@@ -90,7 +90,7 @@ Unhandled methods return `405` with an `Allow` header.
 If `src/socket.ts` exists, belte wires it into the same server:
 
 ```ts
-import type { SocketUpgrade } from 'belte/server'
+import type { SocketUpgrade } from 'belte/types/SocketUpgrade'
 import type { WebSocketHandler } from 'bun'
 
 export const path = '/ws'
@@ -121,27 +121,45 @@ belte compile [--target=…] [--out=…]
 
 ## Package entry points
 
-`belte`'s `package.json` exposes three subpath imports plus the main barrel:
+`belte` exposes each library file as its own subpath import — there is no barrel. Import the exact module you need.
 
-| Import                | Purpose                                                                            |
-| --------------------- | ---------------------------------------------------------------------------------- |
-| `belte`               | Main barrel — all public types and functions below.                                |
-| `belte/server`        | Just `createServer` and its hook types. Use in `_layout.ts`, `socket.ts`, etc.     |
-| `belte/client`        | Just `startClient`. The generated client entry imports this.                       |
-| `belte/preload`       | Bun preload that registers the Svelte and resolver plugins. Used by the CLI.       |
+| Pattern                       | Resolves to                          |
+| ----------------------------- | ------------------------------------ |
+| `belte/types/<TypeName>`      | `src/lib/types/<TypeName>.ts`        |
+| `belte/server/<name>`         | `src/lib/server/<name>.ts`           |
+| `belte/client/<name>`         | `src/lib/client/<name>.ts`           |
+| `belte/shared/<name>`         | `src/lib/shared/<name>.ts`           |
+| `belte/build`                 | `src/build.ts`                       |
+| `belte/compile`               | `src/compile.ts`                     |
+| `belte/preload`               | `src/preload.ts`                     |
+| `belte/svelte-plugin`         | `src/sveltePlugin.ts`                |
+| `belte/resolver-plugin`       | `src/belteResolverPlugin.ts`         |
+
+Examples:
+
+```ts
+import { createServer } from 'belte/server/createServer'
+import { startClient } from 'belte/client/startClient'
+import { build } from 'belte/build'
+import { compile } from 'belte/compile'
+import { log } from 'belte/shared/log'
+import { isDebugEnabled } from 'belte/shared/isDebugEnabled'
+import type { ResolveHook } from 'belte/types/ResolveHook'
+import type { SocketUpgrade } from 'belte/types/SocketUpgrade'
+```
+
+Wildcard subpath exports require `"moduleResolution": "bundler"` (or `"nodenext"`) in your `tsconfig.json`.
 
 ---
 
 ## Public API
-
-Everything below is exported from `belte` (the main barrel). Where it makes sense it is also re-exported from a narrower subpath (`belte/server`, `belte/client`).
 
 ### `createServer(options) → Promise<Bun.Server>`
 
 Starts the SSR/SPA server. The compiled `serverEntry.ts` calls this for you; you only call it directly if you're building a custom entrypoint.
 
 ```ts
-import { createServer } from 'belte/server'
+import { createServer } from 'belte/server/createServer'
 
 await createServer({
     routes,        // Routes
@@ -183,14 +201,14 @@ Bundles the client into `${cwd}/dist/_app/` using `Bun.build`:
 
 Calls `build`, then `Bun.build({ compile: { target, outfile } })` against `serverEntry.ts` with `belteResolverPlugin({ embedAssets: true })`. Produces a single executable that embeds the gzipped client bundle. Returns the output path.
 
-Helpers:
+Helpers (imported from `belte/shared/`):
 
-- `detectTarget(): CompileTarget` — picks the right `bun-<platform>-<arch>` for the host.
+- `detectTarget(platform?, arch?): CompileTarget` — picks the right `bun-<platform>-<arch>`. Defaults to `process.platform` / `process.arch`.
 - `normalizeTarget(input: string): CompileTarget` — accepts `darwin-arm64` or `bun-darwin-arm64`.
 
 ### `sveltePlugin({ generate })`
 
-`BunPlugin` that compiles `.svelte` and `.svelte.{js,ts}` files via `svelte/compiler`. `generate` is `'client'` or `'server'`. CSS is injected (no separate stylesheet step).
+`BunPlugin` that compiles `.svelte` and `.svelte.{js,ts}` files via `svelte/compiler`. `generate` is `'client'` or `'server'`. TypeScript in `.svelte.ts` modules is stripped via `Bun.Transpiler` before compilation. CSS is injected (no separate stylesheet step).
 
 ### `belteResolverPlugin({ cwd?, embedAssets? })`
 
@@ -207,7 +225,7 @@ For a route key like `"posts/[id]/comments"` returns `["", "posts", "posts/[id]"
 Colorized logger built on `Bun.color`. Auto-disables ANSI when `Bun.enableANSIColors` is `false` (non-TTY or `NO_COLOR`).
 
 ```ts
-import { log } from 'belte'
+import { log } from 'belte/shared/log'
 
 log.info('routes resolved')
 log.warn('something looks off')
@@ -220,9 +238,9 @@ log.request('GET', '/foo', 200, 1.42)         // METHOD path STATUS Nms, all col
 
 All methods except `request` prefix output with a bold magenta `[belte]`.
 
-### `isDebugEnabled(name: string) → boolean`
+### `isDebugEnabled(name, env?) → boolean`
 
-Matches the conventions of the [`debug`](https://www.npmjs.com/package/debug) npm package against `process.env.DEBUG`:
+Matches the conventions of the [`debug`](https://www.npmjs.com/package/debug) npm package against `env` (defaults to `process.env.DEBUG`):
 
 - `DEBUG=belte` enables `belte`
 - `DEBUG=belte:*` enables `belte` and any `belte:foo`
@@ -233,10 +251,14 @@ The server uses this to gate per-request logging (`DEBUG=belte` turns on the `ME
 
 ### Types
 
+Each type lives in its own file under `belte/types/<TypeName>`. Import only what you need.
+
 #### Routes & APIs
 
 ```ts
-type Routes = Record<string, () => Promise<{ default: any }>>
+import type { Component } from 'svelte'
+
+type Routes = Record<string, () => Promise<{ default: Component }>>
 
 type ApiHandler = (req: Request, params: Record<string, string>) => Response | Promise<Response>
 type ApiModule  = Partial<Record<string, ApiHandler>>   // keyed by HTTP method
@@ -246,7 +268,7 @@ type ApiRoutes  = Record<string, () => Promise<ApiModule>>
 #### Layouts
 
 ```ts
-type LayoutViewModule = { default: any }
+type LayoutViewModule = { default: Component }
 type LayoutDataModule = { resolve?: ResolveHook }
 
 type LayoutEntry = {
@@ -284,6 +306,19 @@ type SocketUpgrade<T> = (req: Request) => false | { data: T } | Promise<false | 
 ```
 
 Return `false` to reject the upgrade with a 403, or `{ data }` to attach per-connection state.
+
+#### App state
+
+```ts
+type AppState = {
+    layouts: Array<{ key: string; Component: Component }>
+    Page: Component | undefined
+    params: Record<string, string>
+    data: Record<string, unknown>
+}
+```
+
+The single canonical type passed as `state` to `App.svelte`. The client's `nav` reactive store is shaped as `AppState`.
 
 #### Compile target
 

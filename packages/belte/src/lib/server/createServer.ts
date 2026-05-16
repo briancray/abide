@@ -1,19 +1,21 @@
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
+// node:fs — mkdtempSync, realpathSync have no Bun equivalent
+import { mkdtempSync, realpathSync } from 'node:fs'
+// node:os — tmpdir has no Bun equivalent
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
 import type { Server, WebSocketHandler } from 'bun'
 import { Glob } from 'bun'
 import { render } from 'svelte/server'
-import type { ApiRoutes } from './ApiRoutes.ts'
-import App from './App.svelte'
-import { isDebugEnabled } from './debug.ts'
-import type { Layouts } from './Layouts.ts'
-import { log } from './log.ts'
-import type { Routes } from './Routes.ts'
+import App from '../../App.svelte'
+import { isDebugEnabled } from '../shared/isDebugEnabled.ts'
+import { layoutPrefixesFor } from '../shared/layoutPrefixesFor.ts'
+import { log } from '../shared/log.ts'
+import type { ApiRoutes } from '../types/ApiRoutes.ts'
+import type { Assets } from '../types/Assets.ts'
+import type { Layouts } from '../types/Layouts.ts'
+import type { ResolveContext } from '../types/ResolveContext.ts'
+import type { Routes } from '../types/Routes.ts'
+import type { SocketUpgrade } from '../types/SocketUpgrade.ts'
 import { requestContext } from './requestContext.ts'
-import { layoutPrefixesFor } from './routePrefixes.ts'
-
-export type Assets = Record<string, Uint8Array>
 
 function acceptsGzip(req: Request): boolean {
     return (req.headers.get('accept-encoding') ?? '').toLowerCase().includes('gzip')
@@ -36,6 +38,7 @@ function contentType(path: string): string {
     return MIME[path.slice(dot)] ?? 'application/octet-stream'
 }
 
+// global fetch patch is the intended side effect — user code calls plain `fetch`
 let fetchPatched = false
 
 function rawUrl(input: RequestInfo | URL): string {
@@ -75,23 +78,38 @@ function patchFetch(): void {
     }) as typeof fetch
 }
 
-export type ResolveContext = {
-    req: Request
-    url: URL
-    route: string
-    params: Record<string, string>
-}
-
-export type ResolveResult = {
-    data?: Record<string, unknown>
-    redirect?: string
-}
-
-export type ResolveHook = (ctx: ResolveContext) => ResolveResult | Promise<ResolveResult>
-
-export type SocketUpgrade<T> = (req: Request) => false | { data: T } | Promise<false | { data: T }>
-
 const DEFAULT_SOCKET_PATH = '/__belte/socket'
+
+type Resolved =
+    | {
+          kind: 'ok'
+          route: string
+          params: Record<string, string>
+          data: Record<string, unknown>
+      }
+    | { kind: 'redirect'; to: string }
+    | { kind: 'notfound' }
+
+async function reduceResolves(
+    layouts: Layouts,
+    prefixes: string[],
+    ctx: ResolveContext,
+    acc: Record<string, unknown>,
+): Promise<{ kind: 'ok'; data: Record<string, unknown> } | { kind: 'redirect'; to: string }> {
+    if (prefixes.length === 0) {
+        return { kind: 'ok', data: acc }
+    }
+    const [head, ...rest] = prefixes
+    const mod = await layouts[head].resolve!()
+    if (!mod.resolve) {
+        return reduceResolves(layouts, rest, ctx, acc)
+    }
+    const result = await mod.resolve(ctx)
+    if (result.redirect) {
+        return { kind: 'redirect', to: result.redirect }
+    }
+    return reduceResolves(layouts, rest, ctx, { ...acc, ...(result.data ?? {}) })
+}
 
 export async function createServer<TSocketData = unknown>({
     routes,
@@ -116,7 +134,7 @@ export async function createServer<TSocketData = unknown>({
     distDir?: string
     port?: number
 }): Promise<Server> {
-    const effectiveRoutesDir = realpathSync(materializeStubRoutes(routes, apis))
+    const effectiveRoutesDir = realpathSync(await materializeStubRoutes(routes, apis))
 
     const router = new Bun.FileSystemRouter({
         style: 'nextjs',
@@ -132,23 +150,13 @@ export async function createServer<TSocketData = unknown>({
         Object.keys(apis ?? {}).map((key) => [`${routesDirNorm}/${key}.ts`, key]),
     )
 
-    const diskGzipPaths = new Set<string>()
-    if (!assets && existsSync(`${distDir}/_app`)) {
-        const gzGlob = new Glob('**/*.gz')
-        for await (const f of gzGlob.scan({ cwd: `${distDir}/_app` })) {
-            diskGzipPaths.add(`/_app/${f.replace(/\.gz$/, '')}`)
-        }
-    }
-
-    type Resolved =
-        | {
-              kind: 'ok'
-              route: string
-              params: Record<string, string>
-              data: Record<string, unknown>
-          }
-        | { kind: 'redirect'; to: string }
-        | { kind: 'notfound' }
+    const diskGzipPaths = new Set<string>(
+        !assets && (await Bun.file(`${distDir}/_app`).exists())
+            ? (await Array.fromAsync(new Glob('**/*.gz').scan({ cwd: `${distDir}/_app` }))).map(
+                  (f) => `/_app/${f.replace(/\.gz$/, '')}`,
+              )
+            : [],
+    )
 
     async function resolveData(
         req: Request,
@@ -157,19 +165,16 @@ export async function createServer<TSocketData = unknown>({
         params: Record<string, string>,
         resolvePrefixes: string[],
     ): Promise<Resolved> {
-        const data: Record<string, unknown> = {}
-        for (const prefix of resolvePrefixes) {
-            const mod = await (layouts as Layouts)[prefix].resolve!()
-            if (!mod.resolve) {
-                continue
-            }
-            const result = await mod.resolve({ req, url, route, params })
-            if (result.redirect) {
-                return { kind: 'redirect', to: result.redirect }
-            }
-            Object.assign(data, result.data ?? {})
+        const out = await reduceResolves(
+            layouts as Layouts,
+            resolvePrefixes,
+            { req, url, route, params },
+            {},
+        )
+        if (out.kind === 'redirect') {
+            return out
         }
-        return { kind: 'ok', route, params, data }
+        return { kind: 'ok', route, params, data: out.data }
     }
 
     async function loadViewChain(
@@ -324,6 +329,7 @@ export async function createServer<TSocketData = unknown>({
         })
     }
 
+    // Bun.serve is the network IO boundary — impure shell around pure handlers
     const server = Bun.serve({
         port,
         ...(socket ? { websocket: socket } : {}),
@@ -355,17 +361,12 @@ export async function createServer<TSocketData = unknown>({
     return server
 }
 
-function materializeStubRoutes(routes: Routes, apis: ApiRoutes | undefined): string {
-    const dir = mkdtempSync(join(tmpdir(), 'belte-routes-'))
-    for (const key of Object.keys(routes)) {
-        const stubPath = join(dir, `${key}.svelte`)
-        mkdirSync(dirname(stubPath), { recursive: true })
-        writeFileSync(stubPath, '')
-    }
-    for (const key of Object.keys(apis ?? {})) {
-        const stubPath = join(dir, `${key}.ts`)
-        mkdirSync(dirname(stubPath), { recursive: true })
-        writeFileSync(stubPath, '')
-    }
+// filesystem write is unavoidable — Bun.FileSystemRouter requires a real dir on disk
+async function materializeStubRoutes(routes: Routes, apis: ApiRoutes | undefined): Promise<string> {
+    const dir = mkdtempSync(`${tmpdir()}/belte-routes-`)
+    await Promise.all([
+        ...Object.keys(routes).map((key) => Bun.write(`${dir}/${key}.svelte`, '')),
+        ...Object.keys(apis ?? {}).map((key) => Bun.write(`${dir}/${key}.ts`, '')),
+    ])
     return dir
 }

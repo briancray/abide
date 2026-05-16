@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { build } from '../src/build.ts'
-import { compile, normalizeTarget } from '../src/compile.ts'
+import { compile } from '../src/compile.ts'
+import { normalizeTarget } from '../src/lib/shared/normalizeTarget.ts'
 
 const PRELOAD = new URL('../src/preload.ts', import.meta.url).pathname
 const SERVER_ENTRY = new URL('../src/serverEntry.ts', import.meta.url).pathname
@@ -23,7 +24,7 @@ function parseFlag(name: string): string | undefined {
 async function dev(): Promise<void> {
     await build({ cwd })
     Bun.spawn({
-        cmd: ['bun', '--hot', '--watch', '--preload', PRELOAD, SERVER_ENTRY],
+        cmd: ['bun', '--hot', '--preload', PRELOAD, SERVER_ENTRY],
         cwd,
         stdio: ['inherit', 'inherit', 'inherit'],
     })

@@ -3,18 +3,20 @@
     "version": "0.0.1",
     "type": "module",
     "exports": {
-        "./client": "./src/startClient.ts",
-        "./server": "./src/createServer.ts",
-        "./preload": "./src/preload.ts"
+        "./types/*": "./src/lib/types/*.ts",
+        "./server/*": "./src/lib/server/*.ts",
+        "./client/*": "./src/lib/client/*.ts",
+        "./shared/*": "./src/lib/shared/*.ts",
+        "./build": "./src/build.ts",
+        "./compile": "./src/compile.ts",
+        "./preload": "./src/preload.ts",
+        "./svelte-plugin": "./src/sveltePlugin.ts",
+        "./resolver-plugin": "./src/belteResolverPlugin.ts"
     },
     "bin": {
         "belte": "./bin/belte.ts"
     },
     "files": ["src", "bin"],
-    "scripts": {
-        "test:reactive": "BELTE_SVELTE_MODE=client bun --conditions=browser scripts/reactive.ts",
-        "test:click": "BELTE_SVELTE_MODE=client bun --conditions=browser scripts/click-test.ts"
-    },
     "peerDependencies": {
         "svelte": "^5.0.0",
         "bun-plugin-tailwind": "*",

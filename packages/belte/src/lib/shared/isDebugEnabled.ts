@@ -5,8 +5,7 @@
  * DEBUG="*"       → enables everything
  * DEBUG="a,belte" → comma-separated list
  */
-export function isDebugEnabled(name: string): boolean {
-    const env = process.env.DEBUG
+export function isDebugEnabled(name: string, env: string | undefined = process.env.DEBUG): boolean {
     if (!env) {
         return false
     }

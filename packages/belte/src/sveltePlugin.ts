@@ -1,7 +1,7 @@
 import type { BunPlugin } from 'bun'
 import { compile, compileModule } from 'svelte/compiler'
-import { log } from './log.ts'
-import type { SvelteConfig } from './SvelteConfig.ts'
+import { log } from './lib/shared/log.ts'
+import type { SvelteConfig } from './lib/types/SvelteConfig.ts'
 
 export function sveltePlugin(options: {
     generate: 'server' | 'client'
@@ -11,8 +11,10 @@ export function sveltePlugin(options: {
         name: 'svelte-loader',
         setup(build) {
             const userOptions = options.svelteConfig?.compilerOptions ?? {}
+            const tsTranspiler = new Bun.Transpiler({ loader: 'ts' })
             build.onLoad({ filter: /\.svelte\.(js|ts)$/ }, async (args) => {
-                const source = await Bun.file(args.path).text()
+                const raw = await Bun.file(args.path).text()
+                const source = args.path.endsWith('.ts') ? tsTranspiler.transformSync(raw) : raw
                 const { js, warnings } = compileModule(source, {
                     ...userOptions,
                     filename: args.path,

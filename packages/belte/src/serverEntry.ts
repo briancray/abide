@@ -10,7 +10,7 @@ import { routes } from './_virtual/routes.ts'
 import { shell } from './_virtual/shell.ts'
 // @ts-expect-error virtual module resolved by belteResolverPlugin
 import * as socketMod from './_virtual/socket.ts'
-import { createServer } from './createServer.ts'
+import { createServer } from './lib/server/createServer.ts'
 
 await createServer({
     routes,

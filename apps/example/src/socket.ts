@@ -1,4 +1,4 @@
-import type { SocketUpgrade } from 'belte/server'
+import type { SocketUpgrade } from 'belte/types/SocketUpgrade'
 import type { ServerWebSocket, WebSocketHandler } from 'bun'
 
 type Data = { id: number }

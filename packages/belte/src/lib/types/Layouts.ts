@@ -1,12 +1,4 @@
-import type { ResolveHook } from './createServer.ts'
-
-export type LayoutViewModule = { default: any }
-export type LayoutDataModule = { resolve?: ResolveHook }
-
-export type LayoutEntry = {
-    view?: () => Promise<LayoutViewModule>
-    resolve?: () => Promise<LayoutDataModule>
-}
+import type { LayoutEntry } from './LayoutEntry.ts'
 
 /**
  * Merged map of directory prefix → layout entry.

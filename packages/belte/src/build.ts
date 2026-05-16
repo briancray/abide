@@ -1,9 +1,8 @@
-import { rm } from 'node:fs/promises'
 import type { BunPlugin } from 'bun'
 import { belteResolverPlugin } from './belteResolverPlugin.ts'
-import { loadSvelteConfig } from './loadSvelteConfig.ts'
-import { log } from './log.ts'
-import type { SvelteConfig } from './SvelteConfig.ts'
+import { loadSvelteConfig } from './lib/shared/loadSvelteConfig.ts'
+import { log } from './lib/shared/log.ts'
+import type { SvelteConfig } from './lib/types/SvelteConfig.ts'
 import { sveltePlugin } from './sveltePlugin.ts'
 
 const CLIENT_ENTRY = new URL('./clientEntry.ts', import.meta.url).pathname
@@ -18,7 +17,8 @@ export async function build({
     const distDir = `${cwd}/dist`
     const outDir = `${distDir}/_app`
 
-    await rm(distDir, { recursive: true, force: true })
+    // shell-rm is the impure boundary for "clear dist" — Bun.$ is first-party
+    await Bun.$`rm -rf ${distDir}`.quiet()
 
     const config = svelteConfig ?? (await loadSvelteConfig(cwd))
     const plugins: BunPlugin[] = [

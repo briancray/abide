@@ -1,7 +1,8 @@
+// node:fs existsSync — Bun plugin onResolve is sync-only; Bun.file().exists() is async
 import { existsSync } from 'node:fs'
 import type { BunPlugin } from 'bun'
 import { Glob } from 'bun'
-import { log } from './log.ts'
+import { log } from './lib/shared/log.ts'
 
 const NS = 'belte-virtual'
 
@@ -48,15 +49,13 @@ export function belteResolverPlugin({
             build.onLoad({ filter: /.*/, namespace: NS }, async (args) => {
                 if (args.path === 'belte:routes') {
                     const routesDir = `${cwd}/src/routes`
-                    const glob = new Glob('**/*.svelte')
-                    const keys: string[] = []
-                    for await (const f of glob.scan({ cwd: routesDir })) {
-                        if (f === '_layout.svelte' || f.endsWith('/_layout.svelte')) {
-                            continue
-                        }
-                        keys.push(f.replace(/\.svelte$/, ''))
-                    }
-                    keys.sort()
+                    const files = await Array.fromAsync(
+                        new Glob('**/*.svelte').scan({ cwd: routesDir }),
+                    )
+                    const keys = files
+                        .filter((f) => f !== '_layout.svelte' && !f.endsWith('/_layout.svelte'))
+                        .map((f) => f.replace(/\.svelte$/, ''))
+                        .toSorted()
                     const entries = keys
                         .map(
                             (k) =>
@@ -71,15 +70,13 @@ export function belteResolverPlugin({
                 }
                 if (args.path === 'belte:apis') {
                     const routesDir = `${cwd}/src/routes`
-                    const glob = new Glob('**/*.ts')
-                    const keys: string[] = []
-                    for await (const f of glob.scan({ cwd: routesDir })) {
-                        if (f === '_layout.ts' || f.endsWith('/_layout.ts')) {
-                            continue
-                        }
-                        keys.push(f.replace(/\.ts$/, ''))
-                    }
-                    keys.sort()
+                    const files = await Array.fromAsync(
+                        new Glob('**/*.ts').scan({ cwd: routesDir }),
+                    )
+                    const keys = files
+                        .filter((f) => f !== '_layout.ts' && !f.endsWith('/_layout.ts'))
+                        .map((f) => f.replace(/\.ts$/, ''))
+                        .toSorted()
                     const entries = keys
                         .map(
                             (k) =>
@@ -96,21 +93,32 @@ export function belteResolverPlugin({
                 }
                 if (args.path === 'belte:layouts') {
                     const routesDir = `${cwd}/src/routes`
-                    const merged: Record<string, { view?: string; data?: string }> = {}
-                    const viewGlob = new Glob('**/_layout.svelte')
-                    for await (const f of viewGlob.scan({ cwd: routesDir })) {
-                        const prefix =
-                            f === '_layout.svelte' ? '' : f.replace(/\/_layout\.svelte$/, '')
-                        merged[prefix] ??= {}
-                        merged[prefix].view = `${routesDir}/${f}`
-                    }
-                    const dataGlob = new Glob('**/_layout.ts')
-                    for await (const f of dataGlob.scan({ cwd: routesDir })) {
-                        const prefix = f === '_layout.ts' ? '' : f.replace(/\/_layout\.ts$/, '')
-                        merged[prefix] ??= {}
-                        merged[prefix].data = `${routesDir}/${f}`
-                    }
-                    const prefixes = Object.keys(merged).sort()
+                    const viewFiles = await Array.fromAsync(
+                        new Glob('**/_layout.svelte').scan({ cwd: routesDir }),
+                    )
+                    const dataFiles = await Array.fromAsync(
+                        new Glob('**/_layout.ts').scan({ cwd: routesDir }),
+                    )
+                    const merged = [
+                        ...viewFiles.map((f) => ({
+                            prefix:
+                                f === '_layout.svelte' ? '' : f.replace(/\/_layout\.svelte$/, ''),
+                            kind: 'view' as const,
+                            path: `${routesDir}/${f}`,
+                        })),
+                        ...dataFiles.map((f) => ({
+                            prefix: f === '_layout.ts' ? '' : f.replace(/\/_layout\.ts$/, ''),
+                            kind: 'data' as const,
+                            path: `${routesDir}/${f}`,
+                        })),
+                    ].reduce<Record<string, { view?: string; data?: string }>>(
+                        (acc, { prefix, kind, path }) => ({
+                            ...acc,
+                            [prefix]: { ...acc[prefix], [kind]: path },
+                        }),
+                        {},
+                    )
+                    const prefixes = Object.keys(merged).toSorted()
                     const entries = prefixes
                         .map((p) => {
                             const parts: string[] = []
@@ -147,17 +155,15 @@ export function belteResolverPlugin({
                         return { contents: 'export const assets = undefined', loader: 'js' }
                     }
                     const appDir = `${cwd}/dist/_app`
-                    const glob = new Glob('**/*.gz')
-                    const files: string[] = []
-                    for await (const f of glob.scan({ cwd: appDir, onlyFiles: true })) {
-                        files.push(f)
-                    }
+                    const files = await Array.fromAsync(
+                        new Glob('**/*.gz').scan({ cwd: appDir, onlyFiles: true }),
+                    )
                     const encoded = await Promise.all(
                         files.map(async (f) => {
                             const buf = await Bun.file(`${appDir}/${f}`).bytes()
                             const urlPath = `/_app/${f.replace(/\.gz$/, '')}`
                             return {
-                                line: `    ${JSON.stringify(urlPath)}: _d(${JSON.stringify(Buffer.from(buf).toString('base64'))}),`,
+                                line: `    ${JSON.stringify(urlPath)}: _d(${JSON.stringify(buf.toBase64())}),`,
                                 bytes: buf.byteLength,
                             }
                         }),
@@ -168,7 +174,7 @@ export function belteResolverPlugin({
                         `embedded ${encoded.length} gzipped assets from dist/_app/ (${(bytes / 1024).toFixed(1)} KiB)`,
                     )
                     return {
-                        contents: `const _d = (s) => Buffer.from(s, "base64")
+                        contents: `const _d = (s) => Uint8Array.fromBase64(s)
 export const assets = {
 ${entries.join('\n')}
 }
@@ -178,8 +184,8 @@ ${entries.join('\n')}
                 }
                 if (args.path === 'belte:shell') {
                     const userShell = `${cwd}/src/index.html`
-                    const defaultShell = new URL('./index.html', import.meta.url).pathname
-                    const filepath = existsSync(userShell) ? userShell : defaultShell
+                    const defaultShell = new URL('./assets/index.html', import.meta.url).pathname
+                    const filepath = (await Bun.file(userShell).exists()) ? userShell : defaultShell
                     const content = await Bun.file(filepath).text()
                     if (filepath === userShell) {
                         log.info('using custom src/index.html')

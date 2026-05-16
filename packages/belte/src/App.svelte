@@ -1,13 +1,7 @@
 <script lang="ts">
-type LayoutEntry = { key: string; Component: any }
-type State = {
-    layouts: LayoutEntry[]
-    Page: any
-    params: Record<string, string>
-    data: Record<string, unknown>
-}
+import type { AppState } from './lib/types/AppState.ts'
 
-let { state }: { state: State } = $props()
+let { state }: { state: AppState } = $props()
 let layouts = $derived.by(() => state.layouts)
 let Page = $derived.by(() => state.Page)
 let params = $derived.by(() => state.params)

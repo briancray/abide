@@ -1,4 +1,4 @@
-import { isDebugEnabled } from './debug.ts'
+import { isDebugEnabled } from './isDebugEnabled.ts'
 
 const useColor = Bun.enableANSIColors
 const RESET = '\x1b[0m'
@@ -58,6 +58,7 @@ function colorMethod(method: string): string {
 
 const BELTE = useColor ? `${BOLD}${Bun.color('magenta', 'ansi-256')}[belte]${RESET}` : '[belte]'
 
+// console.* is the side effect — logging is intentionally impure
 export const log = {
     info(message: string): void {
         console.log(`${BELTE} ${message}`)
