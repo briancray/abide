@@ -1,0 +1,33 @@
+{
+    "name": "belte",
+    "version": "0.0.1",
+    "type": "module",
+    "exports": {
+        "./client": "./src/startClient.ts",
+        "./server": "./src/createServer.ts",
+        "./preload": "./src/preload.ts"
+    },
+    "bin": {
+        "belte": "./bin/belte.ts"
+    },
+    "files": ["src", "bin"],
+    "scripts": {
+        "test:reactive": "BELTE_SVELTE_MODE=client bun --conditions=browser scripts/reactive.ts",
+        "test:click": "BELTE_SVELTE_MODE=client bun --conditions=browser scripts/click-test.ts"
+    },
+    "peerDependencies": {
+        "svelte": "^5.0.0",
+        "bun-plugin-tailwind": "*",
+        "tailwindcss": "^4.0.0"
+    },
+    "peerDependenciesMeta": {
+        "bun-plugin-tailwind": { "optional": true },
+        "tailwindcss": { "optional": true }
+    },
+    "devDependencies": {
+        "jsdom": "^29.1.1",
+        "svelte": "^5.0.0",
+        "bun-plugin-tailwind": "latest",
+        "tailwindcss": "^4.0.0"
+    }
+}

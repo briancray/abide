@@ -1,0 +1,19 @@
+{
+    "name": "belte-workspace",
+    "private": true,
+    "type": "module",
+    "workspaces": [
+        "packages/*",
+        "apps/*"
+    ],
+    "scripts": {
+        "format": "biome check --write --linter-enabled=false",
+        "lint": "biome lint",
+        "check": "biome check --write"
+    },
+    "devDependencies": {
+        "@biomejs/biome": "^2.4.15",
+        "@types/bun": "latest",
+        "typescript": "^6.0.3"
+    }
+}

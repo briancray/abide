@@ -1,0 +1,78 @@
+{
+    "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+    "vcs": {
+        "enabled": false,
+        "clientKind": "git",
+        "useIgnoreFile": true
+    },
+    "files": {
+        "includes": [
+            "packages/*/src/**/*.{ts,js,json,svelte}",
+            "packages/*/bin/**/*.{ts,js}",
+            "packages/*/scripts/**/*.{ts,js}",
+            "apps/*/src/**/*.{ts,js,json,svelte}",
+            "*.{json,ts,js}",
+            "!**/dist",
+            "!**/node_modules",
+            "!**/.belte",
+            "!**/routes.gen.ts"
+        ]
+    },
+    "formatter": {
+        "enabled": true,
+        "indentStyle": "space",
+        "indentWidth": 4,
+        "lineWidth": 100
+    },
+    "javascript": {
+        "formatter": {
+            "quoteStyle": "single",
+            "semicolons": "asNeeded",
+            "trailingCommas": "all",
+            "arrowParentheses": "always"
+        }
+    },
+    "json": {
+        "formatter": {
+            "indentWidth": 4,
+            "trailingCommas": "none"
+        }
+    },
+    "linter": {
+        "enabled": true,
+        "rules": {
+            "recommended": true,
+            "suspicious": {
+                "noExplicitAny": "off"
+            },
+            "style": {
+                "useImportType": "error",
+                "useNodejsImportProtocol": "error"
+            }
+        }
+    },
+    "assist": {
+        "enabled": true,
+        "actions": {
+            "source": {
+                "organizeImports": "on"
+            }
+        }
+    },
+    "overrides": [
+        {
+            "includes": ["**/*.svelte"],
+            "linter": {
+                "rules": {
+                    "correctness": {
+                        "noUnusedVariables": "off",
+                        "noUnusedImports": "off"
+                    },
+                    "style": {
+                        "useConst": "off"
+                    }
+                }
+            }
+        }
+    ]
+}
