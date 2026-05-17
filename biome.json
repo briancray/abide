@@ -10,7 +10,7 @@
             "packages/*/src/**/*.{ts,js,json,svelte}",
             "packages/*/bin/**/*.{ts,js}",
             "packages/*/scripts/**/*.{ts,js}",
-            "apps/*/src/**/*.{ts,js,json,svelte}",
+            "examples/*/src/**/*.{ts,js,json,svelte}",
             "*.{json,ts,js}",
             "!**/dist",
             "!**/node_modules",

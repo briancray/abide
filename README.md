@@ -40,7 +40,10 @@ belte start    # run the server against dist/
 belte compile  # bundle dist/ and a Bun runtime into a single executable
 ```
 
-A working example lives in [`apps/example`](apps/example).
+Working examples live in [`examples/`](examples):
+
+- [`examples/barebones`](examples/barebones) — the smallest possible app (just `index.svelte`).
+- [`examples/kitchen-sink`](examples/kitchen-sink) — layouts, resolve hooks, JSON APIs, a WebSocket, Tailwind, and a cookie-session auth flow with a protected route.
 
 ---
 
@@ -94,17 +97,44 @@ let { data, children }: { data: { requestedAt: string }; children: Snippet } = $
 A `.ts` file in `routes/` exports HTTP-method-named functions:
 
 ```ts
-// routes/time.ts
-export function GET(): Response {
-    return Response.json({ now: new Date().toISOString() })
-}
+// routes/time.ts — standalone API (no sibling page)
+import type { ApiHandler } from 'belte/types/ApiHandler'
 
-export function POST(req: Request, params: Record<string, string>): Response {
-    // ...
+export const GET: ApiHandler = () => Response.json({ now: new Date().toISOString() })
+```
+
+Standalone API handlers must return a `Response`.
+
+If a page (`foo.svelte`) and an api (`foo.ts`) share the same path, the api becomes a per-method data loader / form action for the page. Layout `resolve` hooks run first, then the matching method handler — which may return:
+
+- `Response` — sent as-is (full control over status, headers, body).
+- `{ data, redirect }` — same shape as a layout `resolve` hook. `redirect` short-circuits (`302`, or `303` for non-`GET`/`HEAD`); JSON requests get `{ "redirect": "…" }` instead. Otherwise `data` is merged shallowly over the page's resolved data (api wins).
+
+```ts
+// routes/signup.ts — colocated with routes/signup.svelte
+import type { ApiHandler } from 'belte/types/ApiHandler'
+
+export const POST: ApiHandler = async (req) => {
+    const form = await req.formData()
+    if (!form.get('email')) {
+        return { data: { error: 'email required' } }
+    }
+    return { redirect: '/thanks' }
 }
 ```
 
-Unhandled methods return `405` with an `Allow` header.
+Unhandled non-`GET` methods return `405` with an `Allow` header.
+
+### Caching
+
+Belte sets sensible `Cache-Control` defaults:
+
+- Hashed chunks under `/_app/` → `public, max-age=31536000, immutable`
+- Unhashed entry/asset files (`client.js`, `client.css`, …) → `public, max-age=0, must-revalidate`
+- SSR HTML / JSON / redirect responses → `private, no-cache`
+- Errors (`404`, `405`, `500`) → `no-store`
+
+To override, return a `Response` from an api handler — its headers are passed through untouched.
 
 ### WebSockets
 

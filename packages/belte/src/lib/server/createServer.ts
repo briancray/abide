@@ -15,10 +15,15 @@ import type { Layouts } from '../types/Layouts.ts'
 import type { ResolveContext } from '../types/ResolveContext.ts'
 import type { Routes } from '../types/Routes.ts'
 import type { SocketUpgrade } from '../types/SocketUpgrade.ts'
+import { cacheControlForAsset } from './cacheControlForAsset.ts'
 import { requestContext } from './requestContext.ts'
 
 function acceptsGzip(req: Request): boolean {
     return (req.headers.get('accept-encoding') ?? '').toLowerCase().includes('gzip')
+}
+
+function wantsJson(req: Request): boolean {
+    return (req.headers.get('accept') ?? '').includes('application/json')
 }
 
 const MIME: Record<string, string> = {
@@ -79,6 +84,25 @@ function patchFetch(): void {
 }
 
 const DEFAULT_SOCKET_PATH = '/__belte/socket'
+
+// SSR responses depend on per-request state (cookies, resolve functions); never reuse without revalidating.
+const SSR_CACHE_CONTROL = 'private, no-cache'
+const NO_STORE = 'no-store'
+
+function redirectResponse(req: Request, to: string, json: boolean): Response {
+    if (json) {
+        return Response.json(
+            { redirect: to },
+            { headers: { Vary: 'Accept', 'Cache-Control': SSR_CACHE_CONTROL } },
+        )
+    }
+    // 303 forces a GET on the redirect target for non-safe methods (POST-redirect-GET).
+    const status = req.method === 'GET' || req.method === 'HEAD' ? 302 : 303
+    return new Response(undefined, {
+        status,
+        headers: { Location: to, Vary: 'Accept', 'Cache-Control': SSR_CACHE_CONTROL },
+    })
+}
 
 type Resolved =
     | {
@@ -191,19 +215,6 @@ export async function createServer<TSocketData = unknown>({
     patchFetch()
     const logRequests = isDebugEnabled('belte')
 
-    async function resolvePageByPath(req: Request, url: URL, pathname: string): Promise<Resolved> {
-        const match = router.match(pathname)
-        if (!match) {
-            return { kind: 'notfound' }
-        }
-        const route = routeKeyByFile.get(match.filePath)
-        if (!route) {
-            return { kind: 'notfound' }
-        }
-        const params = match.params ?? {}
-        return resolveData(req, url, route, params, layoutPrefixesFor(route, layouts, 'resolve'))
-    }
-
     async function handle(req: Request, srv: Server, url: URL): Promise<Response | undefined> {
         if (socket && url.pathname === socketPath) {
             const upgradeOpts = socketUpgrade
@@ -221,80 +232,121 @@ export async function createServer<TSocketData = unknown>({
         if (url.pathname.startsWith('/_app/')) {
             const mime = contentType(url.pathname)
             const wantsGzip = acceptsGzip(req)
+            const baseHeaders = {
+                'Content-Type': mime,
+                Vary: 'Accept-Encoding',
+                'Cache-Control': cacheControlForAsset(url.pathname),
+            }
+            const gzipHeaders = { ...baseHeaders, 'Content-Encoding': 'gzip' }
             if (assets) {
                 const gzipped = assets[url.pathname]
                 if (!gzipped) {
-                    return new Response('Not Found', { status: 404 })
-                }
-                if (wantsGzip) {
-                    return new Response(gzipped, {
-                        headers: { 'Content-Type': mime, 'Content-Encoding': 'gzip' },
+                    return new Response('Not Found', {
+                        status: 404,
+                        headers: { 'Cache-Control': NO_STORE },
                     })
                 }
-                return new Response(Bun.gunzipSync(gzipped), {
-                    headers: { 'Content-Type': mime },
-                })
+                if (wantsGzip) {
+                    return new Response(gzipped, { headers: gzipHeaders })
+                }
+                return new Response(Bun.gunzipSync(gzipped), { headers: baseHeaders })
             }
             const diskPath = distDir + url.pathname
             if (wantsGzip && diskGzipPaths.has(url.pathname)) {
-                return new Response(Bun.file(`${diskPath}.gz`), {
-                    headers: { 'Content-Type': mime, 'Content-Encoding': 'gzip' },
-                })
+                return new Response(Bun.file(`${diskPath}.gz`), { headers: gzipHeaders })
             }
-            return new Response(Bun.file(diskPath))
-        }
-
-        if (url.pathname === '/__belte/resolve') {
-            const target = url.searchParams.get('p') ?? '/'
-            const result = await resolvePageByPath(req, url, target)
-            if (result.kind === 'notfound') {
-                return Response.json({ status: 404 }, { status: 404 })
-            }
-            if (result.kind === 'redirect') {
-                return Response.json({ redirect: result.to })
-            }
-            return Response.json({
-                route: result.route,
-                params: result.params,
-                data: result.data,
-            })
+            return new Response(Bun.file(diskPath), { headers: baseHeaders })
         }
 
         const match = router.match(url.pathname)
         if (!match) {
-            return new Response('Not Found', { status: 404 })
+            return new Response('Not Found', {
+                status: 404,
+                headers: { 'Cache-Control': NO_STORE },
+            })
         }
 
         if (match.filePath.endsWith('.ts')) {
             const apiKey = apiKeyByFile.get(match.filePath)
             const loader = apiKey ? apis?.[apiKey] : undefined
             if (!loader) {
-                return new Response('Not Found', { status: 404 })
+                return new Response('Not Found', {
+                    status: 404,
+                    headers: { 'Cache-Control': NO_STORE },
+                })
             }
             const mod = await loader()
             const handler = mod[req.method.toUpperCase()]
             if (!handler) {
                 return new Response('Method Not Allowed', {
                     status: 405,
-                    headers: { Allow: Object.keys(mod).join(', ') },
+                    headers: {
+                        Allow: Object.keys(mod).join(', '),
+                        'Cache-Control': NO_STORE,
+                    },
                 })
             }
-            return handler(req, match.params ?? {})
+            const result = await handler(req, match.params ?? {})
+            if (!(result instanceof Response)) {
+                throw new Error(
+                    `[belte] apis['${apiKey}'].${req.method} must return a Response — { data, redirect } is only valid when a page exists at the same route`,
+                )
+            }
+            return result
         }
 
         const route = routeKeyByFile.get(match.filePath)
         if (!route) {
-            return new Response('Not Found', { status: 404 })
+            return new Response('Not Found', {
+                status: 404,
+                headers: { 'Cache-Control': NO_STORE },
+            })
         }
         const params = match.params ?? {}
+
         const resolvePrefixes = layoutPrefixesFor(route, layouts, 'resolve')
         const viewPrefixes = layoutPrefixesFor(route, layouts, 'view')
+        const json = wantsJson(req)
+
         const resolved = await resolveData(req, url, route, params, resolvePrefixes)
         if (resolved.kind === 'redirect') {
-            return new Response(undefined, {
-                status: 302,
-                headers: { Location: resolved.to },
-            })
+            return redirectResponse(req, resolved.to, json)
+        }
+
+        let actionData: Record<string, unknown> = {}
+        // HEAD is served by the page render (body stripped by runtime); skip api invocation.
+        if (apis?.[route] && req.method !== 'HEAD') {
+            const mod = await apis[route]()
+            const handler = mod[req.method.toUpperCase()]
+            if (handler) {
+                const result = await handler(req, params)
+                if (result instanceof Response) {
+                    return result
+                }
+                if (typeof result.redirect === 'string') {
+                    return redirectResponse(req, result.redirect, json)
+                }
+                actionData = result.data ?? {}
+            } else if (req.method !== 'GET') {
+                const allow = Array.from(new Set(['GET', 'HEAD', ...Object.keys(mod)])).join(', ')
+                return new Response('Method Not Allowed', {
+                    status: 405,
+                    headers: { Allow: allow, 'Cache-Control': NO_STORE },
+                })
+            }
+        }
+
+        const data = { ...resolved.data, ...actionData }
+
+        if (json) {
+            return Response.json(
+                {
+                    route,
+                    params,
+                    data,
+                },
+                { headers: { Vary: 'Accept', 'Cache-Control': SSR_CACHE_CONTROL } },
+            )
         }
 
         const [{ default: Page }, viewChain] = await Promise.all([
@@ -308,7 +360,7 @@ export async function createServer<TSocketData = unknown>({
                     layouts: viewChain,
                     Page,
                     params,
-                    data: resolved.data,
+                    data,
                 },
             },
         })
@@ -316,7 +368,7 @@ export async function createServer<TSocketData = unknown>({
         const stateTag = `<script>window.__SSR__ = ${JSON.stringify({
             route,
             params,
-            data: resolved.data,
+            data,
         })};</script>`
 
         const html = shell
@@ -325,7 +377,11 @@ export async function createServer<TSocketData = unknown>({
             .replace('<!--ssr:state-->', stateTag)
 
         return new Response(html, {
-            headers: { 'Content-Type': 'text/html; charset=utf-8' },
+            headers: {
+                'Content-Type': 'text/html; charset=utf-8',
+                Vary: 'Accept',
+                'Cache-Control': SSR_CACHE_CONTROL,
+            },
         })
     }
 
@@ -352,7 +408,10 @@ export async function createServer<TSocketData = unknown>({
             log.error(err)
             return new Response(`<pre>${String(err.stack ?? err)}</pre>`, {
                 status: 500,
-                headers: { 'Content-Type': 'text/html; charset=utf-8' },
+                headers: {
+                    'Content-Type': 'text/html; charset=utf-8',
+                    'Cache-Control': NO_STORE,
+                },
             })
         },
     })
@@ -362,11 +421,16 @@ export async function createServer<TSocketData = unknown>({
 }
 
 // filesystem write is unavoidable — Bun.FileSystemRouter requires a real dir on disk
+// When a page and an api share the same key, only the page stub is written; the api is
+// looked up separately by route key in handle(). Bun's FSRouter rejects two stubs at
+// the same URL, so we deduplicate here.
 async function materializeStubRoutes(routes: Routes, apis: ApiRoutes | undefined): Promise<string> {
     const dir = mkdtempSync(`${tmpdir()}/belte-routes-`)
     await Promise.all([
         ...Object.keys(routes).map((key) => Bun.write(`${dir}/${key}.svelte`, '')),
-        ...Object.keys(apis ?? {}).map((key) => Bun.write(`${dir}/${key}.ts`, '')),
+        ...Object.keys(apis ?? {})
+            .filter((key) => !routes[key])
+            .map((key) => Bun.write(`${dir}/${key}.ts`, '')),
     ])
     return dir
 }

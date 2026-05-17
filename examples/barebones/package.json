@@ -1,5 +1,5 @@
 {
-    "name": "example",
+    "name": "barebones",
     "version": "0.0.1",
     "private": true,
     "type": "module",
@@ -12,9 +12,5 @@
     "dependencies": {
         "belte": "workspace:*",
         "svelte": "^5.0.0"
-    },
-    "devDependencies": {
-        "bun-plugin-tailwind": "latest",
-        "tailwindcss": "^4.0.0"
     }
 }

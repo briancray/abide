@@ -33,7 +33,7 @@ type FetchOutcome =
 async function safeResolveFetch(pathname: string): Promise<FetchOutcome> {
     let response: Response
     try {
-        response = await fetch(`/__belte/resolve?p=${encodeURIComponent(pathname)}`)
+        response = await fetch(pathname, { headers: { Accept: 'application/json' } })
     } catch {
         return { kind: 'network-error' }
     }

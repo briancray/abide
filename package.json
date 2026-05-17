@@ -4,7 +4,7 @@
     "type": "module",
     "workspaces": [
         "packages/*",
-        "apps/*"
+        "examples/*"
     ],
     "scripts": {
         "format": "biome check --write --linter-enabled=false",
