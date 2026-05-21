@@ -2,7 +2,7 @@ you are making a ssr + spa framwork for bun and svelte.
 
 # project goals
 
-* exclusively use bun apis when they're available
+* exclusively use bun apis and javascript native apis when they're available
 * keep the api surface very small and simple
 * maintain high visibility into the stack for debugging
 * maintain a consistent runtime between all modes (dev and build)
@@ -26,3 +26,6 @@ you are making a ssr + spa framwork for bun and svelte.
 * use tailwindcss classes for styling, and prefer tailwind classes over style properties when possible.
 * use sveltekit's $derived.by instead of $derived when making derived reactives
 * do not start long living bun servers with `bun run dev`. When i type that it's a mistake
+* use descriptive variable names instead of abbrevations
+* add descriptions above all functions and logic that is otherwise exceptional or unexpected
+* use /* and */ for multiline comments in javascript. dont use per-line markers so that linewidth formatting can change.

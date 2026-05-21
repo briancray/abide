@@ -1,10 +1,10 @@
-/**
- * Matches the conventions of the `debug` npm package.
- * DEBUG="belte"   → enables "belte"
- * DEBUG="belte:*" → enables "belte" and "belte:anything"
- * DEBUG="*"       → enables everything
- * DEBUG="a,belte" → comma-separated list
- */
+/*
+Matches the conventions of the `debug` npm package.
+DEBUG="belte"   → enables "belte"
+DEBUG="belte:*" → enables "belte" and "belte:anything"
+DEBUG="*"       → enables everything
+DEBUG="a,belte" → comma-separated list
+*/
 export function isDebugEnabled(name: string, env: string | undefined = process.env.DEBUG): boolean {
     if (!env) {
         return false

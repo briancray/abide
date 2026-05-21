@@ -28,7 +28,6 @@
     },
     "devDependencies": {
         "jsdom": "^29.1.1",
-        "svelte": "^5.0.0",
         "bun-plugin-tailwind": "latest",
         "tailwindcss": "^4.0.0"
     }

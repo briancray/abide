@@ -8,17 +8,17 @@ let params = $derived.by(() => state.params)
 let data = $derived.by(() => state.data)
 </script>
 
-{#snippet renderAt(idx: number)}
-  {#if idx < layouts.length}
-    {@const L = layouts[idx].Component}
-    <L {data}>
-      {@render renderAt(idx + 1)}
-    </L>
-  {:else if Page}
-    {#key Page}
-      <Page {...params} {data} />
-    {/key}
-  {/if}
+{#snippet renderAt(index: number)}
+    {#if index < layouts.length}
+        {@const Layout = layouts[index].Component}
+        <Layout {data}>
+            {@render renderAt(index + 1)}
+        </Layout>
+    {:else if Page}
+        {#key Page}
+            <Page {...params} {data} />
+        {/key}
+    {/if}
 {/snippet}
 
 {@render renderAt(0)}

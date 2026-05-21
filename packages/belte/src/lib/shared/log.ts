@@ -5,6 +5,7 @@ const RESET = '\x1b[0m'
 const BOLD = '\x1b[1m'
 const DIM = '\x1b[2m'
 
+// Wraps `text` in a Bun-resolved ANSI color escape; no-op when colors are disabled.
 function paint(color: string, text: string): string {
     if (!useColor) {
         return text
@@ -12,6 +13,7 @@ function paint(color: string, text: string): string {
     return `${Bun.color(color, 'ansi-256')}${text}${RESET}`
 }
 
+// Applies the ANSI dim attribute; no-op when colors are disabled.
 function dim(text: string): string {
     if (!useColor) {
         return text
@@ -19,6 +21,7 @@ function dim(text: string): string {
     return `${DIM}${text}${RESET}`
 }
 
+// Prefers a full stack trace when the value is an Error so logs include the call site.
 function formatError(value: unknown): string {
     if (value instanceof Error) {
         return value.stack ?? value.message
@@ -26,6 +29,7 @@ function formatError(value: unknown): string {
     return String(value)
 }
 
+// Maps an HTTP status code to a color that matches the usual server-log convention.
 function colorStatus(status: number): string {
     if (status >= 500) {
         return paint('red', String(status))
@@ -39,6 +43,7 @@ function colorStatus(status: number): string {
     return paint('green', String(status))
 }
 
+// Maps an HTTP method to a color so the request log line is easy to scan.
 function colorMethod(method: string): string {
     const upper = method.toUpperCase()
     if (upper === 'GET') {
@@ -58,7 +63,12 @@ function colorMethod(method: string): string {
 
 const BELTE = useColor ? `${BOLD}${Bun.color('magenta', 'ansi-256')}[belte]${RESET}` : '[belte]'
 
-// console.* is the side effect — logging is intentionally impure
+/*
+Shared logger used by both the build pipeline and the request handler.
+Wraps console.* with ANSI coloring, a `[belte]` prefix, and a per-method/
+per-status palette for `request()`. console.* is the side effect — logging
+is intentionally impure.
+*/
 export const log = {
     info(message: string): void {
         console.log(`${BELTE} ${message}`)

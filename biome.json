@@ -32,6 +32,23 @@
             "arrowParentheses": "always"
         }
     },
+    "html": {
+        "formatter": {
+            "bracketSameLine": true,
+            "indentScriptAndStyle": false,
+            "enabled": true,
+            "whitespaceSensitivity": "ignore"
+        },
+        "experimentalFullSupportEnabled": true
+    },
+    "css": {
+        "formatter": {
+            "enabled": true
+        },
+        "parser": {
+            "tailwindDirectives": true
+        }
+    },
     "json": {
         "formatter": {
             "indentWidth": 4,
@@ -58,21 +75,5 @@
                 "organizeImports": "on"
             }
         }
-    },
-    "overrides": [
-        {
-            "includes": ["**/*.svelte"],
-            "linter": {
-                "rules": {
-                    "correctness": {
-                        "noUnusedVariables": "off",
-                        "noUnusedImports": "off"
-                    },
-                    "style": {
-                        "useConst": "off"
-                    }
-                }
-            }
-        }
-    ]
+    }
 }

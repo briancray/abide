@@ -7,6 +7,7 @@
       "devDependencies": {
         "@biomejs/biome": "^2.4.15",
         "@types/bun": "latest",
+        "svelte": "^5.0.0",
         "typescript": "^6.0.3",
       },
     },
@@ -39,7 +40,6 @@
       "devDependencies": {
         "bun-plugin-tailwind": "latest",
         "jsdom": "^29.1.1",
-        "svelte": "^5.0.0",
         "tailwindcss": "^4.0.0",
       },
       "peerDependencies": {

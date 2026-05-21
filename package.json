@@ -14,6 +14,7 @@
     "devDependencies": {
         "@biomejs/biome": "^2.4.15",
         "@types/bun": "latest",
+        "svelte": "^5.0.0",
         "typescript": "^6.0.3"
     }
 }

@@ -11,6 +11,6 @@
         "verbatimModuleSyntax": true,
         "noEmit": true,
         "isolatedModules": true,
-        "types": ["bun-types"]
+        "types": ["bun"]
     }
 }

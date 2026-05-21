@@ -1,7 +1,7 @@
 import type { Component } from 'svelte'
 import { hydrate } from 'svelte'
 import App from '../../App.svelte'
-import { layoutPrefixesFor } from '../shared/layoutPrefixesFor.ts'
+import { layoutLoadersFor } from '../shared/layoutLoadersFor.ts'
 import type { Layouts } from '../types/Layouts.ts'
 import type { Routes } from '../types/Routes.ts'
 import { nav } from './nav.svelte.ts'
@@ -30,6 +30,10 @@ type FetchOutcome =
     | { kind: 'not-found' }
     | { kind: 'http-error'; status: number }
 
+/*
+Wraps a JSON-accepting fetch in a tagged-union outcome so callers can branch
+on network errors, 404s, and other HTTP failures without try/catch noise.
+*/
 async function safeResolveFetch(pathname: string): Promise<FetchOutcome> {
     let response: Response
     try {
@@ -46,30 +50,35 @@ async function safeResolveFetch(pathname: string): Promise<FetchOutcome> {
     return { kind: 'ok', response }
 }
 
-function isInternalLinkEvent(e: MouseEvent): HTMLAnchorElement | undefined {
-    if (e.defaultPrevented) {
+/*
+Returns the anchor element a click event should hijack for client-side navigation,
+or undefined when the event should fall through to the browser (modifier keys,
+external origin, download/target attributes, hash-only, non-left buttons, etc.).
+*/
+function isInternalLinkEvent(event: MouseEvent): HTMLAnchorElement | undefined {
+    if (event.defaultPrevented) {
         return undefined
     }
-    if (e.button !== 0) {
+    if (event.button !== 0) {
         return undefined
     }
-    if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) {
+    if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) {
         return undefined
     }
-    const a = (e.target as HTMLElement | null)?.closest?.('a')
-    if (!a) {
+    const anchor = (event.target as HTMLElement | null)?.closest?.('a')
+    if (!anchor) {
         return undefined
     }
-    if (a.target && a.target !== '_self') {
+    if (anchor.target && anchor.target !== '_self') {
         return undefined
     }
-    if (a.hasAttribute('download')) {
+    if (anchor.hasAttribute('download')) {
         return undefined
     }
-    if (a.getAttribute('rel')?.includes('external')) {
+    if (anchor.getAttribute('rel')?.includes('external')) {
         return undefined
     }
-    const href = a.getAttribute('href')
+    const href = anchor.getAttribute('href')
     if (!href || href.startsWith('#')) {
         return undefined
     }
@@ -77,9 +86,14 @@ function isInternalLinkEvent(e: MouseEvent): HTMLAnchorElement | undefined {
     if (url.origin !== window.location.origin) {
         return undefined
     }
-    return a
+    return anchor
 }
 
+/*
+Hydrates the SSR'd document against the SSR payload on `window.__SSR__`, then
+intercepts internal link clicks and popstate events to perform client-side
+navigations by fetching the same routes as JSON.
+*/
 export async function startClient({
     routes,
     layouts,
@@ -104,11 +118,11 @@ export async function startClient({
     async function loadLayouts(
         route: string,
     ): Promise<Array<{ key: string; Component: Component }>> {
-        const prefixes = layoutPrefixesFor(route, layouts, 'view')
+        const loaders = layoutLoadersFor(route, layouts, 'view')
         return Promise.all(
-            prefixes.map(async (p) => ({
-                key: p,
-                Component: (await (layouts as Layouts)[p].view!()).default,
+            loaders.map(async ({ prefix, load }) => ({
+                key: prefix,
+                Component: (await load()).default,
             })),
         )
     }
@@ -126,6 +140,12 @@ export async function startClient({
         console.error('[belte] initial hydration failed', err)
     }
 
+    /*
+    Performs a client-side navigation to `pathname`. Fetches the resolve
+    envelope as JSON, follows a redirect by replacing history and recursing,
+    swaps the active layouts/page/data, and resets scroll. Any network or
+    handler failure falls back to a full page load so the user is never stuck.
+    */
     async function navigate(pathname: string): Promise<void> {
         const outcome = await safeResolveFetch(pathname)
         if (outcome.kind === 'network-error') {
@@ -165,13 +185,15 @@ export async function startClient({
     }
 
     // DOM event registration is the impure boundary for client navigation
-    document.addEventListener('click', (e) => {
-        const a = isInternalLinkEvent(e)
-        if (!a) {
+    document.addEventListener('click', (event) => {
+        const anchor = isInternalLinkEvent(event)
+        if (!anchor) {
             return
         }
-        const url = new URL(a.href, window.location.href)
-        e.preventDefault()
+        const url = new URL(anchor.href, window.location.href)
+        event.preventDefault()
+        // Same path+search but different hash: let the browser handle the in-page jump
+        // and history entry; don't refetch the route.
         if (url.pathname === window.location.pathname && url.search === window.location.search) {
             if (url.hash !== window.location.hash) {
                 window.location.hash = url.hash

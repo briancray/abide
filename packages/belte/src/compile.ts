@@ -9,6 +9,13 @@ import { sveltePlugin } from './sveltePlugin.ts'
 
 const SERVER_ENTRY = new URL('./serverEntry.ts', import.meta.url).pathname
 
+/*
+Produces a standalone Bun executable for the server. Runs the client `build`
+first so the resolver plugin can embed the gzipped assets into the binary,
+then invokes Bun.build in compile mode against the server entry. Defaults
+the target to the host platform and appends `.exe` for windows targets.
+Returns the path of the emitted binary; exits the process on build failure.
+*/
 export async function compile({
     cwd = process.cwd(),
     target = detectTarget(),
@@ -21,7 +28,7 @@ export async function compile({
     const svelteConfig = await loadSvelteConfig(cwd)
     await build({ cwd, svelteConfig })
 
-    const out = outfile ?? `${cwd}/dist/server${target.includes('windows') ? '.exe' : ''}`
+    const outPath = outfile ?? `${cwd}/dist/server${target.includes('windows') ? '.exe' : ''}`
 
     const plugins: BunPlugin[] = [
         sveltePlugin({ generate: 'server', svelteConfig }),
@@ -31,7 +38,7 @@ export async function compile({
     const result = await Bun.build({
         entrypoints: [SERVER_ENTRY],
         target: 'bun',
-        compile: { target, outfile: out },
+        compile: { target, outfile: outPath },
         plugins,
     })
 
@@ -42,6 +49,6 @@ export async function compile({
         process.exit(1)
     }
 
-    log.success(`compiled standalone binary: ${out} (target: ${target})`)
-    return out
+    log.success(`compiled standalone binary: ${outPath} (target: ${target})`)
+    return outPath
 }
