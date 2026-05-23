@@ -2,6 +2,7 @@
 import { build } from '../src/build.ts'
 import { compile } from '../src/compile.ts'
 import { normalizeTarget } from '../src/lib/shared/normalizeTarget.ts'
+import { scaffold } from '../src/scaffold.ts'
 
 const PRELOAD = new URL('../src/preload.ts', import.meta.url).pathname
 const SERVER_ENTRY = new URL('../src/serverEntry.ts', import.meta.url).pathname
@@ -61,13 +62,33 @@ async function compileCmd(): Promise<void> {
     })
 }
 
+// Scaffolds the bundled template into a new project directory.
+async function scaffoldCmd(): Promise<void> {
+    const name = rest.find((arg) => !arg.startsWith('--'))
+    if (!name) {
+        console.error('usage: bunx belte scaffold <project-name>')
+        process.exit(1)
+    }
+    await scaffold({ cwd, name })
+}
+
 // Prints the CLI synopsis to stderr and exits non-zero. Marked `never` because the process is gone.
 function usage(): never {
-    console.error('usage: belte <dev|build|start|compile> [--target=<bun-...>] [--out=<path>]')
+    console.error(
+        'usage:\n' +
+            '  bunx belte scaffold <project-name>   scaffold a new belte project\n' +
+            '  belte dev                            build + run with hot reload\n' +
+            '  belte build                          build the client into dist/_app/\n' +
+            '  belte start                          run the production server against dist/\n' +
+            '  belte compile [--target=<bun-...>] [--out=<path>]\n' +
+            '                                       build a standalone executable',
+    )
     process.exit(1)
 }
 
-if (command === 'dev') {
+if (command === 'scaffold') {
+    await scaffoldCmd()
+} else if (command === 'dev') {
     await dev()
 } else if (command === 'build') {
     await buildOnce()

@@ -28,6 +28,5 @@ export type AppModule = {
             | { data: SocketData; headers?: Record<string, string> }
             | false
             | Promise<{ data: SocketData; headers?: Record<string, string> } | false>
-        path?: string
     }
 }

@@ -28,7 +28,7 @@ export async function compile({
     const svelteConfig = await loadSvelteConfig(cwd)
     await build({ cwd, svelteConfig })
 
-    const outPath = outfile ?? `${cwd}/dist/server${target.includes('windows') ? '.exe' : ''}`
+    const outPath = outfile ?? `${cwd}/dist/app${target.includes('windows') ? '.exe' : ''}`
 
     const plugins: BunPlugin[] = [
         sveltePlugin({ generate: 'server', svelteConfig }),

@@ -21,7 +21,8 @@
     },
     "files": [
         "src",
-        "bin"
+        "bin",
+        "template"
     ],
     "peerDependencies": {
         "svelte": "^5.0.0",

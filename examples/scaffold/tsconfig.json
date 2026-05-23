@@ -1,0 +1,12 @@
+{
+    "extends": "../../tsconfig.base.json",
+    "compilerOptions": {
+        "paths": {
+            "$routes": ["./src/routes"],
+            "$routes/*": ["./src/routes/*"],
+            "$lib": ["./src/lib"],
+            "$lib/*": ["./src/lib/*"]
+        }
+    },
+    "include": ["src/**/*.ts", "src/**/*.svelte"]
+}

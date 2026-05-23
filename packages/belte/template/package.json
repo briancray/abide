@@ -1,0 +1,16 @@
+{
+    "name": "belte-app",
+    "version": "0.0.1",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "belte dev",
+        "build": "belte build",
+        "start": "belte start",
+        "compile": "belte compile"
+    },
+    "dependencies": {
+        "belte": "^0.0.1",
+        "svelte": "^5.0.0"
+    }
+}

@@ -14,10 +14,5 @@ export type RequestStore = {
     signal: AbortSignal
     cache: CacheStore
     server: Server<SocketData>
-    response: {
-        headers: Headers
-        cookies: Array<string>
-        status: number | undefined
-    }
     trace: Array<TraceEntry> | undefined
 }

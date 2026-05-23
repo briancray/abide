@@ -19,7 +19,7 @@ Bun plugin that wires every virtual import belte produces at build time:
 - `belte:layouts`  — { dirPrefix: () => import(layout.svelte) } manifest
 - `belte:app`      — { init?, handle?, handleError?, socket? } from src/app.ts
 - `belte:assets`   — gzipped chunk bytes embedded for standalone compile
-- `belte:shell`    — index.html content (custom or default)
+- `belte:shell`    — app.html content (custom or default)
 
 Also rewrites every `endpoint.ts` file inside src/routes to substitute the
 imported verb helpers with route-bound versions: server target uses defineVerb
@@ -187,12 +187,12 @@ ${entries.join('\n')}
                 }
 
                 if (args.path === 'belte:shell') {
-                    const userShell = `${cwd}/src/index.html`
-                    const defaultShell = new URL('./assets/index.html', import.meta.url).pathname
+                    const userShell = `${cwd}/src/app.html`
+                    const defaultShell = new URL('./assets/app.html', import.meta.url).pathname
                     const filepath = (await Bun.file(userShell).exists()) ? userShell : defaultShell
                     const content = await Bun.file(filepath).text()
                     if (filepath === userShell) {
-                        log.info('using custom src/index.html')
+                        log.info('using custom src/app.html')
                     }
                     return {
                         contents: `export const shell = ${JSON.stringify(content)}`,

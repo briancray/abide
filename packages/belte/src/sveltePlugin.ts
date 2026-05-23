@@ -17,15 +17,8 @@ export function sveltePlugin(options: {
     return {
         name: 'svelte-loader',
         setup(build) {
-            const userOptions = options.svelteConfig?.compilerOptions ?? {}
+            const compileOptions = options.svelteConfig?.compilerOptions ?? {}
             const tsTranspiler = new Bun.Transpiler({ loader: 'ts' })
-            const compileOptions = {
-                ...userOptions,
-                experimental: {
-                    ...(userOptions as { experimental?: object }).experimental,
-                    async: true,
-                },
-            }
             build.onLoad({ filter: /\.svelte\.(js|ts)$/ }, async (args) => {
                 const raw = await Bun.file(args.path).text()
                 const source = args.path.endsWith('.ts') ? tsTranspiler.transformSync(raw) : raw

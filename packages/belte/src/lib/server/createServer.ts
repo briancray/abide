@@ -52,28 +52,9 @@ function wantsJson(req: Request): boolean {
     return (req.headers.get('accept') ?? '').includes('application/json')
 }
 
-const DEFAULT_SOCKET_PATH = '/__belte/socket'
+const SOCKET_PATH = '/__belte/socket'
 const SSR_CACHE_CONTROL = 'private, no-cache'
 const NO_STORE = 'no-store'
-
-function applyResponseMutations(response: Response, store: RequestStore): Response {
-    const mut = store.response
-    if (mut.cookies.length === 0 && mut.status === undefined && mut.headers.keys().next().done) {
-        return response
-    }
-    const headers = new Headers(response.headers)
-    mut.headers.forEach((value, name) => {
-        headers.set(name, value)
-    })
-    mut.cookies.forEach((cookie) => {
-        headers.append('Set-Cookie', cookie)
-    })
-    return new Response(response.body, {
-        status: mut.status ?? response.status,
-        statusText: response.statusText,
-        headers,
-    })
-}
 
 function recordTrace(
     store: RequestStore,
@@ -194,7 +175,6 @@ export async function createServer({
 
     const logRequests = isDebugEnabled('belte')
     const tracingEnabled = isDebugEnabled('belte:trace')
-    const socketPath = app?.socket?.path ?? DEFAULT_SOCKET_PATH
 
     async function serveStaticAsset(req: Request, url: URL): Promise<Response> {
         const mime = contentType(url.pathname)
@@ -376,7 +356,7 @@ export async function createServer({
 
         async fetch(req, srv) {
             const url = new URL(req.url)
-            if (baseSocket && url.pathname === socketPath) {
+            if (baseSocket && url.pathname === SOCKET_PATH) {
                 const upgradeOpts = baseSocket.upgrade
                     ? await baseSocket.upgrade(req, { server: srv })
                     : { data: {} as SocketData }
@@ -394,11 +374,6 @@ export async function createServer({
                 signal: req.signal,
                 cache: createCacheStore(),
                 server: srv,
-                response: {
-                    headers: new Headers(),
-                    cookies: [],
-                    status: undefined,
-                },
                 trace: tracingEnabled ? [] : undefined,
             }
             return requestContext.run(store, async () => {
@@ -430,7 +405,7 @@ export async function createServer({
                 if (store.trace && store.trace.length > 0) {
                     log.debug('belte:trace', `\n${formatTrace(store.trace)}`)
                 }
-                return applyResponseMutations(response, store)
+                return response
             })
         },
 
