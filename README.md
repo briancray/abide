@@ -480,9 +480,65 @@ The `$routes` / `$lib` aliases are bundler-wired regardless of TS; this `paths` 
 
 ## Handling data
 
-Belte has a single data primitive: `cache()` from `belte/cache`. It dedupes calls during SSR, replays into the client during hydration, and ties into Svelte's reactivity so a mutation can trigger refetches anywhere the same call is read.
+Endpoints are the data primitive. Each `endpoint.ts` export is a typed remote function — call it from a page, a layout, another endpoint, or the browser. The bundler runs the handler in-process on the server build and substitutes a `fetch` proxy on the client build. `cache()` is a thin layer on top that adds dedupe, SSR hydration, and reactivity.
 
-### How a request flows
+### Calling remote functions directly
+
+The function returned by a verb helper is callable as-is. On the server, the call runs the handler directly; on the client, it issues a `fetch` to the matching URL with the args serialized into the query string (for `GET`/`DELETE`) or the JSON body (for the others). The response is a typed `Response` — `.json()` is `Promise<Return>`.
+
+```ts
+import { getPost, createPost } from '$routes/posts/[id]/endpoint.ts'
+
+// read
+const res = await getPost({ id: 'abc' })
+const post = await res.json()              // typed as { title: string; body: string }
+
+// write
+await createPost({ title: 'hi', body: '...' })
+```
+
+Each remote function also exposes its `.url` and `.method`, so plain HTML and plain `fetch` work too:
+
+```svelte
+<form method="POST" action={createPost.url}>
+    <input name="title" />
+    <textarea name="body"></textarea>
+    <button>save</button>
+</form>
+```
+
+```ts
+const res = await fetch(getPost.url + '?id=abc')
+```
+
+### Server-only handlers
+
+For webhooks or any handler you don't want exposed to the browser, pass `{ hydrate: false }` to the verb helper. The client build replaces the export with a stub that throws on call, so invoking it from a browser-side module is a build-time-visible mistake rather than a runtime fetch.
+
+```ts
+export const stripeWebhook = POST<unknown, never>(
+    async (_args, request) => {
+        // verify signature, process event…
+        return new Response(null, { status: 204 })
+    },
+    { hydrate: false },
+)
+```
+
+### `cache()` — the layer on top
+
+Direct calls are fine for one-shot work, but pages and layouts usually want three things on top: dedupe across components reading the same data, serialization into the SSR HTML, and reactivity so a mutation can trigger refetches.
+
+`cache()` from `belte/cache` does all three. Wrap a remote function call with it and the result is stored in a request-scoped (server) or session-scoped (client) cache keyed by `method + url + args`.
+
+```ts
+import { cache } from 'belte/cache'
+import { getSession } from './session/endpoint.ts'
+
+const session = await cache(getSession)().then((res) => res.json())
+```
+
+### How a cached request flows
 
 ```
 browser request
@@ -580,33 +636,6 @@ cache(searchPosts, { key: 'posts' })({ q })  // collapse multiple call patterns 
 - `undefined` (default) — entry lives forever (or until invalidated)
 - `0` — entry drops as soon as the promise settles (use it to dedupe concurrent reads in the same render)
 - positive number — milliseconds-past-resolve before expiry
-
-### Calling remote functions directly
-
-The function returned by a verb helper also works without `cache()`:
-
-```ts
-import { getNow } from '$routes/time/endpoint.ts'
-
-const res = await getNow()             // direct call — no cache, no dedupe
-const { now } = await res.json()       // typed as { now: string }
-```
-
-You can also use `getNow.url` and `getNow.method` to drive a plain `fetch` — useful for embedding the URL in a `<form action>` or a third-party tool.
-
-### Server-only handlers
-
-For webhooks / server-to-server calls you don't want exposed to the browser, pass `{ hydrate: false }` to the verb helper. The client build replaces the export with a stub that throws on call, so accidentally invoking it from a browser module is a build-time-visible mistake.
-
-```ts
-export const stripeWebhook = POST<unknown, never>(
-    async (_args, request) => {
-        // verify signature, process event…
-        return new Response(null, { status: 204 })
-    },
-    { hydrate: false },
-)
-```
 
 ### Caching defaults at the HTTP layer
 
