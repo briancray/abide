@@ -28,11 +28,12 @@ If anything in the README would contradict source, fix the README — not source
 ### a) Intro
 
 - Tagline: "A tiny SSR + SPA framework for [Bun](https://bun.sh) and [Svelte 5](https://svelte.dev)."
+- **Section table** (three columns: `Section` / `Description` / `Link`) — one row per top-level `##` section that follows (CLI, Project structure, Handling data). The link column holds a markdown link to the GitHub-style anchor (e.g. `[#cli](#cli)`). Goes immediately after the tagline, before the four core ideas. Description column is one sentence summarising what's inside.
 - **Four core ideas** (numbered list):
-  1. Pages and RPC live in separate trees — `src/pages/` for `page.svelte` / `layout.svelte`, `src/rpc/` for one-export-per-file remote functions. URLs are disjoint (pages at `/<folder>`, rpc at `/rpc/<file>`).
+  1. Folder-based pages — `src/pages/` for `page.svelte` / `layout.svelte`, folder path becomes the URL. Don't conflate with rpc here; point 4 covers that.
   2. A single Bun process — no Node, no Vite, no separate bundler runtime
   3. Svelte 5 throughout — SSR → hydration, layout chains both sides
-  4. Endpoints are callable from anywhere — same callable, swapped per target
+  4. RPC is callable from anywhere — one file per remote function under `src/rpc/`, filename = export name = URL (mounted at `/rpc/<file>`), `handler.<VERB>` picks the HTTP verb, bundler runs it in-process on the server and swaps it for a typed `fetch` on the client.
 - "It ships as a library (`belte`) plus a CLI (`belte scaffold | dev | build | start | compile`)." — keep the CLI list in sync with `bin/belte.ts`.
 - **Examples links** (bulleted): barebones, scaffold, kitchen-sink — one-line description each.
 
@@ -83,7 +84,7 @@ Subsections, in this exact order:
 6. **Reactive reads (client)** — `$derived.by(() => cache(fn)())` subscribe pattern, `cache.invalidate(fn)` re-runs every subscriber. Show a counter-style example.
 7. **Mutations** — call the remote function, then invalidate. List the three `cache.invalidate` overloads (`fn`, `key`, `()`).
 8. **`cache` options** — `ttl` (`undefined` / `0` / `>0`) and `key` semantics.
-9. **Caching defaults at the HTTP layer** — the four cache-control buckets (`/_app/` chunks, unhashed entry files, SSR HTML/JSON, errors). These come from `cacheControlForAsset.ts` + `createServer.ts`; verify before pasting numbers.
+9. **Caching defaults at the HTTP layer** — the cache-control buckets emitted by `cacheControlForAsset.ts` + `createServer.ts`. Build emits everything under `/_app/` with a content hash (entry bundles `client-[hash].js`/`.css` and chunks alike), so the hashed-immutable branch covers the whole built tree; the must-revalidate branch is the fallback for any non-hashed asset. Then SSR HTML/JSON and the error path. Verify the actual strings before pasting numbers.
 
 ## Style rules
 

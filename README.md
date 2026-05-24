@@ -2,12 +2,18 @@
 
 A tiny SSR + SPA framework for [Bun](https://bun.sh) and [Svelte 5](https://svelte.dev).
 
+| Section | Description | Link |
+| --- | --- | --- |
+| CLI | The `belte` commands: scaffold a new project, run dev with hot reload, build the client, start the production server, compile a standalone binary. | [#cli](#cli) |
+| Project structure | Every file in a belte app — page / layout / rpc / `app.ts` / `app.html` / `app.css` / config — with a barebones and a full snippet for each. | [#project-structure](#project-structure) |
+| Handling data | Remote functions as the data primitive, `cache()` on top, SSR snapshot + hydration, reactive reads, mutations, and HTTP cache-control defaults. | [#handling-data](#handling-data) |
+
 Belte is built around four ideas:
 
-1. **Pages and RPC live in separate trees.** Every page is a Svelte component under `src/pages/` (folder-based: `page.svelte` renders, `layout.svelte` wraps). Every remote function is one file under `src/rpc/` — the filename is the URL path and the export name, and `handler.GET / POST / PUT / PATCH / DELETE / HEAD` picks the HTTP verb. URLs are disjoint: pages mount at `/<folder>`, rpc files mount at `/rpc/<file>`.
+1. **Folder-based pages.** Every page is a Svelte component under `src/pages/` — `page.svelte` renders, `layout.svelte` wraps, and the folder path becomes the URL.
 2. **A single Bun process.** The dev server, production server, and compiled standalone binary all run on `Bun.serve`. No Node, no Vite, no separate bundler runtime.
 3. **Svelte 5 throughout.** Server-rendered HTML hydrates into a Svelte 5 app and navigates client-side. Layout chains run on both sides.
-4. **Endpoints are callable from anywhere.** A handler exported from an `$rpc/*.ts` module is a typed function on both the server and the client — direct call on the server, network fetch on the client. The bundler swaps the implementation per target.
+4. **RPC is callable from anywhere.** Every file under `src/rpc/` exports one remote function — the filename becomes both the export name and the URL (mounted at `/rpc/<file>`), and `handler.GET / POST / PUT / PATCH / DELETE / HEAD` picks the verb. On the server it runs directly; on the client the bundler swaps it for a typed `fetch` to that URL.
 
 It ships as a library (`belte`) plus a CLI (`belte scaffold | dev | build | start | compile`).
 
@@ -633,8 +639,8 @@ cache(searchPosts, { key: 'posts' })({ q })  // collapse multiple call patterns 
 
 Belte sets sensible `Cache-Control` defaults on every response it owns:
 
-- Hashed chunks under `/_app/` → `public, max-age=31536000, immutable`
-- Unhashed entry/asset files (`client.js`, `client.css`, …) → `public, max-age=0, must-revalidate`
+- Hashed entry bundles and chunks under `/_app/` (`client-<hash>.js`, `client-<hash>.css`, `<name>-<hash>.js`, sourcemaps) → `public, max-age=31536000, immutable`
+- Other static assets under `/_app/` (images, fonts, anything emitted without a content hash) → `public, max-age=0, must-revalidate`
 - SSR HTML / JSON responses → `private, no-cache`
 - Errors (`404`, `405`, `500`) → `no-store`
 
