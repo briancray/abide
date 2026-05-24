@@ -1,7 +1,6 @@
 import type { Server } from 'bun'
 import type { SocketData } from './App.ts'
 import type { CacheStore } from './CacheStore.ts'
-import type { TraceEntry } from './TraceEntry.ts'
 
 /*
 Per-request state propagated through AsyncLocalStorage. Every field is
@@ -14,5 +13,4 @@ export type RequestStore = {
     signal: AbortSignal
     cache: CacheStore
     server: Server<SocketData>
-    trace: Array<TraceEntry> | undefined
 }

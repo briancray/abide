@@ -4,10 +4,10 @@ A tiny SSR + SPA framework for [Bun](https://bun.sh) and [Svelte 5](https://svel
 
 Belte is built around four ideas:
 
-1. **Folder-based filesystem routes.** Every route is a folder. `page.svelte` renders a page, `layout.svelte` wraps everything under its folder, `endpoint.ts` exposes typed HTTP handlers.
+1. **Pages and RPC live in separate trees.** Every page is a Svelte component under `src/pages/` (folder-based: `page.svelte` renders, `layout.svelte` wraps). Every remote function is one file under `src/rpc/` — the filename is the URL path and the export name, and `handler.GET / POST / PUT / PATCH / DELETE / HEAD` picks the HTTP verb. URLs are disjoint: pages mount at `/<folder>`, rpc files mount at `/rpc/<file>`.
 2. **A single Bun process.** The dev server, production server, and compiled standalone binary all run on `Bun.serve`. No Node, no Vite, no separate bundler runtime.
 3. **Svelte 5 throughout.** Server-rendered HTML hydrates into a Svelte 5 app and navigates client-side. Layout chains run on both sides.
-4. **Endpoints are callable from anywhere.** A handler exported from `endpoint.ts` is a typed function on both the server and the client — direct call on the server, network fetch on the client. The bundler swaps the implementation per target.
+4. **Endpoints are callable from anywhere.** A handler exported from an `$rpc/*.ts` module is a typed function on both the server and the client — direct call on the server, network fetch on the client. The bundler swaps the implementation per target.
 
 It ships as a library (`belte`) plus a CLI (`belte scaffold | dev | build | start | compile`).
 
@@ -60,13 +60,14 @@ Bun reads `.env` automatically:
 ```
 my-app/
   src/
-    routes/                     # all routes live here; every route is a folder
+    pages/                      # all pages live here; every page is a folder
       page.svelte                 # GET /
       layout.svelte               # wraps every page below
       about/
         page.svelte               # GET /about
-      hello/
-        endpoint.ts               # typed HTTP handlers at /hello
+    rpc/                        # all remote functions live here; one per file
+      getHello.ts                 # GET /rpc/getHello   (handler.GET)
+      createUser.ts               # POST /rpc/createUser (handler.POST)
     app.ts                      # optional: init / handle / handleError / socket
     app.html                    # optional: HTML shell override
     app.css                     # any CSS, imported from a layout/page
@@ -77,13 +78,14 @@ my-app/
   dist/                         # produced by `belte build`
 ```
 
-Two import aliases are wired through the bundler in every mode (dev, build, compile):
+Three import aliases are wired through the bundler in every mode (dev, build, compile):
 
-- `$routes/...` → `src/routes/...`
+- `$pages/...` → `src/pages/...`
+- `$rpc/...` → `src/rpc/...`
 - `$lib/...` → `src/lib/...`
 
 ```ts
-import { getNow } from '$routes/time/endpoint.ts'
+import { getHello } from '$rpc/getHello.ts'
 import { formatDate } from '$lib/formatDate.ts'
 ```
 
@@ -91,9 +93,9 @@ The sections below cover each file. Each has a **barebones** snippet (the litera
 
 ---
 
-### `src/routes/page.svelte`
+### `src/pages/page.svelte`
 
-A page is a Svelte 5 component. Folder name becomes the URL: `src/routes/page.svelte` mounts at `/`, `src/routes/posts/[id]/page.svelte` mounts at `/posts/:id`. Params from the URL are exposed via the `params` prop. Pages render on the server during SSR and then hydrate on the client; the same component code runs in both contexts.
+A page is a Svelte 5 component. Folder name becomes the URL: `src/pages/page.svelte` mounts at `/`, `src/pages/posts/[id]/page.svelte` mounts at `/posts/:id`. Params from the URL are exposed via the `params` prop. Pages render on the server during SSR and then hydrate on the client; the same component code runs in both contexts.
 
 **Barebones**
 
@@ -106,7 +108,7 @@ A page is a Svelte 5 component. Folder name becomes the URL: `src/routes/page.sv
 ```svelte
 <script lang="ts">
 import { cache } from 'belte/cache'
-import { getPost } from './endpoint.ts'
+import { getPost } from '$rpc/getPost.ts'
 
 let { params }: { params: { id: string } } = $props()
 
@@ -123,9 +125,9 @@ const post = await cache(getPost)({ id: params.id }).then((res) => res.json())
 </article>
 ```
 
-### `src/routes/layout.svelte`
+### `src/pages/layout.svelte`
 
-A layout wraps every page at or below its folder. Layouts compose root-to-leaf: a request for `/admin/users` runs `routes/layout.svelte` → `routes/admin/layout.svelte` → the page. Like pages, they run on the server during SSR and on the client during navigation. Use a layout for header/footer chrome, global CSS imports, and data needed everywhere below the folder.
+A layout wraps every page at or below its folder. Layouts compose root-to-leaf: a request for `/admin/users` runs `pages/layout.svelte` → `pages/admin/layout.svelte` → the page. Like pages, they run on the server during SSR and on the client during navigation. Use a layout for header/footer chrome, global CSS imports, and data needed everywhere below the folder.
 
 **Barebones**
 
@@ -143,7 +145,8 @@ let { children }: { children: import('svelte').Snippet } = $props()
 <script lang="ts">
 import '../app.css'
 import { cache } from 'belte/cache'
-import { getSession } from './session/endpoint.ts'
+import { getSession } from '$rpc/getSession.ts'
+import { logout } from '$rpc/logout.ts'
 
 let { children }: { children: import('svelte').Snippet } = $props()
 
@@ -160,7 +163,7 @@ const session = await cache(getSession)().then((res) => res.json())
         <a href="/about">About</a>
         {#if session?.user}
             <span>{session.user}</span>
-            <form method="POST" action="/logout"><button type="submit">Log out</button></form>
+            <form method="POST" action={logout.url}><button type="submit">Log out</button></form>
         {:else}
             <a href="/login">Log in</a>
         {/if}
@@ -169,66 +172,65 @@ const session = await cache(getSession)().then((res) => res.json())
 <main>{@render children()}</main>
 ```
 
-### `src/routes/<path>/endpoint.ts`
+### `src/rpc/<name>.ts`
 
-An endpoint exposes HTTP-verb-bound functions at the folder's URL. The verb helpers from `belte/route/<VERB>` produce **remote functions** — typed callables that, on the server, run the handler directly, and on the client, fetch the corresponding URL. The bundler swaps the implementation per build target.
+An rpc module exposes exactly one remote function. The filename is both the URL path (under `/rpc/`) and the export name, and `handler.<VERB>` picks the HTTP verb. `handler.GET<Args, Return>(fn)` (or `.POST`, `.PUT`, `.PATCH`, `.DELETE`, `.HEAD`) produces a **remote function** — a typed callable that, on the server, runs the handler directly, and on the client, fetches `/rpc/<name>`. The bundler swaps the implementation per build target.
+
+Folders under `src/rpc/` become URL segments: `src/rpc/users/getUser.ts` mounts at `/rpc/users/getUser`. `[name]` folder segments map to `:name` path params just like in `src/pages/`.
 
 Argument handling is content-type-driven:
 
-- `GET` / `DELETE` → args from the URL search params
+- `GET` / `DELETE` / `HEAD` → args from the URL search params
 - `POST` / `PUT` / `PATCH` with `application/json` → args from the JSON body
 - `POST` / `PUT` / `PATCH` with form data → args from `FormData`
 
-Type parameters are `<Args, Return>`. `Args` is what the caller passes in. `Return` types the JSON-decoded body at call sites (`response.json()` is `Promise<Return>`). Unhandled methods on the URL return `405` with an `Allow` header.
+Type parameters are `<Args, Return>`. `Args` is what the caller passes in. `Return` types the JSON-decoded body at call sites (`response.json()` is `Promise<Return>`). Sending the wrong verb to an rpc URL returns `405` with an `Allow` header.
 
-**Barebones**
+**Barebones** — `src/rpc/getHello.ts`
 
 ```ts
-import { GET } from 'belte/route/GET'
+import { handler } from 'belte/rpc/handler'
 
-export const getHello = GET<undefined, { message: string }>(() =>
+export const getHello = handler.GET<undefined, { message: string }>(() =>
     Response.json({ message: 'Hello from belte' }),
 )
 ```
 
-**Full**
+**Full** — a CRUD-ish post resource
 
 ```ts
-import { DELETE } from 'belte/route/DELETE'
-import { GET } from 'belte/route/GET'
-import { POST } from 'belte/route/POST'
+// src/rpc/getPost.ts
+import { handler } from 'belte/rpc/handler'
 import { db } from '$lib/db.ts'
 
-export const getPost = GET<{ id: string }, { title: string; body: string }>(({ id }) =>
+export const getPost = handler.GET<{ id: string }, { title: string; body: string }>(({ id }) =>
     Response.json(db.posts.get(id)),
-)
-
-export const createPost = POST<{ title: string; body: string }, { id: string }>(async (args) => {
-    const id = await db.posts.insert(args)
-    return Response.json({ id }, { status: 201 })
-})
-
-export const deletePost = DELETE<{ id: string }, never>(async ({ id }) => {
-    await db.posts.delete(id)
-    return new Response(null, { status: 204 })
-})
-
-/*
-Server-only handlers — pass { hydrate: false } to skip the client proxy.
-The client build replaces the export with a stub that throws if invoked,
-so calling it from a browser-side module is a build-time-visible mistake
-rather than a runtime fetch.
-*/
-export const stripeWebhook = POST<unknown, never>(
-    async (_args, request) => {
-        // verify signature, process event…
-        return new Response(null, { status: 204 })
-    },
-    { hydrate: false },
 )
 ```
 
-If a folder has both `page.svelte` and `endpoint.ts`, the page handles `GET`/`HEAD` (rendering) and the endpoint handles its other verbs.
+```ts
+// src/rpc/createPost.ts
+import { handler } from 'belte/rpc/handler'
+import { db } from '$lib/db.ts'
+
+export const createPost = handler.POST<{ title: string; body: string }, { id: string }>(
+    async (args) => {
+        const id = await db.posts.insert(args)
+        return Response.json({ id }, { status: 201 })
+    },
+)
+```
+
+```ts
+// src/rpc/deletePost.ts
+import { handler } from 'belte/rpc/handler'
+import { db } from '$lib/db.ts'
+
+export const deletePost = handler.DELETE<{ id: string }, never>(async ({ id }) => {
+    await db.posts.delete(id)
+    return new Response(null, { status: 204 })
+})
+```
 
 ### `src/app.ts`
 
@@ -402,7 +404,7 @@ export default {
 
 ### `tsconfig.json`
 
-The `$routes` / `$lib` aliases are bundler-wired regardless of TS; this `paths` section just teaches the editor and `tsc` about them.
+The `$pages` / `$rpc` / `$lib` aliases are bundler-wired regardless of TS; this `paths` section just teaches the editor and `tsc` about them.
 
 **Barebones**
 
@@ -422,8 +424,10 @@ The `$routes` / `$lib` aliases are bundler-wired regardless of TS; this `paths` 
         "isolatedModules": true,
         "types": ["bun"],
         "paths": {
-            "$routes": ["./src/routes"],
-            "$routes/*": ["./src/routes/*"],
+            "$pages": ["./src/pages"],
+            "$pages/*": ["./src/pages/*"],
+            "$rpc": ["./src/rpc"],
+            "$rpc/*": ["./src/rpc/*"],
             "$lib": ["./src/lib"],
             "$lib/*": ["./src/lib/*"]
         }
@@ -480,14 +484,15 @@ The `$routes` / `$lib` aliases are bundler-wired regardless of TS; this `paths` 
 
 ## Handling data
 
-Endpoints are the data primitive. Each `endpoint.ts` export is a typed remote function — call it from a page, a layout, another endpoint, or the browser. The bundler runs the handler in-process on the server build and substitutes a `fetch` proxy on the client build. `cache()` is a thin layer on top that adds dedupe, SSR hydration, and reactivity.
+Rpc modules are the data primitive. Each file's export is a typed remote function — call it from a page, a layout, another rpc, or the browser. The bundler runs the handler in-process on the server build and substitutes a `fetch` proxy on the client build. `cache()` is a thin layer on top that adds dedupe, SSR hydration, and reactivity.
 
 ### Calling remote functions directly
 
-The function returned by a verb helper is callable as-is. On the server, the call runs the handler directly; on the client, it issues a `fetch` to the matching URL with the args serialized into the query string (for `GET`/`DELETE`) or the JSON body (for the others). The response is a typed `Response` — `.json()` is `Promise<Return>`.
+The function returned by `handler.<VERB>()` is callable as-is. On the server, the call runs the handler directly; on the client, it issues a `fetch` to the matching URL with the args serialized into the query string (for `GET` / `DELETE` / `HEAD`) or the JSON body (for the others). The response is a typed `Response` — `.json()` is `Promise<Return>`.
 
 ```ts
-import { getPost, createPost } from '$routes/posts/[id]/endpoint.ts'
+import { getPost } from '$rpc/getPost.ts'
+import { createPost } from '$rpc/createPost.ts'
 
 // read
 const res = await getPost({ id: 'abc' })
@@ -511,20 +516,6 @@ Each remote function also exposes its `.url` and `.method`, so plain HTML and pl
 const res = await fetch(getPost.url + '?id=abc')
 ```
 
-### Server-only handlers
-
-For webhooks or any handler you don't want exposed to the browser, pass `{ hydrate: false }` to the verb helper. The client build replaces the export with a stub that throws on call, so invoking it from a browser-side module is a build-time-visible mistake rather than a runtime fetch.
-
-```ts
-export const stripeWebhook = POST<unknown, never>(
-    async (_args, request) => {
-        // verify signature, process event…
-        return new Response(null, { status: 204 })
-    },
-    { hydrate: false },
-)
-```
-
 ### `cache()` — the layer on top
 
 Direct calls are fine for one-shot work, but pages and layouts usually want three things on top: dedupe across components reading the same data, serialization into the SSR HTML, and reactivity so a mutation can trigger refetches.
@@ -533,7 +524,7 @@ Direct calls are fine for one-shot work, but pages and layouts usually want thre
 
 ```ts
 import { cache } from 'belte/cache'
-import { getSession } from './session/endpoint.ts'
+import { getSession } from '$rpc/getSession.ts'
 
 const session = await cache(getSession)().then((res) => res.json())
 ```
@@ -547,11 +538,11 @@ browser request
 src/app.ts  handle?            optional middleware (wraps next call)
   │
   ▼
-routes/layout.svelte           root-to-leaf chain of layouts
-routes/**/layout.svelte        each runs top-level `await cache(fn)()` for its data
+pages/layout.svelte            root-to-leaf chain of layouts
+pages/**/layout.svelte         each runs top-level `await cache(fn)()` for its data
   │
   ▼
-routes/<path>/page.svelte      page renders, can also `await cache(fn)()`
+pages/<path>/page.svelte       page renders, can also `await cache(fn)()`
   │
   ▼
 serialize cache snapshot       every cache entry is JSON'd into <script>window.__SSR__</script>
@@ -576,7 +567,7 @@ A page or layout calls `cache(fn)()` at the top level of its `<script>`. The sam
 ```svelte
 <script lang="ts">
 import { cache } from 'belte/cache'
-import { getSession } from './session/endpoint.ts'
+import { getSession } from '$rpc/getSession.ts'
 
 const session = await cache(getSession)().then((res) => res.json())
 </script>
@@ -597,7 +588,8 @@ Wrap a `cache()` call in `$derived.by` to subscribe the deriving scope to that c
 ```svelte
 <script lang="ts">
 import { cache } from 'belte/cache'
-import { getCounter, incrementCounter } from './state/endpoint.ts'
+import { getCounter } from '$rpc/getCounter.ts'
+import { incrementCounter } from '$rpc/incrementCounter.ts'
 
 const counter = $derived.by(() => cache(getCounter)().then((res) => res.json()))
 
@@ -646,4 +638,4 @@ Belte sets sensible `Cache-Control` defaults on every response it owns:
 - SSR HTML / JSON responses → `private, no-cache`
 - Errors (`404`, `405`, `500`) → `no-store`
 
-To override, return a `Response` from an endpoint handler — its headers are passed through untouched. Pre-gzipped sibling files are streamed automatically when the client sends `Accept-Encoding: gzip`.
+To override, return a `Response` from an rpc handler — its headers are passed through untouched. Pre-gzipped sibling files are streamed automatically when the client sends `Accept-Encoding: gzip`.

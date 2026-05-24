@@ -1,25 +1,16 @@
-import type { HttpVerb } from '../types/HttpVerb.ts'
-
 /*
-Metadata recorded by verb helpers (server and client proxy) for every call.
-The cache layer reads `request` from this WeakMap to populate the entry's
-stored request without re-building it. `key`, `method`, and `url` are
-included for parity with the stored entry shape but are derivable from the
-RemoteFunction itself, so cache() recomputes its own key independently.
+WeakMap that records the synthesized Request each verb helper produced for a
+returned promise. The cache layer reads it to populate the entry's stored
+request without re-building it. method/url/key are intentionally not stored
+here — they're derivable from the RemoteFunction itself, and cache() does
+that derivation independently.
 */
-export type RemoteMeta = {
-    key: string
-    method: HttpVerb
-    url: string
-    request: Request
+const requests = new WeakMap<Promise<unknown>, Request>()
+
+export function recordRemoteMeta(promise: Promise<unknown>, request: Request): void {
+    requests.set(promise, request)
 }
 
-const meta = new WeakMap<Promise<unknown>, RemoteMeta>()
-
-export function recordRemoteMeta(promise: Promise<unknown>, value: RemoteMeta): void {
-    meta.set(promise, value)
-}
-
-export function getRemoteMeta(promise: Promise<unknown>): RemoteMeta | undefined {
-    return meta.get(promise)
+export function getRemoteMeta(promise: Promise<unknown>): Request | undefined {
+    return requests.get(promise)
 }

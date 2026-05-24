@@ -19,6 +19,12 @@ export async function serializeCacheSnapshot(store: CacheStore): Promise<CacheSn
         if (method !== 'GET' && method !== 'DELETE') {
             continue
         }
+        /*
+        Between the awaitAll above and this read, a handler that calls
+        cache.invalidate() (or evicts via ttl=0) may have replaced this
+        entry. Skip the stale one — the live snapshot already reflects the
+        replacement, and including this entry would mismatch the active key.
+        */
         const settled = store.entries.get(entry.key)
         if (!settled || settled !== entry) {
             continue

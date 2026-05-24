@@ -8,7 +8,7 @@
         "./server": "./src/lib/server/server.ts",
         "./client/*": "./src/lib/client/*.ts",
         "./shared/*": "./src/lib/shared/*.ts",
-        "./route/*": "./src/lib/route/*.ts",
+        "./rpc/*": "./src/lib/rpc/*.ts",
         "./cache": "./src/lib/shared/cache.ts",
         "./build": "./src/build.ts",
         "./compile": "./src/compile.ts",

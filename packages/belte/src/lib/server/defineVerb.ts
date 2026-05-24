@@ -1,4 +1,4 @@
-import { keyForRemoteCall } from '../shared/keyForRemoteCall.ts'
+import { buildRpcRequest } from '../shared/buildRpcRequest.ts'
 import { recordRemoteMeta } from '../shared/remoteMeta.ts'
 import type { HttpVerb } from '../types/HttpVerb.ts'
 import type { RemoteFunction } from '../types/RemoteFunction.ts'
@@ -8,9 +8,9 @@ import { parseArgs } from './parseArgs.ts'
 import { requestContext } from './requestContext.ts'
 
 /*
-Headers forwarded from the inbound request onto in-process synthetic Requests
-when a remote handler is invoked from server-side rendering. Lets handlers
-read the caller's cookies/authorization without per-call wiring.
+Headers forwarded from the inbound request onto in-process synthetic
+Requests when a remote handler is invoked from server-side rendering. Lets
+handlers read the caller's cookies/authorization without per-call wiring.
 */
 const FORWARDED_HEADERS = [
     'cookie',
@@ -21,45 +21,27 @@ const FORWARDED_HEADERS = [
 ]
 
 /*
-Builds a RemoteFunction from an HTTP verb + route path + handler. The bundler
-plugin rewrites `import { GET } from 'belte/route/GET'` per-importer so each
-remote handler call site gets a route-bound GET that calls defineVerb with
-the resolver-computed route. On the server, calling the function invokes the
-handler directly with the current Request (built from the args); calling
-.fetch(request) lets a caller hand in a Request and the wrapper parses args
-off the content-type per the standard table.
+Builds a RemoteFunction from an HTTP verb + RPC URL + handler. The bundler
+rewrites every `export const VERB = handler(fn)` inside an `$rpc/**` module
+so the verb (from the export name) and the URL (from the file path under
+`src/rpc/`, with `/rpc/` prefix) are threaded into defineVerb. Calling the
+function invokes the handler directly with a synthesized Request (built
+from the args); calling `.fetch(req, pathParams)` lets a caller hand in a
+Request + matched path params and the wrapper merges body/query/path into
+the args per parseArgs.
 
-Every call (direct, .fetch, or server-side dispatch) registers
-`{key, method, url, request}` metadata against the returned promise so cache()
-can derive the storage key without an explicit `key:` argument.
+Every call records the synthesized Request against the returned promise so
+cache() can stash it on the entry without re-building.
 */
 export function defineVerb<Args, Return>(
     method: HttpVerb,
-    route: string,
+    url: string,
     handler: RemoteHandler<Args, Return>,
 ): RemoteFunction<Args, Return> {
     function buildRequest(args: Args | undefined): Request {
-        const headers = inheritHeaders()
-        if (method === 'GET' || method === 'DELETE') {
-            const searchParams =
-                args && typeof args === 'object'
-                    ? new URLSearchParams(args as Record<string, string>)
-                    : undefined
-            const target =
-                searchParams && searchParams.toString().length > 0
-                    ? `${route}?${searchParams.toString()}`
-                    : route
-            return new Request(toAbsolute(target), { method, headers })
-        }
-        if (args === undefined) {
-            return new Request(toAbsolute(route), { method, headers })
-        }
-        headers.set('content-type', 'application/json')
-        return new Request(toAbsolute(route), {
-            method,
-            headers,
-            body: JSON.stringify(args),
-        })
+        const store = requestContext.getStore()
+        const baseUrl = store ? store.url.href : 'http://localhost/'
+        return buildRpcRequest({ method, url, args, baseUrl, headers: inheritHeaders() })
     }
 
     /*
@@ -84,15 +66,22 @@ export function defineVerb<Args, Return>(
     }
 
     function invoke(request: Request, args: Args | undefined): Promise<RemoteResponse<Return>> {
-        const promise = Promise.resolve(handler(args as Args, request)) as Promise<
-            RemoteResponse<Return>
-        >
-        recordRemoteMeta(promise, {
-            key: keyForRemoteCall(method, route, args),
-            method,
-            url: route,
-            request,
-        })
+        /*
+        Handler bodies may throw synchronously (e.g. an `assert(...)` at the
+        top of the function). Wrap the call so those throws are reflected as
+        rejections — otherwise an SSR caller's `await` short-circuits past
+        the cache layer's snapshot serialization and the error escapes the
+        request boundary.
+        */
+        let promise: Promise<RemoteResponse<Return>>
+        try {
+            promise = Promise.resolve(handler(args as Args, request)) as Promise<
+                RemoteResponse<Return>
+            >
+        } catch (error) {
+            promise = Promise.reject(error) as Promise<RemoteResponse<Return>>
+        }
+        recordRemoteMeta(promise, request)
         return promise
     }
 
@@ -102,25 +91,13 @@ export function defineVerb<Args, Return>(
     }
 
     callable.method = method
-    callable.url = route
-    callable.fetch = async (request: Request): Promise<RemoteResponse<Return>> => {
-        const args = (await parseArgs(method, request)) as Args | undefined
+    callable.url = url
+    callable.fetch = async (
+        request: Request,
+        pathParams?: Record<string, string>,
+    ): Promise<RemoteResponse<Return>> => {
+        const args = (await parseArgs(method, request, pathParams)) as Args | undefined
         return invoke(request, args)
     }
     return callable as RemoteFunction<Args, Return>
-}
-
-/*
-Builds an absolute URL for the constructed Request. Uses the inbound origin
-when called inside a request, falls back to http://localhost when called
-out-of-band (e.g. boot-time priming). Absolute URLs are required by the
-Request constructor; the host is not material because the handler is invoked
-in-process without going over the network.
-*/
-function toAbsolute(path: string): string {
-    const store = requestContext.getStore()
-    if (store) {
-        return new URL(path, store.url).href
-    }
-    return new URL(path, 'http://localhost').href
 }

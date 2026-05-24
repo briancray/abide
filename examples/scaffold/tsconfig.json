@@ -2,8 +2,10 @@
     "extends": "../../tsconfig.base.json",
     "compilerOptions": {
         "paths": {
-            "$routes": ["./src/routes"],
-            "$routes/*": ["./src/routes/*"],
+            "$pages": ["./src/pages"],
+            "$pages/*": ["./src/pages/*"],
+            "$rpc": ["./src/rpc"],
+            "$rpc/*": ["./src/rpc/*"],
             "$lib": ["./src/lib"],
             "$lib/*": ["./src/lib/*"]
         }

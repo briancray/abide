@@ -15,8 +15,8 @@ Re-derive the API from source — never trust the previous README's claims. At m
 - `packages/belte/bin/belte.ts` — CLI commands and their flags
 - `packages/belte/src/lib/types/AppModule.ts` — what `src/app.ts` can export
 - `packages/belte/src/lib/shared/cache.ts` — `cache()` and `cache.invalidate()` semantics
-- `packages/belte/src/lib/route/<VERB>.ts` — verb helpers and the `RemoteOptions` type
-- `packages/belte/src/belteResolverPlugin.ts` — path aliases, recognized route leaf filenames, and the `belte:*` virtual modules
+- `packages/belte/src/lib/rpc/handler.ts` — the `handler.<VERB>(fn)` helper signature
+- `packages/belte/src/belteResolverPlugin.ts` — path aliases, recognized page leaves under `src/pages/`, rpc files under `src/rpc/`, and the `belte:*` virtual modules
 - `packages/belte/src/lib/server/createServer.ts` — cache-control defaults, socket path, default error pages
 - `packages/belte/template/` and `examples/scaffold/` — the canonical "barebones" file contents
 - `examples/kitchen-sink/` — feature-rich examples to draw "full" snippets from
@@ -29,7 +29,7 @@ If anything in the README would contradict source, fix the README — not source
 
 - Tagline: "A tiny SSR + SPA framework for [Bun](https://bun.sh) and [Svelte 5](https://svelte.dev)."
 - **Four core ideas** (numbered list):
-  1. Folder-based filesystem routes — `page.svelte` / `layout.svelte` / `endpoint.ts`
+  1. Pages and RPC live in separate trees — `src/pages/` for `page.svelte` / `layout.svelte`, `src/rpc/` for one-export-per-file remote functions. URLs are disjoint (pages at `/<folder>`, rpc at `/rpc/<file>`).
   2. A single Bun process — no Node, no Vite, no separate bundler runtime
   3. Svelte 5 throughout — SSR → hydration, layout chains both sides
   4. Endpoints are callable from anywhere — same callable, swapped per target
@@ -46,13 +46,13 @@ Two subsections:
 
 ### c) Project structure
 
-- Annotated directory tree showing every file the README covers. Use trailing-space-aligned `#` comments. Include `.env` and `dist/` even though they aren't authored.
-- Two path-alias lines (`$routes/...`, `$lib/...`) and a short import example.
+- Annotated directory tree showing every file the README covers. Use trailing-space-aligned `#` comments. Include `.env` and `dist/` even though they aren't authored. Show both `src/pages/` and `src/rpc/` with at least one file each.
+- Three path-alias lines (`$pages/...`, `$rpc/...`, `$lib/...`) and a short import example.
 - One-line preamble that the rest of the section is per-file with barebones + full snippets.
 - **One subsection per file**, in this exact order:
-  - `src/routes/page.svelte`
-  - `src/routes/layout.svelte`
-  - `src/routes/<path>/endpoint.ts`
+  - `src/pages/page.svelte`
+  - `src/pages/layout.svelte`
+  - `src/rpc/<name>.ts`
   - `src/app.ts`
   - `src/app.html`
   - `src/app.css`
@@ -65,26 +65,25 @@ Per-file rules:
 - 1–3 sentences of prose **before** code. Explain what the file does and why someone reaches for it. Don't restate the obvious.
 - **Barebones** snippet — copy the literal contents from `packages/belte/template/` (or `examples/barebones` for `page.svelte`). This must match the on-disk template byte-for-byte; if it doesn't, fix the template, not the snippet.
 - **Full** snippet — feature-rich. Pull from `examples/kitchen-sink/` where possible so the snippet is real code that actually runs. Annotate with `/* … */` comments only where the *why* is non-obvious.
-- For `endpoint.ts`, also document the `Args`/`Return` generic parameters, the content-type-driven argument parsing rules, and the `{ hydrate: false }` server-only escape hatch.
+- For the `src/rpc/<name>.ts` subsection, document: the `handler.<VERB><Args, Return>(fn)` helper from `belte/rpc/handler`, the content-type-driven argument parsing rules, the one-export-per-file / export-name-matches-filename rule, how the file path becomes the URL (under `/rpc/`), and the bracket-folder convention for path params (`src/rpc/posts/[id]/getPost.ts` → `/rpc/posts/:id/getPost`).
 - For `app.ts`, list every optional export with one-line semantics (`init` / `handle` / `handleError` / `socket`) before snippets.
 - For `app.html`, list the three SSR markers (`<!--ssr:head-->`, `<!--ssr:body-->`, `<!--ssr:state-->`).
 
 ### d) Handling data
 
-**Ordering rule:** introduce remote functions as the primitive first, demonstrate the unwrapped flow (direct calls, then server-only handlers), and only then layer `cache()` on top. Don't mention `cache()` before the "the layer on top" subsection — readers should see the primitive cleanly before the abstraction.
+**Ordering rule:** introduce remote functions as the primitive first, demonstrate the unwrapped flow (direct calls), and only then layer `cache()` on top. Don't mention `cache()` before the "the layer on top" subsection — readers should see the primitive cleanly before the abstraction.
 
 Subsections, in this exact order:
 
-1. **Intro paragraph** — endpoints are the data primitive; the bundler runs handlers in-process on the server build and substitutes a `fetch` proxy on the client build. End the paragraph by previewing that `cache()` is a thin layer added on top.
+1. **Intro paragraph** — rpc modules are the data primitive; the bundler runs handlers in-process on the server build and substitutes a `fetch` proxy on the client build. End the paragraph by previewing that `cache()` is a thin layer added on top.
 2. **Calling remote functions directly** — `await fn(args)` semantics on each build target, query-string vs JSON-body serialization, the typed `.json()` return, and `fn.url` / `fn.method` for `<form action>` and plain `fetch`.
-3. **Server-only handlers** — `{ hydrate: false }` and what it does to the client build (export becomes a throwing stub — build-time-visible misuse, not a runtime fetch).
-4. **`cache()` — the layer on top** — what cache buys you over a direct call (dedupe + SSR snapshot + reactivity). Show the minimal `cache(fn)()` wrap.
-5. **How a cached request flows** — ASCII flow diagram from browser request through `app.ts handle?` → layout chain → page → cache snapshot serialization → hydration → `$derived.by` reactivity. Keep it diagram-like, not prose.
-6. **Reading data (SSR + first paint)** — top-level await semantics, how SSR-time dedupe works, how hydration replays the snapshot (no second fetch). Include the `experimental: { async: true }` note since belte no longer forces it.
-7. **Reactive reads (client)** — `$derived.by(() => cache(fn)())` subscribe pattern, `cache.invalidate(fn)` re-runs every subscriber. Show a counter-style example.
-8. **Mutations** — call the remote function, then invalidate. List the three `cache.invalidate` overloads (`fn`, `key`, `()`).
-9. **`cache` options** — `ttl` (`undefined` / `0` / `>0`) and `key` semantics.
-10. **Caching defaults at the HTTP layer** — the four cache-control buckets (`/_app/` chunks, unhashed entry files, SSR HTML/JSON, errors). These come from `cacheControlForAsset.ts` + `createServer.ts`; verify before pasting numbers.
+3. **`cache()` — the layer on top** — what cache buys you over a direct call (dedupe + SSR snapshot + reactivity). Show the minimal `cache(fn)()` wrap.
+4. **How a cached request flows** — ASCII flow diagram from browser request through `app.ts handle?` → layout chain → page → cache snapshot serialization → hydration → `$derived.by` reactivity. Keep it diagram-like, not prose.
+5. **Reading data (SSR + first paint)** — top-level await semantics, how SSR-time dedupe works, how hydration replays the snapshot (no second fetch). Include the `experimental: { async: true }` note since belte no longer forces it.
+6. **Reactive reads (client)** — `$derived.by(() => cache(fn)())` subscribe pattern, `cache.invalidate(fn)` re-runs every subscriber. Show a counter-style example.
+7. **Mutations** — call the remote function, then invalidate. List the three `cache.invalidate` overloads (`fn`, `key`, `()`).
+8. **`cache` options** — `ttl` (`undefined` / `0` / `>0`) and `key` semantics.
+9. **Caching defaults at the HTTP layer** — the four cache-control buckets (`/_app/` chunks, unhashed entry files, SSR HTML/JSON, errors). These come from `cacheControlForAsset.ts` + `createServer.ts`; verify before pasting numbers.
 
 ## Style rules
 

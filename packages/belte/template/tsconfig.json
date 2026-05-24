@@ -13,8 +13,10 @@
         "isolatedModules": true,
         "types": ["bun"],
         "paths": {
-            "$routes": ["./src/routes"],
-            "$routes/*": ["./src/routes/*"],
+            "$pages": ["./src/pages"],
+            "$pages/*": ["./src/pages/*"],
+            "$rpc": ["./src/rpc"],
+            "$rpc/*": ["./src/rpc/*"],
             "$lib": ["./src/lib"],
             "$lib/*": ["./src/lib/*"]
         }

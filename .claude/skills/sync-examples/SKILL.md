@@ -20,10 +20,10 @@ Establish what actually changed before touching examples. Useful entry points:
 
 - `packages/belte/package.json` `exports` map — the public import surface
 - `packages/belte/bin/belte.ts` — CLI command names and flags
-- `packages/belte/src/lib/types/` — every published type (`AppModule`, `RemoteFunction`, `CacheOptions`, `RemoteOptions`, `App`, `RequestStore`, …)
-- `packages/belte/src/lib/route/<VERB>.ts` — verb helper signatures
+- `packages/belte/src/lib/types/` — every published type (`AppModule`, `RemoteFunction`, `CacheOptions`, `App`, `RequestStore`, …)
+- `packages/belte/src/lib/rpc/handler.ts` — `handler.<VERB>(fn)` verb helpers (one per file under `src/rpc/`; the export name must match the filename)
 - `packages/belte/src/lib/shared/cache.ts` — `cache()` and `cache.invalidate()` API
-- `packages/belte/src/belteResolverPlugin.ts` — recognized route leaf filenames (`page.svelte` / `layout.svelte` / `endpoint.ts`), path aliases, virtual module names
+- `packages/belte/src/belteResolverPlugin.ts` — recognized page leaves (`page.svelte`, `layout.svelte` under `src/pages/`), rpc files (one `.ts` per URL under `src/rpc/`), path aliases (`$pages`, `$rpc`, `$lib`), virtual module names
 
 If the change isn't named in the conversation, run `git log -p --stat -n 20 packages/belte/src` to find recent edits to the library — but prefer asking the user when the scope isn't obvious.
 
@@ -45,9 +45,9 @@ For each affected example, work through:
 
 - **Imports** — if a module path moved (e.g. `belte/foo` → `belte/bar`), update every `import` and `from ''` string. Grep across `examples/**` and `packages/belte/template/**`.
 - **Type augmentations** — if a type's shape changed (e.g. a new field, a renamed field), update `declare module '…'` blocks. `examples/kitchen-sink/src/app.ts` and `examples/scaffold/src/app.ts` both augment `belte/types/App`.
-- **Verb helper generics** — `GET<Args, Return>(...)` signatures must match the current helper definitions.
+- **Handler call sites** — `handler.<VERB><Args, Return>(...)` signatures must match the current helper definition. Each rpc file holds exactly one `export const <name> = handler.<VERB>(...)` whose `<name>` matches the file's stem.
 - **`cache()` call sites** — `cache(fn)()` vs `cache(fn, options)()`. If options shape changed, update every site.
-- **Route filenames** — if recognized leaves changed (e.g. `_layout.svelte` → `layout.svelte`), rename every file and any imports referencing them.
+- **Page / rpc layout** — pages live under `src/pages/` (folder-based, `page.svelte` + `layout.svelte`). Rpc modules live under `src/rpc/` (one `.ts` per URL). If recognized leaves or directory conventions changed, rename files and update every importer.
 - **CLI scripts** — `package.json` `scripts` use `belte <cmd>`. If a command was renamed (e.g. `create` → `scaffold`), update.
 - **Comments inside template/scaffold files** — these are user-facing documentation, not throwaway. If the comment describes behavior that changed, update the comment.
 
@@ -60,10 +60,10 @@ The bundled `packages/belte/template/` is what `bunx belte scaffold` copies. `ex
 - `src/app.html`
 - `src/app.css`
 - `src/app.ts`
-- `src/routes/layout.svelte`
-- `src/routes/page.svelte`
-- `src/routes/about/page.svelte`
-- `src/routes/hello/endpoint.ts`
+- `src/pages/layout.svelte`
+- `src/pages/page.svelte`
+- `src/pages/about/page.svelte`
+- `src/rpc/getHello.ts`
 - `svelte.config.js`
 
 Files that legitimately differ:
@@ -79,7 +79,7 @@ Use `diff -ruN packages/belte/template/src examples/scaffold/src` to confirm the
 For each updated example, run `bun run build` from the example directory and confirm:
 
 - Build exits 0
-- Resolver logs include the expected route counts ("resolved N pages: …", "resolved N endpoints: …", "resolved N layouts: …")
+- Resolver logs include the expected counts ("resolved N rpc modules: …", "resolved N pages: …", "resolved N layouts: …")
 - `dist/_app/` contains a `client.js`, a `client.css` (if any CSS is imported), and `.gz` siblings for each output
 
 Also test the scaffold path itself if `bin/belte.ts`, `src/scaffold.ts`, or `packages/belte/template/` changed:
@@ -106,4 +106,4 @@ The repo's CLAUDE.md applies in full. Notable for examples:
 - Functional style, prefer `map` / `reduce` over loops
 - Tailwind classes when the example already uses Tailwind (kitchen-sink); plain CSS otherwise (template, scaffold, barebones)
 - Comments use `/* … */` blocks, not `//` series, when spanning more than one line
-- One export per file (already true in current examples — don't add multi-export files)
+- One export per file (rpc modules must have exactly one; the export name matches the filename)

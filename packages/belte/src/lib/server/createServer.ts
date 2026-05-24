@@ -1,10 +1,4 @@
-/*
-node:fs — mkdtempSync, realpathSync have no Bun equivalent.
-node:os — tmpdir has no Bun equivalent.
-*/
-import { mkdtempSync, realpathSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import type { Server } from 'bun'
+import type { BunRequest, Server } from 'bun'
 import { Glob } from 'bun'
 import type { Component } from 'svelte'
 import { render } from 'svelte/server'
@@ -19,30 +13,13 @@ import type { Assets } from '../types/Assets.ts'
 import type { HttpVerb } from '../types/HttpVerb.ts'
 import type { Layouts } from '../types/Layouts.ts'
 import type { Pages } from '../types/Pages.ts'
+import type { RemoteFunction } from '../types/RemoteFunction.ts'
 import type { RemoteRoutes } from '../types/RemoteRoutes.ts'
 import type { RequestStore } from '../types/RequestStore.ts'
-import type { TraceEntry } from '../types/TraceEntry.ts'
 import { cacheControlForAsset } from './cacheControlForAsset.ts'
 import { requestContext } from './requestContext.ts'
 import { serializeCacheSnapshot } from './serializeCacheSnapshot.ts'
 import { setActiveServer } from './serverSlot.ts'
-
-const MIME: Record<string, string> = {
-    '.js': 'text/javascript; charset=utf-8',
-    '.css': 'text/css; charset=utf-8',
-    '.map': 'application/json; charset=utf-8',
-    '.html': 'text/html; charset=utf-8',
-    '.svg': 'image/svg+xml',
-    '.json': 'application/json; charset=utf-8',
-}
-
-function contentType(path: string): string {
-    const dot = path.lastIndexOf('.')
-    if (dot === -1) {
-        return 'application/octet-stream'
-    }
-    return MIME[path.slice(dot)] ?? 'application/octet-stream'
-}
 
 function acceptsGzip(req: Request): boolean {
     return (req.headers.get('accept-encoding') ?? '').toLowerCase().includes('gzip')
@@ -56,49 +33,21 @@ const SOCKET_PATH = '/__belte/socket'
 const SSR_CACHE_CONTROL = 'private, no-cache'
 const NO_STORE = 'no-store'
 
-function recordTrace(
-    store: RequestStore,
-    kind: TraceEntry['kind'],
-    label: string,
-    startNs: number,
-): void {
-    if (!store.trace) {
-        return
-    }
-    store.trace.push({ kind, label, ms: (Bun.nanoseconds() - startNs) / 1e6 })
-}
-
-function formatTrace(entries: Array<TraceEntry>): string {
-    let widthKind = 0
-    let widthLabel = 0
-    for (const entry of entries) {
-        if (entry.kind.length > widthKind) {
-            widthKind = entry.kind.length
-        }
-        if (entry.label.length > widthLabel) {
-            widthLabel = entry.label.length
-        }
-    }
-    return entries
-        .map(
-            (entry) =>
-                `${entry.kind.padEnd(widthKind)}  ${entry.label.padEnd(widthLabel)}  ${entry.ms.toFixed(2)}ms`,
-        )
-        .join('\n')
-}
-
-const VERBS: HttpVerb[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
+type AnyRemoteFunction = RemoteFunction<unknown, unknown>
 
 /*
-Starts a Bun HTTP server that ties together the new route conventions:
-page.svelte + layout.svelte for views, endpoint.ts for verb-defined handlers,
-and an optional app.ts for boot-time setup, request middleware, error fallback,
-and socket handlers. Per request, an AsyncLocalStorage RequestStore carries
-the cache store, response mutations, and trace ledger.
+Starts a Bun HTTP server that ties together the route conventions:
+page.svelte + layout.svelte under src/pages/ for views, one named export
+per file under src/rpc/ for verb-bound remote functions, and an optional
+app.ts for boot-time setup, request middleware, error fallback, and socket
+handlers. Pages and rpc URLs live in disjoint spaces — pages mount at the
+folder path, rpc files mount at `/rpc/<file path>` — so each registered
+URL resolves to exactly one thing. Per request, an AsyncLocalStorage
+RequestStore carries the cache store and request metadata.
 */
 export async function createServer({
     pages,
-    remotes,
+    rpc,
     layouts,
     shell,
     app,
@@ -107,7 +56,7 @@ export async function createServer({
     port = Number(process.env.PORT ?? 3000),
 }: {
     pages: Pages
-    remotes: RemoteRoutes
+    rpc: RemoteRoutes
     layouts?: Layouts
     shell: string
     app?: AppModule
@@ -115,21 +64,12 @@ export async function createServer({
     distDir?: string
     port?: number
 }): Promise<Server<SocketData>> {
-    const stubDir = realpathSync(await materializeStubRoutes(pages, remotes))
-    const router = new Bun.FileSystemRouter({
-        style: 'nextjs',
-        dir: stubDir,
-        fileExtensions: ['.svelte', '.ts'],
-    })
-
-    const stubDirNorm = stubDir.replace(/\/$/, '')
-    const pageByFile = new Map<string, string>(
-        Object.keys(pages).map((url) => [`${stubDirNorm}${pageStubPath(url)}`, url]),
-    )
-    const remoteByFile = new Map<string, string>(
-        Object.keys(remotes).map((url) => [`${stubDirNorm}${remoteStubPath(url)}`, url]),
-    )
-
+    /*
+    Forward-declared so the per-request closures below can reference it. The
+    value is assigned by Bun.serve() further down; closures only fire after
+    that, so the read-before-write is safe at runtime.
+    */
+    let server!: Server<SocketData>
     const layoutPrefixes = layouts ? Object.keys(layouts) : []
 
     const diskGzipPaths = new Set<string>(
@@ -140,47 +80,55 @@ export async function createServer({
             : [],
     )
 
-    const remoteModuleCache = new Map<
-        string,
-        Promise<Record<string, ((req: Request) => Promise<Response>) | undefined>>
-    >()
-    function loadRemote(routeUrl: string) {
-        const existing = remoteModuleCache.get(routeUrl)
+    const rpcModuleCache = new Map<string, Promise<AnyRemoteFunction | undefined>>()
+    function loadRpc(url: string): Promise<AnyRemoteFunction | undefined> | undefined {
+        const existing = rpcModuleCache.get(url)
         if (existing) {
             return existing
         }
-        const loader = remotes[routeUrl]
+        const loader = rpc[url]
         if (!loader) {
             return undefined
         }
+        /*
+        Each $rpc module has exactly one named export, validated at build
+        time. Pick the first export that looks like a RemoteFunction so the
+        framework stays tolerant of incidental re-exports.
+        */
         const promise = loader().then((mod) => {
-            const out: Record<string, ((req: Request) => Promise<Response>) | undefined> = {}
-            for (const value of Object.values(mod) as Array<unknown>) {
-                if (typeof value !== 'function') {
-                    continue
-                }
-                const fn = value as { method?: string; fetch?: (req: Request) => Promise<Response> }
-                if (!fn.method || typeof fn.fetch !== 'function') {
-                    continue
-                }
-                if (VERBS.includes(fn.method as HttpVerb)) {
-                    out[fn.method] = fn.fetch.bind(fn)
+            for (const value of Object.values(mod)) {
+                if (typeof value === 'function' && 'method' in value && 'url' in value) {
+                    return value as AnyRemoteFunction
                 }
             }
-            return out
+            return undefined
         })
-        remoteModuleCache.set(routeUrl, promise)
+        rpcModuleCache.set(url, promise)
         return promise
     }
 
     const logRequests = isDebugEnabled('belte')
-    const tracingEnabled = isDebugEnabled('belte:trace')
 
     async function serveStaticAsset(req: Request, url: URL): Promise<Response> {
-        const mime = contentType(url.pathname)
+        /*
+        Defence-in-depth path-traversal check against the raw request URL.
+        The WHATWG URL parser decodes `%2E%2E` to `..` and then normalises
+        dot-segments away before `url.pathname` is even visible, so an
+        attacker's traversal sequence would be invisible if we only looked
+        at the parsed pathname. Inspecting `req.url` instead catches the
+        encoded forms before normalization eats them; `%2F` (encoded slash)
+        is preserved in the pathname but still flagged here for clarity.
+        */
+        if (containsTraversal(req.url)) {
+            return new Response('Not Found', {
+                status: 404,
+                headers: { 'Cache-Control': NO_STORE },
+            })
+        }
         const wantsGz = acceptsGzip(req)
+        const contentType = mimeForExtension(url.pathname)
         const baseHeaders = {
-            'Content-Type': mime,
+            'Content-Type': contentType,
             Vary: 'Accept-Encoding',
             'Cache-Control': cacheControlForAsset(url.pathname),
         }
@@ -222,7 +170,6 @@ export async function createServer({
                 },
             )
         }
-        const start = store.trace ? Bun.nanoseconds() : 0
         const layoutPrefix = nearestLayoutPrefix(routeUrl, layoutPrefixes)
         const [pageMod, layoutMod] = await Promise.all([
             pages[routeUrl](),
@@ -239,7 +186,6 @@ export async function createServer({
                 },
             },
         })
-        recordTrace(store, 'render', routeUrl, start)
         const cacheSnapshot = await serializeCacheSnapshot(store.cache)
         const stateTag = `<script>window.__SSR__ = ${safeJsonForScript({
             route: routeUrl,
@@ -259,86 +205,142 @@ export async function createServer({
         })
     }
 
-    async function defaultPipeline(req: Request, store: RequestStore): Promise<Response> {
-        const url = store.url
-        if (url.pathname.startsWith('/_app/')) {
-            return serveStaticAsset(req, url)
-        }
-        const match = router.match(url.pathname)
-        if (!match) {
-            return new Response('Not Found', {
-                status: 404,
-                headers: { 'Cache-Control': NO_STORE },
-            })
-        }
-        const params = match.params ?? {}
-        const pageUrl = pageByFile.get(match.filePath)
-        const remoteUrl = remoteByFile.get(match.filePath)
-        const candidate = pageUrl ?? remoteUrl
-        if (!candidate) {
-            return new Response('Not Found', {
-                status: 404,
-                headers: { 'Cache-Control': NO_STORE },
-            })
-        }
-        const method = req.method.toUpperCase()
-        const hasPage = pages[candidate] !== undefined
-        const hasRemote = remotes[candidate] !== undefined
-        if (hasRemote) {
-            const mod = await loadRemote(candidate)
-            const handler = mod?.[method]
-            if (handler) {
-                const start = store.trace ? Bun.nanoseconds() : 0
-                const response = await handler(req)
-                recordTrace(store, 'remote', `${method} ${candidate}`, start)
-                return response
-            }
-            if (hasPage && (method === 'GET' || method === 'HEAD')) {
-                return renderPage(candidate, params, store)
-            }
-            const allow = Object.keys(mod ?? {}).filter(
-                (key) => (mod as Record<string, unknown>)[key],
-            )
-            if (hasPage) {
-                allow.push('GET', 'HEAD')
-            }
-            return new Response('Method Not Allowed', {
-                status: 405,
-                headers: {
-                    Allow: Array.from(new Set(allow)).join(', '),
-                    'Cache-Control': NO_STORE,
-                },
-            })
-        }
-        if (hasPage) {
-            if (method !== 'GET' && method !== 'HEAD') {
+    /*
+    Per-route handler bound by buildRoutes(). Receives a BunRequest with
+    `params` filled from the route pattern. Page URLs (under src/pages/)
+    serve GET/HEAD by rendering; rpc URLs (under src/rpc/, prefixed with
+    `/rpc/`) dispatch to the single declared verb-bound handler. URLs are
+    disjoint by construction so each path goes to exactly one branch.
+    */
+    function buildRouteHandler(routeUrl: string) {
+        const hasPage = pages[routeUrl] !== undefined
+        const hasRpc = rpc[routeUrl] !== undefined
+        return async function routeHandler(
+            req: Request,
+            pathParams: Record<string, string>,
+            store: RequestStore,
+        ): Promise<Response> {
+            const method = req.method as HttpVerb
+            if (hasRpc) {
+                const fn = await loadRpc(routeUrl)
+                if (fn && fn.method === method) {
+                    return fn.fetch(req, pathParams)
+                }
+                const allow = fn ? fn.method : ''
                 return new Response('Method Not Allowed', {
                     status: 405,
-                    headers: { Allow: 'GET, HEAD', 'Cache-Control': NO_STORE },
+                    headers: {
+                        Allow: allow,
+                        'Cache-Control': NO_STORE,
+                    },
                 })
             }
-            return renderPage(candidate, params, store)
+            if (hasPage) {
+                if (method !== 'GET' && method !== 'HEAD') {
+                    return new Response('Method Not Allowed', {
+                        status: 405,
+                        headers: { Allow: 'GET, HEAD', 'Cache-Control': NO_STORE },
+                    })
+                }
+                return renderPage(routeUrl, pathParams, store)
+            }
+            return new Response('Not Found', {
+                status: 404,
+                headers: { 'Cache-Control': NO_STORE },
+            })
         }
-        return new Response('Not Found', {
-            status: 404,
-            headers: { 'Cache-Control': NO_STORE },
+    }
+
+    /*
+    Page URLs (folder paths) and rpc URLs (always `/rpc/...`) are disjoint
+    by construction, so a plain object built from each map directly needs
+    no deduplication.
+    */
+    const routes: Record<string, (req: BunRequest) => Promise<Response>> = {}
+    for (const routeUrl of Object.keys(pages)) {
+        const handler = buildRouteHandler(routeUrl)
+        routes[routeUrl] = (req) => {
+            const pathParams = (req.params as Record<string, string> | undefined) ?? {}
+            return dispatchRequest(req, pathParams, handler)
+        }
+    }
+    for (const routeUrl of Object.keys(rpc)) {
+        const handler = buildRouteHandler(routeUrl)
+        routes[routeUrl] = (req) => {
+            /*
+            Capture `req.params` here, while we still hold the original
+            BunRequest. If app.handle() passes a substituted Request through
+            `next`, the Bun-level params don't follow — we restore them via
+            this closure so downstream parseArgs() can merge them in.
+            */
+            const pathParams = (req.params as Record<string, string> | undefined) ?? {}
+            return dispatchRequest(req, pathParams, handler)
+        }
+    }
+
+    function dispatchRequest(
+        req: Request,
+        pathParams: Record<string, string>,
+        handler: (
+            req: Request,
+            pathParams: Record<string, string>,
+            store: RequestStore,
+        ) => Promise<Response>,
+    ): Promise<Response> {
+        return runWithStore(req, async (store) => {
+            if (!app?.handle) {
+                return handler(req, pathParams, store)
+            }
+            return app.handle(req, (next) => handler(next, pathParams, store), {
+                server: store.server,
+            })
         })
     }
 
-    async function dispatch(req: Request, store: RequestStore): Promise<Response> {
-        if (!app?.handle) {
-            return defaultPipeline(req, store)
+    function runWithStore(
+        req: Request,
+        body: (store: RequestStore) => Promise<Response>,
+    ): Promise<Response> {
+        const url = new URL(req.url)
+        const store: RequestStore = {
+            url,
+            req,
+            signal: req.signal,
+            cache: createCacheStore(),
+            server,
         }
-        const start = store.trace ? Bun.nanoseconds() : 0
-        const response = await app.handle(req, (next) => defaultPipeline(next, store), {
-            server: store.server,
+        return requestContext.run(store, async () => {
+            const start = logRequests ? Bun.nanoseconds() : 0
+            let response: Response
+            try {
+                response = await body(store)
+            } catch (error) {
+                if (app?.handleError) {
+                    response = await app.handleError(error, req)
+                } else {
+                    log.error(error)
+                    response = new Response(
+                        `<pre>${String((error as Error)?.stack ?? error)}</pre>`,
+                        {
+                            status: 500,
+                            headers: {
+                                'Content-Type': 'text/html; charset=utf-8',
+                                'Cache-Control': NO_STORE,
+                            },
+                        },
+                    )
+                }
+            }
+            if (logRequests) {
+                const ms = (Bun.nanoseconds() - start) / 1e6
+                log.request(req.method, `${url.pathname}${url.search}`, response.status, ms)
+            }
+            return response
         })
-        recordTrace(store, 'middleware', 'handle', start)
-        return response
     }
 
     const baseSocket = app?.socket
-    const server = Bun.serve({
+    server = Bun.serve({
         port,
         ...(baseSocket
             ? {
@@ -354,6 +356,8 @@ export async function createServer({
               }
             : {}),
 
+        routes,
+
         async fetch(req, srv) {
             const url = new URL(req.url)
             if (baseSocket && url.pathname === SOCKET_PATH) {
@@ -368,44 +372,39 @@ export async function createServer({
                 }
                 return new Response('Upgrade failed', { status: 400 })
             }
-            const store: RequestStore = {
-                url,
-                req,
-                signal: req.signal,
-                cache: createCacheStore(),
-                server: srv,
-                trace: tracingEnabled ? [] : undefined,
-            }
-            return requestContext.run(store, async () => {
-                const start = logRequests ? Bun.nanoseconds() : 0
-                let response: Response
-                try {
-                    response = await dispatch(req, store)
-                } catch (error) {
-                    if (app?.handleError) {
-                        response = await app.handleError(error, req)
-                    } else {
-                        log.error(error)
-                        response = new Response(
-                            `<pre>${String((error as Error)?.stack ?? error)}</pre>`,
-                            {
-                                status: 500,
-                                headers: {
-                                    'Content-Type': 'text/html; charset=utf-8',
-                                    'Cache-Control': NO_STORE,
-                                },
-                            },
-                        )
-                    }
+            /*
+            Static assets sidestep ALS + the per-request CacheStore + the
+            app.handle middleware: they have no need for cache() and the
+            allocation overhead matters on a cold page load that pulls
+            dozens of chunks. The global server.error() handler still
+            catches anything that goes wrong inside serveStaticAsset.
+            */
+            if (url.pathname.startsWith('/_app/')) {
+                if (!logRequests) {
+                    return serveStaticAsset(req, url)
                 }
-                if (logRequests) {
-                    const ms = (Bun.nanoseconds() - start) / 1e6
-                    log.request(req.method, `${url.pathname}${url.search}`, response.status, ms)
-                }
-                if (store.trace && store.trace.length > 0) {
-                    log.debug('belte:trace', `\n${formatTrace(store.trace)}`)
-                }
+                const start = Bun.nanoseconds()
+                const response = await serveStaticAsset(req, url)
+                const ms = (Bun.nanoseconds() - start) / 1e6
+                log.request(
+                    req.method,
+                    `${url.pathname}${url.search}`,
+                    response.status,
+                    ms,
+                )
                 return response
+            }
+            /*
+            Unknown routes still run through dispatchRequest so user-defined
+            app.handle middleware can rewrite the request, serve a custom
+            404, or branch on the URL. The inner handler returns the
+            framework's default 404 when nothing intervenes.
+            */
+            return dispatchRequest(req, {}, async () => {
+                return new Response('Not Found', {
+                    status: 404,
+                    headers: { 'Cache-Control': NO_STORE },
+                })
             })
         },
 
@@ -421,6 +420,13 @@ export async function createServer({
         },
     })
 
+    /*
+    Publishes the live server through `belte/server` before invoking the
+    user's init() hook. The exported `server` is a Proxy that throws on any
+    access before this slot is set, so init() callers can hold a stable
+    reference at module scope and still see the real instance once boot
+    completes.
+    */
     setActiveServer(server)
 
     if (app?.init) {
@@ -444,51 +450,57 @@ export async function createServer({
 }
 
 /*
+Inspects the raw request URL (not the parsed pathname) for path-traversal
+patterns. The WHATWG URL parser decodes `%2E%2E` to `..` and then collapses
+dot-segments out of the pathname during normalization, so by the time
+`url.pathname` is observable any encoded traversal has been masked. The
+remaining literal `..` check guards against any future URL-parser quirk
+that lets a normalised path through.
+*/
+function containsTraversal(rawUrl: string): boolean {
+    if (rawUrl.includes('\\')) {
+        return true
+    }
+    const lower = rawUrl.toLowerCase()
+    if (
+        lower.includes('%2e%2e') ||
+        lower.includes('%2f') ||
+        lower.includes('%5c')
+    ) {
+        return true
+    }
+    const queryStart = rawUrl.indexOf('?')
+    const pathEnd = queryStart === -1 ? rawUrl.length : queryStart
+    const pathStart = rawUrl.indexOf('/', rawUrl.indexOf('://') + 3)
+    if (pathStart === -1 || pathStart >= pathEnd) {
+        return false
+    }
+    return rawUrl
+        .slice(pathStart, pathEnd)
+        .split('/')
+        .some((segment) => segment === '..')
+}
+
+/*
+Derives the MIME type from a URL pathname using Bun.file().type, which
+operates on the file extension synchronously without touching the disk. The
+Bun.file ref here is never read from — it exists only to reuse Bun's
+extension-to-MIME table.
+*/
+function mimeForExtension(pathname: string): string {
+    return Bun.file(pathname).type
+}
+
+/*
 Escapes characters that could prematurely terminate the surrounding <script>
 tag or be interpreted as HTML comment delimiters when a JSON literal is
 inlined into an HTML document.
 */
+const LINE_TERMINATORS = /[\u2028\u2029]/g
+
 function safeJsonForScript(value: unknown): string {
     return JSON.stringify(value)
         .replace(/</g, '\\u003c')
         .replace(/-->/g, '--\\u003e')
-        .replace(/\u2028/g, '\\u2028')
-        .replace(/\u2029/g, '\\u2029')
-}
-
-function pageStubPath(routeUrl: string): string {
-    if (routeUrl === '/') {
-        return '/index.svelte'
-    }
-    return `${routeUrl}.svelte`
-}
-
-function remoteStubPath(routeUrl: string): string {
-    if (routeUrl === '/') {
-        return '/index.ts'
-    }
-    return `${routeUrl}.ts`
-}
-
-/*
-filesystem write is unavoidable — Bun.FileSystemRouter requires a real dir on
-disk. We materialize one stub `.svelte` per page route and one stub `.ts` per
-endpoint route; the runtime maps matched filenames back to original route URLs.
-When a page and an endpoint share the same URL, only the page stub is written —
-the dispatch logic falls back to the endpoint when the page exists for GET/HEAD
-and the endpoint covers POST/PUT/PATCH/DELETE.
-*/
-async function materializeStubRoutes(pages: Pages, remotes: RemoteRoutes): Promise<string> {
-    const dir = mkdtempSync(`${tmpdir()}/belte-routes-`)
-    const writes: Array<Promise<unknown>> = []
-    for (const url of Object.keys(pages)) {
-        writes.push(Bun.write(`${dir}${pageStubPath(url)}`, ''))
-    }
-    for (const url of Object.keys(remotes)) {
-        if (!pages[url]) {
-            writes.push(Bun.write(`${dir}${remoteStubPath(url)}`, ''))
-        }
-    }
-    await Promise.all(writes)
-    return dir
+        .replace(LINE_TERMINATORS, (c) => (c === '\u2028' ? '\\u2028' : '\\u2029'))
 }

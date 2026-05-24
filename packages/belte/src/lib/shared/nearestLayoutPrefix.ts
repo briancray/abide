@@ -10,14 +10,13 @@ export function nearestLayoutPrefix(
 ): string | undefined {
     const normalized = routeUrl === '/' ? '' : routeUrl.replace(/^\//, '')
     let best: string | undefined
+    let bestLen = -1
     for (const prefix of layoutPrefixes) {
         const dir = prefix === '/' ? '' : prefix.replace(/^\//, '')
         if (dir === '' || normalized === dir || normalized.startsWith(`${dir}/`)) {
-            if (
-                best === undefined ||
-                dir.length > (best === '/' ? 0 : best.replace(/^\//, '').length)
-            ) {
+            if (dir.length > bestLen) {
                 best = prefix
+                bestLen = dir.length
             }
         }
     }

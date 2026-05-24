@@ -1,11 +1,13 @@
 import type { RemoteFunction } from './RemoteFunction.ts'
 
 /*
-Manifest of route URL → verb-keyed map of handler loaders. Produced by the
-resolver plugin from endpoint.ts files. Each verb may be present or absent
-depending on what the module exports.
+Manifest of RPC URL → module loader. Produced by the resolver plugin from
+every `.ts` under src/rpc — each file maps to one URL (derived from its
+path under `$rpc`, prefixed with `/rpc/`). Each module has exactly one
+named export, a RemoteFunction whose `.method` and `.url` were stamped in
+by the bundler rewrite.
 */
 export type RemoteRoutes = Record<
     string,
-    () => Promise<Record<string, RemoteFunction<unknown, unknown> | undefined>>
+    () => Promise<Record<string, RemoteFunction<unknown, unknown>>>
 >

@@ -1,4 +1,3 @@
-import { existsSync } from 'node:fs'
 import type { BunPlugin } from 'bun'
 import { belteResolverPlugin } from './belteResolverPlugin.ts'
 import { loadSvelteConfig } from './lib/shared/loadSvelteConfig.ts'
@@ -40,10 +39,11 @@ function dedupeSveltePlugin({ cwd, conditions }: { cwd: string; conditions: stri
     return {
         name: 'belte-dedupe-svelte',
         async setup(build) {
-            if (!existsSync(`${consumerSvelte}/package.json`)) {
+            const pkgFile = Bun.file(`${consumerSvelte}/package.json`)
+            if (!(await pkgFile.exists())) {
                 return
             }
-            const consumerPackage = (await Bun.file(`${consumerSvelte}/package.json`).json()) as {
+            const consumerPackage = (await pkgFile.json()) as {
                 exports: Record<string, ExportEntry>
             }
             build.onResolve({ filter: /^svelte(\/.*)?$/ }, (args) => {
@@ -107,7 +107,7 @@ export async function build({
         minify: true,
         sourcemap: 'linked',
         naming: {
-            entry: 'client.[ext]',
+            entry: 'client-[hash].[ext]',
             chunk: '[name]-[hash].[ext]',
             asset: '[name].[ext]',
         },

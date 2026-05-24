@@ -42,8 +42,8 @@ function invokeWithCache<Args, Return>(
         return shareable(existing.promise) as Promise<RemoteResponse<Return>>
     }
     const promise = fn(args as Args)
-    const meta = getRemoteMeta(promise)
-    if (!meta) {
+    const request = getRemoteMeta(promise)
+    if (!request) {
         throw new Error(
             '[belte] cache() received a function whose call did not record metadata — was it produced by a verb helper?',
         )
@@ -52,29 +52,40 @@ function invokeWithCache<Args, Return>(
     const entry = {
         key,
         promise: promise as Promise<RemoteResponse<unknown>>,
-        request: meta.request,
+        request,
         ttl,
         expiresAt: undefined as number | undefined,
     }
     store.entries.set(key, entry)
+    function deleteIfCurrent() {
+        if (store.entries.get(key) === entry) {
+            store.entries.delete(key)
+        }
+    }
     promise.then(
         () => {
+            /*
+            On the server the cache store is request-scoped and gets GC'd
+            with the response; skip ttl=0 eviction so the SSR snapshot can
+            still pick the entry up. In the browser ttl=0 stays "dedupe
+            in-flight only" — evict the moment the promise settles.
+            */
             if (ttl === 0) {
-                store.entries.delete(key)
+                if (typeof window !== 'undefined') {
+                    deleteIfCurrent()
+                }
                 return
             }
             if (ttl !== undefined) {
                 entry.expiresAt = Date.now() + ttl
                 setTimeout(() => {
-                    if (store.entries.get(key) === entry && (entry.expiresAt ?? 0) <= Date.now()) {
-                        store.entries.delete(key)
+                    if ((entry.expiresAt ?? 0) <= Date.now()) {
+                        deleteIfCurrent()
                     }
                 }, ttl).unref?.()
             }
         },
-        () => {
-            store.entries.delete(key)
-        },
+        deleteIfCurrent,
     )
     return shareable(promise)
 }
@@ -97,24 +108,29 @@ cache.invalidate = function invalidate(
     if (arg === undefined) {
         const keys = Array.from(store.entries.keys())
         store.entries.clear()
-        emit(store, 'invalidate', keys)
+        emit(store, keys)
         return
     }
     if (typeof arg === 'function') {
+        /*
+        `arg.url` is the route template; per-call args appear as `?...`
+        (GET/DELETE) or after a space (canonical-json body) — see
+        keyForRemoteCall.
+        */
         const prefix = `${arg.method} ${arg.url}`
         const affected: string[] = []
         for (const key of store.entries.keys()) {
-            if (key === prefix || key.startsWith(`${prefix} `) || key.startsWith(`${prefix}?`)) {
+            if (key === prefix || key.startsWith(`${prefix}?`) || key.startsWith(`${prefix} `)) {
                 affected.push(key)
             }
         }
         affected.forEach((key) => store.entries.delete(key))
-        emit(store, 'invalidate', affected)
+        emit(store, affected)
         return
     }
     const target = canonicalKey(arg)
     if (store.entries.delete(target)) {
-        emit(store, 'invalidate', [target])
+        emit(store, [target])
     }
 }
 
@@ -136,10 +152,13 @@ function canonicalKey(value: CacheOptions['key']): string {
     return canonicalJson(value)
 }
 
-function emit(
-    store: ReturnType<typeof activeCacheStore>,
-    type: 'invalidate',
-    keys: string[],
-): void {
-    store.events.dispatchEvent(new CustomEvent(type, { detail: keys }))
+/*
+Detail is a Set so each subscriber's `has(key)` check is O(1) regardless of
+how many keys a single invalidate touches.
+*/
+function emit(store: ReturnType<typeof activeCacheStore>, keys: string[]): void {
+    if (keys.length === 0) {
+        return
+    }
+    store.events.dispatchEvent(new CustomEvent('invalidate', { detail: new Set(keys) }))
 }

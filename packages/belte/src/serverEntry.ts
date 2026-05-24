@@ -7,7 +7,7 @@ import { layouts } from './_virtual/layouts.ts'
 // @ts-expect-error virtual module resolved by belteResolverPlugin
 import { pages } from './_virtual/pages.ts'
 // @ts-expect-error virtual module resolved by belteResolverPlugin
-import { remotes } from './_virtual/remotes.ts'
+import { rpc } from './_virtual/rpc.ts'
 // @ts-expect-error virtual module resolved by belteResolverPlugin
 import { shell } from './_virtual/shell.ts'
 import { createServer } from './lib/server/createServer.ts'
@@ -18,7 +18,7 @@ setCacheStoreResolver(() => requestContext.getStore()?.cache)
 
 await createServer({
     pages,
-    remotes,
+    rpc,
     layouts,
     shell,
     app: appMod,

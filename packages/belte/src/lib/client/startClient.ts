@@ -43,7 +43,7 @@ function hydrateCacheFromSnapshot(store: CacheStore, snapshot: CacheSnapshotEntr
     }
 }
 
-type ResolveResponse = { route: string; params: Record<string, string> } | { redirect: string }
+type ResolveResponse = { route: string; params: Record<string, string> }
 
 type FetchOutcome =
     | { kind: 'ok'; response: Response }
@@ -51,10 +51,10 @@ type FetchOutcome =
     | { kind: 'not-found' }
     | { kind: 'http-error'; status: number }
 
-async function safeResolveFetch(pathname: string): Promise<FetchOutcome> {
+async function safeResolveFetch(target: string): Promise<FetchOutcome> {
     let response: Response
     try {
-        response = await fetch(pathname, { headers: { Accept: 'application/json' } })
+        response = await fetch(target, { headers: { Accept: 'application/json' } })
     } catch {
         return { kind: 'network-error' }
     }
@@ -154,27 +154,30 @@ export async function startClient({
         console.error('[belte] initial hydration failed', err)
     }
 
-    async function navigate(pathname: string): Promise<void> {
-        const outcome = await safeResolveFetch(pathname)
+    /*
+    `target` is path + search + hash (or just path); the JSON resolve fetch
+    keeps the search so server-side routing can branch on query. `resetScroll`
+    is true for fresh navigations and false for popstate so the browser's
+    built-in history scroll restoration wins for back/forward.
+    */
+    async function navigate(target: string, resetScroll: boolean): Promise<void> {
+        const outcome = await safeResolveFetch(target)
         if (outcome.kind !== 'ok') {
-            window.location.href = pathname
+            window.location.href = target
             return
         }
         const result = (await outcome.response.json()) as ResolveResponse
-        if ('redirect' in result) {
-            history.replaceState(undefined, '', result.redirect)
-            void navigate(result.redirect)
-            return
-        }
         try {
             const { Page, Layout } = await loadView(result.route)
             nav.Page = Page
             nav.layout = Layout
             nav.params = result.params
-            window.scrollTo(0, 0)
+            if (resetScroll) {
+                window.scrollTo(0, 0)
+            }
         } catch (err) {
             console.error('[belte] navigation failed', err)
-            window.location.href = pathname
+            window.location.href = target
         }
     }
 
@@ -191,11 +194,13 @@ export async function startClient({
             }
             return
         }
-        history.pushState(undefined, '', url.pathname + url.search + url.hash)
-        void navigate(url.pathname)
+        const target = url.pathname + url.search + url.hash
+        history.pushState(undefined, '', target)
+        void navigate(target, true)
     })
 
     window.addEventListener('popstate', () => {
-        void navigate(window.location.pathname)
+        const target = window.location.pathname + window.location.search + window.location.hash
+        void navigate(target, false)
     })
 }

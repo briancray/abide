@@ -2,9 +2,9 @@
 import type { AppState } from './lib/types/AppState.ts'
 
 let { state }: { state: AppState } = $props()
-let Layout = $derived.by(() => state.layout)
-let Page = $derived.by(() => state.Page)
-let params = $derived.by(() => state.params)
+let Layout = $derived(state.layout)
+let Page = $derived(state.Page)
+let params = $derived(state.params)
 </script>
 
 {#if Layout}
