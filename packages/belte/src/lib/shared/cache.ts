@@ -62,31 +62,28 @@ function invokeWithCache<Args, Return>(
             store.entries.delete(key)
         }
     }
-    promise.then(
-        () => {
-            /*
+    promise.then(() => {
+        /*
             On the server the cache store is request-scoped and gets GC'd
             with the response; skip ttl=0 eviction so the SSR snapshot can
             still pick the entry up. In the browser ttl=0 stays "dedupe
             in-flight only" — evict the moment the promise settles.
             */
-            if (ttl === 0) {
-                if (typeof window !== 'undefined') {
+        if (ttl === 0) {
+            if (typeof window !== 'undefined') {
+                deleteIfCurrent()
+            }
+            return
+        }
+        if (ttl !== undefined) {
+            entry.expiresAt = Date.now() + ttl
+            setTimeout(() => {
+                if ((entry.expiresAt ?? 0) <= Date.now()) {
                     deleteIfCurrent()
                 }
-                return
-            }
-            if (ttl !== undefined) {
-                entry.expiresAt = Date.now() + ttl
-                setTimeout(() => {
-                    if ((entry.expiresAt ?? 0) <= Date.now()) {
-                        deleteIfCurrent()
-                    }
-                }, ttl).unref?.()
-            }
-        },
-        deleteIfCurrent,
-    )
+            }, ttl).unref?.()
+        }
+    }, deleteIfCurrent)
     return shareable(promise)
 }
 
@@ -101,8 +98,8 @@ function shareable<Return>(
     return promise.then((response) => response.clone() as RemoteResponse<Return>)
 }
 
-cache.invalidate = function invalidate(
-    arg?: RemoteFunction<unknown, unknown> | CacheOptions['key'],
+cache.invalidate = function invalidate<Args, Return>(
+    arg?: RemoteFunction<Args, Return> | CacheOptions['key'],
 ): void {
     const store = activeCacheStore()
     if (arg === undefined) {

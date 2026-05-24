@@ -112,7 +112,9 @@ Reads the module to discover the declared verb and export name without
 emitting any rewritten source. The client bundle uses this to emit a
 single remoteProxy stub with the same export name the source declared.
 */
-export function extractRpcExport(source: string): { verb: HttpVerb; exportName: string } | undefined {
+export function extractRpcExport(
+    source: string,
+): { verb: HttpVerb; exportName: string } | undefined {
     const site = findRpcCallSite(source)
     if (!site) {
         return undefined

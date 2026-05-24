@@ -12,9 +12,8 @@ target uses defineVerb (real handler), browser target uses remoteProxy
 shapes and identical WeakMap metadata so cache() works the same on either
 side.
 
-`url` is the route template. Each call substitutes `:name`-style
-placeholders out of the args, leaving the rest for the body (POST/PUT/PATCH)
-or query string (GET/DELETE/HEAD).
+`url` is the flat rpc route. Args go in the JSON body (POST/PUT/PATCH) or
+the query string (GET/DELETE/HEAD).
 */
 export function remoteProxy<Args, Return>(
     method: HttpVerb,

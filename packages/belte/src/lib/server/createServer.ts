@@ -7,6 +7,7 @@ import { createCacheStore } from '../shared/createCacheStore.ts'
 import { isDebugEnabled } from '../shared/isDebugEnabled.ts'
 import { log } from '../shared/log.ts'
 import { nearestLayoutPrefix } from '../shared/nearestLayoutPrefix.ts'
+import { toBunRoutePattern } from '../shared/toBunRoutePattern.ts'
 import type { SocketData } from '../types/App.ts'
 import type { AppModule } from '../types/AppModule.ts'
 import type { Assets } from '../types/Assets.ts'
@@ -182,7 +183,11 @@ export async function createServer({
                 state: {
                     layout: Layout,
                     Page,
+                    route: routeUrl,
                     params,
+                    pathname: store.url.pathname,
+                    search: store.url.search,
+                    hash: store.url.hash,
                 },
             },
         })
@@ -207,10 +212,11 @@ export async function createServer({
 
     /*
     Per-route handler bound by buildRoutes(). Receives a BunRequest with
-    `params` filled from the route pattern. Page URLs (under src/pages/)
-    serve GET/HEAD by rendering; rpc URLs (under src/rpc/, prefixed with
-    `/rpc/`) dispatch to the single declared verb-bound handler. URLs are
-    disjoint by construction so each path goes to exactly one branch.
+    `params` filled from the route pattern (only pages use path params;
+    $rpc URLs are flat). Page URLs (under src/pages/) serve GET/HEAD by
+    rendering; rpc URLs (under src/rpc/, prefixed with `/rpc/`) dispatch
+    to the single declared verb-bound handler. URLs are disjoint by
+    construction so each path goes to exactly one branch.
     */
     function buildRouteHandler(routeUrl: string) {
         const hasPage = pages[routeUrl] !== undefined
@@ -224,7 +230,7 @@ export async function createServer({
             if (hasRpc) {
                 const fn = await loadRpc(routeUrl)
                 if (fn && fn.method === method) {
-                    return fn.fetch(req, pathParams)
+                    return fn.fetch(req)
                 }
                 const allow = fn ? fn.method : ''
                 return new Response('Method Not Allowed', {
@@ -252,30 +258,35 @@ export async function createServer({
     }
 
     /*
-    Page URLs (folder paths) and rpc URLs (always `/rpc/...`) are disjoint
-    by construction, so a plain object built from each map directly needs
-    no deduplication.
+    Page URLs (folder paths, e.g. `/media/[id]`) get translated to Bun's
+    pattern syntax (`/media/:id`) at registration. Bun's `*` wildcard
+    matches but does not capture into req.params, so for `[...rest]`
+    routes the catch-all value is reconstructed from the request URL by
+    slicing the pathname segments after the catch-all's pattern index.
+    The reconstructed value is set under the original name (e.g. `rest`)
+    so the page component's $props destructure stays consistent with the
+    file path. Page URLs and rpc URLs (always `/rpc/...`, flat) are
+    disjoint by construction, so a plain object needs no deduplication.
     */
     const routes: Record<string, (req: BunRequest) => Promise<Response>> = {}
     for (const routeUrl of Object.keys(pages)) {
         const handler = buildRouteHandler(routeUrl)
-        routes[routeUrl] = (req) => {
-            const pathParams = (req.params as Record<string, string> | undefined) ?? {}
+        const { pattern, catchAllName } = toBunRoutePattern(routeUrl)
+        const catchAllIndex = catchAllName
+            ? routeUrl.split('/').findIndex((segment) => segment.startsWith('[...'))
+            : -1
+        routes[pattern] = (req) => {
+            const pathParams = { ...((req.params as Record<string, string> | undefined) ?? {}) }
+            if (catchAllName && catchAllIndex !== -1) {
+                const pathSegments = new URL(req.url).pathname.split('/')
+                pathParams[catchAllName] = pathSegments.slice(catchAllIndex).join('/')
+            }
             return dispatchRequest(req, pathParams, handler)
         }
     }
     for (const routeUrl of Object.keys(rpc)) {
         const handler = buildRouteHandler(routeUrl)
-        routes[routeUrl] = (req) => {
-            /*
-            Capture `req.params` here, while we still hold the original
-            BunRequest. If app.handle() passes a substituted Request through
-            `next`, the Bun-level params don't follow — we restore them via
-            this closure so downstream parseArgs() can merge them in.
-            */
-            const pathParams = (req.params as Record<string, string> | undefined) ?? {}
-            return dispatchRequest(req, pathParams, handler)
-        }
+        routes[routeUrl] = (req) => dispatchRequest(req, {}, handler)
     }
 
     function dispatchRequest(
@@ -386,12 +397,7 @@ export async function createServer({
                 const start = Bun.nanoseconds()
                 const response = await serveStaticAsset(req, url)
                 const ms = (Bun.nanoseconds() - start) / 1e6
-                log.request(
-                    req.method,
-                    `${url.pathname}${url.search}`,
-                    response.status,
-                    ms,
-                )
+                log.request(req.method, `${url.pathname}${url.search}`, response.status, ms)
                 return response
             }
             /*
@@ -462,11 +468,7 @@ function containsTraversal(rawUrl: string): boolean {
         return true
     }
     const lower = rawUrl.toLowerCase()
-    if (
-        lower.includes('%2e%2e') ||
-        lower.includes('%2f') ||
-        lower.includes('%5c')
-    ) {
+    if (lower.includes('%2e%2e') || lower.includes('%2f') || lower.includes('%5c')) {
         return true
     }
     const queryStart = rawUrl.indexOf('?')

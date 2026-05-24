@@ -10,6 +10,7 @@
         "./shared/*": "./src/lib/shared/*.ts",
         "./rpc/*": "./src/lib/rpc/*.ts",
         "./cache": "./src/lib/shared/cache.ts",
+        "./nav": "./src/lib/client/nav.svelte.ts",
         "./build": "./src/build.ts",
         "./compile": "./src/compile.ts",
         "./preload": "./src/preload.ts",

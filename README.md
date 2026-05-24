@@ -12,7 +12,7 @@ Belte is built around four ideas:
 
 1. **Folder-based pages.** Every page is a Svelte component under `src/pages/` — `page.svelte` renders, `layout.svelte` wraps, and the folder path becomes the URL.
 2. **A single Bun process.** The dev server, production server, and compiled standalone binary all run on `Bun.serve`. No Node, no Vite, no separate bundler runtime.
-3. **Svelte 5 throughout.** Server-rendered HTML hydrates into a Svelte 5 app and navigates client-side. Layout chains run on both sides.
+3. **Svelte 5 throughout.** Server-rendered HTML hydrates into a Svelte 5 app and navigates client-side; `belte/nav` exposes a reactive `nav` object (`route`, `params`, `pathname`, `search`, `hash`) plus a `navigate(href)` helper. Layout chains run on both sides.
 4. **RPC is callable from anywhere.** Every file under `src/rpc/` exports one remote function — the filename becomes both the export name and the URL (mounted at `/rpc/<file>`), and `handler.GET / POST / PUT / PATCH / DELETE / HEAD` picks the verb. On the server it runs directly; on the client the bundler swaps it for a typed `fetch` to that URL.
 
 It ships as a library (`belte`) plus a CLI (`belte scaffold | dev | build | start | compile`).
@@ -66,11 +66,15 @@ Bun reads `.env` automatically:
 ```
 my-app/
   src/
+    .belte/                     # generated: Routes type augmentation for belte/nav; gitignored
     pages/                      # all pages live here; every page is a folder
       page.svelte                 # GET /
       layout.svelte               # wraps every page below
       about/
         page.svelte               # GET /about
+      posts/
+        [id]/
+          page.svelte             # GET /posts/:id (id is a $prop, typed via Routes)
     rpc/                        # all remote functions live here; one per file
       getHello.ts                 # GET /rpc/getHello   (handler.GET)
       createUser.ts               # POST /rpc/createUser (handler.POST)
@@ -101,7 +105,7 @@ The sections below cover each file. Each has a **barebones** snippet (the litera
 
 ### `src/pages/page.svelte`
 
-A page is a Svelte 5 component. Folder name becomes the URL: `src/pages/page.svelte` mounts at `/`, `src/pages/posts/[id]/page.svelte` mounts at `/posts/:id`. Params from the URL are exposed via the `params` prop. Pages render on the server during SSR and then hydrate on the client; the same component code runs in both contexts.
+A page is a Svelte 5 component. Folder name becomes the URL: `src/pages/page.svelte` mounts at `/`, `src/pages/posts/[id]/page.svelte` mounts at `/posts/:id`. Dynamic segments (`[id]`, `[...rest]`) are spread onto the page as individual props; the typed shape is generated into `src/.belte/routes.d.ts` and surfaces as `Routes` on `belte/nav`. Pages render on the server during SSR and then hydrate on the client; the same component code runs in both contexts.
 
 **Barebones**
 
@@ -109,40 +113,72 @@ A page is a Svelte 5 component. Folder name becomes the URL: `src/pages/page.sve
 <h1>Hello from belte</h1>
 ```
 
-**Full**
+**Full** — `src/pages/posts/[id]/page.svelte`
 
 ```svelte
 <script lang="ts">
 import { cache } from 'belte/cache'
 import { getPost } from '$rpc/getPost.ts'
 
-let { params }: { params: { id: string } } = $props()
+let { id }: { id: string } = $props()
 
-const post = await cache(getPost)({ id: params.id }).then((res) => res.json())
+/*
+`cache(fn, { key })` scopes the entry under an explicit key so two posts
+don't share one getPost entry. Wrapping `await` inside `$derived` makes
+the value re-resolve when `id` changes (navigating /posts/1 → /posts/2
+without remounting the Page).
+*/
+const post = $derived(
+    await cache(getPost, { key: ['post', id] })({ id }).then((res) => res.json()),
+)
 </script>
 
 <svelte:head>
-    <title>{post.title}</title>
+    <title>{post?.title ?? 'Not found'}</title>
 </svelte:head>
 
-<article>
-    <h1>{post.title}</h1>
-    <p>{post.body}</p>
-</article>
+{#if post}
+    <article>
+        <h1>{post.title}</h1>
+        <p>{post.body}</p>
+    </article>
+{:else}
+    <p>No post with id {id}.</p>
+{/if}
 ```
 
 ### `src/pages/layout.svelte`
 
-A layout wraps every page at or below its folder. Layouts compose root-to-leaf: a request for `/admin/users` runs `pages/layout.svelte` → `pages/admin/layout.svelte` → the page. Like pages, they run on the server during SSR and on the client during navigation. Use a layout for header/footer chrome, global CSS imports, and data needed everywhere below the folder.
+A layout wraps every page at or below its folder. Layouts compose root-to-leaf: a request for `/admin/users` runs `pages/layout.svelte` → `pages/admin/layout.svelte` → the page. Like pages, they run on the server during SSR and on the client during navigation. Use a layout for header/footer chrome, global CSS imports, and data needed everywhere below the folder. Importing `nav` from `belte/nav` gets you a reactive `{ route, params, pathname, search, hash }` object — handy for things like highlighting the active link.
 
 **Barebones**
 
 ```svelte
+<!--
+Root layout. Wraps every page below src/pages/. Nest a layout.svelte deeper
+to wrap a subtree (e.g. src/pages/admin/layout.svelte). Layouts compose
+root-to-leaf and run on both the server (during SSR) and the client (after
+hydration).
+-->
 <script lang="ts">
+import '../app.css'
+
 let { children }: { children: import('svelte').Snippet } = $props()
 </script>
 
-<main>{@render children()}</main>
+<svelte:head>
+    <title>belte app</title>
+</svelte:head>
+
+<header>
+    <nav>
+        <a href="/">Home</a>
+        <a href="/about">About</a>
+    </nav>
+</header>
+<main>
+    {@render children()}
+</main>
 ```
 
 **Full**
@@ -151,12 +187,20 @@ let { children }: { children: import('svelte').Snippet } = $props()
 <script lang="ts">
 import '../app.css'
 import { cache } from 'belte/cache'
+import { nav } from 'belte/nav'
 import { getSession } from '$rpc/getSession.ts'
 import { logout } from '$rpc/logout.ts'
 
 let { children }: { children: import('svelte').Snippet } = $props()
 
 const session = await cache(getSession)().then((res) => res.json())
+
+/*
+`nav.pathname` updates on every SPA navigation, so derivations that read
+it (like "is this link the active one?") re-run automatically.
+*/
+const linkClass = (href: string) =>
+    nav.pathname === href ? 'active' : ''
 </script>
 
 <svelte:head>
@@ -165,8 +209,8 @@ const session = await cache(getSession)().then((res) => res.json())
 
 <header>
     <nav>
-        <a href="/">Home</a>
-        <a href="/about">About</a>
+        <a href="/" class={linkClass('/')}>Home</a>
+        <a href="/about" class={linkClass('/about')}>About</a>
         {#if session?.user}
             <span>{session.user}</span>
             <form method="POST" action={logout.url}><button type="submit">Log out</button></form>
@@ -182,7 +226,7 @@ const session = await cache(getSession)().then((res) => res.json())
 
 An rpc module exposes exactly one remote function. The filename is both the URL path (under `/rpc/`) and the export name, and `handler.<VERB>` picks the HTTP verb. `handler.GET<Args, Return>(fn)` (or `.POST`, `.PUT`, `.PATCH`, `.DELETE`, `.HEAD`) produces a **remote function** — a typed callable that, on the server, runs the handler directly, and on the client, fetches `/rpc/<name>`. The bundler swaps the implementation per build target.
 
-Folders under `src/rpc/` become URL segments: `src/rpc/users/getUser.ts` mounts at `/rpc/users/getUser`. `[name]` folder segments map to `:name` path params just like in `src/pages/`.
+Folders under `src/rpc/` become URL segments: `src/rpc/users/getUser.ts` mounts at `/rpc/users/getUser`. $rpc URLs are flat — there are no `[name]` dynamic segments; pass identifiers via args (query string for GET/DELETE/HEAD, JSON body for POST/PUT/PATCH).
 
 Argument handling is content-type-driven:
 
@@ -195,6 +239,17 @@ Type parameters are `<Args, Return>`. `Args` is what the caller passes in. `Retu
 **Barebones** — `src/rpc/getHello.ts`
 
 ```ts
+/*
+RPC module — every file under src/rpc/ exposes exactly one verb-bound remote
+function. The filename is the export name and the URL path (under `/rpc/`),
+and the `handler.<VERB>` method picks the HTTP verb. `handler.GET<Args, Return>`
+gives the function its type signature; the bundler swaps the runtime per
+build target: direct call on the server, fetch over the network on the
+client.
+
+Generic parameters are <Args, Return> — Args is what the caller passes in,
+Return is the JSON-decoded body type.
+*/
 import { handler } from 'belte/rpc/handler'
 
 export const getHello = handler.GET<undefined, { message: string }>(() =>
@@ -249,13 +304,54 @@ Optional application hooks. Every export is optional; delete the ones you don't 
 
 Augment `belte/types/App`'s `SocketData` interface to type `ws.data` across your app.
 
-**Barebones** — delete the whole file if you don't need any hooks.
+**Barebones** — every export is optional; delete the ones you don't need.
 
 ```ts
+/*
+Optional application hooks. Every export is optional; delete the ones you
+don't need. Belte resolves this file at build time via the belte:app virtual
+module — no import is needed from your own code.
+
+  init        runs once after Bun.serve is up; return a cleanup for SIGINT/SIGTERM
+  handle      middleware wrapping the default request pipeline
+  handleError custom 500 fallback
+  socket      WebSocket handler exposed at /__belte/socket
+*/
 import type { AppModule } from 'belte/types/AppModule'
 
+/*
+Augment SocketData to type ws.data across your app. Remove the augmentation
+if you aren't using sockets.
+*/
+declare module 'belte/types/App' {
+    interface SocketData {
+        id: number
+    }
+}
+
 export const init: AppModule['init'] = ({ server }) => {
-    console.log(`listening on http://localhost:${server.port}`)
+    console.log(`server listening on http://localhost:${server.port}`)
+}
+
+export const handle: AppModule['handle'] = async (request, next) => {
+    return next(request)
+}
+
+export const handleError: AppModule['handleError'] = (error) => {
+    console.error(error)
+    return new Response('something went wrong', { status: 500 })
+}
+
+let nextId = 0
+
+export const socket: AppModule['socket'] = {
+    upgrade: () => ({ data: { id: ++nextId } }),
+    open(ws) {
+        ws.send(`hi #${ws.data.id}`)
+    },
+    message(ws, message) {
+        ws.send(`echo: ${message}`)
+    },
 }
 ```
 
@@ -319,6 +415,16 @@ Optional HTML shell. If present at `src/app.html`, belte uses it as the SSR temp
 **Barebones** — the default; delete the file to keep it.
 
 ```html
+<!--
+Optional HTML shell. If present at src/app.html, belte uses this as the SSR
+template; otherwise a default shell is used. The three comment markers below
+are replaced at render time:
+  ssr:head     rendered <head> from Svelte (title, meta, link tags)
+  ssr:body     rendered page body
+  ssr:state    cache snapshot + route info for hydration
+See their usage further down (wrapped as HTML comments).
+Delete this file to use the default shell.
+-->
 <!doctype html>
 <html lang="en">
 <head>
@@ -363,8 +469,26 @@ Any CSS the app cares about. It isn't picked up automatically — import it once
 **Barebones**
 
 ```css
+/*
+Global stylesheet. Imported once from src/routes/layout.svelte so it ships
+with every page. To enable Tailwind v4, add `bun-plugin-tailwind` and
+`tailwindcss` as devDependencies and replace this file with:
+
+    @import "tailwindcss";
+*/
+
 :root {
     font-family: system-ui, sans-serif;
+    color: #1f2937;
+    background: #f8fafc;
+}
+
+body {
+    margin: 0;
+}
+
+a {
+    color: inherit;
 }
 ```
 
@@ -385,9 +509,15 @@ Optional. Same shape as upstream Svelte's config. Delete the file to use default
 **Barebones** — opt in to async Svelte (enables top-level `await` inside components):
 
 ```js
+/*
+Optional Svelte compiler configuration. Same shape as upstream Svelte.
+Delete this file to use defaults.
+*/
+
 /** @type {import('belte').SvelteConfig} */
 export default {
     compilerOptions: {
+        // Opt in to top-level await inside Svelte components.
         experimental: { async: true },
     },
 }
@@ -560,7 +690,7 @@ HTML to client
 hydration                      client cache store loads from __SSR__ — no second fetch
   │
   ▼
-$derived.by(() => cache(fn)()) subscribes; cache.invalidate(fn) re-runs every subscriber
+$derived(cache(fn)()) subscribes; cache.invalidate(fn) re-runs every subscriber
 ```
 
 ### Reading data (SSR + first paint)
@@ -589,7 +719,7 @@ compilerOptions: { experimental: { async: true } }
 
 ### Reactive reads (client)
 
-Wrap a `cache()` call in `$derived.by` to subscribe the deriving scope to that cache key. After invalidation, every subscriber re-runs and fetches a fresh entry.
+Wrap a `cache()` call in `$derived` to subscribe the deriving scope to that cache key. After invalidation, every subscriber re-runs and fetches a fresh entry.
 
 ```svelte
 <script lang="ts">
@@ -597,7 +727,7 @@ import { cache } from 'belte/cache'
 import { getCounter } from '$rpc/getCounter.ts'
 import { incrementCounter } from '$rpc/incrementCounter.ts'
 
-const counter = $derived.by(() => cache(getCounter)().then((res) => res.json()))
+const counter = $derived(cache(getCounter)().then((res) => res.json()))
 
 async function increment() {
     await incrementCounter()
@@ -609,7 +739,7 @@ async function increment() {
 <button onclick={increment}>+1</button>
 ```
 
-Two `$derived.by(() => cache(getCounter)())` calls anywhere on the page share one cache entry and update together.
+Two `$derived(cache(getCounter)())` calls anywhere on the page share one cache entry and update together.
 
 ### Mutations
 

@@ -5,12 +5,12 @@ import { incrementCounter } from '$rpc/incrementCounter.ts'
 import { resetCounter } from '$rpc/resetCounter.ts'
 
 /*
-`cache()` inside `$derived.by` subscribes the deriving scope to the cache
+`cache()` inside `$derived` subscribes the deriving scope to the cache
 key. When `cache.invalidate(getCounter)` fires, every derived re-runs,
 misses, and gets a fresh promise. SSR has no tracking, so the call just
 returns the snapshot promise once.
 */
-const counter = $derived.by(() => cache(getCounter)().then((res) => res.json()))
+const counter = $derived(cache(getCounter)().then((res) => res.json()))
 const mirror = $derived(await cache(getCounter)().then((res) => res.json()))
 
 async function increment() {
@@ -29,7 +29,7 @@ async function refresh() {
 
 <h1 class="text-3xl font-bold">Live cache</h1>
 <p class="mt-2 text-slate-600">
-    Wrap <code class="font-mono">cache(fn)()</code> in <code class="font-mono">$derived.by</code>
+    Wrap <code class="font-mono">cache(fn)()</code> in <code class="font-mono">$derived</code>
     to subscribe. After a mutation, call
     <code class="font-mono">cache.invalidate(fn)</code>
     to broadcast — every derived binding for that key refetches.
@@ -70,7 +70,7 @@ async function refresh() {
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
     <h2 class="text-lg font-semibold">Mirror</h2>
     <p class="mt-1 text-sm text-slate-600">
-        A second <code class="font-mono">$derived.by(() => cache(getCounter)())</code> in the same page —
+        A second <code class="font-mono">$derived(cache(getCounter)())</code> in the same page —
         both update together because they share one cache entry.
     </p>
         <p class="mt-3 font-mono text-3xl text-slate-900">{mirror.count}</p>

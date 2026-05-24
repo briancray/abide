@@ -26,9 +26,8 @@ rewrites every `export const VERB = handler(fn)` inside an `$rpc/**` module
 so the verb (from the export name) and the URL (from the file path under
 `src/rpc/`, with `/rpc/` prefix) are threaded into defineVerb. Calling the
 function invokes the handler directly with a synthesized Request (built
-from the args); calling `.fetch(req, pathParams)` lets a caller hand in a
-Request + matched path params and the wrapper merges body/query/path into
-the args per parseArgs.
+from the args); calling `.fetch(req)` lets a caller hand in a Request and
+the wrapper merges body/query into the args per parseArgs.
 
 Every call records the synthesized Request against the returned promise so
 cache() can stash it on the entry without re-building.
@@ -92,11 +91,8 @@ export function defineVerb<Args, Return>(
 
     callable.method = method
     callable.url = url
-    callable.fetch = async (
-        request: Request,
-        pathParams?: Record<string, string>,
-    ): Promise<RemoteResponse<Return>> => {
-        const args = (await parseArgs(method, request, pathParams)) as Args | undefined
+    callable.fetch = async (request: Request): Promise<RemoteResponse<Return>> => {
+        const args = (await parseArgs(method, request)) as Args | undefined
         return invoke(request, args)
     }
     return callable as RemoteFunction<Args, Return>

@@ -11,5 +11,5 @@ module bound this function to (one of GET/POST/PUT/PATCH/DELETE/HEAD).
 export type RemoteFunction<Args, Return> = ((args: Args) => Promise<RemoteResponse<Return>>) & {
     readonly method: HttpVerb
     readonly url: string
-    fetch(request: Request, pathParams?: Record<string, string>): Promise<RemoteResponse<Return>>
+    fetch(request: Request): Promise<RemoteResponse<Return>>
 }

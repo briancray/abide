@@ -2,10 +2,11 @@
 import { existsSync, statSync } from 'node:fs'
 import type { BunPlugin } from 'bun'
 import { Glob } from 'bun'
-import { extractRpcExport, rewriteForServer } from './lib/shared/rewriteRpcExports.ts'
 import { log } from './lib/shared/log.ts'
 import { pageUrlForFile } from './lib/shared/pageUrlForFile.ts'
+import { extractRpcExport, rewriteForServer } from './lib/shared/rewriteRpcExports.ts'
 import { rpcUrlForFile } from './lib/shared/rpcUrlForFile.ts'
+import { writeRoutesDts } from './lib/shared/writeRoutesDts.ts'
 
 /*
 Resolves a bare directory or extensionless path to a concrete file. Mirrors
@@ -77,7 +78,10 @@ export function belteResolverPlugin({
     let shellContentsPromise: Promise<string> | undefined
     function scanPagesOnce(): Promise<PagesScan> {
         if (!pagesScanPromise) {
-            pagesScanPromise = scanPages(pagesDir)
+            pagesScanPromise = scanPages(pagesDir).then(async (scan) => {
+                await writeRoutesDts({ cwd, pageFiles: scan.pageFiles })
+                return scan
+            })
         }
         return pagesScanPromise
     }
@@ -137,7 +141,7 @@ export function belteResolverPlugin({
                 const declared = extractRpcExport(source)
                 if (!declared) {
                     throw new Error(
-                        `[belte] src/rpc/${relativePath} has no \`export const <name> = handler.<VERB>(...)\` — every \$rpc module must declare exactly one remote function`,
+                        `[belte] src/rpc/${relativePath} has no \`export const <name> = handler.<VERB>(...)\` — every $rpc module must declare exactly one remote function`,
                     )
                 }
                 const expectedName = relativePath.replace(/\.ts$/, '').split('/').pop() ?? ''

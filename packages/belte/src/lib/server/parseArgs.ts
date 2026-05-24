@@ -4,22 +4,16 @@ import type { HttpVerb } from '../types/HttpVerb.ts'
 Parses + merges every source of args available for a verb-defined handler:
 - body (json or form-encoded, ignored for GET/DELETE)
 - url query string
-- path params from the matched Bun.serve route
 
-Later sources win on key collision; path params are most authoritative since
-they came straight off the URL. Returns undefined when no source contributes
-any key. A non-object body (array, primitive) is returned as-is and no merge
-runs — path/query have nowhere to go in that case.
+Query keys win on collision. Returns undefined when no source contributes
+any key. A non-object body (array, primitive) is returned as-is and no
+merge runs — the query has nowhere to go in that case.
 */
-export async function parseArgs(
-    method: HttpVerb,
-    request: Request,
-    pathParams?: Record<string, string>,
-): Promise<unknown> {
+export async function parseArgs(method: HttpVerb, request: Request): Promise<unknown> {
     const url = new URL(request.url)
     const query = Object.fromEntries(url.searchParams)
 
-    let body: unknown = undefined
+    let body: unknown
     if (method !== 'GET' && method !== 'DELETE') {
         const contentType = (request.headers.get('content-type') ?? '').toLowerCase()
         if (contentType.includes('application/json')) {
@@ -41,7 +35,7 @@ export async function parseArgs(
     }
 
     const bodyObject = (body ?? {}) as Record<string, unknown>
-    const merged = { ...bodyObject, ...query, ...(pathParams ?? {}) }
+    const merged = { ...bodyObject, ...query }
     if (Object.keys(merged).length === 0) {
         return undefined
     }

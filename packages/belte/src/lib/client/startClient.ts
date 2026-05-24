@@ -1,15 +1,13 @@
-import type { Component } from 'svelte'
 import { hydrate } from 'svelte'
 import App from '../../App.svelte'
 import { setCacheStoreResolver } from '../shared/activeCacheStore.ts'
 import { createCacheStore } from '../shared/createCacheStore.ts'
-import { nearestLayoutPrefix } from '../shared/nearestLayoutPrefix.ts'
 import type { CacheSnapshotEntry } from '../types/CacheSnapshotEntry.ts'
 import type { CacheStore } from '../types/CacheStore.ts'
 import type { Layouts } from '../types/Layouts.ts'
 import type { Pages } from '../types/Pages.ts'
 import type { RemoteResponse } from '../types/RemoteResponse.ts'
-import { nav } from './nav.svelte.ts'
+import { bindNav, handlePopstate, nav, navigate } from './nav.svelte.ts'
 
 declare global {
     interface Window {
@@ -41,30 +39,6 @@ function hydrateCacheFromSnapshot(store: CacheStore, snapshot: CacheSnapshotEntr
             expiresAt: undefined,
         })
     }
-}
-
-type ResolveResponse = { route: string; params: Record<string, string> }
-
-type FetchOutcome =
-    | { kind: 'ok'; response: Response }
-    | { kind: 'network-error' }
-    | { kind: 'not-found' }
-    | { kind: 'http-error'; status: number }
-
-async function safeResolveFetch(target: string): Promise<FetchOutcome> {
-    let response: Response
-    try {
-        response = await fetch(target, { headers: { Accept: 'application/json' } })
-    } catch {
-        return { kind: 'network-error' }
-    }
-    if (response.status === 404) {
-        return { kind: 'not-found' }
-    }
-    if (!response.ok) {
-        return { kind: 'http-error', status: response.status }
-    }
-    return { kind: 'ok', response }
 }
 
 function isInternalLinkEvent(event: MouseEvent): HTMLAnchorElement | undefined {
@@ -102,11 +76,11 @@ function isInternalLinkEvent(event: MouseEvent): HTMLAnchorElement | undefined {
 }
 
 /*
-Hydrates the SSR'd document against the SSR payload on `window.__SSR__`, then
-intercepts internal link clicks and popstate events to perform client-side
-navigations. Each navigation fetches a JSON envelope (route + params) and
-swaps the active page + layout component; pages call cache(...) themselves to
-fetch their data via the remote-function proxy.
+Hydrates the SSR'd document against the SSR payload on `window.__SSR__`,
+then intercepts internal link clicks (delegating to nav.navigate) and
+popstate events. The nav module owns the route/Page/Layout state and the
+URL-resolution logic; this entry just wires the cache store, runs the
+initial bind, and attaches the global listeners.
 */
 export async function startClient({
     pages,
@@ -126,59 +100,11 @@ export async function startClient({
         hydrateCacheFromSnapshot(cacheStore, window.__SSR__.cache)
     }
 
-    const layoutPrefixes = layouts ? Object.keys(layouts) : []
-
-    async function loadView(
-        route: string,
-    ): Promise<{ Page: Component; Layout: Component | undefined }> {
-        const pageLoader = pages[route]
-        if (!pageLoader) {
-            throw new Error(`[belte] unknown route: ${route}`)
-        }
-        const layoutPrefix = nearestLayoutPrefix(route, layoutPrefixes)
-        const [pageMod, layoutMod] = await Promise.all([
-            pageLoader(),
-            layoutPrefix && layouts ? layouts[layoutPrefix]() : Promise.resolve(undefined),
-        ])
-        return { Page: pageMod.default, Layout: layoutMod?.default }
-    }
-
     try {
-        const { route, params } = window.__SSR__
-        const { Page, Layout } = await loadView(route)
-        nav.Page = Page
-        nav.layout = Layout
-        nav.params = params
+        await bindNav({ pages, layouts, ssr: window.__SSR__ })
         hydrate(App, { target, props: { state: nav } })
     } catch (err) {
         console.error('[belte] initial hydration failed', err)
-    }
-
-    /*
-    `target` is path + search + hash (or just path); the JSON resolve fetch
-    keeps the search so server-side routing can branch on query. `resetScroll`
-    is true for fresh navigations and false for popstate so the browser's
-    built-in history scroll restoration wins for back/forward.
-    */
-    async function navigate(target: string, resetScroll: boolean): Promise<void> {
-        const outcome = await safeResolveFetch(target)
-        if (outcome.kind !== 'ok') {
-            window.location.href = target
-            return
-        }
-        const result = (await outcome.response.json()) as ResolveResponse
-        try {
-            const { Page, Layout } = await loadView(result.route)
-            nav.Page = Page
-            nav.layout = Layout
-            nav.params = result.params
-            if (resetScroll) {
-                window.scrollTo(0, 0)
-            }
-        } catch (err) {
-            console.error('[belte] navigation failed', err)
-            window.location.href = target
-        }
     }
 
     document.addEventListener('click', (event) => {
@@ -187,20 +113,19 @@ export async function startClient({
             return
         }
         const url = new URL(anchor.href, window.location.href)
-        event.preventDefault()
+        /*
+        Hash-only same-page navigations fall through to the browser so the
+        native scroll-into-view for `#anchor` targets keeps working.
+        Anything else (pathname, search, or pathname+hash combo) goes
+        through navigate() — it pushes history, refreshes nav state, and
+        short-circuits the JSON resolve when only search/hash differ.
+        */
         if (url.pathname === window.location.pathname && url.search === window.location.search) {
-            if (url.hash !== window.location.hash) {
-                window.location.hash = url.hash
-            }
             return
         }
-        const target = url.pathname + url.search + url.hash
-        history.pushState(undefined, '', target)
-        void navigate(target, true)
+        event.preventDefault()
+        void navigate(`${url.pathname}${url.search}${url.hash}`)
     })
 
-    window.addEventListener('popstate', () => {
-        const target = window.location.pathname + window.location.search + window.location.hash
-        void navigate(target, false)
-    })
+    window.addEventListener('popstate', handlePopstate)
 }

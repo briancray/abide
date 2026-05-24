@@ -1,5 +1,6 @@
 <script lang="ts">
 import { cache } from 'belte/cache'
+import { navigate } from 'belte/nav'
 import { getNow } from '$rpc/getNow.ts'
 import { boom } from '$rpc/boom.ts'
 
@@ -111,7 +112,7 @@ async function trigger(label: string, url: string, init?: RequestInit) {
         and <code class="font-mono">src/rpc/resetCounter.ts</code> (DELETE) all touch the same
         module-level state. Reading
         <code class="font-mono">cache(fn)()</code>
-        inside <code class="font-mono">$derived.by</code> subscribes;
+        inside <code class="font-mono">$derived</code> subscribes;
         <code class="font-mono">cache.invalidate(fn)</code>
         broadcasts and every derived binding refetches.
     </p>
@@ -159,7 +160,33 @@ async function trigger(label: string, url: string, init?: RequestInit) {
 </section>
 
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
-    <h2 class="text-lg font-semibold">6. Error handling</h2>
+    <h2 class="text-lg font-semibold">6. Dynamic routes</h2>
+    <p class="mt-1 text-sm text-slate-600">
+        <code class="font-mono">src/pages/posts/[id]/page.svelte</code> mounts at
+        <code class="font-mono">/posts/:id</code>. The <code class="font-mono">id</code> arrives as a
+        $prop, typed via the generated
+        <code class="font-mono">Routes</code>
+        augmentation. <code class="font-mono">navigate(href)</code>
+        from
+        <code class="font-mono">belte/nav</code> does the same SPA navigation as clicking a link.
+    </p>
+    <div class="mt-3 flex flex-wrap gap-2">
+        <a
+            href="/posts/1"
+            class="rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100">
+            /posts/1 (link)
+        </a>
+        <button
+            type="button"
+            class="rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100"
+            onclick={() => navigate('/posts/2')}>
+            /posts/2 (navigate())
+        </button>
+    </div>
+</section>
+
+<section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
+    <h2 class="text-lg font-semibold">7. Error handling</h2>
     <p class="mt-1 text-sm text-slate-600">
         belte sets <code class="font-mono">Cache-Control: no-store</code> on 4xx/5xx and an
         <code class="font-mono">Allow</code> header on 405.

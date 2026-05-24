@@ -1,7 +1,8 @@
 import type { BunPlugin } from 'bun'
-import { compile, compileModule } from 'svelte/compiler'
+import { compile, compileModule, preprocess } from 'svelte/compiler'
 import { log } from './lib/shared/log.ts'
 import type { SvelteConfig } from './lib/types/SvelteConfig.ts'
+import { tailwindStylePreprocessor } from './tailwindStylePreprocessor.ts'
 
 /*
 Bun plugin that compiles `.svelte` components (with CSS injected at runtime)
@@ -16,9 +17,10 @@ export function sveltePlugin(options: {
 }): BunPlugin {
     return {
         name: 'svelte-loader',
-        setup(build) {
+        async setup(build) {
             const compileOptions = options.svelteConfig?.compilerOptions ?? {}
             const tsTranspiler = new Bun.Transpiler({ loader: 'ts' })
+            const tailwindPreprocessor = await tailwindStylePreprocessor()
             build.onLoad({ filter: /\.svelte\.(js|ts)$/ }, async (args) => {
                 const raw = await Bun.file(args.path).text()
                 const source = args.path.endsWith('.ts') ? tsTranspiler.transformSync(raw) : raw
@@ -35,7 +37,10 @@ export function sveltePlugin(options: {
             })
 
             build.onLoad({ filter: /\.svelte$/ }, async (args) => {
-                const source = await Bun.file(args.path).text()
+                const raw = await Bun.file(args.path).text()
+                const source = tailwindPreprocessor
+                    ? (await preprocess(raw, tailwindPreprocessor, { filename: args.path })).code
+                    : raw
                 const { js, warnings } = compile(source, {
                     ...compileOptions,
                     filename: args.path,

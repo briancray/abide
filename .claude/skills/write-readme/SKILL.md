@@ -79,9 +79,9 @@ Subsections, in this exact order:
 1. **Intro paragraph** — rpc modules are the data primitive; the bundler runs handlers in-process on the server build and substitutes a `fetch` proxy on the client build. End the paragraph by previewing that `cache()` is a thin layer added on top.
 2. **Calling remote functions directly** — `await fn(args)` semantics on each build target, query-string vs JSON-body serialization, the typed `.json()` return, and `fn.url` / `fn.method` for `<form action>` and plain `fetch`.
 3. **`cache()` — the layer on top** — what cache buys you over a direct call (dedupe + SSR snapshot + reactivity). Show the minimal `cache(fn)()` wrap.
-4. **How a cached request flows** — ASCII flow diagram from browser request through `app.ts handle?` → layout chain → page → cache snapshot serialization → hydration → `$derived.by` reactivity. Keep it diagram-like, not prose.
+4. **How a cached request flows** — ASCII flow diagram from browser request through `app.ts handle?` → layout chain → page → cache snapshot serialization → hydration → `$derived` reactivity. Keep it diagram-like, not prose.
 5. **Reading data (SSR + first paint)** — top-level await semantics, how SSR-time dedupe works, how hydration replays the snapshot (no second fetch). Include the `experimental: { async: true }` note since belte no longer forces it.
-6. **Reactive reads (client)** — `$derived.by(() => cache(fn)())` subscribe pattern, `cache.invalidate(fn)` re-runs every subscriber. Show a counter-style example.
+6. **Reactive reads (client)** — `$derived(cache(fn)())` subscribe pattern, `cache.invalidate(fn)` re-runs every subscriber. Show a counter-style example.
 7. **Mutations** — call the remote function, then invalidate. List the three `cache.invalidate` overloads (`fn`, `key`, `()`).
 8. **`cache` options** — `ttl` (`undefined` / `0` / `>0`) and `key` semantics.
 9. **Caching defaults at the HTTP layer** — the cache-control buckets emitted by `cacheControlForAsset.ts` + `createServer.ts`. Build emits everything under `/_app/` with a content hash (entry bundles `client-[hash].js`/`.css` and chunks alike), so the hashed-immutable branch covers the whole built tree; the must-revalidate branch is the fallback for any non-hashed asset. Then SSR HTML/JSON and the error path. Verify the actual strings before pasting numbers.

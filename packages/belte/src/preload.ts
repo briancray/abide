@@ -6,10 +6,10 @@ import { sveltePlugin } from './sveltePlugin.ts'
 const mode = (process.env.BELTE_SVELTE_MODE ?? 'server') as 'server' | 'client'
 const svelteConfig = await loadSvelteConfig()
 
-plugin(sveltePlugin({ generate: mode, svelteConfig }))
-plugin(belteResolverPlugin({ target: mode }))
+await plugin(sveltePlugin({ generate: mode, svelteConfig }))
+await plugin(belteResolverPlugin({ target: mode }))
 
-plugin({
+await plugin({
     name: 'css-noop',
     setup(build) {
         build.onLoad({ filter: /\.css$/ }, () => ({
