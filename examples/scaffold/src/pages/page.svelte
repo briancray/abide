@@ -3,8 +3,8 @@ Root page — served at GET /. Every folder under src/pages/ that contains a
 page.svelte mounts at that folder's URL.
 -->
 <script lang="ts">
-import { cache } from 'belte/cache'
-import { getHello } from '$rpc/getHello.ts'
+import { cache } from 'belte/consume'
+import { getHello } from '$route/getHello.ts'
 
 /*
 Top-level await runs on the server during SSR. The decoded body is captured

@@ -1,9 +1,9 @@
 <script lang="ts">
-import { subscribe } from 'belte/cache'
-import { tickFeed } from '$rpc/tickFeed.ts'
-import { countLog } from '$rpc/countLog.ts'
-import { chatFeed } from '$rpc/chatFeed.ts'
-import { publishChat } from '$rpc/publishChat.ts'
+import { subscribe } from 'belte/consume'
+import { tickFeed } from '$route/tickFeed.ts'
+import { countLog } from '$route/countLog.ts'
+import { chatFeed } from '$route/chatFeed.ts'
+import { publishChat } from '$route/publishChat.ts'
 
 /*
 subscribe(fn)(args) returns the latest frame from a stream as a reactive
@@ -75,7 +75,7 @@ async function send() {
     <h2 class="text-sm font-semibold">SOCKET — <code class="font-mono">chatFeed</code></h2>
     <p class="mt-1 text-sm text-slate-600">
         Multiplexed onto <code class="font-mono">/__belte/socket</code>. Publish from here
-        (or from <a class="underline" href="/reply/request-and-server">/reply/request-and-server</a>)
+        (or from <a class="underline" href="/respond/request-and-server">/respond/request-and-server</a>)
         and every subscriber re-renders.
     </p>
     <div class="mt-3 flex flex-wrap items-end gap-2">

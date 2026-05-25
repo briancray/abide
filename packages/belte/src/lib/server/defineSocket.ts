@@ -2,10 +2,10 @@ import type { SocketFunction } from '../types/SocketFunction.ts'
 import type { SocketHandler } from '../types/SocketHandler.ts'
 
 /*
-Builds a SocketFunction from a flat rpc URL + an async-generator handler.
+Builds a SocketFunction from a flat route URL + an async-generator handler.
 The bundler rewrites every `export const NAME = SOCKET(fn)` inside an
-`$rpc/**` module so the URL (from the file path under `src/rpc/`, with
-`/rpc/` prefix) is threaded into defineSocket.
+`$route/**` module so the URL (from the file path under `src/route/`, with
+`/route/` prefix) is threaded into defineSocket.
 
 The plain call returns the handler's AsyncIterable directly — server-side
 callers (SSR, in-process publishers) can iterate it just like the browser

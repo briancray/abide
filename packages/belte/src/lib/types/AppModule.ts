@@ -7,7 +7,7 @@ function that runs on SIGINT/SIGTERM. handle is single-middleware with
 next so user code can mutate the response or branch on the URL.
 
 WebSockets are not exposed here — belte's only native WebSocket surface
-is SOCKET-bound rpc (see `belte/rpc`), multiplexed onto a single
+is SOCKET-bound rpc (see `belte/route`), multiplexed onto a single
 framework-owned connection per client at `/__belte/socket`. Inside
 request scopes, the live Bun.Server is reachable via the exported
 `server` proxy from `belte/server`; `init` receives it explicitly

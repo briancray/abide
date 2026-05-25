@@ -1,8 +1,8 @@
 <script lang="ts">
-import { cache } from 'belte/cache'
-import { getCounter } from '$rpc/getCounter.ts'
-import { incrementCounter } from '$rpc/incrementCounter.ts'
-import { resetCounter } from '$rpc/resetCounter.ts'
+import { cache } from 'belte/consume'
+import { getCounter } from '$route/getCounter.ts'
+import { incrementCounter } from '$route/incrementCounter.ts'
+import { resetCounter } from '$route/resetCounter.ts'
 
 /*
 Two derivations against the same cache key. They share one stored entry,

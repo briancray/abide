@@ -1,11 +1,11 @@
 import type { SocketFunction } from '../types/SocketFunction.ts'
-import { getSocketRpcChannel } from './socketRpcChannel.ts'
+import { getSocketRouteChannel } from './socketRouteChannel.ts'
 
 let nextId = 0
 
 /*
 Client-side substitute for a SOCKET-defined handler. The bundler emits
-one call per SOCKET export inside an `$rpc/**` module: server target
+one call per SOCKET export inside an `$route/**` module: server target
 uses defineSocket (real handler), browser target uses socketProxy
 (subscribe over the multiplexed ws channel). Both paths produce
 identical SocketFunction shapes so cache() and SSR snapshots can treat
@@ -35,7 +35,7 @@ type Slot =
 
 async function* iterate(url: string, args: unknown): AsyncGenerator<unknown> {
     const id = String(++nextId)
-    const channel = getSocketRpcChannel()
+    const channel = getSocketRouteChannel()
     /*
     Single-slot mailbox + matched waiter: each yielded frame either
     lands in the buffer (if no one's awaiting) or wakes the pending

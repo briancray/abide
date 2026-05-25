@@ -8,7 +8,7 @@ you are making a ssr + spa framwork for bun and svelte.
 * maintain a consistent runtime between all modes (dev and build)
 * isomorphism by default — same callable, same name, same behavior on both sides; the bundler swaps the runtime (defineVerb/remoteProxy, defineSocket/socketProxy). user code never branches on `typeof window`.
 * framework owns the network — no parallel "raw" escape hatches that fragment the model. one way to call rpc, one way to consume streams, one ws connection. if a primitive feels too low-level for users, hide it.
-* group exports by lifecycle phase, not by implementation — declare (`belte/rpc`) → reply (`belte/response`) → consume (`belte/cache`). new helpers go in the phase they belong to; if a new phase emerges, that's a new module.
+* group exports by lifecycle phase, not by implementation — declare (`belte/route`) → reply (`belte/respond`) → consume (`belte/consume`). new helpers go in the phase they belong to; if a new phase emerges, that's a new module.
 * value performance when all other conditions are met
 
 # coding guidelines

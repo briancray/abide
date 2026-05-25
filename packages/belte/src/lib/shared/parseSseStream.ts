@@ -10,7 +10,7 @@ Drains a ReadableStream<Uint8Array> shaped as Server-Sent Events
 delimited by a blank line; within an event, `data:` lines accumulate
 into the frame payload (parsed as JSON), `event:` sets the event type,
 and `:` lines are comments (used as keepalives — see the producer in
-`belte/response/sse`).
+`belte/respond/sse`).
 
 The `event: error` convention from the producer is recognised here and
 surfaced through onError as a terminal failure. Other event types

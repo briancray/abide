@@ -1,9 +1,9 @@
 <script lang="ts">
 import '../app.css'
-import { cache } from 'belte/cache'
+import { cache } from 'belte/consume'
 import { page } from 'belte/page'
-import { getSession } from '$rpc/getSession.ts'
-import { logout } from '$rpc/logout.ts'
+import { getSession } from '$route/getSession.ts'
+import { logout } from '$route/logout.ts'
 
 let { children }: { children: import('svelte').Snippet } = $props()
 
@@ -32,8 +32,8 @@ const linkClass = (prefix: string) =>
     <header class="border-b border-slate-200 bg-white">
         <nav class="mx-auto flex max-w-4xl flex-wrap items-center gap-4 px-6 py-4 text-sm">
             <a href="/" class="text-base font-semibold">belte kitchen-sink</a>
-            <a href="/declare" class={linkClass('/declare')}>Declare</a>
-            <a href="/reply" class={linkClass('/reply')}>Reply</a>
+            <a href="/route" class={linkClass('/route')}>Route</a>
+            <a href="/respond" class={linkClass('/respond')}>Respond</a>
             <a href="/consume" class={linkClass('/consume')}>Consume</a>
             <a href="/auth/dashboard" class={linkClass('/auth')}>Auth</a>
             <div class="ml-auto flex items-center gap-3">

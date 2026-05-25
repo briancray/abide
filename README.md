@@ -5,9 +5,9 @@ A tiny SSR + SPA framework for [Bun](https://bun.sh) and [Svelte 5](https://svel
 Belte is built around four bets:
 
 1. **Isomorphism by default** — the same callable runs on both sides. The bundler swaps the runtime per build target; user code never branches on `typeof window`.
-2. **Framework owns the network** — one rpc URL shape, one websocket multiplex, one way to consume streams. No parallel "raw" escape hatches that fragment the model.
+2. **Framework owns the network** — one route URL shape, one websocket multiplex, one way to consume streams. No parallel "raw" escape hatches that fragment the model.
 3. **One runtime, dev → prod → binary** — `belte dev`, `belte build`, `belte start`, `belte compile` all run on the same `Bun.serve` under the hood. No Node, no Vite, no separate bundler runtime.
-4. **Exports grouped by lifecycle phase** — `belte/rpc` (declare) → `belte/response` (reply) → `belte/cache` (consume). New helpers go in the phase they belong to.
+4. **Exports grouped by lifecycle phase** — `belte/route` → `belte/respond` → `belte/consume`. New helpers go in the phase they belong to; the module name *is* the phase name.
 
 Working examples live in [`examples/`](examples):
 
@@ -24,9 +24,9 @@ Working examples live in [`examples/`](examples):
 One file declares the function, one identifier calls it. The bundler swaps the runtime: direct call on the server, typed `fetch` on the client.
 
 ```ts
-// src/rpc/getPost.ts
-import { GET } from 'belte/rpc'
-import { json } from 'belte/response'
+// src/route/getPost.ts
+import { GET } from 'belte/route'
+import { json } from 'belte/respond'
 
 export const getPost = GET<{ id: string }, { title: string; body: string }>(
     ({ id }) => json(db.posts.get(id)),
@@ -34,17 +34,17 @@ export const getPost = GET<{ id: string }, { title: string; body: string }>(
 ```
 
 ```ts
-// anywhere — page <script>, layout, another rpc, the browser
-import { getPost } from '$rpc/getPost.ts'
+// anywhere — page <script>, layout, another route, the browser
+import { getPost } from '$route/getPost.ts'
 
 const post = await getPost({ id: 'abc' })
 ```
 
-The same is true for streams. A `SOCKET` rpc is an async generator; consumers iterate it the same way regardless of transport.
+The same is true for streams. A `SOCKET` route is an async generator; consumers iterate it the same way regardless of transport.
 
 ```ts
-// src/rpc/orderFeed.ts
-import { SOCKET } from 'belte/rpc'
+// src/route/orderFeed.ts
+import { SOCKET } from 'belte/route'
 
 export const orderFeed = SOCKET<{ customerId: string }, Order>(async function* ({ customerId }) {
     for await (const order of db.watchOrders(customerId)) {
@@ -55,10 +55,10 @@ export const orderFeed = SOCKET<{ customerId: string }, Order>(async function* (
 
 ### Framework owns the network
 
-There is exactly one shape for an rpc URL (`/rpc/<filename>`), one websocket (`/__belte/socket`) that multiplexes every `SOCKET` rpc, and one reactive consumer (`subscribe`) that works against HTTP one-shots, SSE, JSONL, and websockets uniformly.
+There is exactly one shape for a route URL (`/route/<filename>`), one websocket (`/__belte/socket`) that multiplexes every `SOCKET` route, and one reactive consumer (`subscribe`) that works against HTTP one-shots, SSE, JSONL, and websockets uniformly.
 
 ```ts
-import { subscribe } from 'belte/cache'
+import { subscribe } from 'belte/consume'
 
 // works the same against an SSE/JSONL handler or a SOCKET handler
 const latest = $derived(subscribe(orderFeed)({ customerId }))
@@ -82,9 +82,9 @@ Every mode boots through the same code path. `belte compile` produces a single b
 The three modules you'll reach for from user code map to the three phases of a request:
 
 ```ts
-import { GET, SOCKET }  from 'belte/rpc'        // declare
-import { json, sse }    from 'belte/response'   // reply
-import { cache, subscribe } from 'belte/cache'  // consume
+import { GET, SOCKET }      from 'belte/route'    // route — register the endpoint
+import { json, sse }        from 'belte/respond'  // respond — shape the reply
+import { cache, subscribe } from 'belte/consume'  // consume — read it back
 ```
 
 Find the phase, find the helper.
@@ -107,8 +107,8 @@ let { children }: { children: import('svelte').Snippet } = $props()
 ```svelte
 <!-- src/pages/page.svelte -->
 <script lang="ts">
-import { cache } from 'belte/cache'
-import { getPost } from '$rpc/getPost.ts'
+import { cache } from 'belte/consume'
+import { getPost } from '$route/getPost.ts'
 
 const post = await cache(getPost)({ id: 'hello' })
 </script>
@@ -118,9 +118,9 @@ const post = await cache(getPost)({ id: 'hello' })
 ```
 
 ```ts
-// src/rpc/getPost.ts
-import { GET } from 'belte/rpc'
-import { json } from 'belte/response'
+// src/route/getPost.ts
+import { GET } from 'belte/route'
+import { json } from 'belte/respond'
 
 export const getPost = GET<{ id: string }, { title: string; body: string }>(
     ({ id }) => json({ title: `Post ${id}`, body: '...' }),
@@ -128,9 +128,9 @@ export const getPost = GET<{ id: string }, { title: string; body: string }>(
 ```
 
 ```ts
-// src/rpc/createPost.ts
-import { POST } from 'belte/rpc'
-import { json } from 'belte/response'
+// src/route/createPost.ts
+import { POST } from 'belte/route'
+import { json } from 'belte/respond'
 
 export const createPost = POST<{ title: string; body: string }, { id: string }>(
     async (args) => json({ id: crypto.randomUUID() }, { status: 201 }),
@@ -193,8 +193,8 @@ Bun reads `.env` automatically:
 
 The reference is grouped by the same three lifecycle phases as the imports.
 
-- **[Declare](#declare)** — how routes, handlers, and app hooks get registered.
-- **[Reply](#reply)** — what runs when a request lands.
+- **[Route](#route)** — how pages, layouts, route modules, and app hooks get registered.
+- **[Respond](#respond)** — what runs when a request lands.
 - **[Consume](#consume)** — how the client reads, reacts, and navigates.
 
 ### Project layout
@@ -205,13 +205,13 @@ my-app/
     .belte/                     # generated: Routes type augmentation; gitignored
     pages/                      # all pages live here; every page is a folder
       page.svelte                 # GET /
-      layout.svelte               # wraps every page below
+      layout.svelte               # wraps every page below (nearest-only; replaces ancestors)
       about/page.svelte           # GET /about
       posts/[id]/page.svelte      # GET /posts/:id (id is a $prop, typed via Routes)
-    rpc/                        # all remote functions live here; one per file
-      getHello.ts                 # GET /rpc/getHello   (GET)
-      createUser.ts               # POST /rpc/createUser (POST)
-      orderFeed.ts                # WS  /rpc/orderFeed   (SOCKET, over /__belte/socket)
+    route/                      # all remote functions live here; one per file
+      getHello.ts                 # GET /route/getHello   (GET)
+      createUser.ts               # POST /route/createUser (POST)
+      orderFeed.ts                # WS  /route/orderFeed   (SOCKET, over /__belte/socket)
     app.ts                      # optional: init / handle / handleError
     app.html                    # optional: HTML shell override
     app.css                     # any CSS, imported from a layout/page
@@ -225,12 +225,12 @@ my-app/
 Three import aliases are wired through the bundler in every mode:
 
 - `$pages/...` → `src/pages/...`
-- `$rpc/...` → `src/rpc/...`
+- `$route/...` → `src/route/...`
 - `$lib/...` → `src/lib/...`
 
 ---
 
-## Declare
+## Route
 
 How code gets registered with the framework. File-system + decorator-style imports.
 
@@ -238,7 +238,7 @@ How code gets registered with the framework. File-system + decorator-style impor
 
 A page is a Svelte 5 component. Folder name becomes the URL: `src/pages/page.svelte` mounts at `/`, `src/pages/posts/[id]/page.svelte` mounts at `/posts/:id`. Dynamic segments (`[id]`, `[...rest]`) are spread onto the page as individual props; the typed shape is generated into `src/.belte/routes.d.ts` and surfaces as `Routes` on `belte/page`.
 
-A layout wraps every page at or below its folder. Layouts compose root-to-leaf: a request for `/admin/users` runs `pages/layout.svelte` → `pages/admin/layout.svelte` → the page. Pages and layouts both run on the server during SSR and on the client during navigation.
+A layout wraps every page at or below its folder, and **layouts are nearest-only**: a request for `/admin/users` runs the deepest matching `layout.svelte` — so `pages/admin/layout.svelte` if it exists, otherwise `pages/layout.svelte`, but never both. Nested layouts *replace* ancestors, they do not stack. If a subtree needs the chrome from a parent layout, copy it (or extract it to a snippet and `{@render}` it from both layouts). Pages and layouts both run on the server during SSR and on the client during navigation.
 
 **Barebones — `src/pages/page.svelte`**
 
@@ -250,8 +250,8 @@ A layout wraps every page at or below its folder. Layouts compose root-to-leaf: 
 
 ```svelte
 <script lang="ts">
-import { cache } from 'belte/cache'
-import { getPost } from '$rpc/getPost.ts'
+import { cache } from 'belte/consume'
+import { getPost } from '$route/getPost.ts'
 
 let { id }: { id: string } = $props()
 
@@ -291,10 +291,10 @@ let { children }: { children: import('svelte').Snippet } = $props()
 ```svelte
 <script lang="ts">
 import '../app.css'
-import { cache } from 'belte/cache'
+import { cache } from 'belte/consume'
 import { page } from 'belte/page'
-import { getSession } from '$rpc/getSession.ts'
-import { logout } from '$rpc/logout.ts'
+import { getSession } from '$route/getSession.ts'
+import { logout } from '$route/logout.ts'
 
 let { children }: { children: import('svelte').Snippet } = $props()
 
@@ -319,9 +319,9 @@ const linkClass = (href: string) =>
 <main>{@render children()}</main>
 ```
 
-### RPC modules — `src/rpc/<name>.ts`
+### Route modules — `src/route/<name>.ts`
 
-Every file under `src/rpc/` exports exactly one remote function. The filename is both the URL path (under `/rpc/`) and the export name; the imported helper picks the HTTP verb or transport. Folders become URL segments — `src/rpc/users/getUser.ts` mounts at `/rpc/users/getUser`. Rpc URLs are flat: there are no `[name]` dynamic segments, pass identifiers via args.
+Every file under `src/route/` exports exactly one remote function. The filename is both the URL path (under `/route/`) and the export name; the imported helper picks the HTTP verb or transport. Folders become URL segments — `src/route/users/getUser.ts` mounts at `/route/users/getUser`. Route URLs are flat: there are no `[name]` dynamic segments, pass identifiers via args.
 
 | Helper                              | Transport                                | Returns                                          |
 | ----------------------------------- | ---------------------------------------- | ------------------------------------------------ |
@@ -329,15 +329,15 @@ Every file under `src/rpc/` exports exactly one remote function. The filename is
 | `POST / PUT / PATCH`                | HTTP, args from JSON body or `FormData`  | `Response` — decoded body on the way out         |
 | `SOCKET`                            | Multiplexed websocket at `/__belte/socket` | `AsyncIterable<Frame>` — async generator handler |
 
-The handler signature is `(args) => Response` for HTTP verbs and `async function* (args)` for `SOCKET`. Sending the wrong verb to an HTTP rpc URL returns `405` with an `Allow` header.
+The handler signature is `(args) => Response` for HTTP verbs and `async function* (args)` for `SOCKET`. Sending the wrong verb to an HTTP route URL returns `405` with an `Allow` header.
 
-For raw `Request` access (binary bodies, custom headers, etc.) call `request()` from `belte/server` inside the handler — see [Reply](#reply).
+For raw `Request` access (binary bodies, custom headers, etc.) call `request()` from `belte/server` inside the handler — see [Respond](#respond).
 
-**Barebones — `src/rpc/getHello.ts`**
+**Barebones — `src/route/getHello.ts`**
 
 ```ts
-import { GET } from 'belte/rpc'
-import { json } from 'belte/response'
+import { GET } from 'belte/route'
+import { json } from 'belte/respond'
 
 export const getHello = GET<undefined, { message: string }>(() =>
     json({ message: 'Hello from belte' }),
@@ -347,9 +347,9 @@ export const getHello = GET<undefined, { message: string }>(() =>
 **Full — a CRUD-ish post resource**
 
 ```ts
-// src/rpc/getPost.ts
-import { GET } from 'belte/rpc'
-import { json, error } from 'belte/response'
+// src/route/getPost.ts
+import { GET } from 'belte/route'
+import { json, error } from 'belte/respond'
 import { db } from '$lib/db.ts'
 
 export const getPost = GET<{ id: string }, { title: string; body: string }>(({ id }) => {
@@ -362,9 +362,9 @@ export const getPost = GET<{ id: string }, { title: string; body: string }>(({ i
 ```
 
 ```ts
-// src/rpc/createPost.ts
-import { POST } from 'belte/rpc'
-import { json } from 'belte/response'
+// src/route/createPost.ts
+import { POST } from 'belte/route'
+import { json } from 'belte/respond'
 import { db } from '$lib/db.ts'
 
 export const createPost = POST<{ title: string; body: string }, { id: string }>(async (args) => {
@@ -374,8 +374,8 @@ export const createPost = POST<{ title: string; body: string }, { id: string }>(
 ```
 
 ```ts
-// src/rpc/deletePost.ts
-import { DELETE } from 'belte/rpc'
+// src/route/deletePost.ts
+import { DELETE } from 'belte/route'
 import { db } from '$lib/db.ts'
 
 export const deletePost = DELETE<{ id: string }, undefined>(async ({ id }) => {
@@ -384,10 +384,10 @@ export const deletePost = DELETE<{ id: string }, undefined>(async ({ id }) => {
 })
 ```
 
-**Streaming — `src/rpc/orderFeed.ts`**
+**Streaming — `src/route/orderFeed.ts`**
 
 ```ts
-import { SOCKET } from 'belte/rpc'
+import { SOCKET } from 'belte/route'
 import { db } from '$lib/db.ts'
 
 export const orderFeed = SOCKET<{ customerId: string }, Order>(async function* ({ customerId }) {
@@ -397,7 +397,7 @@ export const orderFeed = SOCKET<{ customerId: string }, Order>(async function* (
 })
 ```
 
-`SOCKET` rpcs ride a single framework-owned websocket per client at `/__belte/socket`. To expose a stream over plain HTTP instead (so `curl` / `EventSource` / `fetch` all work), use a verb helper and wrap the generator with `sse(...)` or `jsonl(...)` from `belte/response`.
+`SOCKET` routes ride a single framework-owned websocket per client at `/__belte/socket`. To expose a stream over plain HTTP instead (so `curl` / `EventSource` / `fetch` all work), use a verb helper and wrap the generator with `sse(...)` or `jsonl(...)` from `belte/respond`.
 
 ### App hooks — `src/app.ts`
 
@@ -407,7 +407,7 @@ Optional application hooks. Every export is optional; delete the ones you don't 
 - `handle` is middleware that wraps the default request pipeline (`next(request)` invokes it). Inside the handler, reach for the inbound `Request` via `request()` and the live `Server` via the `server` import from `belte/server`.
 - `handleError` is your 500 fallback. Replaces belte's default stack-trace response.
 
-WebSockets are not exposed here — belte's only native WebSocket surface is `SOCKET`-bound rpc.
+WebSockets are not exposed here — belte's only native WebSocket surface is `SOCKET`-bound routes.
 
 **Barebones**
 
@@ -432,7 +432,7 @@ export const handleError: AppModule['handleError'] = (error) => {
 
 ```ts
 import type { AppModule } from 'belte/types/AppModule'
-import { error } from 'belte/response'
+import { error } from 'belte/respond'
 
 export const init: AppModule['init'] = async ({ server }) => {
     await db.connect()
@@ -501,7 +501,7 @@ export default {
 ```
 
 ```json
-// tsconfig.json — teach the editor about the $pages / $rpc / $lib aliases
+// tsconfig.json — teach the editor about the $pages / $route / $lib aliases
 {
     "compilerOptions": {
         "target": "ESNext",
@@ -518,7 +518,7 @@ export default {
         "types": ["bun"],
         "paths": {
             "$pages": ["./src/pages"], "$pages/*": ["./src/pages/*"],
-            "$rpc": ["./src/rpc"], "$rpc/*": ["./src/rpc/*"],
+            "$route": ["./src/route"], "$route/*": ["./src/route/*"],
             "$lib": ["./src/lib"], "$lib/*": ["./src/lib/*"]
         }
     },
@@ -546,13 +546,13 @@ export default {
 
 ---
 
-## Reply
+## Respond
 
 What runs when a request lands. Helpers that shape a `Response`, see the inbound `Request`, or signal failure.
 
 ### `request()` — `belte/server`
 
-The inbound `Request` for the SSR pass or rpc handler that's in flight. Backed by `AsyncLocalStorage`, so it works from anywhere inside the request scope (a page's `<script>`, a layout, a helper, an rpc handler) without having to thread `request` through every function. Throws if called outside a request scope (top-level module code, `init`, etc.).
+The inbound `Request` for the SSR pass or route handler that's in flight. Backed by `AsyncLocalStorage`, so it works from anywhere inside the request scope (a page's `<script>`, a layout, a helper, a route handler) without having to thread `request` through every function. Throws if called outside a request scope (top-level module code, `init`, etc.).
 
 ```ts
 import { request } from 'belte/server'
@@ -589,12 +589,12 @@ try {
 }
 ```
 
-### `belte/response` — `json` / `error` / `redirect` / `sse` / `jsonl`
+### `belte/respond` — `json` / `error` / `redirect` / `sse` / `jsonl`
 
-Response constructors with rpc-friendly defaults. All five set `Cache-Control: no-store` unless the caller overrides it — intermediary caches shouldn't memoise rpc replies; the framework's per-request cache handles in-process dedupe.
+Response constructors with route-friendly defaults. All five set `Cache-Control: no-store` unless the caller overrides it — intermediary caches shouldn't memoise route replies; the framework's per-request cache handles in-process dedupe.
 
 ```ts
-import { json, error, redirect, sse, jsonl } from 'belte/response'
+import { json, error, redirect, sse, jsonl } from 'belte/respond'
 
 json({ ok: true })                 // application/json
 json({ ok: true }, { status: 201 })
@@ -607,8 +607,8 @@ redirect('/articles/1', 301)       // permanent
 `sse` and `jsonl` wrap an `AsyncIterable<Frame>` in a streaming response — `text/event-stream` for `sse`, `application/jsonl` for `jsonl`. Both translate consumer cancellation into `iterator.return()`, so the handler's `for await` exits via the normal control path and any DB cursors / file handles get to release in their `finally`. `sse` also emits a 15s `: keepalive` comment so intermediaries don't drop idle connections.
 
 ```ts
-import { GET } from 'belte/rpc'
-import { sse } from 'belte/response'
+import { GET } from 'belte/route'
+import { sse } from 'belte/respond'
 
 export const orderFeed = GET<{ customerId: string }, Order>(({ customerId }) =>
     sse(async function* () {
@@ -619,7 +619,7 @@ export const orderFeed = GET<{ customerId: string }, Order>(({ customerId }) =>
 )
 ```
 
-When `subscribe(fn)(args)` on the client reads from an rpc with `sse` or `jsonl`, it parses each frame and the iteration shape is identical to a `SOCKET` rpc — pick the transport that fits the handler, not the call site.
+When `subscribe(fn)(args)` on the client reads from a route with `sse` or `jsonl`, it parses each frame and the iteration shape is identical to a `SOCKET` route — pick the transport that fits the handler, not the call site.
 
 ### HTTP cache-control defaults
 
@@ -630,7 +630,7 @@ Belte sets sensible `Cache-Control` defaults on every response it owns:
 - SSR HTML / JSON responses → `private, no-cache`
 - Errors (`404`, `405`, `500`) → `no-store`
 
-To override, return a `Response` whose `Cache-Control` you set explicitly — the `belte/response` helpers all let you pass an `init` to do that. Pre-gzipped sibling files are streamed automatically when the client sends `Accept-Encoding: gzip`.
+To override, return a `Response` whose `Cache-Control` you set explicitly — the `belte/respond` helpers all let you pass an `init` to do that. Pre-gzipped sibling files are streamed automatically when the client sends `Accept-Encoding: gzip`.
 
 ---
 
@@ -643,8 +643,8 @@ How the client (and SSR pass) reads data, stays live, and navigates.
 The function returned by `GET()` / `POST()` / etc. is callable as-is. On the server, the call runs the handler directly; on the client, it issues a `fetch` to the matching URL with the args serialized into the query string (for `GET` / `DELETE` / `HEAD`) or the JSON body (for the others). The call resolves to the decoded body — JSON for `application/json`, `string` for `text/*`, `Blob` for binary, `undefined` for `204`. Non-2xx throws `HttpError`.
 
 ```ts
-import { getPost } from '$rpc/getPost.ts'
-import { createPost } from '$rpc/createPost.ts'
+import { getPost } from '$route/getPost.ts'
+import { createPost } from '$route/createPost.ts'
 
 const post = await getPost({ id: 'abc' })          // typed as { title; body }
 const { id } = await createPost({ title, body })   // typed as { id }
@@ -664,15 +664,15 @@ Each remote function also exposes `.url` and `.method`, so plain HTML forms and 
 const res = await fetch(getPost.url + '?id=abc')
 ```
 
-### `cache(fn, options?)` — `belte/cache`
+### `cache(fn, options?)` — `belte/consume`
 
 Direct calls are fine for one-shot work, but pages and layouts usually want three things on top: dedupe across components reading the same data, serialization into the SSR HTML, and reactivity so a mutation can trigger refetches.
 
 `cache()` does all three. Wrap a remote function call with it and the result is stored in a request-scoped (server) or session-scoped (client) cache keyed by `method + url + args`. The invoker returns the same decoded body shape as the plain call.
 
 ```ts
-import { cache } from 'belte/cache'
-import { getSession } from '$rpc/getSession.ts'
+import { cache } from 'belte/consume'
+import { getSession } from '$route/getSession.ts'
 
 const session = await cache(getSession)()
 ```
@@ -694,9 +694,9 @@ Wrap a `cache()` call in `$derived` to subscribe the deriving scope to that cach
 
 ```svelte
 <script lang="ts">
-import { cache } from 'belte/cache'
-import { getCounter } from '$rpc/getCounter.ts'
-import { incrementCounter } from '$rpc/incrementCounter.ts'
+import { cache } from 'belte/consume'
+import { getCounter } from '$route/getCounter.ts'
+import { incrementCounter } from '$route/incrementCounter.ts'
 
 const counter = $derived(cache(getCounter)())
 
@@ -733,9 +733,9 @@ It composes with `cache()` the same way the decoded variant does — pass `fn.ra
 const response = await cache(getPost.raw)({ id })
 ```
 
-### `.stream(args)` + `subscribe(fn)` — `belte/cache`
+### `.stream(args)` + `subscribe(fn)` — `belte/consume`
 
-Both `RemoteFunction` (verb-bound rpcs whose handlers reply with `sse(...)` / `jsonl(...)`) and `SocketFunction` (`SOCKET`-bound rpcs) expose the same `.stream(args)` iteration entry point: an `AsyncIterable<Frame>` you drain with `for await`. The transport choice belongs to the rpc module — the call site is the same regardless.
+Both `RemoteFunction` (verb-bound routes whose handlers reply with `sse(...)` / `jsonl(...)`) and `SocketFunction` (`SOCKET`-bound routes) expose the same `.stream(args)` iteration entry point: an `AsyncIterable<Frame>` you drain with `for await`. The transport choice belongs to the route module — the call site is the same regardless.
 
 ```ts
 for await (const order of orderFeed.stream({ customerId })) {
@@ -743,12 +743,12 @@ for await (const order of orderFeed.stream({ customerId })) {
 }
 ```
 
-For reactive consumption, `subscribe(fn)(args)` from `belte/cache` is the equivalent of `cache()` for streams. It manages a per-key registry of open streams, opens on first `$derived` read and closes on last reader (driven by Svelte's `createSubscriber`), and re-keys when args change. Subscribe is a no-op on the server — SSR can't keep a stream open across the request boundary, so pages that want a value in the initial HTML use `cache()` for the seed and `subscribe()` for live updates after hydration.
+For reactive consumption, `subscribe(fn)(args)` from `belte/consume` is the equivalent of `cache()` for streams. It manages a per-key registry of open streams, opens on first `$derived` read and closes on last reader (driven by Svelte's `createSubscriber`), and re-keys when args change. Subscribe is a no-op on the server — SSR can't keep a stream open across the request boundary, so pages that want a value in the initial HTML use `cache()` for the seed and `subscribe()` for live updates after hydration.
 
 ```svelte
 <script lang="ts">
-import { cache, subscribe } from 'belte/cache'
-import { getOrders, orderFeed } from '$rpc/...'
+import { cache, subscribe } from 'belte/consume'
+import { getOrders, orderFeed } from '$route/...'
 
 const seed = await cache(getOrders)({ customerId })       // SSR-friendly initial value
 const latest = $derived(subscribe(orderFeed)({ customerId })) // live updates after hydration
@@ -788,8 +788,8 @@ browser request
 src/app.ts  handle?            optional middleware (wraps next call)
   │
   ▼
-pages/layout.svelte            root-to-leaf chain of layouts
-pages/**/layout.svelte         each runs top-level `await cache(fn)()` for its data
+pages/.../layout.svelte        nearest matching layout (deepest wins; replaces ancestors)
+                               runs top-level `await cache(fn)()` for its data
   │
   ▼
 pages/<path>/page.svelte       page renders, can also `await cache(fn)()`

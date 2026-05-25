@@ -1,7 +1,7 @@
 import type { HttpVerb } from './HttpVerb.ts'
 
 /*
-Remote function reference produced by GET/POST/... inside an `$rpc/**`
+Remote function reference produced by GET/POST/... inside an `$route/**`
 module and consumed by route dispatch, cache(), SSR auto-hydration, and
 direct calls. Same callable signature on server and client — the bundler
 swaps the implementation for browser builds.

@@ -1,6 +1,6 @@
 <script lang="ts">
-import { cache } from 'belte/cache'
-import { getReport } from '$rpc/getReport.ts'
+import { cache } from 'belte/consume'
+import { getReport } from '$route/getReport.ts'
 
 let decoded = $state('(not called)')
 let raw = $state('(not called)')

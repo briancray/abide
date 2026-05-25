@@ -18,7 +18,7 @@ import type { RemoteRoutes } from '../types/RemoteRoutes.ts'
 import type { RequestStore } from '../types/RequestStore.ts'
 import type { SocketRoutes } from '../types/SocketRoutes.ts'
 import { cacheControlForAsset } from './cacheControlForAsset.ts'
-import { createSocketRpcDispatcher } from './createSocketRpcDispatcher.ts'
+import { createSocketRouteDispatcher } from './createSocketRouteDispatcher.ts'
 import { requestContext } from './requestContext.ts'
 import { serializeCacheSnapshot } from './serializeCacheSnapshot.ts'
 import { setActiveServer } from './serverSlot.ts'
@@ -40,16 +40,16 @@ type AnyRemoteFunction = RemoteFunction<unknown, unknown>
 /*
 Starts a Bun HTTP server that ties together the route conventions:
 page.svelte + layout.svelte under src/pages/ for views, one named export
-per file under src/rpc/ for verb-bound remote functions, and an optional
+per file under src/route/ for verb-bound remote functions, and an optional
 app.ts for boot-time setup, request middleware, error fallback, and socket
-handlers. Pages and rpc URLs live in disjoint spaces — pages mount at the
-folder path, rpc files mount at `/rpc/<file path>` — so each registered
+handlers. Pages and route URLs live in disjoint spaces — pages mount at the
+folder path, route files mount at `/route/<file path>` — so each registered
 URL resolves to exactly one thing. Per request, an AsyncLocalStorage
 RequestStore carries the cache store and request metadata.
 */
 export async function createServer({
     pages,
-    rpc,
+    route,
     sockets,
     layouts,
     shell,
@@ -59,7 +59,7 @@ export async function createServer({
     port = Number(process.env.PORT ?? 3000),
 }: {
     pages: Pages
-    rpc: RemoteRoutes
+    route: RemoteRoutes
     sockets: SocketRoutes
     layouts?: Layouts
     shell: string
@@ -84,18 +84,18 @@ export async function createServer({
             : [],
     )
 
-    const rpcModuleCache = new Map<string, Promise<AnyRemoteFunction | undefined>>()
-    function loadRpc(url: string): Promise<AnyRemoteFunction | undefined> | undefined {
-        const existing = rpcModuleCache.get(url)
+    const routeModuleCache = new Map<string, Promise<AnyRemoteFunction | undefined>>()
+    function loadRoute(url: string): Promise<AnyRemoteFunction | undefined> | undefined {
+        const existing = routeModuleCache.get(url)
         if (existing) {
             return existing
         }
-        const loader = rpc[url]
+        const loader = route[url]
         if (!loader) {
             return undefined
         }
         /*
-        Each $rpc module has exactly one named export, validated at build
+        Each $route module has exactly one named export, validated at build
         time. Pick the first export that looks like a RemoteFunction so the
         framework stays tolerant of incidental re-exports.
         */
@@ -107,7 +107,7 @@ export async function createServer({
             }
             return undefined
         })
-        rpcModuleCache.set(url, promise)
+        routeModuleCache.set(url, promise)
         return promise
     }
 
@@ -215,22 +215,22 @@ export async function createServer({
     /*
     Per-route handler bound by buildRoutes(). Receives a BunRequest with
     `params` filled from the route pattern (only pages use path params;
-    $rpc URLs are flat). Page URLs (under src/pages/) serve GET/HEAD by
-    rendering; rpc URLs (under src/rpc/, prefixed with `/rpc/`) dispatch
+    $route URLs are flat). Page URLs (under src/pages/) serve GET/HEAD by
+    rendering; route URLs (under src/route/, prefixed with `/route/`) dispatch
     to the single declared verb-bound handler. URLs are disjoint by
     construction so each path goes to exactly one branch.
     */
     function buildRouteHandler(routeUrl: string) {
         const hasPage = pages[routeUrl] !== undefined
-        const hasRpc = rpc[routeUrl] !== undefined
+        const hasRoute = route[routeUrl] !== undefined
         return async function routeHandler(
             req: Request,
             pathParams: Record<string, string>,
             store: RequestStore,
         ): Promise<Response> {
             const method = req.method as HttpVerb
-            if (hasRpc) {
-                const fn = await loadRpc(routeUrl)
+            if (hasRoute) {
+                const fn = await loadRoute(routeUrl)
                 if (fn && fn.method === method) {
                     return fn.fetch(req)
                 }
@@ -267,7 +267,7 @@ export async function createServer({
     slicing the pathname segments after the catch-all's pattern index.
     The reconstructed value is set under the original name (e.g. `rest`)
     so the page component's $props destructure stays consistent with the
-    file path. Page URLs and rpc URLs (always `/rpc/...`, flat) are
+    file path. Page URLs and route URLs (always `/route/...`, flat) are
     disjoint by construction, so a plain object needs no deduplication.
     */
     const routes: Record<string, (req: BunRequest) => Promise<Response>> = {}
@@ -286,7 +286,7 @@ export async function createServer({
             return dispatchRequest(req, pathParams, handler)
         }
     }
-    for (const routeUrl of Object.keys(rpc)) {
+    for (const routeUrl of Object.keys(route)) {
         const handler = buildRouteHandler(routeUrl)
         routes[routeUrl] = (req) => dispatchRequest(req, {}, handler)
     }
@@ -351,24 +351,24 @@ export async function createServer({
     }
 
     /*
-    Belte's only native WebSocket surface is SOCKET-bound rpc: all sockets
+    Belte's only native WebSocket surface is SOCKET-bound routes: all sockets
     multiplex onto one framework-owned connection per client at
     /__belte/socket. The dispatcher owns the open/message/close handlers
     below; user code never sees the raw ws lifecycle.
     */
-    const rpcDispatcher = createSocketRpcDispatcher(sockets)
+    const socketDispatcher = createSocketRouteDispatcher(sockets)
     server = Bun.serve({
         port,
 
         websocket: {
             open(ws) {
-                rpcDispatcher.open(ws)
+                socketDispatcher.open(ws)
             },
             message(ws, data) {
-                rpcDispatcher.message(ws, data)
+                socketDispatcher.message(ws, data)
             },
             close(ws) {
-                rpcDispatcher.close(ws)
+                socketDispatcher.close(ws)
             },
         },
 

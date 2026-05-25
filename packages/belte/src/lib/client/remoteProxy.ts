@@ -1,4 +1,4 @@
-import { buildRpcRequest } from '../shared/buildRpcRequest.ts'
+import { buildRouteRequest } from '../shared/buildRouteRequest.ts'
 import { decodeResponse } from '../shared/decodeResponse.ts'
 import { recordRemoteMeta } from '../shared/remoteMeta.ts'
 import { streamResponse } from '../shared/streamResponse.ts'
@@ -7,7 +7,7 @@ import type { RawRemoteFunction, RemoteFunction } from '../types/RemoteFunction.
 
 /*
 Client-side substitute for a verb-defined handler. The bundler emits one
-call per verb export inside an `$rpc/**` module (GET / POST / …): server
+call per verb export inside an `$route/**` module (GET / POST / …): server
 target uses defineVerb (real handler), browser target uses remoteProxy
 (fetch over the network). Both paths produce identical RemoteFunction
 shapes and identical WeakMap metadata so cache() works the same on either
@@ -23,7 +23,7 @@ export function remoteProxy<Args, Return>(
     url: string,
 ): RemoteFunction<Args, Return> {
     function buildRequest(args: Args | undefined): Request {
-        return buildRpcRequest({ method, url, args, baseUrl: window.location.href })
+        return buildRouteRequest({ method, url, args, baseUrl: window.location.href })
     }
 
     function dispatch(request: Request): Promise<Response> {

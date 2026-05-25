@@ -1,6 +1,6 @@
 <script lang="ts">
-import { getEcho } from '$rpc/getEcho.ts'
-import { createEcho } from '$rpc/createEcho.ts'
+import { getEcho } from '$route/getEcho.ts'
+import { createEcho } from '$route/createEcho.ts'
 
 let remoteBody = $state('(not called)')
 let plainBody = $state('(not called)')

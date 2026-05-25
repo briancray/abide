@@ -11,25 +11,25 @@ example on this site.
     Working demos of every primitive in the
     <a class="underline" href="https://github.com/briancray/belte#readme">README</a>, organised by
     the same three lifecycle phases the imports use:
-    <code class="font-mono">belte/rpc</code>
-    (declare) → <code class="font-mono">belte/response</code>
-    (reply) → <code class="font-mono">belte/cache</code> (consume).
+    <code class="font-mono">belte/route</code>
+    → <code class="font-mono">belte/respond</code>
+    → <code class="font-mono">belte/consume</code>.
 </p>
 
 <section class="mt-8 grid gap-4 sm:grid-cols-3">
     <a
-        href="/declare"
+        href="/route"
         class="rounded-lg border border-slate-200 bg-white p-5 hover:border-slate-400">
-        <h2 class="text-lg font-semibold">Declare</h2>
+        <h2 class="text-lg font-semibold">Route</h2>
         <p class="mt-1 text-sm text-slate-600">
             How routes, handlers, and app hooks get registered. Pages, layouts, dynamic segments,
             verb-bound rpcs, and the SOCKET transport.
         </p>
     </a>
     <a
-        href="/reply"
+        href="/respond"
         class="rounded-lg border border-slate-200 bg-white p-5 hover:border-slate-400">
-        <h2 class="text-lg font-semibold">Reply</h2>
+        <h2 class="text-lg font-semibold">Respond</h2>
         <p class="mt-1 text-sm text-slate-600">
             What runs when a request lands. Response helpers, the request scope, the server
             proxy, streaming wrappers, and the error path.
@@ -53,10 +53,10 @@ example on this site.
     <h2 class="text-lg font-semibold">Composed showcase: cookie-session auth</h2>
     <p class="mt-1 text-sm text-slate-600">
         <a class="underline" href="/auth/dashboard">/auth/dashboard</a>
-        is gated by a nested layout. Logging in sets a cookie via
-        <code class="font-mono">request()</code>
-        , the layout reads <code class="font-mono">cache(getSession)()</code>
-        to render the right state, and a 303 redirect from
-        <code class="font-mono">login.ts</code> closes the loop.
+        is gated by a nested layout. The
+        <code class="font-mono">auth/layout.svelte</code>
+        <em>replaces</em>
+        the root layout for everything under <code class="font-mono">/auth</code>
+        (layouts are nearest-only), so the auth area renders its own chrome.
     </p>
 </section>

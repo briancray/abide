@@ -15,8 +15,8 @@
         "paths": {
             "$pages": ["./src/pages"],
             "$pages/*": ["./src/pages/*"],
-            "$rpc": ["./src/rpc"],
-            "$rpc/*": ["./src/rpc/*"],
+            "$route": ["./src/route"],
+            "$route/*": ["./src/route/*"],
             "$lib": ["./src/lib"],
             "$lib/*": ["./src/lib/*"]
         }

@@ -1,4 +1,4 @@
-import { buildRpcRequest } from '../shared/buildRpcRequest.ts'
+import { buildRouteRequest } from '../shared/buildRouteRequest.ts'
 import { decodeResponse } from '../shared/decodeResponse.ts'
 import { recordRemoteMeta } from '../shared/remoteMeta.ts'
 import { streamResponse } from '../shared/streamResponse.ts'
@@ -23,9 +23,9 @@ const FORWARDED_HEADERS = [
 
 /*
 Builds a RemoteFunction from an HTTP verb + RPC URL + handler. The bundler
-rewrites every `export const VERB = handler(fn)` inside an `$rpc/**` module
+rewrites every `export const VERB = handler(fn)` inside an `$route/**` module
 so the verb (from the export name) and the URL (from the file path under
-`src/rpc/`, with `/rpc/` prefix) are threaded into defineVerb.
+`src/route/`, with `/route/` prefix) are threaded into defineVerb.
 
 The plain call (`fn(args)`) resolves to the Content-Type-decoded body;
 non-2xx responses throw HttpError. `.raw(args)` returns the underlying
@@ -44,7 +44,7 @@ export function defineVerb<Args, Return>(
     function buildRequest(args: Args | undefined): Request {
         const store = requestContext.getStore()
         const baseUrl = store ? store.url.href : 'http://localhost/'
-        return buildRpcRequest({ method, url, args, baseUrl, headers: inheritHeaders() })
+        return buildRouteRequest({ method, url, args, baseUrl, headers: inheritHeaders() })
     }
 
     /*

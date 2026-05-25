@@ -4,8 +4,8 @@ import type { BunPlugin } from 'bun'
 import { Glob } from 'bun'
 import { log } from './lib/shared/log.ts'
 import { pageUrlForFile } from './lib/shared/pageUrlForFile.ts'
-import { extractRpcExport, rewriteForServer } from './lib/shared/rewriteRpcExports.ts'
-import { rpcUrlForFile } from './lib/shared/rpcUrlForFile.ts'
+import { extractRouteExport, rewriteForServer } from './lib/shared/rewriteRouteExports.ts'
+import { routeUrlForFile } from './lib/shared/routeUrlForFile.ts'
 import { writeRoutesDts } from './lib/shared/writeRoutesDts.ts'
 
 /*
@@ -40,19 +40,19 @@ function escapeRegex(value: string): string {
 
 /*
 Bun plugin that wires every virtual import belte produces at build time:
-- `belte:rpc`     — { rpcUrl: () => import(rpc-module) } HTTP-verb manifest
-- `belte:sockets` — { rpcUrl: () => import(rpc-module) } SOCKET manifest
+- `belte:route`   — { routeUrl: () => import(route-module) } HTTP-verb manifest
+- `belte:sockets` — { routeUrl: () => import(route-module) } SOCKET manifest
 - `belte:pages`   — { pageUrl: () => import(page.svelte) } manifest
 - `belte:layouts` — { dirPrefix: () => import(layout.svelte) } manifest
 - `belte:app`     — { init?, handle?, handleError? } from src/app.ts
 - `belte:assets`  — gzipped chunk bytes embedded for standalone compile
 - `belte:shell`   — app.html content (custom or default)
 
-Also rewrites every module under src/rpc to bind each verb-named export
+Also rewrites every module under src/route to bind each verb-named export
 to a runtime implementation: HTTP verbs (GET / POST / PUT / PATCH /
 DELETE / HEAD) thread verb + URL into defineVerb on the server and
 remoteProxy on the client; SOCKET threads just the URL into defineSocket
-on the server and socketProxy on the client. Each rpc file is
+on the server and socketProxy on the client. Each route file is
 classified once and emitted into the appropriate manifest so the server
 can route HTTP requests and ws frames against disjoint URL spaces.
 */
@@ -66,18 +66,18 @@ export function belteResolverPlugin({
     target?: 'server' | 'client'
 } = {}): BunPlugin {
     const pagesDir = `${cwd}/src/pages`
-    const rpcDir = `${cwd}/src/rpc`
+    const routeDir = `${cwd}/src/route`
     const libDir = `${cwd}/src/lib`
 
     /*
     The whole-tree validation + per-leaf classification only needs to run
     once per build. Memoise the promise so the three virtual manifests
-    (rpc/pages/layouts) share a single scan instead of each one re-globbing
+    (route/pages/layouts) share a single scan instead of each one re-globbing
     the trees. The shell read is memoised the same way so two passes don't
     re-read app.html from disk.
     */
     let pagesScanPromise: Promise<PagesScan> | undefined
-    let rpcScanPromise: Promise<RpcScan> | undefined
+    let routeScanPromise: Promise<RouteScan> | undefined
     let shellContentsPromise: Promise<string> | undefined
     function scanPagesOnce(): Promise<PagesScan> {
         if (!pagesScanPromise) {
@@ -88,11 +88,11 @@ export function belteResolverPlugin({
         }
         return pagesScanPromise
     }
-    function scanRpcOnce(): Promise<RpcScan> {
-        if (!rpcScanPromise) {
-            rpcScanPromise = scanRpc(rpcDir)
+    function scanRouteOnce(): Promise<RouteScan> {
+        if (!routeScanPromise) {
+            routeScanPromise = scanRoute(routeDir)
         }
-        return rpcScanPromise
+        return routeScanPromise
     }
     function loadShellOnce(): Promise<string> {
         if (!shellContentsPromise) {
@@ -101,14 +101,14 @@ export function belteResolverPlugin({
         return shellContentsPromise
     }
 
-    const rpcFilter = new RegExp(`^${escapeRegex(rpcDir)}/.*\\.ts$`)
+    const routeFilter = new RegExp(`^${escapeRegex(routeDir)}/.*\\.ts$`)
 
     return {
         name: 'belte-resolver',
         setup(build) {
             build.onResolve(
                 {
-                    filter: /\/_virtual\/(rpc|sockets|pages|layouts|app|assets|shell)\.ts$/,
+                    filter: /\/_virtual\/(route|sockets|pages|layouts|app|assets|shell)\.ts$/,
                 },
                 (args) => {
                     const name = args.path.split('/').pop()?.replace('.ts', '')
@@ -124,9 +124,9 @@ export function belteResolverPlugin({
                 return { path: resolveExtension(subpath ? `${pagesDir}${subpath}` : pagesDir) }
             })
 
-            build.onResolve({ filter: /^\$rpc(\/.*)?$/ }, (args) => {
-                const subpath = args.path.slice('$rpc'.length)
-                return { path: resolveExtension(subpath ? `${rpcDir}${subpath}` : rpcDir) }
+            build.onResolve({ filter: /^\$route(\/.*)?$/ }, (args) => {
+                const subpath = args.path.slice('$route'.length)
+                return { path: resolveExtension(subpath ? `${routeDir}${subpath}` : routeDir) }
             })
 
             build.onResolve({ filter: /^\$lib(\/.*)?$/ }, (args) => {
@@ -134,23 +134,23 @@ export function belteResolverPlugin({
                 return { path: resolveExtension(subpath ? `${libDir}${subpath}` : libDir) }
             })
 
-            build.onLoad({ filter: rpcFilter }, async (args) => {
-                if (!args.path.startsWith(`${rpcDir}/`)) {
+            build.onLoad({ filter: routeFilter }, async (args) => {
+                if (!args.path.startsWith(`${routeDir}/`)) {
                     return undefined
                 }
-                const relativePath = args.path.slice(rpcDir.length + 1)
+                const relativePath = args.path.slice(routeDir.length + 1)
                 const source = await Bun.file(args.path).text()
-                const url = rpcUrlForFile(relativePath)
-                const declared = extractRpcExport(source)
+                const url = routeUrlForFile(relativePath)
+                const declared = extractRouteExport(source)
                 if (!declared) {
                     throw new Error(
-                        `[belte] src/rpc/${relativePath} has no \`export const <name> = <VERB>(...)\` — every $rpc module must declare exactly one remote function`,
+                        `[belte] src/route/${relativePath} has no \`export const <name> = <VERB>(...)\` — every $route module must declare exactly one remote function`,
                     )
                 }
                 const expectedName = relativePath.replace(/\.ts$/, '').split('/').pop() ?? ''
                 if (declared.exportName !== expectedName) {
                     throw new Error(
-                        `[belte] src/rpc/${relativePath} exports \`${declared.exportName}\` but the filename expects \`${expectedName}\` — the export name must match the file's stem`,
+                        `[belte] src/route/${relativePath} exports \`${declared.exportName}\` but the filename expects \`${expectedName}\` — the export name must match the file's stem`,
                     )
                 }
                 /*
@@ -159,7 +159,7 @@ export function belteResolverPlugin({
                 server-only top-level imports never reach the browser. The
                 stub keeps the same export name the source declared, so
                 page imports resolve identically on both sides. SOCKET
-                modules emit a socketProxy stub against the rpc URL; HTTP
+                modules emit a socketProxy stub against the route URL; HTTP
                 verbs emit a remoteProxy stub against verb + URL.
                 */
                 if (target === 'client') {
@@ -195,37 +195,37 @@ export const ${declared.exportName} = __belteRemoteProxy__(${JSON.stringify(decl
             })
 
             build.onLoad({ filter: /.*/, namespace: NS }, async (args) => {
-                if (args.path === 'belte:rpc') {
-                    const { httpFiles } = await scanRpcOnce()
+                if (args.path === 'belte:route') {
+                    const { httpFiles } = await scanRouteOnce()
                     const byUrl = httpFiles
                         .toSorted()
-                        .map((file) => ({ url: rpcUrlForFile(file), file }))
+                        .map((file) => ({ url: routeUrlForFile(file), file }))
                     const entries = byUrl
                         .map(
                             ({ url, file }) =>
-                                `    ${JSON.stringify(url)}: () => import(${JSON.stringify(`${rpcDir}/${file}`)}),`,
+                                `    ${JSON.stringify(url)}: () => import(${JSON.stringify(`${routeDir}/${file}`)}),`,
                         )
                         .join('\n')
                     if (byUrl.length > 0) {
                         log.info(
-                            `resolved ${byUrl.length} rpc modules: ${byUrl.map((b) => b.url).join(', ')}`,
+                            `resolved ${byUrl.length} route modules: ${byUrl.map((b) => b.url).join(', ')}`,
                         )
                     }
                     return {
-                        contents: `export const rpc = {\n${entries}\n}\n`,
+                        contents: `export const route = {\n${entries}\n}\n`,
                         loader: 'js',
                     }
                 }
 
                 if (args.path === 'belte:sockets') {
-                    const { socketFiles } = await scanRpcOnce()
+                    const { socketFiles } = await scanRouteOnce()
                     const byUrl = socketFiles
                         .toSorted()
-                        .map((file) => ({ url: rpcUrlForFile(file), file }))
+                        .map((file) => ({ url: routeUrlForFile(file), file }))
                     const entries = byUrl
                         .map(
                             ({ url, file }) =>
-                                `    ${JSON.stringify(url)}: () => import(${JSON.stringify(`${rpcDir}/${file}`)}),`,
+                                `    ${JSON.stringify(url)}: () => import(${JSON.stringify(`${routeDir}/${file}`)}),`,
                         )
                         .join('\n')
                     if (byUrl.length > 0) {
@@ -380,23 +380,23 @@ async function scanPages(pagesDir: string): Promise<PagesScan> {
 }
 
 /*
-Walks src/rpc once and partitions every `.ts` file into HTTP-verb rpcs
-and SOCKET rpcs. Classification reads each file's source and extracts
+Walks src/route once and partitions every `.ts` file into HTTP-verb routes
+and SOCKET routes. Classification reads each file's source and extracts
 the verb identifier (cheap — one tokenizer pass per file). Returns
 empty lists when the directory doesn't exist so a pages-only app
-builds without an `rpc/` folder.
+builds without a `route/` folder.
 */
-async function scanRpc(rpcDir: string): Promise<RpcScan> {
-    if (!existsSync(rpcDir)) {
+async function scanRoute(routeDir: string): Promise<RouteScan> {
+    if (!existsSync(routeDir)) {
         return { httpFiles: [], socketFiles: [] }
     }
-    const allFiles = await Array.fromAsync(new Glob('**/*.ts').scan({ cwd: rpcDir }))
+    const allFiles = await Array.fromAsync(new Glob('**/*.ts').scan({ cwd: routeDir }))
     const httpFiles: string[] = []
     const socketFiles: string[] = []
     await Promise.all(
         allFiles.map(async (file) => {
-            const source = await Bun.file(`${rpcDir}/${file}`).text()
-            const declared = extractRpcExport(source)
+            const source = await Bun.file(`${routeDir}/${file}`).text()
+            const declared = extractRouteExport(source)
             if (declared?.verb === 'SOCKET') {
                 socketFiles.push(file)
             } else {
@@ -407,7 +407,7 @@ async function scanRpc(rpcDir: string): Promise<RpcScan> {
     return { httpFiles, socketFiles }
 }
 
-type RpcScan = {
+type RouteScan = {
     httpFiles: string[]
     socketFiles: string[]
 }

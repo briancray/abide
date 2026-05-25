@@ -8,7 +8,7 @@ type Callbacks = {
 Drains a ReadableStream<Uint8Array> shaped as JSON Lines
 (application/jsonl) — one JSON value per line, terminated by `\n` — and
 forwards each parsed line as a frame. Mirrors the producer side in
-`belte/response/jsonl`: a final `{"$error":"<message>"}` line is
+`belte/respond/jsonl`: a final `{"$error":"<message>"}` line is
 treated as a terminal error and surfaced through onError; everything
 else flows through onFrame.
 

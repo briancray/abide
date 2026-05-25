@@ -1,11 +1,24 @@
 ---
 name: write-readme
-description: Regenerate the project README in belte's canonical 4-section format (intro / CLI / project structure with per-file barebones+full snippets / handling data). Use when the user asks to rewrite, update, regenerate, or refresh the README, or after API changes that the README should reflect.
+description: Regenerate the project README in belte's canonical phase-grouped format (intro + four bets / a complete app on one screen / CLI / Reference organised by Route → Respond → Consume). Use when the user asks to rewrite, update, regenerate, or refresh the README, or after API changes that the README should reflect.
 ---
 
 # Writing the belte README
 
 This project keeps a fixed README structure. Always preserve it; never invent new top-level sections.
+
+**Current section spine** (matches the live README — preserve order):
+
+1. Intro tagline + the four bets (as a numbered list) + examples links.
+2. `## The four bets` — one `###` per bet (Isomorphism by default / Framework owns the network / One runtime, dev → prod → binary / Exports grouped by lifecycle phase) — each ~3 lines of prose + a ~5-line snippet that proves it.
+3. `## A complete app on one screen` — five files (layout, page, two routes, package.json) totaling ~50 lines.
+4. `## CLI` — Scaffold subsection, in-project subsection, debug logging.
+5. `## Reference` — intro + project layout block + three phase sections:
+   - `## Route` — pages/layouts (layouts are **nearest-only** — deepest wins, replaces ancestors), route modules (`GET / POST / PUT / PATCH / DELETE / HEAD / SOCKET`), app hooks, HTML shell, CSS, project config.
+   - `## Respond` — `request()`, `server`, `HttpError`, the `belte/respond` family, HTTP cache-control defaults.
+   - `## Consume` — direct calls, `cache()`, reactive reads + mutations, `.raw` escape hatch, `.stream(args)` + `subscribe()`, `page` + `navigate`, request-lifecycle diagram (which lives at the end of Consume because that's the phase it terminates in).
+
+The section names match the module names: `belte/route`, `belte/respond`, `belte/consume`. The phase IS the module. Don't introduce alternative phase vocabulary in the README — the imports are the canonical name.
 
 ## Before writing
 
@@ -15,8 +28,10 @@ Re-derive the API from source — never trust the previous README's claims. At m
 - `packages/belte/bin/belte.ts` — CLI commands and their flags
 - `packages/belte/src/lib/types/AppModule.ts` — what `src/app.ts` can export
 - `packages/belte/src/lib/shared/cache.ts` — `cache()` and `cache.invalidate()` semantics
-- `packages/belte/src/lib/rpc/handler.ts` — the `handler.<VERB>(fn)` helper signature
-- `packages/belte/src/belteResolverPlugin.ts` — path aliases, recognized page leaves under `src/pages/`, rpc files under `src/rpc/`, and the `belte:*` virtual modules
+- `packages/belte/src/lib/route/index.ts` — the verb helpers (`GET / POST / PUT / PATCH / DELETE / HEAD / SOCKET`) and their signatures
+- `packages/belte/src/lib/respond/` — `json` / `error` / `redirect` / `sse` / `jsonl` response helpers
+- `packages/belte/src/lib/consume/index.ts` — `cache()` and `subscribe()` re-exports
+- `packages/belte/src/belteResolverPlugin.ts` — path aliases, recognized page leaves under `src/pages/`, route files under `src/route/`, and the `belte:*` virtual modules
 - `packages/belte/src/lib/server/createServer.ts` — cache-control defaults, socket path, default error pages
 - `packages/belte/template/` and `examples/scaffold/` — the canonical "barebones" file contents
 - `examples/kitchen-sink/` — feature-rich examples to draw "full" snippets from
@@ -33,7 +48,7 @@ If anything in the README would contradict source, fix the README — not source
   1. Folder-based pages — `src/pages/` for `page.svelte` / `layout.svelte`, folder path becomes the URL. Don't conflate with rpc here; point 4 covers that.
   2. A single Bun process — no Node, no Vite, no separate bundler runtime
   3. Svelte 5 throughout — SSR → hydration, layout chains both sides
-  4. RPC is callable from anywhere — one file per remote function under `src/rpc/`, filename = export name = URL (mounted at `/rpc/<file>`), `handler.<VERB>` picks the HTTP verb, bundler runs it in-process on the server and swaps it for a typed `fetch` on the client.
+  4. Routes are callable from anywhere — one file per remote function under `src/route/`, filename = export name = URL (mounted at `/route/<file>`), the verb is the import (`GET / POST / PUT / PATCH / DELETE / HEAD / SOCKET` from `belte/route`), bundler runs it in-process on the server and swaps it for a typed `fetch` (or socket multiplex) on the client.
 - "It ships as a library (`belte`) plus a CLI (`belte scaffold | dev | build | start | compile`)." — keep the CLI list in sync with `bin/belte.ts`.
 - **Examples links** (bulleted): barebones, scaffold, kitchen-sink — one-line description each.
 
@@ -47,13 +62,13 @@ Two subsections:
 
 ### c) Project structure
 
-- Annotated directory tree showing every file the README covers. Use trailing-space-aligned `#` comments. Include `.env` and `dist/` even though they aren't authored. Show both `src/pages/` and `src/rpc/` with at least one file each.
-- Three path-alias lines (`$pages/...`, `$rpc/...`, `$lib/...`) and a short import example.
+- Annotated directory tree showing every file the README covers. Use trailing-space-aligned `#` comments. Include `.env` and `dist/` even though they aren't authored. Show both `src/pages/` and `src/route/` with at least one file each.
+- Three path-alias lines (`$pages/...`, `$route/...`, `$lib/...`) and a short import example.
 - One-line preamble that the rest of the section is per-file with barebones + full snippets.
 - **One subsection per file**, in this exact order:
   - `src/pages/page.svelte`
   - `src/pages/layout.svelte`
-  - `src/rpc/<name>.ts`
+  - `src/route/<name>.ts`
   - `src/app.ts`
   - `src/app.html`
   - `src/app.css`
@@ -66,8 +81,8 @@ Per-file rules:
 - 1–3 sentences of prose **before** code. Explain what the file does and why someone reaches for it. Don't restate the obvious.
 - **Barebones** snippet — copy the literal contents from `packages/belte/template/` (or `examples/barebones` for `page.svelte`). This must match the on-disk template byte-for-byte; if it doesn't, fix the template, not the snippet.
 - **Full** snippet — feature-rich. Pull from `examples/kitchen-sink/` where possible so the snippet is real code that actually runs. Annotate with `/* … */` comments only where the *why* is non-obvious.
-- For the `src/rpc/<name>.ts` subsection, document: the `handler.<VERB><Args, Return>(fn)` helper from `belte/rpc/handler`, the content-type-driven argument parsing rules, the one-export-per-file / export-name-matches-filename rule, how the file path becomes the URL (under `/rpc/`), and the bracket-folder convention for path params (`src/rpc/posts/[id]/getPost.ts` → `/rpc/posts/:id/getPost`).
-- For `app.ts`, list every optional export with one-line semantics (`init` / `handle` / `handleError` / `socket`) before snippets.
+- For the `src/route/<name>.ts` subsection, document: the verb helpers (`GET<Args, Return>(fn)` … `SOCKET<Args, Frame>(fn)`) from `belte/route`, the content-type-driven argument parsing rules, the one-export-per-file / export-name-matches-filename rule, how the file path becomes the URL (under `/route/`), and the fact that route URLs are **flat** — no `[id]` segments; pass identifiers via args.
+- For `app.ts`, list every optional export with one-line semantics (`init` / `handle` / `handleError`) before snippets. Note that SOCKETs aren't exposed here — they're declared via `SOCKET` in `belte/route` and multiplexed onto `/__belte/socket` automatically.
 - For `app.html`, list the three SSR markers (`<!--ssr:head-->`, `<!--ssr:body-->`, `<!--ssr:state-->`).
 
 ### d) Handling data
@@ -76,7 +91,7 @@ Per-file rules:
 
 Subsections, in this exact order:
 
-1. **Intro paragraph** — rpc modules are the data primitive; the bundler runs handlers in-process on the server build and substitutes a `fetch` proxy on the client build. End the paragraph by previewing that `cache()` is a thin layer added on top.
+1. **Intro paragraph** — route modules are the data primitive; the bundler runs handlers in-process on the server build and substitutes a `fetch` proxy (or socket multiplex) on the client build. End the paragraph by previewing that `cache()` is a thin layer added on top.
 2. **Calling remote functions directly** — `await fn(args)` semantics on each build target, query-string vs JSON-body serialization, the typed `.json()` return, and `fn.url` / `fn.method` for `<form action>` and plain `fetch`.
 3. **`cache()` — the layer on top** — what cache buys you over a direct call (dedupe + SSR snapshot + reactivity). Show the minimal `cache(fn)()` wrap.
 4. **How a cached request flows** — ASCII flow diagram from browser request through `app.ts handle?` → layout chain → page → cache snapshot serialization → hydration → `$derived` reactivity. Keep it diagram-like, not prose.
@@ -98,6 +113,6 @@ Subsections, in this exact order:
 
 ## After writing
 
-- Sanity-check every code block compiles in your head against current source — if `belte/cache` got renamed, the snippets must use the new name.
+- Sanity-check every code block compiles in your head against current source — if `belte/consume` got renamed, the snippets must use the new name.
 - Verify the example links resolve (the three directories must exist under `examples/`).
 - Run `bun x biome check --write --linter-enabled=false README.md` is a no-op (biome doesn't format markdown) — skip the format pass for README.
