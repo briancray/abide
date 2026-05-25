@@ -8,7 +8,6 @@ import { isDebugEnabled } from '../shared/isDebugEnabled.ts'
 import { log } from '../shared/log.ts'
 import { nearestLayoutPrefix } from '../shared/nearestLayoutPrefix.ts'
 import { toBunRoutePattern } from '../shared/toBunRoutePattern.ts'
-import type { SocketData } from '../types/App.ts'
 import type { AppModule } from '../types/AppModule.ts'
 import type { Assets } from '../types/Assets.ts'
 import type { HttpVerb } from '../types/HttpVerb.ts'
@@ -17,7 +16,9 @@ import type { Pages } from '../types/Pages.ts'
 import type { RemoteFunction } from '../types/RemoteFunction.ts'
 import type { RemoteRoutes } from '../types/RemoteRoutes.ts'
 import type { RequestStore } from '../types/RequestStore.ts'
+import type { SocketRoutes } from '../types/SocketRoutes.ts'
 import { cacheControlForAsset } from './cacheControlForAsset.ts'
+import { createSocketRpcDispatcher } from './createSocketRpcDispatcher.ts'
 import { requestContext } from './requestContext.ts'
 import { serializeCacheSnapshot } from './serializeCacheSnapshot.ts'
 import { setActiveServer } from './serverSlot.ts'
@@ -49,6 +50,7 @@ RequestStore carries the cache store and request metadata.
 export async function createServer({
     pages,
     rpc,
+    sockets,
     layouts,
     shell,
     app,
@@ -58,19 +60,20 @@ export async function createServer({
 }: {
     pages: Pages
     rpc: RemoteRoutes
+    sockets: SocketRoutes
     layouts?: Layouts
     shell: string
     app?: AppModule
     assets?: Assets
     distDir?: string
     port?: number
-}): Promise<Server<SocketData>> {
+}): Promise<Server<unknown>> {
     /*
     Forward-declared so the per-request closures below can reference it. The
     value is assigned by Bun.serve() further down; closures only fire after
     that, so the read-before-write is safe at runtime.
     */
-    let server!: Server<SocketData>
+    let server!: Server<unknown>
     const layoutPrefixes = layouts ? Object.keys(layouts) : []
 
     const diskGzipPaths = new Set<string>(
@@ -347,35 +350,34 @@ export async function createServer({
         })
     }
 
-    const baseSocket = app?.socket
+    /*
+    Belte's only native WebSocket surface is SOCKET-bound rpc: all sockets
+    multiplex onto one framework-owned connection per client at
+    /__belte/socket. The dispatcher owns the open/message/close handlers
+    below; user code never sees the raw ws lifecycle.
+    */
+    const rpcDispatcher = createSocketRpcDispatcher(sockets)
     server = Bun.serve({
         port,
-        ...(baseSocket
-            ? {
-                  websocket: {
-                      open: baseSocket.open,
-                      message: baseSocket.message,
-                      close: baseSocket.close,
-                      drain: baseSocket.drain,
-                      error: baseSocket.error,
-                      ping: baseSocket.ping,
-                      pong: baseSocket.pong,
-                  },
-              }
-            : {}),
+
+        websocket: {
+            open(ws) {
+                rpcDispatcher.open(ws)
+            },
+            message(ws, data) {
+                rpcDispatcher.message(ws, data)
+            },
+            close(ws) {
+                rpcDispatcher.close(ws)
+            },
+        },
 
         routes,
 
         async fetch(req, srv) {
             const url = new URL(req.url)
-            if (baseSocket && url.pathname === SOCKET_PATH) {
-                const upgradeOpts = baseSocket.upgrade
-                    ? await baseSocket.upgrade(req, { server: srv })
-                    : { data: {} as SocketData }
-                if (upgradeOpts === false) {
-                    return new Response('Forbidden', { status: 403 })
-                }
-                if (srv.upgrade(req, upgradeOpts)) {
+            if (url.pathname === SOCKET_PATH) {
+                if (srv.upgrade(req, { data: {} })) {
                     return undefined as unknown as Response
                 }
                 return new Response('Upgrade failed', { status: 400 })

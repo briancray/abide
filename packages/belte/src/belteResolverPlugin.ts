@@ -40,18 +40,21 @@ function escapeRegex(value: string): string {
 
 /*
 Bun plugin that wires every virtual import belte produces at build time:
-- `belte:rpc`     — { rpcUrl: () => import(rpc-module) } manifest
+- `belte:rpc`     — { rpcUrl: () => import(rpc-module) } HTTP-verb manifest
+- `belte:sockets` — { rpcUrl: () => import(rpc-module) } SOCKET manifest
 - `belte:pages`   — { pageUrl: () => import(page.svelte) } manifest
 - `belte:layouts` — { dirPrefix: () => import(layout.svelte) } manifest
-- `belte:app`     — { init?, handle?, handleError?, socket? } from src/app.ts
+- `belte:app`     — { init?, handle?, handleError? } from src/app.ts
 - `belte:assets`  — gzipped chunk bytes embedded for standalone compile
 - `belte:shell`   — app.html content (custom or default)
 
 Also rewrites every module under src/rpc to bind each verb-named export
-(GET / POST / PUT / PATCH / DELETE / HEAD) to a runtime implementation:
-the server target threads the verb + URL into defineVerb (real handler
-in-process); the client target replaces the whole module with one
-remoteProxy stub per declared verb (fetch over the network).
+to a runtime implementation: HTTP verbs (GET / POST / PUT / PATCH /
+DELETE / HEAD) thread verb + URL into defineVerb on the server and
+remoteProxy on the client; SOCKET threads just the URL into defineSocket
+on the server and socketProxy on the client. Each rpc file is
+classified once and emitted into the appropriate manifest so the server
+can route HTTP requests and ws frames against disjoint URL spaces.
 */
 export function belteResolverPlugin({
     cwd = process.cwd(),
@@ -74,7 +77,7 @@ export function belteResolverPlugin({
     re-read app.html from disk.
     */
     let pagesScanPromise: Promise<PagesScan> | undefined
-    let rpcScanPromise: Promise<string[]> | undefined
+    let rpcScanPromise: Promise<RpcScan> | undefined
     let shellContentsPromise: Promise<string> | undefined
     function scanPagesOnce(): Promise<PagesScan> {
         if (!pagesScanPromise) {
@@ -85,7 +88,7 @@ export function belteResolverPlugin({
         }
         return pagesScanPromise
     }
-    function scanRpcOnce(): Promise<string[]> {
+    function scanRpcOnce(): Promise<RpcScan> {
         if (!rpcScanPromise) {
             rpcScanPromise = scanRpc(rpcDir)
         }
@@ -105,7 +108,7 @@ export function belteResolverPlugin({
         setup(build) {
             build.onResolve(
                 {
-                    filter: /\/_virtual\/(rpc|pages|layouts|app|assets|shell)\.ts$/,
+                    filter: /\/_virtual\/(rpc|sockets|pages|layouts|app|assets|shell)\.ts$/,
                 },
                 (args) => {
                     const name = args.path.split('/').pop()?.replace('.ts', '')
@@ -152,13 +155,20 @@ export function belteResolverPlugin({
                 }
                 /*
                 For the client bundle, replace the entire module source
-                with a single remoteProxy stub so the handler body and any
+                with a single proxy stub so the handler body and any
                 server-only top-level imports never reach the browser. The
                 stub keeps the same export name the source declared, so
-                page imports resolve identically on both sides.
+                page imports resolve identically on both sides. SOCKET
+                modules emit a socketProxy stub against the rpc URL; HTTP
+                verbs emit a remoteProxy stub against verb + URL.
                 */
                 if (target === 'client') {
-                    const contents = `import { remoteProxy as __belteRemoteProxy__ } from 'belte/client/remoteProxy';
+                    const contents =
+                        declared.verb === 'SOCKET'
+                            ? `import { socketProxy as __belteSocketProxy__ } from 'belte/client/socketProxy';
+export const ${declared.exportName} = __belteSocketProxy__(${JSON.stringify(url)});
+`
+                            : `import { remoteProxy as __belteRemoteProxy__ } from 'belte/client/remoteProxy';
 export const ${declared.exportName} = __belteRemoteProxy__(${JSON.stringify(declared.verb)}, ${JSON.stringify(url)});
 `
                     return { contents, loader: 'ts' }
@@ -166,22 +176,28 @@ export const ${declared.exportName} = __belteRemoteProxy__(${JSON.stringify(decl
                 /*
                 Server target: strip the user's verb import, then rewrite
                 the `<VERB>(...)` call so the verb (from the identifier)
-                and the URL (from the file path) are threaded into
-                defineVerb. The user's handler body stays intact between
-                the parens; any generics on the call are dropped (they
-                carry no runtime info). Rewriting is tokenizer-driven so
-                `GET` mentions inside strings and comments are left alone.
+                and the URL (from the file path) are threaded into the
+                runtime constructor — defineVerb for HTTP verbs,
+                defineSocket for SOCKET. The user's handler body stays
+                intact between the parens; any generics on the call are
+                dropped (they carry no runtime info). Rewriting is
+                tokenizer-driven so `GET` mentions inside strings and
+                comments are left alone.
                 */
                 const rewritten = rewriteForServer(source, url)
-                const banner = `import { defineVerb as __belteDefineVerb__ } from 'belte/server/defineVerb';
+                const banner =
+                    declared.verb === 'SOCKET'
+                        ? `import { defineSocket as __belteDefineSocket__ } from 'belte/server/defineSocket';
+`
+                        : `import { defineVerb as __belteDefineVerb__ } from 'belte/server/defineVerb';
 `
                 return { contents: `${banner}${rewritten}`, loader: 'ts' }
             })
 
             build.onLoad({ filter: /.*/, namespace: NS }, async (args) => {
                 if (args.path === 'belte:rpc') {
-                    const files = await scanRpcOnce()
-                    const byUrl = files
+                    const { httpFiles } = await scanRpcOnce()
+                    const byUrl = httpFiles
                         .toSorted()
                         .map((file) => ({ url: rpcUrlForFile(file), file }))
                     const entries = byUrl
@@ -197,6 +213,28 @@ export const ${declared.exportName} = __belteRemoteProxy__(${JSON.stringify(decl
                     }
                     return {
                         contents: `export const rpc = {\n${entries}\n}\n`,
+                        loader: 'js',
+                    }
+                }
+
+                if (args.path === 'belte:sockets') {
+                    const { socketFiles } = await scanRpcOnce()
+                    const byUrl = socketFiles
+                        .toSorted()
+                        .map((file) => ({ url: rpcUrlForFile(file), file }))
+                    const entries = byUrl
+                        .map(
+                            ({ url, file }) =>
+                                `    ${JSON.stringify(url)}: () => import(${JSON.stringify(`${rpcDir}/${file}`)}),`,
+                        )
+                        .join('\n')
+                    if (byUrl.length > 0) {
+                        log.info(
+                            `resolved ${byUrl.length} socket modules: ${byUrl.map((b) => b.url).join(', ')}`,
+                        )
+                    }
+                    return {
+                        contents: `export const sockets = {\n${entries}\n}\n`,
                         loader: 'js',
                     }
                 }
@@ -342,16 +380,36 @@ async function scanPages(pagesDir: string): Promise<PagesScan> {
 }
 
 /*
-Walks src/rpc once and collects every `.ts` file. Each file becomes one
-endpoint at the URL derived by rpcUrlForFile. Returns an empty list when
-the directory doesn't exist so a pages-only app builds without an `rpc/`
-folder.
+Walks src/rpc once and partitions every `.ts` file into HTTP-verb rpcs
+and SOCKET rpcs. Classification reads each file's source and extracts
+the verb identifier (cheap — one tokenizer pass per file). Returns
+empty lists when the directory doesn't exist so a pages-only app
+builds without an `rpc/` folder.
 */
-async function scanRpc(rpcDir: string): Promise<string[]> {
+async function scanRpc(rpcDir: string): Promise<RpcScan> {
     if (!existsSync(rpcDir)) {
-        return []
+        return { httpFiles: [], socketFiles: [] }
     }
-    return await Array.fromAsync(new Glob('**/*.ts').scan({ cwd: rpcDir }))
+    const allFiles = await Array.fromAsync(new Glob('**/*.ts').scan({ cwd: rpcDir }))
+    const httpFiles: string[] = []
+    const socketFiles: string[] = []
+    await Promise.all(
+        allFiles.map(async (file) => {
+            const source = await Bun.file(`${rpcDir}/${file}`).text()
+            const declared = extractRpcExport(source)
+            if (declared?.verb === 'SOCKET') {
+                socketFiles.push(file)
+            } else {
+                httpFiles.push(file)
+            }
+        }),
+    )
+    return { httpFiles, socketFiles }
+}
+
+type RpcScan = {
+    httpFiles: string[]
+    socketFiles: string[]
 }
 
 /*

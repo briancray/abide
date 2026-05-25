@@ -2,39 +2,44 @@
 import '../app.css'
 import { cache } from 'belte/cache'
 import { page } from 'belte/page'
-import { getSession } from '$rpc/getSession'
-import { logout } from '$rpc/logout'
+import { getSession } from '$rpc/getSession.ts'
+import { logout } from '$rpc/logout.ts'
 
-let { children }: { children: any } = $props()
+let { children }: { children: import('svelte').Snippet } = $props()
 
+/*
+Top-level cache read — runs during SSR on the server and replays from
+the cache snapshot on the client during hydration. Same line, both sides.
+*/
 const session = await cache(getSession)()
 
 /*
-`page.url` is reassigned on every SPA navigation, so derivations that read
-it (like "is this link active?") re-run without any per-link plumbing.
+`page.url` is reassigned on every SPA navigation, so reading it inside a
+$derived re-runs without per-link plumbing. Active-link styling falls
+out for free.
 */
-const linkClass = (href: string) =>
-    page.url.pathname === href
-        ? 'font-medium text-slate-900'
+const linkClass = (prefix: string) =>
+    page.url.pathname === prefix || page.url.pathname.startsWith(`${prefix}/`)
+        ? 'font-semibold text-slate-900'
         : 'text-slate-600 hover:text-slate-900'
 </script>
 
 <svelte:head>
-    <title>kitchen-sink</title>
+    <title>belte kitchen-sink</title>
 </svelte:head>
 
 <div class="min-h-screen bg-slate-50 text-slate-900">
     <header class="border-b border-slate-200 bg-white">
-        <nav class="mx-auto flex max-w-3xl items-center gap-4 px-6 py-4">
-            <a href="/" class="font-semibold">kitchen-sink</a>
-            <a href="/" class={linkClass('/')}>Home</a>
-            <a href="/about" class={linkClass('/about')}>About</a>
-            <a href="/dashboard" class={linkClass('/dashboard')}>Dashboard</a>
-            <a href="/counter" class={linkClass('/counter')}>Counter</a>
-            <div class="ml-auto flex items-center gap-3 text-sm">
+        <nav class="mx-auto flex max-w-4xl flex-wrap items-center gap-4 px-6 py-4 text-sm">
+            <a href="/" class="text-base font-semibold">belte kitchen-sink</a>
+            <a href="/declare" class={linkClass('/declare')}>Declare</a>
+            <a href="/reply" class={linkClass('/reply')}>Reply</a>
+            <a href="/consume" class={linkClass('/consume')}>Consume</a>
+            <a href="/auth/dashboard" class={linkClass('/auth')}>Auth</a>
+            <div class="ml-auto flex items-center gap-3">
                 {#if session?.user}
                     <span class="text-slate-600">
-                        signed in as <strong>{session?.user}</strong>
+                        signed in as <strong>{session.user}</strong>
                     </span>
                     <form method="POST" action={logout.url}>
                         <button
@@ -45,7 +50,7 @@ const linkClass = (href: string) =>
                     </form>
                 {:else}
                     <a
-                        href="/login"
+                        href="/auth/login"
                         class="rounded-md bg-slate-900 px-3 py-1 text-white hover:bg-slate-700">
                         Log in
                     </a>
@@ -53,7 +58,7 @@ const linkClass = (href: string) =>
             </div>
         </nav>
     </header>
-    <main class="mx-auto max-w-3xl px-6 py-10">
+    <main class="mx-auto max-w-4xl px-6 py-10">
         {@render children()}
     </main>
 </div>

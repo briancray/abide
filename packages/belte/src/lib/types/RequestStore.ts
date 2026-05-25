@@ -1,5 +1,4 @@
 import type { Server } from 'bun'
-import type { SocketData } from './App.ts'
 import type { CacheStore } from './CacheStore.ts'
 
 /*
@@ -12,5 +11,5 @@ export type RequestStore = {
     req: Request
     signal: AbortSignal
     cache: CacheStore
-    server: Server<SocketData>
+    server: Server<unknown>
 }

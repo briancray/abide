@@ -1,5 +1,4 @@
 import type { Server } from 'bun'
-import type { SocketData } from '../types/App.ts'
 import { getActiveServer } from './serverSlot.ts'
 
 /*
@@ -8,7 +7,7 @@ reference is stable across modules — consumers can hold `server` at module
 scope and still see the real instance after init resolves. Throws on access
 before init completes so silent failures surface as loud errors.
 */
-export const server = new Proxy({} as Server<SocketData>, {
+export const server = new Proxy({} as Server<unknown>, {
     get(_target, prop, receiver) {
         const active = getActiveServer()
         if (!active) {

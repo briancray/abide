@@ -1,10 +1,12 @@
 import type { HttpVerb } from '../types/HttpVerb.ts'
 
-const VERB_NAMES = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'] as const
+const VERB_NAMES = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'SOCKET'] as const
 const VERB_SET = new Set<string>(VERB_NAMES)
 
+export type RpcVerb = HttpVerb | 'SOCKET'
+
 type RpcSite = {
-    verb: HttpVerb
+    verb: RpcVerb
     exportName: string
     callStart: number
     parenStart: number
@@ -67,7 +69,7 @@ export function findRpcCallSite(source: string): RpcSite | undefined {
                             )
                         }
                         found = {
-                            verb: ident as HttpVerb,
+                            verb: ident as RpcVerb,
                             exportName,
                             callStart: i,
                             parenStart: tail,
@@ -87,10 +89,10 @@ export function findRpcCallSite(source: string): RpcSite | undefined {
 
 /*
 Rewrites an `$rpc/**` module for the server bundle: strips the verb import
-line and replaces the `<VERB>(` call with
-`__belteDefineVerb__("VERB", "<url>", `. Generics on the verb call are
-discarded — they carry no runtime info and the verb/url come from the
-file path + verb identifier instead.
+line and replaces the `<VERB>(` call with the runtime constructor binding
+— `__belteDefineVerb__("VERB", "<url>", ` for HTTP verbs,
+`__belteDefineSocket__("<url>", ` for SOCKET. Generics on the call are
+discarded; the verb/url come from the file path + identifier instead.
 */
 export function rewriteForServer(source: string, url: string): string {
     const stripped = stripRpcImport(source)
@@ -98,21 +100,22 @@ export function rewriteForServer(source: string, url: string): string {
     if (!site) {
         return stripped
     }
-    return (
-        stripped.slice(0, site.callStart) +
-        `__belteDefineVerb__(${JSON.stringify(site.verb)}, ${JSON.stringify(url)}, ` +
-        stripped.slice(site.parenStart + 1)
-    )
+    const binding =
+        site.verb === 'SOCKET'
+            ? `__belteDefineSocket__(${JSON.stringify(url)}, `
+            : `__belteDefineVerb__(${JSON.stringify(site.verb)}, ${JSON.stringify(url)}, `
+    return stripped.slice(0, site.callStart) + binding + stripped.slice(site.parenStart + 1)
 }
 
 /*
 Reads the module to discover the declared verb and export name without
 emitting any rewritten source. The client bundle uses this to emit a
-single remoteProxy stub with the same export name the source declared.
+single proxy stub (remoteProxy or socketProxy) with the same export
+name the source declared.
 */
 export function extractRpcExport(
     source: string,
-): { verb: HttpVerb; exportName: string } | undefined {
+): { verb: RpcVerb; exportName: string } | undefined {
     const site = findRpcCallSite(source)
     if (!site) {
         return undefined

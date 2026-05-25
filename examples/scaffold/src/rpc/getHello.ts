@@ -8,9 +8,16 @@ fetch over the network on the client.
 
 Generic parameters are <Args, Return> — Args is what the caller passes in,
 Return is the value the caller receives after Content-Type-driven decoding.
+
+`json(...)` from `belte/response` is a thin wrapper over `Response.json` that
+defaults `Cache-Control: no-store`, since intermediary caches shouldn't
+memoise rpc replies (the framework's per-request cache handles in-process
+dedupe). Other helpers in the same module: `error`, `redirect`, `sse`,
+`jsonl`.
 */
 import { GET } from 'belte/rpc'
+import { json } from 'belte/response'
 
 export const getHello = GET<undefined, { message: string }>(() =>
-    Response.json({ message: 'Hello from belte' }),
+    json({ message: 'Hello from belte' }),
 )

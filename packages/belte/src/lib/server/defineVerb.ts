@@ -1,6 +1,7 @@
 import { buildRpcRequest } from '../shared/buildRpcRequest.ts'
 import { decodeResponse } from '../shared/decodeResponse.ts'
 import { recordRemoteMeta } from '../shared/remoteMeta.ts'
+import { streamResponse } from '../shared/streamResponse.ts'
 import type { HttpVerb } from '../types/HttpVerb.ts'
 import type { RawRemoteFunction, RemoteFunction } from '../types/RemoteFunction.ts'
 import type { RemoteHandler } from '../types/RemoteHandler.ts'
@@ -100,6 +101,9 @@ export function defineVerb<Args, Return>(
     callable.method = method
     callable.url = url
     callable.raw = raw
+    callable.stream = (args: Args): AsyncIterable<Return> => {
+        return streamResponse(rawCall(args)) as AsyncIterable<Return>
+    }
     callable.fetch = async (request: Request): Promise<Response> => {
         const args = (await parseArgs(method, request)) as Args | undefined
         return invoke(request, args)

@@ -1,4 +1,14 @@
+/*
+In-memory cookie session store + helpers. Used by getSession / login /
+logout to demonstrate the auth showcase under src/pages/auth/. Anything
+that needs the inbound Request reaches for `request()` from belte/server
+— no plumbing.
+*/
+import { request } from 'belte/server'
+
 const sessions = new Map<string, { user: string }>()
+
+export const SESSION_COOKIE = 'sid'
 
 export function createSession(user: string): string {
     const id = crypto.randomUUID()
@@ -16,12 +26,8 @@ export function destroySession(id: string | undefined): void {
     }
 }
 
-export const SESSION_COOKIE = 'sid'
-
-import { request } from 'belte/server'
-
 export function readSessionCookie(): string | undefined {
     const cookie = request().headers.get('cookie') ?? ''
-    const match = cookie.split(/;\s*/).find((p) => p.startsWith(`${SESSION_COOKIE}=`))
+    const match = cookie.split(/;\s*/).find((part) => part.startsWith(`${SESSION_COOKIE}=`))
     return match ? decodeURIComponent(match.slice(SESSION_COOKIE.length + 1)) : undefined
 }
