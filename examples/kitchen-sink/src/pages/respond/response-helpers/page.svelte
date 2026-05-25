@@ -27,19 +27,22 @@ async function callError() {
 
 async function callRedirectFetch() {
     /*
-    Plain `fetch(redirectExample.url, { redirect: 'manual' })` so we can
-    observe the 302 without the browser following it.
+    Browsers don't expose the raw 302 to JS — `redirect: 'manual'` returns
+    an opaqueredirect with status=0 and no headers, and `redirect: 'follow'`
+    (the default) walks the chain transparently. The visible signal that a
+    redirect happened is `response.redirected=true` plus `response.url`
+    pointing at the final destination.
     */
-    const response = await fetch(redirectExample.url, { redirect: 'manual' })
-    last = `redirect() → status=${response.status} Location=${response.headers.get('location')}`
+    const response = await fetch(redirectExample.url)
+    last = `redirect() → redirected=${response.redirected} finalUrl=${new URL(response.url).pathname} status=${response.status}`
 }
 </script>
 
 <h1 class="text-3xl font-bold"><code class="font-mono">belte/respond</code></h1>
 <p class="mt-2 text-slate-600">
-    Response constructors with rpc-friendly defaults. All of them set
+    Response constructors with route-friendly defaults. All of them set
     <code class="font-mono">Cache-Control: no-store</code>
-    unless the caller overrides it — intermediary caches shouldn't memoise rpc replies.
+    unless the caller overrides it — intermediary caches shouldn't memoise route replies.
 </p>
 
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
@@ -60,10 +63,23 @@ async function callRedirectFetch() {
             type="button"
             class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
             onclick={callRedirectFetch}>
-            <code class="font-mono">redirect(...)</code> (fetch w/ manual redirect)
+            <code class="font-mono">redirect(...)</code> (fetch + follow)
         </button>
+        <a
+            href={redirectExample.url}
+            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100">
+            <code class="font-mono">redirect(...)</code> (navigate — watch the address bar)
+        </a>
     </div>
     <p class="mt-4 font-mono text-sm text-slate-700">{last}</p>
+    <p class="mt-2 text-xs text-slate-500">
+        Note: <code class="font-mono">redirect: 'manual'</code>
+        in fetch returns an opaqueredirect (status=0, headers hidden) and
+        <code class="font-mono">redirect: 'follow'</code>
+        walks the chain transparently — the visible signal is
+        <code class="font-mono">response.redirected</code>
+        and <code class="font-mono">response.url</code>.
+    </p>
 </section>
 
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5 text-sm text-slate-600">
