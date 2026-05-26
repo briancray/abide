@@ -68,18 +68,16 @@ async function reset() {
     <CodeBlock
         title="src/route/getCounter.ts / incrementCounter.ts / resetCounter.ts (server)"
         code={`// getCounter.ts
-export const getCounter = GET<undefined, { count: number }>(() =>
-    json({ count: counterState.count }),
-)
+export const getCounter = GET(() => json({ count: counterState.count }))
 
 // incrementCounter.ts
-export const incrementCounter = POST<undefined, { count: number }>(() => {
+export const incrementCounter = POST(() => {
     counterState.count += 1
     return json({ count: counterState.count })
 })
 
 // resetCounter.ts
-export const resetCounter = DELETE<undefined, { count: number }>(() => {
+export const resetCounter = DELETE(() => {
     counterState.count = 0
     return json({ count: counterState.count })
 })`} />

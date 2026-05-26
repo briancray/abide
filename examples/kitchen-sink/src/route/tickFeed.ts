@@ -8,7 +8,7 @@ consumes with `new EventSource(tickFeed.url)`, or by reading
 `tickFeed.raw(...)`'s body if it needs Response headers/status. For
 pub/sub fan-out reach for `belte/stream` instead.
 */
-export const tickFeed = GET<undefined, { tick: number; at: string }>(() =>
+export const tickFeed = GET(() =>
     sse(
         (async function* () {
             for (let tick = 1; ; tick += 1) {

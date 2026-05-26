@@ -1,3 +1,5 @@
+import type { TypedResponse } from '../types/TypedResponse.ts'
+
 /*
 Plain-text error Response — clearer than constructing a Response by
 hand with a status and a text body, and shaped so the client's
@@ -33,7 +35,15 @@ const STATUS_TEXT: Record<number, string> = {
     504: 'Gateway Timeout',
 }
 
-export function error(status: number, message?: string): Response {
+/*
+Body type is `never` because `error()` only travels the non-2xx path on
+the wire — the caller's `await fn(args)` throws `HttpError` and never
+resolves to this response's body. Returning a TypedResponse<never> lets
+the union of branches in a handler narrow to whatever the success
+branch carries (`TypedResponse<{user}> | TypedResponse<never>` → Return
+= {user}).
+*/
+export function error(status: number, message?: string): TypedResponse<never> {
     const body = message ?? STATUS_TEXT[status] ?? `HTTP ${status}`
     return new Response(body, {
         status,
@@ -41,5 +51,5 @@ export function error(status: number, message?: string): Response {
             'Content-Type': 'text/plain; charset=utf-8',
             'Cache-Control': 'no-store',
         },
-    })
+    }) as TypedResponse<never>
 }

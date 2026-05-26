@@ -84,7 +84,7 @@ async function runJsonl() {
         code={`import { GET } from 'belte/route'
 import { sse } from 'belte/respond'
 
-export const tickFeed = GET<undefined, { tick: number; at: string }>(() =>
+export const tickFeed = GET(() =>
     sse(
         (async function* () {
             for (let tick = 1; ; tick += 1) {
@@ -130,7 +130,7 @@ source.addEventListener('message', (event) => {
         code={`import { GET } from 'belte/route'
 import { jsonl } from 'belte/respond'
 
-export const countLog = GET<{ to: number }, { n: number }>(({ to }) =>
+export const countLog = GET<{ to: number }>(({ to }) =>
     jsonl(
         (async function* () {
             for (let n = 1; n <= to; n += 1) {

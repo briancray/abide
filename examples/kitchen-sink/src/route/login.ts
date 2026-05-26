@@ -13,7 +13,7 @@ point is to show the cookie path (request() → cookie → session lookup)
 and how the layout's `cache(getSession)()` picks up the new identity
 without any client-side state plumbing.
 */
-export const login = POST<{ username: string }, never>((args) => {
+export const login = POST<{ username: string }>((args) => {
     const username = String(args?.username ?? '').trim()
     if (!username) {
         return error(400, 'username is required')

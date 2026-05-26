@@ -67,8 +67,8 @@ async function trigger500() {
         code={`import { GET } from 'belte/route'
 import { json, error } from 'belte/respond'
 
-export const getProduct = GET<{ id: string }, Product>(({ id }) => {
-    const product = products[id]
+export const getProduct = GET<{ id: string }>(({ id }) => {
+    const product: Product | undefined = products[id]
     if (!product) return error(404, \`no product with id \${id}\`)
     return json(product)
 })`} />
@@ -102,7 +102,7 @@ try {
     <p class="mt-2 font-mono text-xs text-slate-700">{outcome405}</p>
     <CodeBlock
         title="src/route/getEcho.ts (server — GET-bound, see verb-rpcs demo)"
-        code={`export const getEcho = GET<{ message: string }, ...>(({ message }) => json({ ... }))
+        code={`export const getEcho = GET<{ message: string }>(({ message }) => json({ ... }))
 /* The framework owns the verb dispatch — POST/PUT/etc. against this URL → 405 with Allow: GET */`} />
     <CodeBlock
         title="this page (client)"
@@ -129,7 +129,7 @@ try {
         title="src/route/boom.ts (server)"
         code={`import { GET } from 'belte/route'
 
-export const boom = GET<undefined, never>(() => {
+export const boom = GET(() => {
     throw new Error('intentional boom — exercising the 500 error path')
 })`} />
     <CodeBlock

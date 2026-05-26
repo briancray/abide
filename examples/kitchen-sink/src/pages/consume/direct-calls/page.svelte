@@ -43,8 +43,8 @@ async function callPlainFetch() {
         code={`import { GET } from 'belte/route'
 import { json } from 'belte/respond'
 
-export const getEcho = GET<{ message: string }, { method: 'GET'; message: string }>(
-    ({ message }) => json({ method: 'GET', message }),
+export const getEcho = GET<{ message: string }>(({ message }) =>
+    json({ method: 'GET' as const, message }),
 )`} />
     <CodeBlock
         title="this page (client — identical line, different runtime)"
@@ -100,8 +100,8 @@ const response = await fetch(url)
         code={`import { POST } from 'belte/route'
 import { json } from 'belte/respond'
 
-export const createEcho = POST<{ message: string }, { method: 'POST'; message: string }>(
-    ({ message }) => json({ method: 'POST', message }, { status: 201 }),
+export const createEcho = POST<{ message: string }>(({ message }) =>
+    json({ method: 'POST' as const, message }, { status: 201 }),
 )`} />
     <CodeBlock
         title="this page (client — plain HTML form, no JS)"

@@ -1,7 +1,7 @@
 import { POST } from 'belte/route'
 import { destroySession, readSessionCookie, SESSION_COOKIE } from '../sessions.ts'
 
-export const logout = POST<undefined, never>(() => {
+export const logout = POST(() => {
     destroySession(readSessionCookie())
     return new Response(undefined, {
         status: 303,

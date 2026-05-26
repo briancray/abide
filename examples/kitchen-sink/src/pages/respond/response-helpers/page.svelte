@@ -67,8 +67,8 @@ async function callRedirectFetch() {
         code={`import { GET } from 'belte/route'
 import { json } from 'belte/respond'
 
-export const getEcho = GET<{ message: string }, { method: 'GET'; message: string }>(
-    ({ message }) => json({ method: 'GET', message }),
+export const getEcho = GET<{ message: string }>(({ message }) =>
+    json({ method: 'GET' as const, message }),
 )`} />
     <CodeBlock
         title="this page (client)"
@@ -97,15 +97,13 @@ const value = await getEcho({ message: 'json()' })  // typed: { method: 'GET'; m
         code={`import { GET } from 'belte/route'
 import { json, error } from 'belte/respond'
 
-export const getProduct = GET<{ id: string }, { id: string; name: string; price: number }>(
-    ({ id }) => {
-        const product = products[id]
-        if (!product) {
-            return error(404, \`no product with id \${id}\`)
-        }
-        return json(product)
-    },
-)`} />
+export const getProduct = GET<{ id: string }>(({ id }) => {
+    const product = products[id]
+    if (!product) {
+        return error(404, \`no product with id \${id}\`)
+    }
+    return json(product)
+})`} />
     <CodeBlock
         title="this page (client)"
         code={`import { HttpError } from 'belte/shared/HttpError'
@@ -155,7 +153,7 @@ try {
         code={`import { GET } from 'belte/route'
 import { redirect } from 'belte/respond'
 
-export const redirectExample = GET<undefined, undefined>(() => redirect('/route'))`} />
+export const redirectExample = GET(() => redirect('/route'))`} />
     <CodeBlock
         title="this page (client)"
         code={`import { redirectExample } from '$route/redirectExample.ts'

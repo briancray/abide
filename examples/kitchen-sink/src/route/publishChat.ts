@@ -11,7 +11,7 @@ the client — receives the message. Validation happens here because
 can't publish directly; the auth/sanitisation gate lives in this
 route.
 */
-export const publishChat = POST<{ from: string; text: string }, ChatMessage>(({ from, text }) => {
+export const publishChat = POST<{ from: string; text: string }>(({ from, text }) => {
     const trimmedFrom = from.trim()
     const trimmedText = text.trim()
     if (!trimmedFrom || !trimmedText) {

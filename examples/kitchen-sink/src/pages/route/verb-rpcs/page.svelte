@@ -109,32 +109,32 @@ const message = $state({ value: 'hello' })
         code={`// getEcho.ts
 import { GET } from 'belte/route'
 import { json } from 'belte/respond'
-export const getEcho = GET<{ message: string }, { method: 'GET'; message: string }>(
-    ({ message }) => json({ method: 'GET', message }),
+export const getEcho = GET<{ message: string }>(({ message }) =>
+    json({ method: 'GET' as const, message }),
 )
 
 // createEcho.ts — POST: args from JSON body
-export const createEcho = POST<{ message: string }, { method: 'POST'; message: string }>(
-    ({ message }) => json({ method: 'POST', message }, { status: 201 }),
+export const createEcho = POST<{ message: string }>(({ message }) =>
+    json({ method: 'POST' as const, message }, { status: 201 }),
 )
 
 // replaceEcho.ts — PUT: args from JSON body
-export const replaceEcho = PUT<{ message: string }, { method: 'PUT'; message: string }>(
-    ({ message }) => json({ method: 'PUT', message }),
+export const replaceEcho = PUT<{ message: string }>(({ message }) =>
+    json({ method: 'PUT' as const, message }),
 )
 
 // patchEcho.ts — PATCH: args from JSON body
-export const patchEcho = PATCH<{ message: string }, { method: 'PATCH'; message: string }>(
-    ({ message }) => json({ method: 'PATCH', message }),
+export const patchEcho = PATCH<{ message: string }>(({ message }) =>
+    json({ method: 'PATCH' as const, message }),
 )
 
 // deleteEcho.ts — DELETE: args from URL search params
-export const deleteEcho = DELETE<{ message: string }, { method: 'DELETE'; message: string }>(
-    ({ message }) => json({ method: 'DELETE', message }),
+export const deleteEcho = DELETE<{ message: string }>(({ message }) =>
+    json({ method: 'DELETE' as const, message }),
 )
 
 // headEcho.ts — HEAD: response carries headers, no body
-export const headEcho = HEAD<undefined, undefined>(() =>
+export const headEcho = HEAD(() =>
     new Response(undefined, { status: 204, headers: { 'x-echo': 'HEAD' } }),
 )`} />
     <CodeBlock

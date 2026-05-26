@@ -4,7 +4,7 @@ Wraps an AsyncIterable<Frame> in a Response whose body is JSON Lines
 inside an rpc handler to turn a generator into a streaming HTTP response
 that `subscribe(fn)(args)` consumes frame-by-frame on the client.
 
-  export const orderFeed = GET<Args, Order>((args) =>
+  export const orderFeed = GET<Args>((args) =>
       jsonl(async function* () {
           for await (const order of db.watchOrders(args)) yield order
       }())
@@ -21,7 +21,9 @@ ended cleanly" from "handler threw" without a side-channel. The full
 error is logged server-side via the framework's error handler — only the
 message crosses the wire.
 */
-export function jsonl<Frame>(iterable: AsyncIterable<Frame>): Response {
+import type { TypedResponse } from '../types/TypedResponse.ts'
+
+export function jsonl<Frame>(iterable: AsyncIterable<Frame>): TypedResponse<Frame> {
     const encoder = new TextEncoder()
     const iterator = iterable[Symbol.asyncIterator]()
 
@@ -51,5 +53,5 @@ export function jsonl<Frame>(iterable: AsyncIterable<Frame>): Response {
             'Cache-Control': 'no-store',
             'X-Content-Type-Options': 'nosniff',
         },
-    })
+    }) as TypedResponse<Frame>
 }

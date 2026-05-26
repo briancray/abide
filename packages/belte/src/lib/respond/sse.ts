@@ -5,7 +5,7 @@ Server-Sent Events (text/event-stream) — each frame becomes one
 generator over plain HTTP so EventSource (or `subscribe(fn)(args)` on the
 client) can consume it frame-by-frame.
 
-  export const orderFeed = GET<Args, Order>((args) =>
+  export const orderFeed = GET<Args>((args) =>
       sse(async function* () {
           for await (const order of db.watchOrders(args)) yield order
       }())
@@ -23,9 +23,11 @@ the message (full error logged server-side) before the stream closes;
 EventSource surfaces this via its `error` listener and `subscribe()`
 maps it to the entry's `error` field.
 */
+import type { TypedResponse } from '../types/TypedResponse.ts'
+
 const KEEPALIVE_INTERVAL_MS = 15000
 
-export function sse<Frame>(iterable: AsyncIterable<Frame>): Response {
+export function sse<Frame>(iterable: AsyncIterable<Frame>): TypedResponse<Frame> {
     const encoder = new TextEncoder()
     const iterator = iterable[Symbol.asyncIterator]()
     let keepaliveTimer: ReturnType<typeof setInterval> | undefined
@@ -67,5 +69,5 @@ export function sse<Frame>(iterable: AsyncIterable<Frame>): Response {
             'X-Content-Type-Options': 'nosniff',
             Connection: 'keep-alive',
         },
-    })
+    }) as TypedResponse<Frame>
 }

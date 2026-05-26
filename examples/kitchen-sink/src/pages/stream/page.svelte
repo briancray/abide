@@ -85,7 +85,7 @@ export const chat = stream<ChatMessage>({ history: 100 })`} />
 import { error, json } from 'belte/respond'
 import { chat, type ChatMessage } from '$stream/chat.ts'
 
-export const publishChat = POST<{ from: string; text: string }, ChatMessage>(({ from, text }) => {
+export const publishChat = POST<{ from: string; text: string }>(({ from, text }) => {
     if (!from.trim() || !text.trim()) return error(400, 'from and text are required')
     const message: ChatMessage = { id: crypto.randomUUID(), from, text, at: Date.now() }
     chat.publish(message)

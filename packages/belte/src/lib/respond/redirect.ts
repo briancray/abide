@@ -15,14 +15,22 @@ Status guidance:
 - 307 — temporary, preserve method
 - 308 — permanent, preserve method
 */
+import type { TypedResponse } from '../types/TypedResponse.ts'
+
 type RedirectStatus = 301 | 302 | 303 | 307 | 308
 
-export function redirect(url: string, status: RedirectStatus = 302): Response {
+/*
+Return type is `TypedResponse<never>` for the same reason `error()` is —
+the wire response is a 3xx with no body the caller resolves to, so it
+must not pollute the inferred `Return` of a route that conditionally
+redirects vs returns json.
+*/
+export function redirect(url: string, status: RedirectStatus = 302): TypedResponse<never> {
     return new Response(null, {
         status,
         headers: {
             Location: url,
             'Cache-Control': 'no-store',
         },
-    })
+    }) as TypedResponse<never>
 }

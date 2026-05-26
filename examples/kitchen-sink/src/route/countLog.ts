@@ -8,7 +8,7 @@ exports) rather than a browser's EventSource. Clients read the
 Response body via `.raw(args)` and parse with TextDecoderStream + a
 split-by-newline reduce.
 */
-export const countLog = GET<{ to: number }, { n: number }>(({ to }) =>
+export const countLog = GET<{ to: number }>(({ to }) =>
     jsonl(
         (async function* () {
             for (let n = 1; n <= to; n += 1) {

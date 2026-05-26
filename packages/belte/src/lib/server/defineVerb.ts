@@ -4,6 +4,7 @@ import { recordRemoteMeta } from '../shared/remoteMeta.ts'
 import type { HttpVerb } from '../types/HttpVerb.ts'
 import type { RawRemoteFunction, RemoteFunction } from '../types/RemoteFunction.ts'
 import type { RemoteHandler } from '../types/RemoteHandler.ts'
+import type { StandardSchemaV1 } from '../types/StandardSchemaV1.ts'
 import { parseArgs } from './parseArgs.ts'
 import { requestContext } from './requestContext.ts'
 
@@ -40,7 +41,9 @@ export function defineVerb<Args, Return>(
     method: HttpVerb,
     url: string,
     handler: RemoteHandler<Args, Return>,
+    opts?: { schema?: StandardSchemaV1 },
 ): RemoteFunction<Args, Return> {
+    const schema = opts?.schema
     function buildRequest(args: Args | undefined): Request {
         const store = requestContext.getStore()
         const baseUrl = store ? store.url.href : 'http://localhost/'
@@ -75,15 +78,36 @@ export function defineVerb<Args, Return>(
         rejections — otherwise an SSR caller's `await` short-circuits past
         the cache layer's snapshot serialization and the error escapes the
         request boundary.
+
+        When a Standard Schema is attached, args are validated before the
+        handler runs; failures short-circuit into a 422 Response carrying
+        the schema's issues so callers can decode them off the HttpError.
         */
-        let promise: Promise<Response>
-        try {
-            promise = Promise.resolve(handler(args as Args)) as Promise<Response>
-        } catch (error) {
-            promise = Promise.reject(error)
-        }
+        const promise: Promise<Response> = schema ? validateThenHandle(args) : runHandler(args)
         recordRemoteMeta(promise, request)
         return promise
+    }
+
+    function runHandler(args: Args | undefined): Promise<Response> {
+        try {
+            return Promise.resolve(handler(args as Args)) as Promise<Response>
+        } catch (error) {
+            return Promise.reject(error)
+        }
+    }
+
+    async function validateThenHandle(args: Args | undefined): Promise<Response> {
+        const result = await schema!['~standard'].validate(args)
+        if (result.issues) {
+            return new Response(JSON.stringify({ issues: result.issues }), {
+                status: 422,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Cache-Control': 'no-store',
+                },
+            })
+        }
+        return runHandler(result.value as Args)
     }
 
     function rawCall(args: Args): Promise<Response> {

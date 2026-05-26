@@ -57,13 +57,11 @@ const products: Record<string, { id: string; name: string; price: number }> = {
     '2': { id: '2', name: 'Speculaas', price: 3 },
 }
 
-export const getProduct = GET<{ id: string }, { id: string; name: string; price: number }>(
-    ({ id }) => {
-        const product = products[id]
-        if (!product) return error(404, \`no product with id \${id}\`)
-        return json(product)
-    },
-)`} />
+export const getProduct = GET<{ id: string }>(({ id }) => {
+    const product = products[id]
+    if (!product) return error(404, \`no product with id \${id}\`)
+    return json(product)
+})`} />
 
 <CodeBlock
     title="src/pages/route/product/[id]/page.svelte (this page) — [id] is the dynamic page segment"
