@@ -3,17 +3,16 @@ you are making a ssr + spa framwork for bun and svelte.
 # project goals
 
 * exclusively use bun apis and javascript native apis when they're available
-* keep the api surface very small and simple
+* keep the api surface small, based on standards, and ergonomic
 * maintain high visibility into the stack for debugging
 * maintain a consistent runtime between all modes (dev and build)
-* isomorphism by default — same callable, same name, same behavior on both sides; the bundler swaps the runtime (defineVerb/remoteProxy, defineSocket/socketProxy). user code never branches on `typeof window`.
-* framework owns the network — no parallel "raw" escape hatches that fragment the model. one way to call rpc, one way to consume streams, one ws connection. if a primitive feels too low-level for users, hide it.
-* group exports by lifecycle phase, not by implementation — declare (`belte/route`) → reply (`belte/respond`) → consume (`belte/consume`). new helpers go in the phase they belong to; if a new phase emerges, that's a new module.
+* isomorphism by default — same callable, same name, same behavior on both sides; the bundler swaps the runtime
+* one flat umbrella per side: `belte/server` collects everything server-only (rpc verbs, the `socket()` helper, `respond/*`, `request`, `server`); each consumer surface gets its own flat umbrella named after the consumer (`belte/browser` for html clients, future siblings like `belte/cli` / `belte/mcp`).
 * value performance when all other conditions are met
 
 # coding guidelines
 
-* write library files into src/lib/<logical grouping> with separate folders for types, server (functions), client (functions), shared (functions) and components
+* src/lib is split three ways: `lib/server/` (server-only code, with `rpc/`, `sockets/`, `respond/`, `runtime/` sub-modules + each sub-module's `types/`), `lib/browser/` (the html-browser consumer surface — page state, navigate, cache, subscribe, the client-side proxies wired by the bundler), and `lib/shared/` (cross-side machinery + cache infra + build-time helpers, plus a `types/` for cross-side types). Future consumer surfaces sit as siblings to `browser/` (e.g. `lib/cli/`, `lib/mcp/`).
 * use bun apis not node apis when possible
 * only one export per file named after the export
 * write pure functions and use functional style programming

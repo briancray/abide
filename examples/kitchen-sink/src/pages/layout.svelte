@@ -1,9 +1,8 @@
 <script lang="ts">
 import '../app.css'
-import { cache } from 'belte/consume'
-import { page } from 'belte/page'
-import { getSession } from '$route/getSession.ts'
-import { logout } from '$route/logout.ts'
+import { cache, page } from 'belte/browser'
+import { getSession } from '$rpc/getSession.ts'
+import { logout } from '$rpc/logout.ts'
 
 let { children }: { children: import('svelte').Snippet } = $props()
 
@@ -32,17 +31,15 @@ const linkClass = (prefix: string) =>
     <header class="border-b border-slate-200 bg-white">
         <nav class="mx-auto flex max-w-4xl flex-wrap items-center gap-4 px-6 py-4 text-sm">
             <a href="/" class="text-base font-semibold">belte kitchen-sink</a>
-            <a href="/route" class={linkClass('/route')}>Route</a>
-            <a href="/stream" class={linkClass('/stream')}>Stream</a>
-            <a href="/respond" class={linkClass('/respond')}>Respond</a>
-            <a href="/consume" class={linkClass('/consume')}>Consume</a>
+            <a href="/server" class={linkClass('/server')}>belte/server</a>
+            <a href="/browser" class={linkClass('/browser')}>belte/browser</a>
             <a href="/auth/dashboard" class={linkClass('/auth')}>Auth</a>
             <div class="ml-auto flex items-center gap-3">
                 {#if session?.user}
                     <span class="text-slate-600">
                         signed in as <strong>{session.user}</strong>
                     </span>
-                    <form method="POST" action={logout.url}>
+                    <form action={logout.url} method={logout.method}>
                         <button
                             type="submit"
                             class="rounded-md border border-slate-300 px-3 py-1 hover:bg-slate-100">

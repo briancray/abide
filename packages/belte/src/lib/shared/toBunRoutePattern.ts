@@ -1,3 +1,5 @@
+import { parseRouteSegments } from './parseRouteSegments.ts'
+
 /*
 Translates a belte route URL (`/media/[id]/[...rest]`) into the pattern Bun
 needs (`/media/:id/*`) for `Bun.serve({ routes })`. Returns the catch-all
@@ -10,17 +12,16 @@ export function toBunRoutePattern(routeUrl: string): {
     catchAllName: string | undefined
 } {
     let catchAllName: string | undefined
-    const pattern = routeUrl
-        .split('/')
+    const pattern = parseRouteSegments(routeUrl)
         .map((segment) => {
-            if (segment.startsWith('[...') && segment.endsWith(']')) {
-                catchAllName = segment.slice(4, -1)
+            if (segment.kind === 'literal') {
+                return segment.value
+            }
+            if (segment.catchAll) {
+                catchAllName = segment.name
                 return '*'
             }
-            if (segment.startsWith('[') && segment.endsWith(']')) {
-                return `:${segment.slice(1, -1)}`
-            }
-            return segment
+            return `:${segment.name}`
         })
         .join('/')
     return { pattern, catchAllName }

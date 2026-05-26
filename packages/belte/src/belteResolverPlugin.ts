@@ -4,19 +4,33 @@ import type { BunPlugin } from 'bun'
 import { Glob } from 'bun'
 import { log } from './lib/shared/log.ts'
 import { pageUrlForFile } from './lib/shared/pageUrlForFile.ts'
-import { extractRouteExport, rewriteForServer } from './lib/shared/rewriteRouteExports.ts'
-import { extractStreamExport, rewriteStreamForServer } from './lib/shared/rewriteStreamExports.ts'
-import { routeUrlForFile } from './lib/shared/routeUrlForFile.ts'
-import { streamNameForFile } from './lib/shared/streamNameForFile.ts'
+import { prepareRpcModule } from './lib/shared/prepareRpcModule.ts'
+import { prepareSocketModule } from './lib/shared/prepareSocketModule.ts'
+import { rpcUrlForFile } from './lib/shared/rpcUrlForFile.ts'
+import { socketNameForFile } from './lib/shared/socketNameForFile.ts'
 import { writeRoutesDts } from './lib/shared/writeRoutesDts.ts'
 
 /*
 Resolves a bare directory or extensionless path to a concrete file. Mirrors
 Node-style resolution (path.ts, path.js, path/index.ts, path/index.js) so
 project code can use SvelteKit-style aliases like `$lib/foo/utils` that point
-at directories with an index file.
+at directories with an index file. The (path → resolved) mapping is
+deterministic per build, so cache it — every module that imports a `$lib`
+alias hits this twice or more, and each call would otherwise do up to nine
+filesystem stats.
 */
+const resolveExtensionCache = new Map<string, string>()
 function resolveExtension(path: string): string {
+    const cached = resolveExtensionCache.get(path)
+    if (cached !== undefined) {
+        return cached
+    }
+    const resolved = resolveExtensionUncached(path)
+    resolveExtensionCache.set(path, resolved)
+    return resolved
+}
+
+function resolveExtensionUncached(path: string): string {
     if (existsSync(path) && !statSync(path).isDirectory()) {
         return path
     }
@@ -42,20 +56,20 @@ function escapeRegex(value: string): string {
 
 /*
 Bun plugin that wires every virtual import belte produces at build time:
-- `belte:route`   — { routeUrl: () => import(route-module) } HTTP-verb manifest
-- `belte:streams` — { streamName: () => import(stream-module) } stream manifest
+- `belte:rpc`     — { rpcUrl: () => import(rpc-module) } HTTP-verb manifest
+- `belte:sockets` — { socketName: () => import(socket-module) } socket manifest
 - `belte:pages`   — { pageUrl: () => import(page.svelte) } manifest
 - `belte:layouts` — { dirPrefix: () => import(layout.svelte) } manifest
 - `belte:app`     — { init?, handle?, handleError? } from src/app.ts
 - `belte:assets`  — gzipped chunk bytes embedded for standalone compile
 - `belte:shell`   — app.html content (custom or default)
 
-Also rewrites modules under src/route and src/stream:
-- src/route/<file>.ts: each HTTP-verb export is bound to a runtime
+Also rewrites modules under src/server/rpc and src/server/sockets:
+- src/server/rpc/<file>.ts: each HTTP-verb export is bound to a runtime
   implementation — defineVerb on the server, remoteProxy on the client.
-- src/stream/<file>.ts: each `stream(opts)` export is bound to
-  defineStream on the server (with the stream name + opts) or
-  streamProxy on the client (name only — opts are server-side).
+- src/server/sockets/<file>.ts: each `socket(opts)` export is bound to
+  defineSocket on the server (with the socket name + opts) or
+  socketProxy on the client (name only — opts are server-side).
 */
 export function belteResolverPlugin({
     cwd = process.cwd(),
@@ -67,20 +81,20 @@ export function belteResolverPlugin({
     target?: 'server' | 'client'
 } = {}): BunPlugin {
     const pagesDir = `${cwd}/src/pages`
-    const routeDir = `${cwd}/src/route`
-    const streamDir = `${cwd}/src/stream`
+    const rpcDir = `${cwd}/src/server/rpc`
+    const socketsDir = `${cwd}/src/server/sockets`
     const libDir = `${cwd}/src/lib`
 
     /*
     The whole-tree validation + per-leaf classification only needs to run
     once per build. Memoise the promise so the virtual manifests
-    (route/streams/pages/layouts) share a single scan instead of each one
+    (rpc/sockets/pages/layouts) share a single scan instead of each one
     re-globbing the trees. The shell read is memoised the same way so two
     passes don't re-read app.html from disk.
     */
     let pagesScanPromise: Promise<PagesScan> | undefined
-    let routeScanPromise: Promise<string[]> | undefined
-    let streamScanPromise: Promise<string[]> | undefined
+    let rpcScanPromise: Promise<string[]> | undefined
+    let socketsScanPromise: Promise<string[]> | undefined
     let shellContentsPromise: Promise<string> | undefined
     function scanPagesOnce(): Promise<PagesScan> {
         if (!pagesScanPromise) {
@@ -91,17 +105,17 @@ export function belteResolverPlugin({
         }
         return pagesScanPromise
     }
-    function scanRouteOnce(): Promise<string[]> {
-        if (!routeScanPromise) {
-            routeScanPromise = scanRoute(routeDir)
+    function scanRpcOnce(): Promise<string[]> {
+        if (!rpcScanPromise) {
+            rpcScanPromise = scanRpc(rpcDir)
         }
-        return routeScanPromise
+        return rpcScanPromise
     }
-    function scanStreamOnce(): Promise<string[]> {
-        if (!streamScanPromise) {
-            streamScanPromise = scanStream(streamDir)
+    function scanSocketsOnce(): Promise<string[]> {
+        if (!socketsScanPromise) {
+            socketsScanPromise = scanSockets(socketsDir)
         }
-        return streamScanPromise
+        return socketsScanPromise
     }
     function loadShellOnce(): Promise<string> {
         if (!shellContentsPromise) {
@@ -110,15 +124,15 @@ export function belteResolverPlugin({
         return shellContentsPromise
     }
 
-    const routeFilter = new RegExp(`^${escapeRegex(routeDir)}/.*\\.ts$`)
-    const streamFilter = new RegExp(`^${escapeRegex(streamDir)}/.*\\.ts$`)
+    const rpcFilter = new RegExp(`^${escapeRegex(rpcDir)}/.*\\.ts$`)
+    const socketsFilter = new RegExp(`^${escapeRegex(socketsDir)}/.*\\.ts$`)
 
     return {
         name: 'belte-resolver',
         setup(build) {
             build.onResolve(
                 {
-                    filter: /\/_virtual\/(route|streams|pages|layouts|app|assets|shell)\.ts$/,
+                    filter: /\/_virtual\/(rpc|sockets|pages|layouts|app|assets|shell)\.ts$/,
                 },
                 (args) => {
                     const name = args.path.split('/').pop()?.replace('.ts', '')
@@ -134,15 +148,15 @@ export function belteResolverPlugin({
                 return { path: resolveExtension(subpath ? `${pagesDir}${subpath}` : pagesDir) }
             })
 
-            build.onResolve({ filter: /^\$route(\/.*)?$/ }, (args) => {
-                const subpath = args.path.slice('$route'.length)
-                return { path: resolveExtension(subpath ? `${routeDir}${subpath}` : routeDir) }
+            build.onResolve({ filter: /^\$rpc(\/.*)?$/ }, (args) => {
+                const subpath = args.path.slice('$rpc'.length)
+                return { path: resolveExtension(subpath ? `${rpcDir}${subpath}` : rpcDir) }
             })
 
-            build.onResolve({ filter: /^\$stream(\/.*)?$/ }, (args) => {
-                const subpath = args.path.slice('$stream'.length)
+            build.onResolve({ filter: /^\$sockets(\/.*)?$/ }, (args) => {
+                const subpath = args.path.slice('$sockets'.length)
                 return {
-                    path: resolveExtension(subpath ? `${streamDir}${subpath}` : streamDir),
+                    path: resolveExtension(subpath ? `${socketsDir}${subpath}` : socketsDir),
                 }
             })
 
@@ -151,23 +165,23 @@ export function belteResolverPlugin({
                 return { path: resolveExtension(subpath ? `${libDir}${subpath}` : libDir) }
             })
 
-            build.onLoad({ filter: routeFilter }, async (args) => {
-                if (!args.path.startsWith(`${routeDir}/`)) {
+            build.onLoad({ filter: rpcFilter }, async (args) => {
+                if (!args.path.startsWith(`${rpcDir}/`)) {
                     return undefined
                 }
-                const relativePath = args.path.slice(routeDir.length + 1)
+                const relativePath = args.path.slice(rpcDir.length + 1)
                 const source = await Bun.file(args.path).text()
-                const url = routeUrlForFile(relativePath)
-                const declared = extractRouteExport(source)
-                if (!declared) {
+                const url = rpcUrlForFile(relativePath)
+                const prepared = prepareRpcModule(source)
+                if (!prepared) {
                     throw new Error(
-                        `[belte] src/route/${relativePath} has no \`export const <name> = <VERB>(...)\` — every $route module must declare exactly one remote function`,
+                        `[belte] src/server/rpc/${relativePath} has no \`export const <name> = <VERB>(...)\` — every $rpc module must declare exactly one remote function`,
                     )
                 }
                 const expectedName = relativePath.replace(/\.ts$/, '').split('/').pop() ?? ''
-                if (declared.exportName !== expectedName) {
+                if (prepared.exportName !== expectedName) {
                     throw new Error(
-                        `[belte] src/route/${relativePath} exports \`${declared.exportName}\` but the filename expects \`${expectedName}\` — the export name must match the file's stem`,
+                        `[belte] src/server/rpc/${relativePath} exports \`${prepared.exportName}\` but the filename expects \`${expectedName}\` — the export name must match the file's stem`,
                     )
                 }
                 /*
@@ -178,8 +192,8 @@ export function belteResolverPlugin({
                 so page imports resolve identically on both sides.
                 */
                 if (target === 'client') {
-                    const contents = `import { remoteProxy as __belteRemoteProxy__ } from 'belte/client/remoteProxy';
-export const ${declared.exportName} = __belteRemoteProxy__(${JSON.stringify(declared.verb)}, ${JSON.stringify(url)});
+                    const contents = `import { remoteProxy as __belteRemoteProxy__ } from 'belte/browser/remoteProxy';
+export const ${prepared.exportName} = __belteRemoteProxy__(${JSON.stringify(prepared.verb)}, ${JSON.stringify(url)});
 `
                     return { contents, loader: 'ts' }
                 }
@@ -193,29 +207,28 @@ export const ${declared.exportName} = __belteRemoteProxy__(${JSON.stringify(decl
                 tokenizer-driven so `GET` mentions inside strings and
                 comments are left alone.
                 */
-                const rewritten = rewriteForServer(source, url)
-                const banner = `import { defineVerb as __belteDefineVerb__ } from 'belte/server/defineVerb';
+                const banner = `import { defineVerb as __belteDefineVerb__ } from 'belte/server/rpc/defineVerb';
 `
-                return { contents: `${banner}${rewritten}`, loader: 'ts' }
+                return { contents: `${banner}${prepared.rewriteForServer(url)}`, loader: 'ts' }
             })
 
-            build.onLoad({ filter: streamFilter }, async (args) => {
-                if (!args.path.startsWith(`${streamDir}/`)) {
+            build.onLoad({ filter: socketsFilter }, async (args) => {
+                if (!args.path.startsWith(`${socketsDir}/`)) {
                     return undefined
                 }
-                const relativePath = args.path.slice(streamDir.length + 1)
+                const relativePath = args.path.slice(socketsDir.length + 1)
                 const source = await Bun.file(args.path).text()
-                const name = streamNameForFile(relativePath)
-                const declared = extractStreamExport(source)
-                if (!declared) {
+                const name = socketNameForFile(relativePath)
+                const prepared = prepareSocketModule(source)
+                if (!prepared) {
                     throw new Error(
-                        `[belte] src/stream/${relativePath} has no \`export const <name> = stream(...)\` — every $stream module must declare exactly one stream`,
+                        `[belte] src/server/sockets/${relativePath} has no \`export const <name> = socket(...)\` — every $sockets module must declare exactly one socket`,
                     )
                 }
                 const expectedName = relativePath.replace(/\.ts$/, '').split('/').pop() ?? ''
-                if (declared.exportName !== expectedName) {
+                if (prepared.exportName !== expectedName) {
                     throw new Error(
-                        `[belte] src/stream/${relativePath} exports \`${declared.exportName}\` but the filename expects \`${expectedName}\` — the export name must match the file's stem`,
+                        `[belte] src/server/sockets/${relativePath} exports \`${prepared.exportName}\` but the filename expects \`${expectedName}\` — the export name must match the file's stem`,
                     )
                 }
                 if (target === 'client') {
@@ -224,58 +237,60 @@ export const ${declared.exportName} = __belteRemoteProxy__(${JSON.stringify(decl
                     clientPublish) are server-side state and don't
                     affect the client's wire behaviour.
                     */
-                    const contents = `import { streamProxy as __belteStreamProxy__ } from 'belte/client/streamProxy';
-export const ${declared.exportName} = __belteStreamProxy__(${JSON.stringify(name)});
+                    const contents = `import { socketProxy as __belteSocketProxy__ } from 'belte/browser/socketProxy';
+export const ${prepared.exportName} = __belteSocketProxy__(${JSON.stringify(name)});
 `
                     return { contents, loader: 'ts' }
                 }
-                const rewritten = rewriteStreamForServer(source, name)
-                const banner = `import { defineStream as __belteDefineStream__ } from 'belte/server/defineStream';
+                const banner = `import { defineSocket as __belteDefineSocket__ } from 'belte/server/sockets/defineSocket';
 `
-                return { contents: `${banner}${rewritten}`, loader: 'ts' }
+                return {
+                    contents: `${banner}${prepared.rewriteForServer(name)}`,
+                    loader: 'ts',
+                }
             })
 
             build.onLoad({ filter: /.*/, namespace: NS }, async (args) => {
-                if (args.path === 'belte:route') {
-                    const files = await scanRouteOnce()
+                if (args.path === 'belte:rpc') {
+                    const files = await scanRpcOnce()
                     const byUrl = files
                         .toSorted()
-                        .map((file) => ({ url: routeUrlForFile(file), file }))
+                        .map((file) => ({ url: rpcUrlForFile(file), file }))
                     const entries = byUrl
                         .map(
                             ({ url, file }) =>
-                                `    ${JSON.stringify(url)}: () => import(${JSON.stringify(`${routeDir}/${file}`)}),`,
+                                `    ${JSON.stringify(url)}: () => import(${JSON.stringify(`${rpcDir}/${file}`)}),`,
                         )
                         .join('\n')
                     if (byUrl.length > 0) {
                         log.info(
-                            `resolved ${byUrl.length} route modules: ${byUrl.map((b) => b.url).join(', ')}`,
+                            `resolved ${byUrl.length} rpc modules: ${byUrl.map((b) => b.url).join(', ')}`,
                         )
                     }
                     return {
-                        contents: `export const route = {\n${entries}\n}\n`,
+                        contents: `export const rpc = {\n${entries}\n}\n`,
                         loader: 'js',
                     }
                 }
 
-                if (args.path === 'belte:streams') {
-                    const files = await scanStreamOnce()
+                if (args.path === 'belte:sockets') {
+                    const files = await scanSocketsOnce()
                     const byName = files
                         .toSorted()
-                        .map((file) => ({ name: streamNameForFile(file), file }))
+                        .map((file) => ({ name: socketNameForFile(file), file }))
                     const entries = byName
                         .map(
                             ({ name, file }) =>
-                                `    ${JSON.stringify(name)}: () => import(${JSON.stringify(`${streamDir}/${file}`)}),`,
+                                `    ${JSON.stringify(name)}: () => import(${JSON.stringify(`${socketsDir}/${file}`)}),`,
                         )
                         .join('\n')
                     if (byName.length > 0) {
                         log.info(
-                            `resolved ${byName.length} stream modules: ${byName.map((b) => b.name).join(', ')}`,
+                            `resolved ${byName.length} socket modules: ${byName.map((b) => b.name).join(', ')}`,
                         )
                     }
                     return {
-                        contents: `export const streams = {\n${entries}\n}\n`,
+                        contents: `export const sockets = {\n${entries}\n}\n`,
                         loader: 'js',
                     }
                 }
@@ -421,27 +436,27 @@ async function scanPages(pagesDir: string): Promise<PagesScan> {
 }
 
 /*
-Walks src/route once. Every `.ts` file is an HTTP-verb route. Returns
+Walks src/server/rpc once. Every `.ts` file is an HTTP-verb rpc handler. Returns
 an empty list when the directory doesn't exist so a pages-only app
-builds without a `route/` folder.
+builds without an `rpc/` folder.
 */
-async function scanRoute(routeDir: string): Promise<string[]> {
-    if (!existsSync(routeDir)) {
+async function scanRpc(rpcDir: string): Promise<string[]> {
+    if (!existsSync(rpcDir)) {
         return []
     }
-    return await Array.fromAsync(new Glob('**/*.ts').scan({ cwd: routeDir }))
+    return await Array.fromAsync(new Glob('**/*.ts').scan({ cwd: rpcDir }))
 }
 
 /*
-Walks src/stream once. Each `.ts` file declares one stream; the
+Walks src/server/sockets once. Each `.ts` file declares one socket; the
 dispatcher loads modules lazily on first sub/pub frame. Returns an
 empty list when the directory doesn't exist.
 */
-async function scanStream(streamDir: string): Promise<string[]> {
-    if (!existsSync(streamDir)) {
+async function scanSockets(socketsDir: string): Promise<string[]> {
+    if (!existsSync(socketsDir)) {
         return []
     }
-    return await Array.fromAsync(new Glob('**/*.ts').scan({ cwd: streamDir }))
+    return await Array.fromAsync(new Glob('**/*.ts').scan({ cwd: socketsDir }))
 }
 
 /*
@@ -478,8 +493,17 @@ async function rewriteHashedClientEntries(shell: string, cwd: string): Promise<s
     const entries = await Array.fromAsync(
         new Glob('client-*').scan({ cwd: appDir, onlyFiles: true }),
     )
-    const jsEntry = entries.find((file) => /^client-[a-z0-9]+\.js$/i.test(file))
-    const cssEntry = entries.find((file) => /^client-[a-z0-9]+\.css$/i.test(file))
+    let jsEntry: string | undefined
+    let cssEntry: string | undefined
+    for (const file of entries) {
+        if (!jsEntry && /^client-[a-z0-9]+\.js$/i.test(file)) {
+            jsEntry = file
+            continue
+        }
+        if (!cssEntry && /^client-[a-z0-9]+\.css$/i.test(file)) {
+            cssEntry = file
+        }
+    }
     let result = shell
     if (jsEntry) {
         result = result.replace('/_app/client.js', `/_app/${jsEntry}`)

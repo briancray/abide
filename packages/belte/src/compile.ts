@@ -4,7 +4,7 @@ import { build } from './build.ts'
 import { detectTarget } from './lib/shared/detectTarget.ts'
 import { loadSvelteConfig } from './lib/shared/loadSvelteConfig.ts'
 import { log } from './lib/shared/log.ts'
-import type { CompileTarget } from './lib/types/CompileTarget.ts'
+import type { CompileTarget } from './lib/server/runtime/types/CompileTarget.ts'
 import { sveltePlugin } from './sveltePlugin.ts'
 
 const SERVER_ENTRY = new URL('./serverEntry.ts', import.meta.url).pathname

@@ -1,14 +1,4 @@
 {
-    "extends": "../../tsconfig.base.json",
-    "compilerOptions": {
-        "paths": {
-            "$pages": ["./src/pages"],
-            "$pages/*": ["./src/pages/*"],
-            "$route": ["./src/route"],
-            "$route/*": ["./src/route/*"],
-            "$lib": ["./src/lib"],
-            "$lib/*": ["./src/lib/*"]
-        }
-    },
+    "extends": "belte/tsconfig",
     "include": ["src/**/*.ts", "src/**/*.svelte"]
 }

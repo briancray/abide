@@ -3,21 +3,17 @@
     "version": "0.0.1",
     "type": "module",
     "exports": {
-        "./types/*": "./src/lib/types/*.ts",
-        "./server/*": "./src/lib/server/*.ts",
         "./server": "./src/lib/server/index.ts",
-        "./client/*": "./src/lib/client/*.ts",
-        "./shared/*": "./src/lib/shared/*.ts",
-        "./route": "./src/lib/route/index.ts",
-        "./respond": "./src/lib/respond/index.ts",
-        "./stream": "./src/lib/stream/index.ts",
-        "./consume": "./src/lib/consume/index.ts",
-        "./page": "./src/lib/client/page.svelte.ts",
+        "./browser": "./src/lib/browser/index.ts",
+        "./server/rpc/*": "./src/lib/server/rpc/*.ts",
+        "./server/sockets/*": "./src/lib/server/sockets/*.ts",
+        "./browser/*": "./src/lib/browser/*.ts",
         "./build": "./src/build.ts",
         "./compile": "./src/compile.ts",
         "./preload": "./src/preload.ts",
         "./svelte-plugin": "./src/sveltePlugin.ts",
-        "./resolver-plugin": "./src/belteResolverPlugin.ts"
+        "./resolver-plugin": "./src/belteResolverPlugin.ts",
+        "./tsconfig": "./tsconfig.app.json"
     },
     "bin": {
         "belte": "./bin/belte.ts"
@@ -25,7 +21,8 @@
     "files": [
         "src",
         "bin",
-        "template"
+        "template",
+        "tsconfig.app.json"
     ],
     "peerDependencies": {
         "svelte": "^5.0.0",

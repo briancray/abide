@@ -1,25 +1,4 @@
 {
-    "compilerOptions": {
-        "target": "ESNext",
-        "module": "ESNext",
-        "moduleResolution": "bundler",
-        "lib": ["ESNext", "DOM", "DOM.Iterable"],
-        "strict": true,
-        "esModuleInterop": true,
-        "skipLibCheck": true,
-        "allowImportingTsExtensions": true,
-        "verbatimModuleSyntax": true,
-        "noEmit": true,
-        "isolatedModules": true,
-        "types": ["bun"],
-        "paths": {
-            "$pages": ["./src/pages"],
-            "$pages/*": ["./src/pages/*"],
-            "$route": ["./src/route"],
-            "$route/*": ["./src/route/*"],
-            "$lib": ["./src/lib"],
-            "$lib/*": ["./src/lib/*"]
-        }
-    },
+    "extends": "belte/tsconfig",
     "include": ["src/**/*.ts", "src/**/*.svelte"]
 }

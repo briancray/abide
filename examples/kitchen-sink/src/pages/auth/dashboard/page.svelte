@@ -1,6 +1,6 @@
 <script lang="ts">
-import { cache } from 'belte/consume'
-import { getSession } from '$route/getSession.ts'
+import { cache } from 'belte/browser'
+import { getSession } from '$rpc/getSession.ts'
 
 /*
 Shares the cache key with the auth layout's `cache(getSession)()`, so the

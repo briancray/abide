@@ -1,5 +1,3 @@
-import { dirname } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
 import type { PreprocessorGroup } from 'svelte/compiler'
 
 /*
@@ -12,6 +10,20 @@ processes `.css` files, so scoped styles need this hook instead.
 Returns undefined when `tailwindcss` isn't installed, so consumers without
 Tailwind get the same behaviour as before.
 */
+
+function dirname(filepath: string): string {
+    const lastSlash = filepath.lastIndexOf('/')
+    return lastSlash === -1 ? '' : filepath.slice(0, lastSlash)
+}
+
+function fileUrlToPath(href: string): string {
+    return new URL(href).pathname
+}
+
+function pathToFileUrl(path: string): string {
+    return new URL(path, 'file://').href
+}
+
 export async function tailwindStylePreprocessor(): Promise<PreprocessorGroup | undefined> {
     let tailwind: typeof import('tailwindcss')
     try {
@@ -30,8 +42,8 @@ export async function tailwindStylePreprocessor(): Promise<PreprocessorGroup | u
             const result = await tailwind.compile(content, {
                 base,
                 loadStylesheet: async (uri, fromBase) => {
-                    const fromUrl = pathToFileURL(`${fromBase}/`).href
-                    const resolved = fileURLToPath(import.meta.resolve(uri, fromUrl))
+                    const fromUrl = pathToFileUrl(`${fromBase}/`)
+                    const resolved = fileUrlToPath(import.meta.resolve(uri, fromUrl))
                     return {
                         path: resolved,
                         base: dirname(resolved),

@@ -7,7 +7,7 @@ module — no import is needed from your own code.
   handle      middleware wrapping the default request pipeline
   handleError custom 500 fallback
 */
-import type { AppModule } from 'belte/types/AppModule'
+import type { AppModule } from 'belte/server'
 
 export const init: AppModule['init'] = ({ server }) => {
     console.log(`server listening on http://localhost:${server.port}`)

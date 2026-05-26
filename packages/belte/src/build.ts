@@ -2,7 +2,7 @@ import type { BunPlugin } from 'bun'
 import { belteResolverPlugin } from './belteResolverPlugin.ts'
 import { loadSvelteConfig } from './lib/shared/loadSvelteConfig.ts'
 import { log } from './lib/shared/log.ts'
-import type { SvelteConfig } from './lib/types/SvelteConfig.ts'
+import type { SvelteConfig } from './lib/server/runtime/types/SvelteConfig.ts'
 import { sveltePlugin } from './sveltePlugin.ts'
 
 type ExportEntry = string | { [condition: string]: ExportEntry }

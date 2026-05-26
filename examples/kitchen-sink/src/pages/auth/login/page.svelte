@@ -1,5 +1,5 @@
 <script lang="ts">
-import { login } from '$route/login.ts'
+import { login } from '$rpc/login.ts'
 </script>
 
 <h1 class="text-2xl font-bold">Log in</h1>

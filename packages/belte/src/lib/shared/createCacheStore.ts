@@ -1,6 +1,6 @@
 import { createSubscriber } from 'svelte/reactivity'
-import type { CacheEntry } from '../types/CacheEntry.ts'
-import type { CacheStore } from '../types/CacheStore.ts'
+import type { CacheEntry } from './types/CacheEntry.ts'
+import type { CacheStore } from './types/CacheStore.ts'
 
 /*
 Returns a fresh cache store. On the server, every request gets its own

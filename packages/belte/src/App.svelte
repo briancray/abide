@@ -1,6 +1,6 @@
 <script lang="ts">
 import type { Component } from 'svelte'
-import type { Page as PageState } from './lib/client/page.svelte.ts'
+import type { Page as PageState } from './lib/pages/page.svelte.ts'
 
 let {
     state,

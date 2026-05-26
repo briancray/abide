@@ -1,118 +1,60 @@
 ---
 name: write-readme
-description: Regenerate the project README in belte's canonical phase-grouped format (intro + four bets / a complete app on one screen / CLI / Reference organised by Route → Respond → Consume). Use when the user asks to rewrite, update, regenerate, or refresh the README, or after API changes that the README should reflect.
+description: Regenerate or update the project README. Use when the user asks to rewrite, update, or refresh the README, or after API changes the README should reflect.
 ---
 
 # Writing the belte README
 
-This project keeps a fixed README structure. Always preserve it; never invent new top-level sections.
+## Read these first
 
-**Current section spine** (matches the live README — preserve order):
+Re-derive the API from source — never trust prior README text. Read at least:
 
-1. Intro tagline + the four bets (as a numbered list) + examples links.
-2. `## The four bets` — one `###` per bet (Isomorphism by default / Framework owns the network / One runtime, dev → prod → binary / Exports grouped by lifecycle phase) — each ~3 lines of prose + a ~5-line snippet that proves it.
-3. `## A complete app on one screen` — five files (layout, page, two routes, package.json) totaling ~50 lines.
-4. `## CLI` — Scaffold subsection, in-project subsection, debug logging.
-5. `## Reference` — intro + project layout block + three phase sections:
-   - `## Route` — pages/layouts (layouts are **nearest-only** — deepest wins, replaces ancestors), route modules (`GET / POST / PUT / PATCH / DELETE / HEAD / SOCKET`), app hooks, HTML shell, CSS, project config.
-   - `## Respond` — `request()`, `server`, `HttpError`, the `belte/respond` family, HTTP cache-control defaults.
-   - `## Consume` — direct calls, `cache()`, reactive reads + mutations, `.raw` escape hatch, `.stream(args)` + `subscribe()`, `page` + `navigate`, request-lifecycle diagram (which lives at the end of Consume because that's the phase it terminates in).
+- `packages/belte/package.json` — the `exports` map is the authoritative public surface
+- `packages/belte/bin/belte.ts` — CLI commands and flags
+- `packages/belte/src/lib/server/index.ts` and `packages/belte/src/lib/browser/index.ts` — what each public umbrella re-exports
+- `packages/belte/src/belteResolverPlugin.ts` — directory conventions (`src/pages/`, `src/server/rpc/`, `src/server/sockets/`), path aliases, virtual modules
+- `packages/belte/tsconfig.app.json` — the inheritable tsconfig users extend via `"extends": "belte/tsconfig"`
+- `examples/barebones/` and `examples/kitchen-sink/` — minimal vs feature-rich snippet sources
+- `packages/belte/template/` — what `bunx belte scaffold` produces
+- `CLAUDE.md` — current export-grouping + lib-layout conventions
 
-The section names match the module names: `belte/route`, `belte/respond`, `belte/consume`. The phase IS the module. Don't introduce alternative phase vocabulary in the README — the imports are the canonical name.
+If anything in the README contradicts source, fix the README — not source.
 
-## Before writing
+## Section spine
 
-Re-derive the API from source — never trust the previous README's claims. At minimum, read:
+The reference area is flat — every topic is a top-level `##`. No "Reference" wrapper. Internal shape of each section is your call.
 
-- `packages/belte/package.json` — current `exports` map (this is the authoritative public surface)
-- `packages/belte/bin/belte.ts` — CLI commands and their flags
-- `packages/belte/src/lib/types/AppModule.ts` — what `src/app.ts` can export
-- `packages/belte/src/lib/shared/cache.ts` — `cache()` and `cache.invalidate()` semantics
-- `packages/belte/src/lib/route/index.ts` — the verb helpers (`GET / POST / PUT / PATCH / DELETE / HEAD / SOCKET`) and their signatures
-- `packages/belte/src/lib/respond/` — `json` / `error` / `redirect` / `sse` / `jsonl` response helpers
-- `packages/belte/src/lib/consume/index.ts` — `cache()` and `subscribe()` re-exports
-- `packages/belte/src/belteResolverPlugin.ts` — path aliases, recognized page leaves under `src/pages/`, route files under `src/route/`, and the `belte:*` virtual modules
-- `packages/belte/src/lib/server/createServer.ts` — cache-control defaults, socket path, default error pages
-- `packages/belte/template/` and `examples/scaffold/` — the canonical "barebones" file contents
-- `examples/kitchen-sink/` — feature-rich examples to draw "full" snippets from
+In order:
 
-If anything in the README would contradict source, fix the README — not source.
+1. **Tagline + TOC table** — single-line tagline immediately followed by a two-column table (`Section` / `What it covers`). One row per `##` section in the rest of the doc. The link column points at the GitHub-style anchor (`[Project layout](#project-layout)`, `[`belte/server`](#belteserver)`). No prose between the tagline and the table — the table *is* the intro orientation.
+2. **Bets** — numbered list of the project's foundational decisions.
+3. **Examples** — bullets linking to the three example directories.
+4. **The four bets** — each bet expanded with a small snippet that proves it.
+5. **A complete app on one screen** — a handful of files that compose into a working app (layout, page, an rpc, `package.json`).
+6. **CLI** — `bunx belte scaffold`, in-project commands, debug-logging env vars.
+7. **File-system conventions** — one `##` per file/folder kind: `Project layout`, `Pages and layouts — src/pages/`, `App hooks — src/app.ts`, `HTML shell — src/app.html`, `Project config`.
+8. **Public umbrellas** — one `##` per umbrella, internal `###`s per topic. Currently `belte/server` and `belte/browser`; future siblings (`belte/cli`, `belte/mcp`) slot in here.
 
-## Section layout (in order, no others)
+Don't add Features / Why belte? / Roadmap / License / badges.
 
-### a) Intro
+## Scannability rules
 
-- Tagline: "A tiny SSR + SPA framework for [Bun](https://bun.sh) and [Svelte 5](https://svelte.dev)."
-- **Section table** (three columns: `Section` / `Description` / `Link`) — one row per top-level `##` section that follows (CLI, Project structure, Handling data). The link column holds a markdown link to the GitHub-style anchor (e.g. `[#cli](#cli)`). Goes immediately after the tagline, before the four core ideas. Description column is one sentence summarising what's inside.
-- **Four core ideas** (numbered list):
-  1. Folder-based pages — `src/pages/` for `page.svelte` / `layout.svelte`, folder path becomes the URL. Don't conflate with rpc here; point 4 covers that.
-  2. A single Bun process — no Node, no Vite, no separate bundler runtime
-  3. Svelte 5 throughout — SSR → hydration, layout chains both sides
-  4. Routes are callable from anywhere — one file per remote function under `src/route/`, filename = export name = URL (mounted at `/route/<file>`), the verb is the import (`GET / POST / PUT / PATCH / DELETE / HEAD / SOCKET` from `belte/route`), bundler runs it in-process on the server and swaps it for a typed `fetch` (or socket multiplex) on the client.
-- "It ships as a library (`belte`) plus a CLI (`belte scaffold | dev | build | start | compile`)." — keep the CLI list in sync with `bin/belte.ts`.
-- **Examples links** (bulleted): barebones, scaffold, kitchen-sink — one-line description each.
+The README is a reference, not an essay. Optimise for someone skimming for one answer.
 
-### b) CLI
+- **Tables first** for anything enumerable: option lists, defaults, verb / content-type / parsing pairs, HTTP cache buckets, file → URL mappings, status states.
+- **Bullets next** for short rules that don't fit a table (≤ one line each).
+- **Prose last**, in 1–2 sentences only when transition / nuance can't be a table.
+- **Snippets are minimal.** One example per concept, trimmed to what proves the point. Don't show barebones + full versions of the same thing in the same section.
+- **Place function-shape doc with the declaration**, not the consumer. E.g. `.raw` / `.stream(args?)` lives under RPC because those siblings exist on every rpc function, regardless of who calls it.
 
-Two subsections:
+## Style
 
-1. **Scaffold a new project** — `bunx belte scaffold my-app` flow + a one-paragraph explanation. The command name must match `bin/belte.ts`.
-2. **In an existing project** — the four in-project commands (`dev` / `build` / `start` / `compile`) as a code block with one-line trailing comments. Then the `belte compile` defaults paragraph (host target, dist output, embedded gzipped assets).
-3. **Debug logging** — `DEBUG=belte:*` and `DEBUG=belte:trace`.
-
-### c) Project structure
-
-- Annotated directory tree showing every file the README covers. Use trailing-space-aligned `#` comments. Include `.env` and `dist/` even though they aren't authored. Show both `src/pages/` and `src/route/` with at least one file each.
-- Three path-alias lines (`$pages/...`, `$route/...`, `$lib/...`) and a short import example.
-- One-line preamble that the rest of the section is per-file with barebones + full snippets.
-- **One subsection per file**, in this exact order:
-  - `src/pages/page.svelte`
-  - `src/pages/layout.svelte`
-  - `src/route/<name>.ts`
-  - `src/app.ts`
-  - `src/app.html`
-  - `src/app.css`
-  - `svelte.config.js`
-  - `tsconfig.json`
-  - `package.json`
-
-Per-file rules:
-
-- 1–3 sentences of prose **before** code. Explain what the file does and why someone reaches for it. Don't restate the obvious.
-- **Barebones** snippet — copy the literal contents from `packages/belte/template/` (or `examples/barebones` for `page.svelte`). This must match the on-disk template byte-for-byte; if it doesn't, fix the template, not the snippet.
-- **Full** snippet — feature-rich. Pull from `examples/kitchen-sink/` where possible so the snippet is real code that actually runs. Annotate with `/* … */` comments only where the *why* is non-obvious.
-- For the `src/route/<name>.ts` subsection, document: the verb helpers (`GET<Args, Return>(fn)` … `SOCKET<Args, Frame>(fn)`) from `belte/route`, the content-type-driven argument parsing rules, the one-export-per-file / export-name-matches-filename rule, how the file path becomes the URL (under `/route/`), and the fact that route URLs are **flat** — no `[id]` segments; pass identifiers via args.
-- For `app.ts`, list every optional export with one-line semantics (`init` / `handle` / `handleError`) before snippets. Note that SOCKETs aren't exposed here — they're declared via `SOCKET` in `belte/route` and multiplexed onto `/__belte/socket` automatically.
-- For `app.html`, list the three SSR markers (`<!--ssr:head-->`, `<!--ssr:body-->`, `<!--ssr:state-->`).
-
-### d) Handling data
-
-**Ordering rule:** introduce remote functions as the primitive first, demonstrate the unwrapped flow (direct calls), and only then layer `cache()` on top. Don't mention `cache()` before the "the layer on top" subsection — readers should see the primitive cleanly before the abstraction.
-
-Subsections, in this exact order:
-
-1. **Intro paragraph** — route modules are the data primitive; the bundler runs handlers in-process on the server build and substitutes a `fetch` proxy (or socket multiplex) on the client build. End the paragraph by previewing that `cache()` is a thin layer added on top.
-2. **Calling remote functions directly** — `await fn(args)` semantics on each build target, query-string vs JSON-body serialization, the typed `.json()` return, and `fn.url` / `fn.method` for `<form action>` and plain `fetch`.
-3. **`cache()` — the layer on top** — what cache buys you over a direct call (dedupe + SSR snapshot + reactivity). Show the minimal `cache(fn)()` wrap.
-4. **How a cached request flows** — ASCII flow diagram from browser request through `app.ts handle?` → layout chain → page → cache snapshot serialization → hydration → `$derived` reactivity. Keep it diagram-like, not prose.
-5. **Reading data (SSR + first paint)** — top-level await semantics, how SSR-time dedupe works, how hydration replays the snapshot (no second fetch). Include the `experimental: { async: true }` note since belte no longer forces it.
-6. **Reactive reads (client)** — `$derived(cache(fn)())` subscribe pattern, `cache.invalidate(fn)` re-runs every subscriber. Show a counter-style example.
-7. **Mutations** — call the remote function, then invalidate. List the three `cache.invalidate` overloads (`fn`, `key`, `()`).
-8. **`cache` options** — `ttl` (`undefined` / `0` / `>0`) and `key` semantics.
-9. **Caching defaults at the HTTP layer** — the cache-control buckets emitted by `cacheControlForAsset.ts` + `createServer.ts`. Build emits everything under `/_app/` with a content hash (entry bundles `client-[hash].js`/`.css` and chunks alike), so the hashed-immutable branch covers the whole built tree; the must-revalidate branch is the fallback for any non-hashed asset. Then SSR HTML/JSON and the error path. Verify the actual strings before pasting numbers.
-
-## Style rules
-
-- Headings use sentence case: `### Scaffold a new project`, not `### Scaffold A New Project`.
-- Code blocks use the right language tag (`ts`, `svelte`, `js`, `json`, `html`, `css`, `sh`).
-- No emojis.
-- No marketing language ("blazing fast", "powerful", etc.). State what it does.
-- Reference filenames with backticks (`src/app.ts`), URL paths with backticks (`GET /about`).
-- Don't add a "Features" or "Why belte?" or "Roadmap" or "License" section. The README ends after section (d).
-- Don't add badges.
+- Sentence-case headings.
+- Right language tag on every code block (`ts`, `svelte`, `js`, `json`, `html`, `css`, `sh`).
+- Filenames and URL paths in backticks.
+- No emojis, no marketing words. State what it does.
+- Lift snippets from `examples/` where possible so they're real code that runs.
 
 ## After writing
 
-- Sanity-check every code block compiles in your head against current source — if `belte/consume` got renamed, the snippets must use the new name.
-- Verify the example links resolve (the three directories must exist under `examples/`).
-- Run `bun x biome check --write --linter-enabled=false README.md` is a no-op (biome doesn't format markdown) — skip the format pass for README.
+Skim every snippet against source — import paths, function names, types, directory names. If a rename happened recently, the README is the last place to forget.

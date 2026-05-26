@@ -2,7 +2,7 @@
 /*
 Tiny reusable code-snippet card used by every demo page to show the
 server (route handler) and client (caller) code that backs the demo.
-`title` is a free-form label — usually a file path like `src/route/...`
+`title` is a free-form label — usually a file path like `src/server/rpc/...`
 or a phrase like `this page`. `code` is the raw source text.
 */
 let { title, code }: { title?: string; code: string } = $props()

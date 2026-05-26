@@ -1,0 +1,26 @@
+{
+    "compilerOptions": {
+        "target": "ESNext",
+        "module": "ESNext",
+        "moduleResolution": "bundler",
+        "lib": ["ESNext", "DOM", "DOM.Iterable"],
+        "strict": true,
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "allowImportingTsExtensions": true,
+        "verbatimModuleSyntax": true,
+        "noEmit": true,
+        "isolatedModules": true,
+        "types": ["bun"],
+        "paths": {
+            "$pages": ["${configDir}/src/pages"],
+            "$pages/*": ["${configDir}/src/pages/*"],
+            "$rpc": ["${configDir}/src/server/rpc"],
+            "$rpc/*": ["${configDir}/src/server/rpc/*"],
+            "$sockets": ["${configDir}/src/server/sockets"],
+            "$sockets/*": ["${configDir}/src/server/sockets/*"],
+            "$lib": ["${configDir}/src/lib"],
+            "$lib/*": ["${configDir}/src/lib/*"]
+        }
+    }
+}

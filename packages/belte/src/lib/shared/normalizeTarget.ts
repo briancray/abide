@@ -1,4 +1,4 @@
-import type { CompileTarget } from '../types/CompileTarget.ts'
+import type { CompileTarget } from '../server/runtime/types/CompileTarget.ts'
 
 /*
 Prepends the `bun-` prefix if missing so CLI users can pass either
