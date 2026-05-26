@@ -7,13 +7,13 @@ Belte is built around four bets:
 1. **Isomorphism by default** — the same callable runs on both sides. The bundler swaps the runtime per build target; user code never branches on `typeof window`.
 2. **Framework owns the network** — one route URL shape, one websocket multiplex, one way to consume streams. No parallel "raw" escape hatches that fragment the model.
 3. **One runtime, dev → prod → binary** — `belte dev`, `belte build`, `belte start`, `belte compile` all run on the same `Bun.serve` under the hood. No Node, no Vite, no separate bundler runtime.
-4. **Exports grouped by lifecycle phase** — `belte/route` → `belte/respond` → `belte/consume`. New helpers go in the phase they belong to; the module name *is* the phase name.
+4. **Exports grouped by lifecycle phase** — `belte/route` and `belte/stream` declare, `belte/respond` shapes the reply, `belte/consume` reads it back. The module name *is* the phase name.
 
 Working examples live in [`examples/`](examples):
 
 - [`examples/barebones`](examples/barebones) — the smallest possible app (just a single `page.svelte`).
 - [`examples/scaffold`](examples/scaffold) — the output of `bunx belte scaffold` — one of every file type with comments.
-- [`examples/kitchen-sink`](examples/kitchen-sink) — layouts, remote functions, `cache()`, live invalidation, streaming, Tailwind, and a cookie-session auth flow with a protected route.
+- [`examples/kitchen-sink`](examples/kitchen-sink) — layouts, remote functions, streams, `cache()`, live invalidation, Tailwind, and a cookie-session auth flow with a protected route.
 
 ---
 
@@ -40,28 +40,32 @@ import { getPost } from '$route/getPost.ts'
 const post = await getPost({ id: 'abc' })
 ```
 
-The same is true for streams. A `SOCKET` route is an async generator; consumers iterate it the same way regardless of transport.
+The same is true for streams. One file declares a topic; the same `publish` and async iteration work on both sides.
 
 ```ts
-// src/route/orderFeed.ts
-import { SOCKET } from 'belte/route'
+// src/stream/chat.ts
+import { stream } from 'belte/stream'
 
-export const orderFeed = SOCKET<{ customerId: string }, Order>(async function* ({ customerId }) {
-    for await (const order of db.watchOrders(customerId)) {
-        yield order
-    }
-})
+export const chat = stream<ChatMessage>({ history: 100 })
+```
+
+```ts
+// server-side handler OR browser code — same call shape
+import { chat } from '$stream/chat.ts'
+
+chat.publish({ id, from, text, at })       // notify every subscriber
+for await (const m of chat) { /* … */ }    // replay history, then tail
 ```
 
 ### Framework owns the network
 
-There is exactly one shape for a route URL (`/route/<filename>`), one websocket (`/__belte/socket`) that multiplexes every `SOCKET` route, and one reactive consumer (`subscribe`) that works against HTTP one-shots, SSE, JSONL, and websockets uniformly.
+There is exactly one shape for a route URL (`/route/<filename>`), one websocket (`/__belte/stream`) that multiplexes every stream declared under `src/stream/`, and one reactive consumer (`subscribe`) that reads any stream from any component.
 
 ```ts
 import { subscribe } from 'belte/consume'
+import { chat } from '$stream/chat.ts'
 
-// works the same against an SSE/JSONL handler or a SOCKET handler
-const latest = $derived(subscribe(orderFeed)({ customerId }))
+const latest = $derived(subscribe(chat))
 ```
 
 Plain HTML keeps working — every remote function exposes `.url` and `.method`, so `<form action={createPost.url} method="POST">` and `fetch(getPost.url)` are first-class.
@@ -79,12 +83,13 @@ Every mode boots through the same code path. `belte compile` produces a single b
 
 ### Exports grouped by lifecycle phase
 
-The three modules you'll reach for from user code map to the three phases of a request:
+The four modules you'll reach for from user code map to the phases of a request:
 
 ```ts
-import { GET, SOCKET }      from 'belte/route'    // route — register the endpoint
-import { json, sse }        from 'belte/respond'  // respond — shape the reply
-import { cache, subscribe } from 'belte/consume'  // consume — read it back
+import { GET }              from 'belte/route'    // declare HTTP endpoints
+import { stream }           from 'belte/stream'   // declare broadcast topics
+import { json, sse }        from 'belte/respond'  // shape the reply
+import { cache, subscribe } from 'belte/consume'  // read it back
 ```
 
 Find the phase, find the helper.
@@ -191,9 +196,9 @@ Bun reads `.env` automatically:
 
 ## Reference
 
-The reference is grouped by the same three lifecycle phases as the imports.
+The reference is grouped by the same lifecycle phases as the imports.
 
-- **[Route](#route)** — how pages, layouts, route modules, and app hooks get registered.
+- **[Route](#route)** — how pages, layouts, route modules, stream modules, and app hooks get registered.
 - **[Respond](#respond)** — what runs when a request lands.
 - **[Consume](#consume)** — how the client reads, reacts, and navigates.
 
@@ -209,9 +214,10 @@ my-app/
       about/page.svelte           # GET /about
       posts/[id]/page.svelte      # GET /posts/:id (id is a $prop, typed via Routes)
     route/                      # all remote functions live here; one per file
-      getHello.ts                 # GET /route/getHello   (GET)
-      createUser.ts               # POST /route/createUser (POST)
-      orderFeed.ts                # WS  /route/orderFeed   (SOCKET, over /__belte/socket)
+      getHello.ts                 # GET /route/getHello
+      createUser.ts               # POST /route/createUser
+    stream/                     # all broadcast topics live here; one per file
+      chat.ts                     # multiplexed onto /__belte/stream
     app.ts                      # optional: init / handle / handleError
     app.html                    # optional: HTML shell override
     app.css                     # any CSS, imported from a layout/page
@@ -222,10 +228,11 @@ my-app/
   dist/                         # produced by `belte build`
 ```
 
-Three import aliases are wired through the bundler in every mode:
+Four import aliases are wired through the bundler in every mode:
 
 - `$pages/...` → `src/pages/...`
 - `$route/...` → `src/route/...`
+- `$stream/...` → `src/stream/...`
 - `$lib/...` → `src/lib/...`
 
 ---
@@ -321,23 +328,20 @@ const linkClass = (href: string) =>
 
 ### Route modules — `src/route/<name>.ts`
 
-Every file under `src/route/` exports exactly one remote function. The filename is both the URL path (under `/route/`) and the export name; the imported helper picks the HTTP verb or transport. Folders become URL segments — `src/route/users/getUser.ts` mounts at `/route/users/getUser`. Route URLs are flat: there are no `[name]` dynamic segments, pass identifiers via args.
+Every file under `src/route/` exports exactly one remote function. The filename is both the URL path (under `/route/`) and the export name; the imported helper picks the HTTP verb. Folders become URL segments — `src/route/users/getUser.ts` mounts at `/route/users/getUser`. Route URLs are flat: there are no `[name]` dynamic segments, pass identifiers via args.
 
-| Helper                              | Transport                                | Returns                                          |
-| ----------------------------------- | ---------------------------------------- | ------------------------------------------------ |
-| `GET / DELETE / HEAD`               | HTTP, args from URL search params        | `Response` — decoded body on the way out         |
-| `POST / PUT / PATCH`                | HTTP, args from JSON body or `FormData`  | `Response` — decoded body on the way out         |
-| `SOCKET`                            | Multiplexed websocket at `/__belte/socket` | `AsyncIterable<Frame>` — async generator handler |
+| Helper                              | Transport                                | Args parsed from                          |
+| ----------------------------------- | ---------------------------------------- | ----------------------------------------- |
+| `GET / DELETE / HEAD`               | HTTP                                     | URL search params                         |
+| `POST / PUT / PATCH`                | HTTP                                     | JSON body or `FormData` (query overrides) |
 
-The handler signature is `(args) => Response` for HTTP verbs and `async function* (args)` for `SOCKET`. Sending the wrong verb to an HTTP route URL returns `405` with an `Allow` header.
-
-For raw `Request` access (binary bodies, custom headers, etc.) call `request()` from `belte/server` inside the handler — see [Respond](#respond).
+The handler signature is `(args) => Response`. Sending the wrong verb to a route URL returns `405` with an `Allow` header. For raw `Request` access (binary bodies, custom headers, etc.) call `request()` from `belte/server` inside the handler — see [Respond](#respond). For long-lived broadcast subscriptions, use [Stream modules](#stream-modules--srcstreamnamets) instead.
 
 **Barebones — `src/route/getHello.ts`**
 
 ```ts
-import { GET } from 'belte/route'
 import { json } from 'belte/respond'
+import { GET } from 'belte/route'
 
 export const getHello = GET<undefined, { message: string }>(() =>
     json({ message: 'Hello from belte' }),
@@ -384,20 +388,52 @@ export const deletePost = DELETE<{ id: string }, undefined>(async ({ id }) => {
 })
 ```
 
-**Streaming — `src/route/orderFeed.ts`**
+To expose a one-shot streaming response over plain HTTP (so `curl` / `EventSource` / `fetch` all work) — for example, a server-pushed log tail or a long-running computation — wrap the generator with `sse(...)` or `jsonl(...)` from `belte/respond`. For fan-out broadcast where multiple consumers see the same messages, declare a stream instead.
+
+### Stream modules — `src/stream/<name>.ts`
+
+Every file under `src/stream/` declares exactly one broadcast topic. The filename is both the export name and the topic's wire identity; the bundler binds it to `defineStream` on the server (real fan-out, optional history buffer, Bun-native publish to subscribed ws clients) or to `streamProxy` on the client (subscription over the framework's multiplexed websocket). The same import works on both sides:
 
 ```ts
-import { SOCKET } from 'belte/route'
-import { db } from '$lib/db.ts'
+// src/stream/chat.ts
+import { stream } from 'belte/stream'
 
-export const orderFeed = SOCKET<{ customerId: string }, Order>(async function* ({ customerId }) {
-    for await (const order of db.watchOrders(customerId)) {
-        yield order
-    }
-})
+export type ChatMessage = { id: string; from: string; text: string; at: number }
+
+export const chat = stream<ChatMessage>({ history: 100 })
 ```
 
-`SOCKET` routes ride a single framework-owned websocket per client at `/__belte/socket`. To expose a stream over plain HTTP instead (so `curl` / `EventSource` / `fetch` all work), use a verb helper and wrap the generator with `sse(...)` or `jsonl(...)` from `belte/respond`.
+```ts
+// anywhere — `for await` replays history (if any) then tails live
+for await (const message of chat) { /* … */ }
+for await (const message of chat.tail()) { /* skip the history replay */ }
+
+// `publish` is isomorphic — call from a route handler or (with clientPublish) the browser
+chat.publish({ id: crypto.randomUUID(), from, text, at: Date.now() })
+```
+
+`stream<T>(options?)` options:
+
+- `history` — buffer the last *N* messages and replay them to each new iterator (`for await (const m of chat)`). Default `0` (no replay). Iterators opened via `chat.tail()` always skip the buffer.
+- `clientPublish` — when `true`, browser publishes are forwarded server-side; when `false` (default), a publish frame from the client is silently dropped. Topics that need auth or validation gate publish through an HTTP `POST` instead.
+
+Every stream rides one framework-owned websocket per client at `/__belte/stream`. Steady-state fan-out is handled by Bun's native `server.publish`, so a topic with many subscribers doesn't iterate JS per message per client. Subscriptions auto-close when the iterator's `return()` runs (idiomatic `break` out of a `for await`); on the client, `subscribe()` (see [Consume](#consume)) drives this lifecycle from Svelte's reactivity.
+
+**Publishing gated through HTTP** — when only authenticated callers should publish:
+
+```ts
+// src/route/publishChat.ts
+import { POST } from 'belte/route'
+import { error, json } from 'belte/respond'
+import { type ChatMessage, chat } from '$stream/chat.ts'
+
+export const publishChat = POST<{ from: string; text: string }, ChatMessage>(({ from, text }) => {
+    if (!from.trim() || !text.trim()) return error(400, 'from and text are required')
+    const message: ChatMessage = { id: crypto.randomUUID(), from, text, at: Date.now() }
+    chat.publish(message)
+    return json(message)
+})
+```
 
 ### App hooks — `src/app.ts`
 
@@ -407,7 +443,7 @@ Optional application hooks. Every export is optional; delete the ones you don't 
 - `handle` is middleware that wraps the default request pipeline (`next(request)` invokes it). Inside the handler, reach for the inbound `Request` via `request()` and the live `Server` via the `server` import from `belte/server`.
 - `handleError` is your 500 fallback. Replaces belte's default stack-trace response.
 
-WebSockets are not exposed here — belte's only native WebSocket surface is `SOCKET`-bound routes.
+WebSockets are not exposed here — belte's only native WebSocket surface is the stream hub, multiplexed onto `/__belte/stream` from `src/stream/` declarations.
 
 **Barebones**
 
@@ -501,7 +537,7 @@ export default {
 ```
 
 ```json
-// tsconfig.json — teach the editor about the $pages / $route / $lib aliases
+// tsconfig.json — teach the editor about the $pages / $route / $stream / $lib aliases
 {
     "compilerOptions": {
         "target": "ESNext",
@@ -519,6 +555,7 @@ export default {
         "paths": {
             "$pages": ["./src/pages"], "$pages/*": ["./src/pages/*"],
             "$route": ["./src/route"], "$route/*": ["./src/route/*"],
+            "$stream": ["./src/stream"], "$stream/*": ["./src/stream/*"],
             "$lib": ["./src/lib"], "$lib/*": ["./src/lib/*"]
         }
     },
@@ -568,9 +605,10 @@ The live `Bun.Server` instance. Stable reference from module scope (it's a Proxy
 ```ts
 import { server } from 'belte/server'
 
-server.publish('chat', JSON.stringify(message))
 console.log(`listening on :${server.port}`)
 ```
+
+For broadcast fan-out across subscribers, prefer a stream over reaching for `server.publish` directly — streams pick the right topic name, manage subscriber lifecycle, and stay isomorphic.
 
 ### `HttpError` — `belte/shared/HttpError`
 
@@ -610,16 +648,17 @@ redirect('/articles/1', 301)       // permanent
 import { GET } from 'belte/route'
 import { sse } from 'belte/respond'
 
-export const orderFeed = GET<{ customerId: string }, Order>(({ customerId }) =>
+export const tickFeed = GET<undefined, { tick: number; at: string }>(() =>
     sse(async function* () {
-        for await (const order of db.watchOrders(customerId)) {
-            yield order
+        for (let tick = 1; ; tick += 1) {
+            yield { tick, at: new Date().toISOString() }
+            await Bun.sleep(1000)
         }
     }()),
 )
 ```
 
-When `subscribe(fn)(args)` on the client reads from a route with `sse` or `jsonl`, it parses each frame and the iteration shape is identical to a `SOCKET` route — pick the transport that fits the handler, not the call site.
+`sse` and `jsonl` are for one-shot streaming responses tied to a single HTTP request. For fan-out broadcasts where many subscribers see the same messages with replay-on-connect semantics, declare a [stream](#stream-modules--srcstreamnamets) instead.
 
 ### HTTP cache-control defaults
 
@@ -720,7 +759,7 @@ Mutations are just remote function calls — `incrementCounter()` goes over the 
 
 ### `.raw` — escape hatch
 
-Every remote function has a `.raw` sibling — itself a remote function with the same `method` + `url`, but whose call resolves to the underlying `Response` instead of the decoded body. Reach for it when you need headers, status, or a stream:
+Every remote function has a `.raw` sibling — itself a remote function with the same `method` + `url`, but whose call resolves to the underlying `Response` instead of the decoded body. Reach for it when you need headers, status, or a streaming body:
 
 ```ts
 const res = await getDownload.raw({ id })
@@ -733,31 +772,37 @@ It composes with `cache()` the same way the decoded variant does — pass `fn.ra
 const response = await cache(getPost.raw)({ id })
 ```
 
-### `.stream(args)` + `subscribe(fn)` — `belte/consume`
+### `subscribe(stream)` — `belte/consume`
 
-Both `RemoteFunction` (verb-bound routes whose handlers reply with `sse(...)` / `jsonl(...)`) and `SocketFunction` (`SOCKET`-bound routes) expose the same `.stream(args)` iteration entry point: an `AsyncIterable<Frame>` you drain with `for await`. The transport choice belongs to the route module — the call site is the same regardless.
+The reactive consumer for streams. Pass a `Stream` declared under `src/stream/` and read the latest published value inside any `$derived`. The first read in a tracking scope opens the subscription (replaying history if the topic was declared with `{ history: n }`); the last reader to drop closes it. Many `$deriveds` reading the same stream share one underlying subscription.
 
-```ts
-for await (const order of orderFeed.stream({ customerId })) {
-    console.log(order)
-}
+```svelte
+<script lang="ts">
+import { subscribe } from 'belte/consume'
+import { chat } from '$stream/chat.ts'
+
+const latest = $derived(subscribe(chat))                 // T | undefined
+const error  = $derived(subscribe.error(chat))           // Error | undefined
+const status = $derived(subscribe.status(chat))          // 'pending' | 'open' | 'done' | 'error'
+</script>
 ```
 
-For reactive consumption, `subscribe(fn)(args)` from `belte/consume` is the equivalent of `cache()` for streams. It manages a per-key registry of open streams, opens on first `$derived` read and closes on last reader (driven by Svelte's `createSubscriber`), and re-keys when args change. Subscribe is a no-op on the server — SSR can't keep a stream open across the request boundary, so pages that want a value in the initial HTML use `cache()` for the seed and `subscribe()` for live updates after hydration.
+Errors surface through `subscribe.error(stream)` rather than throwing — reading `latest` from a `$derived` can't crash the component. `subscribe.status(stream)` distinguishes "haven't received the first message" (`pending`) from "stream ended cleanly" (`done`) and "wire layer surfaced an error" (`error`).
+
+`subscribe` is a no-op on the server — SSR can't keep a stream open across the request boundary. Pages that want a seeded value in the initial HTML should fetch a snapshot via `cache()` against an HTTP route and layer `subscribe()` on top for live updates after hydration:
 
 ```svelte
 <script lang="ts">
 import { cache, subscribe } from 'belte/consume'
-import { getOrders, orderFeed } from '$route/...'
+import { getRecentOrders } from '$route/getRecentOrders.ts'
+import { orders } from '$stream/orders.ts'
 
-const seed = await cache(getOrders)({ customerId })       // SSR-friendly initial value
-const latest = $derived(subscribe(orderFeed)({ customerId })) // live updates after hydration
-const error = $derived(subscribe.error(orderFeed)({ customerId }))
-const status = $derived(subscribe.status(orderFeed)({ customerId }))
+const seed   = await cache(getRecentOrders)({ customerId })  // SSR-friendly initial value
+const latest = $derived(subscribe(orders))                   // live updates after hydration
 </script>
 ```
 
-Errors surface through `subscribe.error(fn)(args)` rather than throwing — reading the latest frame from a `$derived` can't crash the component. `subscribe.status(fn)(args)` exposes `'pending' | 'open' | 'done' | 'error'` for callers that need to distinguish "haven't received the first frame" from "stream ended cleanly".
+For lower-level iteration on either side (or for server-side fan-in), use the stream's async iterator directly — `for await (const m of chat)` replays history and tails live, `chat.tail()` skips the replay.
 
 ### `page` + `navigate` — `belte/page`
 
@@ -805,5 +850,5 @@ hydration                      client cache store loads from __SSR__ — no seco
   │
   ▼
 $derived(cache(fn)()) subscribes; cache.invalidate(fn) re-runs every subscriber
-$derived(subscribe(fn)())     opens streams after hydration, re-runs on each frame
+$derived(subscribe(stream))    opens the ws subscription after hydration, re-runs on each frame
 ```
