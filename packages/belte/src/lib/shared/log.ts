@@ -1,11 +1,12 @@
 import { isDebugEnabled } from './isDebugEnabled.ts'
 
-const useColor = Bun.enableANSIColors
+const hasBun = typeof Bun !== 'undefined'
+const useColor = hasBun && Bun.enableANSIColors
 const RESET = '\x1b[0m'
 const BOLD = '\x1b[1m'
 const DIM = '\x1b[2m'
 
-// Wraps `text` in a Bun-resolved ANSI color escape; no-op when colors are disabled.
+// Wraps `text` in a Bun-resolved ANSI color escape; no-op when colors are disabled or unavailable (browser).
 function paint(color: string, text: string): string {
     if (!useColor) {
         return text
@@ -63,6 +64,10 @@ function colorMethod(method: string): string {
 
 const BELTE = useColor ? `${BOLD}${Bun.color('magenta', 'ansi-256')}[belte]${RESET}` : '[belte]'
 
+// Browser console already has its own DEBUG storage convention, but for the shared logger
+// we honor the same DEBUG env. In the browser `process.env.DEBUG` may not exist.
+const debugEnv = typeof process !== 'undefined' ? process.env.DEBUG : undefined
+
 /*
 Shared logger used by both the build pipeline and the request handler.
 Wraps console.* with ANSI coloring, a `[belte]` prefix, and a per-method/
@@ -86,7 +91,7 @@ export const log = {
         console.log(dim(message))
     },
     debug(scope: string, message: string): void {
-        if (!isDebugEnabled(scope)) {
+        if (!isDebugEnabled(scope, debugEnv)) {
             return
         }
         console.log(`${dim(`[${scope}]`)} ${dim(message)}`)
