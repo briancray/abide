@@ -32,6 +32,11 @@ async function readStream() {
 const cachedRaw = $derived(cache(getReport.raw)({ id: 'r-1' }))
 </script>
 
+<nav class="mb-2 text-sm text-slate-500">
+    <a href="/server" class="hover:text-slate-900"><code class="font-mono">belte/server</code></a>
+    <span class="mx-2">/</span>
+    <span><code class="font-mono">.raw</code> and <code class="font-mono">.stream(args?)</code></span>
+</nav>
 <h1 class="text-3xl font-bold"><code class="font-mono">.raw</code> and <code class="font-mono">.stream(args?)</code></h1>
 <p class="mt-2 text-slate-600">
     Function-shape siblings on every rpc — same <code class="font-mono">method</code> and

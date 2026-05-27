@@ -116,7 +116,14 @@ function getOrCreateEntry<T>(subscribable: Subscribable<T>): Entry<T> {
         return () => {
             cancelled = true
             iterator.return?.(undefined)?.catch(() => undefined)
-            registry.delete(key)
+            /*
+            Identity-guard the eviction: if a fresh Subscribable with the
+            same name has already replaced us in the registry, this stale
+            cleanup must not nuke the new entry.
+            */
+            if (registry.get(key) === (entry as Entry<unknown>)) {
+                registry.delete(key)
+            }
         }
     })
     registry.set(key, entry as Entry<unknown>)

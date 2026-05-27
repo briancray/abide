@@ -1,0 +1,66 @@
+/*
+Shared body builder for the streaming respond helpers (`jsonl`, `sse`).
+Both flow the same shape — pull from an AsyncIterator, encode each frame
+to bytes, emit a sentinel `error` frame on a generator throw, and route
+ReadableStream's `cancel` into `iter.return()` so the handler's
+`for await` exits via its normal control path. Only the per-frame
+encoding and the optional keepalive payload differ between the two.
+
+Keepalive is opt-in: SSE uses `: keepalive\n\n` every 15s so proxies
+don't drop an idle connection; jsonl has no spec-defined comment, so it
+omits keepalive entirely.
+*/
+
+export type StreamEncoder<T> = {
+    encodeFrame: (value: T) => string
+    encodeError: (message: string) => string
+    keepaliveMs?: number
+    keepalivePayload?: string
+}
+
+export function streamFromIterator<T>(
+    iterable: AsyncIterable<T>,
+    encoder: StreamEncoder<T>,
+): ReadableStream<Uint8Array> {
+    const textEncoder = new TextEncoder()
+    const iterator = iterable[Symbol.asyncIterator]()
+    let keepalive: ReturnType<typeof setInterval> | undefined
+
+    function stopKeepalive(): void {
+        if (keepalive !== undefined) {
+            clearInterval(keepalive)
+            keepalive = undefined
+        }
+    }
+
+    return new ReadableStream<Uint8Array>({
+        start(controller) {
+            if (encoder.keepaliveMs !== undefined && encoder.keepalivePayload !== undefined) {
+                const payload = textEncoder.encode(encoder.keepalivePayload)
+                keepalive = setInterval(() => {
+                    controller.enqueue(payload)
+                }, encoder.keepaliveMs)
+            }
+        },
+        async pull(controller) {
+            try {
+                const next = await iterator.next()
+                if (next.done) {
+                    stopKeepalive()
+                    controller.close()
+                    return
+                }
+                controller.enqueue(textEncoder.encode(encoder.encodeFrame(next.value)))
+            } catch (error) {
+                const message = error instanceof Error ? error.message : String(error)
+                controller.enqueue(textEncoder.encode(encoder.encodeError(message)))
+                stopKeepalive()
+                controller.close()
+            }
+        },
+        cancel(reason) {
+            stopKeepalive()
+            return iterator.return?.(reason)?.then(() => undefined)
+        },
+    })
+}

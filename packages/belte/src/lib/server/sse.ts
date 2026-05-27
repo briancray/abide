@@ -2,8 +2,8 @@
 Wraps an AsyncIterable<Frame> in a Response whose body is
 Server-Sent Events (text/event-stream) — each frame becomes one
 `data: <json>\n\n` event. Used inside an rpc handler to expose a
-generator over plain HTTP so EventSource (or `subscribe(fn)(args)` on the
-client) can consume it frame-by-frame.
+generator over plain HTTP so EventSource (or `subscribe(fn.stream)(args)`
+on the client) can consume it frame-by-frame.
 
   export const orderFeed = GET<Args>((args) =>
       sse(async function* () {
@@ -25,44 +25,17 @@ maps it to the entry's `error` field.
 */
 import { NO_STORE } from '../shared/cacheControlValues.ts'
 import type { TypedResponse } from './rpc/types/TypedResponse.ts'
+import { streamFromIterator } from './runtime/streamFromIterator.ts'
 
 const KEEPALIVE_INTERVAL_MS = 15000
 
 export function sse<Frame>(iterable: AsyncIterable<Frame>): TypedResponse<Frame> {
-    const encoder = new TextEncoder()
-    const iterator = iterable[Symbol.asyncIterator]()
-    let keepaliveTimer: ReturnType<typeof setInterval> | undefined
-
-    const body = new ReadableStream<Uint8Array>({
-        start(controller) {
-            keepaliveTimer = setInterval(() => {
-                controller.enqueue(encoder.encode(': keepalive\n\n'))
-            }, KEEPALIVE_INTERVAL_MS)
-        },
-        async pull(controller) {
-            try {
-                const next = await iterator.next()
-                if (next.done) {
-                    clearInterval(keepaliveTimer)
-                    controller.close()
-                    return
-                }
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify(next.value)}\n\n`))
-            } catch (error) {
-                const message = error instanceof Error ? error.message : String(error)
-                controller.enqueue(
-                    encoder.encode(`event: error\ndata: ${JSON.stringify({ message })}\n\n`),
-                )
-                clearInterval(keepaliveTimer)
-                controller.close()
-            }
-        },
-        cancel(reason) {
-            clearInterval(keepaliveTimer)
-            return iterator.return?.(reason)?.then(() => undefined)
-        },
+    const body = streamFromIterator(iterable, {
+        encodeFrame: (value) => `data: ${JSON.stringify(value)}\n\n`,
+        encodeError: (message) => `event: error\ndata: ${JSON.stringify({ message })}\n\n`,
+        keepaliveMs: KEEPALIVE_INTERVAL_MS,
+        keepalivePayload: ': keepalive\n\n',
     })
-
     return new Response(body, {
         headers: {
             'Content-Type': 'text/event-stream; charset=utf-8',

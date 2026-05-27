@@ -293,14 +293,26 @@ export default { compilerOptions: { experimental: { async: true } } }
 ```
 
 ```json
-// tsconfig.json — strict/lib/module + the four aliases are inherited
+// tsconfig.json — strict/lib/module inherited; paths declared inline
 {
     "extends": "belte/tsconfig",
-    "include": ["src/**/*.ts", "src/**/*.svelte"]
+    "include": ["src/**/*.ts", "src/**/*.svelte"],
+    "compilerOptions": {
+        "paths": {
+            "$pages": ["./src/pages"],
+            "$pages/*": ["./src/pages/*"],
+            "$rpc": ["./src/server/rpc"],
+            "$rpc/*": ["./src/server/rpc/*"],
+            "$sockets": ["./src/server/sockets"],
+            "$sockets/*": ["./src/server/sockets/*"],
+            "$lib": ["./src/lib"],
+            "$lib/*": ["./src/lib/*"]
+        }
+    }
 }
 ```
 
-Inherits `strict`, `target: ESNext`, `moduleResolution: bundler`, `verbatimModuleSyntax`, `allowImportingTsExtensions`, `types: ["bun"]`, and the four path aliases (`$pages` / `$rpc` / `$sockets` / `$lib`, resolved via `${configDir}` against your project root). Override anything by adding a `compilerOptions` of your own — extending merges.
+Inherits `strict`, `target: ESNext`, `moduleResolution: bundler`, `verbatimModuleSyntax`, `allowImportingTsExtensions`, and `types: ["bun"]`. Paths are declared inline per project because Bun (1.3.x) doesn't substitute `${configDir}` in `paths` inherited via `extends`. Override anything else by adding to `compilerOptions` — extending merges.
 
 ---
 

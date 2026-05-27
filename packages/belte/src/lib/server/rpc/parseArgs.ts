@@ -5,9 +5,12 @@ Parses + merges every source of args available for a verb-defined handler:
 - body (json or form-encoded, ignored for GET/DELETE)
 - url query string
 
-Query keys win on collision. Returns undefined when no source contributes
-any key. A non-object body (array, primitive) is returned as-is and no
-merge runs — the query has nowhere to go in that case.
+When both are present and the body is a plain object, the merge folds the
+query in on top so query keys win on collision. A non-object body (array,
+primitive, null) skips the merge entirely and is returned as-is — there's
+no key on the body to layer the query into, and the framework's args type
+is a single bag rather than a `{body, query}` envelope. Returns undefined
+when no source contributes any key.
 */
 export async function parseArgs(method: HttpVerb, request: Request): Promise<unknown> {
     /*

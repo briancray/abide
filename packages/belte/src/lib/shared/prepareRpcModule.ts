@@ -4,6 +4,7 @@ import { stripImport } from './stripImport.ts'
 
 const VERB_NAMES = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'] as const
 const VERB_SET = new Set<string>(VERB_NAMES)
+const VERB_IMPORT_PATHS = VERB_NAMES.map((verb) => `belte/server/${verb}`)
 
 const SINGLE_EXPORT_ERROR =
     '[belte] $rpc module contains more than one `<VERB>(...)` export — each file must declare exactly one remote function'
@@ -27,7 +28,13 @@ docstring or template literal from the real call, and it can't follow
 nested generics like `GET<Map<K, V>>(`.
 */
 export function prepareRpcModule(source: string): PreparedRpcModule | undefined {
-    const stripped = stripImport(source, 'belte/rpc')
+    /*
+    The "no barrels" surface places each verb at its own path
+    (`belte/server/GET`, `belte/server/POST`, …) — strip every one so
+    the user's verb import doesn't linger and side-effect-load the
+    stub module into the server bundle.
+    */
+    const stripped = VERB_IMPORT_PATHS.reduce((current, path) => stripImport(current, path), source)
     const site = findExportCallSite(stripped, (ident) => VERB_SET.has(ident), SINGLE_EXPORT_ERROR)
     if (!site) {
         return undefined

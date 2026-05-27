@@ -15,6 +15,13 @@ const product = $derived(
 )
 </script>
 
+<nav class="mb-2 text-sm text-slate-500">
+    <a href="/server" class="hover:text-slate-900"><code class="font-mono">belte/server</code></a>
+    <span class="mx-2">/</span>
+    <a href="/server/rpc" class="hover:text-slate-900">RPC</a>
+    <span class="mx-2">/</span>
+    <span>Product {id}</span>
+</nav>
 <h1 class="text-3xl font-bold">Product {id}</h1>
 <p class="mt-2 text-slate-600">
     Dynamic page segment <code class="font-mono">[id]</code> from the folder name — typed via

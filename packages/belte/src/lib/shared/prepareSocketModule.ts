@@ -18,7 +18,7 @@ extract + rewrite passes, so the resolver plugin only walks each source
 character-by-character once.
 */
 export function prepareSocketModule(source: string): PreparedSocketModule | undefined {
-    const stripped = stripImport(source, 'belte/sockets')
+    const stripped = stripImport(source, 'belte/server/socket')
     const site = findExportCallSite(stripped, (ident) => ident === 'socket', SINGLE_EXPORT_ERROR)
     if (!site) {
         return undefined

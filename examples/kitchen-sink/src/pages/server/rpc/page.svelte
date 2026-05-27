@@ -28,6 +28,11 @@ async function safeCall(verb: string, fn: () => Promise<unknown>): Promise<void>
 const message = $state({ value: 'hello' })
 </script>
 
+<nav class="mb-2 text-sm text-slate-500">
+    <a href="/server" class="hover:text-slate-900"><code class="font-mono">belte/server</code></a>
+    <span class="mx-2">/</span>
+    <span>RPC</span>
+</nav>
 <h1 class="text-3xl font-bold">RPC</h1>
 <p class="mt-2 text-slate-600">
     One file per rpc under <code class="font-mono">src/server/rpc/</code>. Filename = export name

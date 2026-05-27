@@ -1,7 +1,8 @@
-import { buildRpcRequest } from '../shared/buildRpcRequest.ts'
-import { decodeResponse } from '../shared/decodeResponse.ts'
 import type { HttpVerb } from '../server/rpc/types/HttpVerb.ts'
 import { verbRegistry } from '../server/rpc/verbRegistry.ts'
+import { buildRpcRequest } from '../shared/buildRpcRequest.ts'
+import { commandNameForUrl } from '../shared/commandNameForUrl.ts'
+import { decodeResponse } from '../shared/decodeResponse.ts'
 import type { CliManifest } from './types/CliManifest.ts'
 import type { CliManifestEntry } from './types/CliManifestEntry.ts'
 
@@ -45,8 +46,7 @@ export function createClient<Api extends AnyApi = AnyApi>(opts?: {
             return { method: entry.method, url: entry.url }
         }
         for (const value of verbRegistry.values()) {
-            const tail = value.remote.url.split('/').pop()
-            if (tail === name) {
+            if (commandNameForUrl(value.remote.url) === name) {
                 return { method: value.remote.method, url: value.remote.url }
             }
         }
@@ -66,18 +66,12 @@ export function createClient<Api extends AnyApi = AnyApi>(opts?: {
         const request = buildRpcRequest({ method, url: path, args, baseUrl, headers })
         const response = await fetch(request)
         if (!response.ok) {
-            throw new Error(
-                `${method} ${path} failed: ${response.status} ${response.statusText}`,
-            )
+            throw new Error(`${method} ${path} failed: ${response.status} ${response.statusText}`)
         }
         return decodeResponse(response)
     }
 
-    async function callInProcess(
-        method: HttpVerb,
-        path: string,
-        args: unknown,
-    ): Promise<unknown> {
+    async function callInProcess(method: HttpVerb, path: string, args: unknown): Promise<unknown> {
         const entry = verbRegistry.get(path)
         if (!entry) {
             throw new Error(
@@ -97,9 +91,7 @@ export function createClient<Api extends AnyApi = AnyApi>(opts?: {
         })
         const response = await entry.remote.fetch(request)
         if (!response.ok) {
-            throw new Error(
-                `${method} ${path} failed: ${response.status} ${response.statusText}`,
-            )
+            throw new Error(`${method} ${path} failed: ${response.status} ${response.statusText}`)
         }
         return decodeResponse(response)
     }

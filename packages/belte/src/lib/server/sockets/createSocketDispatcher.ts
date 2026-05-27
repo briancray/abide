@@ -1,8 +1,8 @@
 import type { ServerWebSocket } from 'bun'
 import { log } from '../../shared/log.ts'
+import { lookupSocket } from './lookupSocket.ts'
 import type { SocketClientFrame } from './types/SocketClientFrame.ts'
 import type { SocketRoutes } from './types/SocketRoutes.ts'
-import { lookupSocket } from './lookupSocket.ts'
 
 type SocketDispatcher = {
     open(ws: ServerWebSocket<unknown>): void
@@ -202,7 +202,19 @@ export function createSocketDispatcher(sockets: SocketRoutes): SocketDispatcher 
             */
             return
         }
-        entry.socket.publish(frame.message)
+        /*
+        publish() runs the topic's optional Standard Schema synchronously
+        and throws on failure (see defineSocket.validateSync). The
+        dispatcher invokes us via `void handlePub(...)`, so an unhandled
+        throw would surface as an unhandled promise rejection on every
+        malformed client frame. Catch + log so a buggy client can't take
+        the process down.
+        */
+        try {
+            entry.socket.publish(frame.message)
+        } catch (error) {
+            log.error(error)
+        }
         /*
         ws parameter retained for future per-ws auth context (cookies on
         upgrade) the canPublish hook would consult.

@@ -1,4 +1,16 @@
 {
     "extends": "belte/tsconfig",
-    "include": ["src/**/*.ts", "src/**/*.svelte"]
+    "include": ["src/**/*.ts", "src/**/*.svelte"],
+    "compilerOptions": {
+        "paths": {
+            "$pages": ["./src/pages"],
+            "$pages/*": ["./src/pages/*"],
+            "$rpc": ["./src/server/rpc"],
+            "$rpc/*": ["./src/server/rpc/*"],
+            "$sockets": ["./src/server/sockets"],
+            "$sockets/*": ["./src/server/sockets/*"],
+            "$lib": ["./src/lib"],
+            "$lib/*": ["./src/lib/*"]
+        }
+    }
 }

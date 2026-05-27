@@ -8,14 +8,41 @@ import { maxSourceMtime } from './maxSourceMtime.ts'
 
 /*
 Process-wide per-platform build coalescing. Two concurrent curls for
-the same /__belte/cli/<platform> share one buildCli invocation; the
-later requests await the same promise the first one created. Entries
-are cleared on resolution so a subsequent miss re-builds (catches the
-case where the user changes an rpc and the on-disk binary is stale).
+the same /__belte/cli/<platform> share one promise; the later requests
+await the same one the first installed. The promise both runs the
+freshness check AND the rebuild, so the map insertion is synchronous
+relative to the first request's entry into the function — no window
+between an `await` and `pendingBuilds.set` for a second concurrent
+request to slip through and fire its own buildCli against the same
+output paths.
 */
 const pendingBuilds = new Map<string, Promise<string | undefined>>()
 
 async function ensurePlatformBinary(
+    platform: string,
+    programName: string,
+    cwd: string,
+): Promise<string | undefined> {
+    const existing = pendingBuilds.get(platform)
+    if (existing) {
+        return existing
+    }
+    const promise = computeBinary(platform, programName, cwd)
+    pendingBuilds.set(platform, promise)
+    /*
+    Drop the entry after settlement so a later request rebuilds if the
+    source has changed again. Identity-guard so a still-pending entry
+    installed by a follow-up request isn't evicted by ours.
+    */
+    promise.finally(() => {
+        if (pendingBuilds.get(platform) === promise) {
+            pendingBuilds.delete(platform)
+        }
+    })
+    return promise
+}
+
+async function computeBinary(
     platform: string,
     programName: string,
     cwd: string,
@@ -36,31 +63,21 @@ async function ensurePlatformBinary(
         }
         log.info(`thin cli for ${platform} is stale — rebuilding`)
     }
-    const existing = pendingBuilds.get(platform)
-    if (existing) {
-        return existing
+    try {
+        log.info(`lazy-building thin cli for ${platform}…`)
+        // Lazy-import buildCli so the build pipeline isn't pulled into
+        // production processes that never serve a download.
+        const { buildCli } = await import('../../../buildCli.ts')
+        await buildCli({
+            cwd,
+            platforms: [normalizeTarget(platform)],
+            thin: true,
+        })
+        return existsSync(binaryPath) ? binaryPath : undefined
+    } catch (error) {
+        log.error(error)
+        return undefined
     }
-    const promise = (async () => {
-        try {
-            log.info(`lazy-building thin cli for ${platform}…`)
-            // Lazy-import buildCli so the build pipeline isn't pulled into
-            // production processes that never serve a download.
-            const { buildCli } = await import('../../../buildCli.ts')
-            await buildCli({
-                cwd,
-                platforms: [normalizeTarget(platform)],
-                thin: true,
-            })
-            return existsSync(binaryPath) ? binaryPath : undefined
-        } catch (error) {
-            log.error(error)
-            return undefined
-        } finally {
-            pendingBuilds.delete(platform)
-        }
-    })()
-    pendingBuilds.set(platform, promise)
-    return promise
 }
 
 /*

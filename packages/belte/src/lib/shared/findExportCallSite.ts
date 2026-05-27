@@ -44,6 +44,10 @@ export function findExportCallSite(
             i = end === -1 ? len : end + 2
             continue
         }
+        if (c === '/' && isRegexContext(source, i)) {
+            i = skipRegex(source, i + 1)
+            continue
+        }
         if (c === '"' || c === "'") {
             i = skipString(source, i + 1, c)
             continue
@@ -162,6 +166,10 @@ function skipTemplateExpression(source: string, start: number): number {
             i = end === -1 ? source.length : end + 2
             continue
         }
+        if (c === '/' && isRegexContext(source, i)) {
+            i = skipRegex(source, i + 1)
+            continue
+        }
         i++
     }
     return i
@@ -267,6 +275,10 @@ function findCallEnd(source: string, parenStart: number): number | undefined {
             i = end === -1 ? source.length : end + 2
             continue
         }
+        if (c === '/' && isRegexContext(source, i)) {
+            i = skipRegex(source, i + 1)
+            continue
+        }
         if (c === '(') {
             depth++
         } else if (c === ')') {
@@ -350,4 +362,118 @@ function isIdentPart(c: string | undefined): boolean {
 
 function isWhitespace(c: string | undefined): boolean {
     return c === ' ' || c === '\t' || c === '\n' || c === '\r'
+}
+
+/*
+A `/` starts a regex literal when the prior expression context expects an
+expression rather than a value — after an open delimiter, operator, or
+expression-prefix keyword (return, typeof, instanceof, in, of, delete,
+void, await, yield, new, throw, case, do). Otherwise `/` is division.
+Without this disambiguation a regex like `/^\//` reads as `/` (division),
+then `^`, `\`, `/`, `/` — and the final `//` pair fakes a line comment
+that swallows the rest of the line, eating any `)` that closes the
+enclosing call.
+*/
+const REGEX_PREFIX_KEYWORDS = new Set([
+    'return',
+    'typeof',
+    'instanceof',
+    'in',
+    'of',
+    'delete',
+    'void',
+    'await',
+    'yield',
+    'new',
+    'throw',
+    'case',
+    'do',
+])
+
+const REGEX_PUNCTUATION = new Set([
+    '(',
+    '[',
+    '{',
+    ',',
+    ';',
+    ':',
+    '?',
+    '!',
+    '&',
+    '|',
+    '^',
+    '~',
+    '+',
+    '-',
+    '*',
+    '%',
+    '<',
+    '>',
+    '=',
+    '/',
+])
+
+function isRegexContext(source: string, slashIndex: number): boolean {
+    let i = slashIndex - 1
+    while (i >= 0 && isWhitespace(source[i])) {
+        i--
+    }
+    if (i < 0) {
+        return true
+    }
+    const prev = source[i] as string
+    if (REGEX_PUNCTUATION.has(prev)) {
+        return true
+    }
+    if (isIdentPart(prev)) {
+        let start = i
+        while (start > 0 && isIdentPart(source[start - 1])) {
+            start--
+        }
+        return REGEX_PREFIX_KEYWORDS.has(source.slice(start, i + 1))
+    }
+    return false
+}
+
+/*
+Walks past a regex literal body, respecting character classes (`[...]`
+where `/` is literal) and backslash escapes, then consumes trailing
+flag identifiers. Returns the index immediately after the regex. An
+unterminated regex (newline before closing `/`) returns the newline
+position so the outer scanner can resume normally on the next line.
+*/
+function skipRegex(source: string, start: number): number {
+    let i = start
+    let inClass = false
+    while (i < source.length) {
+        const c = source[i]
+        if (c === '\\') {
+            i += 2
+            continue
+        }
+        if (c === '\n') {
+            return i
+        }
+        if (inClass) {
+            if (c === ']') {
+                inClass = false
+            }
+            i++
+            continue
+        }
+        if (c === '[') {
+            inClass = true
+            i++
+            continue
+        }
+        if (c === '/') {
+            let j = i + 1
+            while (j < source.length && isIdentPart(source[j])) {
+                j++
+            }
+            return j
+        }
+        i++
+    }
+    return source.length
 }

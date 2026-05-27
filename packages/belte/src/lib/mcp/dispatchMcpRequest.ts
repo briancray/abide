@@ -1,17 +1,18 @@
+import { verbRegistry } from '../server/rpc/verbRegistry.ts'
+import { socketRegistry } from '../server/sockets/socketRegistry.ts'
 import { buildRpcRequest } from '../shared/buildRpcRequest.ts'
 import { NO_STORE } from '../shared/cacheControlValues.ts'
+import { commandNameForUrl } from '../shared/commandNameForUrl.ts'
 import { decodeResponse } from '../shared/decodeResponse.ts'
-import { socketRegistry } from '../server/sockets/socketRegistry.ts'
-import { verbRegistry } from '../server/rpc/verbRegistry.ts'
-import { ensureMcpRegistriesLoaded } from './mcpManifests.ts'
+import { forwardHeaders } from '../shared/forwardHeaders.ts'
 import { jsonSchemaForSchema } from './jsonSchemaForSchema.ts'
+import { ensureMcpRegistriesLoaded } from './mcpManifests.ts'
 import type { JsonRpcRequest } from './types/JsonRpcRequest.ts'
 import type { JsonRpcResponse } from './types/JsonRpcResponse.ts'
 import type { McpServerOptions } from './types/McpServerOptions.ts'
 
 const PROTOCOL_VERSION = '2025-06-18'
 const STREAM_URI_PREFIX = 'belte://stream/'
-const FORWARDED_HEADERS = ['cookie', 'authorization', 'x-forwarded-for', 'x-forwarded-proto']
 
 function jsonRpcError(
     id: string | number | null,
@@ -26,22 +27,13 @@ function jsonRpcOk(id: string | number | null, result: unknown): JsonRpcResponse
     return { jsonrpc: '2.0', id, result }
 }
 
-function forwardHeaders(inbound: Request): Headers {
-    const headers = new Headers()
-    for (const name of FORWARDED_HEADERS) {
-        const value = inbound.headers.get(name)
-        if (value) {
-            headers.set(name, value)
-        }
-    }
-    return headers
-}
-
 /*
 Builds the array of MCP tool descriptors. Each rpc with clients.mcp=true
-becomes one tool named after the export. Each socket with clients.mcp
-becomes optionally a publish_<name> tool (when allowClientPublish) and
-always an await_<name> tool that blocks for the next history entry.
+becomes one tool named after the export's URL (folder segments joined
+with `-` so two files with the same stem in different folders don't
+collide). Each socket with clients.mcp becomes optionally a
+publish_<name> tool (when allowClientPublish) and always an await_<name>
+tool that blocks for the next history entry.
 */
 function buildTools(): Array<{
     name: string
@@ -57,9 +49,8 @@ function buildTools(): Array<{
         if (!entry.clients.mcp) {
             continue
         }
-        const name = entry.remote.url.split('/').pop() ?? entry.remote.url
         tools.push({
-            name,
+            name: commandNameForUrl(entry.remote.url),
             description: `${entry.remote.method} ${entry.remote.url}`,
             inputSchema: jsonSchemaForSchema(entry.schema, entry.jsonSchema),
         })
@@ -137,16 +128,26 @@ async function callTool(
             throw new Error(`unknown tool: ${toolName}`)
         }
         const timeoutMs = (args?.timeoutMs as number | undefined) ?? 30_000
-        const next = (async () => {
-            for await (const value of entry.socket.tail(0)) {
-                return value
-            }
-            return undefined
-        })()
-        const timeout = new Promise<undefined>((resolve) =>
-            setTimeout(() => resolve(undefined), timeoutMs),
-        )
-        const value = await Promise.race([next, timeout])
+        /*
+        Hold onto the iterator so the timeout branch can close it. Without
+        the explicit return(), a timed-out await leaves a subscriber wired
+        into defineSocket's `subscribers` set and the next publish wakes
+        it before noticing it's abandoned — one leaked subscriber per
+        timed-out call.
+        */
+        const iterator = entry.socket.tail(0)[Symbol.asyncIterator]()
+        let value: unknown
+        try {
+            const raced = await Promise.race([
+                iterator.next(),
+                new Promise<IteratorResult<unknown>>((resolve) => {
+                    setTimeout(() => resolve({ value: undefined, done: true }), timeoutMs)
+                }),
+            ])
+            value = raced.done ? undefined : raced.value
+        } finally {
+            iterator.return?.(undefined)?.catch(() => undefined)
+        }
         return {
             content: [
                 {
@@ -168,14 +169,13 @@ async function callTool(
         entry.socket.publish(args)
         return { content: [{ type: 'text', text: 'published' }] }
     }
-    // Plain RPC tool — find verb by export-name match against the url tail.
+    // Plain RPC tool — find verb whose folder-prefixed name matches.
     let found: ReturnType<(typeof verbRegistry)['get']> | undefined
     for (const entry of verbRegistry.values()) {
         if (!entry.clients.mcp) {
             continue
         }
-        const name = entry.remote.url.split('/').pop() ?? entry.remote.url
-        if (name === toolName) {
+        if (commandNameForUrl(entry.remote.url) === toolName) {
             found = entry
             break
         }
@@ -190,7 +190,7 @@ async function callTool(
         url: found.remote.url,
         args,
         baseUrl,
-        headers: forwardHeaders(inbound),
+        headers: forwardHeaders(inbound.headers),
     })
     const response = await found.remote.fetch(request)
     if (!response.ok) {

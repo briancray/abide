@@ -24,6 +24,11 @@ async function send() {
 }
 </script>
 
+<nav class="mb-2 text-sm text-slate-500">
+    <a href="/server" class="hover:text-slate-900"><code class="font-mono">belte/server</code></a>
+    <span class="mx-2">/</span>
+    <span><code class="font-mono">request()</code> + <code class="font-mono">server()</code></span>
+</nav>
 <h1 class="text-3xl font-bold"><code class="font-mono">request()</code> + <code class="font-mono">server()</code></h1>
 <p class="mt-2 text-slate-600">
     Per-request and server-wide accessors backed by <code class="font-mono">AsyncLocalStorage</code>.

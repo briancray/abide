@@ -1,28 +1,16 @@
 import { buildRpcRequest } from '../../shared/buildRpcRequest.ts'
 import { NO_STORE } from '../../shared/cacheControlValues.ts'
-import type { ClientFlags } from '../../shared/types/ClientFlags.ts'
 import { createRemoteFunction } from '../../shared/createRemoteFunction.ts'
+import { forwardHeaders } from '../../shared/forwardHeaders.ts'
 import { resolveClientFlags } from '../../shared/resolveClientFlags.ts'
+import type { ClientFlags } from '../../shared/types/ClientFlags.ts'
+import { requestContext } from '../runtime/requestContext.ts'
+import { parseArgs } from './parseArgs.ts'
+import { registerVerb } from './registerVerb.ts'
 import type { HttpVerb } from './types/HttpVerb.ts'
 import type { RemoteFunction } from './types/RemoteFunction.ts'
 import type { RemoteHandler } from './types/RemoteHandler.ts'
 import type { StandardSchemaV1 } from './types/StandardSchemaV1.ts'
-import { parseArgs } from './parseArgs.ts'
-import { registerVerb } from './registerVerb.ts'
-import { requestContext } from '../runtime/requestContext.ts'
-
-/*
-Headers forwarded from the inbound request onto in-process synthetic
-Requests when a remote handler is invoked from server-side rendering. Lets
-handlers read the caller's cookies/authorization without per-call wiring.
-*/
-const FORWARDED_HEADERS = [
-    'cookie',
-    'authorization',
-    'x-forwarded-for',
-    'x-forwarded-proto',
-    'x-forwarded-host',
-]
 
 /*
 Builds a RemoteFunction from an HTTP verb + RPC URL + handler. The bundler
@@ -54,33 +42,23 @@ export function defineVerb<Args, Return>(
     const jsonSchema = opts?.jsonSchema
     const clients = resolveClientFlags(opts?.clients, schema !== undefined)
 
-    function inheritHeaders(): Headers {
-        const headers = new Headers()
-        const store = requestContext.getStore()
-        if (!store) {
-            return headers
-        }
-        for (const name of FORWARDED_HEADERS) {
-            const value = store.req.headers.get(name)
-            if (value) {
-                headers.set(name, value)
-            }
-        }
-        return headers
-    }
-
     function buildRequest(args: Args | undefined): Request {
         const store = requestContext.getStore()
         const baseUrl = store ? store.url.href : 'http://localhost/'
-        return buildRpcRequest({ method, url, args, baseUrl, headers: inheritHeaders() })
+        const headers = store ? forwardHeaders(store.req.headers) : new Headers()
+        return buildRpcRequest({ method, url, args, baseUrl, headers })
     }
 
-    function runHandler(args: Args | undefined): Promise<Response> {
-        try {
-            return Promise.resolve(handler(args as Args)) as Promise<Response>
-        } catch (error) {
-            return Promise.reject(error)
-        }
+    /*
+    Handler bodies may throw synchronously (e.g. an `assert(...)` at the
+    top of the function). The `async function` wrapper coerces both sync
+    throws and returned non-promises into the Promise<Response> shape
+    callers expect, so an SSR caller's `await` always sees the rejection
+    through the cache layer's snapshot boundary instead of the error
+    escaping the request scope.
+    */
+    async function runHandler(args: Args | undefined): Promise<Response> {
+        return handler(args as Args) as unknown as Response
     }
 
     async function validateThenHandle(args: Args | undefined): Promise<Response> {
@@ -98,16 +76,12 @@ export function defineVerb<Args, Return>(
     }
 
     /*
-    Handler bodies may throw synchronously (e.g. an `assert(...)` at the
-    top of the function). Wrap the call so those throws are reflected as
-    rejections — otherwise an SSR caller's `await` short-circuits past
-    the cache layer's snapshot serialization and the error escapes the
-    request boundary. When a Standard Schema is attached, args are
-    validated before the handler runs; failures short-circuit into a 422
-    Response carrying the schema's issues so callers can decode them off
-    the HttpError.
+    `getRequest` is unused on the server path — handlers receive parsed
+    `args` directly. createRemoteFunction passes a thunk so the client
+    side can lazily synthesize its Request without forcing the server
+    to allocate one per SSR call.
     */
-    function invoke(_request: Request, args: Args | undefined): Promise<Response> {
+    function invoke(args: Args | undefined): Promise<Response> {
         return schema ? validateThenHandle(args) : runHandler(args)
     }
 

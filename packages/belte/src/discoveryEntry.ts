@@ -4,6 +4,7 @@ import { rpc } from './_virtual/rpc.ts'
 import { sockets } from './_virtual/sockets.ts'
 import { jsonSchemaForSchema } from './lib/mcp/jsonSchemaForSchema.ts'
 import { verbRegistry } from './lib/server/rpc/verbRegistry.ts'
+import { commandNameForUrl } from './lib/shared/commandNameForUrl.ts'
 
 /*
 One-shot script that imports every rpc + socket module so defineVerb /
@@ -22,8 +23,7 @@ for (const entry of verbRegistry.values()) {
     if (!entry.clients.cli) {
         continue
     }
-    const name = entry.remote.url.split('/').pop() ?? entry.remote.url
-    manifest[name] = {
+    manifest[commandNameForUrl(entry.remote.url)] = {
         method: entry.remote.method,
         url: entry.remote.url,
         jsonSchema: jsonSchemaForSchema(entry.schema, entry.jsonSchema),

@@ -1,7 +1,7 @@
-import { buildRpcRequest } from '../shared/buildRpcRequest.ts'
-import { createRemoteFunction } from '../shared/createRemoteFunction.ts'
 import type { HttpVerb } from '../server/rpc/types/HttpVerb.ts'
 import type { RemoteFunction } from '../server/rpc/types/RemoteFunction.ts'
+import { buildRpcRequest } from '../shared/buildRpcRequest.ts'
+import { createRemoteFunction } from '../shared/createRemoteFunction.ts'
 
 /*
 The browser stub is only emitted when the verb has `clients.browser:
@@ -34,6 +34,11 @@ export function remoteProxy<Args, Return>(
         clients: BROWSER_CLIENT_FLAGS,
         buildRequest: (args) =>
             buildRpcRequest({ method, url, args, baseUrl: window.location.href }),
-        invoke: (request) => fetch(request),
+        /*
+        Forcing `getRequest()` once builds the Request and seeds the
+        cache meta thunk in createRemoteFunction with the same instance,
+        so cache() readers don't reconstruct it.
+        */
+        invoke: (_args, getRequest) => fetch(getRequest()),
     })
 }

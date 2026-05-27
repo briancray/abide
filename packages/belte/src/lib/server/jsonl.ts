@@ -2,7 +2,7 @@
 Wraps an AsyncIterable<Frame> in a Response whose body is JSON Lines
 (application/jsonl) — one JSON value per line, terminated by `\n`. Used
 inside an rpc handler to turn a generator into a streaming HTTP response
-that `subscribe(fn)(args)` consumes frame-by-frame on the client.
+that `subscribe(fn.stream)(args)` consumes frame-by-frame on the client.
 
   export const orderFeed = GET<Args>((args) =>
       jsonl(async function* () {
@@ -23,31 +23,13 @@ message crosses the wire.
 */
 import { NO_STORE } from '../shared/cacheControlValues.ts'
 import type { TypedResponse } from './rpc/types/TypedResponse.ts'
+import { streamFromIterator } from './runtime/streamFromIterator.ts'
 
 export function jsonl<Frame>(iterable: AsyncIterable<Frame>): TypedResponse<Frame> {
-    const encoder = new TextEncoder()
-    const iterator = iterable[Symbol.asyncIterator]()
-
-    const body = new ReadableStream<Uint8Array>({
-        async pull(controller) {
-            try {
-                const next = await iterator.next()
-                if (next.done) {
-                    controller.close()
-                    return
-                }
-                controller.enqueue(encoder.encode(`${JSON.stringify(next.value)}\n`))
-            } catch (error) {
-                const message = error instanceof Error ? error.message : String(error)
-                controller.enqueue(encoder.encode(`${JSON.stringify({ $error: message })}\n`))
-                controller.close()
-            }
-        },
-        cancel(reason) {
-            return iterator.return?.(reason)?.then(() => undefined)
-        },
+    const body = streamFromIterator(iterable, {
+        encodeFrame: (value) => `${JSON.stringify(value)}\n`,
+        encodeError: (message) => `${JSON.stringify({ $error: message })}\n`,
     })
-
     return new Response(body, {
         headers: {
             'Content-Type': 'application/jsonl; charset=utf-8',

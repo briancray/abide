@@ -12,6 +12,7 @@
         "./browser/HttpError": "./src/lib/server/HttpError.ts",
         "./mcp/*": "./src/lib/mcp/*.ts",
         "./cli/*": "./src/lib/cli/*.ts",
+        "./shared/*": "./src/lib/shared/*.ts",
         "./build": "./src/build.ts",
         "./compile": "./src/compile.ts",
         "./preload": "./src/preload.ts",

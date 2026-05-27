@@ -23,6 +23,11 @@ async function reset() {
 }
 </script>
 
+<nav class="mb-2 text-sm text-slate-500">
+    <a href="/browser" class="hover:text-slate-900"><code class="font-mono">belte/browser</code></a>
+    <span class="mx-2">/</span>
+    <span><code class="font-mono">cache()</code> + invalidation</span>
+</nav>
 <h1 class="text-3xl font-bold"><code class="font-mono">cache()</code> + invalidation</h1>
 <p class="mt-2 text-slate-600">
     Wraps a remote call with dedupe, SSR snapshot, and reactivity. Two
