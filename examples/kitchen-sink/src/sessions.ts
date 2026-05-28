@@ -1,6 +1,6 @@
 /*
 In-memory cookie session store + helpers. Used by getSession / login /
-logout to demonstrate the auth showcase under src/pages/auth/. Anything
+logout to demonstrate the auth showcase under src/browser/pages/auth/. Anything
 that needs the inbound Request reaches for `request()` from belte/server
 — no plumbing.
 */

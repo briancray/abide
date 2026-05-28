@@ -1,5 +1,5 @@
-import { json } from 'belte/server/json'
 import { GET } from 'belte/server/GET'
+import { json } from 'belte/server/json'
 import { request } from 'belte/server/request'
 
 /*

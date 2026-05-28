@@ -1,5 +1,5 @@
-import { json } from 'belte/server/json'
 import { GET } from 'belte/server/GET'
+import { json } from 'belte/server/json'
 import { getSession as readSession, readSessionCookie } from '../../sessions.ts'
 
 export const getSession = GET(() => {

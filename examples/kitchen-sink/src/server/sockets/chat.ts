@@ -16,7 +16,7 @@ subscribe. `history: 100` retains the last 100 messages and replays
 them to new subscribers. `clientPublish` is left off (default false)
 so browsers can't publish directly — publish flows through publishChat
 which validates input and runs server-side. The attached schema
-validates publishes synchronously and flips MCP exposure on, so the
-socket appears as `await_chat` + `belte://stream/chat` (see /mcp).
+validates publish payloads synchronously. Sockets aren't exposed to
+MCP — only schema-bearing rpcs (tools) and prompts are (see /mcp).
 */
 export const chat = socket<ChatMessage>({ history: 100, schema })
