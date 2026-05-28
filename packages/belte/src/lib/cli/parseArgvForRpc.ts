@@ -19,7 +19,8 @@ export async function parseArgvForRpc(
     argv: string[],
     jsonSchema: Record<string, unknown> | undefined,
 ): Promise<Record<string, unknown> | undefined> {
-    const properties = (jsonSchema?.properties as Record<string, { type?: string }> | undefined) ?? {}
+    const properties =
+        (jsonSchema?.properties as Record<string, { type?: string }> | undefined) ?? {}
     const args: Record<string, unknown> = {}
 
     /*

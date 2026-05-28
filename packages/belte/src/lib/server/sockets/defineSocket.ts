@@ -1,9 +1,9 @@
 import { createPushIterator } from '../../shared/createPushIterator.ts'
 import { resolveClientFlags } from '../../shared/resolveClientFlags.ts'
-import type { Socket } from './types/Socket.ts'
-import type { SocketOptions } from './types/SocketOptions.ts'
 import { getActiveServer } from '../runtime/getActiveServer.ts'
 import { registerSocket } from './registerSocket.ts'
+import type { Socket } from './types/Socket.ts'
+import type { SocketOptions } from './types/SocketOptions.ts'
 
 /*
 Server-side construction of a Socket. The bundler rewrites every

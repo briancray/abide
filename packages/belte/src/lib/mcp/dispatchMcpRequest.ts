@@ -1,18 +1,19 @@
+import { promptRegistry } from '../server/prompts/promptRegistry.ts'
+import type { HttpVerb } from '../server/rpc/types/HttpVerb.ts'
 import { verbRegistry } from '../server/rpc/verbRegistry.ts'
-import { socketRegistry } from '../server/sockets/socketRegistry.ts'
+import { ensureRegistriesLoaded } from '../server/runtime/registryManifests.ts'
 import { buildRpcRequest } from '../shared/buildRpcRequest.ts'
 import { NO_STORE } from '../shared/cacheControlValues.ts'
 import { commandNameForUrl } from '../shared/commandNameForUrl.ts'
 import { decodeResponse } from '../shared/decodeResponse.ts'
 import { forwardHeaders } from '../shared/forwardHeaders.ts'
-import { jsonSchemaForSchema } from './jsonSchemaForSchema.ts'
-import { ensureMcpRegistriesLoaded } from './mcpManifests.ts'
+import { jsonSchemaForSchema } from '../shared/jsonSchemaForSchema.ts'
+import { getMcpResourceServer } from './mcpResourceServerSlot.ts'
 import type { JsonRpcRequest } from './types/JsonRpcRequest.ts'
 import type { JsonRpcResponse } from './types/JsonRpcResponse.ts'
 import type { McpServerOptions } from './types/McpServerOptions.ts'
 
 const PROTOCOL_VERSION = '2025-06-18'
-const STREAM_URI_PREFIX = 'belte://stream/'
 
 function jsonRpcError(
     id: string | number | null,
@@ -28,12 +29,10 @@ function jsonRpcOk(id: string | number | null, result: unknown): JsonRpcResponse
 }
 
 /*
-Builds the array of MCP tool descriptors. Each rpc with clients.mcp=true
+Builds the array of MCP tool descriptors. Every rpc with clients.mcp=true
 becomes one tool named after the export's URL (folder segments joined
-with `-` so two files with the same stem in different folders don't
-collide). Each socket with clients.mcp becomes optionally a
-publish_<name> tool (when allowClientPublish) and always an await_<name>
-tool that blocks for the next history entry.
+with `-`), regardless of HTTP verb — GET reads and mutating verbs alike.
+Sockets are never exposed to MCP.
 */
 function buildTools(): Array<{
     name: string
@@ -55,121 +54,46 @@ function buildTools(): Array<{
             inputSchema: jsonSchemaForSchema(entry.schema, entry.jsonSchema),
         })
     }
-    for (const entry of socketRegistry.values()) {
-        if (!entry.clients.mcp) {
-            continue
-        }
-        const payloadSchema = jsonSchemaForSchema(entry.schema, entry.jsonSchema)
-        tools.push({
-            name: `await_${entry.socket.name}`,
-            description: `Block for the next entry published to socket "${entry.socket.name}".`,
-            inputSchema: {
-                type: 'object',
-                properties: {
-                    timeoutMs: {
-                        type: 'number',
-                        description: 'Max ms to wait. Default 30000.',
-                    },
-                },
-            },
-        })
-        if (entry.allowClientPublish) {
-            tools.push({
-                name: `publish_${entry.socket.name}`,
-                description: `Publish a message to socket "${entry.socket.name}".`,
-                inputSchema: payloadSchema,
-            })
-        }
-    }
     return tools
 }
 
-function buildResources(): Array<{
-    uri: string
+/*
+MCP prompts derived from src/mcp/prompts. Arguments come from the
+prompt's schema (top-level properties + required flags); the model fills
+them in and the framework validates + renders on prompts/get.
+*/
+function buildPrompts(): Array<{
     name: string
-    description: string
-    mimeType: string
+    description?: string
+    arguments: Array<{ name: string; description?: string; required: boolean }>
 }> {
-    const resources: Array<{
-        uri: string
-        name: string
-        description: string
-        mimeType: string
-    }> = []
-    for (const entry of socketRegistry.values()) {
-        if (!entry.clients.mcp) {
-            continue
+    return Array.from(promptRegistry.values()).map((entry) => {
+        const jsonSchema = jsonSchemaForSchema(entry.schema, entry.jsonSchema)
+        const properties = (jsonSchema.properties ?? {}) as Record<string, { description?: string }>
+        const required = new Set((jsonSchema.required as string[] | undefined) ?? [])
+        return {
+            name: entry.prompt.name,
+            ...(entry.prompt.description ? { description: entry.prompt.description } : {}),
+            arguments: Object.entries(properties).map(([argName, prop]) => ({
+                name: argName,
+                ...(prop?.description ? { description: prop.description } : {}),
+                required: required.has(argName),
+            })),
         }
-        resources.push({
-            uri: `${STREAM_URI_PREFIX}${entry.socket.name}`,
-            name: entry.socket.name,
-            description: `Latest history window of socket "${entry.socket.name}".`,
-            mimeType: 'application/json',
-        })
-    }
-    return resources
+    })
 }
 
 /*
-Tool dispatch. RPCs synthesize a Request (with forwarded auth headers)
-and pipe it through verb.fetch — same code path the HTTP router uses,
-so validation + handler + error helpers behave identically. Socket
-tools (await_/publish_) bypass HTTP since they're in-process by nature.
+Tool dispatch. Synthesizes a Request (with forwarded auth headers) and
+pipes it through verb.fetch — the same code path the HTTP router uses, so
+validation + handler + error helpers behave identically. Every rpc is a
+tool regardless of verb.
 */
 async function callTool(
     toolName: string,
     args: Record<string, unknown> | undefined,
     inbound: Request,
 ): Promise<Record<string, unknown>> {
-    if (toolName.startsWith('await_')) {
-        const socketName = toolName.slice('await_'.length)
-        const entry = socketRegistry.get(socketName)
-        if (!entry || !entry.clients.mcp) {
-            throw new Error(`unknown tool: ${toolName}`)
-        }
-        const timeoutMs = (args?.timeoutMs as number | undefined) ?? 30_000
-        /*
-        Hold onto the iterator so the timeout branch can close it. Without
-        the explicit return(), a timed-out await leaves a subscriber wired
-        into defineSocket's `subscribers` set and the next publish wakes
-        it before noticing it's abandoned — one leaked subscriber per
-        timed-out call.
-        */
-        const iterator = entry.socket.tail(0)[Symbol.asyncIterator]()
-        let value: unknown
-        try {
-            const raced = await Promise.race([
-                iterator.next(),
-                new Promise<IteratorResult<unknown>>((resolve) => {
-                    setTimeout(() => resolve({ value: undefined, done: true }), timeoutMs)
-                }),
-            ])
-            value = raced.done ? undefined : raced.value
-        } finally {
-            iterator.return?.(undefined)?.catch(() => undefined)
-        }
-        return {
-            content: [
-                {
-                    type: 'text',
-                    text:
-                        value === undefined
-                            ? `(timeout after ${timeoutMs}ms)`
-                            : JSON.stringify(value),
-                },
-            ],
-        }
-    }
-    if (toolName.startsWith('publish_')) {
-        const socketName = toolName.slice('publish_'.length)
-        const entry = socketRegistry.get(socketName)
-        if (!entry || !entry.clients.mcp || !entry.allowClientPublish) {
-            throw new Error(`unknown tool: ${toolName}`)
-        }
-        entry.socket.publish(args)
-        return { content: [{ type: 'text', text: 'published' }] }
-    }
-    // Plain RPC tool — find verb whose folder-prefixed name matches.
     let found: ReturnType<(typeof verbRegistry)['get']> | undefined
     for (const entry of verbRegistry.values()) {
         if (!entry.clients.mcp) {
@@ -183,16 +107,7 @@ async function callTool(
     if (!found) {
         throw new Error(`unknown tool: ${toolName}`)
     }
-    const inboundUrl = new URL(inbound.url)
-    const baseUrl = `${inboundUrl.protocol}//${inboundUrl.host}/`
-    const request = buildRpcRequest({
-        method: found.remote.method,
-        url: found.remote.url,
-        args,
-        baseUrl,
-        headers: forwardHeaders(inbound.headers),
-    })
-    const response = await found.remote.fetch(request)
+    const response = await runRpc(found.remote.method, found.remote.url, args, inbound)
     if (!response.ok) {
         return {
             content: [
@@ -215,23 +130,67 @@ async function callTool(
     }
 }
 
-async function readResource(uri: string): Promise<Record<string, unknown>> {
-    if (!uri.startsWith(STREAM_URI_PREFIX)) {
-        throw new Error(`unknown resource: ${uri}`)
+/*
+Synthesizes the rpc Request and dispatches through verb.fetch, forwarding
+the inbound MCP request's auth headers so session/bearer middleware keeps
+working. Shared by tool calls (non-GET) and resource reads (GET).
+*/
+function runRpc(
+    method: HttpVerb,
+    url: string,
+    args: Record<string, unknown> | undefined,
+    inbound: Request,
+): Promise<Response> {
+    const inboundUrl = new URL(inbound.url)
+    const baseUrl = `${inboundUrl.protocol}//${inboundUrl.host}/`
+    const request = buildRpcRequest({
+        method,
+        url,
+        args,
+        baseUrl,
+        headers: forwardHeaders(inbound.headers),
+    })
+    const entry = verbRegistry.get(url)
+    if (entry && entry.remote.method === method) {
+        return entry.remote.fetch(request)
     }
-    const socketName = uri.slice(STREAM_URI_PREFIX.length)
-    const entry = socketRegistry.get(socketName)
-    if (!entry || !entry.clients.mcp) {
-        throw new Error(`unknown resource: ${uri}`)
+    throw new Error(`unknown rpc: ${method} ${url}`)
+}
+
+/*
+Validates prompt arguments against the prompt's schema (when present),
+renders the messages, and maps them to the MCP prompts/get wire shape.
+A bare string render result becomes a single user message.
+*/
+async function getPrompt(
+    name: string,
+    args: Record<string, unknown> | undefined,
+): Promise<Record<string, unknown>> {
+    const entry = promptRegistry.get(name)
+    if (!entry) {
+        throw new Error(`unknown prompt: ${name}`)
     }
+    let value: unknown = args ?? {}
+    if (entry.schema) {
+        const result = await entry.schema['~standard'].validate(value)
+        if (result.issues) {
+            throw new Error(
+                `prompt "${name}" arguments failed validation: ${JSON.stringify(result.issues)}`,
+            )
+        }
+        value = result.value
+    }
+    const rendered = await entry.prompt.render(value as Record<string, string>)
+    const messages =
+        typeof rendered === 'string'
+            ? [{ role: 'user', content: { type: 'text', text: rendered } }]
+            : rendered.map((message) => ({
+                  role: message.role,
+                  content: { type: 'text', text: message.text },
+              }))
     return {
-        contents: [
-            {
-                uri,
-                mimeType: 'application/json',
-                text: JSON.stringify(entry.snapshotHistory()),
-            },
-        ],
+        ...(entry.prompt.description ? { description: entry.prompt.description } : {}),
+        messages,
     }
 }
 
@@ -266,14 +225,15 @@ export async function dispatchMcpRequest(
     }
 
     try {
-        await ensureMcpRegistriesLoaded()
+        await ensureRegistriesLoaded()
         switch (envelope.method) {
             case 'initialize':
                 return jsonRpcOk(id, {
                     protocolVersion: PROTOCOL_VERSION,
                     capabilities: {
                         tools: { listChanged: false },
-                        resources: { subscribe: false, listChanged: false },
+                        prompts: { listChanged: false },
+                        resources: { listChanged: false },
                     },
                     serverInfo,
                 })
@@ -290,14 +250,34 @@ export async function dispatchMcpRequest(
                 }
                 return jsonRpcOk(id, await callTool(params.name, params.arguments, request))
             }
-            case 'resources/list':
-                return jsonRpcOk(id, { resources: buildResources() })
+            case 'resources/list': {
+                const resourceServer = getMcpResourceServer()
+                return jsonRpcOk(id, {
+                    resources: resourceServer ? await resourceServer.list() : [],
+                })
+            }
             case 'resources/read': {
                 const params = envelope.params as { uri?: string } | undefined
                 if (!params?.uri) {
                     return jsonRpcError(id, -32602, 'Missing resource uri')
                 }
-                return jsonRpcOk(id, await readResource(params.uri))
+                const resourceServer = getMcpResourceServer()
+                const contents = resourceServer ? await resourceServer.read(params.uri) : undefined
+                if (!contents) {
+                    return jsonRpcError(id, -32602, `unknown resource: ${params.uri}`)
+                }
+                return jsonRpcOk(id, { contents: [contents] })
+            }
+            case 'prompts/list':
+                return jsonRpcOk(id, { prompts: buildPrompts() })
+            case 'prompts/get': {
+                const params = envelope.params as
+                    | { name?: string; arguments?: Record<string, unknown> }
+                    | undefined
+                if (!params?.name) {
+                    return jsonRpcError(id, -32602, 'Missing prompt name')
+                }
+                return jsonRpcOk(id, await getPrompt(params.name, params.arguments))
             }
             default:
                 return jsonRpcError(id, -32601, `Method not found: ${envelope.method}`)

@@ -1,4 +1,3 @@
-import type { CacheOptions } from '../shared/types/CacheOptions.ts'
 import type { RawRemoteFunction } from '../server/rpc/types/RawRemoteFunction.ts'
 import type { RemoteFunction } from '../server/rpc/types/RemoteFunction.ts'
 import { activeCacheStore } from '../shared/activeCacheStore.ts'
@@ -6,6 +5,7 @@ import { canonicalJson } from '../shared/canonicalJson.ts'
 import { decodeResponse } from '../shared/decodeResponse.ts'
 import { getRemoteMeta } from '../shared/getRemoteMeta.ts'
 import { keyForRemoteCall } from '../shared/keyForRemoteCall.ts'
+import type { CacheOptions } from '../shared/types/CacheOptions.ts'
 
 type AnyRemote<Args, Return> = RemoteFunction<Args, Return> | RawRemoteFunction<Args>
 

@@ -1,5 +1,5 @@
-import { createPushIterator } from '../shared/createPushIterator.ts'
 import type { Socket } from '../server/sockets/types/Socket.ts'
+import { createPushIterator } from '../shared/createPushIterator.ts'
 import { getSocketChannel } from './socketChannel.ts'
 
 let nextId = 0

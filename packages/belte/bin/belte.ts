@@ -7,6 +7,7 @@ import { scaffold } from '../src/scaffold.ts'
 
 const PRELOAD = new URL('../src/preload.ts', import.meta.url).pathname
 const SERVER_ENTRY = new URL('../src/serverEntry.ts', import.meta.url).pathname
+const DEV_ENTRY = new URL('../src/devEntry.ts', import.meta.url).pathname
 const cwd = process.cwd()
 const [, , command, ...rest] = process.argv
 
@@ -24,12 +25,16 @@ function parseFlag(name: string): string | undefined {
     return undefined
 }
 
-// Runs a client build and then starts the server in hot-reload mode under the belte preload.
-// Awaits the child process so the parent's exit code mirrors the server's.
+/*
+Spawns the server under `bun --watch` against the dev entry. The dev entry
+re-runs the client build and eagerly imports every page/layout/rpc/socket
+module on each boot, so Bun's watcher sees them from the start and
+restarts the whole process whenever any file in the graph changes. The
+browser is not auto-reloaded — refresh manually after the server is back.
+*/
 async function dev(): Promise<void> {
-    await build({ cwd })
     const child = Bun.spawn({
-        cmd: ['bun', '--hot', '--preload', PRELOAD, SERVER_ENTRY],
+        cmd: ['bun', '--watch', '--preload', PRELOAD, DEV_ENTRY],
         cwd,
         stdio: ['inherit', 'inherit', 'inherit'],
     })
@@ -63,15 +68,17 @@ async function compileCmd(): Promise<void> {
     })
 }
 
-// Builds the standalone CLI binary. APP_URL at build time decides thin (no
-// runtime) vs full (in-process fallback). Discovery walks the rpc registry
-// to bake the manifest in. `--platforms a,b,c` requires APP_URL and emits
-// thin binaries into dist/cli-thin/<platform>/<programName> so the
-// /__belte/cli download endpoint can stream them.
+// Builds the standalone CLI binary. Defaults to full (backend embedded, runs
+// locally); `--thin` builds the remote client (manifest only, needs APP_URL
+// at runtime). Discovery walks the rpc registry to bake the manifest in.
+// `--platforms a,b,c` cross-compiles per target — thin binaries land in
+// dist/cli-thin/<platform>/ (the layout the /__belte/cli download endpoint
+// streams), full binaries in dist/cli/<platform>/.
 async function cliCmd(): Promise<void> {
     const targetFlag = parseFlag('target')
     const outFlag = parseFlag('out')
     const platformsFlag = parseFlag('platforms')
+    const thin = rest.includes('--thin')
     const platforms = platformsFlag
         ? platformsFlag.split(',').map((value) => normalizeTarget(value.trim()))
         : undefined
@@ -80,6 +87,7 @@ async function cliCmd(): Promise<void> {
         target: targetFlag ? normalizeTarget(targetFlag) : undefined,
         outfile: outFlag,
         platforms,
+        thin,
     })
 }
 
@@ -103,10 +111,10 @@ function usage(): never {
             '  belte start                          run the production server against dist/\n' +
             '  belte compile [--target=<bun-...>] [--out=<path>]\n' +
             '                                       build a standalone server executable\n' +
-            '  belte cli [--target=<bun-...>] [--out=<path>] [--platforms=<a,b,c>]\n' +
-            '                                       build the cli binary (thin if APP_URL is set;\n' +
-            '                                       --platforms emits thin binaries per platform\n' +
-            '                                       under dist/cli-thin/ for the download endpoint)',
+            '  belte cli [--thin] [--target=<bun-...>] [--out=<path>] [--platforms=<a,b,c>]\n' +
+            '                                       build the cli binary (full by default — runs\n' +
+            '                                       locally; --thin builds the remote client;\n' +
+            '                                       --platforms cross-compiles per platform)',
     )
     process.exit(1)
 }

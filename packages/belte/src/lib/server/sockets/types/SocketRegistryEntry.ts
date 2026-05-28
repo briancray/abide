@@ -1,6 +1,6 @@
 import type { ClientFlags } from '../../../shared/types/ClientFlags.ts'
-import type { Socket } from './Socket.ts'
 import type { StandardSchemaV1 } from '../../rpc/types/StandardSchemaV1.ts'
+import type { Socket } from './Socket.ts'
 
 /*
 Per-socket registry record. The Socket itself stays uniform between

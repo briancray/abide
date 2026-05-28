@@ -6,6 +6,7 @@
         "./server/*": "./src/lib/server/*.ts",
         "./server/rpc/*": "./src/lib/server/rpc/*.ts",
         "./server/sockets/*": "./src/lib/server/sockets/*.ts",
+        "./server/prompts/*": "./src/lib/server/prompts/*.ts",
         "./browser/*": "./src/lib/browser/*.ts",
         "./browser/page": "./src/lib/browser/page.svelte.ts",
         "./browser/navigate": "./src/lib/browser/page.svelte.ts",

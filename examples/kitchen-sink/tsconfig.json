@@ -9,6 +9,8 @@
             "$rpc/*": ["./src/server/rpc/*"],
             "$sockets": ["./src/server/sockets"],
             "$sockets/*": ["./src/server/sockets/*"],
+            "$prompts": ["./src/server/prompts"],
+            "$prompts/*": ["./src/server/prompts/*"],
             "$lib": ["./src/lib"],
             "$lib/*": ["./src/lib/*"]
         }

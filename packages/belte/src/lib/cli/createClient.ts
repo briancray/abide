@@ -96,19 +96,31 @@ export function createClient<Api extends AnyApi = AnyApi>(opts?: {
         return decodeResponse(response)
     }
 
+    /*
+    Memoise per-name so repeated `client.foo` accesses skip both the
+    registry scan in resolve() and a fresh closure allocation. The
+    manifest + registry are fixed for a client's lifetime, so a resolved
+    invoker (or its absence) never changes.
+    */
+    const invokerCache = new Map<string, ((args?: unknown) => Promise<unknown>) | undefined>()
+
     return new Proxy({} as Api, {
         get(_target, prop): ((args?: unknown) => Promise<unknown>) | undefined {
             if (typeof prop !== 'string') {
                 return undefined
             }
-            const resolved = resolve(prop)
-            if (!resolved) {
-                return undefined
+            if (invokerCache.has(prop)) {
+                return invokerCache.get(prop)
             }
-            return (args?: unknown) =>
-                url
-                    ? callRemote(resolved.method, resolved.url, args, url)
-                    : callInProcess(resolved.method, resolved.url, args)
+            const resolved = resolve(prop)
+            const invoker = resolved
+                ? (args?: unknown) =>
+                      url
+                          ? callRemote(resolved.method, resolved.url, args, url)
+                          : callInProcess(resolved.method, resolved.url, args)
+                : undefined
+            invokerCache.set(prop, invoker)
+            return invoker
         },
     })
 }

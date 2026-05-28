@@ -2,7 +2,7 @@ import type { HttpVerb } from './types/HttpVerb.ts'
 
 /*
 Parses + merges every source of args available for a verb-defined handler:
-- body (json or form-encoded, ignored for GET/DELETE)
+- body (json or form-encoded, ignored for GET/DELETE/HEAD)
 - url query string
 
 When both are present and the body is a plain object, the merge folds the
@@ -24,7 +24,7 @@ export async function parseArgs(method: HttpVerb, request: Request): Promise<unk
     const url = hasQuery ? new URL(request.url) : undefined
 
     let body: unknown
-    if (method !== 'GET' && method !== 'DELETE') {
+    if (method !== 'GET' && method !== 'DELETE' && method !== 'HEAD') {
         const contentType = (request.headers.get('content-type') ?? '').toLowerCase()
         if (contentType.includes('application/json')) {
             const text = await request.text()

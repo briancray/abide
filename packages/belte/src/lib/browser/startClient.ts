@@ -4,9 +4,9 @@ import { createCacheStore } from '../shared/createCacheStore.ts'
 import { setCacheStoreResolver } from '../shared/setCacheStoreResolver.ts'
 import type { CacheSnapshotEntry } from '../shared/types/CacheSnapshotEntry.ts'
 import type { CacheStore } from '../shared/types/CacheStore.ts'
+import { bindPage, handlePopstate, navigate, page, renderState } from './page.svelte.ts'
 import type { Layouts } from './types/Layouts.ts'
 import type { Pages } from './types/Pages.ts'
-import { bindPage, handlePopstate, navigate, page, renderState } from './page.svelte.ts'
 
 declare global {
     interface Window {

@@ -22,17 +22,21 @@ will be added when the CLI grows watch/publish subcommands for sockets.
 export async function runCli({
     programName,
     manifest,
+    banner = '',
+    footer = '',
     argv,
 }: {
     programName: string
     manifest: CliManifest
+    banner?: string
+    footer?: string
     argv: string[]
 }): Promise<number> {
     await loadEnvFromBinaryDir()
 
     const first = argv[0]
     if (!first || first === '--help' || first === '-h') {
-        printTopLevelHelp(programName, manifest)
+        printTopLevelHelp(programName, manifest, banner, footer)
         return 0
     }
 
@@ -43,7 +47,9 @@ export async function runCli({
 
     const entry = manifest[first]
     if (!entry) {
-        console.error(`${programName}: unknown command "${first}" — run \`${programName} --help\` for the list`)
+        console.error(
+            `${programName}: unknown command "${first}" — run \`${programName} --help\` for the list`,
+        )
         return 1
     }
 

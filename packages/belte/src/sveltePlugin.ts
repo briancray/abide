@@ -1,7 +1,7 @@
 import type { BunPlugin } from 'bun'
 import { compile, compileModule, preprocess } from 'svelte/compiler'
-import { log } from './lib/shared/log.ts'
 import type { SvelteConfig } from './lib/server/runtime/types/SvelteConfig.ts'
+import { log } from './lib/shared/log.ts'
 import { tailwindStylePreprocessor } from './tailwindStylePreprocessor.ts'
 
 /*

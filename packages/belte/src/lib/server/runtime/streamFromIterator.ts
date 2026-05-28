@@ -38,7 +38,17 @@ export function streamFromIterator<T>(
             if (encoder.keepaliveMs !== undefined && encoder.keepalivePayload !== undefined) {
                 const payload = textEncoder.encode(encoder.keepalivePayload)
                 keepalive = setInterval(() => {
-                    controller.enqueue(payload)
+                    /*
+                    Every close/cancel path clears this interval synchronously,
+                    so a tick can't normally hit a closed controller — but
+                    enqueue throws on a closed/errored stream, and an uncaught
+                    throw in a timer crashes the process. Guard + self-stop.
+                    */
+                    try {
+                        controller.enqueue(payload)
+                    } catch {
+                        stopKeepalive()
+                    }
                 }, encoder.keepaliveMs)
             }
         },

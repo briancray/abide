@@ -1,8 +1,8 @@
 import type { BunPlugin } from 'bun'
 import { belteResolverPlugin } from './belteResolverPlugin.ts'
+import type { SvelteConfig } from './lib/server/runtime/types/SvelteConfig.ts'
 import { loadSvelteConfig } from './lib/shared/loadSvelteConfig.ts'
 import { log } from './lib/shared/log.ts'
-import type { SvelteConfig } from './lib/server/runtime/types/SvelteConfig.ts'
 import { sveltePlugin } from './sveltePlugin.ts'
 
 type ExportEntry = string | { [condition: string]: ExportEntry }
@@ -69,16 +69,20 @@ const CLIENT_ENTRY = new URL('./clientEntry.ts', import.meta.url).pathname
 Builds the client-side bundle into `${cwd}/dist/_app`. Clears the dist
 directory first, then runs Bun.build with the svelte-dedupe plugin, the
 svelte loader, the virtual-module resolver, and (optionally) Tailwind.
-Each emitted file is also written as a gzipped `.gz` sibling so the server
-can stream the precompressed bytes directly. Exits the process on build
-failure with the build logs printed.
+Each emitted file is also written as a zstd-compressed `.zst` sibling
+(level 22 — paid once at build time) so the server can stream the
+precompressed bytes directly when the client supports it, and decompress
+on the fly for older clients. Exits the process on build failure with
+the build logs printed.
 */
 export async function build({
     cwd = process.cwd(),
     svelteConfig,
+    minify = true,
 }: {
     cwd?: string
     svelteConfig?: SvelteConfig
+    minify?: boolean
 } = {}): Promise<void> {
     const distDir = `${cwd}/dist`
     const outDir = `${distDir}/_app`
@@ -104,7 +108,7 @@ export async function build({
         outdir: outDir,
         target: 'browser',
         splitting: true,
-        minify: true,
+        minify,
         sourcemap: 'linked',
         naming: {
             entry: 'client-[hash].[ext]',
@@ -121,18 +125,18 @@ export async function build({
         process.exit(1)
     }
 
-    const gzippedByteLengths = await Promise.all(
+    const compressedByteLengths = await Promise.all(
         result.outputs.map(async (output) => {
             const bytes = await Bun.file(output.path).bytes()
-            const gzipped = Bun.gzipSync(bytes)
-            await Bun.write(`${output.path}.gz`, gzipped)
-            return gzipped.byteLength
+            const compressed = Bun.zstdCompressSync(bytes, { level: 22 })
+            await Bun.write(`${output.path}.zst`, compressed)
+            return compressed.byteLength
         }),
     )
-    const gzippedBytes = gzippedByteLengths.reduce((total, length) => total + length, 0)
+    const compressedBytes = compressedByteLengths.reduce((total, length) => total + length, 0)
 
     log.success(
-        `wrote ${result.outputs.length} files to ${outDir} (+${result.outputs.length} .gz, ${(gzippedBytes / 1024).toFixed(1)} KiB total)`,
+        `wrote ${result.outputs.length} files to ${outDir} (+${result.outputs.length} .zst, ${(compressedBytes / 1024).toFixed(1)} KiB total)`,
     )
     for (const output of result.outputs) {
         log.detail(`  - ${output.path}`)

@@ -1,9 +1,10 @@
 import type { BunPlugin } from 'bun'
 import { belteResolverPlugin } from './belteResolverPlugin.ts'
+import type { CompileTarget } from './lib/server/runtime/types/CompileTarget.ts'
 import { detectTarget } from './lib/shared/detectTarget.ts'
 import { loadSvelteConfig } from './lib/shared/loadSvelteConfig.ts'
 import { log } from './lib/shared/log.ts'
-import type { CompileTarget } from './lib/server/runtime/types/CompileTarget.ts'
+import { programNameForPackage } from './lib/shared/programNameForPackage.ts'
 import { sveltePlugin } from './sveltePlugin.ts'
 
 const DISCOVERY_ENTRY = new URL('./discoveryEntry.ts', import.meta.url).pathname
@@ -20,13 +21,15 @@ Two-pass CLI binary build:
      resolver plugin's `belte:cli-manifest` virtual reads the manifest
      JSON written in step 1 and splices it into the bundle.
 
-APP_URL at build time decides thin vs full:
-  - Set:   thin binary — empty `belte:cli-rpcs` virtual, no handlers
-           bundled, the manifest is the only RPC surface.
-  - Unset: full binary — `belte:cli-rpcs` emits eager imports for every
-           rpc module so the verbRegistry is populated and the
-           in-process fallback works when the binary is run without
-           APP_URL.
+The `thin` flag decides thin vs full (default full):
+  - thin: empty `belte:cli-rpcs` virtual — no handlers bundled, the
+          manifest is the only RPC surface; requires APP_URL at runtime.
+  - full: `belte:cli-rpcs` emits eager imports for every rpc module so the
+          verbRegistry is populated and the binary runs in-process (and
+          still reaches a remote server when APP_URL is set at runtime).
+`platforms` cross-compiles in either mode; thin per-platform binaries land
+in `dist/cli-thin/<platform>/` (the layout the /__belte/cli download endpoint
+serves), full ones in `dist/cli/<platform>/`.
 */
 export async function buildCli({
     cwd = process.cwd(),
@@ -47,7 +50,7 @@ export async function buildCli({
     const discoveryOut = `${distDir}/_discovery.js`
 
     const svelteConfig = await loadSvelteConfig(cwd)
-    const isThin = thinOverride ?? Boolean(process.env.APP_URL)
+    const isThin = thinOverride ?? false
     const sharedPlugins = (): BunPlugin[] => [
         sveltePlugin({ generate: 'server', svelteConfig }),
         belteResolverPlugin({ cwd, target: 'server', thin: isThin }),
@@ -96,22 +99,19 @@ export async function buildCli({
     belte:cli-manifest virtual + the eager rpc imports (full mode only,
     empty for thin). bun build --compile emits the standalone binary.
     When `platforms` is set, loops once per target and writes binaries
-    into `dist/cli-thin/<platform>/<programName>` — the layout the
-    download route expects.
+    into `dist/cli-thin/<platform>/<programName>` (thin — the layout the
+    download route expects) or `dist/cli/<platform>/<programName>` (full).
     */
     const programName = await readProgramName(cwd)
 
     if (platforms && platforms.length > 0) {
-        if (!isThin) {
-            log.error('--platforms requires thin mode (set APP_URL or pass thin: true)')
-            process.exit(1)
-        }
+        const platformDir = isThin ? 'cli-thin' : 'cli'
         const outPaths: string[] = []
         for (const platformTarget of platforms) {
             const shortName = platformTarget.replace(/^bun-/, '')
             const suffix = platformTarget.includes('windows') ? '.exe' : ''
-            const platformOut = `${distDir}/cli-thin/${shortName}/${programName}${suffix}`
-            await Bun.$`mkdir -p ${`${distDir}/cli-thin/${shortName}`}`.quiet()
+            const platformOut = `${distDir}/${platformDir}/${shortName}/${programName}${suffix}`
+            await Bun.$`mkdir -p ${`${distDir}/${platformDir}/${shortName}`}`.quiet()
             const result = await Bun.build({
                 entrypoints: [CLI_ENTRY],
                 target: 'bun',
@@ -124,7 +124,7 @@ export async function buildCli({
                 }
                 process.exit(1)
             }
-            log.success(`compiled thin cli binary: ${platformOut}`)
+            log.success(`compiled ${isThin ? 'thin' : 'full'} cli binary: ${platformOut}`)
             outPaths.push(platformOut)
         }
         return outPaths
@@ -146,9 +146,7 @@ export async function buildCli({
         process.exit(1)
     }
 
-    log.success(
-        `compiled ${isThin ? 'thin' : 'full'} cli binary: ${outPath} (target: ${target})`,
-    )
+    log.success(`compiled ${isThin ? 'thin' : 'full'} cli binary: ${outPath} (target: ${target})`)
     return [outPath]
 }
 
@@ -158,5 +156,5 @@ async function readProgramName(cwd: string): Promise<string> {
         return 'app'
     }
     const pkg = (await pkgFile.json()) as { name?: string }
-    return pkg.name ?? 'app'
+    return programNameForPackage(pkg.name)
 }

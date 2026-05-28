@@ -6,7 +6,16 @@ one-line summary. Per-command help (`<cmd> --help`) prints the flags
 derived from the command's JSON Schema. Output goes to stdout in both
 cases; the caller exits zero after printing.
 */
-export function printTopLevelHelp(programName: string, manifest: CliManifest): void {
+export function printTopLevelHelp(
+    programName: string,
+    manifest: CliManifest,
+    banner = '',
+    footer = '',
+): void {
+    if (banner.trim()) {
+        console.log(banner.replace(/\n$/, ''))
+        console.log('')
+    }
     const names = Object.keys(manifest).toSorted()
     console.log(`usage: ${programName} <command> [--flags]\n`)
     console.log('commands:')
@@ -22,6 +31,10 @@ export function printTopLevelHelp(programName: string, manifest: CliManifest): v
     console.log(`\nenv:`)
     console.log(`  APP_URL              remote server URL (unset → in-process)`)
     console.log(`  APP_TOKEN            sent as Authorization: Bearer <value>`)
+    if (footer.trim()) {
+        console.log('')
+        console.log(footer.replace(/\n$/, ''))
+    }
 }
 
 export function printCommandHelp(programName: string, name: string, manifest: CliManifest): void {
@@ -33,14 +46,20 @@ export function printCommandHelp(programName: string, name: string, manifest: Cl
     console.log(`usage: ${programName} ${name} [--flags]\n`)
     console.log(`  ${entry.method} ${entry.url}\n`)
     const schema = entry.jsonSchema
-    const properties = (schema?.properties as Record<string, { type?: string; description?: string }> | undefined) ?? {}
+    const properties =
+        (schema?.properties as
+            | Record<string, { type?: string; description?: string }>
+            | undefined) ?? {}
     const required = new Set((schema?.required as string[] | undefined) ?? [])
     if (Object.keys(properties).length === 0) {
         console.log('flags: (none)')
     } else {
         console.log('flags:')
         for (const [key, value] of Object.entries(properties)) {
-            const tag = value.type === 'boolean' ? `--${key} / --no-${key}` : `--${key} <${value.type ?? 'value'}>`
+            const tag =
+                value.type === 'boolean'
+                    ? `--${key} / --no-${key}`
+                    : `--${key} <${value.type ?? 'value'}>`
             const requiredTag = required.has(key) ? ' (required)' : ''
             const description = value.description ? ` — ${value.description}` : ''
             console.log(`  ${tag.padEnd(28)}${requiredTag}${description}`)

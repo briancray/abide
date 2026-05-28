@@ -1,6 +1,6 @@
-import type { CacheStore } from './types/CacheStore.ts'
 import { cacheStoreSlot } from './cacheStoreSlot.ts'
 import { createCacheStore } from './createCacheStore.ts'
+import type { CacheStore } from './types/CacheStore.ts'
 
 /*
 Resolves the active CacheStore. The runtime is registered via

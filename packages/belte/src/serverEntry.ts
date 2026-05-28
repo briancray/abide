@@ -1,6 +1,8 @@
 // @ts-expect-error virtual module resolved by belteResolverPlugin
 import * as appMod from './_virtual/app.ts'
 // @ts-expect-error virtual module resolved by belteResolverPlugin
+import { appInfo } from './_virtual/app-info.ts'
+// @ts-expect-error virtual module resolved by belteResolverPlugin
 import { assets } from './_virtual/assets.ts'
 // @ts-expect-error virtual module resolved by belteResolverPlugin
 import cliProgramName from './_virtual/cli-name.ts'
@@ -9,7 +11,13 @@ import { layouts } from './_virtual/layouts.ts'
 // @ts-expect-error virtual module resolved by belteResolverPlugin
 import mcp from './_virtual/mcp.ts'
 // @ts-expect-error virtual module resolved by belteResolverPlugin
+import { mcpResources } from './_virtual/mcp-resources.ts'
+// @ts-expect-error virtual module resolved by belteResolverPlugin
 import { pages } from './_virtual/pages.ts'
+// @ts-expect-error virtual module resolved by belteResolverPlugin
+import { prompts } from './_virtual/prompts.ts'
+// @ts-expect-error virtual module resolved by belteResolverPlugin
+import { publicAssets } from './_virtual/public-assets.ts'
 // @ts-expect-error virtual module resolved by belteResolverPlugin
 import { rpc } from './_virtual/rpc.ts'
 // @ts-expect-error virtual module resolved by belteResolverPlugin
@@ -26,10 +34,14 @@ await createServer({
     pages,
     rpc,
     sockets,
+    prompts,
     layouts,
     shell,
     app: appMod,
     assets,
+    publicAssets,
+    mcpResources,
     mcp,
     cliProgramName,
+    appInfo,
 })

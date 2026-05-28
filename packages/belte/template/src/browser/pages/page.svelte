@@ -1,10 +1,10 @@
 <!--
-Root page — served at GET /. Every folder under src/pages/ that contains a
-page.svelte mounts at that folder's URL.
+Root page — served at GET /. Every folder under src/browser/pages/ that
+contains a page.svelte mounts at that folder's URL.
 -->
 <script lang="ts">
 import { cache } from 'belte/browser/cache'
-import { getHello } from '$rpc/getHello.ts'
+import { getHello } from '$server/rpc/getHello.ts'
 
 /*
 Top-level await runs on the server during SSR. The decoded body is captured
@@ -17,4 +17,4 @@ const hello = await cache(getHello)()
 </script>
 
 <h1>{hello.message}</h1>
-<p>Edit <code>src/pages/page.svelte</code> and the page hot-reloads.</p>
+<p>Edit <code>src/browser/pages/page.svelte</code> and the page hot-reloads.</p>

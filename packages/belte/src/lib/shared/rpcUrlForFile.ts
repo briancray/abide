@@ -3,7 +3,7 @@ Maps an rpc-relative path (under `src/server/rpc/`) to its URL. Each file
 is one endpoint at `/rpc/<file path>`, dropping the `.ts` extension.
 $rpc URLs are flat function-call endpoints (args go in query or body), so
 bracket-style `[name]` / `[...rest]` segments are rejected — those belong
-in `src/pages/` where they map to dynamic path params.
+in `src/browser/pages/` where they map to dynamic path params.
 */
 export function rpcUrlForFile(relPath: string): string {
     const withoutExt = relPath.replace(/\.ts$/, '')

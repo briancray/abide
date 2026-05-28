@@ -5,37 +5,79 @@ description: Regenerate or update the project README. Use when the user asks to 
 
 # Writing the belte README
 
-## Read these first
+## READ FIRST
 
-Re-derive the API from source — never trust prior README text. Read at least:
+* dont use the current README, rebuild completely based on the outline below
+* Always start with heading Belte and tagline Isomorphic multimodal http framework built for humans and machines in a single Bun runtime.
 
-- `packages/belte/package.json` — the `exports` map is the authoritative public surface
-- `packages/belte/bin/belte.ts` — CLI commands and flags
-- `packages/belte/src/lib/server/*.ts` and `packages/belte/src/lib/browser/*.ts` — the public names (one file per export, no barrels — every public import is `belte/<namespace>/<name>`)
-- `packages/belte/src/belteResolverPlugin.ts` — directory conventions (`src/pages/`, `src/server/rpc/`, `src/server/sockets/`), path aliases, virtual modules
-- `packages/belte/tsconfig.app.json` — the inheritable tsconfig users extend via `"extends": "belte/tsconfig"`
-- `examples/barebones/` and `examples/kitchen-sink/` — minimal vs feature-rich snippet sources
-- `packages/belte/template/` — what `bunx belte scaffold` produces
-- `CLAUDE.md` — current export-grouping + lib-layout conventions
+## outline
 
-If anything in the README contradicts source, fix the README — not source.
+belte — isomorphic multimodal HTTP framework for humans and machines, one Bun runtime
+* Humans: web (Svelte) + cli
+* Machines: mcp + cli
+* cli serves both — humans run it, machines script it)
 
-## Section spine
+* What is an isomorphic multimodal framework
+    * a single runtime
+    * declare rpc once, use anywhere for free (browser/http, mcp, cli)
+    * declaration example
+    * consuming on each client + example
 
-The reference area is flat — every topic is a top-level `##`. No "Reference" wrapper. Internal shape of each section is your call.
+* Server:
+    * Server/rcp
+        * Declaring
+            * function spec + options
+            * example
+            * response helpers
+            * request() and server()
+        * Consuming
+            * Normal call encoding + args and decoding response + example
+            * .raw spec + example
+            * .stream spec + example
+            * httperror
+            * openapi.json
+    * Server/sockets
+        * declaring
+            * function spec + options
+            * example
+        * publishing
+            * function spec + options
+            * example
+        * Consuming
+            * note about AsyncInterable
+            * example using AsyncIterater
+            * .tail example
 
-In order:
+* Clients:
+    * Browser
+        * pages (svelte 5)
+        * Layouts
+        * cache function spec + example
+        * subscribe function spec + example
+        * navigate function spec + example
+        * page state
+    * Mcp
+        * generated automatically for free
+        * rpc are tools
+        * resources/ + example
+        * prompts/ + example
+    * Cli
+        * generated automatically for free
+        * rpcs are commands, args/flags derived from each schema
+        * defaults to full** (runs locally); `--thin` opts into the remote client
+        * Downloading + authenticated downloads
+        * cli/banner.txt + footer.txt
 
-1. **Tagline + TOC table** — single-line tagline immediately followed by a two-column table (`Section` / `What it covers`). One row per `##` section in the rest of the doc. The link column points at the GitHub-style anchor (`[Project layout](#project-layout)`, `[`belte/server`](#belteserver)`). No prose between the tagline and the table — the table *is* the intro orientation.
-2. **Bets** — numbered list of the project's foundational decisions.
-3. **Examples** — bullets linking to the three example directories.
-4. **The four bets** — each bet expanded with a small snippet that proves it.
-5. **A complete app on one screen** — a handful of files that compose into a working app (layout, page, an rpc, `package.json`).
-6. **CLI** — `bunx belte scaffold`, in-project commands, debug-logging env vars.
-7. **File-system conventions** — one `##` per file/folder kind: `Project layout`, `Pages and layouts — src/pages/`, `App hooks — src/app.ts`, `HTML shell — src/app.html`, `Project config`.
-8. **Public namespaces** — one `##` per namespace, internal `###`s per topic. Currently `belte/server` and `belte/browser` (future siblings: `belte/cli`, `belte/mcp`). Each public name has its own path (`belte/server/GET`, `belte/browser/cache`, …) — no umbrella imports.
+* Some details
+    * app hooks
+    * project layout
+    * cli commands
+    * public/ files
+    * bundling
+    * environment variables
+    * logging api and DEBUG
 
-Don't add Features / Why belte? / Roadmap / License / badges.
+
 
 ## Scannability rules
 
@@ -45,7 +87,6 @@ The README is a reference, not an essay. Optimise for someone skimming for one a
 - **Bullets next** for short rules that don't fit a table (≤ one line each).
 - **Prose last**, in 1–2 sentences only when transition / nuance can't be a table.
 - **Snippets are minimal.** One example per concept, trimmed to what proves the point. Don't show barebones + full versions of the same thing in the same section.
-- **Place function-shape doc with the declaration**, not the consumer. E.g. `.raw` / `.stream(args?)` lives under RPC because those siblings exist on every rpc function, regardless of who calls it.
 
 ## Style
 

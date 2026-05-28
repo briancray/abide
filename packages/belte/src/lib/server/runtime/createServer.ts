@@ -3,9 +3,10 @@ import { Glob } from 'bun'
 import type { Component } from 'svelte'
 import { render } from 'svelte/server'
 import App from '../../../App.svelte'
-import { handleCliDownload } from '../cli/handleCliDownload.ts'
-import { handleCliInstall } from '../cli/handleCliInstall.ts'
-import { setMcpManifests } from '../../mcp/mcpManifests.ts'
+import type { Layouts } from '../../browser/types/Layouts.ts'
+import type { Pages } from '../../browser/types/Pages.ts'
+import { createMcpResourceServer } from '../../mcp/createMcpResourceServer.ts'
+import { setMcpResourceServer } from '../../mcp/mcpResourceServerSlot.ts'
 import type { McpServer } from '../../mcp/types/McpServer.ts'
 import { NO_STORE, SSR_CACHE_CONTROL } from '../../shared/cacheControlValues.ts'
 import { createCacheStore } from '../../shared/createCacheStore.ts'
@@ -14,25 +15,29 @@ import { log } from '../../shared/log.ts'
 import { nearestLayoutPrefix, normalizeLayoutPrefixes } from '../../shared/nearestLayoutPrefix.ts'
 import { toBunRoutePattern } from '../../shared/toBunRoutePattern.ts'
 import type { AppModule } from '../AppModule.ts'
-import type { Assets } from './types/Assets.ts'
+import { handleCliDownload } from '../cli/handleCliDownload.ts'
+import { handleCliInstall } from '../cli/handleCliInstall.ts'
+import type { PromptRoutes } from '../prompts/types/PromptRoutes.ts'
 import type { HttpVerb } from '../rpc/types/HttpVerb.ts'
-import type { Layouts } from '../../browser/types/Layouts.ts'
-import type { Pages } from '../../browser/types/Pages.ts'
 import type { RemoteFunction } from '../rpc/types/RemoteFunction.ts'
 import type { RemoteRoutes } from '../rpc/types/RemoteRoutes.ts'
-import type { RequestStore } from './types/RequestStore.ts'
+import { createSocketDispatcher } from '../sockets/createSocketDispatcher.ts'
 import type { SocketRoutes } from '../sockets/types/SocketRoutes.ts'
+import { buildOpenApiSpec } from './buildOpenApiSpec.ts'
 import { cacheControlForAsset } from './cacheControlForAsset.ts'
 import { containsTraversal } from './containsTraversal.ts'
-import { createSocketDispatcher } from '../sockets/createSocketDispatcher.ts'
+import { createPublicAssetServer } from './createPublicAssetServer.ts'
 import { mimeForExtension } from './mimeForExtension.ts'
+import { ensureRegistriesLoaded, setRegistryManifests } from './registryManifests.ts'
 import { requestContext } from './requestContext.ts'
 import { safeJsonForScript } from './safeJsonForScript.ts'
 import { serializeCacheSnapshot } from './serializeCacheSnapshot.ts'
 import { setActiveServer } from './setActiveServer.ts'
+import type { Assets } from './types/Assets.ts'
+import type { RequestStore } from './types/RequestStore.ts'
 
-function acceptsGzip(req: Request): boolean {
-    return (req.headers.get('accept-encoding') ?? '').toLowerCase().includes('gzip')
+function acceptsZstd(req: Request): boolean {
+    return (req.headers.get('accept-encoding') ?? '').toLowerCase().includes('zstd')
 }
 
 function wantsJson(req: Request): boolean {
@@ -43,12 +48,13 @@ const SOCKETS_PATH = '/__belte/sockets'
 const MCP_PATH = '/__belte/mcp'
 const CLI_PATH = '/__belte/cli'
 const CLI_DOWNLOAD_PREFIX = '/__belte/cli/'
+const OPENAPI_PATH = '/openapi.json'
 
 type AnyRemoteFunction = RemoteFunction<unknown, unknown>
 
 /*
 Starts a Bun HTTP server that ties together the framework conventions:
-page.svelte + layout.svelte under src/pages/ for views, one named export
+page.svelte + layout.svelte under src/browser/pages/ for views, one named export
 per file under src/server/rpc/ for verb-bound remote functions, one named export
 per file under src/server/sockets/ for broadcast sockets, and an optional
 app.ts for boot-time setup, request middleware, and error fallback. Page
@@ -61,30 +67,44 @@ export async function createServer({
     pages,
     rpc,
     sockets,
+    prompts,
     layouts,
     shell,
     app,
     assets,
+    publicAssets,
+    mcpResources,
     mcp,
     cliProgramName,
+    appInfo,
     distDir = `${process.cwd()}/dist`,
+    publicDir = `${process.cwd()}/src/browser/public`,
+    resourcesDir = `${process.cwd()}/src/mcp/resources`,
     port = Number(process.env.PORT ?? 3000),
 }: {
     pages: Pages
     rpc: RemoteRoutes
     sockets: SocketRoutes
+    prompts: PromptRoutes
     layouts?: Layouts
     shell: string
     app?: AppModule
     assets?: Assets
+    publicAssets?: Assets
+    mcpResources?: Assets
     mcp?: McpServer
     cliProgramName?: string
+    appInfo?: { name: string; version: string }
     distDir?: string
+    publicDir?: string
+    resourcesDir?: string
     port?: number
 }): Promise<Server<unknown>> {
-    setMcpManifests({ rpc, sockets })
+    setRegistryManifests({ rpc, sockets, prompts })
+    setMcpResourceServer(createMcpResourceServer({ resourcesDir, mcpResources }))
     const cliName = cliProgramName ?? 'app'
     const cliCwd = process.cwd()
+    const servePublicAsset = createPublicAssetServer({ publicDir, publicAssets })
     /*
     Forward-declared so the per-request closures below can reference it. The
     value is assigned by Bun.serve() further down; closures only fire after
@@ -93,10 +113,10 @@ export async function createServer({
     let server!: Server<unknown>
     const layoutPrefixes = layouts ? normalizeLayoutPrefixes(Object.keys(layouts)) : []
 
-    const diskGzipPaths = new Set<string>(
+    const diskZstdPaths = new Set<string>(
         !assets && (await Bun.file(`${distDir}/_app`).exists())
-            ? (await Array.fromAsync(new Glob('**/*.gz').scan({ cwd: `${distDir}/_app` }))).map(
-                  (file) => `/_app/${file.replace(/\.gz$/, '')}`,
+            ? (await Array.fromAsync(new Glob('**/*.zst').scan({ cwd: `${distDir}/_app` }))).map(
+                  (file) => `/_app/${file.replace(/\.zst$/, '')}`,
               )
             : [],
     )
@@ -138,7 +158,7 @@ export async function createServer({
     */
     type AssetHeaderBundle = {
         base: HeadersInit
-        gzip: HeadersInit
+        zstd: HeadersInit
     }
     const assetHeaderCache = new Map<string, AssetHeaderBundle>()
     function headersForAsset(pathname: string): AssetHeaderBundle {
@@ -151,8 +171,8 @@ export async function createServer({
             Vary: 'Accept-Encoding',
             'Cache-Control': cacheControlForAsset(pathname),
         }
-        const gzip: HeadersInit = { ...base, 'Content-Encoding': 'gzip' }
-        const bundle = { base, gzip }
+        const zstd: HeadersInit = { ...base, 'Content-Encoding': 'zstd' }
+        const bundle = { base, zstd }
         assetHeaderCache.set(pathname, bundle)
         return bundle
     }
@@ -173,24 +193,24 @@ export async function createServer({
                 headers: { 'Cache-Control': NO_STORE },
             })
         }
-        const wantsGz = acceptsGzip(req)
-        const { base: baseHeaders, gzip: gzipHeaders } = headersForAsset(url.pathname)
+        const wantsZstd = acceptsZstd(req)
+        const { base: baseHeaders, zstd: zstdHeaders } = headersForAsset(url.pathname)
         if (assets) {
-            const gzipped = assets[url.pathname]
-            if (!gzipped) {
+            const compressed = assets[url.pathname]
+            if (!compressed) {
                 return new Response('Not Found', {
                     status: 404,
                     headers: { 'Cache-Control': NO_STORE },
                 })
             }
-            if (wantsGz) {
-                return new Response(gzipped, { headers: gzipHeaders })
+            if (wantsZstd) {
+                return new Response(compressed, { headers: zstdHeaders })
             }
-            return new Response(Bun.gunzipSync(gzipped), { headers: baseHeaders })
+            return new Response(Bun.zstdDecompressSync(compressed), { headers: baseHeaders })
         }
         const diskPath = distDir + url.pathname
-        if (wantsGz && diskGzipPaths.has(url.pathname)) {
-            return new Response(Bun.file(`${diskPath}.gz`), { headers: gzipHeaders })
+        if (wantsZstd && diskZstdPaths.has(url.pathname)) {
+            return new Response(Bun.file(`${diskPath}.zst`), { headers: zstdHeaders })
         }
         return new Response(Bun.file(diskPath), { headers: baseHeaders })
     }
@@ -253,7 +273,7 @@ export async function createServer({
     /*
     Per-route handler bound by buildRoutes(). Receives a BunRequest with
     `params` filled from the route pattern (only pages use path params;
-    $rpc URLs are flat). Page URLs (under src/pages/) serve GET/HEAD by
+    $rpc URLs are flat). Page URLs (under src/browser/pages/) serve GET/HEAD by
     rendering; rpc URLs (under src/server/rpc/, prefixed with `/rpc/`) dispatch
     to the single declared verb-bound handler. URLs are disjoint by
     construction so each path goes to exactly one branch.
@@ -434,6 +454,16 @@ export async function createServer({
                     handleCliDownload(req, platform, cliName, cliCwd),
                 )
             }
+            if (url.pathname === OPENAPI_PATH) {
+                return dispatchRequest(req, {}, async () => {
+                    await ensureRegistriesLoaded()
+                    const spec = buildOpenApiSpec({
+                        title: appInfo?.name ?? cliName,
+                        version: appInfo?.version ?? '0.0.0',
+                    })
+                    return Response.json(spec, { headers: { 'Cache-Control': NO_STORE } })
+                })
+            }
             /*
             Static assets sidestep ALS + the per-request CacheStore + the
             app.handle middleware: they have no need for cache() and the
@@ -450,6 +480,24 @@ export async function createServer({
                 const ms = (Bun.nanoseconds() - start) / 1e6
                 log.request(req.method, `${url.pathname}${url.search}`, response.status, ms)
                 return response
+            }
+            /*
+            Files under public/ are served at the site root, sidestepping
+            ALS + middleware like the /_app/ assets do. A miss returns
+            undefined so the request falls through to the 404 / middleware
+            path below.
+            */
+            const publicResponse = await servePublicAsset(req, url)
+            if (publicResponse) {
+                if (logRequests) {
+                    log.request(
+                        req.method,
+                        `${url.pathname}${url.search}`,
+                        publicResponse.status,
+                        0,
+                    )
+                }
+                return publicResponse
             }
             /*
             Unknown routes still run through dispatchRequest so user-defined

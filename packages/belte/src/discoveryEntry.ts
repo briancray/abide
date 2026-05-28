@@ -2,9 +2,9 @@
 import { rpc } from './_virtual/rpc.ts'
 // @ts-expect-error virtual module resolved by belteResolverPlugin
 import { sockets } from './_virtual/sockets.ts'
-import { jsonSchemaForSchema } from './lib/mcp/jsonSchemaForSchema.ts'
 import { verbRegistry } from './lib/server/rpc/verbRegistry.ts'
 import { commandNameForUrl } from './lib/shared/commandNameForUrl.ts'
+import { jsonSchemaForSchema } from './lib/shared/jsonSchemaForSchema.ts'
 
 /*
 One-shot script that imports every rpc + socket module so defineVerb /

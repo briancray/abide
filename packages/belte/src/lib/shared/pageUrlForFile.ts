@@ -1,5 +1,5 @@
 /*
-Maps a page-relative path (under `src/pages/`) to its URL route. Pages are
+Maps a page-relative path (under `src/browser/pages/`) to its URL route. Pages are
 folder-based: every leaf is `page.svelte` or `layout.svelte`, and the URL
 is the directory path. Pages mount at the directory path; layouts mount at
 the directory prefix. Dynamic segments keep their `[name]` / `[...rest]`

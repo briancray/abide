@@ -6,18 +6,17 @@ const DEFAULT_NAME = 'belte-app'
 const DEFAULT_VERSION = '0.0.0'
 
 /*
-Constructs an MCP server bound to the project's rpc + socket registries.
-Returns an object whose `handle(request)` is the function the bun route
-at /__belte/mcp invokes. Users can call this from src/server/mcp.ts to
-customise behaviour (currently: authorize hook, server name/version);
-absent that, the framework constructs a default server with the project
-name from package.json.
+Constructs an MCP server bound to the project's rpc registry. Returns an
+object whose `handle(request)` is the function the bun route at
+/__belte/mcp invokes. Framework-internal — the belte:mcp virtual
+default-constructs it; there is no user-authored server module. Server
+name/version default from package.json.
 
-Tools are derived from every verb with `clients.mcp: true` and every
-socket with `clients.mcp: true` (await_<name> + optional publish_<name>).
-Resources are derived from sockets with `clients.mcp: true`. Auth
-inherits from the inbound request — bearer / cookie headers flow into
-the synthesized Request that hits each rpc handler. An optional
+Tools are derived from every verb with `clients.mcp: true` (auto-on when
+the verb carries a schema) — one tool per rpc regardless of HTTP verb.
+Sockets are not exposed to MCP. Auth inherits from the inbound request —
+bearer / cookie headers
+flow into the synthesized Request that hits each rpc handler. An optional
 `authorize` hook in opts can short-circuit the request before any tool
 dispatches.
 */

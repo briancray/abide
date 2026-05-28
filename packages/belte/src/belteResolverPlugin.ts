@@ -4,8 +4,11 @@ import type { BunPlugin } from 'bun'
 import { Glob } from 'bun'
 import { log } from './lib/shared/log.ts'
 import { pageUrlForFile } from './lib/shared/pageUrlForFile.ts'
+import { preparePromptModule } from './lib/shared/preparePromptModule.ts'
 import { prepareRpcModule } from './lib/shared/prepareRpcModule.ts'
 import { prepareSocketModule } from './lib/shared/prepareSocketModule.ts'
+import { programNameForPackage } from './lib/shared/programNameForPackage.ts'
+import { promptNameForFile } from './lib/shared/promptNameForFile.ts'
 import { rpcUrlForFile } from './lib/shared/rpcUrlForFile.ts'
 import { socketNameForFile } from './lib/shared/socketNameForFile.ts'
 import { writeRoutesDts } from './lib/shared/writeRoutesDts.ts'
@@ -13,9 +16,9 @@ import { writeRoutesDts } from './lib/shared/writeRoutesDts.ts'
 /*
 Resolves a bare directory or extensionless path to a concrete file. Mirrors
 Node-style resolution (path.ts, path.js, path/index.ts, path/index.js) so
-project code can use SvelteKit-style aliases like `$lib/foo/utils` that point
+project code can use SvelteKit-style aliases like `$shared/foo/utils` that point
 at directories with an index file. The (path → resolved) mapping is
-deterministic per build, so cache it — every module that imports a `$lib`
+deterministic per build, so cache it — every module that imports a `$shared`
 alias hits this twice or more, and each call would otherwise do up to nine
 filesystem stats.
 */
@@ -60,8 +63,11 @@ Bun plugin that wires every virtual import belte produces at build time:
 - `belte:sockets` — { socketName: () => import(socket-module) } socket manifest
 - `belte:pages`   — { pageUrl: () => import(page.svelte) } manifest
 - `belte:layouts` — { dirPrefix: () => import(layout.svelte) } manifest
+- `belte:prompts` — { promptName: () => import(prompt-module) } manifest
 - `belte:app`     — { init?, handle?, handleError? } from src/app.ts
-- `belte:assets`  — gzipped chunk bytes embedded for standalone compile
+- `belte:assets`  — zstd-compressed chunk bytes embedded for standalone compile
+- `belte:public-assets`  — zstd-embedded src/browser/public files
+- `belte:mcp-resources`  — zstd-embedded src/mcp/resources files
 - `belte:shell`   — app.html content (custom or default)
 
 Also rewrites modules under src/server/rpc and src/server/sockets:
@@ -82,10 +88,17 @@ export function belteResolverPlugin({
     target?: 'server' | 'client'
     thin?: boolean
 } = {}): BunPlugin {
-    const pagesDir = `${cwd}/src/pages`
-    const rpcDir = `${cwd}/src/server/rpc`
-    const socketsDir = `${cwd}/src/server/sockets`
-    const libDir = `${cwd}/src/lib`
+    const serverDir = `${cwd}/src/server`
+    const browserDir = `${cwd}/src/browser`
+    const sharedDir = `${cwd}/src/shared`
+    const mcpDir = `${cwd}/src/mcp`
+    const cliDir = `${cwd}/src/cli`
+    const rpcDir = `${serverDir}/rpc`
+    const socketsDir = `${serverDir}/sockets`
+    const pagesDir = `${browserDir}/pages`
+    const publicDir = `${browserDir}/public`
+    const promptsDir = `${mcpDir}/prompts`
+    const resourcesDir = `${mcpDir}/resources`
 
     /*
     The whole-tree validation + per-leaf classification only needs to run
@@ -97,6 +110,7 @@ export function belteResolverPlugin({
     let pagesScanPromise: Promise<PagesScan> | undefined
     let rpcScanPromise: Promise<string[]> | undefined
     let socketsScanPromise: Promise<string[]> | undefined
+    let promptsScanPromise: Promise<string[]> | undefined
     let shellContentsPromise: Promise<string> | undefined
     function scanPagesOnce(): Promise<PagesScan> {
         if (!pagesScanPromise) {
@@ -119,6 +133,12 @@ export function belteResolverPlugin({
         }
         return socketsScanPromise
     }
+    function scanPromptsOnce(): Promise<string[]> {
+        if (!promptsScanPromise) {
+            promptsScanPromise = scanPrompts(promptsDir)
+        }
+        return promptsScanPromise
+    }
     function loadShellOnce(): Promise<string> {
         if (!shellContentsPromise) {
             shellContentsPromise = loadShell(cwd)
@@ -128,13 +148,14 @@ export function belteResolverPlugin({
 
     const rpcFilter = new RegExp(`^${escapeRegex(rpcDir)}/.*\\.ts$`)
     const socketsFilter = new RegExp(`^${escapeRegex(socketsDir)}/.*\\.ts$`)
+    const promptsFilter = new RegExp(`^${escapeRegex(promptsDir)}/.*\\.ts$`)
 
     return {
         name: 'belte-resolver',
         setup(build) {
             build.onResolve(
                 {
-                    filter: /\/_virtual\/(rpc|sockets|pages|layouts|app|mcp|assets|shell|cli-manifest|cli-name|cli-rpcs)\.ts$/,
+                    filter: /\/_virtual\/(rpc|sockets|prompts|pages|layouts|app|mcp-resources|mcp|assets|public-assets|shell|app-info|cli-manifest|cli-name|cli-chrome|cli-rpcs)\.ts$/,
                 },
                 (args) => {
                     const name = args.path.split('/').pop()?.replace('.ts', '')
@@ -145,26 +166,35 @@ export function belteResolverPlugin({
                 },
             )
 
-            build.onResolve({ filter: /^\$pages(\/.*)?$/ }, (args) => {
-                const subpath = args.path.slice('$pages'.length)
-                return { path: resolveExtension(subpath ? `${pagesDir}${subpath}` : pagesDir) }
+            /*
+            User-facing aliases are the five top-level project directories.
+            Sub-paths fall out of them: `$server/rpc/getThing`,
+            `$browser/pages/...`, `$mcp/prompts/...`, `$mcp/resources/...`.
+            `lib/` is userland — projects declare their own lib aliases.
+            */
+            build.onResolve({ filter: /^\$server(\/.*)?$/ }, (args) => {
+                const subpath = args.path.slice('$server'.length)
+                return { path: resolveExtension(subpath ? `${serverDir}${subpath}` : serverDir) }
             })
 
-            build.onResolve({ filter: /^\$rpc(\/.*)?$/ }, (args) => {
-                const subpath = args.path.slice('$rpc'.length)
-                return { path: resolveExtension(subpath ? `${rpcDir}${subpath}` : rpcDir) }
+            build.onResolve({ filter: /^\$browser(\/.*)?$/ }, (args) => {
+                const subpath = args.path.slice('$browser'.length)
+                return { path: resolveExtension(subpath ? `${browserDir}${subpath}` : browserDir) }
             })
 
-            build.onResolve({ filter: /^\$sockets(\/.*)?$/ }, (args) => {
-                const subpath = args.path.slice('$sockets'.length)
-                return {
-                    path: resolveExtension(subpath ? `${socketsDir}${subpath}` : socketsDir),
-                }
+            build.onResolve({ filter: /^\$shared(\/.*)?$/ }, (args) => {
+                const subpath = args.path.slice('$shared'.length)
+                return { path: resolveExtension(subpath ? `${sharedDir}${subpath}` : sharedDir) }
             })
 
-            build.onResolve({ filter: /^\$lib(\/.*)?$/ }, (args) => {
-                const subpath = args.path.slice('$lib'.length)
-                return { path: resolveExtension(subpath ? `${libDir}${subpath}` : libDir) }
+            build.onResolve({ filter: /^\$mcp(\/.*)?$/ }, (args) => {
+                const subpath = args.path.slice('$mcp'.length)
+                return { path: resolveExtension(subpath ? `${mcpDir}${subpath}` : mcpDir) }
+            })
+
+            build.onResolve({ filter: /^\$cli(\/.*)?$/ }, (args) => {
+                const subpath = args.path.slice('$cli'.length)
+                return { path: resolveExtension(subpath ? `${cliDir}${subpath}` : cliDir) }
             })
 
             build.onLoad({ filter: rpcFilter }, async (args) => {
@@ -252,6 +282,42 @@ export const ${prepared.exportName} = __belteSocketProxy__(${JSON.stringify(name
                 }
             })
 
+            build.onLoad({ filter: promptsFilter }, async (args) => {
+                if (!args.path.startsWith(`${promptsDir}/`)) {
+                    return undefined
+                }
+                /*
+                Prompts are MCP-only — no client-side counterpart. The
+                client bundle never imports a prompts module, but emit an
+                empty stub for the client target defensively so a stray
+                import can't drag the render body into the browser bundle.
+                */
+                if (target === 'client') {
+                    return { contents: 'export {}', loader: 'ts' }
+                }
+                const relativePath = args.path.slice(promptsDir.length + 1)
+                const source = await Bun.file(args.path).text()
+                const name = promptNameForFile(relativePath)
+                const prepared = preparePromptModule(source)
+                if (!prepared) {
+                    throw new Error(
+                        `[belte] src/mcp/prompts/${relativePath} has no \`export const <name> = prompt(...)\` — every prompts module must declare exactly one prompt`,
+                    )
+                }
+                const expectedName = relativePath.replace(/\.ts$/, '').split('/').pop() ?? ''
+                if (prepared.exportName !== expectedName) {
+                    throw new Error(
+                        `[belte] src/mcp/prompts/${relativePath} exports \`${prepared.exportName}\` but the filename expects \`${expectedName}\` — the export name must match the file's stem`,
+                    )
+                }
+                const banner = `import { definePrompt as __belteDefinePrompt__ } from 'belte/server/prompts/definePrompt';
+`
+                return {
+                    contents: `${banner}${prepared.rewriteForServer(name)}`,
+                    loader: 'ts',
+                }
+            })
+
             build.onLoad({ filter: /.*/, namespace: NS }, async (args) => {
                 if (args.path === 'belte:rpc') {
                     const files = await scanRpcOnce()
@@ -293,6 +359,28 @@ export const ${prepared.exportName} = __belteSocketProxy__(${JSON.stringify(name
                     }
                     return {
                         contents: `export const sockets = {\n${entries}\n}\n`,
+                        loader: 'js',
+                    }
+                }
+
+                if (args.path === 'belte:prompts') {
+                    const files = await scanPromptsOnce()
+                    const byName = files
+                        .toSorted()
+                        .map((file) => ({ name: promptNameForFile(file), file }))
+                    const entries = byName
+                        .map(
+                            ({ name, file }) =>
+                                `    ${JSON.stringify(name)}: () => import(${JSON.stringify(`${promptsDir}/${file}`)}),`,
+                        )
+                        .join('\n')
+                    if (byName.length > 0) {
+                        log.info(
+                            `resolved ${byName.length} prompt modules: ${byName.map((b) => b.name).join(', ')}`,
+                        )
+                    }
+                    return {
+                        contents: `export const prompts = {\n${entries}\n}\n`,
                         loader: 'js',
                     }
                 }
@@ -373,16 +461,65 @@ export const ${prepared.exportName} = __belteSocketProxy__(${JSON.stringify(name
                 if (args.path === 'belte:cli-name') {
                     /*
                     Program name shown in `<program> --help`. Reads the
-                    project's package.json `name` field, falling back to
-                    `app` when missing.
+                    project's package.json `name` field (scoped names keep
+                    only the final segment), falling back to `app` when
+                    missing.
                     */
                     const pkgPath = `${cwd}/package.json`
                     if (!existsSync(pkgPath)) {
                         return { contents: 'export default "app"', loader: 'js' }
                     }
                     const pkg = (await Bun.file(pkgPath).json()) as { name?: string }
-                    const name = pkg.name ?? 'app'
+                    const name = programNameForPackage(pkg.name)
                     return { contents: `export default ${JSON.stringify(name)}`, loader: 'js' }
+                }
+
+                if (args.path === 'belte:cli-chrome') {
+                    /*
+                    Optional CLI help chrome baked into the binary: src/cli/
+                    banner.txt prints atop top-level help, footer.txt prints
+                    below it. Missing files emit empty strings (no chrome).
+                    Read as plain text, like belte:shell.
+                    */
+                    const bannerFile = `${cliDir}/banner.txt`
+                    const footerFile = `${cliDir}/footer.txt`
+                    const banner = (await Bun.file(bannerFile).exists())
+                        ? await Bun.file(bannerFile).text()
+                        : ''
+                    const footer = (await Bun.file(footerFile).exists())
+                        ? await Bun.file(footerFile).text()
+                        : ''
+                    return {
+                        contents: `export const banner = ${JSON.stringify(banner)}
+export const footer = ${JSON.stringify(footer)}
+`,
+                        loader: 'js',
+                    }
+                }
+
+                if (args.path === 'belte:app-info') {
+                    /*
+                    Project identity ({ name, version }) read from
+                    package.json, surfaced in the OpenAPI document's `info`
+                    block. Falls back to placeholder values when the file
+                    is missing so the spec still emits.
+                    */
+                    const pkgPath = `${cwd}/package.json`
+                    if (!existsSync(pkgPath)) {
+                        return {
+                            contents: 'export const appInfo = { name: "app", version: "0.0.0" }',
+                            loader: 'js',
+                        }
+                    }
+                    const pkg = (await Bun.file(pkgPath).json()) as {
+                        name?: string
+                        version?: string
+                    }
+                    const info = { name: pkg.name ?? 'app', version: pkg.version ?? '0.0.0' }
+                    return {
+                        contents: `export const appInfo = ${JSON.stringify(info)}`,
+                        loader: 'js',
+                    }
                 }
 
                 if (args.path === 'belte:cli-rpcs') {
@@ -393,13 +530,12 @@ export const ${prepared.exportName} = __belteSocketProxy__(${JSON.stringify(name
                     in-process fallback can dispatch. Thin builds emit
                     an empty module — the binary speaks remote-only.
 
-                    `thin` resolution order: explicit plugin option
-                    wins (set by buildCli when its `thin` option is
-                    passed), otherwise fall back to process.env.APP_URL
-                    so the CLI-tooling entry points work without
-                    ceremony.
+                    `thin` is set by buildCli (default full — it passes
+                    `thin: false` unless `--thin`). Defaults to full here
+                    too so a stray APP_URL in the build environment can't
+                    silently thin the bundle.
                     */
-                    const isThin = thin ?? Boolean(process.env.APP_URL)
+                    const isThin = thin ?? false
                     if (isThin) {
                         return { contents: 'export {}', loader: 'js' }
                     }
@@ -412,18 +548,11 @@ export const ${prepared.exportName} = __belteSocketProxy__(${JSON.stringify(name
 
                 if (args.path === 'belte:mcp') {
                     /*
-                    User's optional src/server/mcp.ts default-exports an
-                    McpServer (typically constructed via createMcpServer).
-                    Absent that, fall back to a default-constructed server.
+                    The MCP server is fully framework-generated — tools from
+                    the verb registry, prompts from src/mcp/prompts, resources
+                    from src/mcp/resources. createMcpServer is internal; there
+                    is no user-authored server module.
                     */
-                    const userMcp = `${cwd}/src/server/mcp.ts`
-                    if (await Bun.file(userMcp).exists()) {
-                        log.info('using custom src/server/mcp.ts')
-                        return {
-                            contents: `export { default } from ${JSON.stringify(userMcp)}`,
-                            loader: 'js',
-                        }
-                    }
                     return {
                         contents:
                             "import { createMcpServer } from 'belte/mcp/createMcpServer'\nexport default createMcpServer()\n",
@@ -437,12 +566,12 @@ export const ${prepared.exportName} = __belteSocketProxy__(${JSON.stringify(name
                     }
                     const appDir = `${cwd}/dist/_app`
                     const files = await Array.fromAsync(
-                        new Glob('**/*.gz').scan({ cwd: appDir, onlyFiles: true }),
+                        new Glob('**/*.zst').scan({ cwd: appDir, onlyFiles: true }),
                     )
                     const encoded = await Promise.all(
                         files.map(async (file) => {
                             const bytes = await Bun.file(`${appDir}/${file}`).bytes()
-                            const urlPath = `/_app/${file.replace(/\.gz$/, '')}`
+                            const urlPath = `/_app/${file.replace(/\.zst$/, '')}`
                             return {
                                 line: `    ${JSON.stringify(urlPath)}: _d(${JSON.stringify(bytes.toBase64())}),`,
                                 bytes: bytes.byteLength,
@@ -452,12 +581,106 @@ export const ${prepared.exportName} = __belteSocketProxy__(${JSON.stringify(name
                     const entries = encoded.map((entry) => entry.line)
                     const totalBytes = encoded.reduce((total, entry) => total + entry.bytes, 0)
                     log.info(
-                        `embedded ${encoded.length} gzipped assets from dist/_app/ (${(totalBytes / 1024).toFixed(1)} KiB)`,
+                        `embedded ${encoded.length} zstd assets from dist/_app/ (${(totalBytes / 1024).toFixed(1)} KiB)`,
                     )
                     return {
                         contents: `const _d = (s) => Uint8Array.fromBase64(s)
 export const assets = {
 ${entries.join('\n')}
+}
+`,
+                        loader: 'js',
+                    }
+                }
+
+                if (args.path === 'belte:public-assets') {
+                    /*
+                    Embeds every file under public/ (zstd level 22, paid
+                    once at compile) keyed by its site-root path so the
+                    standalone binary serves them without a public/ dir on
+                    disk. Mirrors belte:assets. Empty/undefined when not
+                    embedding (dev + `belte start` read public/ off disk).
+                    */
+                    if (!embedAssets || !existsSync(publicDir)) {
+                        return {
+                            contents: 'export const publicAssets = undefined',
+                            loader: 'js',
+                        }
+                    }
+                    const files = await Array.fromAsync(
+                        new Glob('**/*').scan({ cwd: publicDir, onlyFiles: true }),
+                    )
+                    if (files.length === 0) {
+                        return {
+                            contents: 'export const publicAssets = undefined',
+                            loader: 'js',
+                        }
+                    }
+                    const encoded = await Promise.all(
+                        files.map(async (file) => {
+                            const bytes = await Bun.file(`${publicDir}/${file}`).bytes()
+                            const compressed = Bun.zstdCompressSync(bytes, { level: 22 })
+                            return {
+                                line: `    ${JSON.stringify(`/${file}`)}: _d(${JSON.stringify(compressed.toBase64())}),`,
+                                bytes: compressed.byteLength,
+                            }
+                        }),
+                    )
+                    const totalBytes = encoded.reduce((total, entry) => total + entry.bytes, 0)
+                    log.info(
+                        `embedded ${encoded.length} public files from public/ (${(totalBytes / 1024).toFixed(1)} KiB zstd)`,
+                    )
+                    return {
+                        contents: `const _d = (s) => Uint8Array.fromBase64(s)
+export const publicAssets = {
+${encoded.map((entry) => entry.line).join('\n')}
+}
+`,
+                        loader: 'js',
+                    }
+                }
+
+                if (args.path === 'belte:mcp-resources') {
+                    /*
+                    Embeds every file under src/mcp/resources/ (zstd level
+                    22) keyed by its path relative to that dir, so the
+                    standalone binary serves MCP resources without the folder
+                    on disk. Mirrors belte:public-assets. Undefined when not
+                    embedding (dev + `belte start` read off disk).
+                    */
+                    if (!embedAssets || !existsSync(resourcesDir)) {
+                        return {
+                            contents: 'export const mcpResources = undefined',
+                            loader: 'js',
+                        }
+                    }
+                    const files = await Array.fromAsync(
+                        new Glob('**/*').scan({ cwd: resourcesDir, onlyFiles: true }),
+                    )
+                    if (files.length === 0) {
+                        return {
+                            contents: 'export const mcpResources = undefined',
+                            loader: 'js',
+                        }
+                    }
+                    const encoded = await Promise.all(
+                        files.map(async (file) => {
+                            const bytes = await Bun.file(`${resourcesDir}/${file}`).bytes()
+                            const compressed = Bun.zstdCompressSync(bytes, { level: 22 })
+                            return {
+                                line: `    ${JSON.stringify(file)}: _d(${JSON.stringify(compressed.toBase64())}),`,
+                                bytes: compressed.byteLength,
+                            }
+                        }),
+                    )
+                    const totalBytes = encoded.reduce((total, entry) => total + entry.bytes, 0)
+                    log.info(
+                        `embedded ${encoded.length} mcp resources from src/mcp/resources/ (${(totalBytes / 1024).toFixed(1)} KiB zstd)`,
+                    )
+                    return {
+                        contents: `const _d = (s) => Uint8Array.fromBase64(s)
+export const mcpResources = {
+${encoded.map((entry) => entry.line).join('\n')}
 }
 `,
                         loader: 'js',
@@ -484,9 +707,9 @@ type PagesScan = {
 }
 
 /*
-Walks src/pages once and partitions every `.svelte` file into pages and
-layouts. Rejects any other file shape — pages and layouts must live in
-their own folders (or directly under `src/pages/` for the root) and the
+Walks src/browser/pages once and partitions every `.svelte` file into pages
+and layouts. Rejects any other file shape — pages and layouts must live in
+their own folders (or directly under `src/browser/pages/` for the root) and the
 basename must be `page.svelte` or `layout.svelte`. A misnamed file (e.g.
 `about.svelte`) would otherwise be silently ignored; the explicit error
 gives the right hint.
@@ -511,7 +734,7 @@ async function scanPages(pagesDir: string): Promise<PagesScan> {
         const stem = basename.replace(/\.[^.]+$/, '')
         const parent = file.includes('/') ? `${file.slice(0, file.lastIndexOf('/'))}/` : ''
         throw new Error(
-            `[belte] src/pages/${file} is not a recognized page file — every page must live in its own folder as page.svelte or layout.svelte (try src/pages/${parent}${stem}/page.svelte)`,
+            `[belte] src/browser/pages/${file} is not a recognized page file — every page must live in its own folder as page.svelte or layout.svelte (try src/browser/pages/${parent}${stem}/page.svelte)`,
         )
     }
     return { pageFiles, layoutFiles }
@@ -542,18 +765,30 @@ async function scanSockets(socketsDir: string): Promise<string[]> {
 }
 
 /*
-Picks `src/app.html` when it exists, otherwise the bundled default shell.
-Reads the file once per build so the resolver's two virtual passes share a
-single disk hit. Rewrites the literal `/_app/client.js` and `/_app/client.css`
+Walks src/mcp/prompts once. Each `.ts` file declares one MCP prompt.
+Returns an empty list when the directory doesn't exist so an app without
+prompts builds the same.
+*/
+async function scanPrompts(promptsDir: string): Promise<string[]> {
+    if (!existsSync(promptsDir)) {
+        return []
+    }
+    return await Array.fromAsync(new Glob('**/*.ts').scan({ cwd: promptsDir }))
+}
+
+/*
+Picks `src/browser/app.html` when it exists, otherwise the bundled default
+shell. Reads the file once per build so the resolver's two virtual passes share
+a single disk hit. Rewrites the literal `/_app/client.js` and `/_app/client.css`
 references to the hashed entry filenames emitted by the client build so the
 entry bundles can be served with `immutable` cache headers like the chunks.
 */
 async function loadShell(cwd: string): Promise<string> {
-    const userShell = `${cwd}/src/app.html`
+    const userShell = `${cwd}/src/browser/app.html`
     const defaultShell = new URL('./assets/app.html', import.meta.url).pathname
     const filepath = (await Bun.file(userShell).exists()) ? userShell : defaultShell
     if (filepath === userShell) {
-        log.info('using custom src/app.html')
+        log.info('using custom src/browser/app.html')
     }
     const content = await Bun.file(filepath).text()
     return await rewriteHashedClientEntries(content, cwd)

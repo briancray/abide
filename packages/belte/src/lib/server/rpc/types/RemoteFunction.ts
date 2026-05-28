@@ -1,7 +1,7 @@
 import type { ClientFlags } from '../../../shared/types/ClientFlags.ts'
+import type { Subscribable } from '../../../shared/types/Subscribable.ts'
 import type { HttpVerb } from './HttpVerb.ts'
 import type { RawRemoteFunction } from './RawRemoteFunction.ts'
-import type { Subscribable } from '../../../shared/types/Subscribable.ts'
 
 /*
 Remote function reference produced by GET/POST/... inside an `$rpc/**`
