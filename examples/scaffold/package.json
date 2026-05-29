@@ -10,7 +10,7 @@
         "compile": "belte compile"
     },
     "dependencies": {
-        "belte": "workspace:*",
+        "@briancray/belte": "workspace:*",
         "svelte": "^5.0.0"
     }
 }

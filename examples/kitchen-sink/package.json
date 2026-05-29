@@ -7,10 +7,11 @@
         "dev": "belte dev",
         "build": "belte build",
         "start": "belte start",
-        "compile": "belte compile"
+        "compile": "belte compile",
+        "bundle": "belte bundle"
     },
     "dependencies": {
-        "belte": "workspace:*",
+        "@briancray/belte": "workspace:*",
         "shiki": "^3.0.0",
         "svelte": "^5.0.0",
         "zod": "^4.0.0"

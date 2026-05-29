@@ -9,10 +9,15 @@
     "scripts": {
         "format": "biome check --write --linter-enabled=false",
         "lint": "biome lint",
-        "check": "biome check --write"
+        "check": "biome check --write",
+        "changeset": "changeset",
+        "version-packages": "changeset version",
+        "release": "changeset publish"
     },
     "devDependencies": {
         "@biomejs/biome": "^2.4.15",
+        "@changesets/changelog-github": "^0.5.1",
+        "@changesets/cli": "^2.29.7",
         "@types/bun": "latest",
         "svelte": "^5.0.0",
         "typescript": "^6.0.3"

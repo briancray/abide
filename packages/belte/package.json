@@ -1,7 +1,37 @@
 {
-    "name": "belte",
+    "name": "@briancray/belte",
     "version": "0.0.1",
     "type": "module",
+    "description": "Isomorphic multimodal HTTP framework built for humans and machines in a single Bun runtime",
+    "license": "MIT",
+    "author": "Brian Cray",
+    "homepage": "https://github.com/briancray/belte#readme",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/briancray/belte.git",
+        "directory": "packages/belte"
+    },
+    "bugs": {
+        "url": "https://github.com/briancray/belte/issues"
+    },
+    "keywords": [
+        "bun",
+        "svelte",
+        "ssr",
+        "spa",
+        "framework",
+        "isomorphic",
+        "rpc",
+        "mcp",
+        "cli"
+    ],
+    "engines": {
+        "bun": ">=1.3.0"
+    },
+    "publishConfig": {
+        "access": "public",
+        "provenance": true
+    },
     "exports": {
         "./server/*": "./src/lib/server/*.ts",
         "./server/rpc/*": "./src/lib/server/rpc/*.ts",
