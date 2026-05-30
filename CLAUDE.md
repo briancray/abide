@@ -1,4 +1,5 @@
-you are making a ssr + spa framwork for bun and svelte.
+* you are making a ssr + spa framwork for bun and svelte.
+* ignore changes to README and examples unless i specifically instruct you to
 
 # project goals
 

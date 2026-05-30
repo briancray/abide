@@ -75,4 +75,13 @@
             and the raw <code class="font-mono">response</code>.
         </p>
     </a>
+    <a
+        href="/openapi.json"
+        class="rounded-lg border border-slate-200 bg-white p-5 hover:border-slate-400">
+        <h2 class="text-lg font-semibold"><code class="font-mono">/openapi.json</code></h2>
+        <p class="mt-1 text-sm text-slate-600">
+            An OpenAPI 3.1 document built from the verb registry — every rpc's HTTP surface,
+            generated for free. Opens the live document.
+        </p>
+    </a>
 </section>

@@ -7,7 +7,8 @@
         "dev": "belte dev",
         "build": "belte build",
         "start": "belte start",
-        "compile": "belte compile"
+        "compile": "belte compile",
+        "bundle": "belte bundle"
     },
     "dependencies": {
         "@briancray/belte": "workspace:*",

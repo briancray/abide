@@ -77,9 +77,9 @@ async function getSummarizePrompt() {
                     <td class="px-4 py-2 text-slate-600">one tool per rpc, any verb; folder segments join with <code class="font-mono">-</code></td>
                 </tr>
                 <tr>
-                    <td class="px-4 py-2 font-mono text-slate-600">src/mcp/prompts/&lt;name&gt;.ts</td>
+                    <td class="px-4 py-2 font-mono text-slate-600">src/mcp/prompts/&lt;name&gt;.md</td>
                     <td class="px-4 py-2 font-mono text-slate-500">prompt &lt;name&gt;</td>
-                    <td class="px-4 py-2 text-slate-600">schema → argument list; <code class="font-mono">render()</code> → messages</td>
+                    <td class="px-4 py-2 text-slate-600">frontmatter <code class="font-mono">arguments</code> → argument list; <code class="font-mono">{`{{name}}`}</code> body → message</td>
                 </tr>
                 <tr>
                     <td class="px-4 py-2 font-mono text-slate-600">src/mcp/resources/&lt;path&gt;</td>
@@ -169,18 +169,19 @@ async function getSummarizePrompt() {
 
 <section class="mt-6 space-y-3">
     <CodeBlock
-        title="src/mcp/prompts/summarize.ts — an MCP prompt"
-        code={`import { prompt } from 'belte/server/prompt'
-import { z } from 'zod'
-
-const schema = z.object({ topic: z.string(), tone: z.string().optional() })
-
-export const summarize = prompt({
-    description: 'Draft a request to summarize a topic.',
-    schema,
-    render: ({ topic, tone }) =>
-        \`Write a concise summary of \${topic}\${tone ? \` in a \${tone} tone\` : ''}.\`,
-})`} />
+        title="src/mcp/prompts/summarize.md — an MCP prompt"
+        lang="sh"
+        code={`---
+description: Draft a request to summarize a topic.
+arguments:
+  - name: topic
+    description: the subject to summarize
+    required: true
+  - name: tone
+    description: optional voice for the summary
+    required: false
+---
+Write a concise summary of {{topic}} in a {{tone}} tone.`} />
 
     <CodeBlock
         title="src/mcp/resources/about.md — a file resource"

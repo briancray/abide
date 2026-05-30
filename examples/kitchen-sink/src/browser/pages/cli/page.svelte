@@ -12,8 +12,8 @@ async function fetchInstaller() {
 <h1 class="text-3xl font-bold"><code class="font-mono">belte/cli</code></h1>
 <p class="mt-2 text-slate-600">
     The in-process / remote rpc client (<code class="font-mono">createClient</code>) and the
-    standalone CLI binary toolchain. Schema-bearing rpcs auto-expose; argv parses against
-    the same JSON Schema MCP uses.
+    standalone CLI binary — a thin remote client that talks to a running server over HTTP.
+    Schema-bearing rpcs auto-expose; argv parses against the same JSON Schema MCP uses.
 </p>
 
 <section class="mt-6">
@@ -94,31 +94,15 @@ async function fetchInstaller() {
         >{installer}</code></pre>
 </section>
 
-<section class="mt-6">
-    <h2 class="text-sm font-semibold">Thin vs full at build time</h2>
-    <div class="mt-2 overflow-x-auto rounded-lg border border-slate-200 bg-white">
-        <table class="w-full text-sm">
-            <thead class="border-b border-slate-200 bg-slate-50 text-left">
-                <tr>
-                    <th class="px-4 py-2 font-mono font-medium">APP_URL at build</th>
-                    <th class="px-4 py-2 font-medium">mode</th>
-                    <th class="px-4 py-2 font-medium">behavior</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100">
-                <tr>
-                    <td class="px-4 py-2 text-slate-600">unset</td>
-                    <td class="px-4 py-2 text-slate-600">full</td>
-                    <td class="px-4 py-2 text-slate-600">every rpc module is bundled in — in-process when <code class="font-mono">APP_URL</code> is unset at runtime, remote when it's set</td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 text-slate-600">set</td>
-                    <td class="px-4 py-2 text-slate-600">thin</td>
-                    <td class="px-4 py-2 text-slate-600">only the manifest is bundled — requires <code class="font-mono">APP_URL</code> at runtime</td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
+<section class="mt-6 rounded-lg border border-slate-200 bg-white p-5 text-sm text-slate-600">
+    <h2 class="text-sm font-semibold text-slate-900"><code class="font-mono">belte cli</code> vs <code class="font-mono">belte compile</code></h2>
+    <p class="mt-1">
+        <code class="font-mono">belte cli</code> builds a thin remote client — only the rpc
+        manifest is bundled, so it always talks to a running server over HTTP and
+        <code class="font-mono">APP_URL</code> is required at runtime. For an embedded
+        backend, <code class="font-mono">belte compile</code> produces the standalone
+        <em>server</em> binary instead.
+    </p>
 </section>
 
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5 text-sm text-slate-600">
@@ -147,8 +131,7 @@ await client.createEcho({ message: 'seeded' })`} />
         title="standalone CLI binary — argv parses against each rpc's JSON Schema"
         lang="sh"
         code={`belte cli                                          # build ./dist/cli
-./dist/cli getEcho --message=hello                 # in-process (no APP_URL)
-APP_URL=http://localhost:3000 ./dist/cli getEcho --message=hello   # remote
+APP_URL=http://localhost:3000 ./dist/cli getEcho --message=hello   # call the server
 ./dist/cli --help
 ./dist/cli getEcho --help`} />
 

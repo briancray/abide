@@ -1,15 +1,15 @@
 <script lang="ts">
 /*
-Kitchen-sink index. Four cards mirror the four public umbrellas in the
-README — belte/server, belte/browser, belte/mcp, belte/cli. The composed
-auth showcase sits below.
+Kitchen-sink index. Five cards mirror the five public umbrellas in the
+README — belte/server, belte/browser, belte/mcp, belte/cli, belte/bundle.
+The composed auth showcase sits below.
 */
 </script>
 
 <h1 class="text-3xl font-bold">belte kitchen-sink</h1>
 <p class="mt-2 text-slate-600">
     Working demos of every primitive in the framework, organised by public umbrella —
-    one typed backend, three clients.
+    one typed backend reaching the browser, MCP, the CLI, and a native desktop bundle.
 </p>
 
 <section class="mt-8 grid gap-4 sm:grid-cols-2">
@@ -51,8 +51,18 @@ auth showcase sits below.
         <h2 class="text-lg font-semibold"><code class="font-mono">belte/cli</code></h2>
         <p class="mt-1 text-sm text-slate-600">
             <code class="font-mono">createClient</code>
-            for in-process / remote scripts, plus the standalone CLI binary toolchain
+            for in-process / remote scripts, plus the thin standalone CLI binary
             served from <code class="font-mono">/__belte/cli</code>.
+        </p>
+    </a>
+    <a
+        href="/bundle"
+        class="rounded-lg border border-slate-200 bg-white p-5 hover:border-slate-400">
+        <h2 class="text-lg font-semibold"><code class="font-mono">belte/bundle</code></h2>
+        <p class="mt-1 text-sm text-slate-600">
+            <code class="font-mono">belte bundle</code> wraps the app in a movable, native
+            desktop bundle — server binary, launcher, and OS webview, configured from
+            <code class="font-mono">src/bundle/window.ts</code>.
         </p>
     </a>
 </section>
