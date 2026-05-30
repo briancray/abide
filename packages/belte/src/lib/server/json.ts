@@ -1,5 +1,6 @@
 import { NO_STORE } from '../shared/cacheControlValues.ts'
 import type { TypedResponse } from './rpc/types/TypedResponse.ts'
+import { withResponseDefaults } from './runtime/withResponseDefaults.ts'
 
 /*
 JSON Response with rpc-friendly defaults — same shape as
@@ -20,9 +21,8 @@ For non-default cache policy pass `init.headers`; explicit
 `cache-control` wins over the default.
 */
 export function json<T>(data: T, init?: ResponseInit): TypedResponse<T> {
-    const headers = new Headers(init?.headers)
-    if (!headers.has('cache-control')) {
-        headers.set('cache-control', NO_STORE)
-    }
-    return Response.json(data, { ...init, headers }) as TypedResponse<T>
+    return Response.json(
+        data,
+        withResponseDefaults(init, { 'Cache-Control': NO_STORE }),
+    ) as TypedResponse<T>
 }

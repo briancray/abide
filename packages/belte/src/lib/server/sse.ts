@@ -26,22 +26,27 @@ maps it to the entry's `error` field.
 import { NO_STORE } from '../shared/cacheControlValues.ts'
 import type { TypedResponse } from './rpc/types/TypedResponse.ts'
 import { streamFromIterator } from './runtime/streamFromIterator.ts'
+import { withResponseDefaults } from './runtime/withResponseDefaults.ts'
 
 const KEEPALIVE_INTERVAL_MS = 15000
 
-export function sse<Frame>(iterable: AsyncIterable<Frame>): TypedResponse<Frame> {
+export function sse<Frame>(
+    iterable: AsyncIterable<Frame>,
+    init?: ResponseInit,
+): TypedResponse<Frame> {
     const body = streamFromIterator(iterable, {
         encodeFrame: (value) => `data: ${JSON.stringify(value)}\n\n`,
         encodeError: (message) => `event: error\ndata: ${JSON.stringify({ message })}\n\n`,
         keepaliveMs: KEEPALIVE_INTERVAL_MS,
         keepalivePayload: ': keepalive\n\n',
     })
-    return new Response(body, {
-        headers: {
+    return new Response(
+        body,
+        withResponseDefaults(init, {
             'Content-Type': 'text/event-stream; charset=utf-8',
             'Cache-Control': NO_STORE,
             'X-Content-Type-Options': 'nosniff',
             Connection: 'keep-alive',
-        },
-    }) as TypedResponse<Frame>
+        }),
+    ) as TypedResponse<Frame>
 }

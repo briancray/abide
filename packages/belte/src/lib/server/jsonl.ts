@@ -24,17 +24,22 @@ message crosses the wire.
 import { NO_STORE } from '../shared/cacheControlValues.ts'
 import type { TypedResponse } from './rpc/types/TypedResponse.ts'
 import { streamFromIterator } from './runtime/streamFromIterator.ts'
+import { withResponseDefaults } from './runtime/withResponseDefaults.ts'
 
-export function jsonl<Frame>(iterable: AsyncIterable<Frame>): TypedResponse<Frame> {
+export function jsonl<Frame>(
+    iterable: AsyncIterable<Frame>,
+    init?: ResponseInit,
+): TypedResponse<Frame> {
     const body = streamFromIterator(iterable, {
         encodeFrame: (value) => `${JSON.stringify(value)}\n`,
         encodeError: (message) => `${JSON.stringify({ $error: message })}\n`,
     })
-    return new Response(body, {
-        headers: {
+    return new Response(
+        body,
+        withResponseDefaults(init, {
             'Content-Type': 'application/jsonl; charset=utf-8',
             'Cache-Control': NO_STORE,
             'X-Content-Type-Options': 'nosniff',
-        },
-    }) as TypedResponse<Frame>
+        }),
+    ) as TypedResponse<Frame>
 }

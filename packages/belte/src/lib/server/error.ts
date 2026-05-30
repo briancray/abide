@@ -1,5 +1,6 @@
 import { NO_STORE } from '../shared/cacheControlValues.ts'
 import type { TypedResponse } from './rpc/types/TypedResponse.ts'
+import { withResponseDefaults } from './runtime/withResponseDefaults.ts'
 
 /*
 Plain-text error Response — clearer than constructing a Response by
@@ -11,13 +12,22 @@ returns the message, no parsing).
 
 `message` defaults to the status's standard reason phrase when
 omitted (e.g. `error(404)` body = 'Not Found'). The body is
-text/plain so intermediaries don't try to render or sniff it.
+text/plain so intermediaries don't try to render or sniff it. A final
+`ResponseInit` adds headers (e.g. `Retry-After` on a 429); the positional
+`status` always wins over any `init.status`.
 
 To short-circuit a handler instead of returning, `throw new Error(...)`
 or `throw new HttpError(error(...))` — the framework's `app.handleError`
 hook catches thrown errors. This helper deliberately returns a Response
 rather than throwing one so a single `return error(...)` is the
 expected pattern, with the same control flow as `return json(...)`.
+*/
+
+/*
+Standard reason phrases for the statuses error() is realistically called
+with. Maintained explicitly because Bun's `Response` does not populate
+`statusText` from the status code, so there's no platform table to read.
+Unlisted codes fall back to `HTTP <status>`.
 */
 const STATUS_TEXT: Record<number, string> = {
     400: 'Bad Request',
@@ -44,13 +54,17 @@ the union of branches in a handler narrow to whatever the success
 branch carries (`TypedResponse<{user}> | TypedResponse<never>` → Return
 = {user}).
 */
-export function error(status: number, message?: string): TypedResponse<never> {
+export function error(status: number, message?: string, init?: ResponseInit): TypedResponse<never> {
     const body = message ?? STATUS_TEXT[status] ?? `HTTP ${status}`
-    return new Response(body, {
-        status,
-        headers: {
-            'Content-Type': 'text/plain; charset=utf-8',
-            'Cache-Control': NO_STORE,
-        },
-    }) as TypedResponse<never>
+    return new Response(
+        body,
+        withResponseDefaults(
+            init,
+            {
+                'Content-Type': 'text/plain; charset=utf-8',
+                'Cache-Control': NO_STORE,
+            },
+            status,
+        ),
+    ) as TypedResponse<never>
 }
