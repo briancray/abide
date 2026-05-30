@@ -1,6 +1,6 @@
 {
     "name": "@briancray/belte",
-    "version": "0.2.1",
+    "version": "0.2.2",
     "type": "module",
     "description": "Isomorphic multimodal HTTP framework built for humans and machines in a single Bun runtime",
     "license": "MIT",
