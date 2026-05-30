@@ -3,11 +3,11 @@ import type { Prompt } from './types/Prompt.ts'
 import type { PromptOptions } from './types/PromptOptions.ts'
 
 /*
-Builds a Prompt from a name + options. The bundler rewrites every
-`export const NAME = prompt(opts)` inside `src/server/prompts/<file>.ts`
-into `__belteDefinePrompt__("<name>", opts)` so the file path becomes the
-prompt's identity. Registers itself so the MCP dispatcher can enumerate
-and render it.
+Builds a Prompt from a name + options. The resolver plugin parses every
+`src/mcp/prompts/<file>.md` and generates a module that calls
+`definePrompt("<name>", { description, jsonSchema, render })`, so the file
+path becomes the prompt's identity. Registers itself so the MCP dispatcher
+can enumerate and render it.
 */
 export function definePrompt(name: string, opts: PromptOptions): Prompt {
     const self: Prompt = {
@@ -15,6 +15,6 @@ export function definePrompt(name: string, opts: PromptOptions): Prompt {
         description: opts.description,
         render: opts.render,
     }
-    registerPrompt({ prompt: self, schema: opts.schema, jsonSchema: opts.jsonSchema })
+    registerPrompt({ prompt: self, jsonSchema: opts.jsonSchema })
     return self
 }

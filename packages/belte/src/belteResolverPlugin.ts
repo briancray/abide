@@ -2,9 +2,11 @@
 import { existsSync, statSync } from 'node:fs'
 import type { BunPlugin } from 'bun'
 import { Glob } from 'bun'
+import { fileStem } from './lib/shared/fileStem.ts'
+import { jsonSchemaForPromptArguments } from './lib/shared/jsonSchemaForPromptArguments.ts'
 import { log } from './lib/shared/log.ts'
 import { pageUrlForFile } from './lib/shared/pageUrlForFile.ts'
-import { preparePromptModule } from './lib/shared/preparePromptModule.ts'
+import { parsePromptMarkdown } from './lib/shared/parsePromptMarkdown.ts'
 import { prepareRpcModule } from './lib/shared/prepareRpcModule.ts'
 import { prepareSocketModule } from './lib/shared/prepareSocketModule.ts'
 import { programNameForPackage } from './lib/shared/programNameForPackage.ts'
@@ -57,6 +59,17 @@ function escapeRegex(value: string): string {
     return value.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&')
 }
 
+/* Memoises a zero-arg async producer so repeat calls reuse the first in-flight promise. */
+function once<T>(produce: () => Promise<T>): () => Promise<T> {
+    let promise: Promise<T> | undefined
+    return () => {
+        if (!promise) {
+            promise = produce()
+        }
+        return promise
+    }
+}
+
 /*
 Bun plugin that wires every virtual import belte produces at build time:
 - `belte:rpc`     — { rpcUrl: () => import(rpc-module) } HTTP-verb manifest
@@ -81,12 +94,10 @@ export function belteResolverPlugin({
     cwd = process.cwd(),
     embedAssets = false,
     target = 'server',
-    thin,
 }: {
     cwd?: string
     embedAssets?: boolean
     target?: 'server' | 'client'
-    thin?: boolean
 } = {}): BunPlugin {
     const serverDir = `${cwd}/src/server`
     const browserDir = `${cwd}/src/browser`
@@ -107,58 +118,30 @@ export function belteResolverPlugin({
     re-globbing the trees. The shell read is memoised the same way so two
     passes don't re-read app.html from disk.
     */
-    let pagesScanPromise: Promise<PagesScan> | undefined
-    let rpcScanPromise: Promise<string[]> | undefined
-    let socketsScanPromise: Promise<string[]> | undefined
-    let promptsScanPromise: Promise<string[]> | undefined
-    let shellContentsPromise: Promise<string> | undefined
-    function scanPagesOnce(): Promise<PagesScan> {
-        if (!pagesScanPromise) {
-            pagesScanPromise = scanPages(pagesDir).then(async (scan) => {
-                await writeRoutesDts({ cwd, pageFiles: scan.pageFiles })
-                return scan
-            })
-        }
-        return pagesScanPromise
-    }
-    function scanRpcOnce(): Promise<string[]> {
-        if (!rpcScanPromise) {
-            rpcScanPromise = scanRpc(rpcDir)
-        }
-        return rpcScanPromise
-    }
-    function scanSocketsOnce(): Promise<string[]> {
-        if (!socketsScanPromise) {
-            socketsScanPromise = scanSockets(socketsDir)
-        }
-        return socketsScanPromise
-    }
-    function scanPromptsOnce(): Promise<string[]> {
-        if (!promptsScanPromise) {
-            promptsScanPromise = scanPrompts(promptsDir)
-        }
-        return promptsScanPromise
-    }
-    function loadShellOnce(): Promise<string> {
-        if (!shellContentsPromise) {
-            shellContentsPromise = loadShell(cwd)
-        }
-        return shellContentsPromise
-    }
+    const scanPagesOnce = once(() =>
+        scanPages(pagesDir).then(async (scan) => {
+            await writeRoutesDts({ cwd, pageFiles: scan.pageFiles })
+            return scan
+        }),
+    )
+    const scanRpcOnce = once(() => scanRpc(rpcDir))
+    const scanSocketsOnce = once(() => scanSockets(socketsDir))
+    const scanPromptsOnce = once(() => scanPrompts(promptsDir))
+    const loadShellOnce = once(() => loadShell(cwd))
 
     const rpcFilter = new RegExp(`^${escapeRegex(rpcDir)}/.*\\.ts$`)
     const socketsFilter = new RegExp(`^${escapeRegex(socketsDir)}/.*\\.ts$`)
-    const promptsFilter = new RegExp(`^${escapeRegex(promptsDir)}/.*\\.ts$`)
+    const promptsFilter = new RegExp(`^${escapeRegex(promptsDir)}/.*\\.md$`)
 
     return {
         name: 'belte-resolver',
         setup(build) {
             build.onResolve(
                 {
-                    filter: /\/_virtual\/(rpc|sockets|prompts|pages|layouts|app|mcp-resources|mcp|assets|public-assets|shell|app-info|cli-manifest|cli-name|cli-chrome|cli-rpcs)\.ts$/,
+                    filter: /\/_virtual\/(rpc|sockets|prompts|pages|layouts|app|mcp-resources|mcp|assets|public-assets|shell|app-info|cli-manifest|cli-name|cli-chrome|bundle-window|bundle-disconnected-component|bundle-disconnected)\.ts$/,
                 },
                 (args) => {
-                    const name = args.path.split('/').pop()?.replace('.ts', '')
+                    const name = fileStem(args.path)
                     if (!name) {
                         return undefined
                     }
@@ -172,30 +155,19 @@ export function belteResolverPlugin({
             `$browser/pages/...`, `$mcp/prompts/...`, `$mcp/resources/...`.
             `lib/` is userland — projects declare their own lib aliases.
             */
-            build.onResolve({ filter: /^\$server(\/.*)?$/ }, (args) => {
-                const subpath = args.path.slice('$server'.length)
-                return { path: resolveExtension(subpath ? `${serverDir}${subpath}` : serverDir) }
-            })
-
-            build.onResolve({ filter: /^\$browser(\/.*)?$/ }, (args) => {
-                const subpath = args.path.slice('$browser'.length)
-                return { path: resolveExtension(subpath ? `${browserDir}${subpath}` : browserDir) }
-            })
-
-            build.onResolve({ filter: /^\$shared(\/.*)?$/ }, (args) => {
-                const subpath = args.path.slice('$shared'.length)
-                return { path: resolveExtension(subpath ? `${sharedDir}${subpath}` : sharedDir) }
-            })
-
-            build.onResolve({ filter: /^\$mcp(\/.*)?$/ }, (args) => {
-                const subpath = args.path.slice('$mcp'.length)
-                return { path: resolveExtension(subpath ? `${mcpDir}${subpath}` : mcpDir) }
-            })
-
-            build.onResolve({ filter: /^\$cli(\/.*)?$/ }, (args) => {
-                const subpath = args.path.slice('$cli'.length)
-                return { path: resolveExtension(subpath ? `${cliDir}${subpath}` : cliDir) }
-            })
+            const dirAliases: Record<string, string> = {
+                $server: serverDir,
+                $browser: browserDir,
+                $shared: sharedDir,
+                $mcp: mcpDir,
+                $cli: cliDir,
+            }
+            for (const [alias, baseDir] of Object.entries(dirAliases)) {
+                build.onResolve({ filter: new RegExp(`^\\${alias}(\\/.*)?$`) }, (args) => {
+                    const subpath = args.path.slice(alias.length)
+                    return { path: resolveExtension(subpath ? `${baseDir}${subpath}` : baseDir) }
+                })
+            }
 
             build.onLoad({ filter: rpcFilter }, async (args) => {
                 if (!args.path.startsWith(`${rpcDir}/`)) {
@@ -210,7 +182,7 @@ export function belteResolverPlugin({
                         `[belte] src/server/rpc/${relativePath} has no \`export const <name> = <VERB>(...)\` — every $rpc module must declare exactly one remote function`,
                     )
                 }
-                const expectedName = relativePath.replace(/\.ts$/, '').split('/').pop() ?? ''
+                const expectedName = fileStem(relativePath)
                 if (prepared.exportName !== expectedName) {
                     throw new Error(
                         `[belte] src/server/rpc/${relativePath} exports \`${prepared.exportName}\` but the filename expects \`${expectedName}\` — the export name must match the file's stem`,
@@ -257,7 +229,7 @@ export const ${prepared.exportName} = __belteRemoteProxy__(${JSON.stringify(prep
                         `[belte] src/server/sockets/${relativePath} has no \`export const <name> = socket(...)\` — every $sockets module must declare exactly one socket`,
                     )
                 }
-                const expectedName = relativePath.replace(/\.ts$/, '').split('/').pop() ?? ''
+                const expectedName = fileStem(relativePath)
                 if (prepared.exportName !== expectedName) {
                     throw new Error(
                         `[belte] src/server/sockets/${relativePath} exports \`${prepared.exportName}\` but the filename expects \`${expectedName}\` — the export name must match the file's stem`,
@@ -290,32 +262,40 @@ export const ${prepared.exportName} = __belteSocketProxy__(${JSON.stringify(name
                 Prompts are MCP-only — no client-side counterpart. The
                 client bundle never imports a prompts module, but emit an
                 empty stub for the client target defensively so a stray
-                import can't drag the render body into the browser bundle.
+                import can't drag the prompt body into the browser bundle.
                 */
                 if (target === 'client') {
                     return { contents: 'export {}', loader: 'ts' }
                 }
+                /*
+                Server target: a `.md` prompt is data, not code. Parse the
+                frontmatter (description + arguments) and body once, then
+                generate a module that registers the prompt via definePrompt
+                — the body is embedded as a string literal and the render
+                closure interpolates `{{name}}` placeholders at call time.
+                */
                 const relativePath = args.path.slice(promptsDir.length + 1)
                 const source = await Bun.file(args.path).text()
                 const name = promptNameForFile(relativePath)
-                const prepared = preparePromptModule(source)
-                if (!prepared) {
-                    throw new Error(
-                        `[belte] src/mcp/prompts/${relativePath} has no \`export const <name> = prompt(...)\` — every prompts module must declare exactly one prompt`,
-                    )
-                }
-                const expectedName = relativePath.replace(/\.ts$/, '').split('/').pop() ?? ''
-                if (prepared.exportName !== expectedName) {
-                    throw new Error(
-                        `[belte] src/mcp/prompts/${relativePath} exports \`${prepared.exportName}\` but the filename expects \`${expectedName}\` — the export name must match the file's stem`,
-                    )
-                }
-                const banner = `import { definePrompt as __belteDefinePrompt__ } from 'belte/server/prompts/definePrompt';
+                const parsed = parsePromptMarkdown(source)
+                const jsonSchema = jsonSchemaForPromptArguments(parsed.arguments)
+                const optionLines = [
+                    parsed.description
+                        ? `    description: ${JSON.stringify(parsed.description)},`
+                        : undefined,
+                    jsonSchema ? `    jsonSchema: ${JSON.stringify(jsonSchema)},` : undefined,
+                    `    render: (args) => __belteRenderPromptTemplate__(__template__, args),`,
+                ]
+                    .filter((line) => line !== undefined)
+                    .join('\n')
+                const contents = `import { definePrompt as __belteDefinePrompt__ } from 'belte/server/prompts/definePrompt'
+import { renderPromptTemplate as __belteRenderPromptTemplate__ } from 'belte/server/prompts/renderPromptTemplate'
+const __template__ = ${JSON.stringify(parsed.body)}
+export const prompt = __belteDefinePrompt__(${JSON.stringify(name)}, {
+${optionLines}
+})
 `
-                return {
-                    contents: `${banner}${prepared.rewriteForServer(name)}`,
-                    loader: 'ts',
-                }
+                return { contents, loader: 'ts' }
             })
 
             build.onLoad({ filter: /.*/, namespace: NS }, async (args) => {
@@ -474,6 +454,71 @@ export const ${prepared.exportName} = __belteSocketProxy__(${JSON.stringify(name
                     return { contents: `export default ${JSON.stringify(name)}`, loader: 'js' }
                 }
 
+                if (args.path === 'belte:bundle-window') {
+                    /*
+                    Optional bundle window config (title/size/menu) baked into
+                    the bundled launcher. Re-exports the default from
+                    src/bundle/window.ts when present; otherwise an empty
+                    object so the launcher falls back to its defaults.
+                    */
+                    const userFile = `${cwd}/src/bundle/window.ts`
+                    if (existsSync(userFile)) {
+                        log.info('using custom src/bundle/window.ts')
+                        return {
+                            contents: `export { default } from ${JSON.stringify(userFile)}`,
+                            loader: 'js',
+                        }
+                    }
+                    return { contents: 'export default {}', loader: 'js' }
+                }
+
+                if (args.path === 'belte:bundle-disconnected') {
+                    /*
+                    The connect screen HTML baked into the launcher. buildDisconnected
+                    writes `${cwd}/dist/bundle-disconnected.html`; this virtual splices
+                    it in as a string export. A minimal inline fallback keeps the
+                    launcher buildable when the file is missing (the screen still loads,
+                    just unstyled) — bundleApp always builds it first.
+                    */
+                    const htmlPath = `${cwd}/dist/bundle-disconnected.html`
+                    if (!existsSync(htmlPath)) {
+                        const fallback =
+                            '<!doctype html><html><body><div id="app">belte</div></body></html>'
+                        return {
+                            contents: `export const disconnectedHtml = ${JSON.stringify(fallback)}`,
+                            loader: 'js',
+                        }
+                    }
+                    const html = await Bun.file(htmlPath).text()
+                    return {
+                        contents: `export const disconnectedHtml = ${JSON.stringify(html)}`,
+                        loader: 'js',
+                    }
+                }
+
+                if (args.path === 'belte:bundle-disconnected-component') {
+                    /*
+                    The Svelte component the connect-screen build mounts: the project's
+                    src/bundle/disconnected.svelte override when present, otherwise the
+                    lib default. Re-exports the default like belte:bundle-window; the
+                    svelte loader plugin compiles the .svelte target either way.
+                    */
+                    const userFile = `${cwd}/src/bundle/disconnected.svelte`
+                    if (existsSync(userFile)) {
+                        log.info('using custom src/bundle/disconnected.svelte')
+                        return {
+                            contents: `export { default } from ${JSON.stringify(userFile)}`,
+                            loader: 'js',
+                        }
+                    }
+                    const defaultFile = new URL('./lib/bundle/disconnected.svelte', import.meta.url)
+                        .pathname
+                    return {
+                        contents: `export { default } from ${JSON.stringify(defaultFile)}`,
+                        loader: 'js',
+                    }
+                }
+
                 if (args.path === 'belte:cli-chrome') {
                     /*
                     Optional CLI help chrome baked into the binary: src/cli/
@@ -522,30 +567,6 @@ export const footer = ${JSON.stringify(footer)}
                     }
                 }
 
-                if (args.path === 'belte:cli-rpcs') {
-                    /*
-                    Eager-import side-effect bundle for the FULL CLI
-                    binary. Importing every rpc module fires defineVerb
-                    so the verbRegistry is populated and createClient's
-                    in-process fallback can dispatch. Thin builds emit
-                    an empty module — the binary speaks remote-only.
-
-                    `thin` is set by buildCli (default full — it passes
-                    `thin: false` unless `--thin`). Defaults to full here
-                    too so a stray APP_URL in the build environment can't
-                    silently thin the bundle.
-                    */
-                    const isThin = thin ?? false
-                    if (isThin) {
-                        return { contents: 'export {}', loader: 'js' }
-                    }
-                    const files = await scanRpcOnce()
-                    const lines = files.map(
-                        (file) => `import ${JSON.stringify(`${rpcDir}/${file}`)}`,
-                    )
-                    return { contents: `${lines.join('\n')}\nexport {}`, loader: 'js' }
-                }
-
                 if (args.path === 'belte:mcp') {
                     /*
                     The MCP server is fully framework-generated — tools from
@@ -568,29 +589,16 @@ export const footer = ${JSON.stringify(footer)}
                     const files = await Array.fromAsync(
                         new Glob('**/*.zst').scan({ cwd: appDir, onlyFiles: true }),
                     )
-                    const encoded = await Promise.all(
-                        files.map(async (file) => {
-                            const bytes = await Bun.file(`${appDir}/${file}`).bytes()
-                            const urlPath = `/_app/${file.replace(/\.zst$/, '')}`
-                            return {
-                                line: `    ${JSON.stringify(urlPath)}: _d(${JSON.stringify(bytes.toBase64())}),`,
-                                bytes: bytes.byteLength,
-                            }
-                        }),
-                    )
-                    const entries = encoded.map((entry) => entry.line)
-                    const totalBytes = encoded.reduce((total, entry) => total + entry.bytes, 0)
-                    log.info(
-                        `embedded ${encoded.length} zstd assets from dist/_app/ (${(totalBytes / 1024).toFixed(1)} KiB)`,
-                    )
-                    return {
-                        contents: `const _d = (s) => Uint8Array.fromBase64(s)
-export const assets = {
-${entries.join('\n')}
-}
-`,
-                        loader: 'js',
-                    }
+                    const contents = await embedZstdDir({
+                        dir: appDir,
+                        files,
+                        keyFor: (file) => `/_app/${file.replace(/\.zst$/, '')}`,
+                        precompressed: true,
+                        exportName: 'assets',
+                        label: 'zstd assets',
+                        source: 'dist/_app/',
+                    })
+                    return { contents, loader: 'js' }
                 }
 
                 if (args.path === 'belte:public-assets') {
@@ -616,28 +624,16 @@ ${entries.join('\n')}
                             loader: 'js',
                         }
                     }
-                    const encoded = await Promise.all(
-                        files.map(async (file) => {
-                            const bytes = await Bun.file(`${publicDir}/${file}`).bytes()
-                            const compressed = Bun.zstdCompressSync(bytes, { level: 22 })
-                            return {
-                                line: `    ${JSON.stringify(`/${file}`)}: _d(${JSON.stringify(compressed.toBase64())}),`,
-                                bytes: compressed.byteLength,
-                            }
-                        }),
-                    )
-                    const totalBytes = encoded.reduce((total, entry) => total + entry.bytes, 0)
-                    log.info(
-                        `embedded ${encoded.length} public files from public/ (${(totalBytes / 1024).toFixed(1)} KiB zstd)`,
-                    )
-                    return {
-                        contents: `const _d = (s) => Uint8Array.fromBase64(s)
-export const publicAssets = {
-${encoded.map((entry) => entry.line).join('\n')}
-}
-`,
-                        loader: 'js',
-                    }
+                    const contents = await embedZstdDir({
+                        dir: publicDir,
+                        files,
+                        keyFor: (file) => `/${file}`,
+                        precompressed: false,
+                        exportName: 'publicAssets',
+                        label: 'public files',
+                        source: 'public/',
+                    })
+                    return { contents, loader: 'js' }
                 }
 
                 if (args.path === 'belte:mcp-resources') {
@@ -663,28 +659,16 @@ ${encoded.map((entry) => entry.line).join('\n')}
                             loader: 'js',
                         }
                     }
-                    const encoded = await Promise.all(
-                        files.map(async (file) => {
-                            const bytes = await Bun.file(`${resourcesDir}/${file}`).bytes()
-                            const compressed = Bun.zstdCompressSync(bytes, { level: 22 })
-                            return {
-                                line: `    ${JSON.stringify(file)}: _d(${JSON.stringify(compressed.toBase64())}),`,
-                                bytes: compressed.byteLength,
-                            }
-                        }),
-                    )
-                    const totalBytes = encoded.reduce((total, entry) => total + entry.bytes, 0)
-                    log.info(
-                        `embedded ${encoded.length} mcp resources from src/mcp/resources/ (${(totalBytes / 1024).toFixed(1)} KiB zstd)`,
-                    )
-                    return {
-                        contents: `const _d = (s) => Uint8Array.fromBase64(s)
-export const mcpResources = {
-${encoded.map((entry) => entry.line).join('\n')}
-}
-`,
-                        loader: 'js',
-                    }
+                    const contents = await embedZstdDir({
+                        dir: resourcesDir,
+                        files,
+                        keyFor: (file) => file,
+                        precompressed: false,
+                        exportName: 'mcpResources',
+                        label: 'mcp resources',
+                        source: 'src/mcp/resources/',
+                    })
+                    return { contents, loader: 'js' }
                 }
 
                 if (args.path === 'belte:shell') {
@@ -699,6 +683,54 @@ ${encoded.map((entry) => entry.line).join('\n')}
             })
         },
     }
+}
+
+/*
+Encodes every file in `files` (relative to `dir`) into a base64 zstd map and
+emits `export const <exportName> = { "<key>": _d("<base64>") }`. `keyFor` maps
+a relative path to its lookup key; `precompressed` true means the files are
+already `.zst` on disk (read + base64 as-is), false means compress here at
+level 22. Shared by the belte:assets / belte:public-assets / belte:mcp-resources
+virtuals, which differ only in source dir, key shape, and whether the inputs
+are pre-compressed.
+*/
+async function embedZstdDir({
+    dir,
+    files,
+    keyFor,
+    precompressed,
+    exportName,
+    label,
+    source,
+}: {
+    dir: string
+    files: string[]
+    keyFor: (file: string) => string
+    precompressed: boolean
+    exportName: string
+    label: string
+    source: string
+}): Promise<string> {
+    const encoded = await Promise.all(
+        files.map(async (file) => {
+            const raw = await Bun.file(`${dir}/${file}`).bytes()
+            const bytes = precompressed ? raw : await Bun.zstdCompress(raw, { level: 22 })
+            return {
+                line: `    ${JSON.stringify(keyFor(file))}: _d(${JSON.stringify(bytes.toBase64())}),`,
+                bytes: bytes.byteLength,
+            }
+        }),
+    )
+    const totalBytes = encoded.reduce((total, entry) => total + entry.bytes, 0)
+    const unit = precompressed ? 'KiB' : 'KiB zstd'
+    log.info(
+        `embedded ${encoded.length} ${label} from ${source} (${(totalBytes / 1024).toFixed(1)} ${unit})`,
+    )
+    return `const _d = (s) => Uint8Array.fromBase64(s)
+export const ${exportName} = {
+${encoded.map((entry) => entry.line).join('\n')}
+}
+`
 }
 
 type PagesScan = {
@@ -765,15 +797,15 @@ async function scanSockets(socketsDir: string): Promise<string[]> {
 }
 
 /*
-Walks src/mcp/prompts once. Each `.ts` file declares one MCP prompt.
-Returns an empty list when the directory doesn't exist so an app without
-prompts builds the same.
+Walks src/mcp/prompts once. Each `.md` file declares one MCP prompt —
+frontmatter for metadata, body for the template. Returns an empty list
+when the directory doesn't exist so an app without prompts builds the same.
 */
 async function scanPrompts(promptsDir: string): Promise<string[]> {
     if (!existsSync(promptsDir)) {
         return []
     }
-    return await Array.fromAsync(new Glob('**/*.ts').scan({ cwd: promptsDir }))
+    return await Array.fromAsync(new Glob('**/*.md').scan({ cwd: promptsDir }))
 }
 
 /*
@@ -810,17 +842,8 @@ async function rewriteHashedClientEntries(shell: string, cwd: string): Promise<s
     const entries = await Array.fromAsync(
         new Glob('client-*').scan({ cwd: appDir, onlyFiles: true }),
     )
-    let jsEntry: string | undefined
-    let cssEntry: string | undefined
-    for (const file of entries) {
-        if (!jsEntry && /^client-[a-z0-9]+\.js$/i.test(file)) {
-            jsEntry = file
-            continue
-        }
-        if (!cssEntry && /^client-[a-z0-9]+\.css$/i.test(file)) {
-            cssEntry = file
-        }
-    }
+    const jsEntry = entries.find((file) => /^client-[a-z0-9]+\.js$/i.test(file))
+    const cssEntry = entries.find((file) => /^client-[a-z0-9]+\.css$/i.test(file))
     let result = shell
     if (jsEntry) {
         result = result.replace('/_app/client.js', `/_app/${jsEntry}`)

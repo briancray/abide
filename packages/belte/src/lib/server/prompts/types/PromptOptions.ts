@@ -1,17 +1,12 @@
-import type { StandardSchemaV1 } from '../../rpc/types/StandardSchemaV1.ts'
-import type { PromptMessage } from './PromptMessage.ts'
-
 /*
-Server-side options passed when declaring a prompt via `prompt(opts)`.
-MCP prompts are read-only templates: `render(args)` turns the caller's
-arguments into one or more chat messages. The optional Standard Schema
-both validates incoming arguments and supplies the argument list MCP
-advertises in `prompts/list` (top-level properties + required array).
-All of this is server-only — prompts are never imported by client code.
+Options definePrompt receives for one markdown prompt. The resolver plugin
+generates this object from the file: `description` + `jsonSchema` come from
+the frontmatter (the schema built from the `arguments` list), and `render`
+closes over the parsed body. All of this is server-only — prompts are never
+imported by client code.
 */
-export type PromptOptions<Args = Record<string, string>> = {
+export type PromptOptions = {
     description?: string
-    schema?: StandardSchemaV1
     jsonSchema?: Record<string, unknown>
-    render: (args: Args) => PromptMessage[] | string | Promise<PromptMessage[] | string>
+    render: (args: Record<string, string>) => string
 }
