@@ -1,5 +1,5 @@
 {
-    "extends": "belte/tsconfig",
+    "extends": "@briancray/belte/tsconfig",
     "include": ["src/**/*.ts", "src/**/*.svelte"],
     "compilerOptions": {
         "paths": {

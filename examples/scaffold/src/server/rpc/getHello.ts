@@ -27,7 +27,7 @@ Every rpc value also exposes `.raw(args?)` (returns the underlying
 for callers that need headers/status or want to iterate SSE/JSONL frames.
 */
 
-import { GET } from 'belte/server/GET'
-import { json } from 'belte/server/json'
+import { GET } from '@briancray/belte/server/GET'
+import { json } from '@briancray/belte/server/json'
 
 export const getHello = GET(() => json({ message: 'Hello from belte' }))

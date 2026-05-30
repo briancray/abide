@@ -17,7 +17,7 @@
       "name": "barebones",
       "version": "0.0.1",
       "dependencies": {
-        "belte": "workspace:@briancray/belte@*",
+        "@briancray/belte": "workspace:*",
         "svelte": "^5.0.0",
       },
     },
@@ -25,7 +25,7 @@
       "name": "kitchen-sink",
       "version": "0.0.1",
       "dependencies": {
-        "belte": "workspace:@briancray/belte@*",
+        "@briancray/belte": "workspace:*",
         "shiki": "^3.0.0",
         "svelte": "^5.0.0",
         "zod": "^4.0.0",
@@ -39,13 +39,13 @@
       "name": "scaffold",
       "version": "0.0.1",
       "dependencies": {
-        "belte": "workspace:@briancray/belte@*",
+        "@briancray/belte": "workspace:*",
         "svelte": "^5.0.0",
       },
     },
     "packages/belte": {
       "name": "@briancray/belte",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "bin": {
         "belte": "./bin/belte.ts",
       },
@@ -226,8 +226,6 @@
     "axobject-query": ["axobject-query@4.1.0", "", {}, "sha512-qIj0G9wZbMGNLjLmg1PT6v2mE9AH2zlnADJD/2tC6E00hgmhUOfEB6greHPAfLRSufHqROIUTkw6E+M3lH0PTQ=="],
 
     "barebones": ["barebones@workspace:examples/barebones"],
-
-    "belte": ["@briancray/belte@workspace:packages/belte"],
 
     "better-path-resolve": ["better-path-resolve@1.0.0", "", { "dependencies": { "is-windows": "^1.0.0" } }, "sha512-pbnl5XzGBdrFU/wT4jqmJVPn2B6UHPBOhzMQkY/SPUPB6QtUXtmBHBIwCbXJol93mOpGMnQyP/+BB19q04xj7g=="],
 

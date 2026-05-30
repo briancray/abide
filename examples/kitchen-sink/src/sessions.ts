@@ -4,7 +4,7 @@ logout to demonstrate the auth showcase under src/browser/pages/auth/. Anything
 that needs the inbound Request reaches for `request()` from belte/server
 — no plumbing.
 */
-import { request } from 'belte/server/request'
+import { request } from '@briancray/belte/server/request'
 
 const sessions = new Map<string, { user: string }>()
 

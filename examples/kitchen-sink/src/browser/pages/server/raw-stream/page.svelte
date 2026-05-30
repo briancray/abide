@@ -1,6 +1,6 @@
 <script lang="ts">
 import CodeBlock from '$browser/CodeBlock.svelte'
-import { cache } from 'belte/browser/cache'
+import { cache } from '@briancray/belte/browser/cache'
 import { getReport } from '$server/rpc/getReport.ts'
 import { tickFeed } from '$server/rpc/tickFeed.ts'
 
@@ -108,7 +108,7 @@ const cachedRaw = $derived(cache(getReport.raw)({ id: 'r-1' }))
 <section class="mt-6 space-y-3">
     <CodeBlock
         title="src/server/rpc/getReport.ts — handler sets a custom header"
-        code={`import { GET } from 'belte/server/GET'
+        code={`import { GET } from '@briancray/belte/server/GET'
 
 export const getReport = GET<{ id: string }, { id: string; rows: number[] }>(({ id }) =>
     Response.json(

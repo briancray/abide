@@ -1,5 +1,5 @@
-import { GET } from 'belte/server/GET'
-import { json } from 'belte/server/json'
+import { GET } from '@briancray/belte/server/GET'
+import { json } from '@briancray/belte/server/json'
 import { z } from 'zod'
 
 const schema = z.object({ message: z.string() })

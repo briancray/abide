@@ -1,4 +1,4 @@
-import type { BundleWindow } from 'belte/bundle/BundleWindow'
+import type { BundleWindow } from '@briancray/belte/bundle/BundleWindow'
 
 /*
 Optional desktop-window config, default-exported from src/bundle/window.ts

@@ -1,4 +1,4 @@
-import { socket } from 'belte/server/socket'
+import { socket } from '@briancray/belte/server/socket'
 import { z } from 'zod'
 
 export type ChatMessage = { id: string; from: string; text: string; at: number }

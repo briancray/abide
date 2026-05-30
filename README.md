@@ -21,8 +21,8 @@ The cli sits in both columns: humans run it by hand, machines script it.
 
 ```ts
 // src/server/rpc/getOrder.ts
-import { GET } from 'belte/server/GET'
-import { json } from 'belte/server/json'
+import { GET } from '@briancray/belte/server/GET'
+import { json } from '@briancray/belte/server/json'
 
 export const getOrder = GET<{ id: string }>(async ({ id }) => json(await db.order(id)))
 ```
@@ -34,7 +34,7 @@ The export name must match the filename stem. The URL is the file path under `sr
 ```svelte
 <!-- web: in a Svelte page -->
 <script lang="ts">
-  import { cache } from 'belte/browser/cache'
+  import { cache } from '@briancray/belte/browser/cache'
   import { getOrder } from '$server/rpc/getOrder'
   const order = $derived(await cache(getOrder)({ id: '7' }))
 </script>
@@ -86,8 +86,8 @@ Defaults: browser-only when schemaless; all surfaces when a schema is present (t
 
 ```ts
 // src/server/rpc/createOrder.ts
-import { POST } from 'belte/server/POST'
-import { json } from 'belte/server/json'
+import { POST } from '@briancray/belte/server/POST'
+import { json } from '@briancray/belte/server/json'
 import { OrderInput } from '$shared/schemas'
 
 export const createOrder = POST(async (input) => json(await db.insert(input)), {
@@ -110,8 +110,8 @@ Args are a single parsed bag — `undefined` for empty GET/DELETE, an object for
 **Request and server context:**
 
 ```ts
-import { request } from 'belte/server/request' // inbound Request for this SSR/rpc pass
-import { server } from 'belte/server/server'   // the live Bun.Server
+import { request } from '@briancray/belte/server/request' // inbound Request for this SSR/rpc pass
+import { server } from '@briancray/belte/server/server'   // the live Bun.Server
 ```
 
 Both throw if read outside a request scope / before boot. Handlers reach headers and `request.signal` through `request()` rather than a handler parameter, keeping the signature a single args bag.
@@ -159,7 +159,7 @@ const latest = $derived(subscribe(countLog.stream({ to: 5 })))
 **`HttpError`** — thrown by `fn(args)` on a non-2xx response; carries the raw `Response`.
 
 ```ts
-import { HttpError } from 'belte/browser/HttpError'
+import { HttpError } from '@briancray/belte/browser/HttpError'
 
 try {
   await getOrder({ id: 'x' })
@@ -193,7 +193,7 @@ type socket = {
 
 ```ts
 // src/server/sockets/chat.ts
-import { socket } from 'belte/server/socket'
+import { socket } from '@briancray/belte/server/socket'
 
 export const chat = socket<{ user: string; text: string }>({ history: 50 })
 ```
@@ -230,7 +230,7 @@ for await (const message of chat) render(message)
 ```svelte
 <!-- reactive, in a Svelte page -->
 <script lang="ts">
-  import { subscribe } from 'belte/browser/subscribe'
+  import { subscribe } from '@briancray/belte/browser/subscribe'
   import { chat } from '$server/sockets/chat'
   const latest = $derived(subscribe(chat))             // full history then live
   const recent = $derived(subscribe(chat.tail(10)))    // last 10 then live
@@ -304,7 +304,7 @@ type Page = { route: string; params: Record<string, string>; url: URL }
 
 ```svelte
 <script lang="ts">
-  import { page } from 'belte/browser/page'
+  import { page } from '@briancray/belte/browser/page'
 </script>
 <p>route {page.route} — id {page.params.id} — {page.url.search}</p>
 ```
@@ -403,7 +403,7 @@ type BundleWindow = {
 
 ```ts
 // src/bundle/window.ts
-import type { BundleWindow } from 'belte/bundle/BundleWindow'
+import type { BundleWindow } from '@briancray/belte/bundle/BundleWindow'
 
 export default {
   title: 'Orders',
@@ -422,8 +422,8 @@ type onMenu = (handler: (name: string) => void) => () => void
 
 ```svelte
 <script lang="ts">
-  import { onMenu } from 'belte/bundle/onMenu'
-  import { navigate } from 'belte/browser/navigate'
+  import { onMenu } from '@briancray/belte/bundle/onMenu'
+  import { navigate } from '@briancray/belte/browser/navigate'
   $effect(() => onMenu((name) => {
     if (name === 'open-mcp') navigate('/mcp')
   }))

@@ -118,7 +118,7 @@ async function fetchInstaller() {
 <section class="mt-6 space-y-3">
     <CodeBlock
         title="scripts/seed.ts — in-process rpc client for migration scripts"
-        code={`import { createClient } from 'belte/cli/createClient'
+        code={`import { createClient } from '@briancray/belte/cli/createClient'
 import { createEcho } from '$server/rpc/createEcho.ts'   // import forces the registry to populate
 void createEcho                                   // referenced so the import isn't tree-shaken
 

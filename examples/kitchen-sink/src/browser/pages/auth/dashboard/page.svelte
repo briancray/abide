@@ -1,5 +1,5 @@
 <script lang="ts">
-import { cache } from 'belte/browser/cache'
+import { cache } from '@briancray/belte/browser/cache'
 import { getSession } from '$server/rpc/getSession.ts'
 
 /*

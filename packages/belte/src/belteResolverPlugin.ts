@@ -113,6 +113,13 @@ export function belteResolverPlugin({
     const resourcesDir = `${mcpDir}/resources`
 
     /*
+    The bare specifier the project imports belte under (canonical
+    `@briancray/belte` or a package alias). Resolved once from the project's
+    package.json and threaded into every generated module so the codegen's
+    imports resolve regardless of which install style the project uses.
+    */
+    const belteImportNameOnce = once(() => belteImportName(cwd))
+    /*
     The whole-tree validation + per-leaf classification only needs to run
     once per build. Memoise the promise so the virtual manifests
     (rpc/sockets/pages/layouts) share a single scan instead of each one
@@ -121,7 +128,11 @@ export function belteResolverPlugin({
     */
     const scanPagesOnce = once(() =>
         scanPages(pagesDir).then(async (scan) => {
-            await writeRoutesDts({ cwd, pageFiles: scan.pageFiles })
+            await writeRoutesDts({
+                cwd,
+                pageFiles: scan.pageFiles,
+                importName: await belteImportNameOnce(),
+            })
             return scan
         }),
     )
@@ -129,13 +140,6 @@ export function belteResolverPlugin({
     const scanSocketsOnce = once(() => scanSockets(socketsDir))
     const scanPromptsOnce = once(() => scanPrompts(promptsDir))
     const loadShellOnce = once(() => loadShell(cwd))
-    /*
-    The bare specifier the project imports belte under (canonical
-    `@briancray/belte` or a package alias). Resolved once from the project's
-    package.json and threaded into every generated module so the codegen's
-    imports resolve regardless of which install style the project uses.
-    */
-    const belteImportNameOnce = once(() => belteImportName(cwd))
 
     const rpcFilter = new RegExp(`^${escapeRegex(rpcDir)}/.*\\.ts$`)
     const socketsFilter = new RegExp(`^${escapeRegex(socketsDir)}/.*\\.ts$`)

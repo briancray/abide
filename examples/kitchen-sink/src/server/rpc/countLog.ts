@@ -1,5 +1,5 @@
-import { GET } from 'belte/server/GET'
-import { jsonl } from 'belte/server/jsonl'
+import { GET } from '@briancray/belte/server/GET'
+import { jsonl } from '@briancray/belte/server/jsonl'
 
 /*
 JSONL streaming over plain HTTP — one JSON object per line. Best when

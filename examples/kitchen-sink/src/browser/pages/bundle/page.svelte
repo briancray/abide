@@ -105,7 +105,7 @@ import CodeBlock from '$browser/CodeBlock.svelte'
 <section class="mt-6 space-y-3">
     <CodeBlock
         title="src/bundle/window.ts — this app's window config"
-        code={`import type { BundleWindow } from 'belte/bundle/BundleWindow'
+        code={`import type { BundleWindow } from '@briancray/belte/bundle/BundleWindow'
 
 export default {
     title: 'belte kitchen-sink',
@@ -126,8 +126,8 @@ export default {
     <CodeBlock
         title="src/browser/pages/layout.svelte — the app side of the menu contract"
         lang="svelte"
-        code={`import { onMenu } from 'belte/bundle/onMenu'
-import { navigate } from 'belte/browser/navigate'
+        code={`import { onMenu } from '@briancray/belte/bundle/onMenu'
+import { navigate } from '@briancray/belte/browser/navigate'
 
 $effect(() =>
     onMenu((name) => {

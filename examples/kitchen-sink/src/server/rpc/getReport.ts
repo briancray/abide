@@ -1,4 +1,4 @@
-import { GET } from 'belte/server/GET'
+import { GET } from '@briancray/belte/server/GET'
 
 /*
 Returns JSON with a custom `x-report-version` header — used by the

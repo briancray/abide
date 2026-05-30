@@ -1,4 +1,4 @@
-import { POST } from 'belte/server/POST'
+import { POST } from '@briancray/belte/server/POST'
 import { destroySession, readSessionCookie, SESSION_COOKIE } from '../../sessions.ts'
 
 export const logout = POST(() => {

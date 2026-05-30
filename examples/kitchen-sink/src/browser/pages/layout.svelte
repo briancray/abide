@@ -1,9 +1,9 @@
 <script lang="ts">
 import '../app.css'
-import { cache } from 'belte/browser/cache'
-import { navigate } from 'belte/browser/navigate'
-import { page } from 'belte/browser/page'
-import { onMenu } from 'belte/bundle/onMenu'
+import { cache } from '@briancray/belte/browser/cache'
+import { navigate } from '@briancray/belte/browser/navigate'
+import { page } from '@briancray/belte/browser/page'
+import { onMenu } from '@briancray/belte/bundle/onMenu'
 import { getSession } from '$server/rpc/getSession.ts'
 import { logout } from '$server/rpc/logout.ts'
 
