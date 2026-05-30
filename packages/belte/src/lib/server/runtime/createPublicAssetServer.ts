@@ -1,8 +1,8 @@
+import { PUBLIC_ASSET_CACHE_CONTROL } from '../../shared/cacheControlValues.ts'
+import { acceptsZstd } from './acceptsZstd.ts'
 import { containsTraversal } from './containsTraversal.ts'
-import { mimeForExtension } from './mimeForExtension.ts'
+import { createAssetHeaderCache } from './createAssetHeaderCache.ts'
 import type { Assets } from './types/Assets.ts'
-
-const PUBLIC_CACHE_CONTROL = 'public, max-age=3600'
 
 /*
 Serves files from the project's `public/` folder at the site root. Two
@@ -25,27 +25,13 @@ export function createPublicAssetServer({
     publicDir: string
     publicAssets?: Assets
 }): (req: Request, url: URL) => Promise<Response | undefined> {
-    const headerCache = new Map<string, { base: HeadersInit; zstd: HeadersInit }>()
-    function headersFor(pathname: string): { base: HeadersInit; zstd: HeadersInit } {
-        const cached = headerCache.get(pathname)
-        if (cached) {
-            return cached
-        }
-        const base: HeadersInit = {
-            'Content-Type': mimeForExtension(pathname),
-            Vary: 'Accept-Encoding',
-            'Cache-Control': PUBLIC_CACHE_CONTROL,
-        }
-        const bundle = { base, zstd: { ...base, 'Content-Encoding': 'zstd' } }
-        headerCache.set(pathname, bundle)
-        return bundle
-    }
+    const headersFor = createAssetHeaderCache(() => PUBLIC_ASSET_CACHE_CONTROL)
 
     return async function servePublicAsset(req, url) {
         if (containsTraversal(req.url)) {
             return undefined
         }
-        const wantsZstd = (req.headers.get('accept-encoding') ?? '').toLowerCase().includes('zstd')
+        const wantsZstd = acceptsZstd(req)
         const { base, zstd } = headersFor(url.pathname)
         if (publicAssets) {
             const compressed = publicAssets[url.pathname]
@@ -55,7 +41,7 @@ export function createPublicAssetServer({
             if (wantsZstd) {
                 return new Response(compressed, { headers: zstd })
             }
-            return new Response(Bun.zstdDecompressSync(compressed), { headers: base })
+            return new Response(await Bun.zstdDecompress(compressed), { headers: base })
         }
         const file = Bun.file(publicDir + url.pathname)
         if (!(await file.exists())) {

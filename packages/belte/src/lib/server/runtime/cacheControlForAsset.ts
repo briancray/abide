@@ -1,3 +1,8 @@
+import {
+    IMMUTABLE_ASSET_CACHE_CONTROL,
+    REVALIDATE_ASSET_CACHE_CONTROL,
+} from '../../shared/cacheControlValues.ts'
+
 /*
 Bun.build emits `[name]-[hash].[ext]` for chunks; hash is alnum and >=8 chars.
 Source maps inherit the same name (e.g. foo-abc12345.js.map), so the suffix may be `.map`.
@@ -11,7 +16,7 @@ Hashed chunk filenames are content-addressed and immutable; everything else
 */
 export function cacheControlForAsset(pathname: string): string {
     if (HASHED.test(pathname)) {
-        return 'public, max-age=31536000, immutable'
+        return IMMUTABLE_ASSET_CACHE_CONTROL
     }
-    return 'public, max-age=0, must-revalidate'
+    return REVALIDATE_ASSET_CACHE_CONTROL
 }

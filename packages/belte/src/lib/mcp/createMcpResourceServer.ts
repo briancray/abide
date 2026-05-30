@@ -89,7 +89,7 @@ export function createMcpResourceServer({
                 if (!compressed) {
                     return undefined
                 }
-                return contentsFor(relativePath, Bun.zstdDecompressSync(compressed))
+                return contentsFor(relativePath, await Bun.zstdDecompress(compressed))
             }
             const file = Bun.file(`${resourcesDir}/${relativePath}`)
             if (!(await file.exists())) {
