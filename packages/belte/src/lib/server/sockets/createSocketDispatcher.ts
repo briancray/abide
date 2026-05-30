@@ -3,6 +3,10 @@ import { log } from '../../shared/log.ts'
 import { lookupSocket } from './lookupSocket.ts'
 import type { SocketClientFrame } from './types/SocketClientFrame.ts'
 import type { SocketRoutes } from './types/SocketRoutes.ts'
+import type { SocketServerFrame } from './types/SocketServerFrame.ts'
+
+// Reused across every inbound binary frame rather than allocated per message.
+const textDecoder = new TextDecoder()
 
 type SocketDispatcher = {
     open(ws: ServerWebSocket<unknown>): void
@@ -60,8 +64,8 @@ export function createSocketDispatcher(sockets: SocketRoutes): SocketDispatcher 
         return promise
     }
 
-    function send(ws: ServerWebSocket<unknown>, frame: unknown): void {
-        if (ws.readyState !== 1) {
+    function send(ws: ServerWebSocket<unknown>, frame: SocketServerFrame): void {
+        if (ws.readyState !== WebSocket.OPEN) {
             return
         }
         ws.send(JSON.stringify(frame))
@@ -154,10 +158,9 @@ export function createSocketDispatcher(sockets: SocketRoutes): SocketDispatcher 
         const replayCount =
             frame.replay === undefined ? history.length : Math.min(frame.replay, history.length)
         if (replayCount > 0) {
-            const start = history.length - replayCount
-            for (let index = start; index < history.length; index++) {
-                send(ws, { type: 'msg', socket: frame.socket, message: history[index] })
-            }
+            history.slice(history.length - replayCount).forEach((message) => {
+                send(ws, { type: 'msg', socket: frame.socket, message })
+            })
         }
     }
 
@@ -232,7 +235,7 @@ export function createSocketDispatcher(sockets: SocketRoutes): SocketDispatcher 
             if (!state) {
                 return
             }
-            const text = typeof data === 'string' ? data : data.toString('utf8')
+            const text = typeof data === 'string' ? data : textDecoder.decode(data)
             let frame: SocketClientFrame
             try {
                 frame = JSON.parse(text) as SocketClientFrame

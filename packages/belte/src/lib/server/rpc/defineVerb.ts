@@ -77,9 +77,10 @@ export function defineVerb<Args, Return>(
 
     /*
     `getRequest` is unused on the server path — handlers receive parsed
-    `args` directly. createRemoteFunction passes a thunk so the client
-    side can lazily synthesize its Request without forcing the server
-    to allocate one per SSR call.
+    `args` directly and reach the inbound Request via `request()`.
+    createRemoteFunction passes a thunk so the client side can lazily
+    synthesize its Request without forcing the server to allocate one per
+    SSR call.
     */
     function invoke(args: Args | undefined): Promise<Response> {
         return schema ? validateThenHandle(args) : runHandler(args)

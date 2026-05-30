@@ -16,9 +16,5 @@ function sortedKeysReplacer(_key: string, value: unknown): unknown {
     }
     const record = value as Record<string, unknown>
     const sortedKeys = Object.keys(record).sort()
-    const sorted: Record<string, unknown> = {}
-    for (const key of sortedKeys) {
-        sorted[key] = record[key]
-    }
-    return sorted
+    return Object.fromEntries(sortedKeys.map((key) => [key, record[key]]))
 }

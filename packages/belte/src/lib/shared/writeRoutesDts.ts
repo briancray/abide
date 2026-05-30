@@ -9,13 +9,11 @@ when dispatching, so the page component sees `params.rest`, not
 `params['*']`.
 */
 function paramsForRoute(routeUrl: string): Record<string, 'string'> {
-    const params: Record<string, 'string'> = {}
-    for (const segment of parseRouteSegments(routeUrl)) {
-        if (segment.kind === 'param') {
-            params[segment.name] = 'string'
-        }
-    }
-    return params
+    return Object.fromEntries(
+        parseRouteSegments(routeUrl)
+            .filter((segment) => segment.kind === 'param')
+            .map((segment) => [segment.name, 'string'] as const),
+    )
 }
 
 function renderParamsShape(shape: Record<string, 'string'>): string {

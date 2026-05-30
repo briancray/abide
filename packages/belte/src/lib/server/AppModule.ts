@@ -7,10 +7,10 @@ function that runs on SIGINT/SIGTERM. handle is single-middleware with
 next so user code can mutate the response or branch on the URL.
 
 WebSockets are not exposed here — belte's only native WebSocket
-surface is the sockets hub (see `belte/sockets`), multiplexed onto a
+surface is the sockets hub (see `belte/server/socket`), multiplexed onto a
 single framework-owned connection per client at `/__belte/sockets`.
 Inside request scopes, the live Bun.Server is reachable via the
-exported `server` proxy from `belte/server`; `init` receives it
+exported `server()` function from `belte/server`; `init` receives it
 explicitly because it runs outside a request.
 */
 export type AppModule = {

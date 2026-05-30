@@ -41,8 +41,10 @@ export function buildOpenApiSpec(info: {
         const url = entry.remote.url
         const method = entry.remote.method
         const jsonSchema = jsonSchemaForSchema(entry.schema, entry.jsonSchema)
+        const description = jsonSchema.description as string | undefined
         const operation: Record<string, unknown> = {
             operationId: commandNameForUrl(url),
+            ...(description ? { description } : {}),
             responses: { '200': { description: 'OK' } },
         }
         if (BODY_METHODS.has(method)) {

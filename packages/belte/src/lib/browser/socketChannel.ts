@@ -132,8 +132,18 @@ export function getSocketChannel(): Channel {
             for (const [, sub] of active) {
                 sub.callbacks.onError('socket channel disconnected')
             }
+            /*
+            Drop any queued frames too. We've just torn down every local
+            sub, so replaying their `sub`/`unsub`/`pub` frames on
+            reconnect would open ghost subscriptions on the server that
+            no client object tracks (and never gets an `unsub`). This
+            keeps the "no silent re-subscribe across a reconnect"
+            contract above honest — consumers re-open fresh subs.
+            */
+            const hadPending = pendingSends.length > 0
+            pendingSends = []
             ws = undefined
-            if (active.length === 0 && pendingSends.length === 0) {
+            if (active.length === 0 && !hadPending) {
                 return
             }
             setTimeout(connect, backoffMs)

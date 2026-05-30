@@ -145,12 +145,9 @@ cache.invalidate = function invalidate<Args, Return>(
         same set because they share method+url.
         */
         const prefix = `${arg.method} ${arg.url}`
-        const affected: string[] = []
-        for (const key of store.entries.keys()) {
-            if (key === prefix || key.startsWith(`${prefix}?`) || key.startsWith(`${prefix} `)) {
-                affected.push(key)
-            }
-        }
+        const affected = Array.from(store.entries.keys()).filter(
+            (key) => key === prefix || key.startsWith(`${prefix}?`) || key.startsWith(`${prefix} `),
+        )
         affected.forEach((key) => store.entries.delete(key))
         emit(store, affected)
         return

@@ -3,16 +3,18 @@ import { canonicalJson } from './canonicalJson.ts'
 
 /*
 Derives a cache key from a verb-defined remote function and its args. The
-prefix is `${method} ${url}` where `url` is the route template. GET/DELETE
+prefix is `${method} ${url}` where `url` is the route template. GET/DELETE/HEAD
 serialise args onto the URL as `?key=value` with keys sorted so the order
 the caller assembled the object doesn't change the key; POST/PUT/PATCH join
-args after a space as canonical JSON. Sorted key/value pairs are walked once
-and concatenated directly so the hot GET-cache path doesn't allocate per
-intermediate (entries / filtered / URLSearchParams).
+args after a space as canonical JSON. The verb split mirrors buildRpcRequest
+exactly so the key and the synthesized Request can't disagree. Sorted
+key/value pairs are walked once and concatenated directly so the hot
+GET-cache path doesn't allocate per intermediate (entries / filtered /
+URLSearchParams).
 */
 export function keyForRemoteCall(method: HttpVerb, url: string, args: unknown): string {
     const prefix = `${method} ${url}`
-    if (method === 'GET' || method === 'DELETE') {
+    if (method === 'GET' || method === 'DELETE' || method === 'HEAD') {
         if (args && typeof args === 'object' && !Array.isArray(args)) {
             const record = args as Record<string, unknown>
             const keys = Object.keys(record).sort()

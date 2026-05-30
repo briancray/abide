@@ -13,8 +13,13 @@ block that fills this interface with `routePath: paramShape` pairs derived
 from the project's `src/browser/pages/**` tree. A bare belte install has no routes,
 so the fallback arm below keeps the union inhabited before the generated
 d.ts lands.
+
+Declared as an `interface` (not a `type` alias) because the generated d.ts
+augments it via `declare module … { interface Routes { … } }`, and module
+augmentation only merges into interfaces.
 */
-export type Routes = {}
+// biome-ignore lint/suspicious/noEmptyInterface: augmented by the generated routes.d.ts
+export interface Routes {}
 
 type RouteKey = keyof Routes extends never ? string : keyof Routes
 type ParamsFor<R extends RouteKey> = R extends keyof Routes ? Routes[R] : Record<string, string>
@@ -121,26 +126,19 @@ function syncUrl(): void {
     mutable.url = new URL(window.location.href)
 }
 
-type FetchOutcome =
-    | { kind: 'ok'; response: Response }
-    | { kind: 'network-error' }
-    | { kind: 'not-found' }
-    | { kind: 'http-error'; status: number }
-
-async function safeResolveFetch(target: string): Promise<FetchOutcome> {
-    let response: Response
+/*
+Resolves the JSON view payload for a target URL, or undefined when the fetch
+fails for any reason (network error or non-2xx, including 404). The caller
+falls back to a hard navigation in every failure case, so the failure modes
+don't need to be distinguished.
+*/
+async function safeResolveFetch(target: string): Promise<Response | undefined> {
     try {
-        response = await fetch(target, { headers: { Accept: 'application/json' } })
+        const response = await fetch(target, { headers: { Accept: 'application/json' } })
+        return response.ok ? response : undefined
     } catch {
-        return { kind: 'network-error' }
+        return undefined
     }
-    if (response.status === 404) {
-        return { kind: 'not-found' }
-    }
-    if (!response.ok) {
-        return { kind: 'http-error', status: response.status }
-    }
-    return { kind: 'ok', response }
 }
 
 export type NavigateOptions = { replace?: boolean; scroll?: boolean }
@@ -185,12 +183,12 @@ async function applyTarget(
         syncUrl()
         return
     }
-    const outcome = await safeResolveFetch(fullTarget)
-    if (outcome.kind !== 'ok') {
+    const response = await safeResolveFetch(fullTarget)
+    if (!response) {
         window.location.href = fullTarget
         return
     }
-    const result = (await outcome.response.json()) as SsrPayload
+    const result = (await response.json()) as SsrPayload
     try {
         const { Page, Layout } = await loadView(result.route)
         applyState(result.route, result.params, Page, Layout)

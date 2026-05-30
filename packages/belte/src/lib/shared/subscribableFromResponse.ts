@@ -24,7 +24,7 @@ mirroring the plain `fn(args)` decode path.
 */
 function streamResponse<T>(response: Response): AsyncIterable<T> {
     if (!response.ok) {
-        return errorIterable(new HttpError(response))
+        return errorIterable<T>(new HttpError(response))
     }
     const contentType = (response.headers.get('content-type') ?? '').toLowerCase()
     if (contentType.startsWith('text/event-stream')) {
@@ -36,25 +36,9 @@ function streamResponse<T>(response: Response): AsyncIterable<T> {
     return oneShot<T>(response)
 }
 
-function errorIterable<T>(error: Error): AsyncIterable<T> {
-    return {
-        [Symbol.asyncIterator](): AsyncIterator<T, void, undefined> {
-            let done = false
-            return {
-                async next() {
-                    if (done) {
-                        return { value: undefined, done: true }
-                    }
-                    done = true
-                    throw error
-                },
-                async return() {
-                    done = true
-                    return { value: undefined, done: true }
-                },
-            }
-        },
-    }
+/* Surfaces a non-2xx response (or any pre-stream failure) as a thrown error on the first pull. */
+async function* errorIterable<T>(error: Error): AsyncGenerator<T> {
+    throw error
 }
 
 /*
@@ -64,120 +48,84 @@ completes. Makes `fn.stream(args)` symmetrical across streaming and
 non-streaming handlers — callers can pick the iteration shape without
 worrying about which body the handler returned.
 */
-function oneShot<T>(response: Response): AsyncIterable<T> {
-    return {
-        [Symbol.asyncIterator](): AsyncIterator<T, void, undefined> {
-            let yielded = false
-            return {
-                async next() {
-                    if (yielded) {
-                        return { value: undefined, done: true }
-                    }
-                    yielded = true
-                    const value = (await decodeResponse(response)) as T
-                    return { value, done: false }
-                },
-                async return() {
-                    yielded = true
-                    return { value: undefined, done: true }
-                },
+async function* oneShot<T>(response: Response): AsyncGenerator<T> {
+    yield (await decodeResponse(response)) as T
+}
+
+/*
+Reads a streaming text Response and yields raw frame strings split on
+`delimiter` (`\n\n` for SSE events, `\n` for JSON lines). Owns the whole
+buffering lifecycle: incremental decode, amortised-O(n) compaction, a
+final flush of the trailing partial frame, and reader cancellation when
+the consumer stops iterating (the generator's `finally` runs on
+`return()`). The SSE and jsonl parsers layer their per-frame parsing on
+top of this single machine so the two can't drift.
+*/
+async function* frameReader(response: Response, delimiter: string): AsyncGenerator<string> {
+    const body = response.body
+    if (!body) {
+        return
+    }
+    const reader = body.pipeThrough(new TextDecoderStream()).getReader()
+    let buffer = ''
+    let bufferStart = 0
+    try {
+        while (true) {
+            const { value, done } = await reader.read()
+            if (done) {
+                if (bufferStart < buffer.length) {
+                    yield buffer.slice(bufferStart)
+                }
+                return
             }
-        },
+            /*
+            Compact only when the unread region is small relative to the
+            consumed prefix — keeps amortised work O(n) instead of
+            quadratic slicing per frame boundary.
+            */
+            if (bufferStart > buffer.length / 2) {
+                buffer = buffer.slice(bufferStart) + value
+                bufferStart = 0
+            } else {
+                buffer += value
+            }
+            let boundary = buffer.indexOf(delimiter, bufferStart)
+            while (boundary !== -1) {
+                yield buffer.slice(bufferStart, boundary)
+                bufferStart = boundary + delimiter.length
+                boundary = buffer.indexOf(delimiter, bufferStart)
+            }
+        }
+    } finally {
+        await reader.cancel().catch(() => undefined)
     }
 }
 
 /*
-SSE parser: reads the response body as text frames separated by blank
-lines, splits each frame into `event:` / `data:` lines, and yields the
-JSON-parsed data payload. The `sse()` respond helper emits an
-`event: error\ndata: {"message":...}` frame when the source generator
-throws, which we surface as a thrown Error so consumer loops can
-surface mid-stream failure rather than silently stopping.
+SSE parser: yields the JSON-parsed `data` payload of each `event:`/`data:`
+frame. The `sse()` respond helper emits an `event: error\ndata:
+{"message":...}` frame when the source generator throws, which we surface
+as a thrown Error so consumer loops can react to mid-stream failure
+rather than silently stopping.
 */
-function parseSse<T>(response: Response): AsyncIterable<T> {
-    return {
-        [Symbol.asyncIterator](): AsyncIterator<T, void, undefined> {
-            const body = response.body
-            if (!body) {
-                return emptyIterator<T>()
-            }
-            const reader = body.pipeThrough(new TextDecoderStream()).getReader()
-            let buffer = ''
-            let bufferStart = 0
-            const pending: Array<{ event: string; data: string }> = []
-            let done = false
-
-            async function pullFrames(): Promise<void> {
-                while (pending.length === 0 && !done) {
-                    const { value, done: streamDone } = await reader.read()
-                    if (streamDone) {
-                        done = true
-                        if (bufferStart < buffer.length) {
-                            const frame = parseFrame(buffer.slice(bufferStart))
-                            if (frame) {
-                                pending.push(frame)
-                            }
-                            buffer = ''
-                            bufferStart = 0
-                        }
-                        return
-                    }
-                    /*
-                    Compact only when the unread region is small relative to
-                    the consumed prefix — keeps amortised work O(n) instead
-                    of quadratic slicing per frame boundary.
-                    */
-                    if (bufferStart > buffer.length / 2) {
-                        buffer = buffer.slice(bufferStart) + value
-                        bufferStart = 0
-                    } else {
-                        buffer += value
-                    }
-                    let boundary = buffer.indexOf('\n\n', bufferStart)
-                    while (boundary !== -1) {
-                        const raw = buffer.slice(bufferStart, boundary)
-                        bufferStart = boundary + 2
-                        const frame = parseFrame(raw)
-                        if (frame) {
-                            pending.push(frame)
-                        }
-                        boundary = buffer.indexOf('\n\n', bufferStart)
-                    }
+async function* parseSse<T>(response: Response): AsyncGenerator<T> {
+    for await (const raw of frameReader(response, '\n\n')) {
+        const frame = parseFrame(raw)
+        if (!frame) {
+            continue
+        }
+        if (frame.event === 'error') {
+            try {
+                const decoded = JSON.parse(frame.data) as { message?: string }
+                throw new Error(decoded?.message ?? 'sse stream error')
+            } catch (err) {
+                if (err instanceof SyntaxError) {
+                    throw new Error(frame.data || 'sse stream error')
                 }
+                throw err
             }
-
-            return {
-                async next() {
-                    while (true) {
-                        if (pending.length > 0) {
-                            const next = pending.shift() as { event: string; data: string }
-                            if (next.event === 'error') {
-                                try {
-                                    const decoded = JSON.parse(next.data) as { message?: string }
-                                    throw new Error(decoded?.message ?? 'sse stream error')
-                                } catch (err) {
-                                    if (err instanceof SyntaxError) {
-                                        throw new Error(next.data || 'sse stream error')
-                                    }
-                                    throw err
-                                }
-                            }
-                            const value = JSON.parse(next.data) as T
-                            return { value, done: false }
-                        }
-                        if (done) {
-                            return { value: undefined, done: true }
-                        }
-                        await pullFrames()
-                    }
-                },
-                async return() {
-                    done = true
-                    await reader.cancel().catch(() => undefined)
-                    return { value: undefined, done: true }
-                },
-            }
-        },
+        }
+        yield JSON.parse(frame.data) as T
     }
 }
 
@@ -205,96 +153,22 @@ function parseFrame(raw: string): { event: string; data: string } | undefined {
 }
 
 /*
-JSONL/NDJSON parser: reads the response body as text, splits on `\n`,
-parses each non-empty line as JSON, and yields the value. The `jsonl()`
-respond helper emits a trailing `{"$error":"<message>"}` line when the
-source generator throws — that's surfaced here as a thrown Error so
-consumer loops can react to mid-stream failure.
+JSONL/NDJSON parser: parses each non-empty line as JSON and yields the
+value. The `jsonl()` respond helper emits a trailing
+`{"$error":"<message>"}` line when the source generator throws — that's
+surfaced here as a thrown Error so consumer loops can react to mid-stream
+failure.
 */
-function parseJsonLines<T>(response: Response): AsyncIterable<T> {
-    return {
-        [Symbol.asyncIterator](): AsyncIterator<T, void, undefined> {
-            const body = response.body
-            if (!body) {
-                return emptyIterator<T>()
-            }
-            const reader = body.pipeThrough(new TextDecoderStream()).getReader()
-            let buffer = ''
-            let bufferStart = 0
-            const pending: string[] = []
-            let done = false
-
-            async function pullLines(): Promise<void> {
-                while (pending.length === 0 && !done) {
-                    const { value, done: streamDone } = await reader.read()
-                    if (streamDone) {
-                        done = true
-                        if (bufferStart < buffer.length) {
-                            pending.push(buffer.slice(bufferStart))
-                            buffer = ''
-                            bufferStart = 0
-                        }
-                        return
-                    }
-                    if (bufferStart > buffer.length / 2) {
-                        buffer = buffer.slice(bufferStart) + value
-                        bufferStart = 0
-                    } else {
-                        buffer += value
-                    }
-                    let newline = buffer.indexOf('\n', bufferStart)
-                    while (newline !== -1) {
-                        const line = buffer.slice(bufferStart, newline)
-                        bufferStart = newline + 1
-                        if (line.length > 0) {
-                            pending.push(line)
-                        }
-                        newline = buffer.indexOf('\n', bufferStart)
-                    }
-                }
-            }
-
-            return {
-                async next() {
-                    while (true) {
-                        if (pending.length > 0) {
-                            const line = pending.shift() as string
-                            const parsed = JSON.parse(line) as Record<string, unknown> & {
-                                $error?: string
-                            }
-                            if (
-                                parsed &&
-                                typeof parsed === 'object' &&
-                                typeof parsed.$error === 'string'
-                            ) {
-                                throw new Error(parsed.$error)
-                            }
-                            return { value: parsed as T, done: false }
-                        }
-                        if (done) {
-                            return { value: undefined, done: true }
-                        }
-                        await pullLines()
-                    }
-                },
-                async return() {
-                    done = true
-                    await reader.cancel().catch(() => undefined)
-                    return { value: undefined, done: true }
-                },
-            }
-        },
-    }
-}
-
-function emptyIterator<T>(): AsyncIterator<T, void, undefined> {
-    return {
-        async next() {
-            return { value: undefined, done: true }
-        },
-        async return() {
-            return { value: undefined, done: true }
-        },
+async function* parseJsonLines<T>(response: Response): AsyncGenerator<T> {
+    for await (const raw of frameReader(response, '\n')) {
+        if (raw.length === 0) {
+            continue
+        }
+        const parsed = JSON.parse(raw) as Record<string, unknown> & { $error?: string }
+        if (parsed && typeof parsed === 'object' && typeof parsed.$error === 'string') {
+            throw new Error(parsed.$error)
+        }
+        yield parsed as T
     }
 }
 
@@ -315,15 +189,30 @@ export function subscribableFromResponse<T>(
         name,
         [Symbol.asyncIterator]() {
             let inner: AsyncIterator<T, void, undefined> | undefined
+            let cancelled = false
             return {
                 async next() {
+                    if (cancelled) {
+                        return { value: undefined, done: true }
+                    }
                     if (!inner) {
                         const response = await fetchResponse()
                         inner = streamResponse<T>(response)[Symbol.asyncIterator]()
+                        /*
+                        If return() landed while we were awaiting the
+                        fetch, `inner` was still undefined then so its
+                        reader was never cancelled — release the body now
+                        rather than leaving the HTTP stream open.
+                        */
+                        if (cancelled) {
+                            await inner.return?.(undefined)
+                            return { value: undefined, done: true }
+                        }
                     }
                     return inner.next()
                 },
                 async return() {
+                    cancelled = true
                     await inner?.return?.(undefined)
                     return { value: undefined, done: true }
                 },

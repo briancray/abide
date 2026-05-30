@@ -20,29 +20,47 @@ type RegistryManifests = {
 }
 
 let manifests: RegistryManifests | undefined
-let loadedAll = false
+let loading: Promise<void> | undefined
 
 export function setRegistryManifests(value: RegistryManifests): void {
     manifests = value
-    loadedAll = false
+    loading = undefined
 }
 
 /*
 On first call, eagerly imports every rpc + socket + prompt module so
 defineVerb / defineSocket / definePrompt fire and populate the
-registries. Idempotent — repeat calls are no-ops. Eager loading is
-acceptable here because enumeration (MCP tool/resource/prompt lists,
-the OpenAPI document) fundamentally requires the full surface; the
-alternative of per-call lazy loading produces flaky first-call latency.
+registries. Idempotent — repeat calls reuse the same in-flight promise,
+so concurrent first requests (e.g. /openapi.json + an MCP tools/list)
+trigger exactly one load instead of racing to fire the full import set
+each. Eager loading is acceptable here because enumeration (MCP
+tool/resource/prompt lists, the OpenAPI document) fundamentally requires
+the full surface; the alternative of per-call lazy loading produces flaky
+first-call latency.
 */
-export async function ensureRegistriesLoaded(): Promise<void> {
-    if (loadedAll || !manifests) {
-        return
+export function ensureRegistriesLoaded(): Promise<void> {
+    if (!manifests) {
+        return Promise.resolve()
     }
-    await Promise.all([
-        ...Object.values(manifests.rpc).map((loader) => loader()),
-        ...Object.values(manifests.sockets).map((loader) => loader()),
-        ...Object.values(manifests.prompts).map((loader) => loader()),
-    ])
-    loadedAll = true
+    if (!loading) {
+        const { rpc, sockets, prompts } = manifests
+        loading = Promise.all([
+            ...Object.values(rpc).map((loader) => loader()),
+            ...Object.values(sockets).map((loader) => loader()),
+            ...Object.values(prompts).map((loader) => loader()),
+        ])
+            .then(() => undefined)
+            /*
+            Clear the memo on failure so a transient import error (a
+            module that throws at load, fixed by the next HMR pass)
+            doesn't poison every later enumeration request for the
+            process lifetime. The rejection still propagates to this
+            caller; the reset only affects subsequent calls.
+            */
+            .catch((error) => {
+                loading = undefined
+                throw error
+            })
+    }
+    return loading
 }
