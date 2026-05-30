@@ -11,7 +11,7 @@
         "bundle": "belte bundle"
     },
     "dependencies": {
-        "belte": "^0.2.0",
+        "belte": "npm:@briancray/belte@^0.2.0",
         "svelte": "^5.0.0"
     }
 }

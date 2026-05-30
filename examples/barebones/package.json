@@ -11,7 +11,7 @@
         "bundle": "belte bundle"
     },
     "dependencies": {
-        "belte": "workspace:*",
+        "belte": "workspace:@briancray/belte@*",
         "svelte": "^5.0.0"
     }
 }

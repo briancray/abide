@@ -1,7 +1,7 @@
 # Changesets
 
 This folder is managed by [Changesets](https://github.com/changesets/changesets). It drives
-versioning, the `CHANGELOG.md`, npm publishing, and GitHub Releases for `belte`.
+versioning, the `CHANGELOG.md`, npm publishing, and GitHub Releases for `@briancray/belte`.
 
 ## Adding a changeset
 

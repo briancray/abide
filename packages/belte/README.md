@@ -1,4 +1,4 @@
-# belte
+# @briancray/belte
 
 Isomorphic multimodal HTTP framework built for humans and machines in a single [Bun](https://bun.sh) runtime.
 
@@ -11,7 +11,7 @@ The bundler swaps the runtime per target — the call site, name, and behaviour 
 ## Install
 
 ```sh
-bun add belte
+bun add @briancray/belte
 ```
 
 `svelte` is a peer dependency; `tailwindcss` and `bun-plugin-tailwind` are optional peers.
@@ -22,8 +22,8 @@ Declare a remote function once:
 
 ```ts
 // src/server/rpc/getOrder.ts
-import { GET } from 'belte/server/GET'
-import { json } from 'belte/server/json'
+import { GET } from '@briancray/belte/server/GET'
+import { json } from '@briancray/belte/server/json'
 
 export const getOrder = GET<{ id: string }>(async ({ id }) => json(await db.getOrder(id)))
 ```

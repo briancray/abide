@@ -1,5 +1,5 @@
 {
-    "name": "belte",
+    "name": "@briancray/belte",
     "version": "0.2.0",
     "type": "module",
     "description": "Isomorphic multimodal HTTP framework built for humans and machines in a single Bun runtime",
