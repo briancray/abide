@@ -29,8 +29,7 @@ click away even after an explicit disconnect.
 const LAST_URL_KEY = 'belte:last-server-url'
 
 // Injected globals: app title from the launcher, logo data URI from the build.
-const heading =
-    (globalThis as { __BELTE_TITLE__?: string }).__BELTE_TITLE__ ?? 'belte app'
+const heading = (globalThis as { __BELTE_TITLE__?: string }).__BELTE_TITLE__ ?? 'belte app'
 const logo = (globalThis as { __BELTE_LOGO__?: string }).__BELTE_LOGO__
 
 const placeholder = 'https://example.com'
@@ -134,10 +133,12 @@ async function start(): Promise<void> {
 }
 </script>
 
-<main class="flex min-h-screen items-center justify-center bg-gray-50 p-6 text-gray-900 dark:bg-gray-950 dark:text-gray-100">
-    <div class="w-full max-w-sm rounded-2xl bg-white p-8 shadow-sm ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-800">
+<main
+    class="flex min-h-screen items-center justify-center bg-gray-50 p-6 text-gray-900 dark:bg-gray-950 dark:text-gray-100">
+    <div
+        class="w-full max-w-sm rounded-2xl bg-white p-8 shadow-sm ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-800">
         {#if logo}
-            <img src={logo} alt="" class="mx-auto mb-5 h-16 w-16 rounded-xl object-contain" />
+            <img src={logo} alt="" class="mx-auto mb-5 h-16 w-16 rounded-xl object-contain">
         {/if}
         <h1 class="mb-6 text-center text-xl font-semibold tracking-tight">{heading}</h1>
 
@@ -146,19 +147,16 @@ async function start(): Promise<void> {
             onsubmit={(event) => {
                 event.preventDefault()
                 void connect()
-            }}
-        >
+            }}>
             <input
                 type="url"
                 bind:value={url}
                 {placeholder}
                 autocomplete="url"
-                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-900 focus:ring-1 focus:ring-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:focus:border-gray-100 dark:focus:ring-gray-100"
-            />
+                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-900 focus:ring-1 focus:ring-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:focus:border-gray-100 dark:focus:ring-gray-100">
             <button
                 type="submit"
-                class="w-full rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-700 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-300"
-            >
+                class="w-full rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-700 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-300">
                 Connect
             </button>
         </form>
@@ -173,8 +171,7 @@ async function start(): Promise<void> {
             type="button"
             onclick={() => void start()}
             disabled={starting}
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium hover:bg-gray-50 disabled:opacity-60 dark:border-gray-700 dark:hover:bg-gray-800"
-        >
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium hover:bg-gray-50 disabled:opacity-60 dark:border-gray-700 dark:hover:bg-gray-800">
             {starting ? 'Starting…' : 'Start server'}
         </button>
 
@@ -184,7 +181,9 @@ async function start(): Promise<void> {
 
         <p class="mt-8 text-center text-xs text-gray-400 dark:text-gray-500">
             made with
-            <a href="https://github.com/briancray/belte" class="underline hover:text-gray-600 dark:hover:text-gray-300">
+            <a
+                href="https://github.com/briancray/belte"
+                class="underline hover:text-gray-600 dark:hover:text-gray-300">
                 belte
             </a>
         </p>

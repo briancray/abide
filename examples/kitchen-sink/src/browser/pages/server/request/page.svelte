@@ -1,9 +1,9 @@
 <script lang="ts">
-import CodeBlock from '$browser/CodeBlock.svelte'
 import { cache } from '@briancray/belte/browser/cache'
 import { subscribe } from '@briancray/belte/browser/subscribe'
-import { whoAmI } from '$server/rpc/whoAmI.ts'
+import CodeBlock from '$browser/CodeBlock.svelte'
 import { publishChat } from '$server/rpc/publishChat.ts'
+import { whoAmI } from '$server/rpc/whoAmI.ts'
 import { chat } from '$server/sockets/chat.ts'
 
 const me = await cache(whoAmI)()
@@ -29,10 +29,12 @@ async function send() {
     <span class="mx-2">/</span>
     <span><code class="font-mono">request()</code> + <code class="font-mono">server()</code></span>
 </nav>
-<h1 class="text-3xl font-bold"><code class="font-mono">request()</code> + <code class="font-mono">server()</code></h1>
+<h1 class="text-3xl font-bold">
+    <code class="font-mono">request()</code> + <code class="font-mono">server()</code>
+</h1>
 <p class="mt-2 text-slate-600">
-    Per-request and server-wide accessors backed by <code class="font-mono">AsyncLocalStorage</code>.
-    Reach for them from any scope inside a handler or SSR pass — no plumbing.
+    Per-request and server-wide accessors backed by <code class="font-mono">AsyncLocalStorage</code>
+    . Reach for them from any scope inside a handler or SSR pass — no plumbing.
 </p>
 
 <section class="mt-6">
@@ -54,7 +56,9 @@ async function send() {
                 <tr>
                     <td class="px-4 py-2 font-mono">server()</td>
                     <td class="px-4 py-2 font-mono text-slate-500">Bun.Server</td>
-                    <td class="px-4 py-2 text-slate-600">called before <code class="font-mono">Bun.serve</code> finishes booting</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        called before <code class="font-mono">Bun.serve</code> finishes booting
+                    </td>
                 </tr>
             </tbody>
         </table>
@@ -62,12 +66,16 @@ async function send() {
 </section>
 
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
-    <h2 class="text-sm font-semibold"><code class="font-mono">request()</code> — read inbound headers</h2>
+    <h2 class="text-sm font-semibold">
+        <code class="font-mono">request()</code> — read inbound headers
+    </h2>
     <p class="mt-1 text-xs text-slate-500">
         <code class="font-mono">whoAmI()</code> reads <code class="font-mono">cookie</code> and
-        <code class="font-mono">user-agent</code> off the inbound request — same on SSR and over the wire.
+        <code class="font-mono">user-agent</code> off the inbound request — same on SSR and over the
+        wire.
     </p>
-    <pre class="mt-3 overflow-x-auto rounded-md bg-slate-900 p-4 text-xs leading-relaxed text-slate-100"><code
+    <pre
+        class="mt-3 overflow-x-auto rounded-md bg-slate-900 p-4 text-xs leading-relaxed text-slate-100"><code
         >{JSON.stringify(me, undefined, 2)}</code></pre>
 </section>
 
@@ -75,7 +83,8 @@ async function send() {
     <h2 class="text-sm font-semibold">Publish through a validated rpc</h2>
     <p class="mt-1 text-xs text-slate-500">
         <code class="font-mono">publishChat</code> validates, then calls
-        <code class="font-mono">chat.publish(message)</code>. <code class="font-mono">server()</code>
+        <code class="font-mono">chat.publish(message)</code>
+        . <code class="font-mono">server()</code>
         is used implicitly by the socket runtime to fan out to remote subscribers.
     </p>
     <div class="mt-3 flex flex-wrap items-end gap-2">
@@ -83,13 +92,13 @@ async function send() {
             from
             <input
                 bind:value={from}
-                class="mt-1 block rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
+                class="mt-1 block rounded-md border border-slate-300 px-3 py-1.5 text-sm">
         </label>
         <label class="flex-1 text-xs font-medium">
             text
             <input
                 bind:value={text}
-                class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
+                class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm">
         </label>
         <button
             type="button"
@@ -100,7 +109,8 @@ async function send() {
     </div>
     <p class="mt-2 text-xs text-slate-500">{lastSendResult}</p>
     {#if latestChat}
-        <pre class="mt-3 overflow-x-auto rounded-md bg-slate-900 p-4 text-xs leading-relaxed text-slate-100"><code
+        <pre
+            class="mt-3 overflow-x-auto rounded-md bg-slate-900 p-4 text-xs leading-relaxed text-slate-100"><code
             >{JSON.stringify(latestChat, undefined, 2)}</code></pre>
     {/if}
 </section>

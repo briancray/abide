@@ -1,9 +1,9 @@
 <script lang="ts">
-import CodeBlock from '$browser/CodeBlock.svelte'
 import { HttpError } from '@briancray/belte/browser/HttpError'
-import { getProduct } from '$server/rpc/getProduct.ts'
+import CodeBlock from '$browser/CodeBlock.svelte'
 import { boom } from '$server/rpc/boom.ts'
 import { getEcho } from '$server/rpc/getEcho.ts'
+import { getProduct } from '$server/rpc/getProduct.ts'
 
 let outcome404 = $state('(not triggered)')
 let outcome405 = $state('(not triggered)')
@@ -46,10 +46,14 @@ async function trigger500() {
 <h1 class="text-3xl font-bold">HTTP errors</h1>
 <p class="mt-2 text-slate-600">
     Non-2xx comes back through the same call site as the success path.
-    <code class="font-mono">HttpError</code> carries <code class="font-mono">status</code>,
-    <code class="font-mono">statusText</code>, and the raw
-    <code class="font-mono">response</code>. All error responses are
-    <code class="font-mono">Cache-Control: no-store</code>.
+    <code class="font-mono">HttpError</code> carries <code class="font-mono">status</code>
+    ,
+    <code class="font-mono">statusText</code>
+    , and the raw
+    <code class="font-mono">response</code>
+    . All error responses are
+    <code class="font-mono">Cache-Control: no-store</code>
+    .
 </p>
 
 <section class="mt-6">
@@ -66,18 +70,26 @@ async function trigger500() {
             <tbody class="divide-y divide-slate-100">
                 <tr>
                     <td class="px-4 py-2 font-mono">404</td>
-                    <td class="px-4 py-2 text-slate-600">handler returns <code class="font-mono">error(404, …)</code></td>
-                    <td class="px-4 py-2 text-slate-600">caught as <code class="font-mono">HttpError</code></td>
+                    <td class="px-4 py-2 text-slate-600">
+                        handler returns <code class="font-mono">error(404, …)</code>
+                    </td>
+                    <td class="px-4 py-2 text-slate-600">
+                        caught as <code class="font-mono">HttpError</code>
+                    </td>
                 </tr>
                 <tr>
                     <td class="px-4 py-2 font-mono">405</td>
                     <td class="px-4 py-2 text-slate-600">wrong verb sent to a known URL</td>
-                    <td class="px-4 py-2 text-slate-600">framework adds <code class="font-mono">Allow</code> header</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        framework adds <code class="font-mono">Allow</code> header
+                    </td>
                 </tr>
                 <tr>
                     <td class="px-4 py-2 font-mono">500</td>
                     <td class="px-4 py-2 text-slate-600">handler throws</td>
-                    <td class="px-4 py-2 text-slate-600">routes through <code class="font-mono">app.handleError</code></td>
+                    <td class="px-4 py-2 text-slate-600">
+                        routes through <code class="font-mono">app.handleError</code>
+                    </td>
                 </tr>
             </tbody>
         </table>
@@ -87,13 +99,23 @@ async function trigger500() {
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
     <h2 class="text-sm font-semibold">Try it</h2>
     <div class="mt-3 flex flex-wrap gap-2 text-sm">
-        <button type="button" class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100" onclick={trigger404}>
-            getProduct({`{ id: 'missing' }`}) → 404
+        <button
+            type="button"
+            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+            onclick={trigger404}>
+            getProduct({`{ id: 'missing' }`}
+            ) → 404
         </button>
-        <button type="button" class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100" onclick={trigger405}>
+        <button
+            type="button"
+            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+            onclick={trigger405}>
             POST /rpc/getEcho → 405
         </button>
-        <button type="button" class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100" onclick={trigger500}>
+        <button
+            type="button"
+            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+            onclick={trigger500}>
             boom() → 500
         </button>
     </div>

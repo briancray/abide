@@ -1,6 +1,6 @@
 <script lang="ts">
-import CodeBlock from '$browser/CodeBlock.svelte'
 import { cache } from '@briancray/belte/browser/cache'
+import CodeBlock from '$browser/CodeBlock.svelte'
 import { getCounter } from '$server/rpc/getCounter.ts'
 import { incrementCounter } from '$server/rpc/incrementCounter.ts'
 import { resetCounter } from '$server/rpc/resetCounter.ts'
@@ -31,8 +31,8 @@ async function reset() {
 <h1 class="text-3xl font-bold"><code class="font-mono">cache()</code> + invalidation</h1>
 <p class="mt-2 text-slate-600">
     Wraps a remote call with dedupe, SSR snapshot, and reactivity. Two
-    <code class="font-mono">$derived</code> reads against the same key share one entry and
-    re-run together on invalidation.
+    <code class="font-mono">$derived</code> reads against the same key share one entry and re-run
+    together on invalidation.
 </p>
 
 <section class="mt-6">
@@ -54,7 +54,9 @@ async function reset() {
                 </tr>
                 <tr>
                     <td class="px-4 py-2 font-mono text-slate-500">0</td>
-                    <td class="px-4 py-2 text-slate-600">dedupe in-flight only — drop once settled</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        dedupe in-flight only — drop once settled
+                    </td>
                 </tr>
                 <tr>
                     <td class="px-4 py-2 font-mono text-slate-500">number (ms)</td>
@@ -63,7 +65,10 @@ async function reset() {
                 <tr>
                     <td class="px-4 py-2 font-mono">key</td>
                     <td class="px-4 py-2 font-mono text-slate-500">string / unknown[]</td>
-                    <td class="px-4 py-2 text-slate-600">override the auto key (e.g. <code class="font-mono">['post', id]</code>)</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        override the auto key (e.g. <code class="font-mono">['post', id]</code>
+                        )
+                    </td>
                 </tr>
             </tbody>
         </table>
@@ -82,8 +87,8 @@ async function reset() {
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
     <h2 class="text-sm font-semibold">Try it</h2>
     <p class="mt-1 text-xs text-slate-500">
-        Two <code class="font-mono">$derived(cache(getCounter)())</code> reads against the same
-        key — both update together because they share one entry.
+        Two <code class="font-mono">$derived(cache(getCounter)())</code> reads against the same key
+        — both update together because they share one entry.
     </p>
     <div class="mt-3 grid gap-3 sm:grid-cols-2">
         <div class="rounded-md border border-slate-200 p-3">

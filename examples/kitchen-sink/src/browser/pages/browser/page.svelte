@@ -1,6 +1,6 @@
 <script lang="ts">
-import { page } from '@briancray/belte/browser/page'
 import { navigate } from '@briancray/belte/browser/navigate'
+import { page } from '@briancray/belte/browser/page'
 
 const currentPath = $derived(page.url.pathname)
 </script>
@@ -20,9 +20,11 @@ const currentPath = $derived(page.url.pathname)
         class="rounded-lg border border-slate-200 bg-white p-5 hover:border-slate-400">
         <h2 class="text-lg font-semibold">Direct calls</h2>
         <p class="mt-1 text-sm text-slate-600">
-            <code class="font-mono">await getX()</code>, plus
+            <code class="font-mono">await getX()</code>
+            , plus
             <code class="font-mono">fn.url</code> and <code class="font-mono">fn.method</code>
-            for forms and plain <code class="font-mono">fetch</code>.
+            for forms and plain <code class="font-mono">fetch</code>
+            .
         </p>
     </a>
     <a
@@ -31,7 +33,8 @@ const currentPath = $derived(page.url.pathname)
         <h2 class="text-lg font-semibold"><code class="font-mono">cache()</code> + invalidation</h2>
         <p class="mt-1 text-sm text-slate-600">
             Dedupe, SSR hydration, and reactive reads via
-            <code class="font-mono">$derived(cache(fn)())</code>.
+            <code class="font-mono">$derived(cache(fn)())</code>
+            .
         </p>
     </a>
     <a
@@ -40,14 +43,18 @@ const currentPath = $derived(page.url.pathname)
         <h2 class="text-lg font-semibold"><code class="font-mono">subscribe()</code></h2>
         <p class="mt-1 text-sm text-slate-600">
             Reactive consumer for streams — a socket, or any
-            <code class="font-mono">fn.stream(args)</code>. Read the latest value inside any
-            <code class="font-mono">$derived</code>.
+            <code class="font-mono">fn.stream(args)</code>
+            . Read the latest value inside any
+            <code class="font-mono">$derived</code>
+            .
         </p>
     </a>
     <a
         href="/server/raw-stream"
         class="rounded-lg border border-slate-200 bg-white p-5 hover:border-slate-400">
-        <h2 class="text-lg font-semibold"><code class="font-mono">.raw</code> + <code class="font-mono">.stream</code></h2>
+        <h2 class="text-lg font-semibold">
+            <code class="font-mono">.raw</code> + <code class="font-mono">.stream</code>
+        </h2>
         <p class="mt-1 text-sm text-slate-600">
             Every rpc has two siblings on its value — documented under
             <code class="font-mono">belte/server</code> → RPC, since the shape belongs to the
@@ -57,12 +64,14 @@ const currentPath = $derived(page.url.pathname)
 </section>
 
 <section class="mt-10 rounded-lg border border-slate-200 bg-white p-5">
-    <h2 class="text-sm font-semibold"><code class="font-mono">page</code> + <code class="font-mono">navigate</code></h2>
+    <h2 class="text-sm font-semibold">
+        <code class="font-mono">page</code> + <code class="font-mono">navigate</code>
+    </h2>
     <p class="mt-1 text-sm text-slate-600">
         <code class="font-mono">page</code> is reactive — reading
         <code class="font-mono">page.url.pathname</code>
-        inside a $derived (as this section does) subscribes the scope, so the value below
-        updates the moment <code class="font-mono">navigate()</code>
+        inside a $derived (as this section does) subscribes the scope, so the value below updates
+        the moment <code class="font-mono">navigate()</code>
         fires.
     </p>
     <p class="mt-3 font-mono text-sm text-slate-700">
@@ -79,7 +88,8 @@ const currentPath = $derived(page.url.pathname)
             type="button"
             class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
             onclick={() => navigate('/browser', { replace: true })}>
-            navigate('/browser', {`{ replace: true }`})
+            navigate('/browser', {`{ replace: true }`}
+            )
         </button>
     </div>
 </section>

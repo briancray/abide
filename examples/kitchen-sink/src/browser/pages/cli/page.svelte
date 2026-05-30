@@ -11,13 +11,15 @@ async function fetchInstaller() {
 
 <h1 class="text-3xl font-bold"><code class="font-mono">belte/cli</code></h1>
 <p class="mt-2 text-slate-600">
-    The in-process / remote rpc client (<code class="font-mono">createClient</code>) and the
-    standalone CLI binary — a thin remote client that talks to a running server over HTTP.
+    The in-process / remote rpc client (<code class="font-mono">createClient</code>
+    ) and the standalone CLI binary — a thin remote client that talks to a running server over HTTP.
     Schema-bearing rpcs auto-expose; argv parses against the same JSON Schema MCP uses.
 </p>
 
 <section class="mt-6">
-    <h2 class="text-sm font-semibold"><code class="font-mono">createClient&lt;Api&gt;(opts?)</code></h2>
+    <h2 class="text-sm font-semibold">
+        <code class="font-mono">createClient&lt;Api&gt;(opts?)</code>
+    </h2>
     <div class="mt-2 overflow-x-auto rounded-lg border border-slate-200 bg-white">
         <table class="w-full text-sm">
             <thead class="border-b border-slate-200 bg-slate-50 text-left">
@@ -31,22 +33,34 @@ async function fetchInstaller() {
                 <tr>
                     <td class="px-4 py-2 font-mono">url</td>
                     <td class="px-4 py-2 text-slate-600">remote</td>
-                    <td class="px-4 py-2 text-slate-600">each call hits <code class="font-mono">&lt;url&gt;/&lt;path&gt;</code> via <code class="font-mono">fetch</code></td>
+                    <td class="px-4 py-2 text-slate-600">
+                        each call hits <code class="font-mono">
+                            &lt;url&gt;/&lt;path&gt;
+                        </code> via <code class="font-mono">fetch</code>
+                    </td>
                 </tr>
                 <tr>
                     <td class="px-4 py-2 font-mono">(no url)</td>
                     <td class="px-4 py-2 text-slate-600">in-process</td>
-                    <td class="px-4 py-2 text-slate-600">looks up the verb in the registry, calls <code class="font-mono">verb.fetch</code> — no network</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        looks up the verb in the registry, calls <code class="font-mono">
+                            verb.fetch
+                        </code> — no network
+                    </td>
                 </tr>
                 <tr>
                     <td class="px-4 py-2 font-mono">token</td>
                     <td class="px-4 py-2 text-slate-600">both</td>
-                    <td class="px-4 py-2 text-slate-600">sets <code class="font-mono">authorization: Bearer &lt;token&gt;</code></td>
+                    <td class="px-4 py-2 text-slate-600">
+                        sets <code class="font-mono">authorization: Bearer &lt;token&gt;</code>
+                    </td>
                 </tr>
                 <tr>
                     <td class="px-4 py-2 font-mono">manifest</td>
                     <td class="px-4 py-2 text-slate-600">both</td>
-                    <td class="px-4 py-2 text-slate-600">bundler-emitted CLI manifest; in-process falls back to the live registry</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        bundler-emitted CLI manifest; in-process falls back to the live registry
+                    </td>
                 </tr>
             </tbody>
         </table>
@@ -56,8 +70,8 @@ async function fetchInstaller() {
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
     <h2 class="text-sm font-semibold">Server-side install endpoint</h2>
     <p class="mt-1 text-sm text-slate-600">
-        <code class="font-mono">createServer</code> registers two CLI routes for any client
-        that wants to install the binary.
+        <code class="font-mono">createServer</code> registers two CLI routes for any client that
+        wants to install the binary.
     </p>
     <div class="mt-3 overflow-x-auto rounded-lg border border-slate-200">
         <table class="w-full text-sm">
@@ -70,11 +84,21 @@ async function fetchInstaller() {
             <tbody class="divide-y divide-slate-100">
                 <tr>
                     <td class="px-4 py-2 font-mono">GET /__belte/cli</td>
-                    <td class="px-4 py-2 text-slate-600">shell installer — detects <code class="font-mono">uname</code>, downloads the platform tarball, drops the binary into <code class="font-mono">$BELTE_INSTALL_DIR</code> (default <code class="font-mono">~/.local/bin</code>)</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        shell installer — detects <code class="font-mono">uname</code>
+                        , downloads the platform tarball, drops the binary into <code
+                            class="font-mono">
+                            $BELTE_INSTALL_DIR
+                        </code> (default <code class="font-mono">~/.local/bin</code>
+                        )
+                    </td>
                 </tr>
                 <tr>
                     <td class="px-4 py-2 font-mono">GET /__belte/cli/&lt;platform&gt;</td>
-                    <td class="px-4 py-2 text-slate-600">gzipped tarball — thin binary + an <code class="font-mono">.env</code> with the request's origin as <code class="font-mono">APP_URL</code></td>
+                    <td class="px-4 py-2 text-slate-600">
+                        gzipped tarball — thin binary + an <code class="font-mono">.env</code> with
+                        the request's origin as <code class="font-mono">APP_URL</code>
+                    </td>
                 </tr>
             </tbody>
         </table>
@@ -90,17 +114,22 @@ async function fetchInstaller() {
         onclick={fetchInstaller}>
         GET /__belte/cli
     </button>
-    <pre class="mt-3 overflow-x-auto rounded-md bg-slate-900 p-3 text-xs leading-relaxed text-slate-100"><code
+    <pre
+        class="mt-3 overflow-x-auto rounded-md bg-slate-900 p-3 text-xs leading-relaxed text-slate-100"><code
         >{installer}</code></pre>
 </section>
 
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5 text-sm text-slate-600">
-    <h2 class="text-sm font-semibold text-slate-900"><code class="font-mono">belte cli</code> vs <code class="font-mono">belte compile</code></h2>
+    <h2 class="text-sm font-semibold text-slate-900">
+        <code class="font-mono">belte cli</code> vs <code class="font-mono">belte compile</code>
+    </h2>
     <p class="mt-1">
-        <code class="font-mono">belte cli</code> builds a thin remote client — only the rpc
-        manifest is bundled, so it always talks to a running server over HTTP and
-        <code class="font-mono">APP_URL</code> is required at runtime. For an embedded
-        backend, <code class="font-mono">belte compile</code> produces the standalone
+        <code class="font-mono">belte cli</code> builds a thin remote client — only the rpc manifest
+        is bundled, so it always talks to a running server over HTTP and
+        <code class="font-mono">APP_URL</code> is required at runtime. For an embedded backend, <code
+            class="font-mono">
+            belte compile
+        </code> produces the standalone
         <em>server</em> binary instead.
     </p>
 </section>
@@ -109,7 +138,8 @@ async function fetchInstaller() {
     <h2 class="text-sm font-semibold text-slate-900">Streaming caveat</h2>
     <p class="mt-1">
         CLI commands cover the request/response surface only — sockets,
-        <code class="font-mono">sse</code>, and <code class="font-mono">jsonl</code>
+        <code class="font-mono">sse</code>
+        , and <code class="font-mono">jsonl</code>
         rpcs aren't reachable from the binary yet. Use the browser or
         <a class="underline" href="/mcp">MCP</a> surface for those.
     </p>

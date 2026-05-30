@@ -1,12 +1,12 @@
 <script lang="ts">
-import CodeBlock from '$browser/CodeBlock.svelte'
 import { HttpError } from '@briancray/belte/browser/HttpError'
-import { getEcho } from '$server/rpc/getEcho.ts'
+import CodeBlock from '$browser/CodeBlock.svelte'
 import { createEcho } from '$server/rpc/createEcho.ts'
-import { replaceEcho } from '$server/rpc/replaceEcho.ts'
-import { patchEcho } from '$server/rpc/patchEcho.ts'
 import { deleteEcho } from '$server/rpc/deleteEcho.ts'
+import { getEcho } from '$server/rpc/getEcho.ts'
 import { headEcho } from '$server/rpc/headEcho.ts'
+import { patchEcho } from '$server/rpc/patchEcho.ts'
+import { replaceEcho } from '$server/rpc/replaceEcho.ts'
 
 type EchoCall = { verb: string; outcome: string }
 let log = $state<EchoCall[]>([])
@@ -35,8 +35,9 @@ const message = $state({ value: 'hello' })
 </nav>
 <h1 class="text-3xl font-bold">RPC</h1>
 <p class="mt-2 text-slate-600">
-    One file per rpc under <code class="font-mono">src/server/rpc/</code>. Filename = export name
-    = URL path under <code class="font-mono">/rpc/</code>; the imported verb picks the HTTP method.
+    One file per rpc under <code class="font-mono">src/server/rpc/</code>
+    . Filename = export name = URL path under <code class="font-mono">/rpc/</code>
+    ; the imported verb picks the HTTP method.
 </p>
 
 <section class="mt-6">
@@ -56,15 +57,30 @@ const message = $state({ value: 'hello' })
                 </tr>
                 <tr>
                     <td class="px-4 py-2 font-mono">POST / PUT / PATCH</td>
-                    <td class="px-4 py-2 text-slate-600">JSON body or <code class="font-mono">FormData</code> (query overrides)</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        JSON body or <code class="font-mono">FormData</code> (query overrides)
+                    </td>
                 </tr>
             </tbody>
         </table>
     </div>
     <ul class="mt-2 space-y-1 text-xs text-slate-500">
-        <li>URLs are flat — no <code class="font-mono">[id]</code> segments. Pass identifiers via args.</li>
-        <li>Wrong verb on a known URL → <code class="font-mono">405</code> with <code class="font-mono">Allow</code> header.</li>
-        <li>Dynamic page segments (e.g. <a class="underline" href="/server/rpc/product/1">/product/1</a>) are a page-tree feature; rpcs stay flat.</li>
+        <li>
+            URLs are flat — no <code class="font-mono">[id]</code> segments. Pass identifiers via
+            args.
+        </li>
+        <li>
+            Wrong verb on a known URL → <code class="font-mono">405</code> with <code
+                class="font-mono">
+                Allow
+            </code> header.
+        </li>
+        <li>
+            Dynamic page segments (e.g. <a class="underline" href="/server/rpc/product/1">
+                /product/1
+            </a>
+            ) are a page-tree feature; rpcs stay flat.
+        </li>
     </ul>
 </section>
 
@@ -74,25 +90,51 @@ const message = $state({ value: 'hello' })
         message
         <input
             bind:value={message.value}
-            class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
+            class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm">
     </label>
     <div class="mt-3 flex flex-wrap gap-2 text-sm">
-        <button type="button" class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
-            onclick={() => safeCall('GET', () => getEcho({ message: message.value }))}>GET</button>
-        <button type="button" class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
-            onclick={() => safeCall('POST', () => createEcho({ message: message.value }))}>POST</button>
-        <button type="button" class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
-            onclick={() => safeCall('PUT', () => replaceEcho({ message: message.value }))}>PUT</button>
-        <button type="button" class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
-            onclick={() => safeCall('PATCH', () => patchEcho({ message: message.value }))}>PATCH</button>
-        <button type="button" class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
-            onclick={() => safeCall('DELETE', () => deleteEcho({ message: message.value }))}>DELETE</button>
-        <button type="button" class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
-            onclick={() => safeCall('HEAD', () => headEcho())}>HEAD</button>
+        <button
+            type="button"
+            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+            onclick={() => safeCall('GET', () => getEcho({ message: message.value }))}>
+            GET
+        </button>
+        <button
+            type="button"
+            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+            onclick={() => safeCall('POST', () => createEcho({ message: message.value }))}>
+            POST
+        </button>
+        <button
+            type="button"
+            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+            onclick={() => safeCall('PUT', () => replaceEcho({ message: message.value }))}>
+            PUT
+        </button>
+        <button
+            type="button"
+            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+            onclick={() => safeCall('PATCH', () => patchEcho({ message: message.value }))}>
+            PATCH
+        </button>
+        <button
+            type="button"
+            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+            onclick={() => safeCall('DELETE', () => deleteEcho({ message: message.value }))}>
+            DELETE
+        </button>
+        <button
+            type="button"
+            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+            onclick={() => safeCall('HEAD', () => headEcho())}>
+            HEAD
+        </button>
     </div>
     {#if log.length > 0}
         <ul class="mt-3 space-y-1 font-mono text-xs text-slate-700">
-            {#each log as entry, i (i)}<li>{entry.verb} → {entry.outcome}</li>{/each}
+            {#each log as entry, i (i)}
+                <li>{entry.verb} → {entry.outcome}</li>
+            {/each}
         </ul>
     {/if}
 </section>
@@ -100,15 +142,23 @@ const message = $state({ value: 'hello' })
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5 text-sm text-slate-600">
     <h2 class="text-sm font-semibold text-slate-900">Plain HTML works too</h2>
     <p class="mt-1 text-xs text-slate-500">
-        Each rpc exposes <code class="font-mono">.url</code> and <code class="font-mono">.method</code>.
+        Each rpc exposes <code class="font-mono">.url</code> and <code class="font-mono">
+            .method
+        </code>
+        .
     </p>
     <form
         action={createEcho.url}
         method={createEcho.method}
         target="_blank"
         class="mt-3 flex flex-wrap items-center gap-2">
-        <input name="message" value="form post" class="rounded-md border border-slate-300 px-3 py-1 text-sm" />
-        <button type="submit" class="rounded-md border border-slate-300 px-3 py-1 text-sm hover:bg-slate-100">
+        <input
+            name="message"
+            value="form post"
+            class="rounded-md border border-slate-300 px-3 py-1 text-sm">
+        <button
+            type="submit"
+            class="rounded-md border border-slate-300 px-3 py-1 text-sm hover:bg-slate-100">
             <code class="font-mono">{createEcho.method} {createEcho.url}</code>
         </button>
     </form>

@@ -1,7 +1,7 @@
 <script lang="ts">
 import CodeBlock from '$browser/CodeBlock.svelte'
-import { tickFeed } from '$server/rpc/tickFeed.ts'
 import { countLog } from '$server/rpc/countLog.ts'
+import { tickFeed } from '$server/rpc/tickFeed.ts'
 
 let sseFrames = $state<string[]>([])
 let jsonlFrames = $state<string[]>([])
@@ -43,8 +43,8 @@ async function runJsonl() {
 <h1 class="text-3xl font-bold">Streaming over HTTP</h1>
 <p class="mt-2 text-slate-600">
     Wrap an <code class="font-mono">AsyncIterable</code> in
-    <code class="font-mono">sse()</code> or <code class="font-mono">jsonl()</code>;
-    consume client-side with native APIs.
+    <code class="font-mono">sse()</code> or <code class="font-mono">jsonl()</code>
+    ; consume client-side with native APIs.
 </p>
 
 <section class="mt-6">
@@ -62,12 +62,16 @@ async function runJsonl() {
                 <tr>
                     <td class="px-4 py-2 font-mono">sse</td>
                     <td class="px-4 py-2 font-mono text-slate-500">text/event-stream</td>
-                    <td class="px-4 py-2 text-slate-600"><code class="font-mono">new EventSource(fn.url)</code></td>
+                    <td class="px-4 py-2 text-slate-600">
+                        <code class="font-mono">new EventSource(fn.url)</code>
+                    </td>
                 </tr>
                 <tr>
                     <td class="px-4 py-2 font-mono">jsonl</td>
                     <td class="px-4 py-2 font-mono text-slate-500">application/jsonl</td>
-                    <td class="px-4 py-2 text-slate-600"><code class="font-mono">fn.raw(args).then(r =&gt; r.body)</code></td>
+                    <td class="px-4 py-2 text-slate-600">
+                        <code class="font-mono">fn.raw(args).then(r =&gt; r.body)</code>
+                    </td>
                 </tr>
             </tbody>
         </table>
@@ -89,7 +93,9 @@ async function runJsonl() {
     </button>
     {#if sseFrames.length > 0}
         <ul class="mt-3 space-y-1 font-mono text-xs text-slate-700">
-            {#each sseFrames as frame, i (i)}<li>{frame}</li>{/each}
+            {#each sseFrames as frame, i (i)}
+                <li>{frame}</li>
+            {/each}
         </ul>
     {/if}
 </section>
@@ -100,11 +106,14 @@ async function runJsonl() {
         type="button"
         class="mt-2 rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100"
         onclick={runJsonl}>
-        run countLog({`{ to: 8 }`})
+        run countLog({`{ to: 8 }`}
+        )
     </button>
     {#if jsonlFrames.length > 0}
         <ul class="mt-3 space-y-1 font-mono text-xs text-slate-700">
-            {#each jsonlFrames as frame, i (i)}<li>{frame}</li>{/each}
+            {#each jsonlFrames as frame, i (i)}
+                <li>{frame}</li>
+            {/each}
         </ul>
     {/if}
 </section>

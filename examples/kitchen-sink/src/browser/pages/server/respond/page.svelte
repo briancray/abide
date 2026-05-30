@@ -1,6 +1,6 @@
 <script lang="ts">
-import CodeBlock from '$browser/CodeBlock.svelte'
 import { HttpError } from '@briancray/belte/browser/HttpError'
+import CodeBlock from '$browser/CodeBlock.svelte'
 import { getEcho } from '$server/rpc/getEcho.ts'
 import { getProduct } from '$server/rpc/getProduct.ts'
 import { redirectExample } from '$server/rpc/redirectExample.ts'
@@ -43,7 +43,8 @@ async function callRedirectFetch() {
 <p class="mt-2 text-slate-600">
     Response constructors with rpc-friendly defaults — all set
     <code class="font-mono">Cache-Control: no-store</code> unless the caller overrides via
-    <code class="font-mono">init</code>.
+    <code class="font-mono">init</code>
+    .
 </p>
 
 <section class="mt-6">
@@ -60,12 +61,16 @@ async function callRedirectFetch() {
                 <tr>
                     <td class="px-4 py-2 font-mono">json(data, init?)</td>
                     <td class="px-4 py-2 font-mono text-slate-500">application/json</td>
-                    <td class="px-4 py-2 text-slate-600">thin wrapper over <code class="font-mono">Response.json</code></td>
+                    <td class="px-4 py-2 text-slate-600">
+                        thin wrapper over <code class="font-mono">Response.json</code>
+                    </td>
                 </tr>
                 <tr>
                     <td class="px-4 py-2 font-mono">error(status, msg?)</td>
                     <td class="px-4 py-2 font-mono text-slate-500">text/plain</td>
-                    <td class="px-4 py-2 text-slate-600">message verbatim; status reason phrase if omitted</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        message verbatim; status reason phrase if omitted
+                    </td>
                 </tr>
                 <tr>
                     <td class="px-4 py-2 font-mono">redirect(url, status?)</td>
@@ -76,20 +81,32 @@ async function callRedirectFetch() {
         </table>
     </div>
     <p class="mt-2 text-xs text-slate-500">
-        For streaming responses see <a class="underline" href="/server/streaming">SSE + JSONL</a>.
+        For streaming responses see <a class="underline" href="/server/streaming">SSE + JSONL</a>
+        .
     </p>
 </section>
 
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
     <h2 class="text-sm font-semibold">Try it</h2>
     <div class="mt-3 flex flex-wrap gap-2 text-sm">
-        <button type="button" class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100" onclick={callJson}>
-            json — getEcho({`{ message: 'json()' }`})
+        <button
+            type="button"
+            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+            onclick={callJson}>
+            json — getEcho({`{ message: 'json()' }`}
+            )
         </button>
-        <button type="button" class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100" onclick={callError}>
-            error — getProduct({`{ id: 'missing' }`})
+        <button
+            type="button"
+            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+            onclick={callError}>
+            error — getProduct({`{ id: 'missing' }`}
+            )
         </button>
-        <button type="button" class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100" onclick={callRedirectFetch}>
+        <button
+            type="button"
+            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+            onclick={callRedirectFetch}>
             redirect — fetch(redirectExample.url)
         </button>
         <a
@@ -104,7 +121,9 @@ async function callRedirectFetch() {
         <li>redirect: {redirectOutcome}</li>
     </ul>
     <p class="mt-2 text-xs text-slate-500">
-        Browsers don't expose the 302 directly to JS — <code class="font-mono">response.redirected</code>
+        Browsers don't expose the 302 directly to JS — <code class="font-mono">
+            response.redirected
+        </code>
         + <code class="font-mono">response.url</code> are the visible signals.
     </p>
 </section>

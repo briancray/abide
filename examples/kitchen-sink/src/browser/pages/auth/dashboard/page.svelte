@@ -13,8 +13,9 @@ const session = await cache(getSession)()
 <h1 class="text-2xl font-bold">Dashboard</h1>
 {#if session?.user}
     <p class="mt-3 text-sm text-slate-300">
-        Hi, <strong>{session.user}</strong>. The auth layout's session widget reads the same
-        cache entry as this page — one route call serves both.
+        Hi, <strong>{session.user}</strong>
+        . The auth layout's session widget reads the same cache entry as this page — one route call
+        serves both.
     </p>
 {:else}
     <p class="mt-3 text-sm text-slate-300">
@@ -27,6 +28,7 @@ const session = await cache(getSession)()
 <p class="mt-6 text-xs text-slate-500">
     Layouts are nearest-only: <code class="font-mono">src/browser/pages/auth/layout.svelte</code>
     replaces <code class="font-mono">src/browser/pages/layout.svelte</code> for everything under
-    <code class="font-mono">/auth</code>. Navigate back to
+    <code class="font-mono">/auth</code>
+    . Navigate back to
     <a class="underline" href="/">the root</a> to see the chrome change wholesale.
 </p>

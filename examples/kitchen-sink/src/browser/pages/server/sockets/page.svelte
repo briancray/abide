@@ -1,8 +1,8 @@
 <script lang="ts">
-import CodeBlock from '$browser/CodeBlock.svelte'
 import { subscribe } from '@briancray/belte/browser/subscribe'
-import { chat } from '$server/sockets/chat.ts'
+import CodeBlock from '$browser/CodeBlock.svelte'
 import { publishChat } from '$server/rpc/publishChat.ts'
+import { chat } from '$server/sockets/chat.ts'
 
 const latest = $derived(subscribe(chat))
 
@@ -20,11 +20,13 @@ async function send() {
 </nav>
 <h1 class="text-3xl font-bold">Sockets</h1>
 <p class="mt-2 text-slate-600">
-    One topic per file under <code class="font-mono">src/server/sockets/</code>. A
+    One topic per file under <code class="font-mono">src/server/sockets/</code>
+    . A
     <code class="font-mono">Socket&lt;T&gt;</code>
     is an isomorphic <code class="font-mono">AsyncIterable&lt;T&gt;</code>
     — every socket multiplexes onto one ws at
-    <code class="font-mono">/__belte/sockets</code>.
+    <code class="font-mono">/__belte/sockets</code>
+    .
 </p>
 
 <section class="mt-6">
@@ -47,12 +49,16 @@ async function send() {
                 <tr>
                     <td class="px-4 py-2 font-mono">ttl</td>
                     <td class="px-4 py-2 font-mono text-slate-500">undefined</td>
-                    <td class="px-4 py-2 text-slate-600">per-frame max age in ms; older entries evicted lazily</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        per-frame max age in ms; older entries evicted lazily
+                    </td>
                 </tr>
                 <tr>
                     <td class="px-4 py-2 font-mono">clientPublish</td>
                     <td class="px-4 py-2 font-mono text-slate-500">false</td>
-                    <td class="px-4 py-2 text-slate-600">when true, browser publishes are forwarded server-side</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        when true, browser publishes are forwarded server-side
+                    </td>
                 </tr>
             </tbody>
         </table>
@@ -62,22 +68,23 @@ async function send() {
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
     <h2 class="text-sm font-semibold">Try it</h2>
     <p class="mt-1 text-xs text-slate-500">
-        <code class="font-mono">chat</code> has <code class="font-mono">clientPublish: false</code> —
-        publishes route through <code class="font-mono">publishChat</code> (POST) so the server can
-        validate first.
+        <code class="font-mono">chat</code> has <code class="font-mono">
+            clientPublish: false
+        </code> — publishes route through <code class="font-mono">publishChat</code> (POST) so the
+        server can validate first.
     </p>
     <div class="mt-3 flex flex-wrap items-end gap-2">
         <label class="text-xs font-medium">
             from
             <input
                 bind:value={from}
-                class="mt-1 block rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
+                class="mt-1 block rounded-md border border-slate-300 px-3 py-1.5 text-sm">
         </label>
         <label class="flex-1 text-xs font-medium">
             text
             <input
                 bind:value={text}
-                class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
+                class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm">
         </label>
         <button
             type="button"
@@ -87,7 +94,8 @@ async function send() {
         </button>
     </div>
     {#if latest}
-        <pre class="mt-3 overflow-x-auto rounded-md bg-slate-900 p-4 text-xs leading-relaxed text-slate-100"><code
+        <pre
+            class="mt-3 overflow-x-auto rounded-md bg-slate-900 p-4 text-xs leading-relaxed text-slate-100"><code
             >{JSON.stringify(latest, undefined, 2)}</code></pre>
     {:else}
         <p class="mt-3 text-xs text-slate-500">(no message yet — publish something)</p>

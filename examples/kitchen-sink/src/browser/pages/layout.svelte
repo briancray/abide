@@ -59,9 +59,7 @@ const linkClass = (prefix: string) =>
             <a href="/auth/dashboard" class={linkClass('/auth')}>Auth</a>
             <div class="ml-auto flex items-center gap-3">
                 {#if session?.user}
-                    <span class="text-slate-600">
-                        signed in as <strong>{session.user}</strong>
-                    </span>
+                    <span class="text-slate-600">signed in as <strong>{session.user}</strong></span>
                     <form action={logout.url} method={logout.method}>
                         <button
                             type="submit"

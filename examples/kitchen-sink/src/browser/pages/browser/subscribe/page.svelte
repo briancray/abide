@@ -1,8 +1,8 @@
 <script lang="ts">
-import CodeBlock from '$browser/CodeBlock.svelte'
 import { subscribe } from '@briancray/belte/browser/subscribe'
-import { chat } from '$server/sockets/chat.ts'
+import CodeBlock from '$browser/CodeBlock.svelte'
 import { publishChat } from '$server/rpc/publishChat.ts'
+import { chat } from '$server/sockets/chat.ts'
 
 const latest = $derived(subscribe(chat))
 const status = $derived(subscribe.status(chat))
@@ -23,8 +23,8 @@ async function send() {
 <p class="mt-2 text-slate-600">
     Reactive consumer for any <code class="font-mono">Subscribable&lt;T&gt;</code> — a
     <a class="underline" href="/server/sockets">socket</a> or
-    <code class="font-mono">fn.stream(args)</code>. First read in a tracking scope opens the
-    iterator; last reader closes it.
+    <code class="font-mono">fn.stream(args)</code>
+    . First read in a tracking scope opens the iterator; last reader closes it.
 </p>
 
 <section class="mt-6">
@@ -42,24 +42,34 @@ async function send() {
                 <tr>
                     <td class="px-4 py-2 font-mono">subscribe(src)</td>
                     <td class="px-4 py-2 font-mono text-slate-500">T | undefined</td>
-                    <td class="px-4 py-2 text-slate-600">latest frame; undefined until the first arrives</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        latest frame; undefined until the first arrives
+                    </td>
                 </tr>
                 <tr>
                     <td class="px-4 py-2 font-mono">subscribe.status(src)</td>
-                    <td class="px-4 py-2 font-mono text-slate-500">'pending' | 'open' | 'done' | 'error'</td>
-                    <td class="px-4 py-2 text-slate-600">distinguish first-message-pending from clean end / error</td>
+                    <td class="px-4 py-2 font-mono text-slate-500">
+                        'pending' | 'open' | 'done' | 'error'
+                    </td>
+                    <td class="px-4 py-2 text-slate-600">
+                        distinguish first-message-pending from clean end / error
+                    </td>
                 </tr>
                 <tr>
                     <td class="px-4 py-2 font-mono">subscribe.error(src)</td>
                     <td class="px-4 py-2 font-mono text-slate-500">Error | undefined</td>
-                    <td class="px-4 py-2 text-slate-600">wire-layer error surface (reads don't throw)</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        wire-layer error surface (reads don't throw)
+                    </td>
                 </tr>
             </tbody>
         </table>
     </div>
     <p class="mt-2 text-xs text-slate-500">
         <code class="font-mono">subscribe</code> is a no-op on the server. For SSR-friendly initial
-        paint, seed with <a class="underline" href="/browser/cache"><code class="font-mono">cache()</code></a>
+        paint, seed with <a class="underline" href="/browser/cache">
+            <code class="font-mono">cache()</code>
+        </a>
         then layer <code class="font-mono">subscribe()</code> on top after hydration.
     </p>
 </section>
@@ -72,13 +82,13 @@ async function send() {
             from
             <input
                 bind:value={from}
-                class="mt-1 block rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
+                class="mt-1 block rounded-md border border-slate-300 px-3 py-1.5 text-sm">
         </label>
         <label class="flex-1 text-xs font-medium">
             text
             <input
                 bind:value={text}
-                class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
+                class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm">
         </label>
         <button
             type="button"
@@ -88,7 +98,8 @@ async function send() {
         </button>
     </div>
     {#if latest}
-        <pre class="mt-3 overflow-x-auto rounded-md bg-slate-900 p-4 text-xs leading-relaxed text-slate-100"><code
+        <pre
+            class="mt-3 overflow-x-auto rounded-md bg-slate-900 p-4 text-xs leading-relaxed text-slate-100"><code
             >{JSON.stringify(latest, undefined, 2)}</code></pre>
     {:else}
         <p class="mt-3 text-xs text-slate-500">(no message yet — publish something)</p>
