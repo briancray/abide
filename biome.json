@@ -7,7 +7,7 @@
     },
     "files": {
         "includes": [
-            "**/*.{json,ts,js}",
+            "**/*.{json,ts,js,svelte}",
             "!**/dist",
             "!**/node_modules",
             "!**/.belte",
