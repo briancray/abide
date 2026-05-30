@@ -1,5 +1,6 @@
 import { dlopen, FFIType, type Pointer } from 'bun:ffi'
 import type { BundleMenu } from './BundleMenu.ts'
+import { installDownloads } from './installDownloads.ts'
 import { installMacMenu } from './installMacMenu.ts'
 import { resolveWebviewLib } from './resolveWebviewLib.ts'
 
@@ -71,6 +72,12 @@ export async function openWebview({
     upstream webview omits the menu entirely — plus the bundle's custom menus.
     */
     installMacMenu(libPath, handle, title, menu, fileMenu)
+    /*
+    Attach the download delegate (no-op off macOS / before 11.3) before the
+    first navigation, so `<a download>`, blob/data links, and attachment
+    responses save a file instead of being silently dropped by the bare webview.
+    */
+    installDownloads(libPath, handle)
     onWindow?.(handle)
 
     symbols.webview_navigate(handle, cString(url))

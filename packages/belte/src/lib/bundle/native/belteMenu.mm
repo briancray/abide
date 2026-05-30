@@ -6,6 +6,8 @@
 // the built-in File menu (Start / Disconnect), and the bundle's custom menus
 // whose items emit events into the page.
 #import <Cocoa/Cocoa.h>
+#import <WebKit/WebKit.h>
+#import <objc/runtime.h>
 #include <cstdlib>
 #include <cstring>
 
@@ -15,6 +17,9 @@ extern "C" int webview_eval(void *w, const char *js);
 // Marshals a callback onto the UI thread; the only safe way to touch the window
 // from another thread (the launcher runs its control server off the main thread).
 extern "C" int webview_dispatch(void *w, void (*fn)(void *w, void *arg), void *arg);
+// Returns a backend-native handle for the webview; with kind
+// WEBVIEW_NATIVE_HANDLE_KIND_BROWSER_CONTROLLER (2) that's the WKWebView.
+extern "C" void *webview_get_native_handle(void *w, int kind);
 
 // Exported despite -fvisibility=hidden so belte's FFI layer can resolve it.
 #define BELTE_EXPORT __attribute__((visibility("default")))
@@ -294,5 +299,124 @@ extern "C" BELTE_EXPORT void belte_install_app_menu(void *webview_handle,
         [app setWindowsMenu:windowMenu];
 
         [app setMainMenu:mainMenu];
+    }
+}
+
+// WEBVIEW_NATIVE_HANDLE_KIND_BROWSER_CONTROLLER — the WKWebView pointer.
+static const int kBelteBrowserController = 2;
+
+// Associated-object key under which each WKDownload stashes its chosen
+// destination URL, so downloadDidFinish: can reveal the saved file in Finder.
+static const char kBelteDownloadDestKey = 0;
+
+/*
+Navigation + download delegate for the bundle's WKWebView. The upstream webview
+sets no navigation delegate, so WKWebView silently drops `<a download>` clicks,
+blob:/data: downloads, and attachment responses — leaving every belte bundle app
+unable to save a file. This routes those to a real download saved into the user's
+Downloads folder and reveals it in Finder, while passing every ordinary
+navigation straight through (the app's own page loads must not be hijacked).
+A process-lifetime singleton, never released (MRC), matching the menu objects
+above; WKWebView holds its navigationDelegate weakly, so the strong global is
+what keeps it alive.
+*/
+API_AVAILABLE(macos(11.3))
+@interface BelteDownloadDelegate : NSObject <WKNavigationDelegate, WKDownloadDelegate>
+@end
+
+@implementation BelteDownloadDelegate
+
+// A link with a `download` attribute (e.g. URL.createObjectURL + a.download)
+// sets shouldPerformDownload; turn only those into downloads and allow the rest
+// — notably the app's own navigations, which must load normally.
+- (void)webView:(WKWebView *)webView
+    decidePolicyForNavigationAction:(WKNavigationAction *)navigationAction
+                    decisionHandler:(void (^)(WKNavigationActionPolicy))decisionHandler {
+    if (navigationAction.shouldPerformDownload) {
+        decisionHandler(WKNavigationActionPolicyDownload);
+    } else {
+        decisionHandler(WKNavigationActionPolicyAllow);
+    }
+}
+
+// A response the webview can't render (or that the server marks as an
+// attachment) becomes a download too, mirroring how a browser behaves.
+- (void)webView:(WKWebView *)webView
+    decidePolicyForNavigationResponse:(WKNavigationResponse *)navigationResponse
+                      decisionHandler:(void (^)(WKNavigationResponsePolicy))decisionHandler {
+    if (navigationResponse.canShowMIMEType) {
+        decisionHandler(WKNavigationResponsePolicyAllow);
+    } else {
+        decisionHandler(WKNavigationResponsePolicyDownload);
+    }
+}
+
+- (void)webView:(WKWebView *)webView
+     navigationAction:(WKNavigationAction *)navigationAction
+    didBecomeDownload:(WKDownload *)download {
+    download.delegate = self;
+}
+
+- (void)webView:(WKWebView *)webView
+    navigationResponse:(WKNavigationResponse *)navigationResponse
+     didBecomeDownload:(WKDownload *)download {
+    download.delegate = self;
+}
+
+// Save under ~/Downloads using the browser-suggested name, de-duplicating with a
+// " (n)" suffix so a repeat export never silently clobbers the previous file.
+- (void)download:(WKDownload *)download
+    decideDestinationUsingResponse:(NSURLResponse *)response
+                 suggestedFilename:(NSString *)suggestedFilename
+                 completionHandler:(void (^)(NSURL *))completionHandler {
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSURL *dir =
+        [[fm URLsForDirectory:NSDownloadsDirectory inDomains:NSUserDomainMask] firstObject];
+    if (dir == nil) {
+        dir = [NSURL fileURLWithPath:NSHomeDirectory()];
+    }
+    NSString *name = suggestedFilename.length ? suggestedFilename : @"download";
+    NSURL *dest = [dir URLByAppendingPathComponent:name];
+    NSString *base = [name stringByDeletingPathExtension];
+    NSString *ext = [name pathExtension];
+    for (int i = 1; [fm fileExistsAtPath:dest.path]; i++) {
+        NSString *candidate =
+            ext.length ? [NSString stringWithFormat:@"%@ (%d).%@", base, i, ext]
+                       : [NSString stringWithFormat:@"%@ (%d)", base, i];
+        dest = [dir URLByAppendingPathComponent:candidate];
+    }
+    objc_setAssociatedObject(download, &kBelteDownloadDestKey, dest,
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    completionHandler(dest);
+}
+
+- (void)downloadDidFinish:(WKDownload *)download {
+    NSURL *dest = objc_getAssociatedObject(download, &kBelteDownloadDestKey);
+    if (dest != nil) {
+        [[NSWorkspace sharedWorkspace] activateFileViewerSelectingURLs:@[ dest ]];
+    }
+}
+
+@end
+
+/*
+Attaches the download delegate to the bundle's WKWebView. Safe to call after
+webview_create and must run before the first navigation. A no-op on macOS
+versions before 11.3 (no WKDownload API) — there downloads stay unsupported, as
+they were. The delegate is a strong process-lifetime singleton because WKWebView
+holds its navigationDelegate weakly.
+*/
+extern "C" BELTE_EXPORT void belte_install_downloads(void *webview_handle) {
+    if (@available(macOS 11.3, *)) {
+        WKWebView *webView =
+            (WKWebView *)webview_get_native_handle(webview_handle, kBelteBrowserController);
+        if (webView == nil) {
+            return;
+        }
+        static BelteDownloadDelegate *delegate = nil;
+        if (delegate == nil) {
+            delegate = [[BelteDownloadDelegate alloc] init];
+        }
+        webView.navigationDelegate = delegate;
     }
 }
