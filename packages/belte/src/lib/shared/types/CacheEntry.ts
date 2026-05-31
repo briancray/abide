@@ -6,6 +6,11 @@ the function. `ttl`/`expiresAt` drive eviction: expiresAt = undefined means
 soon as the promise settles). The stored promise resolves to the raw
 Response so the snapshot can read its status/headers/body; the cache
 layer hands callers a decoded view derived from this same promise.
+
+`value` is set only for entries hydrated from the SSR snapshot: the
+snapshot body is pre-decoded synchronously so the first client render can
+read it without a microtask hop and byte-match the SSR DOM. Live fetches
+leave it undefined and take the async decode path.
 */
 export type CacheEntry = {
     key: string
@@ -13,4 +18,5 @@ export type CacheEntry = {
     request: Request
     ttl: number | undefined
     expiresAt: number | undefined
+    value?: unknown
 }

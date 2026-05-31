@@ -25,10 +25,11 @@ pass finds the data via cache() without issuing a network round-trip.
 */
 function hydrateCacheFromSnapshot(store: CacheStore, snapshot: CacheSnapshotEntry[]): void {
     for (const entry of snapshot) {
+        const headers = new Headers(entry.headers)
         const response = new Response(entry.body, {
             status: entry.status,
             statusText: entry.statusText,
-            headers: new Headers(entry.headers),
+            headers,
         })
         store.entries.set(entry.key, {
             key: entry.key,
@@ -36,8 +37,30 @@ function hydrateCacheFromSnapshot(store: CacheStore, snapshot: CacheSnapshotEntr
             request: new Request(entry.url, { method: entry.method }),
             ttl: undefined,
             expiresAt: undefined,
+            value: warmValueFromSnapshot(entry.status, headers, entry.body),
         })
     }
+}
+
+/*
+Synchronously decodes a snapshot body so the warm entry reads without a
+microtask hop on first render. Mirrors decodeResponse for the textual cases
+the snapshot ships; non-2xx and 204 yield no warm value and fall back to the
+async path, which throws HttpError / returns undefined exactly as a live call
+would. Binary/xml bodies also skip the warm path and decode asynchronously.
+*/
+function warmValueFromSnapshot(status: number, headers: Headers, body: string): unknown {
+    if (status === 204 || status < 200 || status >= 300) {
+        return undefined
+    }
+    const contentType = (headers.get('content-type') ?? '').toLowerCase()
+    if (contentType.includes('json')) {
+        return JSON.parse(body)
+    }
+    if (contentType.startsWith('text/')) {
+        return body
+    }
+    return undefined
 }
 
 function isInternalLinkEvent(event: MouseEvent): HTMLAnchorElement | undefined {

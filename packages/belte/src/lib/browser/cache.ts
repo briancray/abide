@@ -5,6 +5,7 @@ import { canonicalJson } from '../shared/canonicalJson.ts'
 import { decodeResponse } from '../shared/decodeResponse.ts'
 import { getRemoteMeta } from '../shared/getRemoteMeta.ts'
 import { keyForRemoteCall } from '../shared/keyForRemoteCall.ts'
+import type { CacheEntry } from '../shared/types/CacheEntry.ts'
 import type { CacheOptions } from '../shared/types/CacheOptions.ts'
 
 type AnyRemote<Args, Return> = RemoteFunction<Args, Return> | RawRemoteFunction<Args>
@@ -46,7 +47,7 @@ export function cache<Args>(
 export function cache<Args, Return>(
     fn: AnyRemote<Args, Return>,
     options?: CacheOptions,
-): (args?: Args) => Promise<Return | Response> {
+): (args?: Args) => Promise<Return | Response> | Return {
     /*
     The "raw" variant lacks its own `.raw` sibling; only the decoded
     callable carries one. Tell them apart by that presence and dispatch the
@@ -55,20 +56,42 @@ export function cache<Args, Return>(
     const isRaw = !('raw' in fn)
     const rawFn = isRaw ? (fn as RawRemoteFunction<Args>) : (fn as RemoteFunction<Args, Return>).raw
     return (args) => {
-        const responsePromise = invokeWithCache(rawFn, args, options)
+        const store = activeCacheStore()
+        const key = resolveKey(rawFn, args, options?.key)
+        store.subscribe(key)
+        const existing = store.entries.get(key)
+        /*
+        Snapshot warm path: hydration pre-decoded the SSR body onto the
+        entry, so the decoded variant returns it synchronously — the first
+        {#await} render resolves without a microtask suspension and matches
+        the SSR DOM. Raw callers always take the Response path. After an
+        invalidate the replacement entry carries no value and falls through
+        to the async fetch as before.
+
+        The public overload stays typed Promise<Return> on purpose: a
+        non-thenable is the only thing {#await} can render synchronously, so
+        the sync return is left as an internal optimization rather than
+        widened to `Return | Promise<Return>` (which would leak it into every
+        caller's types). The one cost is that `.then`/`.catch`/`.finally`
+        directly on a warm result throws — consume cache via `await`/`{#await}`,
+        never `.then`. Don't "fix" the type; see memory cache-warm-sync-tradeoff.
+        */
+        if (!isRaw && existing?.value !== undefined) {
+            return existing.value as Return
+        }
+        const responsePromise = invokeWithCache(store, key, existing, rawFn, args, options)
         return isRaw ? responsePromise : (responsePromise.then(decodeResponse) as Promise<Return>)
     }
 }
 
 function invokeWithCache<Args>(
+    store: ReturnType<typeof activeCacheStore>,
+    key: string,
+    existing: CacheEntry | undefined,
     rawFn: RawRemoteFunction<Args>,
     args: Args | undefined,
     options: CacheOptions | undefined,
 ): Promise<Response> {
-    const store = activeCacheStore()
-    const key = resolveKey(rawFn, args, options?.key)
-    store.subscribe(key)
-    const existing = store.entries.get(key)
     if (existing) {
         return shareable(existing.promise)
     }
