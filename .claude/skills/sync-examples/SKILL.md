@@ -5,7 +5,12 @@ description: After a belte API or README change, update every example (and the b
 
 # Keeping belte examples in sync with the library
 
-`README.md` is the source of truth — **for what the examples demonstrate AND for how they're designed.** Every import path, every directory name, every helper signature, every section title, every term, and the kitchen-sink's page-tree shape comes from the README. If the README and an example disagree, update the example. If the README is wrong, fix it via `write-readme` *first*, then return here.
+## READ FIRST
+
+* **Rebuild, don't patch.** Regenerate each example's content from the current source of truth instead of diffing against what's there and editing only the parts you think changed. Delta-patching is how drift survives: prose and tables describing old behaviour go untouched because nothing flagged them. Treat the existing example content as disposable — re-derive it, then overwrite. This is the same discipline `write-readme` uses ("don't use the current README, rebuild completely").
+* **Two sources of truth, two jobs.**
+  * `README.md` governs **structure and scope** — every import path, directory name, helper signature, section title, term, and the kitchen-sink's page-tree shape. If the README and an example disagree on shape, the example is wrong. If the README itself is wrong, fix it via `write-readme` *first*, then return here.
+  * `packages/belte/src` governs **behaviour** — every explanatory table, prose claim, and code snippet in a demo page must describe what the code actually does *now*, read fresh from the source, not copied forward from the old page. (The bundle "Launch modes" table drifted precisely because it was carried over instead of re-derived from `controlServerWorker.ts`.)
 
 ## Targets
 
@@ -31,10 +36,11 @@ The README isn't just a list of helpers — it's the design spec for the example
 
 1. **Re-read the README** — treat its `##` outline + TOC table as the checklist. Note any renames or restructures since the last sync.
 2. **Re-derive the public surface** — read `packages/belte/package.json` `exports` and the two umbrella entry files. Anything imported in an example that isn't in this list is stale.
-3. **Apply the delta across all four trees** — imports, directory names, type signatures, doc-comments in template/scaffold files (user-facing — keep them current), tsconfig (extends `belte/tsconfig`), package.json scripts.
-4. **Reshape the kitchen-sink page tree if needed** — folders + URLs follow the README's umbrella structure. Update `pages/layout.svelte`'s nav, the index page's cards, and the overview pages so a reader can land on a section in the README and navigate straight to a demo.
-5. **Template ↔ scaffold parity** — `diff -ruN packages/belte/template/src examples/scaffold/src` should be empty (the generated `.belte/routes.d.ts` excepted; it's gitignored).
-6. **Verify** — `bun ../../packages/belte/bin/belte.ts build` exits 0 in each example, the resolver counts match the page tree, `bun --bun tsc --noEmit` is clean in scaffold + kitchen-sink (barebones has no `.ts` files; tsc skips it).
+3. **Reshape the kitchen-sink page tree to the README** — folders + URLs follow the README's umbrella structure. Update `pages/layout.svelte`'s nav, the index page's cards, and the overview pages so a reader can land on a section in the README and navigate straight to a demo.
+4. **Rebuild each demo page's content from the live code, not from itself.** For every kitchen-sink page (and the doc-comments in template/scaffold files — they ship to users as docs), open the actual implementation in `packages/belte/src` for the feature it demonstrates and write the page's snippets, tables, and prose to match that code's current behaviour. Do not trust the existing page text. Where a page describes runtime behaviour (modes, defaults, env vars, status states), trace it to the function that implements it and confirm every row still holds. Carry the same renames through imports, file paths, CodeBlock strings, h1s, nav links, and in-page prose.
+5. **Apply the structural delta to all four trees** — imports, directory names, type signatures, tsconfig (extends `belte/tsconfig`), package.json scripts must match the re-derived public surface across template, scaffold, barebones, and kitchen-sink.
+6. **Template ↔ scaffold parity** — `diff -ruN packages/belte/template/src examples/scaffold/src` should be empty (the generated `.belte/routes.d.ts` excepted; it's gitignored).
+7. **Verify** — `bun ../../packages/belte/bin/belte.ts build` exits 0 in each example, the resolver counts match the page tree, `bun --bun tsc --noEmit` is clean in scaffold + kitchen-sink (barebones has no `.ts` files; tsc skips it).
 
 ## Style
 
