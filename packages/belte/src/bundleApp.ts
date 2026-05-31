@@ -4,6 +4,7 @@ import { ensureWebviewLib } from './lib/bundle/ensureWebviewLib.ts'
 import { infoPlist } from './lib/bundle/infoPlist.ts'
 import { pngToIcns } from './lib/bundle/pngToIcns.ts'
 import { serverBinaryFilename } from './lib/bundle/serverBinaryFilename.ts'
+import { signMacApp } from './lib/bundle/signMacApp.ts'
 import { webviewLibName } from './lib/bundle/webviewLibName.ts'
 import { detectTarget } from './lib/shared/detectTarget.ts'
 import { exitOnBuildFailure } from './lib/shared/exitOnBuildFailure.ts'
@@ -17,8 +18,9 @@ const WORKER_ENTRY = new URL('./controlServerWorker.ts', import.meta.url).pathna
 
 /*
 Assembles a movable, self-contained app bundle for the host platform —
-no signing, no cross-compilation. Three pieces travel together so the app
-runs on another machine of the same OS with nothing installed:
+no cross-compilation, and on macOS an ad-hoc seal so it launches on other
+Macs (signMacApp). Three pieces travel together so the app runs on another
+machine of the same OS with nothing installed:
 
   - the standalone server binary (`compile()`, assets embedded)
   - the launcher binary (appEntry — spawns the server, opens the webview)
@@ -106,6 +108,14 @@ export async function bundleApp({ cwd = process.cwd() }: { cwd?: string } = {}):
             `${bundleRoot}/Contents/Info.plist`,
             infoPlist({ name: programName, version, icon: hasIcon ? 'icon' : undefined }),
         )
+
+        // Seal the finished bundle so it launches on other Macs — must run last,
+        // after every binary, the lib, and Info.plist are in place.
+        await signMacApp(bundleRoot, [
+            `${libDir}/${webviewLibName()}`,
+            `${binDir}/${serverBinaryFilename()}`,
+            launcherPath,
+        ])
     }
 
     log.success(`bundled app: ${bundleRoot} (target: ${target})`)
