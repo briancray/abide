@@ -1,4 +1,5 @@
 import type { HttpVerb } from '../server/rpc/types/HttpVerb.ts'
+import { carriesBodyArgs } from './carriesBodyArgs.ts'
 
 /*
 Builds the Request a verb helper uses to invoke its handler. Same shape on
@@ -27,7 +28,7 @@ export function buildRpcRequest({
     headers?: Headers
 }): Request {
     const requestHeaders = headers ?? new Headers()
-    if (method === 'GET' || method === 'DELETE' || method === 'HEAD') {
+    if (!carriesBodyArgs(method)) {
         const target = appendQuery(method, url, args)
         return new Request(new URL(target, baseUrl).href, { method, headers: requestHeaders })
     }

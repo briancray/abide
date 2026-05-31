@@ -1,5 +1,6 @@
 import type { HttpVerb } from '../server/rpc/types/HttpVerb.ts'
 import { canonicalJson } from './canonicalJson.ts'
+import { carriesBodyArgs } from './carriesBodyArgs.ts'
 
 /*
 Derives a cache key from a verb-defined remote function and its args. The
@@ -14,7 +15,7 @@ URLSearchParams).
 */
 export function keyForRemoteCall(method: HttpVerb, url: string, args: unknown): string {
     const prefix = `${method} ${url}`
-    if (method === 'GET' || method === 'DELETE' || method === 'HEAD') {
+    if (!carriesBodyArgs(method)) {
         if (args && typeof args === 'object' && !Array.isArray(args)) {
             const record = args as Record<string, unknown>
             const keys = Object.keys(record).sort()

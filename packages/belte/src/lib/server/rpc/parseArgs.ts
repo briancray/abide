@@ -1,3 +1,4 @@
+import { carriesBodyArgs } from '../../shared/carriesBodyArgs.ts'
 import type { HttpVerb } from './types/HttpVerb.ts'
 
 /*
@@ -24,7 +25,7 @@ export async function parseArgs(method: HttpVerb, request: Request): Promise<unk
     const url = hasQuery ? new URL(request.url) : undefined
 
     let body: unknown
-    if (method !== 'GET' && method !== 'DELETE' && method !== 'HEAD') {
+    if (carriesBodyArgs(method)) {
         const contentType = (request.headers.get('content-type') ?? '').toLowerCase()
         if (contentType.includes('application/json')) {
             const text = await request.text()
