@@ -29,7 +29,13 @@ export function defineSocket<T>(name: string, opts: SocketOptions = {}): Socket<
     const ttl = opts.ttl
     const schema = opts.schema
     const jsonSchema = opts.jsonSchema
-    const clients = resolveClientFlags(opts.clients, schema !== undefined)
+    /*
+    A schema makes the socket's payload safe to advertise to non-browser
+    surfaces, so it flips mcp/cli on by default — exposing the `tail` read
+    tool (and `publish` when clientPublish is set). Explicit `clients` wins.
+    */
+    const hasSchema = schema !== undefined
+    const clients = resolveClientFlags(opts.clients, { mcp: hasSchema, cli: hasSchema })
     type BufferEntry = { value: T; expiresAt: number | undefined }
     const buffer: BufferEntry[] = []
     const subscribers = new Set<(message: T) => void>()

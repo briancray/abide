@@ -1,9 +1,10 @@
 import { buildRpcRequest } from '../../shared/buildRpcRequest.ts'
-import { NO_STORE } from '../../shared/cacheControlValues.ts'
 import { createRemoteFunction } from '../../shared/createRemoteFunction.ts'
 import { forwardHeaders } from '../../shared/forwardHeaders.ts'
+import { isReadOnlyMethod } from '../../shared/isReadOnlyMethod.ts'
 import { resolveClientFlags } from '../../shared/resolveClientFlags.ts'
 import type { ClientFlags } from '../../shared/types/ClientFlags.ts'
+import { json } from '../json.ts'
 import { requestContext } from '../runtime/requestContext.ts'
 import { parseArgs } from './parseArgs.ts'
 import { registerVerb } from './registerVerb.ts'
@@ -33,14 +34,30 @@ export function defineVerb<Args, Return>(
     url: string,
     handler: RemoteHandler<Args, Return>,
     opts?: {
-        schema?: StandardSchemaV1
-        jsonSchema?: Record<string, unknown>
+        inputSchema?: StandardSchemaV1
+        inputJsonSchema?: Record<string, unknown>
+        outputSchema?: StandardSchemaV1
+        outputJsonSchema?: Record<string, unknown>
         clients?: Partial<ClientFlags>
     },
 ): RemoteFunction<Args, Return> {
-    const schema = opts?.schema
-    const jsonSchema = opts?.jsonSchema
-    const clients = resolveClientFlags(opts?.clients, schema !== undefined)
+    const inputSchema = opts?.inputSchema
+    const inputJsonSchema = opts?.inputJsonSchema
+    const outputSchema = opts?.outputSchema
+    const outputJsonSchema = opts?.outputJsonSchema
+    /*
+    An input schema makes the handler safe to advertise to non-browser
+    surfaces. CLI flips on for any verb with one (a human/script invokes it
+    deliberately). MCP only auto-exposes read-only verbs (GET/HEAD) — a
+    model shouldn't be able to mutate/delete just because the handler
+    carries a schema, so mutating verbs require an explicit clients.mcp.
+    Explicit `clients` always wins.
+    */
+    const hasSchema = inputSchema !== undefined
+    const clients = resolveClientFlags(opts?.clients, {
+        mcp: hasSchema && isReadOnlyMethod(method),
+        cli: hasSchema,
+    })
 
     function buildRequest(args: Args | undefined): Request {
         const store = requestContext.getStore()
@@ -62,15 +79,9 @@ export function defineVerb<Args, Return>(
     }
 
     async function validateThenHandle(args: Args | undefined): Promise<Response> {
-        const result = await schema!['~standard'].validate(args)
+        const result = await inputSchema!['~standard'].validate(args)
         if (result.issues) {
-            return new Response(JSON.stringify({ issues: result.issues }), {
-                status: 422,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Cache-Control': NO_STORE,
-                },
-            })
+            return json({ issues: result.issues }, { status: 422 })
         }
         return runHandler(result.value as Args)
     }
@@ -83,7 +94,7 @@ export function defineVerb<Args, Return>(
     SSR call.
     */
     function invoke(args: Args | undefined): Promise<Response> {
-        return schema ? validateThenHandle(args) : runHandler(args)
+        return inputSchema ? validateThenHandle(args) : runHandler(args)
     }
 
     const remote = createRemoteFunction<Args, Return>({
@@ -96,8 +107,10 @@ export function defineVerb<Args, Return>(
     })
     registerVerb({
         remote: remote as RemoteFunction<unknown, unknown>,
-        schema,
-        jsonSchema,
+        inputSchema,
+        inputJsonSchema,
+        outputSchema,
+        outputJsonSchema,
         clients,
     })
     return remote

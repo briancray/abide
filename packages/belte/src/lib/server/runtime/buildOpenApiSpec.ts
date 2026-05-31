@@ -1,9 +1,7 @@
+import { carriesBodyArgs } from '../../shared/carriesBodyArgs.ts'
 import { commandNameForUrl } from '../../shared/commandNameForUrl.ts'
 import { jsonSchemaForSchema } from '../../shared/jsonSchemaForSchema.ts'
-import type { HttpVerb } from '../rpc/types/HttpVerb.ts'
 import { verbRegistry } from '../rpc/verbRegistry.ts'
-
-const BODY_METHODS = new Set<HttpVerb>(['POST', 'PUT', 'PATCH'])
 
 /*
 Turns a verb's resolved JSON Schema into OpenAPI query parameters — one
@@ -40,14 +38,27 @@ export function buildOpenApiSpec(info: {
     for (const entry of verbRegistry.values()) {
         const url = entry.remote.url
         const method = entry.remote.method
-        const jsonSchema = jsonSchemaForSchema(entry.schema, entry.jsonSchema)
+        const jsonSchema = jsonSchemaForSchema(entry.inputSchema, entry.inputJsonSchema)
         const description = jsonSchema.description as string | undefined
+        /*
+        When the verb declares an `outputSchema`, describe the 200 body
+        with it so external tooling sees the real return shape; otherwise
+        fall back to a bare OK.
+        */
+        const okResponse: Record<string, unknown> = { description: 'OK' }
+        if (entry.outputSchema) {
+            okResponse.content = {
+                'application/json': {
+                    schema: jsonSchemaForSchema(entry.outputSchema, entry.outputJsonSchema),
+                },
+            }
+        }
         const operation: Record<string, unknown> = {
             operationId: commandNameForUrl(url),
             ...(description ? { description } : {}),
-            responses: { '200': { description: 'OK' } },
+            responses: { '200': okResponse },
         }
-        if (BODY_METHODS.has(method)) {
+        if (carriesBodyArgs(method)) {
             operation.requestBody = {
                 content: { 'application/json': { schema: jsonSchema } },
             }
