@@ -1,5 +1,27 @@
 # @briancray/belte
 
+## 0.4.0
+
+### Minor Changes
+
+- [`a432d00`](https://github.com/briancray/belte/commit/a432d00d3c58dea7f4968307e9c82590ff07ef8a) - `belte bundle` now ad-hoc code-signs the assembled macOS `.app` so it launches on other Macs instead of being silently killed by Gatekeeper. A quarantined copy may still need `xattr -cr` once; full distribution still requires a Developer ID signature and notarization.
+
+- [`a432d00`](https://github.com/briancray/belte/commit/a432d00d3c58dea7f4968307e9c82590ff07ef8a) - The native webview inspector in a bundle is now gated behind `BELTE_INSPECT`, so release bundles ship without DevTools while debugging remains one env var away.
+
+- [`a432d00`](https://github.com/briancray/belte/commit/a432d00d3c58dea7f4968307e9c82590ff07ef8a) - `cache()` now returns synchronously for keys already warm in the SSR hydration snapshot, so the first client read of server-rendered data skips the microtask round-trip.
+
+- [`d0a733d`](https://github.com/briancray/belte/commit/d0a733dd238e634baa1dd9fdf0adf99114612893) - Add a name-filtered `onMenu(name, handler)` overload alongside the existing catch-all `onMenu((name) => …)` form, so a bundle menu item can bind one handler without switching on the emit name.
+
+- [`a432d00`](https://github.com/briancray/belte/commit/a432d00d3c58dea7f4968307e9c82590ff07ef8a) - **Breaking:** verb helpers now take `inputSchema` (and optional `outputSchema`) instead of `schema`. `inputSchema` validates incoming args and feeds OpenAPI params / the MCP tool input; `outputSchema` describes the success body for the OpenAPI `200` response and MCP tool output. Client exposure (`browser` / `mcp` / `cli`) now defaults per-surface from the schema — read-only verbs auto-expose to MCP, mutating verbs opt in via `clients`. Migrate by renaming `{ schema }` to `{ inputSchema }`.
+
+- [`a432d00`](https://github.com/briancray/belte/commit/a432d00d3c58dea7f4968307e9c82590ff07ef8a) - Sockets are now exposed to MCP and the CLI over an HTTP face: each schema-bearing socket contributes a `<name>-tail` read tool/command, plus `<name>-publish` when `clientPublish` is set.
+
+### Patch Changes
+
+- [`a432d00`](https://github.com/briancray/belte/commit/a432d00d3c58dea7f4968307e9c82590ff07ef8a) - Public asset paths are snapshotted on disk at boot rather than stat'd per request, and browser-only routes are logged at startup.
+
+- [`a432d00`](https://github.com/briancray/belte/commit/a432d00d3c58dea7f4968307e9c82590ff07ef8a) - Scaffolded apps now ship a default `src/bundle/icon.png`, so `belte bundle` produces an icon'd macOS `.app` out of the box.
+
 ## 0.3.1
 
 ### Patch Changes
