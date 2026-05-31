@@ -344,6 +344,8 @@ A `src/cli/banner.txt` prints above the top-level help and `src/cli/footer.txt` 
 
 `belte bundle` produces a movable, self-contained native desktop app for the host platform (a `.app` on macOS, a flat directory elsewhere) — the server binary, a launcher, and the native webview together, no Chromium. The launcher boots into a connect screen: start the embedded server, or connect to a remote one by URL. It resolves the last connection before opening the window, so a configured app relaunches straight into the live server.
 
+The embedded server honors a configured `PORT` (see Environment variables), binding a fixed address; with none set it takes a free port. Set one to start the server on one machine and connect to it from another via the connect screen.
+
 #### Window
 
 Optional `src/bundle/window.ts`, default-exported, baked in at build time.
@@ -470,13 +472,13 @@ Files under `src/browser/public/` are served at the root path. `belte compile`/`
 
 | Variable | Used by | Meaning |
 | --- | --- | --- |
-| `PORT` | server | listen port (default `3000`) |
+| `PORT` | server | listen port (default `3000`); in a bundle the embedded server binds a configured value, else a free port |
 | `APP_URL` | CLI | server the CLI calls (required) |
 | `APP_TOKEN` | CLI | bearer token for CLI calls |
 | `DEBUG` | everywhere | enable debug logging (see below) |
 | `BELTE_INSPECT` | bundle | open the native webview inspector |
 
-A bundle also loads a per-user data-dir `.env` (written by the config form) and a shipped binary-dir `.env`, merged into `process.env` at boot beneath the shell and CWD `.env` — so app code just reads `Bun.env.*` regardless of source.
+A bundle loads a per-user data-dir `.env` (written by the config form) and a shipped binary-dir `.env`, merged into `process.env` at boot beneath the shell and CWD `.env` — so app code just reads `Bun.env.*` regardless of source. Setting `PORT` there (or in `config`) binds the embedded server to a fixed, reachable address; the server has no `hostname` set, so it listens on all interfaces.
 
 ### Logging and DEBUG
 
