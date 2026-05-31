@@ -9,6 +9,7 @@ import { resolveServerBinary } from './lib/bundle/resolveServerBinary.ts'
 import { resolveWebviewLib } from './lib/bundle/resolveWebviewLib.ts'
 import { stableLocalPort } from './lib/bundle/stableLocalPort.ts'
 import { waitForServer } from './lib/bundle/waitForServer.ts'
+import { parsePort } from './lib/server/runtime/parsePort.ts'
 import { appDataDir } from './lib/shared/appDataDir.ts'
 import { log } from './lib/shared/log.ts'
 import { readEnvFile } from './lib/shared/readEnvFile.ts'
@@ -160,9 +161,26 @@ Spawns the sibling server binary on a free port and waits for it to answer,
 returning the URL to point the window at. Any previous child is reaped first so
 only one embedded server runs at a time.
 */
+/*
+The port the embedded server binds. A `PORT` configured in the data-dir `.env`
+(where the config form writes), the shipped binary-dir `.env`, or the launcher's
+own env is honored — so the server answers at a fixed, known address another
+machine can reliably connect to. With none set, a free port is chosen (the
+historical behaviour). Precedence matches the server's own env stack: shell >
+data-dir > binary-dir. A configured port is used as-is and not second-guessed —
+if it's taken, the bind failure surfaces rather than silently moving.
+*/
+async function resolveEmbeddedPort(): Promise<number> {
+    const [dataDirEnv, binaryDirEnv] = await Promise.all([
+        readEnvFile(dataDirEnvPath()),
+        readEnvFile(binaryDirEnvPath()),
+    ])
+    return parsePort(process.env.PORT ?? dataDirEnv.PORT ?? binaryDirEnv.PORT) ?? findFreePort()
+}
+
 async function startEmbeddedServer(timeoutMs?: number): Promise<string> {
     killServerChild()
-    const port = findFreePort()
+    const port = await resolveEmbeddedPort()
     const url = `http://localhost:${port}`
     serverChild = Bun.spawn({
         cmd: [resolveServerBinary()],
@@ -267,6 +285,11 @@ function dataDirEnvPath(): string {
     return join(appDataDir(programName), '.env')
 }
 
+// The shipped `.env` beside the server binary (the bundle's default config layer).
+function binaryDirEnvPath(): string {
+    return join(dirname(resolveServerBinary()), '.env')
+}
+
 /*
 Resolves the value to pre-fill each config field with, following the same
 precedence the server applies below the shell: the user's saved data-dir `.env`,
@@ -279,7 +302,7 @@ async function resolveConfigValues(): Promise<Record<string, string>> {
     // Independent reads — fetch together; precedence is applied in the merge below.
     const [dataDirEnv, binaryDirEnv] = await Promise.all([
         readEnvFile(dataDirEnvPath()),
-        readEnvFile(join(dirname(resolveServerBinary()), '.env')),
+        readEnvFile(binaryDirEnvPath()),
     ])
     return Object.fromEntries(
         Object.keys(properties).map((key) => {
