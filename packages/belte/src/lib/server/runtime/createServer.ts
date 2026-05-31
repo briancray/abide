@@ -1,5 +1,4 @@
 import type { BunRequest, Server } from 'bun'
-import { Glob } from 'bun'
 import type { Component } from 'svelte'
 import { render } from 'svelte/server'
 import App from '../../../App.svelte'
@@ -29,6 +28,8 @@ import { cacheControlForAsset } from './cacheControlForAsset.ts'
 import { containsTraversal } from './containsTraversal.ts'
 import { createAssetHeaderCache } from './createAssetHeaderCache.ts'
 import { createPublicAssetServer } from './createPublicAssetServer.ts'
+import { globToPathSet } from './globToPathSet.ts'
+import { logBrowserOnlyRoutes } from './logBrowserOnlyRoutes.ts'
 import { ensureRegistriesLoaded, setRegistryManifests } from './registryManifests.ts'
 import { requestContext } from './requestContext.ts'
 import { safeJsonForScript } from './safeJsonForScript.ts'
@@ -126,16 +127,23 @@ export async function createServer({
     setMcpResourceServer(createMcpResourceServer({ resourcesDir, mcpResources }))
     const cliName = cliProgramName ?? 'app'
     const cliCwd = process.cwd()
-    const servePublicAsset = createPublicAssetServer({ publicDir, publicAssets })
+    const servePublicAsset = await createPublicAssetServer({ publicDir, publicAssets })
     const layoutPrefixes = layouts ? normalizeLayoutPrefixes(Object.keys(layouts)) : []
 
-    const diskZstdPaths = new Set<string>(
-        !assets && (await Bun.file(`${distDir}/_app`).exists())
-            ? (await Array.fromAsync(new Glob('**/*.zst').scan({ cwd: `${distDir}/_app` }))).map(
-                  (file) => `/_app/${file.replace(/\.zst$/, '')}`,
-              )
-            : [],
-    )
+    /*
+    Snapshot the precompressed `.zst` siblings the build wrote next to each
+    `_app` asset, keyed by the asset's request path, so a zstd-capable
+    client gets the precompressed bytes without on-the-fly compression. Only
+    in disk mode (`belte start` / dev); the compiled binary serves from the
+    embedded `assets` map instead.
+    */
+    const diskZstdPaths = assets
+        ? new Set<string>()
+        : await globToPathSet(
+              `${distDir}/_app`,
+              '**/*.zst',
+              (file) => `/_app/${file.replace(/\.zst$/, '')}`,
+          )
 
     const rpcModuleCache = new Map<string, Promise<AnyRemoteFunction | undefined>>()
     function loadRpc(url: string): Promise<AnyRemoteFunction | undefined> | undefined {
@@ -555,5 +563,13 @@ export async function createServer({
     }
 
     log.success(`ready at http://localhost:${server.port}`)
+    /*
+    Diagnostic only, and only under `belte` debug logging — eager-loads the
+    registry to report routes that are browser-only for lack of a schema,
+    making the opt-in nature of the MCP/CLI surfaces visible.
+    */
+    if (logRequests) {
+        void logBrowserOnlyRoutes()
+    }
     return server
 }
