@@ -16,7 +16,8 @@ subscribe. `history: 100` retains the last 100 messages and replays
 them to new subscribers. `clientPublish` is left off (default false)
 so browsers can't publish directly — publish flows through publishChat
 which validates input and runs server-side. The attached schema
-validates publish payloads synchronously. Sockets aren't exposed to
-MCP — only schema-bearing rpcs (tools) and prompts are (see /mcp).
+validates publish payloads synchronously and auto-exposes the socket to
+MCP and the CLI as a `chat-tail` read tool/command (recent buffered
+messages); a `chat-publish` would also appear if `clientPublish` were on.
 */
 export const chat = socket<ChatMessage>({ history: 100, schema })

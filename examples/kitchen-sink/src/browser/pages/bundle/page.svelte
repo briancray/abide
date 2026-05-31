@@ -11,35 +11,49 @@ import CodeBlock from '$browser/CodeBlock.svelte'
 </p>
 
 <section class="mt-6">
-    <h2 class="text-sm font-semibold">Launch modes</h2>
+    <h2 class="text-sm font-semibold">Connect screen</h2>
     <p class="mt-1 text-xs text-slate-500">
-        Mode is keyed on <code class="font-mono">APP_URL</code> at launch, exactly like the
-        <a class="underline" href="/cli">CLI</a> binary.
+        The launcher boots into a connect screen — no server is assumed. An always-installed File
+        menu (Start server / Connect / Disconnect) drives which server the window points at; the
+        screen's form is where you enter a remote URL.
     </p>
     <div class="mt-2 overflow-x-auto rounded-lg border border-slate-200 bg-white">
         <table class="w-full text-sm">
             <thead class="border-b border-slate-200 bg-slate-50 text-left">
                 <tr>
-                    <th class="px-4 py-2 font-mono font-medium">APP_URL</th>
+                    <th class="px-4 py-2 font-medium">action</th>
                     <th class="px-4 py-2 font-medium">behavior</th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-slate-100">
                 <tr>
-                    <td class="px-4 py-2 font-mono text-slate-600">set</td>
+                    <td class="px-4 py-2 font-mono text-slate-600">Start server</td>
                     <td class="px-4 py-2 text-slate-600">
-                        remote — point the webview at that server, start nothing
+                        spawn the sibling server binary on a free local port, then point the window
+                        at it
                     </td>
                 </tr>
                 <tr>
-                    <td class="px-4 py-2 font-mono text-slate-600">unset</td>
+                    <td class="px-4 py-2 font-mono text-slate-600">Connect</td>
                     <td class="px-4 py-2 text-slate-600">
-                        embedded — spawn the sibling server binary on a free local port
+                        probe the entered URL is a belte server, then point the window at it
+                    </td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono text-slate-600">Disconnect</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        reap any embedded server and return to the connect screen
                     </td>
                 </tr>
             </tbody>
         </table>
     </div>
+    <p class="mt-2 text-xs text-slate-500">
+        A liveness watch bounces the window back to the connect screen if the connected server stops
+        responding. Override the screen itself with
+        <code class="font-mono">src/bundle/disconnected.svelte</code>
+        .
+    </p>
 </section>
 
 <section class="mt-6">
@@ -87,7 +101,8 @@ import CodeBlock from '$browser/CodeBlock.svelte'
         <code class="font-mono">emit</code> name. Subscribe with
         <code class="font-mono">onMenu</code> from
         <code class="font-mono">belte/bundle/onMenu</code>
-        : it hands your handler the name and returns an unsubscribe, so it drops straight into an
+        : pass a name plus a handler to fire for one item, or a single handler to take every name.
+        Both return an unsubscribe, so they drop straight into an
         <code class="font-mono">$effect</code>
         . Your code makes the relevant rpc call, so the menu can drive parameterised work. The
         standard App / Edit / Window menus (Quit, copy/paste, minimize) are always installed.
@@ -106,8 +121,10 @@ import CodeBlock from '$browser/CodeBlock.svelte'
         drop <code class="font-mono">src/bundle/icon.png</code> and the build converts it to <code
             class="font-mono">
             icon.icns
-        </code> and wires the Info.plist. Bundles are
-        <strong>unsigned</strong> — distributing to other users still needs platform signing.
+        </code> and wires the Info.plist. The finished <code class="font-mono">.app</code> is
+        <strong>ad-hoc code-signed</strong> so it launches on other Macs (a quarantined copy may
+        still need <code class="font-mono">xattr -cr</code> once); full distribution still needs a
+        Developer ID signature and notarization.
     </p>
 </section>
 
@@ -138,15 +155,15 @@ export default {
         code={`import { onMenu } from '@briancray/belte/bundle/onMenu'
 import { navigate } from '@briancray/belte/browser/navigate'
 
-$effect(() =>
-    onMenu((name) => {
-        if (name === 'reload-session') location.reload()
-        else if (name === 'open-mcp') void navigate('/mcp')
-    }),
-)`} />
+// name-filtered: one handler per item
+$effect(() => onMenu('reload-session', () => location.reload()))
+$effect(() => onMenu('open-mcp', () => void navigate('/mcp')))
+
+// or catch-all: every name through one handler
+// $effect(() => onMenu((name) => { ... }))`} />
 
     <CodeBlock
-        title="build the bundle (unsigned, host platform)"
+        title="build the bundle (host platform)"
         lang="sh"
         code={`belte bundle           # → dist/<program>.app (macOS) or dist/<program>/
 belte compile          # just the embedded server binary the bundle spawns`} />

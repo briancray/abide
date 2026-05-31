@@ -39,6 +39,20 @@ async function callCreateEcho() {
     })
 }
 
+async function callChatTail() {
+    callOutput = await call(8, 'tools/call', {
+        name: 'chat-tail',
+        arguments: { count: 5 },
+    })
+}
+
+async function callCountLog() {
+    callOutput = await call(9, 'tools/call', {
+        name: 'countLog',
+        arguments: { to: 5 },
+    })
+}
+
 async function readAbout() {
     callOutput = await call(6, 'resources/read', { uri: 'belte://resources/about.md' })
 }
@@ -76,14 +90,30 @@ async function getSummarizePrompt() {
             <tbody class="divide-y divide-slate-100">
                 <tr>
                     <td class="px-4 py-2 text-slate-600">
-                        rpc with <code class="font-mono">schema</code>
+                        rpc with <code class="font-mono">inputSchema</code>
                     </td>
                     <td class="px-4 py-2 font-mono text-slate-500">tool &lt;name&gt;</td>
                     <td class="px-4 py-2 text-slate-600">
-                        one tool per rpc, any verb; folder segments join with <code
-                            class="font-mono">
-                            -
+                        read-only verbs (<code class="font-mono">GET</code>
+                        /<code class="font-mono">HEAD</code>
+                        ) auto-expose; mutating verbs opt in via <code class="font-mono">
+                            clients.mcp
                         </code>
+                        . The verb feeds the tool's read/write annotations.
+                    </td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 text-slate-600">
+                        socket with <code class="font-mono">schema</code>
+                    </td>
+                    <td class="px-4 py-2 font-mono text-slate-500">
+                        &lt;name&gt;-tail / &lt;name&gt;-publish
+                    </td>
+                    <td class="px-4 py-2 text-slate-600">
+                        <code class="font-mono">-tail</code> reads recent buffered messages; <code
+                            class="font-mono">
+                            -publish
+                        </code> only when <code class="font-mono">clientPublish</code> is set.
                     </td>
                 </tr>
                 <tr>
@@ -113,24 +143,30 @@ async function getSummarizePrompt() {
         </table>
     </div>
     <p class="mt-2 text-xs text-slate-500">
-        No schema → no MCP exposure. The schema is the gate that makes the non-browser surfaces safe
-        to advertise. Override per-declaration with
+        No input schema → no MCP exposure. The schema is the gate that makes the non-browser
+        surfaces safe to advertise. Override per-declaration with
         <code class="font-mono">{`{ clients: { mcp: false } }`}</code>
-        . Sockets are not exposed to MCP.
+        — or opt a mutating verb in with
+        <code class="font-mono">{`{ clients: { mcp: true } }`}</code>
+        .
     </p>
 </section>
 
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
     <h2 class="text-sm font-semibold">Try it</h2>
     <p class="mt-1 text-xs text-slate-500">
-        Hits <code class="font-mono">POST /__belte/mcp</code> directly from the browser. The
-        schema-bearing rpcs (<code class="font-mono">getEcho</code>
+        Hits <code class="font-mono">POST /__belte/mcp</code> directly from the browser. Read-only
+        rpcs (<code class="font-mono">getEcho</code>
         ,
         <code class="font-mono">getProduct</code>
-        , <code class="font-mono">createEcho</code>
         ,
-        <code class="font-mono">publishChat</code>
-        ) are tools;
+        <code class="font-mono">countLog</code>
+        ) are tools automatically; the mutating <code class="font-mono">createEcho</code>
+        opts in via <code class="font-mono">clients.mcp</code>
+        ; the <code class="font-mono">chat</code> socket exposes <code class="font-mono">
+            chat-tail
+        </code>
+        ;
         <code class="font-mono">about.md</code> is a resource; and
         <code class="font-mono">summarize</code> is a prompt.
     </p>
@@ -164,6 +200,18 @@ async function getSummarizePrompt() {
             class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
             onclick={callCreateEcho}>
             tools/call → createEcho
+        </button>
+        <button
+            type="button"
+            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+            onclick={callChatTail}>
+            tools/call → chat-tail
+        </button>
+        <button
+            type="button"
+            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+            onclick={callCountLog}>
+            tools/call → countLog
         </button>
         <button
             type="button"
@@ -214,7 +262,8 @@ async function getSummarizePrompt() {
     <h2 class="text-sm font-semibold text-slate-900">Streaming caveat</h2>
     <p class="mt-1">
         MCP exposes request/response tools, prompts, and snapshot resources — not a live
-        subscription. Sockets aren't exposed to MCP; real-time fan-out stays on the
+        subscription. A socket's <code class="font-mono">-tail</code> tool returns the recent
+        buffered messages, not a live stream; real-time fan-out stays on the
         <a class="underline" href="/server/sockets">ws multiplex</a>
         .
     </p>

@@ -135,13 +135,16 @@ async function fetchInstaller() {
 </section>
 
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5 text-sm text-slate-600">
-    <h2 class="text-sm font-semibold text-slate-900">Streaming caveat</h2>
+    <h2 class="text-sm font-semibold text-slate-900">Streaming &amp; sockets</h2>
     <p class="mt-1">
-        CLI commands cover the request/response surface only — sockets,
-        <code class="font-mono">sse</code>
-        , and <code class="font-mono">jsonl</code>
-        rpcs aren't reachable from the binary yet. Use the browser or
-        <a class="underline" href="/mcp">MCP</a> surface for those.
+        Streaming works: an <code class="font-mono">sse</code>
+        /
+        <code class="font-mono">jsonl</code>
+        rpc — or a socket <code class="font-mono">&lt;name&gt;-tail</code> command — prints
+        frame-by-frame as NDJSON to stdout; everything else is decoded and printed once. Each socket
+        contributes a <code class="font-mono">&lt;name&gt;-tail</code> command, plus
+        <code class="font-mono">&lt;name&gt;-publish</code> when
+        <code class="font-mono">clientPublish</code> is set.
     </p>
 </section>
 
@@ -162,6 +165,8 @@ await client.createEcho({ message: 'seeded' })`} />
         lang="sh"
         code={`belte cli                                          # build ./dist/cli
 APP_URL=http://localhost:3000 ./dist/cli getEcho --message=hello   # call the server
+./dist/cli countLog --to=5                          # streaming jsonl rpc → NDJSON frames
+./dist/cli chat-tail --tail=10                      # socket: replay last 10, then stream live as NDJSON
 ./dist/cli --help
 ./dist/cli getEcho --help`} />
 

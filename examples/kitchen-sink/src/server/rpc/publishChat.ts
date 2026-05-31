@@ -4,16 +4,16 @@ import { POST } from '@briancray/belte/server/POST'
 import { z } from 'zod'
 import { type ChatMessage, chat } from '$server/sockets/chat.ts'
 
-const schema = z.object({ from: z.string(), text: z.string() })
+const inputSchema = z.object({ from: z.string(), text: z.string() })
 
 /*
 POST handler that records a chat message and publishes it to the
 `chat` socket. Anyone subscribed — server-side `for await (const m of
 chat)` or browser-side `subscribe(chat)` — receives the message.
-Validation runs ahead of the handler via the attached Standard
-Schema; trimming + non-empty checks stay here because they're domain
-rules, not shape rules. Schema also auto-exposes the rpc to MCP +
-CLI (see /mcp and /cli).
+Validation runs ahead of the handler via the attached `inputSchema`;
+trimming + non-empty checks stay here because they're domain rules, not
+shape rules. The inputSchema auto-exposes the rpc to the CLI (see /cli);
+as a mutating POST it stays off MCP unless it opts in via `clients.mcp`.
 */
 export const publishChat = POST(
     ({ from, text }) => {
@@ -31,5 +31,5 @@ export const publishChat = POST(
         chat.publish(message)
         return json(message)
     },
-    { schema },
+    { inputSchema },
 )

@@ -12,9 +12,11 @@ decoding) is inferred from the handler's return type via the
 `TypedResponse<T>` brand on `json`/`error`/`redirect`/`jsonl`/`sse`, so
 plain `GET(() => json({...}))` already types end-to-end.
 
-For inbound validation pass a Standard Schema-compatible schema as the
-second argument: `GET(fn, { schema })`. Args then infers from the schema's
-output type and the server replies with 422 on validation failure.
+For inbound validation pass a Standard Schema as `inputSchema` in the
+second argument: `GET(fn, { inputSchema })`. Args then infers from the
+schema's output type and the server replies with 422 on validation
+failure. An optional `outputSchema` describes the success body for the
+OpenAPI 200 response and the MCP tool output.
 
 `json(...)` from `belte/server/json` is a thin wrapper over `Response.json`
 that defaults `Cache-Control: no-store`, since intermediary caches shouldn't

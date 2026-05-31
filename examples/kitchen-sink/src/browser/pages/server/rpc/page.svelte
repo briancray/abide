@@ -167,12 +167,13 @@ const message = $state({ value: 'hello' })
 <section class="mt-6 space-y-3">
     <CodeBlock
         title="src/server/rpc/*.ts — one verb per file"
-        code={`// getEcho.ts
+        code={`// getEcho.ts — inputSchema validates args and exposes the rpc to MCP + CLI
 import { GET } from '@briancray/belte/server/GET'
 import { json } from '@briancray/belte/server/json'
-export const getEcho = GET<{ message: string }>(({ message }) =>
-    json({ method: 'GET' as const, message }),
-)
+import { z } from 'zod'
+const inputSchema = z.object({ message: z.string() })
+export const getEcho = GET(({ message }) =>
+    json({ method: 'GET' as const, message }), { inputSchema })
 
 // createEcho.ts — POST: args from JSON body
 export const createEcho = POST<{ message: string }>(({ message }) =>

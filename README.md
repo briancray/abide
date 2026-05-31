@@ -2,566 +2,623 @@
 
 Isomorphic multimodal HTTP framework built for humans and machines in a single Bun runtime.
 
-Declare a handler once. Belte exposes it to every client — web, CLI, MCP, and a native bundle — from one Bun process, with the same name and the same behavior on both sides of the wire.
+One declaration is reachable from every surface a modern app needs:
 
-| Audience | Surfaces                         |
-| -------- | -------------------------------- |
-| Humans   | web (Svelte), CLI, native bundle |
-| Machines | MCP, CLI                         |
+- **Humans** — web UI (Svelte 5 SSR + SPA), a CLI, and a native desktop bundle.
+- **Machines** — an MCP server and the same CLI, scriptable.
+- The **CLI serves both** — humans run it by hand, machines call it from a shell.
 
-The CLI serves both: humans run it by hand, machines script it.
+Declare a remote function once; the bundler swaps the runtime so the same name and behavior work on the server, in the browser, over MCP, and from the CLI — no duplicated clients, no second schema.
 
 ## Try it
 
-The fastest path is a prebuilt example or the scaffold.
+The fastest path is a prebuilt example.
 
-```sh
-# scaffold a new app
-bunx @briancray/belte scaffold my-app
-cd my-app && bun install && bun dev
-```
+- **Scaffold a new app:**
 
-```sh
-# kitchen-sink: every feature in one app
-git clone https://github.com/briancray/belte
-cd belte/examples/kitchen-sink && bun dev
-```
+  ```sh
+  bunx @briancray/belte scaffold my-app
+  cd my-app && bun install
+  bun dev
+  ```
+
+- **Kitchen-sink (every feature in one app):**
+
+  ```sh
+  git clone https://github.com/briancray/belte
+  cd belte/examples/kitchen-sink
+  bun dev
+  ```
 
 ## What is an isomorphic multimodal framework
 
-- **One runtime.** Dev and production run the same code paths on Bun. No separate adapter per target.
-- **Declare once, use anywhere.** A handler declared on the server is callable — for free — over HTTP from the browser, as an MCP tool, as a CLI command, and from inside the native bundle.
-- **The bundler swaps the runtime.** The verb helper you call is rewritten per build target: it keeps the implementation on the server and becomes a typed remote call on the client.
+Belte runs your server, client, MCP, and CLI logic in **one Bun runtime** with **one runtime per declaration**. You write a remote function once and it is consumed, for free, on every client surface — the bundler chooses the implementation per build target.
 
-Declare a handler in `src/server/rpc/users.ts` — one export per file, named after the file:
+Declare it once under `src/server/rpc/`:
 
 ```ts
-import { GET } from "@briancray/belte/server/GET";
-import { json } from "@briancray/belte/server/json";
+// src/server/rpc/users/get.ts
+import { GET } from 'belte/server/GET'
+import { json } from 'belte/server/json'
+import { z } from 'zod'
 
-export const users = GET(({ id }: { id: string }) => json(db.users.find(id)));
+export const get = GET(
+    async ({ id }) => json(await db.users.find(id)),
+    { inputSchema: z.object({ id: z.string() }) },
+)
 ```
 
-Consume the same export on each client:
+Consume it on each surface:
+
+| Surface | How |
+| --- | --- |
+| Browser | `cache(get)({ id })` inside a page component |
+| HTTP | `GET /rpc/users/get?id=1` |
+| MCP | tool `users-get` (read-only verb auto-exposes) |
+| CLI | `app users-get --id 1` |
+| OpenAPI | operation `users-get` in `/openapi.json` |
+
+The export name must match the filename stem, and each file under `src/server/rpc/` declares exactly one remote function. The file path becomes the URL (`/rpc/users/get`), the command name (`users-get`), and the MCP tool name.
+
+---
+
+# Server
+
+## Server / rpc
+
+### Declaring
+
+A verb helper turns a handler into a remote function. The handler receives the parsed (and, with `inputSchema`, validated) args bag and returns a `Response` — usually via a response helper.
 
 ```ts
-// browser — the bundler swaps in a fetch
-import { users } from "$server/rpc/users";
-const user = await users({ id: "42" });
+type Verb = <Return, InputSchema>(
+    handler: (args: InferOutput<InputSchema>) => Return | Promise<Return>,
+    opts?: {
+        inputSchema?: StandardSchema
+        inputJsonSchema?: Record<string, unknown>
+        outputSchema?: StandardSchema
+        outputJsonSchema?: Record<string, unknown>
+        clients?: Partial<{ browser: boolean; mcp: boolean; cli: boolean }>
+    },
+) => RemoteFunction<InferInput<InputSchema>, Return>
 ```
 
-```sh
-# CLI — generated command, flags from the schema
-my-app users --id 42
-```
+| Option | Type | Default | Purpose |
+| --- | --- | --- | --- |
+| `inputSchema` | Standard Schema | — | Validates the args bag; rejects with `422` on failure. Its presence is what auto-exposes the verb to MCP/CLI. |
+| `inputJsonSchema` | object | derived | Precomputed JSON Schema override for the input (OpenAPI params / MCP tool input). |
+| `outputSchema` | Standard Schema | — | Describes the success body for the OpenAPI `200` response and the MCP tool output. |
+| `outputJsonSchema` | object | derived | Precomputed JSON Schema override for the output. |
+| `clients` | `{ browser?, mcp?, cli? }` | see below | Which surfaces advertise this verb. Explicit values always win. |
 
-```
-# MCP — exposed as a tool named "users", called by the model
-```
+Verb helpers, one module path each:
 
-## Server
+`belte/server/GET` · `belte/server/POST` · `belte/server/PUT` · `belte/server/PATCH` · `belte/server/DELETE` · `belte/server/HEAD`
 
-### Server / RPC
+Args travel differently per verb:
 
-#### Declaring
+| Verb | Args location |
+| --- | --- |
+| `GET` / `DELETE` / `HEAD` | query string (`?key=value`) |
+| `POST` / `PUT` / `PATCH` | JSON body |
 
-A verb factory turns a handler into a remote function. The same factory exists for every method: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`. Each lives at its own path (`@briancray/belte/server/GET`, …) and is the single export of a file under `src/server/rpc/`, named after the file.
+Client exposure defaults from the schema:
+
+| Surface | Default |
+| --- | --- |
+| `browser` | always `true` |
+| `cli` | `true` when an `inputSchema` is present |
+| `mcp` | `true` when an `inputSchema` is present **and** the verb is read-only (`GET`/`HEAD`); mutating verbs require explicit `clients: { mcp: true }` |
 
 ```ts
-type VerbHelper = {
-  // with a schema — Args is inferred from the schema, Return overridable
-  <Return, Schema>(
-    handler: (args: InferOutput<Schema>) => Response,
-    opts: { schema: Schema; clients?: Partial<ClientFlags> }
-  ): RemoteFunction<InferInput<Schema>, Return>;
-  // bare handler — Args and Return come from the handler
-  <Args, Return>(handler: (args: Args) => Response): RemoteFunction<
-    Args,
-    Return
-  >;
-};
+// src/server/rpc/articles/create.ts
+import { POST } from 'belte/server/POST'
+import { json } from 'belte/server/json'
+import { z } from 'zod'
+
+const Article = z.object({ title: z.string(), body: z.string() })
+
+export const create = POST(
+    async (article) => json(await db.articles.insert(article), { status: 201 }),
+    { inputSchema: Article, outputSchema: z.object({ id: z.string() }) },
+)
 ```
 
-| Argument       | Type                                            | Purpose                                                                                                                                             |
-| -------------- | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `handler`      | `(args: Args) => Response \| Promise<Response>` | The implementation. Receives one parsed argument bag and returns a `Response` — use a [response helper](#response-helpers) so `Return` is inferred. |
-| `opts.schema`  | Standard Schema                                 | Validates the argument bag before the handler; infers `Args`; feeds the OpenAPI and MCP input schema.                                               |
-| `opts.clients` | `Partial<ClientFlags>`                          | Which surfaces (`browser` / `mcp` / `cli`) expose the route. Defaults to all.                                                                       |
+#### Response helpers
 
-The argument bag is one object: query parameters for `GET`/`DELETE`, the parsed JSON or form body otherwise. For binary or multipart bodies it is `undefined` — read the raw request with [`request()`](#request-and-server). Schemas follow [Standard Schema](https://standardschema.dev), so zod, valibot, and arktype are interchangeable.
+Each returns a typed `Response`; the verb infers the caller-facing return type from the body.
+
+| Helper | Signature | Body |
+| --- | --- | --- |
+| `belte/server/json` | `json<T>(data: T, init?: ResponseInit)` | `application/json`, `no-store` |
+| `belte/server/error` | `error(status: number, message?: string, init?: ResponseInit)` | `text/plain`; message defaults to the status reason |
+| `belte/server/redirect` | `redirect(url: string, status?: 301\|302\|303\|307\|308, init?: ResponseInit)` | 3xx with `Location` (relative URLs allowed) |
+| `belte/server/sse` | `sse<Frame>(iterable: AsyncIterable<Frame>, init?: ResponseInit)` | `text/event-stream`, one event per frame |
+| `belte/server/jsonl` | `jsonl<Frame>(iterable: AsyncIterable<Frame>, init?: ResponseInit)` | `application/jsonl`, one JSON value per line |
 
 ```ts
-import { POST } from "@briancray/belte/server/POST";
-import { json } from "@briancray/belte/server/json";
-import { z } from "zod";
+import { GET } from 'belte/server/GET'
+import { sse } from 'belte/server/sse'
 
-export const createPost = POST(
-  ({ title, body }) => json(db.posts.create({ title, body })),
-  {
-    schema: z.object({ title: z.string(), body: z.string() }),
-  }
-);
+export const ticks = GET(() =>
+    sse(async function* () {
+        for (let n = 0; ; n++) {
+            yield { n }
+            await Bun.sleep(1000)
+        }
+    }()),
+)
 ```
 
-##### Response helpers
+#### `request()` and `server()`
 
-A handler must return a `Response`. These helpers build the common ones; each carries a type brand so the verb infers `Return` from the handler body. All are server-only modules under `@briancray/belte/server/`.
+Both throw if called outside their scope rather than returning `undefined`.
 
-| Helper     | Type                                                                               | Use                                                                 |
-| ---------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| `json`     | `<T>(data: T, init?: ResponseInit) => Response`                                    | JSON body; sets `Cache-Control: no-store` unless overridden.        |
-| `jsonl`    | `<T>(source: AsyncIterable<T>, init?: ResponseInit) => Response`                   | Stream one JSON value per line (NDJSON).                            |
-| `sse`      | `<T>(source: AsyncIterable<T>, init?: ResponseInit) => Response`                   | Stream as `text/event-stream` with a 15s keepalive.                 |
-| `redirect` | `(url: string, status?: 301\|302\|303\|307\|308, init?: ResponseInit) => Response` | Redirect; accepts relative URLs, defaults to `302`.                 |
-| `error`    | `(status: number, message?: string, init?: ResponseInit) => Response`              | Plain-text error response; `message` defaults to the status reason. |
+| Function | Returns | Available |
+| --- | --- | --- |
+| `belte/server/request` → `request(): Request` | the inbound request | inside an SSR render or rpc handler |
+| `belte/server/server` → `server(): Server` | the live `Bun.serve` instance | after `app.ts` `init()` resolves |
 
-```ts
-export const report = GET(() => json({ ok: true }, { status: 201 }));
-```
+### Consuming
 
-To short-circuit by throwing instead of returning, `throw new HttpError(error(404, "not found"))`; the `handleError` hook catches it.
-
-##### request() and server()
-
-Both resolve from the in-flight request context (an `AsyncLocalStorage`); both throw if called outside a request / before boot rather than returning `undefined`.
-
-```ts
-type request = () => Request;
-type server = () => Bun.Server;
-```
-
-| Function    | Returns                  | Use inside a handler for                        |
-| ----------- | ------------------------ | ----------------------------------------------- |
-| `request()` | the in-flight `Request`  | headers, cookies, `request.signal`, the raw URL |
-| `server()`  | the running `Bun.Server` | upgrades and low-level server access            |
-
-```ts
-import { request } from "@briancray/belte/server/request";
-
-export const whoami = GET(() => json(request().headers.get("authorization")));
-```
-
-#### Consuming
-
-The verb factory returns a `RemoteFunction`. On the client it is the same callable; the bundler routes the call over HTTP to `/rpc/<name>`.
+A `RemoteFunction` is callable plus a few members:
 
 ```ts
 type RemoteFunction<Args, Return> = ((args: Args) => Promise<Return>) & {
-  raw: (args: Args) => Promise<Response>;
-  stream: (args?: Args) => Subscribable<Return>;
-  method: string;
-  url: string;
-};
-```
-
-The argument bag is encoded into the request — query parameters for `GET`/`DELETE`, a JSON body otherwise — and the response body is decoded (by `Content-Type`) back into `Return`.
-
-```ts
-const user = await users({ id: "42" }); // typed Return
-```
-
-##### `.raw`
-
-Returns the underlying `Response` without decoding and without throwing on non-2xx — for headers, status, or non-JSON payloads.
-
-```ts
-const response = await report.raw();
-const etag = response.headers.get("etag");
-```
-
-##### `.stream`
-
-Returns a `Subscribable<Return>` over the response frames — an `AsyncIterable` usable directly or through [`subscribe`](#subscribe). `sse`/`jsonl` handlers yield each frame; non-streaming handlers yield their value once.
-
-```ts
-for await (const line of logs.stream({ since })) {
-  console.log(line);
+    readonly method: HttpVerb
+    readonly url: string
+    readonly clients: ClientFlags
+    readonly raw: (args: Args) => Promise<Response>
+    stream(args?: Args): Subscribable<Return>
 }
 ```
 
-##### Errors
+#### Plain call
 
-A non-2xx response rejects with an `HttpError` carrying the status and raw `Response`, so client and server observe the same failure. Importable from `@briancray/belte/browser/HttpError`.
+`fn(args)` sends the request (args encoded per the verb) and decodes the body by Content-Type. Non-2xx throws `HttpError`.
+
+| Response | `fn(args)` resolves to |
+| --- | --- |
+| `application/json` / `*+json` | parsed object |
+| `text/*` | string |
+| `204` / empty | `undefined` |
+| other | `Blob` |
+| streaming (sse/jsonl) | throws — use `.stream` |
 
 ```ts
-class HttpError extends Error {
-  status: number;
-  statusText: string;
-  response: Response;
+const user = await get({ id: '1' }) // decoded body, throws HttpError on non-2xx
+```
+
+#### `.raw`
+
+`fn.raw(args)` returns the underlying `Response` without decoding and without throwing on non-2xx — for status/header inspection or custom error handling.
+
+```ts
+const res = await get.raw({ id: '1' })
+if (res.status === 404) {
+    /* … */
 }
 ```
 
+#### `.stream`
+
+`fn.stream(args?)` returns a `Subscribable<Return>` over the response body: sse/jsonl handlers yield each frame; non-streaming handlers yield the decoded body once. Pass it to `subscribe()` or iterate directly.
+
 ```ts
-try {
-  await users({ id: "missing" });
-} catch (error) {
-  // error.status, await error.response.text()
+for await (const tick of ticks.stream()) {
+    console.log(tick.n)
 }
 ```
 
-##### openapi.json
+#### `HttpError`
 
-Each RPC's method, `url`, and `schema` feed a generated OpenAPI document served at `/openapi.json` (also `/swagger.json`) for external tooling.
+Thrown by the plain call on non-2xx. Import from `belte/browser/HttpError`.
 
-### Server / sockets
+| Member | Type |
+| --- | --- |
+| `status` | `number` |
+| `statusText` | `string` |
+| `response` | `Response` |
 
-#### Declaring
+#### `/openapi.json`
 
-`socket` declares a named broadcast channel, the single export of a file under `src/server/sockets/`. The export name and file path become the socket name.
+Every rpc is described as an OpenAPI 3.1 operation, served at `/openapi.json`. `GET`/`DELETE`/`HEAD` args become query parameters; `POST`/`PUT`/`PATCH` args become a JSON request body; `outputSchema` becomes the `200` response schema.
+
+## Server / sockets
+
+A socket is a named broadcast channel — bidirectional, with optional history replay — declared once and consumed on every surface like an rpc.
+
+### Declaring
 
 ```ts
-type socket = {
-  <Schema>(opts: SocketOptions & { schema: Schema }): Socket<
-    InferOutput<Schema>
-  >;
-  <T>(opts?: SocketOptions): Socket<T>;
-};
+type socket = <Schema>(opts: {
+    schema?: Schema
+    history?: number
+    ttl?: number
+    clientPublish?: boolean
+    jsonSchema?: Record<string, unknown>
+    clients?: Partial<{ browser: boolean; mcp: boolean; cli: boolean }>
+}) => Socket<InferOutput<Schema>>
 ```
 
-| Field           | Type                   | Default      | Purpose                                                                                       |
-| --------------- | ---------------------- | ------------ | --------------------------------------------------------------------------------------------- |
-| `schema`        | Standard Schema        | —            | Validates each published payload, infers `T`, and describes the payload to MCP/CLI.           |
-| `history`       | `number`               | `0`          | Recent payloads retained and replayed to each new subscriber.                                 |
-| `ttl`           | `number`               | —            | Drop history entries older than this many ms before replay.                                   |
-| `clientPublish` | `boolean`              | `false`      | Allow clients to publish (fan-out chat style). Server-only topics ignore client `pub` frames. |
-| `clients`       | `Partial<ClientFlags>` | browser-only | Which non-browser surfaces (`mcp` / `cli`) advertise the socket.                              |
+| Option | Type | Default | Purpose |
+| --- | --- | --- | --- |
+| `schema` | Standard Schema | — | Validates publish payloads; auto-exposes the socket to MCP/CLI. |
+| `history` | number | `0` | How many recent messages to buffer for replay on subscribe. |
+| `ttl` | number (ms) | — | Evict buffered messages older than this before replay. |
+| `clientPublish` | boolean | `false` | Allow clients to publish over the wire (off = server-only fan-out). |
+| `clients` | `{ browser?, mcp?, cli? }` | schema-derived | Which surfaces advertise the socket. |
 
 ```ts
-import { socket } from "@briancray/belte/server/socket";
-import { z } from "zod";
+// src/server/sockets/chat.ts
+import { socket } from 'belte/server/socket'
+import { z } from 'zod'
 
 export const chat = socket({
-  schema: z.object({ from: z.string(), text: z.string() }),
-  history: 50,
-  clientPublish: true,
-});
+    schema: z.object({ user: z.string(), text: z.string() }),
+    history: 50,
+    clientPublish: true,
+})
 ```
 
-#### Publishing
-
-`publish` is isomorphic: server code publishes in-process and fans out to remote subscribers.
+### Publishing
 
 ```ts
-interface Socket<T> extends AsyncIterable<T> {
-  name: string;
-  publish(message: T): void;
-  tail(count?: number): AsyncIterable<T>;
+type publish = (message: T) => void
+```
+
+Isomorphic: server code publishes in-process and fans out to remote subscribers; client code (when `clientPublish` is set) sends a frame the server validates and rebroadcasts.
+
+```ts
+chat.publish({ user: 'ada', text: 'hello' })
+```
+
+### Consuming
+
+A `Socket<T>` is an `AsyncIterable<T>`. Iterating opens a subscription (with full history replay when `history` is set); `.tail(count)` replays only the last `count` before tailing live.
+
+```ts
+type Socket<T> = AsyncIterable<T> & {
+    readonly name: string
+    publish(message: T): void
+    tail(count?: number): AsyncIterable<T>
 }
 ```
 
 ```ts
-import { chat } from "$server/sockets/chat";
-
-export const announce = POST(({ text }) => {
-  chat.publish({ from: "system", text });
-  return json({ ok: true });
-});
-```
-
-#### Consuming
-
-A `Socket<T>` is an `AsyncIterable<T>` — iterating opens a subscription, replaying history first when configured. `.tail(count)` replays the last `count` payloads, then tails live. Both satisfy `Subscribable`, so a socket can also be passed to [`subscribe`](#subscribe) for a reactive latest value.
-
-```ts
+// full history, then live
 for await (const message of chat) {
-  render(message);
+    render(message)
 }
 
-for await (const message of chat.tail(20)) {
-  render(message);
+// last 10, then live
+for await (const message of chat.tail(10)) {
+    render(message)
 }
 ```
 
-## Clients
+In a Svelte component, read it reactively with `subscribe()` (below) rather than a raw `for await`.
 
-### Browser
+---
 
-#### Pages
+# Clients
 
-Pages live under `src/browser/pages/` and are folder-based: each route folder holds a `page.svelte`, and the URL is the folder path. Dynamic segments use bracket folders.
+## Browser
 
-| Folder                              | Route                               |
-| ----------------------------------- | ----------------------------------- |
-| `pages/page.svelte`                 | `/`                                 |
-| `pages/about/page.svelte`           | `/about`                            |
-| `pages/users/[id]/page.svelte`      | `/users/:id`                        |
-| `pages/files/[...rest]/page.svelte` | catch-all                           |
-| `pages/(group)/…`                   | group folder, stripped from the URL |
+### Pages
+
+Pages are Svelte 5 components at `src/browser/pages/<route>/page.svelte`. The folder path is the route; `[id]` is a dynamic segment, `[...rest]` a catch-all.
+
+| File | Route |
+| --- | --- |
+| `src/browser/pages/page.svelte` | `/` |
+| `src/browser/pages/about/page.svelte` | `/about` |
+| `src/browser/pages/media/[id]/page.svelte` | `/media/:id` |
 
 ```svelte
-<!-- src/browser/pages/users/[id]/page.svelte -->
+<!-- src/browser/pages/media/[id]/page.svelte -->
 <script lang="ts">
-  import { page } from "@briancray/belte/browser/page";
-  import { users } from "$server/rpc/users";
-  const user = await users({ id: page.params.id });
+  import { cache } from 'belte/browser/cache'
+  import { page } from 'belte/browser/page'
+  import { getMedia } from '../../../server/rpc/media/get'
+
+  const item = $derived(await cache(getMedia)({ id: page.params.id }))
 </script>
 
-<h1>{user.name}</h1>
+<h1>{item.title}</h1>
 ```
 
-#### Layouts
+### Layouts
 
-A `layout.svelte` in a route folder wraps that folder and everything beneath it, rendering its children. Nest layouts by placing one per level.
+A `layout.svelte` in a pages folder wraps that folder's subtree; the nearest layout up the tree applies. Render children with `{@render children()}`.
 
 ```svelte
 <!-- src/browser/pages/layout.svelte -->
 <script lang="ts">
-  let { children } = $props();
+  let { children } = $props()
 </script>
 
-<nav>…</nav>
+<nav><a href="/">home</a></nav>
 {@render children()}
 ```
 
-#### cache
-
-`cache` wraps a remote function in a reactive, read-through cache. It returns an invoker; calling it dedupes concurrent calls with the same key and shares one in-flight request. Reading the result inside `$derived`/`$effect` subscribes the scope, so invalidation re-runs it.
+### `cache`
 
 ```ts
 type cache = {
-  <Args, Return>(fn: RemoteFunction<Args, Return>, options?: CacheOptions): (
-    args?: Args
-  ) => Promise<Return>;
-  <Args>(fn: RawRemoteFunction<Args>, options?: CacheOptions): (
-    args?: Args
-  ) => Promise<Response>;
-};
+    <Args, Return>(fn: RemoteFunction<Args, Return>, options?: CacheOptions): (args?: Args) => Promise<Return>
+    <Args>(fn: RawRemoteFunction<Args>, options?: CacheOptions): (args?: Args) => Promise<Response>
+    invalidate(target?: RemoteFunction | string | unknown[] | Record<string, unknown>): void
+}
 ```
 
-| Option | Type                                             | Effect                                                                                                         |
-| ------ | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
-| `key`  | `string \| unknown[] \| Record<string, unknown>` | Stable identity; strings used verbatim, other values canonicalised. Omit to derive from method + url + args.   |
-| `ttl`  | `number`                                         | `undefined` → cache until invalidated; `0` → in-flight dedupe only; `> 0` → expire that many ms after resolve. |
+| `CacheOptions` | Type | Meaning |
+| --- | --- | --- |
+| `key` | `string \| unknown[] \| object` | Override the auto-derived key (method + url + args). |
+| `ttl` | number (ms) | `undefined` = forever, `0` = dedupe in-flight only, `n` = expire `n` ms after resolve. |
 
-`cache.invalidate(fn | key)` clears matching entries; omit the argument to clear all.
+`cache(fn, options?)` returns an invoker; calling it dedupes by key and shares one stored `Response`. Reads inside a `$derived`/`$effect` re-run when the key is invalidated. During SSR the cache seeds the hydration snapshot so the first client read skips the network.
+
+```ts
+const post = $derived(await cache(getPost, { ttl: 60_000 })({ id }))
+// later
+cache.invalidate(getPost) // all entries for that function
+cache.invalidate()        // everything
+```
+
+### `subscribe`
+
+```ts
+type subscribe = {
+    <T>(source: Subscribable<T>): T | undefined
+    error<T>(source: Subscribable<T>): Error | undefined
+    status<T>(source: Subscribable<T>): 'pending' | 'open' | 'done' | 'error'
+}
+```
+
+Reactive view over a `Socket<T>` or an `fn.stream(args)` result. The first `$derived` read opens the underlying iterator; the last to stop reading closes it. Readers of the same source (deduped by name) share one subscription. No-op during SSR.
 
 ```svelte
 <script lang="ts">
-  import { cache } from "@briancray/belte/browser/cache";
-  import { users } from "$server/rpc/users";
-  const user = $derived(await cache(users)({ id: "42" }));
-</script>
-```
+  import { subscribe } from 'belte/browser/subscribe'
+  import { chat } from '../../server/sockets/chat'
 
-#### subscribe
-
-`subscribe` is the reactive reader for any `Subscribable<T>` — a `Socket<T>` or the result of `fn.stream(args)`. It returns the latest value; the stream opens on the first read in a tracking scope and closes when the last reader stops. Readers of the same source share one connection.
-
-```ts
-type subscribe = <T>(subscribable: Subscribable<T>) => T | undefined;
-```
-
-| Member                | Returns                                    | Meaning                                                |
-| --------------------- | ------------------------------------------ | ------------------------------------------------------ |
-| `subscribe(s)`        | `T \| undefined`                           | Latest payload, or `undefined` before the first frame. |
-| `subscribe.error(s)`  | `Error \| undefined`                       | Last error surfaced by the stream.                     |
-| `subscribe.status(s)` | `'pending' \| 'open' \| 'done' \| 'error'` | Stream lifecycle state.                                |
-
-`subscribe` is a no-op during SSR (returns `undefined`); seed initial HTML with `cache`, then layer `subscribe` on top after hydration.
-
-```svelte
-<script lang="ts">
-  import { subscribe } from "@briancray/belte/browser/subscribe";
-  import { chat } from "$server/sockets/chat";
-  const latest = $derived(subscribe(chat));
+  const latest = $derived(subscribe(chat))
+  const status = $derived(subscribe.status(chat))
 </script>
 
-<p>{latest?.text}</p>
+{#if latest}<p>{latest.user}: {latest.text}</p>{/if}
+<small>{status}</small>
 ```
 
-#### navigate
-
-Client-side navigation. Pushes history and swaps the route component without a full reload; falls back to a hard navigation on failure.
+### `navigate`
 
 ```ts
-type navigate = (
-  href: string,
-  options?: { replace?: boolean; scroll?: boolean }
-) => Promise<void>;
+type navigate = (href: string, options?: { replace?: boolean; scroll?: boolean }) => Promise<void>
 ```
 
-```ts
-import { navigate } from "@briancray/belte/browser/navigate";
-await navigate("/users/42");
-```
+SPA navigation: pushes history (or replaces), resolves the new view, and updates page state. Internal link clicks are intercepted automatically — call `navigate()` directly only for programmatic moves. A search/hash-only change skips the data fetch and just reassigns `page.url`. Import from `belte/browser/navigate`.
 
-#### Page state
+### Page state
 
-`page` is reactive state for the current route. Narrowing on `page.route` narrows `page.params`.
+`belte/browser/page` exports a reactive `page` object. Reassignments on navigation re-run `$derived` consumers.
 
-| Field    | Type                     | Meaning                                        |
-| -------- | ------------------------ | ---------------------------------------------- |
-| `route`  | `string`                 | Matched route path.                            |
-| `params` | `Record<string, string>` | Path parameters.                               |
-| `url`    | `URL`                    | Live location; reassigned on every navigation. |
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `route` | `string` | Current matched route. |
+| `params` | `Record<string, string>` | Dynamic-segment values. |
+| `url` | `URL` | Live location. |
 
-### MCP
+## MCP
 
-Every RPC, prompt, and resource is exposed over MCP automatically, served at `/__belte/mcp`.
+An MCP server is generated automatically and served at `/__belte/mcp` — no server module to author. Auth flows from the inbound request.
 
-- **RPCs are tools.** The route name is the tool name; the verb's `schema` becomes the tool input schema.
-- **`src/mcp/prompts/*.md` are prompts.** Front matter sets the description and arguments; the body is the template, with `{{name}}` placeholders filled from the call arguments.
+| MCP concept | Source |
+| --- | --- |
+| Tools (rpc) | Each verb with `clients.mcp` (read-only verbs auto-expose; mutating verbs opt in). The HTTP verb feeds the tool's `readOnlyHint` / `destructiveHint` / `idempotentHint`. |
+| Tools (sockets) | Each socket with `clients.mcp` gets a `<name>-tail` read tool, plus `<name>-publish` when `clientPublish` is set. |
+| Resources | Files under `src/mcp/resources/`, served as `belte://resources/<path>`. |
+| Prompts | `src/mcp/prompts/<name>.md` — frontmatter for metadata, body for the template. |
 
 ```md
+<!-- src/mcp/prompts/summarize.md -->
 ---
-description: Review a diff
+description: Summarize an article
 arguments:
-  - name: diff
+  - name: id
     required: true
 ---
-
-Review this diff:
-
-{{diff}}
+Summarize article {{id}} in three sentences.
 ```
 
-- **`src/mcp/resources/` are resources.** Every file is served as an MCP resource at `belte://resources/<path>`, with its MIME type inferred from the extension (text inline, binary as base64).
+## CLI
 
-### CLI
+A CLI is generated automatically — humans run it, machines script it. Each rpc becomes a subcommand named after its URL (`users-get`), with flags derived from its schema; sockets contribute `<name>-tail` and `<name>-publish`.
 
-Every app gets a CLI for free. RPCs become subcommands; flags are derived from each route's schema, and `<cmd> --help` lists them.
+The CLI is a thin remote client: it talks to a running server over HTTP.
+
+| Variable | Purpose |
+| --- | --- |
+| `APP_URL` | Server to call (required), e.g. `http://localhost:3000`. |
+| `APP_TOKEN` | Bearer token sent as `Authorization` (optional). |
 
 ```sh
-my-app users --id 42
-my-app create-post --title "Hello" --body "World"
+APP_URL=http://localhost:3000 app users-get --id 1
+app users-get --help     # per-command flags from the schema
+app --help               # command list
 ```
 
-The CLI is a thin remote client — it always talks to a running server.
+A `.env` next to the binary is loaded automatically, so installed tarballs carry their own `APP_URL` / `APP_TOKEN`.
 
-| Variable    | Required | Purpose                                                |
-| ----------- | -------- | ------------------------------------------------------ |
-| `APP_URL`   | yes      | Base URL the CLI calls (e.g. `http://localhost:3000`). |
-| `APP_TOKEN` | no       | Sent as `Authorization: Bearer <value>`.               |
+### Downloading
 
-- **Output.** A string result is printed verbatim; anything else is printed as formatted JSON.
-- **Distribution.** The running server hosts its own CLI binary and an install script; authenticated servers gate the download behind `APP_TOKEN`.
-- **Branding.** `src/cli/banner.txt` prints atop the top-level help and `src/cli/footer.txt` below it.
+A running server hands out the CLI binary:
 
-### Bundle
+| Route | Returns |
+| --- | --- |
+| `GET /__belte/cli` | a platform-detecting install script (`curl … \| sh`) |
+| `GET /__belte/cli/<platform>` | the prebuilt binary tarball for that platform |
 
-A movable, self-contained native desktop app for the host platform, rendered in a native webview. It can serve the app itself or connect to a remote server; the built-in File menu switches between Start server, Connect, and Disconnect.
+Gate these behind auth with the `app.ts` `handle` hook to require a token before download.
 
-Window configuration is the default export of an optional `src/bundle/window.ts`.
+### Banner and footer
+
+`src/cli/banner.txt` prints above the top-level help; `src/cli/footer.txt` prints below it.
+
+## Bundle
+
+`belte bundle` assembles a movable, self-contained native desktop app for the host platform. It boots into a connect screen: start the embedded server or connect to a remote one.
+
+### Window
+
+A default-exported config from an optional `src/bundle/window.ts`.
 
 ```ts
 type BundleWindow = {
-  title?: string;
-  width?: number;
-  height?: number;
-  menu?: BundleMenu[];
-};
+    title?: string
+    width?: number
+    height?: number
+    menu?: BundleMenu[]
+}
 ```
 
-| Surface      | Type                                              | Purpose                                                                     |
-| ------------ | ------------------------------------------------- | --------------------------------------------------------------------------- |
-| `window.ts`  | `BundleWindow`                                    | Title, size, and custom menus (inserted between the Edit and Window menus). |
-| `BundleMenu` | `{ label: string; items: BundleMenuItem[] }`      | A custom top-level menu; items emit `belte:menu` events.                    |
-| `onMenu`     | `(handler: (name: string) => void) => () => void` | Subscribes to menu selections. From `@briancray/belte/bundle/onMenu`.       |
+The standard App / Edit / Window menus plus a File menu (Start server / Connect / Disconnect) are always installed. `menu` adds custom top-level menus whose items emit `belte:menu` events.
 
 ```ts
-import { onMenu } from "@briancray/belte/bundle/onMenu";
-onMenu((name) => {
-  if (name === "preferences") openSettings();
-});
+// src/bundle/window.ts
+import type { BundleWindow } from 'belte/bundle/BundleWindow'
+
+export default {
+    title: 'My App',
+    width: 1100,
+    height: 720,
+} satisfies BundleWindow
 ```
 
-- **`src/bundle/disconnected.svelte`** overrides the screen shown when a bundle pointed at a remote server loses its connection.
-- **`src/bundle/icon.png`** (or `icon.icns`) becomes the app icon.
+### `disconnected.svelte`
 
-## Some details
+`src/bundle/disconnected.svelte` overrides the screen shown when the app has no server connection.
 
-### App hooks
+### `onMenu`
 
-Export any of these from `src/app.ts`; the server wires whichever are present, and defaults apply otherwise.
+```ts
+type onMenu = {
+    (handler: (name: string) => void): () => void
+    (name: string, handler: () => void): () => void
+}
+```
 
-| Hook          | Signature                                            | Runs                                                                                 |
-| ------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `init`        | `({ server }) => void \| (() => void) \| Promise<…>` | Once after boot. May return a cleanup function, run on `SIGINT`/`SIGTERM`.           |
-| `handle`      | `(request, next) => Response \| Promise<Response>`   | Around every request. Return a `Response` to short-circuit, or call `next(request)`. |
-| `handleError` | `(error, request) => Response \| Promise<Response>`  | When a handler throws.                                                               |
+Subscribes to custom menu-item clicks; returns an unsubscribe function. Pass a single handler to receive every item's `emit` name, or a name plus a handler to fire only for that item. Inert during SSR and in a plain browser tab.
+
+```svelte
+<script lang="ts">
+  import { onMenu } from 'belte/bundle/onMenu'
+  // catch-all
+  $effect(() => onMenu((name) => {
+    if (name === 'reload') location.reload()
+  }))
+  // filtered to one item
+  $effect(() => onMenu('reload', () => location.reload()))
+</script>
+```
+
+### Icon
+
+`src/bundle/icon.icns` is used as-is; otherwise `src/bundle/icon.png` is converted (macOS).
+
+---
+
+# Some details
+
+## App hooks
+
+An optional `src/app.ts` default-exports lifecycle hooks. All are optional.
+
+| Hook | Signature | Purpose |
+| --- | --- | --- |
+| `init` | `(ctx: { server }) => void \| (() => void) \| Promise<…>` | Boot-time setup; returns an optional cleanup run on `SIGINT`/`SIGTERM`. |
+| `handle` | `(request, next) => Response \| Promise<Response>` | Single middleware; mutate the response or branch on the URL. |
+| `handleError` | `(error, request) => Response \| Promise<Response>` | Replace the default `500`. |
 
 ```ts
 // src/app.ts
-export const handle = async (
-  request: Request,
-  next: (req: Request) => Promise<Response>
-) => {
-  const started = performance.now();
-  const response = await next(request);
-  console.log(request.url, performance.now() - started);
-  return response;
-};
+export default {
+    async handle(request, next) {
+        const response = await next(request)
+        response.headers.set('x-powered-by', 'belte')
+        return response
+    },
+}
 ```
 
-### Project layout
+## Project layout
 
-```
-my-app/
-  src/
-    app.ts                  optional init / handle / handleError hooks
-    server/
-      rpc/                  one verb handler per file → /rpc/<name>
-      sockets/              one socket per file
-    browser/
-      pages/                folder-based page.svelte / layout.svelte
-    mcp/
-      prompts/              MCP prompt templates (.md)
-      resources/            MCP resource files
-    cli/
-      banner.txt            printed above CLI help
-      footer.txt            printed below CLI help
-    bundle/
-      window.ts             native window + menus
-      disconnected.svelte   offline screen override
-      icon.png              app icon
-  public/                   static assets served at the root
-```
+| Path | Holds |
+| --- | --- |
+| `src/server/rpc/**` | remote functions (one verb export per file) |
+| `src/server/sockets/**` | sockets (one `socket()` export per file) |
+| `src/browser/pages/**` | `page.svelte` / `layout.svelte` routes |
+| `src/browser/public/**` | static files served at the site root |
+| `src/browser/app.html` | optional HTML shell override |
+| `src/mcp/resources/**` | MCP resource files |
+| `src/mcp/prompts/*.md` | MCP prompts |
+| `src/cli/banner.txt`, `footer.txt` | CLI help chrome |
+| `src/bundle/window.ts`, `disconnected.svelte`, `icon.png` | desktop bundle config |
+| `src/app.ts` | app hooks |
 
-Each surface can hold a `lib/` folder for code it shares.
+A `lib/` folder under any surface (e.g. `src/server/lib/`, `src/browser/lib/`) is a good home for shared, non-convention modules that surface code imports.
 
-### CLI commands
+## CLI commands
 
-| Command                 | Action                                                      |
-| ----------------------- | ----------------------------------------------------------- |
-| `belte dev`             | Start the dev server with reload.                           |
-| `belte build`           | Build the production server and client assets into `dist/`. |
-| `belte start`           | Run the built production server.                            |
-| `belte compile`         | Produce a standalone executable (and native bundle).        |
-| `belte scaffold [name]` | Create a new app from the template.                         |
+| Command | Does |
+| --- | --- |
+| `bunx belte scaffold <name>` | scaffold a new project |
+| `belte dev` | build + run with hot reload |
+| `belte build` | build the client into `dist/_app/` |
+| `belte start` | run the production server against `dist/` |
+| `belte compile [--target] [--out]` | build a standalone server executable |
+| `belte cli [--target] [--out] [--platforms]` | build the CLI binary (thin remote client) |
+| `belte bundle` | build a movable native app bundle for this platform |
 
-A built app exposes its own CLI: `<app> <rpc-name> [flags]`.
+## Public files
 
-### public/ files
+Files in `src/browser/public/` are served at the site root (`src/browser/public/favicon.ico` → `/favicon.ico`). The on-disk set is snapshotted at server start; add a file and restart to pick it up.
 
-Files under `public/` are served as static assets from the root — `public/logo.svg` is served at `/logo.svg`. In a compiled binary they are embedded; in dev and `belte start` they are read off disk.
+## Bundling
 
-### Bundling
+The build writes a zstd-compressed `.zst` sibling next to each `dist/_app/` asset, and the server serves the precompressed bytes to clients that accept zstd. `belte compile` produces a standalone server binary; `belte cli` produces the thin CLI client; `belte bundle` produces the desktop app.
 
-`belte build` generates the route manifest, bundles the client assets, and emits the production server. `belte compile` then produces a standalone single-file executable; with `src/bundle/` present it packages a native desktop app for the host platform.
+## Environment variables
 
-### Environment variables
+| Variable | Purpose |
+| --- | --- |
+| `PORT` | Server port (default `3000`). |
+| `APP_URL` | Target server for the CLI client. |
+| `APP_TOKEN` | Bearer token for the CLI client. |
+| `DEBUG` | Enable debug logging (see below). |
+| `BELTE_INSPECT` | Open the native webview inspector in a bundle. |
 
-| Variable    | Default | Effect                                                                       |
-| ----------- | ------- | ---------------------------------------------------------------------------- |
-| `PORT`      | `3000`  | Server port.                                                                 |
-| `DEBUG`     | unset   | Enables `debug` logging by scope — `belte`, `belte:*`, `*`, or a comma list. |
-| `APP_URL`   | —       | Base URL the generated CLI calls (required for the CLI).                     |
-| `APP_TOKEN` | —       | Bearer token the CLI sends.                                                  |
+## Logging
 
-### Logging and DEBUG
+`belte/shared/log` exposes a small console logger.
 
-`log` is a shared, structured logger used across the build pipeline and request handler — ANSI-coloured under a `[belte]` prefix. `debug` only emits when `DEBUG` enables its scope (matching the `debug` package conventions); the other levels always emit.
+| Method | Use |
+| --- | --- |
+| `log.info(msg)` | informational line |
+| `log.success(msg)` | green success line |
+| `log.warn(msg)` | yellow warning |
+| `log.error(value)` | red error (full stack for `Error`) |
+| `log.detail(msg)` | dim secondary line |
+| `log.request(method, path, status, ms)` | colored request line |
+| `log.debug(scope, msg)` | printed only when `scope` is enabled via `DEBUG` |
 
-| Method                                 | Signature                                                                    |
-| -------------------------------------- | ---------------------------------------------------------------------------- |
-| `info` / `warn` / `success` / `detail` | `(message: string) => void`                                                  |
-| `error`                                | `(value: unknown) => void`                                                   |
-| `debug`                                | `(scope: string, message: string) => void`                                   |
-| `request`                              | `(method: string, path: string, status: number, durationMs: number) => void` |
+`DEBUG` follows the `debug` package conventions:
 
-```ts
-import { log } from "@briancray/belte/shared/log";
+| `DEBUG` | Enables |
+| --- | --- |
+| `belte` | exactly `belte` |
+| `belte:*` | `belte` and `belte:anything` |
+| `*` | everything |
+| `a,belte` | comma-separated list |
 
-log.info("ready");
-log.debug("rpc", "dispatched users");
-```
+Setting `DEBUG=belte` also turns on per-request server logging.

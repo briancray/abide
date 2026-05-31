@@ -12,19 +12,14 @@ let { children }: { children: import('svelte').Snippet } = $props()
 /*
 Custom bundle menu items (declared in src/bundle/window.ts) carry no
 arguments — clicking one fires the item's `emit` name through onMenu, the
-app side of the contract that maps each name to real work. onMenu is inert
-during SSR and in a plain browser tab (the native menu only exists in the
-bundled desktop app); returning its unsubscribe wires up $effect cleanup.
+app side of the contract that maps each name to real work. The name-filtered
+form binds one handler per item; the catch-all form `onMenu((name) => …)`
+takes every name through a single handler. onMenu is inert during SSR and in
+a plain browser tab (the native menu only exists in the bundled desktop app);
+returning its unsubscribe wires up $effect cleanup.
 */
-$effect(() =>
-    onMenu((name) => {
-        if (name === 'reload-session') {
-            location.reload()
-        } else if (name === 'open-mcp') {
-            void navigate('/mcp')
-        }
-    }),
-)
+$effect(() => onMenu('reload-session', () => location.reload()))
+$effect(() => onMenu('open-mcp', () => void navigate('/mcp')))
 
 /*
 Top-level cache read — runs during SSR on the server and replays from
