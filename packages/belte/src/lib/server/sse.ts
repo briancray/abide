@@ -24,6 +24,7 @@ EventSource surfaces this via its `error` listener and `subscribe()`
 maps it to the entry's `error` field.
 */
 import { NO_STORE } from '../shared/cacheControlValues.ts'
+import { sseErrorFrame } from '../shared/sseErrorFrame.ts'
 import type { TypedResponse } from './rpc/types/TypedResponse.ts'
 import { streamFromIterator } from './runtime/streamFromIterator.ts'
 import { withResponseDefaults } from './runtime/withResponseDefaults.ts'
@@ -36,7 +37,7 @@ export function sse<Frame>(
 ): TypedResponse<Frame> {
     const body = streamFromIterator(iterable, {
         encodeFrame: (value) => `data: ${JSON.stringify(value)}\n\n`,
-        encodeError: (message) => `event: error\ndata: ${JSON.stringify({ message })}\n\n`,
+        encodeError: (message) => sseErrorFrame.encode(message),
         keepaliveMs: KEEPALIVE_INTERVAL_MS,
         keepalivePayload: ': keepalive\n\n',
     })

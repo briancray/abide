@@ -22,6 +22,7 @@ error is logged server-side via the framework's error handler — only the
 message crosses the wire.
 */
 import { NO_STORE } from '../shared/cacheControlValues.ts'
+import { jsonlErrorFrame } from '../shared/jsonlErrorFrame.ts'
 import type { TypedResponse } from './rpc/types/TypedResponse.ts'
 import { streamFromIterator } from './runtime/streamFromIterator.ts'
 import { withResponseDefaults } from './runtime/withResponseDefaults.ts'
@@ -32,7 +33,7 @@ export function jsonl<Frame>(
 ): TypedResponse<Frame> {
     const body = streamFromIterator(iterable, {
         encodeFrame: (value) => `${JSON.stringify(value)}\n`,
-        encodeError: (message) => `${JSON.stringify({ $error: message })}\n`,
+        encodeError: (message) => jsonlErrorFrame.encode(message),
     })
     return new Response(
         body,
