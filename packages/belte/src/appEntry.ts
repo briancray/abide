@@ -7,6 +7,7 @@ import programName from './_virtual/cli-name.ts'
 import type { BundleMenu } from './lib/bundle/BundleMenu.ts'
 import type { BundleWindow } from './lib/bundle/BundleWindow.ts'
 import { openWebview } from './lib/bundle/openWebview.ts'
+import { jsonSchemaForSchema } from './lib/shared/jsonSchemaForSchema.ts'
 import { log } from './lib/shared/log.ts'
 
 /*
@@ -32,6 +33,14 @@ const window = bundleWindow as BundleWindow
 const title = window.title ?? programName
 
 /*
+Derive the config form's JSON Schema here (the worker can't import the virtual
+that carries window.config) and pass the plain object through init — the
+validator itself isn't serializable, but its JSON Schema is. Undefined when the
+app declares no config, so the connect screen never gates Start.
+*/
+const configSchema = window.config ? jsonSchemaForSchema(window.config, undefined) : undefined
+
+/*
 Spawn the control server worker. `__BELTE_WORKER_ENTRY__` is the worker's absolute
 path, injected by bundleApp via Bun's `define` so the specifier is a static literal
 at build time — that's what makes `bun build --compile` embed the worker module
@@ -49,15 +58,22 @@ worker.addEventListener('error', (event: ErrorEvent) => {
 // Hand the worker the plugin-resolved data it can't import itself, then start it.
 worker.postMessage({
     type: 'init',
-    init: { disconnectedHtml: disconnectedHtml as string, title, programName },
+    init: { disconnectedHtml: disconnectedHtml as string, title, programName, configSchema },
 })
 
-// The worker posts its control-server origin once bound; the window points here.
-const origin = await new Promise<string>((resolve) => {
+/*
+The worker, once bound, resolves where the window should open and posts both the
+control-server `origin` (for the File-menu action URLs) and the `target` to point
+the window at now: the live server when it could resume the last connection, else
+the connect screen. Resolving before this means a successful resume opens straight
+at the app — no connect-screen flash — at the cost of a brief window-less moment
+while it boots/probes (the OS shows the launching dock icon meanwhile).
+*/
+const { origin, target } = await new Promise<{ origin: string; target: string }>((resolve) => {
     worker.addEventListener('message', (event: MessageEvent) => {
-        const data = event.data as { type: string; origin?: string }
-        if (data.type === 'ready' && data.origin) {
-            resolve(data.origin)
+        const data = event.data as { type: string; origin?: string; target?: string }
+        if (data.type === 'ready' && data.origin && data.target) {
+            resolve({ origin: data.origin, target: data.target })
         }
     })
 })
@@ -89,9 +105,9 @@ const fileMenu: { label: string; items: FileMenuItem[] } = {
     ],
 }
 
-log.info(`opening ${title} connect screen at ${origin}`)
+log.info(`opening ${title} window at ${target}`)
 await openWebview({
-    url: origin,
+    url: target,
     title,
     width: window.width,
     height: window.height,

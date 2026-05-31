@@ -25,9 +25,21 @@ import { shell } from './_virtual/shell.ts'
 // @ts-expect-error virtual module resolved by belteResolverPlugin
 import { sockets } from './_virtual/sockets.ts'
 import { exitWithParent } from './lib/bundle/exitWithParent.ts'
+import { loadEnvFromBinaryDir } from './lib/cli/loadEnvFromBinaryDir.ts'
 import { createServer } from './lib/server/runtime/createServer.ts'
 import { requestContext } from './lib/server/runtime/requestContext.ts'
+import { loadEnvFromDataDir } from './lib/shared/loadEnvFromDataDir.ts'
 import { setCacheStoreResolver } from './lib/shared/setCacheStoreResolver.ts'
+
+/*
+Resolve config into process.env before anything reads it (createServer reads
+PORT, app code reads Bun.env.*). Data-dir first so the user's saved config wins
+over the binary-dir shipped default; both back-fill only what the shell or Bun's
+CWD `.env` didn't already set. A bundle launched via `open` has cwd `/`, so the
+data-dir `.env` is how it gets its config at all.
+*/
+await loadEnvFromDataDir(cliProgramName)
+await loadEnvFromBinaryDir()
 
 // In a bundle, tie this server's life to the launcher's (no-op standalone).
 exitWithParent()

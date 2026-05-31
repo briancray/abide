@@ -56,6 +56,18 @@ export async function bundleApp({ cwd = process.cwd() }: { cwd?: string } = {}):
     // connect-screen build that writes into dist.
     await compile({ cwd, target, outfile: `${binDir}/${serverBinaryFilename()}` })
 
+    /*
+    Opt-in: ship the project's `.env.bundle` as the binary-dir `.env`, which the
+    server loads at boot (loadEnvFromBinaryDir) as its default config layer. A
+    dedicated file, never the working `.env` — a compiled bundle is extractable,
+    so only ship-safe defaults belong here; user-specific/secret values come from
+    the data-dir `.env` instead. Skipped when absent.
+    */
+    const bundleEnv = Bun.file(`${cwd}/.env.bundle`)
+    if (await bundleEnv.exists()) {
+        await Bun.write(`${binDir}/.env`, bundleEnv)
+    }
+
     // 2. Connect screen — bake dist/bundle-disconnected.html before the launcher
     // build, which inlines it via the belte:bundle-disconnected virtual.
     await buildDisconnected({ cwd, svelteConfig })

@@ -1,3 +1,4 @@
+import type { StandardSchemaV1 } from '../server/rpc/types/StandardSchemaV1.ts'
 import type { BundleMenu } from './BundleMenu.ts'
 
 /*
@@ -17,4 +18,14 @@ export type BundleWindow = {
     width?: number
     height?: number
     menu?: BundleMenu[]
+    /*
+    Config the embedded server needs before it can run, as a Standard Schema (the
+    same kind belte accepts for RPC/MCP). Its JSON Schema drives the connect
+    screen's first-run form, shown as a modal when Start is clicked with a required
+    key still unset; the user's answers persist to the data-dir `.env` the server
+    loads at boot. Each property maps to one env var of the same name; `title` is
+    the field label, `description` the hint, `format: 'password'` masks the input,
+    and `default` pre-fills it.
+    */
+    config?: StandardSchemaV1
 }

@@ -1,3 +1,5 @@
+import { mkdir, rm } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 import { bindConnectedFlag } from './lib/bundle/bindConnectedFlag.ts'
 import { bindRequestNavigate } from './lib/bundle/bindRequestNavigate.ts'
 import { findFreePort } from './lib/bundle/findFreePort.ts'
@@ -7,7 +9,10 @@ import { resolveServerBinary } from './lib/bundle/resolveServerBinary.ts'
 import { resolveWebviewLib } from './lib/bundle/resolveWebviewLib.ts'
 import { stableLocalPort } from './lib/bundle/stableLocalPort.ts'
 import { waitForServer } from './lib/bundle/waitForServer.ts'
+import { appDataDir } from './lib/shared/appDataDir.ts'
 import { log } from './lib/shared/log.ts'
+import { readEnvFile } from './lib/shared/readEnvFile.ts'
+import { serializeEnv } from './lib/shared/serializeEnv.ts'
 
 /*
 The bundle's control server, run in a Worker so it owns its own thread.
@@ -34,15 +39,28 @@ window back to the connect screen, since a dead server (local crash or remote
 outage) otherwise leaves a frozen page and a menu that still claims connected.
 
   GET  /                   → the connect screen (title injected at serve time)
+  GET  /__belte/config     → { schema, values } for the first-run config form
+  POST /__belte/config     → persist the form's answers to the data-dir .env
   POST /connect {url}      → record connected, reply { redirect: url }
   POST /start              → spawn the server binary, reply { redirect: localUrl }
   GET  /__belte/disconnect → reap the child, clear connected
 */
 
-// Init payload from the launcher, plus the per-run state the handlers close over.
-type Init = { disconnectedHtml: string; title: string; programName: string }
+/*
+Init payload from the launcher, plus the per-run state the handlers close over.
+`configSchema` is the JSON Schema derived from the app's BundleWindow.config
+(undefined when none declared), driving the connect screen's first-run form.
+*/
+type Init = {
+    disconnectedHtml: string
+    title: string
+    programName: string
+    configSchema?: Record<string, unknown>
+}
 let disconnectedHtml = ''
 let title = ''
+let programName = ''
+let configSchema: Record<string, unknown> | undefined
 let flag: ReturnType<typeof bindConnectedFlag> | undefined
 let server: ReturnType<typeof listenLocalControlServer> | undefined
 
@@ -142,19 +160,96 @@ Spawns the sibling server binary on a free port and waits for it to answer,
 returning the URL to point the window at. Any previous child is reaped first so
 only one embedded server runs at a time.
 */
-async function startEmbeddedServer(): Promise<string> {
+async function startEmbeddedServer(timeoutMs?: number): Promise<string> {
     killServerChild()
     const port = findFreePort()
     const url = `http://localhost:${port}`
     serverChild = Bun.spawn({
         cmd: [resolveServerBinary()],
         // BELTE_PARENT_PID lets the child exit if the launcher is force-quit
-        // (a clean window close reaps it directly; see exitWithParent).
+        // (a clean window close reaps it directly; see exitWithParent). The
+        // server resolves its own config from its data-dir/binary-dir .env at
+        // boot (see serverEntry), so the launcher injects nothing else.
         env: { ...process.env, PORT: String(port), BELTE_PARENT_PID: String(process.pid) },
         stdio: ['inherit', 'inherit', 'inherit'],
     })
-    await waitForServer(url)
+    /*
+    Race readiness against the child's exit. A misconfigured bundle (missing env
+    the server needs to bind) crashes immediately; without this the launcher
+    would wait out waitForServer's full timeout and report a generic stall
+    instead of the actual crash. The exit branch resolves (never rejects) so the
+    race loser still pending after a successful boot can't surface as an
+    unhandled rejection when the child is later reaped on disconnect.
+    */
+    const exited = serverChild.exited
+    const outcome = await Promise.race([
+        waitForServer(url, timeoutMs ? { timeoutMs } : undefined).then(() => undefined),
+        exited,
+    ])
+    if (outcome !== undefined) {
+        throw new Error(`[belte] embedded server exited (code ${outcome}) before binding`)
+    }
     return url
+}
+
+/*
+Where the window should point on launch, resolved before it ever opens so the
+connect screen never flashes. Repeats the last connection from the launcher-owned
+record (which survives relaunch where the embedded server's fresh port can't):
+
+  - embedded, config complete → boot it and point at the live server
+  - embedded, config missing  → the connect screen, so the user can configure
+  - remote url, still alive   → point straight at it
+  - remote url, now dead       → the connect screen with a `lost` notice
+  - nothing recorded           → the connect screen
+
+Boot is bounded by a short ceiling: a failed or slow boot falls back to the
+connect screen rather than leaving the launcher window-less, and reaps the child
+so a half-started server doesn't hold its port.
+*/
+const AUTO_START_CEILING_MS = 3000
+async function resolveLaunchTarget(): Promise<string> {
+    const last = await readLastConnection()
+    if (!last) {
+        return controlOrigin
+    }
+    if (last.kind === 'embedded') {
+        if (await autoStartBlockedByConfig()) {
+            return controlOrigin
+        }
+        try {
+            const url = await startEmbeddedServer(AUTO_START_CEILING_MS)
+            flag?.setConnected(true)
+            startLivenessWatch(url)
+            log.info(`resumed embedded server at ${url}`)
+            return url
+        } catch (error) {
+            killServerChild()
+            log.warn(`embedded server did not resume: ${String(error)}`)
+            return controlOrigin
+        }
+    }
+    const identity = await probeBelteServer(last.url)
+    if (identity) {
+        flag?.setConnected(true)
+        startLivenessWatch(last.url)
+        log.info(`reconnected to ${identity.name} at ${last.url}`)
+        return last.url
+    }
+    log.warn(`saved server did not respond: ${last.url}`)
+    return `${controlOrigin}/?action=lost`
+}
+
+// True when the app declares required config that nothing yet supplies, so an
+// embedded auto-start would only crash for the lack of it — land on the connect
+// screen (and its setup modal) instead.
+async function autoStartBlockedByConfig(): Promise<boolean> {
+    const required = (configSchema?.required as string[] | undefined) ?? []
+    if (required.length === 0) {
+        return false
+    }
+    const values = await resolveConfigValues()
+    return required.some((key) => !values[key])
 }
 
 /*
@@ -167,6 +262,83 @@ function renderConnectScreen(): Response {
     return new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8' } })
 }
 
+// The data-dir `.env` the form writes and the server loads first at boot.
+function dataDirEnvPath(): string {
+    return join(appDataDir(programName), '.env')
+}
+
+/*
+Resolves the value to pre-fill each config field with, following the same
+precedence the server applies below the shell: the user's saved data-dir `.env`,
+then the bundle's shipped binary-dir `.env`, then the schema's own `default`.
+Empty string when nothing supplies it — which is how the form spots an unmet
+required field.
+*/
+async function resolveConfigValues(): Promise<Record<string, string>> {
+    const properties = (configSchema?.properties ?? {}) as Record<string, { default?: unknown }>
+    // Independent reads — fetch together; precedence is applied in the merge below.
+    const [dataDirEnv, binaryDirEnv] = await Promise.all([
+        readEnvFile(dataDirEnvPath()),
+        readEnvFile(join(dirname(resolveServerBinary()), '.env')),
+    ])
+    return Object.fromEntries(
+        Object.keys(properties).map((key) => {
+            const fallback = properties[key]?.default
+            const value =
+                dataDirEnv[key] ??
+                binaryDirEnv[key] ??
+                (fallback === undefined ? '' : String(fallback))
+            return [key, value]
+        }),
+    )
+}
+
+/*
+Persists the form's answers to the data-dir `.env`, merged over any existing
+file so keys the form didn't touch survive. Creates the data dir on first run
+(appDataDir only computes the path).
+*/
+async function writeConfig(values: Record<string, string>): Promise<void> {
+    const path = dataDirEnvPath()
+    const merged = { ...(await readEnvFile(path)), ...values }
+    await mkdir(appDataDir(programName), { recursive: true })
+    await Bun.write(path, serializeEnv(merged))
+}
+
+/*
+The launcher-owned record of the last connection, in the data dir so it survives
+relaunch and is readable before the window opens — unlike the webview's
+localStorage, and unlike the embedded server's URL, which can't be persisted
+because it picks a fresh port each launch (so we record the intent, not the URL).
+resolveLaunchTarget reads it; /connect and /start write it; /disconnect clears it.
+*/
+type LastConnection = { kind: 'embedded' } | { kind: 'url'; url: string }
+
+function lastConnectionPath(): string {
+    return join(appDataDir(programName), 'last-connection.json')
+}
+
+async function readLastConnection(): Promise<LastConnection | undefined> {
+    const file = Bun.file(lastConnectionPath())
+    if (!(await file.exists())) {
+        return undefined
+    }
+    try {
+        return (await file.json()) as LastConnection
+    } catch {
+        return undefined
+    }
+}
+
+async function writeLastConnection(value: LastConnection): Promise<void> {
+    await mkdir(appDataDir(programName), { recursive: true })
+    await Bun.write(lastConnectionPath(), JSON.stringify(value))
+}
+
+async function clearLastConnection(): Promise<void> {
+    await rm(lastConnectionPath(), { force: true })
+}
+
 /*
 The control server's request handler. The connect screen owns localStorage +
 navigation; this worker owns the embedded-server process and the native flag.
@@ -175,6 +347,18 @@ async function handleControlRequest(request: Request): Promise<Response> {
     const url = new URL(request.url)
     if (request.method === 'GET' && url.pathname === '/') {
         return renderConnectScreen()
+    }
+    if (request.method === 'GET' && url.pathname === '/__belte/config') {
+        // No schema declared → null tells the form to skip the gate entirely.
+        if (!configSchema) {
+            return Response.json({ schema: null, values: {} })
+        }
+        return Response.json({ schema: configSchema, values: await resolveConfigValues() })
+    }
+    if (request.method === 'POST' && url.pathname === '/__belte/config') {
+        const { values } = (await request.json()) as { values: Record<string, string> }
+        await writeConfig(values)
+        return new Response(undefined, { status: 204 })
     }
     if (request.method === 'POST' && url.pathname === '/connect') {
         const { url: target } = (await request.json()) as { url: string }
@@ -189,6 +373,8 @@ async function handleControlRequest(request: Request): Promise<Response> {
         }
         flag?.setConnected(true)
         startLivenessWatch(target)
+        // Record the choice so the next launch reconnects here before opening.
+        await writeLastConnection({ kind: 'url', url: target })
         log.info(`connecting to ${identity.name} at ${target}`)
         return Response.json({ redirect: target })
     }
@@ -197,6 +383,8 @@ async function handleControlRequest(request: Request): Promise<Response> {
             const localUrl = await startEmbeddedServer()
             flag?.setConnected(true)
             startLivenessWatch(localUrl)
+            // Record the choice so the next launch boots the embedded server first.
+            await writeLastConnection({ kind: 'embedded' })
             log.info(`started embedded server at ${localUrl}`)
             return Response.json({ redirect: localUrl })
         } catch (error) {
@@ -208,6 +396,8 @@ async function handleControlRequest(request: Request): Promise<Response> {
         stopLivenessWatch()
         killServerChild()
         flag?.setConnected(false)
+        // Forget the auto-resume choice so the next launch lands on the connect screen.
+        await clearLastConnection()
         return new Response(undefined, { status: 204 })
     }
     return new Response('not found', { status: 404 })
@@ -216,18 +406,26 @@ async function handleControlRequest(request: Request): Promise<Response> {
 /*
 Bind the control server to 127.0.0.1 literally (not `localhost`) so the webview
 reaches it without any IPv4/IPv6 name-resolution ambiguity, open the native flag
-handle, and hand the launcher the origin to navigate the window at.
+handle, then resolve where the window should open before handing back. Resolving
+the launch target here — booting/probing the last connection before `ready` — is
+what lets the launcher open the window straight at the live server, so the
+connect screen never flashes; only an unconfigured, failed, or absent resume
+falls back to it. The launcher gets both `origin` (for the File-menu actions) and
+`target` (where to point the window now).
 */
 async function start(init: Init): Promise<void> {
     disconnectedHtml = init.disconnectedHtml
     title = init.title
+    programName = init.programName
+    configSchema = init.configSchema
     const libPath = await resolveWebviewLib()
     flag = bindConnectedFlag(libPath)
     navigate = bindRequestNavigate(libPath)
     server = listenLocalControlServer(stableLocalPort(init.programName), handleControlRequest)
     controlOrigin = `http://127.0.0.1:${server.port}`
     log.info(`${title} control server listening at ${controlOrigin}`)
-    self.postMessage({ type: 'ready', origin: controlOrigin })
+    const target = await resolveLaunchTarget()
+    self.postMessage({ type: 'ready', origin: controlOrigin, target })
 }
 
 // Reap the child + release the server and FFI handles, then confirm so the

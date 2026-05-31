@@ -11,20 +11,9 @@ connection so the native File menu's enabled state stays authoritative.
 */
 
 /*
-localStorage key holding the last connection so a relaunch repeats it: either a
-remote server URL, or the START_EMBEDDED sentinel meaning "boot the embedded
-server". The embedded server's own URL can't be persisted — it picks a fresh
-port each launch — so we persist the intent and re-run start() instead.
-Disconnect clears it so a relaunch never auto-retries a forgotten server.
-*/
-const STORAGE_KEY = 'belte:server-url'
-const START_EMBEDDED = 'belte:start-embedded'
-
-/*
-The last remote URL that successfully connected, kept separate from STORAGE_KEY
-so it survives disconnect (and the app quitting): it only prefills the form, it
-never drives an auto-reconnect, so reconnecting to the same server stays one
-click away even after an explicit disconnect.
+The last remote URL that successfully connected — only prefills the form's input
+on a later visit; it never drives a reconnect (the launcher owns auto-resume now,
+deciding before the window even opens). Survives disconnect and quitting.
 */
 const LAST_URL_KEY = 'belte:last-server-url'
 
@@ -36,8 +25,50 @@ const placeholder = 'https://example.com'
 
 // Prefill the form with the last server we connected to, from any prior launch.
 let url = $state(localStorage.getItem(LAST_URL_KEY) ?? '')
-let starting = $state(false)
 let error = $state<string | undefined>(undefined)
+
+/*
+`?action=` set by the File menu (Start/Disconnect) or the launcher when a live
+connection dies (`lost`). Auto-resume of a saved connection now happens in the
+launcher before the window opens, so this screen only ever loads as a real
+destination — there's no no-action auto-resume left to handle here.
+*/
+const launchAction = new URLSearchParams(location.search).get('action')
+
+/*
+Two phases so the screen never flashes before a redirect. A menu Start may boot
+straight through, so it opens on a neutral splash; every other entry is a genuine
+destination, so the connect screen shows immediately. Boot/connect re-enter the
+splash so a redirect (including after saving config) never flashes the form.
+*/
+let phase = $state<'splash' | 'connect'>(launchAction === 'start' ? 'splash' : 'connect')
+
+/*
+First-run config form, surfaced as a modal only when Start is clicked (or
+auto-start fires) with a required key still unset. Fields are derived from the
+app's config JSON Schema served by the launcher; answers post back to the
+data-dir `.env` the embedded server loads at boot.
+*/
+type ConfigField = {
+    key: string
+    label: string
+    description?: string
+    inputType: 'text' | 'password' | 'number' | 'checkbox'
+    required: boolean
+}
+let configFields = $state<ConfigField[]>([])
+let configValues = $state<Record<string, string>>({})
+let showConfig = $state(false)
+let savingConfig = $state(false)
+// Every required field has a value — gates the modal's Save button.
+const canSaveConfig = $derived(
+    configFields.every(
+        (field) =>
+            !field.required ||
+            field.inputType === 'checkbox' ||
+            (configValues[field.key] ?? '').trim() !== '',
+    ),
+)
 
 /*
 Interpret the boot intent once on load. `?action=` is set by the native File
@@ -51,30 +82,19 @@ remembered server reconnects automatically:
   - (none)     → reconnect to the saved server if there is one.
 */
 $effect(() => {
-    const action = new URLSearchParams(location.search).get('action')
-    const saved = localStorage.getItem(STORAGE_KEY) ?? undefined
-    if (action === 'start') {
+    if (launchAction === 'start') {
+        // File-menu Start Server is an explicit click → run the Start flow.
         void start()
         return
     }
-    if (action === 'lost') {
+    if (launchAction === 'lost') {
         error = 'The server stopped responding.'
         return
     }
-    if (action === 'disconnect') {
-        // Forget the auto-reconnect intent but keep LAST_URL_KEY, so the form
-        // stays prefilled with the server we just left for a one-click return.
-        localStorage.removeItem(STORAGE_KEY)
+    if (launchAction === 'disconnect') {
+        // Have the launcher forget the auto-resume choice and reap any embedded
+        // server; LAST_URL_KEY stays so the form is still prefilled to reconnect.
         void fetch('/__belte/disconnect').catch(() => {})
-        return
-    }
-    // No action: repeat the last choice — re-boot the embedded server, or reconnect.
-    if (saved === START_EMBEDDED) {
-        void start()
-        return
-    }
-    if (saved) {
-        void connect(saved)
     }
 })
 
@@ -92,6 +112,8 @@ async function connect(target: string = url.trim()): Promise<void> {
         return
     }
     error = undefined
+    // Hide the form while connecting so a successful redirect doesn't flash it.
+    phase = 'splash'
     try {
         const response = await fetch('/connect', {
             method: 'POST',
@@ -103,21 +125,44 @@ async function connect(target: string = url.trim()): Promise<void> {
             throw new Error(body.error ?? `connect failed (${response.status})`)
         }
         const { redirect } = (await response.json()) as { redirect: string }
-        localStorage.setItem(STORAGE_KEY, cleaned)
-        // Remember it separately so it outlives a later disconnect and prefills the form.
+        // Prefill the form with this server on a later visit (the launcher records
+        // the auto-resume choice itself, on the /connect it just handled).
         localStorage.setItem(LAST_URL_KEY, cleaned)
         location.href = redirect
     } catch (cause) {
         error = `Could not connect: ${String(cause)}`
+        // Failed — bring the form back so the error and a retry are visible.
+        phase = 'connect'
     }
 }
 
-// Boot the embedded server via the launcher, then follow it once it answers.
+/*
+Start, always an explicit click (button or File-menu) — auto-resume happens in
+the launcher before the window opens, so this is never a launch path. Asks the
+launcher what config the app needs: if it declares any, open the modal (prefilled
+with the last-used values) so the user can review or change settings before
+booting — re-running Start after a disconnect is how you reconfigure. With no
+config schema, boot straight through. The modal's save path resumes the boot.
+*/
 async function start(): Promise<void> {
     error = undefined
-    starting = true
-    // Remember the embedded-server choice so the next launch boots it automatically.
-    localStorage.setItem(STORAGE_KEY, START_EMBEDDED)
+    const config = await loadConfig().catch(() => undefined)
+    if (config) {
+        configFields = config.fields
+        configValues = { ...config.values }
+        // Reveal the connect screen as the modal's backdrop.
+        phase = 'connect'
+        showConfig = true
+        return
+    }
+    await boot()
+}
+
+// Boot the embedded server via the launcher, then follow it once it answers.
+async function boot(): Promise<void> {
+    // Splash while booting so the connect screen doesn't flash before the redirect
+    // (including straight after saving config).
+    phase = 'splash'
     try {
         const response = await fetch('/start', { method: 'POST' })
         if (!response.ok) {
@@ -128,11 +173,92 @@ async function start(): Promise<void> {
         location.href = redirect
     } catch (cause) {
         error = `Could not start the server: ${String(cause)}`
-        starting = false
+        // Boot failed — bring the connect screen back to show the error.
+        phase = 'connect'
+    }
+}
+
+/*
+Fetches the app's config schema + resolved current values from the launcher and
+turns the JSON Schema into render-ready fields. Returns undefined when no schema
+is declared, so Start never gates.
+*/
+async function loadConfig(): Promise<
+    { fields: ConfigField[]; values: Record<string, string> } | undefined
+> {
+    const response = await fetch('/__belte/config')
+    const { schema, values } = (await response.json()) as {
+        schema: Record<string, unknown> | null
+        values: Record<string, string>
+    }
+    if (!schema) {
+        return undefined
+    }
+    return { fields: fieldsFromSchema(schema), values: values ?? {} }
+}
+
+// Derives one render-ready field per JSON Schema property, reusing the standard
+// slots: `title` → label, `description` → hint, `format`/`type` → input kind.
+function fieldsFromSchema(schema: Record<string, unknown>): ConfigField[] {
+    const properties = (schema.properties ?? {}) as Record<string, Record<string, unknown>>
+    const required = new Set((schema.required as string[]) ?? [])
+    return Object.entries(properties).map(([key, property]) => ({
+        key,
+        label: (property.title as string) ?? key,
+        description: property.description as string | undefined,
+        inputType: inputType(property),
+        required: required.has(key),
+    }))
+}
+
+// Maps a JSON Schema property to an HTML input kind (directory falls back to text
+// until a native picker exists).
+function inputType(property: Record<string, unknown>): ConfigField['inputType'] {
+    if (property.type === 'boolean') {
+        return 'checkbox'
+    }
+    if (property.type === 'number' || property.type === 'integer') {
+        return 'number'
+    }
+    if (property.format === 'password') {
+        return 'password'
+    }
+    return 'text'
+}
+
+// Persist the form's answers to the data-dir `.env`, then resume the boot.
+async function saveConfig(): Promise<void> {
+    error = undefined
+    savingConfig = true
+    try {
+        const response = await fetch('/__belte/config', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ values: configValues }),
+        })
+        if (!response.ok) {
+            throw new Error(`save failed (${response.status})`)
+        }
+        showConfig = false
+        savingConfig = false
+        await boot()
+    } catch (cause) {
+        error = `Could not save settings: ${String(cause)}`
+        savingConfig = false
     }
 }
 </script>
 
+{#if phase === 'splash'}
+    <!-- Neutral splash shown while an auto-start/auto-reconnect resolves, so the
+    connect screen never flashes before it redirects. Same background as the card. -->
+    <div
+        class="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-950">
+        {#if logo}
+            <img src={logo} alt="" class="h-16 w-16 rounded-xl object-contain opacity-90">
+        {/if}
+    </div>
+{:else}
 <main
     class="flex min-h-screen items-center justify-center bg-gray-50 p-6 text-gray-900 dark:bg-gray-950 dark:text-gray-100">
     <div
@@ -170,9 +296,8 @@ async function start(): Promise<void> {
         <button
             type="button"
             onclick={() => void start()}
-            disabled={starting}
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium hover:bg-gray-50 disabled:opacity-60 dark:border-gray-700 dark:hover:bg-gray-800">
-            {starting ? 'Starting…' : 'Start server'}
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800">
+            Start server
         </button>
 
         {#if error}
@@ -189,3 +314,74 @@ async function start(): Promise<void> {
         </p>
     </div>
 </main>
+{/if}
+
+{#if showConfig}
+    <!-- First-run config modal — shown only when Start needs settings the app lacks. -->
+    <div
+        class="fixed inset-0 z-10 flex items-center justify-center bg-black/40 p-6 text-gray-900 dark:text-gray-100">
+        <div
+            class="w-full max-w-sm rounded-2xl bg-white p-8 shadow-lg ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-800">
+            <h2 class="mb-5 text-lg font-semibold tracking-tight">Set up {heading}</h2>
+
+            <form
+                class="flex flex-col gap-4"
+                onsubmit={(event) => {
+                    event.preventDefault()
+                    void saveConfig()
+                }}>
+                {#each configFields as field (field.key)}
+                    <label class="flex flex-col gap-1 text-sm">
+                        <span class="font-medium">
+                            {field.label}
+                            {#if field.required}
+                                <span class="text-red-500">*</span>
+                            {/if}
+                        </span>
+                        {#if field.inputType === 'checkbox'}
+                            <input
+                                type="checkbox"
+                                checked={configValues[field.key] === 'true'}
+                                onchange={(event) =>
+                                    (configValues[field.key] = event.currentTarget.checked
+                                        ? 'true'
+                                        : 'false')}
+                                class="mt-1 size-4 self-start rounded border-gray-300 dark:border-gray-700">
+                        {:else}
+                            <input
+                                type={field.inputType}
+                                value={configValues[field.key] ?? ''}
+                                oninput={(event) =>
+                                    (configValues[field.key] = event.currentTarget.value)}
+                                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-900 focus:ring-1 focus:ring-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:focus:border-gray-100 dark:focus:ring-gray-100">
+                        {/if}
+                        {#if field.description}
+                            <span class="text-xs text-gray-400 dark:text-gray-500">
+                                {field.description}
+                            </span>
+                        {/if}
+                    </label>
+                {/each}
+
+                <div class="mt-1 flex gap-3">
+                    <button
+                        type="button"
+                        onclick={() => (showConfig = false)}
+                        class="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800">
+                        Cancel
+                    </button>
+                    <button
+                        type="submit"
+                        disabled={!canSaveConfig || savingConfig}
+                        class="flex-1 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-60 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-300">
+                        {savingConfig ? 'Saving…' : 'Save & start'}
+                    </button>
+                </div>
+            </form>
+
+            {#if error}
+                <p class="mt-4 text-center text-sm text-red-600 dark:text-red-400">{error}</p>
+            {/if}
+        </div>
+    </div>
+{/if}

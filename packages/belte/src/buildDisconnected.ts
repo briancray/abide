@@ -116,6 +116,9 @@ function composeHtml({ js, css, logo }: { js: string; css: string; logo: string 
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <!--belte:connect-config-->
 <script>${escapeScriptBody(logoScript)}</script>
+<!-- Paint the screen background before the client mounts, so there's no white
+flash ahead of the splash (gray-50 / gray-950 to match the rendered screen). -->
+<style>html,body{margin:0;background:#f9fafb}@media (prefers-color-scheme:dark){html,body{background:#030712}}</style>
 <style>${css}</style>
 </head>
 <body>
