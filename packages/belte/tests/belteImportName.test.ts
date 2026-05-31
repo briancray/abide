@@ -1,7 +1,7 @@
 import { afterAll, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { belteImportName } from './belteImportName.ts'
+import { belteImportName } from '../src/lib/shared/belteImportName.ts'
 
 const roots: string[] = []
 afterAll(() => roots.forEach((root) => rmSync(root, { recursive: true, force: true })))
