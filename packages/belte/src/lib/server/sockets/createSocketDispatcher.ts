@@ -1,5 +1,6 @@
 import type { ServerWebSocket } from 'bun'
 import { log } from '../../shared/log.ts'
+import { memoizeByKey } from '../../shared/memoizeByKey.ts'
 import { error } from '../error.ts'
 import { json } from '../json.ts'
 import { sse } from '../sse.ts'
@@ -52,22 +53,12 @@ module triggers its `defineSocket` call, which inserts into the
 registry. After that the dispatcher just reads the registry.
 */
 export function createSocketDispatcher(sockets: SocketRoutes): SocketDispatcher {
-    const moduleCache = new Map<string, Promise<void>>()
     const connections = new WeakMap<ServerWebSocket<unknown>, ConnectionState>()
 
-    function ensureLoaded(name: string): Promise<void> | undefined {
-        const existing = moduleCache.get(name)
-        if (existing) {
-            return existing
-        }
+    const ensureLoaded = memoizeByKey((name): Promise<void> | undefined => {
         const loader = sockets[name]
-        if (!loader) {
-            return undefined
-        }
-        const promise = loader().then(() => undefined)
-        moduleCache.set(name, promise)
-        return promise
-    }
+        return loader ? loader().then(() => undefined) : undefined
+    })
 
     function send(ws: ServerWebSocket<unknown>, frame: SocketServerFrame): void {
         if (ws.readyState !== WebSocket.OPEN) {
@@ -111,37 +102,24 @@ export function createSocketDispatcher(sockets: SocketRoutes): SocketDispatcher 
         state: ConnectionState,
         frame: Extract<SocketClientFrame, { type: 'sub' }>,
     ): Promise<void> {
+        // Reject this sub: emit the error then the terminal end frame for its id.
+        function fail(message: string): void {
+            send(ws, { type: 'err', sub: frame.sub, message })
+            send(ws, { type: 'end', sub: frame.sub })
+        }
         const loader = ensureLoaded(frame.socket)
         if (!loader) {
-            send(ws, {
-                type: 'err',
-                sub: frame.sub,
-                message: `[belte] no socket registered at ${frame.socket}`,
-            })
-            send(ws, { type: 'end', sub: frame.sub })
-            return
+            return fail(`[belte] no socket registered at ${frame.socket}`)
         }
         try {
             await loader
         } catch (error) {
             log.error(error)
-            send(ws, {
-                type: 'err',
-                sub: frame.sub,
-                message: error instanceof Error ? error.message : String(error),
-            })
-            send(ws, { type: 'end', sub: frame.sub })
-            return
+            return fail(error instanceof Error ? error.message : String(error))
         }
         const entry = lookupSocket(frame.socket)
         if (!entry) {
-            send(ws, {
-                type: 'err',
-                sub: frame.sub,
-                message: `[belte] socket module at ${frame.socket} did not register a Socket export`,
-            })
-            send(ws, { type: 'end', sub: frame.sub })
-            return
+            return fail(`[belte] socket module at ${frame.socket} did not register a Socket export`)
         }
         const isFirstLocalSub = addSub(state, frame.socket, frame.sub)
         if (isFirstLocalSub) {

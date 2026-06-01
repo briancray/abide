@@ -26,7 +26,7 @@ export function handleCliInstall(request: Request, programName: string): Respons
             headers: { 'Cache-Control': NO_STORE },
         })
     }
-    const appUrl = `${url.protocol}//${url.host}`
+    const appUrl = url.origin
     const script = installScript(appUrl, programName)
     return new Response(script, {
         headers: {

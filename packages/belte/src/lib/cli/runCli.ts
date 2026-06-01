@@ -8,6 +8,8 @@ import { parseArgvForRpc } from './parseArgvForRpc.ts'
 import { printCommandHelp, printTopLevelHelp } from './printHelp.ts'
 import type { CliManifest } from './types/CliManifest.ts'
 
+const isHelpFlag = (arg: string): boolean => arg === '--help' || arg === '-h'
+
 // String results print verbatim (with a trailing newline); everything else as a JSON line.
 function printValue(value: unknown, pretty: boolean): void {
     if (typeof value === 'string') {
@@ -54,12 +56,12 @@ export async function runCli({
     await loadEnvFromBinaryDir()
 
     const first = argv[0]
-    if (!first || first === '--help' || first === '-h') {
+    if (!first || isHelpFlag(first)) {
         printTopLevelHelp(programName, manifest, banner, footer)
         return 0
     }
 
-    if (argv.includes('--help') || argv.includes('-h')) {
+    if (argv.some(isHelpFlag)) {
         printCommandHelp(programName, first, manifest)
         return 0
     }

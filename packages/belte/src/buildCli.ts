@@ -1,9 +1,11 @@
 import type { CompileTarget } from './lib/server/runtime/types/CompileTarget.ts'
 import { detectTarget } from './lib/shared/detectTarget.ts'
+import { exeSuffix } from './lib/shared/exeSuffix.ts'
 import { exitOnBuildFailure } from './lib/shared/exitOnBuildFailure.ts'
 import { loadSvelteConfig } from './lib/shared/loadSvelteConfig.ts'
 import { log } from './lib/shared/log.ts'
 import { programNameForPackage } from './lib/shared/programNameForPackage.ts'
+import { readPackageJson } from './lib/shared/readPackageJson.ts'
 import { serverBuildPlugins } from './serverBuildPlugins.ts'
 
 const DISCOVERY_ENTRY = new URL('./discoveryEntry.ts', import.meta.url).pathname
@@ -92,7 +94,7 @@ export async function buildCli({
         return Promise.all(
             platforms.map(async (platformTarget) => {
                 const shortName = platformTarget.replace(/^bun-/, '')
-                const suffix = platformTarget.includes('windows') ? '.exe' : ''
+                const suffix = exeSuffix(platformTarget)
                 const platformOut = `${distDir}/cli-thin/${shortName}/${programName}${suffix}`
                 await Bun.$`mkdir -p ${`${distDir}/cli-thin/${shortName}`}`.quiet()
                 const result = await Bun.build({
@@ -108,7 +110,7 @@ export async function buildCli({
         )
     }
 
-    const suffix = target.includes('windows') ? '.exe' : ''
+    const suffix = exeSuffix(target)
     const outPath = outfile ?? `${distDir}/cli${suffix}`
 
     const cliResult = await Bun.build({
@@ -124,10 +126,6 @@ export async function buildCli({
 }
 
 async function readProgramName(cwd: string): Promise<string> {
-    const pkgFile = Bun.file(`${cwd}/package.json`)
-    if (!(await pkgFile.exists())) {
-        return 'app'
-    }
-    const pkg = (await pkgFile.json()) as { name?: string }
-    return programNameForPackage(pkg.name)
+    const pkg = (await readPackageJson(cwd)) as { name?: string } | undefined
+    return programNameForPackage(pkg?.name)
 }

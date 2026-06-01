@@ -1,4 +1,5 @@
 import { dirname, join } from 'node:path'
+import { bundleLayout } from '../shared/bundleLayout.ts'
 import { webviewCachePath } from './webviewCachePath.ts'
 import { webviewLibName } from './webviewLibName.ts'
 
@@ -29,10 +30,11 @@ export async function resolveWebviewLib(cwd: string = process.cwd()): Promise<st
     /*
     Bundle-relative candidates. In dev `process.execPath` is the `bun`
     binary, so these miss and we fall through to the build cache; in a
-    shipped bundle the launcher's own directory holds the lib.
+    shipped bundle the launcher's own directory holds the lib (flat layout)
+    or its sibling Frameworks dir (macOS `.app`) — bundleLayout knows which.
     */
-    const binDir = dirname(process.execPath)
-    const bundledCandidates = [join(binDir, libName), join(binDir, '..', 'Frameworks', libName)]
+    const { binDir, libDir } = bundleLayout(dirname(process.execPath))
+    const bundledCandidates = [join(binDir, libName), join(libDir, libName)]
     for (const candidate of bundledCandidates) {
         if (await Bun.file(candidate).exists()) {
             return candidate

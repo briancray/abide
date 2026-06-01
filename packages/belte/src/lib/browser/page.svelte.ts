@@ -118,7 +118,7 @@ function applyState(
     const mutable = page as PageStateFor<string>
     mutable.route = route
     mutable.params = params
-    mutable.url = new URL(window.location.href)
+    syncUrl()
 }
 
 function syncUrl(): void {

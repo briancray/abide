@@ -101,8 +101,7 @@ export async function handleCliDownload(
             headers: { 'Cache-Control': NO_STORE },
         })
     }
-    const url = new URL(request.url)
-    const appUrl = `${url.protocol}//${url.host}`
+    const appUrl = new URL(request.url).origin
     const auth = request.headers.get('authorization')
     const bearer =
         auth && auth.toLowerCase().startsWith('bearer ') ? auth.slice('bearer '.length) : undefined

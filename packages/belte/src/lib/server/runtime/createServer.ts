@@ -11,6 +11,7 @@ import { NO_STORE, SSR_CACHE_CONTROL } from '../../shared/cacheControlValues.ts'
 import { createCacheStore } from '../../shared/createCacheStore.ts'
 import { isDebugEnabled } from '../../shared/isDebugEnabled.ts'
 import { log } from '../../shared/log.ts'
+import { memoizeByKey } from '../../shared/memoizeByKey.ts'
 import { nearestLayoutPrefix, normalizeLayoutPrefixes } from '../../shared/nearestLayoutPrefix.ts'
 import { toBunRoutePattern } from '../../shared/toBunRoutePattern.ts'
 import type { AppModule } from '../AppModule.ts'
@@ -42,6 +43,9 @@ import type { RequestStore } from './types/RequestStore.ts'
 function wantsJson(req: Request): boolean {
     return (req.headers.get('accept') ?? '').includes('application/json')
 }
+
+// SSR placeholders the shell carries; filled in a single pass per render.
+const SSR_MARKER = /<!--ssr:(head|body|state)-->/g
 
 /*
 The framework's default 500 response — a `<pre>` stack dump. Shared by the
@@ -146,12 +150,7 @@ export async function createServer({
               (file) => `/_app/${file.replace(/\.zst$/, '')}`,
           )
 
-    const rpcModuleCache = new Map<string, Promise<AnyRemoteFunction | undefined>>()
-    function loadRpc(url: string): Promise<AnyRemoteFunction | undefined> | undefined {
-        const existing = rpcModuleCache.get(url)
-        if (existing) {
-            return existing
-        }
+    const loadRpc = memoizeByKey((url): Promise<AnyRemoteFunction | undefined> | undefined => {
         const loader = rpc[url]
         if (!loader) {
             return undefined
@@ -161,7 +160,7 @@ export async function createServer({
         time. Pick the first export that looks like a RemoteFunction so the
         framework stays tolerant of incidental re-exports.
         */
-        const promise = loader().then((mod) => {
+        return loader().then((mod) => {
             for (const value of Object.values(mod)) {
                 if (typeof value === 'function' && 'method' in value && 'url' in value) {
                     return value as AnyRemoteFunction
@@ -169,9 +168,7 @@ export async function createServer({
             }
             return undefined
         })
-        rpcModuleCache.set(url, promise)
-        return promise
-    }
+    })
 
     const logRequests = isDebugEnabled('belte')
 
@@ -258,10 +255,12 @@ export async function createServer({
             params,
             cache: cacheSnapshot,
         })};</script>`
-        const html = shell
-            .replace('<!--ssr:head-->', rendered.head)
-            .replace('<!--ssr:body-->', rendered.body)
-            .replace('<!--ssr:state-->', stateTag)
+        const fills: Record<string, string> = {
+            head: rendered.head,
+            body: rendered.body,
+            state: stateTag,
+        }
+        const html = shell.replace(SSR_MARKER, (_match, key: string) => fills[key])
         return new Response(html, {
             headers: {
                 'Content-Type': 'text/html; charset=utf-8',

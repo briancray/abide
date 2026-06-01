@@ -7,12 +7,13 @@ import { pngToIcns } from './lib/bundle/pngToIcns.ts'
 import { serverBinaryFilename } from './lib/bundle/serverBinaryFilename.ts'
 import { signMacApp } from './lib/bundle/signMacApp.ts'
 import { webviewLibName } from './lib/bundle/webviewLibName.ts'
+import { bundleLayout } from './lib/shared/bundleLayout.ts'
 import { detectTarget } from './lib/shared/detectTarget.ts'
 import { exitOnBuildFailure } from './lib/shared/exitOnBuildFailure.ts'
 import { loadSvelteConfig } from './lib/shared/loadSvelteConfig.ts'
 import { log } from './lib/shared/log.ts'
 import { programNameForPackage } from './lib/shared/programNameForPackage.ts'
-import { shippedEnvPath } from './lib/shared/shippedEnvPath.ts'
+import { readPackageJson } from './lib/shared/readPackageJson.ts'
 import { serverBuildPlugins } from './serverBuildPlugins.ts'
 
 const APP_ENTRY = new URL('./appEntry.ts', import.meta.url).pathname
@@ -40,15 +41,16 @@ export async function bundleApp({ cwd = process.cwd() }: { cwd?: string } = {}):
     const svelteConfig = await loadSvelteConfig(cwd)
 
     /*
-    Layout differs by OS: a macOS .app nests binaries under Contents/MacOS
-    and the lib under Contents/Frameworks; elsewhere everything sits flat
-    in one directory. binDir is where the launcher + server land, libDir
-    where the webview lib lands — matching resolveWebviewLib's candidates.
+    Layout differs by OS: a macOS .app nests binaries under Contents/MacOS, the
+    lib under Contents/Frameworks, and data under Contents/Resources; elsewhere
+    everything sits flat in one directory. bundleLayout derives the rest from
+    binDir — the same source the boot readers resolve from — so build and runtime
+    agree on where the lib, resources, and shipped `.env` land.
     */
     const isMac = process.platform === 'darwin'
     const bundleRoot = isMac ? `${cwd}/dist/${programName}.app` : `${cwd}/dist/${programName}`
     const binDir = isMac ? `${bundleRoot}/Contents/MacOS` : bundleRoot
-    const libDir = isMac ? `${bundleRoot}/Contents/Frameworks` : bundleRoot
+    const { libDir, resourcesDir, envPath } = bundleLayout(binDir)
 
     await Bun.$`rm -rf ${bundleRoot}`.quiet()
     await Bun.$`mkdir -p ${binDir} ${libDir}`.quiet()
@@ -63,13 +65,12 @@ export async function bundleApp({ cwd = process.cwd() }: { cwd?: string } = {}):
     server loads at boot (loadEnvFromBinaryDir) as its default config layer. A
     dedicated file, never the working `.env` — a compiled bundle is extractable,
     so only ship-safe defaults belong here; user-specific/secret values come from
-    the data-dir `.env` instead. shippedEnvPath places it under Contents/Resources
+    the data-dir `.env` instead. bundleLayout places it under Contents/Resources
     in a macOS `.app` (sealed as a resource, so it survives codesign) and beside
     the binaries otherwise. Skipped when absent.
     */
     const bundleEnv = Bun.file(`${cwd}/.env.bundle`)
     if (await bundleEnv.exists()) {
-        const envPath = shippedEnvPath(binDir)
         await Bun.$`mkdir -p ${dirname(envPath)}`.quiet()
         await Bun.write(envPath, bundleEnv)
     }
@@ -110,7 +111,6 @@ export async function bundleApp({ cwd = process.cwd() }: { cwd?: string } = {}):
     converted via sips + iconutil so authors don't need to make an .icns.
     */
     if (isMac) {
-        const resourcesDir = `${bundleRoot}/Contents/Resources`
         const icnsSource = `${cwd}/src/bundle/icon.icns`
         const pngSource = `${cwd}/src/bundle/icon.png`
         let hasIcon = false
@@ -142,10 +142,6 @@ export async function bundleApp({ cwd = process.cwd() }: { cwd?: string } = {}):
 
 // Reads name + version from package.json, with fallbacks when absent.
 async function readPackage(cwd: string): Promise<{ name: string | undefined; version: string }> {
-    const pkgFile = Bun.file(`${cwd}/package.json`)
-    if (!(await pkgFile.exists())) {
-        return { name: undefined, version: '0.0.0' }
-    }
-    const pkg = (await pkgFile.json()) as { name?: string; version?: string }
-    return { name: pkg.name, version: pkg.version ?? '0.0.0' }
+    const pkg = (await readPackageJson(cwd)) as { name?: string; version?: string } | undefined
+    return { name: pkg?.name, version: pkg?.version ?? '0.0.0' }
 }

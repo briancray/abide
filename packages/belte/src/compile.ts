@@ -1,6 +1,7 @@
 import { build } from './build.ts'
 import type { CompileTarget } from './lib/server/runtime/types/CompileTarget.ts'
 import { detectTarget } from './lib/shared/detectTarget.ts'
+import { exeSuffix } from './lib/shared/exeSuffix.ts'
 import { exitOnBuildFailure } from './lib/shared/exitOnBuildFailure.ts'
 import { loadSvelteConfig } from './lib/shared/loadSvelteConfig.ts'
 import { log } from './lib/shared/log.ts'
@@ -28,7 +29,7 @@ export async function compile({
     const svelteConfig = await loadSvelteConfig(cwd)
     await build({ cwd, svelteConfig })
 
-    const outPath = outfile ?? `${cwd}/dist/app${target.includes('windows') ? '.exe' : ''}`
+    const outPath = outfile ?? `${cwd}/dist/app${exeSuffix(target)}`
 
     const result = await Bun.build({
         entrypoints: [SERVER_ENTRY],

@@ -6,6 +6,7 @@ import { belteImportName } from './lib/shared/belteImportName.ts'
 import { fileStem } from './lib/shared/fileStem.ts'
 import { jsonSchemaForPromptArguments } from './lib/shared/jsonSchemaForPromptArguments.ts'
 import { log } from './lib/shared/log.ts'
+import { manifestModule } from './lib/shared/manifestModule.ts'
 import { pageUrlForFile } from './lib/shared/pageUrlForFile.ts'
 import { parsePromptMarkdown } from './lib/shared/parsePromptMarkdown.ts'
 import { prepareRpcModule } from './lib/shared/prepareRpcModule.ts'
@@ -315,111 +316,56 @@ ${optionLines}
 
             build.onLoad({ filter: /.*/, namespace: NS }, async (args) => {
                 if (args.path === 'belte:rpc') {
-                    const files = await scanRpcOnce()
-                    const byUrl = files
-                        .toSorted()
-                        .map((file) => ({ url: rpcUrlForFile(file), file }))
-                    const entries = byUrl
-                        .map(
-                            ({ url, file }) =>
-                                `    ${JSON.stringify(url)}: () => import(${JSON.stringify(`${rpcDir}/${file}`)}),`,
-                        )
-                        .join('\n')
-                    if (byUrl.length > 0) {
-                        log.info(
-                            `resolved ${byUrl.length} rpc modules: ${byUrl.map((b) => b.url).join(', ')}`,
-                        )
-                    }
-                    return {
-                        contents: `export const rpc = {\n${entries}\n}\n`,
-                        loader: 'js',
-                    }
+                    return manifestModule({
+                        files: await scanRpcOnce(),
+                        keyForFile: rpcUrlForFile,
+                        importDir: rpcDir,
+                        exportName: 'rpc',
+                        label: 'rpc modules',
+                    })
                 }
 
                 if (args.path === 'belte:sockets') {
-                    const files = await scanSocketsOnce()
-                    const byName = files
-                        .toSorted()
-                        .map((file) => ({ name: socketNameForFile(file), file }))
-                    const entries = byName
-                        .map(
-                            ({ name, file }) =>
-                                `    ${JSON.stringify(name)}: () => import(${JSON.stringify(`${socketsDir}/${file}`)}),`,
-                        )
-                        .join('\n')
-                    if (byName.length > 0) {
-                        log.info(
-                            `resolved ${byName.length} socket modules: ${byName.map((b) => b.name).join(', ')}`,
-                        )
-                    }
-                    return {
-                        contents: `export const sockets = {\n${entries}\n}\n`,
-                        loader: 'js',
-                    }
+                    return manifestModule({
+                        files: await scanSocketsOnce(),
+                        keyForFile: socketNameForFile,
+                        importDir: socketsDir,
+                        exportName: 'sockets',
+                        label: 'socket modules',
+                    })
                 }
 
                 if (args.path === 'belte:prompts') {
-                    const files = await scanPromptsOnce()
-                    const byName = files
-                        .toSorted()
-                        .map((file) => ({ name: promptNameForFile(file), file }))
-                    const entries = byName
-                        .map(
-                            ({ name, file }) =>
-                                `    ${JSON.stringify(name)}: () => import(${JSON.stringify(`${promptsDir}/${file}`)}),`,
-                        )
-                        .join('\n')
-                    if (byName.length > 0) {
-                        log.info(
-                            `resolved ${byName.length} prompt modules: ${byName.map((b) => b.name).join(', ')}`,
-                        )
-                    }
-                    return {
-                        contents: `export const prompts = {\n${entries}\n}\n`,
-                        loader: 'js',
-                    }
+                    return manifestModule({
+                        files: await scanPromptsOnce(),
+                        keyForFile: promptNameForFile,
+                        importDir: promptsDir,
+                        exportName: 'prompts',
+                        label: 'prompt modules',
+                    })
                 }
 
                 if (args.path === 'belte:pages') {
-                    const { pageFiles: files } = await scanPagesOnce()
-                    const byUrl = files
-                        .toSorted()
-                        .map((file) => ({ url: pageUrlForFile(file), file }))
-                    const entries = byUrl
-                        .map(
-                            ({ url, file }) =>
-                                `    ${JSON.stringify(url)}: () => import(${JSON.stringify(`${pagesDir}/${file}`)}),`,
-                        )
-                        .join('\n')
-                    log.info(
-                        `resolved ${byUrl.length} pages: ${byUrl.map((b) => b.url).join(', ')}`,
-                    )
-                    return {
-                        contents: `export const pages = {\n${entries}\n}\n`,
-                        loader: 'js',
-                    }
+                    const { pageFiles } = await scanPagesOnce()
+                    return manifestModule({
+                        files: pageFiles,
+                        keyForFile: pageUrlForFile,
+                        importDir: pagesDir,
+                        exportName: 'pages',
+                        label: 'pages',
+                        logWhenEmpty: true,
+                    })
                 }
 
                 if (args.path === 'belte:layouts') {
-                    const { layoutFiles: files } = await scanPagesOnce()
-                    const byPrefix = files
-                        .toSorted()
-                        .map((file) => ({ prefix: pageUrlForFile(file), file }))
-                    const entries = byPrefix
-                        .map(
-                            ({ prefix, file }) =>
-                                `    ${JSON.stringify(prefix)}: () => import(${JSON.stringify(`${pagesDir}/${file}`)}),`,
-                        )
-                        .join('\n')
-                    if (byPrefix.length > 0) {
-                        log.info(
-                            `resolved ${byPrefix.length} layouts: ${byPrefix.map((b) => b.prefix).join(', ')}`,
-                        )
-                    }
-                    return {
-                        contents: `export const layouts = {\n${entries}\n}\n`,
-                        loader: 'js',
-                    }
+                    const { layoutFiles } = await scanPagesOnce()
+                    return manifestModule({
+                        files: layoutFiles,
+                        keyForFile: pageUrlForFile,
+                        importDir: pagesDir,
+                        exportName: 'layouts',
+                        label: 'layouts',
+                    })
                 }
 
                 if (args.path === 'belte:app') {

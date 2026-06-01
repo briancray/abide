@@ -1,4 +1,5 @@
 import { beltePackageName } from './beltePackageName.ts'
+import { readPackageJson } from './readPackageJson.ts'
 
 /*
 Resolves the bare specifier prefix a consuming project imports belte under —
@@ -17,13 +18,11 @@ resolve belte at all in that case, and the canonical name yields the clearest
 resolution error.
 */
 export async function belteImportName(cwd: string): Promise<string> {
-    const packageJsonPath = `${cwd}/package.json`
-    if (!(await Bun.file(packageJsonPath).exists())) {
+    const packageJson = (await readPackageJson(cwd)) as
+        | { dependencies?: Record<string, string>; devDependencies?: Record<string, string> }
+        | undefined
+    if (!packageJson) {
         return beltePackageName
-    }
-    const packageJson = (await Bun.file(packageJsonPath).json()) as {
-        dependencies?: Record<string, string>
-        devDependencies?: Record<string, string>
     }
     const dependencies = { ...packageJson.devDependencies, ...packageJson.dependencies }
     /*

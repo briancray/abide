@@ -224,8 +224,7 @@ function dispatchVerb(
     args: Record<string, unknown> | undefined,
     inbound: Request,
 ): Promise<Response> {
-    const inboundUrl = new URL(inbound.url)
-    const baseUrl = `${inboundUrl.protocol}//${inboundUrl.host}/`
+    const baseUrl = `${new URL(inbound.url).origin}/`
     const request = buildRpcRequest({
         method: entry.remote.method,
         url: entry.remote.url,

@@ -1,3 +1,5 @@
+import { serializeEnv } from '../../shared/serializeEnv.ts'
+
 /*
 Generates the `.env` file content shipped alongside the CLI binary in
 the download tarball. APP_URL is always present (derived from the
@@ -10,9 +12,8 @@ user's auth code at the actual RPC endpoints validates whatever value
 arrives back in subsequent calls.
 */
 export function buildEnvContent(appUrl: string, bearerToken: string | undefined): string {
-    const lines = [`APP_URL=${appUrl}`]
-    if (bearerToken) {
-        lines.push(`APP_TOKEN=${bearerToken}`)
-    }
-    return `${lines.join('\n')}\n`
+    return serializeEnv({
+        APP_URL: appUrl,
+        ...(bearerToken ? { APP_TOKEN: bearerToken } : {}),
+    })
 }

@@ -11,10 +11,10 @@ import { stableLocalPort } from './lib/bundle/stableLocalPort.ts'
 import { waitForServer } from './lib/bundle/waitForServer.ts'
 import { parsePort } from './lib/server/runtime/parsePort.ts'
 import { appDataDir } from './lib/shared/appDataDir.ts'
+import { bundleLayout } from './lib/shared/bundleLayout.ts'
 import { log } from './lib/shared/log.ts'
 import { readEnvFile } from './lib/shared/readEnvFile.ts'
 import { serializeEnv } from './lib/shared/serializeEnv.ts'
-import { shippedEnvPath } from './lib/shared/shippedEnvPath.ts'
 
 /*
 The bundle's control server, run in a Worker so it owns its own thread.
@@ -290,7 +290,7 @@ function dataDirEnvPath(): string {
 // directory — same source loadEnvFromBinaryDir reads at boot (dirname of the running
 // binary): beside the binary in the flat layout, under Resources in a `.app`.
 function binaryDirEnvPath(): string {
-    return shippedEnvPath(dirname(process.execPath))
+    return bundleLayout(dirname(process.execPath)).envPath
 }
 
 /*
@@ -365,68 +365,81 @@ async function clearLastConnection(): Promise<void> {
     await rm(lastConnectionPath(), { force: true })
 }
 
-/*
-The control server's request handler. The connect screen owns localStorage +
-navigation; this worker owns the embedded-server process and the native flag.
-*/
-async function handleControlRequest(request: Request): Promise<Response> {
-    const url = new URL(request.url)
-    if (request.method === 'GET' && url.pathname === '/') {
-        return renderConnectScreen()
+// GET /__belte/config — the form's schema + current values, or null schema to skip the gate.
+async function handleConfigGet(): Promise<Response> {
+    if (!configSchema) {
+        return Response.json({ schema: null, values: {} })
     }
-    if (request.method === 'GET' && url.pathname === '/__belte/config') {
-        // No schema declared → null tells the form to skip the gate entirely.
-        if (!configSchema) {
-            return Response.json({ schema: null, values: {} })
-        }
-        return Response.json({ schema: configSchema, values: await resolveConfigValues() })
+    return Response.json({ schema: configSchema, values: await resolveConfigValues() })
+}
+
+// POST /__belte/config — persist the form's answers to the data-dir `.env`.
+async function handleConfigPost(request: Request): Promise<Response> {
+    const { values } = (await request.json()) as { values: Record<string, string> }
+    await writeConfig(values)
+    return new Response(undefined, { status: 204 })
+}
+
+// POST /connect — point the window at a remote belte server after probing it.
+async function handleConnect(request: Request): Promise<Response> {
+    const { url: target } = (await request.json()) as { url: string }
+    // Verify it's actually a belte server before pointing the window at it.
+    const identity = await probeBelteServer(target)
+    if (!identity) {
+        log.warn(`no belte server responded at ${target}`)
+        return Response.json({ error: `No belte server responded at ${target}` }, { status: 502 })
     }
-    if (request.method === 'POST' && url.pathname === '/__belte/config') {
-        const { values } = (await request.json()) as { values: Record<string, string> }
-        await writeConfig(values)
-        return new Response(undefined, { status: 204 })
-    }
-    if (request.method === 'POST' && url.pathname === '/connect') {
-        const { url: target } = (await request.json()) as { url: string }
-        // Verify it's actually a belte server before pointing the window at it.
-        const identity = await probeBelteServer(target)
-        if (!identity) {
-            log.warn(`no belte server responded at ${target}`)
-            return Response.json(
-                { error: `No belte server responded at ${target}` },
-                { status: 502 },
-            )
-        }
+    flag?.setConnected(true)
+    startLivenessWatch(target)
+    // Record the choice so the next launch reconnects here before opening.
+    await writeLastConnection({ kind: 'url', url: target })
+    log.info(`connecting to ${identity.name} at ${target}`)
+    return Response.json({ redirect: target })
+}
+
+// POST /start — boot the embedded server and point the window at it.
+async function handleStart(): Promise<Response> {
+    try {
+        const localUrl = await startEmbeddedServer()
         flag?.setConnected(true)
-        startLivenessWatch(target)
-        // Record the choice so the next launch reconnects here before opening.
-        await writeLastConnection({ kind: 'url', url: target })
-        log.info(`connecting to ${identity.name} at ${target}`)
-        return Response.json({ redirect: target })
-    }
-    if (request.method === 'POST' && url.pathname === '/start') {
-        try {
-            const localUrl = await startEmbeddedServer()
-            flag?.setConnected(true)
-            startLivenessWatch(localUrl)
-            // Record the choice so the next launch boots the embedded server first.
-            await writeLastConnection({ kind: 'embedded' })
-            log.info(`started embedded server at ${localUrl}`)
-            return Response.json({ redirect: localUrl })
-        } catch (error) {
-            killServerChild()
-            return Response.json({ error: String(error) }, { status: 500 })
-        }
-    }
-    if (request.method === 'GET' && url.pathname === '/__belte/disconnect') {
-        stopLivenessWatch()
+        startLivenessWatch(localUrl)
+        // Record the choice so the next launch boots the embedded server first.
+        await writeLastConnection({ kind: 'embedded' })
+        log.info(`started embedded server at ${localUrl}`)
+        return Response.json({ redirect: localUrl })
+    } catch (error) {
         killServerChild()
-        flag?.setConnected(false)
-        // Forget the auto-resume choice so the next launch lands on the connect screen.
-        await clearLastConnection()
-        return new Response(undefined, { status: 204 })
+        return Response.json({ error: String(error) }, { status: 500 })
     }
-    return new Response('not found', { status: 404 })
+}
+
+// GET /__belte/disconnect — tear down the embedded server and forget the auto-resume choice.
+async function handleDisconnect(): Promise<Response> {
+    stopLivenessWatch()
+    killServerChild()
+    flag?.setConnected(false)
+    await clearLastConnection()
+    return new Response(undefined, { status: 204 })
+}
+
+/*
+The control server's routes, keyed by `${method} ${pathname}` (exact match). The
+connect screen owns localStorage + navigation; this worker owns the embedded-
+server process and the native flag.
+*/
+const controlRoutes: Record<string, (request: Request) => Promise<Response> | Response> = {
+    'GET /': () => renderConnectScreen(),
+    'GET /__belte/config': handleConfigGet,
+    'POST /__belte/config': handleConfigPost,
+    'POST /connect': handleConnect,
+    'POST /start': handleStart,
+    'GET /__belte/disconnect': handleDisconnect,
+}
+
+function handleControlRequest(request: Request): Promise<Response> | Response {
+    const { pathname } = new URL(request.url)
+    const route = controlRoutes[`${request.method} ${pathname}`]
+    return route ? route(request) : new Response('not found', { status: 404 })
 }
 
 /*
