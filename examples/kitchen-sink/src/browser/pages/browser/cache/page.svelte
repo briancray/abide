@@ -6,11 +6,12 @@ import { incrementCounter } from '$server/rpc/incrementCounter.ts'
 import { resetCounter } from '$server/rpc/resetCounter.ts'
 
 /*
-Two derivations against the same cache key. They share one stored entry,
-so one mutation invalidates both and they stay in lockstep.
+Two derivations against the same cache key, both tagged with the same
+scope. They share one stored entry, so any invalidation — by fn or by
+scope — re-runs both and they stay in lockstep.
 */
-const counter = $derived(cache(getCounter)())
-const mirror = $derived(await cache(getCounter)())
+const counter = $derived(cache(getCounter, { scope: 'counter' })())
+const mirror = $derived(await cache(getCounter, { scope: 'counter' })())
 
 async function increment() {
     await incrementCounter()
@@ -64,10 +65,18 @@ async function reset() {
                 </tr>
                 <tr>
                     <td class="px-4 py-2 font-mono">key</td>
-                    <td class="px-4 py-2 font-mono text-slate-500">string / unknown[]</td>
+                    <td class="px-4 py-2 font-mono text-slate-500">string / unknown[] / object</td>
                     <td class="px-4 py-2 text-slate-600">
-                        override the auto key (e.g. <code class="font-mono">['post', id]</code>
-                        )
+                        override the auto key — method + url + args (e.g.
+                        <code class="font-mono">['post', id]</code>)
+                    </td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">scope</td>
+                    <td class="px-4 py-2 font-mono text-slate-500">string</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        free-form tag grouping calls so one <code class="font-mono">invalidate</code>
+                        drops them together
                     </td>
                 </tr>
             </tbody>
@@ -78,9 +87,15 @@ async function reset() {
 <section class="mt-6">
     <h2 class="text-sm font-semibold"><code class="font-mono">cache.invalidate</code></h2>
     <ul class="mt-2 space-y-1 text-sm text-slate-600">
-        <li><code class="font-mono">cache.invalidate(fn)</code> — drop every entry for that rpc</li>
-        <li><code class="font-mono">cache.invalidate(key)</code> — drop a specific key</li>
-        <li><code class="font-mono">cache.invalidate()</code> — clear the whole store</li>
+        <li><code class="font-mono">cache.invalidate()</code> — drop everything</li>
+        <li>
+            <code class="font-mono">cache.invalidate(fn)</code> — drop one function's calls (fn or
+            fn.raw)
+        </li>
+        <li>
+            <code class="font-mono">{'cache.invalidate({ key?, scope? })'}</code> — drop a keyed entry
+            and/or every entry in a scope (the union)
+        </li>
     </ul>
 </section>
 
@@ -122,8 +137,8 @@ async function reset() {
         <button
             type="button"
             class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
-            onclick={() => cache.invalidate(getCounter)}>
-            invalidate only
+            onclick={() => cache.invalidate({ scope: 'counter' })}>
+            invalidate scope
         </button>
     </div>
 </section>
@@ -133,23 +148,25 @@ async function reset() {
         title="this page — two derivations share one entry"
         code={`import { cache } from '@briancray/belte/browser/cache'
 
-const counter = $derived(cache(getCounter)())
-const mirror  = $derived(await cache(getCounter)())   // same key, same entry
+const counter = $derived(cache(getCounter, { scope: 'counter' })())
+const mirror  = $derived(await cache(getCounter, { scope: 'counter' })())  // same key, same entry
 
 async function increment() {
     await incrementCounter()
-    cache.invalidate(getCounter)                       // re-runs every subscriber
+    cache.invalidate(getCounter)              // re-runs every subscriber
 }`} />
 
     <CodeBlock
         title="option grammar"
-        code={`cache(fn)()                       // lives forever
-cache(fn, { ttl: 0 })()           // dedupe in-flight only
-cache(fn, { ttl: 30_000 })()      // expire 30s after resolve
-cache(fn, { key: 'group' })()     // group calls under one key
-cache(fn, { key: ['post', id] })  // scope per arg
+        code={`cache(fn)()                             // lives forever
+cache(fn, { ttl: 0 })()                 // dedupe in-flight only
+cache(fn, { ttl: 30_000 })()            // expire 30s after resolve
+cache(fn, { key: 'group' })()           // group calls under one key
+cache(fn, { key: ['post', id] })()      // override the key per arg
+cache(fn, { scope: 'orders' })()        // tag for grouped invalidation
 
-cache.invalidate(fn)              // drop every entry for fn
-cache.invalidate(['post', id])    // drop one keyed entry
-cache.invalidate()                // clear the store`} />
+cache.invalidate()                      // drop everything
+cache.invalidate(fn)                    // drop one function's calls
+cache.invalidate({ key: ['post', id] }) // drop one keyed entry
+cache.invalidate({ scope: 'orders' })   // drop every entry in the scope`} />
 </section>
