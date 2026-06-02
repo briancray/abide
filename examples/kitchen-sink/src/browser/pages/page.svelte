@@ -51,12 +51,10 @@ The composed auth showcase sits below.
     <a href="/cli" class="rounded-lg border border-slate-200 bg-white p-5 hover:border-slate-400">
         <h2 class="text-lg font-semibold"><code class="font-mono">belte/cli</code></h2>
         <p class="mt-1 text-sm text-slate-600">
-            <code class="font-mono">createClient</code>
-            for in-process / remote scripts, plus the thin standalone CLI binary served from <code
-                class="font-mono">
+            The thin standalone CLI binary — a remote client served from <code class="font-mono">
                 /__belte/cli
             </code>
-            .
+            ; schema-bearing rpcs auto-expose as commands.
         </p>
     </a>
     <a

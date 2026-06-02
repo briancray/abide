@@ -2,13 +2,13 @@ import { mkdir, rm } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { bindConnectedFlag } from './lib/bundle/bindConnectedFlag.ts'
 import { bindRequestNavigate } from './lib/bundle/bindRequestNavigate.ts'
-import { findFreePort } from './lib/bundle/findFreePort.ts'
 import { listenLocalControlServer } from './lib/bundle/listenLocalControlServer.ts'
 import { probeBelteServer } from './lib/bundle/probeBelteServer.ts'
 import { resolveServerBinary } from './lib/bundle/resolveServerBinary.ts'
 import { resolveWebviewLib } from './lib/bundle/resolveWebviewLib.ts'
 import { stableLocalPort } from './lib/bundle/stableLocalPort.ts'
 import { waitForServer } from './lib/bundle/waitForServer.ts'
+import { findOpenPort } from './lib/server/runtime/findOpenPort.ts'
 import { parsePort } from './lib/server/runtime/parsePort.ts'
 import { appDataDir } from './lib/shared/appDataDir.ts'
 import { bundleLayout } from './lib/shared/bundleLayout.ts'
@@ -166,17 +166,18 @@ only one embedded server runs at a time.
 The port the embedded server binds. A `PORT` configured in the data-dir `.env`
 (where the config form writes), the shipped binary-dir `.env`, or the launcher's
 own env is honored — so the server answers at a fixed, known address another
-machine can reliably connect to. With none set, a free port is chosen (the
-historical behaviour). Precedence matches the server's own env stack: shell >
-data-dir > binary-dir. A configured port is used as-is and not second-guessed —
-if it's taken, the bind failure surfaces rather than silently moving.
+machine can reliably connect to. With none set, the first open port at/above
+3000 is chosen (matching the standalone server's default). Precedence matches
+the server's own env stack: shell > data-dir > binary-dir. A configured port is
+used as-is and not second-guessed — if it's taken, the bind failure surfaces
+rather than silently moving.
 */
 async function resolveEmbeddedPort(): Promise<number> {
     const [dataDirEnv, binaryDirEnv] = await Promise.all([
         readEnvFile(dataDirEnvPath()),
         readEnvFile(binaryDirEnvPath()),
     ])
-    return parsePort(process.env.PORT ?? dataDirEnv.PORT ?? binaryDirEnv.PORT) ?? findFreePort()
+    return parsePort(process.env.PORT ?? dataDirEnv.PORT ?? binaryDirEnv.PORT) ?? findOpenPort(3000)
 }
 
 async function startEmbeddedServer(timeoutMs?: number): Promise<string> {

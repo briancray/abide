@@ -29,6 +29,7 @@ import { cacheControlForAsset } from './cacheControlForAsset.ts'
 import { containsTraversal } from './containsTraversal.ts'
 import { createAssetHeaderCache } from './createAssetHeaderCache.ts'
 import { createPublicAssetServer } from './createPublicAssetServer.ts'
+import { findOpenPort } from './findOpenPort.ts'
 import { globToPathSet } from './globToPathSet.ts'
 import { logBrowserOnlyRoutes } from './logBrowserOnlyRoutes.ts'
 import { parsePort } from './parsePort.ts'
@@ -108,7 +109,9 @@ export async function createServer({
     distDir = `${process.cwd()}/dist`,
     publicDir = `${process.cwd()}/src/browser/public`,
     resourcesDir = `${process.cwd()}/src/mcp/resources`,
-    port = parsePort(process.env.PORT) ?? 3000,
+    // No PORT set → scan for the first open port at/above 3000 rather than
+    // hardcoding 3000, so a second app boots cleanly instead of colliding.
+    port = parsePort(process.env.PORT) ?? findOpenPort(3000),
 }: {
     pages: Pages
     rpc: RemoteRoutes

@@ -1,6 +1,6 @@
 ---
 name: write-readme
-description: Regenerate or update the project README. Use when the user asks to rewrite, update, or refresh the README, or after API changes the README should reflect.
+description: Regenerate README. Use when the user asks to rewrite, update, or refresh the README, or after API changes the README should reflect.
 ---
 
 # Writing the belte README

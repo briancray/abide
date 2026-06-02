@@ -61,6 +61,14 @@ export function cache<Args, Return>(
         store.subscribe(key)
         const existing = store.entries.get(key)
         /*
+        Tag an existing entry with this call's scope so a later
+        cache.invalidate({ scope }) reaches entries hydrated from the SSR
+        snapshot (which carry a value but no scope) without a refetch.
+        */
+        if (existing && options?.scope !== undefined) {
+            existing.scope = options.scope
+        }
+        /*
         Snapshot warm path: hydration pre-decoded the SSR body onto the
         entry, so the decoded variant returns it synchronously — the first
         {#await} render resolves without a microtask suspension and matches
@@ -109,6 +117,7 @@ function invokeWithCache<Args>(
         request,
         ttl,
         expiresAt: undefined as number | undefined,
+        scope: options?.scope,
     }
     store.entries.set(key, entry)
     function deleteIfCurrent() {
@@ -150,8 +159,17 @@ function shareable(promise: Promise<Response>): Promise<Response> {
     return promise.then((response) => response.clone())
 }
 
-cache.invalidate = function invalidate<Args, Return>(
-    arg?: AnyRemote<Args, Return> | CacheOptions['key'],
+/*
+Three call shapes:
+  invalidate()                  → drop everything
+  invalidate(fn)                → drop one function's calls (method+url prefix)
+  invalidate({ key?, scope? })  → drop one entry by key and/or a tagged group
+A selector with both fields drops the union; an empty or unmatched selector
+is a no-op. `key` accepts the same string/array/object the cache() `key`
+option does and is canonicalised the same way.
+*/
+function invalidate<Args, Return>(
+    arg?: AnyRemote<Args, Return> | Pick<CacheOptions, 'key' | 'scope'>,
 ): void {
     const store = activeCacheStore()
     if (arg === undefined) {
@@ -175,11 +193,21 @@ cache.invalidate = function invalidate<Args, Return>(
         emit(store, affected)
         return
     }
-    const target = canonicalKey(arg)
-    if (store.entries.delete(target)) {
-        emit(store, [target])
-    }
+    const target = arg.key !== undefined ? canonicalKey(arg.key) : undefined
+    const byKey = target !== undefined && store.entries.has(target) ? [target] : []
+    const byScope =
+        arg.scope === undefined
+            ? []
+            : Array.from(store.entries.values())
+                  .filter((entry) => entry.scope === arg.scope)
+                  .map((entry) => entry.key)
+    /* emit() dedupes via a Set, so a key matching both criteria is harmless. */
+    const affected = [...byKey, ...byScope]
+    affected.forEach((key) => store.entries.delete(key))
+    emit(store, affected)
 }
+
+cache.invalidate = invalidate
 
 function resolveKey<Args>(
     rawFn: RawRemoteFunction<Args>,

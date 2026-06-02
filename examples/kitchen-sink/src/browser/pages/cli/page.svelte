@@ -11,61 +11,9 @@ async function fetchInstaller() {
 
 <h1 class="text-3xl font-bold"><code class="font-mono">belte/cli</code></h1>
 <p class="mt-2 text-slate-600">
-    The in-process / remote rpc client (<code class="font-mono">createClient</code>
-    ) and the standalone CLI binary — a thin remote client that talks to a running server over HTTP.
-    Schema-bearing rpcs auto-expose; argv parses against the same JSON Schema MCP uses.
+    The standalone CLI binary is a thin remote client that talks to a running server over HTTP.
+    Schema-bearing rpcs auto-expose as commands; argv parses against the same JSON Schema MCP uses.
 </p>
-
-<section class="mt-6">
-    <h2 class="text-sm font-semibold">
-        <code class="font-mono">createClient&lt;Api&gt;(opts?)</code>
-    </h2>
-    <div class="mt-2 overflow-x-auto rounded-lg border border-slate-200 bg-white">
-        <table class="w-full text-sm">
-            <thead class="border-b border-slate-200 bg-slate-50 text-left">
-                <tr>
-                    <th class="px-4 py-2 font-mono font-medium">option</th>
-                    <th class="px-4 py-2 font-medium">mode</th>
-                    <th class="px-4 py-2 font-medium">behavior</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100">
-                <tr>
-                    <td class="px-4 py-2 font-mono">url</td>
-                    <td class="px-4 py-2 text-slate-600">remote</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        each call hits <code class="font-mono">
-                            &lt;url&gt;/&lt;path&gt;
-                        </code> via <code class="font-mono">fetch</code>
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">(no url)</td>
-                    <td class="px-4 py-2 text-slate-600">in-process</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        looks up the verb in the registry, calls <code class="font-mono">
-                            verb.fetch
-                        </code> — no network
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">token</td>
-                    <td class="px-4 py-2 text-slate-600">both</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        sets <code class="font-mono">authorization: Bearer &lt;token&gt;</code>
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">manifest</td>
-                    <td class="px-4 py-2 text-slate-600">both</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        bundler-emitted CLI manifest; in-process falls back to the live registry
-                    </td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-</section>
 
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
     <h2 class="text-sm font-semibold">Server-side install endpoint</h2>
@@ -148,17 +96,6 @@ async function fetchInstaller() {
 </section>
 
 <section class="mt-6 space-y-3">
-    <CodeBlock
-        title="scripts/seed.ts — in-process rpc client for migration scripts"
-        code={`import { createClient } from '@briancray/belte/cli/createClient'
-import { createEcho } from '$server/rpc/createEcho.ts'   // import forces the registry to populate
-void createEcho                                   // referenced so the import isn't tree-shaken
-
-const client = createClient<{
-    createEcho: (args: { message: string }) => Promise<{ method: 'POST'; message: string }>
-}>()
-await client.createEcho({ message: 'seeded' })`} />
-
     <CodeBlock
         title="standalone CLI binary — argv parses against each rpc's JSON Schema"
         lang="sh"
