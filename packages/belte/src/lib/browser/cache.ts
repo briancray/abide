@@ -63,10 +63,12 @@ export function cache<Args, Return>(
         /*
         Tag an existing entry with this call's scope so a later
         cache.invalidate({ scope }) reaches entries hydrated from the SSR
-        snapshot (which carry a value but no scope) without a refetch.
+        snapshot (which carry a value but no scope) without a refetch. Merge
+        rather than replace so a read tagging one group can't drop tags a
+        different read site already added.
         */
         if (existing && options?.scope !== undefined) {
-            existing.scope = options.scope
+            existing.scope = mergeScopes(existing.scope, options.scope)
         }
         /*
         Snapshot warm path: hydration pre-decoded the SSR body onto the
@@ -117,7 +119,7 @@ function invokeWithCache<Args>(
         request,
         ttl,
         expiresAt: undefined as number | undefined,
-        scope: options?.scope,
+        scope: options?.scope === undefined ? undefined : toScopeSet(options.scope),
     }
     store.entries.set(key, entry)
     function deleteIfCurrent() {
@@ -163,10 +165,11 @@ function shareable(promise: Promise<Response>): Promise<Response> {
 Three call shapes:
   invalidate()                  → drop everything
   invalidate(fn)                → drop one function's calls (method+url prefix)
-  invalidate({ key?, scope? })  → drop one entry by key and/or a tagged group
+  invalidate({ key?, scope? })  → drop one entry by key and/or tagged groups
 A selector with both fields drops the union; an empty or unmatched selector
 is a no-op. `key` accepts the same string/array/object the cache() `key`
-option does and is canonicalised the same way.
+option does and is canonicalised the same way. `scope` accepts one tag or an
+array; an entry is dropped when its tag set shares any tag with the request.
 */
 function invalidate<Args, Return>(
     arg?: AnyRemote<Args, Return> | Pick<CacheOptions, 'key' | 'scope'>,
@@ -195,11 +198,15 @@ function invalidate<Args, Return>(
     }
     const target = arg.key !== undefined ? canonicalKey(arg.key) : undefined
     const byKey = target !== undefined && store.entries.has(target) ? [target] : []
+    const requestedScopes = arg.scope === undefined ? undefined : toScopeSet(arg.scope)
     const byScope =
-        arg.scope === undefined
+        requestedScopes === undefined
             ? []
             : Array.from(store.entries.values())
-                  .filter((entry) => entry.scope === arg.scope)
+                  .filter(
+                      (entry) =>
+                          entry.scope !== undefined && intersects(entry.scope, requestedScopes),
+                  )
                   .map((entry) => entry.key)
     /* emit() dedupes via a Set, so a key matching both criteria is harmless. */
     const affected = [...byKey, ...byScope]
@@ -225,6 +232,21 @@ function canonicalKey(value: CacheOptions['key']): string {
         return value
     }
     return canonicalJson(value)
+}
+
+/* Normalizes a scope option (one tag or many) to a Set for O(1) membership. */
+function toScopeSet(scope: string | string[]): Set<string> {
+    return new Set(typeof scope === 'string' ? [scope] : scope)
+}
+
+/* Folds new tags into an entry's existing set without duplicating them. */
+function mergeScopes(existing: Set<string> | undefined, incoming: string | string[]): Set<string> {
+    return new Set([...(existing ?? []), ...toScopeSet(incoming)])
+}
+
+/* True when an entry's tags and the requested tags overlap on any tag. */
+function intersects(entryScopes: Set<string>, requestedScopes: Set<string>): boolean {
+    return Array.from(requestedScopes).some((scope) => entryScopes.has(scope))
 }
 
 /*

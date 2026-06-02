@@ -12,8 +12,9 @@ snapshot body is pre-decoded synchronously so the first client render can
 read it without a microtask hop and byte-match the SSR DOM. Live fetches
 leave it undefined and take the async decode path.
 
-`scope` mirrors the cache() call's `scope` option so
-`cache.invalidate({ scope })` can drop every entry sharing the tag.
+`scope` holds the cache() call's scope tags as a Set so
+`cache.invalidate({ scope })` can drop every entry sharing any tag with O(1)
+membership; a re-read merges new tags in rather than replacing them.
 */
 export type CacheEntry = {
     key: string
@@ -22,5 +23,5 @@ export type CacheEntry = {
     ttl: number | undefined
     expiresAt: number | undefined
     value?: unknown
-    scope?: string
+    scope?: Set<string>
 }

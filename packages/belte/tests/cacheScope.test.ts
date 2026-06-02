@@ -113,9 +113,48 @@ describe('cache.invalidate selector', () => {
         expect(store.entries.get('GET /rpc/posts')?.scope).toBeUndefined()
 
         await cache(getPosts, { scope: 'dashboard' })()
-        expect(store.entries.get('GET /rpc/posts')?.scope).toBe('dashboard')
+        expect(store.entries.get('GET /rpc/posts')?.scope?.has('dashboard')).toBe(true)
 
         cache.invalidate({ scope: 'dashboard' })
+        expect(store.entries.size).toBe(0)
+    })
+
+    test('an array scope makes an entry reachable from any of its groups', async () => {
+        const getGrid = fakeRemote<undefined>('GET', '/rpc/grid')
+        const store = cacheStoreSlot.fallback!
+
+        await cache(getGrid, { scope: ['media', 'sources'] })()
+        cache.invalidate({ scope: 'sources' })
+        expect(store.entries.size).toBe(0)
+
+        await cache(getGrid, { scope: ['media', 'sources'] })()
+        cache.invalidate({ scope: 'media' })
+        expect(store.entries.size).toBe(0)
+    })
+
+    test('an array scope selector drops entries matching any requested tag', async () => {
+        const getPosts = fakeRemote<undefined>('GET', '/rpc/posts')
+        const getTags = fakeRemote<undefined>('GET', '/rpc/tags')
+        const getUser = fakeRemote<undefined>('GET', '/rpc/user')
+        const store = cacheStoreSlot.fallback!
+
+        await cache(getPosts, { scope: 'media' })()
+        await cache(getTags, { scope: 'sources' })()
+        await cache(getUser, { scope: 'profile' })()
+
+        cache.invalidate({ scope: ['media', 'sources'] })
+        expect(Array.from(store.entries.keys())).toEqual(['GET /rpc/user'])
+    })
+
+    test('a re-read merges new tags into an entry rather than replacing them', async () => {
+        const getGrid = fakeRemote<undefined>('GET', '/rpc/grid')
+        const store = cacheStoreSlot.fallback!
+
+        await cache(getGrid, { scope: 'media' })()
+        await cache(getGrid, { scope: 'sources' })()
+        expect(store.entries.get('GET /rpc/grid')?.scope).toEqual(new Set(['media', 'sources']))
+
+        cache.invalidate({ scope: 'media' })
         expect(store.entries.size).toBe(0)
     })
 })

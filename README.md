@@ -306,7 +306,7 @@ Curries a remote call against the request-scoped (server) or tab-scoped (browser
 | --- | --- | --- |
 | `key` | `string \| unknown[] \| Record<string, unknown>` | Override the auto-derived key (method + url + args). |
 | `ttl` | `number` | ms-past-resolve the entry stays live. Omitted = forever; `0` = dedupe in-flight only. |
-| `scope` | `string` | Free-form tag grouping calls so one `invalidate` drops them together. |
+| `scope` | `string \| string[]` | One or more free-form tags grouping calls so one `invalidate` drops them together. A call can join several groups; re-reads merge tags rather than replace. |
 
 `cache.invalidate` has three shapes:
 
@@ -314,7 +314,7 @@ Curries a remote call against the request-scoped (server) or tab-scoped (browser
 | --- | --- |
 | `cache.invalidate()` | Drop everything. |
 | `cache.invalidate(fn)` | Drop one function's calls (`fn` or `fn.raw`). |
-| `cache.invalidate({ key?, scope? })` | Drop one entry by `key` and/or every entry tagged `scope` (the union). |
+| `cache.invalidate({ key?, scope? })` | Drop one entry by `key` and/or every entry sharing any tag in `scope` (the union). |
 
 ```ts
 const order = await cache(getOrder, { ttl: 30_000, scope: 'orders' })({ id })
@@ -544,7 +544,7 @@ Zstd-precompressed siblings are written next to each `_app` asset and served to 
 
 | Variable | Used by |
 | --- | --- |
-| `PORT` | server listen port (default `3000`) |
+| `PORT` | server listen port; unset scans for the first open port ≥ `3000` (`3000`, then `3001`, …) |
 | `APP_URL` | CLI thin client — remote server URL (required) |
 | `APP_TOKEN` | CLI thin client — bearer token |
 | `DEBUG` | logging scopes (see below) |

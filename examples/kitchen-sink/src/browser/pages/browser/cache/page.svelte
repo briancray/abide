@@ -68,15 +68,17 @@ async function reset() {
                     <td class="px-4 py-2 font-mono text-slate-500">string / unknown[] / object</td>
                     <td class="px-4 py-2 text-slate-600">
                         override the auto key — method + url + args (e.g.
-                        <code class="font-mono">['post', id]</code>)
+                        <code class="font-mono">['post', id]</code>
+                        )
                     </td>
                 </tr>
                 <tr>
                     <td class="px-4 py-2 font-mono">scope</td>
-                    <td class="px-4 py-2 font-mono text-slate-500">string</td>
+                    <td class="px-4 py-2 font-mono text-slate-500">string / string[]</td>
                     <td class="px-4 py-2 text-slate-600">
-                        free-form tag grouping calls so one <code class="font-mono">invalidate</code>
-                        drops them together
+                        one or more free-form tags grouping calls so one
+                        <code class="font-mono">invalidate</code> drops them together; a call can
+                        join several groups
                     </td>
                 </tr>
             </tbody>
@@ -93,8 +95,8 @@ async function reset() {
             fn.raw)
         </li>
         <li>
-            <code class="font-mono">{'cache.invalidate({ key?, scope? })'}</code> — drop a keyed entry
-            and/or every entry in a scope (the union)
+            <code class="font-mono">{'cache.invalidate({ key?, scope? })'}</code> — drop a keyed
+            entry and/or every entry in a scope (the union)
         </li>
     </ul>
 </section>
@@ -164,9 +166,10 @@ cache(fn, { ttl: 30_000 })()            // expire 30s after resolve
 cache(fn, { key: 'group' })()           // group calls under one key
 cache(fn, { key: ['post', id] })()      // override the key per arg
 cache(fn, { scope: 'orders' })()        // tag for grouped invalidation
+cache(fn, { scope: ['orders', 'feed'] })()  // join several groups
 
 cache.invalidate()                      // drop everything
 cache.invalidate(fn)                    // drop one function's calls
 cache.invalidate({ key: ['post', id] }) // drop one keyed entry
-cache.invalidate({ scope: 'orders' })   // drop every entry in the scope`} />
+cache.invalidate({ scope: 'orders' })   // drop every entry sharing the tag`} />
 </section>
