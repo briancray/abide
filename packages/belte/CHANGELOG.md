@@ -1,5 +1,15 @@
 # @briancray/belte
 
+## 0.6.0
+
+### Minor Changes
+
+- [#21](https://github.com/briancray/belte/pull/21) [`5fbf023`](https://github.com/briancray/belte/commit/5fbf023c7de46457ae652c1738613ee2ceaf7dd7) Thanks [@briancray](https://github.com/briancray)! - `cache()` gains a `scope` option, and `cache.invalidate({ scope })` drops every entry sharing that tag in one call. `cache.invalidate` now takes `() | (fn) | ({ key?, scope? })`.
+
+- [#21](https://github.com/briancray/belte/pull/21) [`56cd195`](https://github.com/briancray/belte/commit/56cd1950cf39e13dd06c90309efd35296c6c7e81) Thanks [@briancray](https://github.com/briancray)! - Breaking: `belte/cli/*` is no longer a public export — `createClient` is now internal. Nothing in the documented API referenced it.
+
+- [#21](https://github.com/briancray/belte/pull/21) [`6776396`](https://github.com/briancray/belte/commit/67763968b13dd88173aeaf42242df6239fdc713b) Thanks [@briancray](https://github.com/briancray)! - When `PORT` is unset, the server now binds the first open port at or above 3000 instead of hardcoding 3000, so a second app boots without colliding. An explicit `PORT` is still honored as-is.
+
 ## 0.5.3
 
 ### Patch Changes
