@@ -8,7 +8,6 @@ import { createMcpResourceServer } from '../../mcp/createMcpResourceServer.ts'
 import { setMcpResourceServer } from '../../mcp/mcpResourceServerSlot.ts'
 import type { McpServer } from '../../mcp/types/McpServer.ts'
 import { NO_STORE, SSR_CACHE_CONTROL } from '../../shared/cacheControlValues.ts'
-import { createCacheStore } from '../../shared/createCacheStore.ts'
 import { isDebugEnabled } from '../../shared/isDebugEnabled.ts'
 import { log } from '../../shared/log.ts'
 import { memoizeByKey } from '../../shared/memoizeByKey.ts'
@@ -31,10 +30,11 @@ import { createAssetHeaderCache } from './createAssetHeaderCache.ts'
 import { createPublicAssetServer } from './createPublicAssetServer.ts'
 import { findOpenPort } from './findOpenPort.ts'
 import { globToPathSet } from './globToPathSet.ts'
+import { internalErrorResponse } from './internalErrorResponse.ts'
 import { logBrowserOnlyRoutes } from './logBrowserOnlyRoutes.ts'
 import { parsePort } from './parsePort.ts'
 import { ensureRegistriesLoaded, setRegistryManifests } from './registryManifests.ts'
-import { requestContext } from './requestContext.ts'
+import { runWithRequestScope } from './runWithRequestScope.ts'
 import { safeJsonForScript } from './safeJsonForScript.ts'
 import { serializeCacheSnapshot } from './serializeCacheSnapshot.ts'
 import { setActiveServer } from './setActiveServer.ts'
@@ -47,21 +47,6 @@ function wantsJson(req: Request): boolean {
 
 // SSR placeholders the shell carries; filled in a single pass per render.
 const SSR_MARKER = /<!--ssr:(head|body|state)-->/g
-
-/*
-The framework's default 500 response — a `<pre>` stack dump. Shared by the
-per-request catch and Bun.serve's global error() fallback so the two can't
-drift. Only reached when the app supplies no `handleError` hook.
-*/
-function internalErrorResponse(err: unknown): Response {
-    return new Response(`<pre>${String((err as Error)?.stack ?? err)}</pre>`, {
-        status: 500,
-        headers: {
-            'Content-Type': 'text/html; charset=utf-8',
-            'Cache-Control': NO_STORE,
-        },
-    })
-}
 
 const IDENTITY_PATH = '/__belte/identity'
 const SOCKETS_PATH = '/__belte/sockets'
@@ -361,42 +346,11 @@ export async function createServer({
             store: RequestStore,
         ) => Promise<Response>,
     ): Promise<Response> {
-        return runWithStore(req, async (store) => {
+        return runWithRequestScope(req, { app, logRequests }, async (store) => {
             if (!app?.handle) {
                 return handler(req, pathParams, store)
             }
             return app.handle(req, (next) => handler(next, pathParams, store))
-        })
-    }
-
-    function runWithStore(
-        req: Request,
-        body: (store: RequestStore) => Promise<Response>,
-    ): Promise<Response> {
-        const url = new URL(req.url)
-        const store: RequestStore = {
-            url,
-            req,
-            cache: createCacheStore(),
-        }
-        return requestContext.run(store, async () => {
-            const start = logRequests ? Bun.nanoseconds() : 0
-            let response: Response
-            try {
-                response = await body(store)
-            } catch (error) {
-                if (app?.handleError) {
-                    response = await app.handleError(error, req)
-                } else {
-                    log.error(error)
-                    response = internalErrorResponse(error)
-                }
-            }
-            if (logRequests) {
-                const ms = (Bun.nanoseconds() - start) / 1e6
-                log.request(req.method, `${url.pathname}${url.search}`, response.status, ms)
-            }
-            return response
         })
     }
 
