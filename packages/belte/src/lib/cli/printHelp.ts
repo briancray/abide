@@ -1,3 +1,4 @@
+import { printTrimmed } from './printTrimmed.ts'
 import type { CliManifest } from './types/CliManifest.ts'
 import type { CliManifestEntry } from './types/CliManifestEntry.ts'
 
@@ -37,7 +38,7 @@ export function printTopLevelHelp(
     footer = '',
 ): void {
     if (banner.trim()) {
-        console.log(banner.replace(/\n$/, ''))
+        printTrimmed(banner)
         console.log('')
     }
     const names = Object.keys(manifest).toSorted()
@@ -65,14 +66,19 @@ export function printTopLevelHelp(
             console.log(`  ${' '.repeat(20)} ${detail}`)
         }
     }
+    console.log(`\nconnection (\`/\` manages the connection, a bare word runs a command):`)
+    console.log(`  ${programName} /connect <url>   connect to a remote server`)
+    console.log(`  ${programName} /start           start a local instance`)
+    console.log(`  ${programName} /disconnect      forget the saved connection`)
+    console.log(`  ${programName}                  resume the saved connection (session)`)
     console.log(`\n  --help, -h           show this help`)
     console.log(`  <command> --help     show help for a specific command`)
     console.log(`\nenv:`)
-    console.log(`  APP_URL              remote server URL (required)`)
+    console.log(`  APP_URL              default server URL (baked at install; shell-overridable)`)
     console.log(`  APP_TOKEN            sent as Authorization: Bearer <value>`)
     if (footer.trim()) {
         console.log('')
-        console.log(footer.replace(/\n$/, ''))
+        printTrimmed(footer)
     }
 }
 

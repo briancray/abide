@@ -1,44 +1,37 @@
-import { decodeResponse } from '../shared/decodeResponse.ts'
-import { isStreamingResponse } from '../shared/isStreamingResponse.ts'
-import { responseErrorText } from '../shared/responseErrorText.ts'
-import { streamResponse } from '../shared/streamResponse.ts'
-import { createClient } from './createClient.ts'
+import { clearLastConnection } from '../shared/clearLastConnection.ts'
+import { loadEnvFromDataDir } from '../shared/loadEnvFromDataDir.ts'
+import { connectToServer } from './connectToServer.ts'
+import { dispatchCommand } from './dispatchCommand.ts'
 import { loadEnvFromBinaryDir } from './loadEnvFromBinaryDir.ts'
-import { parseArgvForRpc } from './parseArgvForRpc.ts'
 import { printCommandHelp, printTopLevelHelp } from './printHelp.ts'
+import { printTrimmed } from './printTrimmed.ts'
+import { resolveCliTarget } from './resolveCliTarget.ts'
+import { runSession } from './runSession.ts'
+import { startLocalInstance } from './startLocalInstance.ts'
 import type { CliManifest } from './types/CliManifest.ts'
+import type { CliTarget } from './types/CliTarget.ts'
 
 const isHelpFlag = (arg: string): boolean => arg === '--help' || arg === '-h'
 
-// String results print verbatim (with a trailing newline); everything else as a JSON line.
-function printValue(value: unknown, pretty: boolean): void {
-    if (typeof value === 'string') {
-        process.stdout.write(value.endsWith('\n') ? value : `${value}\n`)
-        return
-    }
-    if (value !== undefined) {
-        process.stdout.write(`${JSON.stringify(value, null, pretty ? 2 : undefined)}\n`)
-    }
-}
-
 /*
-Top-level CLI driver. Loaded by the standalone binary's entry; expects
-the bundler-emitted manifest plus the raw argv tail. The binary is a
-thin remote client — it carries no handler code, so it always talks to a
-running server over HTTP and APP_URL must be set. Flow:
+Top-level CLI driver for the standalone binary. The binary is a thin remote client
+— it carries no handler code, so it always talks to a running server over HTTP, but
+it can boot one: the full binary ships the server beside it, so `/start` spawns a
+local instance. One rule governs the first positional — `/` manages the connection,
+a bare word runs a command:
 
-  1. Read .env next to the binary so APP_URL / APP_TOKEN are picked up
-     for the common install-tarball case.
-  2. Pull the first positional as the subcommand.
-  3. --help and `<cmd> --help` print and exit zero.
-  4. Require APP_URL before dispatching a command.
-  5. Otherwise parse the rest of the argv against the manifest entry's
-     JSON Schema and dispatch via createClient against APP_URL.
+  --help / -h                     → top-level help
+  /help [cmd]                     → help (per-command with an arg)
+  (none) + TTY                    → interactive session, resuming the saved connection
+  (none) + non-TTY                → top-level help (scripts use `<cmd>` one-shot)
+  /connect <url>                  → connect to a remote server, open a session
+  /start                          → boot a local instance, open a session
+  /disconnect                     → forget the saved connection, exit
+  <cmd> [--flags]                 → one-shot RPC against the resumed target
 
-Streaming responses are handled by sniffing the response Content-Type:
-sse/jsonl bodies (a streaming verb, or a socket `tail` command) are
-printed frame-by-frame as NDJSON to stdout; everything else is decoded
-and pretty-printed once.
+The connection verbs are `/`-prefixed only — no bare aliases — so a bare word is
+always an RPC command and never collides. Env layers APP_URL/APP_TOKEN (shell >
+data-dir > binary-dir) supply the baked default a fresh download resumes against.
 */
 export async function runCli({
     programName,
@@ -53,69 +46,94 @@ export async function runCli({
     footer?: string
     argv: string[]
 }): Promise<number> {
+    await loadEnvFromDataDir(programName)
     await loadEnvFromBinaryDir()
 
     const first = argv[0]
-    if (!first || isHelpFlag(first)) {
+
+    // Explicit help, top-level and per-command.
+    if (first && isHelpFlag(first)) {
         printTopLevelHelp(programName, manifest, banner, footer)
         return 0
     }
-
-    if (argv.some(isHelpFlag)) {
+    if (first === '/help') {
+        if (argv[1]) {
+            printCommandHelp(programName, argv[1], manifest)
+        } else {
+            printTopLevelHelp(programName, manifest, banner, footer)
+        }
+        return 0
+    }
+    if (first && argv.some(isHelpFlag)) {
         printCommandHelp(programName, first, manifest)
         return 0
     }
 
-    const entry = manifest[first]
-    if (!entry) {
-        console.error(
-            `${programName}: unknown command "${first}" — run \`${programName} --help\` for the list`,
-        )
-        return 1
-    }
-
-    let args: Record<string, unknown> | undefined
-    try {
-        args = await parseArgvForRpc(argv.slice(1), entry.jsonSchema)
-    } catch (error) {
-        console.error(`${programName}: ${error instanceof Error ? error.message : String(error)}`)
-        return 1
-    }
-
-    const appUrl = process.env.APP_URL
-    if (!appUrl) {
-        console.error(
-            `${programName}: APP_URL is not set — the cli talks to a running server, so point it at one (e.g. APP_URL=http://localhost:3000)`,
-        )
-        return 1
-    }
-    const appToken = process.env.APP_TOKEN
-    const client = createClient({ url: appUrl, token: appToken, manifest })
-
-    const fn = client[first]
-    if (!fn) {
-        console.error(`${programName}: command "${first}" not in client`)
-        return 1
-    }
-    try {
-        const response = await fn.raw(args)
-        if (isStreamingResponse(response)) {
-            /*
-            Stream frame-by-frame to stdout as NDJSON. streamResponse
-            throws a clear HttpError on a non-2xx body, caught below.
-            */
-            for await (const frame of streamResponse(response)) {
-                printValue(frame, false)
-            }
+    // No command: interactive session on a TTY, help otherwise (scripts/pipes).
+    if (!first) {
+        if (!process.stdin.isTTY) {
+            printTopLevelHelp(programName, manifest, banner, footer)
             return 0
         }
-        if (!response.ok) {
-            throw new Error(await responseErrorText(response))
-        }
-        printValue(await decodeResponse(response), true)
+        printTrimmed(banner)
+        const target = await resolveCliTarget(programName)
+        return runSession({ programName, manifest, footer, target })
+    }
+
+    // Disconnect (reset): clear the saved connection and exit.
+    if (first === '/disconnect') {
+        await clearLastConnection(programName)
+        console.log('disconnected')
         return 0
-    } catch (error) {
-        console.error(`${programName}: ${error instanceof Error ? error.message : String(error)}`)
+    }
+
+    // Connect to a remote server, then open a session.
+    if (first === '/connect') {
+        const url = argv[1]
+        if (!url) {
+            console.error(`${programName}: /connect requires a url`)
+            return 1
+        }
+        printTrimmed(banner)
+        const target = await connectToServer(programName, url)
+        if (!target) {
+            return 1
+        }
+        return runSession({ programName, manifest, footer, target })
+    }
+
+    // Start a local instance, then open a session.
+    if (first === '/start') {
+        printTrimmed(banner)
+        let target: CliTarget
+        try {
+            target = await startLocalInstance(programName)
+        } catch (error) {
+            console.error(
+                `${programName}: ${error instanceof Error ? error.message : String(error)}`,
+            )
+            return 1
+        }
+        return runSession({ programName, manifest, footer, target })
+    }
+
+    // One-shot RPC dispatch (scripting): resolve the target without a session.
+    const target = await resolveCliTarget(programName)
+    if (!target) {
+        console.error(
+            `${programName}: not connected — run \`${programName} /connect <url>\` or \`${programName} /start\``,
+        )
         return 1
     }
+    const code = await dispatchCommand({
+        programName,
+        manifest,
+        command: first,
+        argvTail: argv.slice(1),
+        url: target.url,
+        token: target.token,
+    })
+    // Reap any local instance booted just to resolve the target.
+    target.child?.kill()
+    return code
 }

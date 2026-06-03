@@ -78,12 +78,12 @@ async function compileCmd(): Promise<void> {
     })
 }
 
-// Builds the standalone CLI binary — a thin remote client that talks to a
-// running server (manifest baked in, needs APP_URL at runtime). Discovery
-// walks the rpc registry to bake the manifest in. `--platforms a,b,c`
-// cross-compiles per target into dist/cli-thin/<platform>/ — the layout the
-// /__belte/cli download endpoint streams. For an embedded backend, use
-// `belte compile` (standalone server binary) instead.
+// Builds the standalone CLI binary — a thin remote client (manifest baked in)
+// that ships the compiled server beside it, so it can talk to a remote server
+// or spawn a local instance (`<name> start`). Discovery walks the rpc registry
+// to bake the manifest in. `--platforms a,b,c` cross-compiles per target into
+// dist/cli-thin/<platform>/ (cli + server) — the layout the /__belte/cli
+// download endpoint streams. For just the server, use `belte compile`.
 async function cliCmd(): Promise<void> {
     const targetFlag = parseFlag('target')
     const outFlag = parseFlag('out')
@@ -128,9 +128,10 @@ function usage(): never {
             '  belte compile [--target=<bun-...>] [--out=<path>]\n' +
             '                                       build a standalone server executable\n' +
             '  belte cli [--target=<bun-...>] [--out=<path>] [--platforms=<a,b,c>]\n' +
-            '                                       build the cli binary — a thin remote client\n' +
-            '                                       that talks to a running server (needs APP_URL;\n' +
-            '                                       --platforms cross-compiles per platform)\n' +
+            '                                       build the cli binary — a thin remote client that\n' +
+            '                                       ships the server beside it (connect to a remote\n' +
+            '                                       server or `start` a local instance; --platforms\n' +
+            '                                       cross-compiles per platform)\n' +
             '  belte bundle                         build a movable, self-contained app\n' +
             '                                       bundle for this platform (unsigned). Boots\n' +
             '                                       into a connect screen — start the embedded\n' +

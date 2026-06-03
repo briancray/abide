@@ -1,3 +1,6 @@
+import { dirname, join } from 'node:path'
+import { build } from './build.ts'
+import { compile } from './compile.ts'
 import type { CompileTarget } from './lib/server/runtime/types/CompileTarget.ts'
 import { detectTarget } from './lib/shared/detectTarget.ts'
 import { exeSuffix } from './lib/shared/exeSuffix.ts'
@@ -12,21 +15,21 @@ const DISCOVERY_ENTRY = new URL('./discoveryEntry.ts', import.meta.url).pathname
 const CLI_ENTRY = new URL('./cliEntry.ts', import.meta.url).pathname
 
 /*
-Two-pass CLI binary build. The CLI is always a thin remote client — it
-bakes in the per-rpc manifest and talks to a running server over HTTP
-(APP_URL at runtime); no handler code is bundled. For an embedded
-backend, `belte compile` produces the standalone server binary instead.
+CLI binary build. The CLI is a thin remote client — it bakes in the per-rpc
+manifest and talks to a running server over HTTP — but the **full** binary ships
+the compiled server beside it, so `/start` can spawn a local instance.
 
-  1. Discovery: build the discovery entry into a temporary JS bundle and
-     run it. It imports every rpc/socket module so defineVerb /
-     defineSocket populate the registries, then prints the CLI manifest
-     to stdout. The manifest is written to `dist/cli-manifest.json`.
-  2. Compile: build the CLI binary via `Bun.build({ compile })`. The
-     resolver plugin's `belte:cli-manifest` virtual reads the manifest
-     JSON written in step 1 and splices it into the bundle.
+  1. Client build (once): `build` produces the platform-independent `dist/_app`
+     the server binaries embed. It clears dist first, so it runs before everything.
+  2. Discovery: build the discovery entry into a temporary JS bundle and run it. It
+     imports every rpc/socket module so defineVerb / defineSocket populate the
+     registries, then prints the CLI manifest to stdout → `dist/cli-manifest.json`.
+  3. Per target: a server binary (`compile`, reusing the shared `dist/_app` via
+     `buildClient:false`) plus the CLI binary, written side by side. The resolver's
+     `belte:cli-manifest` virtual splices in the manifest from step 2.
 
-`platforms` cross-compiles per target into `dist/cli-thin/<platform>/`
-— the layout the /__belte/cli download endpoint serves.
+`platforms` cross-compiles per target into `dist/cli-thin/<platform>/` (the layout
+the /__belte/cli download endpoint serves): `<programName>` + `server` together.
 */
 export async function buildCli({
     cwd = process.cwd(),
@@ -40,17 +43,20 @@ export async function buildCli({
     platforms?: CompileTarget[]
 } = {}): Promise<string[]> {
     const distDir = `${cwd}/dist`
-    await Bun.$`mkdir -p ${distDir}`.quiet()
     const manifestPath = `${distDir}/cli-manifest.json`
     const discoveryOut = `${distDir}/_discovery.js`
 
     const svelteConfig = await loadSvelteConfig(cwd)
     const plugins = serverBuildPlugins({ cwd, svelteConfig })
 
+    // Step 1 — client build once (clears dist, writes _app). Every server binary
+    // embeds it, so it must precede discovery and the per-target compiles.
+    await build({ cwd, svelteConfig })
+
     /*
-    Step 1 — discovery. Build a runnable bundle, execute it under bun,
-    capture stdout. We don't `bun build --compile` here because the
-    discovery output is throwaway; a plain JS bundle runs faster.
+    Step 2 — discovery. Build a runnable bundle, execute it under bun, capture
+    stdout. We don't `bun build --compile` here because the discovery output is
+    throwaway; a plain JS bundle runs faster. Additive — does not clear dist.
     */
     const discoveryResult = await Bun.build({
         entrypoints: [DISCOVERY_ENTRY],
@@ -80,49 +86,41 @@ export async function buildCli({
     const entryCount = Object.keys(JSON.parse(stdout) as Record<string, unknown>).length
     log.info(`discovered ${entryCount} cli commands → ${manifestPath}`)
 
-    /*
-    Step 2 — compile. The cliEntry imports the now-populated
-    belte:cli-manifest virtual; bun build --compile emits the standalone
-    binary. When `platforms` is set, loops once per target and writes
-    binaries into `dist/cli-thin/<platform>/<programName>` — the layout
-    the download route expects.
-    */
     const programName = await readProgramName(cwd)
 
+    /*
+    Step 3 — compile a CLI binary + sibling server binary for a single target,
+    written side by side so `resolveServerBinary()` finds the server next to the
+    running CLI. The server reuses the shared client build (buildClient:false).
+    */
+    async function buildTargetPair(platformTarget: CompileTarget, cliOut: string): Promise<string> {
+        const serverOut = join(dirname(cliOut), `server${exeSuffix(platformTarget)}`)
+        await compile({ cwd, target: platformTarget, outfile: serverOut, buildClient: false })
+        const result = await Bun.build({
+            entrypoints: [CLI_ENTRY],
+            target: 'bun',
+            compile: { target: platformTarget, outfile: cliOut },
+            plugins,
+        })
+        exitOnBuildFailure(result)
+        log.success(`compiled cli + server: ${cliOut}`)
+        return cliOut
+    }
+
     if (platforms && platforms.length > 0) {
-        // Cross-compile every target in parallel — each build is independent.
+        // Cross-compile every target in parallel — each pair is independent.
         return Promise.all(
             platforms.map(async (platformTarget) => {
                 const shortName = platformTarget.replace(/^bun-/, '')
-                const suffix = exeSuffix(platformTarget)
-                const platformOut = `${distDir}/cli-thin/${shortName}/${programName}${suffix}`
+                const cliOut = `${distDir}/cli-thin/${shortName}/${programName}${exeSuffix(platformTarget)}`
                 await Bun.$`mkdir -p ${`${distDir}/cli-thin/${shortName}`}`.quiet()
-                const result = await Bun.build({
-                    entrypoints: [CLI_ENTRY],
-                    target: 'bun',
-                    compile: { target: platformTarget, outfile: platformOut },
-                    plugins,
-                })
-                exitOnBuildFailure(result)
-                log.success(`compiled thin cli binary: ${platformOut}`)
-                return platformOut
+                return buildTargetPair(platformTarget, cliOut)
             }),
         )
     }
 
-    const suffix = exeSuffix(target)
-    const outPath = outfile ?? `${distDir}/cli${suffix}`
-
-    const cliResult = await Bun.build({
-        entrypoints: [CLI_ENTRY],
-        target: 'bun',
-        compile: { target, outfile: outPath },
-        plugins,
-    })
-    exitOnBuildFailure(cliResult)
-
-    log.success(`compiled thin cli binary: ${outPath} (target: ${target})`)
-    return [outPath]
+    const cliOut = outfile ?? `${distDir}/cli${exeSuffix(target)}`
+    return [await buildTargetPair(target, cliOut)]
 }
 
 async function readProgramName(cwd: string): Promise<string> {

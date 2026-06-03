@@ -1,20 +1,20 @@
-import { mkdir, rm } from 'node:fs/promises'
+import { mkdir } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { bindConnectedFlag } from './lib/bundle/bindConnectedFlag.ts'
 import { bindRequestNavigate } from './lib/bundle/bindRequestNavigate.ts'
 import { listenLocalControlServer } from './lib/bundle/listenLocalControlServer.ts'
 import { probeBelteServer } from './lib/bundle/probeBelteServer.ts'
-import { resolveServerBinary } from './lib/bundle/resolveServerBinary.ts'
 import { resolveWebviewLib } from './lib/bundle/resolveWebviewLib.ts'
+import { spawnEmbeddedServer } from './lib/bundle/spawnEmbeddedServer.ts'
 import { stableLocalPort } from './lib/bundle/stableLocalPort.ts'
-import { waitForServer } from './lib/bundle/waitForServer.ts'
-import { findOpenPort } from './lib/server/runtime/findOpenPort.ts'
-import { parsePort } from './lib/server/runtime/parsePort.ts'
 import { appDataDir } from './lib/shared/appDataDir.ts'
 import { bundleLayout } from './lib/shared/bundleLayout.ts'
+import { clearLastConnection } from './lib/shared/clearLastConnection.ts'
 import { log } from './lib/shared/log.ts'
 import { readEnvFile } from './lib/shared/readEnvFile.ts'
+import { readLastConnection } from './lib/shared/readLastConnection.ts'
 import { serializeEnv } from './lib/shared/serializeEnv.ts'
+import { writeLastConnection } from './lib/shared/writeLastConnection.ts'
 
 /*
 The bundle's control server, run in a Worker so it owns its own thread.
@@ -158,57 +158,14 @@ function handleConnectionLost(url: string): void {
 }
 
 /*
-Spawns the sibling server binary on a free port and waits for it to answer,
-returning the URL to point the window at. Any previous child is reaped first so
-only one embedded server runs at a time.
+Boots the embedded server via the shared spawn helper and keeps the child so
+killServerChild can reap it. Any previous child is reaped first so only one
+embedded server runs at a time; returns the URL to point the window at.
 */
-/*
-The port the embedded server binds. A `PORT` configured in the data-dir `.env`
-(where the config form writes), the shipped binary-dir `.env`, or the launcher's
-own env is honored — so the server answers at a fixed, known address another
-machine can reliably connect to. With none set, the first open port at/above
-3000 is chosen (matching the standalone server's default). Precedence matches
-the server's own env stack: shell > data-dir > binary-dir. A configured port is
-used as-is and not second-guessed — if it's taken, the bind failure surfaces
-rather than silently moving.
-*/
-async function resolveEmbeddedPort(): Promise<number> {
-    const [dataDirEnv, binaryDirEnv] = await Promise.all([
-        readEnvFile(dataDirEnvPath()),
-        readEnvFile(binaryDirEnvPath()),
-    ])
-    return parsePort(process.env.PORT ?? dataDirEnv.PORT ?? binaryDirEnv.PORT) ?? findOpenPort(3000)
-}
-
 async function startEmbeddedServer(timeoutMs?: number): Promise<string> {
     killServerChild()
-    const port = await resolveEmbeddedPort()
-    const url = `http://localhost:${port}`
-    serverChild = Bun.spawn({
-        cmd: [resolveServerBinary()],
-        // BELTE_PARENT_PID lets the child exit if the launcher is force-quit
-        // (a clean window close reaps it directly; see exitWithParent). The
-        // server resolves its own config from its data-dir/binary-dir .env at
-        // boot (see serverEntry), so the launcher injects nothing else.
-        env: { ...process.env, PORT: String(port), BELTE_PARENT_PID: String(process.pid) },
-        stdio: ['inherit', 'inherit', 'inherit'],
-    })
-    /*
-    Race readiness against the child's exit. A misconfigured bundle (missing env
-    the server needs to bind) crashes immediately; without this the launcher
-    would wait out waitForServer's full timeout and report a generic stall
-    instead of the actual crash. The exit branch resolves (never rejects) so the
-    race loser still pending after a successful boot can't surface as an
-    unhandled rejection when the child is later reaped on disconnect.
-    */
-    const exited = serverChild.exited
-    const outcome = await Promise.race([
-        waitForServer(url, timeoutMs ? { timeoutMs } : undefined).then(() => undefined),
-        exited,
-    ])
-    if (outcome !== undefined) {
-        throw new Error(`[belte] embedded server exited (code ${outcome}) before binding`)
-    }
+    const { url, child } = await spawnEmbeddedServer({ programName, timeoutMs })
+    serverChild = child
     return url
 }
 
@@ -229,7 +186,7 @@ so a half-started server doesn't hold its port.
 */
 const AUTO_START_CEILING_MS = 3000
 async function resolveLaunchTarget(): Promise<string> {
-    const last = await readLastConnection()
+    const last = await readLastConnection(programName)
     if (!last) {
         return controlOrigin
     }
@@ -332,40 +289,6 @@ async function writeConfig(values: Record<string, string>): Promise<void> {
     await Bun.write(path, serializeEnv(merged))
 }
 
-/*
-The launcher-owned record of the last connection, in the data dir so it survives
-relaunch and is readable before the window opens — unlike the webview's
-localStorage, and unlike the embedded server's URL, which can't be persisted
-because it picks a fresh port each launch (so we record the intent, not the URL).
-resolveLaunchTarget reads it; /connect and /start write it; /disconnect clears it.
-*/
-type LastConnection = { kind: 'embedded' } | { kind: 'url'; url: string }
-
-function lastConnectionPath(): string {
-    return join(appDataDir(programName), 'last-connection.json')
-}
-
-async function readLastConnection(): Promise<LastConnection | undefined> {
-    const file = Bun.file(lastConnectionPath())
-    if (!(await file.exists())) {
-        return undefined
-    }
-    try {
-        return (await file.json()) as LastConnection
-    } catch {
-        return undefined
-    }
-}
-
-async function writeLastConnection(value: LastConnection): Promise<void> {
-    await mkdir(appDataDir(programName), { recursive: true })
-    await Bun.write(lastConnectionPath(), JSON.stringify(value))
-}
-
-async function clearLastConnection(): Promise<void> {
-    await rm(lastConnectionPath(), { force: true })
-}
-
 // GET /__belte/config — the form's schema + current values, or null schema to skip the gate.
 async function handleConfigGet(): Promise<Response> {
     if (!configSchema) {
@@ -393,7 +316,7 @@ async function handleConnect(request: Request): Promise<Response> {
     flag?.setConnected(true)
     startLivenessWatch(target)
     // Record the choice so the next launch reconnects here before opening.
-    await writeLastConnection({ kind: 'url', url: target })
+    await writeLastConnection(programName, { kind: 'url', url: target })
     log.info(`connecting to ${identity.name} at ${target}`)
     return Response.json({ redirect: target })
 }
@@ -405,7 +328,7 @@ async function handleStart(): Promise<Response> {
         flag?.setConnected(true)
         startLivenessWatch(localUrl)
         // Record the choice so the next launch boots the embedded server first.
-        await writeLastConnection({ kind: 'embedded' })
+        await writeLastConnection(programName, { kind: 'embedded' })
         log.info(`started embedded server at ${localUrl}`)
         return Response.json({ redirect: localUrl })
     } catch (error) {
@@ -419,7 +342,7 @@ async function handleDisconnect(): Promise<Response> {
     stopLivenessWatch()
     killServerChild()
     flag?.setConnected(false)
-    await clearLastConnection()
+    await clearLastConnection(programName)
     return new Response(undefined, { status: 204 })
 }
 

@@ -8,6 +8,7 @@
         "build": "belte build",
         "start": "belte start",
         "compile": "belte compile",
+        "cli": "belte cli",
         "bundle": "belte bundle"
     },
     "dependencies": {

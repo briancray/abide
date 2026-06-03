@@ -21,13 +21,23 @@ export async function compile({
     cwd = process.cwd(),
     target = detectTarget(),
     outfile,
+    buildClient = true,
 }: {
     cwd?: string
     target?: CompileTarget
     outfile?: string
+    /*
+    Skip the client `build` (which clears dist). Set false when the caller already
+    built the platform-independent client once and is compiling several server
+    binaries against it — e.g. `belte cli` co-shipping a per-platform server beside
+    each CLI binary — so the shared `dist/_app` isn't wiped between targets.
+    */
+    buildClient?: boolean
 } = {}): Promise<string> {
     const svelteConfig = await loadSvelteConfig(cwd)
-    await build({ cwd, svelteConfig })
+    if (buildClient) {
+        await build({ cwd, svelteConfig })
+    }
 
     const outPath = outfile ?? `${cwd}/dist/app${exeSuffix(target)}`
 

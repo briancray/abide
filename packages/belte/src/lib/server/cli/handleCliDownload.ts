@@ -1,9 +1,16 @@
 import { NO_STORE } from '../../shared/cacheControlValues.ts'
+import { exeSuffix } from '../../shared/exeSuffix.ts'
 import { log } from '../../shared/log.ts'
 import { normalizeTarget } from '../../shared/normalizeTarget.ts'
 import { buildEnvContent } from './buildEnvContent.ts'
 import { createTarGz } from './createTarGz.ts'
 import { maxSourceMtime } from './maxSourceMtime.ts'
+
+// The sibling server binary's name for a platform — `server` / `server.exe` — must
+// match what resolveServerBinary() looks for next to the unpacked CLI binary.
+function serverBinaryName(platform: string): string {
+    return `server${exeSuffix(normalizeTarget(platform))}`
+}
 
 /*
 Process-wide per-platform build coalescing. Two concurrent curls for
@@ -46,16 +53,20 @@ async function computeBinary(
     programName: string,
     cwd: string,
 ): Promise<string | undefined> {
-    const binaryPath = `${cwd}/dist/cli-thin/${platform}/${programName}`
+    const dir = `${cwd}/dist/cli-thin/${platform}`
+    const binaryPath = `${dir}/${programName}`
+    const serverPath = `${dir}/${serverBinaryName(platform)}`
     /*
-    On-disk binary is fresh when it exists AND its mtime beats the
-    newest rpc/socket source mtime. The mtime check catches the
-    common dev iteration where the user edits an rpc handler but
-    didn't run `belte cli` again. Other source paths (project lib,
+    On-disk binaries are fresh when both the CLI and its sibling server exist AND
+    the CLI's mtime beats the newest rpc/socket source mtime. The mtime check
+    catches the common dev iteration where the user edits an rpc handler but didn't
+    run `belte cli` again; the server-exists check forces a rebuild for a dist
+    produced before the CLI co-shipped a server. Other source paths (project lib,
     transitive imports) fall back to manual rebuild.
     */
     const binaryFile = Bun.file(binaryPath)
-    if (await binaryFile.exists()) {
+    const serverFile = Bun.file(serverPath)
+    if ((await binaryFile.exists()) && (await serverFile.exists())) {
         const binaryMtime = (await binaryFile.stat()).mtimeMs
         const sourceMtime = await maxSourceMtime(cwd)
         if (binaryMtime >= sourceMtime) {
@@ -64,7 +75,7 @@ async function computeBinary(
         log.info(`thin cli for ${platform} is stale — rebuilding`)
     }
     try {
-        log.info(`lazy-building thin cli for ${platform}…`)
+        log.info(`lazy-building cli + server for ${platform}…`)
         // Lazy-import buildCli so the build pipeline isn't pulled into
         // production processes that never serve a download.
         const { buildCli } = await import('../../../buildCli.ts')
@@ -72,7 +83,7 @@ async function computeBinary(
             cwd,
             platforms: [normalizeTarget(platform)],
         })
-        return (await binaryFile.exists()) ? binaryPath : undefined
+        return (await binaryFile.exists()) && (await serverFile.exists()) ? binaryPath : undefined
     } catch (error) {
         log.error(error)
         return undefined
@@ -107,9 +118,15 @@ export async function handleCliDownload(
         auth && auth.toLowerCase().startsWith('bearer ') ? auth.slice('bearer '.length) : undefined
     const envContent = buildEnvContent(appUrl, bearer)
 
-    const binaryBytes = await Bun.file(binaryPath).bytes()
+    const serverPath = `${cwd}/dist/cli-thin/${platform}/${serverBinaryName(platform)}`
+    const [binaryBytes, serverBytes] = await Promise.all([
+        Bun.file(binaryPath).bytes(),
+        Bun.file(serverPath).bytes(),
+    ])
+    // Ship the server beside the CLI so `/start` can spawn a local instance.
     const archive = createTarGz([
         { name: programName, content: binaryBytes, mode: 0o755 },
+        { name: serverBinaryName(platform), content: serverBytes, mode: 0o755 },
         { name: '.env', content: new TextEncoder().encode(envContent), mode: 0o644 },
     ])
     return new Response(archive, {

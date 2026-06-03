@@ -61,15 +61,17 @@ export async function bundleApp({ cwd = process.cwd() }: { cwd?: string } = {}):
     await compile({ cwd, target, outfile: `${binDir}/${serverBinaryFilename()}` })
 
     /*
-    Opt-in: ship the project's `.env.bundle` as the shipped `.env`, which the
+    Opt-in: ship the project's `bundle.env` as the shipped `.env`, which the
     server loads at boot (loadEnvFromBinaryDir) as its default config layer. A
     dedicated file, never the working `.env` — a compiled bundle is extractable,
     so only ship-safe defaults belong here; user-specific/secret values come from
-    the data-dir `.env` instead. bundleLayout places it under Contents/Resources
+    the data-dir `.env` instead. Named outside Bun's `.env.*` autoload family on
+    purpose: it's a build input, not a runtime overlay, so `bun dev`/`bun start`
+    never pick it up. bundleLayout places it under Contents/Resources
     in a macOS `.app` (sealed as a resource, so it survives codesign) and beside
     the binaries otherwise. Skipped when absent.
     */
-    const bundleEnv = Bun.file(`${cwd}/.env.bundle`)
+    const bundleEnv = Bun.file(`${cwd}/bundle.env`)
     if (await bundleEnv.exists()) {
         await Bun.$`mkdir -p ${dirname(envPath)}`.quiet()
         await Bun.write(envPath, bundleEnv)
