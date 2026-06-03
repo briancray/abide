@@ -26,10 +26,12 @@ import { containsTraversal } from './containsTraversal.ts'
 import { createAssetHeaderCache } from './createAssetHeaderCache.ts'
 import { createPublicAssetServer } from './createPublicAssetServer.ts'
 import { createRouteDispatcher } from './createRouteDispatcher.ts'
+import { disableIdleTimeoutForStream } from './disableIdleTimeoutForStream.ts'
 import { findOpenPort } from './findOpenPort.ts'
 import { globToPathSet } from './globToPathSet.ts'
 import { internalErrorResponse } from './internalErrorResponse.ts'
 import { logBrowserOnlyRoutes } from './logBrowserOnlyRoutes.ts'
+import { parseIdleTimeout } from './parseIdleTimeout.ts'
 import { parsePort } from './parsePort.ts'
 import { ensureRegistriesLoaded, setRegistryManifests } from './registryManifests.ts'
 import { runWithRequestScope } from './runWithRequestScope.ts'
@@ -93,6 +95,13 @@ export async function createServer({
     // No PORT set → scan for the first open port at/above 3000 rather than
     // hardcoding 3000, so a second app boots cleanly instead of colliding.
     port = parsePort(process.env.PORT) ?? findOpenPort(3000),
+    /*
+    Bun's per-connection idle timeout in seconds (its own default is 10).
+    Surfaced for apps whose unary handlers legitimately compute longer than
+    that; streaming responses opt out per-request via disableIdleTimeoutForStream
+    regardless of this floor.
+    */
+    idleTimeout = parseIdleTimeout(process.env.BELTE_IDLE_TIMEOUT) ?? 10,
 }: {
     pages: Pages
     rpc: RemoteRoutes
@@ -111,6 +120,7 @@ export async function createServer({
     publicDir?: string
     resourcesDir?: string
     port?: number
+    idleTimeout?: number
 }): Promise<Server<unknown>> {
     setRegistryManifests({ rpc, sockets, prompts })
     setMcpResourceServer(createMcpResourceServer({ resourcesDir, mcpResources }))
@@ -283,10 +293,11 @@ export async function createServer({
         ) => Promise<Response>,
     ): Promise<Response> {
         return runWithRequestScope(req, { app, logRequests }, async (store) => {
-            if (!app?.handle) {
-                return handler(req, pathParams, store)
-            }
-            return app.handle(req, (next) => handler(next, pathParams, store))
+            const response = !app?.handle
+                ? await handler(req, pathParams, store)
+                : await app.handle(req, (next) => handler(next, pathParams, store))
+            // Streaming bodies (sse/jsonl, socket tail) opt out of the idle timeout.
+            return disableIdleTimeoutForStream(server, req, response)
         })
     }
 
@@ -302,6 +313,7 @@ export async function createServer({
     // Server<unknown> pins Bun's WebSocketData generic so upgrade({ data: {} }) typechecks.
     const server: Server<unknown> = Bun.serve({
         port,
+        idleTimeout,
 
         websocket: {
             open(ws) {
