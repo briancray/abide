@@ -29,17 +29,23 @@ import { loadEnvFromBinaryDir } from './lib/cli/loadEnvFromBinaryDir.ts'
 import { createServer } from './lib/server/runtime/createServer.ts'
 import { requestContext } from './lib/server/runtime/requestContext.ts'
 import { loadEnvFromDataDir } from './lib/shared/loadEnvFromDataDir.ts'
+import { runningAsStandaloneBinary } from './lib/shared/runningAsStandaloneBinary.ts'
 import { setCacheStoreResolver } from './lib/shared/setCacheStoreResolver.ts'
 
 /*
 Resolve config into process.env before anything reads it (createServer reads
-PORT, app code reads Bun.env.*). Data-dir first so the user's saved config wins
-over the binary-dir shipped default; both back-fill only what the shell or Bun's
-CWD `.env` didn't already set. A bundle launched via `open` has cwd `/`, so the
-data-dir `.env` is how it gets its config at all.
+PORT, app code reads Bun.env.*). Standalone-only: data-dir first so the user's
+saved config wins over the binary-dir shipped default; both back-fill only what
+the shell didn't already set. A bundle launched via `open` has cwd `/`, so the
+data-dir `.env` is how it gets its config at all. Under `bun dev`/`bun start`
+these bundle layers don't apply — the project's own CWD `.env` (Bun-autoloaded)
+is the config — so loading them would let a stray data-dir `PORT` defeat dev's
+port scan.
 */
-await loadEnvFromDataDir(cliProgramName)
-await loadEnvFromBinaryDir()
+if (runningAsStandaloneBinary()) {
+    await loadEnvFromDataDir(cliProgramName)
+    await loadEnvFromBinaryDir()
+}
 
 // In a bundle, tie this server's life to the launcher's (no-op standalone).
 exitWithParent()
