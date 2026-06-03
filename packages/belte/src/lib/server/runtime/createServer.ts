@@ -27,9 +27,9 @@ import { createAssetHeaderCache } from './createAssetHeaderCache.ts'
 import { createPublicAssetServer } from './createPublicAssetServer.ts'
 import { createRouteDispatcher } from './createRouteDispatcher.ts'
 import { disableIdleTimeoutForStream } from './disableIdleTimeoutForStream.ts'
-import { findOpenPort } from './findOpenPort.ts'
 import { globToPathSet } from './globToPathSet.ts'
 import { internalErrorResponse } from './internalErrorResponse.ts'
+import { listenOnOpenPort } from './listenOnOpenPort.ts'
 import { logBrowserOnlyRoutes } from './logBrowserOnlyRoutes.ts'
 import { parseIdleTimeout } from './parseIdleTimeout.ts'
 import { parsePort } from './parsePort.ts'
@@ -92,9 +92,9 @@ export async function createServer({
     distDir = `${process.cwd()}/dist`,
     publicDir = `${process.cwd()}/src/browser/public`,
     resourcesDir = `${process.cwd()}/src/mcp/resources`,
-    // No PORT set → scan for the first open port at/above 3000 rather than
-    // hardcoding 3000, so a second app boots cleanly instead of colliding.
-    port = parsePort(process.env.PORT) ?? findOpenPort(3000),
+    // A configured PORT is honored as-is; left undefined, the real listener
+    // scans upward from 3000 at bind time (see buildServer / listenOnOpenPort).
+    port = parsePort(process.env.PORT),
     /*
     Bun's per-connection idle timeout in seconds (its own default is 10).
     Surfaced for apps whose unary handlers legitimately compute longer than
@@ -310,137 +310,155 @@ export async function createServer({
     a busy socket doesn't iterate JS per subscriber per message.
     */
     const socketDispatcher = createSocketDispatcher(sockets)
-    // Server<unknown> pins Bun's WebSocketData generic so upgrade({ data: {} }) typechecks.
-    const server: Server<unknown> = Bun.serve({
-        port,
-        idleTimeout,
 
-        websocket: {
-            open(ws) {
-                socketDispatcher.open(ws)
-            },
-            message(ws, data) {
-                socketDispatcher.message(ws, data)
-            },
-            close(ws) {
-                socketDispatcher.close(ws)
-            },
-        },
+    /*
+    Bind the real server on `boundPort`. Only the port varies between scan
+    attempts, so the rest of the config lives inline and just the port is spread
+    in — passing the literal straight to Bun.serve keeps contextual typing of the
+    websocket handlers (and Server<unknown> pins Bun's WebSocketData generic so
+    upgrade({ data: {} }) typechecks).
+    */
+    const bindAt = (boundPort: number): Server<unknown> =>
+        Bun.serve({
+            port: boundPort,
+            idleTimeout,
 
-        routes,
+            websocket: {
+                open(ws) {
+                    socketDispatcher.open(ws)
+                },
+                message(ws, data) {
+                    socketDispatcher.message(ws, data)
+                },
+                close(ws) {
+                    socketDispatcher.close(ws)
+                },
+            },
 
-        async fetch(req, bunServer) {
-            const url = new URL(req.url)
-            /*
-            Identity probe — answered directly, ahead of any app.handle middleware,
-            so the bundle's connect screen can confirm a URL really is a belte
-            server (and which app) before pointing the desktop window at it. It
-            must stay reachable even when the app guards everything behind auth,
-            hence the early return that bypasses dispatchRequest.
-            */
-            if (url.pathname === IDENTITY_PATH) {
-                return Response.json(
-                    {
-                        belte: true,
-                        name: appInfo?.name ?? cliName,
-                        version: appInfo?.version ?? '0.0.0',
-                    },
-                    { headers: { 'Cache-Control': NO_STORE } },
-                )
-            }
-            if (url.pathname === SOCKETS_PATH) {
-                if (bunServer.upgrade(req, { data: {} })) {
-                    return undefined as unknown as Response
-                }
-                return new Response('Upgrade failed', { status: 400 })
-            }
-            /*
-            HTTP face of a socket (`/__belte/sockets/<name>`) — tail over
-            SSE / JSON and publish — for the CLI and MCP. Runs through
-            dispatchRequest so app.handle auth applies, like the rpc paths.
-            The socket name may contain `/` (nested files), so it's the
-            whole remaining pathname, percent-decoded.
-            */
-            if (url.pathname.startsWith(SOCKETS_REST_PREFIX)) {
-                const name = decodeURIComponent(url.pathname.slice(SOCKETS_REST_PREFIX.length))
-                return dispatchRequest(req, {}, async () => socketDispatcher.rest(req, name))
-            }
-            if (url.pathname === MCP_PATH && mcp) {
-                return dispatchRequest(req, {}, async () => mcp.handle(req))
-            }
-            if (url.pathname === CLI_PATH) {
-                return dispatchRequest(req, {}, async () => handleCliInstall(req, cliName))
-            }
-            if (url.pathname.startsWith(CLI_DOWNLOAD_PREFIX)) {
-                const platform = url.pathname.slice(CLI_DOWNLOAD_PREFIX.length)
-                return dispatchRequest(req, {}, async () =>
-                    handleCliDownload(req, platform, cliName, cliCwd),
-                )
-            }
-            if (url.pathname === OPENAPI_PATH) {
-                return dispatchRequest(req, {}, async () => {
-                    await ensureRegistriesLoaded()
-                    const spec = buildOpenApiSpec({
-                        title: appInfo?.name ?? cliName,
-                        version: appInfo?.version ?? '0.0.0',
-                    })
-                    return Response.json(spec, { headers: { 'Cache-Control': NO_STORE } })
-                })
-            }
-            /*
-            Static assets sidestep ALS + the per-request CacheStore + the
-            app.handle middleware: they have no need for cache() and the
-            allocation overhead matters on a cold page load that pulls
-            dozens of chunks. The global server.error() handler still
-            catches anything that goes wrong inside serveStaticAsset.
-            */
-            if (url.pathname.startsWith('/_app/')) {
-                if (!logRequests) {
-                    return serveStaticAsset(req, url)
-                }
-                const start = Bun.nanoseconds()
-                const response = await serveStaticAsset(req, url)
-                const ms = (Bun.nanoseconds() - start) / 1e6
-                log.request(req.method, `${url.pathname}${url.search}`, response.status, ms)
-                return response
-            }
-            /*
-            Files under public/ are served at the site root, sidestepping
-            ALS + middleware like the /_app/ assets do. A miss returns
-            undefined so the request falls through to the 404 / middleware
-            path below.
-            */
-            const publicResponse = await servePublicAsset(req, url)
-            if (publicResponse) {
-                if (logRequests) {
-                    log.request(
-                        req.method,
-                        `${url.pathname}${url.search}`,
-                        publicResponse.status,
-                        0,
+            routes,
+
+            async fetch(req, bunServer) {
+                const url = new URL(req.url)
+                /*
+                Identity probe — answered directly, ahead of any app.handle middleware,
+                so the bundle's connect screen can confirm a URL really is a belte
+                server (and which app) before pointing the desktop window at it. It
+                must stay reachable even when the app guards everything behind auth,
+                hence the early return that bypasses dispatchRequest.
+                */
+                if (url.pathname === IDENTITY_PATH) {
+                    return Response.json(
+                        {
+                            belte: true,
+                            name: appInfo?.name ?? cliName,
+                            version: appInfo?.version ?? '0.0.0',
+                        },
+                        { headers: { 'Cache-Control': NO_STORE } },
                     )
                 }
-                return publicResponse
-            }
-            /*
-            Unknown routes still run through dispatchRequest so user-defined
-            app.handle middleware can rewrite the request, serve a custom
-            404, or branch on the URL. The inner handler returns the
-            framework's default 404 when nothing intervenes.
-            */
-            return dispatchRequest(req, {}, async () => {
-                return new Response('Not Found', {
-                    status: 404,
-                    headers: { 'Cache-Control': NO_STORE },
+                if (url.pathname === SOCKETS_PATH) {
+                    if (bunServer.upgrade(req, { data: {} })) {
+                        return undefined as unknown as Response
+                    }
+                    return new Response('Upgrade failed', { status: 400 })
+                }
+                /*
+                HTTP face of a socket (`/__belte/sockets/<name>`) — tail over
+                SSE / JSON and publish — for the CLI and MCP. Runs through
+                dispatchRequest so app.handle auth applies, like the rpc paths.
+                The socket name may contain `/` (nested files), so it's the
+                whole remaining pathname, percent-decoded.
+                */
+                if (url.pathname.startsWith(SOCKETS_REST_PREFIX)) {
+                    const name = decodeURIComponent(url.pathname.slice(SOCKETS_REST_PREFIX.length))
+                    return dispatchRequest(req, {}, async () => socketDispatcher.rest(req, name))
+                }
+                if (url.pathname === MCP_PATH && mcp) {
+                    return dispatchRequest(req, {}, async () => mcp.handle(req))
+                }
+                if (url.pathname === CLI_PATH) {
+                    return dispatchRequest(req, {}, async () => handleCliInstall(req, cliName))
+                }
+                if (url.pathname.startsWith(CLI_DOWNLOAD_PREFIX)) {
+                    const platform = url.pathname.slice(CLI_DOWNLOAD_PREFIX.length)
+                    return dispatchRequest(req, {}, async () =>
+                        handleCliDownload(req, platform, cliName, cliCwd),
+                    )
+                }
+                if (url.pathname === OPENAPI_PATH) {
+                    return dispatchRequest(req, {}, async () => {
+                        await ensureRegistriesLoaded()
+                        const spec = buildOpenApiSpec({
+                            title: appInfo?.name ?? cliName,
+                            version: appInfo?.version ?? '0.0.0',
+                        })
+                        return Response.json(spec, { headers: { 'Cache-Control': NO_STORE } })
+                    })
+                }
+                /*
+                Static assets sidestep ALS + the per-request CacheStore + the
+                app.handle middleware: they have no need for cache() and the
+                allocation overhead matters on a cold page load that pulls
+                dozens of chunks. The global server.error() handler still
+                catches anything that goes wrong inside serveStaticAsset.
+                */
+                if (url.pathname.startsWith('/_app/')) {
+                    if (!logRequests) {
+                        return serveStaticAsset(req, url)
+                    }
+                    const start = Bun.nanoseconds()
+                    const response = await serveStaticAsset(req, url)
+                    const ms = (Bun.nanoseconds() - start) / 1e6
+                    log.request(req.method, `${url.pathname}${url.search}`, response.status, ms)
+                    return response
+                }
+                /*
+                Files under public/ are served at the site root, sidestepping
+                ALS + middleware like the /_app/ assets do. A miss returns
+                undefined so the request falls through to the 404 / middleware
+                path below.
+                */
+                const publicResponse = await servePublicAsset(req, url)
+                if (publicResponse) {
+                    if (logRequests) {
+                        log.request(
+                            req.method,
+                            `${url.pathname}${url.search}`,
+                            publicResponse.status,
+                            0,
+                        )
+                    }
+                    return publicResponse
+                }
+                /*
+                Unknown routes still run through dispatchRequest so user-defined
+                app.handle middleware can rewrite the request, serve a custom
+                404, or branch on the URL. The inner handler returns the
+                framework's default 404 when nothing intervenes.
+                */
+                return dispatchRequest(req, {}, async () => {
+                    return new Response('Not Found', {
+                        status: 404,
+                        headers: { 'Cache-Control': NO_STORE },
+                    })
                 })
-            })
-        },
+            },
 
-        error(err) {
-            log.error(err)
-            return internalErrorResponse(err)
-        },
-    })
+            error(err) {
+                log.error(err)
+                return internalErrorResponse(err)
+            },
+        })
+
+    /*
+    A configured PORT binds that exact port — a collision surfaces loudly rather
+    than silently moving, since something connecting to the app needs a known
+    address. With none set, scan upward from 3000 binding the real listener, so
+    whichever server wins the port keeps it (no probe-release gap to lose it in,
+    which used to crash boot on EADDRINUSE instead of stepping to the next port).
+    */
+    const server: Server<unknown> =
+        port === undefined ? listenOnOpenPort(bindAt, 3000) : bindAt(port)
 
     /*
     Publishes the live server through `belte/server` before invoking the
