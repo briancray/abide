@@ -1,5 +1,11 @@
 # @briancray/belte
 
+## 0.8.1
+
+### Patch Changes
+
+- [#29](https://github.com/briancray/belte/pull/29) [`f85ee72`](https://github.com/briancray/belte/commit/f85ee722cd2b659aad7d8f250ae595b0b2ccdcae) Thanks [@briancray](https://github.com/briancray)! - With no `PORT` set, the server now scans upward from 3000 at bind time, binding the listener that wins the port instead of probing a throwaway server and releasing it first. This closes the gap where the chosen port could be stolen between probe and bind, which crashed boot on `EADDRINUSE` rather than stepping to the next port. A configured `PORT` still binds that exact port and surfaces a collision loudly.
+
 ## 0.8.0
 
 ### Minor Changes
