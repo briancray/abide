@@ -12,7 +12,7 @@
         "test": "bun test",
         "check": "biome check --write",
         "changeset": "changeset",
-        "version-packages": "bun run scripts/autofillChangesets.ts && changeset version",
+        "version-packages": "bun run scripts/autofillChangesets.ts && changeset version && bun run scripts/syncRootChangelog.ts",
         "release": "changeset publish"
     },
     "devDependencies": {
