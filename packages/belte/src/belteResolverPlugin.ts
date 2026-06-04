@@ -182,6 +182,27 @@ export function belteResolverPlugin({
                 })
             }
 
+            /*
+            Root-absolute url() references in stylesheets (e.g.
+            `url(/fonts/x.woff2)`) point at files served from public/ at the
+            site root at runtime, not at anything on disk at build time. Bun's
+            CSS bundler otherwise tries to resolve them against the project
+            root and fails the whole build. Mark them external so the literal
+            `/…` path survives into the emitted CSS, where
+            createPublicAssetServer serves it. Scoped to CSS importers: svelte
+            <style> blocks compile to injected JS strings and never reach the
+            CSS bundler, and belte's own absolute-path JS imports come from
+            .ts/virtual importers — neither is a `.css` importer, so both are
+            untouched. Relative url()s (`./x.png`) still resolve and bundle
+            normally.
+            */
+            build.onResolve({ filter: /^\// }, (args) => {
+                if (args.importer.endsWith('.css')) {
+                    return { path: args.path, external: true }
+                }
+                return undefined
+            })
+
             build.onLoad({ filter: rpcFilter }, async (args) => {
                 if (!args.path.startsWith(`${rpcDir}/`)) {
                     return undefined

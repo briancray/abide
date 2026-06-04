@@ -1,2 +1,7 @@
 [install]
 linker = "hoisted"
+
+[test]
+# Run `bun test` from the repo root (the `test` script). Registers a
+# `.svelte.ts` loader so rune-based test harnesses compile.
+preload = ["./packages/belte/tests/support/sveltePreload.ts"]

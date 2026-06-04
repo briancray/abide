@@ -2,13 +2,8 @@ import { beforeAll, describe, expect, test } from 'bun:test'
 import { dispatchMcpRequest } from '../src/lib/mcp/dispatchMcpRequest.ts'
 import { createSocketDispatcher } from '../src/lib/server/sockets/createSocketDispatcher.ts'
 import { defineSocket } from '../src/lib/server/sockets/defineSocket.ts'
-import type { SocketRoutes } from '../src/lib/server/sockets/types/SocketRoutes.ts'
 import { testSchema } from './standardSchema.ts'
-
-// A loader map that resolves the named socket — defineSocket already populated the registry.
-function routesFor(name: string): SocketRoutes {
-    return { [name]: () => Promise.resolve({}) } as unknown as SocketRoutes
-}
+import { routesFor } from './support/routesFor.ts'
 
 describe('socket REST happy path', () => {
     const chat = defineSocket<{ text: string }>('rest-chat', {
