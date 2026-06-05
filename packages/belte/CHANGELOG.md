@@ -1,5 +1,13 @@
 # @briancray/belte
 
+## 0.10.0
+
+### Minor Changes
+
+- stream deferred cache resolutions from server to client ([`a608a8e`](https://github.com/briancray/belte/commit/a608a8e02cdfaa19114ce323a0e6c1aedd83c31a))
+
+- [`6a511c4`](https://github.com/briancray/belte/commit/6a511c4961eb124fa9b21a595e0a11886ef10cda) - Stream deferred cache resolutions from the server to the client. Cache entries left pending when SSR flushes are now snapshotted on the server, their resolutions streamed over the response, and reinstalled on the client as streaming placeholders that settle as each resolution arrives. This keeps the SSR/stream split driven by `await` vs `{#await}` without blocking the initial HTML on slow cache reads.
+
 ## 0.9.1
 
 ### Patch Changes
