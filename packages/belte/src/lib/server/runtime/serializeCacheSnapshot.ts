@@ -21,6 +21,10 @@ export async function serializeCacheSnapshot(store: CacheStore): Promise<CacheSn
     const settled: CacheEntry[] = []
     const pending: CacheEntry[] = []
     for (const entry of store.entries.values()) {
+        /* Producer entries carry no wire request — nothing to rehydrate against, skip. */
+        if (!entry.request) {
+            continue
+        }
         const method = entry.request.method.toUpperCase()
         if (method !== 'GET' && method !== 'DELETE') {
             continue

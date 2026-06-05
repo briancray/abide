@@ -1,0 +1,39 @@
+name: CI
+
+# The release safety net: lint, the full test suite, and a real build of every
+# example (including the scaffold) must pass before anything publishes. Runs on
+# pull requests for contributor feedback and is reused by release.yml via
+# workflow_call so a push to main can't publish without going green first.
+on:
+  pull_request:
+  workflow_call:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Test
+        run: bun run test
+
+      # Building the examples resolves every public import path against the
+      # package exports map, so a moved/renamed export (the kind that ships a
+      # broken scaffold) fails CI instead of npm publish.
+      - name: Build scaffold example
+        run: bun run --filter scaffold build
+
+      - name: Build kitchen-sink example
+        run: bun run --filter kitchen-sink build

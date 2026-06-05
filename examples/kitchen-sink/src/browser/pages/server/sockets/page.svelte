@@ -20,10 +20,10 @@ async function send() {
 </nav>
 <h1 class="text-3xl font-bold">Sockets</h1>
 <p class="mt-2 text-slate-600">
-    One topic per file under <code class="font-mono">src/server/sockets/</code>
+    One topic per file under<code class="font-mono">src/server/sockets/</code>
     . A
     <code class="font-mono">Socket&lt;T&gt;</code>
-    is an isomorphic <code class="font-mono">AsyncIterable&lt;T&gt;</code>
+    is an isomorphic<code class="font-mono">AsyncIterable&lt;T&gt;</code>
     — every socket multiplexes onto one ws at
     <code class="font-mono">/__belte/sockets</code>
     .
@@ -68,10 +68,9 @@ async function send() {
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
     <h2 class="text-sm font-semibold">Try it</h2>
     <p class="mt-1 text-xs text-slate-500">
-        <code class="font-mono">chat</code> has <code class="font-mono">
-            clientPublish: false
-        </code> — publishes route through <code class="font-mono">publishChat</code> (POST) so the
-        server can validate first.
+        <code class="font-mono">chat</code> has<code class="font-mono">clientPublish: false</code> —
+        publishes route through<code class="font-mono">publishChat</code> (POST) so the server can
+        validate first.
     </p>
     <div class="mt-3 flex flex-wrap items-end gap-2">
         <label class="text-xs font-medium">

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { cache } from '../src/lib/browser/cache.ts'
 import { json } from '../src/lib/server/json.ts'
 import { defineVerb } from '../src/lib/server/rpc/defineVerb.ts'
+import { cache } from '../src/lib/shared/cache.ts'
 import { cacheStoreSlot } from '../src/lib/shared/cacheStoreSlot.ts'
 import { createCacheStore } from '../src/lib/shared/createCacheStore.ts'
 import { keyForRemoteCall } from '../src/lib/shared/keyForRemoteCall.ts'

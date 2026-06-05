@@ -1,17 +1,52 @@
 import { carriesBodyArgs } from '../../shared/carriesBodyArgs.ts'
-import type { HttpVerb } from './types/HttpVerb.ts'
+import type { HttpVerb } from '../../shared/types/HttpVerb.ts'
+import { requestContext } from '../runtime/requestContext.ts'
+
+/*
+Splits a parsed FormData into the text fields that become args and the File
+parts that don't. Repeated text keys collapse into an array (an HTML form posts
+multiple same-named inputs); File parts group by field name and stash on the
+request store for files() to read — they never enter args, so the input schema
+keeps validating a plain object with no binary in it.
+*/
+function splitFormData(form: FormData): Record<string, unknown> {
+    const fileMap: Record<string, File[]> = {}
+    const fields: Record<string, unknown> = {}
+    for (const [key, value] of form) {
+        if (value instanceof File) {
+            fileMap[key] ??= []
+            fileMap[key].push(value)
+            continue
+        }
+        const existing = fields[key]
+        if (!(key in fields)) {
+            fields[key] = value
+        } else if (Array.isArray(existing)) {
+            existing.push(value)
+        } else {
+            fields[key] = [existing, value]
+        }
+    }
+    const store = requestContext.getStore()
+    if (store && Object.keys(fileMap).length > 0) {
+        store.files = fileMap
+    }
+    return fields
+}
 
 /*
 Parses + merges every source of args available for a verb-defined handler:
 - body (json or form-encoded, ignored for GET/DELETE/HEAD)
 - url query string
 
-When both are present and the body is a plain object, the merge folds the
-query in on top so query keys win on collision. A non-object body (array,
-primitive, null) skips the merge entirely and is returned as-is — there's
-no key on the body to layer the query into, and the framework's args type
-is a single bag rather than a `{body, query}` envelope. Returns undefined
-when no source contributes any key.
+When both are present and the body is a plain object, the merge layers the
+body on top of the query so the typed body wins on collision — the query
+supplies defaults a body field can override, and a URL param can't silently
+shadow a validated body value. A non-object body (array, primitive, null)
+skips the merge entirely and is returned as-is — there's no key on the body
+to layer the query into, and the framework's args type is a single bag rather
+than a `{body, query}` envelope. Returns undefined when no source contributes
+any key.
 */
 export async function parseArgs(method: HttpVerb, request: Request): Promise<unknown> {
     /*
@@ -36,8 +71,7 @@ export async function parseArgs(method: HttpVerb, request: Request): Promise<unk
             contentType.includes('application/x-www-form-urlencoded') ||
             contentType.includes('multipart/form-data')
         ) {
-            const form = await request.formData()
-            body = Object.fromEntries(form)
+            body = splitFormData(await request.formData())
         }
     }
 
@@ -53,7 +87,7 @@ export async function parseArgs(method: HttpVerb, request: Request): Promise<unk
     }
 
     const bodyObject = (body ?? {}) as Record<string, unknown>
-    const merged = { ...bodyObject, ...Object.fromEntries(url.searchParams) }
+    const merged = { ...Object.fromEntries(url.searchParams), ...bodyObject }
     if (Object.keys(merged).length === 0) {
         return undefined
     }

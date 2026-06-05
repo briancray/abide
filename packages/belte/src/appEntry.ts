@@ -7,6 +7,7 @@ import programName from './_virtual/cli-name.ts'
 import type { BundleMenu } from './lib/bundle/BundleMenu.ts'
 import type { BundleWindow } from './lib/bundle/BundleWindow.ts'
 import { openWebview } from './lib/bundle/openWebview.ts'
+import { envSchemaStore } from './lib/server/runtime/envSchemaStore.ts'
 import { jsonSchemaForSchema } from './lib/shared/jsonSchemaForSchema.ts'
 import { log } from './lib/shared/log.ts'
 
@@ -33,12 +34,22 @@ const window = bundleWindow as BundleWindow
 const title = window.title ?? programName
 
 /*
-Derive the config form's JSON Schema here (the worker can't import the virtual
-that carries window.config) and pass the plain object through init — the
-validator itself isn't serializable, but its JSON Schema is. Undefined when the
-app declares no config, so the connect screen never gates Start.
+Derive the config form's JSON Schema here (the worker can't import the virtuals
+that carry the schema) and pass the plain object through init — the validator
+itself isn't serializable, but its JSON Schema is. Undefined when the app
+declares no config, so the connect screen never gates Start.
+
+Default source is src/server/config.ts's env schema, so one declaration drives
+both boot validation and the setup form. Imported with skipValidation set — we
+want the schema's shape, not a boot check the launcher has no business running.
+`window.config` replaces it when set, for a bundle form that should differ from
+the env schema.
 */
-const configSchema = window.config ? jsonSchemaForSchema(window.config, undefined) : undefined
+envSchemaStore.skipValidation = true
+// @ts-expect-error virtual module resolved by belteResolverPlugin
+await import('./_virtual/config.ts')
+const formSchema = window.config ?? envSchemaStore.schema
+const configSchema = formSchema ? jsonSchemaForSchema(formSchema) : undefined
 
 /*
 Spawn the control server worker. `__BELTE_WORKER_ENTRY__` is the worker's absolute

@@ -45,12 +45,12 @@
     },
     "packages/belte": {
       "name": "@briancray/belte",
-      "version": "0.5.3",
+      "version": "0.9.1",
       "bin": {
         "belte": "./bin/belte.ts",
       },
       "devDependencies": {
-        "bun-plugin-tailwind": "latest",
+        "bun-plugin-tailwind": "^0.1.2",
         "tailwindcss": "^4.0.0",
       },
       "peerDependencies": {

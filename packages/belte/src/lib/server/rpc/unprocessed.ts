@@ -1,4 +1,4 @@
-import type { RemoteFunction } from './types/RemoteFunction.ts'
+import type { RemoteFunction } from '../../shared/types/RemoteFunction.ts'
 
 /*
 Verb helpers (GET / POST / …) are placeholders — the bundler rewrites every

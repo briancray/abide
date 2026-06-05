@@ -1,4 +1,4 @@
-import type { StandardSchemaV1 } from '../src/lib/server/rpc/types/StandardSchemaV1.ts'
+import type { StandardSchemaV1 } from '../src/lib/shared/types/StandardSchemaV1.ts'
 
 /*
 Minimal Standard Schema for tests: validation is pass-through (every

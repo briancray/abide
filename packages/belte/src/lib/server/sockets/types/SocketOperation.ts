@@ -1,4 +1,4 @@
-import type { HttpVerb } from '../../rpc/types/HttpVerb.ts'
+import type { HttpVerb } from '../../../shared/types/HttpVerb.ts'
 
 /*
 One operation a socket exposes to the non-browser surfaces. A socket

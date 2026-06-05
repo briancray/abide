@@ -1,4 +1,4 @@
-import { HttpError } from '../server/HttpError.ts'
+import { HttpError } from './HttpError.ts'
 import { STREAMING_CONTENT_TYPES } from './streamingContentTypes.ts'
 
 /*

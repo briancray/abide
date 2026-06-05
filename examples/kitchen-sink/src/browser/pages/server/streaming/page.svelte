@@ -42,8 +42,8 @@ async function runJsonl() {
 </nav>
 <h1 class="text-3xl font-bold">Streaming over HTTP</h1>
 <p class="mt-2 text-slate-600">
-    Wrap an <code class="font-mono">AsyncIterable</code> in
-    <code class="font-mono">sse()</code> or <code class="font-mono">jsonl()</code>
+    Wrap an<code class="font-mono">AsyncIterable</code> in
+    <code class="font-mono">sse()</code> or<code class="font-mono">jsonl()</code>
     ; consume client-side with native APIs.
 </p>
 
@@ -77,8 +77,8 @@ async function runJsonl() {
         </table>
     </div>
     <p class="mt-2 text-xs text-slate-500">
-        Consumer cancellation propagates to <code class="font-mono">iterator.return()</code>
-        — handler <code class="font-mono">finally</code> blocks run. For fan-out pub/sub use
+        Consumer cancellation propagates to<code class="font-mono">iterator.return()</code>
+        — handler<code class="font-mono">finally</code> blocks run. For fan-out pub/sub use
         <a class="underline" href="/server/sockets">Sockets</a> instead.
     </p>
 </section>

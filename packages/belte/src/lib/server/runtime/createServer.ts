@@ -2,6 +2,7 @@ import type { BunRequest, Server } from 'bun'
 import type { Component } from 'svelte'
 import { render } from 'svelte/server'
 import App from '../../../App.svelte'
+import type { Errors } from '../../browser/types/Errors.ts'
 import type { Layouts } from '../../browser/types/Layouts.ts'
 import type { Pages } from '../../browser/types/Pages.ts'
 import { createMcpResourceServer } from '../../mcp/createMcpResourceServer.ts'
@@ -30,6 +31,7 @@ import { createRouteDispatcher } from './createRouteDispatcher.ts'
 import { disableIdleTimeoutForStream } from './disableIdleTimeoutForStream.ts'
 import { globToPathSet } from './globToPathSet.ts'
 import { internalErrorResponse } from './internalErrorResponse.ts'
+import { isCrossOriginUpgrade } from './isCrossOriginUpgrade.ts'
 import { listenOnOpenPort } from './listenOnOpenPort.ts'
 import { logBrowserOnlyRoutes } from './logBrowserOnlyRoutes.ts'
 import { parseIdleTimeout } from './parseIdleTimeout.ts'
@@ -84,6 +86,7 @@ export async function createServer({
     sockets,
     prompts,
     layouts,
+    errors,
     shell,
     app,
     assets,
@@ -111,6 +114,7 @@ export async function createServer({
     sockets: SocketRoutes
     prompts: PromptRoutes
     layouts?: Layouts
+    errors?: Errors
     shell: string
     app?: AppModule
     assets?: Assets
@@ -131,6 +135,7 @@ export async function createServer({
     const cliCwd = process.cwd()
     const servePublicAsset = await createPublicAssetServer({ publicDir, publicAssets })
     const layoutPrefixes = layouts ? normalizeLayoutPrefixes(Object.keys(layouts)) : []
+    const errorPrefixes = errors ? normalizeLayoutPrefixes(Object.keys(errors)) : []
 
     /*
     Snapshot the precompressed `.zst` siblings the build wrote next to each
@@ -190,6 +195,80 @@ export async function createServer({
         return new Response(Bun.file(diskPath), { headers: baseHeaders })
     }
 
+    /* Splices the rendered head/body and a state <script> into the shell's SSR markers. */
+    function fillShell(rendered: Awaited<ReturnType<typeof render>>, stateTag: string): string {
+        const fills: Record<string, string> = {
+            head: rendered.head,
+            body: rendered.body,
+            state: stateTag,
+        }
+        return shell.replace(SSR_MARKER, (_match, key: string) => fills[key])
+    }
+
+    /*
+    Renders the nearest error.svelte for a failed page navigation — an unknown
+    route (404) or a throw during a page render. Walks up from the requested
+    pathname to the deepest error.svelte ancestor (nearest-only, like layouts)
+    and renders it inside the nearest layout with `{ status, message, stack }`
+    props. Returns undefined when no error.svelte covers the path, so the caller
+    falls back to its plain Response (the 404 text) or rethrows (→
+    app.handleError). The document is static — it ships `__SSR__.error` so the
+    client skips hydration (there is no client route for an error view to
+    hydrate against).
+
+    The full message and stack are passed through; nothing is serialized to
+    `__SSR__`, so they reach the browser only where the author's template
+    actually renders them — a bare error.svelte leaks neither. Withholding them
+    would just deny an author who wants a dev stack, so exposure stays the
+    author's call (and the cause is logged server-side regardless).
+    */
+    async function renderError(
+        status: number,
+        message: string,
+        store: RequestStore,
+        stack?: string,
+    ): Promise<Response | undefined> {
+        if (!errors) {
+            return undefined
+        }
+        const pathname = store.url.pathname
+        const errorPrefix = nearestLayoutPrefix(pathname, errorPrefixes)
+        if (!errorPrefix) {
+            return undefined
+        }
+        const layoutPrefix = nearestLayoutPrefix(pathname, layoutPrefixes)
+        const [errorMod, layoutMod] = await Promise.all([
+            errors[errorPrefix](),
+            layoutPrefix && layouts ? layouts[layoutPrefix]() : Promise.resolve(undefined),
+        ])
+        const ErrorView = errorMod.default as Component
+        const Layout = layoutMod?.default as Component | undefined
+        const rendered = await render(App, {
+            props: {
+                state: {
+                    page: {
+                        route: pathname,
+                        // status is a number (and stack optional); the page-params
+                        // shape is string-keyed generically, so the error props
+                        // ride through to the component as-is.
+                        params: { status, message, stack } as unknown as Record<string, string>,
+                        url: store.url,
+                    },
+                    render: { Layout, Page: ErrorView },
+                },
+            },
+        })
+        const stateTag = `<script>window.__SSR__ = ${safeJsonForScript({ error: true })};</script>`
+        const html = fillShell(rendered, stateTag)
+        return new Response(html, {
+            status,
+            headers: {
+                'Content-Type': 'text/html; charset=utf-8',
+                'Cache-Control': NO_STORE,
+            },
+        })
+    }
+
     async function renderPage(
         routeUrl: string,
         params: Record<string, string>,
@@ -207,6 +286,32 @@ export async function createServer({
                 },
             )
         }
+        try {
+            return await renderPageHtml(routeUrl, params, store)
+        } catch (error) {
+            /*
+            A page render failed (module import, component throw, or a settled
+            cache read). error.svelte wins for page renders: render the nearest
+            one with a 500, logging the cause it's about to swallow into a
+            presentable page. With no error.svelte covering the path, rethrow so
+            app.handleError — or the framework 500 — takes it.
+            */
+            const message = error instanceof Error ? error.message : String(error)
+            const stack = error instanceof Error ? error.stack : undefined
+            const rendered = await renderError(500, message, store, stack)
+            if (rendered) {
+                log.error(error)
+                return rendered
+            }
+            throw error
+        }
+    }
+
+    async function renderPageHtml(
+        routeUrl: string,
+        params: Record<string, string>,
+        store: RequestStore,
+    ): Promise<Response> {
         const layoutPrefix = nearestLayoutPrefix(routeUrl, layoutPrefixes)
         const [pageMod, layoutMod] = await Promise.all([
             pages[routeUrl](),
@@ -243,8 +348,9 @@ export async function createServer({
         */
         const streaming = pending.map((entry) => ({
             key: entry.key,
-            url: entry.request.url,
-            method: entry.request.method,
+            /* serializeCacheSnapshot only ever yields request-bearing (remote) entries here. */
+            url: entry.request?.url ?? '',
+            method: entry.request?.method ?? 'GET',
         }))
         const streamToken =
             pending.length > 0 ? stashPendingStream(store.cache, pending) : undefined
@@ -255,12 +361,7 @@ export async function createServer({
             streaming,
             streamToken,
         })};</script>`
-        const fills: Record<string, string> = {
-            head: rendered.head,
-            body: rendered.body,
-            state: stateTag,
-        }
-        const html = shell.replace(SSR_MARKER, (_match, key: string) => fills[key])
+        const html = fillShell(rendered, stateTag)
         return new Response(html, {
             headers: {
                 'Content-Type': 'text/html; charset=utf-8',
@@ -383,6 +484,10 @@ export async function createServer({
                     )
                 }
                 if (url.pathname === SOCKETS_PATH) {
+                    // Reject cross-origin upgrades (CSWSH) before handing off to Bun.
+                    if (isCrossOriginUpgrade(req, url)) {
+                        return new Response('Forbidden', { status: 403 })
+                    }
                     if (bunServer.upgrade(req, { data: {} })) {
                         return undefined as unknown as Response
                     }
@@ -473,11 +578,14 @@ export async function createServer({
                 404, or branch on the URL. The inner handler returns the
                 framework's default 404 when nothing intervenes.
                 */
-                return dispatchRequest(req, {}, async () => {
-                    return new Response('Not Found', {
-                        status: 404,
-                        headers: { 'Cache-Control': NO_STORE },
-                    })
+                return dispatchRequest(req, {}, async (_req, _pathParams, store) => {
+                    return (
+                        (await renderError(404, 'Not Found', store)) ??
+                        new Response('Not Found', {
+                            status: 404,
+                            headers: { 'Cache-Control': NO_STORE },
+                        })
+                    )
                 })
             },
 

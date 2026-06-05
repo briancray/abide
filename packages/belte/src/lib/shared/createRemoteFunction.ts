@@ -1,11 +1,11 @@
-import type { HttpVerb } from '../server/rpc/types/HttpVerb.ts'
-import type { RawRemoteFunction } from '../server/rpc/types/RawRemoteFunction.ts'
-import type { RemoteFunction } from '../server/rpc/types/RemoteFunction.ts'
 import { decodeResponse } from './decodeResponse.ts'
 import { keyForRemoteCall } from './keyForRemoteCall.ts'
 import { recordRemoteMeta } from './recordRemoteMeta.ts'
 import { subscribableFromResponse } from './subscribableFromResponse.ts'
 import type { ClientFlags } from './types/ClientFlags.ts'
+import type { HttpVerb } from './types/HttpVerb.ts'
+import type { RawRemoteFunction } from './types/RawRemoteFunction.ts'
+import type { RemoteFunction } from './types/RemoteFunction.ts'
 import type { Subscribable } from './types/Subscribable.ts'
 
 /*
@@ -51,28 +51,38 @@ export function createRemoteFunction<Args, Return>(opts: {
     function dispatch(args: Args | undefined, prebuilt?: Request): Promise<Response> {
         let cached = prebuilt
         function getRequest(): Request {
-            return cached ?? (cached = buildRequest(args))
+            if (cached === undefined) {
+                cached = buildRequest(args)
+            }
+            return cached
         }
         const promise = invoke(args, getRequest)
         recordRemoteMeta(promise, getRequest)
         return promise
     }
 
-    function rawCall(args: Args): Promise<Response> {
-        return dispatch(args)
+    /*
+    A body verb may receive a FormData in place of typed Args (the upload
+    escape hatch). It flows through dispatch only into buildRpcRequest /
+    keyForRemoteCall, both of which take it as-is, so the cast to Args is a
+    contained type lie — buildRpcRequest's `instanceof FormData` branch handles
+    it at runtime.
+    */
+    function rawCall(args: Args | FormData): Promise<Response> {
+        return dispatch(args as Args)
     }
     rawCall.method = method
     rawCall.url = url
     const raw = rawCall as RawRemoteFunction<Args>
 
-    function callable(args: Args): Promise<Return> {
+    function callable(args: Args | FormData): Promise<Return> {
         return raw(args).then(decodeResponse) as Promise<Return>
     }
     callable.method = method
     callable.url = url
     callable.clients = clients
     callable.raw = raw
-    callable.stream = (args?: Args): Subscribable<Return> => {
+    callable.stream = (args?: Args | FormData): Subscribable<Return> => {
         return subscribableFromResponse(keyForRemoteCall(method, url, args), () =>
             raw(args as Args),
         )

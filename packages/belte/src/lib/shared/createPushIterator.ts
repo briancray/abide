@@ -4,6 +4,13 @@ socket fan-out (defineSocket) and the client-side ws proxy
 (socketProxy). Callers push values, signal end, or signal an error;
 the iterator drains a queue then awaits the next push. Cancellation
 runs the optional `onClose` so subscribers can drop their backref.
+
+The pending-value buffer is bounded: a subscriber whose `next()` falls
+behind a chatty producer would otherwise grow it without limit, which on
+the server is a remotely-triggerable memory-exhaustion vector. At the cap
+the oldest pending value is dropped (live fan-out is latest-wins) so
+memory stays bounded; terminal end/error slots are always appended and
+never dropped.
 */
 
 type Slot<T> = { kind: 'value'; value: T } | { kind: 'end' } | { kind: 'error'; message: string }
@@ -14,7 +21,12 @@ export type PushIterator<T> = AsyncIterator<T, void, undefined> & {
     error(message: string): void
 }
 
-export function createPushIterator<T>(onClose?: () => void): PushIterator<T> {
+const DEFAULT_MAX_BUFFER = 1024
+
+export function createPushIterator<T>(
+    onClose?: () => void,
+    maxBuffer = DEFAULT_MAX_BUFFER,
+): PushIterator<T> {
     const buffer: Slot<T>[] = []
     let waiter: ((slot: Slot<T>) => void) | undefined
     let closed = false
@@ -28,6 +40,10 @@ export function createPushIterator<T>(onClose?: () => void): PushIterator<T> {
             waiter = undefined
             wake(slot)
             return
+        }
+        // Drop the oldest pending value before exceeding the cap.
+        if (slot.kind === 'value' && buffer.length >= maxBuffer) {
+            buffer.shift()
         }
         buffer.push(slot)
     }

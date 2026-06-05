@@ -7,9 +7,13 @@ import { loadEnvFile } from '../src/lib/shared/loadEnvFile.ts'
 const dirs: string[] = []
 const keys = ['BELTE_TEST_A', 'BELTE_TEST_B', 'BELTE_TEST_QUOTED']
 afterEach(() => {
-    dirs.forEach((dir) => rmSync(dir, { recursive: true, force: true }))
+    dirs.forEach((dir) => {
+        rmSync(dir, { recursive: true, force: true })
+    })
     dirs.length = 0
-    keys.forEach((key) => delete process.env[key])
+    keys.forEach((key) => {
+        delete process.env[key]
+    })
 })
 
 // Writes a `.env` into a fresh temp dir and returns its path.

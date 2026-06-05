@@ -7,6 +7,8 @@ import { assets } from './_virtual/assets.ts'
 // @ts-expect-error virtual module resolved by belteResolverPlugin
 import cliProgramName from './_virtual/cli-name.ts'
 // @ts-expect-error virtual module resolved by belteResolverPlugin
+import { errors } from './_virtual/errors.ts'
+// @ts-expect-error virtual module resolved by belteResolverPlugin
 import { layouts } from './_virtual/layouts.ts'
 // @ts-expect-error virtual module resolved by belteResolverPlugin
 import mcp from './_virtual/mcp.ts'
@@ -28,9 +30,11 @@ import { exitWithParent } from './lib/bundle/exitWithParent.ts'
 import { loadEnvFromBinaryDir } from './lib/cli/loadEnvFromBinaryDir.ts'
 import { createServer } from './lib/server/runtime/createServer.ts'
 import { requestContext } from './lib/server/runtime/requestContext.ts'
+import { createCacheStore } from './lib/shared/createCacheStore.ts'
 import { loadEnvFromDataDir } from './lib/shared/loadEnvFromDataDir.ts'
 import { runningAsStandaloneBinary } from './lib/shared/runningAsStandaloneBinary.ts'
 import { setCacheStoreResolver } from './lib/shared/setCacheStoreResolver.ts'
+import { setGlobalCacheStoreResolver } from './lib/shared/setGlobalCacheStoreResolver.ts'
 
 /*
 Resolve config into process.env before anything reads it (createServer reads
@@ -47,10 +51,28 @@ if (runningAsStandaloneBinary()) {
     await loadEnvFromBinaryDir()
 }
 
+/*
+Eager-import src/server/config.ts (via belte:config) now that every .env layer
+is merged into process.env — its top-level `env(schema)` validates the
+environment and fails the boot loudly here, before the server starts, rather
+than lazily on the first handler that imports `$server/config`. A dynamic
+import (not a static top-level one) so it runs after the merge above, not at
+module-eval time. No-op when the file is absent.
+*/
+// @ts-expect-error virtual module resolved by belteResolverPlugin
+await import('./_virtual/config.ts')
+
 // In a bundle, tie this server's life to the launcher's (no-op standalone).
 exitWithParent()
 
 setCacheStoreResolver(() => requestContext.getStore()?.cache)
+
+/*
+Process-level store for cache(fn, { global: true }) — one per server process,
+outlives every request so memoised external calls are shared across them.
+*/
+const globalCacheStore = createCacheStore()
+setGlobalCacheStoreResolver(() => globalCacheStore)
 
 await createServer({
     pages,
@@ -58,6 +80,7 @@ await createServer({
     sockets,
     prompts,
     layouts,
+    errors,
     shell,
     app: appMod,
     assets,

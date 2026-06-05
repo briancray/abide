@@ -2,7 +2,7 @@ import { GET } from '@briancray/belte/server/GET'
 
 /*
 Returns JSON with a custom `x-report-version` header — used by the
-.raw escape-hatch demo at /consume/raw-escape, where the page reads
+.raw escape-hatch demo at /server/raw-stream, where the page reads
 the header off the underlying Response. Calling `getReport({...})`
 (without .raw) would still resolve to the decoded body and discard
 the header.

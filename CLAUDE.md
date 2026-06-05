@@ -8,12 +8,12 @@
 * maintain high visibility into the stack for debugging
 * maintain a consistent runtime between all modes (dev and build)
 * isomorphism by default — same callable, same name, same behavior on both sides; the bundler swaps the runtime
-* no barrels. Every public name has its own module path: `belte/server/GET`, `belte/server/socket`, `belte/server/json`, `belte/browser/cache`, `belte/browser/page`, …. `belte/server` and `belte/browser` are namespaces — there is no umbrella `index.ts`, so importing a single name never drags side-effecting siblings into the bundle.
+* no barrels. Every public name has its own module path: `belte/server/GET`, `belte/server/socket`, `belte/server/json`, `belte/shared/cache`, `belte/shared/HttpError`, `belte/browser/page`, …. `belte/server`, `belte/browser`, and `belte/shared` are namespaces — there is no umbrella `index.ts`, so importing a single name never drags side-effecting siblings into the bundle. The namespace marks the side a name runs on: `belte/server/*` server-side, `belte/browser/*` client-side, `belte/shared/*` isomorphic (same callable, same behaviour on both sides — e.g. `cache`, `HttpError`).
 * value performance when all other conditions are met
 
 # coding guidelines
 
-* src/lib is split three ways: `lib/server/` (server-only — public names like `GET.ts` / `socket.ts` / `json.ts` / `request.ts` sit flat at the top; internal helpers live in `rpc/` / `sockets/` / `runtime/` sub-modules + each sub-module's `types/`), `lib/browser/` (html consumer — `cache.ts` / `subscribe.ts` / `page.svelte.ts` + the bundler-target proxies), and `lib/shared/` (cross-side machinery + cache infra + build-time helpers + `types/` for cross-side types). Future consumer surfaces sit as siblings to `browser/`. No `index.ts` barrels anywhere.
+* src/lib is split three ways: `lib/server/` (server-only — public names like `GET.ts` / `socket.ts` / `json.ts` / `request.ts` sit flat at the top; internal helpers live in `rpc/` / `sockets/` / `runtime/` sub-modules + each sub-module's `types/`), `lib/browser/` (html consumer — `subscribe.ts` / `page.svelte.ts` + the bundler-target proxies + the cache's client-only streaming/hydration helpers), and `lib/shared/` (isomorphic surface — the cross-side public callables like `cache.ts` / `HttpError.ts` alongside the cross-side machinery, cache infra, build-time helpers, and `types/` for cross-side types). A feature that spans sides (e.g. cache) keeps its isomorphic core + infra in `shared/`, its client-only extensions in `browser/`, and its server-only extensions in `server/runtime/`. Future consumer surfaces sit as siblings to `browser/`. No `index.ts` barrels anywhere.
 * use bun apis not node apis when possible
 * only one export per file named after the export
 * write pure functions and use functional style programming

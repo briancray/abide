@@ -1,5 +1,6 @@
 import { NO_STORE } from '../../shared/cacheControlValues.ts'
 import { exeSuffix } from '../../shared/exeSuffix.ts'
+import { isCompileTarget } from '../../shared/isCompileTarget.ts'
 import { log } from '../../shared/log.ts'
 import { normalizeTarget } from '../../shared/normalizeTarget.ts'
 import { buildEnvContent } from './buildEnvContent.ts'
@@ -105,6 +106,19 @@ export async function handleCliDownload(
     programName: string,
     cwd: string,
 ): Promise<Response> {
+    /*
+    Validate the URL-supplied platform against the known target set before any
+    filesystem access or lazy build. Without this, an arbitrary `platform`
+    segment flows into `dist/cli-thin/<platform>` paths (a traversal/oracle
+    surface) and a cache miss triggers an expensive cross-compile — so spraying
+    distinct junk strings amplifies into unbounded concurrent builds.
+    */
+    if (!isCompileTarget(normalizeTarget(platform))) {
+        return new Response(`unknown platform: ${platform}`, {
+            status: 404,
+            headers: { 'Cache-Control': NO_STORE },
+        })
+    }
     const binaryPath = await ensurePlatformBinary(platform, programName, cwd)
     if (!binaryPath) {
         return new Response(`unknown platform: ${platform}`, {

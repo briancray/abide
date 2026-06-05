@@ -1,5 +1,5 @@
 <script lang="ts">
-import { HttpError } from '@briancray/belte/browser/HttpError'
+import { HttpError } from '@briancray/belte/shared/HttpError'
 import CodeBlock from '$browser/CodeBlock.svelte'
 import { getEcho } from '$server/rpc/getEcho.ts'
 import { getProduct } from '$server/rpc/getProduct.ts'
@@ -62,7 +62,7 @@ async function callRedirectFetch() {
                     <td class="px-4 py-2 font-mono">json(data, init?)</td>
                     <td class="px-4 py-2 font-mono text-slate-500">application/json</td>
                     <td class="px-4 py-2 text-slate-600">
-                        thin wrapper over <code class="font-mono">Response.json</code>
+                        thin wrapper over<code class="font-mono">Response.json</code>
                     </td>
                 </tr>
                 <tr>
@@ -81,7 +81,7 @@ async function callRedirectFetch() {
         </table>
     </div>
     <p class="mt-2 text-xs text-slate-500">
-        For streaming responses see <a class="underline" href="/server/streaming">SSE + JSONL</a>
+        For streaming responses see<a class="underline" href="/server/streaming">SSE + JSONL</a>
         .
     </p>
 </section>
@@ -116,15 +116,15 @@ async function callRedirectFetch() {
         </a>
     </div>
     <ul class="mt-3 space-y-1 font-mono text-xs text-slate-700">
-        <li>json: {jsonOutcome}</li>
-        <li>error: {errorOutcome}</li>
-        <li>redirect: {redirectOutcome}</li>
+        <li>json:{jsonOutcome}</li>
+        <li>error:{errorOutcome}</li>
+        <li>redirect:{redirectOutcome}</li>
     </ul>
     <p class="mt-2 text-xs text-slate-500">
-        Browsers don't expose the 302 directly to JS — <code class="font-mono">
+        Browsers don't expose the 302 directly to JS —<code class="font-mono">
             response.redirected
         </code>
-        + <code class="font-mono">response.url</code> are the visible signals.
+        +<code class="font-mono">response.url</code> are the visible signals.
     </p>
 </section>
 

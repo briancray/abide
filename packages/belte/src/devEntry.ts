@@ -1,4 +1,6 @@
 // @ts-expect-error virtual module resolved by belteResolverPlugin
+import { errors } from './_virtual/errors.ts'
+// @ts-expect-error virtual module resolved by belteResolverPlugin
 import { layouts } from './_virtual/layouts.ts'
 // @ts-expect-error virtual module resolved by belteResolverPlugin
 import { pages } from './_virtual/pages.ts'
@@ -25,6 +27,7 @@ await build({ cwd: process.cwd(), minify: false })
 await Promise.all([
     ...Object.values(pages).map((loader) => (loader as () => Promise<unknown>)()),
     ...Object.values(layouts).map((loader) => (loader as () => Promise<unknown>)()),
+    ...Object.values(errors).map((loader) => (loader as () => Promise<unknown>)()),
     ...Object.values(rpc).map((loader) => (loader as () => Promise<unknown>)()),
     ...Object.values(sockets).map((loader) => (loader as () => Promise<unknown>)()),
     ...Object.values(prompts).map((loader) => (loader as () => Promise<unknown>)()),

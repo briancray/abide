@@ -1,5 +1,6 @@
-import type { HttpVerb } from '../server/rpc/types/HttpVerb.ts'
 import { carriesBodyArgs } from './carriesBodyArgs.ts'
+import { queryStringFromArgs } from './queryStringFromArgs.ts'
+import type { HttpVerb } from './types/HttpVerb.ts'
 
 /*
 Builds the Request a verb helper uses to invoke its handler. Same shape on
@@ -35,6 +36,19 @@ export function buildRpcRequest({
     if (args === undefined) {
         return new Request(new URL(url, baseUrl).href, { method, headers: requestHeaders })
     }
+    /*
+    A FormData body ships as-is: the Request constructor sets its own
+    `multipart/form-data` content-type with a boundary, so the server's
+    parseArgs splits text fields into args and File parts into files().
+    Setting the header by hand would omit the boundary and break parsing.
+    */
+    if (args instanceof FormData) {
+        return new Request(new URL(url, baseUrl).href, {
+            method,
+            headers: requestHeaders,
+            body: args,
+        })
+    }
     requestHeaders.set('content-type', 'application/json')
     return new Request(new URL(url, baseUrl).href, {
         method,
@@ -51,12 +65,6 @@ function appendQuery(method: HttpVerb, url: string, args: unknown): string {
         const got = Array.isArray(args) ? 'array' : typeof args
         throw new Error(`[belte] ${method} ${url} args must be a plain object — got ${got}`)
     }
-    const entries = Object.entries(args as Record<string, unknown>).filter(
-        ([, value]) => value !== undefined,
-    )
-    if (entries.length === 0) {
-        return url
-    }
-    const suffix = new URLSearchParams(entries as Array<[string, string]>).toString()
+    const suffix = queryStringFromArgs(args as Record<string, unknown>, false)
     return suffix === '' ? url : `${url}?${suffix}`
 }

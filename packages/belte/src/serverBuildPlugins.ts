@@ -1,6 +1,6 @@
 import type { BunPlugin } from 'bun'
 import { belteResolverPlugin } from './belteResolverPlugin.ts'
-import type { SvelteConfig } from './lib/server/runtime/types/SvelteConfig.ts'
+import type { SvelteConfig } from './lib/shared/types/SvelteConfig.ts'
 import { sveltePlugin } from './sveltePlugin.ts'
 
 /*

@@ -1,0 +1,40 @@
+import { GET } from '@briancray/belte/server/GET'
+import { json } from '@briancray/belte/server/json'
+import { cache } from '@briancray/belte/shared/cache'
+
+type Rates = { base: string; date: string; rates: Record<string, number> }
+
+/*
+Hoisted producer wrapping an external fetch. The cache keys on this
+function's reference + args, so a const/hoisted fn dedupes across calls;
+an inline arrow would get a fresh id every call and never hit. It returns
+a plain Promise<Rates> (no Response, no decode) — the producer path, not
+the remote-verb path.
+*/
+async function fetchRates(base = 'USD'): Promise<Rates> {
+    const response = await fetch(`https://api.frankfurter.app/latest?from=${base}`)
+    if (!response.ok) {
+        throw new Error(`upstream ${response.status}`)
+    }
+    return response.json()
+}
+
+/*
+Reuses the rpc cache machinery for an upstream API. `global: true` puts the
+entry in the process-level store so a value fetched for one request is reused
+by later requests (per-user request scoping is wrong here — the upstream is
+shared); `ttl` bounds staleness so the upstream is hit at most once per minute
+across the whole process. Same dedup/ttl/invalidate/pending machinery the rpc
+verbs get — only the Response-based SSR streaming snapshot is unavailable,
+since an external fetch carries no wire metadata to snapshot.
+*/
+export const getRates = GET<{ base?: string }, Rates>(async ({ base = 'USD' }) => {
+    const rates = await cache(fetchRates, { global: true, ttl: 60_000 })(base)
+    return json(rates)
+})
+
+/*
+Invalidate this upstream from anywhere with cache.invalidate(fetchRates) — the
+selector matches the producer's id prefix, so the next read refetches. Works
+only once fetchRates has been cached at least once (before that it has no id).
+*/

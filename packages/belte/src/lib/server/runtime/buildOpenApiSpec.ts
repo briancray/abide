@@ -24,6 +24,26 @@ function queryParameters(jsonSchema: Record<string, unknown>): Array<Record<stri
 }
 
 /*
+Request body schema for a multipart upload verb: the text fields from
+inputSchema, plus the binary parts. A File has no honest
+Standard-Schema→JSON-Schema conversion, so the file parts are advertised
+generically as additional binary properties rather than named per field.
+*/
+function multipartBodySchema(textSchema: Record<string, unknown>): Record<string, unknown> {
+    const textProperties = (textSchema.properties as Record<string, unknown> | undefined) ?? {}
+    const schema: Record<string, unknown> = {
+        type: 'object',
+        properties: { ...textProperties },
+        additionalProperties: { type: 'string', format: 'binary' },
+    }
+    const required = (textSchema.required as string[] | undefined) ?? []
+    if (required.length > 0) {
+        schema.required = required
+    }
+    return schema
+}
+
+/*
 Builds an OpenAPI 3.1 document from the verb registry — the HTTP surface
 every rpc exposes regardless of which non-browser clients it advertises.
 GET/DELETE/HEAD args become query parameters; POST/PUT/PATCH args become
@@ -38,7 +58,7 @@ export function buildOpenApiSpec(info: {
     for (const entry of verbRegistry.values()) {
         const url = entry.remote.url
         const method = entry.remote.method
-        const jsonSchema = jsonSchemaForSchema(entry.inputSchema, entry.inputJsonSchema)
+        const jsonSchema = jsonSchemaForSchema(entry.inputSchema)
         const description = jsonSchema.description as string | undefined
         /*
         When the verb declares an `outputSchema`, describe the 200 body
@@ -49,7 +69,7 @@ export function buildOpenApiSpec(info: {
         if (entry.outputSchema) {
             okResponse.content = {
                 'application/json': {
-                    schema: jsonSchemaForSchema(entry.outputSchema, entry.outputJsonSchema),
+                    schema: jsonSchemaForSchema(entry.outputSchema),
                 },
             }
         }
@@ -59,16 +79,23 @@ export function buildOpenApiSpec(info: {
             responses: { '200': okResponse },
         }
         if (carriesBodyArgs(method)) {
-            operation.requestBody = {
-                content: { 'application/json': { schema: jsonSchema } },
-            }
+            operation.requestBody = entry.filesSchema
+                ? {
+                      content: {
+                          'multipart/form-data': {
+                              schema: multipartBodySchema(jsonSchema),
+                          },
+                      },
+                  }
+                : { content: { 'application/json': { schema: jsonSchema } } }
         } else {
             const parameters = queryParameters(jsonSchema)
             if (parameters.length > 0) {
                 operation.parameters = parameters
             }
         }
-        const path = (paths[url] ??= {})
+        paths[url] ??= {}
+        const path = paths[url]
         path[method.toLowerCase()] = operation
     }
     return {

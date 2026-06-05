@@ -25,6 +25,15 @@ describe('buildOpenApiSpec happy path', () => {
         defineVerb('POST', '/rpc/oa-make', ({ name }: { name: string }) => json({ name }), {
             inputSchema: testSchema({ type: 'object', properties: { name: { type: 'string' } } }),
         })
+        // upload verb → text fields plus generic binary parts
+        defineVerb('POST', '/rpc/oa-upload', () => json({ ok: true }), {
+            inputSchema: testSchema({
+                type: 'object',
+                properties: { title: { type: 'string' } },
+                required: ['title'],
+            }),
+            filesSchema: testSchema(),
+        })
         const spec = buildOpenApiSpec({ title: 'app', version: '1.0.0' })
         paths = spec.paths as Record<string, Record<string, Operation>>
     })
@@ -55,5 +64,22 @@ describe('buildOpenApiSpec happy path', () => {
             type: 'object',
             properties: { name: { type: 'string' } },
         })
+        // a non-upload POST has no multipart body
+        expect(operation.requestBody?.content['multipart/form-data']).toBeUndefined()
+    })
+
+    test('an upload verb emits a multipart body with text fields + generic binary parts', () => {
+        const schema = paths['/rpc/oa-upload'].post.requestBody?.content['multipart/form-data']
+            .schema as Record<string, unknown>
+        expect(schema).toMatchObject({
+            type: 'object',
+            properties: { title: { type: 'string' } },
+            additionalProperties: { type: 'string', format: 'binary' },
+        })
+        expect(schema.required).toEqual(expect.arrayContaining(['title']))
+        // filesSchema never reached the JSON body
+        expect(
+            paths['/rpc/oa-upload'].post.requestBody?.content['application/json'],
+        ).toBeUndefined()
     })
 })

@@ -1,8 +1,8 @@
 import type { Pages } from '../../browser/types/Pages.ts'
 import { NO_STORE } from '../../shared/cacheControlValues.ts'
 import { memoizeByKey } from '../../shared/memoizeByKey.ts'
-import type { HttpVerb } from '../rpc/types/HttpVerb.ts'
-import type { RemoteFunction } from '../rpc/types/RemoteFunction.ts'
+import type { HttpVerb } from '../../shared/types/HttpVerb.ts'
+import type { RemoteFunction } from '../../shared/types/RemoteFunction.ts'
 import type { RemoteRoutes } from '../rpc/types/RemoteRoutes.ts'
 import type { RequestStore } from './types/RequestStore.ts'
 

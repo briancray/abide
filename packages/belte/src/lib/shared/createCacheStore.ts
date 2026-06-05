@@ -1,5 +1,6 @@
 import { createSubscriber } from 'svelte/reactivity'
 import type { CacheEntry } from './types/CacheEntry.ts'
+import type { CacheInvalidation } from './types/CacheInvalidation.ts'
 import type { CacheStore } from './types/CacheStore.ts'
 
 /*
@@ -31,7 +32,7 @@ export function createCacheStore(): CacheStore {
         }
         const registered = createSubscriber((update) => {
             const onInvalidate = (event: Event) => {
-                if ((event as CustomEvent<Set<string>>).detail.has(key)) {
+                if ((event as CustomEvent<CacheInvalidation>).detail.has(key)) {
                     update()
                 }
             }

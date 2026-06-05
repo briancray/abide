@@ -1,7 +1,7 @@
 <script lang="ts">
 /*
-Kitchen-sink index. Five cards mirror the five public umbrellas in the
-README — belte/server, belte/browser, belte/mcp, belte/cli, belte/bundle.
+Kitchen-sink index. Six cards mirror the public umbrellas in the README —
+belte/server, belte/shared, belte/browser, belte/mcp, belte/cli, belte/bundle.
 The composed auth showcase sits below.
 */
 </script>
@@ -24,13 +24,22 @@ The composed auth showcase sits below.
         </p>
     </a>
     <a
+        href="/shared"
+        class="rounded-lg border border-slate-200 bg-white p-5 hover:border-slate-400">
+        <h2 class="text-lg font-semibold"><code class="font-mono">belte/shared</code></h2>
+        <p class="mt-1 text-sm text-slate-600">
+            The isomorphic surface — same callable both sides.
+            <code class="font-mono">cache()</code> for deduped, SSR-hydrated reads, and
+            <code class="font-mono">HttpError</code>
+            for non-2xx remote calls.
+        </p>
+    </a>
+    <a
         href="/browser"
         class="rounded-lg border border-slate-200 bg-white p-5 hover:border-slate-400">
         <h2 class="text-lg font-semibold"><code class="font-mono">belte/browser</code></h2>
         <p class="mt-1 text-sm text-slate-600">
             How the browser reads, reacts, and navigates —
-            <code class="font-mono">cache()</code>
-            ,
             <code class="font-mono">subscribe()</code>
             ,
             <code class="font-mono">page</code>
@@ -51,7 +60,7 @@ The composed auth showcase sits below.
     <a href="/cli" class="rounded-lg border border-slate-200 bg-white p-5 hover:border-slate-400">
         <h2 class="text-lg font-semibold"><code class="font-mono">belte/cli</code></h2>
         <p class="mt-1 text-sm text-slate-600">
-            The thin standalone CLI binary — a remote client served from <code class="font-mono">
+            The thin standalone CLI binary — a remote client served from<code class="font-mono">
                 /__belte/cli
             </code>
             ; schema-bearing rpcs auto-expose as commands.
@@ -77,7 +86,7 @@ The composed auth showcase sits below.
         is gated by a nested layout. The
         <code class="font-mono">auth/layout.svelte</code>
         <em>replaces</em>
-        the root layout for everything under <code class="font-mono">/auth</code>
+        the root layout for everything under<code class="font-mono">/auth</code>
         (layouts are nearest-only), so the auth area renders its own chrome.
     </p>
 </section>

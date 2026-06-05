@@ -4,14 +4,14 @@ import { forwardHeaders } from '../../shared/forwardHeaders.ts'
 import { isReadOnlyMethod } from '../../shared/isReadOnlyMethod.ts'
 import { resolveClientFlags } from '../../shared/resolveClientFlags.ts'
 import type { ClientFlags } from '../../shared/types/ClientFlags.ts'
+import type { HttpVerb } from '../../shared/types/HttpVerb.ts'
+import type { RemoteFunction } from '../../shared/types/RemoteFunction.ts'
+import type { StandardSchemaV1 } from '../../shared/types/StandardSchemaV1.ts'
 import { json } from '../json.ts'
 import { requestContext } from '../runtime/requestContext.ts'
 import { parseArgs } from './parseArgs.ts'
 import { registerVerb } from './registerVerb.ts'
-import type { HttpVerb } from './types/HttpVerb.ts'
-import type { RemoteFunction } from './types/RemoteFunction.ts'
 import type { RemoteHandler } from './types/RemoteHandler.ts'
-import type { StandardSchemaV1 } from './types/StandardSchemaV1.ts'
 
 /*
 Builds a RemoteFunction from an HTTP verb + RPC URL + handler. The bundler
@@ -35,16 +35,14 @@ export function defineVerb<Args, Return>(
     handler: RemoteHandler<Args, Return>,
     opts?: {
         inputSchema?: StandardSchemaV1
-        inputJsonSchema?: Record<string, unknown>
         outputSchema?: StandardSchemaV1
-        outputJsonSchema?: Record<string, unknown>
+        filesSchema?: StandardSchemaV1
         clients?: Partial<ClientFlags>
     },
 ): RemoteFunction<Args, Return> {
     const inputSchema = opts?.inputSchema
-    const inputJsonSchema = opts?.inputJsonSchema
     const outputSchema = opts?.outputSchema
-    const outputJsonSchema = opts?.outputJsonSchema
+    const filesSchema = opts?.filesSchema
     /*
     An input schema makes the handler safe to advertise to non-browser
     surfaces. CLI flips on for any verb with one (a human/script invokes it
@@ -78,12 +76,31 @@ export function defineVerb<Args, Return>(
         return handler(args as Args) as unknown as Response
     }
 
+    /*
+    Validates the parsed args against inputSchema (text fields), then — when the
+    verb declares filesSchema — validates the File parts parseArgs split onto
+    the request store and merges them into the args bag the handler receives.
+    Either schema's issues become a 422. Files stay out of inputSchema so its
+    JSON-Schema projection (OpenAPI/MCP/CLI) never has to model a binary.
+    */
     async function validateThenHandle(args: Args | undefined): Promise<Response> {
-        const result = await inputSchema!['~standard'].validate(args)
-        if (result.issues) {
-            return json({ issues: result.issues }, { status: 422 })
+        let value: unknown = args
+        if (inputSchema) {
+            const result = await inputSchema['~standard'].validate(value)
+            if (result.issues) {
+                return json({ issues: result.issues }, { status: 422 })
+            }
+            value = result.value
         }
-        return runHandler(result.value as Args)
+        if (filesSchema) {
+            const files = requestContext.getStore()?.files ?? {}
+            const result = await filesSchema['~standard'].validate(files)
+            if (result.issues) {
+                return json({ issues: result.issues }, { status: 422 })
+            }
+            value = { ...(value as object), ...(result.value as object) }
+        }
+        return runHandler(value as Args)
     }
 
     /*
@@ -94,7 +111,7 @@ export function defineVerb<Args, Return>(
     SSR call.
     */
     function invoke(args: Args | undefined): Promise<Response> {
-        return inputSchema ? validateThenHandle(args) : runHandler(args)
+        return inputSchema || filesSchema ? validateThenHandle(args) : runHandler(args)
     }
 
     const remote = createRemoteFunction<Args, Return>({
@@ -108,9 +125,8 @@ export function defineVerb<Args, Return>(
     registerVerb({
         remote: remote as RemoteFunction<unknown, unknown>,
         inputSchema,
-        inputJsonSchema,
         outputSchema,
-        outputJsonSchema,
+        filesSchema,
         clients,
     })
     return remote

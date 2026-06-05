@@ -4,7 +4,11 @@ import { tmpdir } from 'node:os'
 import { globToPathSet } from '../src/lib/server/runtime/globToPathSet.ts'
 
 const roots: string[] = []
-afterAll(() => roots.forEach((root) => rmSync(root, { recursive: true, force: true })))
+afterAll(() => {
+    roots.forEach((root) => {
+        rmSync(root, { recursive: true, force: true })
+    })
+})
 
 // Creates a temp dir, runs `build` against it to lay out files, returns the dir.
 function tempDir(build: (dir: string) => void): string {

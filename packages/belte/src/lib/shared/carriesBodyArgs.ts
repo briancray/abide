@@ -1,4 +1,4 @@
-import type { HttpVerb } from '../server/rpc/types/HttpVerb.ts'
+import type { HttpVerb } from './types/HttpVerb.ts'
 
 /*
 Whether a verb carries its args in the request body (POST/PUT/PATCH) vs

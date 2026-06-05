@@ -1,4 +1,4 @@
-import type { SvelteConfig } from '../server/runtime/types/SvelteConfig.ts'
+import type { SvelteConfig } from './types/SvelteConfig.ts'
 
 const EXTENSIONS = ['js', 'mjs', 'ts'] as const
 

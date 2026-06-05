@@ -10,6 +10,8 @@ description: Regenerate README. Use when the user asks to rewrite, update, or re
 * dont use the current README, rebuild completely based on the outline below
 * use only files in packages/belte/src to understand the code. do not refer to examples or anything outside of this directory
 * Always start with heading Belte and tagline Isomorphic multimodal http framework built for humans and machines in a single Bun runtime.
+* pin every import to its real export path, verified against `packages/belte/src/../package.json` `exports`* — so paths like `@briancray/belte/shared/cache` can't regress.
+* dont mention any internal apis in the documentation
 
 ## outline
 
@@ -26,6 +28,7 @@ belte — isomorphic multimodal HTTP framework for humans and machines, one Bun 
 * What is an isomorphic multimodal framework
     * a single runtime
     * declare rpc once, use anywhere for free (browser/http, mcp, cli, bundle)
+    * belte/server/*` server-only, `belte/browser/*` client-only, `belte/shared/*` isomorphic
     * declaration example
     * consuming on each client
 
@@ -35,7 +38,9 @@ belte — isomorphic multimodal HTTP framework for humans and machines, one Bun 
             * function spec + options
             * example
             * response helpers
-            * request() and server()
+            * request() and server() and cookies()
+            * filesSchema (multipart)
+            * withJsonSchema()
         * Consuming
             * Normal call encoding + args and decoding response + example
             * .raw spec + example
@@ -55,13 +60,16 @@ belte — isomorphic multimodal HTTP framework for humans and machines, one Bun 
             * .tail example
 
 * Clients:
+    * Shared
+        * cache() on server and browser examples
+        * HttpError
     * Browser
         * pages (svelte 5)
         * Layouts
-        * cache function spec + example
         * subscribe function spec + example
         * navigate function spec + example
         * page state
+        * cache() reactivity
     * Mcp
         * generated automatically for free
         * rpc are tools
@@ -82,13 +90,13 @@ belte — isomorphic multimodal HTTP framework for humans and machines, one Bun 
         * icon.png
 
 * Some details
+    * config/env
     * app hooks
     * project layout
         * also suggest lib/ folders under each surface for handling lib
     * cli commands
     * public/ files
     * bundling
-    * environment variables
     * logging api and DEBUG
 
 

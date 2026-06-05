@@ -151,7 +151,7 @@ export function belteResolverPlugin({
         setup(build) {
             build.onResolve(
                 {
-                    filter: /\/_virtual\/(rpc|sockets|prompts|pages|layouts|app|mcp-resources|mcp|assets|public-assets|shell|app-info|cli-manifest|cli-name|cli-chrome|bundle-window|bundle-disconnected-component|bundle-disconnected)\.ts$/,
+                    filter: /\/_virtual\/(rpc|sockets|prompts|pages|layouts|errors|app|config|mcp-resources|mcp|assets|public-assets|shell|app-info|cli-manifest|cli-name|cli-chrome|bundle-window|bundle-disconnected-component|bundle-disconnected)\.ts$/,
                 },
                 (args) => {
                     const name = fileStem(args.path)
@@ -389,12 +389,42 @@ ${optionLines}
                     })
                 }
 
+                if (args.path === 'belte:errors') {
+                    const { errorFiles } = await scanPagesOnce()
+                    return manifestModule({
+                        files: errorFiles,
+                        keyForFile: pageUrlForFile,
+                        importDir: pagesDir,
+                        exportName: 'errors',
+                        label: 'error pages',
+                    })
+                }
+
                 if (args.path === 'belte:app') {
                     const userApp = `${cwd}/src/app.ts`
                     if (await Bun.file(userApp).exists()) {
                         log.info('using custom src/app.ts')
                         return {
                             contents: `export * from ${JSON.stringify(userApp)}`,
+                            loader: 'js',
+                        }
+                    }
+                    return { contents: 'export {};', loader: 'js' }
+                }
+
+                if (args.path === 'belte:config') {
+                    /*
+                    Re-exports src/server/config.ts so serverEntry can eager-import
+                    it at boot — running its `env(schema)` validation once the env
+                    layers are merged, before the server starts. Optional: an empty
+                    stub when absent, so an app with no config builds and boots the
+                    same (it just reads Bun.env directly).
+                    */
+                    const userConfig = `${serverDir}/config.ts`
+                    if (await Bun.file(userConfig).exists()) {
+                        log.info('using src/server/config.ts')
+                        return {
+                            contents: `export * from ${JSON.stringify(userConfig)}`,
                             loader: 'js',
                         }
                     }
@@ -718,23 +748,25 @@ ${encoded.map((entry) => entry.line).join('\n')}
 type PagesScan = {
     pageFiles: string[]
     layoutFiles: string[]
+    errorFiles: string[]
 }
 
 /*
-Walks src/browser/pages once and partitions every `.svelte` file into pages
-and layouts. Rejects any other file shape — pages and layouts must live in
-their own folders (or directly under `src/browser/pages/` for the root) and the
-basename must be `page.svelte` or `layout.svelte`. A misnamed file (e.g.
-`about.svelte`) would otherwise be silently ignored; the explicit error
-gives the right hint.
+Walks src/browser/pages once and partitions every `.svelte` file into pages,
+layouts, and error pages. Rejects any other file shape — every leaf must live in
+its own folder (or directly under `src/browser/pages/` for the root) and the
+basename must be `page.svelte`, `layout.svelte`, or `error.svelte`. A misnamed
+file (e.g. `about.svelte`) would otherwise be silently ignored; the explicit
+error gives the right hint.
 */
 async function scanPages(pagesDir: string): Promise<PagesScan> {
     if (!existsSync(pagesDir)) {
-        return { pageFiles: [], layoutFiles: [] }
+        return { pageFiles: [], layoutFiles: [], errorFiles: [] }
     }
     const allFiles = await Array.fromAsync(new Glob('**/*.svelte').scan({ cwd: pagesDir }))
     const pageFiles: string[] = []
     const layoutFiles: string[] = []
+    const errorFiles: string[] = []
     for (const file of allFiles) {
         const basename = file.split('/').pop() ?? ''
         if (basename === 'page.svelte') {
@@ -745,13 +777,17 @@ async function scanPages(pagesDir: string): Promise<PagesScan> {
             layoutFiles.push(file)
             continue
         }
+        if (basename === 'error.svelte') {
+            errorFiles.push(file)
+            continue
+        }
         const stem = basename.replace(/\.[^.]+$/, '')
         const parent = file.includes('/') ? `${file.slice(0, file.lastIndexOf('/'))}/` : ''
         throw new Error(
-            `[belte] src/browser/pages/${file} is not a recognized page file — every page must live in its own folder as page.svelte or layout.svelte (try src/browser/pages/${parent}${stem}/page.svelte)`,
+            `[belte] src/browser/pages/${file} is not a recognized page file — every page must live in its own folder as page.svelte, layout.svelte, or error.svelte (try src/browser/pages/${parent}${stem}/page.svelte)`,
         )
     }
-    return { pageFiles, layoutFiles }
+    return { pageFiles, layoutFiles, errorFiles }
 }
 
 /*

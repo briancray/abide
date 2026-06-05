@@ -1,10 +1,10 @@
 import { build } from './build.ts'
-import type { CompileTarget } from './lib/server/runtime/types/CompileTarget.ts'
 import { detectTarget } from './lib/shared/detectTarget.ts'
 import { exeSuffix } from './lib/shared/exeSuffix.ts'
 import { exitOnBuildFailure } from './lib/shared/exitOnBuildFailure.ts'
 import { loadSvelteConfig } from './lib/shared/loadSvelteConfig.ts'
 import { log } from './lib/shared/log.ts'
+import type { CompileTarget } from './lib/shared/types/CompileTarget.ts'
 import { serverBuildPlugins } from './serverBuildPlugins.ts'
 
 const SERVER_ENTRY = new URL('./serverEntry.ts', import.meta.url).pathname

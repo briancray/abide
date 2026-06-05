@@ -24,7 +24,25 @@ const streams = new Map<string, StashedStream>()
 
 const STASH_TTL_MS = 30_000
 
+/*
+The TTL bounds how long a stash lives, but not how many can pile up: a burst
+of streamed renders whose clients never connect would retain that many request
+stores until each times out. Cap the count and evict the oldest (insertion
+order on the Map) so peak memory stays bounded regardless of arrival rate.
+*/
+const MAX_STASHES = 1024
+
 export function stashPendingStream(store: CacheStore, pending: CacheEntry[]): string {
+    if (streams.size >= MAX_STASHES) {
+        const oldest = streams.keys().next().value
+        if (oldest !== undefined) {
+            const evicted = streams.get(oldest)
+            if (evicted) {
+                clearTimeout(evicted.timer)
+            }
+            streams.delete(oldest)
+        }
+    }
     const token = crypto.randomUUID()
     const timer = setTimeout(() => streams.delete(token), STASH_TTL_MS)
     timer.unref?.()

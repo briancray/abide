@@ -19,7 +19,13 @@ permissions:
   id-token: write # mint the OIDC token npm uses to attach provenance
 
 jobs:
+  # Gate the publish on the same lint + test + example-build suite PRs run, so a
+  # red suite or a broken example can never reach npm.
+  verify:
+    uses: ./.github/workflows/ci.yml
+
   release:
+    needs: verify
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

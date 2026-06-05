@@ -1,7 +1,6 @@
 import { dirname, join } from 'node:path'
 import { build } from './build.ts'
 import { compile } from './compile.ts'
-import type { CompileTarget } from './lib/server/runtime/types/CompileTarget.ts'
 import { detectTarget } from './lib/shared/detectTarget.ts'
 import { exeSuffix } from './lib/shared/exeSuffix.ts'
 import { exitOnBuildFailure } from './lib/shared/exitOnBuildFailure.ts'
@@ -9,6 +8,7 @@ import { loadSvelteConfig } from './lib/shared/loadSvelteConfig.ts'
 import { log } from './lib/shared/log.ts'
 import { programNameForPackage } from './lib/shared/programNameForPackage.ts'
 import { readPackageJson } from './lib/shared/readPackageJson.ts'
+import type { CompileTarget } from './lib/shared/types/CompileTarget.ts'
 import { serverBuildPlugins } from './serverBuildPlugins.ts'
 
 const DISCOVERY_ENTRY = new URL('./discoveryEntry.ts', import.meta.url).pathname

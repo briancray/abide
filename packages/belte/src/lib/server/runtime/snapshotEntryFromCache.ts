@@ -21,11 +21,15 @@ export async function snapshotEntryFromCache(
     store: CacheStore,
     entry: CacheEntry,
 ): Promise<CacheSnapshotEntry | undefined> {
+    /* Producer entries have no wire request to replay — they never snapshot. */
+    if (!entry.request) {
+        return undefined
+    }
     const method = entry.request.method.toUpperCase()
     if (method !== 'GET' && method !== 'DELETE') {
         return undefined
     }
-    const response = await readSettled(entry.promise)
+    const response = await readSettled(entry.promise as Promise<Response>)
     if (!response) {
         return undefined
     }

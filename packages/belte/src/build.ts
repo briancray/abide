@@ -1,10 +1,11 @@
 import type { BunPlugin } from 'bun'
 import { belteResolverPlugin } from './belteResolverPlugin.ts'
 import { dedupeSveltePlugin } from './dedupeSveltePlugin.ts'
-import type { SvelteConfig } from './lib/server/runtime/types/SvelteConfig.ts'
 import { exitOnBuildFailure } from './lib/shared/exitOnBuildFailure.ts'
+import { isModuleNotFound } from './lib/shared/isModuleNotFound.ts'
 import { loadSvelteConfig } from './lib/shared/loadSvelteConfig.ts'
 import { log } from './lib/shared/log.ts'
+import type { SvelteConfig } from './lib/shared/types/SvelteConfig.ts'
 import { sveltePlugin } from './sveltePlugin.ts'
 
 const CLIENT_ENTRY = new URL('./clientEntry.ts', import.meta.url).pathname
@@ -43,7 +44,16 @@ export async function build({
     try {
         const tailwind = (await import('bun-plugin-tailwind')).default
         plugins.push(tailwind)
-    } catch {
+    } catch (error) {
+        /*
+        Tailwind is an optional peer — a genuine "not installed" is fine and
+        builds without it. But only swallow the module-resolution failure;
+        any other error (a plugin that loaded and then threw on a real
+        misconfig) must surface, or the build silently ships unstyled.
+        */
+        if (!isModuleNotFound(error)) {
+            throw error
+        }
         log.warn('bun-plugin-tailwind not installed; building without Tailwind')
     }
 

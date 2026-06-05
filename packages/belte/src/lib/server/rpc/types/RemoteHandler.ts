@@ -3,9 +3,10 @@ import type { TypedResponse } from './TypedResponse.ts'
 /*
 Handler signature for verb-defined remote functions. Args is `undefined` for
 GETs/DELETEs with no query, JSON-shaped objects for json bodies, and
-form-shaped objects for form-encoded bodies. For binary or multipart bodies
-Args is `undefined` — read the raw Request via `request()` from
-`belte/server` instead.
+form-shaped objects for form-encoded bodies. For a multipart upload it's the
+text fields (`inputSchema`) intersected with the validated File parts
+(`filesSchema`), merged into one bag. For a raw binary body Args is `undefined`
+— read the stream via `request()` from `belte/server` instead.
 
 Return is the value type the call site sees after Content-Type-driven
 decoding (a parsed object for JSON, a string for text/*, a Blob otherwise,

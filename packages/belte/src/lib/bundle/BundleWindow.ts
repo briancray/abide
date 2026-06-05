@@ -1,4 +1,4 @@
-import type { StandardSchemaV1 } from '../server/rpc/types/StandardSchemaV1.ts'
+import type { StandardSchemaV1 } from '../shared/types/StandardSchemaV1.ts'
 import type { BundleMenu } from './BundleMenu.ts'
 
 /*
@@ -19,13 +19,18 @@ export type BundleWindow = {
     height?: number
     menu?: BundleMenu[]
     /*
-    Config the embedded server needs before it can run, as a Standard Schema (the
-    same kind belte accepts for RPC/MCP). Its JSON Schema drives the connect
-    screen's first-run form, shown as a modal when Start is clicked with a required
-    key still unset; the user's answers persist to the data-dir `.env` the server
-    loads at boot. Each property maps to one env var of the same name; `title` is
-    the field label, `description` the hint, `format: 'password'` masks the input,
-    and `default` pre-fills it.
+    Overrides the bundle setup form's schema. By default the form is derived from
+    src/server/config.ts's env schema, so one declaration drives both boot
+    validation and the form — set this only when the bundle form should differ
+    from the env schema (it replaces, not merges; compose with the env schema
+    yourself via its `.extend(...)` if you want both).
+
+    A Standard Schema (the same kind belte accepts for RPC/MCP). Its JSON Schema
+    drives the connect screen's first-run form, shown as a modal when Start is
+    clicked with a required key still unset; the user's answers persist to the
+    data-dir `.env` the server loads at boot. Each property maps to one env var of
+    the same name; `title` is the field label, `description` the hint,
+    `format: 'password'` masks the input, and `default` pre-fills it.
     */
     config?: StandardSchemaV1
 }

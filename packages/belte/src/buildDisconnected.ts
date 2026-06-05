@@ -1,9 +1,10 @@
 import type { BunPlugin } from 'bun'
 import { belteResolverPlugin } from './belteResolverPlugin.ts'
 import { dedupeSveltePlugin } from './dedupeSveltePlugin.ts'
-import type { SvelteConfig } from './lib/server/runtime/types/SvelteConfig.ts'
 import { exitOnBuildFailure } from './lib/shared/exitOnBuildFailure.ts'
+import { isModuleNotFound } from './lib/shared/isModuleNotFound.ts'
 import { log } from './lib/shared/log.ts'
+import type { SvelteConfig } from './lib/shared/types/SvelteConfig.ts'
 import { sveltePlugin } from './sveltePlugin.ts'
 
 const ENTRY = new URL('./bundleDisconnectedEntry.ts', import.meta.url).pathname
@@ -50,7 +51,11 @@ export async function buildDisconnected({
     try {
         const tailwind = (await import('bun-plugin-tailwind')).default
         plugins.push(tailwind)
-    } catch {
+    } catch (error) {
+        // Optional peer: swallow "not installed", surface any real load error.
+        if (!isModuleNotFound(error)) {
+            throw error
+        }
         log.warn('bun-plugin-tailwind not installed; building connect screen without Tailwind')
     }
 

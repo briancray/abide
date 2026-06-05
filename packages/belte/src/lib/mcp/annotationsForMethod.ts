@@ -1,4 +1,4 @@
-import type { HttpVerb } from '../server/rpc/types/HttpVerb.ts'
+import type { HttpVerb } from '../shared/types/HttpVerb.ts'
 
 /*
 Maps an HTTP verb to MCP tool annotations so a model can tell a read from

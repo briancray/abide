@@ -70,7 +70,17 @@ export function streamFromIterator<T>(
         },
         cancel(reason) {
             stopKeepalive()
-            return iterator.return?.(reason)?.then(() => undefined)
+            /*
+            Route cancel into the generator's normal exit, but swallow a
+            rejection from its cleanup: a `finally` that throws on `.return()`
+            would otherwise surface as an unhandled rejection (process-fatal
+            under Bun's default) on a client disconnect — a path every
+            sse/jsonl/resolve stream hits routinely.
+            */
+            return iterator.return?.(reason)?.then(
+                () => undefined,
+                () => undefined,
+            )
         },
     })
 }

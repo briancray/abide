@@ -1,5 +1,5 @@
 <script lang="ts">
-import { cache } from '@briancray/belte/browser/cache'
+import { cache } from '@briancray/belte/shared/cache'
 import CodeBlock from '$browser/CodeBlock.svelte'
 import { getCounter } from '$server/rpc/getCounter.ts'
 import { incrementCounter } from '$server/rpc/incrementCounter.ts'
@@ -13,6 +13,14 @@ scope — re-runs both and they stay in lockstep.
 const counter = $derived(cache(getCounter, { scope: 'counter' })())
 const mirror = $derived(await cache(getCounter, { scope: 'counter' })())
 
+/*
+Reactive in-flight probe. Shares invalidate's selector grammar, so
+`cache.pending(getCounter)` is true while any getCounter call is unsettled
+— the read taps the store's lifecycle channel, so this $derived re-runs the
+moment a matching call starts or settles.
+*/
+const loading = $derived(cache.pending(getCounter))
+
 async function increment() {
     await incrementCounter()
     cache.invalidate(getCounter)
@@ -25,15 +33,15 @@ async function reset() {
 </script>
 
 <nav class="mb-2 text-sm text-slate-500">
-    <a href="/browser" class="hover:text-slate-900"><code class="font-mono">belte/browser</code></a>
+    <a href="/shared" class="hover:text-slate-900"><code class="font-mono">belte/shared</code></a>
     <span class="mx-2">/</span>
     <span><code class="font-mono">cache()</code> + invalidation</span>
 </nav>
 <h1 class="text-3xl font-bold"><code class="font-mono">cache()</code> + invalidation</h1>
 <p class="mt-2 text-slate-600">
-    Wraps a remote call with dedupe, SSR snapshot, and reactivity. Two
-    <code class="font-mono">$derived</code> reads against the same key share one entry and re-run
-    together on invalidation.
+    Isomorphic — wraps a remote call with dedupe, SSR snapshot, and reactivity, the same line on
+    server and client. Two<code class="font-mono">$derived</code> reads against the same key share
+    one entry and re-run together on invalidation.
 </p>
 
 <section class="mt-6">
@@ -81,6 +89,23 @@ async function reset() {
                         join several groups
                     </td>
                 </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">global</td>
+                    <td class="px-4 py-2 font-mono text-slate-500">true</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        store in the process-level cache so a value computed in one request is
+                        reused by later ones (server). A no-op on the client — one tab store either
+                        way.
+                    </td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">invalidate</td>
+                    <td class="px-4 py-2 font-mono text-slate-500">{'{ throttle?, debounce? }'}</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        coalesce an invalidation burst into far fewer refetches and serve the stale
+                        value until the refetch resolves (stale-while-revalidate). Set at most one.
+                    </td>
+                </tr>
             </tbody>
         </table>
     </div>
@@ -101,11 +126,40 @@ async function reset() {
     </ul>
 </section>
 
+<section class="mt-6">
+    <h2 class="text-sm font-semibold"><code class="font-mono">cache.pending</code></h2>
+    <p class="mt-2 text-sm text-slate-600">
+        Reactive in-flight probe sharing the same selector grammar —<code class="font-mono">
+            true
+        </code> while any matching call is unsettled. Use it for spinners; SSR loading state is
+        driven by<code class="font-mono">{'{#await}'}</code>
+        , not this.
+    </p>
+    <ul class="mt-2 space-y-1 text-sm text-slate-600">
+        <li><code class="font-mono">cache.pending()</code> — any rpc in flight</li>
+        <li><code class="font-mono">cache.pending(fn)</code> — one function's calls</li>
+        <li>
+            <code class="font-mono">{'cache.pending({ key?, scope? })'}</code> — a keyed entry
+            and/or a tagged group
+        </li>
+    </ul>
+</section>
+
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
-    <h2 class="text-sm font-semibold">Try it</h2>
+    <div class="flex items-center justify-between">
+        <h2 class="text-sm font-semibold">Try it</h2>
+        <span
+            class="rounded-full px-2 py-0.5 text-xs {loading
+                ? 'bg-amber-100 text-amber-700'
+                : 'bg-slate-100 text-slate-400'}">
+            {loading ? 'fetching…' : 'idle'}
+        </span>
+    </div>
     <p class="mt-1 text-xs text-slate-500">
-        Two <code class="font-mono">$derived(cache(getCounter)())</code> reads against the same key
-        — both update together because they share one entry.
+        Two<code class="font-mono">$derived(cache(getCounter)())</code> reads against the same key —
+        both update together because they share one entry. The badge reads
+        <code class="font-mono">cache.pending(getCounter)</code>
+        .
     </p>
     <div class="mt-3 grid gap-3 sm:grid-cols-2">
         <div class="rounded-md border border-slate-200 p-3">
@@ -148,7 +202,7 @@ async function reset() {
 <section class="mt-6 space-y-3">
     <CodeBlock
         title="this page — two derivations share one entry"
-        code={`import { cache } from '@briancray/belte/browser/cache'
+        code={`import { cache } from '@briancray/belte/shared/cache'
 
 const counter = $derived(cache(getCounter, { scope: 'counter' })())
 const mirror  = $derived(await cache(getCounter, { scope: 'counter' })())  // same key, same entry
@@ -167,9 +221,15 @@ cache(fn, { key: 'group' })()           // group calls under one key
 cache(fn, { key: ['post', id] })()      // override the key per arg
 cache(fn, { scope: 'orders' })()        // tag for grouped invalidation
 cache(fn, { scope: ['orders', 'feed'] })()  // join several groups
+cache(fn, { global: true })()           // process-level store (server reuse)
+cache(fn, { invalidate: { throttle: 1000 } })()  // coalesce refetch bursts
 
 cache.invalidate()                      // drop everything
 cache.invalidate(fn)                    // drop one function's calls
 cache.invalidate({ key: ['post', id] }) // drop one keyed entry
-cache.invalidate({ scope: 'orders' })   // drop every entry sharing the tag`} />
+cache.invalidate({ scope: 'orders' })   // drop every entry sharing the tag
+
+const loading = $derived(cache.pending(fn))  // reactive in-flight probe
+cache.pending()                         // any rpc in flight
+cache.pending({ scope: 'orders' })      // a tagged group in flight`} />
 </section>

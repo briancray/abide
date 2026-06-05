@@ -1,4 +1,4 @@
-import type { RemoteFunction } from './RemoteFunction.ts'
+import type { RemoteFunction } from '../../../shared/types/RemoteFunction.ts'
 
 /*
 Manifest of RPC URL → module loader. Produced by the resolver plugin from

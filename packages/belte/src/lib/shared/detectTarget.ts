@@ -1,4 +1,4 @@
-import type { CompileTarget } from '../server/runtime/types/CompileTarget.ts'
+import type { CompileTarget } from './types/CompileTarget.ts'
 
 /*
 Picks the Bun compile target matching the current host. Throws if the

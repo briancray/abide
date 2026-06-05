@@ -1,3 +1,4 @@
+import { invalidateEvent } from '../shared/invalidateEvent.ts'
 import type { CacheStore } from '../shared/types/CacheStore.ts'
 import type { StreamedResolution } from '../shared/types/StreamedResolution.ts'
 import { cacheEntryFromSnapshot } from './cacheEntryFromSnapshot.ts'
@@ -27,6 +28,6 @@ export function applyStreamedResolution(
     }
     const entry = cacheEntryFromSnapshot(resolution)
     store.entries.set(resolution.key, entry)
-    deferred?.resolve(entry.promise)
-    store.events.dispatchEvent(new CustomEvent('invalidate', { detail: new Set([resolution.key]) }))
+    deferred?.resolve(entry.promise as Promise<Response>)
+    store.events.dispatchEvent(invalidateEvent([resolution.key]))
 }

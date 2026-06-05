@@ -1,7 +1,7 @@
-import type { HttpVerb } from '../server/rpc/types/HttpVerb.ts'
 import { beltePackageName } from './beltePackageName.ts'
 import { findExportCallSite } from './findExportCallSite.ts'
 import { stripImport } from './stripImport.ts'
+import type { HttpVerb } from './types/HttpVerb.ts'
 
 const VERB_NAMES = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'] as const
 const VERB_SET = new Set<string>(VERB_NAMES)

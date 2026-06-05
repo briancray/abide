@@ -4,7 +4,11 @@ import { tmpdir } from 'node:os'
 import { belteImportName } from '../src/lib/shared/belteImportName.ts'
 
 const roots: string[] = []
-afterAll(() => roots.forEach((root) => rmSync(root, { recursive: true, force: true })))
+afterAll(() => {
+    roots.forEach((root) => {
+        rmSync(root, { recursive: true, force: true })
+    })
+})
 
 // Writes a package.json into a fresh temp dir and returns the dir.
 async function projectWith(packageJson: unknown): Promise<string> {

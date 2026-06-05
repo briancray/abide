@@ -38,7 +38,7 @@ describe('runWithRequestScope', () => {
         expect(first).not.toBe(second)
     })
 
-    test('a thrown body with no handleError yields the framework 500', async () => {
+    test('a thrown body with no handleError yields a generic framework 500 (no message leak)', async () => {
         const response = await runWithRequestScope(
             new Request('https://test.local/'),
             options,
@@ -48,7 +48,32 @@ describe('runWithRequestScope', () => {
         )
         expect(response.status).toBe(500)
         expect(response.headers.get('Content-Type')).toBe('text/html; charset=utf-8')
-        expect(await response.text()).toContain('boom')
+        const body = await response.text()
+        // Secure by default: the error message/stack must not reach the client.
+        expect(body).toBe('Internal Server Error')
+        expect(body).not.toContain('boom')
+    })
+
+    test('DEBUG=belte opts the framework 500 into the full stack', async () => {
+        const previous = process.env.DEBUG
+        process.env.DEBUG = 'belte'
+        try {
+            const response = await runWithRequestScope(
+                new Request('https://test.local/'),
+                options,
+                () => {
+                    throw new Error('boom')
+                },
+            )
+            expect(response.status).toBe(500)
+            expect(await response.text()).toContain('boom')
+        } finally {
+            if (previous === undefined) {
+                delete process.env.DEBUG
+            } else {
+                process.env.DEBUG = previous
+            }
+        }
     })
 
     test("a thrown body is routed to the app's handleError", async () => {

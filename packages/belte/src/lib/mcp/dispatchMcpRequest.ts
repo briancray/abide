@@ -1,12 +1,11 @@
 import { promptRegistry } from '../server/prompts/promptRegistry.ts'
+import { dispatchVerbInProcess } from '../server/rpc/dispatchVerbInProcess.ts'
 import { findVerbByCommandName } from '../server/rpc/findVerbByCommandName.ts'
-import type { VerbRegistryEntry } from '../server/rpc/types/VerbRegistryEntry.ts'
 import { verbRegistry } from '../server/rpc/verbRegistry.ts'
 import { ensureRegistriesLoaded } from '../server/runtime/registryManifests.ts'
 import { recentHistory } from '../server/sockets/recentHistory.ts'
 import { socketOperations } from '../server/sockets/socketOperations.ts'
 import { socketRegistry } from '../server/sockets/socketRegistry.ts'
-import { buildRpcRequest } from '../shared/buildRpcRequest.ts'
 import { NO_STORE } from '../shared/cacheControlValues.ts'
 import { commandNameForUrl } from '../shared/commandNameForUrl.ts'
 import { forwardHeaders } from '../shared/forwardHeaders.ts'
@@ -73,7 +72,7 @@ function buildTools(): ToolDescriptor[] {
         falling back to `method url` so the tool is still labelled when
         the schema has none.
         */
-        const inputSchema = jsonSchemaForSchema(entry.inputSchema, entry.inputJsonSchema)
+        const inputSchema = jsonSchemaForSchema(entry.inputSchema)
         const tool: ToolDescriptor = {
             name: commandNameForUrl(entry.remote.url),
             description:
@@ -83,7 +82,7 @@ function buildTools(): ToolDescriptor[] {
             annotations: annotationsForMethod(entry.remote.method),
         }
         if (entry.outputSchema) {
-            tool.outputSchema = jsonSchemaForSchema(entry.outputSchema, entry.outputJsonSchema)
+            tool.outputSchema = jsonSchemaForSchema(entry.outputSchema)
         }
         tools.push(tool)
     }
@@ -91,7 +90,7 @@ function buildTools(): ToolDescriptor[] {
         if (!entry.clients.mcp) {
             continue
         }
-        const payloadSchema = jsonSchemaForSchema(entry.schema, entry.jsonSchema)
+        const payloadSchema = jsonSchemaForSchema(entry.schema)
         for (const operation of socketOperations(entry)) {
             if (operation.kind === 'tail') {
                 tools.push({
@@ -147,11 +146,14 @@ function buildPrompts(): PromptDescriptor[] {
 
 /*
 Tool dispatch. RPC tools synthesize a Request (with forwarded auth
-headers) and pipe it through verb.fetch — the same code path the HTTP
-router uses, so validation + handler + error helpers behave identically;
-the response (buffered or streaming) is framed by toolResultFromResponse.
-Socket tools (`<base>-tail` / `<base>-publish`) fall through to the
-socket dispatcher.
+headers) and pipe it through verb.fetch inside the request scope — the
+same seam the HTTP router crosses, so validation, the handler, and the
+request-scoped helpers (per-call cache(), cookies(), request()) behave
+identically. A handler throw is caught by the scope and framed as an
+isError tool result (via the 500 response) rather than escaping as a
+JSON-RPC error. The response (buffered or streaming) is framed by
+toolResultFromResponse. Socket tools (`<base>-tail` / `<base>-publish`)
+fall through to the socket dispatcher.
 */
 async function callTool(
     toolName: string,
@@ -160,7 +162,12 @@ async function callTool(
 ): Promise<Record<string, unknown>> {
     const entry = findVerbByCommandName(toolName)
     if (entry?.clients.mcp) {
-        const response = await dispatchVerb(entry, args, inbound)
+        const response = await dispatchVerbInProcess({
+            entry,
+            args,
+            baseUrl: `${new URL(inbound.url).origin}/`,
+            headers: forwardHeaders(inbound.headers),
+        })
         return toolResultFromResponse(response)
     }
     const socketResult = callSocketTool(toolName, args)
@@ -212,27 +219,6 @@ function callSocketTool(
         return textResult('ok')
     }
     return undefined
-}
-
-/*
-Synthesizes the rpc Request from a resolved registry entry and dispatches
-through verb.fetch — the same code path the HTTP router uses — forwarding the
-inbound MCP request's auth headers so session/bearer middleware keeps working.
-*/
-function dispatchVerb(
-    entry: VerbRegistryEntry,
-    args: Record<string, unknown> | undefined,
-    inbound: Request,
-): Promise<Response> {
-    const baseUrl = `${new URL(inbound.url).origin}/`
-    const request = buildRpcRequest({
-        method: entry.remote.method,
-        url: entry.remote.url,
-        args,
-        baseUrl,
-        headers: forwardHeaders(inbound.headers),
-    })
-    return entry.remote.fetch(request)
 }
 
 /*

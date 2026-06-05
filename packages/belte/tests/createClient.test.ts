@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { createClient } from '../src/lib/cli/createClient.ts'
 import { json } from '../src/lib/server/json.ts'
+import { request } from '../src/lib/server/request.ts'
 import { defineVerb } from '../src/lib/server/rpc/defineVerb.ts'
 import { sse } from '../src/lib/server/sse.ts'
 import { streamResponse } from '../src/lib/shared/streamResponse.ts'
@@ -18,6 +19,13 @@ describe('createClient in-process happy path', () => {
         const response = await client['cli-ping'].raw({ n: '5' })
         expect(response.status).toBe(200)
         expect(await response.json()).toEqual({ pong: '5' })
+    })
+
+    test('runs in a request scope — request() resolves instead of throwing', async () => {
+        defineVerb('GET', '/rpc/cli-where', () => json({ host: new URL(request().url).host }))
+        const client = createClient()
+
+        expect(await client['cli-where']()).toEqual({ host: 'localhost' })
     })
 
     test('.raw on a streaming verb yields frames through streamResponse', async () => {

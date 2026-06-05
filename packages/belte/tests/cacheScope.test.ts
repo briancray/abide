@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { cache } from '../src/lib/browser/cache.ts'
-import type { HttpVerb } from '../src/lib/server/rpc/types/HttpVerb.ts'
-import type { RawRemoteFunction } from '../src/lib/server/rpc/types/RawRemoteFunction.ts'
+import { cache } from '../src/lib/shared/cache.ts'
 import { cacheStoreSlot } from '../src/lib/shared/cacheStoreSlot.ts'
 import { createCacheStore } from '../src/lib/shared/createCacheStore.ts'
 import { remoteMetaStore } from '../src/lib/shared/remoteMetaStore.ts'
+import type { CacheInvalidation } from '../src/lib/shared/types/CacheInvalidation.ts'
+import type { HttpVerb } from '../src/lib/shared/types/HttpVerb.ts'
+import type { RawRemoteFunction } from '../src/lib/shared/types/RawRemoteFunction.ts'
 
 /* Minimal raw remote function that records request meta so cache() accepts it. */
 function fakeRemote<Args>(method: HttpVerb, url: string): RawRemoteFunction<Args> {
@@ -54,9 +55,9 @@ describe('cache.invalidate selector', () => {
         const store = cacheStoreSlot.fallback!
         await cache(getPosts, { scope: 'dashboard' })()
 
-        let notified: Set<string> | undefined
+        let notified: CacheInvalidation | undefined
         store.events.addEventListener('invalidate', (event) => {
-            notified = (event as CustomEvent<Set<string>>).detail
+            notified = (event as CustomEvent<CacheInvalidation>).detail
         })
 
         cache.invalidate({ scope: 'dashboard' })

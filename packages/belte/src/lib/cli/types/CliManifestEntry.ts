@@ -1,4 +1,4 @@
-import type { HttpVerb } from '../../server/rpc/types/HttpVerb.ts'
+import type { HttpVerb } from '../../shared/types/HttpVerb.ts'
 
 /*
 Per-command manifest entry baked into the standalone CLI binary by the

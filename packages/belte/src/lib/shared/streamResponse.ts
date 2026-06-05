@@ -1,5 +1,5 @@
-import { HttpError } from '../server/HttpError.ts'
 import { decodeResponse } from './decodeResponse.ts'
+import { HttpError } from './HttpError.ts'
 import { jsonlErrorFrame } from './jsonlErrorFrame.ts'
 import { sseErrorFrame } from './sseErrorFrame.ts'
 import { STREAMING_CONTENT_TYPES } from './streamingContentTypes.ts'
@@ -40,6 +40,7 @@ export function streamResponse<T>(response: Response): AsyncIterable<T> {
 }
 
 /* Surfaces a non-2xx response (or any pre-stream failure) as a thrown error on the first pull. */
+// biome-ignore lint/correctness/useYield: throws on first pull; the generator shape is intentional so callers iterate it uniformly
 async function* errorIterable<T>(error: Error): AsyncGenerator<T> {
     throw error
 }

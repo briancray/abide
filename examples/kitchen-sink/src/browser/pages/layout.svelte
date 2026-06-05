@@ -1,9 +1,9 @@
 <script lang="ts">
 import '../app.css'
-import { cache } from '@briancray/belte/browser/cache'
 import { navigate } from '@briancray/belte/browser/navigate'
 import { page } from '@briancray/belte/browser/page'
 import { onMenu } from '@briancray/belte/bundle/onMenu'
+import { cache } from '@briancray/belte/shared/cache'
 import { getSession } from '$server/rpc/getSession.ts'
 import { logout } from '$server/rpc/logout.ts'
 
@@ -47,6 +47,7 @@ const linkClass = (prefix: string) =>
         <nav class="mx-auto flex max-w-4xl flex-wrap items-center gap-4 px-6 py-4 text-sm">
             <a href="/" class="text-base font-semibold">belte kitchen-sink</a>
             <a href="/server" class={linkClass('/server')}>belte/server</a>
+            <a href="/shared" class={linkClass('/shared')}>belte/shared</a>
             <a href="/browser" class={linkClass('/browser')}>belte/browser</a>
             <a href="/mcp" class={linkClass('/mcp')}>belte/mcp</a>
             <a href="/cli" class={linkClass('/cli')}>belte/cli</a>
@@ -54,7 +55,7 @@ const linkClass = (prefix: string) =>
             <a href="/auth/dashboard" class={linkClass('/auth')}>Auth</a>
             <div class="ml-auto flex items-center gap-3">
                 {#if session?.user}
-                    <span class="text-slate-600">signed in as <strong>{session.user}</strong></span>
+                    <span class="text-slate-600">signed in as<strong>{session.user}</strong></span>
                     <form action={logout.url} method={logout.method}>
                         <button
                             type="submit"

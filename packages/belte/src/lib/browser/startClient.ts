@@ -2,6 +2,7 @@ import { hydrate } from 'svelte'
 import App from '../../App.svelte'
 import { createCacheStore } from '../shared/createCacheStore.ts'
 import { setCacheStoreResolver } from '../shared/setCacheStoreResolver.ts'
+import { setGlobalCacheStoreResolver } from '../shared/setGlobalCacheStoreResolver.ts'
 import type { CacheSnapshotEntry } from '../shared/types/CacheSnapshotEntry.ts'
 import type { CacheStore } from '../shared/types/CacheStore.ts'
 import type { StreamingPlaceholder } from '../shared/types/StreamingPlaceholder.ts'
@@ -22,6 +23,8 @@ declare global {
             streaming?: StreamingPlaceholder[]
             /* Single-use token for the out-of-band resolution stream. */
             streamToken?: string
+            /* A server-rendered error.svelte page — static, nothing to hydrate. */
+            error?: boolean
         }
     }
 }
@@ -92,8 +95,18 @@ export async function startClient({
         throw new Error('[belte] missing #app target')
     }
 
+    /*
+    A server-rendered error.svelte (404 / page-render failure) ships static HTML
+    with no route to hydrate against — leave the markup as-is and wire nothing.
+    */
+    if (window.__SSR__.error) {
+        return
+    }
+
     const cacheStore = createCacheStore()
     setCacheStoreResolver(() => cacheStore)
+    /* One tab store: cache(fn, { global: true }) shares it, so global is a no-op here. */
+    setGlobalCacheStoreResolver(() => cacheStore)
     if (window.__SSR__.cache) {
         hydrateCacheFromSnapshot(cacheStore, window.__SSR__.cache)
     }

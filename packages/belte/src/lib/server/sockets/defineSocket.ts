@@ -28,7 +28,6 @@ export function defineSocket<T>(name: string, opts: SocketOptions = {}): Socket<
     const historySize = opts.history ?? 0
     const ttl = opts.ttl
     const schema = opts.schema
-    const jsonSchema = opts.jsonSchema
     /*
     A schema makes the socket's payload safe to advertise to non-browser
     surfaces, so it flips mcp/cli on by default — exposing the `tail` read
@@ -109,7 +108,10 @@ export function defineSocket<T>(name: string, opts: SocketOptions = {}): Socket<
         for (const notify of subscribers) {
             notify(validated)
         }
-        const server = cachedServer ?? (cachedServer = getActiveServer())
+        if (cachedServer === undefined) {
+            cachedServer = getActiveServer()
+        }
+        const server = cachedServer
         if (server) {
             server.publish(topic, JSON.stringify({ type: 'msg', socket: name, message: validated }))
         }
@@ -155,7 +157,6 @@ export function defineSocket<T>(name: string, opts: SocketOptions = {}): Socket<
         socket: self as Socket<unknown>,
         allowClientPublish: opts.clientPublish ?? false,
         schema,
-        jsonSchema,
         clients,
         snapshotHistory: () => {
             pruneExpired(Date.now())

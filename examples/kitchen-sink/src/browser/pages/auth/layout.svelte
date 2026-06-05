@@ -13,7 +13,7 @@ nav. Switching between "/" and "/auth/login" you can see the chrome
 change wholesale.
 */
 import '../../app.css'
-import { cache } from '@briancray/belte/browser/cache'
+import { cache } from '@briancray/belte/shared/cache'
 import { getSession } from '$server/rpc/getSession.ts'
 import { logout } from '$server/rpc/logout.ts'
 
@@ -34,7 +34,7 @@ const session = await cache(getSession)()
             <div class="ml-auto flex items-center gap-3">
                 {#if session?.user}
                     <span class="text-slate-400">
-                        signed in as <strong class="text-slate-100">{session.user}</strong>
+                        signed in as<strong class="text-slate-100">{session.user}</strong>
                     </span>
                     <form method="POST" action={logout.url}>
                         <button

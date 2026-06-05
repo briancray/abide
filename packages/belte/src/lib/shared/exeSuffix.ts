@@ -1,4 +1,4 @@
-import type { CompileTarget } from '../server/runtime/types/CompileTarget.ts'
+import type { CompileTarget } from './types/CompileTarget.ts'
 
 /*
 Executable filename suffix for a compile target — `.exe` on Windows targets,

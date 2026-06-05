@@ -1,8 +1,8 @@
-import type { HttpVerb } from '../server/rpc/types/HttpVerb.ts'
-import type { RemoteFunction } from '../server/rpc/types/RemoteFunction.ts'
 import { browserClientFlags } from '../shared/browserClientFlags.ts'
 import { buildRpcRequest } from '../shared/buildRpcRequest.ts'
 import { createRemoteFunction } from '../shared/createRemoteFunction.ts'
+import type { HttpVerb } from '../shared/types/HttpVerb.ts'
+import type { RemoteFunction } from '../shared/types/RemoteFunction.ts'
 
 /*
 Client-side substitute for a verb-defined handler. The bundler emits one

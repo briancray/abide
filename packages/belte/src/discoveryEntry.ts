@@ -30,7 +30,7 @@ for (const entry of verbRegistry.values()) {
     manifest[commandNameForUrl(entry.remote.url)] = {
         method: entry.remote.method,
         url: entry.remote.url,
-        jsonSchema: jsonSchemaForSchema(entry.inputSchema, entry.inputJsonSchema),
+        jsonSchema: jsonSchemaForSchema(entry.inputSchema),
     }
 }
 
@@ -64,7 +64,7 @@ for (const entry of socketRegistry.values()) {
             }
             continue
         }
-        const payloadSchema = jsonSchemaForSchema(entry.schema, entry.jsonSchema)
+        const payloadSchema = jsonSchemaForSchema(entry.schema)
         manifest[operation.name] = {
             method: operation.method,
             url: operation.restUrl,

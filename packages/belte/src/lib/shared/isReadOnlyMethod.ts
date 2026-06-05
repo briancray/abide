@@ -1,4 +1,4 @@
-import type { HttpVerb } from '../server/rpc/types/HttpVerb.ts'
+import type { HttpVerb } from './types/HttpVerb.ts'
 
 /*
 Read-only (safe) HTTP methods — they don't mutate server state. Belte

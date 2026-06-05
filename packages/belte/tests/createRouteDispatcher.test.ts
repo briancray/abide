@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import type { Pages } from '../src/lib/browser/types/Pages.ts'
-import type { HttpVerb } from '../src/lib/server/rpc/types/HttpVerb.ts'
-import type { RemoteFunction } from '../src/lib/server/rpc/types/RemoteFunction.ts'
 import type { RemoteRoutes } from '../src/lib/server/rpc/types/RemoteRoutes.ts'
 import { createRouteDispatcher } from '../src/lib/server/runtime/createRouteDispatcher.ts'
 import type { RequestStore } from '../src/lib/server/runtime/types/RequestStore.ts'
+import type { HttpVerb } from '../src/lib/shared/types/HttpVerb.ts'
+import type { RemoteFunction } from '../src/lib/shared/types/RemoteFunction.ts'
 
 const noPages: Pages = {}
 const noRpc: RemoteRoutes = {}

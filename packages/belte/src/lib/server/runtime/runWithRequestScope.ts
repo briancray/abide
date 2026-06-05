@@ -38,6 +38,16 @@ export function runWithRequestScope(
                 response = internalErrorResponse(error)
             }
         }
+        /*
+        Flush any cookies the handler set onto the outgoing response. Only when
+        a jar was materialized (cookies() was called) and only via append, so a
+        Set-Cookie the handler already placed on the response init survives.
+        */
+        if (store.cookies) {
+            store.cookies.toSetCookieHeaders().forEach((header) => {
+                response.headers.append('set-cookie', header)
+            })
+        }
         if (options.logRequests) {
             const ms = (Bun.nanoseconds() - start) / 1e6
             log.request(req.method, `${url.pathname}${url.search}`, response.status, ms)

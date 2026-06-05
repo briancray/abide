@@ -1,7 +1,7 @@
-import type { ClientFlags } from '../../../shared/types/ClientFlags.ts'
-import type { Subscribable } from '../../../shared/types/Subscribable.ts'
+import type { ClientFlags } from './ClientFlags.ts'
 import type { HttpVerb } from './HttpVerb.ts'
 import type { RawRemoteFunction } from './RawRemoteFunction.ts'
+import type { Subscribable } from './Subscribable.ts'
 
 /*
 Remote function reference produced by GET/POST/... inside an `$rpc/**`
@@ -25,11 +25,18 @@ HTTP rpc isn't the place for long-lived multi-publisher subscriptions.
 the router to invoke the handler from an incoming HTTP request, not
 for user code.
 */
-export type RemoteFunction<Args, Return> = ((args: Args) => Promise<Return>) & {
+/*
+A body verb (POST/PUT/PATCH) also accepts a FormData in place of typed args:
+buildRpcRequest ships it as a multipart body and the server splits text fields
+into args (still schema-validated) and File parts into files(). FormData is
+stringly-typed, so this is the upload escape hatch — typed object args remain
+the default for everything else.
+*/
+export type RemoteFunction<Args, Return> = ((args: Args | FormData) => Promise<Return>) & {
     readonly method: HttpVerb
     readonly url: string
     readonly clients: ClientFlags
     readonly raw: RawRemoteFunction<Args>
-    stream(args?: Args): Subscribable<Return>
+    stream(args?: Args | FormData): Subscribable<Return>
     fetch(request: Request): Promise<Response>
 }

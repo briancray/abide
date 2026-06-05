@@ -1,10 +1,15 @@
 import { afterAll, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
+import type { BunPlugin } from 'bun'
 import { belteResolverPlugin } from '../src/belteResolverPlugin.ts'
 
 const roots: string[] = []
-afterAll(() => roots.forEach((root) => rmSync(root, { recursive: true, force: true })))
+afterAll(() => {
+    roots.forEach((root) => {
+        rmSync(root, { recursive: true, force: true })
+    })
+})
 
 // Creates a temp project dir, runs `build` to lay out files, returns the dir.
 function tempProject(build: (dir: string) => void): string {
@@ -166,4 +171,47 @@ test('externalizes root-absolute url() for the server target', async () => {
     expect(result.success).toBe(true)
     const css = await result.outputs.find((output) => output.path.endsWith('.css'))?.text()
     expect(css).toContain('url("/images/server.png")')
+})
+
+/* Stub loader so the manifest's dynamic `import("…/error.svelte")` bundles
+without pulling in the real Svelte compiler. */
+const svelteStub: BunPlugin = {
+    name: 'svelte-stub',
+    setup(build) {
+        build.onLoad({ filter: /\.svelte$/ }, () => ({
+            contents: 'export default {}',
+            loader: 'js',
+        }))
+    },
+}
+
+/*
+error.svelte files partition into the belte:errors manifest keyed by their
+directory prefix (pageUrlForFile), exactly like layouts — the root one keys to
+"/" and a nested one to its folder. scanPages must accept error.svelte as a
+recognized leaf rather than throwing the "unrecognized page file" error.
+*/
+test('builds a belte:errors manifest keyed by directory prefix', async () => {
+    const cwd = tempProject((root) => {
+        const pages = `${root}/src/browser/pages`
+        mkdirSync(`${pages}/admin`, { recursive: true })
+        writeFileSync(`${pages}/page.svelte`, '<h1>home</h1>')
+        writeFileSync(`${pages}/error.svelte`, '<h1>error</h1>')
+        writeFileSync(`${pages}/admin/error.svelte`, '<h1>admin error</h1>')
+        writeFileSync(`${root}/entry.ts`, 'export { errors } from "./_virtual/errors.ts"\n')
+    })
+
+    const result = await Bun.build({
+        entrypoints: [`${cwd}/entry.ts`],
+        outdir: `${cwd}/out`,
+        target: 'bun',
+        plugins: [belteResolverPlugin({ cwd, target: 'server' }), svelteStub],
+    })
+
+    expect(result.success).toBe(true)
+    const bundle = (await result.outputs[0]?.text()) ?? ''
+    // Both prefixes present, each a lazy loader for its error.svelte.
+    expect(bundle).toContain('"/admin"')
+    expect(bundle).toMatch(/"\/":\s*\(\)\s*=>/)
+    expect(bundle).toContain('error.svelte')
 })

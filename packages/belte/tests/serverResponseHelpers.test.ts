@@ -3,7 +3,6 @@ import { DELETE } from '../src/lib/server/DELETE.ts'
 import { error } from '../src/lib/server/error.ts'
 import { GET } from '../src/lib/server/GET.ts'
 import { HEAD } from '../src/lib/server/HEAD.ts'
-import { HttpError } from '../src/lib/server/HttpError.ts'
 import { json } from '../src/lib/server/json.ts'
 import { jsonl } from '../src/lib/server/jsonl.ts'
 import { PATCH } from '../src/lib/server/PATCH.ts'
@@ -14,6 +13,7 @@ import { request } from '../src/lib/server/request.ts'
 import { runWithRequestScope } from '../src/lib/server/runtime/runWithRequestScope.ts'
 import { socket } from '../src/lib/server/socket.ts'
 import { sse } from '../src/lib/server/sse.ts'
+import { HttpError } from '../src/lib/shared/HttpError.ts'
 
 describe('json', () => {
     test('serializes the body with no-store by default', async () => {

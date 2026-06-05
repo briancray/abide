@@ -1,7 +1,7 @@
 <script lang="ts">
-import { cache } from '@briancray/belte/browser/cache'
-import { HttpError } from '@briancray/belte/browser/HttpError'
 import { navigate } from '@briancray/belte/browser/navigate'
+import { cache } from '@briancray/belte/shared/cache'
+import { HttpError } from '@briancray/belte/shared/HttpError'
 import CodeBlock from '$browser/CodeBlock.svelte'
 import { getProduct } from '$server/rpc/getProduct.ts'
 
@@ -20,20 +20,20 @@ const product = $derived(
     <span class="mx-2">/</span>
     <a href="/server/rpc" class="hover:text-slate-900">RPC</a>
     <span class="mx-2">/</span>
-    <span>Product {id}</span>
+    <span>Product{id}</span>
 </nav>
-<h1 class="text-3xl font-bold">Product {id}</h1>
+<h1 class="text-3xl font-bold">Product{id}</h1>
 <p class="mt-2 text-slate-600">
-    Dynamic page segment <code class="font-mono">[id]</code> from the folder name — typed via the
-    generated <code class="font-mono">Routes</code> augmentation. Per-id cache key keeps products
-    from sharing one entry; <code class="font-mono">$derived</code> re-runs on nav.
+    Dynamic page segment<code class="font-mono">[id]</code> from the folder name — typed via the
+    generated<code class="font-mono">Routes</code> augmentation. Per-id cache key keeps products
+    from sharing one entry;<code class="font-mono">$derived</code> re-runs on nav.
 </p>
 
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
     {#if product}
         <p class="text-slate-700"><strong>{product.name}</strong> — €{product.price}</p>
     {:else}
-        <p class="text-slate-500">No product with id {id}.</p>
+        <p class="text-slate-500">No product with id{id}.</p>
     {/if}
     <div class="mt-4 flex flex-wrap gap-2 text-sm">
         {#each ['1', '2', '3'] as candidate (candidate)}
@@ -61,7 +61,7 @@ const product = $derived(
                 <tr>
                     <td class="px-4 py-2 font-mono">src/browser/pages/.../[id]/page.svelte</td>
                     <td class="px-4 py-2 text-slate-600">
-                        URL segment → <code class="font-mono">$props().id</code>
+                        URL segment →<code class="font-mono">$props().id</code>
                     </td>
                 </tr>
                 <tr>
@@ -96,7 +96,7 @@ export const getProduct = GET<{ id: string }>(({ id }) => {
         title="this page — [id] segment + per-id cache"
         lang="svelte"
         code={`<script lang="ts">
-import { cache } from '@briancray/belte/browser/cache'
+import { cache } from '@briancray/belte/shared/cache'
 import { getProduct } from '$server/rpc/getProduct.ts'
 
 let { id }: { id: string } = $props()    // typed via src/.belte/routes.d.ts

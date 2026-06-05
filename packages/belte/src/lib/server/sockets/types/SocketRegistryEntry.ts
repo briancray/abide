@@ -1,5 +1,5 @@
 import type { ClientFlags } from '../../../shared/types/ClientFlags.ts'
-import type { StandardSchemaV1 } from '../../rpc/types/StandardSchemaV1.ts'
+import type { StandardSchemaV1 } from '../../../shared/types/StandardSchemaV1.ts'
 import type { Socket } from './Socket.ts'
 
 /*
@@ -12,7 +12,6 @@ export type SocketRegistryEntry = {
     socket: Socket<unknown>
     allowClientPublish: boolean
     schema: StandardSchemaV1 | undefined
-    jsonSchema: Record<string, unknown> | undefined
     clients: ClientFlags
     snapshotHistory(): unknown[]
 }

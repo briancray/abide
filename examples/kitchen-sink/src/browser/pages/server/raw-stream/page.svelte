@@ -1,5 +1,5 @@
 <script lang="ts">
-import { cache } from '@briancray/belte/browser/cache'
+import { cache } from '@briancray/belte/shared/cache'
 import CodeBlock from '$browser/CodeBlock.svelte'
 import { getReport } from '$server/rpc/getReport.ts'
 import { tickFeed } from '$server/rpc/tickFeed.ts'
@@ -36,14 +36,14 @@ const cachedRaw = $derived(cache(getReport.raw)({ id: 'r-1' }))
     <a href="/server" class="hover:text-slate-900"><code class="font-mono">belte/server</code></a>
     <span class="mx-2">/</span>
     <span>
-        <code class="font-mono">.raw</code> and <code class="font-mono">.stream(args?)</code>
+        <code class="font-mono">.raw</code> and<code class="font-mono">.stream(args?)</code>
     </span>
 </nav>
 <h1 class="text-3xl font-bold">
-    <code class="font-mono">.raw</code> and <code class="font-mono">.stream(args?)</code>
+    <code class="font-mono">.raw</code> and<code class="font-mono">.stream(args?)</code>
 </h1>
 <p class="mt-2 text-slate-600">
-    Function-shape siblings on every rpc — same <code class="font-mono">method</code> and
+    Function-shape siblings on every rpc — same<code class="font-mono">method</code> and
     <code class="font-mono">url</code>
     , different return shape.
 </p>
@@ -71,7 +71,7 @@ const cachedRaw = $derived(cache(getReport.raw)({ id: 'r-1' }))
                     <td class="px-4 py-2 font-mono">fn.stream(args?)</td>
                     <td class="px-4 py-2 font-mono text-slate-500">Subscribable&lt;Return&gt;</td>
                     <td class="px-4 py-2 text-slate-600">
-                        iterating SSE/JSONL frames, or piping into <code class="font-mono">
+                        iterating SSE/JSONL frames, or piping into<code class="font-mono">
                             subscribe()
                         </code>
                     </td>
@@ -111,10 +111,10 @@ const cachedRaw = $derived(cache(getReport.raw)({ id: 'r-1' }))
         </button>
     </div>
     <ul class="mt-3 space-y-1 font-mono text-xs text-slate-700">
-        <li>decoded: {decoded}</li>
-        <li>raw: {raw}</li>
+        <li>decoded:{decoded}</li>
+        <li>raw:{raw}</li>
         {#each streamFrames as f, i (i)}
-            <li>stream[{i}]: {f}</li>
+            <li>stream[{i}]:{f}</li>
         {/each}
     </ul>
 </section>
