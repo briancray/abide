@@ -11,6 +11,10 @@ Turns the current working tree into a published `@briancray/belte` version. Invo
 
 - On `main`. The Release workflow (`.github/workflows/release.yml`) only fires on push to `main`; a feature branch will not release. If not on `main`, stop and tell the user.
 - `gh` authenticated, working tree may be dirty or clean.
+- **Sync with origin first.** Run `git fetch origin` and check `git rev-list --left-right --count origin/main...HEAD`. A previous `/ship` merges the Version Packages PR on the remote (consuming the changeset files there), so local `main` is routinely behind and must not be built on:
+  - Behind only (`N 0`) → `git rebase origin/main` (or fast-forward) before committing.
+  - Diverged (`N M`, local commits not yet on origin) → `git rebase origin/main` to replay them on top. This is the case that drops the already-consumed `auto-*.md` changesets the remote deleted — verify `ls .changeset/*.md` shows only `README.md` afterward.
+  - Conflicts → stop and surface them; do not force.
 
 ## Workflow
 
