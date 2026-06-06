@@ -74,6 +74,55 @@ describe('cache() invalidate throttle / debounce', () => {
         expect(await cache(producer)()).toBe(2) // fresh swapped in
     })
 
+    test('refreshing is true only while a coalesced refetch is in flight', async () => {
+        let resolveSecond: (value: number) => void = () => {}
+        const second = new Promise<number>((resolve) => {
+            resolveSecond = resolve
+        })
+        const values: Promise<number>[] = [Promise.resolve(1), second]
+        let index = 0
+        const producer = () => values[index++]
+
+        expect(await cache(producer, { invalidate: { debounce: 10 } })()).toBe(1)
+        /* Settled value present, nothing in flight → not refreshing, not pending. */
+        expect(cache.refreshing(producer)).toBe(false)
+        expect(cache.pending(producer)).toBe(false)
+
+        cache.invalidate(producer)
+        await wait(30) // debounce fired; the refetch is unresolved
+
+        /* Stale value still visible (pending stays false) but a refetch is in flight. */
+        expect(cache.refreshing(producer)).toBe(true)
+        expect(cache.pending(producer)).toBe(false)
+
+        resolveSecond(2)
+        await settle()
+        expect(cache.refreshing(producer)).toBe(false)
+        expect(await cache(producer)()).toBe(2)
+    })
+
+    test('refreshing selector ignores other revalidating entries', async () => {
+        let resolveSecond: (value: number) => void = () => {}
+        const blocked = new Promise<number>((resolve) => {
+            resolveSecond = resolve
+        })
+        const slow = [Promise.resolve(1), blocked]
+        let slowIndex = 0
+        const slowProducer = () => slow[slowIndex++]
+        const fastProducer = counter()
+
+        await cache(slowProducer, { invalidate: { debounce: 10 } })()
+        await cache(fastProducer, { invalidate: { debounce: 10 } })()
+
+        cache.invalidate(slowProducer)
+        await wait(30)
+        expect(cache.refreshing(slowProducer)).toBe(true)
+        expect(cache.refreshing(fastProducer)).toBe(false)
+
+        resolveSecond(2)
+        await settle()
+    })
+
     test('a rejected refetch keeps the stale value', async () => {
         let calls = 0
         const producer = () => {

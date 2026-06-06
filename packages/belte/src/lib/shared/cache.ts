@@ -409,6 +409,8 @@ function fireRefetch(store: CacheStore, entry: CacheEntry): void {
     }
     policy.refreshing = true
     policy.lastFiredAt = Date.now()
+    /* Ping lifecycle so cache.refreshing re-derives when revalidation begins; the settle handlers ping again when it ends. */
+    markLifecycle(store)
     const inflight = policy.refetch()
     inflight.then(
         () => {
@@ -455,7 +457,35 @@ function pending<Args, Return>(arg?: Selector<Args, Return>): boolean {
 
 cache.pending = pending
 
-/* Signals cache.pending readers that in-flight membership changed. */
+/*
+Reactive revalidation probe sharing invalidate's selector grammar:
+  refreshing()               → any entry doing a background refetch
+  refreshing(fn)             → that function's calls (per-route "updating…" badge)
+  refreshing({ scope })      → a tagged group
+Returns true while any matching entry is serving a stale value during a coalesced
+invalidate refetch (settled, value visible, fresh fetch in flight) — the
+stale-while-revalidate window cache.pending deliberately omits: pending answers
+"is there a value yet?", refreshing answers "is the visible value being
+replaced?". Taps each store's lifecycle channel (both before checking, so neither
+is skipped by short-circuit) so a $derived re-runs when a refresh starts or ends.
+Outside a tracking scope it returns the current value.
+*/
+function refreshing<Args, Return>(arg?: Selector<Args, Return>): boolean {
+    const matches = selectorMatcher(arg)
+    const stores = cacheStores()
+    stores.forEach((store) => {
+        store.trackLifecycle()
+    })
+    return stores.some((store) =>
+        store.entries
+            .values()
+            .some((entry) => entry.invalidation?.refreshing === true && matches(entry)),
+    )
+}
+
+cache.refreshing = refreshing
+
+/* Signals cache.pending / cache.refreshing readers that in-flight membership changed. */
 function markLifecycle(store: CacheStore): void {
     store.events.dispatchEvent(new Event('lifecycle'))
 }
