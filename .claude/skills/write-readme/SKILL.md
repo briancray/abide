@@ -7,6 +7,7 @@ description: Regenerate README. Use when the user asks to rewrite, update, or re
 
 ## READ FIRST
 
+* write to `packages/belte/README.md` — the canonical, npm-shipped file. The repo-root `README.md` is a symlink to it (GitHub renders the symlink), so never edit the root path or replace the symlink with a copy.
 * dont use the current README, rebuild completely based on the outline below
 * use only files in packages/belte/src to understand the code. do not refer to examples or anything outside of this directory
 * Always start with heading Belte and tagline Isomorphic multimodal http framework built for humans and machines in a single Bun runtime.
