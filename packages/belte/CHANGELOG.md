@@ -1,5 +1,15 @@
 # @briancray/belte
 
+## 0.13.0
+
+### Minor Changes
+
+- [`e052e54`](https://github.com/briancray/belte/commit/e052e5457bec12774b56e095c7ede98c6eb5a945) - add 'belte run' to execute scripts under the belte preload ([`fc77a20`](https://github.com/briancray/belte/commit/fc77a20ec535223cfe56c5f134d812449558047f))
+
+### Patch Changes
+
+- [`e052e54`](https://github.com/briancray/belte/commit/e052e5457bec12774b56e095c7ede98c6eb5a945) - resolve server() in-process so handler idioms don't throw in tests ([`03cc3c1`](https://github.com/briancray/belte/commit/03cc3c1a6fb0ebc3b42156b450952dfc5336819e))
+
 ## 0.12.0
 
 ### Minor Changes
