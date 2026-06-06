@@ -9,6 +9,7 @@ import { createMcpResourceServer } from '../../mcp/createMcpResourceServer.ts'
 import { setMcpResourceServer } from '../../mcp/mcpResourceServerSlot.ts'
 import type { McpServer } from '../../mcp/types/McpServer.ts'
 import { NO_STORE, SSR_CACHE_CONTROL } from '../../shared/cacheControlValues.ts'
+import { extraForwardHeaders } from '../../shared/extraForwardHeaders.ts'
 import { isDebugEnabled } from '../../shared/isDebugEnabled.ts'
 import { log } from '../../shared/log.ts'
 import { nearestLayoutPrefix, normalizeLayoutPrefixes } from '../../shared/nearestLayoutPrefix.ts'
@@ -33,7 +34,7 @@ import { globToPathSet } from './globToPathSet.ts'
 import { internalErrorResponse } from './internalErrorResponse.ts'
 import { isCrossOriginUpgrade } from './isCrossOriginUpgrade.ts'
 import { listenOnOpenPort } from './listenOnOpenPort.ts'
-import { logBrowserOnlyRoutes } from './logBrowserOnlyRoutes.ts'
+import { logExposedSurfaces } from './logExposedSurfaces.ts'
 import { parseIdleTimeout } from './parseIdleTimeout.ts'
 import { parsePort } from './parsePort.ts'
 import { ensureRegistriesLoaded, setRegistryManifests } from './registryManifests.ts'
@@ -153,6 +154,9 @@ export async function createServer({
           )
 
     const logRequests = isDebugEnabled('belte')
+
+    // App-configured headers extend the in-process forward allowlist for the process lifetime.
+    extraForwardHeaders.set(app?.forwardHeaders ?? [])
 
     // Per-pathname asset header bundles, hashed-chunk-aware Cache-Control.
     const headersForAsset = createAssetHeaderCache(cacheControlForAsset)
@@ -640,11 +644,11 @@ export async function createServer({
     log.success(`ready at http://localhost:${server.port}`)
     /*
     Diagnostic only, and only under `belte` debug logging — eager-loads the
-    registry to report routes that are browser-only for lack of a schema,
-    making the opt-in nature of the MCP/CLI surfaces visible.
+    registry to print the per-rpc surface map (which verbs reach mcp/cli/
+    openapi), making belte's multimodal-by-default exposure auditable.
     */
     if (logRequests) {
-        void logBrowserOnlyRoutes()
+        void logExposedSurfaces()
     }
     return server
 }
