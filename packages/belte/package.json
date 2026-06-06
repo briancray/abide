@@ -85,7 +85,8 @@
         "src",
         "bin",
         "template",
-        "tsconfig.app.json"
+        "tsconfig.app.json",
+        "CHANGELOG.md"
     ],
     "peerDependencies": {
         "svelte": "^5.0.0",
