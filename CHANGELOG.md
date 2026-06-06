@@ -1,5 +1,17 @@
 # @briancray/belte
 
+## 0.14.0
+
+### Minor Changes
+
+- [`559772c`](https://github.com/briancray/belte/commit/559772cdee4f496629a3e2cb5c38a1f4206703d9) - configurable SSR/MCP header forwarding and a boot-time surface map ([`6f03a53`](https://github.com/briancray/belte/commit/6f03a5367cd3d16a7f51910a992cf081fb6e0b02))
+
+- [`559772c`](https://github.com/briancray/belte/commit/559772cdee4f496629a3e2cb5c38a1f4206703d9) - add cache.refreshing() reactive revalidation probe ([`8ab8666`](https://github.com/briancray/belte/commit/8ab866670888970c728aa68c4d20999e19d46756))
+
+### Patch Changes
+
+- [`559772c`](https://github.com/briancray/belte/commit/559772cdee4f496629a3e2cb5c38a1f4206703d9) - prevent cache-key collisions for Date/Map/Set/bigint args ([`3910cbf`](https://github.com/briancray/belte/commit/3910cbf3d3a3e7204df91a8a55284b00a5c052a0))
+
 ## 0.13.2
 
 ### Patch Changes
