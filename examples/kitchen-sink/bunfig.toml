@@ -1,0 +1,4 @@
+[test]
+# Register belte's preload so `.svelte`/`.svelte.ts` rune modules compile
+# under `bun test` — same runtime as the server.
+preload = ["@briancray/belte/preload"]

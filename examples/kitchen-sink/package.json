@@ -9,7 +9,8 @@
         "start": "belte start",
         "compile": "belte compile",
         "cli": "belte cli",
-        "bundle": "belte bundle"
+        "bundle": "belte bundle",
+        "test": "bun test"
     },
     "dependencies": {
         "@briancray/belte": "workspace:*",

@@ -8,7 +8,9 @@
         "build": "belte build",
         "start": "belte start",
         "compile": "belte compile",
-        "bundle": "belte bundle"
+        "cli": "belte cli",
+        "bundle": "belte bundle",
+        "test": "bun test"
     },
     "dependencies": {
         "@briancray/belte": "^0.2.0",
