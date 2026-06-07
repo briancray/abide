@@ -57,6 +57,7 @@ export async function openWebview({
             args: [FFIType.ptr, FFIType.i32, FFIType.i32, FFIType.i32],
             returns: FFIType.void,
         },
+        webview_init: { args: [FFIType.ptr, FFIType.ptr], returns: FFIType.i32 },
         webview_navigate: { args: [FFIType.ptr, FFIType.ptr], returns: FFIType.void },
         webview_run: { args: [FFIType.ptr], returns: FFIType.void },
         webview_destroy: { args: [FFIType.ptr], returns: FFIType.void },
@@ -87,6 +88,14 @@ export async function openWebview({
     installDownloads(libPath, handle)
     onWindow?.(handle)
 
+    /*
+    Stamp the bundle marker before navigation so it runs ahead of page scripts on
+    every document the webview loads — local embedded server or a remote one. This
+    is what makes browser-side bundled() report "in the webview" regardless of who
+    served the page; a plain browser tab (even hitting the embedded localhost
+    server) never runs this, so it stays false there.
+    */
+    symbols.webview_init(handle, cString('window.__BELTE_BUNDLE__=true'))
     symbols.webview_navigate(handle, cString(url))
     // Blocks here, running the native UI loop, until the window is closed.
     symbols.webview_run(handle)

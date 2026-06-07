@@ -57,6 +57,7 @@
         "./browser/page": "./src/lib/browser/page.svelte.ts",
         "./browser/navigate": "./src/lib/browser/page.svelte.ts",
         "./browser/subscribe": "./src/lib/browser/subscribe.ts",
+        "./shared/bundled": "./src/lib/shared/bundled.ts",
         "./shared/cache": "./src/lib/shared/cache.ts",
         "./shared/HttpError": "./src/lib/shared/HttpError.ts",
         "./shared/withJsonSchema": "./src/lib/shared/withJsonSchema.ts",
