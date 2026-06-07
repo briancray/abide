@@ -1,5 +1,25 @@
 # @briancray/belte
 
+## 0.16.0
+
+### Minor Changes
+
+- [`38bdca6`](https://github.com/briancray/belte/commit/38bdca60b6a05496f16b87a89660c0e4742b894c) - add bundled() to detect the desktop bundle ([`3cdca36`](https://github.com/briancray/belte/commit/3cdca36d5d31b6ffc3eaf88adc296ee5f285eb83))
+
+### Patch Changes
+
+- [`38bdca6`](https://github.com/briancray/belte/commit/38bdca60b6a05496f16b87a89660c0e4742b894c) - extract clientBuildPlugins for the page and connect-screen builds ([`0974367`](https://github.com/briancray/belte/commit/0974367947b4619780b8d60f959c9067974f437b))
+
+- [`38bdca6`](https://github.com/briancray/belte/commit/38bdca60b6a05496f16b87a89660c0e4742b894c) - share a defaultPort across server, dev, and embedded launcher ([`27f91e5`](https://github.com/briancray/belte/commit/27f91e512963b0a82d39f66c20778ee9191c9f07))
+
+- [`38bdca6`](https://github.com/briancray/belte/commit/38bdca60b6a05496f16b87a89660c0e4742b894c) - extract importNamesToStrip for the server-stub strip ([`2b28922`](https://github.com/briancray/belte/commit/2b28922576202daee109170774e2b763de786b7e))
+
+- [`38bdca6`](https://github.com/briancray/belte/commit/38bdca60b6a05496f16b87a89660c0e4742b894c) - render the boot surface map as aligned page/socket/rpc tables ([`2b336af`](https://github.com/briancray/belte/commit/2b336af13c8b2a375d4e2d9e6bebfcdce8ab2c9d))
+
+- [`38bdca6`](https://github.com/briancray/belte/commit/38bdca60b6a05496f16b87a89660c0e4742b894c) - resolve the SPA target view before writing history ([`5685e05`](https://github.com/briancray/belte/commit/5685e051eedda4267ced59c12d92441285d48d41))
+
+- [`38bdca6`](https://github.com/briancray/belte/commit/38bdca60b6a05496f16b87a89660c0e4742b894c) - avoid per-call array allocation in forwardHeaders ([`acc859b`](https://github.com/briancray/belte/commit/acc859b7f213a1349e1fefd106ff146aa1dd0a24))
+
 ## 0.15.0
 
 ### Minor Changes
