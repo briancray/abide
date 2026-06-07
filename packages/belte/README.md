@@ -378,8 +378,9 @@ type cache = <Args, Return>(
   },
 ) => (args?: Args) => Promise<Return>
 
-cache.invalidate(selector?): void   // selector: a remote fn, a producer, { scope }, or nothing (all)
-cache.pending(selector?): boolean   // reactive in-flight probe with the same selector grammar
+cache.invalidate(selector?): void    // selector: a remote fn, a producer, { scope }, or nothing (all)
+cache.pending(selector?): boolean    // reactive: is a matching call in flight? (no value yet)
+cache.refreshing(selector?): boolean // reactive: is a matching entry serving stale during an invalidate refetch?
 ```
 
 ```ts
@@ -392,6 +393,7 @@ const post = await cache(getPost)({ id })
 const posts = $derived(await cache(listPosts)({ page }))
 cache.invalidate(listPosts) // drop entries → next read refetches
 const busy = $derived(cache.pending()) // any rpc in flight
+const updating = $derived(cache.refreshing(listPosts)) // stale-while-revalidate badge
 ```
 
 SSR rendering mode follows Svelte's `{#await}` rule, not a config flag: a top-level
@@ -434,8 +436,9 @@ let { children }: { children: import('svelte').Snippet } = $props()
 ```
 
 **Error pages** — an `error.svelte` renders for an unknown route (404) or a throw
-during a page render; nearest-only like layouts. Receives `{ status, message }`
-props.
+during a page render; nearest-only like layouts. Receives `{ status, message, stack }`
+props (nothing is serialized to `__SSR__` — they reach the browser only where your
+template renders them).
 
 **`subscribe`** — reactive consumer for a `Subscribable<T>` (a `Socket<T>` or
 `fn.stream(args)`). The first read in a tracking scope opens the iterator; the last
@@ -714,7 +717,7 @@ src/
     app.html  app.css          # shell + global styles
     pages/**/page.svelte       # routed pages (folder path = URL)
     pages/**/layout.svelte     # nearest-only layouts
-    pages/**/error.svelte      # nearest-only error pages ({ status, message })
+    pages/**/error.svelte      # nearest-only error pages ({ status, message, stack })
     public/                    # static files served at the site root
     lib/                       # your client-only helpers
   mcp/
@@ -736,7 +739,7 @@ Directory aliases for imports: `$server`, `$browser`, `$shared`, `$mcp`, `$cli`
 | Command | Does |
 | --- | --- |
 | `bunx @briancray/belte scaffold <name>` | scaffold a new project |
-| `belte dev` | build the client and run the server with hot reload |
+| `belte dev` | build the client, run the server, and live-reload the browser on any `src/` change |
 | `belte build` | build the client into `dist/_app/` |
 | `belte start` | run the production server against `dist/` |
 | `belte run <file> [args...]` | run a script under the belte preload (same runtime as the server) |
@@ -752,8 +755,10 @@ the server.
 
 Files under `src/browser/public/` are served at the site root with long-lived cache
 headers (e.g. `src/browser/public/robots.txt` → `/robots.txt`). Dotfiles are kept
-(`.well-known/…`). The path set is snapshotted at boot — a file added after boot
-needs a restart (the same restart a code change triggers under `bun --watch`).
+(`.well-known/…`). The path set is snapshotted at boot. Under `belte dev` the
+orchestrator restarts the server on any `src/` change, so a newly added public file
+is picked up after the restart; `belte start` and compiled binaries need a manual
+restart.
 
 ### Bundling
 
