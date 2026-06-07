@@ -13,6 +13,7 @@ import { prepareRpcModule } from './lib/shared/prepareRpcModule.ts'
 import { prepareSocketModule } from './lib/shared/prepareSocketModule.ts'
 import { programNameForPackage } from './lib/shared/programNameForPackage.ts'
 import { promptNameForFile } from './lib/shared/promptNameForFile.ts'
+import { readPackageJson } from './lib/shared/readPackageJson.ts'
 import { rpcUrlForFile } from './lib/shared/rpcUrlForFile.ts'
 import { socketNameForFile } from './lib/shared/socketNameForFile.ts'
 import { writeRoutesDts } from './lib/shared/writeRoutesDts.ts'
@@ -342,7 +343,6 @@ ${optionLines}
                         keyForFile: rpcUrlForFile,
                         importDir: rpcDir,
                         exportName: 'rpc',
-                        label: 'rpc modules',
                     })
                 }
 
@@ -352,7 +352,6 @@ ${optionLines}
                         keyForFile: socketNameForFile,
                         importDir: socketsDir,
                         exportName: 'sockets',
-                        label: 'socket modules',
                     })
                 }
 
@@ -373,8 +372,6 @@ ${optionLines}
                         keyForFile: pageUrlForFile,
                         importDir: pagesDir,
                         exportName: 'pages',
-                        label: 'pages',
-                        logWhenEmpty: true,
                     })
                 }
 
@@ -385,7 +382,6 @@ ${optionLines}
                         keyForFile: pageUrlForFile,
                         importDir: pagesDir,
                         exportName: 'layouts',
-                        label: 'layouts',
                     })
                 }
 
@@ -457,12 +453,8 @@ ${optionLines}
                     only the final segment), falling back to `app` when
                     missing.
                     */
-                    const pkgPath = `${cwd}/package.json`
-                    if (!existsSync(pkgPath)) {
-                        return { contents: 'export default "app"', loader: 'js' }
-                    }
-                    const pkg = (await Bun.file(pkgPath).json()) as { name?: string }
-                    const name = programNameForPackage(pkg.name)
+                    const pkg = await readPackageJson(cwd)
+                    const name = programNameForPackage(pkg?.name as string | undefined)
                     return { contents: `export default ${JSON.stringify(name)}`, loader: 'js' }
                 }
 
@@ -561,18 +553,11 @@ export const footer = ${JSON.stringify(footer)}
                     block. Falls back to placeholder values when the file
                     is missing so the spec still emits.
                     */
-                    const pkgPath = `${cwd}/package.json`
-                    if (!existsSync(pkgPath)) {
-                        return {
-                            contents: 'export const appInfo = { name: "app", version: "0.0.0" }',
-                            loader: 'js',
-                        }
+                    const pkg = await readPackageJson(cwd)
+                    const info = {
+                        name: (pkg?.name as string | undefined) ?? 'app',
+                        version: (pkg?.version as string | undefined) ?? '0.0.0',
                     }
-                    const pkg = (await Bun.file(pkgPath).json()) as {
-                        name?: string
-                        version?: string
-                    }
-                    const info = { name: pkg.name ?? 'app', version: pkg.version ?? '0.0.0' }
                     return {
                         contents: `export const appInfo = ${JSON.stringify(info)}`,
                         loader: 'js',

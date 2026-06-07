@@ -11,10 +11,15 @@ export function manifestModule(options: {
     keyForFile: (file: string) => string
     importDir: string
     exportName: string
-    label: string
-    // pages logs its count even at zero (a route-less app is worth surfacing);
-    // the other manifests stay quiet when empty.
-    logWhenEmpty?: boolean
+    /*
+    A plain `resolved N <label>: keys` line at build time, when set. Omitted for
+    manifests whose contents are enumerated once at boot as an aligned table (see
+    logExposedSurfaces) — rpc/sockets/pages/layouts — which both avoids the
+    redundant list and the double-log of manifests (pages/layouts) loaded by both
+    the server and client bundles. prompts/errors have no table, so they pass a
+    label to keep their build-time line.
+    */
+    label?: string
 }): { contents: string; loader: 'js' } {
     const entries = options.files
         .toSorted()
@@ -25,7 +30,7 @@ export function manifestModule(options: {
                 `    ${JSON.stringify(key)}: () => import(${JSON.stringify(`${options.importDir}/${file}`)}),`,
         )
         .join('\n')
-    if (entries.length > 0 || options.logWhenEmpty) {
+    if (options.label && entries.length > 0) {
         log.info(
             `resolved ${entries.length} ${options.label}: ${entries.map((entry) => entry.key).join(', ')}`,
         )

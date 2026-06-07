@@ -29,6 +29,7 @@ import { containsTraversal } from './containsTraversal.ts'
 import { createAssetHeaderCache } from './createAssetHeaderCache.ts'
 import { createPublicAssetServer } from './createPublicAssetServer.ts'
 import { createRouteDispatcher } from './createRouteDispatcher.ts'
+import { defaultPort } from './defaultPort.ts'
 import { devReloadClientScript } from './devReloadClientScript.ts'
 import { devReloadResponse } from './devReloadResponse.ts'
 import { disableIdleTimeoutForStream } from './disableIdleTimeoutForStream.ts'
@@ -628,7 +629,7 @@ export async function createServer({
     which used to crash boot on EADDRINUSE instead of stepping to the next port).
     */
     const server: Server<unknown> =
-        port === undefined ? listenOnOpenPort(bindAt, 3000) : bindAt(port)
+        port === undefined ? listenOnOpenPort(bindAt, defaultPort) : bindAt(port)
 
     /*
     Publishes the live server through `belte/server` before invoking the
@@ -662,14 +663,16 @@ export async function createServer({
     process.once('SIGINT', shutdown)
     process.once('SIGTERM', shutdown)
 
-    log.success(`ready at http://localhost:${server.port}`)
     /*
     Diagnostic only, and only under `belte` debug logging — eager-loads the
-    registry to print the per-rpc surface map (which verbs reach mcp/cli/
-    openapi), making belte's multimodal-by-default exposure auditable.
+    registry to print the page/socket/rpc surface maps (routing + which
+    declarations reach mcp/cli/openapi), making belte's multimodal-by-default
+    exposure auditable. Awaited so `ready` lands after all of belte's own
+    startup output rather than interleaving with it.
     */
     if (logRequests) {
-        void logExposedSurfaces()
+        await logExposedSurfaces({ pages, layoutPrefixes, errorPrefixes })
     }
+    log.success(`ready at http://localhost:${server.port}`)
     return server
 }
