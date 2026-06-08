@@ -72,7 +72,7 @@ the child.
 export function cache<Args, Return>(
     fn: RemoteFunction<Args, Return>,
     options?: CacheOptions,
-): (args?: Args) => Promise<Return>
+): (args?: Args) => Promise<Return> | Return
 export function cache<Args>(
     fn: RawRemoteFunction<Args>,
     options?: CacheOptions,
@@ -118,13 +118,14 @@ export function cache<Args, Return>(
         invalidate the replacement entry carries no value and falls through
         to the async fetch as before.
 
-        The public overload stays typed Promise<Return> on purpose: a
-        non-thenable is the only thing {#await} can render synchronously, so
-        the sync return is left as an internal optimization rather than
-        widened to `Return | Promise<Return>` (which would leak it into every
-        caller's types). The one cost is that `.then`/`.catch`/`.finally`
-        directly on a warm result throws — consume cache via `await`/`{#await}`,
-        never `.then`. Don't "fix" the type; see memory cache-warm-sync-tradeoff.
+        The decoded overload is typed `Promise<Return> | Return` so the warm
+        sync return is honest at the type level: a non-thenable is the only
+        thing {#await} can render synchronously, and surfacing the union turns
+        chaining `.then`/`.catch`/`.finally` on a read into a compile error
+        rather than a runtime throw on warm hits. Consume cache via
+        `await`/`{#await}` (both accept the union); in the await form handle
+        errors with `try/catch`, never `.catch`. Raw and producer callers stay
+        `Promise<…>` — they never take this sync path.
 
         Each warm read returns its own clone of the stored value: the entry's
         value is decoded once at hydration and would otherwise be handed by
