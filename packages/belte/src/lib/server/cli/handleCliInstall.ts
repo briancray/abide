@@ -1,4 +1,4 @@
-import { NO_STORE } from '../../shared/cacheControlValues.ts'
+import { NO_STORE } from '../../shared/CACHE_CONTROL_VALUES.ts'
 import { installScript } from './installScript.ts'
 
 /*

@@ -1,7 +1,7 @@
 import { join } from 'node:path'
-import { webviewBuildRevision } from './webviewBuildRevision.ts'
+import { WEBVIEW_BUILD_REVISION } from './WEBVIEW_BUILD_REVISION.ts'
+import { WEBVIEW_VERSION } from './WEBVIEW_VERSION.ts'
 import { webviewLibName } from './webviewLibName.ts'
-import { webviewVersion } from './webviewVersion.ts'
 
 /*
 Absolute path where the locally built webview library is cached. belte
@@ -18,6 +18,6 @@ a fresh path automatically.
 */
 export function webviewCachePath(): string {
     const nativeDir = new URL('./native', import.meta.url).pathname
-    const key = `${process.platform}-${process.arch}-${webviewVersion}-${webviewBuildRevision}`
+    const key = `${process.platform}-${process.arch}-${WEBVIEW_VERSION}-${WEBVIEW_BUILD_REVISION}`
     return join(nativeDir, '.cache', key, webviewLibName())
 }

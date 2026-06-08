@@ -7,7 +7,7 @@ fresh code is being served. The first open is the initial page load (no
 reload); every open after that is a restart. Self-managed retry keeps the gap
 short instead of relying on EventSource's multi-second default backoff.
 */
-export const devReloadClientScript = `<script>
+export const DEV_RELOAD_CLIENT_SCRIPT = `<script>
 ;(() => {
   let opened = false
   function connect() {

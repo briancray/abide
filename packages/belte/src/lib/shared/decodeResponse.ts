@@ -1,5 +1,5 @@
 import { HttpError } from './HttpError.ts'
-import { STREAMING_CONTENT_TYPES } from './streamingContentTypes.ts'
+import { STREAMING_CONTENT_TYPES } from './STREAMING_CONTENT_TYPES.ts'
 
 /*
 Decodes a Response into the natural body value based on Content-Type:

@@ -6,4 +6,4 @@ cache key alongside the upstream version, so changing belte's native build
 selects a fresh cache path and bypasses any library built before the change.
 Bump this whenever the shim sources or their compile invocation change.
 */
-export const webviewBuildRevision = 9
+export const WEBVIEW_BUILD_REVISION = 9

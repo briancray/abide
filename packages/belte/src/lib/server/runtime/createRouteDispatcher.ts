@@ -1,5 +1,5 @@
 import type { Pages } from '../../browser/types/Pages.ts'
-import { NO_STORE } from '../../shared/cacheControlValues.ts'
+import { NO_STORE } from '../../shared/CACHE_CONTROL_VALUES.ts'
 import { memoizeByKey } from '../../shared/memoizeByKey.ts'
 import type { HttpVerb } from '../../shared/types/HttpVerb.ts'
 import type { RemoteFunction } from '../../shared/types/RemoteFunction.ts'

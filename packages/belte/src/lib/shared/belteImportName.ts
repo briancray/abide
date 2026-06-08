@@ -1,4 +1,4 @@
-import { beltePackageName } from './beltePackageName.ts'
+import { BELTE_PACKAGE_NAME } from './BELTE_PACKAGE_NAME.ts'
 import { readPackageJson } from './readPackageJson.ts'
 
 /*
@@ -22,7 +22,7 @@ export async function belteImportName(cwd: string): Promise<string> {
         | { dependencies?: Record<string, string>; devDependencies?: Record<string, string> }
         | undefined
     if (!packageJson) {
-        return beltePackageName
+        return BELTE_PACKAGE_NAME
     }
     const dependencies = { ...packageJson.devDependencies, ...packageJson.dependencies }
     /*
@@ -30,15 +30,15 @@ export async function belteImportName(cwd: string): Promise<string> {
     `workspace:` for the in-repo examples. The key is the name the project
     imports under; the version suffix (`@^0.2.0`, `@*`) is optional.
     */
-    const aliasPattern = new RegExp(`^(npm|workspace):${beltePackageName}(@.*)?$`)
+    const aliasPattern = new RegExp(`^(npm|workspace):${BELTE_PACKAGE_NAME}(@.*)?$`)
     const aliasNames = Object.entries(dependencies)
         .filter(([, specifier]) => aliasPattern.test(specifier))
         .map(([name]) => name)
     if (aliasNames.includes('belte')) {
         return 'belte'
     }
-    if (beltePackageName in dependencies) {
-        return beltePackageName
+    if (BELTE_PACKAGE_NAME in dependencies) {
+        return BELTE_PACKAGE_NAME
     }
-    return aliasNames[0] ?? beltePackageName
+    return aliasNames[0] ?? BELTE_PACKAGE_NAME
 }

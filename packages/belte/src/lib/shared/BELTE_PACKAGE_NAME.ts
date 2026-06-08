@@ -4,4 +4,4 @@ match a consuming project's dependency (direct or aliased) against this to
 decide which specifier to emit, so keeping it in one place means a future
 rename touches a single constant.
 */
-export const beltePackageName = '@briancray/belte'
+export const BELTE_PACKAGE_NAME = '@briancray/belte'

@@ -18,7 +18,7 @@ Status guidance:
 A final `ResponseInit` adds headers (e.g. a `Set-Cookie` on the redirect);
 the positional `status` always wins over any `init.status`.
 */
-import { NO_STORE } from '../shared/cacheControlValues.ts'
+import { NO_STORE } from '../shared/CACHE_CONTROL_VALUES.ts'
 import type { TypedResponse } from './rpc/types/TypedResponse.ts'
 import { withResponseDefaults } from './runtime/withResponseDefaults.ts'
 

@@ -1,4 +1,4 @@
-import { NO_STORE } from '../../shared/cacheControlValues.ts'
+import { NO_STORE } from '../../shared/CACHE_CONTROL_VALUES.ts'
 import { exeSuffix } from '../../shared/exeSuffix.ts'
 import { isCompileTarget } from '../../shared/isCompileTarget.ts'
 import { log } from '../../shared/log.ts'

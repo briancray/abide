@@ -1,4 +1,4 @@
-import { PUBLIC_ASSET_CACHE_CONTROL } from '../../shared/cacheControlValues.ts'
+import { PUBLIC_ASSET_CACHE_CONTROL } from '../../shared/CACHE_CONTROL_VALUES.ts'
 import { acceptsZstd } from './acceptsZstd.ts'
 import { containsTraversal } from './containsTraversal.ts'
 import { createAssetHeaderCache } from './createAssetHeaderCache.ts'

@@ -1,7 +1,7 @@
 import {
     IMMUTABLE_ASSET_CACHE_CONTROL,
     REVALIDATE_ASSET_CACHE_CONTROL,
-} from '../../shared/cacheControlValues.ts'
+} from '../../shared/CACHE_CONTROL_VALUES.ts'
 
 /*
 Bun.build emits `[name]-[hash].[ext]` for chunks; hash is alnum and >=8 chars.

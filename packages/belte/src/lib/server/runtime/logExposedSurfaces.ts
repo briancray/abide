@@ -6,9 +6,9 @@ import { verbRegistry } from '../rpc/verbRegistry.ts'
 import { socketRegistry } from '../sockets/socketRegistry.ts'
 import { ensureRegistriesLoaded } from './registryManifests.ts'
 
-// Cell glyphs: present, absent.
-const present = '✓'
-const absent = '·'
+// Cell glyphs: PRESENT, ABSENT.
+const PRESENT = '✓'
+const ABSENT = '·'
 const COLUMN_GAP = 2
 
 const hasColor = typeof Bun !== 'undefined' && Bun.enableANSIColors
@@ -21,8 +21,8 @@ A declared inputSchema is what makes mcp/cli safe to advertise (see defineVerb /
 defineSocket), so a missing schema gets a red `·` to flag the declaration whose
 machine surfaces are gated behind it.
 */
-const schemaCell = (hasSchema: boolean): string => (hasSchema ? present : redden(absent))
-const flag = (on: boolean): string => (on ? present : absent)
+const schemaCell = (hasSchema: boolean): string => (hasSchema ? PRESENT : redden(ABSENT))
+const flag = (on: boolean): string => (on ? PRESENT : ABSENT)
 
 // Display width ignoring ANSI color escapes, so colored glyphs don't inflate alignment.
 // biome-ignore lint/suspicious/noControlCharactersInRegex: the ESC (\x1b) is the intended match — stripping the color escape to measure visible width
@@ -112,8 +112,8 @@ export async function logExposedSurfaces(routing: {
     const pageRows = Object.keys(routing.pages)
         .map((route) => [
             route,
-            nearestLayoutPrefix(route, routing.layoutPrefixes) ?? absent,
-            nearestLayoutPrefix(route, routing.errorPrefixes) ?? absent,
+            nearestLayoutPrefix(route, routing.layoutPrefixes) ?? ABSENT,
+            nearestLayoutPrefix(route, routing.errorPrefixes) ?? ABSENT,
         ])
         .sort()
 

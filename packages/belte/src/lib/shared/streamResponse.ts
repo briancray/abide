@@ -1,8 +1,8 @@
 import { decodeResponse } from './decodeResponse.ts'
 import { HttpError } from './HttpError.ts'
 import { jsonlErrorFrame } from './jsonlErrorFrame.ts'
+import { STREAMING_CONTENT_TYPES } from './STREAMING_CONTENT_TYPES.ts'
 import { sseErrorFrame } from './sseErrorFrame.ts'
-import { STREAMING_CONTENT_TYPES } from './streamingContentTypes.ts'
 
 /*
 Turns a Response into an AsyncIterable of frames, regardless of the

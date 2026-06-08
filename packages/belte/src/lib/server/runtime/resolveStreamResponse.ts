@@ -1,4 +1,4 @@
-import { NO_STORE } from '../../shared/cacheControlValues.ts'
+import { NO_STORE } from '../../shared/CACHE_CONTROL_VALUES.ts'
 import { streamCacheResolutions } from './streamCacheResolutions.ts'
 import { streamFromIterator } from './streamFromIterator.ts'
 import { takePendingStream } from './streamStash.ts'

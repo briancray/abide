@@ -1,4 +1,4 @@
-import { STREAMING_CONTENT_TYPES } from './streamingContentTypes.ts'
+import { STREAMING_CONTENT_TYPES } from './STREAMING_CONTENT_TYPES.ts'
 
 /*
 Whether a Response carries a streaming body (SSE / JSONL / NDJSON) by its

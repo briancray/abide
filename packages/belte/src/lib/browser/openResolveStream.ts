@@ -1,4 +1,4 @@
-import { resolveStreamPath } from '../shared/resolveStreamPath.ts'
+import { RESOLVE_STREAM_PATH } from '../shared/RESOLVE_STREAM_PATH.ts'
 import { streamResponse } from '../shared/streamResponse.ts'
 import type { CacheStore } from '../shared/types/CacheStore.ts'
 import type { StreamedResolution } from '../shared/types/StreamedResolution.ts'
@@ -26,7 +26,9 @@ export async function openResolveStream(
     const controller = new AbortController()
     setPageStreamController(controller)
     try {
-        const response = await fetch(`${resolveStreamPath}${token}`, { signal: controller.signal })
+        const response = await fetch(`${RESOLVE_STREAM_PATH}${token}`, {
+            signal: controller.signal,
+        })
         for await (const resolution of streamResponse<StreamedResolution>(response)) {
             applyStreamedResolution(store, deferreds, resolution)
         }

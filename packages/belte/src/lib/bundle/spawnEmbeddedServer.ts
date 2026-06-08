@@ -1,5 +1,5 @@
 import { dirname, join } from 'node:path'
-import { defaultPort } from '../server/runtime/defaultPort.ts'
+import { DEFAULT_PORT } from '../server/runtime/DEFAULT_PORT.ts'
 import { findOpenPort } from '../server/runtime/findOpenPort.ts'
 import { parsePort } from '../server/runtime/parsePort.ts'
 import { appDataDir } from '../shared/appDataDir.ts'
@@ -24,7 +24,7 @@ async function resolveEmbeddedPort(programName: string): Promise<number> {
     ])
     return (
         parsePort(process.env.PORT ?? dataDirEnv.PORT ?? binaryDirEnv.PORT) ??
-        findOpenPort(defaultPort)
+        findOpenPort(DEFAULT_PORT)
     )
 }
 

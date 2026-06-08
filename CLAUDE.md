@@ -33,3 +33,4 @@
 * use undefined instead of null for nullish values unless a type needs null
 * reactive consumers (cache, subscribe, future ones) use `createSubscriber` from `svelte/reactivity` so the surrounding $derived/$effect drives the underlying resource lifecycle — open on first read, close on last reader. don't invent parallel reactivity machinery.
 * do not start long living bun servers with `bun run dev`. When i type that it's a mistake
+* constants should be UPPERCASE_SNAKE_CASE always, including their files

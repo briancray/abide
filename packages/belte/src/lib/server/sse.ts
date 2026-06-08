@@ -23,7 +23,7 @@ the message (full error logged server-side) before the stream closes;
 EventSource surfaces this via its `error` listener and `subscribe()`
 maps it to the entry's `error` field.
 */
-import { NO_STORE } from '../shared/cacheControlValues.ts'
+import { NO_STORE } from '../shared/CACHE_CONTROL_VALUES.ts'
 import { sseErrorFrame } from '../shared/sseErrorFrame.ts'
 import type { TypedResponse } from './rpc/types/TypedResponse.ts'
 import { streamFromIterator } from './runtime/streamFromIterator.ts'

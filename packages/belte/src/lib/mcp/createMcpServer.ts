@@ -1,4 +1,4 @@
-import { NO_STORE } from '../shared/cacheControlValues.ts'
+import { NO_STORE } from '../shared/CACHE_CONTROL_VALUES.ts'
 import { dispatchMcpRequest, MCP_NO_STORE_HEADERS } from './dispatchMcpRequest.ts'
 import type { McpServer } from './types/McpServer.ts'
 import type { McpServerOptions } from './types/McpServerOptions.ts'
