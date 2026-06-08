@@ -1,8 +1,7 @@
-import { promptRegistry } from '../server/prompts/promptRegistry.ts'
 import { ensureRegistriesLoaded } from '../server/runtime/registryManifests.ts'
 import { NO_STORE } from '../shared/CACHE_CONTROL_VALUES.ts'
 import { getMcpResourceServer } from './mcpResourceServerSlot.ts'
-import { buildPrompts, buildTools, callTool } from './mcpSurface.ts'
+import { buildPrompts, buildTools, callTool, renderPrompt } from './mcpSurface.ts'
 import type { JsonRpcRequest } from './types/JsonRpcRequest.ts'
 import type { JsonRpcResponse } from './types/JsonRpcResponse.ts'
 import type { McpServerOptions } from './types/McpServerOptions.ts'
@@ -33,14 +32,13 @@ function getPrompt(
     name: string,
     args: Record<string, unknown> | undefined,
 ): Record<string, unknown> {
-    const entry = promptRegistry.get(name)
-    if (!entry) {
-        throw new Error(`unknown prompt: ${name}`)
-    }
-    const rendered = entry.prompt.render((args ?? {}) as Record<string, string>)
+    const { description, messages } = renderPrompt(name, args)
     return {
-        ...(entry.prompt.description ? { description: entry.prompt.description } : {}),
-        messages: [{ role: 'user', content: { type: 'text', text: rendered } }],
+        ...(description ? { description } : {}),
+        messages: messages.map((message) => ({
+            role: message.role,
+            content: { type: 'text', text: message.text },
+        })),
     }
 }
 

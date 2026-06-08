@@ -230,16 +230,31 @@ export async function callTool(
 }
 
 /*
-Renders a prompt to the message(s) that seed a conversation. A markdown
-prompt is a single user turn whose text is the interpolated template.
-Throws on an unknown prompt name.
+Renders a prompt: looks it up, interpolates the caller's args, and returns its
+optional description plus the message(s) that seed a conversation. A markdown
+prompt is a single user turn whose text is the interpolated template. Throws on
+an unknown prompt name. The one place prompt rendering lives — dispatchMcpRequest
+wraps this in the prompts/get wire shape, the agent loop reads the messages plain.
 */
-export function getPromptMessages(name: string, args?: Record<string, unknown>): PromptMessage[] {
+export function renderPrompt(
+    name: string,
+    args?: Record<string, unknown>,
+): { description?: string; messages: PromptMessage[] } {
     const entry = promptRegistry.get(name)
     if (!entry) {
         throw new Error(`unknown prompt: ${name}`)
     }
-    return [{ role: 'user', text: entry.prompt.render((args ?? {}) as Record<string, string>) }]
+    return {
+        ...(entry.prompt.description ? { description: entry.prompt.description } : {}),
+        messages: [
+            { role: 'user', text: entry.prompt.render((args ?? {}) as Record<string, string>) },
+        ],
+    }
+}
+
+// The conversation-seeding messages for a prompt, without the wire-shape wrapping.
+export function getPromptMessages(name: string, args?: Record<string, unknown>): PromptMessage[] {
+    return renderPrompt(name, args).messages
 }
 
 /*
@@ -248,10 +263,20 @@ Projects the app's MCP surface for an in-process consumer bound to `request`
 the model acts with the caller's identity. Used by `agent()`.
 */
 export function mcpSurface(request: Request): McpSurface {
+    // Built on first read and memoized: an engine that advertises tools but never
+    // reads prompts (or reaches tools over HTTP, reading neither) skips the unused build.
+    let tools: ToolDescriptor[] | undefined
+    let prompts: PromptDescriptor[] | undefined
     return {
-        tools: buildTools(),
+        get tools() {
+            tools ??= buildTools()
+            return tools
+        },
+        get prompts() {
+            prompts ??= buildPrompts()
+            return prompts
+        },
         call: (name, args) => callTool(name, args, request),
-        prompts: buildPrompts(),
         getPrompt: getPromptMessages,
         async listResources() {
             const server = getMcpResourceServer()
