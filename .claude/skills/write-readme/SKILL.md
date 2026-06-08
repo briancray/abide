@@ -16,7 +16,7 @@ that survives into the README must be backed by something you can point to in
   you write. Do not state a behaviour, option, default, path, or guarantee that you
   have not seen in that tree. If the code doesn't back it, it doesn't go in.
 * **`packages/belte/package.json` backs the meta-claims:** import paths (the
-  `exports` map — pin every `@briancray/belte/...` to a real key), dependency
+  `exports` map — pin every `@belte/belte/...` to a real key), dependency
   footprint (the `dependencies` / `peerDependencies` fields), and runtime
   (`engines`). Pin imports to real export keys so paths can't regress.
 * Do **not** mine `examples/`, the current README, CHANGELOG, or docs for facts.
@@ -67,8 +67,8 @@ bundler swaps the runtime per target.
 
 ```ts
 // src/server/rpc/getPost.ts — the filename is the export, the URL, and the command name
-import { GET } from '@briancray/belte/server/GET'
-import { json } from '@briancray/belte/server/json'
+import { GET } from '@belte/belte/server/GET'
+import { json } from '@belte/belte/server/json'
 
 export const getPost = GET<{ id: string }>(async ({ id }) => json(await db.post(id)))
 ```

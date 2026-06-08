@@ -8,7 +8,7 @@ Belte eager-imports this file at boot (the belte:config virtual) — no import i
 needed from your own code. The floor below re-exports Bun.env untyped; swap it
 for a schema once you have required variables:
 
-  import { env } from '@briancray/belte/server/env'
+  import { env } from '@belte/belte/server/env'
   import { z } from 'zod'
   export const config = env(z.object({ DATABASE_URL: z.string() }))
 

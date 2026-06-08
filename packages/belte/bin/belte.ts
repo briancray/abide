@@ -145,7 +145,7 @@ function usage(): never {
             '  belte run <file> [args...]           run a script under the belte preload\n' +
             '                                       (jobs, one-off scripts — same runtime as\n' +
             '                                       the server). For tests, add\n' +
-            '                                       preload = ["@briancray/belte/preload"] under\n' +
+            '                                       preload = ["@belte/belte/preload"] under\n' +
             '                                       [test] in bunfig.toml and use `bun test`\n' +
             '  belte compile [--target=<bun-...>] [--out=<path>]\n' +
             '                                       build a standalone server executable\n' +

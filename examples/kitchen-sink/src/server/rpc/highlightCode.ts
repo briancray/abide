@@ -1,5 +1,5 @@
-import { json } from '@briancray/belte/server/json'
-import { POST } from '@briancray/belte/server/POST'
+import { json } from '@belte/belte/server/json'
+import { POST } from '@belte/belte/server/POST'
 import { createHighlighter, type HighlighterGeneric } from 'shiki/bundle/web'
 
 type Lang = 'ts' | 'svelte' | 'sh'

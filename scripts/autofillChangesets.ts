@@ -14,7 +14,7 @@ entry. Runs inside `version-packages`, so both local and CI versioning fill the 
 import { $ } from 'bun'
 
 const REPO = 'briancray/belte'
-const PACKAGE = '@briancray/belte'
+const PACKAGE = '@belte/belte'
 
 // Paths whose changes actually ship in the npm tarball (package.json `files`);
 // a commit touching only tests/examples/docs is not release-noteworthy.

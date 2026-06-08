@@ -9,8 +9,8 @@ bundler swaps the runtime per target.
 
 ```ts
 // src/server/rpc/getPost.ts — the filename is the export, the URL, and the command name
-import { GET } from '@briancray/belte/server/GET'
-import { json } from '@briancray/belte/server/json'
+import { GET } from '@belte/belte/server/GET'
+import { json } from '@belte/belte/server/json'
 import { z } from 'zod'
 
 export const getPost = GET(async ({ id }) => json(await db.post(id)), {
@@ -116,8 +116,8 @@ A single schema-bearing verb, consumed from all five surfaces.
 
 ```ts
 // src/server/rpc/createOrder.ts
-import { POST } from '@briancray/belte/server/POST'
-import { json } from '@briancray/belte/server/json'
+import { POST } from '@belte/belte/server/POST'
+import { json } from '@belte/belte/server/json'
 import { z } from 'zod'
 
 export const createOrder = POST(async ({ sku, qty }) => json(await orders.create(sku, qty)), {
@@ -129,7 +129,7 @@ export const createOrder = POST(async ({ sku, qty }) => json(await orders.create
 ```svelte
 <!-- browser: SSR + hydrate -->
 <script lang="ts">
-    import { cache } from '@briancray/belte/shared/cache'
+    import { cache } from '@belte/belte/shared/cache'
     import { createOrder } from '$server/rpc/createOrder'
     const result = $derived(await cache(createOrder)({ sku: 'A1', qty: 2 }))
 </script>
@@ -214,7 +214,7 @@ projection (OpenAPI/MCP/CLI) never has to model a binary.
 library doesn't expose one (Zod 4 / Effect / Arktype carry their own):
 
 ```ts
-import { withJsonSchema } from '@briancray/belte/shared/withJsonSchema'
+import { withJsonSchema } from '@belte/belte/shared/withJsonSchema'
 export const fn = POST(handler, { inputSchema: withJsonSchema(vSchema, (s) => toJsonSchema(s)) })
 ```
 
@@ -260,7 +260,7 @@ type socket = <T>(opts?: {
 
 ```ts
 // src/server/sockets/chat.ts
-import { socket } from '@briancray/belte/server/socket'
+import { socket } from '@belte/belte/server/socket'
 import { z } from 'zod'
 
 export const chat = socket({
@@ -373,7 +373,7 @@ streaming source — a `Socket<T>` or `fn.stream(args)`:
 
 ```svelte
 <script lang="ts">
-    import { subscribe } from '@briancray/belte/browser/subscribe'
+    import { subscribe } from '@belte/belte/browser/subscribe'
     import { chat } from '$server/sockets/chat'
     const latest = $derived(subscribe(chat))             // T | undefined
     const status = $derived(subscribe.status(chat))      // 'pending' | 'open' | 'done' | 'error'

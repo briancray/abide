@@ -1,6 +1,6 @@
 {
-    "name": "@briancray/belte",
-    "version": "0.18.0",
+    "name": "@belte/belte",
+    "version": "0.19.0",
     "type": "module",
     "description": "Isomorphic multimodal HTTP framework built for humans and machines in a single Bun runtime",
     "license": "MIT",
@@ -51,6 +51,7 @@
         "./server/appDataDir": "./src/lib/server/appDataDir.ts",
         "./server/server": "./src/lib/server/server.ts",
         "./server/AppModule": "./src/lib/server/AppModule.ts",
+        "./server/agent": "./src/lib/server/agent.ts",
         "./server/rpc/defineVerb": "./src/lib/server/rpc/defineVerb.ts",
         "./server/sockets/defineSocket": "./src/lib/server/sockets/defineSocket.ts",
         "./server/prompts/definePrompt": "./src/lib/server/prompts/definePrompt.ts",

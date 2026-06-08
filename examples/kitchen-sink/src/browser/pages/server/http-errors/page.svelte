@@ -1,5 +1,5 @@
 <script lang="ts">
-import { HttpError } from '@briancray/belte/shared/HttpError'
+import { HttpError } from '@belte/belte/shared/HttpError'
 import CodeBlock from '$browser/CodeBlock.svelte'
 import { boom } from '$server/rpc/boom.ts'
 import { getEcho } from '$server/rpc/getEcho.ts'
@@ -129,9 +129,9 @@ async function trigger500() {
 <section class="mt-6 space-y-3">
     <CodeBlock
         title="src/server/rpc/getProduct.ts — explicit 404"
-        code={`import { GET } from '@briancray/belte/server/GET'
-import { json } from '@briancray/belte/server/json'
-import { error } from '@briancray/belte/server/error'
+        code={`import { GET } from '@belte/belte/server/GET'
+import { json } from '@belte/belte/server/json'
+import { error } from '@belte/belte/server/error'
 
 export const getProduct = GET<{ id: string }>(({ id }) => {
     const product = products[id]
@@ -141,7 +141,7 @@ export const getProduct = GET<{ id: string }>(({ id }) => {
 
     <CodeBlock
         title="src/server/rpc/boom.ts — thrown error → 500"
-        code={`import { GET } from '@briancray/belte/server/GET'
+        code={`import { GET } from '@belte/belte/server/GET'
 
 export const boom = GET(() => {
     throw new Error('intentional boom — exercising the 500 error path')
@@ -149,7 +149,7 @@ export const boom = GET(() => {
 
     <CodeBlock
         title="client — same catch shape for every status"
-        code={`import { HttpError } from '@briancray/belte/shared/HttpError'
+        code={`import { HttpError } from '@belte/belte/shared/HttpError'
 
 try {
     await getProduct({ id: 'missing' })

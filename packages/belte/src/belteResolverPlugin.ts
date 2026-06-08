@@ -116,7 +116,7 @@ export function belteResolverPlugin({
 
     /*
     The bare specifier the project imports belte under (canonical
-    `@briancray/belte` or a package alias). Resolved once from the project's
+    `@belte/belte` or a package alias). Resolved once from the project's
     package.json and threaded into every generated module so the codegen's
     imports resolve regardless of which install style the project uses.
     */

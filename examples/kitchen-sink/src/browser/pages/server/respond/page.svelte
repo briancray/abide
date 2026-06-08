@@ -1,5 +1,5 @@
 <script lang="ts">
-import { HttpError } from '@briancray/belte/shared/HttpError'
+import { HttpError } from '@belte/belte/shared/HttpError'
 import CodeBlock from '$browser/CodeBlock.svelte'
 import { getEcho } from '$server/rpc/getEcho.ts'
 import { getProduct } from '$server/rpc/getProduct.ts'
@@ -131,10 +131,10 @@ async function callRedirectFetch() {
 <section class="mt-6 space-y-3">
     <CodeBlock
         title="src/server/rpc/*.ts — three handlers, three helpers"
-        code={`import { GET } from '@briancray/belte/server/GET'
-import { json } from '@briancray/belte/server/json'
-import { error } from '@briancray/belte/server/error'
-import { redirect } from '@briancray/belte/server/redirect'
+        code={`import { GET } from '@belte/belte/server/GET'
+import { json } from '@belte/belte/server/json'
+import { error } from '@belte/belte/server/error'
+import { redirect } from '@belte/belte/server/redirect'
 
 // getEcho.ts — json
 export const getEcho = GET<{ message: string }>(({ message }) =>

@@ -5,7 +5,7 @@ description: One-shot release — stage all working-tree changes into logically-
 
 # ship
 
-Turns the current working tree into a published `@briancray/belte` version. Invoking this skill **authorizes the npm publish** — proceed through the merge without re-prompting, but report the version bump before merging as a sanity checkpoint.
+Turns the current working tree into a published `@belte/belte` version. Invoking this skill **authorizes the npm publish** — proceed through the merge without re-prompting, but report the version bump before merging as a sanity checkpoint.
 
 ## Preconditions
 
@@ -47,7 +47,7 @@ Turns the current working tree into a published `@briancray/belte` version. Invo
    rid=$(gh run list --workflow=release.yml --limit 1 --json databaseId -q '.[0].databaseId')
    gh run view "$rid" --log | grep -iE "Publishing|published successfully|New tag"
    ```
-   Report the published version + git tag (`@briancray/belte@x.y.z`). If the run failed, surface the failing step — do **not** retry the publish blindly.
+   Report the published version + git tag (`@belte/belte@x.y.z`). If the run failed, surface the failing step — do **not** retry the publish blindly.
 
 ## Notes
 

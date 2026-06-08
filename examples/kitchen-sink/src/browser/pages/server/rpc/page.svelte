@@ -1,5 +1,5 @@
 <script lang="ts">
-import { HttpError } from '@briancray/belte/shared/HttpError'
+import { HttpError } from '@belte/belte/shared/HttpError'
 import CodeBlock from '$browser/CodeBlock.svelte'
 import { createEcho } from '$server/rpc/createEcho.ts'
 import { deleteEcho } from '$server/rpc/deleteEcho.ts'
@@ -168,8 +168,8 @@ const message = $state({ value: 'hello' })
     <CodeBlock
         title="src/server/rpc/*.ts — one verb per file"
         code={`// getEcho.ts — inputSchema validates args and exposes the rpc to MCP + CLI
-import { GET } from '@briancray/belte/server/GET'
-import { json } from '@briancray/belte/server/json'
+import { GET } from '@belte/belte/server/GET'
+import { json } from '@belte/belte/server/json'
 import { z } from 'zod'
 const inputSchema = z.object({ message: z.string() })
 export const getEcho = GET(({ message }) =>

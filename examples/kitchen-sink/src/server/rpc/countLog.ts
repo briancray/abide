@@ -1,5 +1,5 @@
-import { GET } from '@briancray/belte/server/GET'
-import { jsonl } from '@briancray/belte/server/jsonl'
+import { GET } from '@belte/belte/server/GET'
+import { jsonl } from '@belte/belte/server/jsonl'
 import { z } from 'zod'
 
 // GET args arrive as query-string text ("8"), so coerce to a number —

@@ -1,5 +1,5 @@
 <script lang="ts">
-import { subscribe } from '@briancray/belte/browser/subscribe'
+import { subscribe } from '@belte/belte/browser/subscribe'
 import CodeBlock from '$browser/CodeBlock.svelte'
 import { publishChat } from '$server/rpc/publishChat.ts'
 import { chat } from '$server/sockets/chat.ts'
@@ -120,7 +120,7 @@ async function send() {
 <section class="mt-6 space-y-3">
     <CodeBlock
         title="src/server/sockets/chat.ts"
-        code={`import { socket } from '@briancray/belte/server/socket'
+        code={`import { socket } from '@belte/belte/server/socket'
 
 export type ChatMessage = { id: string; from: string; text: string; at: number }
 
@@ -128,9 +128,9 @@ export const chat = socket<ChatMessage>({ history: 100 })`} />
 
     <CodeBlock
         title="src/server/rpc/publishChat.ts — validated publish path"
-        code={`import { POST } from '@briancray/belte/server/POST'
-import { error } from '@briancray/belte/server/error'
-import { json } from '@briancray/belte/server/json'
+        code={`import { POST } from '@belte/belte/server/POST'
+import { error } from '@belte/belte/server/error'
+import { json } from '@belte/belte/server/json'
 import { chat, type ChatMessage } from '$server/sockets/chat.ts'
 
 export const publishChat = POST<{ from: string; text: string }>(({ from, text }) => {
@@ -148,7 +148,7 @@ for await (const m of chat.tail(20)) { /* last 20 (clamped to history), then liv
 
     <CodeBlock
         title="this page — reactive read"
-        code={`import { subscribe } from '@briancray/belte/browser/subscribe'
+        code={`import { subscribe } from '@belte/belte/browser/subscribe'
 import { chat } from '$server/sockets/chat.ts'
 
 const latest = $derived(subscribe(chat))     // re-renders on every new frame`} />

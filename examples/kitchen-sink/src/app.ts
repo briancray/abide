@@ -8,7 +8,7 @@ hooks are exported here to show each one in action:
               every outgoing Response with an x-server header
   handleError fallback 500 page — replaces belte's default stack-trace HTML
 */
-import type { AppModule } from '@briancray/belte/server/AppModule'
+import type { AppModule } from '@belte/belte/server/AppModule'
 
 export const init: AppModule['init'] = () => {
     // one-time setup goes here; belte already logs the boot URL, so nothing to print

@@ -1,5 +1,5 @@
-import { error } from '@briancray/belte/server/error'
-import { POST } from '@briancray/belte/server/POST'
+import { error } from '@belte/belte/server/error'
+import { POST } from '@belte/belte/server/POST'
 import { createSession, SESSION_COOKIE } from '../../sessions.ts'
 
 /*

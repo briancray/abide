@@ -1,5 +1,5 @@
 <script lang="ts">
-import { cache } from '@briancray/belte/shared/cache'
+import { cache } from '@belte/belte/shared/cache'
 import { highlightCode } from '$server/rpc/highlightCode.ts'
 
 /*

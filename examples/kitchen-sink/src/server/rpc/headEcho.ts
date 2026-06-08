@@ -1,4 +1,4 @@
-import { HEAD } from '@briancray/belte/server/HEAD'
+import { HEAD } from '@belte/belte/server/HEAD'
 
 /*
 HEAD — same routing semantics as GET, but no response body. Useful for

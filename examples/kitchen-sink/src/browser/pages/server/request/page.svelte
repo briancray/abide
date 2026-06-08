@@ -1,6 +1,6 @@
 <script lang="ts">
-import { subscribe } from '@briancray/belte/browser/subscribe'
-import { cache } from '@briancray/belte/shared/cache'
+import { subscribe } from '@belte/belte/browser/subscribe'
+import { cache } from '@belte/belte/shared/cache'
 import CodeBlock from '$browser/CodeBlock.svelte'
 import { publishChat } from '$server/rpc/publishChat.ts'
 import { whoAmI } from '$server/rpc/whoAmI.ts'
@@ -118,9 +118,9 @@ async function send() {
 <section class="mt-6 space-y-3">
     <CodeBlock
         title="src/server/rpc/whoAmI.ts"
-        code={`import { GET } from '@briancray/belte/server/GET'
-import { request } from '@briancray/belte/server/request'
-import { json } from '@briancray/belte/server/json'
+        code={`import { GET } from '@belte/belte/server/GET'
+import { request } from '@belte/belte/server/request'
+import { json } from '@belte/belte/server/json'
 
 export const whoAmI = GET(() => {
     const headers = request().headers
@@ -132,9 +132,9 @@ export const whoAmI = GET(() => {
 
     <CodeBlock
         title="src/server/rpc/publishChat.ts"
-        code={`import { POST } from '@briancray/belte/server/POST'
-import { error } from '@briancray/belte/server/error'
-import { json } from '@briancray/belte/server/json'
+        code={`import { POST } from '@belte/belte/server/POST'
+import { error } from '@belte/belte/server/error'
+import { json } from '@belte/belte/server/json'
 import { chat, type ChatMessage } from '$server/sockets/chat.ts'
 
 export const publishChat = POST<{ from: string; text: string }>(({ from, text }) => {
@@ -146,8 +146,8 @@ export const publishChat = POST<{ from: string; text: string }>(({ from, text })
 
     <CodeBlock
         title="this page — SSR + reactive read"
-        code={`import { cache } from '@briancray/belte/shared/cache'
-import { subscribe } from '@briancray/belte/browser/subscribe'
+        code={`import { cache } from '@belte/belte/shared/cache'
+import { subscribe } from '@belte/belte/browser/subscribe'
 import { whoAmI } from '$server/rpc/whoAmI.ts'
 import { chat } from '$server/sockets/chat.ts'
 

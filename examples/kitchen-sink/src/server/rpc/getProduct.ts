@@ -1,6 +1,6 @@
-import { error } from '@briancray/belte/server/error'
-import { GET } from '@briancray/belte/server/GET'
-import { json } from '@briancray/belte/server/json'
+import { error } from '@belte/belte/server/error'
+import { GET } from '@belte/belte/server/GET'
+import { json } from '@belte/belte/server/json'
 import { z } from 'zod'
 
 /*

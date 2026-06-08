@@ -1,4 +1,4 @@
-import type { BundleWindow } from '@briancray/belte/bundle/BundleWindow'
+import type { BundleWindow } from '@belte/belte/bundle/BundleWindow'
 import { z } from 'zod'
 
 /*

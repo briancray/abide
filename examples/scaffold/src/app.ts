@@ -7,7 +7,7 @@ module — no import is needed from your own code.
   handle      middleware wrapping the default request pipeline
   handleError custom 500 fallback
 */
-import type { AppModule } from '@briancray/belte/server/AppModule'
+import type { AppModule } from '@belte/belte/server/AppModule'
 
 export const init: AppModule['init'] = () => {
     // one-time setup; optionally return a cleanup to run on SIGINT/SIGTERM

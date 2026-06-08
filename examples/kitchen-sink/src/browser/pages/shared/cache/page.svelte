@@ -1,5 +1,5 @@
 <script lang="ts">
-import { cache } from '@briancray/belte/shared/cache'
+import { cache } from '@belte/belte/shared/cache'
 import CodeBlock from '$browser/CodeBlock.svelte'
 import { getCounter } from '$server/rpc/getCounter.ts'
 import { incrementCounter } from '$server/rpc/incrementCounter.ts'
@@ -213,7 +213,7 @@ async function reset() {
 <section class="mt-6 space-y-3">
     <CodeBlock
         title="this page — two derivations share one entry"
-        code={`import { cache } from '@briancray/belte/shared/cache'
+        code={`import { cache } from '@belte/belte/shared/cache'
 
 const counter = $derived(cache(getCounter, { scope: 'counter' })())
 const mirror  = $derived(await cache(getCounter, { scope: 'counter' })())  // same key, same entry

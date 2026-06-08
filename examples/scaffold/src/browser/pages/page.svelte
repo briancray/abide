@@ -3,7 +3,7 @@ Root page — served at GET /. Every folder under src/browser/pages/ that
 contains a page.svelte mounts at that folder's URL.
 -->
 <script lang="ts">
-import { cache } from '@briancray/belte/shared/cache'
+import { cache } from '@belte/belte/shared/cache'
 import { getHello } from '$server/rpc/getHello.ts'
 
 /*

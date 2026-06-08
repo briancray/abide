@@ -1,5 +1,5 @@
-import { GET } from '@briancray/belte/server/GET'
-import { redirect } from '@briancray/belte/server/redirect'
+import { GET } from '@belte/belte/server/GET'
+import { redirect } from '@belte/belte/server/redirect'
 
 /*
 GET that returns a redirect via belte/server. The `redirect()` helper

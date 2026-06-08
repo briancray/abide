@@ -33,7 +33,7 @@ The file is written to `src/.belte/routes.d.ts` so the consumer's existing
 src tsconfig include picks it up with no extra configuration. The augmented
 module is keyed on the name the project imports belte under (`importName`),
 so the augmentation matches the consumer's `page` import whether belte is
-installed directly (`@briancray/belte`) or behind an alias.
+installed directly (`@belte/belte`) or behind an alias.
 */
 export async function writeRoutesDts({
     cwd,

@@ -119,8 +119,8 @@ async function callPlainFetch() {
 <section class="mt-6 space-y-3">
     <CodeBlock
         title="src/server/rpc/getEcho.ts"
-        code={`import { GET } from '@briancray/belte/server/GET'
-import { json } from '@briancray/belte/server/json'
+        code={`import { GET } from '@belte/belte/server/GET'
+import { json } from '@belte/belte/server/json'
 
 export const getEcho = GET<{ message: string }>(({ message }) =>
     json({ method: 'GET' as const, message }),

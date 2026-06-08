@@ -1,4 +1,4 @@
-import { GET } from '@briancray/belte/server/GET'
+import { GET } from '@belte/belte/server/GET'
 
 /*
 Always throws. Routes through belte's handleError fallback (defined in

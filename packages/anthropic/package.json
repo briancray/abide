@@ -1,0 +1,44 @@
+{
+    "name": "@belte/anthropic",
+    "version": "0.1.0",
+    "type": "module",
+    "description": "Anthropic Messages API engine for belte's agent() — a model-of-your-choosing assistant over your app's MCP surface",
+    "license": "MIT",
+    "author": "Brian Cray",
+    "homepage": "https://github.com/briancray/belte#readme",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/briancray/belte.git",
+        "directory": "packages/anthropic"
+    },
+    "bugs": {
+        "url": "https://github.com/briancray/belte/issues"
+    },
+    "keywords": [
+        "belte",
+        "anthropic",
+        "claude",
+        "agent",
+        "mcp",
+        "llm"
+    ],
+    "engines": {
+        "bun": ">=1.3.0"
+    },
+    "publishConfig": {
+        "access": "public",
+        "provenance": true
+    },
+    "exports": {
+        ".": "./src/engine.ts"
+    },
+    "files": [
+        "src"
+    ],
+    "dependencies": {
+        "@anthropic-ai/sdk": "^0.102.0"
+    },
+    "peerDependencies": {
+        "@belte/belte": ">=0.17.0"
+    }
+}

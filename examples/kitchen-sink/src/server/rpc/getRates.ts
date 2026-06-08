@@ -1,6 +1,6 @@
-import { GET } from '@briancray/belte/server/GET'
-import { json } from '@briancray/belte/server/json'
-import { cache } from '@briancray/belte/shared/cache'
+import { GET } from '@belte/belte/server/GET'
+import { json } from '@belte/belte/server/json'
+import { cache } from '@belte/belte/shared/cache'
 
 type Rates = { base: string; date: string; rates: Record<string, number> }
 

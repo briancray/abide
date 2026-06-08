@@ -4,8 +4,8 @@ import { readPackageJson } from './readPackageJson.ts'
 /*
 Resolves the bare specifier prefix a consuming project imports belte under —
 the name belte is installed as in its package.json. A project may depend on
-belte directly (`@briancray/belte`) or behind a package alias
-(`"belte": "npm:@briancray/belte@..."`, or `workspace:@briancray/belte@*`
+belte directly (`@belte/belte`) or behind a package alias
+(`"belte": "npm:@belte/belte@..."`, or `workspace:@belte/belte@*`
 inside this repo). An alias-only install resolves only under the alias key and
 a direct install only under the canonical name, so the generated rpc / socket
 / prompt modules must import under whichever name the project

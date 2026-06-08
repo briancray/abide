@@ -1,6 +1,6 @@
 <script lang="ts">
-import { navigate } from '@briancray/belte/browser/navigate'
-import { page } from '@briancray/belte/browser/page'
+import { navigate } from '@belte/belte/browser/navigate'
+import { page } from '@belte/belte/browser/page'
 
 const currentPath = $derived(page.url.pathname)
 </script>
