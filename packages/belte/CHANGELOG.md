@@ -1,5 +1,11 @@
 # @belte/belte
 
+## 0.19.1
+
+### Patch Changes
+
+- [`c392c5a`](https://github.com/briancray/belte/commit/c392c5abf08a070617e7bfa1094cc38a20cba002) - read the page store during SSR via a request-scoped resolver ([`85f4c7a`](https://github.com/briancray/belte/commit/85f4c7a486191847772553cd62b34315a15a6438))
+
 ## 0.18.0
 
 ### Minor Changes
