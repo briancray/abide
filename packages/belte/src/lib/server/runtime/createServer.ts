@@ -8,12 +8,12 @@ import type { Pages } from '../../browser/types/Pages.ts'
 import { createMcpResourceServer } from '../../mcp/createMcpResourceServer.ts'
 import { setMcpResourceServer } from '../../mcp/mcpResourceServerSlot.ts'
 import type { McpServer } from '../../mcp/types/McpServer.ts'
-import { NO_STORE, SSR_CACHE_CONTROL } from '../../shared/cacheControlValues.ts'
+import { NO_STORE, SSR_CACHE_CONTROL } from '../../shared/CACHE_CONTROL_VALUES.ts'
 import { extraForwardHeaders } from '../../shared/extraForwardHeaders.ts'
 import { isDebugEnabled } from '../../shared/isDebugEnabled.ts'
 import { log } from '../../shared/log.ts'
 import { nearestLayoutPrefix, normalizeLayoutPrefixes } from '../../shared/nearestLayoutPrefix.ts'
-import { resolveStreamPath } from '../../shared/resolveStreamPath.ts'
+import { RESOLVE_STREAM_PATH } from '../../shared/RESOLVE_STREAM_PATH.ts'
 import { toBunRoutePattern } from '../../shared/toBunRoutePattern.ts'
 import type { AppModule } from '../AppModule.ts'
 import { handleCliDownload } from '../cli/handleCliDownload.ts'
@@ -29,8 +29,9 @@ import { containsTraversal } from './containsTraversal.ts'
 import { createAssetHeaderCache } from './createAssetHeaderCache.ts'
 import { createPublicAssetServer } from './createPublicAssetServer.ts'
 import { createRouteDispatcher } from './createRouteDispatcher.ts'
-import { defaultPort } from './defaultPort.ts'
-import { devReloadClientScript } from './devReloadClientScript.ts'
+import { DEFAULT_PORT } from './DEFAULT_PORT.ts'
+import { DEV_REBUILD_MESSAGE } from './DEV_REBUILD_MESSAGE.ts'
+import { DEV_RELOAD_CLIENT_SCRIPT } from './DEV_RELOAD_CLIENT_SCRIPT.ts'
 import { devReloadResponse } from './devReloadResponse.ts'
 import { disableIdleTimeoutForStream } from './disableIdleTimeoutForStream.ts'
 import { globToPathSet } from './globToPathSet.ts'
@@ -65,6 +66,8 @@ const CLI_PATH = '/__belte/cli'
 const CLI_DOWNLOAD_PREFIX = '/__belte/cli/'
 // Dev-only live-reload SSE channel; mounted only when `dev` (see devEntry orchestrator).
 const DEV_RELOAD_PATH = '/__belte/dev'
+// Dev-only manual rebuild trigger; POSTing signals the orchestrator to rebuild + restart.
+const DEV_REBUILD_PATH = '/__belte/reload'
 /*
 Unlike the framework's own plumbing routes above (the socket multiplex, MCP
 endpoint, CLI download), the OpenAPI document describes the app's public HTTP
@@ -141,7 +144,7 @@ export async function createServer({
 }): Promise<Server<unknown>> {
     // In dev, append the live-reload client to the shell so every rendered
     // page reconnects to /__belte/dev and reloads after a restart.
-    const activeShell = dev ? shell.replace('</body>', `${devReloadClientScript}</body>`) : shell
+    const activeShell = dev ? shell.replace('</body>', `${DEV_RELOAD_CLIENT_SCRIPT}</body>`) : shell
     setRegistryManifests({ rpc, sockets, prompts })
     setMcpResourceServer(createMcpResourceServer({ resourcesDir, mcpResources }))
     const cliName = cliProgramName ?? 'app'
@@ -509,6 +512,17 @@ export async function createServer({
                     // it and the reconnect triggers a spurious reload loop.
                     return disableIdleTimeoutForStream(bunServer, req, devReloadResponse())
                 }
+                /*
+                Manual rebuild trigger: signal the orchestrator parent over IPC to
+                rebuild + restart. Same-origin sibling of the live-reload channel, so
+                a script refreshes on the app's own port. process.send exists only when
+                the dev orchestrator spawned us with ipc; the optional chain no-ops on a
+                bare server.
+                */
+                if (dev && req.method === 'POST' && url.pathname === DEV_REBUILD_PATH) {
+                    process.send?.(DEV_REBUILD_MESSAGE)
+                    return new Response('rebuilding\n')
+                }
                 if (url.pathname === SOCKETS_PATH) {
                     // Reject cross-origin upgrades (CSWSH) before handing off to Bun.
                     if (isCrossOriginUpgrade(req, url)) {
@@ -538,8 +552,8 @@ export async function createServer({
                 disableIdleTimeoutForStream so it inherits the bounded idleTimeout
                 rather than the long-lived-stream disable.
                 */
-                if (url.pathname.startsWith(resolveStreamPath)) {
-                    return resolveStreamResponse(url.pathname.slice(resolveStreamPath.length))
+                if (url.pathname.startsWith(RESOLVE_STREAM_PATH)) {
+                    return resolveStreamResponse(url.pathname.slice(RESOLVE_STREAM_PATH.length))
                 }
                 if (url.pathname === MCP_PATH && mcp) {
                     return dispatchRequest(req, {}, async () => mcp.handle(req))
@@ -629,7 +643,7 @@ export async function createServer({
     which used to crash boot on EADDRINUSE instead of stepping to the next port).
     */
     const server: Server<unknown> =
-        port === undefined ? listenOnOpenPort(bindAt, defaultPort) : bindAt(port)
+        port === undefined ? listenOnOpenPort(bindAt, DEFAULT_PORT) : bindAt(port)
 
     /*
     Publishes the live server through `belte/server` before invoking the

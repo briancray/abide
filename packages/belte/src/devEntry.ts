@@ -1,7 +1,8 @@
 import { watch } from 'node:fs'
 import type { Subprocess } from 'bun'
 import { build } from './build.ts'
-import { defaultPort } from './lib/server/runtime/defaultPort.ts'
+import { DEFAULT_PORT } from './lib/server/runtime/DEFAULT_PORT.ts'
+import { DEV_REBUILD_MESSAGE } from './lib/server/runtime/DEV_REBUILD_MESSAGE.ts'
 import { findOpenPort } from './lib/server/runtime/findOpenPort.ts'
 import { log } from './lib/shared/log.ts'
 
@@ -60,6 +61,13 @@ function startServer(port: number): void {
         cwd,
         env: { ...process.env, PORT: String(port), BELTE_DEV: '1' },
         stdio: ['inherit', 'inherit', 'inherit'],
+        // The child's POST /__belte/reload route signals a rebuild over IPC, so the
+        // trigger rides the app's own port instead of a side channel.
+        ipc(message) {
+            if (message === DEV_REBUILD_MESSAGE) {
+                void rebuild(port)
+            }
+        },
     })
 }
 
@@ -112,25 +120,37 @@ pointing at the same address. Scans upward from the shared default so dev lands
 on the same predictable 3000+ address as `bun start`; reusing the number across
 restarts (not re-scanning) is what keeps the tab valid.
 */
-const port = findOpenPort(defaultPort)
+const port = findOpenPort(DEFAULT_PORT)
 const firstBuild = await build(buildOptions)
 if (!firstBuild) {
     log.warn('initial build failed — fix the error and save to retry')
 }
 startServer(port)
 
+/*
+BELTE_DEV_NO_WATCH=1 skips the fs watcher: rebuild only on demand via POST
+/__belte/reload (always mounted under dev), so a long-lived in-process job — e.g.
+an agent editing the app's own source — isn't yanked mid-run by a save.
+*/
+const manualRebuild = Bun.env.BELTE_DEV_NO_WATCH === '1'
+
 let debounce: ReturnType<typeof setTimeout> | undefined
-const watcher = watch(SOURCE_DIR, { recursive: true }, (_event, filename) => {
-    if (!filename || isGenerated(filename)) {
-        return
-    }
-    clearTimeout(debounce)
-    debounce = setTimeout(() => void rebuild(port), REBUILD_DEBOUNCE_MS)
-})
+const watcher = manualRebuild
+    ? undefined
+    : watch(SOURCE_DIR, { recursive: true }, (_event, filename) => {
+          if (!filename || isGenerated(filename)) {
+              return
+          }
+          clearTimeout(debounce)
+          debounce = setTimeout(() => void rebuild(port), REBUILD_DEBOUNCE_MS)
+      })
+if (manualRebuild) {
+    log.info(`manual rebuild mode — POST http://localhost:${port}/__belte/reload to apply changes`)
+}
 
 /* Tear down the watcher and the child on shutdown so neither outlives the orchestrator. */
 const shutdown = async () => {
-    watcher.close()
+    watcher?.close()
     await stopServer()
     process.exit(0)
 }
