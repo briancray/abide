@@ -293,6 +293,9 @@ export async function createServer({
         params: Record<string, string>,
         store: RequestStore,
     ): Promise<Response> {
+        /* Publish the match so the `page` proxy resolves route/params during SSR render. */
+        store.route = routeUrl
+        store.params = params
         const json = wantsJson(store.req)
         if (json) {
             return Response.json(

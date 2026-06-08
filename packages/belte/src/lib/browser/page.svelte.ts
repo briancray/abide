@@ -1,9 +1,11 @@
 import type { Component } from 'svelte'
+import { activePage } from '../shared/activePage.ts'
 import {
     type NormalizedLayoutPrefix,
     nearestLayoutPrefix,
     normalizeLayoutPrefixes,
 } from '../shared/nearestLayoutPrefix.ts'
+import type { PageSnapshot } from '../shared/types/PageSnapshot.ts'
 import { abortPageStream } from './pageStreamController.ts'
 import type { Layouts } from './types/Layouts.ts'
 import type { Pages } from './types/Pages.ts'
@@ -42,12 +44,36 @@ export type Page = keyof Routes extends never
     ? PageStateFor<string>
     : { [R in keyof Routes]: PageStateFor<R> }[keyof Routes]
 
-// biome-ignore lint/suspicious/noExplicitAny: discriminated-union init needs a single arm
-export const page: Page = $state<any>({
+/*
+Client-side singleton the resolver returns. navigate()/applyState mutate it;
+because it's $state, reads taken through the `page` proxy inside a $derived
+re-run on every nav. Never populated server-side — there the resolver reads
+the per-request ALS store instead, so concurrent renders don't share it.
+*/
+export const clientPageState: PageSnapshot = $state({
     route: '',
     params: {},
     url: new URL('http://localhost/'),
 })
+
+/*
+Public page state. A getter proxy over the side's registered resolver
+(activePage): client → clientPageState singleton, server → the per-request
+ALS snapshot. Property reads on the client resolve to the $state singleton, so
+reactivity flows; on the server each render reads its own request scope. Users
+only ever see route/params/url.
+*/
+export const page = {
+    get route() {
+        return activePage().route
+    },
+    get params() {
+        return activePage().params
+    },
+    get url() {
+        return activePage().url
+    },
+} as unknown as Page
 
 /*
 Internal renderer state — the Layout/Page components App.svelte mounts.
@@ -116,15 +142,13 @@ function applyState(
 ): void {
     renderState.Layout = Layout
     renderState.Page = Page
-    const mutable = page as PageStateFor<string>
-    mutable.route = route
-    mutable.params = params
+    clientPageState.route = route
+    clientPageState.params = params
     syncUrl()
 }
 
 function syncUrl(): void {
-    const mutable = page as PageStateFor<string>
-    mutable.url = new URL(window.location.href)
+    clientPageState.url = new URL(window.location.href)
 }
 
 /*
@@ -207,7 +231,7 @@ export async function navigate(href: string, options: NavigateOptions = {}): Pro
         return
     }
     const fullTarget = `${target.pathname}${target.search}${target.hash}`
-    if (target.pathname === page.url.pathname) {
+    if (target.pathname === clientPageState.url.pathname) {
         writeHistory(replace, fullTarget)
         syncUrl()
         return
@@ -234,7 +258,7 @@ only refreshes `page.url`; a pathname change resolves and swaps the page, or
 hard-navigates when the restored URL isn't an SPA route.
 */
 async function applyTarget(pathname: string, fullTarget: string): Promise<void> {
-    if (pathname === page.url.pathname) {
+    if (pathname === clientPageState.url.pathname) {
         syncUrl()
         return
     }

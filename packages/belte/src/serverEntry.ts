@@ -35,6 +35,7 @@ import { loadEnvFromDataDir } from './lib/shared/loadEnvFromDataDir.ts'
 import { runningAsStandaloneBinary } from './lib/shared/runningAsStandaloneBinary.ts'
 import { setCacheStoreResolver } from './lib/shared/setCacheStoreResolver.ts'
 import { setGlobalCacheStoreResolver } from './lib/shared/setGlobalCacheStoreResolver.ts'
+import { setPageResolver } from './lib/shared/setPageResolver.ts'
 
 /*
 Resolve config into process.env before anything reads it (createServer reads
@@ -66,6 +67,21 @@ await import('./_virtual/config.ts')
 exitWithParent()
 
 setCacheStoreResolver(() => requestContext.getStore()?.cache)
+
+/*
+Request-scoped page resolver: the `page` proxy reads route/params/url off the
+ALS store, so layout-scoped components see the live match during SSR without a
+module singleton leaking across concurrent or streaming renders. route/params
+land just before render; url is set at the request boundary, so 404/error
+renders still get a correct page.url.
+*/
+setPageResolver(() => {
+    const store = requestContext.getStore()
+    if (!store) {
+        return undefined
+    }
+    return { route: store.route ?? '', params: store.params ?? {}, url: store.url }
+})
 
 /*
 Process-level store for cache(fn, { global: true }) — one per server process,

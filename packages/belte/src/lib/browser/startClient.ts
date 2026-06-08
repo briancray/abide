@@ -3,13 +3,21 @@ import App from '../../App.svelte'
 import { createCacheStore } from '../shared/createCacheStore.ts'
 import { setCacheStoreResolver } from '../shared/setCacheStoreResolver.ts'
 import { setGlobalCacheStoreResolver } from '../shared/setGlobalCacheStoreResolver.ts'
+import { setPageResolver } from '../shared/setPageResolver.ts'
 import type { CacheSnapshotEntry } from '../shared/types/CacheSnapshotEntry.ts'
 import type { CacheStore } from '../shared/types/CacheStore.ts'
 import type { StreamingPlaceholder } from '../shared/types/StreamingPlaceholder.ts'
 import { cacheEntryFromSnapshot } from './cacheEntryFromSnapshot.ts'
 import { installStreamingPlaceholders } from './installStreamingPlaceholders.ts'
 import { openResolveStream } from './openResolveStream.ts'
-import { bindPage, handlePopstate, navigate, page, renderState } from './page.svelte.ts'
+import {
+    bindPage,
+    clientPageState,
+    handlePopstate,
+    navigate,
+    page,
+    renderState,
+} from './page.svelte.ts'
 import type { Layouts } from './types/Layouts.ts'
 import type { Pages } from './types/Pages.ts'
 
@@ -107,6 +115,8 @@ export async function startClient({
     setCacheStoreResolver(() => cacheStore)
     /* One tab store: cache(fn, { global: true }) shares it, so global is a no-op here. */
     setGlobalCacheStoreResolver(() => cacheStore)
+    /* One document: the `page` proxy resolves to this $state singleton, mutated by navigate(). */
+    setPageResolver(() => clientPageState)
     if (window.__SSR__.cache) {
         hydrateCacheFromSnapshot(cacheStore, window.__SSR__.cache)
     }

@@ -12,6 +12,13 @@ export type RequestStore = {
     req: Request
     cache: CacheStore
     /*
+    The matched page route and its decoded params, set just before the page
+    renders so the `page` proxy resolves them inside layout-scoped components
+    during SSR. Undefined on rpc/socket requests and until a page match lands.
+    */
+    route?: string
+    params?: Record<string, string>
+    /*
     The request's cookie jar, materialized lazily by the first cookies() call
     and flushed to Set-Cookie headers when the scope returns. Undefined while a
     request never touches cookies, so the common path parses and emits nothing.
