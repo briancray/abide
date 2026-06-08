@@ -97,4 +97,17 @@
             generated for free. Opens the live document.
         </p>
     </a>
+    <a
+        href="/server/agent"
+        class="rounded-lg border border-slate-200 bg-white p-5 hover:border-slate-400">
+        <h2 class="text-lg font-semibold"><code class="font-mono">agent()</code></h2>
+        <p class="mt-1 text-sm text-slate-600">
+            Run a model over the app's own MCP tools and stream
+            <code class="font-mono">AgentFrame</code>
+            s back — here the
+            <code class="font-mono">@belte/claude-code</code>
+            engine, framed with<code class="font-mono">jsonl()</code>
+            .
+        </p>
+    </a>
 </section>
