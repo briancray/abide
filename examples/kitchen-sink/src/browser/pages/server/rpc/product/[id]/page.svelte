@@ -7,12 +7,23 @@ import { getProduct } from '$server/rpc/getProduct.ts'
 
 let { id }: { id: string } = $props()
 
-const product = $derived(
-    await cache(getProduct)({ id }).catch((err) => {
-        if (err instanceof HttpError && err.status === 404) return undefined
+/*
+cache() returns the warm value synchronously on a hydrated key, so it has no
+`.catch` — chain a promise method on a read and it throws on warm hits. Handle
+errors in the await form with try/catch instead.
+*/
+async function loadProduct(id: string): Promise<{ name: string; price: number } | undefined> {
+    try {
+        return await cache(getProduct)({ id })
+    } catch (err) {
+        if (err instanceof HttpError && err.status === 404) {
+            return undefined
+        }
         throw err
-    }),
-)
+    }
+}
+
+const product = $derived(await loadProduct(id))
 </script>
 
 <nav class="mb-2 text-sm text-slate-500">
