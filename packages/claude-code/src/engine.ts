@@ -1,3 +1,4 @@
+import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk'
 import { query } from '@anthropic-ai/claude-agent-sdk'
 import type { AgentEngine } from '@belte/belte/server/agent'
 
@@ -11,23 +12,30 @@ raw-model engine, Claude Code owns its loop — core only sees frames out.
   import { agent } from '@belte/belte/server/agent'
   import { jsonl } from '@belte/belte/server/jsonl'
   import { engine } from '@belte/claude-code'
-  const chatEngine = engine({ permission: { allow: ['mcp__app__*'], deny: ['Bash'] } })
+  const chatEngine = engine({ permissionMode: 'bypassPermissions' })
   export const chat = POST(({ messages }) => jsonl(agent(chatEngine, messages)), { inputSchema })
 
 Auth rides whatever Claude Code is logged in with (subscription or API key)
-— no key in $server/config. Permission is decided server-side and static:
-the app's tools are gated by the verb declaration; Claude Code's own
-built-ins (Bash, file ops, web) are fenced by the deny/allow rules below.
+— no key in $server/config. Permission is decided server-side via
+`permissionMode`: the app's own tools are already gated by each verb's
+declaration, so the mode just sets how Claude Code treats its own built-ins
+(prompt, plan-only, or bypass).
 
 NOTE: the @anthropic-ai/claude-agent-sdk message/option shapes are evolving
-— verify `query`'s options (mcpServers, allowedTools, disallowedTools) and
-the streamed message discriminants against the installed SDK version before
-relying on this in production.
+— verify `query`'s options (mcpServers, permissionMode) and the streamed
+message discriminants against the installed SDK version before relying on
+this in production.
 */
 
 type ClaudeCodeConfig = {
-    // Static permission posture for Claude Code's own tools (not the app's — those are verb-gated).
-    permission?: { allow?: string[]; deny?: string[] }
+    /*
+    Claude Code's permission mode for the session — `'default'` (prompt on
+    dangerous ops), `'acceptEdits'`, `'plan'` (no tool execution), `'dontAsk'`,
+    or `'bypassPermissions'`. `'bypassPermissions'` is wired with the SDK's
+    required `allowDangerouslySkipPermissions` flag — only choose it for a
+    fully trusted, non-interactive server.
+    */
+    permissionMode?: PermissionMode
     // Bearer for the app's /__belte/mcp endpoint, if it's gated by app.handle/authorize.
     mcpToken?: string
     // MCP server name → tools surface as `mcp__<name>__<tool>`; defaults to "app".
@@ -54,8 +62,11 @@ export function engine(config: ClaudeCodeConfig = {}): AgentEngine {
                             : {}),
                     },
                 },
-                ...(config.permission?.allow ? { allowedTools: config.permission.allow } : {}),
-                ...(config.permission?.deny ? { disallowedTools: config.permission.deny } : {}),
+                ...(config.permissionMode ? { permissionMode: config.permissionMode } : {}),
+                // The SDK requires this explicit opt-in alongside bypassPermissions.
+                ...(config.permissionMode === 'bypassPermissions'
+                    ? { allowDangerouslySkipPermissions: true }
+                    : {}),
             },
         })
 
