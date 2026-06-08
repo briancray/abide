@@ -1,5 +1,11 @@
 # @belte/belte
 
+## 0.19.3
+
+### Patch Changes
+
+- [`ae17e17`](https://github.com/briancray/belte/commit/ae17e17cac4a52a7506e411a572857cdf6f2d5d1) - type the warm sync return as Promise<Return> | Return ([`a00afa7`](https://github.com/briancray/belte/commit/a00afa7955fef3755f91b8a4da935916701c070a))
+
 ## 0.19.2
 
 ### Patch Changes
