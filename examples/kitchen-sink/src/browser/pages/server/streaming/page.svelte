@@ -20,7 +20,10 @@ function runSse() {
 async function runJsonl() {
     jsonlFrames = []
     const response = await countLog.raw({ to: 8 })
-    const reader = response.body!.pipeThrough(new TextDecoderStream()).getReader()
+    if (!response.body) {
+        return
+    }
+    const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
     let buffer = ''
     while (true) {
         const { value, done } = await reader.read()

@@ -19,7 +19,7 @@ toolchain path (`belte bundle`) calls ensureWebviewLib to build-on-miss;
 this resolver only reports what already exists. Throws with
 guidance when nothing resolves rather than letting dlopen fail opaquely.
 */
-export async function resolveWebviewLib(cwd: string = process.cwd()): Promise<string> {
+export async function resolveWebviewLib(_cwd: string = process.cwd()): Promise<string> {
     const fromEnv = process.env.BELTE_WEBVIEW_LIB
     if (fromEnv) {
         return fromEnv

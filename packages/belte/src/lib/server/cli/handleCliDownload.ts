@@ -128,8 +128,9 @@ export async function handleCliDownload(
     }
     const appUrl = new URL(request.url).origin
     const auth = request.headers.get('authorization')
-    const bearer =
-        auth && auth.toLowerCase().startsWith('bearer ') ? auth.slice('bearer '.length) : undefined
+    const bearer = auth?.toLowerCase().startsWith('bearer ')
+        ? auth.slice('bearer '.length)
+        : undefined
     const envContent = buildEnvContent(appUrl, bearer)
 
     const serverPath = `${cwd}/dist/cli-thin/${platform}/${serverBinaryName(platform)}`

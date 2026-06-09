@@ -43,10 +43,10 @@ async function send() {
     streaming = true
     try {
         const response = await chat.raw({ messages: history })
-        if (!response.ok) {
+        if (!response.ok || !response.body) {
             throw new Error(`HTTP ${response.status}`)
         }
-        const reader = response.body!.pipeThrough(new TextDecoderStream()).getReader()
+        const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
         let buffer = ''
         while (true) {
             const { value, done } = await reader.read()

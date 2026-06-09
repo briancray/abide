@@ -13,7 +13,6 @@ export interface StandardSchemaV1<Input = unknown, Output = Input> {
     readonly '~standard': StandardSchemaV1.Props<Input, Output>
 }
 
-// biome-ignore lint/style/useNamingConvention: matches the Standard Schema spec exactly
 export namespace StandardSchemaV1 {
     export interface Props<Input = unknown, Output = Input> {
         readonly version: 1
