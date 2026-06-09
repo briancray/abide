@@ -24,6 +24,8 @@ are no provider built-ins to fence here.
 type AnthropicConfig = {
     model: string
     apiKey: string
+    // Alternate Messages API origin — a gateway, a proxy, or a test double.
+    baseURL?: string
     maxTokens?: number
     effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max'
     // Hard cap on tool-loop turns so a model that never stops requesting tools can't
@@ -103,7 +105,7 @@ function toolResultText(result: Record<string, unknown>): string {
 }
 
 export function engine(config: AnthropicConfig): AgentEngine {
-    const client = new Anthropic({ apiKey: config.apiKey })
+    const client = new Anthropic({ apiKey: config.apiKey, baseURL: config.baseURL })
     const maxSteps = config.maxSteps ?? MAX_STEPS
     return async function* ({ surface, messages }) {
         /*
