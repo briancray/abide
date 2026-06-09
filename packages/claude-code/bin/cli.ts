@@ -1,10 +1,8 @@
 #!/usr/bin/env bun
-import type { Settings } from '@anthropic-ai/claude-agent-sdk'
 import { CAPABILITY_TOOLS } from '../src/CAPABILITY_TOOLS.ts'
 import { launch } from '../src/launch.ts'
+import type { PermissionMode } from '../src/PermissionMode.ts'
 import { serve } from '../src/serve.ts'
-
-type PermissionMode = NonNullable<Settings['permissions']>['defaultMode']
 
 /* Local belte dev server default — mirrors belte's DEFAULT_PORT. The package owns
 its own default so it needs no internal belte import. */
@@ -51,10 +49,6 @@ if (command === 'serve') {
     console.error(`belte assistant bridge on http://127.0.0.1:${server.port} -> ${url}`)
 } else {
     // Default action: the interactive TUI against the local (or --url) app.
-    const mode = parseFlag('permission-mode') as PermissionMode | undefined
-    await launch({
-        url,
-        mcpToken,
-        ...(mode ? { permissions: { defaultMode: mode } } : {}),
-    })
+    const permissionMode = parseFlag('permission-mode') as PermissionMode | undefined
+    await launch({ url, mcpToken, ...(permissionMode ? { permissionMode } : {}) })
 }

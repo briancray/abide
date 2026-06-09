@@ -1,17 +1,19 @@
-import type { Options, Settings } from '@anthropic-ai/claude-agent-sdk'
 import type { NeutralMessage } from '@belte/belte/server/agent'
 import { BRIDGE_PORT } from './BRIDGE_PORT.ts'
-import { engine } from './engine.ts'
+import type { ClaudePermissions } from './ClaudePermissions.ts'
+import { cliEngine } from './cliEngine.ts'
 
 /*
 Runs on the USER's machine, on loopback, so a remote belte site's browser can
 drive the user's local Claude Code over its own MCP surface. A separate process
-from any deployed server — apps that don't use this pay nothing.
+from any deployed server — apps that don't use this pay nothing. Drives the
+installed `claude` binary (via cliEngine), so it needs only Bun + claude on PATH,
+no @anthropic-ai/claude-agent-sdk.
 
 The page reaches the bridge over a single WebSocket: presence IS the connection
 being open (no polling), and chat frames ride the same socket, id-tagged so
 concurrent turns don't interleave. This is the loopback channel only — Claude
-still talks to the app's MCP over HTTP (the engine's `mcp__<app>__*` server).
+still talks to the app's MCP over HTTP (the `mcp__<app>__*` server).
 
 The trust boundary: capabilities (`tools`/`permissions`) are chosen HERE, by the
 user starting the bridge — never sent from the page, which could only ever author
@@ -30,8 +32,8 @@ type ServeConfig = {
     // Optional bridge→site MCP bearer, distinct from `token`.
     mcpToken?: string
     // Built-in tools the local agent may use, on top of the site's verbs. Default [] — site verbs only.
-    tools?: Options['tools']
-    permissions?: Settings['permissions']
+    tools?: string[]
+    permissions?: ClaudePermissions
 }
 
 // One chat turn from the page: `id` correlates the frames streamed back on the shared socket.
@@ -80,16 +82,14 @@ export function serve(config: ServeConfig) {
                 /* Per-message engine so the site's behavioral systemPrompt can vary
                 per turn — it shapes output within the granted tools, never expands
                 them, so it's safe to take from the page. */
-                const runAgent = engine({
+                const runAgent = cliEngine({
                     tools: config.tools ?? [],
                     permissions: config.permissions ?? { defaultMode: 'default' },
                     mcpToken: config.mcpToken,
+                    systemPrompt: request.systemPrompt,
                     abortController: controller,
-                    ...(request.systemPrompt
-                        ? { options: { systemPrompt: request.systemPrompt } }
-                        : {}),
                 })
-                // The claude-code engine ignores `surface` — it dials the site's MCP via `origin`.
+                // The engine ignores `surface` — it dials the site's MCP via `origin`.
                 const frames = runAgent({
                     surface: undefined as never,
                     messages: request.messages,

@@ -1,5 +1,5 @@
-import type { Settings } from '@anthropic-ai/claude-agent-sdk'
 import { appMcpServers } from './appMcpServers.ts'
+import type { PermissionMode } from './PermissionMode.ts'
 
 /*
 Launches the interactive `claude` TUI wired to a belte app's MCP surface. Unlike
@@ -15,7 +15,7 @@ type LaunchConfig = {
     // The belte app whose MCP the TUI drives (local dev server or a deployed origin).
     url: string
     mcpToken?: string
-    permissions?: Settings['permissions']
+    permissionMode?: PermissionMode
 }
 
 export async function launch(config: LaunchConfig): Promise<never> {
@@ -28,9 +28,8 @@ export async function launch(config: LaunchConfig): Promise<never> {
         '--setting-sources',
         '',
     ]
-    const mode = config.permissions?.defaultMode
-    if (mode) {
-        args.push('--permission-mode', mode)
+    if (config.permissionMode) {
+        args.push('--permission-mode', config.permissionMode)
     }
     const child = Bun.spawn({ cmd: args, stdio: ['inherit', 'inherit', 'inherit'] })
     const forward = (signal: NodeJS.Signals) => {
