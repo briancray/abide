@@ -43,6 +43,28 @@ function applyFrame(reply: AssistantReply, frame: AgentFrame): AssistantReply {
     return { ...reply, done: true }
 }
 
+/* What the UI should do about the assistant. A host (a belte bundle) injects a
+handshake into the URL fragment to say it manages the bridge — `<port>.<token>`
+when it's running, or `unavailable` when it manages one but `claude` isn't
+installed. Absent = a plain browser, where the user starts the bridge via `command`. */
+type AssistantStatus = 'ready' | 'starting' | 'manual' | 'unavailable'
+
+type BundleHandshake = { managed: boolean; unavailable: boolean; port?: number; token?: string }
+
+function bundleHandshake(): BundleHandshake {
+    const hash = typeof location === 'undefined' ? '' : location.hash
+    const match = hash.match(/belte-assistant=([^&]+)/)
+    if (!match) {
+        return { managed: false, unavailable: false }
+    }
+    const value = decodeURIComponent(match[1])
+    if (value === 'unavailable') {
+        return { managed: true, unavailable: true }
+    }
+    const [port, token] = value.split('.')
+    return { managed: true, unavailable: false, port: Number(port), token }
+}
+
 type AssistantConfig = {
     // The belte site whose MCP the local agent drives. Defaults to location.origin.
     url?: string
@@ -57,10 +79,14 @@ type AssistantConfig = {
 }
 
 type AssistantHandle = {
-    // Reactive: true while the loopback socket is open.
+    // Reactive: true while the loopback socket is open and serving.
     readonly available: boolean
-    // The copy-paste `serve` command that starts the bridge for this site.
-    readonly command: string
+    /* What the UI should do: 'ready' (show chat), 'starting' (a host is bringing
+    the bridge up), 'manual' (browser — show `command`), 'unavailable' (a host
+    manages the bridge but `claude` isn't installed — show an install hint). */
+    readonly status: AssistantStatus
+    // The copy-paste `serve` command — only in 'manual' mode; undefined when a host manages the bridge.
+    readonly command: string | undefined
     /* The assistant's reply to `messages`, as a Subscribable of accumulating
     snapshots: `subscribe(assistant.ask(messages))` drives the turn reactively.
     Keyed by messages+bridge, so re-renders share one run and the LLM doesn't
@@ -222,20 +248,42 @@ the user's machine). Render the assistant only when `available`; otherwise show
 `command` as the first-run hint.
 */
 export function assistant(config: AssistantConfig = {}): AssistantHandle {
+    const host = bundleHandshake()
     const origin = siteOrigin(config.url)
-    const port = config.port ?? BRIDGE_PORT
-    const wsUrl = `ws://127.0.0.1:${port}${config.token ? `?token=${config.token}` : ''}`
+    // A managed host's injected port/token win as defaults; explicit config still overrides.
+    const port = config.port ?? host.port ?? BRIDGE_PORT
+    const token = config.token ?? host.token
+    const wsUrl = `ws://127.0.0.1:${port}${token ? `?token=${token}` : ''}`
+
+    // True only when a bridge is actually reachable — never when a managed host reports it can't run one.
+    function isAvailable(): boolean {
+        if (typeof window === 'undefined' || host.unavailable) {
+            return false
+        }
+        const connection = getConnection(wsUrl)
+        connection.track()
+        return connection.connected
+    }
+
     return {
         get available() {
-            // SSR can't hold a loopback socket; the not-available branch (command hint) renders.
-            if (typeof window === 'undefined') {
-                return false
+            return isAvailable()
+        },
+        get status() {
+            if (host.unavailable) {
+                return 'unavailable'
             }
-            const connection = getConnection(wsUrl)
-            connection.track()
-            return connection.connected
+            if (isAvailable()) {
+                return 'ready'
+            }
+            // A managed host is bringing the bridge up; a plain browser needs the user to.
+            return host.managed ? 'starting' : 'manual'
         },
         get command() {
+            // A host manages the bridge — nothing for the user to run.
+            if (host.managed) {
+                return undefined
+            }
             const parts = [`bunx @belte/claude-code serve --url ${origin}`]
             if (port !== BRIDGE_PORT) {
                 parts.push(`--port ${port}`)

@@ -96,6 +96,44 @@ function killServerChild(): void {
     }
 }
 
+/*
+Optional local-assistant bridge, tied to the connected app. Started only when the
+app bundled @belte/claude-code (its UI uses browser/assistant, so the dynamic
+import resolves — an app that doesn't is tolerated by --compile and no-ops) AND
+`claude` is on PATH. The page receives the loopback bridge's port+token through the
+webview URL fragment (withAssistant); no `claude` yields an `unavailable` fragment
+so the page shows an install hint instead of a run-this-command prompt. The bridge
+is loopback-only and torn down with the connection (stopLivenessWatch).
+*/
+let bridge: ReturnType<(typeof import('@belte/claude-code/serve'))['serve']> | undefined
+let assistantHandshake: string | undefined
+
+async function startBridge(url: string): Promise<void> {
+    const claude = await import('@belte/claude-code/serve').catch(() => undefined)
+    if (!claude) {
+        return
+    }
+    if (!Bun.which('claude')) {
+        assistantHandshake = 'unavailable'
+        return
+    }
+    const token = crypto.randomUUID()
+    const server = claude.serve({ url, allowOrigins: [url], token })
+    bridge = server
+    assistantHandshake = `${server.port}.${token}`
+}
+
+function stopBridge(): void {
+    bridge?.stop(true)
+    bridge = undefined
+    assistantHandshake = undefined
+}
+
+// Append the bridge handshake to a webview URL so the page's assistant() finds its port+token.
+function withAssistant(url: string): string {
+    return assistantHandshake ? `${url}#belte-assistant=${assistantHandshake}` : url
+}
+
 // Begin (or restart) watching `url` for liveness once the window points at it.
 function startLivenessWatch(url: string): void {
     stopLivenessWatch()
@@ -112,6 +150,8 @@ function stopLivenessWatch(): void {
     }
     connectedUrl = undefined
     livenessFailures = 0
+    // The assistant bridge follows the connection — drop it whenever we disconnect.
+    stopBridge()
 }
 
 /*
@@ -198,6 +238,7 @@ async function resolveLaunchTarget(): Promise<string> {
             const url = await startEmbeddedServer(AUTO_START_CEILING_MS)
             flag?.setConnected(true)
             startLivenessWatch(url)
+            await startBridge(url)
             log.info(`resumed embedded server at ${url}`)
             return url
         } catch (error) {
@@ -210,6 +251,7 @@ async function resolveLaunchTarget(): Promise<string> {
     if (identity) {
         flag?.setConnected(true)
         startLivenessWatch(last.url)
+        await startBridge(last.url)
         log.info(`reconnected to ${identity.name} at ${last.url}`)
         return last.url
     }
@@ -315,10 +357,11 @@ async function handleConnect(request: Request): Promise<Response> {
     }
     flag?.setConnected(true)
     startLivenessWatch(target)
+    await startBridge(target)
     // Record the choice so the next launch reconnects here before opening.
     await writeLastConnection(programName, { kind: 'url', url: target })
     log.info(`connecting to ${identity.name} at ${target}`)
-    return Response.json({ redirect: target })
+    return Response.json({ redirect: withAssistant(target) })
 }
 
 // POST /start — boot the embedded server and point the window at it.
@@ -327,10 +370,11 @@ async function handleStart(): Promise<Response> {
         const localUrl = await startEmbeddedServer()
         flag?.setConnected(true)
         startLivenessWatch(localUrl)
+        await startBridge(localUrl)
         // Record the choice so the next launch boots the embedded server first.
         await writeLastConnection(programName, { kind: 'embedded' })
         log.info(`started embedded server at ${localUrl}`)
-        return Response.json({ redirect: localUrl })
+        return Response.json({ redirect: withAssistant(localUrl) })
     } catch (error) {
         killServerChild()
         return Response.json({ error: String(error) }, { status: 500 })
@@ -388,7 +432,8 @@ async function start(init: Init): Promise<void> {
     controlOrigin = `http://127.0.0.1:${server.port}`
     log.info(`${title} control server listening at ${controlOrigin}`)
     const target = await resolveLaunchTarget()
-    self.postMessage({ type: 'ready', origin: controlOrigin, target })
+    // Fold in the assistant handshake (when a bridge started) so the page is configured on first load.
+    self.postMessage({ type: 'ready', origin: controlOrigin, target: withAssistant(target) })
 }
 
 // Reap the child + release the server and FFI handles, then confirm so the
