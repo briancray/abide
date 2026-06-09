@@ -1,6 +1,7 @@
 import type { Options, Settings } from '@anthropic-ai/claude-agent-sdk'
 import { query } from '@anthropic-ai/claude-agent-sdk'
 import type { AgentEngine, NeutralMessage } from '@belte/belte/server/agent'
+import { appMcpServers } from './appMcpServers.ts'
 
 /*
 The Claude Code engine for belte's `agent()`. `engine(config)` returns an
@@ -42,7 +43,7 @@ type ClaudeCodeConfig = {
     permissions?: Settings['permissions']
     /*
     The base set of built-in tools the model may see — `['Read', 'Bash', …]`,
-    or `[]` to drop every built-in so only the app's `mcp__app__*` verbs
+    or `[]` to drop every built-in so only the app's `mcp__<app>__*` verbs
     remain. This removes tools from context entirely (cheaper, and the
     model can't try them), a harder cut than a `permissions.deny` rule. Omit to
     keep the default Claude Code tool preset.
@@ -50,6 +51,13 @@ type ClaudeCodeConfig = {
     tools?: Options['tools']
     // Bearer for the app's /__belte/mcp endpoint, if it's gated by app.handle/authorize.
     mcpToken?: string
+    /*
+    Cancels the run early. The engine also aborts when the consumer stops
+    iterating (break / HTTP disconnect), so passing one is only needed to cancel
+    proactively from outside the loop — e.g. the serve bridge aborting on socket
+    close, so the spawned Claude process dies with the page rather than running on.
+    */
+    abortController?: AbortController
     /*
     Escape hatch for any other SDK option (`model`, `maxTurns`, `systemPrompt`,
     `agents`, `env`, …). Spread first, so the engine-owned keys — the MCP
@@ -85,15 +93,6 @@ function promptFromMessages(messages: NeutralMessage[]): string {
         .join('\n\n')
 }
 
-/* The app's MCP server is always registered under this name, so its verbs have
-the stable prefix `mcp__app__<verb>` that permission rules can rely on. A second
-belte app can be added in the same session via `config.options.mcpServers` under
-its own name (e.g. `mcp__shop__*`); only `app` is reserved. If symmetric
-multi-app sessions are ever needed (no privileged "the app"), take an array of
-origins and name them deterministically — don't reopen a per-call name, which
-would let the prefix drift out of sync with the permission rules. */
-const MCP_SERVER_NAME = 'app'
-
 export function engine(config: ClaudeCodeConfig = {}): AgentEngine {
     /* Split the settings-shaped permission block: `defaultMode` is the session
     mode — a top-level SDK option, and the only thing the bypass guard checks —
@@ -102,6 +101,16 @@ export function engine(config: ClaudeCodeConfig = {}): AgentEngine {
     const { defaultMode, ...permissionRules } = config.permissions ?? {}
     return async function* ({ messages, origin }) {
         const prompt = promptFromMessages(messages)
+
+        /* The app's MCP server, keyed under its discovered `mcp__<name>__*` prefix;
+        a second belte app can still be merged via config.options.mcpServers under
+        its own discovered name. */
+        const appServers = await appMcpServers(origin, config.mcpToken)
+
+        /* Aborted in the finally below so the SDK stops and kills the spawned
+        Claude process when the consumer stops iterating; a caller-supplied
+        controller also lets the run be cancelled from outside the loop. */
+        const controller = config.abortController ?? new AbortController()
 
         const stream = query({
             prompt,
@@ -115,13 +124,7 @@ export function engine(config: ClaudeCodeConfig = {}): AgentEngine {
                 ...config.options,
                 mcpServers: {
                     ...config.options?.mcpServers,
-                    [MCP_SERVER_NAME]: {
-                        type: 'http',
-                        url: `${origin}/__belte/mcp`,
-                        ...(config.mcpToken
-                            ? { headers: { Authorization: `Bearer ${config.mcpToken}` } }
-                            : {}),
-                    },
+                    ...appServers,
                 },
                 /* The engine's config is the authoritative permission source, so
                 isolate from the deploy host's ~/.claude and project settings —
@@ -132,6 +135,13 @@ export function engine(config: ClaudeCodeConfig = {}): AgentEngine {
                 servers: project .mcp.json, user settings, plugins, and claude.ai
                 cloud connectors (Gmail/Calendar/Drive). Without this they leak in. */
                 strictMcpConfig: true,
+                /* Always stream token deltas (as `stream_event` messages) so text
+                arrives live, not buffered into one frame per turn — parity with
+                the @belte/anthropic engine. After the spread, so it can't be
+                disabled via config.options. */
+                includePartialMessages: true,
+                // Engine-owned (after the spread) so the finally-abort always has a handle.
+                abortController: controller,
                 ...(config.tools ? { tools: config.tools } : {}),
                 ...(Object.keys(permissionRules).length
                     ? { settings: { permissions: permissionRules } }
@@ -146,43 +156,54 @@ export function engine(config: ClaudeCodeConfig = {}): AgentEngine {
 
         // tool_use id → name, so a tool_result (which carries only the id) can name its call.
         const toolNames = new Map<string, string>()
-        for await (const message of stream) {
-            if (message.type === 'assistant') {
-                for (const block of message.message.content) {
-                    if (block.type === 'text') {
-                        yield { type: 'text', delta: block.text }
-                    } else if (block.type === 'tool_use') {
-                        toolNames.set(block.id, block.name)
-                        yield {
-                            type: 'tool_use',
-                            id: block.id,
-                            name: block.name,
-                            input: block.input,
-                        }
+        try {
+            for await (const message of stream) {
+                if (message.type === 'stream_event') {
+                    /* Live text deltas. The complete `assistant` message below repeats
+                this text in full, so text is emitted only here to avoid a double
+                send; that message is kept solely for its fully-formed tool_use
+                blocks (partial tool inputs mid-stream aren't valid JSON yet). */
+                    const event = message.event
+                    if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+                        yield { type: 'text', delta: event.delta.text }
                     }
-                }
-            } else if (message.type === 'user') {
-                /* Tool outcomes return as tool_result blocks on a user turn — successes
-                and denials alike (a `dontAsk`/deny rejection is an `is_error` result). So
-                `ok: !is_error` surfaces a blocked tool the same way as a failed one. */
-                const content = message.message.content
-                if (Array.isArray(content)) {
-                    for (const block of content) {
-                        if (block.type === 'tool_result') {
+                } else if (message.type === 'assistant') {
+                    for (const block of message.message.content) {
+                        if (block.type === 'tool_use') {
+                            toolNames.set(block.id, block.name)
                             yield {
-                                type: 'tool_result',
-                                id: block.tool_use_id,
-                                name: toolNames.get(block.tool_use_id) ?? '',
-                                ok: !block.is_error,
+                                type: 'tool_use',
+                                id: block.id,
+                                name: block.name,
+                                input: block.input,
                             }
                         }
                     }
+                } else if (message.type === 'user') {
+                    /* Tool outcomes return as tool_result blocks on a user turn — successes
+                and denials alike (a `dontAsk`/deny rejection is an `is_error` result). So
+                `ok: !is_error` surfaces a blocked tool the same way as a failed one. */
+                    const content = message.message.content
+                    if (Array.isArray(content)) {
+                        for (const block of content) {
+                            if (block.type === 'tool_result') {
+                                yield {
+                                    type: 'tool_result',
+                                    id: block.tool_use_id,
+                                    name: toolNames.get(block.tool_use_id) ?? '',
+                                    ok: !block.is_error,
+                                }
+                            }
+                        }
+                    }
+                } else if (message.type === 'result') {
+                    // `success` is a clean finish; every error subtype (max_turns, budget,
+                    // execution error) is an abnormal stop the client must be able to see.
+                    yield { type: 'done', stop: message.subtype === 'success' ? 'end' : 'error' }
                 }
-            } else if (message.type === 'result') {
-                // `success` is a clean finish; every error subtype (max_turns, budget,
-                // execution error) is an abnormal stop the client must be able to see.
-                yield { type: 'done', stop: message.subtype === 'success' ? 'end' : 'error' }
             }
+        } finally {
+            controller.abort()
         }
     }
 }
