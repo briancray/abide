@@ -36,6 +36,7 @@ changed, rewrite or drop the claim.
 | Claim in the opening | Verify against |
 | --- | --- |
 | One declared rpc becomes SSR call + browser fetch + MCP tool + CLI subcommand + OpenAPI op | `src/belteResolverPlugin.ts` + `src/lib/shared/createRemoteFunction.ts` (swap), `src/lib/mcp/dispatchMcpRequest.ts` (mcp), `src/lib/server/runtime/buildOpenApiSpec.ts` (openapi) |
+| An rpc's mcp surface is also drivable by an in-app model agent, provider-swappable | `src/lib/server/agent.ts` (engine contract + frame stream; framed via `jsonl()`/`sse()`); engines ship as sibling packages `packages/anthropic`, `packages/claude-code` |
 | Zero runtime dependencies; only optional peers | `package.json` — `dependencies` absent/empty; `peerDependencies` are the only deps |
 | Bun-only, by design | `package.json` `engines.bun`; `bun:*` / `Bun.*` usage in `src/lib` |
 | Svelte-only web surface | `src/App.svelte`, `src/lib/browser/*`, `peerDependencies.svelte` |
@@ -80,9 +81,13 @@ That one file is now all of this:
 
 Don't take the diagram's word for it — belte prints the exact map at boot:
 
-[a fenced `sh` block showing the REAL output of logExposedSurfaces — match its
- format exactly: `METHOD  /rpc/<name> → http, openapi, browser, mcp:<name>, cli:<name>`
- and the `(add a schema → mcp/cli)` hint for schemaless verbs]
+[a fenced `sh` block showing the REAL output of logExposedSurfaces — three
+ aligned tables of `✓`/`·` glyph columns, NOT an arrow list. pages = `page |
+ layout | error`; sockets = `socket | schema | browser | mcp | cli | publish`;
+ rpcs = method+path then `schema | browser | mcp | cli` (http/openapi are
+ unconditional, folded into the `http` header). A schemaless verb shows a red `·`
+ in its schema column — that one column gates the machine surfaces; there is no
+ separate hint line.]
 
 Every surface a function reaches is auditable in one place — no surface is ever
 exposed by accident.
@@ -122,12 +127,21 @@ After the opening, keep the reference dense and faithful. Order:
   the opening.
 * **Server**
   * **Server / rpc** — Declaring (verb spec + options table + example; response
-    helpers table; `request()` / `server()` / `cookies()`; a callout that SSR/MCP
+    helpers table — `json` / `jsonl` / `sse` / `error` / `redirect`;
+    `request()` / `server()` / `cookies()`; a callout that SSR/MCP
     in-process calls forward only an allowlist of headers, extensible via
     `app.forwardHeaders`; `filesSchema` multipart; `withJsonSchema()`). Consuming
     (`fn(args)` / `.raw` / `.stream` table + examples; `HttpError`; `openapi.json`).
   * **Server / sockets** — declaring (spec + options + example), publishing (spec +
     example), consuming (AsyncIterable note, iterate example, `.tail`).
+  * **Server / agent** — `agent(engine, messages)` runs a provider model engine
+    against the app's own mcp surface and returns the engine's frame stream; the
+    handler frames it with `jsonl()`/`sse()`, so transport is the app's choice
+    (spec + the `chat` example). Engines live in provider packages
+    (`@belte/anthropic`, `@belte/claude-code`) and only see the surface in / frames
+    out, so swapping providers never touches the verb or UI. Permission is
+    server-side: the surface is gated by each verb's `clients.mcp` plus per-call
+    handler auth, not negotiated at runtime.
 * **Clients**
   * **Shared** — `cache()` (spec + server/browser examples; `{#await}` vs top-level
     await for SSR mode; a note that keys distinguish `Date`/`Map`/`Set`/`bigint`,
