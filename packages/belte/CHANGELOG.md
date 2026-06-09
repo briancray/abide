@@ -1,5 +1,11 @@
 # @belte/belte
 
+## 0.20.1
+
+### Patch Changes
+
+- [`b24f689`](https://github.com/briancray/belte/commit/b24f689f06d32c47a0636f5e834758401b8933a7) - degrade un-serializable schemas to opaque instead of throwing ([`9477216`](https://github.com/briancray/belte/commit/94772166c5c1d435bfcd013c8c2bcf75e699bb51))
+
 ## 0.20.0
 
 ### Minor Changes
