@@ -1,4 +1,4 @@
-import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk'
+import type { Options, Settings } from '@anthropic-ai/claude-agent-sdk'
 import { query } from '@anthropic-ai/claude-agent-sdk'
 import type { AgentEngine, NeutralMessage } from '@belte/belte/server/agent'
 
@@ -12,34 +12,51 @@ raw-model engine, Claude Code owns its loop — core only sees frames out.
   import { agent } from '@belte/belte/server/agent'
   import { jsonl } from '@belte/belte/server/jsonl'
   import { engine } from '@belte/claude-code'
-  const chatEngine = engine({ permissionMode: 'bypassPermissions' })
+  const chatEngine = engine({ permissions: { defaultMode: 'bypassPermissions' } })
   export const chat = POST(({ messages }) => jsonl(agent(chatEngine, messages)), { inputSchema })
 
 Auth rides whatever Claude Code is logged in with (subscription or API key)
 — no key in $server/config. Permission is decided server-side via
-`permissionMode`: the app's own tools are already gated by each verb's
-declaration, so the mode just sets how Claude Code treats its own built-ins
-(prompt, plan-only, or bypass).
+`permissions` — the same `defaultMode` + `allow`/`ask`/`deny` block as
+.claude/settings.json. The app's own tools are already gated by each verb's
+declaration, so this governs how Claude Code treats its own built-ins
+(which ops auto-run, prompt, plan-only, or are blocked).
 
 NOTE: the @anthropic-ai/claude-agent-sdk message/option shapes are evolving
-— verify `query`'s options (mcpServers, permissionMode) and the streamed
+— verify `query`'s options (mcpServers, settings.permissions, permissionMode) and the streamed
 message discriminants against the installed SDK version before relying on
 this in production.
 */
 
 type ClaudeCodeConfig = {
     /*
-    Claude Code's permission mode for the session — `'default'` (prompt on
-    dangerous ops), `'acceptEdits'`, `'plan'` (no tool execution), `'dontAsk'`,
-    or `'bypassPermissions'`. `'bypassPermissions'` is wired with the SDK's
-    required `allowDangerouslySkipPermissions` flag — only choose it for a
-    fully trusted, non-interactive server.
+    The session's permission policy, forwarded to the SDK as inline settings.
+    Same shape as .claude/settings.json's `permissions`: a `defaultMode`
+    (`'default'` prompts on dangerous ops, `'acceptEdits'`, `'plan'` no tool
+    execution, `'dontAsk'`, `'bypassPermissions'`) plus `allow`/`ask`/`deny`
+    rule lists (e.g. `deny: ['Bash(rm:*)']`). `defaultMode:
+    'bypassPermissions'` auto-wires the SDK's required
+    `allowDangerouslySkipPermissions` flag — only for a fully trusted,
+    non-interactive server.
     */
-    permissionMode?: PermissionMode
+    permissions?: Settings['permissions']
+    /*
+    The base set of built-in tools the model may see — `['Read', 'Bash', …]`,
+    or `[]` to drop every built-in so only the app's `mcp__app__*` verbs
+    remain. This removes tools from context entirely (cheaper, and the
+    model can't try them), a harder cut than a `permissions.deny` rule. Omit to
+    keep the default Claude Code tool preset.
+    */
+    tools?: Options['tools']
     // Bearer for the app's /__belte/mcp endpoint, if it's gated by app.handle/authorize.
     mcpToken?: string
-    // MCP server name → tools surface as `mcp__<name>__<tool>`; defaults to "app".
-    serverName?: string
+    /*
+    Escape hatch for any other SDK option (`model`, `maxTurns`, `systemPrompt`,
+    `agents`, `env`, …). Spread first, so the engine-owned keys — the MCP
+    wiring, `settingSources` isolation, and the bypass guard — always win;
+    `mcpServers` is merged, so extra servers add to (not replace) the app's.
+    */
+    options?: Partial<Options>
 }
 
 /*
@@ -68,16 +85,37 @@ function promptFromMessages(messages: NeutralMessage[]): string {
         .join('\n\n')
 }
 
+/* The app's MCP server is always registered under this name, so its verbs have
+the stable prefix `mcp__app__<verb>` that permission rules can rely on. A second
+belte app can be added in the same session via `config.options.mcpServers` under
+its own name (e.g. `mcp__shop__*`); only `app` is reserved. If symmetric
+multi-app sessions are ever needed (no privileged "the app"), take an array of
+origins and name them deterministically — don't reopen a per-call name, which
+would let the prefix drift out of sync with the permission rules. */
+const MCP_SERVER_NAME = 'app'
+
 export function engine(config: ClaudeCodeConfig = {}): AgentEngine {
-    const serverName = config.serverName ?? 'app'
+    /* Split the settings-shaped permission block: `defaultMode` is the session
+    mode — a top-level SDK option, and the only thing the bypass guard checks —
+    while the allow/ask/deny rules ride in `settings.permissions`. Routing the
+    mode to one place avoids declaring it twice. */
+    const { defaultMode, ...permissionRules } = config.permissions ?? {}
     return async function* ({ messages, origin }) {
         const prompt = promptFromMessages(messages)
 
         const stream = query({
             prompt,
             options: {
+                /* Expose no skills by default — a site-inline agent shouldn't surface
+                the host's dev workflows, and the skill *listing* rides in the system
+                prompt independently of `tools`/`settingSources`. Before the spread, so
+                a caller can opt back in via `options.skills`. */
+                skills: [],
+                // Caller extras first; every engine-owned key below overrides them.
+                ...config.options,
                 mcpServers: {
-                    [serverName]: {
+                    ...config.options?.mcpServers,
+                    [MCP_SERVER_NAME]: {
                         type: 'http',
                         url: `${origin}/__belte/mcp`,
                         ...(config.mcpToken
@@ -85,25 +123,58 @@ export function engine(config: ClaudeCodeConfig = {}): AgentEngine {
                             : {}),
                     },
                 },
-                ...(config.permissionMode ? { permissionMode: config.permissionMode } : {}),
+                /* The engine's config is the authoritative permission source, so
+                isolate from the deploy host's ~/.claude and project settings —
+                they'd otherwise merge into (and could widen) this policy. */
+                settingSources: [],
+                /* Only the MCP servers passed above (the app, plus any the caller
+                merged via options.mcpServers) — never the deploy user's ambient
+                servers: project .mcp.json, user settings, plugins, and claude.ai
+                cloud connectors (Gmail/Calendar/Drive). Without this they leak in. */
+                strictMcpConfig: true,
+                ...(config.tools ? { tools: config.tools } : {}),
+                ...(Object.keys(permissionRules).length
+                    ? { settings: { permissions: permissionRules } }
+                    : {}),
+                ...(defaultMode ? { permissionMode: defaultMode } : {}),
                 // The SDK requires this explicit opt-in alongside bypassPermissions.
-                ...(config.permissionMode === 'bypassPermissions'
+                ...(defaultMode === 'bypassPermissions'
                     ? { allowDangerouslySkipPermissions: true }
                     : {}),
             },
         })
 
+        // tool_use id → name, so a tool_result (which carries only the id) can name its call.
+        const toolNames = new Map<string, string>()
         for await (const message of stream) {
             if (message.type === 'assistant') {
                 for (const block of message.message.content) {
                     if (block.type === 'text') {
                         yield { type: 'text', delta: block.text }
                     } else if (block.type === 'tool_use') {
+                        toolNames.set(block.id, block.name)
                         yield {
                             type: 'tool_use',
                             id: block.id,
                             name: block.name,
                             input: block.input,
+                        }
+                    }
+                }
+            } else if (message.type === 'user') {
+                /* Tool outcomes return as tool_result blocks on a user turn — successes
+                and denials alike (a `dontAsk`/deny rejection is an `is_error` result). So
+                `ok: !is_error` surfaces a blocked tool the same way as a failed one. */
+                const content = message.message.content
+                if (Array.isArray(content)) {
+                    for (const block of content) {
+                        if (block.type === 'tool_result') {
+                            yield {
+                                type: 'tool_result',
+                                id: block.tool_use_id,
+                                name: toolNames.get(block.tool_use_id) ?? '',
+                                ok: !block.is_error,
+                            }
                         }
                     }
                 }
