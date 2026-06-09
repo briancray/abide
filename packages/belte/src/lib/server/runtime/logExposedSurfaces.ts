@@ -1,7 +1,6 @@
 import type { Pages } from '../../browser/types/Pages.ts'
 import { log } from '../../shared/log.ts'
-import type { NormalizedLayoutPrefix } from '../../shared/nearestLayoutPrefix.ts'
-import { nearestLayoutPrefix } from '../../shared/nearestLayoutPrefix.ts'
+import type { ViewResolver } from '../../shared/types/ViewResolver.ts'
 import { verbRegistry } from '../rpc/verbRegistry.ts'
 import { socketRegistry } from '../sockets/socketRegistry.ts'
 import { ensureRegistriesLoaded } from './registryManifests.ts'
@@ -100,8 +99,7 @@ this is diagnostic only.
 */
 export async function logExposedSurfaces(routing: {
     pages: Pages
-    layoutPrefixes: NormalizedLayoutPrefix[]
-    errorPrefixes: NormalizedLayoutPrefix[]
+    resolver: ViewResolver
 }): Promise<void> {
     try {
         await ensureRegistriesLoaded()
@@ -110,11 +108,10 @@ export async function logExposedSurfaces(routing: {
     }
 
     const pageRows = Object.keys(routing.pages)
-        .map((route) => [
-            route,
-            nearestLayoutPrefix(route, routing.layoutPrefixes) ?? ABSENT,
-            nearestLayoutPrefix(route, routing.errorPrefixes) ?? ABSENT,
-        ])
+        .map((route) => {
+            const { layout, error } = routing.resolver.prefixes(route)
+            return [route, layout ?? ABSENT, error ?? ABSENT]
+        })
         .sort()
 
     const socketRows = Array.from(socketRegistry.values(), (entry) => [

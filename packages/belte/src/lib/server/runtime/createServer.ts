@@ -1,18 +1,15 @@
 import type { BunRequest, Server } from 'bun'
-import type { Component } from 'svelte'
-import { render } from 'svelte/server'
-import App from '../../../App.svelte'
 import type { Errors } from '../../browser/types/Errors.ts'
 import type { Layouts } from '../../browser/types/Layouts.ts'
 import type { Pages } from '../../browser/types/Pages.ts'
 import { createMcpResourceServer } from '../../mcp/createMcpResourceServer.ts'
 import { setMcpResourceServer } from '../../mcp/mcpResourceServerSlot.ts'
 import type { McpServer } from '../../mcp/types/McpServer.ts'
-import { NO_STORE, SSR_CACHE_CONTROL } from '../../shared/CACHE_CONTROL_VALUES.ts'
+import { NO_STORE } from '../../shared/CACHE_CONTROL_VALUES.ts'
+import { createViewResolver } from '../../shared/createViewResolver.ts'
 import { extraForwardHeaders } from '../../shared/extraForwardHeaders.ts'
 import { isDebugEnabled } from '../../shared/isDebugEnabled.ts'
 import { log } from '../../shared/log.ts'
-import { nearestLayoutPrefix, normalizeLayoutPrefixes } from '../../shared/nearestLayoutPrefix.ts'
 import { RESOLVE_STREAM_PATH } from '../../shared/RESOLVE_STREAM_PATH.ts'
 import { toBunRoutePattern } from '../../shared/toBunRoutePattern.ts'
 import type { AppModule } from '../AppModule.ts'
@@ -22,11 +19,9 @@ import type { PromptRoutes } from '../prompts/types/PromptRoutes.ts'
 import type { RemoteRoutes } from '../rpc/types/RemoteRoutes.ts'
 import { createSocketDispatcher } from '../sockets/createSocketDispatcher.ts'
 import type { SocketRoutes } from '../sockets/types/SocketRoutes.ts'
-import { acceptsZstd } from './acceptsZstd.ts'
 import { buildOpenApiSpec } from './buildOpenApiSpec.ts'
-import { cacheControlForAsset } from './cacheControlForAsset.ts'
-import { containsTraversal } from './containsTraversal.ts'
-import { createAssetHeaderCache } from './createAssetHeaderCache.ts'
+import { createAppAssetServer } from './createAppAssetServer.ts'
+import { createPageRenderer } from './createPageRenderer.ts'
 import { createPublicAssetServer } from './createPublicAssetServer.ts'
 import { createRouteDispatcher } from './createRouteDispatcher.ts'
 import { DEFAULT_PORT } from './DEFAULT_PORT.ts'
@@ -34,7 +29,6 @@ import { DEV_REBUILD_MESSAGE } from './DEV_REBUILD_MESSAGE.ts'
 import { DEV_RELOAD_CLIENT_SCRIPT } from './DEV_RELOAD_CLIENT_SCRIPT.ts'
 import { devReloadResponse } from './devReloadResponse.ts'
 import { disableIdleTimeoutForStream } from './disableIdleTimeoutForStream.ts'
-import { globToPathSet } from './globToPathSet.ts'
 import { internalErrorResponse } from './internalErrorResponse.ts'
 import { isCrossOriginUpgrade } from './isCrossOriginUpgrade.ts'
 import { listenOnOpenPort } from './listenOnOpenPort.ts'
@@ -44,19 +38,9 @@ import { parsePort } from './parsePort.ts'
 import { ensureRegistriesLoaded, setRegistryManifests } from './registryManifests.ts'
 import { resolveStreamResponse } from './resolveStreamResponse.ts'
 import { runWithRequestScope } from './runWithRequestScope.ts'
-import { safeJsonForScript } from './safeJsonForScript.ts'
-import { serializeCacheSnapshot } from './serializeCacheSnapshot.ts'
 import { setActiveServer } from './setActiveServer.ts'
-import { stashPendingStream } from './streamStash.ts'
 import type { Assets } from './types/Assets.ts'
 import type { RequestStore } from './types/RequestStore.ts'
-
-function wantsJson(req: Request): boolean {
-    return (req.headers.get('accept') ?? '').includes('application/json')
-}
-
-// SSR placeholders the shell carries; filled in a single pass per render.
-const SSR_MARKER = /<!--ssr:(head|body|state)-->/g
 
 const IDENTITY_PATH = '/__belte/identity'
 const SOCKETS_PATH = '/__belte/sockets'
@@ -150,248 +134,23 @@ export async function createServer({
     const cliName = cliProgramName ?? 'app'
     const cliCwd = process.cwd()
     const servePublicAsset = await createPublicAssetServer({ publicDir, publicAssets })
-    const layoutPrefixes = layouts ? normalizeLayoutPrefixes(Object.keys(layouts)) : []
-    const errorPrefixes = errors ? normalizeLayoutPrefixes(Object.keys(errors)) : []
+    /* Route → components: layout/error prefix matching + module loading live behind this seam. */
+    const viewResolver = createViewResolver({ pages, layouts, errors })
 
-    /*
-    Snapshot the precompressed `.zst` siblings the build wrote next to each
-    `_app` asset, keyed by the asset's request path, so a zstd-capable
-    client gets the precompressed bytes without on-the-fly compression. Only
-    in disk mode (`belte start` / dev); the compiled binary serves from the
-    embedded `assets` map instead.
-    */
-    const diskZstdPaths = assets
-        ? new Set<string>()
-        : await globToPathSet(
-              `${distDir}/_app`,
-              '**/*.zst',
-              (file) => `/_app/${file.replace(/\.zst$/, '')}`,
-          )
+    // Build-tree assets: embedded zstd map (compiled binary) or dist/ on disk.
+    const serveAppAsset = await createAppAssetServer({ distDir, assets })
 
     const logRequests = isDebugEnabled('belte')
 
     // App-configured headers extend the in-process forward allowlist for the process lifetime.
     extraForwardHeaders.set(app?.forwardHeaders ?? [])
 
-    // Per-pathname asset header bundles, hashed-chunk-aware Cache-Control.
-    const headersForAsset = createAssetHeaderCache(cacheControlForAsset)
-
-    async function serveStaticAsset(req: Request, url: URL): Promise<Response> {
-        /*
-        Defence-in-depth path-traversal check against the raw request URL.
-        The WHATWG URL parser decodes `%2E%2E` to `..` and then normalises
-        dot-segments away before `url.pathname` is even visible, so an
-        attacker's traversal sequence would be invisible if we only looked
-        at the parsed pathname. Inspecting `req.url` instead catches the
-        encoded forms before normalization eats them; `%2F` (encoded slash)
-        is preserved in the pathname but still flagged here for clarity.
-        */
-        if (containsTraversal(req.url)) {
-            return new Response('Not Found', {
-                status: 404,
-                headers: { 'Cache-Control': NO_STORE },
-            })
-        }
-        const wantsZstd = acceptsZstd(req)
-        const { base: baseHeaders, zstd: zstdHeaders } = headersForAsset(url.pathname)
-        if (assets) {
-            const compressed = assets[url.pathname]
-            if (!compressed) {
-                return new Response('Not Found', {
-                    status: 404,
-                    headers: { 'Cache-Control': NO_STORE },
-                })
-            }
-            if (wantsZstd) {
-                return new Response(compressed, { headers: zstdHeaders })
-            }
-            return new Response(await Bun.zstdDecompress(compressed), { headers: baseHeaders })
-        }
-        const diskPath = distDir + url.pathname
-        if (wantsZstd && diskZstdPaths.has(url.pathname)) {
-            return new Response(Bun.file(`${diskPath}.zst`), { headers: zstdHeaders })
-        }
-        return new Response(Bun.file(diskPath), { headers: baseHeaders })
-    }
-
-    /* Splices the rendered head/body and a state <script> into the shell's SSR markers. */
-    function fillShell(rendered: Awaited<ReturnType<typeof render>>, stateTag: string): string {
-        const fills: Record<string, string> = {
-            head: rendered.head,
-            body: rendered.body,
-            state: stateTag,
-        }
-        return activeShell.replace(SSR_MARKER, (_match, key: string) => fills[key])
-    }
-
     /*
-    Renders the nearest error.svelte for a failed page navigation — an unknown
-    route (404) or a throw during a page render. Walks up from the requested
-    pathname to the deepest error.svelte ancestor (nearest-only, like layouts)
-    and renders it inside the nearest layout with `{ status, message, stack }`
-    props. Returns undefined when no error.svelte covers the path, so the caller
-    falls back to its plain Response (the 404 text) or rethrows (→
-    app.handleError). The document is static — it ships `__SSR__.error` so the
-    client skips hydration (there is no client route for an error view to
-    hydrate against).
-
-    The full message and stack are passed through; nothing is serialized to
-    `__SSR__`, so they reach the browser only where the author's template
-    actually renders them — a bare error.svelte leaks neither. Withholding them
-    would just deny an author who wants a dev stack, so exposure stays the
-    author's call (and the cause is logged server-side regardless).
+    SSR document assembly — view render, cache snapshot partition, `__SSR__`
+    state tag, shell splicing — lives behind createPageRenderer. renderError
+    also serves the 404 fallthrough below.
     */
-    async function renderError(
-        status: number,
-        message: string,
-        store: RequestStore,
-        stack?: string,
-    ): Promise<Response | undefined> {
-        if (!errors) {
-            return undefined
-        }
-        const pathname = store.url.pathname
-        const errorPrefix = nearestLayoutPrefix(pathname, errorPrefixes)
-        if (!errorPrefix) {
-            return undefined
-        }
-        const layoutPrefix = nearestLayoutPrefix(pathname, layoutPrefixes)
-        const [errorMod, layoutMod] = await Promise.all([
-            errors[errorPrefix](),
-            layoutPrefix && layouts ? layouts[layoutPrefix]() : Promise.resolve(undefined),
-        ])
-        const ErrorView = errorMod.default as Component
-        const Layout = layoutMod?.default as Component | undefined
-        // status is a number (and stack optional); the page-params shape is
-        // string-keyed generically, so the error props ride through as-is.
-        const errorParams = { status, message, stack } as unknown as Record<string, string>
-        /* Publish to the store too, so the `page` proxy resolves these during the error render
-           (renderError bypasses renderPage, which is where normal renders set them). */
-        store.route = pathname
-        store.params = errorParams
-        const rendered = await render(App, {
-            props: {
-                state: {
-                    page: { route: pathname, params: errorParams, url: store.url },
-                    render: { Layout, Page: ErrorView },
-                },
-            },
-        })
-        const stateTag = `<script>window.__SSR__ = ${safeJsonForScript({ error: true })};</script>`
-        const html = fillShell(rendered, stateTag)
-        return new Response(html, {
-            status,
-            headers: {
-                'Content-Type': 'text/html; charset=utf-8',
-                'Cache-Control': NO_STORE,
-            },
-        })
-    }
-
-    async function renderPage(
-        routeUrl: string,
-        params: Record<string, string>,
-        store: RequestStore,
-    ): Promise<Response> {
-        /* Publish the match so the `page` proxy resolves route/params during SSR render. */
-        store.route = routeUrl
-        store.params = params
-        const json = wantsJson(store.req)
-        if (json) {
-            return Response.json(
-                { route: routeUrl, params },
-                {
-                    headers: {
-                        Vary: 'Accept',
-                        'Cache-Control': SSR_CACHE_CONTROL,
-                    },
-                },
-            )
-        }
-        try {
-            return await renderPageHtml(routeUrl, params, store)
-        } catch (error) {
-            /*
-            A page render failed (module import, component throw, or a settled
-            cache read). error.svelte wins for page renders: render the nearest
-            one with a 500, logging the cause it's about to swallow into a
-            presentable page. With no error.svelte covering the path, rethrow so
-            app.handleError — or the framework 500 — takes it.
-            */
-            const message = error instanceof Error ? error.message : String(error)
-            const stack = error instanceof Error ? error.stack : undefined
-            const rendered = await renderError(500, message, store, stack)
-            if (rendered) {
-                log.error(error)
-                return rendered
-            }
-            throw error
-        }
-    }
-
-    async function renderPageHtml(
-        routeUrl: string,
-        params: Record<string, string>,
-        store: RequestStore,
-    ): Promise<Response> {
-        const layoutPrefix = nearestLayoutPrefix(routeUrl, layoutPrefixes)
-        const [pageMod, layoutMod] = await Promise.all([
-            pages[routeUrl](),
-            layoutPrefix && layouts ? layouts[layoutPrefix]() : Promise.resolve(undefined),
-        ])
-        const Page = pageMod.default as Component
-        const Layout = layoutMod?.default as Component | undefined
-        const rendered = await render(App, {
-            props: {
-                state: {
-                    page: {
-                        route: routeUrl,
-                        params,
-                        url: store.url,
-                    },
-                    render: { Layout, Page },
-                },
-            },
-        })
-        /*
-        Settled entries (awaited reads render() blocked on) inline into the
-        first chunk; pending entries ({#await} reads) stream a resolve script
-        each as their fetch lands. A page with no pending reads stays a plain
-        buffered Response — no streaming overhead when nothing's deferred.
-        */
-        const { inline, pending } = await serializeCacheSnapshot(store.cache)
-        /*
-        Settled reads inline into `__SSR__`. Pending {#await} reads ship their
-        keys in `__SSR__.streaming` (so the client pre-creates placeholders that
-        cache() hits instead of re-fetching) plus a single-use `streamToken`; the
-        in-flight promises are stashed under that token for the out-of-band
-        resolve endpoint to drain. The document itself is a plain buffered
-        response — it closes immediately, so hydration isn't gated on the stream.
-        */
-        const streaming = pending.map((entry) => ({
-            key: entry.key,
-            /* serializeCacheSnapshot only ever yields request-bearing (remote) entries here. */
-            url: entry.request?.url ?? '',
-            method: entry.request?.method ?? 'GET',
-        }))
-        const streamToken =
-            pending.length > 0 ? stashPendingStream(store.cache, pending) : undefined
-        const stateTag = `<script>window.__SSR__ = ${safeJsonForScript({
-            route: routeUrl,
-            params,
-            cache: inline,
-            streaming,
-            streamToken,
-        })};</script>`
-        const html = fillShell(rendered, stateTag)
-        return new Response(html, {
-            headers: {
-                'Content-Type': 'text/html; charset=utf-8',
-                Vary: 'Accept',
-                'Cache-Control': SSR_CACHE_CONTROL,
-            },
-        })
-    }
+    const { renderPage, renderError } = createPageRenderer({ shell: activeShell, viewResolver })
 
     /*
     Route dispatch — rpc-vs-page-vs-404 resolution and method matching — lives
@@ -585,14 +344,14 @@ export async function createServer({
                 app.handle middleware: they have no need for cache() and the
                 allocation overhead matters on a cold page load that pulls
                 dozens of chunks. The global server.error() handler still
-                catches anything that goes wrong inside serveStaticAsset.
+                catches anything that goes wrong inside serveAppAsset.
                 */
                 if (url.pathname.startsWith('/_app/')) {
                     if (!logRequests) {
-                        return serveStaticAsset(req, url)
+                        return serveAppAsset(req, url)
                     }
                     const start = Bun.nanoseconds()
-                    const response = await serveStaticAsset(req, url)
+                    const response = await serveAppAsset(req, url)
                     const ms = (Bun.nanoseconds() - start) / 1e6
                     log.request(req.method, `${url.pathname}${url.search}`, response.status, ms)
                     return response
@@ -688,7 +447,7 @@ export async function createServer({
     startup output rather than interleaving with it.
     */
     if (logRequests) {
-        await logExposedSurfaces({ pages, layoutPrefixes, errorPrefixes })
+        await logExposedSurfaces({ pages, resolver: viewResolver })
     }
     log.success(`ready at http://localhost:${server.port}`)
     return server

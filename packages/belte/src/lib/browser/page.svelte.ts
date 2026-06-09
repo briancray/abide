@@ -1,11 +1,8 @@
 import type { Component } from 'svelte'
 import { activePage } from '../shared/activePage.ts'
-import {
-    type NormalizedLayoutPrefix,
-    nearestLayoutPrefix,
-    normalizeLayoutPrefixes,
-} from '../shared/nearestLayoutPrefix.ts'
+import { createViewResolver } from '../shared/createViewResolver.ts'
 import type { PageSnapshot } from '../shared/types/PageSnapshot.ts'
+import type { ViewResolver } from '../shared/types/ViewResolver.ts'
 import { abortPageStream } from './pageStreamController.ts'
 import type { Layouts } from './types/Layouts.ts'
 import type { Pages } from './types/Pages.ts'
@@ -95,17 +92,16 @@ export const renderState = $state<{
     Page: undefined,
 })
 
-let boundPages: Pages | undefined
-let boundLayouts: Layouts | undefined
-let layoutPrefixes: NormalizedLayoutPrefix[] = []
+let boundResolver: ViewResolver | undefined
 
 type SsrPayload = { route: string; params: Record<string, string> }
 
 /*
 Wires the route + layout tables produced by the bundler's virtual manifests
-and seeds page state from the SSR payload. Called once from startClient
-before `hydrate(App)` so the first render sees Page/Layout/params already
-populated. Subsequent `navigate()` calls reuse `boundPages` / `boundLayouts`.
+into a view resolver and seeds page state from the SSR payload. Called once
+from startClient before `hydrate(App)` so the first render sees
+Page/Layout/params already populated. Subsequent `navigate()` calls reuse
+the bound resolver.
 */
 export async function bindPage({
     pages,
@@ -116,9 +112,7 @@ export async function bindPage({
     layouts?: Layouts
     ssr: SsrPayload
 }): Promise<void> {
-    boundPages = pages
-    boundLayouts = layouts
-    layoutPrefixes = layouts ? normalizeLayoutPrefixes(Object.keys(layouts)) : []
+    boundResolver = createViewResolver({ pages, layouts })
     const { Page, Layout } = await loadView(ssr.route)
     applyState(ssr.route, ssr.params, Page, Layout)
 }
@@ -126,19 +120,10 @@ export async function bindPage({
 async function loadView(
     route: string,
 ): Promise<{ Page: Component; Layout: Component | undefined }> {
-    if (!boundPages) {
+    if (!boundResolver) {
         throw new Error('[belte] page is not initialized — call bindPage first')
     }
-    const pageLoader = boundPages[route]
-    if (!pageLoader) {
-        throw new Error(`[belte] unknown route: ${route}`)
-    }
-    const layoutPrefix = nearestLayoutPrefix(route, layoutPrefixes)
-    const [pageMod, layoutMod] = await Promise.all([
-        pageLoader(),
-        layoutPrefix && boundLayouts ? boundLayouts[layoutPrefix]() : Promise.resolve(undefined),
-    ])
-    return { Page: pageMod.default, Layout: layoutMod?.default }
+    return boundResolver.view(route)
 }
 
 function applyState(
@@ -174,7 +159,7 @@ async function safeResolveFetch(target: string): Promise<Response | undefined> {
 }
 
 function hasRoute(route: string): boolean {
-    return Boolean(boundPages?.[route])
+    return Boolean(boundResolver?.has(route))
 }
 
 type ResolvedView = {
