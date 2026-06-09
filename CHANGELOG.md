@@ -1,5 +1,19 @@
 # @belte/belte
 
+## 0.22.0
+
+### Minor Changes
+
+- [`80786f1`](https://github.com/briancray/belte/commit/80786f13d2fcaaa1bdb6f1913959010fd1de66a6) - agent test surface — test/createScriptedSurface + test/assertAgentFrameConformance ([`f7dae05`](https://github.com/briancray/belte/commit/f7dae05336d126d7957876180865afb57d6daeea))
+
+### Patch Changes
+
+- [`80786f1`](https://github.com/briancray/belte/commit/80786f13d2fcaaa1bdb6f1913959010fd1de66a6) - domain-language CONTEXT.md, first ADRs, forwardHeaders in app hooks comment ([`1512a33`](https://github.com/briancray/belte/commit/1512a33a10cdccd338411d7a7f3d230dd3779c8a))
+
+- [`80786f1`](https://github.com/briancray/belte/commit/80786f13d2fcaaa1bdb6f1913959010fd1de66a6) - extract view resolver, page renderer, and app asset server from createServer ([`effd6fa`](https://github.com/briancray/belte/commit/effd6fa1f8316347e14e15a1fa5569c2ef4e8b34))
+
+- [`80786f1`](https://github.com/briancray/belte/commit/80786f13d2fcaaa1bdb6f1913959010fd1de66a6) - biome whitespaceSensitivity css + repair collapsed inline spacing ([`f3ac186`](https://github.com/briancray/belte/commit/f3ac1866e1adb66336ad4641f2223aeb724b82b9))
+
 ## 0.21.0
 
 ### Minor Changes
