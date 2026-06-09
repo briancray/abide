@@ -1,5 +1,11 @@
 # @belte/claude-code
 
+## 0.5.1
+
+### Patch Changes
+
+- [`b28d167`](https://github.com/briancray/belte/commit/b28d1672a06d93daf7470452379139758854a1db) - pin the serve command to this bundle's version ([`b03d1af`](https://github.com/briancray/belte/commit/b03d1afca3e1a60263ed57fca0dee42a9c4a4b39))
+
 ## 0.5.0
 
 ### Minor Changes
