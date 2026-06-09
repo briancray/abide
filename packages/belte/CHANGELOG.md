@@ -1,5 +1,13 @@
 # @belte/belte
 
+## 0.19.4
+
+### Patch Changes
+
+- [`946b6c4`](https://github.com/briancray/belte/commit/946b6c44b09ca30f28f4ab38d43ad5f9db452c2a) - clear lint findings in belte helpers and examples ([`55583cc`](https://github.com/briancray/belte/commit/55583ccd3cfa96e98ec94d0bb87210eaf3c047de))
+
+- [`946b6c4`](https://github.com/briancray/belte/commit/946b6c44b09ca30f28f4ab38d43ad5f9db452c2a) - repair stale package references and sync to current API ([`f33a7b2`](https://github.com/briancray/belte/commit/f33a7b29aa14965790e53bdc3d34082972278abc))
+
 ## 0.19.3
 
 ### Patch Changes
