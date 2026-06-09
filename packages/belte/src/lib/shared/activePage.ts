@@ -14,7 +14,12 @@ export function activePage(): PageSnapshot {
         return fromResolver
     }
     if (!pageSlot.fallback) {
-        pageSlot.fallback = { route: '', params: {}, url: new URL('http://localhost/') }
+        pageSlot.fallback = {
+            route: '',
+            params: {},
+            url: new URL('http://localhost/'),
+            navigating: false,
+        }
     }
     return pageSlot.fallback
 }

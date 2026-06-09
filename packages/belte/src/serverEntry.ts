@@ -80,7 +80,12 @@ setPageResolver(() => {
     if (!store) {
         return undefined
     }
-    return { route: store.route ?? '', params: store.params ?? {}, url: store.url }
+    return {
+        route: store.route ?? '',
+        params: store.params ?? {},
+        url: store.url,
+        navigating: false,
+    }
 })
 
 /*

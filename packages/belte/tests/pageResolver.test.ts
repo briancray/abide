@@ -20,6 +20,7 @@ describe('activePage resolver', () => {
             route: '/posts/[id]',
             params: { id: '42' },
             url: new URL('https://test.local/posts/42'),
+            navigating: false,
         }
         pageSlot.resolver = () => snapshot
 
@@ -33,11 +34,13 @@ describe('activePage resolver', () => {
             route: '/a',
             params: { tab: 'one' },
             url: new URL('https://test.local/a'),
+            navigating: false,
         }
         const second: PageSnapshot = {
             route: '/b',
             params: { tab: 'two' },
             url: new URL('https://test.local/b'),
+            navigating: false,
         }
 
         pageSlot.resolver = () => first

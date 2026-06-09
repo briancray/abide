@@ -31,6 +31,7 @@ type PageStateFor<R extends RouteKey> = {
     route: R
     params: ParamsFor<R>
     url: URL
+    navigating: boolean
 }
 
 /*
@@ -38,7 +39,9 @@ Discriminated union keyed on `route`, so consumers that narrow on `page.route`
 get the matching `page.params` shape automatically. `url` is the live
 WHATWG URL for the currently-displayed location; navigation reassigns the
 reference so $derived subscribers re-run on every nav (not just on the
-fields they happen to touch).
+fields they happen to touch). `navigating` is true while a pathname-changing
+SPA navigation is resolving its view, false otherwise (always false on the
+server).
 */
 export type Page = keyof Routes extends never
     ? PageStateFor<string>
@@ -54,6 +57,7 @@ export const clientPageState: PageSnapshot = $state({
     route: '',
     params: {},
     url: new URL('http://localhost/'),
+    navigating: false,
 })
 
 /*
@@ -72,6 +76,9 @@ export const page = {
     },
     get url() {
         return activePage().url
+    },
+    get navigating() {
+        return activePage().navigating
     },
 } as unknown as Page
 
@@ -214,6 +221,33 @@ function writeHistory(replace: boolean, fullTarget: string): void {
 export type NavigateOptions = { replace?: boolean; scroll?: boolean }
 
 /*
+Shared pathname-navigation core for navigate() and popstate's applyTarget().
+Cancels any open resolution stream, flags the in-flight nav so $derived
+consumers (loading indicators) re-run, then resolves + applies the target
+view. `beforeApply` runs between resolve and apply — navigate writes history
+there, which applyState's syncUrl reads. Returns false when the target wasn't
+an SPA route and we hard-navigated via location.href instead, so callers skip
+post-apply work like scrolling. The finally clears the flag on every exit,
+including the hard-nav bail.
+*/
+async function applyResolvedView(fullTarget: string, beforeApply?: () => void): Promise<boolean> {
+    abortPageStream()
+    clientPageState.navigating = true
+    try {
+        const view = await resolveView(fullTarget)
+        if (!view) {
+            window.location.href = fullTarget
+            return false
+        }
+        beforeApply?.()
+        applyState(view.route, view.params, view.Page, view.Layout)
+        return true
+    } finally {
+        clientPageState.navigating = false
+    }
+}
+
+/*
 SPA navigation entrypoint. When only `search` or `hash` changes (same
 pathname) the JSON resolve fetch + loadView are skipped — history is written
 and `page.url` reassigned so $derived consumers re-run without a network
@@ -236,17 +270,8 @@ export async function navigate(href: string, options: NavigateOptions = {}): Pro
         syncUrl()
         return
     }
-    /* Leaving this page: cancel its still-open resolution stream (if any) so the
-    connection frees instead of running to completion for a page that's gone. */
-    abortPageStream()
-    const view = await resolveView(fullTarget)
-    if (!view) {
-        window.location.href = fullTarget
-        return
-    }
-    writeHistory(replace, fullTarget)
-    applyState(view.route, view.params, view.Page, view.Layout)
-    if (scroll && !replace) {
+    const applied = await applyResolvedView(fullTarget, () => writeHistory(replace, fullTarget))
+    if (applied && scroll && !replace) {
         window.scrollTo(0, 0)
     }
 }
@@ -262,13 +287,7 @@ async function applyTarget(pathname: string, fullTarget: string): Promise<void> 
         syncUrl()
         return
     }
-    abortPageStream()
-    const view = await resolveView(fullTarget)
-    if (!view) {
-        window.location.href = fullTarget
-        return
-    }
-    applyState(view.route, view.params, view.Page, view.Layout)
+    await applyResolvedView(fullTarget)
 }
 
 /*
