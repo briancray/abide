@@ -5,223 +5,184 @@ description: Regenerate the belte README. Use when the user asks to rewrite, upd
 
 # Writing the belte README
 
-Reproduce the value proposition and style below faithfully, but treat the code as
-the only authority for facts. The opening *sells*; the code *proves*. Every claim
-that survives into the README must be backed by something you can point to in
-`packages/belte/src` (or `packages/belte/package.json` for paths/footprint).
+The README makes its argument with artifacts — the declare snippet, the
+fan-out diagram, the boot surface map — and then gets out of the way. It is
+**terse by contract**: code and tables carry the content; prose only appears
+where a snippet or table can't. Treat the code as the only authority for
+facts; treat the budgets below as the authority for length.
 
 ## Source of truth — non-negotiable
 
-* **`packages/belte/src` is the SOLE source of factual / API truth.** Read it before
-  you write. Do not state a behaviour, option, default, path, or guarantee that you
-  have not seen in that tree. If the code doesn't back it, it doesn't go in.
+* **`packages/belte/src` is the SOLE source of factual / API truth.** Read it
+  before you write. Do not state a behaviour, option, default, path, or
+  guarantee that you have not seen in that tree. If the code doesn't back it,
+  it doesn't go in.
 * **`packages/belte/package.json` backs the meta-claims:** import paths (the
   `exports` map — pin every `@belte/belte/...` to a real key), dependency
-  footprint (the `dependencies` / `peerDependencies` fields), and runtime
-  (`engines`). Pin imports to real export keys so paths can't regress.
-* Do **not** mine `examples/`, the current README, CHANGELOG, or docs for facts.
-  `examples/` paths may only appear as literal commands in **Try it** (they are
-  run instructions, not API claims). The current README is not a source — rebuild
-  completely.
+  footprint (`dependencies` / `peerDependencies`), runtime (`engines`).
+* Do **not** mine `examples/`, the current README, CHANGELOG, or docs for
+  facts. The current README is not a source — rebuild completely. (The
+  CHANGELOG may be consulted only to date a rename if one must be mentioned.)
 * Never document internal APIs (anything not in the `exports` map).
-* If a claim below no longer matches the code, **change the claim, not the code** —
-  the README reflects what is true today.
+* If a claim below no longer matches the code, **change the claim, not the
+  code** — the README reflects what is true today. That includes structure:
+  if a feature in the section plan no longer exists, drop its section; if a
+  new public surface exists, add one at the same altitude and budget.
 
 ## Verify before you write — the claim ledger
 
-The value proposition rests on a small set of load-bearing claims. Before writing
-the opening, re-confirm each against the file in its row. If the evidence has
-changed, rewrite or drop the claim.
+Re-confirm each load-bearing claim against its file before writing. If the
+evidence has changed, rewrite or drop the claim.
 
-| Claim in the opening | Verify against |
+| Claim | Verify against |
 | --- | --- |
-| One declared rpc becomes SSR call + browser fetch + MCP tool + CLI subcommand + OpenAPI op | `src/belteResolverPlugin.ts` + `src/lib/shared/createRemoteFunction.ts` (swap), `src/lib/mcp/dispatchMcpRequest.ts` (mcp), `src/lib/server/runtime/buildOpenApiSpec.ts` (openapi) |
-| An rpc's mcp surface is also drivable by an in-app model agent, provider-swappable | `src/lib/server/agent.ts` (engine contract + frame stream; framed via `jsonl()`/`sse()`); engines ship as sibling packages `packages/anthropic`, `packages/claude-code` |
-| Zero runtime dependencies; only optional peers | `package.json` — `dependencies` absent/empty; `peerDependencies` are the only deps |
-| Bun-only, by design | `package.json` `engines.bun`; `bun:*` / `Bun.*` usage in `src/lib` |
-| Svelte-only web surface | `src/App.svelte`, `src/lib/browser/*`, `peerDependencies.svelte` |
-| "No magic strings" — the swap is a real tokenizer | `src/lib/shared/findExportCallSite.ts` (skips strings/templates/comments/regex/generics) |
-| Safe by default: a mutating verb never auto-exposes to MCP | `src/lib/server/rpc/defineVerb.ts` + `src/lib/shared/resolveClientFlags.ts` + `src/lib/shared/isReadOnlyMethod.ts` |
-| No umbrella `index.ts`; every name on its own path | `package.json` `exports` (no `.` barrel; one key per name) |
-| The boot surface-map is real, and its exact format | `src/lib/server/runtime/logExposedSurfaces.ts` — reproduce its real output shape; gated by `DEBUG=belte` |
-| Cache keys distinguish `Date`/`Map`/`Set`/`bigint` | `src/lib/shared/canonicalJson.ts` |
-| A write never re-fires unprompted: SSR snapshots ship GET only, and invalidate policies refuse write methods at wrap time | `src/lib/shared/REPLAYABLE_METHODS.ts` + `src/lib/server/runtime/snapshotEntryFromCache.ts` + `src/lib/shared/cache.ts` (validatePolicy) |
-| Probes report, never act: `pending()`/`refreshing()` span the cache and the subscribe registry without opening a fetch or a stream | `src/lib/shared/probeRegistries.ts` + `src/lib/shared/subscribeProbeSlot.ts`; framing in `docs/adr/0003-registries-act-probes-report.md` (the ADR backs the *language*, the modules back the *facts*) |
+| One declared rpc = SSR call + browser fetch + MCP tool + CLI subcommand + OpenAPI op | `src/belteResolverPlugin.ts`, `src/lib/shared/createRemoteFunction.ts`, `src/lib/mcp/dispatchMcpRequest.ts`, `src/lib/server/runtime/buildOpenApiSpec.ts` |
+| Zero runtime dependencies; Svelte the only required peer | `package.json` — `dependencies` absent; `peerDependencies` |
+| Bun-only (`engines.bun`); Svelte-only web surface | `package.json` `engines`, `src/lib/browser/*` |
+| The boot surface map's exact format (three glyph tables under `DEBUG=belte`) | `src/lib/server/runtime/logExposedSurfaces.ts` — reproduce its real output, never invent columns |
+| Mutating verbs never auto-expose to MCP | `src/lib/server/rpc/defineVerb.ts`, `src/lib/shared/resolveClientFlags.ts`, `src/lib/shared/isReadOnlyMethod.ts` |
+| Cross-origin browser mutations 403 by default; `crossOrigin: true` opts a verb out; the MCP mount gets the same Origin check | `src/lib/server/runtime/createRouteDispatcher.ts`, `src/lib/server/runtime/isCrossOriginRequest.ts`, `createServer.ts` MCP mount |
+| Boot warns when MCP tools are exposed with no `app.handle` | `src/lib/server/runtime/warnUnguardedMcp.ts` + its call in `createServer.ts` |
+| SSR snapshots replay GET only; invalidate policies refuse writes at wrap time | `src/lib/shared/REPLAYABLE_METHODS.ts`, `src/lib/shared/cache.ts` (validatePolicy) |
+| `cache()` returns warm SSR values synchronously (`Promise<Return> \| Return`) | `src/lib/shared/cache.ts` (snapshot warm path) |
+| Query args travel as strings (the `z.coerce` warning) | `src/lib/shared/queryStringFromArgs.ts`, `src/lib/server/rpc/parseArgs.ts` |
+| Probes (`pending`/`refreshing`) have their own paths and report-never-act | `src/lib/shared/pending.ts`, `refreshing.ts`, `probeRegistries.ts` |
+| The streaming consumer is `tail` (status/error/reconnect semantics) | `src/lib/browser/tail.ts` + the `exports` map |
+| `scaffold <name>` installs and (interactively) starts dev — one command | `src/scaffold.ts`, `bin/belte.ts` scaffoldCmd |
+| In-process calls forward only the header allowlist | `src/lib/shared/forwardHeaders.ts` |
+| Single-process deploy truth (`global` cache, socket retention, fan-out are process memory) | `src/lib/shared/globalCacheStore.ts`, socket registry/dispatcher, `Bun.serve` in `createServer.ts` |
 
-Treat this ledger as the floor, not the ceiling — verify every other claim in the
-body the same way (each option, default, response helper, env var) against its module.
+The ledger is the floor, not the ceiling — verify every option, default,
+helper, env var, and route in the body the same way.
 
-## The value proposition — reproduce this faithfully
+## The opening — reproduce this shape
 
-This is the part to preserve in voice and shape. Heading is lowercase `# belte`,
-followed by a bold one-line capability statement (not a slogan — a plain statement
-of what one declaration becomes), the declare snippet, the surfaces diagram, the
-**real** boot surface-map, then "Why it's built this way" and "Scope".
+Lowercase `# belte`, then in order, nothing else between:
 
-````md
-# belte
+1. The bold capability line: **"Write one function. Get a web app, a CLI, and
+   an AI tool — from the same line of code."**
+2. Two sentences max saying what belte is and that the bundler swaps the
+   runtime per target.
+3. The declare snippet (one schema-bearing GET, filename-is-identity comment).
+4. The ASCII fan-out diagram — one line per surface, each a real consume form.
+5. One lead-in line, then the **real** boot surface map (`DEBUG=belte`),
+   copied from `logExposedSurfaces.ts`'s actual format.
+6. One sentence on gating: schema gates machine surfaces, mutations need
+   explicit `clients: { mcp: true }`.
+7. Exactly two one-line bullets: zero runtime dependencies; one runtime.
+8. The quickstart — ideally a single command. State in a trailing comment
+   what it does (scaffolds, installs, starts dev) only if the code still does
+   all three.
 
-**Write one function. Get a web app, a CLI, and an AI tool — from the same line of code.**
+**Do not add**: a comparison/"why not X" section, an API stability table, a
+scope/maturity essay, adjectives, superlatives, or any paragraph whose job is
+to justify adoption. The artifacts argue; prose doesn't.
 
-belte is an HTTP framework for Bun + Svelte where a single declared function is
-*simultaneously* an SSR call, a browser fetch, an MCP tool, a CLI subcommand, and
-an OpenAPI operation. You don't wire up five surfaces. You write one handler; the
-bundler swaps the runtime per target.
+## The body — section plan and budgets
 
-```ts
-// src/server/rpc/getPost.ts — the filename is the export, the URL, and the command name
-import { GET } from '@belte/belte/server/GET'
-import { json } from '@belte/belte/server/json'
+Hard budget: **≤ 400 lines total** (target ~350). Per concept: **one snippet,
+one table, at most one `>` warning line, prose ≤ 2 sentences.** Tables first
+for anything enumerable; bullets for one-line rules; prose only for a nuance
+neither can hold. If the draft exceeds the budget, cut prose — never facts.
 
-export const getPost = GET<{ id: string }>(async ({ id }) => json(await db.post(id)))
-```
+Section order (rename/drop/add as the code dictates, keep the altitude):
 
-That one file is now all of this:
+1. **Layout** — namespace sentence + project tree. The namespace sentence is
+   about *import* namespaces: spell the full `@belte/belte/server|browser|shared/*`
+   prefixes and name example `shared/*` exports, because `shared/*` is not a
+   project directory and the tree that follows must not imply it is. Lead the
+   tree with "A project:". Tree comments ≤ ~72 columns; point long lists
+   (e.g. app hooks) at Reference instead of inlining them.
+2. **rpc** — verbs list, options table (incl. `clients.*` defaults and
+   `crossOrigin`), consume table (`fn` / `.raw` / `.stream`), the `z.coerce`
+   warning, one `withJsonSchema` line.
+3. **Response helpers** — table only, plus one line on shared defaults.
+4. **Request scope** — table (`request`/`cookies`/`server`) + the
+   forward-headers allowlist warning.
+5. **Security defaults** — three bullets (mutation Origin gate + opt-out, MCP
+   same check, boot warning) + the `app.handle` auth snippet + one proxy
+   `Host` caveat line.
+6. **Sockets** — snippet, options table, two lines on publish/iterate/tail.
+7. **cache** — snippet (dedupe + the `ttl: 0` mutation idiom), options table,
+   `cache.invalidate` line, SSR consumption-form line, then one bullet each
+   for the warm-sync union, the top-level-await sweep, and producer hoisting.
+8. **pending / refreshing** — snippet + two definition lines.
+9. **Pages** — three bullets (routes, nearest-only layouts, error boundary) +
+   `page`/`navigate` snippet + two lines.
+10. **tail** — snippet + status/error/reconnect in ≤ 4 lines + the SSR no-op
+    line (seed with `cache()`, layer `tail()`).
+11. **agent** — snippet + two lines (engines are provider packages; frames).
+12. **MCP / CLI / bundle** — one three-row table covering all three.
+13. **Deploy** — single-process truth in ≤ 3 sentences, the Dockerfile,
+    compile targets, `PORT` / idle-timeout line.
+14. **Reference** — commands table, framework-routes table, typed-env
+    snippet, app-hooks line, testing snippet (`createTestClient` + the
+    bunfig preload).
+15. `MIT` as the last line.
 
-[ASCII diagram: the one rpc file fanning out to browser / http / cli / mcp / openapi,
- each line a real consume form taken from the code]
+## Validation pass — run before finishing
 
-Don't take the diagram's word for it — belte prints the exact map at boot:
+1. **Import paths**: extract every `@belte/belte/...` from the README and
+   check each against the `exports` map (namespace prefixes ending in `/*`
+   are prose, not imports). Example:
 
-[a fenced `sh` block showing the REAL output of logExposedSurfaces — three
- aligned tables of `✓`/`·` glyph columns, NOT an arrow list. pages = `page |
- layout | error`; sockets = `socket | schema | browser | mcp | cli | publish`;
- rpcs = method+path then `schema | browser | mcp | cli` (http/openapi are
- unconditional, folded into the `http` header). A schemaless verb shows a red `·`
- in its schema column — that one column gates the machine surfaces; there is no
- separate hint line.]
+   ```sh
+   grep -oE '@belte/belte/[a-zA-Z/-]+' packages/belte/README.md | sort -u
+   ```
 
-Every surface a function reaches is auditable in one place — no surface is ever
-exposed by accident.
+   Every concrete path must be an exports key. Fix the README, not the map.
+2. **Surface accountability — the completeness gate.** Import-path checking
+   only proves what's *in* the README is real; it can't catch a public
+   surface the fixed section plan never had a slot for (this is how the
+   `url` helper and `APP_URL` subpath mounting shipped undocumented). So
+   enumerate every public surface from the code and account for each member
+   — the unit is "consciously placed", not "has its own section":
 
-## Why it's built this way
+   ```sh
+   # public exports
+   grep -oE '"\./[a-zA-Z/-]+":' packages/belte/package.json | tr -d '":'
+   # env vars the runtime reads
+   grep -rhoE 'Bun\.env\.[A-Z_]+|process\.env\.[A-Z_]+' packages/belte/src | sort -u
+   # framework routes
+   grep -rhoE '/__belte/[a-z]+|/openapi\.json' packages/belte/src | sort -u
+   ```
 
-- **Zero runtime dependencies.** [back with package.json + the Web/Bun APIs used]
-- **No magic strings.** [back with findExportCallSite.ts]
-- **Safe by default for machines.** [back with defineVerb / resolveClientFlags]
+   Each **exports key** must resolve to exactly one of: (a) documented in a
+   section, (b) named in the Layout namespace line (minor shared utils only,
+   e.g. `log`), or (c) on the plumbing allowlist below. Each **env var** and
+   **route** must appear in the README (Deploy / Reference / a section) *or*
+   be internal-only (dev/hot-reload/bundler plumbing — `BELTE_DEV*`,
+   `BELTE_PARENT_PID`, `BELTE_SVELTE_MODE`, `BELTE_WEBVIEW_LIB`,
+   `/__belte/dev`, `/__belte/reload`, `/__belte/resolve`,
+   `/__belte/disconnect`, `/__belte/config`). Anything left unaccounted-for
+   is a gap: **an export with no home means a new capability arrived since
+   the section plan was written — add a section at the right altitude and
+   budget (the source-of-truth rule), don't bury it in the namespace line.**
 
-## Scope — read this before you adopt
-
-[Bun-only + Svelte-only by design; no Node fallback; pre-1.0; core vs newer
- satellites (mcp/cli/desktop). State the trade plainly — this sets blast-radius
- expectations and pre-empts the "is it production-ready" question.]
-````
-
-Rules for the opening:
-* The bold line and the five surfaces must each be true *right now* — cross them
-  against the ledger. If a surface were removed from the code, remove it here.
-* The boot block is a hero artifact: copy the **actual** format emitted by
-  `logExposedSurfaces.ts`. Don't invent columns or surfaces it doesn't print.
-* "Why it's built this way" is three bullets, each a fact with code behind it — not
-  adjectives. No superlatives, no comparisons to other frameworks.
-* "Scope" is honest, not apologetic: the Bun/Svelte-only bet and pre-1.0 status are
-  stated as design facts.
-
-## Outline — the rest of the document
-
-After the opening, keep the reference dense and faithful. Order:
-
-* **The mental model** — three ideas: one runtime (dev == build), declare once, the
-  namespace marks the side (`server/*` server-only, `browser/*` client-only,
-  `shared/*` isomorphic). Include the namespace table and the no-barrel note.
-* **One function, every surface** — a single worked example (one schema-bearing verb)
-  consumed from browser, http, cli, mcp, and openapi back-to-back. The tour proves
-  the opening.
-* **Server**
-  * **Server / rpc** — Declaring (verb spec + options table + example; response
-    helpers table — `json` / `jsonl` / `sse` / `error` / `redirect`;
-    `request()` / `server()` / `cookies()`; a callout that SSR/MCP
-    in-process calls forward only an allowlist of headers, extensible via
-    `app.forwardHeaders`; `filesSchema` multipart; `withJsonSchema()`). Consuming
-    (`fn(args)` / `.raw` / `.stream` table + examples; `HttpError`; `openapi.json`).
-  * **Server / sockets** — declaring (spec + options + example), publishing (spec +
-    example), consuming (AsyncIterable note, iterate example, `.tail`).
-  * **Server / agent** — `agent(engine, messages)` runs a provider model engine
-    against the app's own mcp surface and returns the engine's frame stream; the
-    handler frames it with `jsonl()`/`sse()`, so transport is the app's choice
-    (spec + the `chat` example). Engines live in provider packages
-    (`@belte/anthropic`, `@belte/claude-code`) and only see the surface in / frames
-    out, so swapping providers never touches the verb or UI. Permission is
-    server-side: the surface is gated by each verb's `clients.mcp` plus per-call
-    handler auth, not negotiated at runtime.
-* **Clients**
-  * **Shared** — frame the section with the registry mental model (one short
-    paragraph): cache and subscribe are two registries — calls at rest, streams
-    in motion — `cache.invalidate` bridges push events to pull state, and the
-    probes read both. Then:
-    * `cache()` — spec + server/browser examples. Coalescing is always on;
-      `ttl` is purely the retention dial: omitted = forever, `ttl: n` = n ms,
-      and **`ttl: 0` is the mutation idiom** — document it with a submit
-      example (`const submit = cache(createPost, { ttl: 0 })` +
-      `disabled={pending(createPost)}`): double-submit coalescing and probe
-      visibility, nothing retained beyond the store's atomic unit (the whole
-      request on the server — one render, one effect; the in-flight window in
-      the tab). Backed by `cache.ts` (registerEntry/adoptTtl). Also: `{#await}`
-      vs top-level await for SSR mode; `scope` tags as declared identity for
-      cross-module invalidation/probing; `invalidate: { throttle } | { debounce }`
-      = stale-while-revalidate for push-driven invalidation, with the wrap-time
-      guards stated as a contract (a policy declares "safe to re-run
-      unprompted": non-GET remote, `ttl: 0`, or both knobs → throw; a producer
-      under a policy must be a pure read); producer identity is the function
-      reference — hoist it (anonymous producers warn); keys distinguish
-      `Date`/`Map`/`Set`/`bigint`, backed by `canonicalJson.ts`.
-    * `pending()` / `refreshing()` — own import paths (`shared/pending`,
-      `shared/refreshing`; they are NOT properties of `cache` — do not echo the
-      old `cache.pending` form). Spec + the selector grammar shared with
-      `cache.invalidate` (bare / fn / `{ scope }`) plus the Subscribable form.
-      One sentence each: pending = "no value yet" (in-flight call, or stream
-      awaiting its first frame), refreshing = "value held, fresher source in
-      flight" (policy refetch, drop-then-reload, or stream reconnecting — never
-      a merely-open stream). State the invariant: probes report, never act.
-      Backed by `probeRegistries.ts`.
-    * `HttpError`.
-  * **Browser** — pages (Svelte 5), layouts (nearest-only), error pages, `subscribe`
-    (spec + example + `subscribe.status` / `subscribe.error`; transport loss
-    self-heals — `latest` is retained, `refreshing(subscribable)` is true across
-    the gap, the stream reopens under the channel's backoff, and status never
-    degrades to `error` for a disconnect; application errors stay terminal.
-    Describe the behavior only — the disconnect error class is internal, not in
-    the `exports` map, so never name it), `navigate` (spec + example), `page`
-    state (table), `cache()` reactivity via `createSubscriber`.
-  * **Mcp** — generated at `/__belte/mcp`, no module to author; tools from
-    schema-bearing verbs/sockets; resources/ + example; prompts/ + example.
-  * **Cli** — generated thin client; `BELTE_APP_URL` / `BELTE_APP_TOKEN`; rpcs →
-    subcommands with schema-derived flags (table); downloading + authenticated
-    downloads; `banner.txt` / `footer.txt`.
-  * **Bundle** — movable native desktop app (unsigned — note Gatekeeper); embedded
-    server or connect remote; `window.ts` (spec + example); `disconnected.svelte`;
-    `onMenu`; `icon.png`.
-* **Some details** — config/env/`appDataDir`; app hooks table (include
-  `forwardHeaders`, `init`, `handle`, `handleError`); project layout (with `lib/`
-  per surface); CLI commands table; `public/` files; bundling targets table;
-  logging + `DEBUG` (note `DEBUG=belte` prints the surface map).
+   **Plumbing allowlist** — build/bundler/codegen exports that carry no
+   prose (re-confirm each still belongs; never grow it to silence a real
+   surface): `tsconfig`, `build`, `compile`, `preload`, `svelte-plugin`,
+   `resolver-plugin`, `browser/remoteProxy`, `browser/socketProxy`,
+   `server/AppModule`, `server/rpc/defineVerb`, `server/sockets/defineSocket`,
+   `server/prompts/definePrompt`, `server/prompts/renderPromptTemplate`,
+   `mcp/createMcpServer`, `test/clearVerbRegistry`,
+   `test/createScriptedSurface`, `test/assertAgentFrameConformance`.
+3. **Budget**: `wc -l` ≤ 400.
+4. **Tree width**: no line in a `text` tree block over ~76 columns (GitHub
+   clips them).
+5. **Boot map**: matches the current `logExposedSurfaces.ts` columns exactly.
 
 ## Write to the right file
 
-* Write to `packages/belte/README.md` — the canonical, npm-shipped file. The
-  repo-root `README.md` is a symlink to it (GitHub renders the symlink). Never edit
-  the root path or replace the symlink with a copy.
-
-## Scannability rules
-
-The body is a reference, not an essay. Optimise for someone skimming for one answer.
-
-- **No internal API exposure.**
-- **Tables first** for anything enumerable: options, defaults, verb/method/parsing
-  pairs, content types, file → URL mappings, status states, env vars.
-- **Bullets next** for short rules that don't fit a table (≤ one line each).
-- **Prose last**, 1–2 sentences, only when a transition or nuance can't be a table.
-- **Snippets are minimal** — one example per concept, trimmed to what proves the point.
+Write to `packages/belte/README.md` — the canonical, npm-shipped file. The
+repo-root `README.md` is a symlink to it; never edit the root path or replace
+the symlink with a copy.
 
 ## Style
 
-- The title is lowercase `# belte`, immediately followed by the bold capability line.
-- Section headings are sentence-case.
-- The opening value proposition may be punchy, but only with claims the ledger backs.
-  Everywhere else: no superlatives, no marketing, no competitor comparisons — state
-  what it does.
-- No emojis.
-- Right language tag on every code block (`ts`, `svelte`, `js`, `json`, `html`,
-  `css`, `sh`, `md`).
-- Filenames and URL paths in backticks.
-- Function specs: a TypeScript `type` alias declaration plus a table of args/options.
+* Title lowercase `# belte`; section headings sentence-case, mostly one word.
+* No emojis, no superlatives, no competitor names.
+* Right language tag on every fence (`ts`, `svelte`, `sh`, `text`, `toml`,
+  `dockerfile`); filenames and URL paths in backticks.
+* Warnings are single `>` lines (or a single `>` bullet list in cache), not
+  callout paragraphs.
