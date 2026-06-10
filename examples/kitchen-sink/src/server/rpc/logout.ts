@@ -1,13 +1,13 @@
 import { POST } from '@belte/belte/server/POST'
-import { destroySession, readSessionCookie, SESSION_COOKIE } from '../../sessions.ts'
+import { redirect } from '@belte/belte/server/redirect'
+import { destroySession } from '../../sessions.ts'
 
+/*
+Drops the server-side session and expires the cookie via
+`cookies().delete(...)` — the expiry flushes as `Set-Cookie` when the
+handler returns, alongside the 303 redirect.
+*/
 export const logout = POST(() => {
-    destroySession(readSessionCookie())
-    return new Response(undefined, {
-        status: 303,
-        headers: {
-            Location: '/',
-            'Set-Cookie': `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`,
-        },
-    })
+    destroySession()
+    return redirect('/', 303)
 })

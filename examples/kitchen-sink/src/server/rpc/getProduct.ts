@@ -4,7 +4,7 @@ import { json } from '@belte/belte/server/json'
 import { z } from 'zod'
 
 /*
-Stand-in for a products table. Used by /rpc/product/[id] to show how a
+Stand-in for a products table. Used by /pages/product/[id] to show how a
 dynamic page segment threads through to an rpc arg. `error(404, ...)` from
 belte/server keeps the response shape consistent with HttpError on the
 caller side — `getProduct({ id }).catch((e) => e.status)` sees 404.

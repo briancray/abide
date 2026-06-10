@@ -36,6 +36,22 @@ const linkClass = (prefix: string) =>
     page.url.pathname === prefix || page.url.pathname.startsWith(`${prefix}/`)
         ? 'font-semibold text-slate-900'
         : 'text-slate-600 hover:text-slate-900'
+
+/* Nav mirrors the README's section order — one entry per concept section. */
+const sections = [
+    ['/rpc', 'rpc'],
+    ['/security', 'security'],
+    ['/sockets', 'sockets'],
+    ['/cache', 'cache'],
+    ['/probes', 'pending / refreshing'],
+    ['/pages', 'pages'],
+    ['/url', 'url'],
+    ['/tail', 'tail'],
+    ['/agent', 'agent'],
+    ['/mcp', 'mcp'],
+    ['/cli', 'cli'],
+    ['/bundle', 'bundle'],
+] as const
 </script>
 
 <svelte:head>
@@ -44,15 +60,13 @@ const linkClass = (prefix: string) =>
 
 <div class="min-h-screen bg-slate-50 text-slate-900">
     <header class="border-b border-slate-200 bg-white">
-        <nav class="mx-auto flex max-w-4xl flex-wrap items-center gap-4 px-6 py-4 text-sm">
+        <nav
+            class="mx-auto flex max-w-4xl flex-wrap items-center gap-x-4 gap-y-1 px-6 py-4 text-sm">
             <a href="/" class="text-base font-semibold">belte kitchen-sink</a>
-            <a href="/server" class={linkClass('/server')}>belte/server</a>
-            <a href="/shared" class={linkClass('/shared')}>belte/shared</a>
-            <a href="/browser" class={linkClass('/browser')}>belte/browser</a>
-            <a href="/mcp" class={linkClass('/mcp')}>belte/mcp</a>
-            <a href="/cli" class={linkClass('/cli')}>belte/cli</a>
-            <a href="/bundle" class={linkClass('/bundle')}>belte/bundle</a>
-            <a href="/auth/dashboard" class={linkClass('/auth')}>Auth</a>
+            {#each sections as [ href, label ] (href)}
+                <a {href} class={linkClass(href)}>{label}</a>
+            {/each}
+            <a href="/auth/dashboard" class={linkClass('/auth')}>auth</a>
             <div class="ml-auto flex items-center gap-3">
                 {#if session?.user}
                     <span class="text-slate-600">signed in as <strong>{session.user}</strong></span>

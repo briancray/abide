@@ -235,19 +235,24 @@ async function getSummarizePrompt() {
 </section>
 
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
-    <h2 class="text-sm font-semibold">Auth forwarding</h2>
+    <h2 class="text-sm font-semibold">Auth forwarding + the Origin check</h2>
     <p class="mt-1 text-sm text-slate-600">
         Inbound MCP requests forward <code class="font-mono">cookie</code>,
         <code class="font-mono">authorization</code>, and the
-        <code class="font-mono">x-forwarded-for</code>
-        /
-        <code class="font-mono">-proto</code>
-        / <code class="font-mono">-host</code>
+        <code class="font-mono">x-forwarded-*</code>
         hints onto every synthesized rpc request, so the session middleware in
         <code class="font-mono">src/app.ts</code>
         keeps working unchanged. Tool calls go through the same
         <code class="font-mono">verb.fetch</code>
         path as the HTTP route — validation, response helpers, and error mapping behave identically.
+    </p>
+    <p class="mt-2 text-sm text-slate-600">
+        <code class="font-mono">/__belte/mcp</code>
+        403s a cross-origin browser <code class="font-mono">Origin</code> (machine clients send none
+        and pass), and boot warns when MCP tools are exposed with no
+        <code class="font-mono">app.handle</code>
+        middleware — see <a class="underline" href="/security">Security defaults</a>
+        for the gate and the auth recipe.
     </p>
 </section>
 
@@ -257,7 +262,7 @@ async function getSummarizePrompt() {
         MCP exposes request/response tools, prompts, and snapshot resources — not a live
         subscription. A socket's <code class="font-mono">-tail</code> tool returns the recent
         buffered messages, not a live stream; real-time fan-out stays on the
-        <a class="underline" href="/server/sockets">ws multiplex</a>.
+        <a class="underline" href="/sockets">ws multiplex</a>.
     </p>
 </section>
 

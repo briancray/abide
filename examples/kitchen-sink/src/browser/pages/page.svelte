@@ -1,82 +1,89 @@
 <script lang="ts">
 /*
-Kitchen-sink index. Six cards mirror the public umbrellas in the README —
-belte/server, belte/shared, belte/browser, belte/mcp, belte/cli, belte/bundle.
-The composed auth showcase sits below.
+Kitchen-sink index. One card per README concept section, in the README's
+order — rpc, Security defaults, Sockets, cache, pending / refreshing,
+Pages, url, tail, agent, MCP / CLI / bundle. The composed auth showcase
+sits below.
 */
+const cards = [
+    {
+        href: '/rpc',
+        title: 'rpc',
+        body: 'One verb per file under src/server/rpc/ — GET / POST / PUT / PATCH / DELETE / HEAD. The schema validates args and projects the MCP tool, CLI flags, and OpenAPI operation from one declaration.',
+    },
+    {
+        href: '/security',
+        title: 'Security defaults',
+        body: 'Mutating verbs 403 a cross-origin browser Origin before the handler runs; crossOrigin: true is the per-verb opt-out. /__belte/mcp gets the same check, and boot warns when MCP tools ship with no auth middleware.',
+    },
+    {
+        href: '/sockets',
+        title: 'Sockets',
+        body: 'One broadcast topic per file under src/server/sockets/. publish() is isomorphic, retention is opt-in via tail: n, and every browser subscription multiplexes one WebSocket.',
+    },
+    {
+        href: '/cache',
+        title: 'cache',
+        body: 'Isomorphic memoise + coalesce — identical in-flight calls share one flight, ttl is only the retention dial, and cache.invalidate re-runs every $derived that read a dropped entry.',
+    },
+    {
+        href: '/probes',
+        title: 'pending / refreshing',
+        body: 'Standalone reactive probes spanning calls and streams. pending = no value yet; refreshing = value held, fresher source in flight. They report, never act.',
+    },
+    {
+        href: '/pages',
+        title: 'Pages',
+        body: 'Folders under src/browser/pages/ are routes — [id] params, nearest-only layout.svelte, error.svelte failure boundaries — plus the reactive page state and navigate().',
+    },
+    {
+        href: '/url',
+        title: 'url',
+        body: 'One typed, base-correct builder for every in-app URL — page links, asset refs, and rpc hrefs. Reads the path to pick the resolution; carries the APP_URL subpath base so rooted links stay inside the mount.',
+    },
+    {
+        href: '/tail',
+        title: 'tail',
+        body: 'The reactive consumer for anything streaming — a socket or fn.stream(args). First $derived read opens the stream, last reader closes it; transport drops self-heal.',
+    },
+    {
+        href: '/agent',
+        title: 'agent',
+        body: "agent(engine, messages) runs a model against the app's own gated MCP surface and streams AgentFrames; the handler picks the transport.",
+    },
+    {
+        href: '/mcp',
+        title: 'MCP',
+        body: 'POST /__belte/mcp, JSON-RPC — tools from clients.mcp verbs and schema’d sockets, prompts from src/mcp/prompts/*.md, resources from src/mcp/resources/.',
+    },
+    {
+        href: '/cli',
+        title: 'CLI',
+        body: 'A standalone binary: subcommands with schema-derived flags, streamed jsonl/sse, and a REPL — installable via curl <app>/__belte/cli | sh.',
+    },
+    {
+        href: '/bundle',
+        title: 'bundle',
+        body: 'belte bundle wraps the app in a movable desktop app — native menus through onMenu(), a connect screen for embedded or remote servers, bundled() to detect the context.',
+    },
+] as const
 </script>
 
 <h1 class="text-3xl font-bold">belte kitchen-sink</h1>
 <p class="mt-2 text-slate-600">
-    Working demos of every primitive in the framework, organised by public umbrella — one typed
+    Working demos of every primitive in the framework, organised by README section — one typed
     backend reaching the browser, MCP, the CLI, and a native desktop bundle.
 </p>
 
 <section class="mt-8 grid gap-4 sm:grid-cols-2">
-    <a
-        href="/server"
-        class="rounded-lg border border-slate-200 bg-white p-5 hover:border-slate-400">
-        <h2 class="text-lg font-semibold"><code class="font-mono">belte/server</code></h2>
-        <p class="mt-1 text-sm text-slate-600">
-            RPC verbs, sockets, response helpers, the request scope, the server proxy, and
-            <code class="font-mono">HttpError</code>. Everything declared on the server side of an
-            app.
-        </p>
-    </a>
-    <a
-        href="/shared"
-        class="rounded-lg border border-slate-200 bg-white p-5 hover:border-slate-400">
-        <h2 class="text-lg font-semibold"><code class="font-mono">belte/shared</code></h2>
-        <p class="mt-1 text-sm text-slate-600">
-            The isomorphic surface — same callable both sides.
-            <code class="font-mono">cache()</code>
-            for coalesced, SSR-hydrated reads,
-            <code class="font-mono">pending()</code>
-            / <code class="font-mono">refreshing()</code>
-            probes spanning calls and streams, and
-            <code class="font-mono">HttpError</code>
-            for non-2xx remote calls.
-        </p>
-    </a>
-    <a
-        href="/browser"
-        class="rounded-lg border border-slate-200 bg-white p-5 hover:border-slate-400">
-        <h2 class="text-lg font-semibold"><code class="font-mono">belte/browser</code></h2>
-        <p class="mt-1 text-sm text-slate-600">
-            How the browser reads, reacts, and navigates —
-            <code class="font-mono">tail()</code>,
-            <code class="font-mono">page</code>, and
-            <code class="font-mono">navigate</code>.
-        </p>
-    </a>
-    <a href="/mcp" class="rounded-lg border border-slate-200 bg-white p-5 hover:border-slate-400">
-        <h2 class="text-lg font-semibold"><code class="font-mono">belte/mcp</code></h2>
-        <p class="mt-1 text-sm text-slate-600">
-            Schema-bearing rpcs become MCP tools, with prompts and resources from
-            <code class="font-mono">src/mcp/</code>, at
-            <code class="font-mono">POST /__belte/mcp</code>
-            — zero config.
-        </p>
-    </a>
-    <a href="/cli" class="rounded-lg border border-slate-200 bg-white p-5 hover:border-slate-400">
-        <h2 class="text-lg font-semibold"><code class="font-mono">belte/cli</code></h2>
-        <p class="mt-1 text-sm text-slate-600">
-            The thin standalone CLI binary — a remote client served from
-            <code class="font-mono">/__belte/cli</code>; schema-bearing rpcs auto-expose as
-            commands.
-        </p>
-    </a>
-    <a
-        href="/bundle"
-        class="rounded-lg border border-slate-200 bg-white p-5 hover:border-slate-400">
-        <h2 class="text-lg font-semibold"><code class="font-mono">belte/bundle</code></h2>
-        <p class="mt-1 text-sm text-slate-600">
-            <code class="font-mono">belte bundle</code>
-            wraps the app in a movable, native desktop bundle — server binary, launcher, and OS
-            webview, configured from
-            <code class="font-mono">src/bundle/window.ts</code>.
-        </p>
-    </a>
+    {#each cards as card (card.href)}
+        <a
+            href={card.href}
+            class="rounded-lg border border-slate-200 bg-white p-5 hover:border-slate-400">
+            <h2 class="text-lg font-semibold"><code class="font-mono">{card.title}</code></h2>
+            <p class="mt-1 text-sm text-slate-600">{card.body}</p>
+        </a>
+    {/each}
 </section>
 
 <section class="mt-10 rounded-lg border border-slate-200 bg-white p-5">
@@ -87,6 +94,8 @@ The composed auth showcase sits below.
         <code class="font-mono">auth/layout.svelte</code>
         <em>replaces</em>
         the root layout for everything under <code class="font-mono">/auth</code>
-        (layouts are nearest-only), so the auth area renders its own chrome.
+        (layouts are nearest-only), and the session rides a cookie written through
+        <code class="font-mono">cookies()</code>
+        — see <a class="underline" href="/rpc/request-scope">Request scope</a>.
     </p>
 </section>

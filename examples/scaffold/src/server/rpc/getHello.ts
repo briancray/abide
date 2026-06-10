@@ -25,8 +25,9 @@ dedupe). Other helpers are siblings, one per file: `belte/server/error`,
 `belte/server/redirect`, `belte/server/sse`, `belte/server/jsonl`.
 
 Every rpc value also exposes `.raw(args?)` (returns the underlying
-`Response`) and `.stream(args?)` (returns a `Subscribable` view of the body)
-for callers that need headers/status or want to iterate SSE/JSONL frames.
+`Response`) and `.stream(args?)` (returns a `Subscribable` over the frames —
+feed it to `tail()`) for callers that need headers/status or want to iterate
+jsonl/sse frames.
 */
 
 import { GET } from '@belte/belte/server/GET'

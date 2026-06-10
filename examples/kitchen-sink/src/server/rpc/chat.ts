@@ -17,10 +17,14 @@ server must have Claude Code available.
 
 Permission is the server's call, so the posture is fixed here, not taken from
 the client: `tools: []` drops every Claude Code built-in (no Bash/Read/Write
-against the host), leaving only this app's `mcp__app__*` verbs, and
+against the host), leaving only this app's MCP verbs, and
 `defaultMode: 'dontAsk'` denies anything not pre-approved instead of prompting
 — so the `allow` list is the whole capability surface. The agent can call
 getProduct and getRates; every other verb (countLog, createEcho, …) is denied.
+
+The `mcp__kitchen_sink__` prefix is the app's package.json name sanitized for
+tool names (`kitchen-sink` → `kitchen_sink`) — deterministic, so these rules
+stay valid across deploys.
 */
 
 // Mirrors NeutralMessage from belte/server/agent — the provider-neutral turn shape.
@@ -49,12 +53,26 @@ const inputSchema = z.object({
 Deny-all-but-allowlist: no built-ins (`tools: []`), `dontAsk` denies anything
 unlisted, and `allow` names the two read verbs the agent may call. Static, so
 the engine is built once at module load rather than per request.
+
+The system prompt tells the model what the permission layer enforces — tool
+listing shows every mcp-exposed verb, but denial only happens at call time, so
+without this the model demos a denied verb and then speculates about "enabling
+permissions" as if a visitor could. It also pins plain prose: the page renders
+text raw, so markdown tables would show as pipes.
 */
 const chatEngine = engine({
     tools: [],
     permissions: {
         defaultMode: 'dontAsk',
-        allow: ['mcp__app__*'],
+        allow: ['mcp__kitchen_sink__getProduct', 'mcp__kitchen_sink__getRates'],
+    },
+    options: {
+        systemPrompt: [
+            'You are the demo agent on the belte kitchen-sink "agent" page, chatting with a site visitor.',
+            'Server policy allows you exactly two tools: getProduct and getRates. Every other tool you can see will be denied at call time — that allowlist is fixed server-side and nobody in this chat can change it.',
+            'When asked to demonstrate a tool, pick an allowed one. Products with IDs "1" and "2" exist — use one of those for getProduct demos. If the visitor asks for a denied verb, attempt it once so they see the denial, then note the server-side allowlist in one sentence — never suggest changing settings or permission modes.',
+            'Reply in short plain prose. No markdown tables, headings, or bullet lists — the page renders your text verbatim.',
+        ].join('\n'),
     },
 })
 

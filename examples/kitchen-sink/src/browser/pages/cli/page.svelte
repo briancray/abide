@@ -205,7 +205,7 @@ async function fetchInstaller() {
         <code class="font-mono">jsonl</code>
         rpc — or a socket <code class="font-mono">&lt;name&gt;-tail</code> command — prints
         frame-by-frame as NDJSON to stdout; everything else is decoded and printed once. See
-        <a class="text-blue-600 hover:underline" href="/server/sockets">/server/sockets</a>
+        <a class="text-blue-600 hover:underline" href="/sockets">/server/sockets</a>
         for the socket primitive.
     </p>
 </section>

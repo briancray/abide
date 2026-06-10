@@ -1,0 +1,131 @@
+<script lang="ts">
+import CodeBlock from '$browser/CodeBlock.svelte'
+import { probeOriginGate } from '$server/rpc/probeOriginGate.ts'
+import { trackPageview } from '$server/rpc/trackPageview.ts'
+
+let probe = $state('(not probed)')
+let beacon = $state('(not sent)')
+
+/*
+A browser can't forge its own Origin header, so the live 403s come from
+probeOriginGate — a GET whose handler plays the hostile page, firing
+forged-Origin POSTs at this app's own URLs and reporting the statuses.
+*/
+async function runProbe() {
+    probe = JSON.stringify(await probeOriginGate(), undefined, 2)
+}
+
+/* Same-origin call to the opted-out verb — passes like any other rpc. */
+async function sendBeacon() {
+    const result = await trackPageview({ pageUrl: location.href })
+    beacon = JSON.stringify(result)
+}
+</script>
+
+<h1 class="text-3xl font-bold">Security defaults</h1>
+<p class="mt-2 text-slate-600">
+    Mutating verbs 403 a cross-origin browser <code class="font-mono">Origin</code> before the
+    handler runs — the no-preflight CSRF shapes (a hostile page firing a form post or fetch at an
+    rpc URL inside a visitor's authenticated browser, ambient cookies attached). Reads, curl, CLI,
+    and MCP clients send no <code class="font-mono">Origin</code> and pass.
+    <code class="font-mono">/__belte/mcp</code>
+    gets the same check.
+</p>
+
+<section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
+    <h2 class="text-sm font-semibold">The gate, observed</h2>
+    <p class="mt-1 text-xs text-slate-500">
+        <code class="font-mono">probeOriginGate</code>
+        POSTs at this app with a forged
+        <code class="font-mono">Origin: https://evil.example</code>
+        — a normal mutation and the MCP endpoint are refused with 403 before any handler runs;
+        <code class="font-mono">trackPageview</code>
+        passes because it declares <code class="font-mono">crossOrigin: true</code>.
+    </p>
+    <button
+        type="button"
+        class="mt-3 rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100"
+        onclick={runProbe}>
+        run the forged-Origin probe
+    </button>
+    <pre
+        class="mt-3 overflow-x-auto rounded-md bg-slate-900 p-4 text-xs leading-relaxed text-slate-100"><code
+        >{probe}</code></pre>
+</section>
+
+<section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
+    <h2 class="text-sm font-semibold">
+        Per-verb opt-out: <code class="font-mono">crossOrigin: true</code>
+    </h2>
+    <p class="mt-1 text-xs text-slate-500">
+        For a verb third-party pages may legitimately call from their own origin — a public beacon,
+        an embedded widget's API. Safe here because the handler reads no cookies and trusts nothing
+        ambient.
+    </p>
+    <button
+        type="button"
+        class="mt-3 rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100"
+        onclick={sendBeacon}>
+        trackPageview({`{ pageUrl: location.href }`}
+        )
+    </button>
+    <p class="mt-2 font-mono text-xs text-slate-700">{beacon}</p>
+</section>
+
+<section class="mt-6">
+    <h2 class="text-sm font-semibold">Guarding the MCP endpoint</h2>
+    <p class="mt-2 text-sm text-slate-600">
+        The Origin check stops hostile pages, not hostile machines — auth for machine clients is
+        <code class="font-mono">app.handle</code>
+        middleware. Boot warns when MCP tools are exposed with no
+        <code class="font-mono">app.handle</code>
+        in <code class="font-mono">src/app.ts</code>:
+    </p>
+    <pre
+        class="mt-2 overflow-x-auto rounded-md bg-slate-900 p-4 text-xs leading-relaxed text-amber-200"><code
+        >[belte] MCP endpoint /__belte/mcp exposes 5 declarations with no auth guard — add an app.handle middleware in src/app.ts to authenticate machine clients, or set clients.mcp: false per declaration</code></pre>
+    <p class="mt-2 text-xs text-slate-500">
+        This app exports a <code class="font-mono">handle</code> (so it boots quietly), but a real
+        deployment should authenticate — the recipe:
+    </p>
+</section>
+
+<section class="mt-4 space-y-3">
+    <CodeBlock
+        title="src/app.ts — the auth seam for machine clients"
+        code={`export function handle(request: Request, next: (req: Request) => Promise<Response>) {
+    if (new URL(request.url).pathname === '/__belte/mcp') {
+        if (request.headers.get('authorization') !== \`Bearer \${config.MCP_TOKEN}\`) {
+            return error(401)
+        }
+    }
+    return next(request)
+}`} />
+
+    <CodeBlock
+        title="src/server/rpc/trackPageview.ts — the opt-out, declared per verb"
+        code={`import { json } from '@belte/belte/server/json'
+import { POST } from '@belte/belte/server/POST'
+import { z } from 'zod'
+
+const inputSchema = z.object({ pageUrl: z.string() })
+
+export const trackPageview = POST(
+    ({ pageUrl }) => {
+        const count = (pageviews.get(pageUrl) ?? 0) + 1
+        pageviews.set(pageUrl, count)
+        return json({ pageUrl, count })
+    },
+    { inputSchema, crossOrigin: true },
+)`} />
+</section>
+
+<section class="mt-6 rounded-lg border border-slate-200 bg-white p-5 text-sm text-slate-600">
+    <h2 class="text-sm font-semibold text-slate-900">Behind a proxy</h2>
+    <p class="mt-1">
+        The gate compares <code class="font-mono">Origin</code> to the request's own host — preserve
+        <code class="font-mono">Host</code>
+        (or set <code class="font-mono">x-forwarded-host</code>) in the proxy, or every same-origin
+        mutation looks forged.
+    </p>
+</section>
