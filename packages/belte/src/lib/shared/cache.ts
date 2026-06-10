@@ -1,12 +1,18 @@
 import { activeCacheStore } from './activeCacheStore.ts'
-import { canonicalJson } from './canonicalJson.ts'
+import { cacheStores } from './cacheStores.ts'
 import { decodeResponse } from './decodeResponse.ts'
 import { getRemoteMeta } from './getRemoteMeta.ts'
 import { globalCacheStore } from './globalCacheStore.ts'
 import { invalidateEvent } from './invalidateEvent.ts'
 import { keyForRemoteCall } from './keyForRemoteCall.ts'
+import { log } from './log.ts'
+import { producerKey } from './producerKey.ts'
+import { REPLAYABLE_METHODS } from './REPLAYABLE_METHODS.ts'
+import { selectorMatcher } from './selectorMatcher.ts'
+import { toScopeSet } from './toScopeSet.ts'
 import type { CacheEntry } from './types/CacheEntry.ts'
 import type { CacheOptions } from './types/CacheOptions.ts'
+import type { CacheSelector } from './types/CacheSelector.ts'
 import type { CacheStore } from './types/CacheStore.ts'
 import type { RawRemoteFunction } from './types/RawRemoteFunction.ts'
 import type { RemoteFunction } from './types/RemoteFunction.ts'
@@ -23,6 +29,12 @@ options anchored in a fixed position so they can't collide with arg shapes. TTL
 = undefined → forever; ttl = 0 → dedupe only; ttl > 0 → entry expires `ttl` ms
 after the promise resolves.
 
+Coalescing is always on: identical in-flight calls share one flight, so
+`cache(createPost, { ttl: 0 })` is the mutation idiom — double-submit
+coalescing and pending() visibility with nothing retained beyond the store's
+atomic unit (the whole request on the server: one render, one effect; the
+in-flight window in the tab). Caching is the retention `ttl` adds on top.
+
 `fn` is either a remote function (a GET/POST/... helper) or a plain producer
 returning a Promise:
 
@@ -34,8 +46,9 @@ Remote calls key on fn.method + fn.url + args and store the underlying Response
 (the decoded view is derived on the way out for the non-raw variant; both share
 one entry). Producers have no wire identity, so they key on the producer's
 reference + args — pass a hoisted/stable function to dedupe (an inline arrow is a
-new reference every call and never does), and the promise is stored and handed
-back as-is (no Response, no decode, no SSR snapshot).
+new reference every call and never does; a warning fires once per such call
+site), and the promise is stored and handed back as-is (no Response, no decode,
+no SSR snapshot).
 
 `options.global` puts the entry in the process-level store instead of the
 request-scoped one, so a value computed in one request is reused by later
@@ -98,6 +111,10 @@ export function cache<Args, Return>(
         : isRaw
           ? (fn as RawRemoteFunction<Args>)
           : (fn as RemoteFunction<Args, Return>).raw
+    validatePolicy(options, isRemote ? (rawFn as RawRemoteFunction<Args>).method : undefined)
+    if (!isRemote) {
+        warnAnonymousProducer(fn)
+    }
     return (args) => {
         const store = options?.global ? globalCacheStore() : activeCacheStore()
         if (!isRemote) {
@@ -109,6 +126,8 @@ export function cache<Args, Return>(
         const existing = store.entries.get(key)
         if (existing) {
             tagScope(existing, options?.scope)
+            attachPolicy(existing, options, () => remote(args as Args))
+            adoptTtl(store, existing, options)
         }
         /*
         Snapshot warm path: hydration pre-decoded the SSR body onto the
@@ -151,6 +170,56 @@ export function cache<Args, Return>(
 }
 
 /*
+Guards impossible option combinations at wrap time, where the call site is on
+the stack. A policy declares "this call is safe to re-run unprompted", so a
+non-replayable remote method (a write) must never carry one — replaying a write
+through the invalidation grammar would be a state change disguised as a
+refresh. Producers are opaque (no method to check); the same contract is on
+the caller there. ttl: 0 retains nothing, so there is nothing for a policy to
+revalidate; and the two coalescing strategies are exclusive by construction.
+*/
+function validatePolicy(options: CacheOptions | undefined, method: string | undefined): void {
+    const policy = options?.invalidate
+    if (!policy || (policy.throttle === undefined && policy.debounce === undefined)) {
+        return
+    }
+    if (policy.throttle !== undefined && policy.debounce !== undefined) {
+        throw new Error('[belte] cache(): set invalidate.throttle or invalidate.debounce, not both')
+    }
+    if (options?.ttl === 0) {
+        throw new Error(
+            '[belte] cache(): an invalidate policy requires retention — ttl: 0 keeps nothing to revalidate',
+        )
+    }
+    if (method !== undefined && !REPLAYABLE_METHODS.has(method.toUpperCase())) {
+        throw new Error(
+            `[belte] cache(): an invalidate policy re-runs the call unprompted — ${method.toUpperCase()} is a write and must not be replayed`,
+        )
+    }
+}
+
+/*
+An anonymous producer mints a fresh identity per wrap, so it never coalesces
+and probes never match it — silently. Warn once per distinct source text (the
+function object itself is fresh each time, so reference identity can't dedupe
+the warning).
+*/
+const warnedAnonymousProducers = new Set<string>()
+function warnAnonymousProducer(producer: (args?: never) => unknown): void {
+    if (producer.name !== '') {
+        return
+    }
+    const source = producer.toString()
+    if (warnedAnonymousProducers.has(source)) {
+        return
+    }
+    warnedAnonymousProducers.add(source)
+    log.warn(
+        'cache() received an anonymous function — each call mints a fresh identity, so it never coalesces and pending()/refreshing() never match it. Hoist it to a named binding, or add a scope tag to probe it from elsewhere.',
+    )
+}
+
+/*
 Producer path: key on the producer's reference + args, share the
 in-flight/retained promise on hit, and store the value promise as-is on miss — no
 Response, no decode, no SSR request metadata.
@@ -166,6 +235,7 @@ function invokeProducer<Args, Return>(
     const existing = store.entries.get(key)
     if (existing) {
         tagScope(existing, options?.scope)
+        attachPolicy(existing, options, () => producer(args))
         return existing.promise as Promise<Return>
     }
     const promise = producer(args)
@@ -218,7 +288,7 @@ function registerEntry(
     /*
     A prior entry for this key was dropped by invalidate() and is awaiting its
     next read — consume the marker so this replacement read reports as a reload
-    (cache.refreshing) until it settles, not as a first-ever load.
+    (refreshing()) until it settles, not as a first-ever load.
     */
     const refreshing = store.pendingRefresh.delete(key) || undefined
     const entry: CacheEntry = {
@@ -235,18 +305,21 @@ function registerEntry(
     markLifecycle(store)
     /*
     A ttl=0 remote entry in the request-scoped server store is kept until the
-    response is GC'd so the post-render SSR snapshot can still pick it up. That
-    exception never applies on the client (window defined), to producer entries
-    (never snapshotted), or to the process-level `global` store (not request-
-    scoped — keeping it would leak forever) — those evict the moment they settle.
+    store dies with the response. The request is the server's atomic unit, so
+    a ttl=0 entry retains nothing beyond it but coalesces everything within
+    it: identical calls during one render — any method — share one effect
+    deterministically, regardless of settle timing, and the post-render SSR
+    snapshot can still pick up replayable entries (the snapshot applies its
+    own method filter; writes never ship). The keep never applies on the
+    client (the tab store outlives any unit — a kept write would block every
+    future re-submit, so entries evict the moment they settle), to producer
+    entries (no request), or to the process-level `global` store (not
+    request-scoped — keeping it would leak forever).
     */
-    const keepZeroTtlForSnapshot =
+    const keepZeroTtlForRequest =
         request !== undefined && !options?.global && typeof window === 'undefined'
     function deleteIfCurrent() {
-        if (store.entries.get(key) === entry) {
-            store.entries.delete(key)
-            markLifecycle(store)
-        }
+        evictIfCurrent(store, entry)
     }
     promise.then(() => {
         /*
@@ -260,21 +333,68 @@ function registerEntry(
         entry.refreshing = false
         markLifecycle(store)
         if (ttl === 0) {
-            if (!keepZeroTtlForSnapshot) {
+            if (!keepZeroTtlForRequest) {
                 deleteIfCurrent()
             }
             return
         }
         if (ttl !== undefined) {
-            entry.expiresAt = Date.now() + ttl
-            setTimeout(() => {
-                if ((entry.expiresAt ?? 0) <= Date.now()) {
-                    deleteIfCurrent()
-                }
-            }, ttl).unref?.()
+            armTtlExpiry(store, entry, ttl)
         }
     }, deleteIfCurrent)
     return entry
+}
+
+/*
+Evicts `entry` unless a newer entry already owns the key (a concurrent
+invalidate-and-reread must not lose its replacement). Disarms any policy timer
+first — an armed timer would otherwise refetch a key that no longer exists.
+*/
+function evictIfCurrent(store: CacheStore, entry: CacheEntry): void {
+    if (store.entries.get(entry.key) === entry) {
+        clearTimeout(entry.invalidation?.timer)
+        store.entries.delete(entry.key)
+        markLifecycle(store)
+    }
+}
+
+/* Arms the ttl > 0 expiry sweep; `expiresAt` re-checks at fire time so a refreshed deadline survives. */
+function armTtlExpiry(store: CacheStore, entry: CacheEntry, ttl: number): void {
+    entry.expiresAt = Date.now() + ttl
+    setTimeout(() => {
+        if ((entry.expiresAt ?? 0) <= Date.now()) {
+            evictIfCurrent(store, entry)
+        }
+    }, ttl).unref?.()
+}
+
+/*
+Mirrors tagScope/attachPolicy for retention: a hydrated snapshot entry ships
+without its wrap options (they live at call sites, not on the wire), so the
+first read adopts its call site's ttl declaration. Omitted = forever, exactly
+as shipped; ttl > 0 = the expiry clock starts at this read; ttl = 0 = the warm
+value exists only to complete the hydration render — the SSR request's atomic
+unit ends here — so eviction is deferred one macrotask (every reader in the
+same hydration pass still gets the warm value, no invalidate event fires, and
+the already-painted DOM stays put) and the next read fetches live. The first
+reader consumes the flag, so its declaration wins; live entries never carry
+the flag and keep the ttl they registered with.
+*/
+function adoptTtl(store: CacheStore, entry: CacheEntry, options: CacheOptions | undefined): void {
+    if (entry.hydrated !== true) {
+        return
+    }
+    entry.hydrated = false
+    const ttl = options?.ttl
+    if (ttl === undefined) {
+        return
+    }
+    entry.ttl = ttl
+    if (ttl === 0) {
+        setTimeout(() => evictIfCurrent(store, entry), 0).unref?.()
+        return
+    }
+    armTtlExpiry(store, entry, ttl)
 }
 
 /*
@@ -286,67 +406,16 @@ function shareable(promise: Promise<Response>): Promise<Response> {
     return promise.then((response) => response.clone())
 }
 
-type Selector<Args, Return> =
-    | AnyRemote<Args, Return>
-    | Producer<Args, Return>
-    | Pick<CacheOptions, 'scope'>
-
-/*
-Compiles a selector into an entry predicate shared by invalidate() and
-pending() so both interpret the call shapes identically:
-  undefined            → every entry
-  remote fn            → that function's calls (method+url prefix). `arg.url` is
-                         the route template; per-call args appear as `?...`
-                         (GET/DELETE) or after a space (canonical-json body) —
-                         see keyForRemoteCall. `fn` and `fn.raw` match the same
-                         set since they share method+url.
-  producer fn          → that producer's calls (reference id prefix). Matches
-                         only if the producer was cached at least once (else it
-                         has no id and nothing matches).
-  { scope }            → any entry sharing one of the requested scope tags. An
-                         empty selector matches nothing.
-*/
-function selectorMatcher<Args, Return>(
-    arg?: Selector<Args, Return>,
-): (entry: CacheEntry) => boolean {
-    if (arg === undefined) {
-        return () => true
-    }
-    if (typeof arg === 'function') {
-        /* Remote fns carry url/method; a producer keys on its reference id. */
-        const prefix = 'url' in arg ? `${arg.method} ${arg.url}` : existingProducerId(arg)
-        if (prefix === undefined) {
-            return () => false
-        }
-        return (entry) =>
-            entry.key === prefix ||
-            entry.key.startsWith(`${prefix}?`) ||
-            entry.key.startsWith(`${prefix} `)
-    }
-    if (arg.scope === undefined) {
-        return () => false
-    }
-    const requestedScopes = toScopeSet(arg.scope)
-    return (entry) => entry.scope !== undefined && intersects(entry.scope, requestedScopes)
-}
-
-/* Active + process-level stores, deduped (one tab store on the client). */
-function cacheStores(): CacheStore[] {
-    const active = activeCacheStore()
-    const global = globalCacheStore()
-    return active === global ? [active] : [active, global]
-}
-
 /*
 Invalidates every entry matching the selector (see selectorMatcher) across both
 the request/tab store and the process-level store, and notifies readers. An entry
 with an invalidate throttle/debounce policy is kept and its refetch coalesced (stale served
 until it resolves); every other match is dropped so the next read refetches —
-its key recorded in pendingRefresh so that read reports as a reload (cache.refreshing)
+its key recorded in pendingRefresh so that read reports as a reload (refreshing())
 rather than a first-ever load. An empty or unmatched selector is a no-op on the
 cache; the lifecycle ping still fires but recomputes pending() to the same value.
 */
-function invalidate<Args, Return>(arg?: Selector<Args, Return>): void {
+function invalidate<Args, Return>(arg?: CacheSelector<Args, Return>): void {
     const matches = selectorMatcher(arg)
     for (const store of cacheStores()) {
         const affected: string[] = []
@@ -359,7 +428,7 @@ function invalidate<Args, Return>(arg?: Selector<Args, Return>): void {
                 scheduleInvalidationRefetch(store, entry)
             } else {
                 store.entries.delete(entry.key)
-                /* Mark so the next read of this key reports as a reload via cache.refreshing. */
+                /* Mark so the next read of this key reports as a reload via refreshing(). */
                 store.pendingRefresh.add(entry.key)
                 affected.push(entry.key)
             }
@@ -422,7 +491,7 @@ function fireRefetch(store: CacheStore, entry: CacheEntry): void {
     }
     entry.refreshing = true
     policy.lastFiredAt = Date.now()
-    /* Ping lifecycle so cache.refreshing re-derives when revalidation begins; the settle handlers ping again when it ends. */
+    /* Ping lifecycle so refreshing() re-derives when revalidation begins; the settle handlers ping again when it ends. */
     markLifecycle(store)
     const inflight = policy.refetch()
     inflight.then(
@@ -445,89 +514,9 @@ function fireRefetch(store: CacheStore, entry: CacheEntry): void {
     )
 }
 
-/*
-Reactive in-flight probe sharing invalidate's selector grammar:
-  pending()                  → any rpc in flight (global progress bar)
-  pending(fn)                → that function's calls (per-route spinner)
-  pending({ scope })         → a tagged group
-Returns true while any matching entry's promise is unsettled across the
-request/tab and process-level stores. The read taps each store's lifecycle
-channel (track both before checking, so neither is skipped by short-circuit), so
-a $derived re-runs when a matching call starts or settles. Outside a tracking
-scope (plain client code, SSR) the tap is a no-op and it returns the current
-value — SSR loading state is driven by {#await}, not this.
-*/
-function pending<Args, Return>(arg?: Selector<Args, Return>): boolean {
-    const matches = selectorMatcher(arg)
-    const stores = cacheStores()
-    stores.forEach((store) => {
-        store.trackLifecycle()
-    })
-    return stores.some((store) =>
-        store.entries.values().some((entry) => entry.settled !== true && matches(entry)),
-    )
-}
-
-cache.pending = pending
-
-/*
-Reactive revalidation probe sharing invalidate's selector grammar:
-  refreshing()               → any entry reloading data it already had
-  refreshing(fn)             → that function's calls (per-route "updating…" badge)
-  refreshing({ scope })      → a tagged group
-Returns true while any matching entry is reloading data it previously held:
-either a policy stale-while-revalidate refetch (settled, value visible, fresh
-fetch in flight) or the default drop-then-reload (the key was invalidated and
-dropped, this read refetches it — pending is also true here). The distinction
-from cache.pending: pending answers "is any matching call in flight?" (covers
-first-ever loads), refreshing answers "is a matching call reloading data that
-was already loaded once?". Taps each store's lifecycle channel (both before
-checking, so neither is skipped by short-circuit) so a $derived re-runs when a
-refresh starts or ends. Outside a tracking scope it returns the current value.
-*/
-function refreshing<Args, Return>(arg?: Selector<Args, Return>): boolean {
-    const matches = selectorMatcher(arg)
-    const stores = cacheStores()
-    stores.forEach((store) => {
-        store.trackLifecycle()
-    })
-    return stores.some((store) =>
-        store.entries.values().some((entry) => entry.refreshing === true && matches(entry)),
-    )
-}
-
-cache.refreshing = refreshing
-
-/* Signals cache.pending / cache.refreshing readers that in-flight membership changed. */
+/* Signals pending() / refreshing() readers that in-flight membership changed. */
 function markLifecycle(store: CacheStore): void {
-    store.events.dispatchEvent(new Event('lifecycle'))
-}
-
-/*
-Producers have no wire identity, so each is assigned a stable id on first use,
-kept in a WeakMap so it's collected with the function. The cache key is that id
-plus the canonicalised args — a hoisted producer dedupes across calls; an inline
-arrow gets a fresh id every call and never does.
-*/
-const producerIds = new WeakMap<object, string>()
-let producerCounter = 0
-function producerKey(producer: object, args: unknown): string {
-    let id = producerIds.get(producer)
-    if (id === undefined) {
-        id = `@producer:${++producerCounter}`
-        producerIds.set(producer, id)
-    }
-    return args === undefined ? id : `${id} ${canonicalJson(args)}`
-}
-
-/* The producer's id without assigning one — for selectors matching prior entries. */
-function existingProducerId(producer: object): string | undefined {
-    return producerIds.get(producer)
-}
-
-/* Normalizes a scope option (one tag or many) to a Set for O(1) membership. */
-function toScopeSet(scope: string | string[]): Set<string> {
-    return new Set(typeof scope === 'string' ? [scope] : scope)
+    store.markLifecycle()
 }
 
 /* Folds new tags into an entry's existing set without duplicating them. */
@@ -547,9 +536,29 @@ function tagScope(entry: CacheEntry, scope: CacheOptions['scope']): void {
     }
 }
 
-/* True when an entry's tags and the requested tags overlap on any tag. */
-function intersects(entryScopes: Set<string>, requestedScopes: Set<string>): boolean {
-    return requestedScopes.values().some((scope) => entryScopes.has(scope))
+/*
+Mirrors tagScope for invalidate policies: a read declaring a policy arms an
+existing entry that lacks one. Hydrated snapshot entries carry a value but no
+refetch thunk — without this, the first invalidate after hydration would hard-
+drop the entry (a pending flash) instead of revalidating stale-in-place, and a
+policy-less first read would permanently win over a later read that declared
+one. An entry that already has a policy keeps it (first policy wins; the key
+is the same call, so the thunks are interchangeable).
+*/
+function attachPolicy(
+    entry: CacheEntry,
+    options: CacheOptions | undefined,
+    refetch: () => Promise<unknown>,
+): void {
+    const policy = options?.invalidate
+    if (
+        entry.invalidation ||
+        !policy ||
+        (policy.throttle === undefined && policy.debounce === undefined)
+    ) {
+        return
+    }
+    entry.invalidation = { refetch, throttle: policy.throttle, debounce: policy.debounce }
 }
 
 function emit(store: ReturnType<typeof activeCacheStore>, keys: string[]): void {

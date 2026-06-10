@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { cacheEntryFromSnapshot } from '../src/lib/browser/cacheEntryFromSnapshot.ts'
 import { json } from '../src/lib/server/json.ts'
 import { defineVerb } from '../src/lib/server/rpc/defineVerb.ts'
 import { requestContext } from '../src/lib/server/runtime/requestContext.ts'
@@ -8,7 +9,10 @@ import { cache } from '../src/lib/shared/cache.ts'
 import { cacheStoreSlot } from '../src/lib/shared/cacheStoreSlot.ts'
 import { createCacheStore } from '../src/lib/shared/createCacheStore.ts'
 import { globalCacheStoreSlot } from '../src/lib/shared/globalCacheStoreSlot.ts'
+import { keyForRemoteCall } from '../src/lib/shared/keyForRemoteCall.ts'
 import type { CacheStore } from '../src/lib/shared/types/CacheStore.ts'
+import type { RawRemoteFunction } from '../src/lib/shared/types/RawRemoteFunction.ts'
+import { settle } from './support/settle.ts'
 
 const options = { logRequests: false }
 
@@ -28,6 +32,9 @@ edges the other cache suites don't pin:
 
 let calls = 0
 const countedRemote = defineVerb('GET', '/rpc/ttl-counted', () => json({ hit: ++calls }))
+
+let writes = 0
+const countedWrite = defineVerb('POST', '/rpc/ttl-write', () => json({ write: ++writes }))
 
 let failures = 0
 const flakyRemote = defineVerb('GET', '/rpc/ttl-flaky', () => {
@@ -82,6 +89,24 @@ describe('ttl=0 (dedupe only)', () => {
                 delete (globalThis as Record<string, unknown>).window
             }
         }
+    })
+
+    test('the server coalesces a write for the whole request, but never snapshots it', async () => {
+        writes = 0
+        await inServerScope(async (store) => {
+            await cache(countedWrite, { ttl: 0 })()
+            /*
+            The request is the server's atomic unit: an identical call later in
+            the same render coalesces deterministically, regardless of whether
+            the first had already settled — one render, one effect.
+            */
+            await cache(countedWrite, { ttl: 0 })()
+            expect(writes).toBe(1)
+            expect(store.entries.size).toBe(1)
+            /* The kept entry serves the request only — a write never ships to the client. */
+            const { inline } = await serializeCacheSnapshot(store)
+            expect(inline).toHaveLength(0)
+        })
     })
 
     test('the process-level global store evicts on settle (would leak forever)', async () => {
@@ -140,5 +165,72 @@ describe('rejection', () => {
             /* Same scope, same key: the failure was not cached. */
             expect(await cache(flakyRemote)()).toEqual({ hit: 2 })
         })
+    })
+})
+
+/*
+A hydrated snapshot entry ships without its wrap options, so the first read
+adopts its call site's ttl: omitted keeps the entry (exactly as shipped),
+ttl > 0 starts the expiry clock at that read, and ttl: 0 serves the hydration
+pass only — evicted a macrotask later, so every reader in the pass still warm-
+hits but the next render fetches live. The first reader's declaration wins.
+*/
+describe('hydrated entries adopt the reading call site ttl', () => {
+    function hydrate(store: CacheStore, remote: RawRemoteFunction<undefined>): string {
+        const key = keyForRemoteCall(remote.method, remote.url, undefined)
+        store.entries.set(
+            key,
+            cacheEntryFromSnapshot({
+                key,
+                url: `https://test.local${remote.url}`,
+                method: remote.method,
+                status: 200,
+                statusText: 'OK',
+                headers: [['content-type', 'application/json']],
+                body: '{"hit":0}',
+            }),
+        )
+        return key
+    }
+
+    test('ttl: 0 serves every reader in the hydration pass, then evicts', async () => {
+        const store = createCacheStore()
+        cacheStoreSlot.resolver = () => store
+        const key = hydrate(store, countedRemote.raw)
+
+        /* Both same-pass readers warm-hit — eviction is deferred a macrotask. */
+        expect(cache(countedRemote, { ttl: 0 })()).toEqual({ hit: 0 })
+        expect(cache(countedRemote, { ttl: 0 })()).toEqual({ hit: 0 })
+        await settle()
+        expect(store.entries.has(key)).toBe(false)
+    })
+
+    test('an omitted ttl keeps the hydrated entry, and a later ttl: 0 read cannot evict it', async () => {
+        const store = createCacheStore()
+        cacheStoreSlot.resolver = () => store
+        const key = hydrate(store, countedRemote.raw)
+
+        /* First reader declares forever — it consumes the adoption. */
+        expect(cache(countedRemote)()).toEqual({ hit: 0 })
+        await settle()
+        expect(store.entries.has(key)).toBe(true)
+
+        /* The losing later declaration neither evicts nor re-arms. */
+        expect(cache(countedRemote, { ttl: 0 })()).toEqual({ hit: 0 })
+        await settle()
+        expect(store.entries.has(key)).toBe(true)
+    })
+
+    test('ttl > 0 starts the expiry clock at the first read', async () => {
+        const store = createCacheStore()
+        cacheStoreSlot.resolver = () => store
+        const key = hydrate(store, countedRemote.raw)
+
+        expect(cache(countedRemote, { ttl: 20 })()).toEqual({ hit: 0 })
+        await settle()
+        expect(store.entries.has(key)).toBe(true)
+
+        await Bun.sleep(35)
+        expect(store.entries.has(key)).toBe(false)
     })
 })

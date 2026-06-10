@@ -1,3 +1,4 @@
+import { REPLAYABLE_METHODS } from '../../shared/REPLAYABLE_METHODS.ts'
 import type { CacheEntry } from '../../shared/types/CacheEntry.ts'
 import type { CacheSnapshot } from '../../shared/types/CacheSnapshot.ts'
 import type { CacheSnapshotEntry } from '../../shared/types/CacheSnapshotEntry.ts'
@@ -26,7 +27,7 @@ export async function serializeCacheSnapshot(store: CacheStore): Promise<CacheSn
             continue
         }
         const method = entry.request.method.toUpperCase()
-        if (method !== 'GET' && method !== 'DELETE') {
+        if (!REPLAYABLE_METHODS.has(method)) {
             continue
         }
         if (entry.settled) {

@@ -18,6 +18,13 @@ snapshot body is pre-decoded synchronously so the first client render can
 read it without a microtask hop and byte-match the SSR DOM. Live fetches
 leave it undefined and take the async decode path.
 
+`hydrated` marks an entry built from the SSR snapshot, which ships no wrap
+options — the first read consumes the flag and adopts its call site's `ttl`
+(omitted = forever, as shipped; ttl > 0 = expiry clock starts at that read;
+ttl = 0 = the warm value exists only to complete the hydration render and is
+evicted a macrotask later). Live entries never carry it; their ttl was fixed
+at registration.
+
 `scope` holds the cache() call's scope tags as a Set so
 `cache.invalidate({ scope })` can drop every entry sharing any tag with O(1)
 membership; a re-read merges new tags in rather than replacing them.
@@ -31,14 +38,18 @@ the pending branch without blocking) and stream a resolve chunk instead.
 `refreshing` flips true while this entry is reloading data it already held —
 either a policy stale-while-revalidate refetch (value still visible) or the
 default drop-then-reload (the prior entry was invalidated and dropped, this is
-its replacement read). It backs cache.refreshing, distinguishing a reload from a
+its replacement read). It backs refreshing(), distinguishing a reload from a
 first-ever load; cleared when the read settles.
 
-`invalidation` is present only when the cache() call set an `invalidate`
-throttle/debounce policy: it holds the refetch thunk (the original call captured
-with its args) plus the policy and its runtime timer state, so invalidate() can
-rate-limit refetches of this key instead of dropping the entry and refetching on
-every invalidation.
+`invalidation` holds an `invalidate` throttle/debounce policy: the refetch
+thunk (the call captured with its args) plus the policy and its runtime timer
+state, so invalidate() can rate-limit refetches of this key instead of dropping
+the entry and refetching on every invalidation. Set at registration when the
+creating read declared a policy, or attached by a later read declaring one on
+an entry that lacks it (hydrated snapshot entries always start without one) —
+first policy wins. An armed `timer` is cleared if the entry is evicted, so a
+dead key never refetches. Wrap-time validation guarantees a policy never
+coexists with ttl: 0 and never sits on a non-replayable remote method.
 */
 export type CacheEntry = {
     key: string
@@ -49,6 +60,7 @@ export type CacheEntry = {
     value?: unknown
     scope?: Set<string>
     settled?: boolean
+    hydrated?: boolean
     refreshing?: boolean
     invalidation?: InvalidationState
 }

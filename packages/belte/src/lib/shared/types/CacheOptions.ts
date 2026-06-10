@@ -3,7 +3,9 @@ Options for cache(). The key is always auto-derived (method+url+args for a remot
 function, producer-reference+args for a plain producer): hoist a producer to a
 stable reference to share its entry across calls. `ttl` is the
 milliseconds-past-resolve that the entry stays live: omitted = forever, 0 =
-dedupe only (entry dropped once the promise settles), any other number = TTL.
+dedupe only (entry dropped once the promise settles — the mutation idiom:
+in-flight coalescing and pending() visibility, nothing retained), any other
+number = TTL.
 `scope` is one or more free-form tags grouping unrelated calls so one
 `cache.invalidate({ scope })` drops every entry sharing any of them — pass an
 array when a call belongs to multiple invalidation groups. A unique tag (e.g. a
@@ -23,7 +25,11 @@ quiet. Both coalesce a burst of invalidations (e.g. a socket spraying
 `cache.invalidate`) into far fewer calls and keep serving the existing (stale)
 value until the refetch resolves — stale-while-revalidate. They affect only the
 refetch-after-invalidate; the first fetch and arg-change fetches stay immediate.
-Set at most one.
+A policy declares the call safe to re-run unprompted: cache() throws at wrap
+time on both set at once, on ttl: 0 (nothing retained, nothing to revalidate),
+and on a non-replayable remote method (replaying a write is a state change
+disguised as a refresh). Producers are uncheckable — declare a policy only on
+a producer that is a pure read.
 */
 export type CacheOptions = {
     ttl?: number

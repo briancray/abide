@@ -10,6 +10,7 @@ function storeWith(entries: CacheEntry[]): CacheStore {
         events: new EventTarget(),
         subscribe: () => {},
         trackLifecycle: () => {},
+        markLifecycle: () => {},
         pendingRefresh: new Set(),
     }
 }

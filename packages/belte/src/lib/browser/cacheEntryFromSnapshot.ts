@@ -6,7 +6,8 @@ Rebuilds a warm cache entry from a wire snapshot: an already-resolved Response
 plus the synchronously-decoded warm value, so cache() reads it without a network
 round-trip or a microtask hop. Shared by the initial inline snapshot hydration
 and the streamed resolution path. `settled` is true — the body shipped fully
-resolved either way.
+resolved either way. `hydrated` marks that the wrap options didn't travel:
+the first cache() read adopts its call site's ttl (see CacheEntry).
 */
 export function cacheEntryFromSnapshot(entry: CacheSnapshotEntry): CacheEntry {
     const headers = new Headers(entry.headers)
@@ -23,6 +24,7 @@ export function cacheEntryFromSnapshot(entry: CacheSnapshotEntry): CacheEntry {
         expiresAt: undefined,
         value: warmValueFromSnapshot(entry.status, headers, entry.body),
         settled: true,
+        hydrated: true,
     }
 }
 

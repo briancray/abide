@@ -1,4 +1,5 @@
 import { createSubscriber } from 'svelte/reactivity'
+import { createLifecycleChannel } from './createLifecycleChannel.ts'
 import type { CacheEntry } from './types/CacheEntry.ts'
 import type { CacheInvalidation } from './types/CacheInvalidation.ts'
 import type { CacheStore } from './types/CacheStore.ts'
@@ -17,7 +18,7 @@ there's no listener churn or duplicate registration as cache values come
 and go. It's evicted only when its last reactive reader tears down (the
 client store is module-level/tab-scoped, so retaining a thunk per distinct
 key would otherwise grow unbounded across a session), identity-guarded so
-a concurrent re-subscribe isn't clobbered — mirroring subscribe.ts.
+a concurrent re-subscribe isn't clobbered — mirroring tail.ts.
 */
 export function createCacheStore(): CacheStore {
     const entries = new Map<string, CacheEntry>()
@@ -49,27 +50,15 @@ export function createCacheStore(): CacheStore {
         registered()
     }
 
-    /*
-    Store-wide tap for in-flight lifecycle. cache.pending selectors match many
-    entries (or all), so they re-derive by scanning `entries` and only need a
-    single "something changed" signal rather than per-key granularity. One
-    lazily-created subscriber for the whole store, evicted when its last reader
-    tears down — mirroring subscribe(key) and subscribe.ts.
-    */
-    let lifecycle: (() => void) | undefined
-    function trackLifecycle(): void {
-        if (!lifecycle) {
-            lifecycle = createSubscriber((update) => {
-                const onLifecycle = () => update()
-                events.addEventListener('lifecycle', onLifecycle)
-                return () => {
-                    events.removeEventListener('lifecycle', onLifecycle)
-                    lifecycle = undefined
-                }
-            })
-        }
-        lifecycle()
-    }
+    /* Store-wide in-flight tap for the probes; semantics live in createLifecycleChannel. */
+    const lifecycle = createLifecycleChannel()
 
-    return { entries, events, subscribe, trackLifecycle, pendingRefresh }
+    return {
+        entries,
+        events,
+        subscribe,
+        trackLifecycle: lifecycle.track,
+        markLifecycle: lifecycle.mark,
+        pendingRefresh,
+    }
 }

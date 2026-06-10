@@ -5,15 +5,16 @@ import { requestContext } from '../src/lib/server/runtime/requestContext.ts'
 import { runWithRequestScope } from '../src/lib/server/runtime/runWithRequestScope.ts'
 import { cache } from '../src/lib/shared/cache.ts'
 import { cacheStoreSlot } from '../src/lib/shared/cacheStoreSlot.ts'
+import { pending } from '../src/lib/shared/pending.ts'
 
 const options = { logRequests: false }
 
 /*
-cache.pending() reflects in-flight membership of the active store. It shares
+pending() reflects in-flight membership of the active store. It shares
 invalidate's selector grammar, so the global form, the per-function form, and
 the scoped form each narrow which entries count toward "loading".
 */
-describe('cache.pending', () => {
+describe('pending()', () => {
     const getPost = defineVerb('GET', '/rpc/pending-post', () => json({ ok: true }))
     const getUser = defineVerb('GET', '/rpc/pending-user', () => json({ ok: true }))
 
@@ -27,12 +28,12 @@ describe('cache.pending', () => {
     test('true while a call is in flight, false once it settles', async () => {
         await runWithRequestScope(new Request('https://test.local/'), options, async () => {
             const promise = cache(getPost)()
-            expect(cache.pending()).toBe(true)
-            expect(cache.pending(getPost)).toBe(true)
+            expect(pending()).toBe(true)
+            expect(pending(getPost)).toBe(true)
 
             await promise
-            expect(cache.pending()).toBe(false)
-            expect(cache.pending(getPost)).toBe(false)
+            expect(pending()).toBe(false)
+            expect(pending(getPost)).toBe(false)
             return json(null)
         })
     })
@@ -40,8 +41,8 @@ describe('cache.pending', () => {
     test('per-function selector ignores other in-flight calls', async () => {
         await runWithRequestScope(new Request('https://test.local/'), options, async () => {
             const post = cache(getPost)()
-            expect(cache.pending(getUser)).toBe(false)
-            expect(cache.pending(getPost)).toBe(true)
+            expect(pending(getUser)).toBe(false)
+            expect(pending(getPost)).toBe(true)
             await post
             return json(null)
         })
@@ -50,10 +51,10 @@ describe('cache.pending', () => {
     test('scope selector tracks only entries tagged with the scope', async () => {
         await runWithRequestScope(new Request('https://test.local/'), options, async () => {
             const post = cache(getPost, { scope: 'feed' })()
-            expect(cache.pending({ scope: 'feed' })).toBe(true)
-            expect(cache.pending({ scope: 'profile' })).toBe(false)
+            expect(pending({ scope: 'feed' })).toBe(true)
+            expect(pending({ scope: 'profile' })).toBe(false)
             await post
-            expect(cache.pending({ scope: 'feed' })).toBe(false)
+            expect(pending({ scope: 'feed' })).toBe(false)
             return json(null)
         })
     })
