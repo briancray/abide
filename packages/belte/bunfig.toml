@@ -1,0 +1,5 @@
+[test]
+# Mirror of the root bunfig's preload so `bun test` also works with this
+# package as cwd — bunfig resolution is cwd-relative, and without this the
+# rune-based suites fail with "$effect is not defined".
+preload = ["./tests/support/sveltePreload.ts"]

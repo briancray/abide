@@ -1,5 +1,6 @@
 import { decodeResponse } from './decodeResponse.ts'
 import { keyForRemoteCall } from './keyForRemoteCall.ts'
+import { REMOTE_FUNCTION } from './REMOTE_FUNCTION.ts'
 import { recordRemoteMeta } from './recordRemoteMeta.ts'
 import { subscribableFromResponse } from './subscribableFromResponse.ts'
 import type { ClientFlags } from './types/ClientFlags.ts'
@@ -35,11 +36,13 @@ export function createRemoteFunction<Args, Return>(opts: {
     method: HttpVerb
     url: string
     clients: ClientFlags
+    /* Server-side only: exempts a mutating verb from the router's same-origin CSRF gate. */
+    crossOrigin?: boolean
     buildRequest: (args: Args | undefined) => Request
     invoke: (args: Args | undefined, getRequest: () => Request) => Promise<Response>
     parseArgsForFetch?: (request: Request) => Promise<Args | undefined>
 }): RemoteFunction<Args, Return> {
-    const { method, url, clients, buildRequest, invoke, parseArgsForFetch } = opts
+    const { method, url, clients, crossOrigin, buildRequest, invoke, parseArgsForFetch } = opts
 
     /*
     Dispatch is the one-stop entry for both the plain call (no prebuilt
@@ -73,6 +76,8 @@ export function createRemoteFunction<Args, Return>(opts: {
     }
     rawCall.method = method
     rawCall.url = url
+    /* Non-enumerable brand on both variants; see REMOTE_FUNCTION. */
+    Object.defineProperty(rawCall, REMOTE_FUNCTION, { value: true })
     const raw = rawCall as RawRemoteFunction<Args>
 
     function callable(args: Args | FormData): Promise<Return> {
@@ -81,12 +86,14 @@ export function createRemoteFunction<Args, Return>(opts: {
     callable.method = method
     callable.url = url
     callable.clients = clients
+    callable.crossOrigin = crossOrigin
     callable.raw = raw
     callable.stream = (args?: Args | FormData): Subscribable<Return> => {
         return subscribableFromResponse(keyForRemoteCall(method, url, args), () =>
             raw(args as Args),
         )
     }
+    Object.defineProperty(callable, REMOTE_FUNCTION, { value: true })
     callable.fetch = parseArgsForFetch
         ? async (request: Request): Promise<Response> => {
               const args = await parseArgsForFetch(request)

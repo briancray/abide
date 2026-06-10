@@ -3,6 +3,7 @@ import { cache } from '../src/lib/shared/cache.ts'
 import { cacheStoreSlot } from '../src/lib/shared/cacheStoreSlot.ts'
 import { createCacheStore } from '../src/lib/shared/createCacheStore.ts'
 import { pending } from '../src/lib/shared/pending.ts'
+import { REMOTE_FUNCTION } from '../src/lib/shared/REMOTE_FUNCTION.ts'
 import { remoteMetaStore } from '../src/lib/shared/remoteMetaStore.ts'
 import type { HttpVerb } from '../src/lib/shared/types/HttpVerb.ts'
 import type { RawRemoteFunction } from '../src/lib/shared/types/RawRemoteFunction.ts'
@@ -27,7 +28,7 @@ function countingRemote(method: HttpVerb, url: string): RawRemoteFunction<undefi
         remoteMetaStore.set(promise, () => request)
         return promise
     }) as RawRemoteFunction<undefined>
-    Object.assign(fn, { method, url })
+    Object.assign(fn, { method, url, [REMOTE_FUNCTION]: true })
     return fn
 }
 

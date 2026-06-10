@@ -45,6 +45,16 @@ describe('cache() producer', () => {
         expect(cacheStoreSlot.fallback!.entries.size).toBe(2)
     })
 
+    test('a producer with an incidental url prop stays a producer (brand, not shape, decides)', async () => {
+        const fetchValue = Object.assign(counter(), { url: '/looks/remote', method: 'GET' })
+        const first = await cache(fetchValue)()
+        const second = await cache(fetchValue)()
+        expect(first).toBe(1)
+        expect(second).toBe(1)
+        const entry = Array.from(cacheStoreSlot.fallback!.entries.values())[0]
+        expect(entry.request).toBeUndefined()
+    })
+
     test('stores the value promise directly — no Response, no request metadata', async () => {
         const fetchValue = counter()
         await cache(fetchValue)()

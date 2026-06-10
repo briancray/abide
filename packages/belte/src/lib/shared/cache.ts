@@ -1,4 +1,5 @@
 import { activeCacheStore } from './activeCacheStore.ts'
+import { CACHE_WRAPPED } from './CACHE_WRAPPED.ts'
 import { cacheStores } from './cacheStores.ts'
 import { decodeResponse } from './decodeResponse.ts'
 import { getRemoteMeta } from './getRemoteMeta.ts'
@@ -7,6 +8,7 @@ import { invalidateEvent } from './invalidateEvent.ts'
 import { keyForRemoteCall } from './keyForRemoteCall.ts'
 import { log } from './log.ts'
 import { producerKey } from './producerKey.ts'
+import { REMOTE_FUNCTION } from './REMOTE_FUNCTION.ts'
 import { REPLAYABLE_METHODS } from './REPLAYABLE_METHODS.ts'
 import { selectorMatcher } from './selectorMatcher.ts'
 import { toScopeSet } from './toScopeSet.ts'
@@ -99,12 +101,24 @@ export function cache<Args, Return>(
     options?: CacheOptions,
 ): (args?: Args) => Promise<Return | Response> | Return {
     /*
-    A remote function carries `url`/`method`; a plain producer carries neither —
-    that's the discriminator. Among remotes, the "raw" variant lacks its own
-    `.raw` sibling (only the decoded callable carries one), which selects whether
-    the decode step runs on the way out.
+    Re-wrapping loses the remote's identity (no url/method on the wrapper), so
+    the inner remote would silently become an anonymous producer — no shared
+    key, no SSR snapshot, no write-method guards. Throw where the mistake is.
     */
-    const isRemote = 'url' in fn
+    if (CACHE_WRAPPED in fn) {
+        throw new Error(
+            '[belte] cache(): fn is already a cache() wrapper — wrap the original function once',
+        )
+    }
+    /*
+    A remote function carries the REMOTE_FUNCTION brand (set by
+    createRemoteFunction on both variants); a plain producer never does — exact,
+    unlike a `url` property check a user function could satisfy by accident.
+    Among remotes, the "raw" variant lacks its own `.raw` sibling (only the
+    decoded callable carries one), which selects whether the decode step runs
+    on the way out.
+    */
+    const isRemote = REMOTE_FUNCTION in fn
     const isRaw = isRemote && !('raw' in fn)
     const rawFn = !isRemote
         ? undefined
@@ -113,9 +127,9 @@ export function cache<Args, Return>(
           : (fn as RemoteFunction<Args, Return>).raw
     validatePolicy(options, isRemote ? (rawFn as RawRemoteFunction<Args>).method : undefined)
     if (!isRemote) {
-        warnAnonymousProducer(fn)
+        warnAnonymousProducer(fn as Producer<Args, Return>)
     }
-    return (args) => {
+    const read = (args?: Args): Promise<Return | Response> | Return => {
         const store = options?.global ? globalCacheStore() : activeCacheStore()
         if (!isRemote) {
             return invokeProducer(store, fn as Producer<Args, Return>, args, options)
@@ -167,6 +181,9 @@ export function cache<Args, Return>(
         )
         return isRaw ? responsePromise : (responsePromise.then(decodeResponse) as Promise<Return>)
     }
+    /* Non-enumerable brand; selectorMatcher and the re-wrap guard read it. */
+    Object.defineProperty(read, CACHE_WRAPPED, { value: fn })
+    return read
 }
 
 /*

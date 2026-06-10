@@ -2,11 +2,14 @@ import type { Server } from 'bun'
 import type { Errors } from '../../src/lib/browser/types/Errors.ts'
 import type { Layouts } from '../../src/lib/browser/types/Layouts.ts'
 import type { Pages } from '../../src/lib/browser/types/Pages.ts'
+import type { McpServer } from '../../src/lib/mcp/types/McpServer.ts'
 import type { AppModule } from '../../src/lib/server/AppModule.ts'
 import type { RemoteRoutes } from '../../src/lib/server/rpc/types/RemoteRoutes.ts'
 import { createServer } from '../../src/lib/server/runtime/createServer.ts'
 import { requestContext } from '../../src/lib/server/runtime/requestContext.ts'
 import { serverSlot } from '../../src/lib/server/runtime/serverSlot.ts'
+import type { SocketRoutes } from '../../src/lib/server/sockets/types/SocketRoutes.ts'
+import { baseSlot } from '../../src/lib/shared/baseSlot.ts'
 import { cacheStoreSlot } from '../../src/lib/shared/cacheStoreSlot.ts'
 import { createCacheStore } from '../../src/lib/shared/createCacheStore.ts'
 import { globalCacheStoreSlot } from '../../src/lib/shared/globalCacheStoreSlot.ts'
@@ -30,13 +33,16 @@ export async function bootTestServer(manifests: {
     layouts?: Layouts
     errors?: Errors
     rpc?: RemoteRoutes
+    sockets?: SocketRoutes
     app?: AppModule
+    mcp?: McpServer
     shell?: string
 }): Promise<{ origin: string; server: Server<unknown>; stop: () => void }> {
     const previous = {
         cacheResolver: cacheStoreSlot.resolver,
         globalResolver: globalCacheStoreSlot.resolver,
         pageResolver: pageSlot.resolver,
+        baseResolver: baseSlot.resolver,
         activeServer: serverSlot.active,
     }
 
@@ -62,12 +68,13 @@ export async function bootTestServer(manifests: {
     const server = await createServer({
         pages: manifests.pages ?? {},
         rpc: manifests.rpc ?? {},
-        sockets: {},
+        sockets: manifests.sockets ?? {},
         prompts: {},
         layouts: manifests.layouts,
         errors: manifests.errors,
         shell: manifests.shell ?? TEST_SHELL,
         app: manifests.app,
+        mcp: manifests.mcp,
         assets: {},
         publicAssets: {},
         mcpResources: {},
@@ -79,6 +86,7 @@ export async function bootTestServer(manifests: {
         cacheStoreSlot.resolver = previous.cacheResolver
         globalCacheStoreSlot.resolver = previous.globalResolver
         pageSlot.resolver = previous.pageResolver
+        baseSlot.resolver = previous.baseResolver
         serverSlot.active = previous.activeServer
     }
 

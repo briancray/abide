@@ -24,6 +24,9 @@ HTTP rpc isn't the place for long-lived multi-publisher subscriptions.
 `.fetch(req)` is the framework's request-dispatch entry point — used by
 the router to invoke the handler from an incoming HTTP request, not
 for user code.
+`crossOrigin` (server-side only, set via the verb's opts) exempts a
+mutating verb from the router's same-origin CSRF gate, accepting browser
+requests whose Origin doesn't match the app's own host.
 */
 /*
 A body verb (POST/PUT/PATCH) also accepts a FormData in place of typed args:
@@ -36,6 +39,7 @@ export type RemoteFunction<Args, Return> = ((args: Args | FormData) => Promise<R
     readonly method: HttpVerb
     readonly url: string
     readonly clients: ClientFlags
+    readonly crossOrigin?: boolean
     readonly raw: RawRemoteFunction<Args>
     stream(args?: Args | FormData): Subscribable<Return>
     fetch(request: Request): Promise<Response>

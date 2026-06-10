@@ -5,13 +5,17 @@ import type { Pages } from '../../browser/types/Pages.ts'
 import { createMcpResourceServer } from '../../mcp/createMcpResourceServer.ts'
 import { setMcpResourceServer } from '../../mcp/mcpResourceServerSlot.ts'
 import type { McpServer } from '../../mcp/types/McpServer.ts'
+import { basePathFromAppUrl } from '../../shared/basePathFromAppUrl.ts'
 import { NO_STORE } from '../../shared/CACHE_CONTROL_VALUES.ts'
 import { createViewResolver } from '../../shared/createViewResolver.ts'
 import { extraForwardHeaders } from '../../shared/extraForwardHeaders.ts'
 import { isDebugEnabled } from '../../shared/isDebugEnabled.ts'
+import { isReadOnlyMethod } from '../../shared/isReadOnlyMethod.ts'
 import { log } from '../../shared/log.ts'
 import { RESOLVE_STREAM_PATH } from '../../shared/RESOLVE_STREAM_PATH.ts'
+import { setBaseResolver } from '../../shared/setBaseResolver.ts'
 import { toBunRoutePattern } from '../../shared/toBunRoutePattern.ts'
+import type { HttpVerb } from '../../shared/types/HttpVerb.ts'
 import type { AppModule } from '../AppModule.ts'
 import { handleCliDownload } from '../cli/handleCliDownload.ts'
 import { handleCliInstall } from '../cli/handleCliInstall.ts'
@@ -24,13 +28,14 @@ import { createAppAssetServer } from './createAppAssetServer.ts'
 import { createPageRenderer } from './createPageRenderer.ts'
 import { createPublicAssetServer } from './createPublicAssetServer.ts'
 import { createRouteDispatcher } from './createRouteDispatcher.ts'
+import { crossOriginForbidden } from './crossOriginForbidden.ts'
 import { DEFAULT_PORT } from './DEFAULT_PORT.ts'
 import { DEV_REBUILD_MESSAGE } from './DEV_REBUILD_MESSAGE.ts'
 import { DEV_RELOAD_CLIENT_SCRIPT } from './DEV_RELOAD_CLIENT_SCRIPT.ts'
 import { devReloadResponse } from './devReloadResponse.ts'
 import { disableIdleTimeoutForStream } from './disableIdleTimeoutForStream.ts'
 import { internalErrorResponse } from './internalErrorResponse.ts'
-import { isCrossOriginUpgrade } from './isCrossOriginUpgrade.ts'
+import { isCrossOriginRequest } from './isCrossOriginRequest.ts'
 import { listenOnOpenPort } from './listenOnOpenPort.ts'
 import { logExposedSurfaces } from './logExposedSurfaces.ts'
 import { parseIdleTimeout } from './parseIdleTimeout.ts'
@@ -41,6 +46,7 @@ import { runWithRequestScope } from './runWithRequestScope.ts'
 import { setActiveServer } from './setActiveServer.ts'
 import type { Assets } from './types/Assets.ts'
 import type { RequestStore } from './types/RequestStore.ts'
+import { warnUnguardedMcp } from './warnUnguardedMcp.ts'
 
 const IDENTITY_PATH = '/__belte/identity'
 const SOCKETS_PATH = '/__belte/sockets'
@@ -287,8 +293,8 @@ export async function createServer({
                 }
                 if (url.pathname === SOCKETS_PATH) {
                     // Reject cross-origin upgrades (CSWSH) before handing off to Bun.
-                    if (isCrossOriginUpgrade(req, url)) {
-                        return new Response('Forbidden', { status: 403 })
+                    if (isCrossOriginRequest(req, url)) {
+                        return crossOriginForbidden()
                     }
                     if (bunServer.upgrade(req, { data: {} })) {
                         return undefined as unknown as Response
@@ -303,6 +309,20 @@ export async function createServer({
                 whole remaining pathname, percent-decoded.
                 */
                 if (url.pathname.startsWith(SOCKETS_REST_PREFIX)) {
+                    /*
+                    Reject cross-origin browser publishes (CSRF) like the socket
+                    upgrade and MCP above — `rest` reads req.json() ignoring
+                    Content-Type, so a hostile page's text/plain POST could
+                    otherwise publish to a `clientPublish` socket with the
+                    visitor's ambient cookies. GET tail reads stay open
+                    cross-origin like rpc reads; only the mutating POST is gated.
+                    */
+                    if (
+                        !isReadOnlyMethod(req.method as HttpVerb) &&
+                        isCrossOriginRequest(req, url)
+                    ) {
+                        return crossOriginForbidden()
+                    }
                     const name = decodeURIComponent(url.pathname.slice(SOCKETS_REST_PREFIX.length))
                     return dispatchRequest(req, {}, async () => socketDispatcher.rest(req, name))
                 }
@@ -318,6 +338,16 @@ export async function createServer({
                     return resolveStreamResponse(url.pathname.slice(RESOLVE_STREAM_PATH.length))
                 }
                 if (url.pathname === MCP_PATH && mcp) {
+                    /*
+                    Reject cross-site browser posts (CSRF) like the socket
+                    upgrade above. The JSON-RPC parse ignores Content-Type, so
+                    a hostile page's text/plain form trick could otherwise
+                    smuggle an envelope here with the visitor's ambient
+                    cookies. Native MCP clients send no Origin and pass.
+                    */
+                    if (isCrossOriginRequest(req, url)) {
+                        return crossOriginForbidden()
+                    }
                     return dispatchRequest(req, {}, async () => mcp.handle(req))
                 }
                 if (url.pathname === CLI_PATH) {
@@ -448,6 +478,10 @@ export async function createServer({
     */
     if (logRequests) {
         await logExposedSurfaces({ pages, resolver: viewResolver })
+    }
+    // Unguarded machine surface check — app.handle is the blessed auth seam.
+    if (mcp && !app?.handle) {
+        await warnUnguardedMcp()
     }
     log.success(`ready at http://localhost:${server.port}`)
     return server

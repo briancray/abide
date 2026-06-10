@@ -1,7 +1,10 @@
+import { CACHE_WRAPPED } from './CACHE_WRAPPED.ts'
 import { producerKey } from './producerKey.ts'
+import { REMOTE_FUNCTION } from './REMOTE_FUNCTION.ts'
 import { toScopeSet } from './toScopeSet.ts'
 import type { CacheEntry } from './types/CacheEntry.ts'
 import type { CacheSelector } from './types/CacheSelector.ts'
+import type { RawRemoteFunction } from './types/RawRemoteFunction.ts'
 
 /*
 Compiles a selector into an entry predicate shared by cache.invalidate(),
@@ -25,8 +28,18 @@ export function selectorMatcher<Args, Return>(
         return () => true
     }
     if (typeof arg === 'function') {
-        /* Remote fns carry url/method; a producer keys on its reference id. */
-        const prefix = 'url' in arg ? `${arg.method} ${arg.url}` : producerKey.existing(arg)
+        /*
+        A cache() wrapper carries no selector identity — it would silently
+        match nothing. Detection is certain (our brand), so throw with the fix.
+        */
+        if (CACHE_WRAPPED in arg) {
+            throw new Error(
+                '[belte] a cache() wrapper is not a selector — pass the function it wraps, e.g. pending(getPost), not pending(cache(getPost))',
+            )
+        }
+        /* Branded remotes key on method+url; a producer keys on its reference id. */
+        const remote = REMOTE_FUNCTION in arg ? (arg as RawRemoteFunction<Args>) : undefined
+        const prefix = remote ? `${remote.method} ${remote.url}` : producerKey.existing(arg)
         if (prefix === undefined) {
             return () => false
         }

@@ -38,6 +38,7 @@ export function defineVerb<Args, Return>(
         outputSchema?: StandardSchemaV1
         filesSchema?: StandardSchemaV1
         clients?: Partial<ClientFlags>
+        crossOrigin?: boolean
     },
 ): RemoteFunction<Args, Return> {
     const inputSchema = opts?.inputSchema
@@ -118,6 +119,7 @@ export function defineVerb<Args, Return>(
         method,
         url,
         clients,
+        crossOrigin: opts?.crossOrigin,
         buildRequest,
         invoke,
         parseArgsForFetch: (request) => parseArgs(method, request) as Promise<Args | undefined>,

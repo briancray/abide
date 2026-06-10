@@ -15,6 +15,9 @@ Shared signature for every verb helper (GET / POST / …). Three overloads:
     `outputSchema`. JSON Schema is projected from each schema's own
     `toJSONSchema()` (wrap with withJsonSchema if the library lacks one).
     `clients` controls which surfaces (browser / mcp / cli) expose this verb.
+    `crossOrigin: true` exempts a mutating verb from the router's same-origin
+    CSRF gate — by default a browser request whose Origin doesn't match the
+    app's own host is refused with 403 on every non-GET/HEAD verb.
   - `Verb(fn, { clients })` — schemaless but with explicit client
     targeting (e.g. server-internal RPC with `clients: { browser: false }`).
   - `Verb(fn)` — bare handler. `Args` and `Return` come from the handler
@@ -45,6 +48,7 @@ export type VerbHelper = {
             filesSchema: FilesSchema
             outputSchema?: StandardSchemaV1
             clients?: Partial<ClientFlags>
+            crossOrigin?: boolean
         },
     ): RemoteFunction<StandardSchemaV1.InferInput<InputSchema>, Return>
     <Return = unknown, InputSchema extends StandardSchemaV1 = StandardSchemaV1>(
@@ -53,6 +57,7 @@ export type VerbHelper = {
             inputSchema: InputSchema
             outputSchema?: StandardSchemaV1
             clients?: Partial<ClientFlags>
+            crossOrigin?: boolean
         },
     ): RemoteFunction<StandardSchemaV1.InferInput<InputSchema>, Return>
     <Args = undefined, Return = unknown>(
@@ -60,6 +65,7 @@ export type VerbHelper = {
         opts: {
             outputSchema?: StandardSchemaV1
             clients: Partial<ClientFlags>
+            crossOrigin?: boolean
         },
     ): RemoteFunction<Args, Return>
     <Args = undefined, Return = unknown>(
