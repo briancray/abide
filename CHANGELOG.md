@@ -1,5 +1,13 @@
 # @belte/belte
 
+## 0.23.1
+
+### Patch Changes
+
+- [`d8fe8fc`](https://github.com/briancray/belte/commit/d8fe8fcae7863407d7b55774e19762715d311450) - **Fixed**
+
+  - The lifecycle channel defers its notify to a microtask, coalescing marks within a tick. With a live `pending()`/`refreshing()` probe armed, a cold cache read inside a `$derived` — the documented `$derived(await cache(fn)())` idiom — registered its entry mid-derived and wrote the subscriber's version source synchronously, throwing `state_unsafe_mutation` and killing the flush (seen as an unhandled rejection plus a follow-on `active_reaction` TypeError, with UI updates in that batch silently dropped). Probes scan the registry at re-derive time, so the deferred ping reads state that is already current.
+
 ## 0.23.0
 
 ### Minor Changes
