@@ -30,7 +30,10 @@ The composed auth showcase sits below.
         <p class="mt-1 text-sm text-slate-600">
             The isomorphic surface — same callable both sides.
             <code class="font-mono">cache()</code>
-            for deduped, SSR-hydrated reads, and
+            for coalesced, SSR-hydrated reads,
+            <code class="font-mono">pending()</code>
+            / <code class="font-mono">refreshing()</code>
+            probes spanning calls and streams, and
             <code class="font-mono">HttpError</code>
             for non-2xx remote calls.
         </p>
@@ -41,7 +44,7 @@ The composed auth showcase sits below.
         <h2 class="text-lg font-semibold"><code class="font-mono">belte/browser</code></h2>
         <p class="mt-1 text-sm text-slate-600">
             How the browser reads, reacts, and navigates —
-            <code class="font-mono">subscribe()</code>,
+            <code class="font-mono">tail()</code>,
             <code class="font-mono">page</code>, and
             <code class="font-mono">navigate</code>.
         </p>

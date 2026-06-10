@@ -233,7 +233,7 @@ $effect(() => onMenu('open-mcp', () => void navigate('/mcp')))
     <CodeBlock
         title="src/browser/pages/page.svelte — branch desktop-only UI"
         lang="svelte"
-        code={`import { bundled } from '@belte/belte/shared/bundled'
+        code={`import { bundled } from '@belte/belte/bundle/bundled'
 
 // true in the bundle's webview / embedded server, false in a plain browser tab
 {#if bundled()}

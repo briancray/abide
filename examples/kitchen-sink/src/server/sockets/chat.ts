@@ -11,13 +11,16 @@ const schema = z.object({
 })
 
 /*
-A topic-style broadcast: anyone with the import can publish or
-subscribe. `history: 100` retains the last 100 messages and replays
-them to new subscribers. `clientPublish` is left off (default false)
-so browsers can't publish directly — publish flows through publishChat
-which validates input and runs server-side. The attached schema
-validates publish payloads synchronously and auto-exposes the socket to
-MCP and the CLI as a `chat-tail` read tool/command (recent buffered
-messages); a `chat-publish` would also appear if `clientPublish` were on.
+A topic-style broadcast: anyone with the import can publish or read.
+`tail: 100` opts the topic into retention — the socket keeps its last
+100 messages so readers that weren't there can seed: `chat.tail(n)`
+iteration, the reactive `tail()` consumer, and the MCP/CLI read faces.
+Bare iteration is the live stream only. `clientPublish` is left off
+(default false) so browsers can't publish directly — publish flows
+through publishChat which validates input and runs server-side. The
+attached schema validates publish payloads synchronously and
+auto-exposes the socket to MCP and the CLI as a `chat-tail` read
+tool/command (the retained tail); a `chat-publish` would also appear if
+`clientPublish` were on.
 */
-export const chat = socket<ChatMessage>({ history: 100, schema })
+export const chat = socket<ChatMessage>({ tail: 100, schema })

@@ -1,10 +1,10 @@
 <script lang="ts">
-import { subscribe } from '@belte/belte/browser/subscribe'
+import { tail } from '@belte/belte/browser/tail'
 import CodeBlock from '$browser/CodeBlock.svelte'
 import { publishChat } from '$server/rpc/publishChat.ts'
 import { chat } from '$server/sockets/chat.ts'
 
-const latest = $derived(subscribe(chat))
+const latest = $derived(tail(chat))
 
 let from = $state('alice')
 let text = $state('hello socket!')
@@ -40,9 +40,12 @@ async function send() {
             </thead>
             <tbody class="divide-y divide-slate-100">
                 <tr>
-                    <td class="px-4 py-2 font-mono">history</td>
+                    <td class="px-4 py-2 font-mono">tail</td>
                     <td class="px-4 py-2 font-mono text-slate-500">0</td>
-                    <td class="px-4 py-2 text-slate-600">buffer last N messages for replay</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        retain the last N frames — the socket's tail — so readers that weren't there
+                        can seed; 0 = pure live pipe
+                    </td>
                 </tr>
                 <tr>
                     <td class="px-4 py-2 font-mono">ttl</td>
@@ -124,7 +127,7 @@ async function send() {
 
 export type ChatMessage = { id: string; from: string; text: string; at: number }
 
-export const chat = socket<ChatMessage>({ history: 100 })`} />
+export const chat = socket<ChatMessage>({ tail: 100 })`} />
 
     <CodeBlock
         title="src/server/rpc/publishChat.ts — validated publish path"
@@ -142,14 +145,14 @@ export const publishChat = POST<{ from: string; text: string }>(({ from, text })
 
     <CodeBlock
         title="iteration — works the same on both sides"
-        code={`for await (const m of chat)         { /* full history replay, then tail */ }
-for await (const m of chat.tail())   { /* no replay — live only */ }
-for await (const m of chat.tail(20)) { /* last 20 (clamped to history), then live */ }`} />
+        code={`for await (const m of chat)         { /* live stream — no replay */ }
+for await (const m of chat.tail())   { /* whole retained tail, then live */ }
+for await (const m of chat.tail(20)) { /* last 20 (clamped to the retained tail), then live */ }`} />
 
     <CodeBlock
         title="this page — reactive read"
-        code={`import { subscribe } from '@belte/belte/browser/subscribe'
+        code={`import { tail } from '@belte/belte/browser/tail'
 import { chat } from '$server/sockets/chat.ts'
 
-const latest = $derived(subscribe(chat))     // re-renders on every new frame`} />
+const latest = $derived(tail(chat))     // re-renders on every new frame`} />
 </section>

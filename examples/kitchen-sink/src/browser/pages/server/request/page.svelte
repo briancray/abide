@@ -1,5 +1,5 @@
 <script lang="ts">
-import { subscribe } from '@belte/belte/browser/subscribe'
+import { tail } from '@belte/belte/browser/tail'
 import { cache } from '@belte/belte/shared/cache'
 import CodeBlock from '$browser/CodeBlock.svelte'
 import { publishChat } from '$server/rpc/publishChat.ts'
@@ -12,7 +12,7 @@ let from = $state('alice')
 let text = $state('hello belte')
 let lastSendResult = $state('(not sent)')
 
-const latestChat = $derived(subscribe(chat))
+const latestChat = $derived(tail(chat))
 
 async function send() {
     try {
@@ -152,10 +152,10 @@ export const publishChat = POST<{ from: string; text: string }>(({ from, text })
     <CodeBlock
         title="this page — SSR + reactive read"
         code={`import { cache } from '@belte/belte/shared/cache'
-import { subscribe } from '@belte/belte/browser/subscribe'
+import { tail } from '@belte/belte/browser/tail'
 import { whoAmI } from '$server/rpc/whoAmI.ts'
 import { chat } from '$server/sockets/chat.ts'
 
 const me         = await cache(whoAmI)()         // runs during SSR, replays on hydration
-const latestChat = $derived(subscribe(chat))     // reactive — re-renders per frame`} />
+const latestChat = $derived(tail(chat))          // reactive — re-renders per frame`} />
 </section>

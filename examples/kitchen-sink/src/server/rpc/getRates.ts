@@ -24,7 +24,7 @@ Reuses the rpc cache machinery for an upstream API. `global: true` puts the
 entry in the process-level store so a value fetched for one request is reused
 by later requests (per-user request scoping is wrong here — the upstream is
 shared); `ttl` bounds staleness so the upstream is hit at most once per minute
-across the whole process. Same dedup/ttl/invalidate/pending machinery the rpc
+across the whole process. Same coalesce/ttl/invalidate/probe machinery the rpc
 verbs get — only the Response-based SSR streaming snapshot is unavailable,
 since an external fetch carries no wire metadata to snapshot.
 */

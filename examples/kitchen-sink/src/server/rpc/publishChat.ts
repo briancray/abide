@@ -8,8 +8,8 @@ const inputSchema = z.object({ from: z.string(), text: z.string() })
 
 /*
 POST handler that records a chat message and publishes it to the
-`chat` socket. Anyone subscribed — server-side `for await (const m of
-chat)` or browser-side `subscribe(chat)` — receives the message.
+`chat` socket. Every live reader — server-side `for await (const m of
+chat)` or browser-side `tail(chat)` — receives the message.
 Validation runs ahead of the handler via the attached `inputSchema`;
 trimming + non-empty checks stay here because they're domain rules, not
 shape rules. The inputSchema auto-exposes the rpc to the CLI (see /cli);

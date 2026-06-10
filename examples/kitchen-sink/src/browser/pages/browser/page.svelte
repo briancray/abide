@@ -8,7 +8,7 @@ const currentPath = $derived(page.url.pathname)
 <h1 class="text-3xl font-bold"><code class="font-mono">belte/browser</code></h1>
 <p class="mt-2 text-slate-600">
     The html consumer surface — direct calls for one-shot work,
-    <code class="font-mono">subscribe()</code>
+    <code class="font-mono">tail()</code>
     for live streams, plus <code class="font-mono">page</code> and
     <code class="font-mono">navigate</code>
     for SPA routing. Shared, SSR-hydrated reads use
@@ -29,12 +29,13 @@ const currentPath = $derived(page.url.pathname)
         </p>
     </a>
     <a
-        href="/browser/subscribe"
+        href="/browser/tail"
         class="rounded-lg border border-slate-200 bg-white p-5 hover:border-slate-400">
-        <h2 class="text-lg font-semibold"><code class="font-mono">subscribe()</code></h2>
+        <h2 class="text-lg font-semibold"><code class="font-mono">tail()</code></h2>
         <p class="mt-1 text-sm text-slate-600">
             Reactive consumer for streams — a socket, or any
-            <code class="font-mono">fn.stream(args)</code>. Read the latest value inside any
+            <code class="font-mono">fn.stream(args)</code>. Read the latest frame, or a live window
+            of the last n, inside any
             <code class="font-mono">$derived</code>.
         </p>
     </a>

@@ -73,7 +73,7 @@ const cachedRaw = $derived(cache(getReport.raw)({ id: 'r-1' }))
                     <td class="px-4 py-2 font-mono text-slate-500">Subscribable&lt;Return&gt;</td>
                     <td class="px-4 py-2 text-slate-600">
                         iterating SSE/JSONL frames, or piping into
-                        <code class="font-mono">subscribe()</code>
+                        <code class="font-mono">tail()</code>
                     </td>
                 </tr>
             </tbody>
