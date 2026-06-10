@@ -3,7 +3,9 @@ import type { RouteSegment } from './parseRouteSegments.ts'
 import { parseRouteSegments } from './parseRouteSegments.ts'
 import { queryStringFromArgs } from './queryStringFromArgs.ts'
 
-type QueryValue = string | number | boolean
+/* `undefined` is allowed and dropped (queryStringFromArgs skips it), so an
+   optional field — url('/p', { ref: maybeUndefined }) — types without a guard. */
+type QueryValue = string | number | boolean | undefined
 type Query = Record<string, QueryValue>
 
 /*
