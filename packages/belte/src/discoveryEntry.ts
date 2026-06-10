@@ -37,8 +37,8 @@ for (const entry of verbRegistry.values()) {
 /*
 Sockets advertised to the CLI become commands against the socket's HTTP
 face (see socketOperations): `<base>-tail` streams live (GET +
-text/event-stream, with an optional --tail N to replay recent history
-first) and, when clientPublish is set, `<base>-publish` sends the args bag
+text/event-stream, with an optional --tail N to seed from the retained
+tail first) and, when clientPublish is set, `<base>-publish` sends the args bag
 as a message (POST).
 */
 for (const entry of socketRegistry.values()) {

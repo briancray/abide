@@ -1,5 +1,6 @@
 import { createPushIterator } from '../../shared/createPushIterator.ts'
 import { resolveClientFlags } from '../../shared/resolveClientFlags.ts'
+import type { TailHooks } from '../../shared/types/TailHooks.ts'
 import { getActiveServer } from '../runtime/getActiveServer.ts'
 import { registerSocket } from './registerSocket.ts'
 import type { Socket } from './types/Socket.ts'
@@ -10,22 +11,22 @@ Server-side construction of a Socket. The bundler rewrites every
 `export const NAME = socket(opts)` inside `src/server/sockets/<file>.ts` into
 `__belteDefineSocket__("<name>", opts)` so the file path becomes the
 socket's identity. Each subscriber gets its own queue + notifier, the
-optional history buffer is shared, and outbound fan-out rides Bun's
+optional retained tail is shared, and outbound fan-out rides Bun's
 native `server.publish` so connected ws clients are notified by the
 runtime in C rather than per-client iteration in JS.
 
 The Socket itself is the AsyncIterable: `for await (const m of chat)`
-replays the full history buffer then tails live. `chat.tail(count)`
-opens a subscription that replays the last `count` items (default `0`,
-clamped to the configured `history` max). When `ttl` is set, history
-entries older than `ttl` ms are evicted lazily on every read/append —
-no timer runs in the background. `chat.publish(m)` is isomorphic —
+is the live stream — no replay. `chat.tail(count)` opens a subscription
+seeded with the last `count` retained frames (no-arg = the whole
+retained tail, clamped to the declared `tail` size). When `ttl` is set,
+retained frames older than `ttl` ms are evicted lazily on every
+read/append — no timer runs in the background. `chat.publish(m)` is isomorphic —
 called server-side it both notifies in-process iterators and broadcasts
 to remote subscribers; called client-side (via socketProxy) it sends a
 `pub` frame the dispatcher validates and forwards.
 */
 export function defineSocket<T>(name: string, opts: SocketOptions = {}): Socket<T> {
-    const historySize = opts.history ?? 0
+    const retention = opts.tail ?? 0
     const ttl = opts.ttl
     const schema = opts.schema
     /*
@@ -41,7 +42,7 @@ export function defineSocket<T>(name: string, opts: SocketOptions = {}): Socket<
     const topic = `socket:${name}`
 
     /*
-    History entries are stored with an expiry timestamp. When `ttl` is set,
+    Retained frames are stored with an expiry timestamp. When `ttl` is set,
     every read/append starts by dropping leading entries whose expiry has
     passed — entries are appended in order so the expired prefix is
     contiguous. No timer/setInterval is needed: expiry is lazy.
@@ -97,11 +98,11 @@ export function defineSocket<T>(name: string, opts: SocketOptions = {}): Socket<
     }
     function publish(message: T): void {
         const validated = validateSync(message)
-        if (historySize > 0) {
+        if (retention > 0) {
             const now = Date.now()
             pruneExpired(now)
             buffer.push({ value: validated, expiresAt: ttl === undefined ? undefined : now + ttl })
-            if (buffer.length > historySize) {
+            if (buffer.length > retention) {
                 buffer.shift()
             }
         }
@@ -118,10 +119,13 @@ export function defineSocket<T>(name: string, opts: SocketOptions = {}): Socket<
     }
 
     /*
-    replay === 'all' replays the entire buffer (bare `for await`);
-    a number replays the last min(count, buffer.length) items.
+    replay === 'all' replays the whole retained tail (`.tail()` no-arg);
+    a number replays the last min(count, buffer.length) items — `0` is
+    live-only, the bare `for await` behavior. `hooks.replayed` is queued
+    in-band after the replayed frames so a window reader commits its seed
+    atomically, strictly before any live frame.
     */
-    function iterate(replay: number | 'all'): AsyncIterable<T> {
+    function iterate(replay: number | 'all', hooks?: TailHooks): AsyncIterable<T> {
         return {
             [Symbol.asyncIterator](): AsyncIterator<T, void, undefined> {
                 let subscriber: ((message: T) => void) | undefined
@@ -139,6 +143,9 @@ export function defineSocket<T>(name: string, opts: SocketOptions = {}): Socket<
                         iter.push((buffer[index] as BufferEntry).value)
                     }
                 }
+                if (hooks?.replayed) {
+                    iter.control(hooks.replayed)
+                }
                 subscriber = (message: T) => iter.push(message)
                 subscribers.add(subscriber)
                 return iter
@@ -150,17 +157,18 @@ export function defineSocket<T>(name: string, opts: SocketOptions = {}): Socket<
         name,
         clients,
         publish,
-        tail: (count = 0) => iterate(count),
-        [Symbol.asyncIterator]: () => iterate('all')[Symbol.asyncIterator](),
+        tail: (count?: number, hooks?: TailHooks) => iterate(count ?? 'all', hooks),
+        [Symbol.asyncIterator]: () => iterate(0)[Symbol.asyncIterator](),
     }
     registerSocket({
         socket: self as Socket<unknown>,
         allowClientPublish: opts.clientPublish ?? false,
         schema,
         clients,
-        snapshotHistory: () => {
+        snapshotTail: (count?: number) => {
             pruneExpired(Date.now())
-            return buffer.map((entry) => entry.value)
+            const start = count === undefined ? 0 : Math.max(0, buffer.length - count)
+            return buffer.slice(start).map((entry) => entry.value)
         },
     })
     return self

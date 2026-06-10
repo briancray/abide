@@ -4,7 +4,7 @@ import type { Socket } from './Socket.ts'
 
 /*
 Per-socket registry record. The Socket itself stays uniform between
-server and client by parking policy state (history snapshot, client
+server and client by parking policy state (retained-tail snapshot, client
 publish gate, payload schema, client targeting) here instead of leaking
 into the public Socket shape.
 */
@@ -13,5 +13,7 @@ export type SocketRegistryEntry = {
     allowClientPublish: boolean
     schema: StandardSchemaV1 | undefined
     clients: ClientFlags
-    snapshotHistory(): unknown[]
+    /* last `count` retained frames (whole tail when omitted) — the read-only
+       face shared by the ws sub replay, the HTTP rest() face, and MCP tail */
+    snapshotTail(count?: number): unknown[]
 }

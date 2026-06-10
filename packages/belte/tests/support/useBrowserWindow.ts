@@ -2,7 +2,7 @@ import { afterEach, beforeEach } from 'bun:test'
 
 /*
 Installs a `globalThis.window` for the surrounding describe so belte's consumers
-take their browser branch (subscribe()/cache() reactivity, gated on
+take their browser branch (tail()/cache() reactivity, gated on
 `typeof window`), and removes it afterward so the rest of the suite keeps seeing
 the server branch. Call once inside a describe that drives reactivity.
 */

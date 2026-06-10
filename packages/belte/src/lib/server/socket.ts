@@ -9,7 +9,7 @@ exactly one export, named after the file (e.g. `chat.ts` →
 export name from the filename and the socket name from the file path
 under `src/server/sockets/`, then rewrites this call to bind the name into the
 runtime implementation (defineSocket on the server, socketProxy on the
-client). Opts (history, clientPublish, schema, clients) live on the
+client). Opts (tail, clientPublish, schema, clients) live on the
 server side only; the client target discards them.
 
 When `schema` is set, `T` infers from `InferOutput<Schema>` and publish

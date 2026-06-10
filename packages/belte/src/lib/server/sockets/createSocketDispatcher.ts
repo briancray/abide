@@ -5,7 +5,6 @@ import { error } from '../error.ts'
 import { json } from '../json.ts'
 import { sse } from '../sse.ts'
 import { lookupSocket } from './lookupSocket.ts'
-import { recentHistory } from './recentHistory.ts'
 import type { SocketClientFrame } from './types/SocketClientFrame.ts'
 import type { SocketRoutes } from './types/SocketRoutes.ts'
 import type { SocketServerFrame } from './types/SocketServerFrame.ts'
@@ -23,8 +22,8 @@ type SocketDispatcher = {
 /*
 Per-connection state: which sockets this ws is currently subscribed to
 (at the Bun-topic level), and which `sub` ids map to which socket. One
-ws can hold multiple subs against the same socket (e.g. one with
-history, one without); the Bun-topic subscription is reference-counted
+ws can hold multiple subs against the same socket (e.g. one seeded
+from the retained tail, one live-only); the Bun-topic subscription is reference-counted
 so we only `ws.unsubscribe` when the last local sub drops.
 */
 type ConnectionState = {
@@ -40,9 +39,9 @@ is only on the path for sub/unsub bookkeeping and client-initiated pub
 validation; the published `msg` frames go from publisher to subscribers
 without touching JS per frame.
 
-`sub` opens a subscription: history is replayed (unless the client
-passed `tail: true`) directly to this ws, then the ws is added to the
-Bun topic. `unsub` drops the local sub and unsubscribes the ws from
+`sub` opens a subscription: the requested slice of the retained tail
+is replayed directly to this ws, then the ws is added to the Bun
+topic. `unsub` drops the local sub and unsubscribes the ws from
 the Bun topic if no other local subs remain. `pub` validates the
 socket's `allowClientPublish` policy and calls `socket.publish` —
 which fans out to in-process iterators and republishes through Bun
@@ -126,20 +125,20 @@ export function createSocketDispatcher(sockets: SocketRoutes): SocketDispatcher 
             ws.subscribe(`socket:${frame.socket}`)
         }
         /*
-        Replay history directly to this ws via ws.send (not
-        server.publish) so other connected subscribers don't see the
-        replay. Live messages published from now on flow through the
-        Bun topic the ws just joined; clients may observe live messages
-        interleaved with the tail of history, so user payloads should
-        carry an id/timestamp when ordering matters.
+        Replay rides one per-sub `replay` frame (sent even when empty), not
+        socket-keyed msg frames: the batch demarcates replay from live for
+        the reader, and the per-sub address keeps this sub's replay out of
+        sibling subs on the same socket. Live messages flow through the Bun
+        topic the ws just joined; a frame published between the join and
+        this snapshot can appear in both, so user payloads should carry an
+        id/timestamp when ordering matters.
 
-        `replay === undefined` means full replay (bare `for await`);
-        a number is clamped to the buffer length so the client can ask
-        for "as many as available, up to N".
+        `replay === undefined` means the whole retained tail (`.tail()`
+        no-arg); a number is clamped to the buffer length so the client
+        can ask for "as many as available, up to N" — `0` (bare
+        `for await`) replays nothing.
         */
-        recentHistory(entry, frame.replay).forEach((message) => {
-            send(ws, { type: 'msg', socket: frame.socket, message })
-        })
+        send(ws, { type: 'replay', sub: frame.sub, messages: entry.snapshotTail(frame.replay) })
     }
 
     function handleUnsub(
@@ -207,9 +206,9 @@ export function createSocketDispatcher(sockets: SocketRoutes): SocketDispatcher 
     HTTP face of the sockets hub at `/__belte/sockets/<name>`, for the CLI
     and MCP (which can't speak the ws multiplex protocol):
 
-      GET  text/event-stream → live SSE stream; `?tail=N` replays the last
-           N buffered messages before tailing live (default 0 = live only).
-      GET  otherwise         → JSON array of the recent history buffer
+      GET  text/event-stream → live SSE stream; `?tail=N` seeds with the
+           last N retained frames before tailing live (default 0 = live only).
+      GET  otherwise         → JSON array of the retained tail
            (`?tail=N` caps it; default all).
       POST                   → publish the JSON body, gated by the socket's
            clientPublish policy and validated against its schema.
@@ -238,7 +237,7 @@ export function createSocketDispatcher(sockets: SocketRoutes): SocketDispatcher 
             if ((req.headers.get('accept') ?? '').includes('text/event-stream')) {
                 return sse(entry.socket.tail(count ?? 0))
             }
-            return json(recentHistory(entry, count))
+            return json(entry.snapshotTail(count))
         }
         if (req.method === 'POST') {
             if (!entry.allowClientPublish) {

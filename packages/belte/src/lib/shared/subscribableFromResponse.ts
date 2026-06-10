@@ -3,11 +3,11 @@ import type { Subscribable } from './types/Subscribable.ts'
 
 /*
 Builds the Subscribable returned by `fn.stream(args)`. The carried
-`name` is the cache-style key for (method, url, args) so subscribe()
-dedupes multiple subscribers to identical args into one underlying
+`name` is the cache-style key for (method, url, args) so tail()
+dedupes multiple readers of identical args into one underlying
 fetch. The fetch is deferred until the first iterator pull so
 constructing the Subscribable (which happens on every $derived
-re-evaluation) doesn't open a connection — subscribe()'s registry
+re-evaluation) doesn't open a connection — tail()'s registry
 short-circuits the second instance before it iterates.
 */
 export function subscribableFromResponse<T>(

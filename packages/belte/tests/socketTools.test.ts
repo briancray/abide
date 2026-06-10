@@ -8,7 +8,7 @@ import { routesFor } from './support/routesFor.ts'
 describe('socket REST happy path', () => {
     const chat = defineSocket<{ text: string }>('rest-chat', {
         schema: testSchema(),
-        history: 10,
+        tail: 10,
         clientPublish: true,
     })
     const dispatcher = createSocketDispatcher(routesFor('rest-chat'))
@@ -18,7 +18,7 @@ describe('socket REST happy path', () => {
         chat.publish({ text: 'two' })
     })
 
-    test('GET returns the recent history snapshot as JSON', async () => {
+    test('GET returns the retained tail snapshot as JSON', async () => {
         const response = await dispatcher.rest(
             new Request('http://x/__belte/sockets/rest-chat'),
             'rest-chat',
@@ -60,7 +60,7 @@ describe('socket REST happy path', () => {
     })
 
     test('POST to a non-clientPublish socket is rejected with 403', async () => {
-        defineSocket('rest-readonly', { schema: testSchema(), history: 5 })
+        defineSocket('rest-readonly', { schema: testSchema(), tail: 5 })
         const readonly = createSocketDispatcher(routesFor('rest-readonly'))
         const response = await readonly.rest(
             new Request('http://x/__belte/sockets/rest-readonly', {
@@ -94,7 +94,7 @@ describe('socket MCP tools happy path', () => {
     beforeAll(() => {
         const room = defineSocket<{ text: string }>('mcp-room', {
             schema: testSchema(),
-            history: 10,
+            tail: 10,
             clientPublish: true,
         })
         room.publish({ text: 'seeded' })

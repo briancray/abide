@@ -2,7 +2,6 @@ import { promptRegistry } from '../server/prompts/promptRegistry.ts'
 import { dispatchVerbInProcess } from '../server/rpc/dispatchVerbInProcess.ts'
 import { findVerbByCommandName } from '../server/rpc/findVerbByCommandName.ts'
 import { verbRegistry } from '../server/rpc/verbRegistry.ts'
-import { recentHistory } from '../server/sockets/recentHistory.ts'
 import { socketOperations } from '../server/sockets/socketOperations.ts'
 import { socketRegistry } from '../server/sockets/socketRegistry.ts'
 import { commandNameForUrl } from '../shared/commandNameForUrl.ts'
@@ -160,7 +159,7 @@ function textResult(text: string, isError = false): ToolResult {
 Dispatches the socket tail / publish tools by matching the tool name
 against each mcp-exposed socket's operations (socketOperations is the same
 projection tools/list advertised, so the publish op only exists when the
-socket allows it). tail returns the recent history buffer (request/response
+socket allows it). tail returns the retained tail (request/response
 can't hold a live subscription); publish validates against the socket
 schema and fans out. Returns undefined when the name isn't a known socket
 tool so callTool can fall through to "unknown tool".
@@ -179,7 +178,7 @@ function callSocketTool(
         }
         if (operation.kind === 'tail') {
             const count = typeof args?.count === 'number' ? args.count : undefined
-            const frames = recentHistory(entry, count)
+            const frames = entry.snapshotTail(count)
             return {
                 content: [{ type: 'text', text: frames.map((f) => JSON.stringify(f)).join('\n') }],
                 structuredContent: { frames },

@@ -1,9 +1,10 @@
 /*
 Wire frame the browser sends over the multiplexed socket connection.
 `sub` opens a subscription against `socket`. The optional `replay`
-controls history: omitted = full replay (default `for await`); a
-number = at most that many trailing items (clamped server-side to the
-topic's history max). `unsub` closes one. `pub` publishes a message —
+controls seeding from the retained tail: omitted = the whole retained
+tail (`.tail()` no-arg); a number = at most that many trailing frames,
+clamped server-side to what the topic retains — `0` (bare `for await`)
+is live-only. `unsub` closes one. `pub` publishes a message —
 the dispatcher checks the topic's `clientPublish` flag before fanning
 out.
 

@@ -1,6 +1,6 @@
 /*
 Drives a reactive read inside an $effect.root so belte's createSubscriber-based
-consumers (subscribe/cache) see a real Svelte tracking scope: the first read
+consumers (tail/cache) see a real Svelte tracking scope: the first read
 opens the underlying resource, dependency changes re-run the effect, and stop()
 tears the scope down so last-reader cleanup fires. Effects flush on the
 scheduler's microtask, so callers await their source's frames (a tick) before

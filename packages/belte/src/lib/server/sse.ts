@@ -2,7 +2,7 @@
 Wraps an AsyncIterable<Frame> in a Response whose body is
 Server-Sent Events (text/event-stream) — each frame becomes one
 `data: <json>\n\n` event. Used inside an rpc handler to expose a
-generator over plain HTTP so EventSource (or `subscribe(fn.stream)(args)`
+generator over plain HTTP so EventSource (or `tail(fn.stream(args))`
 on the client) can consume it frame-by-frame.
 
   export const orderFeed = GET<Args>((args) =>
@@ -20,7 +20,7 @@ Cancellation flows from the consumer through ReadableStream's `cancel`
 into `iter.return()` so the handler's `for await` exits via its normal
 control path. Errors are emitted as an `event: error` frame carrying only
 the message (full error logged server-side) before the stream closes;
-EventSource surfaces this via its `error` listener and `subscribe()`
+EventSource surfaces this via its `error` listener and `tail()`
 maps it to the entry's `error` field.
 */
 import { NO_STORE } from '../shared/CACHE_CONTROL_VALUES.ts'

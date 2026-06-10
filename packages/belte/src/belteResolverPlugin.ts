@@ -274,7 +274,7 @@ export const ${prepared.exportName} = __belteRemoteProxy__(${JSON.stringify(prep
                 }
                 if (target === 'client') {
                     /*
-                    Client bundle gets a name-only stub — opts (history,
+                    Client bundle gets a name-only stub — opts (tail,
                     clientPublish) are server-side state and don't
                     affect the client's wire behaviour.
                     */

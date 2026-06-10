@@ -11,7 +11,7 @@ import { settle } from './support/settle.ts'
 A stand-in for Bun's ServerWebSocket capturing the frames the dispatcher
 sends and the Bun topics it (un)subscribes. Steady-state live fan-out rides
 the real server's native publish, so this fake covers exactly the JS the
-dispatcher owns: the sub/unsub bookkeeping and history replay.
+dispatcher owns: the sub/unsub bookkeeping and retained-tail replay.
 */
 function fakeSocket() {
     const sent: SocketServerFrame[] = []
@@ -33,8 +33,8 @@ function frame(value: SocketClientFrame): string {
 }
 
 describe('socket ws multiplex happy path', () => {
-    test('sub replays history to the subscribing ws and joins the bun topic', async () => {
-        const room = defineSocket<{ text: string }>('ws-room', { history: 10 })
+    test('sub replays the retained tail to the subscribing ws and joins the bun topic', async () => {
+        const room = defineSocket<{ text: string }>('ws-room', { tail: 10 })
         room.publish({ text: 'one' })
         room.publish({ text: 'two' })
         const dispatcher = createSocketDispatcher(routesFor('ws-room'))
@@ -44,17 +44,16 @@ describe('socket ws multiplex happy path', () => {
         dispatcher.message(ws, frame({ type: 'sub', sub: 's1', socket: 'ws-room' }))
         await settle()
 
-        // History is replayed directly to this ws as msg frames, in order.
+        // The retained tail arrives as one per-sub batch — the replay/live demarcation.
         expect(sent).toEqual([
-            { type: 'msg', socket: 'ws-room', message: { text: 'one' } },
-            { type: 'msg', socket: 'ws-room', message: { text: 'two' } },
+            { type: 'replay', sub: 's1', messages: [{ text: 'one' }, { text: 'two' }] },
         ])
         // First local sub joins the Bun topic so live fan-out reaches this ws.
         expect(subscribed).toEqual(['socket:ws-room'])
     })
 
-    test('replay count caps how much history a sub receives', async () => {
-        const feed = defineSocket<number>('ws-capped', { history: 10 })
+    test('replay count caps how much of the retained tail a sub receives', async () => {
+        const feed = defineSocket<number>('ws-capped', { tail: 10 })
         feed.publish(1)
         feed.publish(2)
         feed.publish(3)
@@ -65,11 +64,11 @@ describe('socket ws multiplex happy path', () => {
         dispatcher.message(ws, frame({ type: 'sub', sub: 's1', socket: 'ws-capped', replay: 1 }))
         await settle()
 
-        expect(sent).toEqual([{ type: 'msg', socket: 'ws-capped', message: 3 }])
+        expect(sent).toEqual([{ type: 'replay', sub: 's1', messages: [3] }])
     })
 
     test('unsub drops the local sub, leaves the topic, and emits a terminal end', async () => {
-        defineSocket('ws-leave', { history: 0 })
+        defineSocket('ws-leave', { tail: 0 })
         const dispatcher = createSocketDispatcher(routesFor('ws-leave'))
         const { ws, sent, unsubscribed } = fakeSocket()
 
@@ -95,8 +94,8 @@ describe('socket ws multiplex happy path', () => {
         expect(sent[1]).toEqual({ type: 'end', sub: 's1' })
     })
 
-    test('pub on a clientPublish socket fans the message into history', async () => {
-        defineSocket<{ text: string }>('ws-pub', { history: 10, clientPublish: true })
+    test('pub on a clientPublish socket fans the message into the retained tail', async () => {
+        defineSocket<{ text: string }>('ws-pub', { tail: 10, clientPublish: true })
         const dispatcher = createSocketDispatcher(routesFor('ws-pub'))
         const { ws } = fakeSocket()
 
@@ -104,7 +103,7 @@ describe('socket ws multiplex happy path', () => {
         dispatcher.message(ws, frame({ type: 'pub', socket: 'ws-pub', message: { text: 'hi' } }))
         await settle()
 
-        // Observe the published message through the socket's own history buffer.
+        // Observe the published message through the socket's own retained tail.
         const history = await dispatcher
             .rest(new Request('http://x/__belte/sockets/ws-pub'), 'ws-pub')
             .then((response) => response.json())
@@ -112,7 +111,7 @@ describe('socket ws multiplex happy path', () => {
     })
 
     test('pub on a non-clientPublish socket is dropped, not thrown', async () => {
-        defineSocket('ws-readonly', { history: 10 })
+        defineSocket('ws-readonly', { tail: 10 })
         const dispatcher = createSocketDispatcher(routesFor('ws-readonly'))
         const { ws } = fakeSocket()
 
@@ -127,8 +126,8 @@ describe('socket ws multiplex happy path', () => {
     })
 
     test('close leaves every subscribed topic for the connection', async () => {
-        defineSocket('ws-a', { history: 0 })
-        defineSocket('ws-b', { history: 0 })
+        defineSocket('ws-a', { tail: 0 })
+        defineSocket('ws-b', { tail: 0 })
         const dispatcher = createSocketDispatcher(routesFor('ws-a', 'ws-b'))
         const { ws, unsubscribed } = fakeSocket()
 

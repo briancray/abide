@@ -2,7 +2,7 @@
 Wraps an AsyncIterable<Frame> in a Response whose body is JSON Lines
 (application/jsonl) — one JSON value per line, terminated by `\n`. Used
 inside an rpc handler to turn a generator into a streaming HTTP response
-that `subscribe(fn.stream)(args)` consumes frame-by-frame on the client.
+that `tail(fn.stream(args))` consumes frame-by-frame on the client.
 
   export const orderFeed = GET<Args>((args) =>
       jsonl(async function* () {

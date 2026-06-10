@@ -3,8 +3,12 @@ import type { SocketServerFrame } from '../server/sockets/types/SocketServerFram
 
 type SubCallbacks = {
     onMessage(message: unknown): void
+    /* The sub's batched seed from the retained tail (possibly empty) — the replay/live boundary. */
+    onReplay(messages: unknown[]): void
     onError(message: string): void
     onEnd(): void
+    /* Transport loss (ws close), as opposed to a per-sub server `err` frame — recoverable. */
+    onDisconnect(): void
 }
 
 type Channel = {
@@ -25,24 +29,31 @@ let singleton: Channel | undefined
 /*
 Lazily opens the single multiplexed ws used by every socket proxy on
 the page. Routes inbound frames:
-  `msg` → all local subs of that socket
-  `end` → the matching sub
-  `err` → the matching sub
+  `msg`    → all local subs of that socket
+  `replay` → the matching sub (its batched seed)
+  `end`    → the matching sub
+  `err`    → the matching sub
 
 `msg` frames carry no sub id: one publish from the server fans out to
 every connected ws via Bun's native publish, and each ws delivers the
-message to every local sub of that socket. `end`/`err` are per-sub
-because they're subscription-lifecycle events, not data.
+message to every local sub of that socket. `replay`/`end`/`err` are
+per-sub — a seed batch belongs to the sub that requested it.
 
 Outbound frames sent before `ws.onopen` fires are queued and flushed
 on open. The channel reconnects on close with bounded backoff;
-in-flight subs are torn down with a synthetic error so consumers'
-`for await` loops can surface the disconnect, then the connection
-comes back up and fresh subs can be opened. We intentionally do not
-silently re-subscribe across a reconnect — most socket consumers need
-to reconcile state on a fresh connection (e.g. re-fetch a snapshot
-before reapplying deltas), so the framework hands the disconnect to
-user code instead of papering over it.
+in-flight subs are torn down with the typed disconnect signal so
+consumers' `for await` loops can surface it, then the connection
+comes back up and fresh subs can be opened. The channel itself never
+re-subscribes across a reconnect — it can't know consumer semantics;
+a delta consumer must reconcile state on a fresh connection (e.g.
+re-fetch a snapshot before reapplying deltas). tail() opts in
+above this layer because its latest-wins/window semantics make replay a
+correct reconciliation; raw `for await` consumers keep manual control.
+
+While the backoff timer is armed, `connect()` defers to it: a consumer
+re-subscribing in reaction to the disconnect would otherwise trigger an
+immediate reconnect on every failure cycle, defeating the backoff. Its
+frames queue in `pendingSends` and flush when the timer's attempt opens.
 */
 export function getSocketChannel(): Channel {
     if (singleton) {
@@ -53,6 +64,7 @@ export function getSocketChannel(): Channel {
     let ws: WebSocket | undefined
     let pendingSends: string[] = []
     let backoffMs = 250
+    let reconnectTimer: ReturnType<typeof setTimeout> | undefined
 
     function flushPending(): void {
         if (!ws || ws.readyState !== WebSocket.OPEN) {
@@ -75,6 +87,10 @@ export function getSocketChannel(): Channel {
     }
 
     function connect(): void {
+        /* Backoff window owns reconnection; queued frames flush when its attempt opens. */
+        if (reconnectTimer !== undefined) {
+            return
+        }
         if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
             return
         }
@@ -106,6 +122,10 @@ export function getSocketChannel(): Channel {
                 }
                 return
             }
+            if (frame.type === 'replay') {
+                subs.get(frame.sub)?.callbacks.onReplay(frame.messages)
+                return
+            }
             if (frame.type === 'end') {
                 const sub = subs.get(frame.sub)
                 if (!sub) {
@@ -126,27 +146,33 @@ export function getSocketChannel(): Channel {
             }
         })
         ws.addEventListener('close', () => {
-            const active = [...subs.entries()]
+            const active = [...subs.values()]
             subs.clear()
             subsBySocket.clear()
-            for (const [, sub] of active) {
-                sub.callbacks.onError('socket channel disconnected')
-            }
             /*
             Drop any queued frames too. We've just torn down every local
             sub, so replaying their `sub`/`unsub`/`pub` frames on
             reconnect would open ghost subscriptions on the server that
             no client object tracks (and never gets an `unsub`). This
-            keeps the "no silent re-subscribe across a reconnect"
-            contract above honest — consumers re-open fresh subs.
+            keeps the "channel never re-subscribes" contract above
+            honest — consumers re-open fresh subs. Cleared before the
+            callbacks run so a consumer reacting to the disconnect (its
+            catch resolves in a microtask, after this handler) queues
+            onto a fresh list.
             */
             const hadPending = pendingSends.length > 0
             pendingSends = []
             ws = undefined
+            for (const sub of active) {
+                sub.callbacks.onDisconnect()
+            }
             if (active.length === 0 && !hadPending) {
                 return
             }
-            setTimeout(connect, backoffMs)
+            reconnectTimer = setTimeout(() => {
+                reconnectTimer = undefined
+                connect()
+            }, backoffMs)
             backoffMs = Math.min(backoffMs * 2, 5000)
         })
     }

@@ -18,7 +18,7 @@ stored entry — the decode just happens on the way out for callers of
 `fn`). `.stream(args)` returns an iterable view of the Response body:
 SSE / JSONL handlers yield each frame; non-streaming handlers yield the
 decoded body once then complete. The result is a Subscribable, so it
-can be passed to subscribe() and shared across reactive consumers.
+can be passed to tail() and shared across reactive consumers.
 For sustained broadcast / pub-sub use the `belte/server/socket` primitive —
 HTTP rpc isn't the place for long-lived multi-publisher subscriptions.
 `.fetch(req)` is the framework's request-dispatch entry point — used by
