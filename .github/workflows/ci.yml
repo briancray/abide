@@ -37,3 +37,67 @@ jobs:
 
       - name: Build kitchen-sink example
         run: bun run --filter kitchen-sink build
+
+  # The front door, exercised end to end against the packed tarball — the
+  # exact artifact npm would publish. Scaffold an app with the packed CLI,
+  # install the tarball into it, build, boot, and curl a page + an rpc.
+  # Catches what the in-repo example builds can't: a template pinning a stale
+  # framework version, or the published file set missing something the
+  # scaffold needs.
+  scaffold-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Pack @belte/belte
+        run: cd packages/belte && bun pm pack --destination "$RUNNER_TEMP"
+
+      - name: Scaffold an app from the packed artifact
+        run: |
+          TARBALL="$(echo "$RUNNER_TEMP"/belte-belte-*.tgz)"
+          mkdir "$RUNNER_TEMP/consumer"
+          cd "$RUNNER_TEMP/consumer"
+          echo '{"name":"consumer","private":true}' > package.json
+          bun add "$TARBALL"
+          # --no-install: the pinned version may not be published yet; the
+          # build step below installs from the packed tarball instead.
+          ./node_modules/.bin/belte scaffold my-app --no-install
+
+      # The scaffold must pin the framework version that scaffolded it — a
+      # stale pin installs a framework the docs don't describe.
+      - name: Assert the scaffold pins the packed version
+        run: |
+          cd "$RUNNER_TEMP/consumer/my-app"
+          PIN="$(bun -e 'console.log((await Bun.file("package.json").json()).dependencies["@belte/belte"])')"
+          EXPECTED="^$(bun -e 'console.log((await Bun.file(process.env.GITHUB_WORKSPACE + "/packages/belte/package.json").json()).version)')"
+          echo "pin=$PIN expected=$EXPECTED"
+          test "$PIN" = "$EXPECTED"
+
+      # Point the dependency at the tarball so the build exercises the packed
+      # artifact rather than whatever the registry currently serves.
+      - name: Build the scaffolded app from the tarball
+        run: |
+          cd "$RUNNER_TEMP/consumer/my-app"
+          bun add "$RUNNER_TEMP"/belte-belte-*.tgz
+          bun install
+          bun run build
+
+      - name: Boot and curl the page and rpc
+        run: |
+          cd "$RUNNER_TEMP/consumer/my-app"
+          PORT=4173 bun run start > server.log 2>&1 &
+          SERVER_PID=$!
+          for attempt in $(seq 1 50); do
+            curl -fs "http://localhost:4173/__belte/identity" > /dev/null 2>&1 && break
+            sleep 0.2
+          done
+          curl -fs "http://localhost:4173/__belte/identity" | grep -q '"belte":true'
+          curl -fs "http://localhost:4173/" | grep -q "</html>"
+          curl -fs "http://localhost:4173/rpc/getHello" | grep -q "Hello"
+          kill "$SERVER_PID"

@@ -124,21 +124,30 @@ async function bundleCmd(): Promise<void> {
     await bundleApp({ cwd })
 }
 
-// Scaffolds the bundled template into a new project directory.
+/*
+Scaffolds the bundled template, installs it, and — interactively — starts the
+dev server so the one command ends in a running app. Non-TTY runs (CI,
+scripts) never auto-start; `--no-dev` opts out explicitly.
+*/
 async function scaffoldCmd(): Promise<void> {
     const name = rest.find((arg) => !arg.startsWith('--'))
     if (!name) {
-        console.error('usage: bunx belte scaffold <project-name>')
+        console.error('usage: bunx belte scaffold <project-name> [--no-install] [--no-dev]')
         process.exit(1)
     }
-    await scaffold({ cwd, name })
+    const install = !rest.includes('--no-install')
+    // scaffold gates dev on a successful install, so only the TTY/flag policy lives here.
+    const dev = !rest.includes('--no-dev') && Boolean(process.stdout.isTTY)
+    await scaffold({ cwd, name, install, dev })
 }
 
 // Prints the CLI synopsis to stderr and exits non-zero. Marked `never` because the process is gone.
 function usage(): never {
     console.error(
         'usage:\n' +
-            '  bunx belte scaffold <project-name>   scaffold a new belte project\n' +
+            '  bunx belte scaffold <project-name>   scaffold a new belte project, install\n' +
+            '                                       it, and start its dev server\n' +
+            '                                       (--no-install / --no-dev to skip)\n' +
             '  belte dev                            build + run with hot reload\n' +
             '  belte build                          build the client into dist/_app/\n' +
             '  belte start                          run the production server against dist/\n' +
