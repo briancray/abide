@@ -1,5 +1,17 @@
 # @belte/belte
 
+## 0.24.0
+
+### Minor Changes
+
+- [`429dea8`](https://github.com/briancray/belte/commit/429dea81761cd4da6e2cd316a2ee78e8a60ae71e) - scaffold installs deps and starts the dev server ([`986cd72`](https://github.com/briancray/belte/commit/986cd725b82cf49d3dadaa52be00f8a222af638e))
+
+- [`429dea8`](https://github.com/briancray/belte/commit/429dea81761cd4da6e2cd316a2ee78e8a60ae71e) - same-origin CSRF gate + symbol-branded remotes ([`b5570ba`](https://github.com/briancray/belte/commit/b5570ba9a1e5e852d7b791df4a3e177eb82b78a9))
+
+- [`429dea8`](https://github.com/briancray/belte/commit/429dea81761cd4da6e2cd316a2ee78e8a60ae71e) - typed url() helper + APP_URL subpath mount ([`e5bdb57`](https://github.com/briancray/belte/commit/e5bdb57437d0b69cb46013d24ae1bef416b531bd))
+
+- [`429dea8`](https://github.com/briancray/belte/commit/429dea81761cd4da6e2cd316a2ee78e8a60ae71e) - client-side page error boundary ([`f70d885`](https://github.com/briancray/belte/commit/f70d8852568f41b8377a9cc99ff0251aecfc2e5b))
+
 ## 0.23.1
 
 ### Patch Changes
