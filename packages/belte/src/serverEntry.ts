@@ -30,6 +30,7 @@ import { exitWithParent } from './lib/bundle/exitWithParent.ts'
 import { loadEnvFromBinaryDir } from './lib/cli/loadEnvFromBinaryDir.ts'
 import { createServer } from './lib/server/runtime/createServer.ts'
 import { requestContext } from './lib/server/runtime/requestContext.ts'
+import { resolvePageSnapshot } from './lib/server/runtime/resolvePageSnapshot.ts'
 import { createCacheStore } from './lib/shared/createCacheStore.ts'
 import { loadEnvFromDataDir } from './lib/shared/loadEnvFromDataDir.ts'
 import { runningAsStandaloneBinary } from './lib/shared/runningAsStandaloneBinary.ts'
@@ -68,25 +69,7 @@ exitWithParent()
 
 setCacheStoreResolver(() => requestContext.getStore()?.cache)
 
-/*
-Request-scoped page resolver: the `page` proxy reads route/params/url off the
-ALS store, so layout-scoped components see the live match during SSR without a
-module singleton leaking across concurrent or streaming renders. route/params
-land just before render; url is set at the request boundary, so 404/error
-renders still get a correct page.url.
-*/
-setPageResolver(() => {
-    const store = requestContext.getStore()
-    if (!store) {
-        return undefined
-    }
-    return {
-        route: store.route ?? '',
-        params: store.params ?? {},
-        url: store.url,
-        navigating: false,
-    }
-})
+setPageResolver(resolvePageSnapshot)
 
 /*
 Process-level store for cache(fn, { global: true }) — one per server process,

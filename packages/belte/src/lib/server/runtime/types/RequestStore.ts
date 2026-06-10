@@ -19,6 +19,12 @@ export type RequestStore = {
     route?: string
     params?: Record<string, string>
     /*
+    store.url with the mount base re-applied — the browser-space URL the `page`
+    proxy publishes, memoized by pageUrlFromStore on first read. `url` itself
+    stays app-space for routing and error-prefix matching.
+    */
+    pageUrl?: URL
+    /*
     The request's cookie jar, materialized lazily by the first cookies() call
     and flushed to Set-Cookie headers when the scope returns. Undefined while a
     request never touches cookies, so the common path parses and emits nothing.

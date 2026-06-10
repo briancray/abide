@@ -7,6 +7,7 @@ import type { AppModule } from '../../src/lib/server/AppModule.ts'
 import type { RemoteRoutes } from '../../src/lib/server/rpc/types/RemoteRoutes.ts'
 import { createServer } from '../../src/lib/server/runtime/createServer.ts'
 import { requestContext } from '../../src/lib/server/runtime/requestContext.ts'
+import { resolvePageSnapshot } from '../../src/lib/server/runtime/resolvePageSnapshot.ts'
 import { serverSlot } from '../../src/lib/server/runtime/serverSlot.ts'
 import type { SocketRoutes } from '../../src/lib/server/sockets/types/SocketRoutes.ts'
 import { baseSlot } from '../../src/lib/shared/baseSlot.ts'
@@ -51,19 +52,8 @@ export async function bootTestServer(manifests: {
     const globalStore = createCacheStore()
     globalCacheStoreSlot.resolver = () => globalStore
 
-    /* Mirrors serverEntry's resolver: the page proxy reads the live match off the ALS store. */
-    pageSlot.resolver = () => {
-        const store = requestContext.getStore()
-        if (!store) {
-            return undefined
-        }
-        return {
-            route: store.route ?? '',
-            params: store.params ?? {},
-            url: store.url,
-            navigating: false,
-        }
-    }
+    /* The same resolver serverEntry registers: the page proxy reads the live match off the ALS store. */
+    pageSlot.resolver = resolvePageSnapshot
 
     const server = await createServer({
         pages: manifests.pages ?? {},

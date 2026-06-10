@@ -6,6 +6,7 @@ import {
     handleRenderError,
     renderState,
 } from '../src/lib/browser/page.svelte.ts'
+import { baseSlot } from '../src/lib/shared/baseSlot.ts'
 import { settle } from './support/settle.ts'
 
 /* Distinct component stand-ins so assertions can check identity, not just shape. */
@@ -60,6 +61,25 @@ describe('handleRenderError', () => {
         expect(params.message).toBe('boom')
         expect(typeof params.stack).toBe('string')
         expect(resetCalls).toBe(1)
+    })
+
+    test('under a mount base, the browser-space pathname still finds the boundary', async () => {
+        /* page.url is browser-space (/v2/…); the prefix tables are app-space route paths. */
+        baseSlot.fallback = '/v2'
+        ;(globalThis as { window?: unknown }).window = {
+            location: { href: 'https://test.local/v2/pages/boundary' },
+        }
+        try {
+            await bindPage({ pages, layouts, errors, ssr })
+            handleRenderError(new Error('boom'), () => {})
+            await settle()
+
+            expect(renderState.Page).toBe(components.rootError)
+            /* Route keys stay app-space, matching the server's error render. */
+            expect(clientPageState.route).toBe('/pages/boundary')
+        } finally {
+            baseSlot.fallback = undefined
+        }
     })
 
     test('rethrows when no error.svelte covers the pathname, leaving render state alone', async () => {

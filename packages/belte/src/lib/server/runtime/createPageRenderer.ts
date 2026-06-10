@@ -4,6 +4,7 @@ import { NO_STORE, SSR_CACHE_CONTROL } from '../../shared/CACHE_CONTROL_VALUES.t
 import { errorParamsForThrow } from '../../shared/errorParamsForThrow.ts'
 import { log } from '../../shared/log.ts'
 import type { ViewResolver } from '../../shared/types/ViewResolver.ts'
+import { pageUrlFromStore } from './pageUrlFromStore.ts'
 import { safeJsonForScript } from './safeJsonForScript.ts'
 import { serializeCacheSnapshot } from './serializeCacheSnapshot.ts'
 import { stashPendingStream } from './streamStash.ts'
@@ -94,7 +95,7 @@ export function createPageRenderer({
         const rendered = await render(App, {
             props: {
                 state: {
-                    page: { route: pathname, params: errorParams, url: store.url },
+                    page: { route: pathname, params: errorParams, url: pageUrlFromStore(store) },
                     render: { Layout, Page: ErrorView },
                 },
             },
@@ -162,7 +163,7 @@ export function createPageRenderer({
                     page: {
                         route: routeUrl,
                         params,
-                        url: store.url,
+                        url: pageUrlFromStore(store),
                     },
                     render: { Layout, Page },
                 },

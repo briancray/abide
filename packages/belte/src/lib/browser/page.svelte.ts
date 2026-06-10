@@ -2,6 +2,7 @@ import type { Component } from 'svelte'
 import { activePage } from '../shared/activePage.ts'
 import { createViewResolver } from '../shared/createViewResolver.ts'
 import { errorParamsForThrow } from '../shared/errorParamsForThrow.ts'
+import { stripBase } from '../shared/stripBase.ts'
 import type { PageSnapshot } from '../shared/types/PageSnapshot.ts'
 import type { ViewResolver } from '../shared/types/ViewResolver.ts'
 import { abortPageStream } from './pageStreamController.ts'
@@ -38,7 +39,11 @@ Discriminated union keyed on `route`, so consumers that narrow on `page.route`
 get the matching `page.params` shape automatically. `url` is the live
 WHATWG URL for the currently-displayed location; navigation reassigns the
 reference so $derived subscribers re-run on every nav (not just on the
-fields they happen to touch). `navigating` is true while a pathname-changing
+fields they happen to touch). `url` is browser-space on both sides — under a
+mount base the pathname carries the prefix (the server re-applies it to the
+proxy-stripped request URL), so active-state compares must use url() output
+(`page.url.pathname.startsWith(url('/people'))`) to hydrate identically.
+`navigating` is true while a pathname-changing
 SPA navigation is resolving its view, false otherwise (always false on the
 server).
 */
@@ -158,10 +163,12 @@ renderPage catch. A throw during a page render (or its effects) swaps in the
 nearest error.svelte with the server's prop contract, logging the cause it's
 about to swallow. Rethrows when no error.svelte covers the pathname (or when
 the error view itself threw), so the failure surfaces uncaught — the client
-analogue of the server's rethrow into app.handleError.
+analogue of the server's rethrow into app.handleError. page.url is
+browser-space; the resolver's prefix tables are app-space route paths, so the
+mount base is stripped before matching.
 */
 export function handleRenderError(error: unknown, reset: () => void): void {
-    const pathname = clientPageState.url.pathname
+    const pathname = stripBase(clientPageState.url.pathname)
     if (!boundResolver || errorViewActive || !boundResolver.prefixes(pathname).error) {
         throw error
     }
