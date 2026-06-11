@@ -19,17 +19,13 @@ export function createAssetHeaderCache(
 ): (pathname: string) => AssetHeaderBundle {
     const cache = new Map<string, AssetHeaderBundle>()
     return function headersFor(pathname) {
-        const cached = cache.get(pathname)
-        if (cached) {
-            return cached
-        }
-        const base: HeadersInit = {
-            'Content-Type': mimeForExtension(pathname),
-            Vary: 'Accept-Encoding',
-            'Cache-Control': cacheControlFor(pathname),
-        }
-        const bundle: AssetHeaderBundle = { base, zstd: { ...base, 'Content-Encoding': 'zstd' } }
-        cache.set(pathname, bundle)
-        return bundle
+        return cache.getOrInsertComputed(pathname, () => {
+            const base: HeadersInit = {
+                'Content-Type': mimeForExtension(pathname),
+                Vary: 'Accept-Encoding',
+                'Cache-Control': cacheControlFor(pathname),
+            }
+            return { base, zstd: { ...base, 'Content-Encoding': 'zstd' } }
+        })
     }
 }

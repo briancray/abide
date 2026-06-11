@@ -158,13 +158,11 @@ export function createClient<Api extends AnyApi = AnyApi>(opts?: {
             if (typeof prop !== 'string') {
                 return undefined
             }
-            if (invokerCache.has(prop)) {
-                return invokerCache.get(prop)
-            }
-            const resolved = resolve(prop)
-            const invoker = resolved ? buildInvoker(resolved) : undefined
-            invokerCache.set(prop, invoker)
-            return invoker
+            // Caches undefined too, so an unknown name resolves once, not per access.
+            return invokerCache.getOrInsertComputed(prop, () => {
+                const resolved = resolve(prop)
+                return resolved ? buildInvoker(resolved) : undefined
+            })
         },
     })
 }

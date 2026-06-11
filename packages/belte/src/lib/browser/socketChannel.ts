@@ -197,6 +197,7 @@ export function getSocketChannel(): Channel {
     singleton = {
         subscribe(id, socket, replay, callbacks) {
             subs.set(id, { socket, callbacks })
+            /* Not getOrInsertComputed: browser-side code, and Safari/Chrome only shipped it within the last browser cycle (26.2 / 145). */
             let set = subsBySocket.get(socket)
             if (!set) {
                 set = new Set()

@@ -10,11 +10,5 @@ const mimeByExtension = new Map<string, string>()
 export function mimeForExtension(pathname: string): string {
     const dot = pathname.lastIndexOf('.')
     const extension = dot === -1 ? '' : pathname.slice(dot)
-    const cached = mimeByExtension.get(extension)
-    if (cached !== undefined) {
-        return cached
-    }
-    const type = Bun.file(pathname).type
-    mimeByExtension.set(extension, type)
-    return type
+    return mimeByExtension.getOrInsertComputed(extension, () => Bun.file(pathname).type)
 }

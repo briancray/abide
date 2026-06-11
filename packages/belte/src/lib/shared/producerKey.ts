@@ -13,6 +13,7 @@ const producerIds = new WeakMap<object, string>()
 let producerCounter = 0
 
 export function producerKey(producer: object, args: unknown): string {
+    /* Not getOrInsertComputed: shared module ships to the browser, where support is too new (Safari 26.2 / Chrome 145). */
     let id = producerIds.get(producer)
     if (id === undefined) {
         id = `@producer:${++producerCounter}`
