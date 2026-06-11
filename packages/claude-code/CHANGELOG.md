@@ -1,5 +1,11 @@
 # @belte/claude-code
 
+## 0.5.3
+
+### Patch Changes
+
+- [`ee6c2a3`](https://github.com/briancray/belte/commit/ee6c2a3e2f7506a77540ff12bc4c45d0f84dc083) - share claude CLI arg construction between engine and launch ([`434a6d7`](https://github.com/briancray/belte/commit/434a6d700c8b54f441d152c45965e3c8b39e106b))
+
 ## 0.5.2
 
 ### Patch Changes

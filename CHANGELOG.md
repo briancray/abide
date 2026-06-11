@@ -1,5 +1,15 @@
 # @belte/belte
 
+## 0.25.1
+
+### Patch Changes
+
+- [`ee6c2a3`](https://github.com/briancray/belte/commit/ee6c2a3e2f7506a77540ff12bc4c45d0f84dc083) - sync examples and scaffold template to the restructured README ([`5ec6cf7`](https://github.com/briancray/belte/commit/5ec6cf7ad2b99f12904605d34a1fafb05a1196ab))
+
+- [`ee6c2a3`](https://github.com/briancray/belte/commit/ee6c2a3e2f7506a77540ff12bc4c45d0f84dc083) - dedupe framework paths, helpers, and boot/request hot paths ([`6d4b0f8`](https://github.com/briancray/belte/commit/6d4b0f8ace9ec66445fdd68e033475cfb1742e4c))
+
+- [`7389826`](https://github.com/briancray/belte/commit/7389826331434b252c6fd1ac9b9809a376fb563f) - cache: a policy refetch that hits a 404 now evicts the entry instead of retaining it — the resource is gone, so keeping the stale value made the entry immortal (every later invalidation re-fired the dead fetch). Transient failures (network errors, 5xx) still keep the stale value; a non-2xx Response from a remote refetch is no longer swapped in as fresh data.
+
 ## 0.25.0
 
 ### Minor Changes
