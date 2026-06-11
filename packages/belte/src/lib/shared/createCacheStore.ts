@@ -1,5 +1,6 @@
 import { createSubscriber } from 'svelte/reactivity'
 import { createLifecycleChannel } from './createLifecycleChannel.ts'
+import { keyMatchesPrefix } from './keyMatchesPrefix.ts'
 import type { CacheEntry } from './types/CacheEntry.ts'
 import type { CacheInvalidation } from './types/CacheInvalidation.ts'
 import type { CacheStore } from './types/CacheStore.ts'
@@ -52,13 +53,51 @@ export function createCacheStore(): CacheStore {
 
     /* Store-wide in-flight tap for the probes; semantics live in createLifecycleChannel. */
     const lifecycle = createLifecycleChannel()
+    /*
+    Per-prefix channels arm fn-selector probes (pending(fn) / refreshing(fn))
+    without waking them on unrelated cache events. Keyed by selector prefix
+    (method+url / producer reference id — see selectorPrefix), so the
+    population is bounded by probe call sites in code, not by data; a channel
+    whose last reader tore down is an inert closure, not a leak.
+    */
+    const prefixLifecycles = new Map<string, ReturnType<typeof createLifecycleChannel>>()
+
+    function trackLifecycle(keyPrefix?: string): void {
+        if (keyPrefix === undefined) {
+            lifecycle.track()
+            return
+        }
+        let channel = prefixLifecycles.get(keyPrefix)
+        if (channel === undefined) {
+            channel = createLifecycleChannel()
+            prefixLifecycles.set(keyPrefix, channel)
+        }
+        channel.track()
+    }
+
+    /*
+    Marks the store-wide channel always (bare/scope probes scan everything)
+    plus any probed prefix channel owning the changed key — a new entry's key
+    starts with its fn's prefix, so prefix probes see membership too.
+    */
+    function markLifecycle(key?: string): void {
+        lifecycle.mark()
+        if (key === undefined) {
+            return
+        }
+        prefixLifecycles.forEach((channel, prefix) => {
+            if (keyMatchesPrefix(key, prefix)) {
+                channel.mark()
+            }
+        })
+    }
 
     return {
         entries,
         events,
         subscribe,
-        trackLifecycle: lifecycle.track,
-        markLifecycle: lifecycle.mark,
+        trackLifecycle,
+        markLifecycle,
         pendingRefresh,
     }
 }

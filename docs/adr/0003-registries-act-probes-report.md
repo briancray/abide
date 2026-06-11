@@ -78,8 +78,18 @@ One invariant: **registries act, probes report, neither does the other's job.**
   Previously-silent invalid option combinations now throw at wrap time.
 - A future probe must be a pure read of registry state; if it needs to trigger
   work, it belongs in a registry. A future registry should expose entries +
-  one lifecycle channel and register a prober slot rather than growing a
+  a lifecycle channel and register a prober slot rather than growing a
   parallel probe surface.
+- *Amended 2026-06-11:* the cache store's lifecycle channel is scoped by
+  selector prefix — `pending(fn)` taps only fn's channel (selectorPrefix /
+  keyMatchesPrefix), so an effect probing one fn can't be re-woken by another
+  fn's events (the microtask-deferred mark made such cross-wakes loop outside
+  Svelte's depth detection). Bare and scope selectors scan many entries and
+  stay on the store-wide channel; a producer never cached has no prefix and
+  sits store-wide until its first cache resolves one. cache.invalidate also
+  carries an always-on tripwire: many same-selector invalidations within one
+  macrotask (the loop signature — a spinning loop starves macrotasks) warns
+  once with the selector instead of silently pinning the CPU.
 - `refreshing` ends on the first post-reconnect event rather than on
   sub-frame flush; for retaining sockets these coincide, and a
   no-retention socket behaves like its own initial load. Revisit only if a

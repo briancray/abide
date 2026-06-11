@@ -1,10 +1,12 @@
 import { createSubscriber } from 'svelte/reactivity'
 
 /*
-Registry-wide lifecycle tap shared by the cache store and the tail registry:
-one "membership or state changed" signal for the pending()/refreshing()
-probes, which match many entries (or all) and re-derive by scanning, so they
-need a single channel rather than per-key granularity. track() inside a
+Lifecycle tap shared by the cache store and the tail registry: one
+"membership or state changed" signal for the pending()/refreshing() probes,
+which match a group of entries and re-derive by scanning. The owning
+registry decides the granularity — the cache store keeps a store-wide
+channel plus one per probed selector prefix; this module only owns the
+subscribe/notify semantics. track() inside a
 tracking scope ($derived / $effect) re-runs that scope on every mark();
 outside one it is a no-op. The subscriber is created lazily on the first
 tracked read and self-evicts when its last reader tears down,
