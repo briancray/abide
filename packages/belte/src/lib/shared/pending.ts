@@ -10,6 +10,7 @@ tail registry (streams). Pending means "no value yet":
                            awaiting its first frame (global activity bar)
   pending(fn)            → that function's calls (per-route spinner; remote or
                            producer, same selector grammar as cache.invalidate)
+  pending(fn, args)      → exactly that call (per-row spinner)
   pending({ scope })     → a tagged group
   pending(subscribable)  → that stream awaiting its first frame
                            (tail.status === 'pending'; true when nothing
@@ -20,8 +21,9 @@ selector grammar, registry spans) live in probeRegistries.
 */
 export function pending<Args, Return>(
     arg?: CacheSelector<Args, Return> | Subscribable<unknown>,
+    args?: Args,
 ): boolean {
-    return probeRegistries(arg, 'pending', unsettled, true)
+    return probeRegistries(arg, args, 'pending', unsettled, true)
 }
 
 const unsettled = (entry: CacheEntry) => entry.settled !== true

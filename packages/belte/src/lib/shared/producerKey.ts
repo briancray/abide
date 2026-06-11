@@ -22,6 +22,11 @@ export function producerKey(producer: object, args: unknown): string {
     return args === undefined ? id : `${id} ${canonicalJson(args)}`
 }
 
-producerKey.existing = function existing(producer: object): string | undefined {
-    return producerIds.get(producer)
+/* With `args`, the exact entry key for that call (same format as producerKey) — still never minting. */
+producerKey.existing = function existing(producer: object, args?: unknown): string | undefined {
+    const id = producerIds.get(producer)
+    if (id === undefined || args === undefined) {
+        return id
+    }
+    return `${id} ${canonicalJson(args)}`
 }

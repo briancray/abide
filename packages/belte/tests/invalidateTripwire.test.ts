@@ -39,7 +39,9 @@ describe('invalidate loop tripwire', () => {
 
     test('same-selector invalidations within one task warn once, naming the selector', () => {
         const get = remoteSelector('/rpc/tripwire-loop')
-        Array.from({ length: 30 }, () => cache.invalidate(get))
+        for (let call = 0; call < 30; call++) {
+            cache.invalidate(get)
+        }
         expect(warn).toHaveBeenCalledTimes(1)
         expect(warn.mock.calls[0][0]).toContain('GET /rpc/tripwire-loop')
         expect(warn.mock.calls[0][0]).toContain('reactive loop')
@@ -47,19 +49,23 @@ describe('invalidate loop tripwire', () => {
 
     test('repeats spread across macrotasks never warn', async () => {
         const get = remoteSelector('/rpc/tripwire-spread')
-        Array.from({ length: 24 }, () => cache.invalidate(get))
+        for (let call = 0; call < 24; call++) {
+            cache.invalidate(get)
+        }
         await settle()
-        Array.from({ length: 24 }, () => cache.invalidate(get))
+        for (let call = 0; call < 24; call++) {
+            cache.invalidate(get)
+        }
         expect(warn).not.toHaveBeenCalled()
     })
 
     test('distinct selectors count separately', () => {
         const a = remoteSelector('/rpc/tripwire-a')
         const b = remoteSelector('/rpc/tripwire-b')
-        Array.from({ length: 13 }, () => {
+        for (let call = 0; call < 13; call++) {
             cache.invalidate(a)
             cache.invalidate(b)
-        })
+        }
         expect(warn).not.toHaveBeenCalled()
     })
 })

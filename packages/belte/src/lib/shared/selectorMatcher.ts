@@ -1,10 +1,8 @@
-import { CACHE_WRAPPED } from './CACHE_WRAPPED.ts'
-import { producerKey } from './producerKey.ts'
-import { REMOTE_FUNCTION } from './REMOTE_FUNCTION.ts'
+import { keyMatchesPrefix } from './keyMatchesPrefix.ts'
+import { selectorPrefix } from './selectorPrefix.ts'
 import { toScopeSet } from './toScopeSet.ts'
 import type { CacheEntry } from './types/CacheEntry.ts'
 import type { CacheSelector } from './types/CacheSelector.ts'
-import type { RawRemoteFunction } from './types/RawRemoteFunction.ts'
 
 /*
 Compiles a selector into an entry predicate shared by cache.invalidate(),
@@ -20,33 +18,30 @@ pending(), and refreshing() so all three interpret the call shapes identically:
                          has no id and nothing matches).
   { scope }            → any entry sharing one of the requested scope tags. An
                          empty selector matches nothing.
+  fn + args            → exactly that call's entry (the key derived from the
+                         same encoders the read path uses); other args
+                         variants of the fn are untouched.
+Fn-selector identity (prefix resolution + the cache()-wrapper throw) lives in
+selectorPrefix, the prefix grammar in keyMatchesPrefix — both shared with the
+probes' scoped lifecycle channels so a probe subscribes to exactly the entries
+this predicate would match.
 */
 export function selectorMatcher<Args, Return>(
     arg?: CacheSelector<Args, Return>,
+    args?: Args,
 ): (entry: CacheEntry) => boolean {
     if (arg === undefined) {
         return () => true
     }
     if (typeof arg === 'function') {
-        /*
-        A cache() wrapper carries no selector identity — it would silently
-        match nothing. Detection is certain (our brand), so throw with the fix.
-        */
-        if (CACHE_WRAPPED in arg) {
-            throw new Error(
-                '[belte] a cache() wrapper is not a selector — pass the function it wraps, e.g. pending(getPost), not pending(cache(getPost))',
-            )
-        }
-        /* Branded remotes key on method+url; a producer keys on its reference id. */
-        const remote = REMOTE_FUNCTION in arg ? (arg as RawRemoteFunction<Args>) : undefined
-        const prefix = remote ? `${remote.method} ${remote.url}` : producerKey.existing(arg)
+        const prefix = selectorPrefix(arg, args)
         if (prefix === undefined) {
             return () => false
         }
-        return (entry) =>
-            entry.key === prefix ||
-            entry.key.startsWith(`${prefix}?`) ||
-            entry.key.startsWith(`${prefix} `)
+        if (args !== undefined) {
+            return (entry) => entry.key === prefix
+        }
+        return (entry) => keyMatchesPrefix(entry.key, prefix)
     }
     if (arg.scope === undefined) {
         return () => false

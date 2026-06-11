@@ -5,19 +5,24 @@ import { decodeResponse } from './decodeResponse.ts'
 import { getRemoteMeta } from './getRemoteMeta.ts'
 import { globalCacheStore } from './globalCacheStore.ts'
 import { invalidateEvent } from './invalidateEvent.ts'
+import { invalidateTripwire } from './invalidateTripwire.ts'
 import { keyForRemoteCall } from './keyForRemoteCall.ts'
 import { log } from './log.ts'
 import { producerKey } from './producerKey.ts'
 import { REMOTE_FUNCTION } from './REMOTE_FUNCTION.ts'
 import { REPLAYABLE_METHODS } from './REPLAYABLE_METHODS.ts'
+import { SocketDisconnectedError } from './SocketDisconnectedError.ts'
 import { selectorMatcher } from './selectorMatcher.ts'
+import { selectorPrefix } from './selectorPrefix.ts'
 import { toScopeSet } from './toScopeSet.ts'
 import type { CacheEntry } from './types/CacheEntry.ts'
+import type { CacheOnContext } from './types/CacheOnContext.ts'
 import type { CacheOptions } from './types/CacheOptions.ts'
 import type { CacheSelector } from './types/CacheSelector.ts'
 import type { CacheStore } from './types/CacheStore.ts'
 import type { RawRemoteFunction } from './types/RawRemoteFunction.ts'
 import type { RemoteFunction } from './types/RemoteFunction.ts'
+import type { Subscribable } from './types/Subscribable.ts'
 
 type AnyRemote<Args, Return> = RemoteFunction<Args, Return> | RawRemoteFunction<Args>
 type Producer<Args, Return> = (args?: Args) => Promise<Return>
@@ -319,7 +324,7 @@ function registerEntry(
         invalidation,
     }
     store.entries.set(key, entry)
-    markLifecycle(store)
+    markLifecycle(store, key)
     /*
     A ttl=0 remote entry in the request-scoped server store is kept until the
     store dies with the response. The request is the server's atomic unit, so
@@ -348,7 +353,7 @@ function registerEntry(
         entry.settled = true
         /* The reload finished — this entry now holds fresh data, no longer refreshing. */
         entry.refreshing = false
-        markLifecycle(store)
+        markLifecycle(store, key)
         if (ttl === 0) {
             if (!keepZeroTtlForRequest) {
                 deleteIfCurrent()
@@ -371,7 +376,7 @@ function evictIfCurrent(store: CacheStore, entry: CacheEntry): void {
     if (store.entries.get(entry.key) === entry) {
         clearTimeout(entry.invalidation?.timer)
         store.entries.delete(entry.key)
-        markLifecycle(store)
+        markLifecycle(store, entry.key)
     }
 }
 
@@ -425,15 +430,18 @@ function shareable(promise: Promise<Response>): Promise<Response> {
 
 /*
 Invalidates every entry matching the selector (see selectorMatcher) across both
-the request/tab store and the process-level store, and notifies readers. An entry
+the request/tab store and the process-level store, and notifies readers.
+`args` narrows a fn selector to exactly that call's entry — derived through
+the same encoders the read path uses, so other args variants stay warm. An entry
 with an invalidate throttle/debounce policy is kept and its refetch coalesced (stale served
 until it resolves); every other match is dropped so the next read refetches —
 its key recorded in pendingRefresh so that read reports as a reload (refreshing())
 rather than a first-ever load. An empty or unmatched selector is a no-op on the
 cache; the lifecycle ping still fires but recomputes pending() to the same value.
 */
-function invalidate<Args, Return>(arg?: CacheSelector<Args, Return>): void {
-    const matches = selectorMatcher(arg)
+function invalidate<Args, Return>(arg?: CacheSelector<Args, Return>, args?: Args): void {
+    const matches = selectorMatcher(arg, args)
+    invalidateTripwire(selectorLabel(arg, args))
     for (const store of cacheStores()) {
         const affected: string[] = []
         /* Deleting the current entry mid-iteration is spec-safe on a Map; no snapshot needed. */
@@ -449,13 +457,113 @@ function invalidate<Args, Return>(arg?: CacheSelector<Args, Return>): void {
                 store.pendingRefresh.add(entry.key)
                 affected.push(entry.key)
             }
+            markLifecycle(store, entry.key)
         }
         emit(store, affected)
         markLifecycle(store)
     }
 }
 
+/*
+Human-readable selector identity for the tripwire and cache.on coverage: the
+key prefix for fn selectors — the exact key when args narrow it — falling
+back to the function's name for a producer never cached, the tag list for
+scopes, `*` for the bare form.
+*/
+function selectorLabel<Args, Return>(arg?: CacheSelector<Args, Return>, args?: Args): string {
+    if (arg === undefined) {
+        return '*'
+    }
+    if (typeof arg === 'function') {
+        return selectorPrefix(arg, args) ?? (arg.name || 'anonymous producer')
+    }
+    return `scope: ${[...toScopeSet(arg.scope ?? [])].join(', ')}`
+}
+
 cache.invalidate = invalidate
+
+/*
+Event-driven cache maintenance: subscribes to a Subscribable (socket or rpc
+stream) and runs `handler` once per frame — the declarative home for "this
+socket event stales that cached data", replacing the hand-rolled $effect +
+tail() + edge-detection pattern. Bare iteration means live frames only
+(ADR-0004): no replay seed, a frame is an event, nothing is retained.
+
+Delivery is sequential: frame N+1 is not pulled until N's handler (sync or
+async) settles, so ordering holds and before/after work sits naturally
+between frames; a slow handler queues frames rather than racing itself.
+The context's `invalidate` is this binding's scoped copy — same grammar and
+effect as cache.invalidate, but each call is recorded in the binding's
+coverage set (attribution by function identity, so it survives awaits).
+
+On a transport loss (the typed SocketDisconnectedError) frames may have been
+missed, and a missed frame is a missed invalidation — silently stale data. The
+binding can't know what it missed, so it conservatively re-invalidates its
+whole coverage set, then reopens the source (the channel's backoff owns retry
+timing); over-invalidating costs a refetch, never correctness. A handler
+throw is logged and the binding lives on — one bad frame must not detach
+freshness; a server error frame or clean end is terminal, mirroring tail.
+
+No-op on the server (inert dispose): SSR can't hold a stream across the
+request boundary — bindings attach client-side, where the snapshot has
+already seeded the cache. Dispose aborts `signal`, stops delivery, and
+closes the subscription.
+*/
+function on<T>(
+    source: Subscribable<T>,
+    handler: (frame: T, context: CacheOnContext) => void | Promise<void>,
+): () => void {
+    if (typeof window === 'undefined') {
+        return () => undefined
+    }
+    const controller = new AbortController()
+    /* Coverage replays on reconnect; keyed by selector identity so repeats dedupe. */
+    const coverage = new Map<string, () => void>()
+    const context: CacheOnContext = {
+        invalidate<Args, Return>(arg?: CacheSelector<Args, Return>, args?: Args): void {
+            coverage.set(selectorLabel(arg, args), () => invalidate(arg, args))
+            invalidate(arg, args)
+        },
+        signal: controller.signal,
+    }
+    /* `let`: the reconnect path swaps in a fresh iterator; dispose closes the current one. */
+    let iterator = source[Symbol.asyncIterator]()
+    ;(async () => {
+        while (!controller.signal.aborted) {
+            let next: IteratorResult<T>
+            try {
+                next = await iterator.next()
+            } catch (error) {
+                if (controller.signal.aborted) {
+                    return
+                }
+                if (error instanceof SocketDisconnectedError) {
+                    coverage.forEach((replay) => {
+                        replay()
+                    })
+                    iterator = source[Symbol.asyncIterator]()
+                    continue
+                }
+                log.error(error)
+                return
+            }
+            if (controller.signal.aborted || next.done === true) {
+                return
+            }
+            try {
+                await handler(next.value, context)
+            } catch (error) {
+                log.error(error)
+            }
+        }
+    })()
+    return () => {
+        controller.abort()
+        iterator.return?.(undefined)?.catch(() => undefined)
+    }
+}
+
+cache.on = on
 
 /*
 Schedules a coalesced refetch per the entry's invalidate policy. debounce: (re)arm
@@ -509,7 +617,7 @@ function fireRefetch(store: CacheStore, entry: CacheEntry): void {
     entry.refreshing = true
     policy.lastFiredAt = Date.now()
     /* Ping lifecycle so refreshing() re-derives when revalidation begins; the settle handlers ping again when it ends. */
-    markLifecycle(store)
+    markLifecycle(store, entry.key)
     const inflight = policy.refetch()
     inflight.then(
         () => {
@@ -521,19 +629,19 @@ function fireRefetch(store: CacheStore, entry: CacheEntry): void {
             entry.promise = inflight
             entry.value = undefined
             entry.settled = true
-            markLifecycle(store)
+            markLifecycle(store, entry.key)
             emit(store, [entry.key])
         },
         () => {
             entry.refreshing = false
-            markLifecycle(store)
+            markLifecycle(store, entry.key)
         },
     )
 }
 
-/* Signals pending() / refreshing() readers that in-flight membership changed. */
-function markLifecycle(store: CacheStore): void {
-    store.markLifecycle()
+/* Signals pending() / refreshing() readers that in-flight membership changed; `key` routes the mark to fn-selector probes whose prefix owns it. */
+function markLifecycle(store: CacheStore, key?: string): void {
+    store.markLifecycle(key)
 }
 
 /* Folds new tags into an entry's existing set without duplicating them. */
