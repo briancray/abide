@@ -4,6 +4,7 @@ import { cacheStores } from './cacheStores.ts'
 import { decodeResponse } from './decodeResponse.ts'
 import { getRemoteMeta } from './getRemoteMeta.ts'
 import { globalCacheStore } from './globalCacheStore.ts'
+import { HttpError } from './HttpError.ts'
 import { invalidateEvent } from './invalidateEvent.ts'
 import { invalidateTripwire } from './invalidateTripwire.ts'
 import { keyForRemoteCall } from './keyForRemoteCall.ts'
@@ -324,7 +325,7 @@ function registerEntry(
         invalidation,
     }
     store.entries.set(key, entry)
-    markLifecycle(store, key)
+    store.markLifecycle(key)
     /*
     A ttl=0 remote entry in the request-scoped server store is kept until the
     store dies with the response. The request is the server's atomic unit, so
@@ -353,7 +354,7 @@ function registerEntry(
         entry.settled = true
         /* The reload finished — this entry now holds fresh data, no longer refreshing. */
         entry.refreshing = false
-        markLifecycle(store, key)
+        store.markLifecycle(key)
         if (ttl === 0) {
             if (!keepZeroTtlForRequest) {
                 deleteIfCurrent()
@@ -376,7 +377,7 @@ function evictIfCurrent(store: CacheStore, entry: CacheEntry): void {
     if (store.entries.get(entry.key) === entry) {
         clearTimeout(entry.invalidation?.timer)
         store.entries.delete(entry.key)
-        markLifecycle(store, entry.key)
+        store.markLifecycle(entry.key)
     }
 }
 
@@ -440,8 +441,10 @@ rather than a first-ever load. An empty or unmatched selector is a no-op on the
 cache; the lifecycle ping still fires but recomputes pending() to the same value.
 */
 function invalidate<Args, Return>(arg?: CacheSelector<Args, Return>, args?: Args): void {
-    const matches = selectorMatcher(arg, args)
-    invalidateTripwire(selectorLabel(arg, args))
+    /* Resolve the fn-selector prefix once; the matcher and the label both consume it. */
+    const prefix = selectorPrefix(arg, args)
+    const matches = selectorMatcher(arg, args, prefix)
+    invalidateTripwire(selectorLabel(arg, args, prefix))
     for (const store of cacheStores()) {
         const affected: string[] = []
         /* Deleting the current entry mid-iteration is spec-safe on a Map; no snapshot needed. */
@@ -457,10 +460,10 @@ function invalidate<Args, Return>(arg?: CacheSelector<Args, Return>, args?: Args
                 store.pendingRefresh.add(entry.key)
                 affected.push(entry.key)
             }
-            markLifecycle(store, entry.key)
+            store.markLifecycle(entry.key)
         }
         emit(store, affected)
-        markLifecycle(store)
+        store.markLifecycle()
     }
 }
 
@@ -470,12 +473,16 @@ key prefix for fn selectors — the exact key when args narrow it — falling
 back to the function's name for a producer never cached, the tag list for
 scopes, `*` for the bare form.
 */
-function selectorLabel<Args, Return>(arg?: CacheSelector<Args, Return>, args?: Args): string {
+function selectorLabel<Args, Return>(
+    arg?: CacheSelector<Args, Return>,
+    args?: Args,
+    prefix?: string,
+): string {
     if (arg === undefined) {
         return '*'
     }
     if (typeof arg === 'function') {
-        return selectorPrefix(arg, args) ?? (arg.name || 'anonymous producer')
+        return prefix ?? selectorPrefix(arg, args) ?? (arg.name || 'anonymous producer')
     }
     return `scope: ${[...toScopeSet(arg.scope ?? [])].join(', ')}`
 }
@@ -607,7 +614,9 @@ function armTimer(store: CacheStore, entry: CacheEntry, ms: number): ReturnType<
 Runs the captured refetch once, keeping the stale value visible until it
 resolves, then swaps the fresh result in and notifies readers. A refetch already
 in flight is left to finish — the key is stable, so it already fetches the latest
-state. A rejected refetch keeps the stale entry (no notify).
+state. Failure arrives on either settle path: a remote refetch resolves with the
+Response even on an error status (fetch rejects only on network loss), a producer
+rejects. Both route to settleRefetchFailure — stale kept, except a 404 evicts.
 */
 function fireRefetch(store: CacheStore, entry: CacheEntry): void {
     const policy = entry.invalidation
@@ -617,31 +626,55 @@ function fireRefetch(store: CacheStore, entry: CacheEntry): void {
     entry.refreshing = true
     policy.lastFiredAt = Date.now()
     /* Ping lifecycle so refreshing() re-derives when revalidation begins; the settle handlers ping again when it ends. */
-    markLifecycle(store, entry.key)
+    store.markLifecycle(entry.key)
     const inflight = policy.refetch()
     inflight.then(
-        () => {
+        (result) => {
             entry.refreshing = false
             /* Dropped or replaced while in flight — discard this result. */
             if (store.entries.get(entry.key) !== entry) {
                 return
             }
+            if (result instanceof Response && !result.ok) {
+                settleRefetchFailure(store, entry, result.status)
+                return
+            }
             entry.promise = inflight
             entry.value = undefined
             entry.settled = true
-            markLifecycle(store, entry.key)
+            store.markLifecycle(entry.key)
             emit(store, [entry.key])
         },
-        () => {
+        (error) => {
             entry.refreshing = false
-            markLifecycle(store, entry.key)
+            if (store.entries.get(entry.key) !== entry) {
+                return
+            }
+            settleRefetchFailure(
+                store,
+                entry,
+                error instanceof HttpError ? error.status : undefined,
+            )
         },
     )
 }
 
-/* Signals pending() / refreshing() readers that in-flight membership changed; `key` routes the mark to fn-selector probes whose prefix owns it. */
-function markLifecycle(store: CacheStore, key?: string): void {
-    store.markLifecycle(key)
+/*
+A failed revalidation keeps the stale entry — blanking data a reader is showing
+over a transient error would make every background refresh a risk. 404 is the
+exception: the resource is gone, so the retained value is a ghost an invalidation
+stream would refetch forever. Evict it exactly as invalidate() drops a policy-less
+entry (pendingRefresh marks the next read a reload; the notify re-runs readers),
+so a live read replaces it and surfaces the proper error once.
+*/
+function settleRefetchFailure(store: CacheStore, entry: CacheEntry, status?: number): void {
+    if (status === 404) {
+        evictIfCurrent(store, entry)
+        store.pendingRefresh.add(entry.key)
+        emit(store, [entry.key])
+        return
+    }
+    store.markLifecycle(entry.key)
 }
 
 /* Folds new tags into an entry's existing set without duplicating them. */
@@ -686,7 +719,7 @@ function attachPolicy(
     entry.invalidation = { refetch, throttle: policy.throttle, debounce: policy.debounce }
 }
 
-function emit(store: ReturnType<typeof activeCacheStore>, keys: string[]): void {
+function emit(store: CacheStore, keys: string[]): void {
     if (keys.length === 0) {
         return
     }

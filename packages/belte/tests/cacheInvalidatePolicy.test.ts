@@ -4,7 +4,9 @@ import { defineVerb } from '../src/lib/server/rpc/defineVerb.ts'
 import { cache } from '../src/lib/shared/cache.ts'
 import { cacheStoreSlot } from '../src/lib/shared/cacheStoreSlot.ts'
 import { createCacheStore } from '../src/lib/shared/createCacheStore.ts'
+import { HttpError } from '../src/lib/shared/HttpError.ts'
 import { pending } from '../src/lib/shared/pending.ts'
+import { producerKey } from '../src/lib/shared/producerKey.ts'
 import { refreshing } from '../src/lib/shared/refreshing.ts'
 import { settle } from './support/settle.ts'
 
@@ -138,6 +140,60 @@ describe('cache() invalidate throttle / debounce', () => {
         cache.invalidate(producer)
         await wait(30)
         expect(await cache(producer)()).toBe('ok')
+    })
+
+    test('a refetch rejecting with HttpError 404 evicts the entry (resource gone)', async () => {
+        let calls = 0
+        const producer = () => {
+            calls += 1
+            return calls === 1
+                ? Promise.resolve('ok')
+                : Promise.reject(new HttpError(new Response(undefined, { status: 404 })))
+        }
+        expect(await cache(producer, { invalidate: { debounce: 10 } })()).toBe('ok')
+
+        cache.invalidate(producer)
+        await wait(30)
+        /* Not retained — a 404 on revalidation means the resource no longer exists. */
+        expect(cacheStoreSlot.fallback!.entries.size).toBe(0)
+        /* The next read of the key is flagged a reload, mirroring a policy-less drop. */
+        expect(cacheStoreSlot.fallback!.pendingRefresh.has(producerKey(producer, undefined))).toBe(
+            true,
+        )
+    })
+
+    test('a refetch resolving a 404 Response evicts instead of swapping the error in', async () => {
+        /* Remote refetches resolve with the Response even on error statuses. */
+        let calls = 0
+        const producer = () => {
+            calls += 1
+            return Promise.resolve(
+                calls === 1 ? new Response('ok') : new Response(undefined, { status: 404 }),
+            )
+        }
+        await cache(producer, { invalidate: { debounce: 10 } })()
+        expect(cacheStoreSlot.fallback!.entries.size).toBe(1)
+
+        cache.invalidate(producer)
+        await wait(30)
+        expect(cacheStoreSlot.fallback!.entries.size).toBe(0)
+    })
+
+    test('a refetch resolving a non-404 error Response keeps the stale entry', async () => {
+        let calls = 0
+        const producer = () => {
+            calls += 1
+            return Promise.resolve(
+                calls === 1 ? new Response('ok') : new Response(undefined, { status: 500 }),
+            )
+        }
+        const first = await cache(producer, { invalidate: { debounce: 10 } })()
+
+        cache.invalidate(producer)
+        await wait(30)
+        /* The 500 result was discarded — the entry still serves the original Response. */
+        expect(cacheStoreSlot.fallback!.entries.size).toBe(1)
+        expect(await cache(producer)()).toBe(first)
     })
 
     test('without a policy, invalidate still drops the entry immediately', async () => {

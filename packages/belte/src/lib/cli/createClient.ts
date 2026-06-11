@@ -137,17 +137,12 @@ export function createClient<Api extends AnyApi = AnyApi>(opts?: {
     /*
     Build a memoised invoker for a resolved command. The plain call and
     `.raw` share one `send`, so they can't diverge on URL/headers — the
-    plain call just decodes the body and throws on non-2xx on the way out.
+    plain call just decodes the body, and decodeResponse throws HttpError
+    on non-2xx (keeping the response), matching the remote-function path.
     */
     function buildInvoker(resolved: ResolvedSend): ClientInvoker {
         const invoker = (async (args?: unknown) => {
-            const response = await resolved.send(args)
-            if (!response.ok) {
-                throw new Error(
-                    `${resolved.method} ${resolved.url} failed: ${response.status} ${response.statusText}`,
-                )
-            }
-            return decodeResponse(response)
+            return decodeResponse(await resolved.send(args))
         }) as ClientInvoker
         invoker.raw = (args?: unknown) => resolved.send(args)
         return invoker
