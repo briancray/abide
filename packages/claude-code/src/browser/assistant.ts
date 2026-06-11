@@ -58,7 +58,9 @@ function bundleHandshake(): BundleHandshake {
     if (!match) {
         return { managed: false, unavailable: false }
     }
-    const value = decodeURIComponent(match[1])
+    // the group always captures when the regex matches; ?? '' keeps the index
+    // access defined under a consumer's noUncheckedIndexedAccess
+    const value = decodeURIComponent(match[1] ?? '')
     if (value === 'unavailable') {
         return { managed: true, unavailable: true }
     }
