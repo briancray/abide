@@ -19,7 +19,7 @@ describe('warm cache reads are isolated per reader', () => {
     })
 
     test('mutating a warm read does not affect the stored value or other readers', () => {
-        const getValue = defineVerb('GET', '/rpc/warm-probe', () => json({ n: 1 }))
+        const getValue = defineVerb('GET', '/rpc/warm-probe', () => json({ items: [1, 2, 3] }))
         const store: CacheStore = createCacheStore()
         cacheStoreSlot.resolver = () => store
 
