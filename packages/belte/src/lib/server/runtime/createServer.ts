@@ -30,8 +30,10 @@ import { createPublicAssetServer } from './createPublicAssetServer.ts'
 import { createRouteDispatcher } from './createRouteDispatcher.ts'
 import { crossOriginForbidden } from './crossOriginForbidden.ts'
 import { DEFAULT_PORT } from './DEFAULT_PORT.ts'
+import { DEV_READY_MESSAGE } from './DEV_READY_MESSAGE.ts'
 import { DEV_REBUILD_MESSAGE } from './DEV_REBUILD_MESSAGE.ts'
 import { DEV_RELOAD_CLIENT_SCRIPT } from './DEV_RELOAD_CLIENT_SCRIPT.ts'
+import { devClientFingerprint } from './devClientFingerprint.ts'
 import { devReloadResponse } from './devReloadResponse.ts'
 import { disableIdleTimeoutForStream } from './disableIdleTimeoutForStream.ts'
 import { internalErrorResponse } from './internalErrorResponse.ts'
@@ -147,6 +149,15 @@ export async function createServer({
     // Rebase the shell's rooted `/_app/` entry refs onto the mount base, matching
     // either quote style so a custom app.html using single quotes still rewrites.
     const activeShell = base ? devShell.replace(/(["'])\/_app\//g, `$1${base}/_app/`) : devShell
+    /*
+    Dev only: fingerprint the browser-visible surface (client build, public/,
+    shell) once at boot. The live-reload channel announces it so the browser
+    reloads only when a worker swap changed what it would render — a
+    server-only edit keeps the page's UI state (see devClientFingerprint).
+    */
+    const clientFingerprint = dev
+        ? await devClientFingerprint({ distDir, publicDir, shell: activeShell })
+        : undefined
     setRegistryManifests({ rpc, sockets, prompts })
     setMcpResourceServer(createMcpResourceServer({ resourcesDir, mcpResources }))
     const cliName = cliProgramName ?? 'app'
@@ -252,6 +263,13 @@ export async function createServer({
         Bun.serve({
             port: boundPort,
             idleTimeout,
+            /*
+            Dev workers overlap during a restart: the replacement binds while its
+            predecessor still serves, and the kernel keeps delivering connections
+            to the old listener until it stops — the port never refuses a request
+            mid-swap. Dev-only: in production a port collision should fail loudly.
+            */
+            reusePort: dev,
 
             websocket: {
                 open(ws) {
@@ -291,10 +309,14 @@ export async function createServer({
                 so a restart-driven reconnect always lands even when the app guards
                 everything behind auth. Only mounted under `belte dev`.
                 */
-                if (dev && url.pathname === DEV_RELOAD_PATH) {
+                if (clientFingerprint !== undefined && url.pathname === DEV_RELOAD_PATH) {
                     // Long-lived SSE: opt out of the idle timeout, else Bun reaps
                     // it and the reconnect triggers a spurious reload loop.
-                    return disableIdleTimeoutForStream(bunServer, req, devReloadResponse())
+                    return disableIdleTimeoutForStream(
+                        bunServer,
+                        req,
+                        devReloadResponse(clientFingerprint),
+                    )
                 }
                 /*
                 Manual rebuild trigger: signal the orchestrator parent over IPC to
@@ -500,5 +522,11 @@ export async function createServer({
         await warnUnguardedMcp()
     }
     log.success(`ready at http://localhost:${server.port}`)
+    // Tell the dev orchestrator (when it spawned us with ipc) that boot is
+    // complete, so it can retire the previous worker — finishing the
+    // zero-downtime swap. No-op on a bare server: process.send is undefined.
+    if (dev) {
+        process.send?.(DEV_READY_MESSAGE)
+    }
     return server
 }
