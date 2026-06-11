@@ -2,22 +2,25 @@ import { NO_STORE } from '../../shared/CACHE_CONTROL_VALUES.ts'
 
 // Keepalive comment cadence — keeps the idle SSE connection from being dropped.
 const KEEPALIVE_INTERVAL_MS = 15000
+const TEXT_ENCODER = new TextEncoder()
 
 /*
-The dev live-reload channel (`/__belte/dev`, dev only). An SSE stream that
-carries no events of its own — the browser-side client (DEV_RELOAD_CLIENT_SCRIPT)
-reloads when this connection drops and reconnects, which only happens when the
-dev orchestrator restarts the server after a rebuild. The opening `retry: 250`
-shortens EventSource's reconnect backoff; a periodic comment keeps the idle
-connection alive. The interval is cleared when the consumer disconnects.
+The dev live-reload channel (`/__belte/dev`, dev only). An SSE stream carrying
+one event: the worker's client fingerprint (devClientFingerprint). The
+connection drops when the dev orchestrator swaps the server after a rebuild;
+the browser-side client (DEV_RELOAD_CLIENT_SCRIPT) reconnects and reloads only
+if the new worker announces a different fingerprint — a server-only edit keeps
+the page alive. The opening `retry: 250` shortens EventSource's reconnect
+backoff; a periodic comment keeps the idle connection alive. The interval is
+cleared when the consumer disconnects.
 */
-export function devReloadResponse(): Response {
+export function devReloadResponse(fingerprint: string): Response {
     let keepalive: ReturnType<typeof setInterval>
     const body = new ReadableStream<Uint8Array>({
         start(controller) {
-            controller.enqueue(new TextEncoder().encode('retry: 250\n\n'))
+            controller.enqueue(TEXT_ENCODER.encode(`retry: 250\ndata: ${fingerprint}\n\n`))
             keepalive = setInterval(() => {
-                controller.enqueue(new TextEncoder().encode(': keepalive\n\n'))
+                controller.enqueue(TEXT_ENCODER.encode(': keepalive\n\n'))
             }, KEEPALIVE_INTERVAL_MS)
         },
         cancel() {
