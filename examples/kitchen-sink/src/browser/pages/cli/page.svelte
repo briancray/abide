@@ -10,12 +10,13 @@ async function fetchInstaller() {
 
 /*
 What /connect and the bundle's connect screen check before trusting a URL:
-the always-unauthenticated identity probe.
+the always-unauthenticated health probe (falling back to the legacy
+/__belte/identity alias for older servers).
 */
 let identity = $state('(not probed)')
 
-async function probeIdentity() {
-    const response = await fetch('/__belte/identity')
+async function probeHealth() {
+    const response = await fetch('/__belte/health')
     identity = JSON.stringify(await response.json())
 }
 </script>
@@ -90,16 +91,17 @@ async function probeIdentity() {
         <code class="font-mono">BELTE_APP_URL</code>.
         <code class="font-mono">/connect</code>
         trusts a URL only after probing
-        <code class="font-mono">GET /__belte/identity</code>
-        — always unauthenticated, even behind an
+        <code class="font-mono">GET /__belte/health</code>
+        (legacy alias <code class="font-mono">/__belte/identity</code>) — always unauthenticated,
+        even behind an
         <code class="font-mono">app.handle</code>
         guard:
     </p>
     <button
         type="button"
         class="mt-3 rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100"
-        onclick={probeIdentity}>
-        GET /__belte/identity
+        onclick={probeHealth}>
+        GET /__belte/health
     </button>
     <p class="mt-2 font-mono text-xs text-slate-700">{identity}</p>
 </section>

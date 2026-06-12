@@ -24,6 +24,16 @@ export function getSession(): { user: string } | undefined {
     return id ? sessions.get(id) : undefined
 }
 
+/*
+Session lookup from a raw Request, for hooks that run outside any request
+scope — the app.ts health hook answers ahead of all middleware, before the
+scope (and so cookies()) exists, so it parses the Cookie header itself.
+*/
+export function sessionFromRequest(request: Request): { user: string } | undefined {
+    const id = new Bun.CookieMap(request.headers.get('cookie') ?? '').get(SESSION_COOKIE)
+    return id ? sessions.get(id) : undefined
+}
+
 export function destroySession(): void {
     const id = cookies().get(SESSION_COOKIE)
     if (id) {

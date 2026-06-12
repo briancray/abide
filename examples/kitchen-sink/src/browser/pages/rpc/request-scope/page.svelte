@@ -54,6 +54,7 @@ const session = await cache(getSession)()
     <p class="mt-2 text-xs text-slate-500">
         In-process calls (SSR, MCP) forward only an allowlist —
         <code class="font-mono">cookie</code>, <code class="font-mono">authorization</code>,
+        <code class="font-mono">traceparent</code>, <code class="font-mono">tracestate</code>,
         <code class="font-mono">x-forwarded-for</code>,
         <code class="font-mono">x-forwarded-proto</code>,
         <code class="font-mono">x-forwarded-host</code>
@@ -141,6 +142,7 @@ export function getSession(): { user: string } | undefined {
 
     <CodeBlock
         title="src/app.ts — widen the in-process header allowlist"
-        code={`// in-process calls forward only cookie/authorization/x-forwarded-* by default
+        code={`// in-process calls forward only cookie/authorization/traceparent/
+// tracestate/x-forwarded-* by default
 export const forwardHeaders = ['user-agent']`} />
 </section>

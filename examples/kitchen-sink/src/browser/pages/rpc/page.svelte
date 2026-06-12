@@ -96,6 +96,15 @@ const message = $state({ value: 'hello' })
                     </td>
                     <td class="px-4 py-2 font-mono text-slate-500">false</td>
                 </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">maxBodySize</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        cap on received body bytes, 413 past it — see
+                        <code class="font-mono">uploadNote</code>
+                        below
+                    </td>
+                    <td class="px-4 py-2 text-slate-600">Bun's server-wide ceiling</td>
+                </tr>
             </tbody>
         </table>
     </div>
@@ -222,7 +231,10 @@ const message = $state({ value: 'hello' })
     </form>
     <p class="mt-2 text-xs text-slate-500">
         Submitting with no file 422s from <code class="font-mono">filesSchema</code> — the outcome
-        lands in the verb log above.
+        lands in the verb log above. The verb also declares
+        <code class="font-mono">maxBodySize: 5 * 1024 * 1024</code>: the cap counts actual received
+        bytes (not the spoofable Content-Length) before any parse — an oversized upload 413s the
+        moment the cap is crossed, and the rest of the body is never read.
     </p>
 </section>
 
@@ -274,5 +286,6 @@ const inputSchema = withJsonSchema(valibotSchema, (s) => toJsonSchema(s))`} />
         title="client — same call shape per verb"
         code={`await getEcho({ message: 'hello' })       // typed { method: 'GET'; message: string }
 await createEcho({ message: 'hello' })    // typed { method: 'POST'; message: string }
-// HEAD resolves to undefined; the rest resolve to the decoded body`} />
+// headEcho and deleteEcho resolve to undefined (no body / json(undefined) → 204);
+// the rest resolve to the decoded body`} />
 </section>

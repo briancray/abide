@@ -253,7 +253,9 @@ async function getSummarizePrompt() {
     <h2 class="text-sm font-semibold">Auth forwarding + the Origin check</h2>
     <p class="mt-1 text-sm text-slate-600">
         Inbound MCP requests forward <code class="font-mono">cookie</code>,
-        <code class="font-mono">authorization</code>, and the
+        <code class="font-mono">authorization</code>, the trace context
+        (<code class="font-mono">traceparent</code>/<code class="font-mono">tracestate</code>), and
+        the
         <code class="font-mono">x-forwarded-*</code>
         hints onto every synthesized rpc request, so the session middleware in
         <code class="font-mono">src/app.ts</code>

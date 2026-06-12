@@ -46,12 +46,14 @@ const sections = [
     ['/sockets', 'sockets'],
     ['/cache', 'cache'],
     ['/probes', 'pending / refreshing'],
+    ['/health', 'online / health'],
     ['/pages', 'pages'],
     ['/tail', 'tail'],
     ['/agent', 'agent'],
     ['/mcp', 'mcp'],
     ['/cli', 'cli'],
     ['/bundle', 'bundle'],
+    ['/logging', 'logging & tracing'],
 ] as const
 </script>
 

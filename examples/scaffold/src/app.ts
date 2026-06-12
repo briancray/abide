@@ -5,10 +5,12 @@ module — no import is needed from your own code.
 
   forwardHeaders extra inbound header names forwarded onto in-process rpc
                  Requests (SSR / MCP), on top of belte's cookie/authorization/
-                 x-forwarded-* allowlist
+                 traceparent/tracestate/x-forwarded-* allowlist
   init           runs once after Bun.serve is up; return a cleanup for SIGINT/SIGTERM
   handle         middleware wrapping the default request pipeline
   handleError    custom 500 fallback
+  health         app fields merged into the /__belte/health payload the
+                 client health() polls — public, never put secrets in it
 */
 import type { AppModule } from '@belte/belte/server/AppModule'
 

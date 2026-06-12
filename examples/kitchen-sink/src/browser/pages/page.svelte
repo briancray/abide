@@ -2,8 +2,8 @@
 /*
 Kitchen-sink index. One card per README concept section, in the README's
 order — rpc, Security defaults, Sockets, cache, pending / refreshing,
-Pages, tail, agent, MCP / CLI / bundle. The composed auth showcase
-sits below.
+online / health, Pages, tail, agent, MCP / CLI / bundle, Logging & tracing.
+The composed auth showcase sits below.
 */
 const cards = [
     {
@@ -30,6 +30,11 @@ const cards = [
         href: '/probes',
         title: 'pending / refreshing',
         body: 'Standalone reactive probes spanning calls and streams. pending = no value yet; refreshing = value held, fresher source in flight. They report, never act.',
+    },
+    {
+        href: '/health',
+        title: 'online / health',
+        body: 'Reactive connectivity reads: online() rides the browser online/offline events; health() polls /__belte/health while read and reports reachable plus whatever the app health() hook contributes.',
     },
     {
         href: '/pages',
@@ -60,6 +65,11 @@ const cards = [
         href: '/bundle',
         title: 'bundle',
         body: 'belte bundle wraps the app in a movable desktop app — native menus through onMenu(), a connect screen for embedded or remote servers, bundled() to detect the context.',
+    },
+    {
+        href: '/logging',
+        title: 'Logging & tracing',
+        body: "One logger, both sides — always-on app channel, DEBUG-gated diagnostic channels, timed log.trace spans, and trace() returning the request's W3C traceparent.",
     },
 ] as const
 </script>

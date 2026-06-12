@@ -59,7 +59,11 @@ async function callRedirectFetch() {
                     <td class="px-4 py-2 font-mono">json(data, init?)</td>
                     <td class="px-4 py-2 font-mono text-slate-500">application/json</td>
                     <td class="px-4 py-2 text-slate-600">
-                        thin wrapper over <code class="font-mono">Response.json</code>
+                        thin wrapper over <code class="font-mono">Response.json</code>;
+                        <code class="font-mono">json(undefined)</code>
+                        emits 204, decoded back to <code class="font-mono">undefined</code> (see
+                        <code class="font-mono">deleteEcho</code>
+                        on the <a class="underline" href="/rpc">overview</a>)
                     </td>
                 </tr>
                 <tr>
