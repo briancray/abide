@@ -22,7 +22,8 @@ export function parsePromptMarkdown(source: string): ParsedPromptMarkdown {
     if (!match) {
         return { description: undefined, arguments: [], body: source.trim() }
     }
-    const frontmatter = (Bun.YAML.parse(match[1]) ?? {}) as {
+    // The pattern makes group 1 mandatory; the '' default exists for noUncheckedIndexedAccess in consumer tsconfigs.
+    const frontmatter = (Bun.YAML.parse(match[1] ?? '') ?? {}) as {
         description?: string
         arguments?: PromptArgument[]
     }

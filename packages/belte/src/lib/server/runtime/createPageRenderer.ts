@@ -59,7 +59,8 @@ export function createPageRenderer({
             body: rendered.body,
             state: stateTag,
         }
-        return shell.replace(SSR_MARKER, (_match, key: string) => fills[key])
+        // The marker keys are exactly the fills' keys; '' satisfies noUncheckedIndexedAccess in consumer tsconfigs.
+        return shell.replace(SSR_MARKER, (_match, key: string) => fills[key] ?? '')
     }
 
     /*

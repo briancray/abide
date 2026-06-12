@@ -15,8 +15,11 @@ export function parseTraceparent(header: string): TraceContext | undefined {
     if (!match) {
         return undefined
     }
-    const [, version, traceId, spanId, flags] = match
-    if (version === 'ff' || /^0+$/.test(traceId) || /^0+$/.test(spanId)) {
+    /* The pattern makes all four groups mandatory, but consumer tsconfigs with
+       noUncheckedIndexedAccess type-check this shipped source and see them as
+       possibly undefined — default to '' so the zero-id guards reject that path. */
+    const [, version = '', traceId = '', spanId = '', flags = ''] = match
+    if (version === 'ff' || /^0*$/.test(traceId) || /^0*$/.test(spanId)) {
         return undefined
     }
     return { traceId, spanId, flags }

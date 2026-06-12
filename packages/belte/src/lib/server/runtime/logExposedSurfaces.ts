@@ -47,10 +47,12 @@ function renderRow(row: string[], widths: number[]): string {
     return (
         '  ' +
         row
-            .map(
-                (cell, column) =>
-                    cell + ' '.repeat(widths[column] - displayWidth(cell) + COLUMN_GAP),
-            )
+            .map((cell, column) => {
+                /* widths covers every column (computed from the longest row); the fallback
+                   exists for noUncheckedIndexedAccess in consumer tsconfigs and pads only the gap. */
+                const width = widths[column] ?? displayWidth(cell)
+                return cell + ' '.repeat(width - displayWidth(cell) + COLUMN_GAP)
+            })
             .join('')
             .trimEnd()
     )

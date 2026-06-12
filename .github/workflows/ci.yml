@@ -26,6 +26,12 @@ jobs:
       - name: Lint
         run: bun run lint
 
+      # Two passes: the repo's own tsconfig (src + tests under strict), then the
+      # consumer probe — shipped raw TS under the scaffolded app tsconfig plus
+      # noUncheckedIndexedAccess, so a strict consumer flag can't break a release.
+      - name: Typecheck
+        run: bun run typecheck
+
       - name: Test
         run: bun run test
 

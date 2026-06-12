@@ -19,7 +19,8 @@ else is returned as a base64 `blob`. The essence is taken before any `;charset`
 parameter that Bun.file().type appends.
 */
 function isTextMime(mime: string): boolean {
-    const essence = mime.split(';')[0].trim()
+    // split() always yields a first element; the '' default exists for noUncheckedIndexedAccess in consumer tsconfigs.
+    const essence = (mime.split(';')[0] ?? '').trim()
     return (
         essence.startsWith('text/') ||
         essence === 'application/json' ||

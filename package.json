@@ -11,7 +11,7 @@
         "lint": "biome lint",
         "test": "bun test ./packages && for d in examples/*/; do if [ -d \"$d/test\" ]; then (cd \"$d\" && bun test) || exit 1; fi; done",
         "check": "biome check --write",
-        "typecheck": "tsc -p packages/belte/tsconfig.json",
+        "typecheck": "tsc -p packages/belte/tsconfig.json && tsc -p packages/belte/tsconfig.consumer.json",
         "changeset": "changeset",
         "version-packages": "bun run scripts/autofillChangesets.ts && changeset version && bun run scripts/syncRootChangelog.ts",
         "release": "changeset publish"
