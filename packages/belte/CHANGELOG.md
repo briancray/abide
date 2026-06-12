@@ -1,5 +1,13 @@
 # @belte/belte
 
+## 0.26.1
+
+### Patch Changes
+
+- [#73](https://github.com/briancray/belte/pull/73) [`9397ef5`](https://github.com/briancray/belte/commit/9397ef515b5f9f7a8f42532463368ebd8195aa10) Thanks [@briancray](https://github.com/briancray)! - remaining `noUncheckedIndexedAccess` errors in shipped source (parsePromptMarkdown, logExposedSurfaces, createPageRenderer, createMcpResourceServer) — and CI now type-checks the shipped surface under the scaffolded consumer tsconfig plus that flag, so this class of strict-consumer breakage fails CI instead of an app's `bun check`
+
+- [#73](https://github.com/briancray/belte/pull/73) [`9397ef5`](https://github.com/briancray/belte/commit/9397ef515b5f9f7a8f42532463368ebd8195aa10) Thanks [@briancray](https://github.com/briancray)! - fix(belte): parseTraceparent type-checks under `noUncheckedIndexedAccess` — belte ships raw TS, so the destructured regex groups read as possibly undefined in strict consumer tsconfigs and failed the app-side check
+
 ## 0.26.0
 
 ### Minor Changes
