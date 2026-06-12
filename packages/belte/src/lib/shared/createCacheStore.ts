@@ -99,5 +99,6 @@ export function createCacheStore(): CacheStore {
         trackLifecycle,
         markLifecycle,
         pendingRefresh,
+        stats: { hits: 0, misses: 0, coalesced: 0 },
     }
 }

@@ -1,4 +1,5 @@
 import { activeCacheStore } from './activeCacheStore.ts'
+import { belteLog } from './belteLog.ts'
 import { CACHE_WRAPPED } from './CACHE_WRAPPED.ts'
 import { cacheStores } from './cacheStores.ts'
 import { decodeResponse } from './decodeResponse.ts'
@@ -8,7 +9,6 @@ import { HttpError } from './HttpError.ts'
 import { invalidateEvent } from './invalidateEvent.ts'
 import { invalidateTripwire } from './invalidateTripwire.ts'
 import { keyForRemoteCall } from './keyForRemoteCall.ts'
-import { log } from './log.ts'
 import { producerKey } from './producerKey.ts'
 import { REMOTE_FUNCTION } from './REMOTE_FUNCTION.ts'
 import { REPLAYABLE_METHODS } from './REPLAYABLE_METHODS.ts'
@@ -27,6 +27,32 @@ import type { Subscribable } from './types/Subscribable.ts'
 
 type AnyRemote<Args, Return> = RemoteFunction<Args, Return> | RawRemoteFunction<Args>
 type Producer<Args, Return> = (args?: Args) => Promise<Return>
+
+/* Per-read lifecycle diagnostics, opt-in via DEBUG=belte:cache (browser: the belte-debug localStorage key). */
+const cacheLog = belteLog.channel('belte:cache')
+
+/*
+Tallies one read and narrates it on the diagnostics channel. The sink is the
+request/tab store even when the data store is the process-level global one —
+attribution follows the asker, so a request's closing record reflects every
+read it made. A settled retained entry (including the warm SSR sync path) is
+a hit; an unsettled entry is a coalesced join of an in-flight call; no entry
+is a miss that invokes the producer/remote.
+*/
+function recordRead(sink: CacheStore, key: string, existing: CacheEntry | undefined): void {
+    if (!existing) {
+        sink.stats.misses += 1
+        cacheLog(`miss ${key}`)
+        return
+    }
+    if (existing.settled === true) {
+        sink.stats.hits += 1
+        cacheLog(`hit ${key}`)
+        return
+    }
+    sink.stats.coalesced += 1
+    cacheLog(`coalesced ${key}`)
+}
 
 /*
 Curries a call against a cache store. `cache(fn, options?)` returns an invoker;
@@ -144,6 +170,7 @@ export function cache<Args, Return>(
         const key = keyForRemoteCall(remote.method, remote.url, args)
         store.subscribe(key)
         const existing = store.entries.get(key)
+        recordRead(options?.global ? activeCacheStore() : store, key, existing)
         if (existing) {
             tagScope(existing, options?.scope)
             attachPolicy(existing, options, () => remote(args as Args))
@@ -237,7 +264,7 @@ function warnAnonymousProducer(producer: (args?: never) => unknown): void {
         return
     }
     warnedAnonymousProducers.add(source)
-    log.warn(
+    belteLog.warn(
         'cache() received an anonymous function — each call mints a fresh identity, so it never coalesces and pending()/refreshing() never match it. Hoist it to a named binding, or add a scope tag to probe it from elsewhere.',
     )
 }
@@ -256,6 +283,7 @@ function invokeProducer<Args, Return>(
     const key = producerKey(producer, args)
     store.subscribe(key)
     const existing = store.entries.get(key)
+    recordRead(options?.global ? activeCacheStore() : store, key, existing)
     if (existing) {
         tagScope(existing, options?.scope)
         attachPolicy(existing, options, () => producer(args))
@@ -551,7 +579,7 @@ function on<T>(
                     iterator = source[Symbol.asyncIterator]()
                     continue
                 }
-                log.error(error)
+                belteLog.error(error)
                 return
             }
             if (controller.signal.aborted || next.done === true) {
@@ -560,7 +588,7 @@ function on<T>(
             try {
                 await handler(next.value, context)
             } catch (error) {
-                log.error(error)
+                belteLog.error(error)
             }
         }
     })()

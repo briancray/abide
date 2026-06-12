@@ -1,4 +1,5 @@
 import type { CacheEntry } from './CacheEntry.ts'
+import type { CacheStats } from './CacheStats.ts'
 
 /*
 Cache map paired with a Svelte-aware per-key subscriber. Calling
@@ -33,4 +34,6 @@ export type CacheStore = {
     request-scoped store discards it with the response).
     */
     pendingRefresh: Set<string>
+    /* Read tallies for the closing log record + Server-Timing; see CacheStats. */
+    stats: CacheStats
 }

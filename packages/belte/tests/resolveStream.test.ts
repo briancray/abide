@@ -12,6 +12,7 @@ function storeWith(entries: CacheEntry[]): CacheStore {
         trackLifecycle: () => {},
         markLifecycle: () => {},
         pendingRefresh: new Set(),
+        stats: { hits: 0, misses: 0, coalesced: 0 },
     }
 }
 
