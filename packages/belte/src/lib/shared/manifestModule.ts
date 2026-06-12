@@ -1,4 +1,4 @@
-import { log } from './log.ts'
+import { belteLog } from './belteLog.ts'
 
 /*
 Builds one of belte's virtual manifest modules — the `{ key: () => import(...) }`
@@ -31,7 +31,7 @@ export function manifestModule(options: {
         )
         .join('\n')
     if (options.label && entries.length > 0) {
-        log.info(
+        belteLog.info(
             `resolved ${entries.length} ${options.label}: ${entries.map((entry) => entry.key).join(', ')}`,
         )
     }

@@ -1,5 +1,5 @@
 import type { ServerWebSocket } from 'bun'
-import { log } from '../../shared/log.ts'
+import { belteLog } from '../../shared/belteLog.ts'
 import { memoizeByKey } from '../../shared/memoizeByKey.ts'
 import { error } from '../error.ts'
 import { json } from '../json.ts'
@@ -80,7 +80,7 @@ export function createSocketDispatcher(sockets: SocketRoutes): SocketDispatcher 
         try {
             await loader
         } catch (loadError) {
-            log.error(loadError)
+            belteLog.error(loadError)
             return {
                 failure: 'load-failed',
                 message: loadError instanceof Error ? loadError.message : String(loadError),
@@ -212,7 +212,7 @@ export function createSocketDispatcher(sockets: SocketRoutes): SocketDispatcher 
         try {
             entry.socket.publish(frame.message)
         } catch (error) {
-            log.error(error)
+            belteLog.error(error)
         }
         /*
         ws parameter retained for future per-ws auth context (cookies on

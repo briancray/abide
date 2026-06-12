@@ -1,5 +1,5 @@
 import type { BuildOutput } from 'bun'
-import { log } from './log.ts'
+import { belteLog } from './belteLog.ts'
 
 /*
 On a failed Bun.build(), logs each diagnostic and exits non-zero. Every belte
@@ -11,7 +11,7 @@ export function exitOnBuildFailure(result: BuildOutput): void {
         return
     }
     result.logs.forEach((entry) => {
-        log.error(entry)
+        belteLog.error(entry)
     })
     process.exit(1)
 }

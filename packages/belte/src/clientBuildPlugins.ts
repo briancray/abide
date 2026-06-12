@@ -1,8 +1,8 @@
 import type { BunPlugin } from 'bun'
 import { belteResolverPlugin } from './belteResolverPlugin.ts'
 import { dedupeSveltePlugin } from './dedupeSveltePlugin.ts'
+import { belteLog } from './lib/shared/belteLog.ts'
 import { isModuleNotFound } from './lib/shared/isModuleNotFound.ts'
-import { log } from './lib/shared/log.ts'
 import type { SvelteConfig } from './lib/shared/types/SvelteConfig.ts'
 import { sveltePlugin } from './sveltePlugin.ts'
 
@@ -35,7 +35,7 @@ export async function clientBuildPlugins({
         if (!isModuleNotFound(error)) {
             throw error
         }
-        log.warn(tailwindWarning)
+        belteLog.warn(tailwindWarning)
     }
     return plugins
 }

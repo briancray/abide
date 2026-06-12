@@ -1,7 +1,7 @@
+import { belteLog } from '../../shared/belteLog.ts'
 import { NO_STORE } from '../../shared/CACHE_CONTROL_VALUES.ts'
 import { exeSuffix } from '../../shared/exeSuffix.ts'
 import { isCompileTarget } from '../../shared/isCompileTarget.ts'
-import { log } from '../../shared/log.ts'
 import { normalizeTarget } from '../../shared/normalizeTarget.ts'
 import { buildEnvContent } from './buildEnvContent.ts'
 import { createTarGz } from './createTarGz.ts'
@@ -73,10 +73,10 @@ async function computeBinary(
         if (binaryMtime >= sourceMtime) {
             return binaryPath
         }
-        log.info(`thin cli for ${platform} is stale — rebuilding`)
+        belteLog.info(`thin cli for ${platform} is stale — rebuilding`)
     }
     try {
-        log.info(`lazy-building cli + server for ${platform}…`)
+        belteLog.info(`lazy-building cli + server for ${platform}…`)
         // Lazy-import buildCli so the build pipeline isn't pulled into
         // production processes that never serve a download.
         const { buildCli } = await import('../../../buildCli.ts')
@@ -86,7 +86,7 @@ async function computeBinary(
         })
         return (await binaryFile.exists()) && (await serverFile.exists()) ? binaryPath : undefined
     } catch (error) {
-        log.error(error)
+        belteLog.error(error)
         return undefined
     }
 }

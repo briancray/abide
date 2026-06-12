@@ -1,4 +1,4 @@
-import { log } from '../../shared/log.ts'
+import { belteLog } from '../../shared/belteLog.ts'
 import { verbRegistry } from '../rpc/verbRegistry.ts'
 import { socketRegistry } from '../sockets/socketRegistry.ts'
 import { ensureRegistriesLoaded } from './registryManifests.ts'
@@ -24,7 +24,7 @@ export async function warnUnguardedMcp(): Promise<void> {
     if (exposed === 0) {
         return
     }
-    log.warn(
+    belteLog.warn(
         `MCP endpoint /__belte/mcp exposes ${exposed} declaration${exposed === 1 ? '' : 's'} ` +
             'with no auth guard — add an app.handle middleware in src/app.ts to ' +
             'authenticate machine clients, or set clients.mcp: false per declaration',

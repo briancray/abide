@@ -1,4 +1,4 @@
-import { log } from './log.ts'
+import { belteLog } from './belteLog.ts'
 
 /*
 Same-selector invalidations within one macrotask before the warning fires. A
@@ -33,7 +33,7 @@ export function invalidateTripwire(selectorLabel: string): void {
         resetTimer.unref?.()
     }
     if (count === LOOP_THRESHOLD) {
-        log.warn(
+        belteLog.warn(
             `cache.invalidate(${selectorLabel}) fired ${LOOP_THRESHOLD}× within one task — likely a reactive loop: an $effect that reads pending()/refreshing() or a cached value and invalidates a selector waking its own scope re-triggers itself across microtasks, invisible to Svelte's loop detection. Find the $effect invalidating ${selectorLabel}.`,
         )
     }

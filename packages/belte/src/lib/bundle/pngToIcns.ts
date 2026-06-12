@@ -1,4 +1,4 @@
-import { log } from '../shared/log.ts'
+import { belteLog } from '../shared/belteLog.ts'
 
 /*
 The conventional macOS `.iconset` contents — each variant is a square PNG
@@ -38,8 +38,8 @@ export async function pngToIcns(pngPath: string, outPath: string): Promise<boole
         await Bun.$`iconutil -c icns ${iconset} -o ${outPath}`.quiet()
         return true
     } catch (error) {
-        log.warn(`could not convert ${pngPath} to .icns — bundling without an icon`)
-        log.error(error)
+        belteLog.warn(`could not convert ${pngPath} to .icns — bundling without an icon`)
+        belteLog.error(error)
         return false
     } finally {
         await Bun.$`rm -rf ${iconset}`.quiet()

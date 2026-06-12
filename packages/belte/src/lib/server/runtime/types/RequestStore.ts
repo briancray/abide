@@ -1,4 +1,5 @@
 import type { CacheStore } from '../../../shared/types/CacheStore.ts'
+import type { TraceContext } from '../../../shared/types/TraceContext.ts'
 
 /*
 Per-request state propagated through AsyncLocalStorage. Every field is
@@ -12,6 +13,14 @@ export type RequestStore = {
     req: Request
     cache: CacheStore
     /*
+    W3C trace position: inbound `traceparent` continued (prefer-incoming) or a
+    fresh sampled trace minted at the boundary. Read by trace()/log via the
+    request-scope resolver and stamped into __SSR__ for the browser half.
+    */
+    trace: TraceContext
+    /* Bun.nanoseconds() at scope entry — anchors log `+elapsed`, Server-Timing, and the closing record's total. */
+    start: number
+    /*
     The matched page route and its decoded params, set just before the page
     renders so the `page` proxy resolves them inside layout-scoped components
     during SSR. Undefined on rpc/socket requests and until a page match lands.
@@ -24,6 +33,12 @@ export type RequestStore = {
     stays app-space for routing and error-prefix matching.
     */
     pageUrl?: URL
+    /*
+    Set by a server-side health() read (via healthReadSlot) during this
+    request's SSR pass. The renderer stamps the health payload into __SSR__
+    only when set, so the client seed stays reader-driven like the poll.
+    */
+    healthRead?: boolean
     /*
     The request's cookie jar, materialized lazily by the first cookies() call
     and flushed to Set-Cookie headers when the scope returns. Undefined while a

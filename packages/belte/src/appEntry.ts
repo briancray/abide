@@ -8,8 +8,8 @@ import type { BundleMenu } from './lib/bundle/BundleMenu.ts'
 import type { BundleWindow } from './lib/bundle/BundleWindow.ts'
 import { openWebview } from './lib/bundle/openWebview.ts'
 import { envSchemaStore } from './lib/server/runtime/envSchemaStore.ts'
+import { belteLog } from './lib/shared/belteLog.ts'
 import { jsonSchemaForSchema } from './lib/shared/jsonSchemaForSchema.ts'
-import { log } from './lib/shared/log.ts'
 
 /*
 Compiled bundle launcher entry — the executable a bundle runs. Instead of a blank
@@ -63,7 +63,7 @@ declare const __BELTE_WORKER_ENTRY__: string
 const worker = new Worker(__BELTE_WORKER_ENTRY__)
 
 worker.addEventListener('error', (event: ErrorEvent) => {
-    log.error(`control server worker failed: ${event.message}`)
+    belteLog.error(`control server worker failed: ${event.message}`)
 })
 
 // Hand the worker the plugin-resolved data it can't import itself, then start it.
@@ -116,7 +116,7 @@ const fileMenu: { label: string; items: FileMenuItem[] } = {
     ],
 }
 
-log.info(`opening ${title} window at ${target}`)
+belteLog.info(`opening ${title} window at ${target}`)
 await openWebview({
     url: target,
     title,

@@ -1,7 +1,7 @@
 import { clientBuildPlugins } from './clientBuildPlugins.ts'
+import { belteLog } from './lib/shared/belteLog.ts'
 import { exitOnBuildFailure } from './lib/shared/exitOnBuildFailure.ts'
 import { loadSvelteConfig } from './lib/shared/loadSvelteConfig.ts'
-import { log } from './lib/shared/log.ts'
 import type { SvelteConfig } from './lib/shared/types/SvelteConfig.ts'
 
 const CLIENT_ENTRY = new URL('./clientEntry.ts', import.meta.url).pathname
@@ -97,7 +97,7 @@ export async function build({
                 exitOnBuildFailure(result)
             }
             result.logs.forEach((entry) => {
-                log.error(entry)
+                belteLog.error(entry)
             })
             return false
         }
@@ -128,19 +128,20 @@ export async function build({
         await Bun.$`rm -rf ${previousDir}`.quiet().nothrow()
 
         if (compress) {
-            log.info(
+            belteLog.info(
                 `wrote ${result.outputs.length} files to ${outDir} (+${result.outputs.length} .zst, ${(compressedBytes / 1024).toFixed(1)} KiB total)`,
             )
             // Per-file paths are noise at startup; surface them only under DEBUG=belte:build.
+            const buildLog = belteLog.channel('belte:build')
             result.outputs.forEach((output) => {
-                log.debug('belte:build', `  - ${output.path.replace(stagingDir, outDir)}`)
+                buildLog(`  - ${output.path.replace(stagingDir, outDir)}`)
             })
         } else {
-            log.info(`wrote ${result.outputs.length} files to ${outDir}`)
+            belteLog.info(`wrote ${result.outputs.length} files to ${outDir}`)
         }
         return true
     } catch (error) {
-        log.error(error)
+        belteLog.error(error)
         await Bun.$`rm -rf ${stagingDir} ${previousDir}`.quiet().nothrow()
         return fail()
     }

@@ -1,6 +1,6 @@
 import { probeBelteServer } from '../bundle/probeBelteServer.ts'
 import { spawnEmbeddedServer } from '../bundle/spawnEmbeddedServer.ts'
-import { log } from '../shared/log.ts'
+import { belteLog } from '../shared/belteLog.ts'
 import { readLastConnection } from '../shared/readLastConnection.ts'
 import type { CliTarget } from './types/CliTarget.ts'
 
@@ -28,7 +28,7 @@ export async function resolveCliTarget(programName: string): Promise<CliTarget |
             })
             return { url, child }
         } catch (error) {
-            log.warn(
+            belteLog.warn(
                 `could not start local instance: ${error instanceof Error ? error.message : String(error)}`,
             )
             return undefined
@@ -39,7 +39,7 @@ export async function resolveCliTarget(programName: string): Promise<CliTarget |
         if (identity) {
             return { url: last.url, token: process.env.BELTE_APP_TOKEN, name: identity.name }
         }
-        log.warn(`last server at ${last.url} is not responding`)
+        belteLog.warn(`last server at ${last.url} is not responding`)
         return undefined
     }
     // Nothing recorded — fall back to the baked default / shell override.

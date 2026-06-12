@@ -51,9 +51,9 @@ describe('runWithRequestScope', () => {
         expect(body).not.toContain('boom')
     })
 
-    test('DEBUG=belte opts the framework 500 into the full stack', async () => {
-        const previous = process.env.DEBUG
-        process.env.DEBUG = 'belte'
+    test('dev mode (BELTE_DEV=1) opts the framework 500 into the full stack', async () => {
+        const previous = Bun.env.BELTE_DEV
+        Bun.env.BELTE_DEV = '1'
         try {
             const response = await runWithRequestScope(
                 new Request('https://test.local/'),
@@ -66,9 +66,9 @@ describe('runWithRequestScope', () => {
             expect(await response.text()).toContain('boom')
         } finally {
             if (previous === undefined) {
-                delete process.env.DEBUG
+                delete Bun.env.BELTE_DEV
             } else {
-                process.env.DEBUG = previous
+                Bun.env.BELTE_DEV = previous
             }
         }
     })

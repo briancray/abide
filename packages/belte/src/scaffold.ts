@@ -1,5 +1,5 @@
 import { Glob } from 'bun'
-import { log } from './lib/shared/log.ts'
+import { belteLog } from './lib/shared/belteLog.ts'
 
 const TEMPLATE_DIR = new URL('../template', import.meta.url).pathname
 const OWN_PACKAGE_JSON = new URL('../package.json', import.meta.url).pathname
@@ -41,19 +41,19 @@ export async function scaffold({
     await copyTree(TEMPLATE_DIR, target)
     await pinBelteToOwnVersion(target)
     const installed = install ? await installDependencies(target) : false
-    log.success(`scaffolded belte project at ${target}`)
+    belteLog.success(`scaffolded belte project at ${target}`)
     if (target !== cwd) {
-        log.detail(`  to start editing: cd ${trimmed}`)
+        belteLog.detail(`  to start editing: cd ${trimmed}`)
     }
     if (dev && installed) {
         await runDevServer(target)
         return target
     }
-    log.detail('  to run it:')
+    belteLog.detail('  to run it:')
     if (!installed) {
-        log.detail('    bun install')
+        belteLog.detail('    bun install')
     }
-    log.detail('    bun run dev')
+    belteLog.detail('    bun run dev')
     return target
 }
 
@@ -67,13 +67,13 @@ async function installDependencies(target: string): Promise<boolean> {
     if ((await proc.exited) === 0) {
         return true
     }
-    log.warn('bun install failed — run it yourself once the cause is fixed')
+    belteLog.warn('bun install failed — run it yourself once the cause is fixed')
     return false
 }
 
 /* Starts the project's dev server (Ctrl-C stops it) and waits for it to exit. */
 async function runDevServer(target: string): Promise<void> {
-    log.detail('  starting the dev server (Ctrl-C to stop)…')
+    belteLog.detail('  starting the dev server (Ctrl-C to stop)…')
     const proc = Bun.spawn(['bun', 'run', 'dev'], {
         cwd: target,
         stdin: 'inherit',

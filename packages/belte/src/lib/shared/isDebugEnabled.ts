@@ -1,23 +1,26 @@
+import { isDebugNegated } from './isDebugNegated.ts'
+import { matchesDebugPattern } from './matchesDebugPattern.ts'
+import { parseDebugPatterns } from './parseDebugPatterns.ts'
+
 /*
-Matches the conventions of the `debug` npm package.
-DEBUG="belte"   → enables "belte"
-DEBUG="belte:*" → enables "belte" and "belte:anything"
-DEBUG="*"       → enables everything
-DEBUG="a,belte" → comma-separated list
+Whether a DEBUG-gated channel is enabled, npm-debug conventions:
+DEBUG="belte"           → enables "belte"
+DEBUG="belte:*"         → enables "belte" and "belte:anything"
+DEBUG="*"               → enables everything
+DEBUG="a,belte"         → comma-separated list
+DEBUG="belte:*,-belte:svelte" → negation: exclusions win over inclusions
+Always-on channels don't consult this — they check isDebugNegated only.
+The default is guarded: this runs in the browser bundle, where `process`
+doesn't exist.
 */
-export function isDebugEnabled(name: string, env: string | undefined = process.env.DEBUG): boolean {
-    if (!env) {
+export function isDebugEnabled(
+    name: string,
+    env: string | undefined = typeof process === 'undefined' ? undefined : process.env.DEBUG,
+): boolean {
+    if (isDebugNegated(name, env)) {
         return false
     }
-    return env.split(',').some((raw) => {
-        const pattern = raw.trim()
-        if (pattern === '*') {
-            return true
-        }
-        if (pattern.endsWith(':*')) {
-            const prefix = pattern.slice(0, -2)
-            return name === prefix || name.startsWith(`${prefix}:`)
-        }
-        return pattern === name
-    })
+    return parseDebugPatterns(env)
+        .filter((pattern) => !pattern.startsWith('-'))
+        .some((pattern) => matchesDebugPattern(name, pattern))
 }

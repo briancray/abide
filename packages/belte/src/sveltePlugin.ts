@@ -1,6 +1,10 @@
 import type { BunPlugin } from 'bun'
 import { compile, compileModule, preprocess } from 'svelte/compiler'
-import { log } from './lib/shared/log.ts'
+import { belteLog } from './lib/shared/belteLog.ts'
+
+// Compiler warnings are noise unless asked for: surfaced only under DEBUG=belte:svelte.
+const svelteLog = belteLog.channel('belte:svelte')
+
 import type { SvelteConfig } from './lib/shared/types/SvelteConfig.ts'
 import { tailwindStylePreprocessor } from './tailwindStylePreprocessor.ts'
 
@@ -31,7 +35,7 @@ export function sveltePlugin(options: {
                     dev: false,
                 })
                 for (const warning of warnings) {
-                    log.debug('belte:svelte', `${args.path}: ${warning.message}`)
+                    svelteLog(`${args.path}: ${warning.message}`)
                 }
                 return { contents: js.code, loader: 'js' }
             })
@@ -49,7 +53,7 @@ export function sveltePlugin(options: {
                     dev: false,
                 })
                 for (const warning of warnings) {
-                    log.debug('belte:svelte', `${args.path}: ${warning.message}`)
+                    svelteLog(`${args.path}: ${warning.message}`)
                 }
                 return { contents: js.code, loader: 'js' }
             })

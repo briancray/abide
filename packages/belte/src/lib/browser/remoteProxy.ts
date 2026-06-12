@@ -1,6 +1,7 @@
 import { browserClientFlags } from '../shared/browserClientFlags.ts'
 import { buildRpcRequest } from '../shared/buildRpcRequest.ts'
 import { createRemoteFunction } from '../shared/createRemoteFunction.ts'
+import { trace } from '../shared/trace.ts'
 import type { HttpVerb } from '../shared/types/HttpVerb.ts'
 import type { RemoteFunction } from '../shared/types/RemoteFunction.ts'
 import { withBase } from '../shared/withBase.ts'
@@ -32,7 +33,13 @@ export function remoteProxy<Args, Return>(
         reads fn.url), so SSR snapshots round-trip base-independently.
         */
         buildRequest: (args) =>
-            buildRpcRequest({ method, url: withBase(url), args, baseUrl: window.location.href }),
+            buildRpcRequest({
+                method,
+                url: withBase(url),
+                args,
+                baseUrl: window.location.href,
+                headers: traceHeaders(),
+            }),
         /*
         Forcing `getRequest()` once builds the Request and seeds the
         cache meta thunk in createRemoteFunction with the same instance,
@@ -40,4 +47,15 @@ export function remoteProxy<Args, Return>(
         */
         invoke: (_args, getRequest) => fetch(getRequest()),
     })
+}
+
+/* The page's traceparent rides every RPC fetch so the server scope continues the same trace. */
+function traceHeaders(): Headers | undefined {
+    const traceparent = trace()
+    if (!traceparent) {
+        return undefined
+    }
+    const headers = new Headers()
+    headers.set('traceparent', traceparent)
+    return headers
 }

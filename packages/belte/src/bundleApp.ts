@@ -7,11 +7,11 @@ import { pngToIcns } from './lib/bundle/pngToIcns.ts'
 import { serverBinaryFilename } from './lib/bundle/serverBinaryFilename.ts'
 import { signMacApp } from './lib/bundle/signMacApp.ts'
 import { webviewLibName } from './lib/bundle/webviewLibName.ts'
+import { belteLog } from './lib/shared/belteLog.ts'
 import { bundleLayout } from './lib/shared/bundleLayout.ts'
 import { detectTarget } from './lib/shared/detectTarget.ts'
 import { exitOnBuildFailure } from './lib/shared/exitOnBuildFailure.ts'
 import { loadSvelteConfig } from './lib/shared/loadSvelteConfig.ts'
-import { log } from './lib/shared/log.ts'
 import { programNameForPackage } from './lib/shared/programNameForPackage.ts'
 import { readPackageJson } from './lib/shared/readPackageJson.ts'
 import { serverBuildPlugins } from './serverBuildPlugins.ts'
@@ -138,7 +138,7 @@ export async function bundleApp({ cwd = process.cwd() }: { cwd?: string } = {}):
         ])
     }
 
-    log.success(`bundled app: ${bundleRoot} (target: ${target})`)
+    belteLog.success(`bundled app: ${bundleRoot} (target: ${target})`)
     return bundleRoot
 }
 

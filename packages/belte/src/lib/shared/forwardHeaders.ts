@@ -20,6 +20,9 @@ considered "auth/identity" context.
 export const FORWARDED_HEADERS = [
     'cookie',
     'authorization',
+    /* W3C trace context rides every hop so a handler reading headers sees the caller's position. */
+    'traceparent',
+    'tracestate',
     'x-forwarded-for',
     'x-forwarded-proto',
     'x-forwarded-host',

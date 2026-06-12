@@ -5,7 +5,7 @@ import { DEFAULT_PORT } from './lib/server/runtime/DEFAULT_PORT.ts'
 import { DEV_READY_MESSAGE } from './lib/server/runtime/DEV_READY_MESSAGE.ts'
 import { DEV_REBUILD_MESSAGE } from './lib/server/runtime/DEV_REBUILD_MESSAGE.ts'
 import { findOpenPort } from './lib/server/runtime/findOpenPort.ts'
-import { log } from './lib/shared/log.ts'
+import { belteLog } from './lib/shared/belteLog.ts'
 
 /*
 Dev orchestrator. Replaces `bun --watch` (which only watches the import graph,
@@ -113,10 +113,12 @@ function respawnOnUnexpectedExit(proc: Subprocess, port: number): void {
         server = undefined
         exitsWithoutReady += 1
         if (exitsWithoutReady >= MAX_EXITS_WITHOUT_READY) {
-            log.warn(`server keeps exiting (code ${exitCode}) — fix the error and save to retry`)
+            belteLog.warn(
+                `server keeps exiting (code ${exitCode}) — fix the error and save to retry`,
+            )
             return
         }
-        log.warn(`server exited unexpectedly (code ${exitCode}) — restarting`)
+        belteLog.warn(`server exited unexpectedly (code ${exitCode}) — restarting`)
         server = spawnWorker(port).proc
     })
 }
@@ -149,7 +151,7 @@ async function replaceServer(port: number): Promise<void> {
         if (outcome === 'timeout') {
             await stopWorker(next.proc)
         }
-        log.warn('new server failed to boot — the previous one (if any) keeps serving')
+        belteLog.warn('new server failed to boot — the previous one (if any) keeps serving')
         return
     }
     server = next.proc
@@ -197,7 +199,7 @@ restarts (not re-scanning) is what keeps the tab valid.
 const port = findOpenPort(DEFAULT_PORT)
 const firstBuild = await build(buildOptions)
 if (!firstBuild) {
-    log.warn('initial build failed — fix the error and save to retry')
+    belteLog.warn('initial build failed — fix the error and save to retry')
 }
 server = spawnWorker(port).proc
 
@@ -219,7 +221,9 @@ const watcher = manualRebuild
           debounce = setTimeout(() => void rebuild(port), REBUILD_DEBOUNCE_MS)
       })
 if (manualRebuild) {
-    log.info(`manual rebuild mode — POST http://localhost:${port}/__belte/reload to apply changes`)
+    belteLog.info(
+        `manual rebuild mode — POST http://localhost:${port}/__belte/reload to apply changes`,
+    )
 }
 
 /* Tear down the watcher and the child on shutdown so neither outlives the orchestrator. */

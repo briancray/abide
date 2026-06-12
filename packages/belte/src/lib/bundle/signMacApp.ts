@@ -1,4 +1,4 @@
-import { log } from '../shared/log.ts'
+import { belteLog } from '../shared/belteLog.ts'
 
 /*
 Ad-hoc code-signs an assembled macOS `.app` so it launches on other Macs.
@@ -29,7 +29,9 @@ export async function signMacApp(bundleRoot: string, innerPaths: string[]): Prom
         }
         await Bun.$`codesign --force --sign - ${bundleRoot}`.quiet()
     } catch (error) {
-        log.warn(`could not code-sign ${bundleRoot} — it may not launch when copied to another Mac`)
-        log.error(error)
+        belteLog.warn(
+            `could not code-sign ${bundleRoot} — it may not launch when copied to another Mac`,
+        )
+        belteLog.error(error)
     }
 }

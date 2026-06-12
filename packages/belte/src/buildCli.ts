@@ -1,11 +1,11 @@
 import { dirname, join } from 'node:path'
 import { build } from './build.ts'
 import { compile } from './compile.ts'
+import { belteLog } from './lib/shared/belteLog.ts'
 import { detectTarget } from './lib/shared/detectTarget.ts'
 import { exeSuffix } from './lib/shared/exeSuffix.ts'
 import { exitOnBuildFailure } from './lib/shared/exitOnBuildFailure.ts'
 import { loadSvelteConfig } from './lib/shared/loadSvelteConfig.ts'
-import { log } from './lib/shared/log.ts'
 import { programNameForPackage } from './lib/shared/programNameForPackage.ts'
 import { readPackageJson } from './lib/shared/readPackageJson.ts'
 import type { CompileTarget } from './lib/shared/types/CompileTarget.ts'
@@ -78,13 +78,13 @@ export async function buildCli({
         proc.exited,
     ])
     if (exitCode !== 0) {
-        log.error(`discovery exited ${exitCode}:\n${stderr}`)
+        belteLog.error(`discovery exited ${exitCode}:\n${stderr}`)
         process.exit(1)
     }
     await Bun.write(manifestPath, stdout)
     await Bun.$`rm -f ${discoveryOut}`.quiet()
     const entryCount = Object.keys(JSON.parse(stdout) as Record<string, unknown>).length
-    log.info(`discovered ${entryCount} cli commands → ${manifestPath}`)
+    belteLog.info(`discovered ${entryCount} cli commands → ${manifestPath}`)
 
     const programName = await readProgramName(cwd)
 
@@ -103,7 +103,7 @@ export async function buildCli({
             plugins,
         })
         exitOnBuildFailure(result)
-        log.success(`compiled cli + server: ${cliOut}`)
+        belteLog.success(`compiled cli + server: ${cliOut}`)
         return cliOut
     }
 

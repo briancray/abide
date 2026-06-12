@@ -1,5 +1,5 @@
 import { probeBelteServer } from '../bundle/probeBelteServer.ts'
-import { log } from '../shared/log.ts'
+import { belteLog } from '../shared/belteLog.ts'
 import { writeLastConnection } from '../shared/writeLastConnection.ts'
 import type { CliTarget } from './types/CliTarget.ts'
 
@@ -15,7 +15,7 @@ export async function connectToServer(
 ): Promise<CliTarget | undefined> {
     const identity = await probeBelteServer(url)
     if (!identity) {
-        log.warn(`no belte server responded at ${url}`)
+        belteLog.warn(`no belte server responded at ${url}`)
         return undefined
     }
     await writeLastConnection(programName, { kind: 'url', url })

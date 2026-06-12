@@ -1,5 +1,5 @@
 import { dirname } from 'node:path'
-import { log } from '../shared/log.ts'
+import { belteLog } from '../shared/belteLog.ts'
 import { WEBVIEW_VERSION } from './WEBVIEW_VERSION.ts'
 import { webviewCachePath } from './webviewCachePath.ts'
 
@@ -33,7 +33,7 @@ rather than letting the compiler fail opaquely.
 export async function buildWebviewLib(): Promise<string> {
     const outfile = webviewCachePath()
     await Bun.$`mkdir -p ${dirname(outfile)}`.quiet()
-    log.info(`building webview ${WEBVIEW_VERSION} for ${process.platform}-${process.arch}…`)
+    belteLog.info(`building webview ${WEBVIEW_VERSION} for ${process.platform}-${process.arch}…`)
 
     if (process.platform === 'darwin') {
         await compileDarwin(outfile)
@@ -51,7 +51,7 @@ export async function buildWebviewLib(): Promise<string> {
         )
     }
 
-    log.success(`built webview library: ${outfile}`)
+    belteLog.success(`built webview library: ${outfile}`)
     return outfile
 }
 

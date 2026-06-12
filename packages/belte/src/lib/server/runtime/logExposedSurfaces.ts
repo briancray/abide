@@ -1,5 +1,5 @@
 import type { Pages } from '../../browser/types/Pages.ts'
-import { log } from '../../shared/log.ts'
+import { belteLog } from '../../shared/belteLog.ts'
 import type { ViewResolver } from '../../shared/types/ViewResolver.ts'
 import { verbRegistry } from '../rpc/verbRegistry.ts'
 import { socketRegistry } from '../sockets/socketRegistry.ts'
@@ -69,8 +69,10 @@ function logTables(tables: SurfaceTable[]): void {
     }
     const widths = columnWidths(present.flatMap((table) => [table.header, ...table.rows]))
     present.forEach((table) => {
-        log.info(`${table.title}:`)
-        log.detail([table.header, ...table.rows].map((row) => renderRow(row, widths)).join('\n'))
+        belteLog.info(`${table.title}:`)
+        belteLog.detail(
+            [table.header, ...table.rows].map((row) => renderRow(row, widths)).join('\n'),
+        )
     })
 }
 

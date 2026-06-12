@@ -1,6 +1,6 @@
 import { clientBuildPlugins } from './clientBuildPlugins.ts'
+import { belteLog } from './lib/shared/belteLog.ts'
 import { exitOnBuildFailure } from './lib/shared/exitOnBuildFailure.ts'
-import { log } from './lib/shared/log.ts'
 import type { SvelteConfig } from './lib/shared/types/SvelteConfig.ts'
 
 const ENTRY = new URL('./bundleDisconnectedEntry.ts', import.meta.url).pathname
@@ -75,7 +75,7 @@ export async function buildDisconnected({
     const html = composeHtml({ js, css, logo })
     const outPath = `${cwd}/dist/bundle-disconnected.html`
     await Bun.write(outPath, html)
-    log.success(`built connect screen: ${outPath} (${(html.length / 1024).toFixed(1)} KiB)`)
+    belteLog.success(`built connect screen: ${outPath} (${(html.length / 1024).toFixed(1)} KiB)`)
     return outPath
 }
 
