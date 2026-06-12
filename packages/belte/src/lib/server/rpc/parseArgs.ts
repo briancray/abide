@@ -1,6 +1,7 @@
 import { carriesBodyArgs } from '../../shared/carriesBodyArgs.ts'
 import type { HttpVerb } from '../../shared/types/HttpVerb.ts'
 import { requestContext } from '../runtime/requestContext.ts'
+import { readBodyWithinLimit } from './readBodyWithinLimit.ts'
 
 /*
 Splits a parsed FormData into the text fields that become args and the File
@@ -47,8 +48,16 @@ skips the merge entirely and is returned as-is — there's no key on the body
 to layer the query into, and the framework's args type is a single bag rather
 than a `{body, query}` envelope. Returns undefined when no source contributes
 any key.
+
+`maxBodySize` (per-verb, opt-in) bounds the body's actual received bytes
+before any parse — see readBodyWithinLimit. Omitted = no belte-level check;
+Bun.serve's server-wide maxRequestBodySize is the ceiling.
 */
-export async function parseArgs(method: HttpVerb, request: Request): Promise<unknown> {
+export async function parseArgs(
+    method: HttpVerb,
+    request: Request,
+    maxBodySize?: number,
+): Promise<unknown> {
     /*
     Skip the URL parse entirely when the raw request URL has no query —
     typical POST/PUT/PATCH calls land here with a flat rpc URL and no
@@ -61,9 +70,23 @@ export async function parseArgs(method: HttpVerb, request: Request): Promise<unk
 
     let body: unknown
     if (carriesBodyArgs(method)) {
-        const contentType = (request.headers.get('content-type') ?? '').toLowerCase()
+        let bounded = request
+        if (maxBodySize !== undefined) {
+            bounded = await readBodyWithinLimit(request, maxBodySize)
+            /*
+            The size check drained the original body, so point the scope's
+            request at the readable copy — a handler with a content-type this
+            parse skips (raw uploads) reads the body via request() itself, and
+            it must see the bytes, not 'Body already used'.
+            */
+            const store = requestContext.getStore()
+            if (store) {
+                store.req = bounded
+            }
+        }
+        const contentType = (bounded.headers.get('content-type') ?? '').toLowerCase()
         if (contentType.includes('application/json')) {
-            const text = await request.text()
+            const text = await bounded.text()
             if (text !== '') {
                 body = JSON.parse(text)
             }
@@ -71,7 +94,7 @@ export async function parseArgs(method: HttpVerb, request: Request): Promise<unk
             contentType.includes('application/x-www-form-urlencoded') ||
             contentType.includes('multipart/form-data')
         ) {
-            body = splitFormData(await request.formData())
+            body = splitFormData(await bounded.formData())
         }
     }
 

@@ -39,6 +39,8 @@ export function defineVerb<Args, Return>(
         filesSchema?: StandardSchemaV1
         clients?: Partial<ClientFlags>
         crossOrigin?: boolean
+        /* Per-verb cap on actual received body bytes (413 past it); omitted = Bun's server-wide maxRequestBodySize. */
+        maxBodySize?: number
     },
 ): RemoteFunction<Args, Return> {
     const inputSchema = opts?.inputSchema
@@ -122,7 +124,8 @@ export function defineVerb<Args, Return>(
         crossOrigin: opts?.crossOrigin,
         buildRequest,
         invoke,
-        parseArgsForFetch: (request) => parseArgs(method, request) as Promise<Args | undefined>,
+        parseArgsForFetch: (request) =>
+            parseArgs(method, request, opts?.maxBodySize) as Promise<Args | undefined>,
     })
     registerVerb({
         remote: remote as RemoteFunction<unknown, unknown>,

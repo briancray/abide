@@ -18,6 +18,9 @@ Shared signature for every verb helper (GET / POST / …). Three overloads:
     `crossOrigin: true` exempts a mutating verb from the router's same-origin
     CSRF gate — by default a browser request whose Origin doesn't match the
     app's own host is refused with 403 on every non-GET/HEAD verb.
+    `maxBodySize` caps the body's actual received bytes (413 past it),
+    enforced before parsing; omitted, the only ceiling is Bun.serve's
+    server-wide maxRequestBodySize.
   - `Verb(fn, { clients })` — schemaless but with explicit client
     targeting (e.g. server-internal RPC with `clients: { browser: false }`).
   - `Verb(fn)` — bare handler. `Args` and `Return` come from the handler
@@ -49,6 +52,7 @@ export type VerbHelper = {
             outputSchema?: StandardSchemaV1
             clients?: Partial<ClientFlags>
             crossOrigin?: boolean
+            maxBodySize?: number
         },
     ): RemoteFunction<StandardSchemaV1.InferInput<InputSchema>, Return>
     <Return = unknown, InputSchema extends StandardSchemaV1 = StandardSchemaV1>(
@@ -58,14 +62,16 @@ export type VerbHelper = {
             outputSchema?: StandardSchemaV1
             clients?: Partial<ClientFlags>
             crossOrigin?: boolean
+            maxBodySize?: number
         },
     ): RemoteFunction<StandardSchemaV1.InferInput<InputSchema>, Return>
     <Args = undefined, Return = unknown>(
         fn: RemoteHandler<Args, Return>,
         opts: {
             outputSchema?: StandardSchemaV1
-            clients: Partial<ClientFlags>
+            clients?: Partial<ClientFlags>
             crossOrigin?: boolean
+            maxBodySize?: number
         },
     ): RemoteFunction<Args, Return>
     <Args = undefined, Return = unknown>(

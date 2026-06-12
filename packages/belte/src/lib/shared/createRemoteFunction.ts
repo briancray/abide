@@ -1,4 +1,5 @@
 import { decodeResponse } from './decodeResponse.ts'
+import { HttpError } from './HttpError.ts'
 import { keyForRemoteCall } from './keyForRemoteCall.ts'
 import { REMOTE_FUNCTION } from './REMOTE_FUNCTION.ts'
 import { recordRemoteMeta } from './recordRemoteMeta.ts'
@@ -96,7 +97,22 @@ export function createRemoteFunction<Args, Return>(opts: {
     Object.defineProperty(callable, REMOTE_FUNCTION, { value: true })
     callable.fetch = parseArgsForFetch
         ? async (request: Request): Promise<Response> => {
-              const args = await parseArgsForFetch(request)
+              let args: Args | undefined
+              try {
+                  args = await parseArgsForFetch(request)
+              } catch (error) {
+                  /*
+                  Parse-stage rejections that already chose their wire shape
+                  (readBodyWithinLimit's 413) return it; anything else (e.g.
+                  malformed JSON) keeps propagating to the scope's catch.
+                  Handler errors are outside this try on purpose — throwing
+                  is the app.handleError path, `return error(...)` the wire one.
+                  */
+                  if (error instanceof HttpError) {
+                      return error.response
+                  }
+                  throw error
+              }
               return dispatch(args, request)
           }
         : (request: Request): Promise<Response> => {
