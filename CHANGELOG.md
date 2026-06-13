@@ -1,5 +1,11 @@
 # @belte/belte
 
+## 0.27.0
+
+### Minor Changes
+
+- [`f93e490`](https://github.com/briancray/belte/commit/f93e4902a87766978b9ea90d10705ef7bd4ebb2b) - cache.on context.patch for server-pushed deltas ([`70acb1d`](https://github.com/briancray/belte/commit/70acb1d2ff73980d97a2bddeb28e5ee184a3781b))
+
 ## 0.26.1
 
 ### Patch Changes
