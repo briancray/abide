@@ -3,6 +3,7 @@ import App from '../../App.svelte'
 import { createCacheStore } from '../shared/createCacheStore.ts'
 import { createTraceContext } from '../shared/createTraceContext.ts'
 import { healthSeedSlot } from '../shared/healthSeedSlot.ts'
+import { rpcTimeoutSlot } from '../shared/rpcTimeoutSlot.ts'
 import { setAppName } from '../shared/setAppName.ts'
 import { setBaseResolver } from '../shared/setBaseResolver.ts'
 import { setCacheStoreResolver } from '../shared/setCacheStoreResolver.ts'
@@ -14,13 +15,13 @@ import type { CacheStore } from '../shared/types/CacheStore.ts'
 import type { StreamingPlaceholder } from '../shared/types/StreamingPlaceholder.ts'
 import { cacheEntryFromSnapshot } from './cacheEntryFromSnapshot.ts'
 import { installStreamingPlaceholders } from './installStreamingPlaceholders.ts'
+import { navigate } from './navigate.ts'
 import { openResolveStream } from './openResolveStream.ts'
 import {
     bindPage,
     clientPageState,
     handlePopstate,
     handleRenderError,
-    navigate,
     page,
     renderState,
 } from './page.svelte.ts'
@@ -48,6 +49,8 @@ declare global {
             app?: string
             /* Health payload seed for a page that read health() during SSR. */
             health?: Record<string, unknown>
+            /* BELTE_CLIENT_TIMEOUT (ms) for RPC fetches; absent = unbounded. */
+            clientTimeout?: number
         }
     }
 }
@@ -131,6 +134,9 @@ export async function startClient({
     /* Install the mount base before anything reads url() so client-generated links carry it. */
     const base = window.__SSR__.base ?? ''
     setBaseResolver(() => base)
+
+    /* The server's BELTE_CLIENT_TIMEOUT, so RPC fetches bound themselves; absent = unbounded. */
+    rpcTimeoutSlot.ms = window.__SSR__.clientTimeout
 
     /*
     Continue the SSR request's trace (or mint a fresh one if the stamp is

@@ -72,6 +72,7 @@ ALS snapshot. Property reads on the client resolve to the $state singleton, so
 reactivity flows; on the server each render reads its own request scope. Users
 only ever see route/params/url.
 */
+// @readme pages
 export const page = {
     get route() {
         return activePage().route
@@ -204,7 +205,7 @@ async function showErrorView(
     if (!resolved) {
         throw error
     }
-    const errorParams = errorParamsForThrow(error) as unknown as Record<string, string>
+    const errorParams = (await errorParamsForThrow(error)) as unknown as Record<string, string>
     /* Same view swap as a normal render (applyState clears errorViewActive and
        syncs the URL, a no-op here since the location is unchanged), then re-flag
        the error view so same-pathname navigations fall through to a full resolve. */
@@ -213,7 +214,7 @@ async function showErrorView(
     reset()
 }
 
-function syncUrl(): void {
+export function syncUrl(): void {
     clientPageState.url = new URL(window.location.href)
 }
 
@@ -223,7 +224,7 @@ up — the case navigate()/popstate can satisfy with a URL refresh instead of a
 full resolve. With an error view showing, a same-pathname target still needs
 the full resolve, else the error view would linger under the new URL.
 */
-function isCurrentView(pathname: string): boolean {
+export function isCurrentView(pathname: string): boolean {
     return pathname === clientPageState.url.pathname && !errorViewActive
 }
 
@@ -275,16 +276,6 @@ async function resolveView(fullTarget: string): Promise<NavigatedView | undefine
     }
 }
 
-function writeHistory(replace: boolean, fullTarget: string): void {
-    if (replace) {
-        window.history.replaceState(undefined, '', fullTarget)
-    } else {
-        window.history.pushState(undefined, '', fullTarget)
-    }
-}
-
-export type NavigateOptions = { replace?: boolean; scroll?: boolean }
-
 /*
 Shared pathname-navigation core for navigate() and popstate's applyTarget().
 Cancels any open resolution stream, flags the in-flight nav so $derived
@@ -295,7 +286,10 @@ an SPA route and we hard-navigated via location.href instead, so callers skip
 post-apply work like scrolling. The finally clears the flag on every exit,
 including the hard-nav bail.
 */
-async function applyResolvedView(fullTarget: string, beforeApply?: () => void): Promise<boolean> {
+export async function applyResolvedView(
+    fullTarget: string,
+    beforeApply?: () => void,
+): Promise<boolean> {
     abortPageStream()
     clientPageState.navigating = true
     try {
@@ -309,35 +303,6 @@ async function applyResolvedView(fullTarget: string, beforeApply?: () => void): 
         return true
     } finally {
         clientPageState.navigating = false
-    }
-}
-
-/*
-SPA navigation entrypoint. When only `search` or `hash` changes (same
-pathname) the JSON resolve fetch + loadView are skipped — history is written
-and `page.url` reassigned so $derived consumers re-run without a network
-round-trip or page remount. On a pathname change the target view is resolved
-*before* history is touched: a non-SPA target (raw JSON endpoint, unknown
-route, failed import) hard-navigates cleanly via `location.href`, because a
-pushed entry whose URL no longer matches its in-memory document corrupts
-back/forward (Safari restores the stale document under the new URL).
-*/
-export async function navigate(href: string, options: NavigateOptions = {}): Promise<void> {
-    const { replace = false, scroll = true } = options
-    const target = new URL(href, window.location.href)
-    if (target.origin !== window.location.origin) {
-        window.location.href = href
-        return
-    }
-    const fullTarget = `${target.pathname}${target.search}${target.hash}`
-    if (isCurrentView(target.pathname)) {
-        writeHistory(replace, fullTarget)
-        syncUrl()
-        return
-    }
-    const applied = await applyResolvedView(fullTarget, () => writeHistory(replace, fullTarget))
-    if (applied && scroll && !replace) {
-        window.scrollTo(0, 0)
     }
 }
 
