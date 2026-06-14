@@ -10,6 +10,7 @@ surface for it (mirrors how AppModule / AgentEngine are the documented seams).
 Everything here is already produced by the runtime: the registries behind
 loadSurface(), the log chokepoint behind onRecord().
 */
+// @readme plumbing
 export type InspectorContext = {
     /* App identity for the UI header — the same name/version the health probe reports. */
     app: { name: string; version: string }
