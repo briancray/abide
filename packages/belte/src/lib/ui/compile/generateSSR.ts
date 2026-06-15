@@ -1,3 +1,4 @@
+import { branchElements } from './branchElements.ts'
 import { lowerDocAccess } from './lowerDocAccess.ts'
 import { partitionSlots } from './partitionSlots.ts'
 import { renameSignalRefs } from './renameSignalRefs.ts'
@@ -53,9 +54,9 @@ export function generateSSR(
         if (node.kind === 'if') {
             const elseBranch = node.children.find((child) => child.kind === 'case')
             const thenChildren = node.children.filter((child) => child.kind !== 'case')
-            let code = `if (${lowerExpression(node.condition)}) {\n${generateInto(thenChildren, target)}}`
+            let code = `if (${lowerExpression(node.condition)}) {\n${generateInto(branchElements(thenChildren, '<template if>'), target)}}`
             if (elseBranch !== undefined && elseBranch.kind === 'case') {
-                code += ` else {\n${generateInto(elseBranch.children, target)}}`
+                code += ` else {\n${generateInto(branchElements(elseBranch.children, '<template else>'), target)}}`
             }
             return `${code}\n`
         }
@@ -67,13 +68,13 @@ export function generateSSR(
             let started = false
             for (const branch of cases) {
                 if (branch.match !== undefined) {
-                    code += `${started ? 'else ' : ''}if ($s === (${lowerExpression(branch.match)})) {\n${generateInto(branch.children, target)}}\n`
+                    code += `${started ? 'else ' : ''}if ($s === (${lowerExpression(branch.match)})) {\n${generateInto(branchElements(branch.children, '<template case>'), target)}}\n`
                     started = true
                 }
             }
             const fallback = cases.find((branch) => branch.match === undefined)
             if (fallback !== undefined) {
-                code += `${started ? 'else ' : ''}{\n${generateInto(fallback.children, target)}}\n`
+                code += `${started ? 'else ' : ''}{\n${generateInto(branchElements(fallback.children, '<template case>'), target)}}\n`
             }
             return `${code}}\n`
         }
@@ -179,13 +180,13 @@ export function generateSSR(
                 child.kind === 'branch' && child.branch === 'catch',
         )
         let code = push(target, `<!--belte:await:${id}-->`)
-        code += generateInto(pending, target)
+        code += generateInto(branchElements(pending, '<template await> pending', true), target)
         code += push(target, `<!--/belte:await:${id}-->`)
         code +=
             `$awaits.push({ id: ${id}, ` +
             `promise: () => (${lowerExpression(node.promise)}), ` +
-            `then: (${thenBranch?.as ?? '_value'}) => { const $o = []; ${generateInto(thenBranch?.children ?? [], '$o')}return $o.join(''); }, ` +
-            `catch: (${catchBranch?.as ?? '_error'}) => { const $o = []; ${generateInto(catchBranch?.children ?? [], '$o')}return $o.join(''); } });\n`
+            `then: (${thenBranch?.as ?? '_value'}) => { const $o = []; ${generateInto(branchElements(thenBranch?.children ?? [], '<template then>', true), '$o')}return $o.join(''); }, ` +
+            `catch: (${catchBranch?.as ?? '_error'}) => { const $o = []; ${generateInto(branchElements(catchBranch?.children ?? [], '<template catch>', true), '$o')}return $o.join(''); } });\n`
         return code
     }
 

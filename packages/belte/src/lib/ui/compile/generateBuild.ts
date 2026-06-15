@@ -1,3 +1,4 @@
+import { branchElements } from './branchElements.ts'
 import { lowerDocAccess } from './lowerDocAccess.ts'
 import { partitionSlots } from './partitionSlots.ts'
 import { renameSignalRefs } from './renameSignalRefs.ts'
@@ -129,16 +130,12 @@ export function generateBuild(
             )
             .map((branch) => {
                 const param = nextVar('p')
-                const root = singleElementRoot(
-                    branch.children,
-                    '<template case> must contain a single element',
-                    param,
-                )
+                const roots = elementRoots(branch.children, '<template case>', param)
                 const match =
                     branch.match === undefined
                         ? 'undefined'
                         : `() => (${lowerExpression(branch.match)})`
-                return `{ match: ${match}, render: (${param}) => {\n${root.code}return ${root.varName};\n} }`
+                return `{ match: ${match}, render: (${param}) => {\n${roots.code}return ${roots.expr};\n} }`
             })
             .join(', ')
         return `switchBlock(${parentVar}, () => (${lowerExpression(node.subject)}), [${cases}]);\n`
@@ -217,9 +214,9 @@ export function generateBuild(
         const id = awaitId++
         return (
             `awaitBlock(${parentVar}, ${id}, () => (${lowerExpression(node.promise)}), ` +
-            `${renderThunk(pending, undefined)}, ` +
-            `${renderThunk(branchChildren(thenBranch), branchVar(thenBranch), '_value')}, ` +
-            `${renderThunk(branchChildren(catchBranch), branchVar(catchBranch), '_error')});\n`
+            `${renderThunk(pending, undefined, '<template await> pending')}, ` +
+            `${renderThunk(branchChildren(thenBranch), branchVar(thenBranch), '<template then>', '_value')}, ` +
+            `${renderThunk(branchChildren(catchBranch), branchVar(catchBranch), '<template catch>', '_error')});\n`
         )
     }
 
@@ -233,21 +230,41 @@ export function generateBuild(
         return branch !== undefined && branch.kind === 'branch' ? branch.as : undefined
     }
 
-    /* A `() => Node` thunk over a single-element block, or `undefined` when empty
-       (no pending branch). `paramName`/`fallback` name the resolved/error value. */
+    /* Builds the element roots of a branch into `parentVar` (each via openRoot, so
+       detached on create / claimed on hydrate), returning the code plus an array
+       expression of the root nodes the block tracks as a range. */
+    function elementRoots(
+        children: TemplateNode[],
+        context: string,
+        parentVar: string,
+    ): { code: string; expr: string } {
+        const built = branchElements(children, context).map((element) =>
+            generateElement(element, `openRoot(${parentVar}, ${JSON.stringify(element.tag)})`),
+        )
+        return {
+            code: built.map((part) => part.code).join(''),
+            expr: `[${built.map((part) => part.varName).join(', ')}]`,
+        }
+    }
+
+    /* A `(parent[, value]) => Node[]` thunk over a branch's element roots, or
+       `undefined` when empty (a `<template await>` with no pending branch).
+       `paramName`/`fallback` name the resolved/error value the branch binds. */
     function renderThunk(
         children: TemplateNode[],
         paramName: string | undefined,
+        context: string,
         fallback?: string,
     ): string {
+        const hasElement = children.some((child) => child.kind === 'element')
         const parentParam = nextVar('p')
-        const root = children.find((child) => child.kind === 'element')
-        if (root === undefined || root.kind !== 'element') {
-            return fallback === undefined ? 'undefined' : `() => document.createTextNode("")`
+        if (!hasElement) {
+            const value = fallback === undefined ? '' : `, ${paramName ?? fallback}`
+            return fallback === undefined ? 'undefined' : `(${parentParam}${value}) => []`
         }
-        const built = generateElement(root, `openRoot(${parentParam}, ${JSON.stringify(root.tag)})`)
+        const roots = elementRoots(children, context, parentParam)
         const value = fallback === undefined ? '' : `, ${paramName ?? fallback}`
-        return `(${parentParam}${value}) => {\n${built.code}return ${built.varName};\n}`
+        return `(${parentParam}${value}) => {\n${roots.code}return ${roots.expr};\n}`
     }
 
     /* A conditional with an optional nested `<template else>` (a `case` child).
@@ -258,22 +275,14 @@ export function generateBuild(
         )
         const thenChildren = node.children.filter((child) => child.kind !== 'case')
         const thenParam = nextVar('p')
-        const thenRoot = singleElementRoot(
-            thenChildren,
-            '<template if> must contain a single element',
-            thenParam,
-        )
-        const thenThunk = `(${thenParam}) => {\n${thenRoot.code}return ${thenRoot.varName};\n}`
+        const thenRoots = elementRoots(thenChildren, '<template if>', thenParam)
+        const thenThunk = `(${thenParam}) => {\n${thenRoots.code}return ${thenRoots.expr};\n}`
         if (elseBranch === undefined) {
             return `when(${parentVar}, () => (${lowerExpression(node.condition)}), ${thenThunk});\n`
         }
         const elseParam = nextVar('p')
-        const elseRoot = singleElementRoot(
-            elseBranch.children,
-            '<template else> must contain a single element',
-            elseParam,
-        )
-        const elseThunk = `(${elseParam}) => {\n${elseRoot.code}return ${elseRoot.varName};\n}`
+        const elseRoots = elementRoots(elseBranch.children, '<template else>', elseParam)
+        const elseThunk = `(${elseParam}) => {\n${elseRoots.code}return ${elseRoots.expr};\n}`
         return `when(${parentVar}, () => (${lowerExpression(node.condition)}), ${thenThunk}, ${elseThunk});\n`
     }
 

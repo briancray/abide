@@ -2,15 +2,15 @@ import { effect } from '../effect.ts'
 import { claimChild } from '../runtime/claimChild.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { scope } from '../runtime/scope.ts'
-import type { EachRow } from './types/EachRow.ts'
 import type { SwitchCase } from './types/SwitchCase.ts'
 
 /*
 Multi-branch binding — the runtime for `<template switch>`. An effect evaluates
 the subject, picks the first case whose `match` equals it (strict `===`), falling
 back to the default (`match` undefined); the chosen branch renders in its own
-scope, anchored for placement. Staying on the same branch across a subject change
-leaves it mounted; switching disposes the old and mounts the new.
+scope, anchored for placement. A branch is a RANGE of element roots, tracked as a
+node array so a multi-root case inserts/removes as a unit. Staying on the same
+branch across a subject change leaves it mounted; switching disposes the old.
 
 On hydrate it adopts the case the server rendered (in place) and anchors after it;
 the effect's first run picks the same case and is a no-op, later changes swap fresh.
@@ -18,9 +18,17 @@ the effect's first run picks the same case and is a no-op, later changes swap fr
 // @readme plumbing
 export function switchBlock(parent: Node, subject: () => unknown, cases: SwitchCase[]): void {
     const hydration = RENDER.hydration
-    let active: EachRow | undefined
+    let active: { nodes: Node[]; dispose: () => void } | undefined
     let activeIndex = -1
     let anchor: Node
+
+    const build = (chosen: SwitchCase): { nodes: Node[]; dispose: () => void } => {
+        let nodes: Node[] = []
+        const dispose = scope(() => {
+            nodes = chosen.render(parent)
+        })
+        return { nodes, dispose }
+    }
 
     const select = (value: unknown): number => {
         const matched = cases.findIndex(
@@ -33,11 +41,7 @@ export function switchBlock(parent: Node, subject: () => unknown, cases: SwitchC
         activeIndex = select(subject())
         const chosen = activeIndex === -1 ? undefined : cases[activeIndex]
         if (chosen !== undefined) {
-            let node: Node | undefined
-            const dispose = scope(() => {
-                node = chosen.render(parent)
-            })
-            active = { node: node as Node, dispose }
+            active = build(chosen)
         }
         anchor = document.createTextNode('')
         parent.insertBefore(anchor, claimChild(hydration, parent))
@@ -53,7 +57,9 @@ export function switchBlock(parent: Node, subject: () => unknown, cases: SwitchC
         }
         if (active !== undefined) {
             active.dispose()
-            parent.removeChild(active.node)
+            for (const node of active.nodes) {
+                parent.removeChild(node)
+            }
             active = undefined
         }
         activeIndex = index
@@ -61,11 +67,9 @@ export function switchBlock(parent: Node, subject: () => unknown, cases: SwitchC
         if (chosen === undefined) {
             return
         }
-        let node: Node | undefined
-        const dispose = scope(() => {
-            node = chosen.render(parent)
-        })
-        active = { node: node as Node, dispose }
-        parent.insertBefore(active.node, anchor)
+        active = build(chosen)
+        for (const node of active.nodes) {
+            parent.insertBefore(node, anchor)
+        }
     })
 }
