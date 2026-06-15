@@ -10,6 +10,7 @@ import { hydrate } from '../src/lib/ui/dom/hydrate.ts'
 import { on } from '../src/lib/ui/dom/on.ts'
 import { openChild } from '../src/lib/ui/dom/openChild.ts'
 import { openRoot } from '../src/lib/ui/dom/openRoot.ts'
+import { switchBlock } from '../src/lib/ui/dom/switchBlock.ts'
 import { when } from '../src/lib/ui/dom/when.ts'
 import { effect } from '../src/lib/ui/effect.ts'
 import type { SsrRender } from '../src/lib/ui/runtime/types/SsrRender.ts'
@@ -193,5 +194,64 @@ describe('hydrate — adopt server DOM', () => {
         expect(ul.childNodes[0].textContent).toBe('9')
         model.add('order/-', 'c')
         expect(ul.childNodes.map((c) => c.textContent)).toEqual(['9', '2', '3'])
+    })
+
+    test('adopts the matching switch case in place, then switches', () => {
+        const model = doc({ status: 'b' })
+        const source = `
+            <main>
+                <template switch={model.status}>
+                    <template case="'a'"><span>A</span></template>
+                    <template case="'b'"><span>B</span></template>
+                    <template default><span>?</span></template>
+                </template>
+            </main>
+        `
+        const runtime = {
+            doc,
+            state,
+            derived,
+            effect,
+            openChild,
+            openRoot,
+            appendText,
+            appendStatic,
+            on,
+            when,
+            each,
+            switchBlock,
+            model,
+        }
+        const names = Object.keys(runtime)
+        const values = names.map((n) => runtime[n as keyof typeof runtime])
+
+        const server = new Function(
+            'doc',
+            'state',
+            'derived',
+            'effect',
+            'model',
+            compileSSR(source),
+        )(doc, state, derived, effect, model) as SsrRender
+        expect(server.html).toBe('<main><span>B</span></main>')
+
+        const host = document.createElement('div')
+        host.innerHTML = server.html
+        const spanBefore = (host.childNodes[0] as unknown as { childNodes: unknown[] })
+            .childNodes[0]
+        const body = compileComponent(source)
+        hydrate(host, (target) => {
+            new Function('host', ...names, body)(target, ...values)
+        })
+
+        expect((host.childNodes[0] as unknown as { childNodes: unknown[] }).childNodes[0]).toBe(
+            spanBefore,
+        )
+        expect(host.textContent).toBe('B')
+
+        model.replace('status', 'a')
+        expect(host.textContent).toBe('A')
+        model.replace('status', 'zzz')
+        expect(host.textContent).toBe('?') // default
     })
 })
