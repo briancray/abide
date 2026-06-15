@@ -1,0 +1,21 @@
+<script>
+  /* Stands in for a slow data source (a fetch / cache read). The server streams
+     the pending shell first, then the resolved list when it settles. */
+  function loadUsers() {
+    return new Promise((resolve) => setTimeout(() => resolve(['ada', 'grace', 'linus', 'margaret']), 60))
+  }
+</script>
+
+<main>
+  <h1>data (streamed)</h1>
+  <template await={loadUsers()}>
+    <p class="loading">loading users…</p>
+    <template then="users">
+      <ul>
+        <template each={users} as="name" key="name"><li>{name}</li></template>
+      </ul>
+    </template>
+    <template catch="error"><p class="error">failed: {error}</p></template>
+  </template>
+  <nav><a href="/">← home</a></nav>
+</main>

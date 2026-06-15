@@ -5,27 +5,30 @@ import { compileSSR } from '../../packages/belte/src/lib/ui/compile/compileSSR.t
 import { derived } from '../../packages/belte/src/lib/ui/derived.ts'
 import { doc } from '../../packages/belte/src/lib/ui/doc.ts'
 import { effect } from '../../packages/belte/src/lib/ui/effect.ts'
+import { renderToStream } from '../../packages/belte/src/lib/ui/renderToStream.ts'
 import type { SsrRender } from '../../packages/belte/src/lib/ui/runtime/types/SsrRender.ts'
 import { state } from '../../packages/belte/src/lib/ui/state.ts'
 
 /*
 A real multi-page belte-ui app, end to end through the actual pipeline:
 
-  - the CLIENT bundle is built by `Bun.build` + `belteUiPlugin` (the real `.belte`
-    loader) — one bundle with both pages + the router — with a resolver mapping the
-    emitted `belte/ui/*` imports to source;
-  - each route is SERVER-rendered via `compileSSR` and served by `Bun.serve`; the
-    client router then takes over for in-place navigation.
+  - one CLIENT bundle (all pages + router) built by `Bun.build` + `belteUiPlugin`,
+    with a resolver mapping the emitted `belte/ui/*` imports to source;
+  - regular routes are server-rendered complete; `/data` is STREAMED via
+    `renderToStream` — the pending shell flushes first, then the resolved fragment
+    when its promise settles, swapped into place by a tiny inline script.
 
-In a published app these would be `belte build` / `belte start`; here the example
-sits beside the in-development framework, so it wires the pieces directly.
+In a published app these would be `belte build` / `belte start`.
 */
 
 const UI_SRC = resolve(import.meta.dir, '../../packages/belte/src/lib/ui')
-const PAGES: Record<string, string> = { '/': 'Home.belte', '/about': 'About.belte' }
+const PAGES: Record<string, string> = {
+    '/': 'Home.belte',
+    '/about': 'About.belte',
+    '/form': 'Form.belte',
+    '/data': 'Data.belte',
+}
 
-/* Maps the `belte/ui/*` specifiers compiled components emit to the framework
-   source (in a published package these resolve through `@belte/belte`'s exports). */
 const belteUiResolver: BunPlugin = {
     name: 'belte-ui-resolve',
     setup(build) {
@@ -35,7 +38,16 @@ const belteUiResolver: BunPlugin = {
     },
 }
 
-/* Builds the one browser bundle (both pages + router) for the client. */
+/* Vanilla browser swap: moves each streamed `<belte-resolve>` fragment into its
+   `<!--belte:await:id-->` boundary. Inlined in streamed responses, run after each
+   fragment so the value appears as soon as it arrives — even before the bundle. */
+const SWAP_SCRIPT =
+    "function __belteSwap(){var f=document.querySelector('belte-resolve');while(f){" +
+    "var id=f.getAttribute('data-id'),w=document.createTreeWalker(document.body,NodeFilter.SHOW_COMMENT),o=null,c;" +
+    "while((c=w.nextNode())){if(c.data==='belte:await:'+id){o=c;break;}}" +
+    "if(o){var n=o.nextSibling;while(n&&!(n.nodeType===8&&n.data==='/belte:await:'+id)){var x=n.nextSibling;n.remove();n=x;}" +
+    "while(f.firstChild){o.parentNode.insertBefore(f.firstChild,n);}}f.remove();f=document.querySelector('belte-resolve');}}"
+
 export async function buildClient(): Promise<string> {
     const built = await Bun.build({
         entrypoints: [resolve(import.meta.dir, 'main.ts')],
@@ -48,24 +60,60 @@ export async function buildClient(): Promise<string> {
     return built.outputs[0].text()
 }
 
-/* Server-renders the page for `path` via the SSR back-end. */
+/* A server `render()` for a page source. */
+function compileRender(source: string): () => SsrRender {
+    const body = compileSSR(source)
+    return () =>
+        new Function('doc', 'state', 'derived', 'effect', body)(
+            doc,
+            state,
+            derived,
+            effect,
+        ) as SsrRender
+}
+
+async function pageSource(path: string): Promise<string> {
+    return Bun.file(resolve(import.meta.dir, PAGES[path] ?? PAGES['/'])).text()
+}
+
+/* Complete (non-streamed) server render of a route's HTML. */
 export async function renderShell(path = '/'): Promise<string> {
-    const source = await Bun.file(resolve(import.meta.dir, PAGES[path] ?? PAGES['/'])).text()
-    const render = new Function('doc', 'state', 'derived', 'effect', compileSSR(source)) as (
-        ...runtime: unknown[]
-    ) => SsrRender
-    return render(doc, state, derived, effect).html
+    return compileRender(await pageSource(path))().html
 }
 
-function page(shell: string, clientJs: string): string {
-    return `<!doctype html>
-<html lang="en">
-<head><meta charset="utf-8"><title>belte-ui demo</title></head>
-<body><div id="app">${shell}</div><script type="module">${clientJs}</script></body>
-</html>`
+function document(shell: string, clientJs: string, head = ''): string {
+    return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>belte-ui demo</title>${head}</head><body><div id="app">${shell}</div><script type="module">${clientJs}</script></body></html>`
 }
 
-/* Starts the HTTP server: one client bundle, SSR per route. */
+/* A streamed response: pending shell first, then resolved fragments + swap. */
+function streamResponse(render: () => SsrRender, clientJs: string): Response {
+    const encoder = new TextEncoder()
+    return new Response(
+        new ReadableStream({
+            async start(controller) {
+                let first = true
+                for await (const chunk of renderToStream(render)) {
+                    if (first) {
+                        controller.enqueue(
+                            encoder.encode(
+                                `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>belte-ui demo</title><script>${SWAP_SCRIPT}</script></head><body><div id="app">${chunk}</div>`,
+                            ),
+                        )
+                        first = false
+                    } else {
+                        controller.enqueue(encoder.encode(`${chunk}<script>__belteSwap()</script>`))
+                    }
+                }
+                controller.enqueue(
+                    encoder.encode(`<script type="module">${clientJs}</script></body></html>`),
+                )
+                controller.close()
+            },
+        }),
+        { headers: { 'content-type': 'text/html; charset=utf-8' } },
+    )
+}
+
 export async function serve(port = 3737) {
     const clientJs = await buildClient()
     return Bun.serve({
@@ -75,7 +123,10 @@ export async function serve(port = 3737) {
             if (!(path in PAGES)) {
                 return new Response('not found', { status: 404 })
             }
-            return new Response(page(await renderShell(path), clientJs), {
+            if (path === '/data') {
+                return streamResponse(compileRender(await pageSource(path)), clientJs)
+            }
+            return new Response(document(await renderShell(path), clientJs), {
                 headers: { 'content-type': 'text/html; charset=utf-8' },
             })
         },

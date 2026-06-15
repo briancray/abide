@@ -1,0 +1,25 @@
+<script>
+  let draft = state('')
+  let todos = state([])
+
+  function add() {
+    if (draft) {
+      todos.push(draft)
+      draft = ''
+    }
+  }
+</script>
+
+<main>
+  <h1>form</h1>
+  <p>Two-way <code>bind:value</code> + a keyed list.</p>
+
+  <input bind:value={draft} placeholder="new todo">
+  <button onclick={add}>add</button>
+
+  <ul>
+    <template each={todos} as="todo" key="todo"><li>{todo}</li></template>
+  </ul>
+
+  <nav><a href="/">← home</a></nav>
+</main>
