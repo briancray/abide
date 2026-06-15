@@ -120,7 +120,7 @@ the child.
 export function cache<Args, Return>(
     fn: RemoteFunction<Args, Return>,
     options?: CacheOptions,
-): (args?: Args) => Promise<Return> | Return
+): (args?: Args) => Promise<Return>
 export function cache<Args>(
     fn: RawRemoteFunction<Args>,
     options?: CacheOptions,
@@ -132,7 +132,7 @@ export function cache<Args, Return>(
 export function cache<Args, Return>(
     fn: AnyRemote<Args, Return> | Producer<Args, Return>,
     options?: CacheOptions,
-): (args?: Args) => Promise<Return | Response> | Return {
+): (args?: Args) => Promise<Return | Response> {
     /*
     Re-wrapping loses the remote's identity (no url/method on the wrapper), so
     the inner remote would silently become an anonymous producer — no shared
@@ -162,7 +162,7 @@ export function cache<Args, Return>(
     if (!isRemote) {
         warnAnonymousProducer(fn as Producer<Args, Return>)
     }
-    const read = (args?: Args): Promise<Return | Response> | Return => {
+    const read = (args?: Args): Promise<Return | Response> => {
         const store = options?.global ? globalCacheStore() : activeCacheStore()
         if (!isRemote) {
             return invokeProducer(store, fn as Producer<Args, Return>, args, options)
@@ -178,32 +178,27 @@ export function cache<Args, Return>(
             adoptTtl(store, existing, options)
         }
         /*
-        Snapshot warm path: hydration pre-decoded the SSR body onto the
-        entry, so the decoded variant returns it synchronously — the first
-        {#await} render resolves without a microtask suspension and matches
-        the SSR DOM. Raw callers always take the Response path. After an
-        invalidate the replacement entry carries no value and falls through
-        to the async fetch as before.
+        Warm path: a value pre-decoded onto the entry — by the SSR cache
+        snapshot the client seeds its store from, or by a cache.on().patch
+        broadcast — is served without a network round-trip. It resolves on a
+        microtask (a settled Promise), not synchronously, so every cache() read
+        is uniformly `Promise<Return>` and `.then`/`.catch`/`.finally` chain
+        cleanly. Raw callers take the Response path; after an invalidate the
+        replacement entry carries no value and falls through to a live fetch.
 
-        The decoded overload is typed `Promise<Return> | Return` so the warm
-        sync return is honest at the type level: a non-thenable is the only
-        thing {#await} can render synchronously, and surfacing the union turns
-        chaining `.then`/`.catch`/`.finally` on a read into a compile error
-        rather than a runtime throw on warm hits. Consume cache via
-        `await`/`{#await}` (both accept the union); in the await form handle
-        errors with `try/catch`, never `.catch`. Raw and producer callers stay
-        `Promise<…>` — they never take this sync path.
+        belte-ui hydration is seamless regardless: a `<template await>` adopts
+        the server-rendered DOM from the streamed resume manifest (it never calls
+        cache() on the first pass), so a microtask warm read costs no flash — the
+        snapshot's job is keeping post-hydration reads (reactivity, invalidation,
+        navigation) warm, not driving the initial paint.
 
-        Each warm read returns its own clone of the stored value: the entry's
-        value is decoded once at hydration and would otherwise be handed by
-        reference to every component reading the key, so one reader mutating
-        it would corrupt the others and the hydrated state. A live fetch hands
-        each reader a freshly-decoded object, so cloning keeps warm reads
-        consistent with that. The clone is synchronous, preserving the
-        {#await}-renders-without-suspension property.
+        Each warm read resolves to its own clone of the stored value: it is
+        decoded once and would otherwise be shared by reference across every
+        reader of the key, so one mutating it would corrupt the others. A live
+        fetch hands each reader a fresh object; cloning keeps warm reads the same.
         */
         if (!isRaw && existing?.value !== undefined) {
-            return structuredClone(existing.value) as Return
+            return Promise.resolve(structuredClone(existing.value)) as Promise<Return>
         }
         const responsePromise = invokeRemote(
             store,

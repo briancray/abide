@@ -110,10 +110,10 @@ describe('cache() snapshot → UI hydration (full server→client loop)', () => 
         const ul = (host.childNodes[0] as unknown as { childNodes: unknown[] })
             .childNodes[1] as unknown as { childNodes: { textContent: string }[] }
         const firstRowBefore = ul.childNodes[0]
-        /* Drop the positional manifest so this proves the *cache* path specifically. */
-        delete RESUME[0]
 
-        // 3) client: a fresh store seeded from the snapshot, then hydrate
+        // 3) client: a fresh store seeded from the snapshot (warms post-hydration
+        //    reads), then hydrate — the await block adopts the SSR DOM from the
+        //    streamed resume manifest, so the verb is never re-dispatched
         const clientStore = createCacheStore()
         for (const entry of inline) {
             clientStore.entries.set(entry.key, cacheEntryFromSnapshot(entry))

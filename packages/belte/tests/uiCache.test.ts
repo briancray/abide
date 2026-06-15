@@ -35,48 +35,71 @@ function resetState(): void {
 beforeEach(resetState)
 afterEach(resetState)
 
+const URL_USERS = 'https://x.test/api/users'
+
+/* A remote-shaped function recording whether its wire call actually fired. */
+function makeRemote(onFetch: () => void) {
+    const rawFn = Object.assign(
+        () => {
+            onFetch()
+            return Promise.resolve(new Response('[]'))
+        },
+        { method: 'GET' as const, url: URL_USERS },
+    )
+    return Object.assign(() => Promise.resolve([] as string[]), {
+        raw: rawFn,
+        [REMOTE_FUNCTION]: true,
+    })
+}
+
+/* A tab store seeded from the SSR cache snapshot, as startClient does. */
+function warmStore() {
+    const store = createCacheStore()
+    store.entries.set(
+        keyForRemoteCall('GET', URL_USERS, undefined),
+        cacheEntryFromSnapshot({
+            key: keyForRemoteCall('GET', URL_USERS, undefined),
+            url: URL_USERS,
+            method: 'GET',
+            status: 200,
+            statusText: 'OK',
+            headers: [['content-type', 'application/json']],
+            body: JSON.stringify(['ada', 'margaret']),
+        }),
+    )
+    return store
+}
+
 /*
-The new UI framework composes with belte's real `belte/shared/cache`: a warm
-cache entry — as the SSR cache snapshot would seed on the client — makes a
-`<template await={cache(fn)()}>` block adopt the server-rendered branch on
-hydrate, synchronously, without re-fetching. This is the keyed counterpart to the
-positional resume manifest: the store is warm, so any reader of the key is sync.
+belte-ui composes with belte's real `belte/shared/cache` by two complementary,
+belte-native mechanisms: the keyed SSR cache snapshot warms the tab store (so reads
+serve without a fetch), and the positional resume manifest drives no-flash
+hydration (a `<template await>` adopts the server DOM from the streamed value,
+never calling cache() on the first pass). cache() itself is uniformly async.
 */
 describe('cache() + UI await-block hydration', () => {
-    test('adopts the SSR branch from a warm cache entry — no fetch', () => {
-        // a remote-shaped function that records whether it was actually called
+    test('a warm cache read serves the snapshot value without fetching (async)', async () => {
         let fetched = false
-        const url = 'https://x.test/api/users'
-        const rawFn = Object.assign(
-            () => {
-                fetched = true
-                return Promise.resolve(new Response('[]'))
-            },
-            { method: 'GET' as const, url },
-        )
-        const getUsers = Object.assign(() => Promise.resolve([] as string[]), {
-            raw: rawFn,
-            [REMOTE_FUNCTION]: true,
+        const getUsers = makeRemote(() => {
+            fetched = true
         })
+        cacheStoreSlot.resolver = () => warmStore()
 
-        // a warm client store, seeded exactly as hydrateCacheFromSnapshot would
-        const store = createCacheStore()
-        const key = keyForRemoteCall('GET', url, undefined)
-        store.entries.set(
-            key,
-            cacheEntryFromSnapshot({
-                key,
-                url,
-                method: 'GET',
-                status: 200,
-                statusText: 'OK',
-                headers: [['content-type', 'application/json']],
-                body: JSON.stringify(['ada', 'margaret']),
-            }),
-        )
-        cacheStoreSlot.resolver = () => store
+        const result = await cache(getUsers)()
+        expect(fetched).toBe(false) // served from the snapshot, the remote never fired
+        expect(result).toEqual(['ada', 'margaret'])
+    })
 
-        // the server-rendered DOM: shell with the resolved branch already in place
+    test('an await(cache()) block hydrates seamlessly from the resume manifest', () => {
+        let fetched = false
+        const getUsers = makeRemote(() => {
+            fetched = true
+        })
+        /* The store is warm (snapshot) for post-hydration reads; the resume manifest
+           carries the streamed value the await block adopts the SSR DOM from. */
+        cacheStoreSlot.resolver = () => warmStore()
+        RESUME[0] = { ok: true, value: ['ada', 'margaret'] }
+
         const host = document.createElement('div')
         host.innerHTML =
             '<main><!--belte:await:0--><ul><li>ada</li><li>margaret</li></ul><!--/belte:await:0--></main>'
@@ -117,9 +140,8 @@ describe('cache() + UI await-block hydration', () => {
             new Function('host', ...names, body)(target, ...values)
         })
 
-        expect(fetched).toBe(false) // warm cache read — the remote never fired
-        expect(RESUME[0]).toBeUndefined() // proven via the cache store, not the manifest
-        expect(ul.childNodes[0]).toBe(firstRowBefore) // SSR rows adopted, not recreated
+        expect(fetched).toBe(false) // adopted from the manifest — cache never dispatched
+        expect(ul.childNodes[0]).toBe(firstRowBefore) // SSR rows adopted in place, no flash
         expect(ul.childNodes.map((row) => row.textContent)).toEqual(['ada', 'margaret'])
     })
 })
