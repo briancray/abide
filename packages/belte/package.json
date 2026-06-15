@@ -61,6 +61,7 @@
         "./shared/pending": "./src/lib/shared/pending.ts",
         "./shared/refreshing": "./src/lib/shared/refreshing.ts",
         "./shared/HttpError": "./src/lib/shared/HttpError.ts",
+        "./shared/html": "./src/lib/shared/html.ts",
         "./shared/withJsonSchema": "./src/lib/shared/withJsonSchema.ts",
         "./shared/health": "./src/lib/shared/health.ts",
         "./shared/log": "./src/lib/shared/log.ts",

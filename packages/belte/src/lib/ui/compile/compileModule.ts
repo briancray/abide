@@ -22,7 +22,8 @@ export function compileModule(source: string): string {
     const userImports = analyzed.imports
     const body = indent(compileComponent(source))
     const ui = `${BELTE_PACKAGE_NAME}/ui`
-    return `import { doc } from '${ui}/doc'
+    return `import { html } from '${BELTE_PACKAGE_NAME}/shared/html'
+import { doc } from '${ui}/doc'
 import { state } from '${ui}/state'
 import { derived } from '${ui}/derived'
 import { effect } from '${ui}/effect'

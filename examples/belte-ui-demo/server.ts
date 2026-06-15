@@ -20,7 +20,7 @@ A real multi-page belte-ui app, end to end through the actual pipeline:
 In a published app these would be `belte build` / `belte start`.
 */
 
-const UI_SRC = resolve(import.meta.dir, '../../packages/belte/src/lib/ui')
+const LIB_SRC = resolve(import.meta.dir, '../../packages/belte/src/lib')
 const PAGES: Record<string, string> = {
     '/': 'Home.belte',
     '/about': 'About.belte',
@@ -28,14 +28,15 @@ const PAGES: Record<string, string> = {
     '/data': 'Data.belte',
 }
 
-/* Maps the `@belte/belte/ui/*` specifiers compiled components emit (and the bare
-   `belte/ui/*` this demo's own files use) to the framework source — a published
-   app resolves them through `@belte/belte`'s package exports instead. */
+/* Maps the `@belte/belte/ui/*` and `@belte/belte/shared/*` specifiers compiled
+   components emit (and the bare `belte/ui/*` this demo's own files use) to the
+   framework source — a published app resolves them through `@belte/belte`'s
+   package exports instead. */
 const belteUiResolver: BunPlugin = {
     name: 'belte-ui-resolve',
     setup(build) {
-        build.onResolve({ filter: /^(@belte\/belte|belte)\/ui\// }, (args) => ({
-            path: `${resolve(UI_SRC, args.path.replace(/^(@belte\/belte|belte)\/ui\//, ''))}.ts`,
+        build.onResolve({ filter: /^(@belte\/belte|belte)\/(ui|shared)\// }, (args) => ({
+            path: `${resolve(LIB_SRC, args.path.replace(/^(@belte\/belte|belte)\//, ''))}.ts`,
         }))
     },
 }

@@ -47,7 +47,7 @@ export function generateSSR(
                     if (part.kind === 'static') {
                         return part.value.trim() === '' ? '' : push(target, part.value)
                     }
-                    return `${target}.push($esc(${lowerExpression(part.code)}));\n`
+                    return `${target}.push($text(${lowerExpression(part.code)}));\n`
                 })
                 .join('')
         }
