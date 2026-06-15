@@ -1,0 +1,31 @@
+<script>
+  let draft = state('')
+  let order = state(['1'])
+  let byId = state({ '1': { text: 'first' } })
+  let nextId = state(2)
+
+  let count = derived(() => order.length)
+
+  function add() {
+    const id = String(nextId)
+    byId[id] = { text: draft }
+    order.push(id)
+    nextId += 1
+    draft = ''
+  }
+</script>
+
+<input bind:value={draft}>
+<button onclick={add}>Add</button>
+<p>Draft: {draft}</p>
+<p>Count: {count}</p>
+
+<template if={draft}>
+  <small>typing…</small>
+</template>
+
+<ul>
+  <template each={order} as="id" key="id">
+    <li>{byId[id].text}</li>
+  </template>
+</ul>
