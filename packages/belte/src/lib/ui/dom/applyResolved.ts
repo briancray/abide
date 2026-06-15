@@ -1,8 +1,11 @@
+import { RESUME } from '../runtime/RESUME.ts'
+
 /*
 Client consumer of an SSR stream fragment. Parses a streamed
-`<belte-resolve data-id="ID">…</belte-resolve>` frame, finds the matching
-`<!--belte:await:ID-->…<!--/belte:await:ID-->` boundary in `root`, removes the
-pending nodes between the markers, and inserts the resolved content in their
+`<belte-resolve data-id="ID" data-resume="…">…</belte-resolve>` frame, registers
+its serialized value in the resume manifest (for later hydration), finds the
+matching `<!--belte:await:ID-->…<!--/belte:await:ID-->` boundary in `root`, removes
+the pending nodes between the markers, and inserts the resolved content in their
 place. The pending shell painted instantly; this swaps in each value as it
 arrives — completing the out-of-order streaming loop on the client.
 */
@@ -17,6 +20,15 @@ export function applyResolved(root: Element, frame: string): void {
     const id = resolved.getAttribute('data-id')
     if (id === null) {
         return
+    }
+    /* Record the resolved value so a later hydrate adopts this branch (no re-fetch). */
+    const resume = resolved.getAttribute('data-resume')
+    if (resume !== null) {
+        try {
+            RESUME[Number(id)] = JSON.parse(resume)
+        } catch {
+            /* malformed payload — leave unregistered, hydration re-runs the promise */
+        }
     }
     const open = `belte:await:${id}`
     const close = `/belte:await:${id}`

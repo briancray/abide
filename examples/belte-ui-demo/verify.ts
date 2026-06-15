@@ -53,6 +53,10 @@ try {
         '/data streamed the fetched data',
     )
     assert(data.includes('__belteSwap()'), '/data includes the inline swap script')
+    assert(
+        data.includes('data-resume='),
+        '/data streamed the resume manifest (await resumes without re-fetch)',
+    )
 } finally {
     server.stop()
 }

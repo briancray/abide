@@ -19,6 +19,9 @@ export function generateBuild(
     scopeAttribute: string | undefined,
 ): string {
     let counter = 0
+    /* Await ids count in document order, matching the SSR back-end's counter, so a
+       client `await` block and its SSR boundary/resume value share one id. */
+    let awaitId = 0
     const nextVar = (prefix: string): string => `${prefix}${counter++}`
 
     /* Rewrites signal refs, then lowers a single expression (no trailing `;`). */
@@ -176,8 +179,9 @@ export function generateBuild(
         const pending = node.children.filter((child) => child.kind !== 'branch')
         const thenBranch = node.children.find(isBranch('then'))
         const catchBranch = node.children.find(isBranch('catch'))
+        const id = awaitId++
         return (
-            `awaitBlock(${parentVar}, () => (${lowerExpression(node.promise)}), ` +
+            `awaitBlock(${parentVar}, ${id}, () => (${lowerExpression(node.promise)}), ` +
             `${renderThunk(pending, undefined)}, ` +
             `${renderThunk(branchChildren(thenBranch), branchVar(thenBranch), '_value')}, ` +
             `${renderThunk(branchChildren(catchBranch), branchVar(catchBranch), '_error')});\n`

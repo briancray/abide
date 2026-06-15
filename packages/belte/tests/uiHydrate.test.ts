@@ -5,6 +5,8 @@ import { derived } from '../src/lib/ui/derived.ts'
 import { doc } from '../src/lib/ui/doc.ts'
 import { appendStatic } from '../src/lib/ui/dom/appendStatic.ts'
 import { appendText } from '../src/lib/ui/dom/appendText.ts'
+import { applyResolved } from '../src/lib/ui/dom/applyResolved.ts'
+import { awaitBlock } from '../src/lib/ui/dom/awaitBlock.ts'
 import { each } from '../src/lib/ui/dom/each.ts'
 import { hydrate } from '../src/lib/ui/dom/hydrate.ts'
 import { on } from '../src/lib/ui/dom/on.ts'
@@ -13,6 +15,8 @@ import { openRoot } from '../src/lib/ui/dom/openRoot.ts'
 import { switchBlock } from '../src/lib/ui/dom/switchBlock.ts'
 import { when } from '../src/lib/ui/dom/when.ts'
 import { effect } from '../src/lib/ui/effect.ts'
+import { renderToStream } from '../src/lib/ui/renderToStream.ts'
+import { RESUME } from '../src/lib/ui/runtime/RESUME.ts'
 import type { SsrRender } from '../src/lib/ui/runtime/types/SsrRender.ts'
 import { state } from '../src/lib/ui/state.ts'
 import { installMiniDom } from './support/installMiniDom.ts'
@@ -316,5 +320,77 @@ describe('hydrate — adopt server DOM', () => {
         )
         expect((greeting as unknown as { childNodes: unknown[] }).childNodes[0]).toBe(spanBefore)
         expect(host.textContent).toBe('Hi world')
+    })
+
+    test('resumes a streamed await branch from the manifest (no re-fetch)', async () => {
+        // a call counter proves the promise runs once on the server, never on resume
+        let calls = 0
+        ;(globalThis as { __fetchUsers?: () => Promise<string[]> }).__fetchUsers = () => {
+            calls += 1
+            return Promise.resolve(['ada', 'margaret'])
+        }
+        const source = `
+            <main>
+                <template await={__fetchUsers()}>
+                    <p>loading…</p>
+                    <template then="users">
+                        <ul><template each={users} as="u" key="u"><li>{u}</li></template></ul>
+                    </template>
+                </template>
+            </main>
+        `
+
+        // 1) server render → stream the pending shell, then the resolved fragment
+        const render = (): SsrRender =>
+            new Function('doc', 'state', 'derived', 'effect', compileSSR(source))(
+                doc,
+                state,
+                derived,
+                effect,
+            ) as SsrRender
+        const chunks: string[] = []
+        for await (const chunk of renderToStream(render)) {
+            chunks.push(chunk)
+        }
+        expect(calls).toBe(1) // awaited once, on the server
+        expect(chunks[0]).toContain('loading…') // pending shell painted first
+
+        // 2) apply the streamed frame: swaps the resolved branch in + registers resume
+        const host = document.createElement('div')
+        host.innerHTML = chunks[0]
+        for (const frame of chunks.slice(1)) {
+            applyResolved(host, frame)
+        }
+        expect(RESUME[0]).toEqual({ ok: true, value: ['ada', 'margaret'] })
+        const ul = (host.childNodes[0] as unknown as { childNodes: unknown[] })
+            .childNodes[1] as unknown as { childNodes: { textContent: string }[] }
+        const firstRowBefore = ul.childNodes[0]
+        expect(ul.childNodes.map((row) => row.textContent)).toEqual(['ada', 'margaret'])
+
+        // 3) hydrate — adopts the resolved branch from the manifest, no re-fetch
+        const runtime = {
+            doc,
+            state,
+            derived,
+            effect,
+            openChild,
+            openRoot,
+            appendText,
+            appendStatic,
+            on,
+            when,
+            each,
+            awaitBlock,
+        }
+        const names = Object.keys(runtime)
+        const values = names.map((n) => runtime[n as keyof typeof runtime])
+        const body = compileComponent(source)
+        hydrate(host, (target) => {
+            new Function('host', ...names, body)(target, ...values)
+        })
+
+        expect(calls).toBe(1) // resumed from the manifest — the promise never re-ran
+        expect(ul.childNodes[0]).toBe(firstRowBefore) // rows adopted, not recreated
+        expect(ul.childNodes.map((row) => row.textContent)).toEqual(['ada', 'margaret'])
     })
 })
