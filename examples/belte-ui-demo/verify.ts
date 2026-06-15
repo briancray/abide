@@ -21,7 +21,12 @@ assert(clientJs.includes('.cell('), 'bundle uses hoisted cells')
 assert(clientJs.includes('popstate'), 'bundle includes the router')
 
 /* 2) each route server-renders */
-assert((await renderShell('/')).includes('<button>count: 0</button>'), 'home SSR ok')
+const homeShell = await renderShell('/')
+assert(homeShell.includes('count: 0'), 'home SSR ok')
+assert(
+    homeShell.includes('<style>') && homeShell.includes('h1[data-b-'),
+    'home SSR includes scoped styles',
+)
 assert((await renderShell('/about')).includes('<h1>about</h1>'), 'about SSR ok')
 assert((await renderShell('/form')).includes('placeholder="new todo"'), 'form SSR ok (input)')
 

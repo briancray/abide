@@ -16,6 +16,7 @@ export function generateBuild(
     hostVar: string,
     stateNames: ReadonlySet<string>,
     derivedNames: ReadonlySet<string>,
+    scopeAttribute: string | undefined,
 ): string {
     let counter = 0
     const nextVar = (prefix: string): string => `${prefix}${counter++}`
@@ -39,6 +40,9 @@ export function generateBuild(
     } {
         const varName = nextVar('el')
         let code = `const ${varName} = document.createElement(${JSON.stringify(node.tag)});\n`
+        if (scopeAttribute !== undefined) {
+            code += `${varName}.setAttribute(${JSON.stringify(scopeAttribute)}, "");\n`
+        }
         for (const attr of node.attrs) {
             if (attr.kind === 'static') {
                 code += `${varName}.setAttribute(${JSON.stringify(attr.name)}, ${JSON.stringify(attr.value)});\n`

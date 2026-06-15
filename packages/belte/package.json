@@ -83,6 +83,7 @@
         "./ui/dom/awaitBlock": "./src/lib/ui/dom/awaitBlock.ts",
         "./ui/dom/switchBlock": "./src/lib/ui/dom/switchBlock.ts",
         "./ui/dom/applyResolved": "./src/lib/ui/dom/applyResolved.ts",
+        "./ui/dom/injectStyle": "./src/lib/ui/dom/injectStyle.ts",
         "./ui/router": "./src/lib/ui/router.ts",
         "./ui/navigate": "./src/lib/ui/navigate.ts",
         "./ui/renderToStream": "./src/lib/ui/renderToStream.ts",

@@ -27,6 +27,7 @@ import { each } from 'belte/ui/dom/each'
 import { when } from 'belte/ui/dom/when'
 import { awaitBlock } from 'belte/ui/dom/awaitBlock'
 import { switchBlock } from 'belte/ui/dom/switchBlock'
+import { injectStyle } from 'belte/ui/dom/injectStyle'
 
 export default function component(host, $props) {
     return mount(host, (host) => {

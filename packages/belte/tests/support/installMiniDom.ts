@@ -292,6 +292,7 @@ export function installMiniDom(): () => void {
     }
 
     const document = {
+        head: new MiniElement('head'),
         createElement: (tagName: string) => new MiniElement(tagName),
         createTextNode: (data: string) => new MiniText(data),
         createComment: (data: string) => new MiniComment(data),

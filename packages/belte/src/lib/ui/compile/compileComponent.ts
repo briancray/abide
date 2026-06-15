@@ -11,7 +11,12 @@ scope and defines `model` itself. `compileModule` wraps it (and the SSR body) in
 a real module; tests wrap it with `new Function`.
 */
 export function compileComponent(source: string): string {
-    const { script, stateNames, derivedNames, nodes } = analyzeComponent(source)
-    const build = generateBuild(nodes, 'host', stateNames, derivedNames)
-    return `${script}\n${hoistCells(build, 'model')}`
+    const { script, stateNames, derivedNames, nodes, style } = analyzeComponent(source)
+    const build = generateBuild(nodes, 'host', stateNames, derivedNames, style?.attribute)
+    /* A `<style>` block injects its scoped CSS once (deduped by attribute). */
+    const inject =
+        style === undefined
+            ? ''
+            : `injectStyle(${JSON.stringify(style.attribute)}, ${JSON.stringify(style.css)});\n`
+    return `${script}\n${inject}${hoistCells(build, 'model')}`
 }

@@ -14,9 +14,12 @@ front-end, then the SSR back-end, and returns `{ html, state, awaits }`:
 Runs with `doc`/`state`/`derived`/`effect` in scope and defines `model`.
 */
 export function compileSSR(source: string): string {
-    const { script, stateNames, derivedNames, nodes } = analyzeComponent(source)
-    const ssr = generateSSR(nodes, stateNames, derivedNames)
+    const { script, stateNames, derivedNames, nodes, style } = analyzeComponent(source)
+    const ssr = generateSSR(nodes, stateNames, derivedNames, style?.attribute)
+    /* A `<style>` block's scoped CSS is emitted into the markup. */
+    const stylePush =
+        style === undefined ? '' : `$out.push(${JSON.stringify(`<style>${style.css}</style>`)});\n`
     /* `typeof model` guards a component with no reactive state (a pure-async or
        static component declares no `model`); its snapshot is then empty. */
-    return `${script}\n${SSR_ESCAPE}\nconst $out = [];\nconst $awaits = [];\n${ssr}return { html: $out.join(''), state: (typeof model !== 'undefined' ? model.snapshot() : {}), awaits: $awaits };`
+    return `${script}\n${SSR_ESCAPE}\nconst $out = [];\nconst $awaits = [];\n${stylePush}${ssr}return { html: $out.join(''), state: (typeof model !== 'undefined' ? model.snapshot() : {}), awaits: $awaits };`
 }

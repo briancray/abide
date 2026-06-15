@@ -11,4 +11,7 @@ export type AnalyzedComponent = {
     stateNames: Set<string>
     derivedNames: Set<string>
     nodes: TemplateNode[]
+    /* Present when the component has a `<style>`: the scope attribute every
+       element carries and the scoped CSS to inject. */
+    style: { attribute: string; css: string } | undefined
 }

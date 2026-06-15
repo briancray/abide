@@ -23,3 +23,12 @@
     <template else><p class="empty">no items yet</p></template>
   </template>
 </main>
+
+<style>
+  main { font-family: system-ui, sans-serif; max-width: 40rem; margin: 2rem auto; color: #1a1a1a; }
+  h1 { color: #6b46c1; }
+  nav { margin-bottom: 1rem; }
+  button { margin-right: 0.5rem; padding: 0.4rem 0.8rem; cursor: pointer; }
+  .empty { color: #999; }
+  li { padding: 0.2rem 0; }
+</style>

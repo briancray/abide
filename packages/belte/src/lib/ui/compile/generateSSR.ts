@@ -19,6 +19,7 @@ export function generateSSR(
     nodes: TemplateNode[],
     stateNames: ReadonlySet<string>,
     derivedNames: ReadonlySet<string>,
+    scopeAttribute: string | undefined,
 ): string {
     let awaitId = 0
 
@@ -111,6 +112,9 @@ export function generateSSR(
             return `${target}.push($props && $props.$children ? $props.$children() : '');\n`
         }
         let code = push(target, `<${node.tag}`)
+        if (scopeAttribute !== undefined) {
+            code += push(target, ` ${scopeAttribute}=""`)
+        }
         for (const attr of node.attrs) {
             if (attr.kind === 'static') {
                 code += push(target, ` ${attr.name}="${attr.value}"`)
