@@ -92,6 +92,7 @@
         "./ui/router": "./src/lib/ui/router.ts",
         "./ui/navigate": "./src/lib/ui/navigate.ts",
         "./ui/renderToStream": "./src/lib/ui/renderToStream.ts",
+        "./ui/installCacheReactivity": "./src/lib/ui/installCacheReactivity.ts",
         "./ui-plugin": "./src/lib/ui/compile/belteUiPlugin.ts",
         "./mcp/createMcpServer": "./src/lib/mcp/createMcpServer.ts",
         "./bundle/BundleWindow": "./src/lib/bundle/BundleWindow.ts",
