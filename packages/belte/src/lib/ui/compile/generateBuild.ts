@@ -33,13 +33,16 @@ export function generateBuild(
         return lowerDocAccess(renamed, 'model').trim()
     }
 
-    /* Builds an element and its children; returns the build code and its var. */
-    function generateElement(node: Extract<TemplateNode, { kind: 'element' }>): {
-        code: string
-        varName: string
-    } {
+    /* Builds an element and its children; returns the build code and its var.
+       `varExpr` is how the element is obtained — `openChild(parent, tag)` for a
+       child (create-or-claim), or `document.createElement(tag)` for a returned
+       root (rows/branches, which are create-only). */
+    function generateElement(
+        node: Extract<TemplateNode, { kind: 'element' }>,
+        varExpr: string,
+    ): { code: string; varName: string } {
         const varName = nextVar('el')
-        let code = `const ${varName} = document.createElement(${JSON.stringify(node.tag)});\n`
+        let code = `const ${varName} = ${varExpr};\n`
         if (scopeAttribute !== undefined) {
             code += `${varName}.setAttribute(${JSON.stringify(scopeAttribute)}, "");\n`
         }
@@ -73,9 +76,9 @@ export function generateBuild(
                     if (part.value.trim() === '') {
                         continue // drop insignificant whitespace between elements
                     }
-                    code += `${parentVar}.appendChild(document.createTextNode(${JSON.stringify(part.value)}));\n`
+                    code += `appendStatic(${parentVar}, ${JSON.stringify(part.value)});\n`
                 } else {
-                    code += `${parentVar}.appendChild(text(() => (${lowerExpression(part.code)})));\n`
+                    code += `appendText(${parentVar}, () => (${lowerExpression(part.code)}));\n`
                 }
             }
             return code
@@ -85,8 +88,9 @@ export function generateBuild(
             return `if ($props && $props.$children) { $props.$children(${parentVar}); }\n`
         }
         if (node.kind === 'element') {
-            const built = generateElement(node)
-            return `${built.code}${parentVar}.appendChild(${built.varName});\n`
+            /* openChild appends (create) or claims (hydrate) — no separate append. */
+            return generateElement(node, `openChild(${parentVar}, ${JSON.stringify(node.tag)})`)
+                .code
         }
         if (node.kind === 'if') {
             return generateIf(node, parentVar)
@@ -197,7 +201,7 @@ export function generateBuild(
         if (root === undefined || root.kind !== 'element') {
             return fallback === undefined ? 'undefined' : `() => document.createTextNode("")`
         }
-        const built = generateElement(root)
+        const built = generateElement(root, `document.createElement(${JSON.stringify(root.tag)})`)
         const param = fallback === undefined ? '' : (paramName ?? fallback)
         return `(${param}) => {\n${built.code}return ${built.varName};\n}`
     }
@@ -251,7 +255,9 @@ export function generateBuild(
         if (root === undefined || root.kind !== 'element') {
             throw new Error(`[belte] ${message}`)
         }
-        return generateElement(root)
+        /* A returned root (row/branch) is created directly — these live inside
+           control-flow blocks, which are create-mode only. */
+        return generateElement(root, `document.createElement(${JSON.stringify(root.tag)})`)
     }
 
     return nodes.map((node) => generateChild(node, hostVar)).join('')

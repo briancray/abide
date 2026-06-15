@@ -110,6 +110,14 @@ export function installMiniDom(): () => void {
         get textContent(): string {
             return this.data
         }
+        /* Splits at `offset`: this node keeps the first part, a new sibling holds
+           the rest (used by hydration to separate merged SSR text). */
+        splitText(offset: number): MiniText {
+            const rest = new MiniText(this.data.slice(offset))
+            this.data = this.data.slice(0, offset)
+            this.parentNode?.insertBefore(rest, this.nextSibling)
+            return rest
+        }
     }
 
     /* A comment node — used as a streaming/hydration boundary marker. */

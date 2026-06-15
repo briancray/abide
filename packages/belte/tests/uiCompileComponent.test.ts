@@ -2,9 +2,12 @@ import { beforeAll, describe, expect, test } from 'bun:test'
 import { compileComponent } from '../src/lib/ui/compile/compileComponent.ts'
 import { compileModule } from '../src/lib/ui/compile/compileModule.ts'
 import { doc } from '../src/lib/ui/doc.ts'
+import { appendStatic } from '../src/lib/ui/dom/appendStatic.ts'
+import { appendText } from '../src/lib/ui/dom/appendText.ts'
 import { attr } from '../src/lib/ui/dom/attr.ts'
 import { each } from '../src/lib/ui/dom/each.ts'
 import { on } from '../src/lib/ui/dom/on.ts'
+import { openChild } from '../src/lib/ui/dom/openChild.ts'
 import { text } from '../src/lib/ui/dom/text.ts'
 import { when } from '../src/lib/ui/dom/when.ts'
 import { effect } from '../src/lib/ui/effect.ts'
@@ -18,16 +21,20 @@ beforeAll(() => {
 function render(source: string): HTMLElement {
     const body = compileComponent(source)
     const host = document.createElement('div')
-    new Function('host', 'doc', 'text', 'attr', 'on', 'each', 'when', 'effect', body)(
-        host,
-        doc,
-        text,
-        attr,
-        on,
-        each,
-        when,
-        effect,
-    )
+    new Function(
+        'host',
+        'doc',
+        'text',
+        'openChild',
+        'appendText',
+        'appendStatic',
+        'attr',
+        'on',
+        'each',
+        'when',
+        'effect',
+        body,
+    )(host, doc, text, openChild, appendText, appendStatic, attr, on, each, when, effect)
     return host
 }
 
@@ -79,17 +86,21 @@ describe('compileComponent — end to end', () => {
             </div>
         `)
         const host = document.createElement('div')
-        new Function('host', 'doc', 'text', 'attr', 'on', 'each', 'when', 'effect', 'model', body)(
-            host,
-            doc,
-            text,
-            attr,
-            on,
-            each,
-            when,
-            effect,
-            model,
-        )
+        new Function(
+            'host',
+            'doc',
+            'text',
+            'openChild',
+            'appendText',
+            'appendStatic',
+            'attr',
+            'on',
+            'each',
+            'when',
+            'effect',
+            'model',
+            body,
+        )(host, doc, text, openChild, appendText, appendStatic, attr, on, each, when, effect, model)
         const div = host.childNodes[0] as unknown as { textContent: string }
         expect(div.textContent).toBe('hi')
         model.replace('label', 'yo') // field-reactive while shown
@@ -122,16 +133,20 @@ describe('compileComponent — end to end', () => {
             </ul>
         `)
         const host = document.createElement('div')
-        new Function('host', 'doc', 'text', 'attr', 'on', 'each', 'effect', 'model', body)(
-            host,
-            doc,
-            text,
-            attr,
-            on,
-            each,
-            effect,
-            model,
-        )
+        new Function(
+            'host',
+            'doc',
+            'text',
+            'openChild',
+            'appendText',
+            'appendStatic',
+            'attr',
+            'on',
+            'each',
+            'effect',
+            'model',
+            body,
+        )(host, doc, text, openChild, appendText, appendStatic, attr, on, each, effect, model)
         const list = host.childNodes[0] as unknown as { children: Element[] }
         expect(list.children.map((child) => child.textContent)).toEqual(['1', '2'])
         model.replace('byId/a/n', 9)

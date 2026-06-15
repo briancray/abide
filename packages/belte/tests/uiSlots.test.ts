@@ -3,11 +3,14 @@ import { compileComponent } from '../src/lib/ui/compile/compileComponent.ts'
 import { compileSSR } from '../src/lib/ui/compile/compileSSR.ts'
 import { derived } from '../src/lib/ui/derived.ts'
 import { doc } from '../src/lib/ui/doc.ts'
+import { appendStatic } from '../src/lib/ui/dom/appendStatic.ts'
+import { appendText } from '../src/lib/ui/dom/appendText.ts'
 import { attr } from '../src/lib/ui/dom/attr.ts'
 import { awaitBlock } from '../src/lib/ui/dom/awaitBlock.ts'
 import { each } from '../src/lib/ui/dom/each.ts'
 import { mount } from '../src/lib/ui/dom/mount.ts'
 import { on } from '../src/lib/ui/dom/on.ts'
+import { openChild } from '../src/lib/ui/dom/openChild.ts'
 import { switchBlock } from '../src/lib/ui/dom/switchBlock.ts'
 import { text } from '../src/lib/ui/dom/text.ts'
 import { when } from '../src/lib/ui/dom/when.ts'
@@ -25,6 +28,9 @@ const RUNTIME = {
     state,
     derived,
     effect,
+    openChild,
+    appendText,
+    appendStatic,
     text,
     attr,
     on,
