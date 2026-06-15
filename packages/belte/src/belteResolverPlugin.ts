@@ -555,20 +555,20 @@ ${optionLines}
 
                 if (args.path === 'belte:bundle-disconnected-component') {
                     /*
-                    The Svelte component the connect-screen build mounts: the project's
-                    src/bundle/disconnected.svelte override when present, otherwise the
-                    lib default. Re-exports the default like belte:bundle-window; the
-                    svelte loader plugin compiles the .svelte target either way.
+                    The belte-ui component the connect-screen build mounts: the project's
+                    src/bundle/disconnected.belte override when present, otherwise the lib
+                    default. Re-exports the default like belte:bundle-window; the belte-ui
+                    `.belte` loader compiles the target either way.
                     */
-                    const userFile = `${cwd}/src/bundle/disconnected.svelte`
+                    const userFile = `${cwd}/src/bundle/disconnected.belte`
                     if (existsSync(userFile)) {
-                        belteLog.info('using custom src/bundle/disconnected.svelte')
+                        belteLog.info('using custom src/bundle/disconnected.belte')
                         return {
                             contents: `export { default } from ${JSON.stringify(userFile)}`,
                             loader: 'js',
                         }
                     }
-                    const defaultFile = new URL('./lib/bundle/disconnected.svelte', import.meta.url)
+                    const defaultFile = new URL('./lib/bundle/disconnected.belte', import.meta.url)
                         .pathname
                     return {
                         contents: `export { default } from ${JSON.stringify(defaultFile)}`,

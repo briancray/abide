@@ -28,13 +28,14 @@ const PAGES: Record<string, string> = {
     '/data': 'Data.belte',
 }
 
-/* Maps the `belte/ui/*` specifiers compiled components emit to the framework
-   source (a published package resolves them through `@belte/belte`'s exports). */
+/* Maps the `@belte/belte/ui/*` specifiers compiled components emit (and the bare
+   `belte/ui/*` this demo's own files use) to the framework source — a published
+   app resolves them through `@belte/belte`'s package exports instead. */
 const belteUiResolver: BunPlugin = {
     name: 'belte-ui-resolve',
     setup(build) {
-        build.onResolve({ filter: /^belte\/ui\// }, (args) => ({
-            path: `${resolve(UI_SRC, args.path.replace(/^belte\/ui\//, ''))}.ts`,
+        build.onResolve({ filter: /^(@belte\/belte|belte)\/ui\// }, (args) => ({
+            path: `${resolve(UI_SRC, args.path.replace(/^(@belte\/belte|belte)\/ui\//, ''))}.ts`,
         }))
     },
 }

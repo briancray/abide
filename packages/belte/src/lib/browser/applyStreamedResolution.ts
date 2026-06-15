@@ -1,7 +1,7 @@
+import { cacheEntryFromSnapshot } from '../shared/cacheEntryFromSnapshot.ts'
 import { invalidateEvent } from '../shared/invalidateEvent.ts'
 import type { CacheStore } from '../shared/types/CacheStore.ts'
 import type { StreamedResolution } from '../shared/types/StreamedResolution.ts'
-import { cacheEntryFromSnapshot } from '../shared/cacheEntryFromSnapshot.ts'
 import { refetchPlaceholder } from './refetchPlaceholder.ts'
 import type { StreamingDeferred } from './types/StreamingDeferred.ts'
 

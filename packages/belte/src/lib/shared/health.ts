@@ -1,6 +1,6 @@
-import { createSubscriber } from './createSubscriber.ts'
 import { canonicalJson } from './canonicalJson.ts'
 import { createLivenessWatch } from './createLivenessWatch.ts'
+import { createSubscriber } from './createSubscriber.ts'
 import { HEALTH_PATH } from './HEALTH_PATH.ts'
 import { healthReadSlot } from './healthReadSlot.ts'
 import { healthSeedSlot } from './healthSeedSlot.ts'

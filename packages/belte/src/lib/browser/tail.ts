@@ -1,5 +1,5 @@
-import { createSubscriber } from '../shared/createSubscriber.ts'
 import { createLifecycleChannel } from '../shared/createLifecycleChannel.ts'
+import { createSubscriber } from '../shared/createSubscriber.ts'
 import { SocketDisconnectedError } from '../shared/SocketDisconnectedError.ts'
 import { tailProbeSlot } from '../shared/tailProbeSlot.ts'
 import type { Subscribable } from '../shared/types/Subscribable.ts'

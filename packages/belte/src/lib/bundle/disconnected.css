@@ -6,4 +6,4 @@ compiles this at build time; buildDisconnected inlines the result into the serve
 HTML so the screen needs zero external requests.
 */
 @import 'tailwindcss';
-@source './disconnected.svelte';
+@source './disconnected.belte';

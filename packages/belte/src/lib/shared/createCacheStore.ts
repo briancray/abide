@@ -1,5 +1,5 @@
-import { createSubscriber } from './createSubscriber.ts'
 import { createLifecycleChannel } from './createLifecycleChannel.ts'
+import { createSubscriber } from './createSubscriber.ts'
 import { keyMatchesPrefix } from './keyMatchesPrefix.ts'
 import type { CacheEntry } from './types/CacheEntry.ts'
 import type { CacheInvalidation } from './types/CacheInvalidation.ts'
