@@ -17,6 +17,6 @@ export function compileComponent(source: string): string {
     const inject =
         style === undefined
             ? ''
-            : `injectStyle(${JSON.stringify(style.attribute)}, ${JSON.stringify(style.css)});\n`
+            : `injectStyle(host, ${JSON.stringify(style.attribute)}, ${JSON.stringify(style.css)});\n`
     return `${script}\n${inject}${hoistCells(build, 'model')}`
 }

@@ -9,6 +9,7 @@ import { applyResolved } from '../src/lib/ui/dom/applyResolved.ts'
 import { awaitBlock } from '../src/lib/ui/dom/awaitBlock.ts'
 import { each } from '../src/lib/ui/dom/each.ts'
 import { hydrate } from '../src/lib/ui/dom/hydrate.ts'
+import { injectStyle } from '../src/lib/ui/dom/injectStyle.ts'
 import { on } from '../src/lib/ui/dom/on.ts'
 import { openChild } from '../src/lib/ui/dom/openChild.ts'
 import { openRoot } from '../src/lib/ui/dom/openRoot.ts'
@@ -395,4 +396,73 @@ describe('hydrate — adopt server DOM', () => {
 
         delete RESUME[0] // the manifest is process-global; don't leak into other tests
     })
+
+    test('adopts past a scoped <style> without shifting the cursor', () => {
+        // mirrors the demo bug: SSR emits the component's <style> as its first node;
+        // injectStyle must claim it on hydrate so the body roots line up
+        const model = doc({ total: 0 })
+        const source = `
+            <section>
+                <button>a</button>
+                <button>b</button>
+                <template if={model.total}><ul></ul><template else><p class="empty">empty</p></template></template>
+            </section>
+            <style>.empty { color: #999 }</style>
+        `
+        const runtime = {
+            doc,
+            state,
+            derived,
+            effect,
+            openChild,
+            openRoot,
+            appendText,
+            appendStatic,
+            on,
+            when,
+            each,
+            switchBlock,
+            injectStyle,
+            model,
+        }
+        const names = Object.keys(runtime)
+        const values = names.map((n) => runtime[n as keyof typeof runtime])
+        const server = new Function(
+            'doc',
+            'state',
+            'derived',
+            'effect',
+            'model',
+            compileSSR(source),
+        )(doc, state, derived, effect, model) as SsrRender
+        // SSR ships <style> first, then <section>
+        expect(server.html.startsWith('<style>')).toBe(true)
+
+        const host = document.createElement('div')
+        host.innerHTML = server.html
+        const section = host.childNodes[1] as unknown as {
+            childNodes: { tagName?: string; textContent: string }[]
+        }
+        const pBefore = section.childNodes[2] // after the two buttons
+
+        // throws (el.setAttribute) before the fix; passes after
+        hydrate(host, (target) => {
+            new Function('host', ...names, body(source))(target, ...values)
+        })
+
+        // the else <p> was adopted in place, not built over a shifted node
+        expect(section.childNodes[2]).toBe(pBefore)
+        expect((pBefore as { textContent: string }).textContent).toBe('empty')
+
+        // reactive after hydrate: showing the list swaps the empty branch for the ul
+        model.replace('total', 1)
+        const tags = section.childNodes.map((node) => node.tagName).filter(Boolean)
+        expect(tags).toContain('ul') // then-branch now shown
+        expect(tags).not.toContain('p') // empty branch removed
+    })
 })
+
+/* Compile a component body once for the test above. */
+function body(source: string): string {
+    return compileComponent(source)
+}
