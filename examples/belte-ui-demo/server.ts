@@ -119,14 +119,21 @@ export async function serve(port = 3737) {
     return Bun.serve({
         port,
         async fetch(request) {
-            const path = new URL(request.url).pathname
-            if (!(path in PAGES)) {
+            const url = new URL(request.url)
+            /* A real data endpoint (slow, to show streaming). */
+            if (url.pathname === '/api/users') {
+                await new Promise((resolve) => setTimeout(resolve, 60))
+                return Response.json(['ada', 'grace', 'linus', 'margaret'])
+            }
+            if (!(url.pathname in PAGES)) {
                 return new Response('not found', { status: 404 })
             }
-            if (path === '/data') {
-                return streamResponse(compileRender(await pageSource(path)), clientJs)
+            if (url.pathname === '/data') {
+                /* SSR fetches its own API with an absolute URL during render. */
+                ;(globalThis as { BELTE_ORIGIN?: string }).BELTE_ORIGIN = url.origin
+                return streamResponse(compileRender(await pageSource(url.pathname)), clientJs)
             }
-            return new Response(document(await renderShell(path), clientJs), {
+            return new Response(document(await renderShell(url.pathname), clientJs), {
                 headers: { 'content-type': 'text/html; charset=utf-8' },
             })
         },

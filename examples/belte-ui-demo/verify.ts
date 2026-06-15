@@ -39,12 +39,15 @@ try {
         'GET / served page + bundle',
     )
 
+    const api = await (await fetch(`${server.url}api/users`)).json()
+    assert(Array.isArray(api) && api.includes('ada'), 'GET /api/users returns real JSON data')
+
     const data = await (await fetch(`${server.url}data`)).text()
     assert(data.includes('loading users…'), '/data streamed the pending shell')
     assert(data.includes('<belte-resolve'), '/data streamed a resolved fragment')
     assert(
         data.includes('<li>ada</li>') && data.includes('<li>margaret</li>'),
-        '/data streamed the data',
+        '/data streamed the fetched data (SSR fetched its own API)',
     )
     assert(data.includes('__belteSwap()'), '/data includes the inline swap script')
 } finally {
