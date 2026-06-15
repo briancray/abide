@@ -141,13 +141,11 @@ export function parseTemplate(source: string): TemplateNode[] {
             cursor += 1
         }
         cursor += 1 // past '>'
-        /* A capitalised tag is a child component; its attributes become props.
-           (Slot children are a future addition — not parsed yet.) */
+        /* A capitalised tag is a child component; its attributes become props and
+           its children become slot content (rendered where the child puts <slot>). */
         if (/^[A-Z]/.test(tag)) {
-            if (!selfClosing) {
-                readChildren(tag)
-            }
-            return { kind: 'component', name: tag, props: toProps(attrs) }
+            const slotted = selfClosing ? [] : readChildren(tag)
+            return { kind: 'component', name: tag, props: toProps(attrs), children: slotted }
         }
         const children = selfClosing || VOID_TAGS.has(tag) ? [] : readChildren(tag)
         if (tag === 'template') {

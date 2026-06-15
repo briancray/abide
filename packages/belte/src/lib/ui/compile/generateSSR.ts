@@ -89,18 +89,26 @@ export function generateSSR(
         if (node.kind === 'component') {
             /* Server-render the child via its `render` and inline the HTML inside
                the same wrapper the client mounts into, so SSR and client agree.
-               Props pass as thunks, matching the client. */
+               Props pass as thunks; slot content passes as a string-returning
+               `$children` the child invokes from its <slot>. */
             const tag = node.name.toLowerCase()
-            const props = node.props
-                .map(
-                    (prop) => `${JSON.stringify(prop.name)}: () => (${lowerExpression(prop.code)})`,
+            const parts = node.props.map(
+                (prop) => `${JSON.stringify(prop.name)}: () => (${lowerExpression(prop.code)})`,
+            )
+            const slotCode = generateInto(node.children, '$slot')
+            if (slotCode.trim() !== '') {
+                parts.push(
+                    `"$children": () => { const $slot = []; ${slotCode}return $slot.join(''); }`,
                 )
-                .join(', ')
+            }
             return (
                 push(target, `<${tag}>`) +
-                `${target}.push(${node.name}.render({ ${props} }).html);\n` +
+                `${target}.push(${node.name}.render({ ${parts.join(', ')} }).html);\n` +
                 push(target, `</${tag}>`)
             )
+        }
+        if (node.kind === 'element' && node.tag === 'slot') {
+            return `${target}.push($props && $props.$children ? $props.$children() : '');\n`
         }
         let code = push(target, `<${node.tag}`)
         for (const attr of node.attrs) {

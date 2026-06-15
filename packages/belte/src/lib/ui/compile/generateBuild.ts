@@ -76,6 +76,10 @@ export function generateBuild(
             }
             return code
         }
+        if (node.kind === 'element' && node.tag === 'slot') {
+            /* Render the parent-provided slot content here, if any. */
+            return `if ($props && $props.$children) { $props.$children(${parentVar}); }\n`
+        }
         if (node.kind === 'element') {
             const built = generateElement(node)
             return `${built.code}${parentVar}.appendChild(${built.varName});\n`
@@ -133,12 +137,18 @@ export function generateBuild(
         parentVar: string,
     ): string {
         const wrapper = nextVar('cmp')
-        const props = node.props
-            .map((prop) => `${JSON.stringify(prop.name)}: () => (${lowerExpression(prop.code)})`)
-            .join(', ')
+        const parts = node.props.map(
+            (prop) => `${JSON.stringify(prop.name)}: () => (${lowerExpression(prop.code)})`,
+        )
+        /* Slot content compiles to a `$children` builder that mounts the parent's
+           markup into a host the child passes from its <slot> position. */
+        const slotCode = node.children.map((child) => generateChild(child, '$slot')).join('')
+        if (slotCode.trim() !== '') {
+            parts.push(`"$children": ($slot) => {\n${slotCode}}`)
+        }
         return (
             `const ${wrapper} = document.createElement(${JSON.stringify(node.name.toLowerCase())});\n` +
-            `${node.name}(${wrapper}, { ${props} });\n` +
+            `${node.name}(${wrapper}, { ${parts.join(', ')} });\n` +
             `${parentVar}.appendChild(${wrapper});\n`
         )
     }
