@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { tail } from '../src/lib/browser/tail.ts'
 import type { Subscribable } from '../src/lib/shared/types/Subscribable.ts'
 import type { TailHooks } from '../src/lib/shared/types/TailHooks.ts'
-import { track } from './support/reactiveScope.svelte.ts'
+import { track } from './support/reactiveScope.ts'
 import { settle } from './support/settle.ts'
 import { useBrowserWindow } from './support/useBrowserWindow.ts'
 

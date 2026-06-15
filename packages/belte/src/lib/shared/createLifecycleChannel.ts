@@ -1,4 +1,4 @@
-import { createSubscriber } from 'svelte/reactivity'
+import { createSubscriber } from './createSubscriber.ts'
 
 /*
 Lifecycle tap shared by the cache store and the tail registry: one

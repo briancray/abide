@@ -1,4 +1,4 @@
-import { createSubscriber } from 'svelte/reactivity'
+import { createSubscriber } from './createSubscriber.ts'
 import { requestScopeSlot } from './requestScopeSlot.ts'
 
 /*

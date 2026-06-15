@@ -1,4 +1,4 @@
-import { createSubscriber } from 'svelte/reactivity'
+import { createSubscriber } from './createSubscriber.ts'
 import { createLifecycleChannel } from './createLifecycleChannel.ts'
 import { keyMatchesPrefix } from './keyMatchesPrefix.ts'
 import type { CacheEntry } from './types/CacheEntry.ts'

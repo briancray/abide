@@ -7,7 +7,7 @@ import { REMOTE_FUNCTION } from '../src/lib/shared/REMOTE_FUNCTION.ts'
 import { remoteMetaStore } from '../src/lib/shared/remoteMetaStore.ts'
 import type { HttpVerb } from '../src/lib/shared/types/HttpVerb.ts'
 import type { RawRemoteFunction } from '../src/lib/shared/types/RawRemoteFunction.ts'
-import { track } from './support/reactiveScope.svelte.ts'
+import { track } from './support/reactiveScope.ts'
 import { settle } from './support/settle.ts'
 import { useBrowserWindow } from './support/useBrowserWindow.ts'
 

@@ -1,4 +1,4 @@
-import { createSubscriber } from 'svelte/reactivity'
+import { createSubscriber } from './createSubscriber.ts'
 import { canonicalJson } from './canonicalJson.ts'
 import { createLivenessWatch } from './createLivenessWatch.ts'
 import { HEALTH_PATH } from './HEALTH_PATH.ts'

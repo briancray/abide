@@ -1,4 +1,4 @@
-import { createSubscriber } from 'svelte/reactivity'
+import { createSubscriber } from '../shared/createSubscriber.ts'
 import { createLifecycleChannel } from '../shared/createLifecycleChannel.ts'
 import { SocketDisconnectedError } from '../shared/SocketDisconnectedError.ts'
 import { tailProbeSlot } from '../shared/tailProbeSlot.ts'
