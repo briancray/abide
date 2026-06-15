@@ -1,5 +1,7 @@
 import { lowerDocAccess } from './lowerDocAccess.ts'
+import { partitionSlots } from './partitionSlots.ts'
 import { renameSignalRefs } from './renameSignalRefs.ts'
+import { staticAttrValue } from './staticAttrValue.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
 
 /*
@@ -96,11 +98,21 @@ export function generateSSR(
             const parts = node.props.map(
                 (prop) => `${JSON.stringify(prop.name)}: () => (${lowerExpression(prop.code)})`,
             )
-            const slotCode = generateInto(node.children, '$slot')
+            const groups = partitionSlots(node.children)
+            const slotCode = generateInto(groups.default, '$slot')
             if (slotCode.trim() !== '') {
                 parts.push(
                     `"$children": () => { const $slot = []; ${slotCode}return $slot.join(''); }`,
                 )
+            }
+            if (groups.named.length > 0) {
+                const entries = groups.named
+                    .map((group) => {
+                        const code = generateInto(group.nodes, '$slot')
+                        return `${JSON.stringify(group.name)}: () => { const $slot = []; ${code}return $slot.join(''); }`
+                    })
+                    .join(', ')
+                parts.push(`"$slots": { ${entries} }`)
             }
             return (
                 push(target, `<${tag}>`) +
@@ -109,7 +121,7 @@ export function generateSSR(
             )
         }
         if (node.kind === 'element' && node.tag === 'slot') {
-            return `${target}.push($props && $props.$children ? $props.$children() : '');\n`
+            return generateSlot(node, target)
         }
         let code = push(target, `<${node.tag}`)
         if (scopeAttribute !== undefined) {
@@ -130,6 +142,27 @@ export function generateSSR(
             code += push(target, `</${node.tag}>`)
         }
         return code
+    }
+
+    /* A `<slot>` outlet: emit the parent-provided content for this slot (default
+       via `$children`, named via `$slots[name]`), falling back to the slot's own
+       children when none was supplied. */
+    function generateSlot(
+        node: Extract<TemplateNode, { kind: 'element' }>,
+        target: string,
+    ): string {
+        const name = staticAttrValue(node, 'name')
+        const guard =
+            name === undefined
+                ? '$props && $props.$children'
+                : `$props && $props.$slots && $props.$slots[${JSON.stringify(name)}]`
+        const provided =
+            name === undefined ? '$props.$children' : `$props.$slots[${JSON.stringify(name)}]`
+        const fallback = generateInto(node.children, target)
+        if (fallback.trim() === '') {
+            return `if (${guard}) { ${target}.push(${provided}()); }\n`
+        }
+        return `if (${guard}) { ${target}.push(${provided}()); } else {\n${fallback}}\n`
     }
 
     /* Pending shell with boundary markers + a `$awaits` registration carrying the

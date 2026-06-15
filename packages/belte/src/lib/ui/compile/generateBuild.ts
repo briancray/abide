@@ -1,5 +1,7 @@
 import { lowerDocAccess } from './lowerDocAccess.ts'
+import { partitionSlots } from './partitionSlots.ts'
 import { renameSignalRefs } from './renameSignalRefs.ts'
+import { staticAttrValue } from './staticAttrValue.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
 
 /*
@@ -87,8 +89,7 @@ export function generateBuild(
             return code
         }
         if (node.kind === 'element' && node.tag === 'slot') {
-            /* Render the parent-provided slot content here, if any. */
-            return `if ($props && $props.$children) { $props.$children(${parentVar}); }\n`
+            return generateSlot(node, parentVar)
         }
         if (node.kind === 'element') {
             /* openChild appends (create) or claims (hydrate) — no separate append. */
@@ -143,6 +144,29 @@ export function generateBuild(
         return `switchBlock(${parentVar}, () => (${lowerExpression(node.subject)}), [${cases}]);\n`
     }
 
+    /* A `<slot>` outlet: render the parent-provided content for this slot (default
+       via `$children`, named via `$slots[name]`), falling back to the slot's own
+       children when the parent supplied none. */
+    function generateSlot(
+        node: Extract<TemplateNode, { kind: 'element' }>,
+        parentVar: string,
+    ): string {
+        const name = staticAttrValue(node, 'name')
+        const guard =
+            name === undefined
+                ? '$props && $props.$children'
+                : `$props && $props.$slots && $props.$slots[${JSON.stringify(name)}]`
+        const invoke =
+            name === undefined
+                ? `$props.$children(${parentVar})`
+                : `$props.$slots[${JSON.stringify(name)}](${parentVar})`
+        const fallback = node.children.map((child) => generateChild(child, parentVar)).join('')
+        if (fallback.trim() === '') {
+            return `if (${guard}) { ${invoke}; }\n`
+        }
+        return `if (${guard}) { ${invoke}; } else {\n${fallback}}\n`
+    }
+
     /* Mounts a child component into a wrapper element, passing each prop as a
        reactive thunk so the child re-reads when the parent expression changes. */
     function generateComponent(
@@ -153,11 +177,22 @@ export function generateBuild(
         const parts = node.props.map(
             (prop) => `${JSON.stringify(prop.name)}: () => (${lowerExpression(prop.code)})`,
         )
-        /* Slot content compiles to a `$children` builder that mounts the parent's
-           markup into a host the child passes from its <slot> position. */
-        const slotCode = node.children.map((child) => generateChild(child, '$slot')).join('')
+        /* Slot content compiles to builders the child mounts into the host it passes
+           from each <slot> position: the default markup as `$children`, and each
+           `slot="name"` group as `$slots[name]`. */
+        const groups = partitionSlots(node.children)
+        const slotCode = groups.default.map((child) => generateChild(child, '$slot')).join('')
         if (slotCode.trim() !== '') {
             parts.push(`"$children": ($slot) => {\n${slotCode}}`)
+        }
+        if (groups.named.length > 0) {
+            const entries = groups.named
+                .map((group) => {
+                    const code = group.nodes.map((child) => generateChild(child, '$slot')).join('')
+                    return `${JSON.stringify(group.name)}: ($slot) => {\n${code}}`
+                })
+                .join(', ')
+            parts.push(`"$slots": { ${entries} }`)
         }
         /* openChild appends (create) or claims the SSR wrapper (hydrate); since
            hydration is still active, the child's own build then adopts its server
