@@ -156,10 +156,12 @@ export function generateBuild(
         if (slotCode.trim() !== '') {
             parts.push(`"$children": ($slot) => {\n${slotCode}}`)
         }
+        /* openChild appends (create) or claims the SSR wrapper (hydrate); since
+           hydration is still active, the child's own build then adopts its server
+           markup inside the wrapper. */
         return (
-            `const ${wrapper} = document.createElement(${JSON.stringify(node.name.toLowerCase())});\n` +
-            `${node.name}(${wrapper}, { ${parts.join(', ')} });\n` +
-            `${parentVar}.appendChild(${wrapper});\n`
+            `const ${wrapper} = openChild(${parentVar}, ${JSON.stringify(node.name.toLowerCase())});\n` +
+            `${node.name}(${wrapper}, { ${parts.join(', ')} });\n`
         )
     }
 

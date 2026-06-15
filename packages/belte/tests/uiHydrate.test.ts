@@ -254,4 +254,67 @@ describe('hydrate — adopt server DOM', () => {
         model.replace('status', 'zzz')
         expect(host.textContent).toBe('?') // default
     })
+
+    test('adopts a child component (and its slot) in place', () => {
+        const runtime = {
+            doc,
+            state,
+            derived,
+            effect,
+            openChild,
+            openRoot,
+            appendText,
+            appendStatic,
+            on,
+            when,
+            each,
+            switchBlock,
+        }
+        const names = Object.keys(runtime)
+        const values = names.map((n) => runtime[n as keyof typeof runtime])
+
+        // a child component with a prop, available as client mounter + SSR render
+        const childSource = `<script>let label = prop('label')</script><span>Hi {label}</span>`
+        const childClient = compileComponent(childSource)
+        const childSsr = compileSSR(childSource)
+        const Greeting = Object.assign(
+            (host: Element, props?: unknown) => {
+                new Function('host', '$props', ...names, childClient)(host, props, ...values)
+            },
+            {
+                render: (props?: unknown): SsrRender =>
+                    new Function('$props', ...names, childSsr)(props, ...values) as SsrRender,
+            },
+        )
+
+        const parentSource = `<script>let name = state('world')</script><div><Greeting label={name} /></div>`
+
+        // SSR the parent (server-renders the child)
+        const server = new Function(
+            'doc',
+            'state',
+            'derived',
+            'effect',
+            'Greeting',
+            compileSSR(parentSource),
+        )(doc, state, derived, effect, Greeting) as SsrRender
+        expect(server.html).toBe('<div><greeting><span>Hi world</span></greeting></div>')
+
+        // parse + hydrate
+        const host = document.createElement('div')
+        host.innerHTML = server.html
+        const greeting = (host.childNodes[0] as unknown as { childNodes: unknown[] }).childNodes[0]
+        const spanBefore = (greeting as unknown as { childNodes: unknown[] }).childNodes[0]
+        const parentBody = compileComponent(parentSource)
+        hydrate(host, (target) => {
+            new Function('host', 'Greeting', ...names, parentBody)(target, Greeting, ...values)
+        })
+
+        // the child's wrapper and span were adopted, not recreated or duplicated
+        expect((host.childNodes[0] as unknown as { childNodes: unknown[] }).childNodes.length).toBe(
+            1,
+        )
+        expect((greeting as unknown as { childNodes: unknown[] }).childNodes[0]).toBe(spanBefore)
+        expect(host.textContent).toBe('Hi world')
+    })
 })
