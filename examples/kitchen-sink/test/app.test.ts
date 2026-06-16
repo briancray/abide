@@ -1,11 +1,11 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import { HttpError } from '@belte/belte/shared/HttpError'
-import { createTestApp, type TestApp } from '@belte/belte/test/createTestApp'
+import { HttpError } from '@abide/abide/shared/HttpError'
+import { createTestApp, type TestApp } from '@abide/abide/test/createTestApp'
 
 /*
 End-to-end against the real app booted on an ephemeral port — no fixtures, no
 manifests. createTestApp imports the project's own virtual route/verb manifests
-(resolved by the belte preload), so this exercises the full pipeline: SSR,
+(resolved by the abide preload), so this exercises the full pipeline: SSR,
 verb dispatch, the CSRF gate, and the health endpoint.
 */
 let app: TestApp
@@ -18,7 +18,7 @@ describe('createTestApp', () => {
     test('SSRs a page as a full document', async () => {
         const html = await (await app.fetch('/')).text()
         expect(html).toContain('<!doctype html>')
-        expect(html).toContain('belte kitchen-sink')
+        expect(html).toContain('abide kitchen-sink')
         expect(html).toContain('</html>')
     })
 
@@ -47,9 +47,9 @@ describe('createTestApp', () => {
         frames.return?.()
     })
 
-    test('health reports the belte identity', async () => {
+    test('health reports the abide identity', async () => {
         expect(await app.health()).toMatchObject({
-            belte: expect.any(String),
+            abide: expect.any(String),
             name: 'kitchen-sink',
         })
     })

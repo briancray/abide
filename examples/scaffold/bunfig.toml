@@ -1,4 +1,4 @@
 [test]
-# Register belte's preload so `.svelte`/`.svelte.ts` rune modules compile
-# under `bun test` — same runtime as the server.
-preload = ["@belte/belte/preload"]
+# Register the abide preload so `.abide` components compile under `bun test`
+# (same runtime as the server).
+preload = ["@abide/abide/preload"]

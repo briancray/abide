@@ -1,8 +1,8 @@
-import type { AgentFrame } from '@belte/belte/server/agent'
+import type { AgentFrame } from '@abide/abide/server/agent'
 import type { StreamMessage } from './StreamMessage.ts'
 
 /*
-Maps a Claude message stream to belte AgentFrames. Shared by both engines — the
+Maps a Claude message stream to abide AgentFrames. Shared by both engines — the
 SDK's query() stream and the CLI's stream-json lines have the same schema, so the
 discrimination lives here once. Text is emitted from `stream_event` deltas (live
 tokens); the complete `assistant` message repeats that text in full, so it's kept

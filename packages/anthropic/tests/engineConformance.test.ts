@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, test } from 'bun:test'
-import { assertAgentFrameConformance } from '@belte/belte/test/assertAgentFrameConformance'
-import { createScriptedSurface } from '@belte/belte/test/createScriptedSurface'
+import { assertAgentFrameConformance } from '@abide/abide/test/assertAgentFrameConformance'
+import { createScriptedSurface } from '@abide/abide/test/createScriptedSurface'
 import { engine } from '../src/engine.ts'
 
 /*

@@ -9,8 +9,8 @@ win — a commit that added one is left untouched.
 
 Multi-package: every public `packages/*` is covered, each owning the paths its
 own package.json `files` ship. A commit is attributed to whichever package(s)
-its changed files belong to, so a `@belte/claude-code` change bumps claude-code,
-not belte; a commit spanning two packages lists both in one changeset.
+its changed files belong to, so a `@abide/claude-code` change bumps claude-code,
+not abide; a commit spanning two packages lists both in one changeset.
 
 Idempotent: each synthesised file is named `auto-<shortHash>.md`, so re-running
 (e.g. the release action refreshing the Version Packages PR) never duplicates an
@@ -18,7 +18,7 @@ entry. Runs inside `version-packages`, so both local and CI versioning fill the 
 */
 import { $, Glob } from 'bun'
 
-const REPO = 'briancray/belte'
+const REPO = 'briancray/abide'
 
 type Bump = 'minor' | 'patch'
 

@@ -1,5 +1,5 @@
-import { json } from '@belte/belte/server/json'
-import { POST } from '@belte/belte/server/POST'
+import { json } from '@abide/abide/server/json'
+import { POST } from '@abide/abide/server/POST'
 import { z } from 'zod'
 
 /*
@@ -12,7 +12,7 @@ model a binary. Either schema's issues come back as a 422.
 
 maxBodySize caps the actual received body bytes before any parse — 413 past
 it. Per-verb and opt-in; omitted, the only ceiling is Bun's server-wide
-maxRequestBodySize (env: BELTE_MAX_REQUEST_BODY_SIZE).
+maxRequestBodySize (env: ABIDE_MAX_REQUEST_BODY_SIZE).
 */
 const inputSchema = z.object({ title: z.string() })
 const filesSchema = z.object({ attachments: z.array(z.instanceof(File)).min(1) })

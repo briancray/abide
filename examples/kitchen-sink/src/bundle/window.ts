@@ -1,15 +1,15 @@
-import type { BundleWindow } from '@belte/belte/bundle/BundleWindow'
+import type { BundleWindow } from '@abide/abide/bundle/BundleWindow'
 import { z } from 'zod'
 
 /*
 Optional desktop-window config, default-exported from src/bundle/window.ts
-and baked into the launcher by `belte bundle`. Every field is optional —
+and baked into the launcher by `abide bundle`. Every field is optional —
 without this file the launcher falls back to the program name for the
 title and to the webview's default size.
 
 `menu` adds custom top-level menus between the standard Edit and Window
 menus. A menu item carries no arguments; clicking it dispatches a
-`belte:menu` CustomEvent (`detail: { name }`) into the page, so the app
+`abide:menu` CustomEvent (`detail: { name }`) into the page, so the app
 computes any arguments itself and makes the rpc call. `shortcut` is the
 key for the Cmd-based accelerator (e.g. `'r'` → Cmd-R).
 
@@ -21,7 +21,7 @@ masks the input, and `.default()` pre-fills it. The required HOST_ROOT (no
 default) is what makes the modal appear on first Start; the rest are optional.
 */
 export default {
-    title: 'belte kitchen-sink',
+    title: 'abide kitchen-sink',
     width: 1280,
     height: 880,
     menu: [

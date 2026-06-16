@@ -1,12 +1,12 @@
 /*
 In-memory cookie session store + helpers. Used by getSession / login /
-logout to demonstrate the auth showcase under src/browser/pages/auth/.
-The cookie jar is `cookies()` from belte/server — `Bun.CookieMap` for the
+logout to demonstrate the auth showcase under src/ui/pages/auth/.
+The cookie jar is `cookies()` from abide/server — `Bun.CookieMap` for the
 in-flight request, readable from any scope (rpc handler, page script,
 layout) with no plumbing; `set`/`delete` mutations flush as `Set-Cookie`
 headers when the handler returns.
 */
-import { cookies } from '@belte/belte/server/cookies'
+import { cookies } from '@abide/abide/server/cookies'
 
 const sessions = new Map<string, { user: string }>()
 

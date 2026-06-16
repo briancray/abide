@@ -29,7 +29,7 @@ Shapes considered and rejected:
 - **A generic `on(source, handler)`** — auto-reconnect is only safe when the
   consumer's semantics define gap reconciliation (ADR-0003: tail converges
   latest-wins; raw `for await` keeps the manual contract). A generic handler
-  has no defined gap story, so belte couldn't own the hard part — apps would
+  has no defined gap story, so abide couldn't own the hard part — apps would
   be back to hand-rolling recovery.
 - **Middleware `next` in the handler** — there is no inner continuation to
   call; the handler is terminal.

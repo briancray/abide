@@ -1,4 +1,4 @@
-import { socket } from '@belte/belte/server/socket'
+import { socket } from '@abide/abide/server/socket'
 import { z } from 'zod'
 
 const schema = z.object({

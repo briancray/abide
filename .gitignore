@@ -1,6 +1,10 @@
 node_modules
 dist
-.belte
+.abide
 .DS_Store
 bun.lockb
-packages/belte/src/lib/bundle/native/.cache
+packages/abide/src/lib/bundle/native/.cache
+
+# Rust build output (Zed extension)
+target/
+editors/zed/*/target/

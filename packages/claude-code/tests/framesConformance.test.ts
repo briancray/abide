@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { assertAgentFrameConformance } from '@belte/belte/test/assertAgentFrameConformance'
+import { assertAgentFrameConformance } from '@abide/abide/test/assertAgentFrameConformance'
 import { framesFromMessages } from '../src/framesFromMessages.ts'
 import type { StreamMessage } from '../src/StreamMessage.ts'
 

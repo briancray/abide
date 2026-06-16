@@ -1,0 +1,19 @@
+id = "abide"
+name = "Abide"
+version = "0.0.1"
+schema_version = 1
+authors = ["Brian Cray"]
+description = "Syntax highlighting and type-check diagnostics for .abide components"
+repository = "https://github.com/briancray/abide"
+
+# .abide is HTML-with-{expr} like Svelte; reuse the same tree-sitter grammar, pinned
+# to the exact rev the installed Svelte extension uses so highlighting is identical.
+[grammars.svelte]
+repository = "https://github.com/tree-sitter-grammars/tree-sitter-svelte"
+rev = "3f06f705410683adb17d146b5eca28c62fe81ba6"
+
+# The diagnostics server: `abide lsp` over stdio. The Rust crate (src/lib.rs)
+# resolves the command — a `abide` binary if present, else `bun <repo>/bin lsp`.
+[language_servers.abide]
+name = "Abide Language Server"
+languages = ["Abide"]

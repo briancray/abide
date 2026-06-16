@@ -4,16 +4,15 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "dev": "belte dev",
-        "build": "belte build",
-        "start": "belte start",
-        "compile": "belte compile",
-        "cli": "belte cli",
-        "bundle": "belte bundle",
+        "dev": "abide dev",
+        "build": "abide build",
+        "start": "abide start",
+        "compile": "abide compile",
+        "cli": "abide cli",
+        "bundle": "abide bundle",
         "test": "bun test"
     },
     "dependencies": {
-        "@belte/belte": "workspace:*",
-        "svelte": "^5.0.0"
+        "@abide/abide": "workspace:*"
     }
 }

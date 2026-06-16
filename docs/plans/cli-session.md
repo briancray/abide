@@ -2,13 +2,13 @@
 
 ## Goal
 
-Turn the thin app CLI (`appname`, built by `belte cli`) from a stateless one-shot RPC
+Turn the thin app CLI (`appname`, built by `abide cli`) from a stateless one-shot RPC
 caller into a stateful client that mirrors the webview bundle's **connect / start / disconnect**
 model, plus an **interactive session** (REPL) that runs commands against the current
 connection.
 
 ```
-appname /connect <url>   connect to a remote belte server → open a session
+appname /connect <url>   connect to a remote abide server → open a session
 appname /start           boot a local (embedded) instance → open a session
 appname /disconnect      clear the saved connection and exit   (the "reset")
 appname                  resume the saved connection → open a session
@@ -24,7 +24,7 @@ prompt accepts:
 
 ## Decisions settled with the user (do not relitigate)
 
-1. **Always ship the full binary.** `belte cli` co-ships the compiled **server** binary beside
+1. **Always ship the full binary.** `abide cli` co-ships the compiled **server** binary beside
    the CLI binary (per platform), so `start` is always available — no thin-only variant.
    `resolveServerBinary()` finds it next to `process.execPath`, exactly like the bundle.
 2. **Session-scoped local server.** `start` spawns the server child for the life of the
@@ -42,8 +42,8 @@ prompt accepts:
   handling → require `APP_URL` → `parseArgvForRpc` → `createClient({url,token,manifest})` →
   `fn.raw(args)` → stream sse/jsonl frame-by-frame or decode+print once. **The dispatch core
   (parse + client + stream/print) is what the session reuses — extract it.**
-- `src/cliEntry.ts` — compiled binary entry; imports `belte:cli-manifest`, `belte:cli-name`,
-  `belte:cli-chrome` (banner/footer) virtuals and calls `runCli`.
+- `src/cliEntry.ts` — compiled binary entry; imports `abide:cli-manifest`, `abide:cli-name`,
+  `abide:cli-chrome` (banner/footer) virtuals and calls `runCli`.
 - `src/lib/cli/createClient.ts` — remote-mode proxy keyed by `url`. **No change** — a
   local instance is just an `APP_URL` pointing at `http://localhost:<port>`; the client
   doesn't care whether the server is remote or a child we spawned.
@@ -57,15 +57,15 @@ prompt accepts:
     `readLastConnection` / `writeLastConnection` / `clearLastConnection` / `lastConnectionPath`
     (currently **module-private — lift to shared so the CLI reuses them**).
   - `startEmbeddedServer(timeoutMs?)` → `killServerChild` + `resolveEmbeddedPort` (findOpenPort)
-    + `Bun.spawn([resolveServerBinary()], { env: {...process.env, PORT, BELTE_PARENT_PID} })`
+    + `Bun.spawn([resolveServerBinary()], { env: {...process.env, PORT, ABIDE_PARENT_PID} })`
     + race `waitForServer(url)` vs child exit. Holds a module-level `serverChild`.
     **Lift the spawn+wait into a shared helper returning `{ url, child }`** so both the worker
     and the CLI session own their own child.
   - `resolveLaunchTarget()` — embedded→boot, url→probe, none→connect screen; bounded boot.
     **Mirror as `resolveCliTarget()`** (terminal flavour: none → fall back to baked
     `process.env.APP_URL`, then give up to the connect prompt).
-  - `handleConnect` probes via `probeBelteServer(url)` (identity `{ name }`) before recording.
-    **Reuse `probeBelteServer`** for both the connect step and the status line's app name.
+  - `handleConnect` probes via `probeAbideServer(url)` (identity `{ name }`) before recording.
+    **Reuse `probeAbideServer`** for both the connect step and the status line's app name.
 - `src/lib/bundle/{resolveServerBinary,serverBinaryFilename,waitForServer}.ts` and
   `src/lib/server/runtime/findOpenPort.ts` — all reusable as-is.
 - `src/buildCli.ts` — two-pass (discovery → compile). Cross-compiles the CLI per platform
@@ -106,7 +106,7 @@ appname (compiled CLI binary)
   ├─ load env (binary-dir .env → data-dir .env → shell)   [unchanged precedence]
   ├─ first positional (`/`-meta verbs only; every bare word is an RPC):
   │    --help / -h            → printTopLevelHelp
-  │    /connect <url>         → connect: probeBelteServer → writeLastConnection{url} → runSession
+  │    /connect <url>         → connect: probeAbideServer → writeLastConnection{url} → runSession
   │    /start                 → startLocalInstance (session-scoped child) →
   │    |                         writeLastConnection{embedded} → runSession
   │    /disconnect            → clearLastConnection → print, exit
@@ -147,7 +147,7 @@ fns take `programName` as an arg).
 ### 2. Lift the embedded-server spawn (dedup)
 
 `lib/bundle/startEmbeddedServer.ts` (NEW) — pure-ish helper returning `{ url, child }`:
-spawn `resolveServerBinary()` with `PORT` (from `findOpenPort`) + `BELTE_PARENT_PID`, race
+spawn `resolveServerBinary()` with `PORT` (from `findOpenPort`) + `ABIDE_PARENT_PID`, race
 `waitForServer(url)` vs `child.exited`, throw on early exit. Lifted from the worker's inline
 `startEmbeddedServer`. **Edit `controlServerWorker.ts`** to call it (keeping its own
 `serverChild` = the returned `child`, and its `killServerChild`).
@@ -169,7 +169,7 @@ target resolution, and the unknown-command message in `runCli`).
 ```
 read last-connection.json:
   { kind:'embedded' }  → startLocalInstance() → { url, child }
-  { kind:'url', url }  → probeBelteServer(url) alive ? { url } : (warn 'lost', undefined)
+  { kind:'url', url }  → probeAbideServer(url) alive ? { url } : (warn 'lost', undefined)
   none                 → process.env.APP_URL ? { url: APP_URL, appToken: APP_TOKEN } : undefined
 ```
 
@@ -191,7 +191,7 @@ Helpers:
   quotes (so `createPost --title "hello world"` works). Small, pure; no dep.
 - `lib/cli/printSessionStatus.ts` (NEW) — "Connected to <name> at <url>" /
   "Running a local instance at <url>" / "(not connected — /connect <url> or /start)". App
-  name from `probeBelteServer` identity.
+  name from `probeAbideServer` identity.
 - `lib/cli/printSessionHelp.ts` (NEW) — the `/`-meta list; defers to the existing
   `printTopLevelHelp` / `printCommandHelp` for RPCs.
 
@@ -245,13 +245,13 @@ first.)
 - server-binary location + naming — `resolveServerBinary` / `serverBinaryFilename`.
 - remote dispatch + streaming — `createClient` / `runCli`'s dispatch core (extract, don't rewrite).
 - env precedence + baked default — `loadEnvFromBinaryDir` / `loadEnvFromDataDir` / `loadEnvFile`.
-- server identity probe — `probeBelteServer`.
+- server identity probe — `probeAbideServer`.
 - data dir — `appDataDir`.
 
 ## Testing / verification (executor)
 
 1. `bunx tsc --noEmit` (or repo typecheck) clean for the package.
-2. `cd examples/kitchen-sink && bunx belte cli` → confirm `dist/cli` + sibling `dist/server`
+2. `cd examples/kitchen-sink && bunx abide cli` → confirm `dist/cli` + sibling `dist/server`
    both produced; cross-build a platform and confirm `dist/cli-thin/<p>/{<name>,server}`.
 3. Smoke (no long-lived `bun run dev`):
    - `dist/cli start` → boots a local instance, prints "Running a local instance", session
@@ -259,7 +259,7 @@ first.)
    - `dist/cli http://localhost:<a-running-server>` → "Connected to <name>"; `/disconnect`.
    - `dist/cli <cmd> --flag x` (non-TTY pipe) → one-shot, unchanged.
    - `dist/cli disconnect` then `dist/cli` → resumes baked default or shows connect prompt.
-4. Download path: `GET /__belte/cli/<platform>` tarball contains cli + server + .env; unpack +
+4. Download path: `GET /__abide/cli/<platform>` tarball contains cli + server + .env; unpack +
    run `start`.
 5. `bun format` all touched files. Do not commit/push unless asked.
 

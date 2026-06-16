@@ -1,0 +1,10 @@
+<script>
+  import Layout from './Layout.abide'
+  let framework = state('abide-ui')
+</script>
+
+<Layout title="about">
+  <section>
+    <p>This page is server-rendered, then navigated client-side by the {framework} router — no full reload.</p>
+  </section>
+</Layout>

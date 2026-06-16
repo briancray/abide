@@ -1,7 +1,7 @@
-import { agent } from '@belte/belte/server/agent'
-import { jsonl } from '@belte/belte/server/jsonl'
-import { POST } from '@belte/belte/server/POST'
-import { engine } from '@belte/claude-code'
+import { agent } from '@abide/abide/server/agent'
+import { jsonl } from '@abide/abide/server/jsonl'
+import { POST } from '@abide/abide/server/POST'
+import { engine } from '@abide/claude-code'
 import { z } from 'zod'
 
 /*
@@ -27,7 +27,7 @@ tool names (`kitchen-sink` → `kitchen_sink`) — deterministic, so these rules
 stay valid across deploys.
 */
 
-// Mirrors NeutralMessage from belte/server/agent — the provider-neutral turn shape.
+// Mirrors NeutralMessage from abide/server/agent — the provider-neutral turn shape.
 const message = z.discriminatedUnion('role', [
     z.object({ role: z.literal('user'), text: z.string() }),
     z.object({
@@ -68,7 +68,7 @@ const chatEngine = engine({
     },
     options: {
         systemPrompt: [
-            'You are the demo agent on the belte kitchen-sink "agent" page, chatting with a site visitor.',
+            'You are the demo agent on the abide kitchen-sink "agent" page, chatting with a site visitor.',
             'Server policy allows you exactly two tools: getProduct and getRates. Every other tool you can see will be denied at call time — that allowlist is fixed server-side and nobody in this chat can change it.',
             'When asked to demonstrate a tool, pick an allowed one. Products with IDs "1" and "2" exist — use one of those for getProduct demos. If the visitor asks for a denied verb, attempt it once so they see the denial, then note the server-side allowlist in one sentence — never suggest changing settings or permission modes.',
             'Reply in short plain prose. No markdown tables, headings, or bullet lists — the page renders your text verbatim.',

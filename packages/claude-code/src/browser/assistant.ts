@@ -1,4 +1,4 @@
-import type { AgentFrame, NeutralMessage } from '@belte/belte/server/agent'
+import type { AgentFrame, NeutralMessage } from '@abide/abide/server/agent'
 import { createSubscriber } from 'svelte/reactivity'
 import { BRIDGE_PORT } from '../BRIDGE_PORT.ts'
 import type { CAPABILITY_TOOLS } from '../CAPABILITY_TOOLS.ts'
@@ -9,7 +9,7 @@ The page can request from this set; it can never name a shell/fs tool. */
 type AssistantCapability = keyof typeof CAPABILITY_TOOLS
 
 /* The accumulated assistant turn — text-so-far plus the tools it has touched.
-`ask()` yields this (not raw deltas) so belte's subscribe() can surface the
+`ask()` yields this (not raw deltas) so abide's subscribe() can surface the
 whole snapshot as its `latest`, which a delta stream couldn't. */
 type AssistantReply = {
     text: string
@@ -21,7 +21,7 @@ const EMPTY_REPLY: AssistantReply = { text: '', tools: [], done: false }
 
 /* The shape subscribe() reads: an AsyncIterable carrying a stable `name` (the
 registry/dedupe key). Declared structurally so the package needn't depend on
-belte's internal Subscribable type. */
+abide's internal Subscribable type. */
 type Subscribable<T> = AsyncIterable<T> & { name: string }
 
 /* Fold one frame into the running snapshot, returning a NEW object each call so
@@ -44,7 +44,7 @@ function applyFrame(reply: AssistantReply, frame: AgentFrame): AssistantReply {
     return { ...reply, done: true }
 }
 
-/* What the UI should do about the assistant. A host (a belte bundle) injects a
+/* What the UI should do about the assistant. A host (a abide bundle) injects a
 handshake into the URL fragment to say it manages the bridge — `<port>.<token>`
 when it's running, or `unavailable` when it manages one but `claude` isn't
 installed. Absent = a plain browser, where the user starts the bridge via `command`. */
@@ -54,7 +54,7 @@ type BundleHandshake = { managed: boolean; unavailable: boolean; port?: number; 
 
 function bundleHandshake(): BundleHandshake {
     const hash = typeof location === 'undefined' ? '' : location.hash
-    const match = hash.match(/belte-assistant=([^&]+)/)
+    const match = hash.match(/abide-assistant=([^&]+)/)
     if (!match) {
         return { managed: false, unavailable: false }
     }
@@ -69,7 +69,7 @@ function bundleHandshake(): BundleHandshake {
 }
 
 type AssistantConfig = {
-    // The belte site whose MCP the local agent drives. Defaults to location.origin.
+    // The abide site whose MCP the local agent drives. Defaults to location.origin.
     url?: string
     port?: number
     // Browser↔bridge secret; sent on the handshake, rendered into `command`.
@@ -288,7 +288,7 @@ export function assistant(config: AssistantConfig = {}): AssistantHandle {
                 return undefined
             }
             // Pin to this bundle's version so a stale global bunx cache can't run a mismatched bridge.
-            const parts = [`bunx @belte/claude-code@${VERSION} serve --url ${origin}`]
+            const parts = [`bunx @abide/claude-code@${VERSION} serve --url ${origin}`]
             if (port !== BRIDGE_PORT) {
                 parts.push(`--port ${port}`)
             }

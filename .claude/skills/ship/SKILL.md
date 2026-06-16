@@ -1,11 +1,11 @@
 ---
 name: ship
-description: One-shot release — stage all working-tree changes into logically-grouped conventional commits, then drive the belte changesets pipeline to a published npm version (push, version PR, merge, publish). Use when the user says "ship", "ship it", "release", "cut a version", "publish", or wants their pending changes turned into a new npm release with no further prompting.
+description: One-shot release — stage all working-tree changes into logically-grouped conventional commits, then drive the abide changesets pipeline to a published npm version (push, version PR, merge, publish). Use when the user says "ship", "ship it", "release", "cut a version", "publish", or wants their pending changes turned into a new npm release with no further prompting.
 ---
 
 # ship
 
-Turns the current working tree into a published belte release. The repo is a monorepo: any of the public `packages/*` (`@belte/belte`, `@belte/anthropic`, `@belte/claude-code`, …) may be bumped and published in one run — `changeset publish` ships every package the changesets versioned, and `autofillChangesets` attributes each commit to the package(s) it actually touched. Invoking this skill **authorizes the npm publish** — proceed through the merge without re-prompting, but report the per-package version bumps before merging as a sanity checkpoint.
+Turns the current working tree into a published abide release. The repo is a monorepo: any of the public `packages/*` (`abide`, `@abide/anthropic`, `@abide/claude-code`, …) may be bumped and published in one run — `changeset publish` ships every package the changesets versioned, and `autofillChangesets` attributes each commit to the package(s) it actually touched. Invoking this skill **authorizes the npm publish** — proceed through the merge without re-prompting, but report the per-package version bumps before merging as a sanity checkpoint.
 
 ## Preconditions
 
@@ -28,8 +28,8 @@ Turns the current working tree into a published belte release. The repo is a mon
    - Body: why + what, like the existing history. Stage explicit paths per commit (`git add <paths>`), never `git add -A` blindly across concerns.
 
 3. **Gate locally** — run `bun run test` and `bun run lint`. Both must be clean (lint warnings are fine, errors are not). Abort and report if tests fail — CI gates the publish on the same suite, so a red run just wastes a cycle.
-   - **Run the `test` *script*, never bare `bun test`.** The script is `bun test ./packages && for d in examples/*/; do (cd "$d" && bun test); done` — example suites run from **each example's own cwd** so its `bunfig.toml` preload (`@belte/belte/preload`) rewrites `GET`/`POST` → `defineVerb`, the swap the server build does. Bare `bun test` from the repo root scans the examples under the *root* `bunfig.toml` (Svelte loader only, no verb rewrite), so an rpc module's top-level `POST(...)` hits the `unprocessed` stub and throws at import — a **false** red the real gate (and CI's `bun run test`) never sees.
-   - Judge by the `N pass / 0 fail` summary + exit code, not stray output. Tests that exercise error paths print real `console.error` lines (`[belte] Error: boom` / `kaboom`, `[belte] error view failed`, the unguarded-MCP warning) from *passing* cases — that text is not a failure.
+   - **Run the `test` *script*, never bare `bun test`.** The script is `bun test ./packages && for d in examples/*/; do (cd "$d" && bun test); done` — example suites run from **each example's own cwd** so its `bunfig.toml` preload (`abide/preload`) rewrites `GET`/`POST` → `defineVerb`, the swap the server build does. Bare `bun test` from the repo root scans the examples under the *root* `bunfig.toml` (Svelte loader only, no verb rewrite), so an rpc module's top-level `POST(...)` hits the `unprocessed` stub and throws at import — a **false** red the real gate (and CI's `bun run test`) never sees.
+   - Judge by the `N pass / 0 fail` summary + exit code, not stray output. Tests that exercise error paths print real `console.error` lines (`[abide] Error: boom` / `kaboom`, `[abide] error view failed`, the unguarded-MCP warning) from *passing* cases — that text is not a failure.
 
 4. **Generate changesets** — `bun run scripts/autofillChangesets.ts`. This is the critical bootstrap: the changesets action only versions when a changeset file already exists, but `autofillChangesets` normally runs *inside* `version-packages` (which never fires on a zero-changeset push). Running it here synthesizes `.changeset/auto-<hash>.md` from the new commits. It is idempotent — CI's re-run skips files that exist, so no duplication.
    - Commit them: `git commit -m "chore: add changesets for <summary>"`.
@@ -49,7 +49,7 @@ Turns the current working tree into a published belte release. The repo is a mon
    rid=$(gh run list --workflow=release.yml --limit 1 --json databaseId -q '.[0].databaseId')
    gh run view "$rid" --log | grep -iE "Publishing|published successfully|New tag"
    ```
-   Report each published version + git tag (`@belte/<pkg>@x.y.z` for every package the run published). If the run failed, surface the failing step — do **not** retry the publish blindly.
+   Report each published version + git tag (`@abide/<pkg>@x.y.z` for every package the run published). If the run failed, surface the failing step — do **not** retry the publish blindly.
 
 ## Notes
 

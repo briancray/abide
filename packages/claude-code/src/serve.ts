@@ -1,10 +1,10 @@
-import type { NeutralMessage } from '@belte/belte/server/agent'
+import type { NeutralMessage } from '@abide/abide/server/agent'
 import { BRIDGE_PORT } from './BRIDGE_PORT.ts'
 import type { ClaudePermissions } from './ClaudePermissions.ts'
 import { cliEngine } from './cliEngine.ts'
 
 /*
-Runs on the USER's machine, on loopback, so a remote belte site's browser can
+Runs on the USER's machine, on loopback, so a remote abide site's browser can
 drive the user's local Claude Code over its own MCP surface. A separate process
 from any deployed server — apps that don't use this pay nothing. Drives the
 installed `claude` binary (via cliEngine), so it needs only Bun + claude on PATH,
@@ -22,7 +22,7 @@ site's `mcp__<app>__*` verbs (no shell/fs) and sidesteps the headless no-TTY
 permission prompt, with prompting left at `default`.
 */
 type ServeConfig = {
-    // The belte site whose MCP this agent drives, and (by default) the only origin allowed in.
+    // The abide site whose MCP this agent drives, and (by default) the only origin allowed in.
     url: string
     port?: number
     // Origins permitted to reach this bridge. Defaults to [url]; doubles as a DNS-rebind guard.

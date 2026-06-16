@@ -1,5 +1,5 @@
-import { DELETE } from '@belte/belte/server/DELETE'
-import { json } from '@belte/belte/server/json'
+import { DELETE } from '@abide/abide/server/DELETE'
+import { json } from '@abide/abide/server/json'
 
 /*
 DELETE — args arrive as URL search params (no body for GET/DELETE/HEAD).

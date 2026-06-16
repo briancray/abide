@@ -1,0 +1,151 @@
+{
+    "name": "@abide/abide",
+    "version": "0.27.0",
+    "type": "module",
+    "description": "Isomorphic multimodal HTTP framework built for humans and machines in a single Bun runtime",
+    "license": "MIT",
+    "author": "Brian Cray",
+    "homepage": "https://github.com/briancray/abide#readme",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/briancray/abide.git",
+        "directory": "packages/abide"
+    },
+    "bugs": {
+        "url": "https://github.com/briancray/abide/issues"
+    },
+    "keywords": [
+        "bun",
+        "ssr",
+        "spa",
+        "framework",
+        "isomorphic",
+        "rpc",
+        "mcp",
+        "cli"
+    ],
+    "engines": {
+        "bun": ">=1.3.0"
+    },
+    "publishConfig": {
+        "access": "public",
+        "provenance": true
+    },
+    "exports": {
+        "./server/GET": "./src/lib/server/GET.ts",
+        "./server/POST": "./src/lib/server/POST.ts",
+        "./server/PUT": "./src/lib/server/PUT.ts",
+        "./server/PATCH": "./src/lib/server/PATCH.ts",
+        "./server/DELETE": "./src/lib/server/DELETE.ts",
+        "./server/HEAD": "./src/lib/server/HEAD.ts",
+        "./server/socket": "./src/lib/server/socket.ts",
+        "./server/json": "./src/lib/server/json.ts",
+        "./server/jsonl": "./src/lib/server/jsonl.ts",
+        "./server/sse": "./src/lib/server/sse.ts",
+        "./server/error": "./src/lib/server/error.ts",
+        "./server/redirect": "./src/lib/server/redirect.ts",
+        "./server/request": "./src/lib/server/request.ts",
+        "./server/reachable": "./src/lib/server/reachable.ts",
+        "./server/cookies": "./src/lib/server/cookies.ts",
+        "./server/env": "./src/lib/server/env.ts",
+        "./server/appDataDir": "./src/lib/server/appDataDir.ts",
+        "./server/server": "./src/lib/server/server.ts",
+        "./server/AppModule": "./src/lib/server/AppModule.ts",
+        "./server/InspectorContext": "./src/lib/server/runtime/types/InspectorContext.ts",
+        "./server/agent": "./src/lib/server/agent.ts",
+        "./server/rpc/defineVerb": "./src/lib/server/rpc/defineVerb.ts",
+        "./server/sockets/defineSocket": "./src/lib/server/sockets/defineSocket.ts",
+        "./server/prompts/definePrompt": "./src/lib/server/prompts/definePrompt.ts",
+        "./ui/tail": "./src/lib/ui/tail.ts",
+        "./shared/cache": "./src/lib/shared/cache.ts",
+        "./shared/pending": "./src/lib/shared/pending.ts",
+        "./shared/refreshing": "./src/lib/shared/refreshing.ts",
+        "./shared/HttpError": "./src/lib/shared/HttpError.ts",
+        "./shared/html": "./src/lib/shared/html.ts",
+        "./shared/snippet": "./src/lib/shared/snippet.ts",
+        "./shared/withJsonSchema": "./src/lib/shared/withJsonSchema.ts",
+        "./shared/health": "./src/lib/shared/health.ts",
+        "./shared/log": "./src/lib/shared/log.ts",
+        "./shared/online": "./src/lib/shared/online.ts",
+        "./shared/page": "./src/lib/shared/page.ts",
+        "./shared/trace": "./src/lib/shared/trace.ts",
+        "./shared/url": "./src/lib/shared/url.ts",
+        "./ui/state": "./src/lib/ui/state.ts",
+        "./ui/derived": "./src/lib/ui/derived.ts",
+        "./ui/effect": "./src/lib/ui/effect.ts",
+        "./ui/doc": "./src/lib/ui/doc.ts",
+        "./ui/dom/mount": "./src/lib/ui/dom/mount.ts",
+        "./ui/dom/hydrate": "./src/lib/ui/dom/hydrate.ts",
+        "./ui/dom/text": "./src/lib/ui/dom/text.ts",
+        "./ui/dom/openChild": "./src/lib/ui/dom/openChild.ts",
+        "./ui/dom/openRoot": "./src/lib/ui/dom/openRoot.ts",
+        "./ui/dom/appendText": "./src/lib/ui/dom/appendText.ts",
+        "./ui/dom/appendSnippet": "./src/lib/ui/dom/appendSnippet.ts",
+        "./ui/dom/appendStatic": "./src/lib/ui/dom/appendStatic.ts",
+        "./ui/dom/attr": "./src/lib/ui/dom/attr.ts",
+        "./ui/dom/on": "./src/lib/ui/dom/on.ts",
+        "./ui/dom/each": "./src/lib/ui/dom/each.ts",
+        "./ui/dom/eachAsync": "./src/lib/ui/dom/eachAsync.ts",
+        "./ui/dom/when": "./src/lib/ui/dom/when.ts",
+        "./ui/dom/awaitBlock": "./src/lib/ui/dom/awaitBlock.ts",
+        "./ui/dom/tryBlock": "./src/lib/ui/dom/tryBlock.ts",
+        "./ui/dom/switchBlock": "./src/lib/ui/dom/switchBlock.ts",
+        "./ui/dom/applyResolved": "./src/lib/ui/dom/applyResolved.ts",
+        "./ui/dom/injectStyle": "./src/lib/ui/dom/injectStyle.ts",
+        "./ui/runtime/nextBlockId": "./src/lib/ui/runtime/nextBlockId.ts",
+        "./ui/runtime/enterRenderPass": "./src/lib/ui/runtime/enterRenderPass.ts",
+        "./ui/runtime/exitRenderPass": "./src/lib/ui/runtime/exitRenderPass.ts",
+        "./ui/router": "./src/lib/ui/router.ts",
+        "./ui/startClient": "./src/lib/ui/startClient.ts",
+        "./ui/navigate": "./src/lib/ui/navigate.ts",
+        "./ui/renderToStream": "./src/lib/ui/renderToStream.ts",
+        "./ui-plugin": "./src/lib/ui/compile/abideUiPlugin.ts",
+        "./mcp/createMcpServer": "./src/lib/mcp/createMcpServer.ts",
+        "./bundle/BundleWindow": "./src/lib/bundle/BundleWindow.ts",
+        "./bundle/BundleMenu": "./src/lib/bundle/BundleMenu.ts",
+        "./bundle/BundleMenuItem": "./src/lib/bundle/BundleMenuItem.ts",
+        "./bundle/onMenu": "./src/lib/bundle/onMenu.ts",
+        "./bundle/bundled": "./src/lib/bundle/bundled.ts",
+        "./test/createTestApp": "./src/lib/test/createTestApp.ts",
+        "./test/createScriptedSurface": "./src/lib/test/createScriptedSurface.ts",
+        "./test/assertAgentFrameConformance": "./src/lib/test/assertAgentFrameConformance.ts",
+        "./tsconfig": "./tsconfig.app.json",
+        "./build": "./src/build.ts",
+        "./compile": "./src/compile.ts",
+        "./preload": "./src/preload.ts",
+        "./resolver-plugin": "./src/abideResolverPlugin.ts",
+        "./ui/remoteProxy": "./src/lib/ui/remoteProxy.ts",
+        "./ui/socketProxy": "./src/lib/ui/socketProxy.ts",
+        "./server/prompts/renderPromptTemplate": "./src/lib/server/prompts/renderPromptTemplate.ts"
+    },
+    "bin": {
+        "abide": "./bin/abide.ts"
+    },
+    "files": [
+        "src",
+        "bin",
+        "template",
+        "tsconfig.app.json",
+        "CHANGELOG.md"
+    ],
+    "dependencies": {
+        "typescript": "^6.0.3"
+    },
+    "peerDependencies": {
+        "bun-plugin-tailwind": "*",
+        "tailwindcss": "^4.0.0"
+    },
+    "peerDependenciesMeta": {
+        "bun-plugin-tailwind": {
+            "optional": true
+        },
+        "tailwindcss": {
+            "optional": true
+        }
+    },
+    "devDependencies": {
+        "@abide/inspector": "workspace:*",
+        "bun-plugin-tailwind": "^0.1.2",
+        "tailwindcss": "^4.0.0"
+    }
+}

@@ -1,0 +1,29 @@
+<script>
+  let title = prop('title')
+</script>
+
+<div class="app">
+  <header>
+    <strong>abide-ui</strong>
+    <nav>
+      <a href="/">home</a>
+      <a href="/form">form</a>
+      <a href="/data">data</a>
+      <a href="/about">about</a>
+    </nav>
+  </header>
+
+  <h1>{title}</h1>
+  <slot></slot>
+
+  <footer>a single-file component framework, server-rendered &amp; reactive</footer>
+</div>
+
+<style>
+  .app { font-family: system-ui, sans-serif; max-width: 42rem; margin: 1.5rem auto; color: #1a1a1a; }
+  header { display: flex; justify-content: space-between; align-items: baseline; padding-bottom: 0.75rem; border-bottom: 1px solid #e2e2e2; }
+  nav { display: flex; gap: 1rem; }
+  nav a { color: #6b46c1; text-decoration: none; }
+  h1 { color: #6b46c1; }
+  footer { margin-top: 2.5rem; color: #999; font-size: 0.85rem; }
+</style>

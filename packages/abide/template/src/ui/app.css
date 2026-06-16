@@ -1,0 +1,21 @@
+/*
+Global stylesheet. Imported once from src/ui/Layout.abide so it ships
+with every page that wraps it. To enable Tailwind v4, add `bun-plugin-tailwind` and
+`tailwindcss` as devDependencies and replace this file with:
+
+    @import "tailwindcss";
+*/
+
+:root {
+    font-family: system-ui, sans-serif;
+    color: #1f2937;
+    background: #f8fafc;
+}
+
+body {
+    margin: 0;
+}
+
+a {
+    color: inherit;
+}

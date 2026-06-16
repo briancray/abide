@@ -1,13 +1,13 @@
-import { GET } from '@belte/belte/server/GET'
-import { json } from '@belte/belte/server/json'
-import { server } from '@belte/belte/server/server'
+import { GET } from '@abide/abide/server/GET'
+import { json } from '@abide/abide/server/json'
+import { server } from '@abide/abide/server/server'
 
 /*
 Exercises the same-origin mutation gate from the inside, for the /security
 demo. A browser can't forge its own Origin header, so this GET plays the
 hostile page: it fires three POSTs at the app's own URLs with a mismatched
 Origin — exactly the no-preflight CSRF shape the gate exists to stop — and
-reports the statuses. createEcho (a normal mutation) and /__belte/mcp are
+reports the statuses. createEcho (a normal mutation) and /__abide/mcp are
 refused with 403 before any handler runs; trackPageview passes because it
 declares `crossOrigin: true`.
 */
@@ -26,6 +26,6 @@ export const probeOriginGate = GET(async () => {
     return json({
         gatedMutation: await forged('/rpc/createEcho', '{"message":"forged"}'),
         crossOriginOptOut: await forged('/rpc/trackPageview', '{"pageUrl":"https://evil.example"}'),
-        mcpEndpoint: await forged('/__belte/mcp', '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'),
+        mcpEndpoint: await forged('/__abide/mcp', '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'),
     })
 })

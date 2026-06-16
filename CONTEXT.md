@@ -41,7 +41,7 @@ A reactive read of registry state: `pending()` (no value yet — an in-flight
 call, or a stream awaiting its first frame) and `refreshing()` (value held, a
 fresher source in flight — a policy refetch, a drop-then-reload, or a stream
 reconnecting; never a merely-open stream). Standalone modules
-(`belte/shared/pending`, `belte/shared/refreshing`) spanning both registries
+(`abide/shared/pending`, `abide/shared/refreshing`) spanning both registries
 via the same selector grammar as `cache.invalidate` plus a Subscribable form.
 Probes report, never act: reading one opens no fetch and no stream, and every
 registry behavior works with zero probe readers. A proposed probe that would
@@ -82,10 +82,10 @@ The SSR→client agreement for pending `{#await}` reads: the document ships `__S
 ## Agents
 
 **Engine**
-A provider adapter satisfying `AgentEngine`: surface + neutral conversation in, `AgentFrame` stream out. It owns its own loop. Lives in `@belte/<provider>`, never in core.
+A provider adapter satisfying `AgentEngine`: surface + neutral conversation in, `AgentFrame` stream out. It owns its own loop. Lives in `@abide/<provider>`, never in core.
 
 **Frame**
 One provider-neutral streaming event (`text` / `tool_use` / `tool_result` / `done`). The frame contract is what all engines must agree on.
 
 **Frame conformance**
-The invariants every engine's stream must satisfy — exactly one `done`, last; every `tool_use` answered by a same-id same-name `tool_result`. Encoded once in `belte/test/assertAgentFrameConformance`; each provider package runs it against scripted provider output (`belte/test/createScriptedSurface` records tool dispatches).
+The invariants every engine's stream must satisfy — exactly one `done`, last; every `tool_use` answered by a same-id same-name `tool_result`. Encoded once in `abide/test/assertAgentFrameConformance`; each provider package runs it against scripted provider output (`abide/test/createScriptedSurface` records tool dispatches).

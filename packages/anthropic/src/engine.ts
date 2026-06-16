@@ -1,17 +1,17 @@
 import Anthropic from '@anthropic-ai/sdk'
-import type { AgentEngine, AgentSurface, NeutralMessage } from '@belte/belte/server/agent'
+import type { AgentEngine, AgentSurface, NeutralMessage } from '@abide/abide/server/agent'
 
 /*
-The Anthropic engine for belte's `agent()`. `engine(config)` returns an
+The Anthropic engine for abide's `agent()`. `engine(config)` returns an
 AgentEngine: a manual tool loop over the Messages API that advertises the
 app's gated tool surface, streams text frames live, dispatches tool calls
 back through `surface.call`, and loops until the model stops asking for
 tools.
 
   // src/server/rpc/chat.ts
-  import { agent } from '@belte/belte/server/agent'
-  import { jsonl } from '@belte/belte/server/jsonl'
-  import { engine } from '@belte/anthropic'
+  import { agent } from '@abide/abide/server/agent'
+  import { jsonl } from '@abide/abide/server/jsonl'
+  import { engine } from '@abide/anthropic'
   const chatEngine = engine({ model: 'claude-opus-4-8', apiKey: config.ANTHROPIC_API_KEY })
   export const chat = POST(({ messages }) => jsonl(agent(chatEngine, messages)), { inputSchema })
 

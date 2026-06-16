@@ -1,4 +1,4 @@
-import type { AgentEngine } from '@belte/belte/server/agent'
+import type { AgentEngine } from '@abide/abide/server/agent'
 import { appMcpServers } from './appMcpServers.ts'
 import type { ClaudePermissions } from './ClaudePermissions.ts'
 import { claudeCliArgs } from './claudeCliArgs.ts'
@@ -42,7 +42,7 @@ async function* readStreamJson(stdout: ReadableStream<Uint8Array>): AsyncIterabl
 /*
 A local-Claude engine: drives the user's installed `claude` binary headlessly
 (`-p --output-format stream-json`) over the app's MCP, instead of the bundled SDK.
-This is what keeps the serve bridge light — `bunx @belte/claude-code` needs only
+This is what keeps the serve bridge light — `bunx @abide/claude-code` needs only
 Bun and the `claude` already on PATH, not @anthropic-ai/claude-agent-sdk. It maps
 the same MCP contract (appMcpServers) and isolation (`--strict-mcp-config`,
 `--setting-sources ''`) to CLI flags, and aborts — killing the child — when the

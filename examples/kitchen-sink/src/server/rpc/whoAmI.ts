@@ -1,9 +1,9 @@
-import { GET } from '@belte/belte/server/GET'
-import { json } from '@belte/belte/server/json'
-import { request } from '@belte/belte/server/request'
+import { GET } from '@abide/abide/server/GET'
+import { json } from '@abide/abide/server/json'
+import { request } from '@abide/abide/server/request'
 
 /*
-Demonstrates the `request()` helper from belte/server. The same `request()`
+Demonstrates the `request()` helper from abide/server. The same `request()`
 call works from any module under the request scope (rpc handler, page
 script, layout, downstream helper) because it's backed by AsyncLocalStorage
 — no plumbing through function arguments.

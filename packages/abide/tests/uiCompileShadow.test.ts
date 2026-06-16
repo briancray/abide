@@ -1,0 +1,67 @@
+import { describe, expect, test } from 'bun:test'
+import { compileShadow } from '../src/lib/ui/compile/compileShadow.ts'
+
+const SOURCE = `<script>
+import Child from './Child.abide'
+let count = state(0)
+let title = prop<string>('title')
+let lang = prop<string | undefined>('lang')
+const doubled = derived(() => count * 2)
+function bump() { count += 1 }
+</script>
+
+<style>.x { color: red }</style>
+
+<h1>{title}</h1>
+<p>{doubled} and {count.toFixed(2)}</p>
+<template if={count > 0}>
+  <button onclick={bump}>{count}</button>
+</template>
+<template each={[1, 2, 3]} as={n}>
+  <span>{n + count}</span>
+</template>
+<Child name={title} code={lang} />
+`
+
+describe('compileShadow', () => {
+    const { code, mappings } = compileShadow(SOURCE)
+
+    test('reconstructs the scope with value types', () => {
+        expect(code).toContain('let count = (0);')
+        expect(code).toContain('const doubled = (() => count * 2)();')
+        expect(code).toContain('let title = props["title"];')
+    })
+
+    test('emits a Props interface honouring required vs optional', () => {
+        expect(code).toContain('"title": string')
+        expect(code).toContain('"lang"?: string | undefined')
+    })
+
+    test('checks child props against the imported component', () => {
+        expect(code).toContain('Parameters<typeof Child>[0]["name"]')
+        expect(code).toContain('(title)')
+    })
+
+    test('every mapping points at the exact source span it stands for', () => {
+        /* The shadow text at shadowStart equals the source text at sourceStart —
+           the invariant the diagnostic remapper relies on. */
+        for (const { shadowStart, sourceStart, length } of mappings) {
+            expect(code.slice(shadowStart, shadowStart + length)).toBe(
+                SOURCE.slice(sourceStart, sourceStart + length),
+            )
+        }
+    })
+
+    test('maps a template interpolation back to its source offset', () => {
+        const titleLoc = SOURCE.indexOf('{title}</h1>') + 1
+        const mapping = mappings.find((entry) => entry.sourceStart === titleLoc)
+        expect(mapping).toBeDefined()
+        expect(SOURCE.slice(mapping!.sourceStart, mapping!.sourceStart + mapping!.length)).toBe(
+            'title',
+        )
+    })
+
+    test('CSS braces in <style> never parse as interpolations', () => {
+        expect(code).not.toContain('color: red')
+    })
+})

@@ -1,5 +1,5 @@
-import { GET } from '@belte/belte/server/GET'
-import { json } from '@belte/belte/server/json'
+import { GET } from '@abide/abide/server/GET'
+import { json } from '@abide/abide/server/json'
 import { z } from 'zod'
 
 const inputSchema = z.object({ message: z.string() })

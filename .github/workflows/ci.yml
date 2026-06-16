@@ -67,27 +67,27 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Pack @belte/belte
-        run: cd packages/belte && bun pm pack --destination "$RUNNER_TEMP"
+      - name: Pack abide
+        run: cd packages/abide && bun pm pack --destination "$RUNNER_TEMP"
 
       - name: Scaffold an app from the packed artifact
         run: |
-          TARBALL="$(echo "$RUNNER_TEMP"/belte-belte-*.tgz)"
+          TARBALL="$(echo "$RUNNER_TEMP"/abide-abide-*.tgz)"
           mkdir "$RUNNER_TEMP/consumer"
           cd "$RUNNER_TEMP/consumer"
           echo '{"name":"consumer","private":true}' > package.json
           bun add "$TARBALL"
           # --no-install: the pinned version may not be published yet; the
           # build step below installs from the packed tarball instead.
-          ./node_modules/.bin/belte scaffold my-app --no-install
+          ./node_modules/.bin/abide scaffold my-app --no-install
 
       # The scaffold must pin the framework version that scaffolded it — a
       # stale pin installs a framework the docs don't describe.
       - name: Assert the scaffold pins the packed version
         run: |
           cd "$RUNNER_TEMP/consumer/my-app"
-          PIN="$(bun -e 'console.log((await Bun.file("package.json").json()).dependencies["@belte/belte"])')"
-          EXPECTED="^$(bun -e 'console.log((await Bun.file(process.env.GITHUB_WORKSPACE + "/packages/belte/package.json").json()).version)')"
+          PIN="$(bun -e 'console.log((await Bun.file("package.json").json()).dependencies["abide"])')"
+          EXPECTED="^$(bun -e 'console.log((await Bun.file(process.env.GITHUB_WORKSPACE + "/packages/abide/package.json").json()).version)')"
           echo "pin=$PIN expected=$EXPECTED"
           test "$PIN" = "$EXPECTED"
 
@@ -100,8 +100,8 @@ jobs:
       - name: Build the scaffolded app from the tarball
         run: |
           cd "$RUNNER_TEMP/consumer/my-app"
-          BELTE_TARBALL="$(echo "$RUNNER_TEMP"/belte-belte-*.tgz)" \
-            bun -e 'const p = await Bun.file("package.json").json(); p.dependencies["@belte/belte"] = "file:" + process.env.BELTE_TARBALL; await Bun.write("package.json", JSON.stringify(p, null, 4) + "\n")'
+          ABIDE_TARBALL="$(echo "$RUNNER_TEMP"/abide-abide-*.tgz)" \
+            bun -e 'const p = await Bun.file("package.json").json(); p.dependencies["abide"] = "file:" + process.env.ABIDE_TARBALL; await Bun.write("package.json", JSON.stringify(p, null, 4) + "\n")'
           bun install
           bun run build
 
@@ -111,10 +111,10 @@ jobs:
           PORT=4173 bun run start > server.log 2>&1 &
           SERVER_PID=$!
           for attempt in $(seq 1 50); do
-            curl -fs "http://localhost:4173/__belte/identity" > /dev/null 2>&1 && break
+            curl -fs "http://localhost:4173/__abide/identity" > /dev/null 2>&1 && break
             sleep 0.2
           done
-          curl -fs "http://localhost:4173/__belte/identity" | grep -q '"belte":true'
+          curl -fs "http://localhost:4173/__abide/identity" | grep -q '"abide":true'
           curl -fs "http://localhost:4173/" | grep -q "</html>"
           curl -fs "http://localhost:4173/rpc/getHello" | grep -q "Hello"
           kill "$SERVER_PID"

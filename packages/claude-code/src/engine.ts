@@ -1,20 +1,20 @@
 import type { Options, Settings } from '@anthropic-ai/claude-agent-sdk'
 import { query } from '@anthropic-ai/claude-agent-sdk'
-import type { AgentEngine } from '@belte/belte/server/agent'
+import type { AgentEngine } from '@abide/abide/server/agent'
 import { appMcpServers } from './appMcpServers.ts'
 import { framesFromMessages } from './framesFromMessages.ts'
 import { promptFromMessages } from './promptFromMessages.ts'
 import type { StreamMessage } from './StreamMessage.ts'
 
 /*
-The SDK-backed Claude Code engine for belte's `agent()`. `engine(config)` returns
+The SDK-backed Claude Code engine for abide's `agent()`. `engine(config)` returns
 an AgentEngine that drives the @anthropic-ai/claude-agent-sdk headless, pointed at
 the app's own MCP endpoint, and relays its event stream as AgentFrames.
 
   // src/server/rpc/chat.ts
-  import { agent } from '@belte/belte/server/agent'
-  import { jsonl } from '@belte/belte/server/jsonl'
-  import { engine } from '@belte/claude-code'
+  import { agent } from '@abide/abide/server/agent'
+  import { jsonl } from '@abide/abide/server/jsonl'
+  import { engine } from '@abide/claude-code'
   const chatEngine = engine({ permissions: { defaultMode: 'bypassPermissions' } })
   export const chat = POST(({ messages }) => jsonl(agent(chatEngine, messages)), { inputSchema })
 
@@ -33,7 +33,7 @@ type ClaudeCodeConfig = {
     permissions?: Settings['permissions']
     // Built-in tools the model may see, or `[]` to drop them so only mcp__<app>__* remains.
     tools?: Options['tools']
-    // Bearer for the app's /__belte/mcp endpoint, if it's gated by app.handle/authorize.
+    // Bearer for the app's /__abide/mcp endpoint, if it's gated by app.handle/authorize.
     mcpToken?: string
     // Cancels the run early; the engine also aborts when the consumer stops iterating.
     abortController?: AbortController

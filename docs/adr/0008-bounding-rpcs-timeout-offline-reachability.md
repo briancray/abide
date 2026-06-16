@@ -9,12 +9,12 @@ when the machine went offline, and there was no story for an RPC handler
 reaching an external host it couldn't access. Tracing both produced one
 diagnosis and a connected arc of decisions.
 
-The backup was never a client-origin problem. belte RPCs are always
+The backup was never a client-origin problem. abide RPCs are always
 same-origin (`withBase` prefixes a rooted path against `window.location`), so a
 client-side "reject calls that reach outside the app" gate has nothing to
 classify — the hang lived on the *server*: a handler's outbound `fetch` to a
 dead host held the inbound RPC open, and ~6-connections-per-host pool
-starvation queued the SPA nav resolve behind it. `BELTE_IDLE_TIMEOUT` is
+starvation queued the SPA nav resolve behind it. `ABIDE_IDLE_TIMEOUT` is
 server-side (Bun's per-connection idle), so it never bounded a client fetch
 that hadn't reached the server.
 
@@ -29,14 +29,14 @@ defaulted**, and a failure is always an **honest HTTP status**, never a flat 500
 
 ### 1. The client RPC timeout is opt-in via env, with no default and no connectivity branch
 
-`BELTE_CLIENT_TIMEOUT` (ms) bounds the browser's `remoteProxy` fetch; unset =
+`ABIDE_CLIENT_TIMEOUT` (ms) bounds the browser's `remoteProxy` fetch; unset =
 unbounded, exactly as before. The server reads it at boot and ships it via
 `__SSR__` (runtime, not build-time `define`) so the value reflects the running
 server, not the build. A fire maps to a synthetic `HttpError(504)`.
 
 Rejected:
 
-- **A non-zero default.** Same stance as `maxBodySize` (ADR — no belte default
+- **A non-zero default.** Same stance as `maxBodySize` (ADR — no abide default
   cap): a framework that silently abandons requests after N seconds is a
   surprise. Opt-in only.
 - **An offline/online split deadline** (short timeout when `navigator.onLine`
@@ -48,10 +48,10 @@ Rejected:
 
 ### 2. Offline is client-reported; server `online()` reflects the caller, not ambient internet
 
-A belte client fetch stamps `OFFLINE_HEADER` (`belte-offline: 1`) only when
+A abide client fetch stamps `OFFLINE_HEADER` (`abide-offline: 1`) only when
 `navigator.onLine` is false. Server `online()`, within a request scope, returns
 `!req.headers.has(OFFLINE_HEADER)`; true outside any scope and for
-non-belte-client requests. This makes `online()` isomorphic — same callable,
+non-abide-client requests. This makes `online()` isomorphic — same callable,
 honest answer on both sides — where it was a server-side constant before.
 
 This **revises** the prior locked decision ("`online()` is constant `true` on
@@ -69,7 +69,7 @@ Rejected:
   therefore always `true` during SSR (the initial document navigation carries
   no header) and for webhook/cron callers. Real outbound reachability is
   decision 4's separate, explicit job.
-- **The client "reject outside-the-app" gate.** As above — belte RPCs are
+- **The client "reject outside-the-app" gate.** As above — abide RPCs are
   same-origin, so the client can't see which call provokes a server-side
   outbound hang.
 
@@ -87,7 +87,7 @@ throws (a real bug) still default to 500 — correctly.
 
 ### 4. `reachable(host)` is a faithful first read, then a kept-warm poll
 
-`belte/server/reachable` — `async reachable(host): Promise<boolean>` — the
+`abide/server/reachable` — `async reachable(host): Promise<boolean>` — the
 **outbound** complement to `online()`'s inbound/client-reported signal. The
 first call awaits a real status-agnostic HEAD to the origin; it then hands the
 origin to `createLivenessWatch`, which re-probes every TTL so later reads
@@ -125,7 +125,7 @@ The deliberate non-decision: **the per-verb value is not delivered to the client
 fetch.** The server's in-time 504 already bounds the browser for every slow
 handler; the only case it can't cover is a server that never responds at all
 (unreachable / hung connection), which decision 1's global
-`BELTE_CLIENT_TIMEOUT` already backstops. So neither delivery mechanism was
+`ABIDE_CLIENT_TIMEOUT` already backstops. So neither delivery mechanism was
 built:
 
 - **Static bundle-time extraction** into the client stub — literal-only
@@ -155,7 +155,7 @@ pool frees and nav unblocks regardless of the leaked outbound socket.
 ## Consequences
 
 - Four orthogonal, opt-in knobs, none defaulted: browser wait
-  (`BELTE_CLIENT_TIMEOUT`), caller connectivity (the offline header →
+  (`ABIDE_CLIENT_TIMEOUT`), caller connectivity (the offline header →
   `online()`), handler deadline (per-verb `timeout`), host reachability
   (`reachable`). A failure on any is an honest status (503 offline, 504
   timeout, the verb's own 404/…), never a flat 500 (decision 3).
@@ -174,7 +174,7 @@ pool frees and nav unblocks regardless of the leaked outbound socket.
   deadline now fires it, in-process it does not.
 - Left unbuilt: `.maybe()` on remote functions (demote a chosen not-found
   status to `undefined` — the per-call catch); sub-page error isolation sugar
-  (a belte boundary component carrying the same `{ status, message }` contract),
+  (a abide boundary component carrying the same `{ status, message }` contract),
   gated on a Svelte async read-site/boundary spike; per-verb client-fetch
   delivery (only needed to bound the *unreachable* case per-RPC rather than via
   the global). Each is a separate, additive decision.

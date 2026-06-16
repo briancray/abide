@@ -9,7 +9,7 @@ describe('sanitizeMcpName', () => {
     })
 
     test('collapses every non-word run to a single underscore', () => {
-        expect(sanitizeMcpName('belte-app')).toBe('belte_app')
+        expect(sanitizeMcpName('abide-app')).toBe('abide_app')
         expect(sanitizeMcpName('My App v2.0')).toBe('My_App_v2_0')
     })
 

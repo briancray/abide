@@ -1,9 +1,9 @@
 ---
 name: write-readme
-description: Regenerate the belte README. Use when the user asks to rewrite, update, or refresh the README, or after API changes the README should reflect.
+description: Regenerate the abide README. Use when the user asks to rewrite, update, or refresh the README, or after API changes the README should reflect.
 ---
 
-# Writing the belte README
+# Writing the abide README
 
 The README makes its argument with artifacts — the declare snippet, the
 fan-out diagram, the boot surface map — and then gets out of the way. It is
@@ -13,12 +13,12 @@ facts; treat the budgets below as the authority for length.
 
 ## Source of truth — non-negotiable
 
-* **`packages/belte/src` is the SOLE source of factual / API truth.** Read it
+* **`packages/abide/src` is the SOLE source of factual / API truth.** Read it
   before you write. Do not state a behaviour, option, default, path, or
   guarantee that you have not seen in that tree. If the code doesn't back it,
   it doesn't go in.
-* **`packages/belte/package.json` backs the meta-claims:** import paths (the
-  `exports` map — pin every `@belte/belte/...` to a real key), dependency
+* **`packages/abide/package.json` backs the meta-claims:** import paths (the
+  `exports` map — pin every `abide/...` to a real key), dependency
   footprint (`dependencies` / `peerDependencies`), runtime (`engines`).
 * Do **not** mine `examples/`, the current README, CHANGELOG, or docs for
   facts. The current README is not a source — rebuild completely. (The
@@ -35,7 +35,7 @@ Do not start from a remembered list of surfaces; lists drift. Derive the
 surface set from the code every run:
 
 ```sh
-bun run packages/belte/scripts/readmeSurfaces.ts
+bun run packages/abide/scripts/readmeSurfaces.ts
 ```
 
 It reports four things and **fails** if any export is undocumented-by-omission:
@@ -77,16 +77,16 @@ drop it.
 
 | Claim | Verify against |
 | --- | --- |
-| One declared rpc = SSR call + browser fetch + MCP tool + CLI subcommand + OpenAPI op | `src/belteResolverPlugin.ts`, `src/lib/shared/createRemoteFunction.ts`, `src/lib/mcp/dispatchMcpRequest.ts`, `src/lib/server/runtime/buildOpenApiSpec.ts` |
-| The boot surface map's exact format (three glyph tables, printed by default — silence with `DEBUG=-belte`) | `src/lib/server/runtime/logExposedSurfaces.ts` + `createServer.ts` (`!isDebugNegated('belte')`) — reproduce its real output, never invent columns |
+| One declared rpc = SSR call + browser fetch + MCP tool + CLI subcommand + OpenAPI op | `src/abideResolverPlugin.ts`, `src/lib/shared/createRemoteFunction.ts`, `src/lib/mcp/dispatchMcpRequest.ts`, `src/lib/server/runtime/buildOpenApiSpec.ts` |
+| The boot surface map's exact format (three glyph tables, printed by default — silence with `DEBUG=-abide`) | `src/lib/server/runtime/logExposedSurfaces.ts` + `createServer.ts` (`!isDebugNegated('abide')`) — reproduce its real output, never invent columns |
 | Mutating verbs never auto-expose to MCP | `src/lib/server/rpc/defineVerb.ts`, `src/lib/shared/resolveClientFlags.ts`, `src/lib/shared/isReadOnlyMethod.ts` |
 | Cross-origin browser mutations 403 by default; `crossOrigin: true` opts a verb out; the MCP mount gets the same Origin check | `src/lib/server/runtime/createRouteDispatcher.ts`, `src/lib/server/runtime/isCrossOriginRequest.ts`, `createServer.ts` MCP mount |
 | Boot warns when MCP tools are exposed with no `app.handle` | `src/lib/server/runtime/warnUnguardedMcp.ts` + its call in `createServer.ts` |
 | SSR snapshots replay GET only; invalidate policies refuse writes at wrap time | `src/lib/shared/REPLAYABLE_METHODS.ts`, `src/lib/shared/cache.ts` (validatePolicy) |
-| `cache()` returns warm SSR values synchronously (`Promise<Return> \| Return`) | `src/lib/shared/cache.ts` (snapshot warm path) |
+| `cache()` is uniformly `Promise<Return>` — warm SSR/patch values resolve on a microtask (not synchronously), so `.then`/`.catch`/`.finally` chain cleanly; hydration stays flash-free via the resume manifest, not a sync read | `src/lib/shared/cache.ts` (warm path) |
 | Query args travel as strings (the `z.coerce` warning) | `src/lib/shared/queryStringFromArgs.ts`, `src/lib/server/rpc/parseArgs.ts` |
 | Probes (`pending`/`refreshing`) have their own paths and report-never-act | `src/lib/shared/pending.ts`, `refreshing.ts`, `probeRegistries.ts` |
-| The streaming consumer is `tail` (status/error/reconnect semantics) | `src/lib/browser/tail.ts` + the `exports` map |
+| The streaming consumer is `tail` (status/error/reconnect semantics) | `src/lib/ui/tail.ts` + the `exports` map |
 | In-process calls forward only the header allowlist | `src/lib/shared/forwardHeaders.ts` |
 | The testing entry is `createTestApp` (boots the real app in-process); there is no `createTestClient`/`clearVerbRegistry` | `src/lib/test/createTestApp.ts`, `package.json` `exports` (`./test/*`) |
 | Single-process deploy truth (`global` cache, socket retention, fan-out are process memory) | `src/lib/shared/globalCacheStore.ts`, socket registry/dispatcher, `Bun.serve` in `createServer.ts` |
@@ -99,17 +99,17 @@ helper, env var, and route in the body the same way.
 The banner is a pitch, not a demo: the proof artifacts (declare snippet,
 fan-out diagram, boot map) open the first body phase instead, so the page
 leads with the claim and the demonstration lands where the reader starts
-reading. Lowercase `# belte`, then in order, nothing else between:
+reading. Lowercase `# abide`, then in order, nothing else between:
 
 1. The bold capability line: **"Write one function. Get a web app, a CLI, and
    an AI tool — from the same line of code."**
-2. As few sentences as carry it (terse cap, not a target) on what belte is
+2. As few sentences as carry it (terse cap, not a target) on what abide is
    and that the bundler swaps the runtime per target.
 3. One bullet per footprint fact that is true today (today two: zero runtime
    dependencies; one runtime) — add or drop a bullet if the fact set changes,
    don't pad to a fixed count.
 4. The quickstart, two paths:
-   - **Start a project** — ideally one command (`belte scaffold <name>`).
+   - **Start a project** — ideally one command (`abide scaffold <name>`).
      State in a trailing comment what it does (scaffolds, installs, starts
      dev) only if the code still does all three.
    - **See everything live** — clone the repo and run the kitchen-sink
@@ -117,8 +117,8 @@ reading. Lowercase `# belte`, then in order, nothing else between:
      `examples/kitchen-sink/package.json` before pasting:
 
      ```sh
-     git clone https://github.com/briancray/belte
-     cd belte && bun install
+     git clone https://github.com/briancray/abide
+     cd abide && bun install
      cd examples/kitchen-sink && bun run dev
      ```
 
@@ -147,7 +147,7 @@ capability; slot it into the phase its neighbours imply. A merged section
 
 **The demonstration leads the first phase, not the banner**: declare snippet →
 fan-out diagram → boot surface map (copied from `logExposedSurfaces.ts`'s
-actual format — it prints by default, no `DEBUG=belte`) → the one-line gating
+actual format — it prints by default, no `DEBUG=abide`) → the one-line gating
 note (schema gates the machine surfaces; mutations need explicit
 `clients: { mcp: true }`).
 
@@ -158,7 +158,7 @@ note (schema gates the machine surfaces; mutations need explicit
 | | Request scope | `request-scope` | table + forward-headers warning |
 | **Build the web app** | Pages | `pages` | bullets + `page` snippet |
 | | navigate | `navigate` | snippet + ≤ 2 lines |
-| | cache | `cache` | snippet (one-shot + `$derived` reactive + `ttl:0`) + options table + `cache.invalidate`/`cache.on` line + nuance bullets |
+| | cache | `cache` | snippet (one-shot + `derived()` reactive + `ttl:0`) + options table + `cache.invalidate`/`cache.on` line + nuance bullets |
 | | pending / refreshing / online | `probes` | snippet (all three) + ≤ 2 lines |
 | | Sockets & tail | `sockets` + `tail` | socket snippet + options table + tail snippet + status/reconnect + SSR no-op |
 | | url | `url` | snippet + base-prefix line |
@@ -176,32 +176,39 @@ note (schema gates the machine surfaces; mutations need explicit
 **Non-derivable nuances to carry** (not in the claim ledger, easy to lose):
 
 * *Reference / structure* — the namespace sentence is about *import*
-  namespaces: spell the full `@belte/belte/server|browser|shared/*` prefixes
+  namespaces: spell the full `abide/server|ui|shared/*` prefixes
   and name example `shared/*` exports, because `shared/*` is not a project
   directory and the tree must not imply it is. Lead the tree with "A project:";
   tree comments ≤ ~72 cols.
 * *rpc* — the `z.coerce` query-args-travel-as-strings warning; the per-verb
-  `timeout` (504, server-side) is distinct from `BELTE_CLIENT_TIMEOUT`
+  `timeout` (504, server-side) is distinct from `ABIDE_CLIENT_TIMEOUT`
   (client fetch wait).
-* *cache* — the one-shot vs `$derived`-reactive read (`cache.invalidate`
+* *Pages* — the framework resolves only `page.abide` files under
+  `src/ui/pages/` as routes (`[id]`/`[...rest]` segments → params). **Layouts
+  and error boundaries are userland**: a page imports and wraps its own; the
+  framework resolves no `layout.*`/`error.*`, so don't document those as
+  conventions. Component files are `.abide` (never `.svelte`), and the boot
+  map's pages table is a single `page` column (route only).
+* *cache* — the one-shot vs `derived()`-reactive read (`cache.invalidate`
   re-runs the scope) and the `ttl: 0` mutation idiom in the snippet, plus one
-  bullet each for the warm-sync union, the top-level-await sweep, and producer
+  bullet each for the uniform-`Promise` warm read (resolves on a microtask,
+  so `.then`/`.catch`/`.finally` work), the top-level-await sweep, and producer
   hoisting.
 * *tail* — the SSR no-op (seed with `cache()`, layer `tail()`).
 * *Deploy* — the Dockerfile ships the **compiled binary**, never `bun run
-  build` + `bun run start`: a multi-stage build that runs `belte compile` in
+  build` + `bun run start`: a multi-stage build that runs `abide compile` in
   an `oven/bun` stage, then `COPY --from=build` the standalone binary into a
   minimal runtime image (e.g. `debian:bookworm-slim`) needing neither Bun nor
   `node_modules`.
 
 ## Validation pass — run before finishing
 
-1. **Import paths**: extract every `@belte/belte/...` from the README and
+1. **Import paths**: extract every `abide/...` from the README and
    check each against the `exports` map (namespace prefixes ending in `/*`
    are prose, not imports). Example:
 
    ```sh
-   grep -oE '@belte/belte/[a-zA-Z/-]+' packages/belte/README.md | sort -u
+   grep -oE '@abide/abide/[a-zA-Z/-]+' packages/abide/README.md | sort -u
    ```
 
    Every concrete path must be an exports key. Fix the README, not the map.
@@ -212,7 +219,7 @@ note (schema gates the machine surfaces; mutations need explicit
    gate — re-run it against the finished draft:
 
    ```sh
-   bun run packages/belte/scripts/readmeSurfaces.ts
+   bun run packages/abide/scripts/readmeSurfaces.ts
    ```
 
    It must exit OK (every export tagged), and you must be able to point each
@@ -227,22 +234,34 @@ note (schema gates the machine surfaces; mutations need explicit
 4. **Tree width**: no line in a `text` tree block over ~76 columns (GitHub
    clips them).
 5. **Boot map**: matches the current `logExposedSurfaces.ts` columns exactly,
-   and is introduced as default-on (no `DEBUG=belte` prefix).
+   and is introduced as default-on (no `DEBUG=abide` prefix).
 6. **Phase order**: the four `##` phases appear in arc order, surfaces as
    `###` under them; the demonstration leads the first phase, structure sits
    in Reference.
 
 ## Write to the right file
 
-Write to `packages/belte/README.md` — the canonical, npm-shipped file. The
+Write to `packages/abide/README.md` — the canonical, npm-shipped file. The
 repo-root `README.md` is a symlink to it; never edit the root path or replace
 the symlink with a copy.
 
 ## Style
 
-* Title lowercase `# belte`; section headings sentence-case, mostly one word.
+* Title lowercase `# abide`; section headings sentence-case, mostly one word.
 * No emojis, no superlatives, no competitor names.
-* Right language tag on every fence (`ts`, `svelte`, `sh`, `text`, `toml`,
-  `dockerfile`); filenames and URL paths in backticks.
+* Right language tag on every fence (`ts`, `sh`, `text`, `toml`,
+  `dockerfile`); for `.abide` component snippets use the `html` fence — abide-ui
+  templates are valid HTML (`<script>` + native `<template if/each/await>` +
+  `<style>`, dynamic bits in `{ }`), so `html` highlights them and there is no
+  Svelte anywhere. Filenames and URL paths in backticks; component files end in
+  `.abide`, never `.svelte`.
+* abide-ui idioms (read from `.abide` files, never invent Svelte syntax):
+  reactive primitives are `state(v)` / `derived(fn)` / `effect(fn)` / `prop(n)`
+  (plain functions, **not** `$state`/`$derived`); control flow is
+  `<template if>`/`<template else>`, `<template each={…} as="x" key="x">`,
+  `<template await={p}>`/`<template then="v">`/`<template catch="e">`,
+  `<template switch>`/`case`/`default`; `{expr}` text, `name={expr}`,
+  `onclick={fn}`, `bind:value={x}`; components are capitalised tags filling a
+  `<slot>`; `<style>` is component-scoped.
 * Warnings are single `>` lines (or a single `>` bullet list in cache), not
   callout paragraphs.

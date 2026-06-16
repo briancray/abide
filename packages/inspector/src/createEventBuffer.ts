@@ -7,7 +7,7 @@ single log tap feeds push(); each connected events stream replays the tail it
 hasn't seen (by sequence id) then subscribes for new records. Capacity-bounded
 so a long-lived server can't grow the buffer without limit — the inspector is a
 tail, not a store (ADR 0004). Generic over the record so the package forwards
-them opaquely as JSON, free of belte's internal LogRecord type.
+them opaquely as JSON, free of abide's internal LogRecord type.
 
 `epoch` is minted per buffer instance: a dev worker swap creates a fresh buffer
 whose ids restart at 1, so a client reconnecting with the previous worker's

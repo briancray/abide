@@ -1,12 +1,12 @@
-import { GET } from '@belte/belte/server/GET'
-import { sse } from '@belte/belte/server/sse'
+import { GET } from '@abide/abide/server/GET'
+import { sse } from '@abide/abide/server/sse'
 
 /*
 SSE streaming over plain HTTP. The handler returns `sse(asyncIterable)` —
 each yielded frame becomes one `data: <json>\n\n` event. The client
 consumes with `new EventSource(tickFeed.url)`, or by reading
 `tickFeed.raw(...)`'s body if it needs Response headers/status. For
-pub/sub fan-out reach for `belte/server` instead.
+pub/sub fan-out reach for `abide/server` instead.
 */
 export const tickFeed = GET(() =>
     sse(

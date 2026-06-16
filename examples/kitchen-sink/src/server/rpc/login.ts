@@ -1,6 +1,6 @@
-import { error } from '@belte/belte/server/error'
-import { POST } from '@belte/belte/server/POST'
-import { redirect } from '@belte/belte/server/redirect'
+import { error } from '@abide/abide/server/error'
+import { POST } from '@abide/abide/server/POST'
+import { redirect } from '@abide/abide/server/redirect'
 import { createSession } from '../../sessions.ts'
 
 /*

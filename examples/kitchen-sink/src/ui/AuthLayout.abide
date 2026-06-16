@@ -1,0 +1,40 @@
+<script>
+import './app.css'
+import { cache } from '@abide/abide/shared/cache'
+import { getSession } from '$server/rpc/getSession.ts'
+import { logout } from '$server/rpc/logout.ts'
+
+/*
+Userland nested layout for the /auth subtree — auth pages wrap <AuthLayout> instead
+of <Layout> (abide has no framework layout resolution; the page picks its layout).
+Distinct chrome from the root layout, so navigating in/out swaps it wholesale. The
+session await is a child-component await, so it joins the page's SSR stream.
+*/
+</script>
+
+<div class="min-h-screen bg-slate-900 text-slate-100">
+    <header class="border-b border-slate-700 bg-slate-950">
+        <nav class="mx-auto flex max-w-4xl items-center gap-4 px-6 py-4 text-sm">
+            <a href="/" class="text-base font-semibold text-slate-100">← back to kitchen-sink</a>
+            <span class="text-xs uppercase tracking-wide text-slate-500">auth area</span>
+            <template await={cache(getSession)()}>
+                <template then="session">
+                    <div class="ml-auto flex items-center gap-3">
+                        <template if={session && session.user}>
+                            <span class="text-slate-400">signed in as <strong class="text-slate-100">{session.user}</strong></span>
+                            <form method="POST" action={logout.url}>
+                                <button type="submit" class="rounded-md border border-slate-600 px-3 py-1 text-slate-100 hover:bg-slate-800">Log out</button>
+                            </form>
+                        </template>
+                        <template else>
+                            <a href="/auth/login" class="rounded-md bg-slate-100 px-3 py-1 text-slate-900 hover:bg-slate-300">Log in</a>
+                        </template>
+                    </div>
+                </template>
+            </template>
+        </nav>
+    </header>
+    <main class="mx-auto max-w-4xl px-6 py-10">
+        <slot></slot>
+    </main>
+</div>

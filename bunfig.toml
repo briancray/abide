@@ -2,9 +2,9 @@
 linker = "hoisted"
 
 [test]
-# Belte's own tests run from the repo root (the `test` script scopes the scan
-# to ./packages). Registers belte-ui's `.belte` loader so fixture pages/components
+# Abide's own tests run from the repo root (the `test` script scopes the scan
+# to ./packages). Registers abide-ui's `.abide` loader so fixture pages/components
 # compile through the runtime the bundles use. Example tests run per-workspace (see
-# root `test` script) so belte's cwd-rooted resolver resolves against each example's
+# root `test` script) so abide's cwd-rooted resolver resolves against each example's
 # own src/server.
-preload = ["./packages/belte/tests/support/uiPreload.ts"]
+preload = ["./packages/abide/tests/support/uiPreload.ts"]

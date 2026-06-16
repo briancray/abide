@@ -1,4 +1,4 @@
-import type { InspectorContext } from '@belte/belte/server/InspectorContext'
+import type { InspectorContext } from '@abide/abide/server/InspectorContext'
 import { createEventBuffer } from './createEventBuffer.ts'
 import { eventStreamResponse } from './eventStreamResponse.ts'
 import { inspectorHtml } from './inspectorHtml.ts'
@@ -7,7 +7,7 @@ import { inspectorHtml } from './inspectorHtml.ts'
 const BUFFER_CAPACITY = 1000
 
 /*
-The entry core dynamically imports when BELTE_ENABLE_INSPECTOR=true. Wires the
+The entry core dynamically imports when ABIDE_ENABLE_INSPECTOR=true. Wires the
 framework's log tap into a bounded buffer and returns the request handler core
 routes for the inspector's paths. Three routes off the mounted root: `/events`
 (SSE live feed), `/surface` (the static catalog), everything else the UI page.

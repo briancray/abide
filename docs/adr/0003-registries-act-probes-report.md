@@ -12,7 +12,7 @@ tail registry has the same shape (entries, coalescing by name, lifecycle).
 Alternatives considered and rejected:
 
 - `fn.pending` on the verb-helper callable — can't cover producers (no
-  belte-owned object) and fragments the one selector grammar.
+  abide-owned object) and fragments the one selector grammar.
 - A `dedupe`/`track` rename or split — three names for one registry; the SSR
   snapshot story ("the cache hydrates") is the load-bearing feature and reads
   only as a cache.

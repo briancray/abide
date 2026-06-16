@@ -1,0 +1,22 @@
+<script>
+/*
+Root page — served at GET /. Every folder under src/ui/pages/ that contains a
+page.abide mounts at that folder's URL.
+
+The blocking await-block below (the `then` attribute sits ON the <template await>)
+resolves on the server during SSR and renders inline — no pending placeholder. The
+decoded body is captured into the per-request cache, serialized into the HTML, and
+replayed on the client during hydration with no second fetch. A `then` *child*
+instead would stream the resolution in out of order.
+*/
+import { cache } from '@abide/abide/shared/cache'
+import Layout from '../Layout.abide'
+import { getHello } from '$server/rpc/getHello.ts'
+</script>
+
+<Layout>
+    <template await={cache(getHello)()} then="hello">
+        <h1>{hello.message}</h1>
+    </template>
+    <p>Edit <code>src/ui/pages/page.abide</code> and the page hot-reloads.</p>
+</Layout>

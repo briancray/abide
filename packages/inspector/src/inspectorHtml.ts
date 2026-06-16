@@ -16,7 +16,7 @@ export function inspectorHtml(appName: string): string {
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>${escapeHtml(appName)} · belte inspector</title>
+<title>${escapeHtml(appName)} · abide inspector</title>
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
@@ -95,7 +95,7 @@ export function inspectorHtml(appName: string): string {
 </head>
 <body>
 <header>
-  <b>${escapeHtml(appName)}</b><span>belte inspector</span>
+  <b>${escapeHtml(appName)}</b><span>abide inspector</span>
   <span class="warn">privileged · exposes all traffic</span>
 </header>
 <nav>
@@ -261,7 +261,7 @@ function traceHtml(id, recs) {
   }
   const requests = [...byReq.entries()].map(([span, rs]) => buildRequest(span, rs))
   const known = new Set(requests.map((q) => q.span))
-  // Root = the request belte started the trace at (no parent); else the earliest.
+  // Root = the request abide started the trace at (no parent); else the earliest.
   const byTs = [...requests].sort((a, b) => a.ts - b.ts)
   const root = byTs.find((q) => q.parent === undefined) || byTs[0]
   // A request nests under its parent when that parent is itself a request in this

@@ -1,8 +1,8 @@
-import type { NeutralMessage } from '@belte/belte/server/agent'
+import type { NeutralMessage } from '@abide/abide/server/agent'
 
 /*
 Claude (SDK or CLI) takes a single prompt and owns assistant/tool turns through
-its own session, which belte doesn't resume here. So prior turns are flattened
+its own session, which abide doesn't resume here. So prior turns are flattened
 into the prompt as a labelled transcript rather than dropped — the model keeps
 the conversation's context without session state. A lone user turn passes through
 as its bare text. Tool-result turns are internal to the prior run and omitted.

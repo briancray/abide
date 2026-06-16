@@ -1,14 +1,14 @@
 #!/usr/bin/env bun
 /*
 Post-`changeset version` mirror. Changesets writes the changelog inside the
-published package (packages/belte/CHANGELOG.md); this copies it to the repo root
+published package (packages/abide/CHANGELOG.md); this copies it to the repo root
 so the release history is visible at the top level too. Single published package,
 so a verbatim copy is the whole story. Runs inside `version-packages`, so both
 local and CI versioning keep the root copy in step with the package's.
 */
 import { $ } from 'bun'
 
-const PACKAGE_CHANGELOG = 'packages/belte/CHANGELOG.md'
+const PACKAGE_CHANGELOG = 'packages/abide/CHANGELOG.md'
 const ROOT_CHANGELOG = 'CHANGELOG.md'
 
 const source = Bun.file(PACKAGE_CHANGELOG)

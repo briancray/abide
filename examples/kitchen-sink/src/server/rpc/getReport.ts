@@ -1,5 +1,5 @@
-import { GET } from '@belte/belte/server/GET'
-import { log } from '@belte/belte/shared/log'
+import { GET } from '@abide/abide/server/GET'
+import { log } from '@abide/abide/shared/log'
 
 /*
 Returns JSON with a custom `x-report-version` header — used by the

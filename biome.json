@@ -10,7 +10,7 @@
             "**/*.{json,ts,js,svelte}",
             "!**/dist",
             "!**/node_modules",
-            "!**/.belte",
+            "!**/.abide",
             "!**/routes.gen.ts"
         ]
     },

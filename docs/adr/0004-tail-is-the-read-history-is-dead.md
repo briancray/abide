@@ -31,7 +31,7 @@ One concept, one word, three altitudes — and retention is opt-in:
   `chat.tail(count)` seeds with the last `count` retained frames, no-arg =
   the whole retained tail. The ws wire is unchanged (`replay` omitted = full,
   number = trailing-n, `0` = live-only); only the local defaults flipped.
-- `tail(x)` (was `subscribe()`, now `belte/browser/tail`) is the reactive
+- `tail(x)` (was `subscribe()`, now `abide/browser/tail`) is the reactive
   latest-wins read; `tail(x, { last: n })` returns a live `T[]` window of the
   last ≤n frames, however they arrived. `last` is the read-side word (what
   the reader keeps), `tail` the declaration-side word (what the topic
@@ -54,7 +54,7 @@ for keyed memoization, and accuracy beats register consistency.
 
 ## Consequences
 
-- Breaking: `belte/browser/subscribe` → `belte/browser/tail` (with
+- Breaking: `abide/browser/subscribe` → `abide/browser/tail` (with
   `.status`/`.error`); socket option `history` → `tail`; bare socket
   iteration no longer replays (use `.tail()` for the old behavior); the
   reactive bare form seeds via `tail(1)` instead of full replay, so retained

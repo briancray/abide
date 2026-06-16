@@ -1,5 +1,5 @@
 {
-    "name": "belte-workspace",
+    "name": "abide-workspace",
     "private": true,
     "type": "module",
     "workspaces": [
@@ -11,8 +11,8 @@
         "lint": "biome lint",
         "test": "bun test ./packages/*/tests && for d in examples/*/; do if [ -d \"$d/test\" ]; then (cd \"$d\" && bun test) || exit 1; fi; done",
         "check": "biome check --write",
-        "typecheck": "tsc -p packages/belte/tsconfig.json && tsc -p packages/belte/tsconfig.consumer.json",
-        "check:readme-tags": "bun run packages/belte/scripts/readmeSurfaces.ts",
+        "typecheck": "tsgo -p packages/abide/tsconfig.json && tsgo -p packages/abide/tsconfig.consumer.json",
+        "check:readme-tags": "bun run packages/abide/scripts/readmeSurfaces.ts",
         "changeset": "changeset",
         "version-packages": "bun run scripts/autofillChangesets.ts && changeset version && bun run scripts/syncRootChangelog.ts",
         "release": "changeset publish"
@@ -22,6 +22,7 @@
         "@changesets/changelog-github": "^0.7.0",
         "@changesets/cli": "^2.29.7",
         "@types/bun": "latest",
+        "@typescript/native-preview": "latest",
         "typescript": "^6.0.3"
     }
 }

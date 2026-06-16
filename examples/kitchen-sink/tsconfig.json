@@ -1,12 +1,12 @@
 {
-    "extends": "@belte/belte/tsconfig",
-    "include": ["src/**/*.ts", "src/.belte/**/*.ts", "src/**/*.svelte", "test/**/*.ts"],
+    "extends": "@abide/abide/tsconfig",
+    "include": ["src/**/*.ts", "src/.abide/**/*.ts", "src/**/*.svelte", "test/**/*.ts"],
     "compilerOptions": {
         "paths": {
             "$server": ["./src/server"],
             "$server/*": ["./src/server/*"],
-            "$browser": ["./src/browser"],
-            "$browser/*": ["./src/browser/*"],
+            "$ui": ["./src/ui"],
+            "$ui/*": ["./src/ui/*"],
             "$shared": ["./src/shared"],
             "$shared/*": ["./src/shared/*"],
             "$mcp": ["./src/mcp"],

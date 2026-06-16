@@ -1,0 +1,11 @@
+{
+  "//": "Abide: treat .abide components as Svelte for syntax highlighting (the grammar is near-identical). The Svelte language server is disabled here because it would parse .abide as .svelte and emit bogus diagnostics; real type-checking comes from the abide language server (see editors/zed/abide). Once that extension is installed, it registers its own 'Abide' language and you can drop the file_types override.",
+  "file_types": {
+    "Svelte": ["abide"]
+  },
+  "languages": {
+    "Svelte": {
+      "language_servers": []
+    }
+  }
+}
