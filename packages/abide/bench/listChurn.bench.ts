@@ -84,7 +84,7 @@ function removeChurn(rows: number, ops: number): number {
    the parent and descend-scans every minted descendant to pick up index shifts. */
 function reorderChurn(rows: number, ops: number): number {
     const model = mountList(rows)
-    let current = model.snapshot() as { order: string[] }
+    const current = model.snapshot() as { order: string[] }
     const start = performance.now()
     for (let op = 0; op < ops; op += 1) {
         const reversed = [...(model.snapshot() as { order: string[] }).order].reverse()

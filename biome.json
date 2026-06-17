@@ -11,6 +11,7 @@
             "!**/dist",
             "!**/node_modules",
             "!**/.abide",
+            "!**/.zed",
             "!**/routes.gen.ts"
         ]
     },
@@ -71,6 +72,9 @@
                 "rules": {
                     "style": {
                         "noNonNullAssertion": "off"
+                    },
+                    "suspicious": {
+                        "noThenProperty": "off"
                     }
                 }
             }

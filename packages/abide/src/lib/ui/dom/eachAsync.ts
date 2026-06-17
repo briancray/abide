@@ -73,7 +73,8 @@ export function eachAsync<T>(
        never re-checks `generation` — it dangles on the microtask queue forever. */
     let iterator: AsyncIterator<T> | undefined
     effect(() => {
-        const generationAtStart = (generation += 1)
+        generation += 1
+        const generationAtStart = generation
         iterator?.return?.() // close the superseded run's iterator before re-streaming
         iterator = undefined
         clearError() // a fresh run drops a prior error branch

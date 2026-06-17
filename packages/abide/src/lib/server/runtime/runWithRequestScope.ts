@@ -54,13 +54,17 @@ export function runWithRequestScope(
             const setCookies = store.cookies.toSetCookieHeaders()
             if (setCookies.length > 0) {
                 try {
-                    setCookies.forEach((header) => response.headers.append('set-cookie', header))
+                    setCookies.forEach((header) => {
+                        response.headers.append('set-cookie', header)
+                    })
                 } catch {
                     /* A passthrough Response (proxied fetch) carries immutable headers;
                        rebuild it with a mutable copy so the cookies still ship rather
                        than the append throwing and 500ing the successful response. */
                     response = new Response(response.body, response)
-                    setCookies.forEach((header) => response.headers.append('set-cookie', header))
+                    setCookies.forEach((header) => {
+                        response.headers.append('set-cookie', header)
+                    })
                 }
             }
         }

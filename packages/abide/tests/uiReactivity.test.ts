@@ -203,7 +203,7 @@ describe('reactive document', () => {
     same Set, re-yielding it to the in-progress for…of without end.
     */
     test('a derived over a createSubscriber wakes its effect once per update, no loop', () => {
-        let value: unknown = undefined
+        let value: unknown
         let fire: () => void = () => {}
         const tap = createSubscriber((update) => {
             fire = update

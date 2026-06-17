@@ -6,4 +6,5 @@ and on dispose, nothing, or — when the body is async — a promise of either. 
 async case tracks only the reads before its first `await`; reads after it are not
 captured by the reactive graph.
 */
+// biome-ignore lint/suspicious/noConfusingVoidType: an effect body with no return is void; the union is the real contract
 export type EffectResult = void | Teardown | Promise<void | Teardown>

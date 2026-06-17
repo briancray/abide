@@ -30,17 +30,6 @@ const RUNTIME = {
     awaitBlock,
 }
 
-/* Mount a component on the client and return its host. */
-function mount(source: string, model: unknown): HTMLElement {
-    const host = document.createElement('div')
-    new Function('host', ...Object.keys(RUNTIME), 'model', compileComponent(source))(
-        host,
-        ...Object.values(RUNTIME),
-        model,
-    )
-    return host
-}
-
 /* Run the component's SSR render and stream it to one HTML string. */
 async function ssrStream(source: string, model: unknown): Promise<string> {
     const render = new Function(...Object.keys(RUNTIME), 'model', compileSSR(source))(

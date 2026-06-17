@@ -31,9 +31,9 @@ export function installMiniDom(): () => void {
         '"': '&quot;',
         "'": '&#39;',
     }
-    const escape = (value: string): string =>
+    const escapeHtml = (value: string): string =>
         value.replace(/[&<>"']/g, (character) => ESCAPES[character] as string)
-    const unescape = (value: string): string =>
+    const unescapeHtml = (value: string): string =>
         value
             .replace(/&lt;/g, '<')
             .replace(/&gt;/g, '>')
@@ -253,7 +253,7 @@ export function installMiniDom(): () => void {
                 } else {
                     const next = html.indexOf('<', cursor)
                     const stop = next === -1 ? html.length : next
-                    nodes.push(new MiniText(unescape(html.slice(cursor, stop))))
+                    nodes.push(new MiniText(unescapeHtml(html.slice(cursor, stop))))
                     cursor = stop
                 }
             }
@@ -299,7 +299,7 @@ export function installMiniDom(): () => void {
                         cursor += 1
                     }
                     cursor += 1
-                    element.setAttribute(attrName, unescape(value))
+                    element.setAttribute(attrName, unescapeHtml(value))
                 } else if (attrName !== '') {
                     element.setAttribute(attrName, '')
                 }
@@ -327,11 +327,11 @@ export function installMiniDom(): () => void {
             return `<!--${node.data}-->`
         }
         if (!(node instanceof MiniElement)) {
-            return escape((node as MiniText).data)
+            return escapeHtml((node as MiniText).data)
         }
         let html = `<${node.tagName}`
         for (const [name, value] of node.attributes) {
-            html += ` ${name}="${escape(value)}"`
+            html += ` ${name}="${escapeHtml(value)}"`
         }
         html += '>'
         if (VOID.has(node.tagName)) {

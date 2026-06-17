@@ -43,7 +43,7 @@ const run = (cmd: string[]) =>
     new Response(Bun.spawn(cmd, { cwd: REPO, stdout: 'pipe', stderr: 'ignore' }).stdout).text()
 
 /* 1. exports → @readme tag */
-const pkg = await Bun.file(ROOT + 'package.json').json()
+const pkg = await Bun.file(`${ROOT}package.json`).json()
 const exportsMap: Record<string, string> = pkg.exports
 const bySlug = new Map<string, string[]>()
 const untagged: string[] = []
@@ -70,7 +70,7 @@ const grep = async (pattern: string) =>
     (await run(['grep', '-rhoE', pattern, 'packages/abide/src'])).split('\n').filter(Boolean)
 
 const envVars = [
-    ...new Set((await grep('(Bun|process)\\.env\\.[A-Z_]+')).map((m) => m.split('.').pop()!)),
+    ...new Set((await grep('(Bun|process)\\.env\\.[A-Z_]+')).map((m) => m.split('.').at(-1) ?? m)),
 ].sort()
 const routes = [...new Set(await grep('/__abide/[a-z]+|/openapi\\.json'))].sort()
 

@@ -9,7 +9,8 @@
    store: whoever runs first creates it, the other adopts the same reference. */
 export type ResumeEntry = { ok: true; value: unknown } | { ok: false; error: unknown }
 
+const globalScope = globalThis as { __abideResume?: Record<number, ResumeEntry> }
+globalScope.__abideResume ??= {}
+
 // @readme plumbing
-export const RESUME: Record<number, ResumeEntry> = ((
-    globalThis as { __abideResume?: Record<number, ResumeEntry> }
-).__abideResume ??= {})
+export const RESUME: Record<number, ResumeEntry> = globalScope.__abideResume

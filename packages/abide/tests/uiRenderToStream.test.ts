@@ -115,7 +115,7 @@ describe('renderToStream — out-of-order SSR streaming', () => {
         expect(chunks).toHaveLength(1)
         /* `{v}` escapes the `&`, but `$&amp;`/`$\`` are still replacement patterns the
            buggy splice would expand — they must survive verbatim inside the boundary. */
-        expect(chunks[0]).toContain('<span>price $9 $&amp; $\` $0 off</span>')
+        expect(chunks[0]).toContain('<span>price $9 $&amp; $` $0 off</span>')
     })
 
     test('a blocking await renders its catch branch on rejection, still pre-flush', async () => {

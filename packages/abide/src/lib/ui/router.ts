@@ -207,7 +207,8 @@ export function router(
                `[id]` directory matches the `[name]` pattern, not the concrete path). */
             const chainRoute = matched?.route ?? pathname
             const chainKeys = layoutChainForRoute(chainRoute, layoutKeys)
-            const token = (sequence += 1)
+            sequence += 1
+            const token = sequence
             /* First paint adopts a document the server already ran handle() on;
                only later navigations re-run it through the probe. */
             const verdict: Promise<NavVerdict> =
