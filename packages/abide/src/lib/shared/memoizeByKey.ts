@@ -19,6 +19,14 @@ export function memoizeByKey<T>(
             return undefined
         }
         cache.set(key, started)
+        // Evict on rejection so a transient load failure doesn't poison the key
+        // forever; the next call retries. The separate handle doesn't swallow the
+        // rejection seen by the returned promise.
+        void started.catch(() => {
+            if (cache.get(key) === started) {
+                cache.delete(key)
+            }
+        })
         return started
     }
 }

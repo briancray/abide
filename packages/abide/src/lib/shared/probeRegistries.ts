@@ -5,6 +5,7 @@ import { selectorPrefix } from './selectorPrefix.ts'
 import { tailProbeSlot } from './tailProbeSlot.ts'
 import type { CacheEntry } from './types/CacheEntry.ts'
 import type { CacheSelector } from './types/CacheSelector.ts'
+import type { CacheStore } from './types/CacheStore.ts'
 import type { Subscribable } from './types/Subscribable.ts'
 
 /*
@@ -44,8 +45,24 @@ export function probeRegistries<Args, Return>(
     const streams = arg === undefined ? tailProbeSlot.probe?.() : undefined
     const matches = selectorMatcher(arg, args, prefix)
     return (
-        stores.some((store) =>
-            store.entries.values().some((entry) => matchesEntry(entry) && matches(entry)),
-        ) || streams?.[field] === true
+        stores.some((store) => anyEntryMatches(store, matchesEntry, matches)) ||
+        streams?.[field] === true
     )
+}
+
+/*
+A plain for-of over the entries Map rather than .values().some() — Iterator
+Helpers are too new for this module's browser baseline (see producerKey).
+*/
+function anyEntryMatches(
+    store: CacheStore,
+    matchesEntry: (entry: CacheEntry) => boolean,
+    matches: (entry: CacheEntry) => boolean,
+): boolean {
+    for (const entry of store.entries.values()) {
+        if (matchesEntry(entry) && matches(entry)) {
+            return true
+        }
+    }
+    return false
 }

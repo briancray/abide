@@ -41,7 +41,16 @@ function warmValueFromSnapshot(status: number, headers: Headers, body: string): 
     }
     const contentType = (headers.get('content-type') ?? '').toLowerCase()
     if (contentType.includes('json')) {
-        return JSON.parse(body)
+        /*
+        `.includes('json')` also matches streaming/non-JSON types like
+        application/x-ndjson; fall back to the async path (return undefined)
+        rather than throwing a SyntaxError synchronously during hydration.
+        */
+        try {
+            return JSON.parse(body)
+        } catch {
+            return undefined
+        }
     }
     if (contentType.startsWith('text/')) {
         return body

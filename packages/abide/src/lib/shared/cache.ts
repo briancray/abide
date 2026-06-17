@@ -816,7 +816,13 @@ rejects. Both route to settleRefetchFailure — stale kept, except a 404 evicts.
 */
 function fireRefetch(store: CacheStore, entry: CacheEntry): void {
     const policy = entry.invalidation
-    if (!policy || entry.refreshing) {
+    if (!policy) {
+        return
+    }
+    /* A refetch is already running: record the request so it re-fires on settle
+       (the in-flight one may predate this newer invalidation) instead of dropping it. */
+    if (entry.refreshing) {
+        policy.pending = true
         return
     }
     entry.refreshing = true
@@ -827,6 +833,7 @@ function fireRefetch(store: CacheStore, entry: CacheEntry): void {
     inflight.then(
         (result) => {
             entry.refreshing = false
+            reschedulePendingRefetch(store, entry, policy)
             /* Dropped or replaced while in flight — discard this result. */
             if (store.entries.get(entry.key) !== entry) {
                 return
@@ -843,6 +850,7 @@ function fireRefetch(store: CacheStore, entry: CacheEntry): void {
         },
         (error) => {
             entry.refreshing = false
+            reschedulePendingRefetch(store, entry, policy)
             if (store.entries.get(entry.key) !== entry) {
                 return
             }
@@ -853,6 +861,26 @@ function fireRefetch(store: CacheStore, entry: CacheEntry): void {
             )
         },
     )
+}
+
+/*
+Re-schedules a refetch requested while one was already in flight (fireRefetch
+recorded it on policy.pending). Runs after the in-flight refetch settles so the
+newer invalidation isn't lost; honours the throttle/debounce window since
+lastFiredAt was just stamped. No-op if the entry was dropped or replaced.
+*/
+function reschedulePendingRefetch(
+    store: CacheStore,
+    entry: CacheEntry,
+    policy: NonNullable<CacheEntry['invalidation']>,
+): void {
+    if (!policy.pending) {
+        return
+    }
+    policy.pending = false
+    if (store.entries.get(entry.key) === entry) {
+        scheduleInvalidationRefetch(store, entry)
+    }
 }
 
 /*

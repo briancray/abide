@@ -75,4 +75,10 @@ type InvalidationState = {
     debounce?: number
     lastFiredAt?: number
     timer?: ReturnType<typeof setTimeout>
+    /*
+    An invalidation that arrived while a refetch was already in flight: fireRefetch
+    can't run concurrently, so it records the request here and re-schedules once the
+    in-flight refetch settles, rather than dropping the newer invalidation.
+    */
+    pending?: boolean
 }

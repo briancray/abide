@@ -53,7 +53,16 @@ export function selectorMatcher<Args, Return>(
     return (entry) => entry.scope !== undefined && intersects(entry.scope, requestedScopes)
 }
 
-/* True when an entry's tags and the requested tags overlap on any tag. */
+/*
+True when an entry's tags and the requested tags overlap on any tag. A plain
+for-of over the Set rather than .values().some() — Iterator Helpers are too new
+for this module's browser baseline (see producerKey).
+*/
 function intersects(entryScopes: Set<string>, requestedScopes: Set<string>): boolean {
-    return requestedScopes.values().some((scope) => entryScopes.has(scope))
+    for (const scope of requestedScopes) {
+        if (entryScopes.has(scope)) {
+            return true
+        }
+    }
+    return false
 }
