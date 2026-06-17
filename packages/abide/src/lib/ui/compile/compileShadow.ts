@@ -46,9 +46,16 @@ export function compileShadow(source: string): CompiledShadow {
     const scriptStart = leadingScript ? source.indexOf('>', leadingScript.index) + 1 : 0
     const templateStart = leadingScript ? (leadingScript.index ?? 0) + leadingScript[0].length : 0
 
-    const { imports, scope, props } = analyzeScript(scriptBody, scriptStart)
+    const { imports, types, scope, props } = analyzeScript(scriptBody, scriptStart)
     builder.raw(SHADOW_PREAMBLE)
     for (const line of imports) {
+        builder.flush(line)
+    }
+    /* Component-local `type`/`interface` declarations are hoisted to module scope —
+       above `__Props` so prop annotations referencing them resolve, and still visible
+       inside the function body where the rest of the scope and template expressions use
+       them. (Emitting them as in-function scope lines would hide them from `__Props`.) */
+    for (const line of types) {
         builder.flush(line)
     }
     builder.raw(`interface __Props {\n${props.join('\n')}\n}\n`)
@@ -117,17 +124,24 @@ function createBuilder(): Builder {
     return builder
 }
 
-type ScriptAnalysis = { imports: ScopeLine[]; scope: ScopeLine[]; props: string[] }
+type ScriptAnalysis = {
+    imports: ScopeLine[]
+    types: ScopeLine[]
+    scope: ScopeLine[]
+    props: string[]
+}
 
 /* Walks the leading `<script>` and produces the shadow's module imports, the
-   value-typed scope lines, and the Props interface fields. `scriptStart` is the
-   body's absolute offset in the source, so verbatim spans map back exactly. */
+   module-scope type declarations, the value-typed scope lines, and the Props
+   interface fields. `scriptStart` is the body's absolute offset in the source, so
+   verbatim spans map back exactly. */
 function analyzeScript(scriptBody: string, scriptStart: number): ScriptAnalysis {
     const imports: ScopeLine[] = []
+    const types: ScopeLine[] = []
     const scope: ScopeLine[] = []
     const props: string[] = []
     if (scriptBody.trim() === '') {
-        return { imports, scope, props }
+        return { imports, types, scope, props }
     }
     const file = ts.createSourceFile('script.ts', scriptBody, ts.ScriptTarget.Latest, true)
     /* A verbatim span: original text + the segment mapping it back, relative to the
@@ -145,6 +159,11 @@ function analyzeScript(scriptBody: string, scriptStart: number): ScriptAnalysis 
             imports.push({ text: verbatim(statement), segments: [span(statement, 0)] })
             continue
         }
+        if (ts.isTypeAliasDeclaration(statement) || ts.isInterfaceDeclaration(statement)) {
+            /* Hoist to module scope (verbatim, mapped) so prop annotations resolve them. */
+            types.push({ text: verbatim(statement), segments: [span(statement, 0)] })
+            continue
+        }
         const reactive = reactiveDeclarations(statement)
         if (reactive === undefined) {
             /* Plain statement (function, const, expression) — emit verbatim, mapped. */
@@ -155,7 +174,7 @@ function analyzeScript(scriptBody: string, scriptStart: number): ScriptAnalysis 
             scope.push(scopeLineFor(declaration, props, verbatim, span))
         }
     }
-    return { imports, scope, props }
+    return { imports, types, scope, props }
 }
 
 /* The `state`/`derived`/`prop` declarations in a variable statement, or undefined

@@ -81,4 +81,21 @@ describe('compileShadow', () => {
     test('CSS braces in <style> never parse as interpolations', () => {
         expect(code).not.toContain('color: red')
     })
+
+    test('hoists component-local types above __Props so prop annotations resolve them', () => {
+        const { code } = compileShadow(`<script>
+type FilePropertyName = 'audio' | 'size'
+let property = prop<FilePropertyName>('property')
+</script>
+<p>{property}</p>`)
+        /* The type alias must precede the interface that references it; emitting it as
+           an in-function scope line (below __Props) reintroduces the resolution bug. */
+        const typeAt = code.indexOf("type FilePropertyName = 'audio' | 'size'")
+        const propsAt = code.indexOf('interface __Props')
+        const fnAt = code.indexOf('export default async function')
+        expect(typeAt).toBeGreaterThan(-1)
+        expect(typeAt).toBeLessThan(propsAt)
+        expect(typeAt).toBeLessThan(fnAt)
+        expect(code).toContain('"property": FilePropertyName')
+    })
 })
