@@ -1,4 +1,4 @@
-* you are making a type-safe isomorphic framwork built on web standards and bun.
+* you are making a type-safe isomorphic framework built on web standards and bun.
 * ignore changes to README and examples unless i specifically instruct you to
 
 # project goals
@@ -14,7 +14,7 @@
 # coding guidelines
 
 * src/lib is split three ways: `lib/server/` (server-only — public names like `GET.ts` / `socket.ts` / `json.ts` / `request.ts` sit flat at the top; internal helpers live in `rpc/` / `sockets/` / `runtime/` sub-modules + each sub-module's `types/`), `lib/ui/` (client surface — the abide-ui framework itself in `compile/` / `dom/` / `runtime/` plus the client consumer glue flat at the top: the bundler-target proxies (`remoteProxy` / `socketProxy`), `tail`, and the cache's client-only streaming/hydration helpers), and `lib/shared/` (isomorphic surface — the cross-side public callables like `cache.ts` / `HttpError.ts` alongside the cross-side machinery, cache infra, build-time helpers, and `types/` for cross-side types). A feature that spans sides (e.g. cache) keeps its isomorphic core + infra in `shared/`, its client-only extensions in `ui/`, and its server-only extensions in `server/runtime/`. No `index.ts` barrels anywhere.
-* use bun apis not node apis when possible
+* use bun apis - not node apis unless necessary
 * only one export per file named after the export
 * every name in package.json's `exports` map carries a `// @readme <slug>` comment directly above its export — the slug is its README section (or `plumbing` if it carries no user-facing prose). Run `bun run packages/abide/scripts/readmeSurfaces.ts` to list slugs and catch any untagged export; pick a new slug only when no existing one fits.
 * write pure functions and use functional style programming
@@ -27,7 +27,7 @@
 * if a function is shared, add it to the proper  folder and check library folders for existing functionality before writing one
 * run bun format on a file after all changes complete
 * use tailwindcss classes for styling, and prefer tailwind classes over style properties when possible.
-* always use openining and closing brackets for if statements, no single line ifsn on
-* if you're transforming data, prefer functional instance and static methods like map, filter, reduce etc over for loops when applicable
+* always use opening and closing brackets for if statements, no single line bracketless ifs
+* if you're transforming data, prefer functional instance and static methods like map, filter, reduce etc over for loops unless breaks are needed
 * use undefined instead of null for nullish values unless a type needs null
 * constants should be UPPERCASE_SNAKE_CASE always, including their files
