@@ -2,10 +2,11 @@ import type { BunRequest, Server } from 'bun'
 import { createMcpResourceServer } from '../../mcp/createMcpResourceServer.ts'
 import { setMcpResourceServer } from '../../mcp/mcpResourceServerSlot.ts'
 import type { McpServer } from '../../mcp/types/McpServer.ts'
-import { basePathFromAppUrl } from '../../shared/basePathFromAppUrl.ts'
 import { abideLog } from '../../shared/abideLog.ts'
+import { basePathFromAppUrl } from '../../shared/basePathFromAppUrl.ts'
 import { NO_STORE } from '../../shared/CACHE_CONTROL_VALUES.ts'
 import { CLI_PATH } from '../../shared/CLI_PATH.ts'
+import { DEV_HOT_PREFIX } from '../../shared/DEV_HOT_PREFIX.ts'
 import { DEV_RELOAD_PATH } from '../../shared/DEV_RELOAD_PATH.ts'
 import { extraForwardHeaders } from '../../shared/extraForwardHeaders.ts'
 import { HEALTH_PATH } from '../../shared/HEALTH_PATH.ts'
@@ -44,8 +45,10 @@ import { DEV_READY_MESSAGE } from './DEV_READY_MESSAGE.ts'
 import { DEV_REBUILD_MESSAGE } from './DEV_REBUILD_MESSAGE.ts'
 import { DEV_RELOAD_CLIENT_SCRIPT } from './DEV_RELOAD_CLIENT_SCRIPT.ts'
 import { devClientFingerprint } from './devClientFingerprint.ts'
+import { devHotModuleResponse } from './devHotModuleResponse.ts'
 import { devReloadResponse } from './devReloadResponse.ts'
 import { disableIdleTimeoutForStream } from './disableIdleTimeoutForStream.ts'
+import { gzipResponse } from './gzipResponse.ts'
 import { internalErrorResponse } from './internalErrorResponse.ts'
 import { listenOnOpenPort } from './listenOnOpenPort.ts'
 import { logExposedSurfaces } from './logExposedSurfaces.ts'
@@ -202,10 +205,17 @@ export async function createServer({
     devClientFingerprint (dev only) hashes the browser-visible surface so the
     live-reload channel reloads only when a worker swap changed what the
     browser would render; the asset servers glob public/ and the build tree
-    (embedded zstd map in a compiled binary, dist/ on disk).
+    (embedded gzip map in a compiled binary, dist/ on disk).
     */
     const [clientFingerprint, servePublicAsset, serveAppAsset] = await Promise.all([
-        dev ? devClientFingerprint({ distDir, publicDir, shell: activeShell }) : undefined,
+        dev
+            ? devClientFingerprint({
+                  srcDir: `${process.cwd()}/src`,
+                  publicDir,
+                  shell: activeShell,
+                  projectRoot: process.cwd(),
+              })
+            : undefined,
         createPublicAssetServer({ publicDir, publicAssets }),
         createAppAssetServer({ distDir, assets }),
     ])
@@ -316,8 +326,12 @@ export async function createServer({
             const response = app?.handle
                 ? await app.handle(req, (next) => handler(next, pathParams, store))
                 : await handler(req, pathParams, store)
+            /* Gzip compressible dynamic bodies (SSR HTML, rpc/json, 404) when the
+               client accepts it; streaming frame protocols and static assets are
+               passed through untouched (see gzipResponse). */
+            const encoded = gzipResponse(req, response)
             // Streaming bodies (sse/jsonl, socket tail) opt out of the idle timeout.
-            return disableIdleTimeoutForStream(server, req, response)
+            return disableIdleTimeoutForStream(server, req, encoded)
         })
     }
 
@@ -380,15 +394,18 @@ export async function createServer({
                 */
                 if (url.pathname === HEALTH_PATH || url.pathname === IDENTITY_PATH) {
                     const payload = await buildHealthPayload(req, { app, appName, appVersion })
-                    return Response.json(
-                        /*
-                        The IDENTITY_PATH alias keeps the legacy `abide: true`
-                        shape: already-shipped probers check it with strict
-                        equality, and a version string would make them treat
-                        an upgraded healthy server as not-abide.
-                        */
-                        url.pathname === IDENTITY_PATH ? { ...payload, abide: true } : payload,
-                        { headers: { 'Cache-Control': NO_STORE } },
+                    return gzipResponse(
+                        req,
+                        Response.json(
+                            /*
+                            The IDENTITY_PATH alias keeps the legacy `abide: true`
+                            shape: already-shipped probers check it with strict
+                            equality, and a version string would make them treat
+                            an upgraded healthy server as not-abide.
+                            */
+                            url.pathname === IDENTITY_PATH ? { ...payload, abide: true } : payload,
+                            { headers: { 'Cache-Control': NO_STORE } },
+                        ),
                     )
                 }
                 /*
@@ -423,6 +440,13 @@ export async function createServer({
                         bunServer,
                         req,
                         devReloadResponse(clientFingerprint),
+                    )
+                }
+                /* Component hot module — the browser imports one edited `.abide`'s
+                   hot build here instead of reloading (dev component HMR). */
+                if (clientFingerprint !== undefined && url.pathname.startsWith(DEV_HOT_PREFIX)) {
+                    return devHotModuleResponse(
+                        decodeURIComponent(url.pathname.slice(DEV_HOT_PREFIX.length)),
                     )
                 }
                 /*

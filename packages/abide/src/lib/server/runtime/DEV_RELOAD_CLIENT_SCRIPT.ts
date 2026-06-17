@@ -1,27 +1,36 @@
 /*
 Dev-only live-reload client, injected into the served shell when the server
 runs under `abide dev`. It opens an EventSource to /__abide/dev; each
-connection's first event carries the worker's client fingerprint — everything
-the browser consumes (devClientFingerprint). The channel only drops when the
-dev orchestrator swaps the server after a rebuild, and on reconnect the page
-reloads only if the fingerprint changed: a server-only edit keeps the page,
-and its UI state, alive. Self-managed retry keeps the gap short instead of
-relying on EventSource's multi-second default backoff.
+connection's first event carries the worker's reload stamp — `{ structure,
+cssHref }` (devClientFingerprint). The channel only drops when the dev
+orchestrator swaps the server after a rebuild, and on reconnect:
+  - `structure` changed → reload (any non-CSS edit).
+  - only `cssHref` changed → swap the entry stylesheet's `<link>` in place,
+    so a CSS edit restyles the live page with no reload and no state loss.
+  - both equal (server-only edit) → keep the page alive.
+Self-managed retry keeps the first reconnect fast (250ms) so a rebuild swap
+recovers quickly, then backs off exponentially up to a 5s cap — a server that
+stays down (dev stopped) settles to one attempt every 5s instead of flooding
+the network, and still reconnects on its own if the server comes back. The
+backoff resets once a connection opens.
 
 Hidden tabs hold no connection: the channel closes on `visibilitychange:
 hidden` and reopens on visible, where the reconnect's first event carries
 whatever the current worker announces — a rebuild that happened while the tab
 slept still reloads it. The initial connect runs even when the page loads
-hidden (the baseline must be the serving worker's fingerprint, captured before
-a swap can replace it) and releases itself once that first event lands.
+hidden (the baseline must be the serving worker's stamp, captured before a swap
+can replace it) and releases itself once that first event lands.
 */
+import { DEV_HOT_PREFIX } from '../../shared/DEV_HOT_PREFIX.ts'
 import { DEV_RELOAD_PATH } from '../../shared/DEV_RELOAD_PATH.ts'
 
 export const DEV_RELOAD_CLIENT_SCRIPT = `<script>
+window.__abideDev = true;
 ;(() => {
-  let fingerprint
+  let stamp
   let source
   let retryTimer
+  let retryDelay = 250
   function disconnect() {
     clearTimeout(retryTimer)
     if (source) {
@@ -29,27 +38,60 @@ export const DEV_RELOAD_CLIENT_SCRIPT = `<script>
       source = undefined
     }
   }
+  function swapCss(href) {
+    const links = document.querySelectorAll('link[rel="stylesheet"]')
+    for (const link of links) {
+      const current = link.getAttribute('href') || ''
+      if (current.indexOf('/_app/') !== -1 && current.slice(-4) === '.css') {
+        link.href = href
+        return
+      }
+    }
+  }
+  function swapComponents(next, prev) {
+    const components = next.components || {}
+    const before = prev.components || {}
+    for (const id in components) {
+      if (components[id] !== before[id]) {
+        // The hot module sources its runtime from window.__abide and self-invokes
+        // hotReplace; a load/compile failure or a component with no live instance
+        // falls back to a reload.
+        import('${DEV_HOT_PREFIX}' + id + '?v=' + components[id]).catch(() => location.reload())
+      }
+    }
+  }
   function connect() {
     if (source) {
       return
     }
     source = new EventSource('${DEV_RELOAD_PATH}')
+    source.onopen = () => {
+      retryDelay = 250
+    }
     source.onmessage = (event) => {
-      if (fingerprint === undefined) {
-        fingerprint = event.data
+      const next = JSON.parse(event.data)
+      if (stamp === undefined) {
+        stamp = next
         if (document.hidden) {
           disconnect()
         }
         return
       }
-      if (event.data !== fingerprint) {
+      if (next.structure !== stamp.structure) {
         location.reload()
+        return
       }
+      if (next.cssHref && next.cssHref !== stamp.cssHref) {
+        swapCss(next.cssHref)
+      }
+      swapComponents(next, stamp)
+      stamp = next
     }
     source.onerror = () => {
       disconnect()
       if (!document.hidden) {
-        retryTimer = setTimeout(connect, 250)
+        retryTimer = setTimeout(connect, retryDelay)
+        retryDelay = Math.min(retryDelay * 2, 5000)
       }
     }
   }

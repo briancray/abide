@@ -5,6 +5,7 @@ import { setCacheStoreResolver } from '../shared/setCacheStoreResolver.ts'
 import { setGlobalCacheStoreResolver } from '../shared/setGlobalCacheStoreResolver.ts'
 import { setPageResolver } from '../shared/setPageResolver.ts'
 import type { CacheSnapshotEntry } from '../shared/types/CacheSnapshotEntry.ts'
+import { installHotBridge } from './installHotBridge.ts'
 import { probeNavigation } from './probeNavigation.ts'
 import { router } from './router.ts'
 import { clientPage } from './runtime/clientPage.ts'
@@ -33,6 +34,12 @@ export function startClient(
 ): () => void {
     if (target === null) {
         throw new Error('[abide] startClient: missing #app target')
+    }
+    /* Dev only: the live-reload script sets `__abideDev` before this module runs,
+       so the runtime bridge is in place before any component mounts and records
+       its instances (mountChild) for hot replacement. */
+    if ((globalThis as { __abideDev?: boolean }).__abideDev) {
+        installHotBridge()
     }
     const ssr = (globalThis as { __SSR__?: SsrPayload }).__SSR__ ?? {}
     setBaseResolver(() => ssr.base ?? '')

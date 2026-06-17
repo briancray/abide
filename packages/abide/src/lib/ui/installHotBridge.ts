@@ -1,0 +1,71 @@
+import { html } from '../shared/html.ts'
+import { snippet } from '../shared/snippet.ts'
+import { derived } from './derived.ts'
+import { doc } from './doc.ts'
+import { appendSnippet } from './dom/appendSnippet.ts'
+import { appendStatic } from './dom/appendStatic.ts'
+import { appendText } from './dom/appendText.ts'
+import { attr } from './dom/attr.ts'
+import { awaitBlock } from './dom/awaitBlock.ts'
+import { cloneStatic } from './dom/cloneStatic.ts'
+import { each } from './dom/each.ts'
+import { eachAsync } from './dom/eachAsync.ts'
+import { hydrate } from './dom/hydrate.ts'
+import { mount } from './dom/mount.ts'
+import { mountChild } from './dom/mountChild.ts'
+import { on } from './dom/on.ts'
+import { openChild } from './dom/openChild.ts'
+import { openRoot } from './dom/openRoot.ts'
+import { switchBlock } from './dom/switchBlock.ts'
+import { tryBlock } from './dom/tryBlock.ts'
+import { when } from './dom/when.ts'
+import { effect } from './effect.ts'
+import { enterRenderPass } from './runtime/enterRenderPass.ts'
+import { exitRenderPass } from './runtime/exitRenderPass.ts'
+import { hotReloadEnabled } from './runtime/hotReloadEnabled.ts'
+import { hotReplace } from './runtime/hotReplace.ts'
+import { nextBlockId } from './runtime/nextBlockId.ts'
+import { state } from './state.ts'
+
+/*
+Dev-only: exposes the abide-ui runtime plus `hotReplace` on `window.__abide`, and
+flips on `hotReloadEnabled` so `mountChild` records every instance it mounts. A
+hot module (the dev server's standalone recompile of one edited `.abide`) reads
+its runtime from this object instead of importing fresh copies — so it shares the
+one reactive graph and instance registry — then calls `hotReplace` to swap every
+live instance in place. The keys mirror `UI_RUNTIME_IMPORTS` (+ `hotReplace`); a
+test guards that pairing. `startClient` calls this when the server marks the page
+dev (the live-reload script sets `window.__abideDev`).
+*/
+export function installHotBridge(): void {
+    ;(globalThis as { __abide?: Record<string, unknown> }).__abide = {
+        html,
+        snippet,
+        doc,
+        state,
+        derived,
+        effect,
+        mount,
+        openChild,
+        openRoot,
+        appendText,
+        appendSnippet,
+        appendStatic,
+        cloneStatic,
+        attr,
+        on,
+        each,
+        eachAsync,
+        when,
+        awaitBlock,
+        tryBlock,
+        switchBlock,
+        mountChild,
+        hydrate,
+        nextBlockId,
+        enterRenderPass,
+        exitRenderPass,
+        hotReplace,
+    }
+    hotReloadEnabled.current = true
+}
