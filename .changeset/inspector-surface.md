@@ -1,6 +1,6 @@
 ---
 "@abide/inspector": minor
-"abide": minor
+"@abide/abide": minor
 ---
 
 Add `@abide/inspector` — an opt-in inspector activated by `ABIDE_ENABLE_INSPECTOR=true`. Install it (`bun add -d @abide/inspector`) and the flag mounts a UI at `/__abide/inspector`.
