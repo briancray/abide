@@ -71,12 +71,12 @@ The kitchen-sink page tree does **not** map 1:1 to README `##` headings — it
 *groups* related README facets under one nav section. When such a section has
 subpages (today only `rpc/`: its index plus `consume` / `errors` / `respond`
 / `streaming` / `request-scope`), the section title, intro paragraph, and the
-subpage pill-nav are one shared component, `src/browser/<Section>Header.svelte`
-(e.g. `RpcHeader.svelte`), rendered at the top of the index **and** every
+subpage pill-nav are one shared component, `src/ui/<Section>Header.abide`
+(e.g. `RpcHeader.abide`), rendered at the top of the index **and** every
 subpage so the masthead is byte-identical across the section.
 
-- **A component, never a nested `layout.svelte`.** abide resolves the deepest
-  `layout.svelte` and drops ancestors — a section layout would *replace* the
+- **A component, never a nested `layout.abide`.** abide resolves the deepest
+  `layout.abide` and drops ancestors — a section layout would *replace* the
   root chrome, not nest under it. A component composes inside the root layout.
 - Pills read active state from `page.url.pathname` (overview = exact match;
   subpages are distinct paths). Each subpage renders `<…Header />`, then its
@@ -89,7 +89,7 @@ subpage so the masthead is byte-identical across the section.
 Two multi-page sections deliberately **do not** use this pattern — a sync must
 not regularise them into a masthead:
 
-- `auth/` keeps its own nested `layout.svelte` on purpose: it *demonstrates*
+- `auth/` keeps its own nested `layout.abide` on purpose: it *demonstrates*
   deepest-layout-wins by swapping the whole chrome (the live example backing
   the README's Layout section). A shared masthead would delete the demo.
 - `pages/` subpages (`boundary`, `product/[id]`) demonstrate page-tree routing
@@ -120,8 +120,8 @@ existing content.
    that doesn't trace to a current export is stale — *including the page-tree
    folder it lives in.*
 3. **Reshape structure before content.** Make the kitchen-sink page tree,
-   `layout.svelte` nav, index cards, overview pages, and any
-   `<Section>Header.svelte` masthead/pill-nav (see *Multi-page sections share
+   `layout.abide` nav, index cards, overview pages, and any
+   `<Section>Header.abide` masthead/pill-nav (see *Multi-page sections share
    one masthead component*) match the README's section structure. Move or
    delete folders that no longer map to a section.
 4. **Rebuild each demo page from the live code, not from its own old text.**
@@ -144,7 +144,7 @@ existing content.
      the four trees resolves to a current `exports` key:
 
      ```sh
-     grep -rhoE "@abide/abide/[a-zA-Z/-]+" examples packages/abide/template --include="*.ts" --include="*.svelte" | sort -u
+     grep -rhoE "@abide/abide/[a-zA-Z/-]+" examples packages/abide/template --include="*.ts" --include="*.abide" | sort -u
      ```
 
    - Behavioural smoke where one exists (`bun test` in examples with a

@@ -4,7 +4,7 @@ import type { UiProps } from './UiProps.ts'
 /*
 A compiled abide-ui component's default export: the client mounter, plus `render`
 for SSR and the hydration hooks. This is the shape `compileModule` emits and the
-page/route registries carry — the abide-ui counterpart to a Svelte `Component`.
+page/route registries carry — abide-ui's compiled-component shape.
 */
 export type UiComponent = ((host: Element, props?: UiProps) => () => void) & {
     render: (props?: UiProps) => SsrRender

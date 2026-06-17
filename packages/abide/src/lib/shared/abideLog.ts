@@ -12,7 +12,7 @@ internal warns/errors, the closing record's sibling diagnostics — reads
 `[abide] …` and json consumers filter channel='abide'. The styling voices
 (info/success/detail) ride the same channel and the same negation gate, so
 DEBUG=-abide silences every voice; diagnostic sub-channels (abide:cache,
-abide:svelte, …) stay DEBUG-gated via .channel().
+abide:rpc, …) stay DEBUG-gated via .channel().
 */
 const channelVoice = createChannelLog(() => ABIDE_CHANNEL, true)
 

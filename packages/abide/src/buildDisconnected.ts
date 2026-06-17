@@ -20,7 +20,7 @@ const DEFAULT_LOGO = `data:image/svg+xml,${encodeURIComponent(
 /*
 Builds the bundle connect screen into a single self-contained HTML string and
 writes it to `dist/bundle-disconnected.html`, which the launcher bakes in via the
-`abide:bundle-disconnected` virtual. The client bundle (Svelte component +
+`abide:bundle-disconnected` virtual. The client bundle (abide-ui component +
 injected CSS + compiled Tailwind) is inlined into the page so the launcher serves
 it with zero external requests; the logo is embedded as a data URI. The app title
 (`window.__ABIDE_TITLE__`) is injected by the launcher at serve time, so a

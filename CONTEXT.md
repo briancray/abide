@@ -5,19 +5,19 @@ Terms the code and its discussions use exactly. One meaning per term; sharpen he
 ## Routing & rendering
 
 **Route**
-A page URL in readable bracket form (`/post/[id]`, `/docs/[...rest]`), derived from the `page.svelte` file's directory path. Translation to Bun's `:name` / `*` pattern syntax happens only at server registration; everywhere else the bracket form is the identity.
+A page URL in readable bracket form (`/post/[id]`, `/docs/[...rest]`), derived from the `page.abide` file's directory path. Translation to Bun's `:name` / `*` pattern syntax happens only at server registration; everywhere else the bracket form is the identity.
 
 **View**
-What a resolved route mounts: a page (or error) component plus the layout wrapping it — the shape of App.svelte's `state.render` slot.
+What a resolved route mounts: a page component plus the layout chain wrapping it.
 
 **View resolution**
-Route in, view out: nearest-layout selection plus the parallel page+layout module load. Owned by `createViewResolver` (`lib/shared/createViewResolver.ts`); the server renderer, the client navigator, and the surface diagnostics are its three callers. Prefix matching rules live nowhere else.
+Route in, view out: layout-chain selection plus the page+layout module load. The prefix-matching rule lives in `layoutChainForRoute` (`lib/shared/layoutChainForRoute.ts`); `createUiPageRenderer` (server render) and the client `router` (navigation) both call it to assemble the page folded into each layout's `<slot/>` outlet.
 
 **Nearest-only layout**
-The deepest `layout.svelte` prefix that is an ancestor of the route wins; layouts never stack. Errors follow the same rule (`error.svelte` per prefix).
+The deepest `layout.abide` prefix that is an ancestor of the route wins; layouts never stack.
 
 **Page renderer**
-Matched route in, finished SSR document (or JSON view payload) out: the svelte render, the inline-vs-streaming cache partition, the `__SSR__` state tag, shell splicing, and the error.svelte fallback. Owned by `createPageRenderer` (`lib/server/runtime/createPageRenderer.ts`); the route dispatcher and the 404 path are its callers. `createServer` is wiring, not behavior.
+Matched route in, finished SSR document (or JSON view payload) out: the page render, the inline-vs-streaming cache partition, the `__SSR__` state tag, and shell splicing. Owned by `createUiPageRenderer` (`lib/server/runtime/createUiPageRenderer.ts`); the route dispatcher and the 404 path are its callers. `createServer` is wiring, not behavior.
 
 **Match**
 URL → route + decoded params. Server-side only: Bun's router matches, the catch-all param is reconstructed from the pathname. The client never matches URLs — it asks the server (`Accept: application/json`) and receives `{ route, params }`.

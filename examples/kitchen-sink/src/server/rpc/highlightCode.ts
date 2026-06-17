@@ -2,7 +2,7 @@ import { json } from '@abide/abide/server/json'
 import { POST } from '@abide/abide/server/POST'
 import { createHighlighter, type HighlighterGeneric } from 'shiki/bundle/web'
 
-type Lang = 'ts' | 'svelte' | 'sh' | 'toml' | 'dockerfile' | 'text'
+type Lang = 'ts' | 'sh' | 'toml' | 'dockerfile' | 'text'
 type Theme = 'github-dark'
 
 let cached: Promise<HighlighterGeneric<Lang, Theme>> | undefined
@@ -10,27 +10,30 @@ let cached: Promise<HighlighterGeneric<Lang, Theme>> | undefined
 /*
 Shared shiki highlighter. Lazy-loaded once per process — the same
 instance is reused across every request. `shiki/bundle/web` ships
-typescript, svelte, and bash (among others) pre-packed so the
+typescript and bash (among others) pre-packed so the
 highlighter resolves synchronously after the first await.
 */
 function getHighlighter(): Promise<HighlighterGeneric<Lang, Theme>> {
     if (!cached) {
         cached = createHighlighter({
             themes: ['github-dark'],
-            langs: ['typescript', 'svelte', 'bash'],
+            langs: ['typescript', 'bash'],
         }) as Promise<HighlighterGeneric<Lang, Theme>>
     }
     return cached
 }
 
 /* Maps a CodeBlock lang to a shiki grammar. The web bundle ships typescript /
-   svelte / bash; langs without a packed grammar (toml, dockerfile) render as
-   shiki's built-in plaintext — clean, monochrome, never a missing-grammar throw. */
+   bash; langs without a packed grammar (toml, dockerfile) render as shiki's
+   built-in plaintext — clean, monochrome, never a missing-grammar throw. */
 function resolveLang(lang: Lang): string {
-    if (lang === 'ts') return 'typescript'
-    if (lang === 'sh') return 'bash'
-    if (lang === 'toml' || lang === 'dockerfile' || lang === 'text') return 'text'
-    return lang
+    if (lang === 'ts') {
+        return 'typescript'
+    }
+    if (lang === 'sh') {
+        return 'bash'
+    }
+    return 'text'
 }
 
 /*

@@ -26,7 +26,7 @@ import { writeTestSocketsDts } from './lib/shared/writeTestSocketsDts.ts'
 /*
 Resolves a bare directory or extensionless path to a concrete file. Mirrors
 Node-style resolution (path.ts, path.js, path/index.ts, path/index.js) so
-project code can use SvelteKit-style aliases like `$shared/foo/utils` that point
+project code can use `$`-prefixed aliases like `$shared/foo/utils` that point
 at directories with an index file. The (path → resolved) mapping is
 deterministic per build, so cache it — every module that imports a `$shared`
 alias hits this twice or more, and each call would otherwise do up to nine
@@ -239,7 +239,7 @@ export function abideResolverPlugin({
             CSS bundler otherwise tries to resolve them against the project
             root and fails the whole build. Mark them external so the literal
             `/…` path survives into the emitted CSS, where
-            createPublicAssetServer serves it. Scoped to CSS importers: svelte
+            createPublicAssetServer serves it. Scoped to CSS importers: abide-ui
             <style> blocks compile to injected JS strings and never reach the
             CSS bundler, and abide's own absolute-path JS imports come from
             .ts/virtual importers — neither is a `.css` importer, so both are

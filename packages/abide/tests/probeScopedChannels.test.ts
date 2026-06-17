@@ -43,9 +43,9 @@ function remoteStub(method: HttpVerb, url: string) {
 A probe's lifecycle subscription is scoped to its selector: pending(fn) taps
 only fn's prefix channel, so unrelated cache events — another function's
 flights, invalidates, evictions — never re-run the reading scope. The hazard
-this kills: an $effect that reads pending(a) and invalidates b used to be
+this kills: an effect that reads pending(a) and invalidates b used to be
 re-woken by its own invalidate through the store-wide channel, looping across
-microtasks where Svelte's depth detection can't see it.
+microtasks where synchronous depth detection can't see it.
 */
 describe('selector-scoped probe channels', () => {
     useBrowserWindow()

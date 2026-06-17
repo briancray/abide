@@ -1,20 +1,20 @@
 /*
 Subscribes to bundle menu clicks. Each custom menu item declared in the bundle
 window config dispatches a `abide:menu` CustomEvent into the page when clicked.
-Two forms, both returning an unsubscribe so they drop straight into a Svelte
-`$effect`:
+Two forms, both returning an unsubscribe so they drop straight into an
+`effect`:
 
     // catch-all — every emit name flows through one handler
-    $effect(() =>
+    effect(() =>
         onMenu((name) => {
             if (name === 'reload') location.reload()
         }),
     )
 
     // filtered — handler fires only for the named item
-    $effect(() => onMenu('reload', () => location.reload()))
+    effect(() => onMenu('reload', () => location.reload()))
 
-Inert during SSR and in a plain browser tab — `$effect` only runs client-side,
+Inert during SSR and in a plain browser tab — `effect` only runs client-side,
 the native menu that fires the event exists only in the bundled desktop app,
 and `window` is guarded so importing the module never assumes a DOM.
 */

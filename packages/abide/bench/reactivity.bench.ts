@@ -2,20 +2,17 @@ import { doc } from '../src/lib/ui/doc.ts'
 import type { BenchResult } from './types/BenchResult.ts'
 
 /*
-Reactivity write-path benchmark. Run with the Svelte client loader preloaded:
+Reactivity write-path benchmark. Run directly:
 
-  bun --preload ./packages/abide/tests/support/sveltePreload.ts \
-      packages/abide/bench/reactivity.bench.ts
+  bun packages/abide/bench/reactivity.bench.ts
 
 Workload (same for all): a list of N items, M times "update one item's field and
-read it back". Three contenders:
+read it back". Two contenders:
 
   - abide cell   — `doc.cell(path)`, the stable accessor the compiler emits:
-                   path resolved once, the hot loop is string-free. Apples to
-                   apples with Svelte's compiled "hold the signal reference".
+                   path resolved once, the hot loop is string-free.
   - abide path   — `doc.replace(path)` / `doc.read(path)` building the path
                    string every iteration: the *unspecialised* runtime floor.
-  - svelte       — deep `$state` proxy + `$derived` read.
 
 Now that patches mutate in place (O(depth), not O(width)), the structural-sharing
 tax is gone — section 2 confirms per-update cost is flat across list widths.
@@ -64,9 +61,6 @@ function report(label: string, result: BenchResult, updates: number): void {
             `   ${perUpdateUs(result, updates).padStart(16)}   runs=${result.runs}`,
     )
 }
-/* window so the preload's reactivity-client swap activates; imported after. */
-;(globalThis as { window?: unknown }).window = globalThis
-const { svelteCellBench } = await import('./svelteBench.svelte.ts')
 
 const HEAD_TO_HEAD_ITEMS = 1_000
 const UPDATES = 50_000
@@ -74,11 +68,9 @@ const UPDATES = 50_000
 /* Warm the JITs at small size before measuring. */
 abideCellBench(200, 5_000)
 abidePathBench(200, 5_000)
-svelteCellBench(200, 5_000)
 
-console.log(`\n1) head-to-head: ${HEAD_TO_HEAD_ITEMS}-item list, ${UPDATES} update+read\n`)
+console.log(`\n1) cell vs path: ${HEAD_TO_HEAD_ITEMS}-item list, ${UPDATES} update+read\n`)
 report('abide cell', abideCellBench(HEAD_TO_HEAD_ITEMS, UPDATES), UPDATES)
-report('svelte $state', svelteCellBench(HEAD_TO_HEAD_ITEMS, UPDATES), UPDATES)
 report('abide path', abidePathBench(HEAD_TO_HEAD_ITEMS, UPDATES), UPDATES)
 
 console.log(`\n2) abide cell scaling across list width (${UPDATES} update+read)\n`)

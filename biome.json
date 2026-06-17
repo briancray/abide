@@ -7,7 +7,7 @@
     },
     "files": {
         "includes": [
-            "**/*.{json,ts,js,svelte}",
+            "**/*.{json,ts,js}",
             "!**/dist",
             "!**/node_modules",
             "!**/.abide",

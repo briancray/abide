@@ -7,8 +7,8 @@ import type { AbideDiagnostic } from './lib/ui/compile/types/AbideDiagnostic.ts'
 
 /*
 Type-checks every `.abide` component in `cwd` through its shadow (ADR-0010) and
-prints the diagnostics against the source files with a code frame — the
-`svelte-check` analog. Each component is grouped under its nearest tsconfig and
+prints the diagnostics against the source files with a code frame — a
+component type-check pass. Each component is grouped under its nearest tsconfig and
 checked against that project's options, so a monorepo checked at its root reports
 the same as each package checked on its own — and the same as the LSP. Returns
 the error count so the CLI can set its exit code.

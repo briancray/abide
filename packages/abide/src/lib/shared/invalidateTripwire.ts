@@ -13,8 +13,8 @@ const invalidationCounts = new Map<string, number>()
 let resetTimer: ReturnType<typeof setTimeout> | undefined
 
 /*
-Cycle tripwire for cache.invalidate. Svelte's effect_update_depth_exceeded
-counts synchronous re-runs, but the probes' lifecycle marks defer a microtask
+Cycle tripwire for cache.invalidate. A synchronous re-run counter (an
+effect-update-depth limit) counts synchronous re-runs, but the probes' lifecycle marks defer a microtask
 (createLifecycleChannel), so a self-feeding effect — one that reads a probe or
 cached value and invalidates a selector that re-wakes its own scope — spins
 forever without tripping it, pinning the CPU. Many invalidations of one
@@ -34,7 +34,7 @@ export function invalidateTripwire(selectorLabel: string): void {
     }
     if (count === LOOP_THRESHOLD) {
         abideLog.warn(
-            `cache.invalidate(${selectorLabel}) fired ${LOOP_THRESHOLD}× within one task — likely a reactive loop: an $effect that reads pending()/refreshing() or a cached value and invalidates a selector waking its own scope re-triggers itself across microtasks, invisible to Svelte's loop detection. Find the $effect invalidating ${selectorLabel}.`,
+            `cache.invalidate(${selectorLabel}) fired ${LOOP_THRESHOLD}× within one task — likely a reactive loop: an effect that reads pending()/refreshing() or a cached value and invalidates a selector waking its own scope re-triggers itself across microtasks, invisible to synchronous loop detection. Find the effect invalidating ${selectorLabel}.`,
         )
     }
 }

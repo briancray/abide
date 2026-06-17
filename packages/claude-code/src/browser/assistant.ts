@@ -1,5 +1,5 @@
 import type { AgentFrame, NeutralMessage } from '@abide/abide/server/agent'
-import { createSubscriber } from 'svelte/reactivity'
+import { createSubscriber } from '@abide/abide/shared/createSubscriber'
 import { BRIDGE_PORT } from '../BRIDGE_PORT.ts'
 import type { CAPABILITY_TOOLS } from '../CAPABILITY_TOOLS.ts'
 import { VERSION } from '../VERSION.ts'

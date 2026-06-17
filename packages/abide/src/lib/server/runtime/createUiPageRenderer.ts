@@ -22,8 +22,8 @@ function wantsJson(request: Request): boolean {
 }
 
 /*
-The abide-ui SSR document renderer — the svelte-free counterpart to
-createPageRenderer. A matched route + params in, a finished HTML Response out.
+The abide-ui SSR document renderer. A matched route + params in, a finished HTML
+Response out.
 
 A page with no `await` block renders synchronously and ships buffered. A page with
 await blocks STREAMS: the pending shell flushes first, then each resolved fragment

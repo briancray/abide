@@ -1,6 +1,6 @@
 /*
 Maps a page-relative path (under `src/ui/pages/`) to its URL route. Pages are
-folder-based: every leaf is `page.svelte` or `layout.svelte`, and the URL
+folder-based: every leaf is `page.abide` or `layout.abide`, and the URL
 is the directory path. Pages mount at the directory path; layouts mount at
 the directory prefix. Dynamic segments keep their `[name]` / `[...rest]`
 shape — translation to Bun's `:name` / `*` happens at server registration

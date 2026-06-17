@@ -6,7 +6,7 @@ is read and written many times; resolving it to a node + parent + key on every
 access (what `read`/`replace` do) is the path-string floor the bench measured.
 This hoists each distinct static path to a `cell` bound once at the top of the
 scope and rewrites accesses to the string-free `get`/`set` — the form that runs
-~20x faster than re-resolving, and faster than Svelte:
+~20x faster than re-resolving:
 
   model.read("count")          →  _cell0.get()
   model.replace("count", v)    →  _cell0.set(v)

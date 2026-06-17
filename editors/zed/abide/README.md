@@ -4,8 +4,10 @@ Registers the `.abide` language and runs the **abide language server** (`abide l
 so Zed shows type-check diagnostics on template expressions and child-component
 props — the same errors `abide check` reports, mapped onto the component source.
 
-Syntax highlighting uses the Svelte tree-sitter grammar (`.abide` is HTML-with-`{expr}`
-like Svelte), pinned to the same revision as the official Svelte extension.
+Syntax highlighting reuses the `tree-sitter-svelte` parser grammar (`.abide` is
+HTML-with-`{expr}`, syntactically close to Svelte), pinned to the same revision as
+the official Svelte extension. This is an editor-side parser only — abide has no
+Svelte dependency; it just happens to share a near-identical surface syntax.
 
 ## Two layers
 

@@ -7,7 +7,7 @@ consumers (tail/cache/online/health) see a real tracking scope: the first read
 opens the underlying resource, dependency changes re-run the effect, and stop()
 tears the scope down so last-reader cleanup fires. createSubscriber defers its
 open/close reconcile to a microtask, so callers await a tick before reading
-current(). abide-ui-native (no Svelte) — replaces the former $effect.root harness.
+current(). Built on abide-ui's own scope/effect primitives.
 */
 export function track<T>(read: () => T): { current: () => T | undefined; stop: () => void } {
     let value: T | undefined

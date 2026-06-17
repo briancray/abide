@@ -1,6 +1,6 @@
 {
     "extends": "@abide/abide/tsconfig",
-    "include": ["src/**/*.ts", "src/.abide/**/*.ts", "src/**/*.svelte"],
+    "include": ["src/**/*.ts", "src/.abide/**/*.ts", "src/**/*.abide"],
     "compilerOptions": {
         "paths": {
             "$server": ["./src/server"],

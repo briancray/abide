@@ -29,9 +29,9 @@ const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 
 
 /*
 A `cache()` read inside a `<template await>` is a tracked abide-ui dependency: the
-cache store's createSubscriber (now abide-ui-native) subscribes the key to the
+cache store's createSubscriber subscribes the key to the
 await block's effect, so cache.invalidate() of that key re-runs the block — re-
-fetching and swapping the resolved branch in place. No bridge, no Svelte.
+fetching and swapping the resolved branch in place. No bridge.
 */
 describe('cache.invalidate() re-runs an await block', () => {
     test('re-fetches and swaps when the read’s key is invalidated', async () => {

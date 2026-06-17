@@ -10,8 +10,8 @@ Returns a fresh cache store. On the server, every request gets its own
 store via the AsyncLocalStorage RequestStore. On the client, a single
 module-level store is created at startup and shared across the tab.
 
-Each key gets a lazily-created Svelte subscriber. Reading a key from a
-tracking scope ($derived / $effect) subscribes that scope; invalidating
+Each key gets a lazily-created subscriber. Reading a key from a
+tracking scope (derived / effect) subscribes that scope; invalidating
 the key dispatches an 'invalidate' event whose detail is a Set of affected
 keys so each listener's lookup is O(1). The subscriber outlives entry
 eviction — invalidating/refetching a key reuses the same subscriber, so

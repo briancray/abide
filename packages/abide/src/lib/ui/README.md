@@ -1,11 +1,11 @@
 # abide-ui
 
 A from-scratch, single-file UI framework for abide — reactive, with `<script>` +
-template + `<style>` in one `.abide` file. No Svelte. Signal surface, document
+template + `<style>` in one `.abide` file. Signal surface, document
 substrate, server-rendered and streamed, with true DOM adoption.
 
-Status: exploration on branch `abide-ui-wt`. Not wired into abide's own page
-server; the runnable proof is `examples/abide-ui-demo` (Bun.build + Bun.serve).
+abide-ui is the framework's UI runtime: `createUiPageRenderer` renders and streams
+every page, and `.abide` files are the only component format.
 
 ## A component
 
@@ -55,7 +55,7 @@ State is one mutable document addressed by path; every change is a patch over a
 path. The compiler turns `model.a[i].b` into a path read and `model.x = y` into a
 patch, hoisting static paths to a `cell` resolved once. Reactivity is shape-only
 (a deep field edit wakes only that field, not the list above it). On the
-write-path microbench this runs ~20× faster than Svelte 5 `$state`.
+write-path microbench this runs ~20× faster than a deep-proxy signal baseline.
 
 ## SSR + streaming + hydration
 
@@ -83,6 +83,4 @@ write-path microbench this runs ~20× faster than Svelte 5 `$state`.
 - Hydration adopts static structure only; control-flow blocks (if/each/await/
   switch) and child components fall back to `mount` (re-render).
 - `compileModule` emits `abide/ui/*` specifiers (a published consumer needs
-  `abide/ui/*` or `abideImportName`); the demo bridges via a build resolver.
-- Not integrated into abide's own (Svelte-based) page server.
-- Data fetching uses plain `fetch`, not abide `cache()` (no dedup/SSR-snapshot yet).
+  `abide/ui/*` or `abideImportName`).

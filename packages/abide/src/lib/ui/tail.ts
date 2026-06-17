@@ -76,9 +76,9 @@ latest-wins reader only needs the newest); a source without the capability
 retention — the window semantics are identical either way, only how much
 past it can show differs.
 
-Lifecycle mirrors cache(): the entry's tracker is a Svelte createSubscriber,
-so the first $derived read in a tracking scope opens the underlying iterator
-and the last $derived to stop reading closes it. Many $deriveds reading the
+Lifecycle mirrors cache(): the entry's tracker is a createSubscriber,
+so the first derived read in a tracking scope opens the underlying iterator
+and the last derived to stop reading closes it. Many deriveds reading the
 same source share one underlying subscription — the registry dedupes by
 `subscribable.name`, with `last` folded into the key, so the bare form and
 each window size are independent subscriptions. Passing fresh `fn.stream(args)`

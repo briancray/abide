@@ -14,8 +14,8 @@ field change wakes exactly one text node, no list reconcile (shape-only). Run:
 
   bun packages/abide/bench/render.bench.ts
 
-Svelte isn't compared here: its push-effect scheduler doesn't run headless under
-Bun, so a fair DOM comparison needs a browser harness. These are abide absolutes.
+These are abide absolutes — a DOM-level comparison against a push-effect runtime
+would need a browser harness, since such schedulers don't run headless under Bun.
 */
 
 const ROWS = 5_000

@@ -8,7 +8,7 @@ DEBUG="abide"           → enables "abide"
 DEBUG="abide:*"         → enables "abide" and "abide:anything"
 DEBUG="*"               → enables everything
 DEBUG="a,abide"         → comma-separated list
-DEBUG="abide:*,-abide:svelte" → negation: exclusions win over inclusions
+DEBUG="abide:*,-abide:cache" → negation: exclusions win over inclusions
 Always-on channels don't consult this — they check isDebugNegated only.
 The default is guarded: this runs in the browser bundle, where `process`
 doesn't exist.

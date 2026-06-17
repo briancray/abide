@@ -96,21 +96,21 @@ then re-runs that scope, which calls cache() again and gets a fresh entry.
 Outside a tracking scope subscribe() is a no-op, so cache() works the same
 in server code and plain client code.
 
-SSR: how you consume the call decides inline vs streaming, per Svelte's
-documented {#await} rule (only the pending branch renders during SSR):
+SSR: how you consume the call decides inline vs streaming (during SSR only the
+pending branch of a `<template await>` renders):
 
   const post = await cache(getPost)({ id })   // blocks render → baked into
                                               // the initial SSR HTML
-  {#await cache(getPost)({ id })}             // renders pending → shell flushes
+  <template await={cache(getPost)({ id })}>   // renders pending → shell flushes
                                               // now, value streams in on the
                                               // same response when it resolves
 
-The two don't mix within one component. A top-level `await` flips Svelte's
-async render into await-everything mode and sweeps in every promise created
-in that same component instance — so a sibling {#await} (or a
-<svelte:boundary pending>) gets awaited and inlined too, buffering the whole
-response to the slowest read. The markup form doesn't change this: a boundary
-renders its pending branch but render() still blocks. To get both on one page,
+The two don't mix within one component. A top-level `await` flips the async
+render into await-everything mode and sweeps in every promise created
+in that same component instance — so a sibling `<template await>` gets awaited
+and inlined too, buffering the whole response to the slowest read. The markup
+form doesn't change this: an await block renders its pending branch but render()
+still blocks. To get both on one page,
 isolate each blocking (top-level await) read in its own child component and
 keep streaming reads in a parent that never top-level awaits — the
 await-everything mode is per component instance, so a child's await blocks only

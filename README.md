@@ -6,7 +6,7 @@ abide is an isomorphic SSR + SPA framework for Bun: declare a function once and
 it serves an SSR/browser call, an HTTP + OpenAPI operation, an MCP tool, and a
 CLI subcommand. The bundler swaps the runtime per build target — the same name
 is a direct call on the server and a network fetch on the client. Pages render
-with abide-ui, its own from-scratch reactive `.abide` component runtime (no Svelte).
+with abide-ui, its own from-scratch reactive `.abide` component runtime.
 
 - Zero runtime dependencies.
 - One runtime: Bun (`engines.bun >= 1.3`); no required peer.

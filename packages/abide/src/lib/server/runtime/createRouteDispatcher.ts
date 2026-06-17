@@ -44,7 +44,7 @@ disjoint by construction, so each route lands in exactly one branch.
 
 `renderPage` is injected rather than built here: dispatch decisions (the
 405/404 branches and the rpc method match) are the behaviour worth testing,
-and keeping the Svelte render behind the seam lets a test exercise them with a
+and keeping the page render behind the seam lets a test exercise them with a
 stub instead of booting a server. The rpc-module loader is memoised internally
 so each module loads once.
 */

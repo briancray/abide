@@ -83,13 +83,12 @@ describe('cache() reactive refetch', () => {
 
     /*
     A live pending()/refreshing() probe arms the lifecycle channel's notifier.
-    A cold read taken inside a $derived (the documented read idiom) then calls
-    registerEntry, which marks the channel — if the mark writes subscriber
-    state synchronously, Svelte throws state_unsafe_mutation mid-derived and
-    the flush dies. The mark must reach the probe without a write inside the
-    derived's evaluation.
+    A cold read taken inside a derived (the documented read idiom) then calls
+    registerEntry, which marks the channel — the mark must reach the probe
+    without writing subscriber state synchronously inside the derived's
+    evaluation, which would re-enter the dependency collection mid-flush.
     */
-    test('a cold read inside $derived with a live probe does not throw', async () => {
+    test('a cold read inside derived with a live probe does not throw', async () => {
         const get = countingRemote('GET', '/rpc/derived-cold')
         const probe = track(() => pending(get))
         await settle()

@@ -73,7 +73,7 @@ async function start(): Promise<void> {
 
 /*
 Runs an arbitrary script under the abide preload — same runtime as the server,
-so jobs/scripts get .svelte compilation, abide/* + $server/$shared resolution,
+so jobs/scripts get .abide compilation, abide/* + $server/$shared resolution,
 and the .css no-op loader for free. Everything after `run` is forwarded
 verbatim: the first token is the script, the rest are its argv (bun stops
 parsing its own flags at the script path).
@@ -119,7 +119,7 @@ async function cliCmd(): Promise<void> {
 }
 
 // Type-checks every .abide component's template + props through its shadow and
-// exits non-zero if any errors are found (the svelte-check analog).
+// exits non-zero if any errors are found.
 async function checkCmd(): Promise<void> {
     const errors = await checkAbide({ cwd })
     process.exit(errors === 0 ? 0 : 1)

@@ -127,10 +127,10 @@ describe('unified log format', () => {
 
     test('negation wins over inclusion for gated channels', () => {
         requestScopeSlot.resolver = undefined
-        process.env.DEBUG = 'abide:*,-abide:svelte'
+        process.env.DEBUG = 'abide:*,-abide:rpc'
         const onLines = capture('log', () => log.channel('abide:cache')('on')) as unknown[][]
         expect(onLines).toHaveLength(1)
-        const offLines = capture('log', () => log.channel('abide:svelte')('off')) as unknown[][]
+        const offLines = capture('log', () => log.channel('abide:rpc')('off')) as unknown[][]
         expect(offLines).toHaveLength(0)
     })
 
