@@ -22,10 +22,13 @@ export function compileModule(
     options: { isLayout?: boolean; moduleId?: string; hot?: boolean } = {},
 ): string {
     const isLayout = options.isLayout ?? false
-    /* Component-authored imports (e.g. child components) hoisted to module scope. */
-    const analyzed = analyzeComponent(source)
+    /* Run the shared front-end once and feed it to both back-ends — the analysis is
+       pure over (source, moduleId), so the client and SSR builds reuse one parse
+       instead of re-running it. `imports` (hoisted child-component imports) and the
+       per-element scopes both come from this single pass. */
+    const analyzed = analyzeComponent(source, options.moduleId)
     const userImports = analyzed.imports
-    const body = indent(compileComponent(source, isLayout, options.moduleId))
+    const body = indent(compileComponent(source, isLayout, options.moduleId, analyzed))
 
     /* Hot module (dev component HMR): the same client build, but its runtime comes
        from the live bundle via `window.__abide` — so it shares the one reactive graph
@@ -49,7 +52,7 @@ if (!hotReplace(${id}, component)) location.reload()
 `
     }
 
-    const ssrBody = indent(compileSSR(source, isLayout, options.moduleId))
+    const ssrBody = indent(compileSSR(source, isLayout, options.moduleId, analyzed))
     /* Per-component dead-import elimination: emit only the runtime names this module
        actually references. A component that uses no `each`/`await`/`html` shouldn't
        drag those modules into its chunk. The package isn't globally side-effect-free
