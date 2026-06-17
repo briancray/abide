@@ -1,5 +1,17 @@
 # abide
 
+## 0.30.0
+
+### Minor Changes
+
+- [`311f3e7`](https://github.com/briancray/abide/commit/311f3e76732eb2b98d2739f2f7eff0fbbb667645) - cross-fade navigations via the View Transition API ([`d3ea6c0`](https://github.com/briancray/abide/commit/d3ea6c001c47748dd2be3ae47dfc3624ae7c65ee))
+
+### Patch Changes
+
+- [`311f3e7`](https://github.com/briancray/abide/commit/311f3e76732eb2b98d2739f2f7eff0fbbb667645) - surface attach= binding and named-template snippets in .abide grammar ([`51a37ee`](https://github.com/briancray/abide/commit/51a37ee0b0cef708d0571de272ace3584d45a8c0))
+
+- [`311f3e7`](https://github.com/briancray/abide/commit/311f3e76732eb2b98d2739f2f7eff0fbbb667645) - hoist component-local types above \_\_Props so prop annotations resolve ([`8d674c5`](https://github.com/briancray/abide/commit/8d674c543be53ae5775124f392ee44fd8731204f))
+
 ## 0.29.0
 
 ### Minor Changes
