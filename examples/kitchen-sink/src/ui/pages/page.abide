@@ -2,84 +2,115 @@
 import Layout from '../Layout.abide'
 
 /*
-Kitchen-sink index — the framework reference. One card per surface; each card is a
-runnable, fully documented page. The composed auth showcase sits below.
+Kitchen-sink index — the framework reference, grouped the way the sidebar reads:
+stand up the server, build the UI, reach past the browser, ship it, look it up.
+Each card is a runnable, documented page. The composed auth showcase sits below.
 */
-const cards = [
+const groups = [
     {
-        href: '/rpc',
-        title: 'rpc',
-        body: 'One verb per file under src/server/rpc/ — GET / POST / PUT / PATCH / DELETE / HEAD. The schema validates args and projects the MCP tool, CLI flags, and OpenAPI operation from one declaration.',
+        title: 'build the server',
+        cards: [
+            {
+                href: '/rpc',
+                title: 'rpc',
+                body: 'One verb per file under src/server/rpc/ — GET / POST / PUT / PATCH / DELETE / HEAD. The schema validates args and projects the MCP tool, CLI flags, and OpenAPI operation from one declaration.',
+            },
+            {
+                href: '/security',
+                title: 'security',
+                body: 'Mutating verbs 403 a cross-origin browser Origin before the handler runs; crossOrigin: true is the per-verb opt-out. /__abide/mcp gets the same check, and boot warns when MCP tools ship with no auth middleware.',
+            },
+            {
+                href: '/sockets',
+                title: 'sockets',
+                body: 'One broadcast topic per file under src/server/sockets/. publish() is isomorphic, retention is opt-in via tail: n, and every browser subscription multiplexes one WebSocket.',
+            },
+            {
+                href: '/cache',
+                title: 'cache',
+                body: 'Isomorphic memoise + coalesce — identical in-flight calls share one flight, ttl is only the retention dial, and cache.invalidate re-runs every derived that read a dropped entry.',
+            },
+        ],
     },
     {
-        href: '/security',
-        title: 'Security defaults',
-        body: 'Mutating verbs 403 a cross-origin browser Origin before the handler runs; crossOrigin: true is the per-verb opt-out. /__abide/mcp gets the same check, and boot warns when MCP tools ship with no auth middleware.',
+        title: 'build the ui',
+        cards: [
+            {
+                href: '/components',
+                title: 'components',
+                body: 'The .abide grammar — reactive primitives (state / derived / effect / prop), {expr} and bind: bindings, every <template> control-flow directive, snippets, components & slots, and scoped <style>.',
+            },
+            {
+                href: '/pages',
+                title: 'pages',
+                body: 'Folders under src/ui/pages/ are routes — [id] params, userland layouts, try/catch failure boundaries — plus the reactive page state, navigate(), and the typed base-correct url() builder.',
+            },
+            {
+                href: '/probes',
+                title: 'pending / refreshing',
+                body: 'Standalone reactive probes spanning calls and streams. pending = no value yet; refreshing = value held, fresher source in flight. They report, never act.',
+            },
+            {
+                href: '/tail',
+                title: 'tail',
+                body: 'The reactive consumer for anything streaming — a socket or fn.stream(args). First derived read opens the stream, last reader closes it; transport drops self-heal.',
+            },
+            {
+                href: '/health',
+                title: 'online / health',
+                body: 'Reactive connectivity reads: online() rides the browser online/offline events; health() polls /__abide/health while read and reports reachable plus whatever the app health() hook contributes.',
+            },
+        ],
     },
     {
-        href: '/sockets',
-        title: 'Sockets',
-        body: 'One broadcast topic per file under src/server/sockets/. publish() is isomorphic, retention is opt-in via tail: n, and every browser subscription multiplexes one WebSocket.',
+        title: 'beyond the browser',
+        cards: [
+            {
+                href: '/agent',
+                title: 'agent',
+                body: "agent(engine, messages) runs a model against the app's own gated MCP surface and streams AgentFrames; the handler picks the transport.",
+            },
+            {
+                href: '/mcp',
+                title: 'mcp',
+                body: 'POST /__abide/mcp, JSON-RPC — tools from clients.mcp verbs and schema-d sockets, prompts from src/mcp/prompts/*.md, resources from src/mcp/resources/.',
+            },
+            {
+                href: '/cli',
+                title: 'cli',
+                body: 'A standalone binary: subcommands with schema-derived flags, streamed jsonl/sse, and a REPL — installable via curl <app>/__abide/cli | sh.',
+            },
+            {
+                href: '/bundle',
+                title: 'bundle',
+                body: 'abide bundle wraps the app in a movable desktop app — native menus through onMenu(), a connect screen for embedded or remote servers, bundled() to detect the context.',
+            },
+        ],
     },
     {
-        href: '/cache',
-        title: 'cache',
-        body: 'Isomorphic memoise + coalesce — identical in-flight calls share one flight, ttl is only the retention dial, and cache.invalidate re-runs every derived that read a dropped entry.',
+        title: 'build test deploy',
+        cards: [
+            {
+                href: '/build',
+                title: 'build · test · deploy',
+                body: 'The dev-to-prod seams — the abide commands, env() config validation and app.ts boot hooks, in-process testing with createTestApp(), and the compiled-binary Dockerfile.',
+            },
+        ],
     },
     {
-        href: '/probes',
-        title: 'pending / refreshing',
-        body: 'Standalone reactive probes spanning calls and streams. pending = no value yet; refreshing = value held, fresher source in flight. They report, never act.',
-    },
-    {
-        href: '/health',
-        title: 'online / health',
-        body: 'Reactive connectivity reads: online() rides the browser online/offline events; health() polls /__abide/health while read and reports reachable plus whatever the app health() hook contributes.',
-    },
-    {
-        href: '/components',
-        title: 'components',
-        body: 'The .abide grammar — reactive primitives (state / derived / effect / prop), {expr} and bind: bindings, every <template> control-flow directive, snippets, components & slots, and scoped <style>.',
-    },
-    {
-        href: '/pages',
-        title: 'Pages',
-        body: 'Folders under src/ui/pages/ are routes — [id] params, userland layouts, try/catch failure boundaries — plus the reactive page state, navigate(), and the typed base-correct url() builder.',
-    },
-    {
-        href: '/tail',
-        title: 'tail',
-        body: 'The reactive consumer for anything streaming — a socket or fn.stream(args). First derived read opens the stream, last reader closes it; transport drops self-heal.',
-    },
-    {
-        href: '/agent',
-        title: 'agent',
-        body: "agent(engine, messages) runs a model against the app's own gated MCP surface and streams AgentFrames; the handler picks the transport.",
-    },
-    {
-        href: '/mcp',
-        title: 'MCP',
-        body: 'POST /__abide/mcp, JSON-RPC — tools from clients.mcp verbs and schema-d sockets, prompts from src/mcp/prompts/*.md, resources from src/mcp/resources/.',
-    },
-    {
-        href: '/cli',
-        title: 'CLI',
-        body: 'A standalone binary: subcommands with schema-derived flags, streamed jsonl/sse, and a REPL — installable via curl <app>/__abide/cli | sh.',
-    },
-    {
-        href: '/bundle',
-        title: 'bundle',
-        body: 'abide bundle wraps the app in a movable desktop app — native menus through onMenu(), a connect screen for embedded or remote servers, bundled() to detect the context.',
-    },
-    {
-        href: '/logging',
-        title: 'Logging & tracing',
-        body: "One logger, both sides — always-on app channel, DEBUG-gated diagnostic channels, timed log.trace spans, and trace() returning the request's W3C traceparent.",
-    },
-    {
-        href: '/reference',
         title: 'reference',
-        body: 'The cross-cutting reference — project layout, the abide CLI commands, framework routes, every environment variable, and the configure / test / deploy seams.',
+        cards: [
+            {
+                href: '/reference',
+                title: 'reference',
+                body: 'The cross-cutting reference — project layout, framework routes, every environment variable, and the import namespaces that mark which side a name runs on.',
+            },
+            {
+                href: '/logging',
+                title: 'logging & tracing',
+                body: "One logger, both sides — always-on app channel, DEBUG-gated diagnostic channels, timed log.trace spans, and trace() returning the request's W3C traceparent.",
+            },
+        ],
     },
 ]
 </script>
@@ -92,14 +123,19 @@ const cards = [
         consumes it.
     </p>
 
-    <section class="mt-8 grid gap-4 sm:grid-cols-2">
-        <template each={cards} as="card" key="card.href">
-            <a href={card.href} class="rounded-lg border border-slate-200 bg-white p-5 hover:border-slate-400">
-                <h2 class="text-lg font-semibold"><code class="font-mono">{card.title}</code></h2>
-                <p class="mt-1 text-sm text-slate-600">{card.body}</p>
-            </a>
-        </template>
-    </section>
+    <template each={groups} as="group" key="group.title">
+        <section class="mt-10">
+            <h2 class="text-xs font-semibold uppercase tracking-wide text-slate-400">{group.title}</h2>
+            <div class="mt-3 grid gap-4 sm:grid-cols-2">
+                <template each={group.cards} as="card" key="card.href">
+                    <a href={card.href} class="rounded-lg border border-slate-200 bg-white p-5 hover:border-slate-400">
+                        <h3 class="text-lg font-semibold"><code class="font-mono">{card.title}</code></h3>
+                        <p class="mt-1 text-sm text-slate-600">{card.body}</p>
+                    </a>
+                </template>
+            </div>
+        </section>
+    </template>
 
     <section class="mt-10 rounded-lg border border-slate-200 bg-white p-5">
         <h2 class="text-lg font-semibold">Composed showcase: cookie-session auth</h2>

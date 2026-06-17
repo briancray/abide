@@ -21,58 +21,94 @@ effect(() => onMenu('open-mcp', () => void navigate('/mcp')))
 
 /* Active-link styling reads page.url (reassigned on every SPA nav), so a class
    thunk re-runs without per-link plumbing. Compared against url() output so it
-   stays correct under an APP_URL subpath — page.url is browser-space both sides. */
+   stays correct under an APP_URL subpath — page.url is browser-space both sides.
+   `match` defaults to href, letting a link (auth) highlight on a wider prefix. */
 const linkClass = (prefix) =>
     page.url.pathname === url(prefix) || page.url.pathname.startsWith(url(prefix) + '/')
         ? 'font-semibold text-slate-900'
         : 'text-slate-600 hover:text-slate-900'
 
-/* Nav is the reference table of contents — one entry per surface. */
-const sections = [
-    { href: '/rpc', label: 'rpc' },
-    { href: '/security', label: 'security' },
-    { href: '/sockets', label: 'sockets' },
-    { href: '/cache', label: 'cache' },
-    { href: '/probes', label: 'pending / refreshing' },
-    { href: '/health', label: 'online / health' },
-    { href: '/components', label: 'components' },
-    { href: '/pages', label: 'pages' },
-    { href: '/tail', label: 'tail' },
-    { href: '/agent', label: 'agent' },
-    { href: '/mcp', label: 'mcp' },
-    { href: '/cli', label: 'cli' },
-    { href: '/bundle', label: 'bundle' },
-    { href: '/logging', label: 'logging & tracing' },
-    { href: '/reference', label: 'reference' },
+/* The sidebar is the index — surfaces grouped by the job they do, top to bottom:
+   stand up the server, build the UI on it, reach past the browser, then ship and
+   look it up. One destination page per link. */
+const groups = [
+    {
+        title: 'build the server',
+        links: [
+            { href: '/rpc', label: 'rpc' },
+            { href: '/security', label: 'security' },
+            { href: '/sockets', label: 'sockets' },
+            { href: '/cache', label: 'cache' },
+            { href: '/auth/dashboard', label: 'auth', match: '/auth' },
+        ],
+    },
+    {
+        title: 'build the ui',
+        links: [
+            { href: '/components', label: 'components' },
+            { href: '/pages', label: 'pages' },
+            { href: '/probes', label: 'pending / refreshing' },
+            { href: '/tail', label: 'tail' },
+            { href: '/health', label: 'online / health' },
+        ],
+    },
+    {
+        title: 'beyond the browser',
+        links: [
+            { href: '/agent', label: 'agent' },
+            { href: '/mcp', label: 'mcp' },
+            { href: '/cli', label: 'cli' },
+            { href: '/bundle', label: 'bundle' },
+        ],
+    },
+    {
+        title: 'build test deploy',
+        links: [{ href: '/build', label: 'build · test · deploy' }],
+    },
+    {
+        title: 'reference',
+        links: [
+            { href: '/reference', label: 'types, env, routes' },
+            { href: '/logging', label: 'logging & tracing' },
+        ],
+    },
 ]
 </script>
 
 <div class="min-h-screen bg-slate-50 text-slate-900">
-    <header class="border-b border-slate-200 bg-white">
-        <nav class="mx-auto flex max-w-4xl flex-wrap items-center gap-x-4 gap-y-1 px-6 py-4 text-sm">
+    <div class="mx-auto flex max-w-6xl flex-col gap-8 px-6 md:flex-row">
+        <aside class="shrink-0 py-8 md:sticky md:top-0 md:h-screen md:w-60 md:overflow-y-auto md:border-r md:border-slate-200 md:pr-6">
             <a href={url('/')} class="text-base font-semibold">abide kitchen-sink</a>
-            <template each={sections} as="s" key="s.href">
-                <a href={url(s.href)} class={linkClass(s.href)}>{s.label}</a>
-            </template>
-            <a href={url('/auth/dashboard')} class={linkClass('/auth')}>auth</a>
+            <nav class="mt-6 space-y-6 text-sm">
+                <template each={groups} as="group" key="group.title">
+                    <div>
+                        <h2 class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{group.title}</h2>
+                        <ul class="space-y-1">
+                            <template each={group.links} as="link" key="link.href">
+                                <li><a href={url(link.href)} class={linkClass(link.match ?? link.href)}>{link.label}</a></li>
+                            </template>
+                        </ul>
+                    </div>
+                </template>
+            </nav>
             <template await={cache(getSession)()}>
                 <template then="session">
-                    <div class="ml-auto flex items-center gap-3">
+                    <div class="mt-8 border-t border-slate-200 pt-4 text-sm">
                         <template if={session && session.user}>
-                            <span class="text-slate-600">signed in as <strong>{session.user}</strong></span>
-                            <form action={logout.url} method={logout.method}>
+                            <p class="text-slate-600">signed in as <strong>{session.user}</strong></p>
+                            <form action={logout.url} method={logout.method} class="mt-2">
                                 <button type="submit" class="rounded-md border border-slate-300 px-3 py-1 hover:bg-slate-100">Log out</button>
                             </form>
                         </template>
                         <template else>
-                            <a href="/auth/login" class="rounded-md bg-slate-900 px-3 py-1 text-white hover:bg-slate-700">Log in</a>
+                            <a href="/auth/login" class="inline-block rounded-md bg-slate-900 px-3 py-1 text-white hover:bg-slate-700">Log in</a>
                         </template>
                     </div>
                 </template>
             </template>
-        </nav>
-    </header>
-    <main class="mx-auto max-w-4xl px-6 py-10">
-        <slot></slot>
-    </main>
+        </aside>
+        <main class="min-w-0 flex-1 py-10">
+            <slot></slot>
+        </main>
+    </div>
 </div>
