@@ -17,7 +17,6 @@ import { isDebugNegated } from '../../shared/isDebugNegated.ts'
 import { logClosingRecord } from '../../shared/logClosingRecord.ts'
 import { OFFLINE_HEADER } from '../../shared/OFFLINE_HEADER.ts'
 import { parseBoundedEnvInt } from '../../shared/parseBoundedEnvInt.ts'
-import { RESOLVE_STREAM_PATH } from '../../shared/RESOLVE_STREAM_PATH.ts'
 import { SOCKETS_PATH } from '../../shared/SOCKETS_PATH.ts'
 import { setAppName } from '../../shared/setAppName.ts'
 import { setBaseResolver } from '../../shared/setBaseResolver.ts'
@@ -57,7 +56,6 @@ import { parseIdleTimeout } from './parseIdleTimeout.ts'
 import { parsePort } from './parsePort.ts'
 import { ensureRegistriesLoaded, setRegistryManifests } from './registryManifests.ts'
 import { requestContext } from './requestContext.ts'
-import { resolveStreamResponse } from './resolveStreamResponse.ts'
 import { runWithRequestScope } from './runWithRequestScope.ts'
 import { setActiveServer } from './setActiveServer.ts'
 import type { Assets } from './types/Assets.ts'
@@ -500,17 +498,6 @@ export async function createServer({
                         async () => socketDispatcher.rest(req, name),
                         url,
                     )
-                }
-                /*
-                Out-of-band resolution stream for a streamed page's pending
-                {#await} reads. Answered directly (no app.handle / request scope):
-                it drains promises stashed during SSR, and the random single-use
-                token gates access. Returning here bypasses
-                disableIdleTimeoutForStream so it inherits the bounded idleTimeout
-                rather than the long-lived-stream disable.
-                */
-                if (url.pathname.startsWith(RESOLVE_STREAM_PATH)) {
-                    return resolveStreamResponse(url.pathname.slice(RESOLVE_STREAM_PATH.length))
                 }
                 if (url.pathname === MCP_PATH && mcp) {
                     // Gate cross-site browser posts (CSRF, see crossOriginGate).

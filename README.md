@@ -126,9 +126,10 @@ backed by an `AsyncLocalStorage` scope (each throws outside one):
 
 - Every `page.abide` under `src/ui/pages/` mounts at its folder's URL;
   `[id]` / `[...rest]` segments become params.
-- Layouts are userland — a page imports a component and wraps its own body;
-  there is no framework `layout`/`error` resolution.
-- A render throw is caught by a `<template try>` / `<template catch>` boundary.
+- Layouts: a page imports a component and wraps its own body, or a `layout.abide`
+  in a directory auto-wraps every page beneath it (nearest wins, via its `<slot/>`).
+- There is no framework `error` resolution — a render throw is caught by a
+  `<template try>` / `<template catch>` boundary.
 
 ```html
 <script>
@@ -400,7 +401,8 @@ src/
     rpc/<name>.ts         one verb export per file → /rpc/<name>
     sockets/<name>.ts     one socket export per file
   ui/
-    pages/<path>/page.abide   route at the folder URL; layouts are userland
+    pages/<path>/page.abide   route at the folder URL
+    pages/<path>/layout.abide nearest layout.abide wraps the pages beneath it
     public/               static files served at the site root
   mcp/
     prompts/<name>.md     MCP prompt templates

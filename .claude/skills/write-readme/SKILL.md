@@ -156,10 +156,12 @@ note (schema gates the machine surfaces; mutations need explicit
   (client fetch wait).
 * *Pages* — the framework resolves only `page.abide` files under
   `src/ui/pages/` as routes (`[id]`/`[...rest]` segments → params). **Layouts
-  and error boundaries are userland**: a page imports and wraps its own; the
-  framework resolves no `layout.*`/`error.*`, so don't document those as
-  conventions. Component files are `.abide` (never `.svelte`), and the boot
-  map's pages table is a single `page` column (route only).
+  resolve via a nearest `layout.abide`** (by directory prefix, wrapping the page
+  through its `<slot/>`); a page may also import and wrap a component directly.
+  **Error boundaries are userland** — the framework resolves no `error.*`; a
+  render throw is caught by a `<template try>`/`<template catch>`. Component
+  files are `.abide` (never `.svelte`), and the boot map's pages table is a
+  single `page` column (route only).
 * *cache* — the one-shot vs `derived()`-reactive read (`cache.invalidate`
   re-runs the scope) and the `ttl: 0` mutation idiom in the snippet, plus one
   bullet each for the uniform-`Promise` warm read (resolves on a microtask,
@@ -213,8 +215,8 @@ note (schema gates the machine surfaces; mutations need explicit
 ## Write to the right file
 
 Write to `packages/abide/README.md` — the canonical, npm-shipped file. The
-repo-root `README.md` is a symlink to it; never edit the root path or replace
-the symlink with a copy.
+repo-root `README.md` is a separate, longer project landing page (not a symlink);
+this skill regenerates only the npm-shipped `packages/abide/README.md`.
 
 ## Style
 
