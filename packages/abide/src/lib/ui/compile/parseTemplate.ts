@@ -2,6 +2,7 @@ import { decodeHtmlEntities } from './decodeHtmlEntities.ts'
 import type { TemplateAttr } from './types/TemplateAttr.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
 import type { TextPart } from './types/TextPart.ts'
+import { VOID_TAGS } from './VOID_TAGS.ts'
 
 /*
 A minimal compile-time parser for the abide template subset: elements, text with
@@ -18,23 +19,6 @@ or attribute — e.g. one quoted in a code sample — is read as that expression
 text, never mistaken for a real style. Keeping it in the tree lets the front-end
 scope it to its sibling subtree (`analyzeComponent`); the node emits no DOM/markup.
 */
-
-const VOID_TAGS = new Set([
-    'area',
-    'base',
-    'br',
-    'col',
-    'embed',
-    'hr',
-    'img',
-    'input',
-    'link',
-    'meta',
-    'param',
-    'source',
-    'track',
-    'wbr',
-])
 
 /* A braced template expression with the absolute source offset of its first
    (post-trim) character, so the type-checking shadow can map a diagnostic back. */
@@ -245,18 +229,29 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
     return { nodes: roots }
 }
 
-/* Turns a component's attributes into props: a static value becomes a string
-   literal, an expression keeps its code (event/bind on components ignored). */
+/* Turns a component's attributes into props. A component has no directives —
+   every attribute is a prop under its written name, so `on*`/`bind:`/`attach`
+   round-trip to their original names (the kinds the tag-blind attribute parser
+   assigned) instead of being dropped. A static value becomes a string literal;
+   every other kind keeps its `code`, letting a prop hold any value, functions
+   included (e.g. an `onclick` callback). */
 function toProps(attrs: TemplateAttr[]): { name: string; code: string; loc?: number }[] {
-    const props: { name: string; code: string; loc?: number }[] = []
-    for (const attr of attrs) {
+    return attrs.map((attr) => {
         if (attr.kind === 'static') {
-            props.push({ name: attr.name, code: JSON.stringify(attr.value) })
-        } else if (attr.kind === 'expression') {
-            props.push({ name: attr.name, code: attr.code, loc: attr.loc })
+            return { name: attr.name, code: JSON.stringify(attr.value) }
         }
-    }
-    return props
+        /* Every non-static kind keeps its `code`/`loc`; only the prop name differs —
+           a directive (`event`/`bind`/`attach`) round-trips to its written name. */
+        const name =
+            attr.kind === 'event'
+                ? `on${attr.event}`
+                : attr.kind === 'bind'
+                  ? `bind:${attr.property}`
+                  : attr.kind === 'attach'
+                    ? 'attach'
+                    : attr.name
+        return { name, code: attr.code, loc: attr.loc }
+    })
 }
 
 /* The literal text of an attribute (a static value or an expression's code);

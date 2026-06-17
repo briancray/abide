@@ -198,4 +198,20 @@ describe('compileComponent — end to end', () => {
         model.replace('byId/c', { n: 3 })
         expect(list.children.map((child) => child.textContent)).toEqual(['9', '2', '3'])
     })
+
+    /* A component has no directives — every attribute is a prop under its written
+       name, so `on*`/`bind:`/`attach` pass through to `mountChild` instead of
+       being dropped (they'd be DOM directives only on a lowercase element). */
+    test('component attributes pass through as props, including on*/bind/attach', () => {
+        const body = compileComponent(`
+            <Button label="Save" onclick={handleClick} bind:open={state.open} attach={register}>
+                go
+            </Button>
+        `)
+        expect(body).toContain('mountChild')
+        expect(body).toContain('"label": () => ("Save")')
+        expect(body).toContain('"onclick": () => (handleClick)')
+        expect(body).toContain('"bind:open": () => (state.open)')
+        expect(body).toContain('"attach": () => (register)')
+    })
 })
