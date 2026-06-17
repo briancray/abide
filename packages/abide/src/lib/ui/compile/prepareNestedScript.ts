@@ -1,8 +1,9 @@
 import ts from 'typescript'
+import { REACTIVE_CALLEES } from './REACTIVE_CALLEES.ts'
 
 /*
 The signal binding names a `<script>` nested in a control-flow branch declares
-(`state`/`derived`/`prop`). The back-end adds them to the deref scope so both the
+(`state`/`linked`/`derived`/`prop`). The back-end adds them to the deref scope so both the
 script body and the branch's markup rewrite `{a}` → `a.value` — these stay PLAIN
 signals (local to the branch's render, owned by its scope, re-seeded from the
 in-scope data each mount), unlike the top-level component script which desugars to
@@ -18,7 +19,8 @@ export function nestedBindingNames(code: string): Set<string> {
         for (const declaration of statement.declarationList.declarations) {
             const callee = signalCallee(declaration)
             if (
-                (callee === 'state' || callee === 'derived' || callee === 'prop') &&
+                callee !== undefined &&
+                REACTIVE_CALLEES.has(callee) &&
                 ts.isIdentifier(declaration.name)
             ) {
                 names.add(declaration.name.text)

@@ -10,6 +10,7 @@ export const UI_RUNTIME_IMPORTS: { name: string; specifier: string }[] = [
     { name: 'snippet', specifier: 'shared/snippet' },
     { name: 'doc', specifier: 'ui/doc' },
     { name: 'state', specifier: 'ui/state' },
+    { name: 'linked', specifier: 'ui/linked' },
     { name: 'derived', specifier: 'ui/derived' },
     { name: 'effect', specifier: 'ui/effect' },
     { name: 'mount', specifier: 'ui/dom/mount' },

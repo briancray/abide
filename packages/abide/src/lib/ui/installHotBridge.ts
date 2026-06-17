@@ -21,6 +21,7 @@ import { switchBlock } from './dom/switchBlock.ts'
 import { tryBlock } from './dom/tryBlock.ts'
 import { when } from './dom/when.ts'
 import { effect } from './effect.ts'
+import { linked } from './linked.ts'
 import { enterRenderPass } from './runtime/enterRenderPass.ts'
 import { exitRenderPass } from './runtime/exitRenderPass.ts'
 import { hotReloadEnabled } from './runtime/hotReloadEnabled.ts'
@@ -44,6 +45,7 @@ export function installHotBridge(): void {
         snippet,
         doc,
         state,
+        linked,
         derived,
         effect,
         mount,

@@ -3,6 +3,7 @@ import { createSubscriber } from '../src/lib/shared/createSubscriber.ts'
 import { derived } from '../src/lib/ui/derived.ts'
 import { doc } from '../src/lib/ui/doc.ts'
 import { effect } from '../src/lib/ui/effect.ts'
+import { linked } from '../src/lib/ui/linked.ts'
 import { state } from '../src/lib/ui/state.ts'
 
 describe('reactive cells', () => {
@@ -55,6 +56,85 @@ describe('reactive cells', () => {
         expect(runs).toBe(1)
         a.value = 'a2'
         expect(runs).toBe(2)
+    })
+})
+
+describe('write-coercion and reactive seeds', () => {
+    test('state transform coerces writes, not the construction initial', () => {
+        const clamp = (n: number) => Math.max(1, Math.min(99, n))
+        const qty = state(150, clamp)
+        expect(qty.value).toBe(150) // initial taken verbatim
+        qty.value = 1000
+        expect(qty.value).toBe(99) // write clamped
+        qty.value = -5
+        expect(qty.value).toBe(1)
+    })
+
+    test('state transform can reject a write by returning previous', () => {
+        const positive = (next: number, previous: number) => (next > 0 ? next : previous)
+        const n = state(5, positive)
+        let runs = 0
+        effect(() => {
+            n.value
+            runs += 1
+        })
+        expect(runs).toBe(1)
+        n.value = -1 // rejected → returns previous → Object.is no-op
+        expect(n.value).toBe(5)
+        expect(runs).toBe(1) // no wake
+        n.value = 8
+        expect(n.value).toBe(8)
+        expect(runs).toBe(2)
+    })
+
+    test('linked reseeds from upstream, keeps local edits, and reclaims on change', () => {
+        const upstream = state(10)
+        const draft = linked(() => upstream.value)
+        expect(draft.value).toBe(10) // seeded synchronously
+        draft.value = 42 // local edit
+        expect(draft.value).toBe(42)
+        expect(upstream.value).toBe(10) // edit does not flow upstream
+        upstream.value = 20 // upstream change reclaims the draft
+        expect(draft.value).toBe(20)
+    })
+
+    test('linked transform gates reseeds and writes alike', () => {
+        const clamp = (n: number) => Math.max(0, Math.min(100, n))
+        const upstream = state(250)
+        const draft = linked(() => upstream.value, clamp)
+        expect(draft.value).toBe(100) // reseed coerced
+        draft.value = -7
+        expect(draft.value).toBe(0) // write coerced
+        upstream.value = 500
+        expect(draft.value).toBe(100) // reseed coerced again
+    })
+
+    test('linked wakes downstream readers on both edits and reseeds', () => {
+        const upstream = state(1)
+        const draft = linked(() => upstream.value)
+        const seen: number[] = []
+        effect(() => {
+            seen.push(draft.value)
+        })
+        expect(seen).toEqual([1])
+        draft.value = 2
+        expect(seen).toEqual([1, 2])
+        upstream.value = 9
+        expect(seen).toEqual([1, 2, 9])
+    })
+
+    test('derived lens writes through to upstream and recomputes', () => {
+        const celsius = state(0)
+        const fahrenheit = derived(
+            () => (celsius.value * 9) / 5 + 32,
+            (f) => {
+                celsius.value = ((f - 32) * 5) / 9
+            },
+        )
+        expect(fahrenheit.value).toBe(32)
+        fahrenheit.value = 212
+        expect(celsius.value).toBe(100) // write went through to upstream
+        expect(fahrenheit.value).toBe(212) // recomputed from upstream, no local clobber
     })
 })
 

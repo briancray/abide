@@ -160,8 +160,9 @@ Same selector grammar as `cache.invalidate`; also accept a `Subscribable`. See C
 ## UI surface — `abide/ui/*` (client-only)
 
 ### Reactive primitives — `@readme plumbing` (in scope inside `.abide`, no import)
-- `abide/ui/state(initial)` → writable `State<T>` (`.value` getter/setter).
-- `abide/ui/derived(compute)` → lazy read-only computed (`.value`); re-derived on resume, never serialized.
+- `abide/ui/state(initial, transform?)` → writable `State<T>` (`.value` getter/setter). Local truth. `transform(next, prev) => T` is a write-coercion gate: each `.value=` stores what it returns (`return prev` rejects via the `Object.is` no-op); construction `initial` is verbatim. Plain `state(x)` is a serializable doc slot; `state(x, transform)` is a non-serializing `.value` cell.
+- `abide/ui/linked(seed, transform?)` → writable `State<T>` seeded reactively from upstream (Angular's `linkedSignal`): owns a local value, reseeds when the `seed` thunk's deps change, edits stay local. `transform` gates reseeds and writes alike. Thunk seed is required (it is the reactivity); seed captured by reference (clone in the thunk for isolation). Non-serializing — reseeds on resume.
+- `abide/ui/derived(compute)` → lazy read-only computed (`.value`); re-derived on resume, never serialized. `derived(compute, set)` → writable lens: `.value` derives from upstream, assigning runs imperative `set(next)` to write *through* to the sources (no local store).
 - `abide/ui/effect(fn)` → run now, re-run on dependency change; `fn` may return teardown / be async; returns dispose.
 - `abide/ui/doc(initial?)` → reactive document: immutable tree addressed by path, every change a patch (the substrate under all reactivity / resumability / sync).
 
@@ -180,7 +181,7 @@ Same selector grammar as `cache.invalidate`; also accept a `Subscribable`. See C
 Valid HTML with `<script>` + native `<template>` control flow + scoped `<style>`.
 - **Bindings:** `{expr}` text, `name={expr}` attr, `onclick={fn}`, `bind:value={…}` / `bind:checked` / `bind:group`, `attach={fn}` (node-lifetime attachment — the dual of `on`; the `use:`-action / `{@attach}` equivalent, lowered to `ui/dom/attach`).
 - **Control flow (native `<template>`):** `if`/`else`, `each={list} as="x" key="x.id"`, `await={p}`/`then`/`catch`, `switch`/`case`/`default`.
-- **Components:** capitalised tags (`<Layout title=…>`); children fill `<slot/>`; props are reactive (passed as thunks). `prop('name')` reads a typed page param.
+- **Components:** capitalised tags (`<Layout title=…>`); children fill `<slot/>`; props are reactive (passed as thunks). A component has no directives — every attribute is a prop under its written name (so `onclick=`/`bind:open=`/`attach=` pass through as props, e.g. callbacks, not the DOM-element directives those are on a lowercase tag) and is type-checked against the child's declared props. `prop('name')` reads a typed component prop (the parent-supplied thunk, reactive + read-only); route params come from the `page` proxy (`page.params.name`), not `prop()`.
 - **Snippets / named slots:** `<template name="x" args={…}>` declares a reusable named builder (the `snippet()` form), rendered like a function — covers named slots / `{@render}`.
 - **Reactivity:** write plain assignment (`count += 1`, `items.push(x)`); the compiler lowers it to patches. Deep-field edits wake only that field.
 - **SSR:** byte-identical HTML string; `renderToStream` ships the shell then streams `<template await>` fragments out of order; `hydrate` adopts static structure in place (control-flow blocks + child components fall back to `mount`/re-render — known gap).
