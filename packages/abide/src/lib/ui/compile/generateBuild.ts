@@ -1,5 +1,6 @@
 import { OUTLET_TAG } from '../runtime/OUTLET_TAG.ts'
 import { branchElements } from './branchElements.ts'
+import { escapeHtml } from './escapeHtml.ts'
 import { groupBindParts } from './groupBindParts.ts'
 import { lowerDocAccess } from './lowerDocAccess.ts'
 import { partitionSlots } from './partitionSlots.ts'
@@ -7,6 +8,7 @@ import { nestedBindingNames } from './prepareNestedScript.ts'
 import { renameSignalRefs } from './renameSignalRefs.ts'
 import { staticAttrValue } from './staticAttrValue.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
+import { VOID_TAGS } from './VOID_TAGS.ts'
 
 /*
 Generates the build statements for a parsed template: element creation, static
@@ -22,7 +24,6 @@ export function generateBuild(
     hostVar: string,
     stateNames: ReadonlySet<string>,
     derivedNames: ReadonlySet<string>,
-    scopeAttribute: string | undefined,
     isLayout = false,
 ): string {
     let counter = 0
@@ -57,8 +58,10 @@ export function generateBuild(
     ): { code: string; varName: string } {
         const varName = nextVar('el')
         let code = `const ${varName} = ${varExpr};\n`
-        if (scopeAttribute !== undefined) {
-            code += `${varName}.setAttribute(${JSON.stringify(scopeAttribute)}, "");\n`
+        /* Stamp the scope attribute of every `<style>` active at this element (its own
+           sibling list plus every ancestor's), so the bundled CSS matches it. */
+        for (const scope of node.scopes ?? []) {
+            code += `${varName}.setAttribute(${JSON.stringify(scope)}, "");\n`
         }
         for (const attr of node.attrs) {
             if (attr.kind === 'static') {
@@ -94,9 +97,7 @@ export function generateBuild(
         /* A `<script>` among the children scopes its bindings to this element's
            subtree (its later siblings auto-deref them); pop after. */
         const added = scopeNestedScripts(node.children)
-        for (const child of node.children) {
-            code += generateChild(child, varName)
-        }
+        code += generateChildren(node.children, varName)
         for (const name of added) {
             localDerived.delete(name)
         }
@@ -124,6 +125,11 @@ export function generateBuild(
     function generateChild(node: TemplateNode, parentVar: string): string {
         if (node.kind === 'script') {
             return `${lowerStatement(node.code)}\n`
+        }
+        /* A `<style>` emits no DOM — its CSS is bundled and its scope attribute is
+           already stamped onto the elements it covers (see `generateElement`). */
+        if (node.kind === 'style') {
+            return ''
         }
         if (node.kind === 'text') {
             /* The non-whitespace parts share one merged SSR text node, so on hydrate
@@ -182,6 +188,32 @@ export function generateBuild(
             return generateSnippet(node)
         }
         return generateEach(node, parentVar)
+    }
+
+    /* Builds a sibling list, coalescing maximal runs of fully-static element subtrees
+       into one `cloneStatic` clone (a single cloneNode in place of the N create/append
+       calls the imperative path would emit). Whitespace-only text is transparent — it
+       neither breaks a run nor adds markup, matching both back-ends dropping it. Every
+       other child flushes the pending run and builds imperatively, preserving order. */
+    function generateChildren(children: TemplateNode[], parentVar: string): string {
+        let code = ''
+        let runHtml = ''
+        const flush = (): void => {
+            if (runHtml !== '') {
+                code += `cloneStatic(${parentVar}, ${JSON.stringify(runHtml)});\n`
+                runHtml = ''
+            }
+        }
+        for (const child of children) {
+            if (isStaticCloneableElement(child)) {
+                runHtml += staticHtml(child)
+            } else if (!isWhitespaceText(child)) {
+                flush()
+                code += generateChild(child, parentVar)
+            }
+        }
+        flush()
+        return code
     }
 
     /* A snippet declaration: a hoisted function returning a `snippet`-branded builder
@@ -271,7 +303,7 @@ export function generateBuild(
            markup inside the wrapper. */
         return (
             `const ${wrapper} = openChild(${parentVar}, ${JSON.stringify(node.name.toLowerCase())});\n` +
-            `${node.name}(${wrapper}, { ${parts.join(', ')} });\n`
+            `mountChild(${wrapper}, ${node.name}, { ${parts.join(', ')} });\n`
         )
     }
 
@@ -530,5 +562,75 @@ export function generateBuild(
         return generateElement(root, `openRoot(${parentVar}, ${JSON.stringify(root.tag)})`)
     }
 
-    return nodes.map((node) => generateChild(node, hostVar)).join('')
+    return generateChildren(nodes, hostVar)
+}
+
+/* A text node that is purely whitespace (no interpolation, only blank static
+   parts). Both back-ends drop it, so it neither contributes markup nor breaks a
+   static clone run — it stays transparent so `<a/>\n<b/>` still coalesces. */
+function isWhitespaceText(node: TemplateNode): boolean {
+    return (
+        node.kind === 'text' &&
+        node.parts.every((part) => part.kind === 'static' && part.value.trim() === '')
+    )
+}
+
+/*
+Whether an element subtree is fully static — no reactive/event/bind attributes,
+no nested `<script>`, and every descendant likewise static (static text, static
+child elements, or scope-only `<style>`). Such a subtree builds to fixed DOM with
+no per-instance wiring, so it can be cloned from a template instead of built call
+by call. Only ELEMENTS qualify as run members: a static element never merges with
+an adjacent dynamic text node, whereas a bare static text sibling shares one
+merged SSR text node with its neighbour (the `splitAlways` hazard) — those stay
+imperative. Static text and elements nested INSIDE a qualifying element are fine,
+enclosed by its tags.
+*/
+function isStaticCloneableElement(node: TemplateNode): boolean {
+    if (node.kind !== 'element' || node.tag === 'slot') {
+        return false
+    }
+    if (node.attrs.some((attr) => attr.kind !== 'static')) {
+        return false
+    }
+    return node.children.every(
+        (child) =>
+            child.kind === 'style' ||
+            (child.kind === 'text' && child.parts.every((part) => part.kind === 'static')) ||
+            isStaticCloneableElement(child),
+    )
+}
+
+/*
+Renders a fully-static node to its constant HTML, byte-identical to the SSR
+back-end's output for the same node (same scope-attr order, same escaping, same
+void-tag handling, same whitespace-only-text dropping) — so the client clone
+template and the server markup parse to the same DOM. Only handles the shapes
+`isStaticCloneableElement` admits.
+*/
+function staticHtml(node: TemplateNode): string {
+    if (node.kind === 'text') {
+        return node.parts
+            .map((part) =>
+                part.kind === 'static' && part.value.trim() !== '' ? escapeHtml(part.value) : '',
+            )
+            .join('')
+    }
+    if (node.kind !== 'element') {
+        return '' // <style> and any non-element emit no markup
+    }
+    let html = `<${node.tag}`
+    for (const scope of node.scopes ?? []) {
+        html += ` ${scope}=""`
+    }
+    for (const attr of node.attrs) {
+        if (attr.kind === 'static') {
+            html += ` ${attr.name}="${escapeHtml(attr.value)}"`
+        }
+    }
+    html += '>'
+    if (VOID_TAGS.has(node.tag)) {
+        return html
+    }
+    return `${html}${node.children.map(staticHtml).join('')}</${node.tag}>`
 }

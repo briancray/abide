@@ -20,16 +20,16 @@ Runs with `doc`/`state`/`derived`/`effect`/`nextBlockId`/`enterRenderPass`/
 pass so the outermost render resets the block-id counter and an inlined child
 render continues it — keeping await/try ids unique and aligned with the client.
 */
-export function compileSSR(source: string, isLayout = false): string {
-    const { script, stateNames, derivedNames, nodes, style } = analyzeComponent(source)
-    const ssr = generateSSR(nodes, stateNames, derivedNames, style?.attribute, isLayout)
-    /* A `<style>` block's scoped CSS is emitted into the markup. */
-    const stylePush =
-        style === undefined ? '' : `$out.push(${JSON.stringify(`<style>${style.css}</style>`)});\n`
+export function compileSSR(source: string, isLayout = false, scopeSeed?: string): string {
+    const { script, stateNames, derivedNames, nodes } = analyzeComponent(source, scopeSeed)
+    const ssr = generateSSR(nodes, stateNames, derivedNames, isLayout)
+    /* No `<style>` in the markup — the scoped CSS is bundled into the entry stylesheet
+       the shell links (see `abideUiPlugin`), so SSR output is styled by that sheet. The
+       elements still carry their `data-a-…` scopes via `generateSSR`. */
     /* `typeof model` guards a component with no reactive state (a pure-async or
        static component declares no `model`); its snapshot is then empty. */
     return (
-        `enterRenderPass();\ntry {\n${stripEffects(script)}\n${SSR_ESCAPE}\nconst $out = [];\nconst $awaits = [];\n${stylePush}${ssr}` +
+        `enterRenderPass();\ntry {\n${stripEffects(script)}\n${SSR_ESCAPE}\nconst $out = [];\nconst $awaits = [];\n${ssr}` +
         `return { html: $out.join(''), state: (typeof model !== 'undefined' ? model.snapshot() : {}), awaits: $awaits };\n` +
         `} finally { exitRenderPass(); }`
     )

@@ -29,8 +29,9 @@ export function branchElements(
         if (child.kind === 'text' && isWhitespaceOnly(child)) {
             continue
         }
-        /* A scoped `<script>` is emitted as code by the back-end, not a root. */
-        if (child.kind === 'script') {
+        /* A scoped `<script>` is emitted as code by the back-end, not a root; a
+           `<style>` is bundled CSS (its scope already stamped on the roots). */
+        if (child.kind === 'script' || child.kind === 'style') {
             continue
         }
         throw new Error(

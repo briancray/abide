@@ -345,5 +345,8 @@ function emitNode(node: TemplateNode, builder: Builder): void {
                its references check. Not yet position-mapped (rare). */
             builder.raw(`{\n${node.code}\n}\n`)
             return
+        case 'style':
+            /* CSS, not TypeScript — nothing for the shadow to type-check. */
+            return
     }
 }

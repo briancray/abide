@@ -1,5 +1,6 @@
 import { OUTLET_TAG } from '../runtime/OUTLET_TAG.ts'
 import { branchElements } from './branchElements.ts'
+import { escapeHtml } from './escapeHtml.ts'
 import { groupBindParts } from './groupBindParts.ts'
 import { lowerDocAccess } from './lowerDocAccess.ts'
 import { partitionSlots } from './partitionSlots.ts'
@@ -8,6 +9,7 @@ import { renameSignalRefs } from './renameSignalRefs.ts'
 import { staticAttrValue } from './staticAttrValue.ts'
 import { stripEffects } from './stripEffects.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
+import { VOID_TAGS } from './VOID_TAGS.ts'
 
 /*
 Server code generator: turns the parsed template into statements that push HTML
@@ -27,7 +29,6 @@ export function generateSSR(
     nodes: TemplateNode[],
     stateNames: ReadonlySet<string>,
     derivedNames: ReadonlySet<string>,
-    scopeAttribute: string | undefined,
     isLayout = false,
 ): string {
     /* Compile-time counter for unique temp var names (runtime block ids, child render
@@ -143,6 +144,11 @@ export function generateSSR(
                so SSR renders the same values the client build will. */
             return `${lowerScript(node.code)}\n`
         }
+        /* A `<style>` emits no markup — its scope attribute is already on the elements
+           it covers (above) and its CSS is bundled, not inlined. */
+        if (node.kind === 'style') {
+            return ''
+        }
         if (node.kind === 'each') {
             /* Async each (`await`) is drained on the client — render no rows on the
                server (an infinite stream would hang SSR); the client inserts its anchor
@@ -209,8 +215,10 @@ export function generateSSR(
             return generateSlot(node, target)
         }
         let code = push(target, `<${node.tag}`)
-        if (scopeAttribute !== undefined) {
-            code += push(target, ` ${scopeAttribute}=""`)
+        /* Every `<style>` active at this element (own siblings + ancestors) — same set
+           the client stamps, so server and client markup carry identical attributes. */
+        for (const scope of node.scopes ?? []) {
+            code += push(target, ` ${scope}=""`)
         }
         for (const attr of node.attrs) {
             if (attr.kind === 'static') {
@@ -370,33 +378,3 @@ export function generateSSR(
 
     return generateInto(nodes, '$out')
 }
-
-/* HTML-escapes a static attribute value or static text at compile time (a constant
-   string, so no runtime helper is needed) — same five characters as the runtime
-   `$esc`. Static text reaches here already entity-decoded (see parseTemplate), so
-   escaping round-trips it through the browser's HTML parser to the plain text the
-   client builds directly — keeping SSR and client output identical. */
-function escapeHtml(value: string): string {
-    return value.replace(
-        /[&<>"']/g,
-        (char) =>
-            ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char] ?? char,
-    )
-}
-
-const VOID_TAGS = new Set([
-    'area',
-    'base',
-    'br',
-    'col',
-    'embed',
-    'hr',
-    'img',
-    'input',
-    'link',
-    'meta',
-    'param',
-    'source',
-    'track',
-    'wbr',
-])

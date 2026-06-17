@@ -1,6 +1,6 @@
 /*
 Scopes a component's CSS to its own elements by appending an attribute selector
-(`[data-b-<hash>]`) to each rule's key compound selector — the proven approach
+(`[data-a-<hash>]`) to each rule's key compound selector — the proven approach
 (every element the component renders carries the attribute, so descendant
 selectors still resolve, but styles never leak out). At-rule preludes (`@media`,
 etc.) pass through untouched while the nested rules inside them are still scoped.

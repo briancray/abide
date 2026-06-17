@@ -10,13 +10,11 @@ template, and hoists static paths to cells. The returned body runs against a
 scope and defines `model` itself. `compileModule` wraps it (and the SSR body) into
 a real module; tests wrap it with `new Function`.
 */
-export function compileComponent(source: string, isLayout = false): string {
-    const { script, stateNames, derivedNames, nodes, style } = analyzeComponent(source)
-    const build = generateBuild(nodes, 'host', stateNames, derivedNames, style?.attribute, isLayout)
-    /* A `<style>` block injects its scoped CSS once (deduped by attribute). */
-    const inject =
-        style === undefined
-            ? ''
-            : `injectStyle(host, ${JSON.stringify(style.attribute)}, ${JSON.stringify(style.css)});\n`
-    return `${script}\n${inject}${hoistCells(build, 'model')}`
+export function compileComponent(source: string, isLayout = false, scopeSeed?: string): string {
+    const { script, stateNames, derivedNames, nodes } = analyzeComponent(source, scopeSeed)
+    const build = generateBuild(nodes, 'host', stateNames, derivedNames, isLayout)
+    /* The scoped CSS is bundled into the entry stylesheet (see `abideUiPlugin`), not
+       injected at runtime; the build only needs the `data-a-…` scope attributes on
+       elements, which `generateBuild` reads from each node's annotated `scopes`. */
+    return `${script}\n${hoistCells(build, 'model')}`
 }

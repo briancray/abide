@@ -14,9 +14,11 @@ export type AnalyzedComponent = {
     stateNames: Set<string>
     derivedNames: Set<string>
     nodes: TemplateNode[]
-    /* Present when the component has a `<style>`: the scope attribute every
-       element carries and the scoped CSS to inject. */
-    style: { attribute: string; css: string } | undefined
+    /* One entry per non-empty `<style>` in the template (in source order): the scope
+       attribute its covered elements carry (annotated onto `nodes`) and the scoped
+       CSS to bundle. A top-level `<style>` covers the whole component; a nested one
+       covers only its sibling subtree. Empty for a component with no style. */
+    styles: { attribute: string; css: string }[]
     /* False when the template contains an `await` block (not adoptable yet) — the
        router mounts (re-renders) rather than hydrates such a page. */
     hydratable: boolean

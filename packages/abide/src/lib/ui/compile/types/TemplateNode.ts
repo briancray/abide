@@ -13,7 +13,22 @@ positions for the type-checking shadow, ignored by the runtime back-ends.
 export type TemplateNode =
     | { kind: 'text'; parts: TextPart[] }
     | { kind: 'script'; code: string }
-    | { kind: 'element'; tag: string; attrs: TemplateAttr[]; children: TemplateNode[] }
+    /* A `<style>` declared in the template. `css` is its raw body, read structurally
+       so a `<style>` inside an expression isn't mistaken for one. The node stays in
+       place: it scopes its sibling subtree, so the front-end derives each scope
+       attribute and the elements it covers from the node's position (see
+       `analyzeComponent`). Emits no DOM/markup. */
+    | { kind: 'style'; css: string }
+    | {
+          kind: 'element'
+          tag: string
+          attrs: TemplateAttr[]
+          children: TemplateNode[]
+          /* The scope attributes (`data-a-…`) this element carries — one per `<style>`
+             active at its position (its own sibling list plus every ancestor's),
+             filled by `analyzeComponent`. Absent until annotated. */
+          scopes?: string[]
+      }
     | {
           kind: 'each'
           items: string
