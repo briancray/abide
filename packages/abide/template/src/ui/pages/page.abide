@@ -10,8 +10,8 @@ replayed on the client during hydration with no second fetch. A `then` *child*
 instead would stream the resolution in out of order.
 */
 import { cache } from '@abide/abide/shared/cache'
-import Layout from '../Layout.abide'
 import { getHello } from '$server/rpc/getHello.ts'
+import Layout from '../Layout.abide'
 </script>
 
 <Layout>

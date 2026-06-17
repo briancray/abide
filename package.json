@@ -7,7 +7,8 @@
         "examples/*"
     ],
     "scripts": {
-        "format": "biome check --write --linter-enabled=false",
+        "format": "biome check --write --linter-enabled=false && bun run format:abide",
+        "format:abide": "bun run scripts/formatAbide.ts",
         "lint": "biome lint",
         "test": "bun test ./packages/*/tests && for d in examples/*/; do if [ -d \"$d/test\" ]; then (cd \"$d\" && bun test) || exit 1; fi; done",
         "check": "biome check --write",

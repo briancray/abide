@@ -1,18 +1,18 @@
 <script>
-  let draft = state('')
-  let order = state(['1'])
-  let byId = state({ '1': { text: 'first' } })
-  let nextId = state(2)
+let draft = state('')
+let order = state(['1'])
+let byId = state({ '1': { text: 'first' } })
+let nextId = state(2)
 
-  let count = derived(() => order.length)
+let count = derived(() => order.length)
 
-  function add() {
+function add() {
     const id = String(nextId)
     byId[id] = { text: draft }
     order.push(id)
     nextId += 1
     draft = ''
-  }
+}
 </script>
 
 <input bind:value={draft}>

@@ -1,149 +1,149 @@
 <script>
-  /*
+/*
   Default bundle connect screen (abide-ui). The launcher serves this (logo baked in
   at build time, app title injected at runtime) instead of a blank window; override
   it by dropping a `src/bundle/disconnected.abide`. It connects to a remote server
   by URL and boots the embedded server, talking to the launcher's in-process control
   server: POST /connect and POST /start each reply with a `{ redirect }` to follow.
   */
-  const LAST_URL_KEY = 'abide:last-server-url'
+const LAST_URL_KEY = 'abide:last-server-url'
 
-  const heading = globalThis.__ABIDE_TITLE__ ?? 'abide app'
-  const logo = globalThis.__ABIDE_LOGO__
-  const placeholder = 'https://example.com'
+const heading = globalThis.__ABIDE_TITLE__ ?? 'abide app'
+const logo = globalThis.__ABIDE_LOGO__
+const placeholder = 'https://example.com'
 
-  let url = state(localStorage.getItem(LAST_URL_KEY) ?? '')
-  let error = state('')
+let url = state(localStorage.getItem(LAST_URL_KEY) ?? '')
+let error = state('')
 
-  const launchAction = new URLSearchParams(location.search).get('action')
+const launchAction = new URLSearchParams(location.search).get('action')
 
-  /* Two phases so the screen never flashes before a redirect. */
-  let phase = state(launchAction === 'start' ? 'splash' : 'connect')
+/* Two phases so the screen never flashes before a redirect. */
+let phase = state(launchAction === 'start' ? 'splash' : 'connect')
 
-  let configFields = state([])
-  let configValues = state({})
-  let showConfig = state(false)
-  let savingConfig = state(false)
+let configFields = state([])
+let configValues = state({})
+let showConfig = state(false)
+let savingConfig = state(false)
 
-  /* Interpret the boot intent once on load. */
-  effect(() => {
+/* Interpret the boot intent once on load. */
+effect(() => {
     if (launchAction === 'start') {
-      void start()
-      return
+        void start()
+        return
     }
     if (launchAction === 'lost') {
-      error = 'The server stopped responding.'
-      return
+        error = 'The server stopped responding.'
+        return
     }
     if (launchAction === 'disconnect') {
-      void fetch('/__abide/disconnect').catch(() => {})
+        void fetch('/__abide/disconnect').catch(() => {})
     }
-  })
+})
 
-  async function connect() {
+async function connect() {
     const cleaned = url.trim()
     if (!cleaned) {
-      return
+        return
     }
     await postAndFollow('/connect', { url: cleaned }, 'Could not connect', () => {
-      localStorage.setItem(LAST_URL_KEY, cleaned)
+        localStorage.setItem(LAST_URL_KEY, cleaned)
     })
-  }
+}
 
-  async function postAndFollow(path, body, failure, onSuccess) {
+async function postAndFollow(path, body, failure, onSuccess) {
     error = ''
     phase = 'splash'
     try {
-      const response = await fetch(path, {
-        method: 'POST',
-        ...(body === undefined
-          ? {}
-          : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
-      })
-      if (!response.ok) {
-        const reply = await response.json()
-        throw new Error(reply.error ?? `${path.slice(1)} failed (${response.status})`)
-      }
-      const { redirect } = await response.json()
-      onSuccess?.()
-      location.href = redirect
+        const response = await fetch(path, {
+            method: 'POST',
+            ...(body === undefined
+                ? {}
+                : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
+        })
+        if (!response.ok) {
+            const reply = await response.json()
+            throw new Error(reply.error ?? `${path.slice(1)} failed (${response.status})`)
+        }
+        const { redirect } = await response.json()
+        onSuccess?.()
+        location.href = redirect
     } catch (cause) {
-      error = `${failure}: ${String(cause)}`
-      phase = 'connect'
+        error = `${failure}: ${String(cause)}`
+        phase = 'connect'
     }
-  }
+}
 
-  async function start() {
+async function start() {
     error = ''
     const config = await loadConfig().catch(() => undefined)
     if (config) {
-      configFields = config.fields
-      configValues = { ...config.values }
-      phase = 'connect'
-      showConfig = true
-      return
+        configFields = config.fields
+        configValues = { ...config.values }
+        phase = 'connect'
+        showConfig = true
+        return
     }
     await boot()
-  }
+}
 
-  async function boot() {
+async function boot() {
     await postAndFollow('/start', undefined, 'Could not start the server')
-  }
+}
 
-  async function loadConfig() {
+async function loadConfig() {
     const response = await fetch('/__abide/config')
     const { schema, values } = await response.json()
     if (!schema) {
-      return undefined
+        return undefined
     }
     return { fields: fieldsFromSchema(schema), values: values ?? {} }
-  }
+}
 
-  function fieldsFromSchema(schema) {
+function fieldsFromSchema(schema) {
     const properties = schema.properties ?? {}
     const required = new Set(schema.required ?? [])
     return Object.entries(properties).map(([key, property]) => ({
-      key,
-      label: property.title ?? key,
-      description: property.description,
-      inputType: inputType(property),
-      required: required.has(key),
+        key,
+        label: property.title ?? key,
+        description: property.description,
+        inputType: inputType(property),
+        required: required.has(key),
     }))
-  }
+}
 
-  function inputType(property) {
+function inputType(property) {
     if (property.type === 'boolean') {
-      return 'checkbox'
+        return 'checkbox'
     }
     if (property.type === 'number' || property.type === 'integer') {
-      return 'number'
+        return 'number'
     }
     if (property.format === 'password') {
-      return 'password'
+        return 'password'
     }
     return 'text'
-  }
+}
 
-  async function saveConfig() {
+async function saveConfig() {
     error = ''
     savingConfig = true
     try {
-      const response = await fetch('/__abide/config', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ values: configValues }),
-      })
-      if (!response.ok) {
-        throw new Error(`save failed (${response.status})`)
-      }
-      showConfig = false
-      savingConfig = false
-      await boot()
+        const response = await fetch('/__abide/config', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ values: configValues }),
+        })
+        if (!response.ok) {
+            throw new Error(`save failed (${response.status})`)
+        }
+        showConfig = false
+        savingConfig = false
+        await boot()
     } catch (cause) {
-      error = `Could not save settings: ${String(cause)}`
-      savingConfig = false
+        error = `Could not save settings: ${String(cause)}`
+        savingConfig = false
     }
-  }
+}
 </script>
 
 <template if={phase === 'splash'}>
