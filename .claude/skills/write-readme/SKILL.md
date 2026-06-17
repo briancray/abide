@@ -66,34 +66,6 @@ It reports four things and **fails** if any export is undocumented-by-omission:
 When the inventory and a hardcoded claim below disagree, the inventory wins —
 fix the claim.
 
-## Verify before you write — the claim ledger
-
-The ledger pins **nuance that can't be derived** (a default, a union type, a
-replay rule) to its file. It is deliberately *not* an export list — the
-inventory owns enumeration. Never add a row that just names an export; only
-add rows for behaviour a reader would get wrong without the note. Re-confirm
-each row against its file before writing; if the evidence changed, rewrite or
-drop it.
-
-| Claim | Verify against |
-| --- | --- |
-| One declared rpc = SSR call + browser fetch + MCP tool + CLI subcommand + OpenAPI op | `src/abideResolverPlugin.ts`, `src/lib/shared/createRemoteFunction.ts`, `src/lib/mcp/dispatchMcpRequest.ts`, `src/lib/server/runtime/buildOpenApiSpec.ts` |
-| The boot surface map's exact format (three glyph tables, printed by default — silence with `DEBUG=-abide`) | `src/lib/server/runtime/logExposedSurfaces.ts` + `createServer.ts` (`!isDebugNegated('abide')`) — reproduce its real output, never invent columns |
-| Mutating verbs never auto-expose to MCP | `src/lib/server/rpc/defineVerb.ts`, `src/lib/shared/resolveClientFlags.ts`, `src/lib/shared/isReadOnlyMethod.ts` |
-| Cross-origin browser mutations 403 by default; `crossOrigin: true` opts a verb out; the MCP mount gets the same Origin check | `src/lib/server/runtime/createRouteDispatcher.ts`, `src/lib/server/runtime/isCrossOriginRequest.ts`, `createServer.ts` MCP mount |
-| Boot warns when MCP tools are exposed with no `app.handle` | `src/lib/server/runtime/warnUnguardedMcp.ts` + its call in `createServer.ts` |
-| SSR snapshots replay GET only; invalidate policies refuse writes at wrap time | `src/lib/shared/REPLAYABLE_METHODS.ts`, `src/lib/shared/cache.ts` (validatePolicy) |
-| `cache()` is uniformly `Promise<Return>` — warm SSR/patch values resolve on a microtask (not synchronously), so `.then`/`.catch`/`.finally` chain cleanly; hydration stays flash-free via the resume manifest, not a sync read | `src/lib/shared/cache.ts` (warm path) |
-| Query args travel as strings (the `z.coerce` warning) | `src/lib/shared/queryStringFromArgs.ts`, `src/lib/server/rpc/parseArgs.ts` |
-| Probes (`pending`/`refreshing`) have their own paths and report-never-act | `src/lib/shared/pending.ts`, `refreshing.ts`, `probeRegistries.ts` |
-| The streaming consumer is `tail` (status/error/reconnect semantics) | `src/lib/ui/tail.ts` + the `exports` map |
-| In-process calls forward only the header allowlist | `src/lib/shared/forwardHeaders.ts` |
-| The testing entry is `createTestApp` (boots the real app in-process); there is no `createTestClient`/`clearVerbRegistry` | `src/lib/test/createTestApp.ts`, `package.json` `exports` (`./test/*`) |
-| Single-process deploy truth (`global` cache, socket retention, fan-out are process memory) | `src/lib/shared/globalCacheStore.ts`, socket registry/dispatcher, `Bun.serve` in `createServer.ts` |
-
-The ledger is the floor, not the ceiling — verify every option, default,
-helper, env var, and route in the body the same way.
-
 ## The opening — a lean banner
 
 The banner is a pitch, not a demo: the proof artifacts (declare snippet,
@@ -102,12 +74,11 @@ leads with the claim and the demonstration lands where the reader starts
 reading. Lowercase `# abide`, then in order, nothing else between:
 
 1. The bold capability line: **"Write one function. Get a web app, a CLI, and
-   an AI tool — from the same line of code."**
+   an MCP — from the same line of code."**
 2. As few sentences as carry it (terse cap, not a target) on what abide is
    and that the bundler swaps the runtime per target.
 3. One bullet per footprint fact that is true today (today two: zero runtime
-   dependencies; one runtime) — add or drop a bullet if the fact set changes,
-   don't pad to a fixed count.
+   dependencies; one runtime)
 4. The quickstart, two paths:
    - **Start a project** — ideally one command (`abide scaffold <name>`).
      State in a trailing comment what it does (scaffolds, installs, starts
