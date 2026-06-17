@@ -1,5 +1,5 @@
-import Anthropic from '@anthropic-ai/sdk'
 import type { AgentEngine, AgentSurface, NeutralMessage } from '@abide/abide/server/agent'
+import Anthropic from '@anthropic-ai/sdk'
 
 /*
 The Anthropic engine for abide's `agent()`. `engine(config)` returns an
