@@ -332,8 +332,13 @@ function emitNode(node: TemplateNode, builder: Builder): void {
                offending expression (an annotated target reports the error on the RHS,
                unlike an object literal which reports it on the key). */
             for (const prop of node.props) {
+                /* Lead with a defensive `;`: this IIFE is the one shadow emission that
+                   starts with `(`, so without it a preceding scope statement left
+                   unterminated (a script ending in a call with no trailing semicolon,
+                   e.g. `effect(() => …)`) merges across the newline into `effect(…)(…)`
+                   — a spurious "not callable" on the author's last statement. */
                 builder.raw(
-                    `((__prop: Parameters<typeof ${node.name}>[0][${JSON.stringify(prop.name)}]) => {})(`,
+                    `;((__prop: Parameters<typeof ${node.name}>[0][${JSON.stringify(prop.name)}]) => {})(`,
                 )
                 builder.expr(prop.code, prop.loc)
                 builder.raw(');\n')

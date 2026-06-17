@@ -58,6 +58,37 @@ describe('abide check', () => {
         expect(parent[0]!.message).toContain('not assignable')
     })
 
+    test('a call statement with no trailing semicolon does not merge into the next component', () => {
+        /* The script's last statement is a call (`effect(...)`) left unterminated, and
+           the template starts with a prop-bearing component — whose shadow emission
+           begins with `(`. Without a defensive separator the two merge across the
+           newline into `effect(...)(...)`, a spurious "not callable" on the author's
+           effect. The child prop is well-typed, so the only possible diagnostic is the
+           bug; expect none. */
+        const dir = project({
+            'child.abide': `<script>\nlet open = prop<boolean>('open')\n</script>\n<span>{open}</span>\n`,
+            'host.abide': `<script>\nimport Child from './child.abide'\nlet shown = state(true)\neffect(() => { console.log(shown) })\n</script>\n<Child open={shown} />\n`,
+        })
+        const diagnostics = collectAbideDiagnostics(createShadowProgram(dir))
+        expect(diagnostics.filter((diagnostic) => diagnostic.file.endsWith('host.abide'))).toEqual(
+            [],
+        )
+    })
+
+    test('the child prop is still type-checked after the defensive separator', () => {
+        /* The separator must not swallow the prop check: a wrong prop type next to an
+           unterminated call still surfaces. */
+        const dir = project({
+            'child.abide': `<script>\nlet open = prop<boolean>('open')\n</script>\n<span>{open}</span>\n`,
+            'host.abide': `<script>\nimport Child from './child.abide'\nlet shown = state(0)\neffect(() => { console.log(shown) })\n</script>\n<Child open={shown} />\n`,
+        })
+        const diagnostics = collectAbideDiagnostics(createShadowProgram(dir)).filter((diagnostic) =>
+            diagnostic.file.endsWith('host.abide'),
+        )
+        expect(diagnostics).toHaveLength(1)
+        expect(diagnostics[0]!.message).toContain('not assignable')
+    })
+
     /* The `else` branch is fused into a real `if (…) {…} else {…}`, so it carries the
        condition's negative narrowing — here `v` is `number` in the else, not the union. */
     test('the else branch carries the condition negative narrowing', () => {
