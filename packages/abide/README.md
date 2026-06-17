@@ -119,8 +119,9 @@ async function send(event: SubmitEvent) {
 
 <template if={latest}>
     <p class="ping">latest from <strong>{latest.from}</strong></p>
-<template else>
-    <p class="ping muted">no live messages yet</p>
+    <template else>
+        <p class="ping muted">no live messages yet</p>
+    </template>
 </template>
 
 <template switch={filter}>
