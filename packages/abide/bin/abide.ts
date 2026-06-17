@@ -5,6 +5,7 @@ import { buildCli } from '../src/buildCli.ts'
 import { bundleApp } from '../src/bundleApp.ts'
 import { checkAbide } from '../src/checkAbide.ts'
 import { compile } from '../src/compile.ts'
+import { initAgent } from '../src/initAgent.ts'
 import { normalizeTarget } from '../src/lib/shared/normalizeTarget.ts'
 import { scaffold } from '../src/scaffold.ts'
 
@@ -156,6 +157,13 @@ async function scaffoldCmd(): Promise<void> {
     await scaffold({ cwd, name, install, dev })
 }
 
+// Writes/refreshes the abide agent-guide pointer in the project's root CLAUDE.md so
+// Claude (which never reads node_modules) is told where abide's surface map lives.
+// For projects that added abide as a dependency without scaffolding.
+async function initAgentCmd(): Promise<void> {
+    await initAgent({ cwd })
+}
+
 // Prints the CLI synopsis to stderr and exits non-zero. Marked `never` because the process is gone.
 function usage(): never {
     console.error(
@@ -182,7 +190,9 @@ function usage(): never {
             '  abide bundle                         build a movable, self-contained app\n' +
             '                                       bundle for this platform (unsigned). Boots\n' +
             '                                       into a connect screen — start the embedded\n' +
-            '                                       server or connect to a remote one',
+            '                                       server or connect to a remote one\n' +
+            "  abide init-agent                     write/refresh a CLAUDE.md pointer to abide's\n" +
+            '                                       surface map (for non-scaffolded projects)',
     )
     process.exit(1)
 }
@@ -207,6 +217,8 @@ if (command === 'scaffold') {
     await checkCmd()
 } else if (command === 'lsp') {
     await lspCmd()
+} else if (command === 'init-agent') {
+    await initAgentCmd()
 } else {
     usage()
 }
