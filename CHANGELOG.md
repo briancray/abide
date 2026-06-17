@@ -1,5 +1,25 @@
 # abide
 
+## 0.31.0
+
+### Minor Changes
+
+- [`ea69bad`](https://github.com/briancray/abide/commit/ea69bad96d516dc6884d8a8c014b47c4864ebbe6) - linked() reactive cell, writable derived, state write-transform ([`82301ea`](https://github.com/briancray/abide/commit/82301eabcda0866eec471f95048f74079ea93ab7))
+
+- [`ea69bad`](https://github.com/briancray/abide/commit/ea69bad96d516dc6884d8a8c014b47c4864ebbe6) - sharper template type-checking in the shadow ([`f280619`](https://github.com/briancray/abide/commit/f280619778c23200a0f11cf8e6344edf2ea39884))
+
+- [`ea69bad`](https://github.com/briancray/abide/commit/ea69bad96d516dc6884d8a8c014b47c4864ebbe6) - pass component on\*/bind/attach attributes through as props ([`f9a9202`](https://github.com/briancray/abide/commit/f9a9202d8555d7246fcc4338e833551f54ee8968))
+
+### Patch Changes
+
+- [`ea69bad`](https://github.com/briancray/abide/commit/ea69bad96d516dc6884d8a8c014b47c4864ebbe6) - extract messageFromError, contentTypeOf, discardBoundary helpers ([`1bfb721`](https://github.com/briancray/abide/commit/1bfb721a8a8d3c8907bc9d4d0c6d97ddc265ed1e))
+
+- [`ea69bad`](https://github.com/briancray/abide/commit/ea69bad96d516dc6884d8a8c014b47c4864ebbe6) - resolve the chained route on the page proxy ([`ed518c1`](https://github.com/briancray/abide/commit/ed518c1e8232c04496fe3fd04783f750164bc378))
+
+- [`ea69bad`](https://github.com/briancray/abide/commit/ea69bad96d516dc6884d8a8c014b47c4864ebbe6) - share one component analysis across client and SSR back-ends ([`f330664`](https://github.com/briancray/abide/commit/f33066441625c08077b1b413603204ec2afe59eb))
+
+- [`ea69bad`](https://github.com/briancray/abide/commit/ea69bad96d516dc6884d8a8c014b47c4864ebbe6) - format .abide <script> bodies via Biome ([`f4fc64e`](https://github.com/briancray/abide/commit/f4fc64ecb838a449dfb669af5fcaf40bcf7fa8ca))
+
 ## 0.30.0
 
 ### Minor Changes
