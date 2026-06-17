@@ -13,6 +13,8 @@
         "check": "biome check --write",
         "typecheck": "tsgo -p packages/abide/tsconfig.json && tsgo -p packages/abide/tsconfig.consumer.json",
         "check:readme-tags": "bun run packages/abide/scripts/readmeSurfaces.ts",
+        "bench": "for f in packages/abide/bench/*.bench.ts; do bun \"$f\"; done",
+        "bench:gate": "bun packages/abide/bench/gate.ts",
         "changeset": "changeset",
         "version-packages": "bun run scripts/autofillChangesets.ts && changeset version && bun run scripts/syncRootChangelog.ts",
         "release": "changeset publish"

@@ -50,6 +50,38 @@ jobs:
       - name: Build kitchen-sink example
         run: bun run --filter kitchen-sink build
 
+  # Performance regression gate. Microbench numbers are meaningless across
+  # heterogeneous runners, so this compares PR head against its own merge base on
+  # the SAME runner: run the benches on the base commit into a temp baseline, then
+  # on head, and fail if any metric regressed past the gate's tolerance. PR-only —
+  # the release workflow_call has no base to diff against.
+  bench:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Record baseline from merge base
+        run: |
+          git checkout --detach "${{ github.event.pull_request.base.sha }}"
+          BENCH_BASELINE="$RUNNER_TEMP/base.json" bun packages/abide/bench/gate.ts --update
+
+      - name: Compare head against baseline
+        run: |
+          git checkout --detach "${{ github.event.pull_request.head.sha }}"
+          BENCH_BASELINE="$RUNNER_TEMP/base.json" bun packages/abide/bench/gate.ts
+
   # The front door, exercised end to end against the packed tarball — the
   # exact artifact npm would publish. Scaffold an app with the packed CLI,
   # install the tarball into it, build, boot, and curl a page + an rpc.
