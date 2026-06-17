@@ -53,4 +53,34 @@ describe('createTestApp', () => {
             name: 'kitchen-sink',
         })
     })
+
+    test('rpc.convertTemp validates via a hand-rolled Standard Schema', async () => {
+        expect(await app.rpc.convertTemp({ celsius: 100 })).toEqual({
+            celsius: 100,
+            fahrenheit: 212,
+        })
+    })
+
+    test('withJsonSchema feeds convertTemp into /openapi.json', async () => {
+        const openapi = await (await app.fetch('/openapi.json')).json()
+        // The hand-rolled schema has no native toJSONSchema(); withJsonSchema is what
+        // makes this operation (and its celsius param) appear in the document.
+        const parameters = openapi.paths['/rpc/convertTemp']?.get?.parameters ?? []
+        expect(parameters.some((parameter: { name: string }) => parameter.name === 'celsius')).toBe(
+            true,
+        )
+    })
+
+    test('rpc.getDataDir reports an absolute per-user data dir', async () => {
+        const { dir } = await app.rpc.getDataDir()
+        expect(dir.length).toBeGreaterThan(0)
+        expect(dir.startsWith('/')).toBe(true)
+    })
+
+    test('layout chain wraps /auth/dashboard in both the root and the nested auth layout', async () => {
+        const html = await (await app.fetch('/auth/dashboard')).text()
+        // root layout.abide chrome (the sidebar brand) + nested auth/layout.abide header
+        expect(html).toContain('abide kitchen-sink')
+        expect(html).toContain('auth area · nested layout')
+    })
 })

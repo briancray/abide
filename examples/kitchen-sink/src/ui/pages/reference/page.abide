@@ -1,26 +1,24 @@
 <script>
 import CodeBlock from '$ui/CodeBlock.abide'
-import Layout from '$ui/Layout.abide'
 
 /* The cross-cutting static reference: project shape, framework routes, env vars,
    and the import namespaces. The dev-to-prod seams (commands, config, testing,
    deploy) live on /build. */
 </script>
 
-<Layout>
-    <h1 class="text-3xl font-bold">Reference</h1>
-    <p class="mt-2 text-slate-600">
-        Project layout, framework routes, and environment variables. Import namespaces mark the
-        side a name runs on: <code class="font-mono">@abide/abide/server/*</code> server-side,
-        <code class="font-mono">@abide/abide/ui/*</code> client-side,
-        <code class="font-mono">@abide/abide/shared/*</code> isomorphic. The commands, configuration,
-        testing, and deploy seams live on <a class="underline" href="/build">build · test · deploy</a>.
-    </p>
+<h1 class="text-3xl font-bold">Reference</h1>
+<p class="mt-2 text-slate-600">
+    Project layout, framework routes, and environment variables. Import namespaces mark the
+    side a name runs on: <code class="font-mono">@abide/abide/server/*</code> server-side,
+    <code class="font-mono">@abide/abide/ui/*</code> client-side,
+    <code class="font-mono">@abide/abide/shared/*</code> isomorphic. The commands, configuration,
+    testing, and deploy seams live on <a class="underline" href="/build">build · test · deploy</a>.
+</p>
 
-    <!-- Project structure -->
-    <section class="mt-8 space-y-3">
-        <h2 class="text-sm font-semibold">Project structure</h2>
-        <CodeBlock title="a project" lang="text" code={`src/
+<!-- Project structure -->
+<section class="mt-8 space-y-3">
+    <h2 class="text-sm font-semibold">Project structure</h2>
+    <CodeBlock title="a project" lang="text" code={`src/
   app.ts                  # optional: init, handle, handleError, forwardHeaders, health
   server/
     config.ts             # env() validation (loaded at boot)
@@ -30,62 +28,62 @@ import Layout from '$ui/Layout.abide'
     prompts/<file>.md     # MCP prompt templates
     resources/            # MCP resources
   ui/
-    pages/**/page.abide   # routes; layout is a userland component a page wraps
+    pages/**/page.abide   # routes (folder path = URL)
+    pages/**/layout.abide # wraps the pages beneath; nested layouts chain outermost-first
     public/               # static files served at the site root
     app.html              # optional custom shell
   bundle/window.ts        # optional desktop-bundle window config
 bunfig.toml               # preload = ["@abide/abide/preload"]`} />
-    </section>
+</section>
 
-    <!-- Routes -->
-    <section class="mt-8">
-        <h2 class="text-sm font-semibold">Framework routes</h2>
-        <div class="mt-2 overflow-x-auto rounded-lg border border-slate-200 bg-white">
-            <table class="w-full text-sm">
-                <thead class="border-b border-slate-200 bg-slate-50 text-left">
-                    <tr>
-                        <th class="px-4 py-2 font-mono font-medium">route</th>
-                        <th class="px-4 py-2 font-medium">serves</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-100">
-                    <tr><td class="px-4 py-2 font-mono">/__abide/health, /__abide/identity</td><td class="px-4 py-2 text-slate-600">liveness + app health payload</td></tr>
-                    <tr><td class="px-4 py-2 font-mono">/__abide/mcp</td><td class="px-4 py-2 text-slate-600">MCP endpoint (POST)</td></tr>
-                    <tr><td class="px-4 py-2 font-mono">/__abide/sockets</td><td class="px-4 py-2 text-slate-600">socket multiplex (WebSocket) + per-socket REST face</td></tr>
-                    <tr><td class="px-4 py-2 font-mono">/__abide/cli</td><td class="px-4 py-2 text-slate-600">per-platform CLI download</td></tr>
-                    <tr><td class="px-4 py-2 font-mono">/__abide/inspector</td><td class="px-4 py-2 text-slate-600">inspector UI (when enabled)</td></tr>
-                    <tr><td class="px-4 py-2 font-mono">/openapi.json</td><td class="px-4 py-2 text-slate-600">OpenAPI document for the <code class="font-mono">/rpc/*</code> surface</td></tr>
-                </tbody>
-            </table>
-        </div>
-    </section>
+<!-- Routes -->
+<section class="mt-8">
+    <h2 class="text-sm font-semibold">Framework routes</h2>
+    <div class="mt-2 overflow-x-auto rounded-lg border border-slate-200 bg-white">
+        <table class="w-full text-sm">
+            <thead class="border-b border-slate-200 bg-slate-50 text-left">
+                <tr>
+                    <th class="px-4 py-2 font-mono font-medium">route</th>
+                    <th class="px-4 py-2 font-medium">serves</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                <tr><td class="px-4 py-2 font-mono">/__abide/health, /__abide/identity</td><td class="px-4 py-2 text-slate-600">liveness + app health payload</td></tr>
+                <tr><td class="px-4 py-2 font-mono">/__abide/mcp</td><td class="px-4 py-2 text-slate-600">MCP endpoint (POST)</td></tr>
+                <tr><td class="px-4 py-2 font-mono">/__abide/sockets</td><td class="px-4 py-2 text-slate-600">socket multiplex (WebSocket) + per-socket REST face</td></tr>
+                <tr><td class="px-4 py-2 font-mono">/__abide/cli</td><td class="px-4 py-2 text-slate-600">per-platform CLI download</td></tr>
+                <tr><td class="px-4 py-2 font-mono">/__abide/inspector</td><td class="px-4 py-2 text-slate-600">inspector UI (when enabled)</td></tr>
+                <tr><td class="px-4 py-2 font-mono">/openapi.json</td><td class="px-4 py-2 text-slate-600">OpenAPI document for the <code class="font-mono">/rpc/*</code> surface</td></tr>
+            </tbody>
+        </table>
+    </div>
+</section>
 
-    <!-- Env vars -->
-    <section class="mt-8">
-        <h2 class="text-sm font-semibold">Environment variables</h2>
-        <div class="mt-2 overflow-x-auto rounded-lg border border-slate-200 bg-white">
-            <table class="w-full text-sm">
-                <thead class="border-b border-slate-200 bg-slate-50 text-left">
-                    <tr>
-                        <th class="px-4 py-2 font-mono font-medium">var</th>
-                        <th class="px-4 py-2 font-medium">effect</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-100">
-                    <tr><td class="px-4 py-2 font-mono">PORT</td><td class="px-4 py-2 text-slate-600">server port (else scans up from 3000)</td></tr>
-                    <tr><td class="px-4 py-2 font-mono">APP_URL</td><td class="px-4 py-2 text-slate-600">public URL; its pathname becomes the mount base</td></tr>
-                    <tr><td class="px-4 py-2 font-mono">DEBUG</td><td class="px-4 py-2 text-slate-600">diagnostic channels (<code class="font-mono">abide:*</code>); <code class="font-mono">-abide</code> silences the boot map</td></tr>
-                    <tr><td class="px-4 py-2 font-mono">ABIDE_LOG_FORMAT</td><td class="px-4 py-2 text-slate-600"><code class="font-mono">json</code> for one JSON record per line</td></tr>
-                    <tr><td class="px-4 py-2 font-mono">ABIDE_IDLE_TIMEOUT</td><td class="px-4 py-2 text-slate-600">Bun per-connection idle timeout (s)</td></tr>
-                    <tr><td class="px-4 py-2 font-mono">ABIDE_MAX_REQUEST_BODY_SIZE</td><td class="px-4 py-2 text-slate-600">server-wide request body ceiling (bytes)</td></tr>
-                    <tr><td class="px-4 py-2 font-mono">ABIDE_CLIENT_TIMEOUT</td><td class="px-4 py-2 text-slate-600">browser fetch wait before a 504 (ms)</td></tr>
-                    <tr><td class="px-4 py-2 font-mono">ABIDE_REACHABLE_TTL / ABIDE_REACHABLE_TIMEOUT</td><td class="px-4 py-2 text-slate-600"><code class="font-mono">reachable()</code> poll cadence / per-probe bound (ms)</td></tr>
-                    <tr><td class="px-4 py-2 font-mono">ABIDE_DATA_DIR</td><td class="px-4 py-2 text-slate-600">override the per-user data dir</td></tr>
-                    <tr><td class="px-4 py-2 font-mono">ABIDE_ENABLE_INSPECTOR</td><td class="px-4 py-2 text-slate-600">mount the inspector (with <code class="font-mono">@abide/inspector</code> installed)</td></tr>
-                    <tr><td class="px-4 py-2 font-mono">ABIDE_INSPECT</td><td class="px-4 py-2 text-slate-600">enable webview devtools in a bundle</td></tr>
-                    <tr><td class="px-4 py-2 font-mono">ABIDE_APP_URL / ABIDE_APP_TOKEN</td><td class="px-4 py-2 text-slate-600">CLI thin-client target server + auth token</td></tr>
-                </tbody>
-            </table>
-        </div>
-    </section>
-</Layout>
+<!-- Env vars -->
+<section class="mt-8">
+    <h2 class="text-sm font-semibold">Environment variables</h2>
+    <div class="mt-2 overflow-x-auto rounded-lg border border-slate-200 bg-white">
+        <table class="w-full text-sm">
+            <thead class="border-b border-slate-200 bg-slate-50 text-left">
+                <tr>
+                    <th class="px-4 py-2 font-mono font-medium">var</th>
+                    <th class="px-4 py-2 font-medium">effect</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                <tr><td class="px-4 py-2 font-mono">PORT</td><td class="px-4 py-2 text-slate-600">server port (else scans up from 3000)</td></tr>
+                <tr><td class="px-4 py-2 font-mono">APP_URL</td><td class="px-4 py-2 text-slate-600">public URL; its pathname becomes the mount base</td></tr>
+                <tr><td class="px-4 py-2 font-mono">DEBUG</td><td class="px-4 py-2 text-slate-600">diagnostic channels (<code class="font-mono">abide:*</code>); <code class="font-mono">-abide</code> silences the boot map</td></tr>
+                <tr><td class="px-4 py-2 font-mono">ABIDE_LOG_FORMAT</td><td class="px-4 py-2 text-slate-600"><code class="font-mono">json</code> for one JSON record per line</td></tr>
+                <tr><td class="px-4 py-2 font-mono">ABIDE_IDLE_TIMEOUT</td><td class="px-4 py-2 text-slate-600">Bun per-connection idle timeout (s)</td></tr>
+                <tr><td class="px-4 py-2 font-mono">ABIDE_MAX_REQUEST_BODY_SIZE</td><td class="px-4 py-2 text-slate-600">server-wide request body ceiling (bytes)</td></tr>
+                <tr><td class="px-4 py-2 font-mono">ABIDE_CLIENT_TIMEOUT</td><td class="px-4 py-2 text-slate-600">browser fetch wait before a 504 (ms)</td></tr>
+                <tr><td class="px-4 py-2 font-mono">ABIDE_REACHABLE_TTL / ABIDE_REACHABLE_TIMEOUT</td><td class="px-4 py-2 text-slate-600"><code class="font-mono">reachable()</code> poll cadence / per-probe bound (ms)</td></tr>
+                <tr><td class="px-4 py-2 font-mono">ABIDE_DATA_DIR</td><td class="px-4 py-2 text-slate-600">override the per-user data dir</td></tr>
+                <tr><td class="px-4 py-2 font-mono">ABIDE_ENABLE_INSPECTOR</td><td class="px-4 py-2 text-slate-600">mount the inspector (with <code class="font-mono">@abide/inspector</code> installed)</td></tr>
+                <tr><td class="px-4 py-2 font-mono">ABIDE_INSPECT</td><td class="px-4 py-2 text-slate-600">enable webview devtools in a bundle</td></tr>
+                <tr><td class="px-4 py-2 font-mono">ABIDE_APP_URL / ABIDE_APP_TOKEN</td><td class="px-4 py-2 text-slate-600">CLI thin-client target server + auth token</td></tr>
+            </tbody>
+        </table>
+    </div>
+</section>

@@ -1,5 +1,7 @@
+import { error } from '@abide/abide/server/error'
 import { GET } from '@abide/abide/server/GET'
 import { json } from '@abide/abide/server/json'
+import { reachable } from '@abide/abide/server/reachable'
 import { cache } from '@abide/abide/shared/cache'
 
 type Rates = { base: string; date: string; rates: Record<string, number> }
@@ -29,6 +31,12 @@ verbs get — only the Response-based SSR streaming snapshot is unavailable,
 since an external fetch carries no wire metadata to snapshot.
 */
 export const getRates = GET<{ base?: string }, Rates>(async ({ base = 'USD' }) => {
+    /* Fail a doomed outbound call fast: reachable() HEADs the upstream origin
+       (warm after the first probe, fresh within one TTL), so a down host returns
+       503 here instead of every caller eating the full fetch timeout. */
+    if (!(await reachable('api.frankfurter.app'))) {
+        return error(503, 'rates upstream unreachable')
+    }
     const rates = await cache(fetchRates, { global: true, ttl: 60_000 })(base)
     return json(rates)
 })

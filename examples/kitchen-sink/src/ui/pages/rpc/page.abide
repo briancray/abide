@@ -1,8 +1,8 @@
 <script>
 import { HttpError } from '@abide/abide/shared/HttpError'
 import CodeBlock from '$ui/CodeBlock.abide'
-import Layout from '$ui/Layout.abide'
 import RpcHeader from '$ui/RpcHeader.abide'
+import { convertTemp } from '$server/rpc/convertTemp.ts'
 import { createEcho } from '$server/rpc/createEcho.ts'
 import { deleteEcho } from '$server/rpc/deleteEcho.ts'
 import { getEcho } from '$server/rpc/getEcho.ts'
@@ -13,7 +13,14 @@ import { uploadNote } from '$server/rpc/uploadNote.ts'
 
 let log = state([])
 let message = state('hello')
+let celsius = state(100)
+let converted = state('(not called)')
 let seq = 0
+
+async function convert() {
+    const result = await convertTemp({ celsius: Number(celsius) })
+    converted = `${result.celsius}°C = ${result.fahrenheit}°F`
+}
 
 function record(verb, outcome) {
     const id = seq++
@@ -31,115 +38,145 @@ async function safeCall(verb, fn) {
 }
 </script>
 
-<Layout>
-    <RpcHeader />
+<RpcHeader />
 
-    <section class="mt-6">
-        <h2 class="text-sm font-semibold">Options</h2>
-        <div class="mt-2 overflow-x-auto rounded-lg border border-slate-200 bg-white">
-            <table class="w-full text-sm">
-                <thead class="border-b border-slate-200 bg-slate-50 text-left">
-                    <tr>
-                        <th class="px-4 py-2 font-mono font-medium">option</th>
-                        <th class="px-4 py-2 font-medium">effect</th>
-                        <th class="px-4 py-2 font-medium">default</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-100">
-                    <tr>
-                        <td class="px-4 py-2 font-mono">inputSchema</td>
-                        <td class="px-4 py-2 text-slate-600">Standard Schema (zod, valibot, …) validating args; 422 on failure</td>
-                        <td class="px-4 py-2 text-slate-500">none</td>
-                    </tr>
-                    <tr>
-                        <td class="px-4 py-2 font-mono">outputSchema</td>
-                        <td class="px-4 py-2 text-slate-600">success body for OpenAPI / MCP output</td>
-                        <td class="px-4 py-2 text-slate-500">none</td>
-                    </tr>
-                    <tr>
-                        <td class="px-4 py-2 font-mono">filesSchema</td>
-                        <td class="px-4 py-2 text-slate-600">validates <code class="font-mono">File</code> parts of a multipart body</td>
-                        <td class="px-4 py-2 text-slate-500">none</td>
-                    </tr>
-                    <tr>
-                        <td class="px-4 py-2 font-mono">clients.browser</td>
-                        <td class="px-4 py-2 text-slate-600">expose to the browser bundle</td>
-                        <td class="px-4 py-2 font-mono text-slate-500">true</td>
-                    </tr>
-                    <tr>
-                        <td class="px-4 py-2 font-mono">clients.mcp</td>
-                        <td class="px-4 py-2 text-slate-600">expose as an MCP tool — see <a class="underline" href="/mcp">mcp</a></td>
-                        <td class="px-4 py-2 text-slate-600">auto for schema'd GET/HEAD; mutations opt in</td>
-                    </tr>
-                    <tr>
-                        <td class="px-4 py-2 font-mono">clients.cli</td>
-                        <td class="px-4 py-2 text-slate-600">expose as a CLI subcommand — see <a class="underline" href="/cli">cli</a></td>
-                        <td class="px-4 py-2 text-slate-600">auto for any schema'd verb</td>
-                    </tr>
-                    <tr>
-                        <td class="px-4 py-2 font-mono">crossOrigin</td>
-                        <td class="px-4 py-2 text-slate-600">exempt from the same-origin mutation gate — see <a class="underline" href="/security">Security defaults</a></td>
-                        <td class="px-4 py-2 font-mono text-slate-500">false</td>
-                    </tr>
-                    <tr>
-                        <td class="px-4 py-2 font-mono">maxBodySize</td>
-                        <td class="px-4 py-2 text-slate-600">cap on received body bytes, 413 past it</td>
-                        <td class="px-4 py-2 text-slate-600">Bun's server-wide ceiling</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    </section>
+<section class="mt-6">
+    <h2 class="text-sm font-semibold">Options</h2>
+    <div class="mt-2 overflow-x-auto rounded-lg border border-slate-200 bg-white">
+        <table class="w-full text-sm">
+            <thead class="border-b border-slate-200 bg-slate-50 text-left">
+                <tr>
+                    <th class="px-4 py-2 font-mono font-medium">option</th>
+                    <th class="px-4 py-2 font-medium">effect</th>
+                    <th class="px-4 py-2 font-medium">default</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                <tr>
+                    <td class="px-4 py-2 font-mono">inputSchema</td>
+                    <td class="px-4 py-2 text-slate-600">Standard Schema (zod, valibot, …) validating args; 422 on failure</td>
+                    <td class="px-4 py-2 text-slate-500">none</td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">outputSchema</td>
+                    <td class="px-4 py-2 text-slate-600">success body for OpenAPI / MCP output</td>
+                    <td class="px-4 py-2 text-slate-500">none</td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">filesSchema</td>
+                    <td class="px-4 py-2 text-slate-600">validates <code class="font-mono">File</code> parts of a multipart body</td>
+                    <td class="px-4 py-2 text-slate-500">none</td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">clients.browser</td>
+                    <td class="px-4 py-2 text-slate-600">expose to the browser bundle</td>
+                    <td class="px-4 py-2 font-mono text-slate-500">true</td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">clients.mcp</td>
+                    <td class="px-4 py-2 text-slate-600">expose as an MCP tool — see <a class="underline" href="/mcp">mcp</a></td>
+                    <td class="px-4 py-2 text-slate-600">auto for schema'd GET/HEAD; mutations opt in</td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">clients.cli</td>
+                    <td class="px-4 py-2 text-slate-600">expose as a CLI subcommand — see <a class="underline" href="/cli">cli</a></td>
+                    <td class="px-4 py-2 text-slate-600">auto for any schema'd verb</td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">crossOrigin</td>
+                    <td class="px-4 py-2 text-slate-600">exempt from the same-origin mutation gate — see <a class="underline" href="/security">Security defaults</a></td>
+                    <td class="px-4 py-2 font-mono text-slate-500">false</td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">maxBodySize</td>
+                    <td class="px-4 py-2 text-slate-600">cap on received body bytes, 413 past it</td>
+                    <td class="px-4 py-2 text-slate-600">Bun's server-wide ceiling</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</section>
 
-    <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
-        <h2 class="text-sm font-semibold">Try every verb</h2>
-        <label class="mt-2 block text-xs font-medium">
-            message
-            <input bind:value={message} class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
+<section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
+    <h2 class="text-sm font-semibold">Try every verb</h2>
+    <label class="mt-2 block text-xs font-medium">
+        message
+        <input bind:value={message} class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
+    </label>
+    <div class="mt-3 flex flex-wrap gap-2 text-sm">
+        <button type="button" class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100" onclick={() => safeCall('GET', () => getEcho({ message }))}>GET</button>
+        <button type="button" class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100" onclick={() => safeCall('POST', () => createEcho({ message }))}>POST</button>
+        <button type="button" class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100" onclick={() => safeCall('PUT', () => replaceEcho({ message }))}>PUT</button>
+        <button type="button" class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100" onclick={() => safeCall('PATCH', () => patchEcho({ message }))}>PATCH</button>
+        <button type="button" class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100" onclick={() => safeCall('DELETE', () => deleteEcho({ message }))}>DELETE</button>
+        <button type="button" class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100" onclick={() => safeCall('HEAD', () => headEcho())}>HEAD</button>
+    </div>
+    <template if={log.length > 0}>
+        <ul class="mt-3 space-y-1 font-mono text-xs text-slate-700">
+            <template each={log} as="entry" key="entry.id">
+                <li>{entry.verb} →{entry.outcome}</li>
+            </template>
+        </ul>
+    </template>
+</section>
+
+<section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
+    <h2 class="text-sm font-semibold"><code class="font-mono">filesSchema</code> — multipart upload</h2>
+    <p class="mt-1 text-xs text-slate-500">
+        A body verb accepts a <code class="font-mono">FormData</code> in place of typed args: text fields
+        validate against <code class="font-mono">inputSchema</code>, <code class="font-mono">File</code> parts
+        against <code class="font-mono">filesSchema</code>, merged into the handler's args.
+    </p>
+    <form class="mt-3 flex flex-wrap items-end gap-2 text-sm" onsubmit={async (event) => {
+        event.preventDefault()
+        const formData = new FormData(event.currentTarget)
+        await safeCall('upload', () => uploadNote(formData))
+    }}>
+        <label class="text-xs font-medium">
+            title
+            <input name="title" value="receipts" class="mt-1 block rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
         </label>
-        <div class="mt-3 flex flex-wrap gap-2 text-sm">
-            <button type="button" class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100" onclick={() => safeCall('GET', () => getEcho({ message }))}>GET</button>
-            <button type="button" class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100" onclick={() => safeCall('POST', () => createEcho({ message }))}>POST</button>
-            <button type="button" class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100" onclick={() => safeCall('PUT', () => replaceEcho({ message }))}>PUT</button>
-            <button type="button" class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100" onclick={() => safeCall('PATCH', () => patchEcho({ message }))}>PATCH</button>
-            <button type="button" class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100" onclick={() => safeCall('DELETE', () => deleteEcho({ message }))}>DELETE</button>
-            <button type="button" class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100" onclick={() => safeCall('HEAD', () => headEcho())}>HEAD</button>
-        </div>
-        <template if={log.length > 0}>
-            <ul class="mt-3 space-y-1 font-mono text-xs text-slate-700">
-                <template each={log} as="entry" key="entry.id">
-                    <li>{entry.verb} →{entry.outcome}</li>
-                </template>
-            </ul>
-        </template>
-    </section>
+        <label class="text-xs font-medium">
+            attachments
+            <input name="attachments" type="file" multiple class="mt-1 block text-sm" />
+        </label>
+        <button type="submit" class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100">uploadNote(formData)</button>
+    </form>
+</section>
 
-    <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
-        <h2 class="text-sm font-semibold"><code class="font-mono">filesSchema</code> — multipart upload</h2>
-        <p class="mt-1 text-xs text-slate-500">
-            A body verb accepts a <code class="font-mono">FormData</code> in place of typed args: text fields
-            validate against <code class="font-mono">inputSchema</code>, <code class="font-mono">File</code> parts
-            against <code class="font-mono">filesSchema</code>, merged into the handler's args.
-        </p>
-        <form class="mt-3 flex flex-wrap items-end gap-2 text-sm" onsubmit={async (event) => {
-            event.preventDefault()
-            const formData = new FormData(event.currentTarget)
-            await safeCall('upload', () => uploadNote(formData))
-        }}>
-            <label class="text-xs font-medium">
-                title
-                <input name="title" value="receipts" class="mt-1 block rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
-            </label>
-            <label class="text-xs font-medium">
-                attachments
-                <input name="attachments" type="file" multiple class="mt-1 block text-sm" />
-            </label>
-            <button type="submit" class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100">uploadNote(formData)</button>
-        </form>
-    </section>
+<section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
+    <h2 class="text-sm font-semibold"><code class="font-mono">withJsonSchema</code> — a non-native schema</h2>
+    <p class="mt-1 text-xs text-slate-500">
+        <code class="font-mono">convertTemp</code>'s <code class="font-mono">inputSchema</code> is hand-rolled — the bare
+        <code class="font-mono">~standard</code> contract, no schema library. It carries no native
+        <code class="font-mono">toJSONSchema()</code>, so <code class="font-mono">withJsonSchema</code> attaches one; without it the
+        verb would still validate but disappear from <a class="underline" href="/openapi.json">/openapi.json</a>,
+        <a class="underline" href="/mcp">/mcp</a>, and the CLI.
+    </p>
+    <div class="mt-3 flex flex-wrap items-end gap-2 text-sm">
+        <label class="text-xs font-medium">
+            celsius
+            <input type="number" bind:value={celsius} class="mt-1 block w-28 rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
+        </label>
+        <button type="button" class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100" onclick={convert}>convertTemp(&#123; celsius &#125;)</button>
+        <span class="font-mono text-xs text-slate-700">{converted}</span>
+    </div>
+</section>
 
-    <section class="mt-6 space-y-3">
-        <CodeBlock title="src/server/rpc/*.ts — one verb per file" code={`// getEcho.ts — inputSchema validates args and exposes the rpc to MCP + CLI
+<section class="mt-6 space-y-3">
+    <CodeBlock title="src/server/rpc/convertTemp.ts — wrap a schema that has no toJSONSchema()" code={`import { withJsonSchema } from '@abide/abide/shared/withJsonSchema'
+// celsiusSchema is a bare Standard Schema: { '~standard': { version, vendor, validate } }
+const inputSchema = withJsonSchema(celsiusSchema, () => ({
+    type: 'object',
+    properties: { celsius: { type: 'number' } },
+    required: ['celsius'],
+}))
+export const convertTemp = GET(({ celsius }) =>
+    json({ celsius, fahrenheit: celsius * 1.8 + 32 }), { inputSchema })`} />
+</section>
+
+<section class="mt-6 space-y-3">
+    <CodeBlock title="src/server/rpc/*.ts — one verb per file" code={`// getEcho.ts — inputSchema validates args and exposes the rpc to MCP + CLI
 import { GET } from '@abide/abide/server/GET'
 import { json } from '@abide/abide/server/json'
 import { z } from 'zod'
@@ -152,8 +189,7 @@ export const headEcho = HEAD(() =>
     new Response(undefined, { status: 204, headers: { 'x-echo': 'HEAD' } }),
 )`} />
 
-        <CodeBlock title="client — same call shape per verb" code={`await getEcho({ message: 'hello' })       // typed { method: 'GET'; message: string }
+    <CodeBlock title="client — same call shape per verb" code={`await getEcho({ message: 'hello' })       // typed { method: 'GET'; message: string }
 await createEcho({ message: 'hello' })    // typed { method: 'POST'; message: string }
 // headEcho and deleteEcho resolve to undefined (204); the rest resolve to the decoded body`} />
-    </section>
-</Layout>
+</section>

@@ -1,5 +1,4 @@
 <script>
-import Layout from '../Layout.abide'
 
 /*
 Kitchen-sink index — the framework reference, grouped the way the sidebar reads:
@@ -43,7 +42,7 @@ const groups = [
             {
                 href: '/pages',
                 title: 'pages',
-                body: 'Folders under src/ui/pages/ are routes — [id] params, userland layouts, try/catch failure boundaries — plus the reactive page state, navigate(), and the typed base-correct url() builder.',
+                body: 'Folders under src/ui/pages/ are routes — [id] params, nested layout.abide chains, try/catch failure boundaries — plus the reactive page state, navigate(), and the typed base-correct url() builder.',
             },
             {
                 href: '/probes',
@@ -115,37 +114,36 @@ const groups = [
 ]
 </script>
 
-<Layout>
-    <h1 class="text-3xl font-bold">abide kitchen-sink</h1>
-    <p class="mt-2 text-slate-600">
-        The framework reference — every surface as a runnable, documented page. One typed backend
-        reaching the browser, MCP, the CLI, and a native desktop bundle, plus the reactive UI that
-        consumes it.
-    </p>
+<h1 class="text-3xl font-bold">abide kitchen-sink</h1>
+<p class="mt-2 text-slate-600">
+    The framework reference — every surface as a runnable, documented page. One typed backend
+    reaching the browser, MCP, the CLI, and a native desktop bundle, plus the reactive UI that
+    consumes it.
+</p>
 
-    <template each={groups} as="group" key="group.title">
-        <section class="mt-10">
-            <h2 class="text-xs font-semibold uppercase tracking-wide text-slate-400">{group.title}</h2>
-            <div class="mt-3 grid gap-4 sm:grid-cols-2">
-                <template each={group.cards} as="card" key="card.href">
-                    <a href={card.href} class="rounded-lg border border-slate-200 bg-white p-5 hover:border-slate-400">
-                        <h3 class="text-lg font-semibold"><code class="font-mono">{card.title}</code></h3>
-                        <p class="mt-1 text-sm text-slate-600">{card.body}</p>
-                    </a>
-                </template>
-            </div>
-        </section>
-    </template>
-
-    <section class="mt-10 rounded-lg border border-slate-200 bg-white p-5">
-        <h2 class="text-lg font-semibold">Composed showcase: cookie-session auth</h2>
-        <p class="mt-1 text-sm text-slate-600">
-            <a class="underline" href="/auth/dashboard">/auth/dashboard</a>
-            is gated by an auth layout. The auth pages wrap <code class="font-mono">AuthLayout</code>
-            instead of the root <code class="font-mono">Layout</code> (layouts are userland
-            components), and the session rides a cookie written through
-            <code class="font-mono">cookies()</code> — see
-            <a class="underline" href="/rpc/request-scope">Request scope</a>.
-        </p>
+<template each={groups} as="group" key="group.title">
+    <section class="mt-10">
+        <h2 class="text-xs font-semibold uppercase tracking-wide text-slate-400">{group.title}</h2>
+        <div class="mt-3 grid gap-4 sm:grid-cols-2">
+            <template each={group.cards} as="card" key="card.href">
+                <a href={card.href} class="rounded-lg border border-slate-200 bg-white p-5 hover:border-slate-400">
+                    <h3 class="text-lg font-semibold"><code class="font-mono">{card.title}</code></h3>
+                    <p class="mt-1 text-sm text-slate-600">{card.body}</p>
+                </a>
+            </template>
+        </div>
     </section>
-</Layout>
+</template>
+
+<section class="mt-10 rounded-lg border border-slate-200 bg-white p-5">
+    <h2 class="text-lg font-semibold">Composed showcase: cookie-session auth</h2>
+    <p class="mt-1 text-sm text-slate-600">
+        <a class="underline" href="/auth/dashboard">/auth/dashboard</a>
+        is gated by an auth layout: <code class="font-mono">src/ui/pages/auth/layout.abide</code>
+        wraps every page under <code class="font-mono">/auth</code> and itself nests inside the
+        root <code class="font-mono">layout.abide</code> (the chain applies every ancestor),
+        and the session rides a cookie written through
+        <code class="font-mono">cookies()</code> — see
+        <a class="underline" href="/rpc/request-scope">Request scope</a>.
+    </p>
+</section>

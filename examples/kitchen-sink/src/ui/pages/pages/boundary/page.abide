@@ -1,6 +1,5 @@
 <script>
 import { page } from '@abide/abide/shared/page'
-import Layout from '$ui/Layout.abide'
 
 /* The abide failure boundary is lexical: <template try> guards a subtree, and a
    throw while building it (here, when ?explode is present) renders <template catch>
@@ -15,33 +14,31 @@ function renderGuarded() {
 }
 </script>
 
-<Layout>
-    <nav class="mb-2 text-sm text-slate-500">
-        <a href="/pages" class="hover:text-slate-900">Pages</a>
-        <span class="mx-2">/</span>
-        <span>boundary</span>
-    </nav>
-    <h1 class="text-3xl font-bold">Failure boundary</h1>
-    <p class="mt-2 text-slate-600">
-        The guarded subtree below renders normally — until it throws. The nearest
-        <code class="font-mono">&lt;template try&gt;</code> catches it and renders its
-        <code class="font-mono">&lt;template catch&gt;</code> in place.
-    </p>
+<nav class="mb-2 text-sm text-slate-500">
+    <a href="/pages" class="hover:text-slate-900">Pages</a>
+    <span class="mx-2">/</span>
+    <span>boundary</span>
+</nav>
+<h1 class="text-3xl font-bold">Failure boundary</h1>
+<p class="mt-2 text-slate-600">
+    The guarded subtree below renders normally — until it throws. The nearest
+    <code class="font-mono">&lt;template try&gt;</code> catches it and renders its
+    <code class="font-mono">&lt;template catch&gt;</code> in place.
+</p>
 
-    <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
-        <template try>
-            <p class="text-slate-700">guarded content: {renderGuarded()}</p>
-            <template catch="error">
-                <div>
-                    <h2 class="text-xl font-bold text-red-700">caught</h2>
-                    <pre class="mt-2 overflow-x-auto rounded-md bg-slate-900 p-4 text-xs leading-relaxed text-red-200"><code>{error.message}</code></pre>
-                </div>
-            </template>
+<section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
+    <template try>
+        <p class="text-slate-700">guarded content: {renderGuarded()}</p>
+        <template catch="error">
+            <div>
+                <h2 class="text-xl font-bold text-red-700">caught</h2>
+                <pre class="mt-2 overflow-x-auto rounded-md bg-slate-900 p-4 text-xs leading-relaxed text-red-200"><code>{error.message}</code></pre>
+            </div>
         </template>
-    </section>
+    </template>
+</section>
 
-    <div class="mt-4 flex flex-wrap gap-2 text-sm">
-        <a href="/pages/boundary?explode=1" class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100">throw during render → caught by &lt;template try&gt;</a>
-        <a href="/pages/boundary" class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100">render normally</a>
-    </div>
-</Layout>
+<div class="mt-4 flex flex-wrap gap-2 text-sm">
+    <a href="/pages/boundary?explode=1" class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100">throw during render → caught by &lt;template try&gt;</a>
+    <a href="/pages/boundary" class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100">render normally</a>
+</div>
