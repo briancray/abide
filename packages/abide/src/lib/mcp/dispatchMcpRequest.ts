@@ -1,4 +1,5 @@
 import { ensureRegistriesLoaded } from '../server/runtime/registryManifests.ts'
+import { messageFromError } from '../shared/messageFromError.ts'
 import { getMcpResourceServer } from './mcpResourceServerSlot.ts'
 import { buildPrompts, buildTools, callTool, renderPrompt } from './mcpSurface.ts'
 import type { JsonRpcRequest } from './types/JsonRpcRequest.ts'
@@ -68,7 +69,7 @@ export async function dispatchMcpRequest(
         try {
             await opts.authorize(request)
         } catch (error) {
-            const message = error instanceof Error ? error.message : String(error)
+            const message = messageFromError(error)
             return jsonRpcError(id, -32001, message)
         }
     }
@@ -132,7 +133,7 @@ export async function dispatchMcpRequest(
                 return jsonRpcError(id, -32601, `Method not found: ${envelope.method}`)
         }
     } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
+        const message = messageFromError(error)
         return jsonRpcError(id, -32603, message)
     }
 }

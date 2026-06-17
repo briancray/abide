@@ -1,3 +1,4 @@
+import { contentTypeOf } from './contentTypeOf.ts'
 import { decodeResponse } from './decodeResponse.ts'
 import { HttpError } from './HttpError.ts'
 import { jsonlErrorFrame } from './jsonlErrorFrame.ts'
@@ -29,7 +30,7 @@ export function streamResponse<T>(response: Response): AsyncIterable<T> {
     if (!response.ok) {
         return errorIterable<T>(new HttpError(response))
     }
-    const contentType = (response.headers.get('content-type') ?? '').toLowerCase()
+    const contentType = contentTypeOf(response.headers)
     if (contentType.startsWith('text/event-stream')) {
         return parseSse<T>(response)
     }

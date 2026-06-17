@@ -3,6 +3,7 @@ import { claimChild } from '../runtime/claimChild.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { RESUME } from '../runtime/RESUME.ts'
 import { scope } from '../runtime/scope.ts'
+import { discardBoundary } from './discardBoundary.ts'
 
 /*
 Async binding — the runtime for `<template await>`. Renders the pending branch,
@@ -197,28 +198,4 @@ export function awaitBlock(
 /* Whether a value is Promise-like (the cold path); a non-thenable is warm-sync. */
 function isThenable(value: unknown): value is Promise<unknown> {
     return value !== null && typeof (value as { then?: unknown })?.then === 'function'
-}
-
-/* Remove the SSR boundary — open marker through close marker (inclusive) — and
-   park the hydration cursor on the node after it, so a fresh run replaces it
-   without duplicating the server's pending shell. */
-function discardBoundary(
-    parent: Node,
-    open: Node | null,
-    closeData: string,
-    hydration: NonNullable<(typeof RENDER)['hydration']>,
-): void {
-    let node = open
-    let after: Node | null = null
-    while (node !== null) {
-        const next = node.nextSibling
-        const isClose = (node as { data?: string }).data === closeData
-        parent.removeChild(node)
-        if (isClose) {
-            after = next
-            break
-        }
-        node = next
-    }
-    hydration.next.set(parent, after)
 }

@@ -1,4 +1,5 @@
 import { clearLastConnection } from '../shared/clearLastConnection.ts'
+import { messageFromError } from '../shared/messageFromError.ts'
 import { connectToServer } from './connectToServer.ts'
 import { dispatchCommand } from './dispatchCommand.ts'
 import { printSessionHelp } from './printSessionHelp.ts'
@@ -77,9 +78,7 @@ export async function runSession({
             try {
                 await swap(await startLocalInstance(programName))
             } catch (error) {
-                console.error(
-                    `could not start local instance: ${error instanceof Error ? error.message : String(error)}`,
-                )
+                console.error(`could not start local instance: ${messageFromError(error)}`)
             }
         } else if (head === '/disconnect') {
             await clearLastConnection(programName)

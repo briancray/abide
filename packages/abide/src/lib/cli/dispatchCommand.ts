@@ -1,5 +1,6 @@
 import { decodeResponse } from '../shared/decodeResponse.ts'
 import { isStreamingResponse } from '../shared/isStreamingResponse.ts'
+import { messageFromError } from '../shared/messageFromError.ts'
 import { responseErrorText } from '../shared/responseErrorText.ts'
 import { streamResponse } from '../shared/streamResponse.ts'
 import { createClient } from './createClient.ts'
@@ -41,7 +42,7 @@ export async function dispatchCommand({
     try {
         args = await parseArgvForRpc(argvTail, entry.jsonSchema)
     } catch (error) {
-        console.error(`${programName}: ${error instanceof Error ? error.message : String(error)}`)
+        console.error(`${programName}: ${messageFromError(error)}`)
         return 1
     }
 
@@ -65,7 +66,7 @@ export async function dispatchCommand({
         printValue(await decodeResponse(response), true)
         return 0
     } catch (error) {
-        console.error(`${programName}: ${error instanceof Error ? error.message : String(error)}`)
+        console.error(`${programName}: ${messageFromError(error)}`)
         return 1
     }
 }

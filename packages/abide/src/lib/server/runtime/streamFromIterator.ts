@@ -1,3 +1,5 @@
+import { messageFromError } from '../../shared/messageFromError.ts'
+
 /*
 Shared body builder for the streaming respond helpers (`jsonl`, `sse`).
 Both flow the same shape — pull from an AsyncIterator, encode each frame
@@ -62,7 +64,7 @@ export function streamFromIterator<T>(
                 }
                 controller.enqueue(textEncoder.encode(encoder.encodeFrame(next.value)))
             } catch (error) {
-                const message = error instanceof Error ? error.message : String(error)
+                const message = messageFromError(error)
                 controller.enqueue(textEncoder.encode(encoder.encodeError(message)))
                 stopKeepalive()
                 controller.close()

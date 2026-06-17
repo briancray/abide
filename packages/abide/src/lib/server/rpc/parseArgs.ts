@@ -112,9 +112,7 @@ export async function parseArgs(
     }
 
     if (!url) {
-        if (body === undefined) {
-            return undefined
-        }
+        /* `body` is undefined or a plain object here — return it as-is. */
         return body
     }
 

@@ -18,9 +18,10 @@ export async function warnUnguardedMcp(): Promise<void> {
     } catch {
         return
     }
-    const exposed =
-        Array.from(verbRegistry.values()).filter((entry) => entry.clients.mcp).length +
-        Array.from(socketRegistry.values()).filter((entry) => entry.clients.mcp).length
+    const isMcpExposed = (entry: { clients: { mcp: boolean } }): boolean => entry.clients.mcp
+    const exposed = [...verbRegistry.values(), ...socketRegistry.values()].filter(
+        isMcpExposed,
+    ).length
     if (exposed === 0) {
         return
     }

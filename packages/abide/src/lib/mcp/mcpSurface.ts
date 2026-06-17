@@ -8,6 +8,7 @@ import { abideLog } from '../shared/abideLog.ts'
 import { commandNameForUrl } from '../shared/commandNameForUrl.ts'
 import { forwardHeaders } from '../shared/forwardHeaders.ts'
 import { jsonSchemaForSchema } from '../shared/jsonSchemaForSchema.ts'
+import { messageFromError } from '../shared/messageFromError.ts'
 import { annotationsForMethod } from './annotationsForMethod.ts'
 import { getMcpResourceServer } from './mcpResourceServerSlot.ts'
 import { toolResultFromResponse } from './toolResultFromResponse.ts'
@@ -193,7 +194,7 @@ function callSocketTool(
             // publish() validates the payload against the socket schema and throws on failure.
             entry.socket.publish(args)
         } catch (error) {
-            return textResult(error instanceof Error ? error.message : String(error), true)
+            return textResult(messageFromError(error), true)
         }
         return textResult('ok')
     }

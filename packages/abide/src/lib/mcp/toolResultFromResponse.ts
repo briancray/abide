@@ -1,5 +1,6 @@
 import { decodeResponse } from '../shared/decodeResponse.ts'
 import { isStreamingResponse } from '../shared/isStreamingResponse.ts'
+import { messageFromError } from '../shared/messageFromError.ts'
 import { responseErrorText } from '../shared/responseErrorText.ts'
 import { streamResponse } from '../shared/streamResponse.ts'
 
@@ -42,7 +43,7 @@ export async function toolResultFromResponse(response: Response): Promise<Record
                     { type: 'text', text: frames.map(asText).join('\n') },
                     {
                         type: 'text',
-                        text: `stream error: ${error instanceof Error ? error.message : String(error)}`,
+                        text: `stream error: ${messageFromError(error)}`,
                     },
                 ],
                 structuredContent: { frames },

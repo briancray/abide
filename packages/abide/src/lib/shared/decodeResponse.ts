@@ -1,3 +1,4 @@
+import { contentTypeOf } from './contentTypeOf.ts'
 import { HttpError } from './HttpError.ts'
 import { isStreamingResponse } from './isStreamingResponse.ts'
 
@@ -31,7 +32,7 @@ export async function decodeResponse(response: Response): Promise<unknown> {
     if (response.status === 204) {
         return undefined
     }
-    const contentType = (response.headers.get('content-type') ?? '').toLowerCase()
+    const contentType = contentTypeOf(response.headers)
     if (isStreamingResponse(response)) {
         throw new Error(
             `[abide] response at ${response.url} is a stream (${contentType}) — use tail(fn.stream(args)) for a reactive view, or fn.stream(args) for per-call iteration, instead of awaiting the bare call or cache()`,

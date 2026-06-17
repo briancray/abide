@@ -1,6 +1,7 @@
 import type { ServerWebSocket } from 'bun'
 import { abideLog } from '../../shared/abideLog.ts'
 import { memoizeByKey } from '../../shared/memoizeByKey.ts'
+import { messageFromError } from '../../shared/messageFromError.ts'
 import { error } from '../error.ts'
 import { json } from '../json.ts'
 import { sse } from '../sse.ts'
@@ -86,7 +87,7 @@ export function createSocketDispatcher(sockets: SocketRoutes): SocketDispatcher 
             abideLog.error(loadError)
             return {
                 failure: 'load-failed',
-                message: loadError instanceof Error ? loadError.message : String(loadError),
+                message: messageFromError(loadError),
             }
         }
         const entry = lookupSocket(name)
@@ -214,8 +215,8 @@ export function createSocketDispatcher(sockets: SocketRoutes): SocketDispatcher 
         */
         try {
             entry.socket.publish(frame.message)
-        } catch (error) {
-            abideLog.error(error)
+        } catch (publishError) {
+            abideLog.error(publishError)
         }
         /*
         ws parameter retained for future per-ws auth context (cookies on
@@ -276,10 +277,7 @@ export function createSocketDispatcher(sockets: SocketRoutes): SocketDispatcher 
                 // publish() validates against the socket schema and throws on a bad payload.
                 entry.socket.publish(message)
             } catch (publishError) {
-                return error(
-                    422,
-                    publishError instanceof Error ? publishError.message : String(publishError),
-                )
+                return error(422, messageFromError(publishError))
             }
             return json({ ok: true })
         }

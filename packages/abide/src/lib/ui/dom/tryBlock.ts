@@ -1,6 +1,7 @@
 import { claimChild } from '../runtime/claimChild.ts'
 import { OWNER } from '../runtime/OWNER.ts'
 import { RENDER } from '../runtime/RENDER.ts'
+import { discardBoundary } from './discardBoundary.ts'
 
 /*
 Synchronous error boundary — the runtime for `<template try>`. Builds the guarded
@@ -26,7 +27,12 @@ export function tryBlock(
     renderCatch?: (parent: Node, error: unknown) => Node[],
 ): void {
     /* Run a build under a fresh ownership scope; on throw, tear down the partial
-       effects/listeners it registered and rethrow so the caller can fall back. */
+       effects/listeners it registered and rethrow so the caller can fall back.
+       Deliberately not `scope()`: that returns a deferred disposer and leaks the
+       partial scope on throw (it only restores the owner), whereas an error boundary
+       must dispose eagerly when the guarded build throws and hand back the built
+       `Node[]` (not a disposer) on success — those nodes belong to the enclosing
+       scope. Different return type, different throw semantics; merging would be wrong. */
     const buildScoped = (build: () => Node[]): Node[] => {
         const previous = OWNER.current
         const disposers: Array<() => void> = []
@@ -84,29 +90,4 @@ export function tryBlock(
     for (const node of nodes) {
         parent.appendChild(node)
     }
-}
-
-/* Remove the SSR boundary — open marker through close marker (inclusive) — and
-   park the hydration cursor on the node after it, returning that node so a fresh
-   catch can be inserted in the boundary's place. */
-function discardBoundary(
-    parent: Node,
-    open: Node | null,
-    closeData: string,
-    hydration: NonNullable<(typeof RENDER)['hydration']>,
-): Node | null {
-    let node = open
-    let after: Node | null = null
-    while (node !== null) {
-        const next = node.nextSibling
-        const isClose = (node as { data?: string }).data === closeData
-        parent.removeChild(node)
-        if (isClose) {
-            after = next
-            break
-        }
-        node = next
-    }
-    hydration.next.set(parent, after)
-    return after
 }

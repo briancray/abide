@@ -1,6 +1,7 @@
 import { probeAbideServer } from '../bundle/probeAbideServer.ts'
 import { spawnEmbeddedServer } from '../bundle/spawnEmbeddedServer.ts'
 import { abideLog } from '../shared/abideLog.ts'
+import { messageFromError } from '../shared/messageFromError.ts'
 import { readLastConnection } from '../shared/readLastConnection.ts'
 import type { CliTarget } from './types/CliTarget.ts'
 
@@ -28,9 +29,7 @@ export async function resolveCliTarget(programName: string): Promise<CliTarget |
             })
             return { url, child }
         } catch (error) {
-            abideLog.warn(
-                `could not start local instance: ${error instanceof Error ? error.message : String(error)}`,
-            )
+            abideLog.warn(`could not start local instance: ${messageFromError(error)}`)
             return undefined
         }
     }

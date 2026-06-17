@@ -1,5 +1,6 @@
 import { resolve } from 'node:path'
 import ts from 'typescript'
+import { messageFromError } from '../../shared/messageFromError.ts'
 import { assetModulesFile } from './assetModulesFile.ts'
 import { compileShadow } from './compileShadow.ts'
 import { loadShadowTsConfig } from './loadShadowTsConfig.ts'
@@ -51,7 +52,7 @@ export function createShadowProgram(cwd: string, abidePaths?: string[]): ShadowP
             return compiled.code
         } catch (error) {
             shadows.set(abidePath, { code: '', mappings: [] })
-            parseErrors.set(abidePath, error instanceof Error ? error.message : String(error))
+            parseErrors.set(abidePath, messageFromError(error))
             return 'export default function (): void {}\n'
         }
     }

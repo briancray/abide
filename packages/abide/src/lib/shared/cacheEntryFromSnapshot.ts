@@ -1,3 +1,4 @@
+import { contentTypeOf } from './contentTypeOf.ts'
 import type { CacheEntry } from './types/CacheEntry.ts'
 import type { CacheSnapshotEntry } from './types/CacheSnapshotEntry.ts'
 
@@ -39,7 +40,7 @@ function warmValueFromSnapshot(status: number, headers: Headers, body: string): 
     if (status === 204 || status < 200 || status >= 300) {
         return undefined
     }
-    const contentType = (headers.get('content-type') ?? '').toLowerCase()
+    const contentType = contentTypeOf(headers)
     if (contentType.includes('json')) {
         /*
         `.includes('json')` also matches streaming/non-JSON types like

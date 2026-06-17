@@ -1,5 +1,6 @@
 import { clearLastConnection } from '../shared/clearLastConnection.ts'
 import { loadEnvFromDataDir } from '../shared/loadEnvFromDataDir.ts'
+import { messageFromError } from '../shared/messageFromError.ts'
 import { connectToServer } from './connectToServer.ts'
 import { dispatchCommand } from './dispatchCommand.ts'
 import { loadEnvFromBinaryDir } from './loadEnvFromBinaryDir.ts'
@@ -146,9 +147,7 @@ export async function runCli({
         try {
             target = await startLocalInstance(programName)
         } catch (error) {
-            console.error(
-                `${programName}: ${error instanceof Error ? error.message : String(error)}`,
-            )
+            console.error(`${programName}: ${messageFromError(error)}`)
             return 1
         }
         return runSession({ programName, manifest, footer, target })
