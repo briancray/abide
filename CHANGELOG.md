@@ -1,5 +1,15 @@
 # abide
 
+## 0.29.0
+
+### Minor Changes
+
+- [`2d2c141`](https://github.com/briancray/abide/commit/2d2c141a59d3643f997ef4bb16773d29e4149c95) - add 'abide init-agent' command ([`b5e9158`](https://github.com/briancray/abide/commit/b5e915862a74febffb8df28c68f444a73bd371da))
+
+### Patch Changes
+
+- [`2d2c141`](https://github.com/briancray/abide/commit/2d2c141a59d3643f997ef4bb16773d29e4149c95) - add AGENTS.md complete public-surface map for agents ([`b0539ec`](https://github.com/briancray/abide/commit/b0539ec69c880106dc1b0cb8573203e7113964ed))
+
 ## 0.28.0
 
 ### Minor Changes
