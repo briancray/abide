@@ -1,5 +1,17 @@
 # @abide/claude-code
 
+## 0.5.4
+
+### Patch Changes
+
+- rename project belte → abide ([`3ed697b`](https://github.com/briancray/abide/commit/3ed697bd3c804bdd79642d9edb5d3f3045ecdb53))
+
+- tidy agent-engine import order (anthropic, claude-code) ([`ae05402`](https://github.com/briancray/abide/commit/ae05402f921fc7f62915abf378f10bde8e14637d))
+
+- await stdin write so a large prompt isn't truncated ([`b6e9d3f`](https://github.com/briancray/abide/commit/b6e9d3fe76bf96ec8b66ccc5659ae8166bf580df))
+
+- remove Svelte references across code, docs, and tooling ([`e77872a`](https://github.com/briancray/abide/commit/e77872ae3c1f799b5defba9b051ec35a3c6f5a88))
+
 ## 0.5.3
 
 ### Patch Changes
