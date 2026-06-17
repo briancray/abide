@@ -80,8 +80,10 @@ export function cliEngine(config: CliEngineConfig = {}): AgentEngine {
         // Abort (e.g. serve's socket close) kills the spawned claude with the page.
         const onAbort = () => child.kill()
         controller.signal.addEventListener('abort', onAbort)
-        child.stdin.write(promptFromMessages(messages))
-        child.stdin.end()
+        // Await the write (it returns a Promise when backpressured) before closing,
+        // so a prompt larger than the pipe buffer isn't truncated.
+        await child.stdin.write(promptFromMessages(messages))
+        await child.stdin.end()
         try {
             yield* framesFromMessages(readStreamJson(child.stdout))
         } finally {
