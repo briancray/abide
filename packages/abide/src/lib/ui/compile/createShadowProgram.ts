@@ -1,5 +1,6 @@
 import { resolve } from 'node:path'
 import ts from 'typescript'
+import { assetModulesFile } from './assetModulesFile.ts'
 import { compileShadow } from './compileShadow.ts'
 import { loadShadowTsConfig } from './loadShadowTsConfig.ts'
 import { resolveAbideImports } from './resolveAbideImports.ts'
@@ -26,13 +27,18 @@ the project's tsconfig (lib/paths/baseUrl) so the shadows type-check against the
 same world the app does; `noUnusedLocals`/`noUnusedParameters` are forced off
 because the shadow legitimately declares scope bindings a template may not read.
 */
-export function createShadowProgram(cwd: string): ShadowProgram {
+export function createShadowProgram(cwd: string, abidePaths?: string[]): ShadowProgram {
     const { options, fileNames } = loadShadowTsConfig(cwd)
     const shadows = new Map<string, CompiledShadow>()
     const parseErrors = new Map<string, string>()
-    const abidePaths = [...new Bun.Glob('**/*.abide').scanSync({ cwd, onlyFiles: true })]
-        .filter((relative) => !relative.includes('node_modules'))
-        .map((relative) => resolve(cwd, relative))
+    /* The components to root the program at — caller-supplied (one project's files)
+       or, by default, every `.abide` under `cwd`. Imported components resolve on
+       demand through the host, so an explicit subset still type-checks fully. */
+    const rootAbidePaths =
+        abidePaths ??
+        [...new Bun.Glob('**/*.abide').scanSync({ cwd, onlyFiles: true })]
+            .filter((relative) => !relative.includes('node_modules'))
+            .map((relative) => resolve(cwd, relative))
 
     /* Compiles (and caches) a `.abide` file's shadow; a template parse error yields
        a minimal valid module and a recorded message so the program still builds. */
@@ -50,9 +56,15 @@ export function createShadowProgram(cwd: string): ShadowProgram {
         }
     }
 
+    /* Ambient declarations for bundler-handled asset imports (`*.css`, …). */
+    const assets = assetModulesFile(cwd)
+
     const host = ts.createCompilerHost(options, true)
     const originalGetSourceFile = host.getSourceFile.bind(host)
     host.getSourceFile = (fileName, languageVersionOrOptions, onError, shouldCreate) => {
+        if (fileName === assets.path) {
+            return ts.createSourceFile(fileName, assets.content, languageVersionOrOptions, true)
+        }
         if (isShadow(fileName)) {
             return ts.createSourceFile(
                 fileName,
@@ -65,15 +77,20 @@ export function createShadowProgram(cwd: string): ShadowProgram {
         return originalGetSourceFile(fileName, languageVersionOrOptions, onError, shouldCreate)
     }
     host.fileExists = (fileName) =>
-        isShadow(fileName) ? ts.sys.fileExists(sourceOf(fileName)) : ts.sys.fileExists(fileName)
-    host.readFile = (fileName) =>
-        isShadow(fileName) ? shadowText(sourceOf(fileName)) : ts.sys.readFile(fileName)
+        fileName === assets.path ||
+        (isShadow(fileName) ? ts.sys.fileExists(sourceOf(fileName)) : ts.sys.fileExists(fileName))
+    host.readFile = (fileName) => {
+        if (fileName === assets.path) {
+            return assets.content
+        }
+        return isShadow(fileName) ? shadowText(sourceOf(fileName)) : ts.sys.readFile(fileName)
+    }
     host.resolveModuleNames = resolveAbideImports(options, host)
 
     const program = ts.createProgram({
-        rootNames: [...fileNames, ...abidePaths.map((path) => suffixed(path))],
+        rootNames: [assets.path, ...fileNames, ...rootAbidePaths.map((path) => suffixed(path))],
         options,
         host,
     })
-    return { program, shadows, parseErrors, abidePaths }
+    return { program, shadows, parseErrors, abidePaths: rootAbidePaths }
 }

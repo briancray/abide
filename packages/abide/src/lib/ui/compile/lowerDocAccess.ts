@@ -110,6 +110,23 @@ function docAccessTransformer(docName: string): ts.TransformerFactory<ts.SourceF
                     ])
                 }
             }
+            /* A called member on a doc chain is a method on the read value, not a
+               deeper path: `model.draft.trim()` → `model.read("draft").trim()`,
+               `model.items.map(f)` → `model.read("items").map(f)`. (Array `.push`
+               above is the exception — it lowers to an `add` patch.) */
+            if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
+                const segments = pathSegments(node.expression.expression)
+                if (segments) {
+                    return ts.factory.createCallExpression(
+                        ts.factory.createPropertyAccessExpression(
+                            docCall(docName, 'read', [buildPath(segments)]),
+                            node.expression.name.text,
+                        ),
+                        node.typeArguments,
+                        node.arguments.map((arg) => ts.visitNode(arg, visit) as ts.Expression),
+                    )
+                }
+            }
             /* delete doc.path → remove patch. */
             if (ts.isDeleteExpression(node)) {
                 const segments = pathSegments(node.expression)

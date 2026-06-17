@@ -23,7 +23,7 @@ async function generate(files: Record<string, string>): Promise<string> {
         cwd: dir,
         rpcDir,
         rpcFiles: Object.keys(files),
-        importName: 'abide',
+        importName: '@abide/abide',
     })
     return Bun.file(`${dir}/src/.abide/rpc.d.ts`).text()
 }

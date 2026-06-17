@@ -96,7 +96,7 @@ export function generateSSR(
             return node.parts
                 .map((part) => {
                     if (part.kind === 'static') {
-                        return part.value.trim() === '' ? '' : push(target, part.value)
+                        return part.value.trim() === '' ? '' : push(target, escapeHtml(part.value))
                     }
                     return `${target}.push($text(${lowerExpression(part.code)}));\n`
                 })
@@ -217,7 +217,7 @@ export function generateSSR(
                 /* Escape the literal value so a `"`/`&`/`<` in it can't break out of
                    the attribute or inject markup (the client uses setAttribute, which
                    needs no escaping — escaping here keeps SSR and client in sync). */
-                code += push(target, ` ${attr.name}="${escapeAttrValue(attr.value)}"`)
+                code += push(target, ` ${attr.name}="${escapeHtml(attr.value)}"`)
             } else if (attr.kind === 'expression') {
                 /* present/absent semantics matching the client `attr` binding:
                    false/null/undefined drops it, true emits the bare attribute. */
@@ -371,9 +371,12 @@ export function generateSSR(
     return generateInto(nodes, '$out')
 }
 
-/* HTML-escapes a static attribute value at compile time (it's a constant string,
-   so no runtime helper is needed) — same five characters as the runtime `$esc`. */
-function escapeAttrValue(value: string): string {
+/* HTML-escapes a static attribute value or static text at compile time (a constant
+   string, so no runtime helper is needed) — same five characters as the runtime
+   `$esc`. Static text reaches here already entity-decoded (see parseTemplate), so
+   escaping round-trips it through the browser's HTML parser to the plain text the
+   client builds directly — keeping SSR and client output identical. */
+function escapeHtml(value: string): string {
     return value.replace(
         /[&<>"']/g,
         (char) =>

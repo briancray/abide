@@ -5,7 +5,7 @@ describe('writeHealthDts', () => {
     test('with an app module, augments AppHealthMap against the hook return type', async () => {
         const cwd = `${import.meta.dir}/.tmp-health-dts-${crypto.randomUUID().slice(0, 8)}`
         try {
-            await writeHealthDts({ cwd, hasAppModule: true, importName: 'abide' })
+            await writeHealthDts({ cwd, hasAppModule: true, importName: '@abide/abide' })
             const output = await Bun.file(`${cwd}/src/.abide/health.d.ts`).text()
             expect(output).toContain("declare module '@abide/abide/shared/health'")
             expect(output).toContain('interface AppHealthMap')
@@ -20,7 +20,7 @@ describe('writeHealthDts', () => {
     test('without an app module, emits no augmentation (the import would not resolve)', async () => {
         const cwd = `${import.meta.dir}/.tmp-health-dts-${crypto.randomUUID().slice(0, 8)}`
         try {
-            await writeHealthDts({ cwd, hasAppModule: false, importName: 'abide' })
+            await writeHealthDts({ cwd, hasAppModule: false, importName: '@abide/abide' })
             const output = await Bun.file(`${cwd}/src/.abide/health.d.ts`).text()
             expect(output).not.toContain('declare module')
             expect(output).toContain('export {}')

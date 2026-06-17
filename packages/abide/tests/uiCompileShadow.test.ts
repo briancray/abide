@@ -4,9 +4,11 @@ import { compileShadow } from '../src/lib/ui/compile/compileShadow.ts'
 const SOURCE = `<script>
 import Child from './Child.abide'
 let count = state(0)
+let todos = state<string[]>([])
 let title = prop<string>('title')
 let lang = prop<string | undefined>('lang')
 const doubled = derived(() => count * 2)
+const label = derived<string>(() => String(count))
 function bump() { count += 1 }
 </script>
 
@@ -30,6 +32,21 @@ describe('compileShadow', () => {
         expect(code).toContain('let count = (0);')
         expect(code).toContain('const doubled = (() => count * 2)();')
         expect(code).toContain('let title = props["title"];')
+    })
+
+    test('carries an explicit type argument onto the value binding', () => {
+        /* Without the annotation the empty initial infers `any[]` — the squiggle bug. */
+        expect(code).toContain('let todos: string[] = ([]);')
+        expect(code).toContain('const label: string = (() => String(count))();')
+    })
+
+    test('maps the import statement so hover resolves on imported names', () => {
+        const importLoc = SOURCE.indexOf("import Child from './Child.abide'")
+        const mapping = mappings.find((entry) => entry.sourceStart === importLoc)
+        expect(mapping).toBeDefined()
+        expect(code.slice(mapping!.shadowStart, mapping!.shadowStart + mapping!.length)).toBe(
+            "import Child from './Child.abide'",
+        )
     })
 
     test('emits a Props interface honouring required vs optional', () => {

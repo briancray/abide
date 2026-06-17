@@ -5,25 +5,21 @@ import { scopeCss } from './scopeCss.ts'
 import type { AnalyzedComponent } from './types/AnalyzedComponent.ts'
 
 /*
-The shared compile front-end: splits `<script>` and `<style>` (and the optional
-`<abide>` wrapper) off the template, desugars the signal surface to the doc form,
-lowers the script's data access, and parses the template. A `<style>` block is
+The shared compile front-end: splits the leading `<script>` off the template,
+desugars the signal surface to the doc form, lowers the script's data access, and
+parses the template (which extracts `<style>` structurally). A `<style>` block is
 scoped to a per-component attribute (`data-b-<hash>`) so every back-end adds the
 attribute to its elements and emits the scoped CSS. Both client and SSR back-ends
 run from this one analysis, so the targets always agree.
 */
 export function analyzeComponent(source: string): AnalyzedComponent {
     /* Only the LEADING `<script>` is the component script; scripts nested in the
-       template (scoped reactive blocks) survive into the parsed nodes. */
+       template (scoped reactive blocks) survive into the parsed nodes. The `<style>`
+       is left in the template for the parser to extract structurally (below), so a
+       `<style>` quoted inside an expression is never mistaken for the component's. */
     const scriptMatch = source.match(/^\s*<script[^>]*>([\s\S]*?)<\/script>/)
-    const styleMatch = source.match(/<style[^>]*>([\s\S]*?)<\/style>/)
     const scriptBody = (scriptMatch?.[1] ?? '').trim()
-    const styleBody = (styleMatch?.[1] ?? '').trim()
-    const template = source
-        .replace(/^\s*<script[^>]*>[\s\S]*?<\/script>/, '')
-        .replace(/<style[^>]*>[\s\S]*?<\/style>/, '')
-        .replace(/<\/?abide[^>]*>/g, '')
-        .trim()
+    const template = source.replace(/^\s*<script[^>]*>[\s\S]*?<\/script>/, '').trim()
 
     const { code: desugared, stateNames, derivedNames } = desugarSignals(scriptBody)
     const lowered = desugared.trim() === '' ? '' : lowerDocAccess(desugared, 'model')
@@ -38,6 +34,10 @@ export function analyzeComponent(source: string): AnalyzedComponent {
         })
         .replace(/\n{2,}/g, '\n')
         .trim()
+    /* The parser collects `<style>` bodies structurally — the first is the
+       component's scoped CSS (a `<style>` inside an expression isn't collected). */
+    const { nodes, styles } = parseTemplate(template)
+    const styleBody = (styles[0] ?? '').trim()
     const style =
         styleBody === ''
             ? undefined
@@ -45,7 +45,6 @@ export function analyzeComponent(source: string): AnalyzedComponent {
                   const attribute = `data-b-${hashString(styleBody)}`
                   return { attribute, css: scopeCss(styleBody, attribute) }
               })()
-    const nodes = parseTemplate(template)
     return {
         script,
         imports: imports.join('\n'),

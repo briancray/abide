@@ -10,6 +10,11 @@ only UI loader in the dev/build/preload pipeline; the emitted module's
 A `layout.abide` compiles as a layout: its `<slot/>` lowers to the router's page
 outlet (`<abide-outlet>`) rather than a passed-children slot — the file's role is
 its name, so the loader flags it from the path stem.
+
+The emitted module embeds the component's `<script>` and `{expr}` bodies verbatim,
+so it carries the author's TypeScript (a typed `prop`, an annotated handler). The
+`ts` loader strips those annotations — the generated runtime code is valid TS too —
+keeping `.abide` scripts the TypeScript that `abide check` type-checks them as.
 */
 // @readme plumbing
 export const abideUiPlugin: BunPlugin = {
@@ -19,7 +24,7 @@ export const abideUiPlugin: BunPlugin = {
             contents: compileModule(await Bun.file(args.path).text(), {
                 isLayout: (args.path.split('/').pop() ?? '') === 'layout.abide',
             }),
-            loader: 'js',
+            loader: 'ts',
         }))
     },
 }

@@ -2,7 +2,7 @@ import { json } from '@abide/abide/server/json'
 import { POST } from '@abide/abide/server/POST'
 import { createHighlighter, type HighlighterGeneric } from 'shiki/bundle/web'
 
-type Lang = 'ts' | 'svelte' | 'sh'
+type Lang = 'ts' | 'svelte' | 'sh' | 'toml' | 'dockerfile' | 'text'
 type Theme = 'github-dark'
 
 let cached: Promise<HighlighterGeneric<Lang, Theme>> | undefined
@@ -23,9 +23,13 @@ function getHighlighter(): Promise<HighlighterGeneric<Lang, Theme>> {
     return cached
 }
 
+/* Maps a CodeBlock lang to a shiki grammar. The web bundle ships typescript /
+   svelte / bash; langs without a packed grammar (toml, dockerfile) render as
+   shiki's built-in plaintext — clean, monochrome, never a missing-grammar throw. */
 function resolveLang(lang: Lang): string {
     if (lang === 'ts') return 'typescript'
     if (lang === 'sh') return 'bash'
+    if (lang === 'toml' || lang === 'dockerfile' || lang === 'text') return 'text'
     return lang
 }
 

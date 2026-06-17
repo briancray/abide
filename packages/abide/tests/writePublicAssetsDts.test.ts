@@ -14,7 +14,7 @@ afterEach(() => {
 
 async function generate(publicFiles: string[]): Promise<string> {
     dir = mkdtempSync(`${tmpdir()}/abide-publicdts-`)
-    await writePublicAssetsDts({ cwd: dir, publicFiles, importName: 'abide' })
+    await writePublicAssetsDts({ cwd: dir, publicFiles, importName: '@abide/abide' })
     return Bun.file(`${dir}/src/.abide/publicAssets.d.ts`).text()
 }
 

@@ -1,18 +1,40 @@
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import ts from 'typescript'
+import type {
+    ShadowLanguageService,
+    ShadowQuickInfo,
+} from './lib/ui/compile/createShadowLanguageService.ts'
 import { createShadowLanguageService } from './lib/ui/compile/createShadowLanguageService.ts'
+import { nearestProjectRoot } from './lib/ui/compile/nearestProjectRoot.ts'
 import type { AbideDiagnostic } from './lib/ui/compile/types/AbideDiagnostic.ts'
 
 /*
 A minimal Language Server for `.abide` files over stdio (JSON-RPC with
 Content-Length framing). It publishes type-check diagnostics — the shadow's
-errors mapped onto the component source — on open/change/save, so an editor shows
-squiggles on bad template expressions and child props. Full-document sync keeps
-the loop tiny; the shadow LanguageService holds unsaved text as overlays.
+errors mapped onto the component source — on open/change/save, and answers hover
+requests with TypeScript's quick-info for the expression under the cursor, so an
+editor shows squiggles and signature popovers on template expressions and child
+props. Full-document sync keeps the loop tiny; the shadow LanguageService holds
+unsaved text as overlays. Each document routes to a shadow service for its
+nearest tsconfig, so files in a monorepo opened at its root are checked against
+their own project — matching `abide check` run from that package.
 */
 export async function abideLsp({ cwd }: { cwd: string }): Promise<void> {
-    const service = createShadowLanguageService(cwd)
     const documentText = new Map<string, string>()
+
+    /* A shadow service per project root, created on first use. A document's
+       diagnostics/hover come from the service for its nearest tsconfig. */
+    const services = new Map<string, ShadowLanguageService>()
+    const serviceFor = (path: string): ShadowLanguageService => {
+        const root = nearestProjectRoot(path, cwd)
+        const existing = services.get(root)
+        if (existing !== undefined) {
+            return existing
+        }
+        const created = createShadowLanguageService(root)
+        services.set(root, created)
+        return created
+    }
 
     const send = (message: object): void => {
         const body = JSON.stringify(message)
@@ -26,7 +48,7 @@ export async function abideLsp({ cwd }: { cwd: string }): Promise<void> {
             method: 'textDocument/publishDiagnostics',
             params: {
                 uri: pathToFileURL(path).href,
-                diagnostics: service
+                diagnostics: serviceFor(path)
                     .diagnostics(path)
                     .map((diagnostic) => toLspDiagnostic(text, diagnostic)),
             },
@@ -42,7 +64,7 @@ export async function abideLsp({ cwd }: { cwd: string }): Promise<void> {
                     jsonrpc: '2.0',
                     id: message.id,
                     result: {
-                        capabilities: { textDocumentSync: 1 },
+                        capabilities: { textDocumentSync: 1, hoverProvider: true },
                         serverInfo: { name: 'abide-lsp' },
                     },
                 })
@@ -52,7 +74,7 @@ export async function abideLsp({ cwd }: { cwd: string }): Promise<void> {
                 if (isAbide(uri)) {
                     const path = fileURLToPath(uri)
                     documentText.set(path, text)
-                    service.update(path, text)
+                    serviceFor(path).update(path, text)
                     publish(path)
                 }
                 return
@@ -63,7 +85,7 @@ export async function abideLsp({ cwd }: { cwd: string }): Promise<void> {
                     const path = fileURLToPath(uri)
                     const text = message.params.contentChanges.at(-1)?.text ?? ''
                     documentText.set(path, text)
-                    service.update(path, text)
+                    serviceFor(path).update(path, text)
                     publish(path)
                 }
                 return
@@ -75,11 +97,29 @@ export async function abideLsp({ cwd }: { cwd: string }): Promise<void> {
                 }
                 return
             }
+            case 'textDocument/hover': {
+                /* A request: always answer (null when there's nothing to show) so
+                   the editor isn't left waiting. */
+                const { uri } = message.params.textDocument
+                const text = isAbide(uri) ? (documentText.get(fileURLToPath(uri)) ?? '') : ''
+                const info = isAbide(uri)
+                    ? serviceFor(fileURLToPath(uri)).quickInfo(
+                          fileURLToPath(uri),
+                          positionToOffset(text, message.params.position),
+                      )
+                    : undefined
+                send({
+                    jsonrpc: '2.0',
+                    id: message.id,
+                    result: info === undefined ? null : toLspHover(text, info),
+                })
+                return
+            }
             case 'textDocument/didClose': {
                 const { uri } = message.params.textDocument
                 if (isAbide(uri)) {
                     const path = fileURLToPath(uri)
-                    service.close(path)
+                    serviceFor(path).close(path)
                     documentText.delete(path)
                     send({
                         jsonrpc: '2.0',
@@ -140,9 +180,32 @@ function toLspDiagnostic(text: string, diagnostic: AbideDiagnostic): object {
     }
 }
 
+/* Renders mapped quick-info as an LSP hover: TypeScript's signature in a fenced
+   `ts` block, the doc comment (if any) below, over the covered source range. */
+function toLspHover(text: string, info: ShadowQuickInfo): object {
+    const fence = ['```ts', info.text, '```'].join('\n')
+    const value = info.documentation.length > 0 ? `${fence}\n\n${info.documentation}` : fence
+    return {
+        contents: { kind: 'markdown', value },
+        range: {
+            start: offsetToPosition(text, info.start),
+            end: offsetToPosition(text, info.start + info.length),
+        },
+    }
+}
+
 /* An absolute offset → LSP `{ line, character }` (0-based, UTF-16 code units). */
 function offsetToPosition(text: string, offset: number): { line: number; character: number } {
     const before = text.slice(0, offset)
     const line = before.split('\n').length - 1
     return { line, character: offset - (before.lastIndexOf('\n') + 1) }
+}
+
+/* An LSP `{ line, character }` (0-based) → absolute offset in `text`. */
+function positionToOffset(text: string, position: { line: number; character: number }): number {
+    const lineStart = text
+        .split('\n')
+        .slice(0, position.line)
+        .reduce((sum, line) => sum + line.length + 1, 0)
+    return lineStart + position.character
 }

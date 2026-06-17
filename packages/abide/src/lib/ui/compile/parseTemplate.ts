@@ -1,3 +1,4 @@
+import { decodeHtmlEntities } from './decodeHtmlEntities.ts'
 import type { TemplateAttr } from './types/TemplateAttr.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
 import type { TextPart } from './types/TextPart.ts'
@@ -10,6 +11,11 @@ components need and reads brace expressions with quote/nesting awareness so an
 expression containing `<`, `>`, or `}` parses intact. Void elements self-close.
 `<!-- … -->` comments are dropped (no node emitted) so they leave no trace in the
 SSR/client output or hydration cursor.
+
+Returns the parsed `nodes` plus the `styles` it skipped: a `<style>` block is the
+component's scoped CSS, collected here (not via a raw-source regex) so a `<style>`
+sitting inside a `{expr}` or attribute — e.g. one quoted in a code sample — is read
+as that expression's text, never mistaken for the component's own style.
 */
 
 const VOID_TAGS = new Set([
@@ -33,8 +39,13 @@ const VOID_TAGS = new Set([
    (post-trim) character, so the type-checking shadow can map a diagnostic back. */
 type Braced = { code: string; loc: number }
 
-export function parseTemplate(source: string, baseOffset = 0): TemplateNode[] {
+export function parseTemplate(
+    source: string,
+    baseOffset = 0,
+): { nodes: TemplateNode[]; styles: string[] } {
     let cursor = 0
+    /* The CSS bodies of the `<style>` elements skipped below, in source order. */
+    const styles: string[] = []
 
     /* Reads a `{...}` expression starting at `cursor` (on the `{`), tracking
        string literals and nested braces so the matching `}` is found. `loc` is the
@@ -79,9 +90,15 @@ export function parseTemplate(source: string, baseOffset = 0): TemplateNode[] {
         return source.startsWith('<style', cursor) && /[\s>]/.test(source.charAt(cursor + 6))
     }
 
-    /* Skips a `<style>…</style>` block; an unterminated block runs to end. No node. */
+    /* Skips a `<style>…</style>` block, collecting its CSS body into `styles`; an
+       unterminated block runs to end. Emits no node — style never reaches the
+       SSR/client output or hydration cursor. */
     function skipStyle(): void {
+        const openEnd = source.indexOf('>', cursor)
         const close = source.indexOf('</style>', cursor)
+        if (openEnd !== -1 && (close === -1 || openEnd < close)) {
+            styles.push(source.slice(openEnd + 1, close === -1 ? source.length : close).trim())
+        }
         cursor = close === -1 ? source.length : close + '</style>'.length
     }
 
@@ -91,7 +108,7 @@ export function parseTemplate(source: string, baseOffset = 0): TemplateNode[] {
         while (cursor < source.length && source.charAt(cursor) !== '<') {
             if (source.charAt(cursor) === '{') {
                 if (literal !== '') {
-                    parts.push({ kind: 'static', value: literal })
+                    parts.push({ kind: 'static', value: decodeHtmlEntities(literal) })
                     literal = ''
                 }
                 const { code, loc } = readBracedExpression()
@@ -102,7 +119,7 @@ export function parseTemplate(source: string, baseOffset = 0): TemplateNode[] {
             }
         }
         if (literal !== '') {
-            parts.push({ kind: 'static', value: literal })
+            parts.push({ kind: 'static', value: decodeHtmlEntities(literal) })
         }
         return { kind: 'text', parts }
     }
@@ -226,7 +243,7 @@ export function parseTemplate(source: string, baseOffset = 0): TemplateNode[] {
             roots.push(readText())
         }
     }
-    return roots
+    return { nodes: roots, styles }
 }
 
 /* Turns a component's attributes into props: a static value becomes a string

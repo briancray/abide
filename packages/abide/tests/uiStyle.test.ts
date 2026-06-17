@@ -109,3 +109,32 @@ describe('scoped <style> — SSR', () => {
         expect(render.html).toContain('<p data-b-')
     })
 })
+
+/* A `<style>` quoted inside a template expression (e.g. a code sample) is the
+   expression's text, not the component's scoped style: only the real top-level
+   `<style>` is extracted, so the expression renders intact. */
+const QUOTED_STYLE = `
+    <main>
+        <pre>{'<style>.danger { color: blue }</style>'}</pre>
+    </main>
+    <style>
+        h1 { color: red }
+    </style>
+`
+
+describe('a <style> inside an expression is text, not the component style', () => {
+    test('SSR scopes only the real <style>; the quoted one renders as escaped text', () => {
+        const render = new Function('doc', 'state', 'derived', 'effect', compileSSR(QUOTED_STYLE))(
+            doc,
+            state,
+            derived,
+            effect,
+        ) as { html: string }
+        // The real top-level <style> is the scoped CSS.
+        expect(render.html).toMatch(/<style>h1\[data-b-[a-z0-9]+\] \{ color: red \}/)
+        // The quoted .danger rule is never extracted/scoped as the component style.
+        expect(render.html).not.toContain('.danger[data-b-')
+        // The expression renders intact as escaped text in the <pre>.
+        expect(render.html).toContain('&lt;style&gt;.danger { color: blue }&lt;/style&gt;')
+    })
+})

@@ -31,6 +31,18 @@ describe('lowerDocAccess — emitted shape', () => {
         expect(lower('model.lines.push(v)')).toContain('model.add("lines/-", v)')
     })
 
+    test('a called member reads the receiver and invokes the method on the value', () => {
+        // a method call is not a deeper path: `draft.trim()` ≠ read("draft/trim")
+        expect(lower('model.draft.trim()')).toContain('model.read("draft").trim()')
+        expect(lower('model.name.toUpperCase()')).toContain('model.read("name").toUpperCase()')
+    })
+
+    test('a method on a nested path reads up to the method, then calls it', () => {
+        expect(lower('model.items.filter(a => a).map(b => b)')).toContain(
+            'model.read("items").filter(a => a).map(b => b)',
+        )
+    })
+
     test('delete becomes a remove patch', () => {
         expect(lower('delete model.byId[key]')).toContain('model.remove("byId/" + key)')
     })
@@ -71,5 +83,11 @@ describe('lowerDocAccess — executed semantics', () => {
     test('lowered dynamic-index read resolves through the path', () => {
         const d = doc({ lines: [{ sku: 'x' }, { sku: 'y' }] })
         expect(run(d, 'const i = 1; return model.lines[i].sku')).toBe('y')
+    })
+
+    test('a method call runs against the read value', () => {
+        const d = doc({ draft: '  hi  ', tags: ['a', 'b'] })
+        expect(run(d, 'return model.draft.trim()')).toBe('hi')
+        expect(run(d, 'return model.tags.join("-")')).toBe('a-b')
     })
 })

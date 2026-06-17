@@ -94,7 +94,7 @@ describe('health endpoint', () => {
         try {
             const body = await (await fetch(`${origin}${HEALTH_PATH}`)).json()
             /* The client read returns this payload whole (plus reachable), so all keys must be present. */
-            expect(Object.keys(body).sort()).toEqual(['authenticated', 'abide', 'name', 'version'])
+            expect(Object.keys(body).sort()).toEqual(['abide', 'authenticated', 'name', 'version'])
         } finally {
             stop()
         }

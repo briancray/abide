@@ -49,7 +49,7 @@ export function compileShadow(source: string): CompiledShadow {
     const { imports, scope, props } = analyzeScript(scriptBody, scriptStart)
     builder.raw(SHADOW_PREAMBLE)
     for (const line of imports) {
-        builder.raw(`${line}\n`)
+        builder.flush(line)
     }
     builder.raw(`interface __Props {\n${props.join('\n')}\n}\n`)
     /* async so `await` blocks are legal; never executed, so the return is void. */
@@ -59,7 +59,7 @@ export function compileShadow(source: string): CompiledShadow {
     for (const line of scope) {
         builder.flush(line)
     }
-    for (const node of parseTemplate(source.slice(templateStart), templateStart)) {
+    for (const node of parseTemplate(source.slice(templateStart), templateStart).nodes) {
         emitNode(node, builder)
     }
     builder.raw('}\n')
@@ -117,20 +117,19 @@ function createBuilder(): Builder {
     return builder
 }
 
-type ScriptAnalysis = { imports: string[]; scope: ScopeLine[]; props: string[] }
+type ScriptAnalysis = { imports: ScopeLine[]; scope: ScopeLine[]; props: string[] }
 
 /* Walks the leading `<script>` and produces the shadow's module imports, the
    value-typed scope lines, and the Props interface fields. `scriptStart` is the
    body's absolute offset in the source, so verbatim spans map back exactly. */
 function analyzeScript(scriptBody: string, scriptStart: number): ScriptAnalysis {
-    const imports: string[] = []
+    const imports: ScopeLine[] = []
     const scope: ScopeLine[] = []
     const props: string[] = []
     if (scriptBody.trim() === '') {
         return { imports, scope, props }
     }
     const file = ts.createSourceFile('script.ts', scriptBody, ts.ScriptTarget.Latest, true)
-    const printer = ts.createPrinter()
     /* A verbatim span: original text + the segment mapping it back, relative to the
        line start (the caller rebases shadowStart onto the running shadow length). */
     const span = (node: ts.Node, prefixLength: number): ScopeLine['segments'][number] => ({
@@ -142,7 +141,8 @@ function analyzeScript(scriptBody: string, scriptStart: number): ScriptAnalysis 
 
     for (const statement of file.statements) {
         if (ts.isImportDeclaration(statement)) {
-            imports.push(printer.printNode(ts.EmitHint.Unspecified, statement, file))
+            /* Emit verbatim with a span so hover/go-to resolve on the imported names. */
+            imports.push({ text: verbatim(statement), segments: [span(statement, 0)] })
             continue
         }
         const reactive = reactiveDeclarations(statement)
@@ -196,19 +196,27 @@ function scopeLineFor(
     const call = declaration.initializer as ts.CallExpression
     const callee = (call.expression as ts.Identifier).text
     if (callee === 'state') {
+        /* state<T>(initial): T is the value type — carry it onto the `let` so an
+           explicit annotation isn't lost to `any`/`any[]` inference of the initial. */
+        const typeNode = call.typeArguments?.[0]
+        const annotation = typeNode === undefined ? '' : `: ${verbatim(typeNode)}`
         const init = call.arguments[0]
         if (init === undefined) {
-            return { text: `let ${name};`, segments: [] }
+            return { text: `let ${name}${annotation};`, segments: [] }
         }
-        const prefix = `let ${name} = (`
+        const prefix = `let ${name}${annotation} = (`
         return { text: `${prefix}${verbatim(init)});`, segments: [span(init, prefix.length)] }
     }
     if (callee === 'derived') {
+        /* derived<T>(compute): T is the value type — annotate so an explicit
+           argument isn't lost to inference of the compute's return. */
+        const typeNode = call.typeArguments?.[0]
+        const annotation = typeNode === undefined ? '' : `: ${verbatim(typeNode)}`
         const fn = call.arguments[0]
         if (fn === undefined) {
             return { text: `const ${name} = undefined;`, segments: [] }
         }
-        const prefix = `const ${name} = (`
+        const prefix = `const ${name}${annotation} = (`
         return { text: `${prefix}${verbatim(fn)})();`, segments: [span(fn, prefix.length)] }
     }
     /* prop<T>('key'): Props field `key[?]: T`, scope binding read from props. */

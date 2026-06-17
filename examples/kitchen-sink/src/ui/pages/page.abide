@@ -2,8 +2,8 @@
 import Layout from '../Layout.abide'
 
 /*
-Kitchen-sink index. One card per README concept section, in the README's order.
-The composed auth showcase sits below.
+Kitchen-sink index — the framework reference. One card per surface; each card is a
+runnable, fully documented page. The composed auth showcase sits below.
 */
 const cards = [
     {
@@ -35,6 +35,11 @@ const cards = [
         href: '/health',
         title: 'online / health',
         body: 'Reactive connectivity reads: online() rides the browser online/offline events; health() polls /__abide/health while read and reports reachable plus whatever the app health() hook contributes.',
+    },
+    {
+        href: '/components',
+        title: 'components',
+        body: 'The .abide grammar — reactive primitives (state / derived / effect / prop), {expr} and bind: bindings, every <template> control-flow directive, snippets, components & slots, and scoped <style>.',
     },
     {
         href: '/pages',
@@ -71,14 +76,20 @@ const cards = [
         title: 'Logging & tracing',
         body: "One logger, both sides — always-on app channel, DEBUG-gated diagnostic channels, timed log.trace spans, and trace() returning the request's W3C traceparent.",
     },
+    {
+        href: '/reference',
+        title: 'reference',
+        body: 'The cross-cutting reference — project layout, the abide CLI commands, framework routes, every environment variable, and the configure / test / deploy seams.',
+    },
 ]
 </script>
 
 <Layout>
     <h1 class="text-3xl font-bold">abide kitchen-sink</h1>
     <p class="mt-2 text-slate-600">
-        Working demos of every primitive in the framework, organised by README section — one typed
-        backend reaching the browser, MCP, the CLI, and a native desktop bundle.
+        The framework reference — every surface as a runnable, documented page. One typed backend
+        reaching the browser, MCP, the CLI, and a native desktop bundle, plus the reactive UI that
+        consumes it.
     </p>
 
     <section class="mt-8 grid gap-4 sm:grid-cols-2">
