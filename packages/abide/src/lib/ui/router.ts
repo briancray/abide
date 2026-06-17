@@ -240,7 +240,7 @@ export function router(
                 }
                 /* Publish the active page so the `page` proxy resolves route/params/url. */
                 clientPage.value = {
-                    route: matched?.route ?? pathname,
+                    route: chainRoute,
                     params,
                     url:
                         typeof location === 'undefined'
