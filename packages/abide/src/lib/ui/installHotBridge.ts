@@ -5,6 +5,7 @@ import { doc } from './doc.ts'
 import { appendSnippet } from './dom/appendSnippet.ts'
 import { appendStatic } from './dom/appendStatic.ts'
 import { appendText } from './dom/appendText.ts'
+import { attach } from './dom/attach.ts'
 import { attr } from './dom/attr.ts'
 import { awaitBlock } from './dom/awaitBlock.ts'
 import { cloneStatic } from './dom/cloneStatic.ts'
@@ -54,6 +55,7 @@ export function installHotBridge(): void {
         cloneStatic,
         attr,
         on,
+        attach,
         each,
         eachAsync,
         when,

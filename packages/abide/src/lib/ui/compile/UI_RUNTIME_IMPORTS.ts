@@ -21,6 +21,7 @@ export const UI_RUNTIME_IMPORTS: { name: string; specifier: string }[] = [
     { name: 'cloneStatic', specifier: 'ui/dom/cloneStatic' },
     { name: 'attr', specifier: 'ui/dom/attr' },
     { name: 'on', specifier: 'ui/dom/on' },
+    { name: 'attach', specifier: 'ui/dom/attach' },
     { name: 'each', specifier: 'ui/dom/each' },
     { name: 'eachAsync', specifier: 'ui/dom/eachAsync' },
     { name: 'when', specifier: 'ui/dom/when' },

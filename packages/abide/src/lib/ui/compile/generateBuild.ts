@@ -70,6 +70,8 @@ export function generateBuild(
                 code += `attr(${varName}, ${JSON.stringify(attr.name)}, () => (${lowerExpression(attr.code)}));\n`
             } else if (attr.kind === 'event') {
                 code += `on(${varName}, ${JSON.stringify(attr.event)}, (${lowerExpression(attr.code)}));\n`
+            } else if (attr.kind === 'attach') {
+                code += `attach(${varName}, (${lowerExpression(attr.code)}));\n`
             } else if (attr.kind === 'bind' && attr.property === 'group') {
                 /* Grouped two-way: radio binds the path to the single checked
                    `value`; checkbox treats the path as an array, adding/removing

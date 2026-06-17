@@ -153,6 +153,8 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
                     attrs.push({ kind: 'event', event: name.slice(2), code, loc })
                 } else if (name.startsWith('bind:')) {
                     attrs.push({ kind: 'bind', property: name.slice(5), code, loc })
+                } else if (name === 'attach') {
+                    attrs.push({ kind: 'attach', code, loc })
                 } else {
                     attrs.push({ kind: 'expression', name, code, loc })
                 }
@@ -282,6 +284,9 @@ function attrName(attr: TemplateAttr): string {
     }
     if (attr.kind === 'bind') {
         return `bind:${attr.property}`
+    }
+    if (attr.kind === 'attach') {
+        return 'attach'
     }
     return attr.name
 }
