@@ -856,28 +856,42 @@ rewriteHashedClientEntries then swaps both for the hashed entry filenames.
 function injectShellAssets(shell: string): string {
     let result = shell
     if (!result.includes('/_app/client.css')) {
-        if (!result.includes('</head>')) {
-            abideLog.warn(
-                'src/ui/app.html has no </head> — skipping client.css injection; the page will render unstyled',
-            )
-        }
-        result = result.replace(
-            '</head>',
-            '<link rel="stylesheet" href="/_app/client.css" />\n</head>',
+        result = injectBeforeTag(
+            result,
+            '<link rel="stylesheet" href="/_app/client.css" />',
+            'head',
+            'src/ui/app.html has no </head>',
         )
     }
     if (!result.includes('/_app/client.js')) {
-        if (!result.includes('</body>')) {
-            abideLog.warn(
-                'src/ui/app.html has no </body> — skipping client.js injection; the page will not hydrate',
-            )
-        }
-        result = result.replace(
-            '</body>',
-            '<script type="module" src="/_app/client.js"></script>\n</body>',
+        result = injectBeforeTag(
+            result,
+            '<script type="module" src="/_app/client.js"></script>',
+            'body',
+            'src/ui/app.html has no </body>',
         )
     }
     return result
+}
+
+/*
+Inserts `snippet` before the shell's closing `</tag>` (case-insensitive, so an
+uppercase or oddly-cased custom app.html still works). When the tag is absent
+the asset would otherwise be silently dropped, leaving the page unstyled /
+unhydrated; instead warn and append the snippet so it still ships.
+*/
+function injectBeforeTag(
+    shell: string,
+    snippet: string,
+    tag: 'head' | 'body',
+    missingMessage: string,
+): string {
+    const closing = new RegExp(`</${tag}\\s*>`, 'i')
+    if (closing.test(shell)) {
+        return shell.replace(closing, (match) => `${snippet}\n${match}`)
+    }
+    abideLog.warn(`${missingMessage} — appending the reference at the end of the document`)
+    return `${shell}\n${snippet}`
 }
 
 /*
