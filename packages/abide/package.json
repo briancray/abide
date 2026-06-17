@@ -1,6 +1,6 @@
 {
     "name": "@abide/abide",
-    "version": "0.29.0",
+    "version": "0.30.0",
     "type": "module",
     "sideEffects": false,
     "description": "Isomorphic multimodal HTTP framework built for humans and machines in a single Bun runtime",
