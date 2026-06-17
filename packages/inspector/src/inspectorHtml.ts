@@ -450,10 +450,14 @@ async function loadCache() {
 }
 
 // ---- live feed ----
-let first = true
+// Track the buffer epoch (the id prefix). A new epoch means a fresh worker
+// replaying its whole tail (after a reconnect/swap), so clear the feed to avoid
+// appending those records as duplicates on top of what's already shown.
+let currentEpoch
 const source = new EventSource(root + '/events')
 source.onmessage = (event) => {
-  if (first) { feedEl.innerHTML = ''; first = false }
+  const epoch = (event.lastEventId || '').split(':')[0]
+  if (epoch !== currentEpoch) { feedEl.innerHTML = ''; currentEpoch = epoch }
   ingest(JSON.parse(event.data))
 }
 

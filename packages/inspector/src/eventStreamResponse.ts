@@ -10,11 +10,31 @@ function safeJson(record: unknown): string {
     try {
         return JSON.stringify(record)
     } catch {
-        return JSON.stringify({
-            ...(record as object),
-            data: String((record as { data?: unknown }).data),
-        })
+        // A non-serializable field (BigInt/circular) in `data` or elsewhere: degrade
+        // each value to its String form; if even that fails, ship a minimal marker
+        // rather than throwing into the enqueue path.
+        try {
+            return JSON.stringify(
+                Object.fromEntries(
+                    Object.entries(record as object).map(([key, value]) => [
+                        key,
+                        stringifyValue(value),
+                    ]),
+                ),
+            )
+        } catch {
+            return JSON.stringify({ error: 'unserializable record' })
+        }
     }
+}
+
+/* JSON-safe scalar: keep what JSON already handles, String() the rest. */
+function stringifyValue(value: unknown): unknown {
+    const type = typeof value
+    if (value === null || type === 'string' || type === 'number' || type === 'boolean') {
+        return value
+    }
+    return String(value)
 }
 
 /*
@@ -35,11 +55,37 @@ export function eventStreamResponse(
 
     let unsubscribe: (() => void) | undefined
     let heartbeat: ReturnType<typeof setInterval> | undefined
+    let closed = false
     const encoder = new TextEncoder()
+
+    // Tear down the subscription + heartbeat once; idempotent across cancel and an
+    // enqueue failure (the controller closed before cancel ran).
+    const teardown = () => {
+        if (closed) {
+            return
+        }
+        closed = true
+        unsubscribe?.()
+        if (heartbeat) {
+            clearInterval(heartbeat)
+        }
+    }
+
     const stream = new ReadableStream<Uint8Array>({
         start(controller) {
+            // Enqueueing on a closed controller throws; treat that as the stream ending.
+            const safeEnqueue = (bytes: Uint8Array) => {
+                if (closed) {
+                    return
+                }
+                try {
+                    controller.enqueue(bytes)
+                } catch {
+                    teardown()
+                }
+            }
             const send = (entry: BufferedRecord<unknown>) =>
-                controller.enqueue(
+                safeEnqueue(
                     encoder.encode(
                         `id: ${buffer.epoch}:${entry.id}\ndata: ${safeJson(entry.record)}\n\n`,
                     ),
@@ -48,17 +94,9 @@ export function eventStreamResponse(
                 send(entry)
             }
             unsubscribe = buffer.subscribe(send)
-            heartbeat = setInterval(
-                () => controller.enqueue(encoder.encode(': ping\n\n')),
-                HEARTBEAT_MS,
-            )
+            heartbeat = setInterval(() => safeEnqueue(encoder.encode(': ping\n\n')), HEARTBEAT_MS)
         },
-        cancel() {
-            unsubscribe?.()
-            if (heartbeat) {
-                clearInterval(heartbeat)
-            }
-        },
+        cancel: teardown,
     })
     return new Response(stream, {
         headers: {

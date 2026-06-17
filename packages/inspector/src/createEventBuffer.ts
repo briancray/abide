@@ -27,8 +27,15 @@ export function createEventBuffer<Record>(capacity: number) {
         if (entries.length > capacity) {
             entries.shift()
         }
+        // Isolate listeners: a stream whose controller has closed throws on
+        // enqueue, and that must not abort delivery to the other listeners or
+        // the framework's log tap.
         for (const listener of listeners) {
-            listener(entry)
+            try {
+                listener(entry)
+            } catch {
+                // A throwing listener is treated as dead; it will unsubscribe on cancel.
+            }
         }
     }
 
