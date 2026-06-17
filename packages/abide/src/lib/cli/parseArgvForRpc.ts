@@ -59,19 +59,22 @@ export async function parseArgvForRpc(
         if (!token.startsWith('--')) {
             throw new Error(`unexpected positional argument: ${token}`)
         }
-        const isNegated = token.startsWith('--no-')
-        const rawName = isNegated ? token.slice('--no-'.length) : token.slice('--'.length)
-        const [name, eqValue] = rawName.includes('=')
-            ? [rawName.slice(0, rawName.indexOf('=')), rawName.slice(rawName.indexOf('=') + 1)]
-            : [rawName, undefined]
+        const stripped = token.slice('--'.length)
+        const [literalName, eqValue] = stripped.includes('=')
+            ? [stripped.slice(0, stripped.indexOf('=')), stripped.slice(stripped.indexOf('=') + 1)]
+            : [stripped, undefined]
+        /* `--no-x` negates only a known boolean property x; otherwise the literal
+           name wins, so a property legitimately named `no-…` stays reachable. */
+        const negatedName = literalName.startsWith('no-')
+            ? literalName.slice('no-'.length)
+            : undefined
+        const isNegated = negatedName !== undefined && properties[negatedName]?.type === 'boolean'
+        const name = isNegated ? (negatedName as string) : literalName
         const prop = properties[name]
         const propType = prop?.type
         if (propType === 'boolean') {
             args[name] = !isNegated
             continue
-        }
-        if (isNegated) {
-            throw new Error(`--no-${name} is only valid on boolean flags`)
         }
         const value = eqValue ?? argv[++index]
         if (value === undefined) {

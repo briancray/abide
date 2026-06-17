@@ -14,6 +14,43 @@ import type { CliTarget } from './types/CliTarget.ts'
 const isHelpFlag = (arg: string): boolean => arg === '--help' || arg === '-h'
 
 /*
+Whether a command's argv tail genuinely requests help, i.e. a help flag appears
+at a flag position rather than as the value of a value-expecting flag. Mirrors
+parseArgvForRpc's flag rule: boolean props (and `--name=…`) consume no following
+token, everything else consumes the next token as its value — so `--title --help`
+passes `--help` as the title value, not a help request.
+*/
+function commandArgvRequestsHelp(
+    argvTail: string[],
+    jsonSchema: Record<string, unknown> | undefined,
+): boolean {
+    const properties =
+        (jsonSchema?.properties as Record<string, { type?: string }> | undefined) ?? {}
+    for (let index = 0; index < argvTail.length; index += 1) {
+        const token = argvTail[index] as string
+        if (isHelpFlag(token)) {
+            return true
+        }
+        if (!token.startsWith('--')) {
+            continue
+        }
+        if (token === '--json') {
+            index += 1 // consumes its value
+            continue
+        }
+        const rawName = token.slice('--'.length)
+        if (rawName.includes('=')) {
+            continue // inline value, consumes no following token
+        }
+        const name = rawName.startsWith('no-') ? rawName.slice('no-'.length) : rawName
+        if (properties[name]?.type !== 'boolean') {
+            index += 1 // a value-expecting flag consumes the next token
+        }
+    }
+    return false
+}
+
+/*
 Top-level CLI driver for the standalone binary. The binary is a thin remote client
 — it carries no handler code, so it always talks to a running server over HTTP, but
 it can boot one: the full binary ships the server beside it, so `/start` spawns a
@@ -64,7 +101,7 @@ export async function runCli({
         }
         return 0
     }
-    if (first && argv.some(isHelpFlag)) {
+    if (first && commandArgvRequestsHelp(argv.slice(1), manifest[first]?.jsonSchema)) {
         printCommandHelp(programName, first, manifest)
         return 0
     }

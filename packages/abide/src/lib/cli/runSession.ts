@@ -30,10 +30,12 @@ export async function runSession({
 }): Promise<number> {
     let current = target
     // Reap any local instance on Ctrl+C — the closure reads the latest `current`.
-    process.on('SIGINT', () => {
+    // Named + removed on exit so repeated sessions in one process don't accumulate listeners.
+    const onSigint = () => {
         current?.child?.kill()
         process.exit(0)
-    })
+    }
+    process.on('SIGINT', onSigint)
 
     // Swap the active connection: reap the previous local instance (only one runs
     // at a time), adopt the next target, and reprint the status line.
@@ -99,6 +101,7 @@ export async function runSession({
         process.stdout.write(promptText)
     }
 
+    process.removeListener('SIGINT', onSigint)
     current?.child?.kill()
     printTrimmed(footer)
     return 0
