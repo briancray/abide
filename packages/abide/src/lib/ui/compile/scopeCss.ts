@@ -85,10 +85,31 @@ function scopeSelector(selector: string, attribute: string): string {
     }
     const prefix = match[1] ?? ''
     const last = match[2] ?? ''
-    const pseudo = last.indexOf(':')
+    const pseudo = pseudoIndex(last)
     const scopedLast =
         pseudo === -1
             ? `${last}[${attribute}]`
             : `${last.slice(0, pseudo)}[${attribute}]${last.slice(pseudo)}`
     return `${prefix}${scopedLast}`
+}
+
+/*
+Index of the first pseudo-class/element colon in a compound — i.e. a `:` at
+bracket depth zero. Skips colons inside an attribute selector's value
+(e.g. `a[href='http://x']`), which must not be treated as a pseudo boundary.
+Returns -1 when the compound has no pseudo.
+*/
+function pseudoIndex(compound: string): number {
+    let depth = 0
+    for (let index = 0; index < compound.length; index += 1) {
+        const char = compound[index]
+        if (char === '[') {
+            depth += 1
+        } else if (char === ']') {
+            depth -= 1
+        } else if (char === ':' && depth === 0) {
+            return index
+        }
+    }
+    return -1
 }

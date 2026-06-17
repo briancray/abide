@@ -37,6 +37,11 @@ export function decodeHtmlEntities(text: string): string {
                 body.charAt(1).toLowerCase() === 'x'
                     ? parseInt(body.slice(2), 16)
                     : parseInt(body.slice(1), 10)
+            /* A reference past the Unicode max makes String.fromCodePoint throw a
+               RangeError; leave such an invalid reference intact rather than aborting compilation. */
+            if (!Number.isInteger(codePoint) || codePoint > 0x10ffff) {
+                return match
+            }
             return String.fromCodePoint(codePoint)
         }
         return NAMED_ENTITIES[body] ?? match
