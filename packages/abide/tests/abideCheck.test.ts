@@ -57,4 +57,41 @@ describe('abide check', () => {
         expect(parent).toHaveLength(1)
         expect(parent[0]!.message).toContain('not assignable')
     })
+
+    /* The `else` branch is fused into a real `if (…) {…} else {…}`, so it carries the
+       condition's negative narrowing — here `v` is `number` in the else, not the union. */
+    test('the else branch carries the condition negative narrowing', () => {
+        const dir = project({
+            'elseok.abide': `<script>\nlet v = prop<string | number>('v')\n</script>\n<template if={typeof v === 'string'}>{v.toUpperCase()}</template>\n<template else>{v.toFixed(2)}</template>\n`,
+        })
+        expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
+    })
+
+    /* A real `switch` narrows the discriminant subject into each case body. */
+    test('a switch case narrows a discriminated union subject', () => {
+        const dir = project({
+            'shape.abide': `<script>\ntype Shape = { kind: 'circle'; r: number } | { kind: 'square'; side: number }\nlet shape = prop<Shape>('shape')\n</script>\n<template switch={shape.kind}>\n  <template case={'circle'}>{shape.r}</template>\n  <template case={'square'}>{shape.side}</template>\n</template>\n`,
+        })
+        expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
+    })
+
+    /* An async each iterates with `for await`, so the item binds to the AsyncIterable's
+       element type instead of erroring on the missing sync iterator. */
+    test('an async each binds the AsyncIterable element type', () => {
+        const dir = project({
+            'stream.abide': `<script>\nlet stream = prop<AsyncIterable<number>>('stream')\n</script>\n<template each={stream} as={n} await>{n.toFixed(2)}</template>\n`,
+        })
+        expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
+    })
+
+    /* The streaming `then` branch binds the awaited value, so a wrong member on the
+       resolved data is caught (previously bound as `any`, silently unchecked). */
+    test('a streaming then branch type-checks the resolved value', () => {
+        const dir = project({
+            'await.abide': `<script>\nlet load = prop<Promise<{ title: string }>>('load')\n</script>\n<template await={load}>loading<template then={data}>{data.bogus}</template></template>\n`,
+        })
+        const diagnostics = collectAbideDiagnostics(createShadowProgram(dir))
+        expect(diagnostics).toHaveLength(1)
+        expect(diagnostics[0]!.message).toContain('bogus')
+    })
 })

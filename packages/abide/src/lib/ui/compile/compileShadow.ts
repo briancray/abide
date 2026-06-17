@@ -1,6 +1,7 @@
 import ts from 'typescript'
 import { ABIDE_PACKAGE_NAME } from '../../shared/ABIDE_PACKAGE_NAME.ts'
 import { parseTemplate } from './parseTemplate.ts'
+import { REACTIVE_CALLEES } from './REACTIVE_CALLEES.ts'
 import type { CompiledShadow, ShadowMapping } from './types/CompiledShadow.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
 
@@ -14,13 +15,14 @@ never appears here — every `prop()` declaration is rewritten away. `$props` is
 legacy untyped prop bag (pre-`prop()` sugar) made available raw.
 */
 const SHADOW_PREAMBLE = `import { state } from '${ABIDE_PACKAGE_NAME}/ui/state'
+import { linked } from '${ABIDE_PACKAGE_NAME}/ui/linked'
 import { derived } from '${ABIDE_PACKAGE_NAME}/ui/derived'
 import { effect } from '${ABIDE_PACKAGE_NAME}/ui/effect'
 import { doc } from '${ABIDE_PACKAGE_NAME}/ui/doc'
 import { html } from '${ABIDE_PACKAGE_NAME}/shared/html'
 import { snippet } from '${ABIDE_PACKAGE_NAME}/shared/snippet'
 declare const $props: Record<string, (() => unknown) | undefined>
-void [state, derived, effect, doc, html, snippet]
+void [state, linked, derived, effect, doc, html, snippet]
 `
 
 /*
@@ -66,9 +68,7 @@ export function compileShadow(source: string): CompiledShadow {
     for (const line of scope) {
         builder.flush(line)
     }
-    for (const node of parseTemplate(source.slice(templateStart), templateStart).nodes) {
-        emitNode(node, builder)
-    }
+    emitNodes(parseTemplate(source.slice(templateStart), templateStart).nodes, builder)
     builder.raw('}\n')
     return builder.result()
 }
@@ -82,6 +82,9 @@ type Builder = {
     expr: (code: string, sourceLoc: number | undefined) => void
     stmt: (code: string, sourceLoc: number | undefined) => void
     flush: (line: ScopeLine) => void
+    /* A fresh shadow-local binding name (`__<base>_<n>`) — for synthesised bindings
+       like an await's resolved value, kept distinct so nested blocks never collide. */
+    unique: (base: string) => string
     result: () => CompiledShadow
 }
 
@@ -91,8 +94,12 @@ type ScopeLine = { text: string; segments: ShadowMapping[] }
 
 function createBuilder(): Builder {
     let code = ''
+    let uniqueCounter = 0
     const mappings: ShadowMapping[] = []
     const builder: Builder = {
+        unique(base) {
+            return `__${base}_${uniqueCounter++}`
+        },
         raw(text) {
             code += text
         },
@@ -189,14 +196,15 @@ function reactiveDeclarations(statement: ts.Statement): ts.VariableDeclaration[]
     return reactive.length === declarations.length && reactive.length > 0 ? reactive : undefined
 }
 
-/* The callee name of a `NAME = state(...)` / `derived(...)` / `prop(...)` decl. */
+/* The callee name of a `NAME = state(...)` / `linked(...)` / `derived(...)` /
+   `prop(...)` decl. */
 function signalCallee(declaration: ts.VariableDeclaration): string | undefined {
     const initializer = declaration.initializer
     if (
         initializer !== undefined &&
         ts.isCallExpression(initializer) &&
         ts.isIdentifier(initializer.expression) &&
-        ['state', 'derived', 'prop'].includes(initializer.expression.text)
+        REACTIVE_CALLEES.has(initializer.expression.text)
     ) {
         return initializer.expression.text
     }
@@ -226,9 +234,10 @@ function scopeLineFor(
         const prefix = `let ${name}${annotation} = (`
         return { text: `${prefix}${verbatim(init)});`, segments: [span(init, prefix.length)] }
     }
-    if (callee === 'derived') {
-        /* derived<T>(compute): T is the value type — annotate so an explicit
-           argument isn't lost to inference of the compute's return. */
+    if (callee === 'derived' || callee === 'linked') {
+        /* derived<T>(compute) / linked<T>(seed): T is the value type — the call's
+           first arg is a thunk, so invoking it yields the value. Annotate so an
+           explicit type argument isn't lost to inference of the thunk's return. */
         const typeNode = call.typeArguments?.[0]
         const annotation = typeNode === undefined ? '' : `: ${verbatim(typeNode)}`
         const fn = call.arguments[0]
@@ -248,9 +257,56 @@ function scopeLineFor(
     return { text: `let ${name} = props[${JSON.stringify(keyText)}];`, segments: [] }
 }
 
-/* Emits a template node's expressions into the shadow's `if (false) {…}` render
-   body. Control flow introduces its binding so children type-check against it;
-   every expression is referenced in a statement so a type error surfaces and maps. */
+/* Emits a sibling list. Walks with lookahead so an `if` and its trailing `else`
+   (the next meaningful sibling — a `case` with no match) fuse into one
+   `if (…) {…} else {…}`, giving the else branch the condition's negative narrowing
+   instead of being checked bare against the un-narrowed type. Every other node is
+   emitted standalone via `emitNode`. */
+function emitNodes(nodes: TemplateNode[], builder: Builder): void {
+    for (let index = 0; index < nodes.length; index += 1) {
+        const node = nodes[index]
+        if (node === undefined) {
+            continue
+        }
+        if (node.kind !== 'if') {
+            emitNode(node, builder)
+            continue
+        }
+        builder.raw('if ')
+        builder.expr(node.condition, node.loc)
+        builder.raw(' {\n')
+        emitNodes(node.children, builder)
+        builder.raw('}')
+        const elseIndex = nextMeaningful(nodes, index + 1)
+        const elseNode = elseIndex === -1 ? undefined : nodes[elseIndex]
+        if (elseNode?.kind === 'case' && elseNode.match === undefined) {
+            builder.raw(' else {\n')
+            emitNodes(elseNode.children, builder)
+            builder.raw('}')
+            index = elseIndex
+        }
+        builder.raw('\n')
+    }
+}
+
+/* Index of the next node that isn't whitespace-only text (which separates the `if`
+   and `else` tags in source but carries no checkable content); -1 if none remain. */
+function nextMeaningful(nodes: TemplateNode[], from: number): number {
+    for (let index = from; index < nodes.length; index += 1) {
+        const node = nodes[index]
+        const blank =
+            node?.kind === 'text' &&
+            node.parts.every((part) => part.kind === 'static' && part.value.trim() === '')
+        if (!blank) {
+            return index
+        }
+    }
+    return -1
+}
+
+/* Emits a template node's expressions into the shadow's render body. Control flow
+   introduces its binding so children type-check against it; every expression is
+   referenced in a statement so a type error surfaces and maps. */
 function emitNode(node: TemplateNode, builder: Builder): void {
     switch (node.kind) {
         case 'text':
@@ -266,9 +322,7 @@ function emitNode(node: TemplateNode, builder: Builder): void {
                     builder.stmt(attr.code, attr.loc)
                 }
             }
-            node.children.forEach((child) => {
-                emitNode(child, builder)
-            })
+            emitNodes(node.children, builder)
             return
         case 'component': {
             /* Check each prop against the child's declared type. The imported tag
@@ -284,79 +338,117 @@ function emitNode(node: TemplateNode, builder: Builder): void {
                 builder.expr(prop.code, prop.loc)
                 builder.raw(');\n')
             }
-            node.children.forEach((child) => {
-                emitNode(child, builder)
-            })
+            emitNodes(node.children, builder)
             return
         }
         case 'if':
+            /* Reached only for an `if` emitted outside a sibling list (none today);
+               `emitNodes` owns the `if`/`else` fusion. Emit without an else. */
             builder.raw('if ')
             builder.expr(node.condition, node.loc)
             builder.raw(' {\n')
-            node.children.forEach((child) => {
-                emitNode(child, builder)
-            })
+            emitNodes(node.children, builder)
             builder.raw('}\n')
             return
         case 'each':
-            builder.raw(`for (const ${node.as} of `)
+            /* `for await` over an async each's AsyncIterable, plain `for…of` otherwise —
+               so the item binds to the element type under either iteration protocol. */
+            builder.raw(
+                node.async ? `for await (const ${node.as} of ` : `for (const ${node.as} of `,
+            )
             builder.expr(node.items, node.loc)
             builder.raw(') {\n')
             if (node.key !== undefined) {
                 builder.raw(`void (${node.key});\n`)
             }
-            node.children.forEach((child) => {
-                emitNode(child, builder)
-            })
+            emitNodes(node.children, builder)
             builder.raw('}\n')
             return
-        case 'await':
+        case 'await': {
+            /* Resolve once into a shadow-local; `then` binds it (carrying the awaited
+               type so resolved-content props are checked), `catch` binds the error as
+               `any` (statically unknowable), `finally` binds nothing. Blocking: the
+               non-branch children are the resolved content, bound to `as`. Streaming:
+               they're the pending content, checked without the resolved value. */
+            const resolved = builder.unique('awaited')
             builder.raw('{\n')
-            builder.raw(node.as !== undefined ? `const ${node.as} = await ` : 'await ')
+            builder.raw(`const ${resolved} = await `)
             builder.expr(node.promise, node.loc)
-            builder.raw(';\n')
-            node.children.forEach((child) => {
-                emitNode(child, builder)
-            })
+            builder.raw(`;\nvoid ${resolved};\n`)
+            const pending = node.children.filter((child) => child.kind !== 'branch')
+            const branches = node.children.filter((child) => child.kind === 'branch')
+            if (node.blocking && node.as !== undefined) {
+                builder.raw(`{\nconst ${node.as} = ${resolved};\n`)
+                emitNodes(pending, builder)
+                builder.raw('}\n')
+            } else {
+                emitNodes(pending, builder)
+            }
+            for (const branch of branches) {
+                if (branch.kind !== 'branch') {
+                    continue
+                }
+                builder.raw('{\n')
+                if (branch.branch === 'then' && branch.as !== undefined) {
+                    builder.raw(`const ${branch.as} = ${resolved};\n`)
+                } else if (branch.branch === 'catch' && branch.as !== undefined) {
+                    builder.raw(`const ${branch.as} = undefined as any;\n`)
+                }
+                emitNodes(branch.children, builder)
+                builder.raw('}\n')
+            }
             builder.raw('}\n')
             return
+        }
         case 'switch':
-            builder.stmt(node.subject, node.loc)
-            node.children.forEach((child) => {
-                emitNode(child, builder)
-            })
+            /* A real `switch` so a discriminant subject narrows into each case body;
+               non-case children (whitespace between cases) carry nothing and are
+               skipped. `break` keeps cases independent under `noFallthroughCasesInSwitch`. */
+            builder.raw('switch (')
+            builder.expr(node.subject, node.loc)
+            builder.raw(') {\n')
+            for (const child of node.children) {
+                if (child.kind !== 'case') {
+                    continue
+                }
+                if (child.match !== undefined) {
+                    builder.raw('case ')
+                    builder.expr(child.match, child.loc)
+                    builder.raw(': {\n')
+                } else {
+                    builder.raw('default: {\n')
+                }
+                emitNodes(child.children, builder)
+                builder.raw('break;\n}\n')
+            }
+            builder.raw('}\n')
             return
         case 'case':
+            /* Reached only for a stray case outside a switch/if-else (none today); a
+               `switch` emits its own cases and `emitNodes` consumes an `else`. */
             if (node.match !== undefined) {
                 builder.stmt(node.match, node.loc)
             }
-            node.children.forEach((child) => {
-                emitNode(child, builder)
-            })
+            emitNodes(node.children, builder)
             return
         case 'branch':
-            /* then/catch bind the resolved value / error as `any` so children check. */
+            /* Reached only for a stray branch outside an await (none today); the await
+               handler binds resolved/error types for its own branch children. */
             builder.raw('{\n')
             if (node.as !== undefined) {
                 builder.raw(`const ${node.as} = undefined as any;\n`)
             }
-            node.children.forEach((child) => {
-                emitNode(child, builder)
-            })
+            emitNodes(node.children, builder)
             builder.raw('}\n')
             return
         case 'try':
             builder.raw('{\n')
-            node.children.forEach((child) => {
-                emitNode(child, builder)
-            })
+            emitNodes(node.children, builder)
             builder.raw('}\n')
             return
         case 'snippet':
             builder.raw(`const ${node.name} = (${node.params ?? ''}) => {\n`)
-            node.children.forEach((child) => {
-                emitNode(child, builder)
-            })
+            emitNodes(node.children, builder)
             builder.raw('};\n')
             return
         case 'script':
