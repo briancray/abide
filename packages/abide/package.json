@@ -130,6 +130,7 @@
         "bin",
         "template",
         "tsconfig.app.json",
+        "AGENTS.md",
         "CHANGELOG.md"
     ],
     "dependencies": {
