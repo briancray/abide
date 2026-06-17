@@ -1,4 +1,6 @@
 import { abideUiPlugin } from '../../src/lib/ui/compile/abideUiPlugin.ts'
+import { cloneStatic } from '../../src/lib/ui/dom/cloneStatic.ts'
+import { mountChild } from '../../src/lib/ui/dom/mountChild.ts'
 import { enterRenderPass } from '../../src/lib/ui/runtime/enterRenderPass.ts'
 import { exitRenderPass } from '../../src/lib/ui/runtime/exitRenderPass.ts'
 import { nextBlockId } from '../../src/lib/ui/runtime/nextBlockId.ts'
@@ -21,3 +23,10 @@ const globals = globalThis as Record<string, unknown>
 globals.nextBlockId = nextBlockId
 globals.enterRenderPass = enterRenderPass
 globals.exitRenderPass = exitRenderPass
+/* Compiled child mounts call `mountChild` as a bare name; the real bundle imports
+   it. Off the hot path (hotReloadEnabled stays false here) it just runs the
+   factory, exactly as the previous direct call did. */
+globals.mountChild = mountChild
+/* The build emits `cloneStatic` for fully-static element runs; the real bundle
+   imports it, the `new Function` harnesses resolve it as a bare global. */
+globals.cloneStatic = cloneStatic

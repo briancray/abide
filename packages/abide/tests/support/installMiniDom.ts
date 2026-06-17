@@ -99,6 +99,18 @@ export function installMiniDom(): () => void {
             }
             this.childNodes = value === '' ? [] : [new MiniText(value)]
         }
+
+        /* Deep/shallow clone, mirroring `Node.cloneNode` — what `cloneStatic` clones a
+           parsed template's children with. Overridden per subclass to carry their data. */
+        cloneNode(deep = false): MiniNode {
+            const clone = new MiniNode()
+            if (deep) {
+                for (const child of this.childNodes) {
+                    clone.appendChild(child.cloneNode(true))
+                }
+            }
+            return clone
+        }
     }
 
     class MiniText extends MiniNode {
@@ -118,6 +130,9 @@ export function installMiniDom(): () => void {
             this.parentNode?.insertBefore(rest, this.nextSibling)
             return rest
         }
+        cloneNode(): MiniNode {
+            return new MiniText(this.data)
+        }
     }
 
     /* A comment node — used as a streaming/hydration boundary marker. */
@@ -130,15 +145,25 @@ export function installMiniDom(): () => void {
         get textContent(): string {
             return ''
         }
+        cloneNode(): MiniNode {
+            return new MiniComment(this.data)
+        }
     }
 
     class MiniElement extends MiniNode {
         tagName: string
         attributes = new Map<string, string>()
         listeners = new Map<string, Set<EventListener>>()
+        /* A `<template>` parses its `innerHTML` into `.content` (a holder node), not
+           its own children — matching the real DocumentFragment. `cloneStatic` clones
+           `content`'s children. */
+        content: MiniNode | undefined = undefined
         constructor(tagName: string) {
             super()
             this.tagName = tagName
+            if (tagName === 'template') {
+                this.content = new MiniNode()
+            }
         }
         get children(): MiniElement[] {
             return this.childNodes.filter(
@@ -172,13 +197,29 @@ export function installMiniDom(): () => void {
             return true
         }
         set innerHTML(html: string) {
-            for (const child of this.childNodes) {
+            /* A template parses into its content holder, every other element into
+               itself. */
+            const target = this.content ?? this
+            for (const child of target.childNodes) {
                 child.parentNode = undefined
             }
-            this.childNodes = []
+            target.childNodes = []
             for (const node of parseHTML(html)) {
-                this.appendChild(node)
+                target.appendChild(node)
             }
+        }
+        cloneNode(deep = false): MiniNode {
+            const clone = new MiniElement(this.tagName)
+            clone.attributes = new Map(this.attributes)
+            if (this.content !== undefined) {
+                clone.content = this.content.cloneNode(true)
+            }
+            if (deep) {
+                for (const child of this.childNodes) {
+                    clone.appendChild(child.cloneNode(true))
+                }
+            }
+            return clone
         }
     }
 

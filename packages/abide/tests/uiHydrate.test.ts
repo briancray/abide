@@ -9,7 +9,6 @@ import { applyResolved } from '../src/lib/ui/dom/applyResolved.ts'
 import { awaitBlock } from '../src/lib/ui/dom/awaitBlock.ts'
 import { each } from '../src/lib/ui/dom/each.ts'
 import { hydrate } from '../src/lib/ui/dom/hydrate.ts'
-import { injectStyle } from '../src/lib/ui/dom/injectStyle.ts'
 import { on } from '../src/lib/ui/dom/on.ts'
 import { openChild } from '../src/lib/ui/dom/openChild.ts'
 import { openRoot } from '../src/lib/ui/dom/openRoot.ts'
@@ -451,9 +450,9 @@ describe('hydrate — adopt server DOM', () => {
         delete RESUME[0] // the manifest is process-global; don't leak into other tests
     })
 
-    test('adopts past a scoped <style> without shifting the cursor', () => {
-        // mirrors the demo bug: SSR emits the component's <style> as its first node;
-        // injectStyle must claim it on hydrate so the body roots line up
+    test('adopts a multi-root if/else branch in place', () => {
+        // The body roots must line up with the SSR nodes during adoption; with no
+        // per-component <style> emitted, the else <p> is claimed where it stands.
         const model = doc({ total: 0 })
         const source = `
             <section>
@@ -461,7 +460,6 @@ describe('hydrate — adopt server DOM', () => {
                 <button>b</button>
                 <template if={model.total}><ul></ul><template else><p class="empty">empty</p></template></template>
             </section>
-            <style>.empty { color: #999 }</style>
         `
         const runtime = {
             doc,
@@ -476,7 +474,6 @@ describe('hydrate — adopt server DOM', () => {
             when,
             each,
             switchBlock,
-            injectStyle,
             model,
         }
         const names = Object.keys(runtime)
@@ -489,17 +486,16 @@ describe('hydrate — adopt server DOM', () => {
             'model',
             compileSSR(source),
         )(doc, state, derived, effect, model) as SsrRender
-        // SSR ships <style> first, then <section>
-        expect(server.html.startsWith('<style>')).toBe(true)
+        // No <style> in the SSR markup — the scoped sheet is linked by the shell.
+        expect(server.html).not.toContain('<style>')
 
         const host = document.createElement('div')
         host.innerHTML = server.html
-        const section = host.childNodes[1] as unknown as {
+        const section = host.childNodes[0] as unknown as {
             childNodes: { tagName?: string; textContent: string }[]
         }
         const pBefore = section.childNodes[2] // after the two buttons
 
-        // throws (el.setAttribute) before the fix; passes after
         hydrate(host, (target) => {
             new Function('host', ...names, body(source))(target, ...values)
         })
