@@ -1,5 +1,15 @@
 # @abide/anthropic
 
+## 0.2.1
+
+### Patch Changes
+
+- rename project belte → abide ([`3ed697b`](https://github.com/briancray/abide/commit/3ed697bd3c804bdd79642d9edb5d3f3045ecdb53))
+
+- tidy agent-engine import order (anthropic, claude-code) ([`ae05402`](https://github.com/briancray/abide/commit/ae05402f921fc7f62915abf378f10bde8e14637d))
+
+- stop with 'error' when pause_turn hits the step cap ([`d53d0a1`](https://github.com/briancray/abide/commit/d53d0a134e07ba3bc8d405cdbd00c262171eb58b))
+
 ## 0.2.0
 
 ### Minor Changes

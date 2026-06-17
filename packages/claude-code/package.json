@@ -1,6 +1,6 @@
 {
     "name": "@abide/claude-code",
-    "version": "0.5.3",
+    "version": "0.5.4",
     "type": "module",
     "description": "Claude Code engine for abide's agent() — drive Claude Code (your own auth, no API key) over your app's MCP surface",
     "license": "MIT",

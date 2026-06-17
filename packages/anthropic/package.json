@@ -1,6 +1,6 @@
 {
     "name": "@abide/anthropic",
-    "version": "0.2.0",
+    "version": "0.2.1",
     "type": "module",
     "description": "Anthropic Messages API engine for abide's agent() — a model-of-your-choosing assistant over your app's MCP surface",
     "license": "MIT",

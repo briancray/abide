@@ -1,5 +1,70 @@
 # abide
 
+## 0.28.0
+
+### Minor Changes
+
+- [`6379ac1`](https://github.com/briancray/abide/commit/6379ac1d4551d1d87183907ccb56a0f7a7b3ba8a) - client-side navigate ([`151a932`](https://github.com/briancray/abide/commit/151a932f4b5f5d4fa5409487ca0707f1929ae255))
+
+- shadow type-check + import resolution; fix entity escaping & cell method calls ([`422a975`](https://github.com/briancray/abide/commit/422a97575a6efc8c00861b2d600bb07f043cd8e9))
+
+- [`6379ac1`](https://github.com/briancray/abide/commit/6379ac1d4551d1d87183907ccb56a0f7a7b3ba8a) - bound RPC calls with timeout, offline detection, and reachability ([`4b8c932`](https://github.com/briancray/abide/commit/4b8c9321edbd6ca9a4dc1185fbf2e30b8623c122))
+
+- component hot-module reload ([`e42e638`](https://github.com/briancray/abide/commit/e42e6381e3639b0093b97cb730abd93c53cb2e6c))
+
+- attach directive and effect/attachment teardowns ([`e65be44`](https://github.com/briancray/abide/commit/e65be442847f5f96ccb659fb18cf7edb29080324))
+
+- [`0cf889b`](https://github.com/briancray/abide/commit/0cf889b859b9169be2abd35c2624ff762bd08e91) - Add `@abide/inspector` — an opt-in inspector activated by `ABIDE_ENABLE_INSPECTOR=true`. Install it (`bun add -d @abide/inspector`) and the flag mounts a UI at `/__abide/inspector`.
+
+  Three tabs over one event stream:
+
+  - **Logs** (default) — a live tail of request traffic, app/diagnostic channels, cache tallies, and published socket frames, with filters by channel, trace id, and free text. Click a trace id to pivot the feed to that trace.
+  - **Traces** — records grouped by trace id. Because abide propagates W3C trace context (a page session is one trace — the SSR render plus every RPC its interactions fire), a trace holds many requests; the tab splits each trace into nested per-request lanes (each on its own time axis, children indented under the request they descend from) with a span waterfall per request. Records now carry `requestSpan` / `parentSpan` (from the request's `TraceContext`) so this split is possible.
+  - **Cache** — the persistent (`global: true`) cache store: each entry's key, lifecycle state (settled / in-flight / refreshing), kind, ttl, time-to-expiry, scope tags, invalidate policy, and a value preview. Refreshes on open and on demand. (Request-scoped caches are ephemeral, so they surface as per-request tallies in Logs/Traces instead.)
+  - **Surface** — the static machine catalog: RPC verbs (with their declared `timeout` / `maxBodySize` / `crossOrigin` / `files` options as columns, and input/output JSON Schemas on expand) and sockets.
+
+  The framework now self-instruments the request lifecycle with `log.trace` spans on DEBUG-gated diagnostic channels — `abide:render` (SSR render), `abide:view` (view/module resolution), `abide:rpc` (verb dispatch + validation; reveals in-process RPC→RPC calls as nested spans in the same trace), `abide:cache` (producer run on a miss + coalesced wait), `abide:mcp` (tool dispatch), and `abide:sockets` (REST tail/publish). They're zero-cost when their channel is off and fill the Traces waterfall when enabled (`DEBUG=abide:*`). The verb registry now records `timeout` / `maxBodySize` / `crossOrigin` so introspection can report them.
+
+  Core stays clean: a guarded, non-literal dynamic import keeps the package out of the compiled binary, and core injects an `InspectorContext` so the package imports no abide internals. Two passive observation seams feed the inspector — the existing log tap plus a new socket-frame tap in `defineSocket`'s `publish()` — both no-ops when no inspector is mounted. The inspector is privileged operator tooling: it answers ahead of `app.handle` and warns loudly on mount, so enable it only in trusted/dev environments.
+
+### Patch Changes
+
+- [`6379ac1`](https://github.com/briancray/abide/commit/6379ac1d4551d1d87183907ccb56a0f7a7b3ba8a) - replace test client with createTestApp harness ([`02b846b`](https://github.com/briancray/abide/commit/02b846b11c0179f610644935c9137d2dbd288e18))
+
+- remove dead code surfaced by sweep ([`038b78c`](https://github.com/briancray/abide/commit/038b78cfad1154c7e79c7f1bb5cd823012e5671f))
+
+- rename project belte → abide ([`3ed697b`](https://github.com/briancray/abide/commit/3ed697bd3c804bdd79642d9edb5d3f3045ecdb53))
+
+- clear biome errors blocking the release gate ([`456962a`](https://github.com/briancray/abide/commit/456962ab4aa33bf854e33b7d2bdb1c961b8b7095))
+
+- swap zstd asset compression for gzip ([`51f3cfd`](https://github.com/briancray/abide/commit/51f3cfd126c3b5694564db91b9197627d5b84d4d))
+
+- robust flag/help parsing and SIGINT listener cleanup ([`61a29e3`](https://github.com/briancray/abide/commit/61a29e39c0e58d2590b77785639fcc4b8bb86552))
+
+- finish @abide/abide rename in template + smoke CI ([`678635b`](https://github.com/briancray/abide/commit/678635b19ea51b9351864a31cb726e62b829211d))
+
+- compile correctness — escaping, void tags, scoped css, runtime imports ([`7f549a4`](https://github.com/briancray/abide/commit/7f549a4661ab2f16f9a44bdb4a78fc5d8b78ae50))
+
+- linked-list reactivity graph + scope teardown ([`80ba57a`](https://github.com/briancray/abide/commit/80ba57a7f1ebd611a230b4d7f997d9e4f9afce66))
+
+- harden compile-time HTML/CSS handling ([`a65b678`](https://github.com/briancray/abide/commit/a65b6788a4dcfb0894994d1f8a76629cfcb29602))
+
+- static-template cloning + child-mount primitive ([`a8cb9c7`](https://github.com/briancray/abide/commit/a8cb9c70429d35512a2f5560ac6336ee6ec2e94b))
+
+- re-fire coalesced invalidations and harden hydration/iteration ([`cdf7887`](https://github.com/briancray/abide/commit/cdf7887422892cb58a9074c940add8c413b48aaa))
+
+- harden request handling against edge inputs ([`cf2db7c`](https://github.com/briancray/abide/commit/cf2db7ce6d565a6b4be8d63a4d3cfee24c630c92))
+
+- [`cdd8a58`](https://github.com/briancray/abide/commit/cdd8a587d55db05da5bb2d0b0e694f7bf532db8d) - tag InspectorContext export for the @readme gate ([`d2157de`](https://github.com/briancray/abide/commit/d2157de56f00c9aed99cd7b4d4d267c6f296f167))
+
+- inject shell assets case-insensitively, append when tag absent ([`de61b55`](https://github.com/briancray/abide/commit/de61b55e569926233357620e853fe665a0e09e4c))
+
+- drop dead stream-resume subsystem; fix layout + README-symlink docs ([`e39debb`](https://github.com/briancray/abide/commit/e39debb1952169067d3b5c7a66208049a99d23a7))
+
+- remove Svelte references across code, docs, and tooling ([`e77872a`](https://github.com/briancray/abide/commit/e77872ae3c1f799b5defba9b051ec35a3c6f5a88))
+
+- [`9d71d45`](https://github.com/briancray/abide/commit/9d71d45186153eec2b7be094f2e3a9ceae952212) - Fix an infinite loop when a `derived` over a `createSubscriber`-backed resource (e.g. `tail()` of a socket) is read by an effect. `trigger` walked the live observer `Set` while the flush it fired synchronously recomputed the derived, whose `runNode` deletes-then-re-adds itself to that same set — re-yielding it to the in-progress `for…of` forever. Invalidation now snapshots each observer set and the queued effects flush once at the outermost trigger, never mid-propagation.
+
 ## 0.27.0
 
 ### Minor Changes
