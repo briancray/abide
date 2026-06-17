@@ -1,4 +1,24 @@
+import type { RouteSegment } from '../shared/parseRouteSegments.ts'
 import { parseRouteSegments } from '../shared/parseRouteSegments.ts'
+
+/*
+Per-route parse cache. The route set is stable across a session, so parsing a
+pattern into segments (and counting its literals, the specificity tie-breaker) is
+done once per route rather than twice per route on every navigation. Keyed by the
+pattern string; entries never need eviction since routes don't churn.
+*/
+const PARSED_ROUTES = new Map<string, { segments: RouteSegment[]; literals: number }>()
+
+function parsedRoute(route: string): { segments: RouteSegment[]; literals: number } {
+    let parsed = PARSED_ROUTES.get(route)
+    if (parsed === undefined) {
+        const segments = parseRouteSegments(route)
+        const literals = segments.filter((segment) => segment.kind === 'literal').length
+        parsed = { segments, literals }
+        PARSED_ROUTES.set(route, parsed)
+    }
+    return parsed
+}
 
 /*
 Client route matcher: given the registered route patterns and the current
@@ -20,24 +40,24 @@ export function matchRoute(
     const pathSegments = normalized.split('/')
     let best: { route: string; params: Record<string, string>; literals: number } | undefined
     for (const route of routes) {
-        const params = matchSegments(route, pathSegments)
+        const parsed = parsedRoute(route)
+        const params = matchSegments(parsed.segments, pathSegments)
         if (params === undefined) {
             continue
         }
-        const literals = parseRouteSegments(route).filter(
-            (segment) => segment.kind === 'literal',
-        ).length
-        if (best === undefined || literals > best.literals) {
-            best = { route, params, literals }
+        if (best === undefined || parsed.literals > best.literals) {
+            best = { route, params, literals: parsed.literals }
         }
     }
     return best === undefined ? undefined : { route: best.route, params: best.params }
 }
 
-/* Matches one pattern against the path's segments, capturing params; undefined on
-   mismatch. A catch-all consumes every remaining segment. */
-function matchSegments(route: string, pathSegments: string[]): Record<string, string> | undefined {
-    const segments = parseRouteSegments(route)
+/* Matches one parsed pattern against the path's segments, capturing params;
+   undefined on mismatch. A catch-all consumes every remaining segment. */
+function matchSegments(
+    segments: RouteSegment[],
+    pathSegments: string[],
+): Record<string, string> | undefined {
     const params: Record<string, string> = {}
     for (let index = 0; index < segments.length; index += 1) {
         const segment = segments[index]

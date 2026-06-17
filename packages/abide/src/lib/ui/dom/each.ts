@@ -1,5 +1,6 @@
 import { effect } from '../effect.ts'
 import { claimChild } from '../runtime/claimChild.ts'
+import { OWNER } from '../runtime/OWNER.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { scope } from '../runtime/scope.ts'
 import type { EachRow } from './types/EachRow.ts'
@@ -10,9 +11,15 @@ region, bounded by a trailing anchor so positioning is relative to the each itse
 never `parent.firstChild` — a sibling before the each (e.g. a static nav link) must
 not be treated as the first row. An effect tracks `items()` and reconciles by key:
 a new key renders a row in its own ownership scope (so the row's bindings dispose
-when it leaves), surviving rows are moved before the anchor in list order, and a
-departed key disposes and is removed. Keying by identity (not index) lets a row
-keep its node and inner effects across a reorder.
+when it leaves), and a departed key disposes and is removed. Keying by identity
+(not index) lets a row keep its node and inner effects across a reorder.
+
+Placement walks the desired list *backwards* from the trailing anchor, holding a
+cursor at the node each row should precede; a row already sitting there is left
+untouched, so a stable list does zero DOM moves and an append does exactly one —
+only out-of-place rows are re-inserted (`insertBefore` on an in-place node would
+otherwise remove-then-reinsert it, O(rows) moves per change). Departed rows are
+pruned *before* placement so their nodes can't shift the cursor's sibling checks.
 
 On hydrate the SSR rows are already in place and in order: claim each one where it
 sits (no reordering), park the anchor after them, and skip the first reconcile.
@@ -62,19 +69,10 @@ export function each<T>(
             return
         }
         const list = Array.isArray(source) ? source : [...source]
-        const present = new Set<string>()
-        for (const item of list) {
-            const key = keyOf(item)
-            present.add(key)
-            let row = rows.get(key)
-            if (row === undefined) {
-                row = buildRow(item)
-                rows.set(key, row)
-            }
-            /* Place before the anchor in list order — appends a new row, moves a
-               surviving one into sequence; positioning never touches preceding siblings. */
-            parent.insertBefore(row.node, anchor)
-        }
+        const keys = list.map(keyOf)
+        const present = new Set(keys)
+        /* Prune departed rows first so their nodes don't sit between survivors and
+           throw off the in-place sibling checks below. */
         for (const [key, row] of rows) {
             if (!present.has(key)) {
                 row.dispose()
@@ -82,5 +80,36 @@ export function each<T>(
                 rows.delete(key)
             }
         }
+        /* Walk backwards from the anchor: `cursor` is the node the current row must
+           precede. A row already there keeps its place; only an out-of-order (or
+           freshly built) row is moved. Placement never touches preceding siblings. */
+        let cursor: Node = anchor
+        for (let index = list.length - 1; index >= 0; index -= 1) {
+            const key = keys[index] as string
+            let row = rows.get(key)
+            if (row === undefined) {
+                row = buildRow(list[index] as T)
+                rows.set(key, row)
+            }
+            if (row.node.nextSibling !== cursor) {
+                parent.insertBefore(row.node, cursor)
+            }
+            cursor = row.node
+        }
     })
+
+    /* Dispose every row still live when the enclosing scope tears down. The effect's
+       own disposer only unsubscribes it from `items()`; it never reaches the per-row
+       ownership scopes, which are pruned only on the departed-key path above. Without
+       this, a row whose binding subscribes to a longer-lived signal (a module store,
+       the cache, `page`) stays in that signal's observers after the list unmounts. The
+       host's DOM is cleared by `mount`, so disposal need not remove the nodes. */
+    if (OWNER.current !== undefined) {
+        OWNER.current.push(() => {
+            for (const row of rows.values()) {
+                row.dispose()
+            }
+            rows.clear()
+        })
+    }
 }

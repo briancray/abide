@@ -31,7 +31,7 @@ export function createSubscriber(start: (update: () => void) => () => void): () 
 
     const maybeClose = (): void => {
         closeScheduled = false
-        if (node.observers.size === 0 && cleanup !== undefined) {
+        if (node.subsHead === undefined && cleanup !== undefined) {
             cleanup()
             cleanup = undefined
         }
@@ -40,7 +40,7 @@ export function createSubscriber(start: (update: () => void) => () => void): () 
     return () => {
         track(node)
         /* Open eagerly on the first reader within a tracking scope. */
-        if (cleanup === undefined && node.observers.size > 0) {
+        if (cleanup === undefined && node.subsHead !== undefined) {
             cleanup = start(() => trigger(node))
         }
         /* Close once this reader's scope tears down and no observers remain. */

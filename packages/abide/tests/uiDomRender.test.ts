@@ -105,6 +105,40 @@ describe('keyed each', () => {
         expect(list.children[1].textContent).toBe('30')
     })
 
+    test('append moves only the new row, leaving stable rows in place', () => {
+        const model = doc({ order: ['a', 'b', 'c'] })
+        const root = host()
+        const list = document.createElement('ul')
+        mount(root, (h) => {
+            each(
+                list,
+                () => model.read<string[]>('order'),
+                (key) => key,
+                (_parent, key) => {
+                    const li = document.createElement('li')
+                    li.setAttribute('data-id', key)
+                    return li
+                },
+            )
+            h.appendChild(list)
+        })
+        /* Spy after the initial build so only reconcile-time moves are counted. */
+        let moves = 0
+        const realInsertBefore = list.insertBefore.bind(list)
+        list.insertBefore = ((node: Node, ref: Node | null) => {
+            moves += 1
+            return realInsertBefore(node, ref)
+        }) as typeof list.insertBefore
+        model.add('order/-', 'd') // append: stable a/b/c stay put, only d is placed
+        expect([...list.children].map((c) => c.getAttribute('data-id'))).toEqual([
+            'a',
+            'b',
+            'c',
+            'd',
+        ])
+        expect(moves).toBe(1) // exactly one insertBefore — no remove-then-reinsert of survivors
+    })
+
     test('reorder keeps row nodes (keyed identity)', () => {
         const model = doc({ items: [{ id: 'a' }, { id: 'b' }] })
         const root = host()

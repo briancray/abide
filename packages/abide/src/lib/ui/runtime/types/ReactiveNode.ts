@@ -1,15 +1,25 @@
+import type { ReactiveLink } from './ReactiveLink.ts'
+
 /*
-A node in the reactive graph. A signal has a value and no compute; a computed
-has both; an effect has a compute and runs for its side effects. `deps` are the
-nodes this node read on its last run, `observers` are the nodes that read this
-one — kept in both directions so a write can walk forward to dependents and a
-recompute can drop stale back-links.
+A node in the reactive graph. A signal has a value and no compute; a computed has
+both; an effect has a compute and runs for its side effects. Dependencies (the
+nodes this node read on its last run) and subscribers (the nodes that read this
+one) are each held as an intrusive doubly-linked list of `ReactiveLink` edges
+rather than a `Set` — a write walks `subsHead → nextSub` forward to dependents, a
+recompute walks `depsHead → nextDep` to reuse still-live edges and drop stale
+back-links, both O(1) per edge with no allocation once the node settles.
+
+`depsTail` doubles as the recompute cursor: `runNode` rewinds it before compute
+and `track` advances it past each reused edge, so whatever trails it afterward is
+this run's stale dependencies, trimmed in one pass.
 */
 export type ReactiveNode = {
     value: unknown
     compute: (() => unknown) | undefined
-    deps: Set<ReactiveNode>
-    observers: Set<ReactiveNode>
+    depsHead: ReactiveLink | undefined
+    depsTail: ReactiveLink | undefined
+    subsHead: ReactiveLink | undefined
+    subsTail: ReactiveLink | undefined
     dirty: boolean
     isEffect: boolean
 }

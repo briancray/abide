@@ -112,6 +112,32 @@ describe('reactive document', () => {
         expect(listRuns).toBe(3)
     })
 
+    test('end-append wakes the length node and the new slot, leaves stable siblings asleep', () => {
+        const d = doc({ list: [{ n: 1 }] })
+        let lengthRuns = 0
+        let firstRuns = 0
+        let slotRuns = 0
+        effect(() => {
+            d.read('list/length')
+            lengthRuns += 1
+        })
+        effect(() => {
+            d.read('list/0/n')
+            firstRuns += 1
+        })
+        /* Read a slot that doesn't exist yet — the append fills it, so its reader must wake. */
+        effect(() => {
+            d.read('list/1')
+            slotRuns += 1
+        })
+        expect([lengthRuns, firstRuns, slotRuns]).toEqual([1, 1, 1])
+        d.add('list/-', { n: 9 })
+        expect(d.read<number>('list/length')).toBe(2)
+        expect(lengthRuns).toBe(2) // length changed
+        expect(slotRuns).toBe(2) // the previously-empty index is now filled
+        expect(firstRuns).toBe(1) // an existing element's value is untouched → asleep
+    })
+
     test('a patch mutates in place — no cloning, sibling identity preserved', () => {
         const d = doc({ a: { keep: 1 }, b: { change: 1 } })
         const before = d.snapshot() as { a: object; b: { change: number } }

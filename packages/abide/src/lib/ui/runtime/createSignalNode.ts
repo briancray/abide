@@ -6,8 +6,10 @@ export function createSignalNode(value: unknown): ReactiveNode {
     return {
         value,
         compute: undefined,
-        deps: new Set(),
-        observers: new Set(),
+        depsHead: undefined,
+        depsTail: undefined,
+        subsHead: undefined,
+        subsTail: undefined,
         dirty: false,
         isEffect: false,
     }

@@ -2,6 +2,7 @@ import { OWNER } from './OWNER.ts'
 import { REACTIVE_CONTEXT } from './REACTIVE_CONTEXT.ts'
 import { runNode } from './runNode.ts'
 import type { ReactiveNode } from './types/ReactiveNode.ts'
+import { unlinkDeps } from './unlinkDeps.ts'
 
 /*
 Creates an effect: a side-effecting node that runs once immediately (capturing
@@ -15,17 +16,16 @@ export function createEffectNode(fn: () => void): () => void {
     const node: ReactiveNode = {
         value: undefined,
         compute: fn,
-        deps: new Set(),
-        observers: new Set(),
+        depsHead: undefined,
+        depsTail: undefined,
+        subsHead: undefined,
+        subsTail: undefined,
         dirty: false,
         isEffect: true,
     }
     runNode(node)
     const dispose = () => {
-        for (const dep of node.deps) {
-            dep.observers.delete(node)
-        }
-        node.deps.clear()
+        unlinkDeps(node)
         REACTIVE_CONTEXT.pendingEffects.delete(node)
     }
     if (OWNER.current !== undefined) {

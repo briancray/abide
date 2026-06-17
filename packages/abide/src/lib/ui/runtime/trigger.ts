@@ -8,19 +8,25 @@ queued, computed observers are marked dirty and recursed into (their value may
 now differ, so their own observers must learn of it). Recompute is lazy — a
 computed recomputes on next read — so this pass only invalidates and collects.
 
-Each observer set is snapshotted before iteration: flushing a queued effect can
-synchronously recompute a downstream computed, and `runNode` re-subscribes it by
-deleting then re-adding itself to the very sets being walked here — mutating a
-live `for…of` over a Set re-yields the re-added entry forever.
+The subscriber list is walked live: invalidate runs no compute and no effect, so
+nothing re-subscribes (the only mutators of a subscriber list, `track` and
+`runNode`, run inside compute execution, which only `flushEffects` reaches — after
+this pass). The re-subscribe hazard belongs to the flush, where `flushEffects`
+defends with its own snapshot. `nextSub` is read before recursing, so the walk
+holds no reference a downstream pass could invalidate.
 */
 function invalidate(node: ReactiveNode): void {
-    for (const observer of [...node.observers]) {
+    let link = node.subsHead
+    while (link !== undefined) {
+        const observer = link.sub
+        const next = link.nextSub
         if (observer.isEffect) {
             REACTIVE_CONTEXT.pendingEffects.add(observer)
         } else if (!observer.dirty) {
             observer.dirty = true
             invalidate(observer)
         }
+        link = next
     }
 }
 

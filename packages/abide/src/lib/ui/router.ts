@@ -185,6 +185,10 @@ export function router(
     /* Monotonic token: a newer navigation that resolves first wins, so a slow
        chunk landing late never overwrites the page the user has since moved to. */
     let sequence = 0
+    /* Latched on teardown so a navigation whose imports/probe were in flight at
+       dispose can't run its `.then` and rebuild a chain we just tore down — the
+       `token` guard only catches a *newer* navigation, not disposal. */
+    let disposed = false
     const stop = effect(() => {
         /* The route is the only dependency the router should re-run on. Everything
            else runs untracked so the page's build-time reads (each interpolation
@@ -216,7 +220,7 @@ export function router(
                 Promise.all(chainKeys.map((layoutKey) => resolveLayout(layoutKey))),
                 verdict,
             ]).then(([pageView, resolvedLayouts, decision]) => {
-                if (token !== sequence) {
+                if (token !== sequence || disposed) {
                     return
                 }
                 /* handle() redirected: go where it pointed, replacing the blocked
@@ -270,6 +274,7 @@ export function router(
     })
 
     return () => {
+        disposed = true
         if (typeof window !== 'undefined') {
             window.removeEventListener('popstate', onPopState)
             document.removeEventListener('click', onClick as EventListener)

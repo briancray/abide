@@ -1,5 +1,6 @@
 import { effect } from '../effect.ts'
 import { claimChild } from '../runtime/claimChild.ts'
+import { OWNER } from '../runtime/OWNER.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { scope } from '../runtime/scope.ts'
 import type { EachRow } from './types/EachRow.ts'
@@ -65,31 +66,43 @@ export function eachAsync<T>(
 
     /* Bumped each run so a superseded drain stops appending and pruning. */
     let generation = 0
+    /* The live iterator, held so a re-run or teardown can `return()` it — closing
+       the source (a generator's `finally`, a socket) and resolving any pending
+       `next()`. Bumping `generation` alone can't reach a drain parked on `await
+       iterator.next()`: an idle infinite stream never yields again, so the loop
+       never re-checks `generation` — it dangles on the microtask queue forever. */
+    let iterator: AsyncIterator<T> | undefined
     effect(() => {
         const generationAtStart = (generation += 1)
+        iterator?.return?.() // close the superseded run's iterator before re-streaming
+        iterator = undefined
         clearError() // a fresh run drops a prior error branch
         const iterable = items() // read (subscribe) synchronously
         const present = new Set<string>()
         const drain = async (): Promise<void> => {
-            for await (const item of iterable) {
+            const active = iterable[Symbol.asyncIterator]()
+            iterator = active
+            while (true) {
+                const result = await active.next()
+                /* A re-run or teardown bumped the generation while we awaited. */
                 if (generationAtStart !== generation) {
                     return
                 }
-                const key = keyOf(item)
+                if (result.done === true) {
+                    break
+                }
+                const key = keyOf(result.value)
                 present.add(key)
                 /* A re-yielded key rebuilds the row from the new value, swapping the old
                    node out (v1 has no in-place field patch — rows bind plain snapshots). */
                 const stale = rows.get(key)
-                const row = buildRow(item)
+                const row = buildRow(result.value)
                 rows.set(key, row)
                 if (stale !== undefined) {
                     stale.dispose()
                     parent.removeChild(stale.node)
                 }
                 parent.insertBefore(row.node, anchor) // arrival order, before the anchor
-            }
-            if (generationAtStart !== generation) {
-                return
             }
             for (const [key, row] of rows) {
                 if (!present.has(key)) {
@@ -118,4 +131,22 @@ export function eachAsync<T>(
             errorRange = { nodes, dispose }
         })
     })
+
+    /* Stop the live stream when the enclosing scope tears down. The effect's own
+       disposer only unsubscribes from `items()` — it leaves the running `drain()`
+       pulling rows into a now-detached parent forever. Bump the generation so the
+       drain abandons its loop, `return()` the iterator to release the source and any
+       pending `next()`, drop the error branch, and dispose every surviving row. */
+    if (OWNER.current !== undefined) {
+        OWNER.current.push(() => {
+            generation += 1
+            iterator?.return?.()
+            iterator = undefined
+            clearError()
+            for (const row of rows.values()) {
+                row.dispose()
+            }
+            rows.clear()
+        })
+    }
 }

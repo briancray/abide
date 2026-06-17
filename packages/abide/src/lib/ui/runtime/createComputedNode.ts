@@ -6,8 +6,10 @@ export function createComputedNode(compute: () => unknown): ReactiveNode {
     return {
         value: undefined,
         compute,
-        deps: new Set(),
-        observers: new Set(),
+        depsHead: undefined,
+        depsTail: undefined,
+        subsHead: undefined,
+        subsTail: undefined,
         dirty: true,
         isEffect: false,
     }

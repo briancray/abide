@@ -1,6 +1,7 @@
 import { applyPatchToTree } from './applyPatchToTree.ts'
 import { createSignalNode } from './createSignalNode.ts'
 import { flushEffects } from './flushEffects.ts'
+import { pathExists } from './pathExists.ts'
 import { REACTIVE_CONTEXT } from './REACTIVE_CONTEXT.ts'
 import { readNode } from './readNode.ts'
 import { trigger } from './trigger.ts'
@@ -51,12 +52,14 @@ export function createDoc(initial: unknown): Doc {
     /*
     Wakes readers from `rootPath`. `force` notifies the root unconditionally (a
     structural change keeps the container's identity, so there is no new value to
-    compare); otherwise the root is written through the `Object.is` gate. A
-    container root re-reads its existing descendant nodes (also gated) to catch
-    nested and index-shifted values; a scalar root has none, so leaf updates stay
-    O(depth).
+    compare); otherwise the root is written through the `Object.is` gate. When
+    `descend`, a container root also re-reads its existing descendant nodes (gated)
+    to catch nested and index-shifted values. `descend` is skipped for a change
+    that leaves every existing descendant path addressing the same value (an
+    end-append or an object-key add), so those updates stay O(depth) instead of
+    paying a scan over every minted node.
     */
-    function wakeSubtree(rootPath: string, force: boolean): void {
+    function wakeSubtree(rootPath: string, force: boolean, descend: boolean): void {
         const rootValue = valueAtPath(tree, rootPath)
         const rootNode = nodes.get(rootPath)
         if (rootNode !== undefined) {
@@ -66,33 +69,70 @@ export function createDoc(initial: unknown): Doc {
                 writeNode(rootNode, rootValue)
             }
         }
-        if (rootValue === null || typeof rootValue !== 'object') {
+        if (!descend || rootValue === null || typeof rootValue !== 'object') {
             return
         }
         const prefix = rootPath === '' ? '' : `${rootPath}/`
         for (const [candidate, node] of nodes) {
             if (candidate !== rootPath && candidate.startsWith(prefix)) {
-                writeNode(node, valueAtPath(tree, candidate))
+                /* A descendant whose path the mutation removed — a deleted key, an
+                   out-of-range index after a shrink — is woken to undefined, then
+                   dropped from the registry. Without eviction `nodes` grows for the
+                   life of the session over churning keys (items/<uuid>, message ids),
+                   and this very descend scan degrades linearly with it. The woken
+                   reader re-mints a fresh node on its flush if the path ever returns.
+                   Deleting the current entry mid-iteration is safe on a Map. */
+                if (pathExists(tree, candidate)) {
+                    writeNode(node, valueAtPath(tree, candidate))
+                } else {
+                    writeNode(node, undefined)
+                    nodes.delete(candidate)
+                }
             }
         }
     }
 
     function apply(patch: Patch): void {
         const segments = patch.path === '' ? [] : patch.path.split('/')
-        tree = applyPatchToTree(tree, patch)
+        tree = applyPatchToTree(tree, patch, segments)
         const parentPath = segments.slice(0, -1).join('/')
+        const parentValue = valueAtPath(tree, parentPath)
+        const leafKey = segments[segments.length - 1] as string | undefined
         /* A structural change (add/remove, or an array element replaced by index)
            reshapes the parent; a plain value replace reshapes only its own path. */
-        const parentIsArray = Array.isArray(valueAtPath(tree, parentPath))
+        const parentIsArray = Array.isArray(parentValue)
         const structural = patch.op !== 'replace' || parentIsArray
+        const arrayLength = parentIsArray ? (parentValue as unknown[]).length : 0
+        /* An add that introduces a new path without shifting any existing sibling —
+           an object-key add or an array append at the end — changes only the added
+           slot's subtree plus (for an array) its `length` node, never the existing
+           element nodes. Waking exactly those two avoids re-reading every descendant
+           of a large container. Every other structural change (any remove, a
+           mid-array insert, an array element replace) shifts indices or replaces a
+           subtree, so all descendants must be re-read. */
+        const nonShiftingAdd =
+            patch.op === 'add' &&
+            (!parentIsArray || leafKey === '-' || Number(leafKey) === arrayLength - 1)
         REACTIVE_CONTEXT.batchDepth += 1
         try {
             if (segments.length === 0) {
-                wakeSubtree('', true)
-            } else if (structural) {
-                wakeSubtree(parentPath, true)
+                wakeSubtree('', true, true)
+            } else if (!structural) {
+                wakeSubtree(patch.path, false, true)
+            } else if (nonShiftingAdd) {
+                wakeSubtree(parentPath, true, false)
+                /* The appended slot resolves to its real index when keyed by `-`. */
+                const addedPath =
+                    parentIsArray && leafKey === '-'
+                        ? `${parentPath}/${arrayLength - 1}`
+                        : patch.path
+                wakeSubtree(addedPath, false, true)
+                const lengthNode = parentIsArray ? nodes.get(`${parentPath}/length`) : undefined
+                if (lengthNode !== undefined) {
+                    writeNode(lengthNode, arrayLength)
+                }
             } else {
-                wakeSubtree(patch.path, false)
+                wakeSubtree(parentPath, true, true)
             }
         } finally {
             REACTIVE_CONTEXT.batchDepth -= 1

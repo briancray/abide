@@ -10,9 +10,11 @@ O(depth). History/undo is served by journalling patches (the change is a value),
 not by retaining old roots — which is cheaper anyway. The wake step in createDoc
 force-notifies ancestor readers from the path, since their container keeps its
 identity now.
+
+`segments` is the patch path pre-split by the caller (createDoc also needs it),
+threaded in so the path is split once per patch rather than here and there.
 */
-export function applyPatchToTree(tree: unknown, patch: Patch): unknown {
-    const segments = patch.path === '' ? [] : patch.path.split('/')
+export function applyPatchToTree(tree: unknown, patch: Patch, segments: string[]): unknown {
     /* Replacing the root can't mutate in place — hand back the new value. */
     if (segments.length === 0) {
         return patch.op === 'remove' ? undefined : patch.value
