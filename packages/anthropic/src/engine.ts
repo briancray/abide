@@ -141,8 +141,14 @@ export function engine(config: AnthropicConfig): AgentEngine {
 
             // Server paused a long-running turn: resume by re-requesting with the turn
             // so far rather than ending and truncating the output. The step cap bounds it.
-            if (final.stop_reason === 'pause_turn' && step + 1 < maxSteps) {
-                continue
+            if (final.stop_reason === 'pause_turn') {
+                if (step + 1 < maxSteps) {
+                    continue
+                }
+                // Paused at the step cap — the turn is incomplete, so stop with 'error'
+                // rather than mapping pause_turn to a clean 'end' that hides the truncation.
+                yield { type: 'done', stop: 'error' }
+                return
             }
             if (final.stop_reason !== 'tool_use') {
                 yield { type: 'done', stop: mapStop(final.stop_reason) }
