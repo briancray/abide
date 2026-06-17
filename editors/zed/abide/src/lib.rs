@@ -9,10 +9,17 @@ struct AbideExtension;
 
 impl AbideExtension {
     /*
-    Resolves the command that runs the language server. Prefers a `abide`
-    executable on the worktree's PATH (a global install or `node_modules/.bin`);
-    falls back to running the in-repo CLI through `bun` so the extension works
-    while developing abide itself, where no `abide` binary is installed.
+    Resolves the command that runs the language server. Every candidate is an
+    absolute path so the worktree's cwd never decides whether the entrypoint
+    resolves — the original bug was a worktree-relative script path that only
+    existed when the worktree happened to be the abide monorepo. Order:
+      1. A `abide` binary on PATH (a global install).
+      2. The project's local install at `<root>/node_modules/.bin/abide` — a
+         bun-shebang script present in consumer projects and, via the workspace
+         symlink, in the abide monorepo itself. `which` misses it because
+         `node_modules/.bin` is not on the shell PATH.
+      3. The in-repo CLI through `bun` — developing abide before its workspace
+         symlinks exist.
     */
     fn server_command(worktree: &zed::Worktree) -> Result<zed::Command> {
         let env = worktree.shell_env();
@@ -23,13 +30,22 @@ impl AbideExtension {
                 env,
             });
         }
+        let root = worktree.root_path();
+        let local_bin = format!("{root}/node_modules/.bin/abide");
+        if worktree.read_text_file(&local_bin).is_ok() {
+            return Ok(zed::Command {
+                command: local_bin,
+                args: vec!["lsp".to_string()],
+                env,
+            });
+        }
         let bun = worktree
             .which("bun")
             .ok_or_else(|| "abide LSP needs `abide` or `bun` on PATH".to_string())?;
         Ok(zed::Command {
             command: bun,
             args: vec![
-                "packages/abide/bin/abide.ts".to_string(),
+                format!("{root}/packages/abide/bin/abide.ts"),
                 "lsp".to_string(),
             ],
             env,
