@@ -178,9 +178,10 @@ Same selector grammar as `cache.invalidate`; also accept a `Subscribable`. See C
 
 ### `.abide` component format (see `src/lib/ui/README.md`)
 Valid HTML with `<script>` + native `<template>` control flow + scoped `<style>`.
-- **Bindings:** `{expr}` text, `name={expr}` attr, `onclick={fn}`, `bind:value={…}` / `bind:checked` / `bind:group`.
+- **Bindings:** `{expr}` text, `name={expr}` attr, `onclick={fn}`, `bind:value={…}` / `bind:checked` / `bind:group`, `attach={fn}` (node-lifetime attachment — the dual of `on`; the `use:`-action / `{@attach}` equivalent, lowered to `ui/dom/attach`).
 - **Control flow (native `<template>`):** `if`/`else`, `each={list} as="x" key="x.id"`, `await={p}`/`then`/`catch`, `switch`/`case`/`default`.
 - **Components:** capitalised tags (`<Layout title=…>`); children fill `<slot/>`; props are reactive (passed as thunks). `prop('name')` reads a typed page param.
+- **Snippets / named slots:** `<template name="x" args={…}>` declares a reusable named builder (the `snippet()` form), rendered like a function — covers named slots / `{@render}`.
 - **Reactivity:** write plain assignment (`count += 1`, `items.push(x)`); the compiler lowers it to patches. Deep-field edits wake only that field.
 - **SSR:** byte-identical HTML string; `renderToStream` ships the shell then streams `<template await>` fragments out of order; `hydrate` adopts static structure in place (control-flow blocks + child components fall back to `mount`/re-render — known gap).
 
