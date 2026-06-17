@@ -3,8 +3,8 @@ import { error } from '../error.ts'
 /*
 Bounds a verb handler's execution: races the in-flight `work` against `ms`.
 On the deadline it resolves a 504 — so the caller (an SSR cache read, an
-MCP/CLI invocation, or the network response) is unblocked in time and surfaces
-an honest status via errorParamsForThrow — and calls `onTimeout` to cancel any
+MCP/CLI invocation, or the network response) is unblocked in time with an
+honest status — and calls `onTimeout` to cancel any
 cooperating outbound work (the network path composes the verb's deadline into
 request().signal; see defineVerb).
 

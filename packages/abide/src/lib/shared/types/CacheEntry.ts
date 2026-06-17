@@ -69,7 +69,7 @@ export type CacheEntry = {
 }
 
 /* Per-key invalidate coalescing: the throttle/debounce policy plus the timer/in-flight state. */
-export type InvalidationState = {
+type InvalidationState = {
     refetch: () => Promise<unknown>
     throttle?: number
     debounce?: number

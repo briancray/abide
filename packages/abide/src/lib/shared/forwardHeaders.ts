@@ -17,7 +17,7 @@ rely on via the `forwardHeaders` export in src/app.ts.
 Centralised so both call sites can't drift on which headers are
 considered "auth/identity" context.
 */
-export const FORWARDED_HEADERS = [
+const FORWARDED_HEADERS = [
     'cookie',
     'authorization',
     /* W3C trace context rides every hop so a handler reading headers sees the caller's position. */

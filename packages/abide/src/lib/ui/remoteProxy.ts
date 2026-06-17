@@ -56,9 +56,8 @@ export function remoteProxy<Args, Return>(
 /*
 Applies the env-configured client timeout (ABIDE_CLIENT_TIMEOUT, ms) when one
 is set; an unset slot fetches unbounded, exactly as before. A timeout abort
-surfaces as a 504 HttpError so the error boundary reports an honest status
-(errorParamsForThrow reads HttpError.status) instead of a raw DOMException →
-500. Other rejections (genuine network failure) propagate untouched.
+surfaces as a 504 HttpError so a consumer reads an honest status instead of a
+raw DOMException → 500. Other rejections (genuine network failure) propagate untouched.
 */
 function fetchWithTimeout(request: Request): Promise<Response> {
     const timeout = rpcTimeoutSlot.ms

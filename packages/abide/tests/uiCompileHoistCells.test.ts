@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { compileScript } from '../src/lib/ui/compile/compileScript.ts'
 import { hoistCells } from '../src/lib/ui/compile/hoistCells.ts'
+import { lowerDocAccess } from '../src/lib/ui/compile/lowerDocAccess.ts'
 import { doc } from '../src/lib/ui/doc.ts'
 import { effect } from '../src/lib/ui/effect.ts'
 import type { Doc } from '../src/lib/ui/runtime/types/Doc.ts'
@@ -32,13 +32,19 @@ describe('hoistCells — emitted shape', () => {
     })
 })
 
-function run(document: Doc, body: string): unknown {
-    return new Function('model', compileScript(body, 'model'))(document)
+/* The script-side composition the component compiler applies: lower idiomatic
+   data access on `model`, then hoist its static paths to cells. */
+function lowerAndHoist(body: string): string {
+    return hoistCells(lowerDocAccess(body, 'model'), 'model')
 }
 
-describe('compileScript — lowering + hoisting executes correctly', () => {
+function run(document: Doc, body: string): unknown {
+    return new Function('model', lowerAndHoist(body))(document)
+}
+
+describe('lowering + hoisting executes correctly', () => {
     test('author code becomes cell-based and runs', () => {
-        const compiled = compileScript("model.note = 'x'; return model.note", 'model')
+        const compiled = lowerAndHoist("model.note = 'x'; return model.note")
         expect(compiled).toContain('model.cell("note")')
         expect(compiled).toContain('.set(')
         expect(compiled).toContain('.get()')
