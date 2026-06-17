@@ -217,7 +217,12 @@ export async function callTool(
     inbound: Request,
 ): Promise<ToolResult> {
     const entry = findVerbByCommandName(toolName)
-    if (entry?.clients.mcp) {
+    if (entry) {
+        /* A verb owns this name. If it isn't mcp-exposed it's still unavailable —
+           don't fall through to a socket op that happens to share the name. */
+        if (!entry.clients.mcp) {
+            throw new Error(`unknown tool: ${toolName}`)
+        }
         const response = await dispatchVerbInProcess({
             remote: entry.remote,
             args,

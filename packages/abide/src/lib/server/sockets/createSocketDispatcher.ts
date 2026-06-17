@@ -251,7 +251,11 @@ export function createSocketDispatcher(sockets: SocketRoutes): SocketDispatcher 
         }
         const { entry } = resolution
         const tailParam = new URL(req.url).searchParams.get('tail')
-        const count = tailParam !== null ? Number(tailParam) : undefined
+        const parsedTail = tailParam !== null ? Number(tailParam) : undefined
+        // A non-numeric ?tail= yields NaN; treat it as absent rather than letting
+        // snapshotTail(NaN)/slice(NaN) leak the whole retained buffer.
+        const count =
+            parsedTail !== undefined && Number.isFinite(parsedTail) ? parsedTail : undefined
         if (req.method === 'GET' || req.method === 'HEAD') {
             if ((req.headers.get('accept') ?? '').includes('text/event-stream')) {
                 return sse(entry.socket.tail(count ?? 0))
@@ -299,6 +303,10 @@ export function createSocketDispatcher(sockets: SocketRoutes): SocketDispatcher 
             try {
                 frame = JSON.parse(text) as SocketClientFrame
             } catch {
+                return
+            }
+            // JSON.parse succeeds on `null`/`42`/`true`; ignore anything that isn't a frame object.
+            if (typeof frame !== 'object' || frame === null) {
                 return
             }
             if (frame.type === 'sub') {
