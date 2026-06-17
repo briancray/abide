@@ -8,3 +8,7 @@ packages/abide/src/lib/bundle/native/.cache
 # Rust build output (Zed extension)
 target/
 editors/zed/*/target/
+
+# Zed extension build artifacts (compiled wasm + grammar repos Zed fetches)
+editors/zed/*/extension.wasm
+editors/zed/*/grammars/
