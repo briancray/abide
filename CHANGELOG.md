@@ -1,5 +1,11 @@
 # abide
 
+## 0.31.1
+
+### Patch Changes
+
+- [`a9f7b3b`](https://github.com/briancray/abide/commit/a9f7b3b09f1db15fa784844a2672b1058dde2b25) - stop the type-check shadow merging a semicolon-less call into the next component ([`7d863d7`](https://github.com/briancray/abide/commit/7d863d7b1f2d4d973a5eafd94cf5002fdeb519c4))
+
 ## 0.31.0
 
 ### Minor Changes
