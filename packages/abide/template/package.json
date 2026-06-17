@@ -13,6 +13,6 @@
         "test": "bun test"
     },
     "dependencies": {
-        "abide": "^0.25.0"
+        "@abide/abide": "^0.27.0"
     }
 }
