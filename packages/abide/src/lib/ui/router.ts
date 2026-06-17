@@ -264,12 +264,29 @@ export function router(
                 const hydrating =
                     first && pageView?.hydratable === true && pageView.hydrate !== undefined
                 first = false
-                const base = disposeFrom(divergence)
-                /* A fresh mount clears the torn-down DOM; hydration adopts it in place. */
-                if (!hydrating) {
-                    base.textContent = ''
+                /* The DOM mutation a navigation makes: tear the divergent chain down,
+                   clear its DOM (a fresh mount; hydration adopts in place), rebuild. */
+                const swap = (): void => {
+                    const base = disposeFrom(divergence)
+                    if (!hydrating) {
+                        base.textContent = ''
+                    }
+                    buildFrom(base, divergence, chainKeys, layoutViews, pageView, params, hydrating)
                 }
-                buildFrom(base, divergence, chainKeys, layoutViews, pageView, params, hydrating)
+                /* Wrap the swap in a View Transition where the browser supports it, so
+                   the page change cross-fades (and shared `view-transition-name` elements
+                   morph) — the synchronous swap is exactly the mutation the API snapshots
+                   around. Skipped while hydrating: the first paint adopts SSR DOM in place,
+                   not animate. CSS owns opting out (e.g. prefers-reduced-motion). */
+                if (
+                    !hydrating &&
+                    typeof document !== 'undefined' &&
+                    'startViewTransition' in document
+                ) {
+                    document.startViewTransition(swap)
+                } else {
+                    swap()
+                }
             })
         })
     })
