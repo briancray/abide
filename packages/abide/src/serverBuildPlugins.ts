@@ -5,7 +5,7 @@ import { abideUiPlugin } from './lib/ui/compile/abideUiPlugin.ts'
 /*
 The server-target Bun.build plugin pair shared by compile / buildCli / bundleApp:
 the abide-ui `.abide` loader (so SSR `render()` resolves) plus abide's virtual-
-module resolver. `embedAssets` flips on the zstd asset embed used by the
+module resolver. `embedAssets` flips on the gzip asset embed used by the
 standalone server binary; the CLI + launcher builds leave it off.
 */
 export function serverBuildPlugins({

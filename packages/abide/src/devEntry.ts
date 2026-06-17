@@ -12,8 +12,8 @@ Dev orchestrator. Replaces `bun --watch` (which only watches the import graph,
 so new files / CSS / public assets never triggered a restart) with an explicit
 loop we own end to end:
 
-  1. Build the client once — uncompressed, unminified (zstd-22 on every rebuild
-     dwarfs the bundle; the server serves the plain bytes when no .zst exists).
+  1. Build the client once — uncompressed, unminified (compressing on every
+     rebuild dwarfs the bundle; the server serves the plain bytes when no .gz exists).
   2. Spawn the server as a child against a fixed dev port and ABIDE_DEV=1, which
      makes it mount the /__abide/dev live-reload channel.
   3. Watch src/ recursively. On any change, rebuild then swap the worker: the

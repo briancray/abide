@@ -1,5 +1,5 @@
 import { PUBLIC_ASSET_CACHE_CONTROL } from '../../shared/CACHE_CONTROL_VALUES.ts'
-import { acceptsZstd } from './acceptsZstd.ts'
+import { acceptsGzip } from './acceptsGzip.ts'
 import { containsTraversal } from './containsTraversal.ts'
 import { createAssetHeaderCache } from './createAssetHeaderCache.ts'
 import { globToPathSet } from './globToPathSet.ts'
@@ -10,7 +10,7 @@ import type { Assets } from './types/Assets.ts'
 Serves files from the project's `public/` folder at the site root. Two
 sources, picked at construction:
 
-  - `publicAssets` (standalone compile): a map of root path → zstd bytes
+  - `publicAssets` (standalone compile): a map of root path → gzip bytes
     embedded into the binary, mirroring the `_app` asset embed.
   - `publicDir` on disk (dev + `abide start`): files read straight from
     `${cwd}/src/ui/public`, with the set of paths snapshotted once at
@@ -55,7 +55,7 @@ export async function createPublicAssetServer({
             if (!compressed) {
                 return undefined
             }
-            return respondWithEmbeddedAsset(compressed, acceptsZstd(req), headersFor(url.pathname))
+            return respondWithEmbeddedAsset(compressed, acceptsGzip(req), headersFor(url.pathname))
         }
         if (!diskPaths.has(url.pathname)) {
             return undefined

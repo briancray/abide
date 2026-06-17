@@ -10,7 +10,7 @@ const SERVER_ENTRY = new URL('./serverEntry.ts', import.meta.url).pathname
 
 /*
 Produces a standalone Bun executable for the server. Runs the client `build`
-first so the resolver plugin can embed the zstd-compressed assets into
+first so the resolver plugin can embed the gzip-compressed assets into
 the binary, then invokes Bun.build in compile mode against the server
 entry. Defaults
 the target to the host platform and appends `.exe` for windows targets.

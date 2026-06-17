@@ -87,9 +87,9 @@ Bun plugin that wires every virtual import abide produces at build time:
 - `abide:pages`   — { pageUrl: () => import(page.abide) } manifest
 - `abide:prompts` — { promptName: () => import(prompt-module) } manifest
 - `abide:app`     — { init?, handle?, handleError? } from src/app.ts
-- `abide:assets`  — zstd-compressed chunk bytes embedded for standalone compile
-- `abide:public-assets`  — zstd-embedded src/ui/public files
-- `abide:mcp-resources`  — zstd-embedded src/mcp/resources files
+- `abide:assets`  — gzip-compressed chunk bytes embedded for standalone compile
+- `abide:public-assets`  — gzip-embedded src/ui/public files
+- `abide:mcp-resources`  — gzip-embedded src/mcp/resources files
 - `abide:shell`   — app.html content (custom or default)
 
 Also rewrites modules under src/server/rpc and src/server/sockets:
@@ -646,15 +646,15 @@ export const footer = ${JSON.stringify(footer)}
                     }
                     const appDir = `${cwd}/dist/_app`
                     const files = await Array.fromAsync(
-                        new Glob('**/*.zst').scan({ cwd: appDir, onlyFiles: true }),
+                        new Glob('**/*.gz').scan({ cwd: appDir, onlyFiles: true }),
                     )
-                    const contents = await embedZstdDir({
+                    const contents = await embedGzipDir({
                         dir: appDir,
                         files,
-                        keyFor: (file) => `/_app/${file.replace(/\.zst$/, '')}`,
+                        keyFor: (file) => `/_app/${file.replace(/\.gz$/, '')}`,
                         precompressed: true,
                         exportName: 'assets',
-                        label: 'zstd assets',
+                        label: 'gzip assets',
                         source: 'dist/_app/',
                     })
                     return { contents, loader: 'js' }
@@ -662,7 +662,7 @@ export const footer = ${JSON.stringify(footer)}
 
                 if (args.path === 'abide:public-assets') {
                     /*
-                    Embeds every file under public/ (zstd level 22, paid
+                    Embeds every file under public/ (gzip level 9, paid
                     once at compile) keyed by its site-root path so the
                     standalone binary serves them without a public/ dir on
                     disk. Mirrors abide:assets. Empty/undefined when not
@@ -676,7 +676,7 @@ export const footer = ${JSON.stringify(footer)}
                             loader: 'js',
                         }
                     }
-                    const contents = await embedZstdDir({
+                    const contents = await embedGzipDir({
                         dir: publicDir,
                         files,
                         keyFor: (file) => `/${file}`,
@@ -690,8 +690,8 @@ export const footer = ${JSON.stringify(footer)}
 
                 if (args.path === 'abide:mcp-resources') {
                     /*
-                    Embeds every file under src/mcp/resources/ (zstd level
-                    22) keyed by its path relative to that dir, so the
+                    Embeds every file under src/mcp/resources/ (gzip level
+                    9) keyed by its path relative to that dir, so the
                     standalone binary serves MCP resources without the folder
                     on disk. Mirrors abide:public-assets. Undefined when not
                     embedding (dev + `abide start` read off disk).
@@ -711,7 +711,7 @@ export const footer = ${JSON.stringify(footer)}
                             loader: 'js',
                         }
                     }
-                    const contents = await embedZstdDir({
+                    const contents = await embedGzipDir({
                         dir: resourcesDir,
                         files,
                         keyFor: (file) => file,
@@ -738,15 +738,15 @@ export const footer = ${JSON.stringify(footer)}
 }
 
 /*
-Encodes every file in `files` (relative to `dir`) into a base64 zstd map and
+Encodes every file in `files` (relative to `dir`) into a base64 gzip map and
 emits `export const <exportName> = { "<key>": _d("<base64>") }`. `keyFor` maps
 a relative path to its lookup key; `precompressed` true means the files are
-already `.zst` on disk (read + base64 as-is), false means compress here at
-level 22. Shared by the abide:assets / abide:public-assets / abide:mcp-resources
+already `.gz` on disk (read + base64 as-is), false means compress here at
+level 9. Shared by the abide:assets / abide:public-assets / abide:mcp-resources
 virtuals, which differ only in source dir, key shape, and whether the inputs
 are pre-compressed.
 */
-async function embedZstdDir({
+async function embedGzipDir({
     dir,
     files,
     keyFor,
@@ -766,7 +766,7 @@ async function embedZstdDir({
     const encoded = await Promise.all(
         files.map(async (file) => {
             const raw = await Bun.file(`${dir}/${file}`).bytes()
-            const bytes = precompressed ? raw : await Bun.zstdCompress(raw, { level: 22 })
+            const bytes = precompressed ? raw : Bun.gzipSync(raw, { level: 9 })
             return {
                 line: `    ${JSON.stringify(keyFor(file))}: _d(${JSON.stringify(bytes.toBase64())}),`,
                 bytes: bytes.byteLength,
@@ -774,7 +774,7 @@ async function embedZstdDir({
         }),
     )
     const totalBytes = encoded.reduce((total, entry) => total + entry.bytes, 0)
-    const unit = precompressed ? 'KiB' : 'KiB zstd'
+    const unit = precompressed ? 'KiB' : 'KiB gzip'
     abideLog.info(
         `embedded ${encoded.length} ${label} from ${source} (${(totalBytes / 1024).toFixed(1)} ${unit})`,
     )
@@ -842,7 +842,42 @@ async function loadShell(cwd: string): Promise<string> {
         abideLog.info('using custom src/ui/app.html')
     }
     const content = await Bun.file(filepath).text()
-    return await rewriteHashedClientEntries(content, cwd)
+    return await rewriteHashedClientEntries(injectShellAssets(content), cwd)
+}
+
+/*
+Injects the framework's client entry references so app.html stays a clean
+template — page structure plus the SSR markers, no framework asset bookkeeping.
+The css <link> lands before </head>, the module <script> before </body>. Each is
+skipped when the shell already carries that reference, so a custom app.html that
+still spells the tags out (or one already processed) doesn't get a duplicate.
+rewriteHashedClientEntries then swaps both for the hashed entry filenames.
+*/
+function injectShellAssets(shell: string): string {
+    let result = shell
+    if (!result.includes('/_app/client.css')) {
+        if (!result.includes('</head>')) {
+            abideLog.warn(
+                'src/ui/app.html has no </head> — skipping client.css injection; the page will render unstyled',
+            )
+        }
+        result = result.replace(
+            '</head>',
+            '<link rel="stylesheet" href="/_app/client.css" />\n</head>',
+        )
+    }
+    if (!result.includes('/_app/client.js')) {
+        if (!result.includes('</body>')) {
+            abideLog.warn(
+                'src/ui/app.html has no </body> — skipping client.js injection; the page will not hydrate',
+            )
+        }
+        result = result.replace(
+            '</body>',
+            '<script type="module" src="/_app/client.js"></script>\n</body>',
+        )
+    }
+    return result
 }
 
 /*

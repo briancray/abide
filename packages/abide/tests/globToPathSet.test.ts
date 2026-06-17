@@ -21,19 +21,19 @@ function tempDir(build: (dir: string) => void): string {
 /*
 Regression: `Bun.file(dir).exists()` returns false for a directory, so the
 former guard left this Set empty even when the dir held files — disabling
-disk-zstd asset serving. globToPathSet scans the real dir, so an existing
+disk-gzip asset serving. globToPathSet scans the real dir, so an existing
 tree yields a populated Set.
 */
-test('maps the _app .zst tree to asset request paths', async () => {
+test('maps the _app .gz tree to asset request paths', async () => {
     const dir = tempDir((root) => {
         mkdirSync(`${root}/chunks`, { recursive: true })
-        writeFileSync(`${root}/entry.js.zst`, 'x')
-        writeFileSync(`${root}/chunks/a.css.zst`, 'x')
+        writeFileSync(`${root}/entry.js.gz`, 'x')
+        writeFileSync(`${root}/chunks/a.css.gz`, 'x')
     })
     const paths = await globToPathSet(
         dir,
-        '**/*.zst',
-        (file) => `/_app/${file.replace(/\.zst$/, '')}`,
+        '**/*.gz',
+        (file) => `/_app/${file.replace(/\.gz$/, '')}`,
     )
     expect(paths).toEqual(new Set(['/_app/entry.js', '/_app/chunks/a.css']))
 })

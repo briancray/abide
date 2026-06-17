@@ -1,6 +1,6 @@
 import { NO_STORE } from '../../shared/CACHE_CONTROL_VALUES.ts'
 import { TEXT_PLAIN } from '../../shared/TEXT_PLAIN.ts'
-import { acceptsZstd } from './acceptsZstd.ts'
+import { acceptsGzip } from './acceptsGzip.ts'
 import { cacheControlForAsset } from './cacheControlForAsset.ts'
 import { containsTraversal } from './containsTraversal.ts'
 import { createAssetHeaderCache } from './createAssetHeaderCache.ts'
@@ -13,11 +13,11 @@ Serves the build's `_app` assets (hashed chunks, css, sourcemaps). Two
 sources, picked at construction — the sibling of createPublicAssetServer for
 the framework-owned tree:
 
-  - `assets` (standalone compile): a map of request path → zstd bytes
+  - `assets` (standalone compile): a map of request path → gzip bytes
     embedded into the binary.
   - `distDir` on disk (dev + `abide start`): files served straight from
-    `dist`, with the precompressed `.zst` sibling set snapshotted once at
-    boot so a zstd-capable client gets those bytes without on-the-fly
+    `dist`, with the precompressed `.gz` sibling set snapshotted once at
+    boot so a gzip-capable client gets those bytes without on-the-fly
     compression.
 
 Unlike the public server this answers every `/_app/` request itself (404 on
@@ -34,12 +34,12 @@ export async function createAppAssetServer({
 }): Promise<(req: Request, url: URL) => Promise<Response>> {
     // Per-pathname asset header bundles, hashed-chunk-aware Cache-Control.
     const headersForAsset = createAssetHeaderCache(cacheControlForAsset)
-    const diskZstdPaths = assets
+    const diskGzipPaths = assets
         ? new Set<string>()
         : await globToPathSet(
               `${distDir}/_app`,
-              '**/*.zst',
-              (file) => `/_app/${file.replace(/\.zst$/, '')}`,
+              '**/*.gz',
+              (file) => `/_app/${file.replace(/\.gz$/, '')}`,
           )
 
     return async function serveAppAsset(req, url) {
@@ -62,14 +62,14 @@ export async function createAppAssetServer({
             }
             return respondWithEmbeddedAsset(
                 compressed,
-                acceptsZstd(req),
+                acceptsGzip(req),
                 headersForAsset(url.pathname),
             )
         }
-        const { base: baseHeaders, zstd: zstdHeaders } = headersForAsset(url.pathname)
+        const { base: baseHeaders, gzip: gzipHeaders } = headersForAsset(url.pathname)
         const diskPath = distDir + url.pathname
-        if (acceptsZstd(req) && diskZstdPaths.has(url.pathname)) {
-            return new Response(Bun.file(`${diskPath}.zst`), { headers: zstdHeaders })
+        if (acceptsGzip(req) && diskGzipPaths.has(url.pathname)) {
+            return new Response(Bun.file(`${diskPath}.gz`), { headers: gzipHeaders })
         }
         return new Response(Bun.file(diskPath), { headers: baseHeaders })
     }

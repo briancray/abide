@@ -8,11 +8,11 @@ const CLIENT_ENTRY = new URL('./clientEntry.ts', import.meta.url).pathname
 Builds the client-side bundle into `${cwd}/dist/_app`. Runs Bun.build with
 the abide-ui `.abide` loader, the virtual-module resolver, and (optionally)
 Tailwind. When `compress`, each emitted file is also
-written as a zstd-compressed `.zst` sibling (level 22 — paid once at build
-time) so the server can stream the precompressed bytes directly when the
-client supports it, and decompress on the fly for older clients. Dev skips
-compression (zstd-22 on every rebuild dwarfs the bundle itself) — the
-server falls back to serving the plain bytes when no `.zst` sibling exists.
+written as a gzip-compressed `.gz` sibling (level 9 — paid once at build
+time) so the server can stream the precompressed bytes directly to any client
+that accepts gzip (effectively all), and decompress on the fly otherwise. Dev
+skips compression (compressing on every rebuild dwarfs the bundle itself) — the
+server falls back to serving the plain bytes when no `.gz` sibling exists.
 
 The bundle is emitted into a per-build staging dir, then swapped into
 `_app` with two atomic renames. This keeps every build's writes isolated to
@@ -97,14 +97,14 @@ export async function build({
             return false
         }
 
-        // Dev skips the zstd siblings (paths still point into stagingDir here).
+        // Dev skips the gzip siblings (paths still point into stagingDir here).
         const compressedBytes = compress
             ? (
                   await Promise.all(
                       result.outputs.map(async (output) => {
                           const bytes = await Bun.file(output.path).bytes()
-                          const compressed = await Bun.zstdCompress(bytes, { level: 22 })
-                          await Bun.write(`${output.path}.zst`, compressed)
+                          const compressed = Bun.gzipSync(bytes, { level: 9 })
+                          await Bun.write(`${output.path}.gz`, compressed)
                           return compressed.byteLength
                       }),
                   )
@@ -124,7 +124,7 @@ export async function build({
 
         if (compress) {
             abideLog.info(
-                `wrote ${result.outputs.length} files to ${outDir} (+${result.outputs.length} .zst, ${(compressedBytes / 1024).toFixed(1)} KiB total)`,
+                `wrote ${result.outputs.length} files to ${outDir} (+${result.outputs.length} .gz, ${(compressedBytes / 1024).toFixed(1)} KiB total)`,
             )
             // Per-file paths are noise at startup; surface them only under DEBUG=abide:build.
             const buildLog = abideLog.channel('abide:build')

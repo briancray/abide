@@ -51,7 +51,7 @@ function contentsFor(relativePath: string, bytes: Uint8Array): McpResourceConten
 /*
 Serves files under src/mcp/resources as MCP resources. Two sources, picked at
 construction (mirrors createPublicAssetServer):
-  - `mcpResources` (standalone compile): a map of relative-path → zstd bytes
+  - `mcpResources` (standalone compile): a map of relative-path → gzip bytes
     embedded into the binary.
   - `resourcesDir` on disk (dev + `abide start`): files read straight from
     `${cwd}/src/mcp/resources`.
@@ -90,7 +90,7 @@ export function createMcpResourceServer({
                 if (!compressed) {
                     return undefined
                 }
-                return contentsFor(relativePath, await Bun.zstdDecompress(compressed))
+                return contentsFor(relativePath, Bun.gunzipSync(compressed))
             }
             const file = Bun.file(`${resourcesDir}/${relativePath}`)
             if (!(await file.exists())) {

@@ -4,7 +4,7 @@ import { Glob } from 'bun'
 Scans `cwd` for files matching `pattern` and returns their request paths as
 a Set, mapping each relative file path to a root-relative URL via `keyFor`.
 Used to snapshot the on-disk asset trees (the `public/` files, the `_app`
-precompressed `.zst` siblings) once at boot so the request path is a Set
+precompressed `.gz` siblings) once at boot so the request path is a Set
 lookup instead of a filesystem stat.
 
 A missing directory makes scan throw ENOENT — swallowed to an empty Set so
