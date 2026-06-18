@@ -1,5 +1,21 @@
 # abide
 
+## 0.32.1
+
+### Patch Changes
+
+- [`660ce08`](https://github.com/briancray/abide/commit/660ce08109160156dc9697fcb223fbb335229243) - fold asset-serve request logging into a timedServe helper ([`17aa14a`](https://github.com/briancray/abide/commit/17aa14aa3f04abe76a2e06b0c2fb0a8d4e725603))
+
+- [`660ce08`](https://github.com/briancray/abide/commit/660ce08109160156dc9697fcb223fbb335229243) - swallow the superseded each-async iterator's return rejection ([`5e2898f`](https://github.com/briancray/abide/commit/5e2898ff8a785508aa8fde70f3fc351dcdc8e014))
+
+- [`9643066`](https://github.com/briancray/abide/commit/9643066cf19bb944a55509333fd1421a3a8cce7a) - fix(check): narrow `<template else>` against the condition's negation. The shadow type-checker emitted a nested `else` child inside the `if` block, so the else body inherited the if's positive narrowing — a literal-union compare read as "no overlap" and a `typeof`-narrowed branch saw the wrong member. It now pairs the `else` child as a real `if (…) {…} else {…}`, matching the runtime's pairing.
+
+- [`9643066`](https://github.com/briancray/abide/commit/9643066cf19bb944a55509333fd1421a3a8cce7a) - fix(check): value-project a nested control-flow `<script>` like the leading one. The shadow type-checker emitted a branch-scoped `<script>` body raw, so its `state`/`derived` declarations kept their `State<T>`/`Derived<T>` types — every read of a nested signal in the branch's markup false-positived (`'Derived<string>' and 'string' have no overlap`, `Property 'length' does not exist on type 'Derived<…>'`). It now rewrites a nested script's reactive declarations to their value types, matching the runtime, which derefs nested-script signals through the rest of the branch.
+
+- [`0c54e5a`](https://github.com/briancray/abide/commit/0c54e5a025eef96ebc7eece3f51b8a167241434d) - fix(ui): don't emit a void element as a component's mount wrapper. A component instance mounts into a wrapper tag derived from its name (`<Search>`→`<search>`); when the name lowercases to a void element (`<Input>`→`<input>`, `<Img>`→`<img>`) the wrapper self-closes and the HTML parser reparents the component's own markup as the wrapper's siblings, so on hydration `openChild` finds the wrapper empty, claims `null`, and `attr` throws `null is not an object (setAttribute)` — aborting hydration. Such names now map to a hyphenated custom-element tag (`abide-input`, never void) made layout-transparent with `display:contents`, so the child's real root still lays out as a direct child of the parent. Both the SSR string and the client build go through the shared `componentWrapperTag`, keeping them in agreement.
+
+- [`9695bea`](https://github.com/briancray/abide/commit/9695bea26309b693d6b61a4dec1641559421c714) - perf(ui): carry the streamed await-block resume value in a `<script type="application/json">` child instead of a `data-resume` attribute. The attribute form HTML-escaped the JSON (`"` → `&quot;`, plus `&`/`<` passes), inflating the raw payload ~38% and costing two full-string regex passes per render (~2.6 ms/MB; ~10 ms for a 3.7 MB payload). Script content is raw text, so only `<` is neutralized as the JSON escape — ~130–150× cheaper to encode and no quote inflation. `applyResolved` and the inline `SSR_SWAP_SCRIPT` now read the value via `.textContent` and drop the script before swapping the resolved markup into its boundary.
+
 ## 0.32.0
 
 ### Minor Changes
