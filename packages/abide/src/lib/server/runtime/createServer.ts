@@ -238,6 +238,32 @@ export async function createServer({
     /* Request closing records are on by default — DEBUG=-abide is the off switch (negation, like the abide channel itself). */
     const logRequests = !isDebugNegated('abide')
 
+    /*
+    Time an asset serve and emit its closing record when logging is on. A miss
+    (undefined, from the public server) passes through unlogged so the request
+    can fall through to the 404 path.
+    */
+    const timedServe = async <T extends Response | undefined>(
+        serve: () => Promise<T>,
+        req: Request,
+        url: URL,
+    ): Promise<T> => {
+        if (!logRequests) {
+            return serve()
+        }
+        const start = Bun.nanoseconds()
+        const response = await serve()
+        if (response) {
+            logClosingRecord(
+                req.method,
+                `${url.pathname}${url.search}`,
+                response.status,
+                (Bun.nanoseconds() - start) / 1e6,
+            )
+        }
+        return response
+    }
+
     // App-configured headers extend the in-process forward allowlist for the process lifetime.
     extraForwardHeaders.set(app?.forwardHeaders ?? [])
 
@@ -546,19 +572,7 @@ export async function createServer({
                 catches anything that goes wrong inside serveAppAsset.
                 */
                 if (url.pathname.startsWith('/_app/')) {
-                    if (!logRequests) {
-                        return serveAppAsset(req, url)
-                    }
-                    const start = Bun.nanoseconds()
-                    const response = await serveAppAsset(req, url)
-                    const ms = (Bun.nanoseconds() - start) / 1e6
-                    logClosingRecord(
-                        req.method,
-                        `${url.pathname}${url.search}`,
-                        response.status,
-                        ms,
-                    )
-                    return response
+                    return timedServe(() => serveAppAsset(req, url), req, url)
                 }
                 /*
                 Files under public/ are served at the site root, sidestepping
@@ -566,17 +580,8 @@ export async function createServer({
                 undefined so the request falls through to the 404 / middleware
                 path below.
                 */
-                const publicStart = Bun.nanoseconds()
-                const publicResponse = await servePublicAsset(req, url)
+                const publicResponse = await timedServe(() => servePublicAsset(req, url), req, url)
                 if (publicResponse) {
-                    if (logRequests) {
-                        logClosingRecord(
-                            req.method,
-                            `${url.pathname}${url.search}`,
-                            publicResponse.status,
-                            (Bun.nanoseconds() - publicStart) / 1e6,
-                        )
-                    }
                     return publicResponse
                 }
                 /*
