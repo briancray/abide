@@ -5,7 +5,7 @@ import { scope } from '../runtime/scope.ts'
 
 /*
 Adopts existing server-rendered DOM instead of rebuilding it. Runs `build(host)`
-with a claim cursor active, so the dom helpers (openChild/appendText/appendStatic)
+with a claim cursor active, so the dom helpers (skeleton/appendText/appendStatic)
 take the existing nodes rather than creating new ones — attaching event listeners
 and reactive effects to the server's markup in place (no re-render, preserved
 focus/scroll). Returns a disposer.

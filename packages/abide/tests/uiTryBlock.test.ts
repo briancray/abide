@@ -6,7 +6,6 @@ import { doc } from '../src/lib/ui/doc.ts'
 import { appendStatic } from '../src/lib/ui/dom/appendStatic.ts'
 import { appendText } from '../src/lib/ui/dom/appendText.ts'
 import { hydrate } from '../src/lib/ui/dom/hydrate.ts'
-import { openChild } from '../src/lib/ui/dom/openChild.ts'
 import { tryBlock } from '../src/lib/ui/dom/tryBlock.ts'
 import { effect } from '../src/lib/ui/effect.ts'
 import type { SsrRender } from '../src/lib/ui/runtime/types/SsrRender.ts'
@@ -27,7 +26,6 @@ const RUNTIME = {
     state,
     derived,
     effect,
-    openChild,
     appendText,
     appendStatic,
     tryBlock,
@@ -105,12 +103,14 @@ describe('<template try> (sync error boundary)', () => {
 
     test('SSR: success renders guarded markup inside boundary comments', () => {
         const html = ssr(SUCCESS, doc({ label: 'hi' })).html
-        expect(html).toBe('<main><!--abide:try:0--><p>hi</p><!--/abide:try:0--></main>')
+        expect(html).toBe('<main><!--a--><!--abide:try:0--><p>hi</p><!--/abide:try:0--></main>')
     })
 
     test('SSR: a throw renders catch markup, truncating the partial', () => {
         const html = ssr(THROW, doc({})).html
-        expect(html).toBe('<main><!--abide:try:0--><b>caught:kaboom</b><!--/abide:try:0--></main>')
+        expect(html).toBe(
+            '<main><!--a--><!--abide:try:0--><b>caught:kaboom</b><!--/abide:try:0--></main>',
+        )
     })
 
     test('SSR: no catch propagates the throw (becomes a 500 upstream)', () => {

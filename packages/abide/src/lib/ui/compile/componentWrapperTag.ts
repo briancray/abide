@@ -6,7 +6,7 @@ lowercased — readable in devtools, a real box like any abide wrapper. But a na
 that lowercases to a real HTML element (`Button`→`button`, `Input`→`input`) yields a
 wrapper with a content model the parser enforces: void elements self-close, and
 `<button>`/`<a>`/table/list/select families reject or foster the component's own
-markup as the wrapper's siblings — so on hydration `openChild` finds the wrapper
+markup as the wrapper's siblings — so on hydration the skeleton locates the wrapper
 empty, claims `null`, and `attr` throws on it. Those names map to a hyphenated
 custom-element tag (a custom element is never void and has no content model) made
 layout-transparent with `display:contents`, so the component's real root still lays

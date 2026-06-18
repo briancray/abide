@@ -244,7 +244,41 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
             roots.push(readText())
         }
     }
+    rejectStrayBranches(roots, undefined)
     return { nodes: roots }
+}
+
+/* A `case` node (`<template else>`/`<template case>`/`<template default>`) is valid
+   only as a direct child of its `<template if>`/`<template switch>`; a `branch`
+   (`then`/`catch`/`finally`) only inside its `<template await>`/`<template try>`.
+   A sibling `<template else>` — closed off from its `if` — parses to a stray `case`
+   sitting beside the `if`, which would otherwise be silently dropped. Reject it so
+   the mistake surfaces at compile time. Recurses so a stray branch nested anywhere
+   is caught, not just at the root. */
+function rejectStrayBranches(
+    nodes: TemplateNode[],
+    parentKind: TemplateNode['kind'] | undefined,
+): void {
+    for (const node of nodes) {
+        if (node.kind === 'case' && parentKind !== 'if' && parentKind !== 'switch') {
+            throw new Error(
+                '[abide] <template else>/<template case> must be nested inside its <template if>/<template switch> — a sibling branch is not supported',
+            )
+        }
+        if (
+            node.kind === 'branch' &&
+            parentKind !== 'await' &&
+            parentKind !== 'try' &&
+            parentKind !== 'each'
+        ) {
+            throw new Error(
+                '[abide] <template then>/<template catch>/<template finally> must be nested inside its <template await>/<template try>/<template each await>',
+            )
+        }
+        if ('children' in node) {
+            rejectStrayBranches(node.children, node.kind)
+        }
+    }
 }
 
 /* Turns a component's attributes into props. A component has no directives —

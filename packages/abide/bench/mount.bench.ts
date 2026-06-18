@@ -16,9 +16,19 @@ const { attr } = await import('../src/lib/ui/dom/attr.ts')
 const { on } = await import('../src/lib/ui/dom/on.ts')
 const { each } = await import('../src/lib/ui/dom/each.ts')
 const { when } = await import('../src/lib/ui/dom/when.ts')
+const { mountChild } = await import('../src/lib/ui/dom/mountChild.ts')
 const { cloneStatic } = await import('../src/lib/ui/dom/cloneStatic.ts').catch(() => ({
     cloneStatic: undefined,
 }))
+const { skeleton } = await import('../src/lib/ui/dom/skeleton.ts').catch(() => ({
+    skeleton: undefined,
+}))
+const { appendTextAt } = await import('../src/lib/ui/dom/appendTextAt.ts').catch(() => ({
+    appendTextAt: undefined,
+}))
+const { cursorAfterElements } = await import('../src/lib/ui/dom/cursorAfterElements.ts').catch(
+    () => ({ cursorAfterElements: undefined }),
+)
 
 /*
 Mount-cost benchmark: how fast a content-heavy component builds its DOM in CREATE
@@ -88,7 +98,11 @@ const runtime = {
     on,
     each,
     when,
+    mountChild,
     cloneStatic,
+    skeleton,
+    appendTextAt,
+    cursorAfterElements,
 }
 const names = Object.keys(runtime)
 const values = names.map((name) => runtime[name as keyof typeof runtime])

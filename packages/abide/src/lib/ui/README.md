@@ -70,7 +70,7 @@ write-path microbench this runs ~20× faster than a deep-proxy signal baseline.
 ```
 .abide → analyzeComponent (split script/style/template, desugar signals → doc,
                            lower data access, scope CSS)
-       → generateBuild  (client: openChild/appendText/attr/on/each/when/…)
+       → generateBuild  (client: skeleton/cloneStatic/appendText/attr/on/each/when/…)
        → generateSSR    (server: HTML-string back-end, await markers)
        → hoistCells     (static paths → cells)
        → compileModule  (ES module: default mount + render() for SSR)

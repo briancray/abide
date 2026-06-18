@@ -81,11 +81,14 @@
         "./ui/dom/mountChild": "./src/lib/ui/dom/mountChild.ts",
         "./ui/dom/hydrate": "./src/lib/ui/dom/hydrate.ts",
         "./ui/dom/text": "./src/lib/ui/dom/text.ts",
-        "./ui/dom/openChild": "./src/lib/ui/dom/openChild.ts",
         "./ui/dom/appendText": "./src/lib/ui/dom/appendText.ts",
+        "./ui/dom/appendTextAt": "./src/lib/ui/dom/appendTextAt.ts",
         "./ui/dom/appendSnippet": "./src/lib/ui/dom/appendSnippet.ts",
         "./ui/dom/appendStatic": "./src/lib/ui/dom/appendStatic.ts",
         "./ui/dom/cloneStatic": "./src/lib/ui/dom/cloneStatic.ts",
+        "./ui/dom/skeleton": "./src/lib/ui/dom/skeleton.ts",
+        "./ui/dom/anchorCursor": "./src/lib/ui/dom/anchorCursor.ts",
+        "./ui/dom/mountSlot": "./src/lib/ui/dom/mountSlot.ts",
         "./ui/dom/attr": "./src/lib/ui/dom/attr.ts",
         "./ui/dom/on": "./src/lib/ui/dom/on.ts",
         "./ui/dom/attach": "./src/lib/ui/dom/attach.ts",
@@ -151,6 +154,7 @@
     "devDependencies": {
         "@abide/inspector": "workspace:*",
         "bun-plugin-tailwind": "^0.1.2",
+        "happy-dom": "^20.10.6",
         "tailwindcss": "^4.0.0"
     }
 }

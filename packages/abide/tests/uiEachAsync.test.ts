@@ -7,7 +7,6 @@ import { appendStatic } from '../src/lib/ui/dom/appendStatic.ts'
 import { appendText } from '../src/lib/ui/dom/appendText.ts'
 import { attr } from '../src/lib/ui/dom/attr.ts'
 import { eachAsync } from '../src/lib/ui/dom/eachAsync.ts'
-import { openChild } from '../src/lib/ui/dom/openChild.ts'
 import { effect } from '../src/lib/ui/effect.ts'
 import { renderToStream } from '../src/lib/ui/renderToStream.ts'
 import type { SsrRender } from '../src/lib/ui/runtime/types/SsrRender.ts'
@@ -23,7 +22,6 @@ const RUNTIME = {
     state,
     derived,
     effect,
-    openChild,
     appendText,
     appendStatic,
     attr,

@@ -8,7 +8,6 @@ import { appendStatic } from '../src/lib/ui/dom/appendStatic.ts'
 import { appendText } from '../src/lib/ui/dom/appendText.ts'
 import { hydrate } from '../src/lib/ui/dom/hydrate.ts'
 import { on } from '../src/lib/ui/dom/on.ts'
-import { openChild } from '../src/lib/ui/dom/openChild.ts'
 import { effect } from '../src/lib/ui/effect.ts'
 import type { SsrRender } from '../src/lib/ui/runtime/types/SsrRender.ts'
 import { state } from '../src/lib/ui/state.ts'
@@ -23,7 +22,6 @@ const RUNTIME = {
     state,
     derived,
     effect,
-    openChild,
     appendText,
     appendStatic,
     on,

@@ -9,7 +9,7 @@ import { each } from '../src/lib/ui/dom/each.ts'
 import { hydrate } from '../src/lib/ui/dom/hydrate.ts'
 import { mountChild } from '../src/lib/ui/dom/mountChild.ts'
 import { on } from '../src/lib/ui/dom/on.ts'
-import { openChild } from '../src/lib/ui/dom/openChild.ts'
+import { skeleton } from '../src/lib/ui/dom/skeleton.ts'
 import { switchBlock } from '../src/lib/ui/dom/switchBlock.ts'
 import { when } from '../src/lib/ui/dom/when.ts'
 import { effect } from '../src/lib/ui/effect.ts'
@@ -22,13 +22,13 @@ beforeAll(() => {
 })
 
 /* A minimal dual child component: callable on the client (mounts a <span> with its
-   label, claiming its server markup on hydrate via openChild/appendText), and
+   label, claiming its server markup on hydrate via the skeleton primitive), and
    `.render` on the server (the same markup as a string). Stands in for a compiled
    `.abide` child so a component-as-root can be exercised end to end. */
 const Button = Object.assign(
     (host: Element, props: { label: () => unknown }): (() => void) => {
-        const span = openChild(host, 'span')
-        appendText(span, () => props.label())
+        const sk = skeleton(host, '<span data-abide-hole></span>')
+        appendText(sk.el[0] as Node, () => props.label())
         return () => {}
     },
     {
@@ -45,7 +45,6 @@ const RUNTIME = {
     state,
     derived,
     effect,
-    openChild,
     appendText,
     appendStatic,
     on,
@@ -80,9 +79,9 @@ describe('multi-root branches', () => {
 
     test('SSR renders all branch roots, no wrapper', () => {
         expect(ssr(IF, doc({ on: true })).html).toBe(
-            '<main><!--[--><h1>A</h1><p>B</p><!--]--></main>',
+            '<main><!--a--><!--[--><h1>A</h1><p>B</p><!--]--></main>',
         )
-        expect(ssr(IF, doc({ on: false })).html).toBe('<main><!--[--><!--]--></main>')
+        expect(ssr(IF, doc({ on: false })).html).toBe('<main><!--a--><!--[--><!--]--></main>')
     })
 
     test('client mounts all roots, and toggling adds/removes the whole range', () => {
@@ -120,7 +119,7 @@ describe('multi-root branches', () => {
     test('switch case supports multiple roots', () => {
         const SWITCH = `<main><template switch={model.k}><template case="'a'"><h1>A1</h1><h2>A2</h2></template><template default><span>?</span></template></template></main>`
         expect(ssr(SWITCH, doc({ k: 'a' })).html).toBe(
-            '<main><!--[--><h1>A1</h1><h2>A2</h2><!--]--></main>',
+            '<main><!--a--><!--[--><h1>A1</h1><h2>A2</h2><!--]--></main>',
         )
         const model = doc({ k: 'a' })
         const host = document.createElement('div')
@@ -135,9 +134,9 @@ describe('multi-root branches', () => {
         // a component renders into its wrapper element, both server and client; a
         // name colliding with an HTML element remaps to a transparent abide-* wrapper
         expect(ssr(SRC, doc({ on: true })).html).toBe(
-            '<main><!--[--><abide-button style="display:contents"><span>hi</span></abide-button><!--]--></main>',
+            '<main><!--a--><!--[--><abide-button style="display:contents"><span>hi</span></abide-button><!--]--></main>',
         )
-        expect(ssr(SRC, doc({ on: false })).html).toBe('<main><!--[--><!--]--></main>')
+        expect(ssr(SRC, doc({ on: false })).html).toBe('<main><!--a--><!--[--><!--]--></main>')
 
         // client mount
         const model = doc({ on: true })
@@ -164,7 +163,7 @@ describe('multi-root branches', () => {
     test('a component is a valid each row', () => {
         const SRC = `<ul><template each={model.items} as="i" key="i"><Button label={i}/></template></ul>`
         expect(ssr(SRC, doc({ items: ['a', 'b'] })).html).toBe(
-            '<ul><!--[--><abide-button style="display:contents"><span>a</span></abide-button><!--]--><!--[--><abide-button style="display:contents"><span>b</span></abide-button><!--]--></ul>',
+            '<ul><!--a--><!--[--><abide-button style="display:contents"><span>a</span></abide-button><!--]--><!--[--><abide-button style="display:contents"><span>b</span></abide-button><!--]--></ul>',
         )
         const model = doc({ items: ['a', 'b'] })
         const host = document.createElement('div')
@@ -174,8 +173,10 @@ describe('multi-root branches', () => {
 
     test('static text is a valid branch root: SSR, mount, and hydrate agree', () => {
         const SRC = `<main><template if={model.on}>plain text</template></main>`
-        expect(ssr(SRC, doc({ on: true })).html).toBe('<main><!--[-->plain text<!--]--></main>')
-        expect(ssr(SRC, doc({ on: false })).html).toBe('<main><!--[--><!--]--></main>')
+        expect(ssr(SRC, doc({ on: true })).html).toBe(
+            '<main><!--a--><!--[-->plain text<!--]--></main>',
+        )
+        expect(ssr(SRC, doc({ on: false })).html).toBe('<main><!--a--><!--[--><!--]--></main>')
 
         const model = doc({ on: true })
         const host = document.createElement('div')
@@ -196,7 +197,7 @@ describe('multi-root branches', () => {
     test('a dynamic interpolation is a valid branch root: SSR, mount, and hydrate agree', () => {
         const SRC = `<main><template if={model.on}>{model.name}!</template></main>`
         expect(ssr(SRC, doc({ on: true, name: 'Ada' })).html).toBe(
-            '<main><!--[-->Ada!<!--]--></main>',
+            '<main><!--a--><!--[-->Ada!<!--]--></main>',
         )
 
         const model = doc({ on: true, name: 'Ada' })
@@ -218,7 +219,7 @@ describe('multi-root branches', () => {
     test('a nested control-flow <template> directly in a branch renders (full range model)', () => {
         const SRC = `<main><template if={model.on}><template if={model.b}><span>x</span></template></template></main>`
         expect(ssr(SRC, doc({ on: true, b: true })).html).toBe(
-            '<main><!--[--><!--[--><span>x</span><!--]--><!--]--></main>',
+            '<main><!--a--><!--[--><!--[--><span>x</span><!--]--><!--]--></main>',
         )
         const model = doc({ on: true, b: true })
         const host = document.createElement('div')

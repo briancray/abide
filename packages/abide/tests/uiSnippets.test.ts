@@ -12,7 +12,6 @@ import { each } from '../src/lib/ui/dom/each.ts'
 import { hydrate } from '../src/lib/ui/dom/hydrate.ts'
 import { mount } from '../src/lib/ui/dom/mount.ts'
 import { on } from '../src/lib/ui/dom/on.ts'
-import { openChild } from '../src/lib/ui/dom/openChild.ts'
 import { when } from '../src/lib/ui/dom/when.ts'
 import { effect } from '../src/lib/ui/effect.ts'
 import type { SsrRender } from '../src/lib/ui/runtime/types/SsrRender.ts'
@@ -28,7 +27,6 @@ const RUNTIME = {
     state,
     derived,
     effect,
-    openChild,
     appendText,
     appendSnippet,
     appendStatic,

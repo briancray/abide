@@ -50,13 +50,21 @@ export function installMiniDom(): () => void {
            call — matching the native DOM, where moving a fragment's children doesn't
            re-enter insertBefore (a spy counting moves sees one call, not N). */
         private place(node: MiniNode, reference: MiniNode | null): void {
+            /* A non-null reference that isn't a child throws `NotFoundError` in a real DOM
+               (strict in WebKit) — replicate it so a stale insertion ref (e.g. a node a
+               control-flow block already removed) surfaces here, not only in the browser. */
+            const index = reference === null ? -1 : this.childNodes.indexOf(reference)
+            if (reference !== null && index === -1) {
+                throw new Error('NotFoundError: insertBefore reference node is not a child')
+            }
             node.remove()
             node.parentNode = this
-            const index = reference === null ? -1 : this.childNodes.indexOf(reference)
             if (index === -1) {
                 this.childNodes.push(node)
             } else {
-                this.childNodes.splice(index, 0, node)
+                /* `node.remove()` above may have shifted the reference's index when both
+                   share this parent — recompute against the current array. */
+                this.childNodes.splice(this.childNodes.indexOf(reference as MiniNode), 0, node)
             }
         }
 

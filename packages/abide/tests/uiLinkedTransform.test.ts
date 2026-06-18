@@ -7,7 +7,6 @@ import { appendStatic } from '../src/lib/ui/dom/appendStatic.ts'
 import { appendText } from '../src/lib/ui/dom/appendText.ts'
 import { attr } from '../src/lib/ui/dom/attr.ts'
 import { on } from '../src/lib/ui/dom/on.ts'
-import { openChild } from '../src/lib/ui/dom/openChild.ts'
 import { text } from '../src/lib/ui/dom/text.ts'
 import { effect } from '../src/lib/ui/effect.ts'
 import { linked } from '../src/lib/ui/linked.ts'
@@ -29,7 +28,6 @@ function mountClient(source: string): { host: HTMLElement; model: ReturnType<typ
         'linked',
         'derived',
         'text',
-        'openChild',
         'appendText',
         'appendStatic',
         'attr',
@@ -43,7 +41,6 @@ function mountClient(source: string): { host: HTMLElement; model: ReturnType<typ
         linked,
         derived,
         text,
-        openChild,
         appendText,
         appendStatic,
         attr,

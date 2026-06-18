@@ -10,7 +10,6 @@ import { awaitBlock } from '../src/lib/ui/dom/awaitBlock.ts'
 import { each } from '../src/lib/ui/dom/each.ts'
 import { hydrate } from '../src/lib/ui/dom/hydrate.ts'
 import { on } from '../src/lib/ui/dom/on.ts'
-import { openChild } from '../src/lib/ui/dom/openChild.ts'
 import { switchBlock } from '../src/lib/ui/dom/switchBlock.ts'
 import { when } from '../src/lib/ui/dom/when.ts'
 import { effect } from '../src/lib/ui/effect.ts'
@@ -34,7 +33,6 @@ const RUNTIME = {
     state,
     derived,
     effect,
-    openChild,
     appendText,
     appendStatic,
     attr,
@@ -72,9 +70,11 @@ describe('scoped <script> in a control-flow branch', () => {
 
     test('SSR renders the branch-local signal seeded from doc data', () => {
         expect(ssr(IF, doc({ on: true, base: 5 })).html).toBe(
-            '<main><!--[--><p>5</p><button>+</button><!--]--></main>',
+            '<main><!--a--><!--[--><p>5</p><button>+</button><!--]--></main>',
         )
-        expect(ssr(IF, doc({ on: false, base: 5 })).html).toBe('<main><!--[--><!--]--></main>')
+        expect(ssr(IF, doc({ on: false, base: 5 })).html).toBe(
+            '<main><!--a--><!--[--><!--]--></main>',
+        )
     })
 
     test('client mount: the local signal is reactive, and re-seeds on re-entry', () => {
@@ -120,7 +120,7 @@ describe('scoped <script> in a control-flow branch', () => {
     test('a switch case carries its own scoped signal', () => {
         const SWITCH = `<main><template switch={model.k}><template case="'a'"><script>let label = state(model.base + '!')</script><span>{label}</span></template><template default><b>?</b></template></template></main>`
         expect(ssr(SWITCH, doc({ k: 'a', base: 'hi' })).html).toBe(
-            '<main><!--[--><span>hi!</span><!--]--></main>',
+            '<main><!--a--><!--[--><span>hi!</span><!--]--></main>',
         )
 
         const model = doc({ k: 'a', base: 'hi' })
@@ -147,7 +147,7 @@ describe('scoped <script> in a control-flow branch', () => {
                 }),
             ).html,
         ).toBe(
-            '<ul><!--[--><li><button>10</button></li><!--]--><!--[--><li><button>20</button></li><!--]--></ul>',
+            '<ul><!--a--><!--[--><li><button>10</button></li><!--]--><!--[--><li><button>20</button></li><!--]--></ul>',
         )
     })
 
@@ -201,7 +201,7 @@ effect(() => record(n + ':' + model.base))</script><button onclick={() => (n = n
     test('SSR strips the effect — it never runs server-side', () => {
         effectLog = []
         const html = ssr(FX, doc({ on: true, base: 5 })).html
-        expect(html).toBe('<main><!--[--><button>5</button><!--]--></main>') // markup still seeded
+        expect(html).toBe('<main><!--a--><!--[--><button>5</button><!--]--></main>') // markup still seeded
         expect(effectLog).toEqual([]) // effect body did not run
     })
 
@@ -215,5 +215,50 @@ effect(() => record(n + ':' + model.base))</script><button onclick={() => (n = n
         await Promise.resolve()
         await Promise.resolve()
         expect(host.textContent).toBe('ready')
+    })
+})
+
+describe('scoped <script> directly under a bound element (skeleton path)', () => {
+    /* A nested `<script>` under a plain bound element — no control flow — builds through
+       the skeleton clone: the script runs as a bind (in document order, before the later
+       siblings that deref its signal), and a following sibling's reactive attr/text wire to
+       located nodes. The imperative `openChild` path no longer exists, so this exercises the
+       unified backend. (The signal is read by a LATER sibling, never the parent's own
+       attribute — that would read it before the script's `let` runs, in either backend.) */
+    const SRC = `<div><script>let open = state(false)</script><p class={open ? 'on' : 'off'}>{open}</p><button onclick={() => (open = !open)}>x</button></div>`
+
+    test('SSR === client mount for a script under a bound element', () => {
+        const server = ssr(SRC, doc({})).html
+        const host = document.createElement('div')
+        run(SRC, host, doc({}), 'mount')
+        const client = (
+            globalThis as unknown as { serializeMiniDom: (h: unknown) => string }
+        ).serializeMiniDom(host)
+        expect(client).toBe(server) // unified backend: server and client agree
+        expect(server).toContain('class="off"') // initial signal value seeded both sides
+    })
+
+    test('client: the scoped signal stays reactive', () => {
+        const host = document.createElement('div')
+        run(SRC, host, doc({}), 'mount')
+        const div = host.childNodes[0] as unknown as {
+            children: { getAttribute: (n: string) => string; dispatchEvent: (e: Event) => void }[]
+        }
+        expect(div.children[0].getAttribute('class')).toBe('off') // <p>
+        div.children[1].dispatchEvent(new (globalThis as { Event: typeof Event }).Event('click'))
+        expect(div.children[0].getAttribute('class')).toBe('on') // class thunk re-ran off the local signal
+    })
+
+    test('hydration adopts the bound element in place, then stays reactive', () => {
+        const server = ssr(SRC, doc({})).html
+        const host = document.createElement('div')
+        host.innerHTML = server
+        run(SRC, host, doc({}), 'hydrate')
+        const div = host.childNodes[0] as unknown as {
+            children: { getAttribute: (n: string) => string; dispatchEvent: (e: Event) => void }[]
+        }
+        expect(div.children[0].getAttribute('class')).toBe('off')
+        div.children[1].dispatchEvent(new (globalThis as { Event: typeof Event }).Event('click'))
+        expect(div.children[0].getAttribute('class')).toBe('on')
     })
 })

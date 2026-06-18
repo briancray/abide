@@ -24,6 +24,7 @@ export function when(
     condition: () => unknown,
     render: (parent: Node) => void,
     renderElse?: (parent: Node) => void,
+    before: Node | null = null,
 ): void {
     const hydration = RENDER.hydration
     const chosenFor = (branch: 'then' | 'else') => (branch === 'then' ? render : renderElse)
@@ -31,7 +32,10 @@ export function when(
     let activeBranch: 'then' | 'else'
     let end: Comment
 
-    const start = openMarker(parent, '[')
+    /* `before` (a static node located by the skeleton) places the range among siblings on
+       create, so the block sits before a static suffix rather than at the parent's end.
+       Hydrate ignores it — the claim cursor (positioned past the prefix) drives placement. */
+    const start = openMarker(parent, '[', before)
     if (hydration !== undefined) {
         activeBranch = condition() ? 'then' : 'else'
         const chosen = chosenFor(activeBranch)
@@ -40,7 +44,7 @@ export function when(
         }
         end = openMarker(parent, ']')
     } else {
-        end = openMarker(parent, ']')
+        end = openMarker(parent, ']', before)
         activeBranch = condition() ? 'then' : 'else'
         const chosen = chosenFor(activeBranch)
         if (chosen !== undefined) {

@@ -10,7 +10,7 @@ component scope (so they tear down with it). The body's reactive reads update
 fine-grained via those effects; an enclosing `each` re-mounts on list changes.
 
 On hydrate the builder runs against the server-rendered nodes between the
-`<!--abide:snippet-->`/`<!--/abide:snippet-->` markers — its `openChild`/`appendText`
+`<!--abide:snippet-->`/`<!--/abide:snippet-->` markers — its `skeleton`/`appendText`
 claim them in place. The cursor is advanced past the open marker before, and past
 the close marker after, so the markers themselves are skipped.
 */

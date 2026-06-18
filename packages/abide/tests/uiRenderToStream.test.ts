@@ -49,8 +49,8 @@ describe('renderToStream — out-of-order SSR streaming', () => {
         // 1) the shell: both pending branches, inside boundary markers
         expect(chunks[0]).toBe(
             '<div>' +
-                '<!--abide:await:0--><p>loading slow</p><!--/abide:await:0-->' +
-                '<!--abide:await:1--><p>loading fast</p><!--/abide:await:1-->' +
+                '<!--a--><!--abide:await:0--><p>loading slow</p><!--/abide:await:0-->' +
+                '<!--a--><!--abide:await:1--><p>loading fast</p><!--/abide:await:1-->' +
                 '</div>',
         )
         // 2) resolved fragments out of order: fast (id 1) before slow (id 0), each
@@ -99,7 +99,7 @@ describe('renderToStream — out-of-order SSR streaming', () => {
         `)
         expect(chunks).toHaveLength(1)
         expect(chunks[0]).toBe(
-            '<div><!--abide:await:0--><span>VAL</span><!--/abide:await:0--></div>' +
+            '<div><!--a--><!--abide:await:0--><span>VAL</span><!--/abide:await:0--></div>' +
                 '<script>Object.assign(window.__abideResume=window.__abideResume||{},' +
                 '{"0":{"ok":true,"value":"VAL"}})</script>',
         )

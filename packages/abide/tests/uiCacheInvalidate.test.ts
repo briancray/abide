@@ -10,7 +10,6 @@ import { appendText } from '../src/lib/ui/dom/appendText.ts'
 import { awaitBlock } from '../src/lib/ui/dom/awaitBlock.ts'
 import { each } from '../src/lib/ui/dom/each.ts'
 import { on } from '../src/lib/ui/dom/on.ts'
-import { openChild } from '../src/lib/ui/dom/openChild.ts'
 import { effect } from '../src/lib/ui/effect.ts'
 import { state } from '../src/lib/ui/state.ts'
 import { installMiniDom } from './support/installMiniDom.ts'
@@ -58,7 +57,6 @@ describe('cache.invalidate() re-runs an await block', () => {
             state,
             derived,
             effect,
-            openChild,
             appendText,
             appendStatic,
             on,

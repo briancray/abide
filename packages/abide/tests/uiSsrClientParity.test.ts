@@ -8,7 +8,6 @@ import { appendText } from '../src/lib/ui/dom/appendText.ts'
 import { attr } from '../src/lib/ui/dom/attr.ts'
 import { each } from '../src/lib/ui/dom/each.ts'
 import { on } from '../src/lib/ui/dom/on.ts'
-import { openChild } from '../src/lib/ui/dom/openChild.ts'
 import { text } from '../src/lib/ui/dom/text.ts'
 import { when } from '../src/lib/ui/dom/when.ts'
 import { effect } from '../src/lib/ui/effect.ts'
@@ -60,7 +59,6 @@ describe('SSR ↔ client parity', () => {
             'state',
             'derived',
             'text',
-            'openChild',
             'appendText',
             'appendStatic',
             'attr',
@@ -69,29 +67,16 @@ describe('SSR ↔ client parity', () => {
             'when',
             'effect',
             compileComponent(source),
-        )(
-            host,
-            doc,
-            state,
-            derived,
-            text,
-            openChild,
-            appendText,
-            appendStatic,
-            attr,
-            on,
-            each,
-            when,
-            effect,
-        )
+        )(host, doc, state, derived, text, appendText, appendStatic, attr, on, each, when, effect)
         const clientHtml = (
             globalThis as unknown as { serializeMiniDom: (h: unknown) => string }
         ).serializeMiniDom(host)
 
         // control-flow content lives in `[ … ]` comment-marked ranges (per `each` row,
-        // and around the `if`), emitted identically by both back-ends.
+        // and around the `if`), emitted identically by both back-ends. In a skeleton each
+        // block is positioned by an `<!--a-->` anchor (the `<ul>`'s each, the `if`).
         expect(server.html).toBe(
-            '<div class="box"><h1>count 3</h1><ul><!--[--><li>x</li><!--]--><!--[--><li>y</li><!--]--><!--[--><li>z</li><!--]--></ul><!--[--><p>has count</p><!--]--></div>',
+            '<div class="box"><h1>count 3</h1><ul><!--a--><!--[--><li>x</li><!--]--><!--[--><li>y</li><!--]--><!--[--><li>z</li><!--]--></ul><!--a--><!--[--><p>has count</p><!--]--></div>',
         )
         expect(clientHtml).toBe(server.html) // server and client agree
         expect(server.state).toEqual({ count: 3, items: ['x', 'y', 'z'] })

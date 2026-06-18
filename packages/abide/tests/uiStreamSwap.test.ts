@@ -62,8 +62,8 @@ describe('SSR streaming → client swap', () => {
         ).serializeMiniDom(host)
         expect(html).toBe(
             '<div>' +
-                '<!--abide:await:0--><span>SLOW</span><!--/abide:await:0-->' +
-                '<!--abide:await:1--><b>FAST</b><!--/abide:await:1-->' +
+                '<!--a--><!--abide:await:0--><span>SLOW</span><!--/abide:await:0-->' +
+                '<!--a--><!--abide:await:1--><b>FAST</b><!--/abide:await:1-->' +
                 '</div>',
         )
         // pending shells are gone; resolved values are in place

@@ -6,7 +6,6 @@ import { doc } from '../src/lib/ui/doc.ts'
 import { appendStatic } from '../src/lib/ui/dom/appendStatic.ts'
 import { appendText } from '../src/lib/ui/dom/appendText.ts'
 import { awaitBlock } from '../src/lib/ui/dom/awaitBlock.ts'
-import { openChild } from '../src/lib/ui/dom/openChild.ts'
 import { effect } from '../src/lib/ui/effect.ts'
 import { renderToStream } from '../src/lib/ui/renderToStream.ts'
 import type { SsrRender } from '../src/lib/ui/runtime/types/SsrRender.ts'
@@ -22,7 +21,6 @@ const RUNTIME = {
     state,
     derived,
     effect,
-    openChild,
     appendText,
     appendStatic,
     awaitBlock,
@@ -52,7 +50,11 @@ const BLOCKING = `<main><template await={model.load} then="v"><span>{v}</span></
 
 describe('catch-less <template await> surfaces a rejection', () => {
     test('compiles renderCatch as undefined (no catch branch)', () => {
-        expect(compileComponent(STREAMING)).toMatch(/awaitBlock\([\s\S]*undefined\);/)
+        // renderCatch is `undefined` (no catch branch); the trailing arg is the block's
+        // skeleton insertion reference.
+        expect(compileComponent(STREAMING)).toMatch(
+            /awaitBlock\([\s\S]*, undefined, anchorCursor\(\w+\)\);/,
+        )
     })
 
     test('SSR streaming: rejection throws out of renderToStream', async () => {

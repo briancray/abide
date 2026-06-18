@@ -2,10 +2,9 @@ import { OUTLET_TAG } from '../runtime/OUTLET_TAG.ts'
 import { componentWrapperTag } from './componentWrapperTag.ts'
 import { groupBindParts } from './groupBindParts.ts'
 import { lowerContext } from './lowerContext.ts'
-import { partitionSlots } from './partitionSlots.ts'
 import { scopeAttr } from './scopeAttr.ts'
+import { skeletonable } from './skeletonable.ts'
 import { staticAttr } from './staticAttr.ts'
-import { staticAttrValue } from './staticAttrValue.ts'
 import { staticTextPart } from './staticTextPart.ts'
 import { stripEffects } from './stripEffects.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
@@ -69,10 +68,34 @@ export function generateSSR(
        it in the `[ … ]` range markers the runtime tracks (unconditionally per block,
        so an empty/false branch still emits the boundary the client claims). */
     function branchContent(children: TemplateNode[], target: string): string {
-        return withNestedScripts(children, () => generateInto(children, target))
+        /* A control-flow branch is a fresh build context — the block runtime mounts it, not
+           the parent skeleton — so reset the skeleton/anchor tracking; the branch's own
+           skeletonable elements re-enter it. */
+        const previousSkeleton = inSkeleton
+        const previousMark = markText
+        inSkeleton = false
+        markText = false
+        const out = withNestedScripts(children, () => generateInto(children, target))
+        inSkeleton = previousSkeleton
+        markText = previousMark
+        return out
     }
     const openRange = (target: string): string => push(target, RANGE_OPEN)
     const closeRange = (target: string): string => push(target, RANGE_CLOSE)
+
+    /* True inside a skeletonable subtree; `markText` true when, additionally, the current
+       element is NOT a text-leaf — so its reactive text is interleaved and the client uses
+       an `<!--a-->` anchor. The marker is kept both sides (like control-flow ranges), so
+       SSR markup stays identical to the client DOM. */
+    let inSkeleton = false
+    let markText = false
+
+    /* In a skeleton, a control-flow block or slot is positioned by an `<!--a-->` anchor
+       (cloned into the located parent), so it can sit anywhere among static siblings.
+       Emitted both sides in document order — the client's anchor scan lines up with it.
+       Outside a skeleton (top-level / inside a branch) blocks mount on the host directly,
+       so no anchor. */
+    const anchorMark = (target: string): string => (inSkeleton ? push(target, '<!--a-->') : '')
 
     function generate(node: TemplateNode, target: string): string {
         if (node.kind === 'text') {
@@ -82,7 +105,10 @@ export function generateSSR(
                         const markup = staticTextPart(part.value)
                         return markup === '' ? '' : push(target, markup)
                     }
-                    return `${target}.push($text(${lowerExpression(part.code)}));\n`
+                    const value = `$text(${lowerExpression(part.code)})`
+                    return markText
+                        ? `${target}.push('<!--a-->' + ${value});\n`
+                        : `${target}.push(${value});\n`
                 })
                 .join('')
         }
@@ -93,7 +119,7 @@ export function generateSSR(
             if (elseBranch !== undefined && elseBranch.kind === 'case') {
                 code += ` else {\n${branchContent(elseBranch.children, target)}}`
             }
-            return `${openRange(target)}${code}\n${closeRange(target)}`
+            return `${anchorMark(target)}${openRange(target)}${code}\n${closeRange(target)}`
         }
         if (node.kind === 'switch') {
             const cases = node.children.filter(
@@ -111,7 +137,7 @@ export function generateSSR(
             if (fallback !== undefined) {
                 code += `${started ? 'else ' : ''}{\n${branchContent(fallback.children, target)}}\n`
             }
-            return `${openRange(target)}${code}}\n${closeRange(target)}`
+            return `${anchorMark(target)}${openRange(target)}${code}}\n${closeRange(target)}`
         }
         if (node.kind === 'case') {
             return ''
@@ -135,17 +161,19 @@ export function generateSSR(
         if (node.kind === 'each') {
             /* Async each (`await`) is drained on the client — render no rows on the
                server (an infinite stream would hang SSR); the client inserts its anchor
-               before the next sibling during hydration, like an empty sync each. */
+               before the next sibling during hydration, like an empty sync each. In a
+               skeleton the `<!--a-->` anchor still marks its position (the client mounts
+               there); no range markers, since there are no server rows to claim. */
             if (node.async) {
-                return ''
+                return anchorMark(target)
             }
-            return `for (const ${node.as} of (${lowerExpression(node.items)})) {\n${openRange(target)}${branchContent(node.children, target)}${closeRange(target)}}\n`
+            return `${anchorMark(target)}for (const ${node.as} of (${lowerExpression(node.items)})) {\n${openRange(target)}${branchContent(node.children, target)}${closeRange(target)}}\n`
         }
         if (node.kind === 'await') {
-            return generateAwait(node, target)
+            return `${anchorMark(target)}${generateAwait(node, target)}`
         }
         if (node.kind === 'try') {
-            return generateTry(node, target)
+            return `${anchorMark(target)}${generateTry(node, target)}`
         }
         if (node.kind === 'branch') {
             return ''
@@ -159,21 +187,11 @@ export function generateSSR(
             const parts = node.props.map(
                 (prop) => `${JSON.stringify(prop.name)}: () => (${lowerExpression(prop.code)})`,
             )
-            const groups = partitionSlots(node.children)
-            const slotCode = generateInto(groups.default, '$slot')
+            const slotCode = generateInto(node.children, '$slot')
             if (slotCode.trim() !== '') {
                 parts.push(
                     `"$children": () => { const $slot = []; ${slotCode}return $slot.join(''); }`,
                 )
-            }
-            if (groups.named.length > 0) {
-                const entries = groups.named
-                    .map((group) => {
-                        const code = generateInto(group.nodes, '$slot')
-                        return `${JSON.stringify(group.name)}: () => { const $slot = []; ${code}return $slot.join(''); }`
-                    })
-                    .join(', ')
-                parts.push(`"$slots": { ${entries} }`)
             }
             /* Render the child and MERGE its await blocks into this page's `$awaits`
                so they join the page's SSR stream — their markers carry render-pass
@@ -190,9 +208,9 @@ export function generateSSR(
             )
         }
         if (node.kind === 'element' && node.tag === 'slot') {
-            /* A layout's unnamed `<slot/>` is the router's page outlet: emit an empty
+            /* A layout's `<slot/>` is the router's page outlet: emit an empty
                placeholder the chain composer folds the child layer's html into. */
-            if (isLayout && staticAttrValue(node, 'name') === undefined) {
+            if (isLayout) {
                 return push(target, `<${OUTLET_TAG}></${OUTLET_TAG}>`)
             }
             return generateSlot(node, target)
@@ -228,32 +246,55 @@ export function generateSSR(
         }
         code += push(target, '>')
         if (!VOID_TAGS.has(node.tag)) {
+            /* Track skeleton context: reactive text gets an `<!--a-->` anchor only when
+               interleaved (this element has non-text children) inside a skeletonable
+               subtree — matching the client's anchor vs marker-free text-leaf choice. */
+            const entering = !inSkeleton && skeletonable(node)
+            if (entering) {
+                inSkeleton = true
+            }
+            const previousMark = markText
+            const isTextLeaf = node.children.every(
+                (child) => child.kind === 'text' || child.kind === 'style',
+            )
+            markText = inSkeleton && !isTextLeaf
             /* A `<script>` child scopes its bindings to this element's subtree. */
             code += withNestedScripts(node.children, () => generateInto(node.children, target))
+            markText = previousMark
+            if (entering) {
+                inSkeleton = false
+            }
             code += push(target, `</${node.tag}>`)
         }
         return code
     }
 
-    /* A `<slot>` outlet: emit the parent-provided content for this slot (default
-       via `$children`, named via `$slots[name]`), falling back to the slot's own
-       children when none was supplied. */
+    /* A `<slot>` outlet: emit the parent-provided content (`$children`), falling back to the
+       slot's own children when none was supplied. Inside a skeleton the slot is positioned
+       by an `<!--a-->` anchor and its content bounded by a `[ … ]` range (matching the
+       client's `mountSlot`), so it can sit among static siblings. The fallback is a fresh,
+       non-skeleton build context — the client builds it via `mountSlot`/`fillBefore`, not the
+       skeleton clone — so its reactive text takes no anchor (reset like `branchContent`). */
     function generateSlot(
         node: Extract<TemplateNode, { kind: 'element' }>,
         target: string,
     ): string {
-        const name = staticAttrValue(node, 'name')
-        const guard =
-            name === undefined
-                ? '$props && $props.$children'
-                : `$props && $props.$slots && $props.$slots[${JSON.stringify(name)}]`
-        const provided =
-            name === undefined ? '$props.$children' : `$props.$slots[${JSON.stringify(name)}]`
+        const wrap = inSkeleton
+        const previousSkeleton = inSkeleton
+        const previousMark = markText
+        inSkeleton = false
+        markText = false
         const fallback = generateInto(node.children, target)
-        if (fallback.trim() === '') {
-            return `if (${guard}) { ${target}.push(${provided}()); }\n`
+        inSkeleton = previousSkeleton
+        markText = previousMark
+        const body =
+            fallback.trim() === ''
+                ? `if ($props && $props.$children) { ${target}.push($props.$children()); }\n`
+                : `if ($props && $props.$children) { ${target}.push($props.$children()); } else {\n${fallback}}\n`
+        if (!wrap) {
+            return body
         }
-        return `if (${guard}) { ${target}.push(${provided}()); } else {\n${fallback}}\n`
+        return `${anchorMark(target)}${openRange(target)}${body}${closeRange(target)}`
     }
 
     /* Boundary markers + a `$awaits` registration carrying the promise and

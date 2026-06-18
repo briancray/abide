@@ -4,6 +4,7 @@ import { RENDER } from '../runtime/RENDER.ts'
 import { RESUME } from '../runtime/RESUME.ts'
 import { scope } from '../runtime/scope.ts'
 import { discardBoundary } from './discardBoundary.ts'
+import { enterNamespace } from './enterNamespace.ts'
 
 /*
 Async binding — the runtime for `<template await>`. Renders the pending branch,
@@ -34,6 +35,10 @@ export function awaitBlock(
     /* Absent when the block has no catch branch — a rejection then surfaces (re-throws
        to the unhandled-rejection path) instead of rendering an empty branch. */
     renderCatch: ((parent: Node, error: unknown) => void) | undefined,
+    /* A static node located by the skeleton: the block's anchor inserts before it on
+       create (block before a static suffix). Null appends (tail). insertBefore(x, null)
+       === appendChild, so the default is the prior behaviour. */
+    before: Node | null = null,
 ): void {
     const hydration = RENDER.hydration
     let active: { nodes: Node[]; dispose: () => void } | undefined
@@ -62,7 +67,9 @@ export function awaitBlock(
     const place = (build: (parent: Node) => void): void => {
         detach()
         const fragment = document.createDocumentFragment()
-        const dispose = scope(() => build(fragment))
+        const dispose = enterNamespace(anchor?.parentNode ?? parent, () =>
+            scope(() => build(fragment)),
+        )
         const nodes = [...fragment.childNodes]
         ;(anchor?.parentNode ?? parent).insertBefore(fragment, anchor ?? null)
         active = { nodes, dispose }
@@ -122,14 +129,17 @@ export function awaitBlock(
        (hydration off) — the recovery path when adoption can't use the server markup. */
     const rebuildCold = (open: Node | null): void => {
         detach()
-        discardBoundary(
+        /* Insert at the node AFTER the discarded boundary (its return) — NOT the captured
+           `before`, which for a skeleton-anchored block is the open boundary itself and is
+           removed here, so reusing it throws `NotFoundError` in a strict DOM. */
+        const after = discardBoundary(
             parent,
             open,
             `/abide:await:${id}`,
             hydration as NonNullable<typeof hydration>,
         )
         anchor = document.createTextNode('')
-        parent.appendChild(anchor)
+        parent.insertBefore(anchor, after)
         const previous = RENDER.hydration
         RENDER.hydration = undefined
         try {
@@ -174,10 +184,20 @@ export function awaitBlock(
             }
             return
         }
-        discardBoundary(parent, open, `/abide:await:${id}`, cursor)
+        /* Insert at the node after the discarded boundary (see `rebuildCold`). */
+        const after = discardBoundary(parent, open, `/abide:await:${id}`, cursor)
         anchor = document.createTextNode('')
-        parent.appendChild(anchor)
-        render(result)
+        parent.insertBefore(anchor, after)
+        /* The boundary's server nodes are gone, so the pending branch builds FRESH — clear
+           the claim cursor (mirrors `rebuildCold`) so its `cloneStatic`/text don't try to
+           claim discarded nodes and silently render nothing. */
+        const previous = RENDER.hydration
+        RENDER.hydration = undefined
+        try {
+            render(result)
+        } finally {
+            RENDER.hydration = previous
+        }
     }
 
     effect(() => {
@@ -195,7 +215,7 @@ export function awaitBlock(
                 return
             }
             anchor = document.createTextNode('')
-            parent.appendChild(anchor)
+            parent.insertBefore(anchor, before)
         }
         render(result)
     })

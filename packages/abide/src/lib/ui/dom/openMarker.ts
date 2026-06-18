@@ -9,7 +9,7 @@ HTML and the block can claim them positionally on hydrate — the boundary that 
 a branch hold ANY content (components, text, nested blocks, snippets) as a range,
 rather than a list of single nodes.
 */
-export function openMarker(parent: Node, data: string): Comment {
+export function openMarker(parent: Node, data: string, before: Node | null = null): Comment {
     const hydration = RENDER.hydration
     if (hydration !== undefined) {
         const node = claimChild(hydration, parent) as unknown as Comment
@@ -17,6 +17,8 @@ export function openMarker(parent: Node, data: string): Comment {
         return node
     }
     const node = document.createComment(data)
-    parent.appendChild(node)
+    /* `before` (a node already in `parent`) places the block among static siblings —
+       its content lands at that position; without it the marker appends (block at tail). */
+    parent.insertBefore(node, before)
     return node
 }

@@ -2,9 +2,11 @@ import { html } from '../shared/html.ts'
 import { snippet } from '../shared/snippet.ts'
 import { derived } from './derived.ts'
 import { doc } from './doc.ts'
+import { anchorCursor } from './dom/anchorCursor.ts'
 import { appendSnippet } from './dom/appendSnippet.ts'
 import { appendStatic } from './dom/appendStatic.ts'
 import { appendText } from './dom/appendText.ts'
+import { appendTextAt } from './dom/appendTextAt.ts'
 import { attach } from './dom/attach.ts'
 import { attr } from './dom/attr.ts'
 import { awaitBlock } from './dom/awaitBlock.ts'
@@ -14,8 +16,9 @@ import { eachAsync } from './dom/eachAsync.ts'
 import { hydrate } from './dom/hydrate.ts'
 import { mount } from './dom/mount.ts'
 import { mountChild } from './dom/mountChild.ts'
+import { mountSlot } from './dom/mountSlot.ts'
 import { on } from './dom/on.ts'
-import { openChild } from './dom/openChild.ts'
+import { skeleton } from './dom/skeleton.ts'
 import { switchBlock } from './dom/switchBlock.ts'
 import { tryBlock } from './dom/tryBlock.ts'
 import { when } from './dom/when.ts'
@@ -48,11 +51,13 @@ export function installHotBridge(): void {
         derived,
         effect,
         mount,
-        openChild,
         appendText,
+        appendTextAt,
         appendSnippet,
         appendStatic,
         cloneStatic,
+        skeleton,
+        anchorCursor,
         attr,
         on,
         attach,
@@ -62,6 +67,7 @@ export function installHotBridge(): void {
         awaitBlock,
         tryBlock,
         switchBlock,
+        mountSlot,
         mountChild,
         hydrate,
         nextBlockId,

@@ -9,7 +9,6 @@ import { attr } from '../src/lib/ui/dom/attr.ts'
 import { awaitBlock } from '../src/lib/ui/dom/awaitBlock.ts'
 import { each } from '../src/lib/ui/dom/each.ts'
 import { on } from '../src/lib/ui/dom/on.ts'
-import { openChild } from '../src/lib/ui/dom/openChild.ts'
 import { switchBlock } from '../src/lib/ui/dom/switchBlock.ts'
 import { text } from '../src/lib/ui/dom/text.ts'
 import { when } from '../src/lib/ui/dom/when.ts'
@@ -26,7 +25,6 @@ const RUNTIME = {
     state,
     derived,
     effect,
-    openChild,
     appendText,
     appendStatic,
     text,
@@ -81,6 +79,14 @@ describe('if / else', () => {
             </template>
         `
         expect(ssr(source)).toBe('<!--[--><span>OFF</span><!--]-->')
+    })
+
+    /* A sibling `<template else>` (closed off from its `if`) is rejected at compile —
+       it would otherwise silently drop the else branch. The else must nest inside the
+       `if`. */
+    test('rejects a sibling else', () => {
+        const sibling = `<template if={on}><span>ON</span></template><template else><span>OFF</span></template>`
+        expect(() => compileComponent(sibling)).toThrow(/sibling branch is not supported/)
     })
 })
 

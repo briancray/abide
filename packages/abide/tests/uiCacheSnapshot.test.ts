@@ -21,7 +21,6 @@ import { awaitBlock } from '../src/lib/ui/dom/awaitBlock.ts'
 import { each } from '../src/lib/ui/dom/each.ts'
 import { hydrate } from '../src/lib/ui/dom/hydrate.ts'
 import { on } from '../src/lib/ui/dom/on.ts'
-import { openChild } from '../src/lib/ui/dom/openChild.ts'
 import { effect } from '../src/lib/ui/effect.ts'
 import { renderToStream } from '../src/lib/ui/renderToStream.ts'
 import { RESUME } from '../src/lib/ui/runtime/RESUME.ts'
@@ -107,7 +106,7 @@ describe('cache() snapshot → UI hydration (full server→client loop)', () => 
             applyResolved(host, frame)
         }
         const ul = (host.childNodes[0] as unknown as { childNodes: unknown[] })
-            .childNodes[1] as unknown as { childNodes: { textContent: string }[] }
+            .childNodes[2] as unknown as { childNodes: { textContent: string }[] }
         const firstRowBefore = ul.childNodes[0]
 
         // 3) client: a fresh store seeded from the snapshot (warms post-hydration
@@ -124,7 +123,6 @@ describe('cache() snapshot → UI hydration (full server→client loop)', () => 
             state,
             derived,
             effect,
-            openChild,
             appendText,
             appendStatic,
             on,

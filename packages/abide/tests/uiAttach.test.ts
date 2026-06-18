@@ -8,7 +8,6 @@ import { attach } from '../src/lib/ui/dom/attach.ts'
 import { attr } from '../src/lib/ui/dom/attr.ts'
 import { mount } from '../src/lib/ui/dom/mount.ts'
 import { on } from '../src/lib/ui/dom/on.ts'
-import { openChild } from '../src/lib/ui/dom/openChild.ts'
 import type { SsrRender } from '../src/lib/ui/runtime/types/SsrRender.ts'
 import { state } from '../src/lib/ui/state.ts'
 import { installMiniDom } from './support/installMiniDom.ts'
@@ -31,7 +30,6 @@ const torn = (node: Element): void => {
 const RUNTIME = {
     doc,
     state,
-    openChild,
     appendText,
     appendStatic,
     attr,

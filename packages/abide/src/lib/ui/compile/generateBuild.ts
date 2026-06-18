@@ -1,12 +1,11 @@
+import { HOLE_ATTRIBUTE } from '../runtime/HOLE_ATTRIBUTE.ts'
 import { OUTLET_TAG } from '../runtime/OUTLET_TAG.ts'
 import { bindListenEvent } from './bindListenEvent.ts'
 import { componentWrapperTag } from './componentWrapperTag.ts'
 import { groupBindParts } from './groupBindParts.ts'
 import { lowerContext } from './lowerContext.ts'
-import { partitionSlots } from './partitionSlots.ts'
 import { scopeAttr } from './scopeAttr.ts'
 import { staticAttr } from './staticAttr.ts'
-import { staticAttrValue } from './staticAttrValue.ts'
 import { staticTextPart } from './staticTextPart.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
 import { VOID_TAGS } from './VOID_TAGS.ts'
@@ -37,69 +36,207 @@ export function generateBuild(
         withNestedScripts,
     } = lowerContext(stateNames, derivedNames)
 
-    /* Builds an element and its children; returns the build code and its var.
-       `varExpr` is how the element is obtained — `openChild(parent, tag)` for a
-       child (create-or-claim), or `document.createElement(tag)` for a returned
-       root (rows/branches, which are create-only). */
-    function generateElement(
+    /* Emits the wiring for one non-static attribute against an already-obtained skeleton
+       element var — reactive `attr`, `on` listener, `attach`, or a two-way `bind`. */
+    function dynamicAttr(
         node: Extract<TemplateNode, { kind: 'element' }>,
-        varExpr: string,
-    ): { code: string; varName: string } {
-        const varName = nextVar('el')
-        let code = `const ${varName} = ${varExpr};\n`
-        /* Stamp the scope attribute of every `<style>` active at this element (its own
-           sibling list plus every ancestor's), so the bundled CSS matches it. */
+        attr: Extract<
+            (typeof node.attrs)[number],
+            { kind: 'expression' | 'event' | 'attach' | 'bind' }
+        >,
+        varName: string,
+    ): string {
+        if (attr.kind === 'expression') {
+            return `attr(${varName}, ${JSON.stringify(attr.name)}, () => (${lowerExpression(attr.code)}));\n`
+        }
+        if (attr.kind === 'event') {
+            return `on(${varName}, ${JSON.stringify(attr.event)}, (${lowerExpression(attr.code)}));\n`
+        }
+        if (attr.kind === 'attach') {
+            return `attach(${varName}, (${lowerExpression(attr.code)}));\n`
+        }
+        if (attr.property === 'group') {
+            /* Grouped two-way: radio binds the path to the single checked `value`;
+               checkbox treats the path as an array, adding/removing `value` on toggle.
+               Membership reads the array via the lowered path and calls native
+               `.includes`/`.indexOf` (the doc API has no array search); mutations go
+               through `push`/`delete`, which lower to `add`/`remove` patches that the
+               doc reindexes. */
+            const { valueCode, isRadio } = groupBindParts(node)
+            const value = lowerExpression(valueCode)
+            if (isRadio) {
+                return (
+                    `effect(() => { ${varName}.checked = (${lowerExpression(attr.code)}) === (${value}); });\n` +
+                    `on(${varName}, "change", () => { if (${varName}.checked) { ${lowerStatement(`${attr.code} = ${valueCode}`)} } });\n`
+                )
+            }
+            return (
+                `effect(() => { ${varName}.checked = (${lowerExpression(attr.code)}).includes(${value}); });\n` +
+                `on(${varName}, "change", () => { const $groupValue = ${value}; if (${varName}.checked) { if (!(${lowerExpression(attr.code)}).includes($groupValue)) { ${lowerStatement(`${attr.code}.push($groupValue)`)} } } else { const $groupIndex = (${lowerExpression(attr.code)}).indexOf($groupValue); if ($groupIndex !== -1) { ${lowerStatement(`delete ${attr.code}[$groupIndex]`)} } } });\n`
+            )
+        }
+        /* Two-way: drive the property from the path, and write the path back on the
+           property's native event (`input` for most fields, but `toggle` for
+           `<details open>`, `change` for checked/select). The path is an lvalue, so
+           the write lowers to an assignment. */
+        const event = bindListenEvent(attr.property, node.tag)
+        return (
+            `effect(() => { ${varName}.${attr.property} = ${lowerExpression(attr.code)}; });\n` +
+            `on(${varName}, ${JSON.stringify(event)}, () => { ${lowerStatement(`${attr.code} = ${varName}.${attr.property}`)} });\n`
+        )
+    }
+
+    /* Renders a skeletonable node to its marker-stamped skeleton markup, appending each
+       hole's wiring to `binds`. Children are walked in document order, so the holes number
+       in the order the runtime produces them: element holes (reactive attr / text-leaf
+       text) by element-only path (`sk.el`, pre-order); anchor holes (interleaved reactive
+       text, control-flow blocks, slots) by document-order scan (`sk.an`). A control-flow
+       block or slot drops an `<!--a-->` anchor at its position and mounts there (see
+       `anchorCursor`), so it can sit ANYWHERE among static siblings. Static descendants are
+       plain markup. */
+    function skeletonMarkup(
+        node: TemplateNode,
+        skVar: string,
+        counter: { el: number; an: number },
+        binds: string[],
+    ): string {
+        if (node.kind === 'text') {
+            /* Reactive text reached here is INTERLEAVED with element siblings (a text-leaf
+               is bound via `generateChildren` instead). It can't be element-positioned, so
+               it gets an `<!--a-->` anchor — kept in both SSR and client (like a control-flow
+               range marker), located by document-order scan (`sk.an`). */
+            return node.parts
+                .map((part) => {
+                    if (part.kind === 'static') {
+                        return staticTextPart(part.value)
+                    }
+                    binds.push(
+                        `appendTextAt(${skVar}.an[${counter.an++}], () => (${lowerExpression(part.code)}));\n`,
+                    )
+                    return '<!--a-->'
+                })
+                .join('')
+        }
+        if (isControlFlowNode(node)) {
+            /* A control-flow block at its position: an `<!--a-->` anchor in the clone, the
+               block mounted at it. `anchorCursor` parks the hydrate cursor past the anchor
+               and returns the create insertion reference; the block's parent is the located
+               element the anchor was cloned into (`anchor.parentNode`). */
+            const anchorVar = nextVar('an')
+            binds.push(`const ${anchorVar} = ${skVar}.an[${counter.an++}];\n`)
+            binds.push(generateChild(node, `${anchorVar}.parentNode`, `anchorCursor(${anchorVar})`))
+            return '<!--a-->'
+        }
+        if (node.kind === 'component') {
+            /* The wrapper element is a positioned hole in the skeleton; the child mounts
+               into the located node (idempotent display:contents for a transparent wrap,
+               static so it lives in the markup). */
+            const { tag, transparent } = componentWrapperTag(node.name)
+            const { code } = mountComponent(node, `${skVar}.el[${counter.el++}]`)
+            binds.push(code)
+            const style = transparent ? ' style="display:contents"' : ''
+            return `<${tag} ${HOLE_ATTRIBUTE}${style}></${tag}>`
+        }
+        if (node.kind === 'script') {
+            /* A nested `<script>` (scoped reactive block) emits no markup — its lowered body
+               runs as a bind, in document order, so its signals are declared before the later
+               siblings that deref them (the enclosing `withNestedScripts` puts those names in
+               scope). */
+            binds.push(`${lowerStatement(node.code)}\n`)
+            return ''
+        }
+        if (node.kind === 'snippet') {
+            /* A `<template name>` snippet declares a hoisted builder, appending nothing here —
+               `{name(args)}` mounts it. Emit the declaration as a bind. */
+            binds.push(generateSnippet(node))
+            return ''
+        }
+        if (node.kind !== 'element') {
+            return '' // <style> emits no markup
+        }
+        if (node.tag === 'slot') {
+            /* A `<slot>` outlet at its position: an `<!--a-->` anchor, the slot's content
+               mounted as a marker-bounded range (`mountSlot`) so it positions like a block. */
+            const anchorVar = nextVar('an')
+            binds.push(`const ${anchorVar} = ${skVar}.an[${counter.an++}];\n`)
+            const hostVar = nextVar('host')
+            binds.push(
+                `mountSlot(${anchorVar}.parentNode, (${hostVar}) => {\n${generateSlot(node, hostVar)}}, anchorCursor(${anchorVar}));\n`,
+            )
+            return '<!--a-->'
+        }
+        const hasReactiveAttr = node.attrs.some((attr) => attr.kind !== 'static')
+        const hasReactiveText = node.children.some(
+            (child) => child.kind === 'text' && child.parts.some((part) => part.kind !== 'static'),
+        )
+        /* A text-leaf (only text/style children) with reactive text binds marker-free via
+           `generateChildren` on the located element; otherwise reactive text is interleaved
+           and uses `<!--a-->` anchors during the child recursion below. */
+        const isTextLeaf = node.children.every(
+            (child) => child.kind === 'text' || child.kind === 'style',
+        )
+        const textLeafBind = hasReactiveText && isTextLeaf
+        let openTag = `<${node.tag}`
+        let elVar = ''
+        if (hasReactiveAttr || textLeafBind) {
+            /* The element is a located hole (for attr binds or text-leaf text). Take its
+               index BEFORE recursing, so holes number in pre-order — the order the runtime's
+               path walk produces them. */
+            elVar = nextVar('el')
+            binds.push(`const ${elVar} = ${skVar}.el[${counter.el++}];\n`)
+            openTag += ` ${HOLE_ATTRIBUTE}`
+            for (const attr of node.attrs) {
+                if (attr.kind !== 'static') {
+                    binds.push(dynamicAttr(node, attr, elVar))
+                }
+            }
+        }
         for (const scope of node.scopes ?? []) {
-            code += `${varName}.setAttribute(${JSON.stringify(scope)}, "");\n`
+            openTag += scopeAttr(scope)
         }
         for (const attr of node.attrs) {
             if (attr.kind === 'static') {
-                code += `${varName}.setAttribute(${JSON.stringify(attr.name)}, ${JSON.stringify(attr.value)});\n`
-            } else if (attr.kind === 'expression') {
-                code += `attr(${varName}, ${JSON.stringify(attr.name)}, () => (${lowerExpression(attr.code)}));\n`
-            } else if (attr.kind === 'event') {
-                code += `on(${varName}, ${JSON.stringify(attr.event)}, (${lowerExpression(attr.code)}));\n`
-            } else if (attr.kind === 'attach') {
-                code += `attach(${varName}, (${lowerExpression(attr.code)}));\n`
-            } else if (attr.kind === 'bind' && attr.property === 'group') {
-                /* Grouped two-way: radio binds the path to the single checked
-                   `value`; checkbox treats the path as an array, adding/removing
-                   `value` on toggle. Membership reads the array via the lowered
-                   path and calls native `.includes`/`.indexOf` (the doc API has no
-                   array search); mutations go through `push`/`delete`, which lower
-                   to `add`/`remove` patches that the doc reindexes. */
-                const { valueCode, isRadio } = groupBindParts(node)
-                const value = lowerExpression(valueCode)
-                if (isRadio) {
-                    code += `effect(() => { ${varName}.checked = (${lowerExpression(attr.code)}) === (${value}); });\n`
-                    code += `on(${varName}, "change", () => { if (${varName}.checked) { ${lowerStatement(`${attr.code} = ${valueCode}`)} } });\n`
-                } else {
-                    code += `effect(() => { ${varName}.checked = (${lowerExpression(attr.code)}).includes(${value}); });\n`
-                    code += `on(${varName}, "change", () => { const $groupValue = ${value}; if (${varName}.checked) { if (!(${lowerExpression(attr.code)}).includes($groupValue)) { ${lowerStatement(`${attr.code}.push($groupValue)`)} } } else { const $groupIndex = (${lowerExpression(attr.code)}).indexOf($groupValue); if ($groupIndex !== -1) { ${lowerStatement(`delete ${attr.code}[$groupIndex]`)} } } });\n`
-                }
-            } else {
-                /* Two-way: drive the property from the path, and write the path
-                   back on the property's native event (`input` for most fields,
-                   but `toggle` for `<details open>`, `change` for checked/select).
-                   The path is an lvalue, so the write lowers to an assignment. */
-                const event = bindListenEvent(attr.property, node.tag)
-                code += `effect(() => { ${varName}.${attr.property} = ${lowerExpression(attr.code)}; });\n`
-                code += `on(${varName}, ${JSON.stringify(event)}, () => { ${lowerStatement(`${attr.code} = ${varName}.${attr.property}`)} });\n`
+                openTag += staticAttr(attr.name, attr.value)
             }
         }
-        /* A `<script>` among the children scopes its bindings to this element's
-           subtree (its later siblings auto-deref them); pop after. */
-        code += withNestedScripts(node.children, () => generateChildren(node.children, varName))
-        return { code, varName }
+        openTag += '>'
+        if (VOID_TAGS.has(node.tag)) {
+            return openTag
+        }
+        if (textLeafBind) {
+            /* Clone the element empty, build its text on the located node with the
+               imperative path — handles static/reactive/snippet/raw-html text. */
+            binds.push(generateChildren(node.children, elVar))
+            return `${openTag}</${node.tag}>`
+        }
+        /* A nested `<script>` among the children scopes its bindings to this subtree (its
+           later siblings auto-deref them); pop after. */
+        const inner = withNestedScripts(node.children, () =>
+            node.children.map((child) => skeletonMarkup(child, skVar, counter, binds)).join(''),
+        )
+        return `${openTag}${inner}</${node.tag}>`
+    }
+
+    /* Emits a skeletonable subtree via the skeleton path: a marker-stamped static
+       skeleton string (parsed once, cloned per mount) plus each hole's wiring against
+       its located node. */
+    function generateSkeleton(
+        node: Extract<TemplateNode, { kind: 'element' | 'component' }>,
+        parentVar: string,
+    ): string {
+        const skVar = nextVar('sk')
+        const binds: string[] = []
+        const html = skeletonMarkup(node, skVar, { el: 0, an: 0 }, binds)
+        return `const ${skVar} = skeleton(${parentVar}, ${JSON.stringify(html)});\n${binds.join('')}`
     }
 
     /* Emits code appending `node` to `parentVar`. */
-    function generateChild(node: TemplateNode, parentVar: string): string {
+    function generateChild(node: TemplateNode, parentVar: string, before = 'null'): string {
         if (node.kind === 'script') {
             return `${lowerStatement(node.code)}\n`
         }
         /* A `<style>` emits no DOM — its CSS is bundled and its scope attribute is
-           already stamped onto the elements it covers (see `generateElement`). */
+           already stamped onto the elements it covers (see `staticHtml`/`skeletonMarkup`). */
         if (node.kind === 'style') {
             return ''
         }
@@ -122,36 +259,43 @@ export function generateBuild(
                 .join('')
         }
         if (node.kind === 'element' && node.tag === 'slot') {
-            /* In a layout, the unnamed `<slot/>` is the router's page outlet: a bare
-               structural element the router mounts the next chain layer into. Created
-               empty (no scope attr, no children) so it matches the SSR placeholder. */
-            if (isLayout && staticAttrValue(node, 'name') === undefined) {
-                return `openChild(${parentVar}, ${JSON.stringify(OUTLET_TAG)});\n`
+            /* In a layout, `<slot/>` is the router's page outlet: a bare empty `OUTLET_TAG`
+               element the router mounts the next chain layer into, cloned (create) / claimed
+               (hydrate) so it matches the SSR placeholder. (Top-level/nested-in-element layout
+               slots are rewritten to `OUTLET_TAG` up front by `asOutlet`; this covers a slot
+               reached inside a control-flow branch.) */
+            if (isLayout) {
+                return `cloneStatic(${parentVar}, ${JSON.stringify(`<${OUTLET_TAG}></${OUTLET_TAG}>`)});\n`
             }
             return generateSlot(node, parentVar)
         }
         if (node.kind === 'element') {
-            /* openChild appends (create) or claims (hydrate) — no separate append. */
-            return generateElement(node, `openChild(${parentVar}, ${JSON.stringify(node.tag)})`)
-                .code
+            /* Every bound element builds through the parser-backed skeleton (one clone +
+               located holes / anchors, correct foreign namespaces). A fully-static element
+               never reaches here — `generateChildren` coalesces it into a `cloneStatic` run —
+               so a non-slot element here always carries a hole and is skeletonable. */
+            return generateSkeleton(node, parentVar)
         }
         if (node.kind === 'if') {
-            return generateIf(node, parentVar)
+            return generateIf(node, parentVar, before)
         }
         if (node.kind === 'await') {
-            return generateAwait(node, parentVar)
+            return generateAwait(node, parentVar, before)
         }
         if (node.kind === 'try') {
-            return generateTry(node, parentVar)
+            return generateTry(node, parentVar, before)
         }
         if (node.kind === 'branch') {
             return '' // branches are consumed by their await block, never standalone
         }
         if (node.kind === 'component') {
-            return generateComponent(node, parentVar)
+            /* A standalone component builds through the skeleton too — its wrapper element
+               is a located hole, the child mounts into it (same as a component nested in a
+               skeletonable element). */
+            return generateSkeleton(node, parentVar)
         }
         if (node.kind === 'switch') {
-            return generateSwitch(node, parentVar)
+            return generateSwitch(node, parentVar, before)
         }
         if (node.kind === 'case') {
             return '' // cases are consumed by their switch/if, never standalone
@@ -159,7 +303,7 @@ export function generateBuild(
         if (node.kind === 'snippet') {
             return generateSnippet(node)
         }
-        return generateEach(node, parentVar)
+        return generateEach(node, parentVar, before)
     }
 
     /* Builds a sibling list, coalescing maximal runs of fully-static element subtrees
@@ -202,6 +346,7 @@ export function generateBuild(
     function generateSwitch(
         node: Extract<TemplateNode, { kind: 'switch' }>,
         parentVar: string,
+        before: string,
     ): string {
         const cases = node.children
             .filter(
@@ -215,60 +360,41 @@ export function generateBuild(
                 return `{ match: ${match}, render: ${branchThunk(branch.children)} }`
             })
             .join(', ')
-        return `switchBlock(${parentVar}, () => (${lowerExpression(node.subject)}), [${cases}]);\n`
+        return `switchBlock(${parentVar}, () => (${lowerExpression(node.subject)}), [${cases}], ${before});\n`
     }
 
-    /* A `<slot>` outlet: render the parent-provided content for this slot (default
-       via `$children`, named via `$slots[name]`), falling back to the slot's own
-       children when the parent supplied none. */
+    /* A `<slot>` outlet: render the parent-provided content (`$children`), falling
+       back to the slot's own children when the parent supplied none. */
     function generateSlot(
         node: Extract<TemplateNode, { kind: 'element' }>,
         parentVar: string,
     ): string {
-        const name = staticAttrValue(node, 'name')
-        const guard =
-            name === undefined
-                ? '$props && $props.$children'
-                : `$props && $props.$slots && $props.$slots[${JSON.stringify(name)}]`
-        const invoke =
-            name === undefined
-                ? `$props.$children(${parentVar})`
-                : `$props.$slots[${JSON.stringify(name)}](${parentVar})`
-        const fallback = node.children.map((child) => generateChild(child, parentVar)).join('')
+        const fallback = generateChildren(node.children, parentVar)
+        const invoke = `$props.$children(${parentVar})`
         if (fallback.trim() === '') {
-            return `if (${guard}) { ${invoke}; }\n`
+            return `if ($props && $props.$children) { ${invoke}; }\n`
         }
-        return `if (${guard}) { ${invoke}; } else {\n${fallback}}\n`
+        return `if ($props && $props.$children) { ${invoke}; } else {\n${fallback}}\n`
     }
 
     /* Mounts a child component into a wrapper element, passing each prop as a
        reactive thunk so the child re-reads when the parent expression changes. */
     /* The prop + slot thunks a child mount receives — its props as value thunks and
-       its slot content as host-taking builders (`$children` / `$slots[name]`). */
+       its slot content as a host-taking builder (`$children`). */
     function componentParts(node: Extract<TemplateNode, { kind: 'component' }>): string[] {
         const parts = node.props.map(
             (prop) => `${JSON.stringify(prop.name)}: () => (${lowerExpression(prop.code)})`,
         )
-        const groups = partitionSlots(node.children)
-        const slotCode = groups.default.map((child) => generateChild(child, '$slot')).join('')
+        const slotCode = generateChildren(node.children, '$slot')
         if (slotCode.trim() !== '') {
             parts.push(`"$children": ($slot) => {\n${slotCode}}`)
-        }
-        if (groups.named.length > 0) {
-            const entries = groups.named
-                .map((group) => {
-                    const code = group.nodes.map((child) => generateChild(child, '$slot')).join('')
-                    return `${JSON.stringify(group.name)}: ($slot) => {\n${code}}`
-                })
-                .join(', ')
-            parts.push(`"$slots": { ${entries} }`)
         }
         return parts
     }
 
-    /* Mounts a child into a wrapper obtained via `varExpr` (openChild — appends on
-       create / claims on hydrate). Hydration stays active, so the child adopts its
-       server markup inside the wrapper. Returns the wrapper var. */
+    /* Mounts a child into a wrapper obtained via `varExpr` (a skeleton-located node).
+       Hydration stays active, so the child adopts its server markup inside the wrapper.
+       Returns the wrapper var. */
     function mountComponent(
         node: Extract<TemplateNode, { kind: 'component' }>,
         varExpr: string,
@@ -280,25 +406,12 @@ export function generateBuild(
         return { code, varName: wrapper }
     }
 
-    function generateComponent(
-        node: Extract<TemplateNode, { kind: 'component' }>,
-        parentVar: string,
-    ): string {
-        const { tag, transparent } = componentWrapperTag(node.name)
-        const { code, varName } = mountComponent(
-            node,
-            `openChild(${parentVar}, ${JSON.stringify(tag)})`,
-        )
-        /* A void-name remap is layout-transparent so the child's root stays a direct
-           child of the parent (idempotent on a claimed SSR node that already has it). */
-        return transparent ? `${code}${varName}.setAttribute("style", "display:contents");\n` : code
-    }
-
     /* An await block: pending → resolved(value) / error branches. Each branch is a
        single-element root; a render thunk returns its node. */
     function generateAwait(
         node: Extract<TemplateNode, { kind: 'await' }>,
         parentVar: string,
+        before: string,
     ): string {
         const isBranch = (which: 'then' | 'catch' | 'finally') => (child: TemplateNode) =>
             child.kind === 'branch' && child.branch === which
@@ -337,7 +450,7 @@ export function generateBuild(
             `awaitBlock(${parentVar}, nextBlockId(), () => (${lowerExpression(node.promise)}), ` +
             `${pendingThunk}, ` +
             `${thenThunk}, ` +
-            `${catchThunk});\n`
+            `${catchThunk}, ${before});\n`
         )
     }
 
@@ -407,7 +520,11 @@ export function generateBuild(
     /* A sync error boundary: build the guarded subtree (++ finally); a throw while
        building swaps to the catch branch (++ finally). No catch → `undefined`, which
        makes the runtime re-throw to the nearest enclosing boundary. */
-    function generateTry(node: Extract<TemplateNode, { kind: 'try' }>, parentVar: string): string {
+    function generateTry(
+        node: Extract<TemplateNode, { kind: 'try' }>,
+        parentVar: string,
+        before: string,
+    ): string {
         const catchBranch = findBranch(node.children, 'catch')
         const finallyChildren = branchChildren(findBranch(node.children, 'finally'))
         const guarded = node.children.filter((child) => child.kind !== 'branch')
@@ -420,22 +537,23 @@ export function generateBuild(
                       branchVar(catchBranch) ?? '_error',
                       finallyChildren,
                   )
-        return `tryBlock(${parentVar}, nextBlockId(), ${tryThunk}, ${catchThunk});\n`
+        return `tryBlock(${parentVar}, nextBlockId(), ${tryThunk}, ${catchThunk}, ${before});\n`
     }
 
     /* A conditional with an optional nested `<template else>` (a `case` child). Each
        branch is a content range the runtime tracks between markers. */
-    function generateIf(node: Extract<TemplateNode, { kind: 'if' }>, parentVar: string): string {
+    function generateIf(
+        node: Extract<TemplateNode, { kind: 'if' }>,
+        parentVar: string,
+        before: string,
+    ): string {
         const elseBranch = node.children.find(
             (child): child is Extract<TemplateNode, { kind: 'case' }> => child.kind === 'case',
         )
         const thenChildren = node.children.filter((child) => child.kind !== 'case')
         const thenThunk = branchThunk(thenChildren)
-        if (elseBranch === undefined) {
-            return `when(${parentVar}, () => (${lowerExpression(node.condition)}), ${thenThunk});\n`
-        }
-        const elseThunk = branchThunk(elseBranch.children)
-        return `when(${parentVar}, () => (${lowerExpression(node.condition)}), ${thenThunk}, ${elseThunk});\n`
+        const elseThunk = elseBranch === undefined ? 'undefined' : branchThunk(elseBranch.children)
+        return `when(${parentVar}, () => (${lowerExpression(node.condition)}), ${thenThunk}, ${elseThunk}, ${before});\n`
     }
 
     /* A keyed each. Each row is a content RANGE (any content, tracked between the
@@ -443,6 +561,7 @@ export function generateBuild(
     function generateEach(
         node: Extract<TemplateNode, { kind: 'each' }>,
         parentVar: string,
+        before: string,
     ): string {
         const rowParam = nextVar('p')
         /* The row body builds its children (a `<script>` declares per-row local signals,
@@ -464,11 +583,36 @@ export function generateBuild(
             : ''
         return (
             `${fn}(${parentVar}, () => (${lowerExpression(node.items)}), ` +
-            `(${node.as}) => (${keyExpression}), (${rowParam}, ${node.as}) => {\n${rowBody}}${catchArg});\n`
+            `(${node.as}) => (${keyExpression}), (${rowParam}, ${node.as}) => {\n${rowBody}}${catchArg}, ${before});\n`
         )
     }
 
-    return generateChildren(nodes, hostVar)
+    /* In a layout the `<slot/>` page outlet is a bare empty `OUTLET_TAG` element (the
+       router fills it later) — exactly the SSR placeholder. Rewriting it to an element
+       node up front lets the static-clone path carry it as ordinary structure. */
+    function asOutlet(node: TemplateNode): TemplateNode {
+        if (node.kind !== 'element') {
+            return node
+        }
+        if (node.tag === 'slot') {
+            return { ...node, tag: OUTLET_TAG, attrs: [], children: [] }
+        }
+        return { ...node, children: node.children.map(asOutlet) }
+    }
+
+    return generateChildren(isLayout ? nodes.map(asOutlet) : nodes, hostVar)
+}
+
+/* A control-flow block — `if`/`each`/`await`/`switch`/`try`. In a skeleton each mounts at
+   an `<!--a-->` anchor cloned into its located parent at the block's position. */
+function isControlFlowNode(node: TemplateNode): boolean {
+    return (
+        node.kind === 'if' ||
+        node.kind === 'each' ||
+        node.kind === 'await' ||
+        node.kind === 'switch' ||
+        node.kind === 'try'
+    )
 }
 
 /* A text node that is purely whitespace (no interpolation, only blank static

@@ -14,7 +14,6 @@ import { awaitBlock } from '../src/lib/ui/dom/awaitBlock.ts'
 import { each } from '../src/lib/ui/dom/each.ts'
 import { hydrate } from '../src/lib/ui/dom/hydrate.ts'
 import { on } from '../src/lib/ui/dom/on.ts'
-import { openChild } from '../src/lib/ui/dom/openChild.ts'
 import { effect } from '../src/lib/ui/effect.ts'
 import { RESUME } from '../src/lib/ui/runtime/RESUME.ts'
 import { state } from '../src/lib/ui/state.ts'
@@ -101,9 +100,9 @@ describe('cache() + UI await-block hydration', () => {
 
         const host = document.createElement('div')
         host.innerHTML =
-            '<main><!--abide:await:0--><ul><!--[--><li>ada</li><!--]--><!--[--><li>margaret</li><!--]--></ul><!--/abide:await:0--></main>'
+            '<main><!--a--><!--abide:await:0--><ul><!--[--><li>ada</li><!--]--><!--[--><li>margaret</li><!--]--></ul><!--/abide:await:0--></main>'
         const ul = (host.childNodes[0] as unknown as { childNodes: unknown[] })
-            .childNodes[1] as unknown as {
+            .childNodes[2] as unknown as {
             childNodes: { textContent: string }[]
             children: { textContent: string }[]
         }
@@ -125,7 +124,6 @@ describe('cache() + UI await-block hydration', () => {
             state,
             derived,
             effect,
-            openChild,
             appendText,
             appendStatic,
             on,
@@ -165,7 +163,7 @@ describe('cache() + UI await-block hydration', () => {
 
         const host = document.createElement('div')
         host.innerHTML =
-            '<main><!--abide:await:0--><span>resumed</span><!--/abide:await:0--></main>'
+            '<main><!--a--><!--abide:await:0--><span>resumed</span><!--/abide:await:0--></main>'
         const source = `
             <script>let read = cache(loadData)</script>
             <main><template await={read()}><template then="v"><span>{v}</span></template></template></main>
@@ -175,7 +173,6 @@ describe('cache() + UI await-block hydration', () => {
             state,
             derived,
             effect,
-            openChild,
             appendText,
             appendStatic,
             on,

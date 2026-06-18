@@ -19,7 +19,12 @@ matching case in place, claim the end marker. The effect's first run picks the s
 case and is a no-op; later changes swap the range.
 */
 // @readme plumbing
-export function switchBlock(parent: Node, subject: () => unknown, cases: SwitchCase[]): void {
+export function switchBlock(
+    parent: Node,
+    subject: () => unknown,
+    cases: SwitchCase[],
+    before: Node | null = null,
+): void {
     const hydration = RENDER.hydration
     let dispose: (() => void) | undefined
     let activeIndex: number
@@ -34,7 +39,9 @@ export function switchBlock(parent: Node, subject: () => unknown, cases: SwitchC
     const caseAt = (index: number): SwitchCase | undefined =>
         index === -1 ? undefined : cases[index]
 
-    const start = openMarker(parent, '[')
+    /* `before` places the range among static siblings on create (block before a suffix);
+       hydrate ignores it and uses the parked claim cursor. */
+    const start = openMarker(parent, '[', before)
     if (hydration !== undefined) {
         activeIndex = select(subject())
         const chosen = caseAt(activeIndex)
@@ -43,7 +50,7 @@ export function switchBlock(parent: Node, subject: () => unknown, cases: SwitchC
         }
         end = openMarker(parent, ']')
     } else {
-        end = openMarker(parent, ']')
+        end = openMarker(parent, ']', before)
         activeIndex = select(subject())
         const chosen = caseAt(activeIndex)
         if (chosen !== undefined) {

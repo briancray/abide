@@ -10,7 +10,6 @@ import { cloneStatic } from '../src/lib/ui/dom/cloneStatic.ts'
 import { each } from '../src/lib/ui/dom/each.ts'
 import { hydrate } from '../src/lib/ui/dom/hydrate.ts'
 import { on } from '../src/lib/ui/dom/on.ts'
-import { openChild } from '../src/lib/ui/dom/openChild.ts'
 import { when } from '../src/lib/ui/dom/when.ts'
 import { effect } from '../src/lib/ui/effect.ts'
 import { state } from '../src/lib/ui/state.ts'
@@ -46,7 +45,6 @@ const RUNTIME = {
     state,
     derived,
     effect,
-    openChild,
     appendText,
     appendStatic,
     attr,
@@ -74,16 +72,18 @@ function serverHtml(source: string): string {
 }
 
 describe('static-template cloning', () => {
-    test('emits cloneStatic for fully-static subtrees, not for dynamic ones', () => {
+    test('a page with holes builds through one skeleton clone, static interior inlined', () => {
         const body = compileComponent(PAGE)
-        /* The static nav, feature list, and footer each clone in one call (the html
-           is JSON-escaped inside the emitted call, so anchor on quote-free fragments). */
-        expect(body).toContain('cloneStatic(')
+        /* The whole <main> is skeletonable (static structure + text-leaf holes), so it
+           builds in one parser-backed clone — the static nav, feature list, and footer
+           inline in the skeleton markup (JSON-escaped, so anchor on quote-free fragments). */
+        expect(body).toContain('skeleton(')
         expect(body).toContain('<nav><ul><li>')
         expect(body).toContain('<footer><small>© abide</small></footer>')
-        /* The dynamic holes stay imperative. */
+        /* The dynamic text-leaf holes bind imperatively on the located element. */
         expect(body).toContain('appendText(')
-        /* No openChild for the cloned static interior (the <nav>, <small>, bullets). */
+        /* The static interior (the <nav>, <small>, bullets) lives in the skeleton clone
+           string, never built element-by-element. */
         expect(body).not.toContain('"nav"')
         expect(body).not.toContain('"small"')
     })

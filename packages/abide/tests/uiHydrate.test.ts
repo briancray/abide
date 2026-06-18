@@ -10,7 +10,7 @@ import { awaitBlock } from '../src/lib/ui/dom/awaitBlock.ts'
 import { each } from '../src/lib/ui/dom/each.ts'
 import { hydrate } from '../src/lib/ui/dom/hydrate.ts'
 import { on } from '../src/lib/ui/dom/on.ts'
-import { openChild } from '../src/lib/ui/dom/openChild.ts'
+import { skeleton } from '../src/lib/ui/dom/skeleton.ts'
 import { switchBlock } from '../src/lib/ui/dom/switchBlock.ts'
 import { when } from '../src/lib/ui/dom/when.ts'
 import { effect } from '../src/lib/ui/effect.ts'
@@ -56,7 +56,7 @@ describe('hydrate — adopt server DOM', () => {
 
         // 3) hydrate: adopt the existing DOM
         const body = compileComponent(COUNTER)
-        const runtime = { doc, state, derived, effect, openChild, appendText, appendStatic, on }
+        const runtime = { doc, state, derived, effect, appendText, appendStatic, on }
         const names = Object.keys(runtime)
         hydrate(host, (target) => {
             new Function('host', ...names, body)(
@@ -87,7 +87,6 @@ describe('hydrate — adopt server DOM', () => {
             state,
             derived,
             effect,
-            openChild,
             appendText,
             appendStatic,
             on,
@@ -137,7 +136,6 @@ describe('hydrate — adopt server DOM', () => {
             state,
             derived,
             effect,
-            openChild,
             appendText,
             appendStatic,
             on,
@@ -156,7 +154,7 @@ describe('hydrate — adopt server DOM', () => {
             'model',
             compileSSR(source),
         )(doc, state, derived, effect, model) as SsrRender
-        expect(server.html).toBe('<main><!--[--><span>hi</span><!--]--></main>')
+        expect(server.html).toBe('<main><!--a--><!--[--><span>hi</span><!--]--></main>')
 
         // parse + hydrate
         const host = document.createElement('div')
@@ -198,7 +196,6 @@ describe('hydrate — adopt server DOM', () => {
             state,
             derived,
             effect,
-            openChild,
             appendText,
             appendStatic,
             on,
@@ -218,7 +215,7 @@ describe('hydrate — adopt server DOM', () => {
             compileSSR(source),
         )(doc, state, derived, effect, model) as SsrRender
         expect(server.html).toBe(
-            '<main><ul><!--[--><li>1</li><!--]--><!--[--><li>2</li><!--]--></ul></main>',
+            '<main><ul><!--a--><!--[--><li>1</li><!--]--><!--[--><li>2</li><!--]--></ul></main>',
         )
 
         const host = document.createElement('div')
@@ -245,6 +242,114 @@ describe('hydrate — adopt server DOM', () => {
         expect(ul.childNodes.map((c) => c.textContent).filter(Boolean)).toEqual(['9', '2', '3'])
     })
 
+    test('a write that reconciles a keyed each mid-hydrate builds the row (no claim of a missing SSR node)', () => {
+        /* The classic shared-state mismatch: SSR rendered rows from a value the client
+           store defaults *empty* to, so the each adopts zero rows; then a sibling (a page
+           seeding shared state) writes the real list *synchronously, still inside the
+           hydrate pass*. The reconcile must build the new rows fresh — not claim SSR nodes
+           that were never adopted (the old code crashed in attr/openChild on a null node). */
+        const items = state<string[]>([]) // client default — mismatches the SSR rows below
+        const host = document.createElement('div')
+        host.innerHTML = '<ul><!--[--><li>a</li><!--]--></ul>'
+        const ul = host.childNodes[0] as Node
+
+        let threw: unknown
+        hydrate(host, () => {
+            try {
+                each(
+                    ul,
+                    () => items.value as string[],
+                    (key) => key,
+                    (parent, key) => {
+                        const sk = skeleton(parent, '<li data-abide-hole></li>')
+                        appendText(sk.el[0] as Node, () => key)
+                    },
+                )
+                // a sibling seeds the list while the hydrate cursor is still active
+                items.value = ['a']
+            } catch (error) {
+                threw = error
+            }
+        })
+
+        expect(threw).toBeUndefined() // no null setAttribute / claim crash
+        expect(host.textContent).toContain('a') // the row was built and rendered
+
+        // still reactive after hydrate: append lands
+        items.value = ['a', 'b']
+        expect(host.textContent).toContain('b')
+    })
+
+    test('a write that flips a `when` mid-hydrate builds the branch fresh (no claim of a missing SSR node)', () => {
+        /* Same class as the each crash: the branch is absent in the SSR range, so the
+           block adopts nothing; a synchronous write flips the condition *still inside the
+           hydrate pass*, re-running the effect into its rebuild path. The build must
+           create — not claim SSR nodes that were never there (old code crashed on null). */
+        const show = state(false) // client default — no branch rendered server-side
+        const host = document.createElement('div')
+        host.innerHTML = '<div><!--[--><!--]--></div>'
+        const root = host.childNodes[0] as Node
+
+        let threw: unknown
+        hydrate(host, () => {
+            try {
+                when(
+                    root,
+                    () => show.value,
+                    (parent) => {
+                        const sk = skeleton(parent, '<span data-abide-hole></span>')
+                        appendText(sk.el[0] as Node, () => 'on')
+                    },
+                )
+                show.value = true // flip while the hydrate cursor is still active
+            } catch (error) {
+                threw = error
+            }
+        })
+
+        expect(threw).toBeUndefined()
+        expect(host.textContent).toContain('on')
+
+        // still reactive after hydrate: flips back off
+        show.value = false
+        expect(host.textContent).not.toContain('on')
+    })
+
+    test('a write that flips a `switch` mid-hydrate builds the case fresh (no claim of a missing SSR node)', () => {
+        const subject = state('a') // SSR rendered the default case; client picks a real case
+        const host = document.createElement('div')
+        host.innerHTML = '<div><!--[--><span>def</span><!--]--></div>'
+        const root = host.childNodes[0] as Node
+
+        let threw: unknown
+        hydrate(host, () => {
+            try {
+                switchBlock(root, () => subject.value, [
+                    {
+                        match: () => 'b',
+                        render: (parent: Node) => {
+                            const sk = skeleton(parent, '<span data-abide-hole></span>')
+                            appendText(sk.el[0] as Node, () => 'B')
+                        },
+                    },
+                    {
+                        match: undefined,
+                        render: (parent: Node) => {
+                            const sk = skeleton(parent, '<span data-abide-hole></span>')
+                            appendText(sk.el[0] as Node, () => 'def')
+                        },
+                    },
+                ])
+                subject.value = 'b' // switch case while the hydrate cursor is still active
+            } catch (error) {
+                threw = error
+            }
+        })
+
+        expect(threw).toBeUndefined()
+        expect(host.textContent).toContain('B')
+    })
+
     test('adopts the matching switch case in place, then switches', () => {
         const model = doc({ status: 'b' })
         const source = `
@@ -261,7 +366,6 @@ describe('hydrate — adopt server DOM', () => {
             state,
             derived,
             effect,
-            openChild,
             appendText,
             appendStatic,
             on,
@@ -281,7 +385,7 @@ describe('hydrate — adopt server DOM', () => {
             'model',
             compileSSR(source),
         )(doc, state, derived, effect, model) as SsrRender
-        expect(server.html).toBe('<main><!--[--><span>B</span><!--]--></main>')
+        expect(server.html).toBe('<main><!--a--><!--[--><span>B</span><!--]--></main>')
 
         const host = document.createElement('div')
         host.innerHTML = server.html
@@ -309,7 +413,6 @@ describe('hydrate — adopt server DOM', () => {
             state,
             derived,
             effect,
-            openChild,
             appendText,
             appendStatic,
             on,
@@ -408,7 +511,7 @@ describe('hydrate — adopt server DOM', () => {
         }
         expect(RESUME[0]).toEqual({ ok: true, value: ['ada', 'margaret'] })
         const ul = (host.childNodes[0] as unknown as { childNodes: unknown[] })
-            .childNodes[1] as unknown as { childNodes: { textContent: string }[] }
+            .childNodes[2] as unknown as { childNodes: { textContent: string }[] }
         const firstRowBefore = ul.childNodes[0]
         expect(ul.childNodes.map((row) => row.textContent).filter(Boolean)).toEqual([
             'ada',
@@ -421,7 +524,6 @@ describe('hydrate — adopt server DOM', () => {
             state,
             derived,
             effect,
-            openChild,
             appendText,
             appendStatic,
             on,
@@ -446,6 +548,47 @@ describe('hydrate — adopt server DOM', () => {
         delete RESUME[0] // the manifest is process-global; don't leak into other tests
     })
 
+    test('hydrates a genuinely-pending await in a skeleton (discard path, no crash)', async () => {
+        /* Regression (browser-only until the mini-DOM went strict): the layout's
+           `<template await={cache(getSession)()}>` hydrated genuinely pending — no resume,
+           not warm-sync — so awaitBlock discards the SSR boundary and rebuilds fresh. It
+           inserted its managed anchor before the captured `before` ref, which for a
+           skeleton-anchored block IS the await's own open boundary — removed by the discard
+           — so the insert referenced a detached node (NotFoundError in WebKit). The insert
+           must target the node AFTER the discarded boundary (discardBoundary's return). */
+        let resolve: (value: string) => void = () => {}
+        const pending = new Promise<string>((r) => {
+            resolve = r
+        })
+        ;(globalThis as { __pendingUser?: () => Promise<string> }).__pendingUser = () => pending
+        const source = `<main><template await={__pendingUser()}><p>loading…</p><template then="who"><span>{who}</span></template></template></main>`
+
+        // the server pending shell — the `<!--a-->` anchor precedes the await boundary
+        const host = document.createElement('div')
+        host.innerHTML =
+            '<main><!--a--><!--abide:await:0--><p>loading…</p><!--/abide:await:0--></main>'
+
+        const runtime = { doc, state, derived, effect, appendText, appendStatic, on, awaitBlock }
+        const names = Object.keys(runtime)
+        const values = names.map((n) => runtime[n as keyof typeof runtime])
+        const body = compileComponent(source)
+        let threw: unknown
+        try {
+            hydrate(host, (target) => {
+                new Function('host', ...names, body)(target, ...values)
+            })
+        } catch (error) {
+            threw = error
+        }
+        expect(threw).toBeUndefined() // discard rebuild no longer inserts before a removed node
+        expect(host.textContent).toContain('loading') // pending branch rebuilt in place
+
+        resolve('ada')
+        await Promise.resolve()
+        await Promise.resolve()
+        expect(host.textContent).toContain('ada') // resolved branch swapped in, still reactive
+    })
+
     test('adopts a multi-root if/else branch in place', () => {
         // The body roots must line up with the SSR nodes during adoption; with no
         // per-component <style> emitted, the else <p> is claimed where it stands.
@@ -462,7 +605,6 @@ describe('hydrate — adopt server DOM', () => {
             state,
             derived,
             effect,
-            openChild,
             appendText,
             appendStatic,
             on,

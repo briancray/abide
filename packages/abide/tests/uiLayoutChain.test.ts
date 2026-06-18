@@ -5,7 +5,6 @@ import { compileModule } from '../src/lib/ui/compile/compileModule.ts'
 import { compileSSR } from '../src/lib/ui/compile/compileSSR.ts'
 import { appendStatic } from '../src/lib/ui/dom/appendStatic.ts'
 import { hydrate } from '../src/lib/ui/dom/hydrate.ts'
-import { openChild } from '../src/lib/ui/dom/openChild.ts'
 import { navigate } from '../src/lib/ui/navigate.ts'
 import { renderChain } from '../src/lib/ui/renderChain.ts'
 import { router } from '../src/lib/ui/router.ts'
@@ -52,9 +51,9 @@ describe('layoutChainForRoute', () => {
 describe('layout compiler outlet', () => {
     test('a layout <slot/> lowers to a <abide-outlet> in both back-ends', () => {
         const module = compileModule('<div class="shell"><slot /></div>', { isLayout: true })
-        /* SSR pushes an empty outlet placeholder; the client build creates the element. */
+        /* The outlet is a bare empty `<abide-outlet>` placeholder in both the SSR markup
+           and the client clone — the router fills it later (firstOutlet finds it). */
         expect(module).toContain('<abide-outlet></abide-outlet>')
-        expect(module).toContain('openChild(el0, "abide-outlet")')
         /* It is NOT lowered to the passed-children slot machinery. */
         expect(module).not.toContain('$props.$children')
     })
@@ -133,7 +132,7 @@ describe('renderChain', () => {
 describe('compiled layout round-trip', () => {
     /* Compiles a `.abide` source to a UiComponent (render + client mount), with the
        runtime injected, mirroring compileModule's default export. */
-    const RUNTIME = { openChild, appendStatic, enterRenderPass, exitRenderPass, nextBlockId }
+    const RUNTIME = { appendStatic, enterRenderPass, exitRenderPass, nextBlockId }
     const compiled = (source: string, isLayout: boolean): UiComponent => {
         const names = Object.keys(RUNTIME)
         const values = names.map((name) => RUNTIME[name as keyof typeof RUNTIME])

@@ -2,6 +2,7 @@ import { claimChild } from '../runtime/claimChild.ts'
 import { OWNER } from '../runtime/OWNER.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { discardBoundary } from './discardBoundary.ts'
+import { enterNamespace } from './enterNamespace.ts'
 
 /*
 Synchronous error boundary — the runtime for `<template try>`. Builds the guarded
@@ -25,6 +26,7 @@ export function tryBlock(
     id: number,
     renderTry: (parent: Node) => void,
     renderCatch?: (parent: Node, error: unknown) => void,
+    before: Node | null = null,
 ): void {
     /* Run a void build under a fresh ownership scope; on throw, tear down the partial
        effects/listeners it registered and rethrow so the caller can fall back. */
@@ -63,7 +65,7 @@ export function tryBlock(
             RENDER.hydration = undefined
             try {
                 const fragment = document.createDocumentFragment()
-                guard(() => renderCatch(fragment, error))
+                enterNamespace(parent, () => guard(() => renderCatch(fragment, error)))
                 parent.insertBefore(fragment, after)
             } finally {
                 RENDER.hydration = previous
@@ -76,14 +78,14 @@ export function tryBlock(
        (they never entered the document) before the catch builds. */
     try {
         const fragment = document.createDocumentFragment()
-        guard(() => renderTry(fragment))
-        parent.appendChild(fragment)
+        enterNamespace(parent, () => guard(() => renderTry(fragment)))
+        parent.insertBefore(fragment, before)
     } catch (error) {
         if (renderCatch === undefined) {
             throw error
         }
         const fragment = document.createDocumentFragment()
-        guard(() => renderCatch(fragment, error))
-        parent.appendChild(fragment)
+        enterNamespace(parent, () => guard(() => renderCatch(fragment, error)))
+        parent.insertBefore(fragment, before)
     }
 }

@@ -3,6 +3,7 @@ import { claimChild } from '../runtime/claimChild.ts'
 import { OWNER } from '../runtime/OWNER.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { scope } from '../runtime/scope.ts'
+import { enterNamespace } from './enterNamespace.ts'
 import { moveRange } from './moveRange.ts'
 import { removeRange } from './removeRange.ts'
 import type { EachRow } from './types/EachRow.ts'
@@ -31,6 +32,7 @@ export function each<T>(
     items: () => Iterable<T>,
     keyOf: (item: T) => string,
     render: (parent: Node, item: T) => void,
+    before: Node | null = null,
 ): void {
     const rows = new Map<string, EachRow>()
 
@@ -53,7 +55,9 @@ export function each<T>(
         const end = document.createComment(']')
         const pending = document.createDocumentFragment()
         pending.appendChild(start)
-        const dispose = scope(() => render(pending, item))
+        /* Build under `parent`'s foreign namespace so foreign row elements (svg/math)
+           built into the detached fragment are namespaced, not built as HTML. */
+        const dispose = enterNamespace(parent, () => scope(() => render(pending, item)))
         pending.appendChild(end)
         return { start, end, dispose, pending }
     }
@@ -88,7 +92,9 @@ export function each<T>(
         adopting = true
     } else {
         anchor = document.createTextNode('')
-        parent.appendChild(anchor)
+        /* `before` (a static node located by the skeleton) places the row anchor among
+           siblings on create, so rows land before a static suffix; null appends (tail). */
+        parent.insertBefore(anchor, before)
     }
 
     effect(() => {
@@ -99,31 +105,44 @@ export function each<T>(
             adopting = false // rows already adopted in document order; nothing to move
             return
         }
-        const list = Array.isArray(source) ? source : [...source]
-        const keys = list.map(keyOf)
-        const present = new Set(keys)
-        /* Prune departed rows first so their ranges don't sit between survivors and
-           throw off the in-place sibling checks below. */
-        for (const [key, row] of rows) {
-            if (!present.has(key)) {
-                row.dispose()
-                removeRange(row.start, row.end)
-                rows.delete(key)
+        /* All SSR rows were adopted in the pre-effect loop, so every reconcile build is
+           create mode. Clear the global claim cursor for the duration: a synchronous
+           write that reconciles *mid-hydrate* (RENDER.hydration still active — e.g. a
+           page setting shared state during the hydrate pass) would otherwise make
+           buildRow and its inner row render claim SSR nodes that don't exist for a
+           freshly keyed row. The same `next` Map is restored, so the outer hydration
+           cursor is untouched (mirrors awaitBlock/tryBlock). */
+        const previousHydration = RENDER.hydration
+        RENDER.hydration = undefined
+        try {
+            const list = Array.isArray(source) ? source : [...source]
+            const keys = list.map(keyOf)
+            const present = new Set(keys)
+            /* Prune departed rows first so their ranges don't sit between survivors and
+               throw off the in-place sibling checks below. */
+            for (const [key, row] of rows) {
+                if (!present.has(key)) {
+                    row.dispose()
+                    removeRange(row.start, row.end)
+                    rows.delete(key)
+                }
             }
-        }
-        /* Walk backwards from the anchor: `cursor` is the node the current row must
-           precede. A row already ending there keeps its place; only out-of-order (or
-           freshly built) rows move. */
-        let cursor: Node = anchor
-        for (let index = list.length - 1; index >= 0; index -= 1) {
-            const key = keys[index] as string
-            let row = rows.get(key)
-            if (row === undefined) {
-                row = buildRow(list[index] as T)
-                rows.set(key, row)
+            /* Walk backwards from the anchor: `cursor` is the node the current row must
+               precede. A row already ending there keeps its place; only out-of-order (or
+               freshly built) rows move. */
+            let cursor: Node = anchor
+            for (let index = list.length - 1; index >= 0; index -= 1) {
+                const key = keys[index] as string
+                let row = rows.get(key)
+                if (row === undefined) {
+                    row = buildRow(list[index] as T)
+                    rows.set(key, row)
+                }
+                placeBefore(row, cursor)
+                cursor = row.start
             }
-            placeBefore(row, cursor)
-            cursor = row.start
+        } finally {
+            RENDER.hydration = previousHydration
         }
     })
 

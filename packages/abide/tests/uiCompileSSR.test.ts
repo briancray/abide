@@ -34,7 +34,7 @@ describe('compileSSR — server render to string', () => {
             </template>
         `)
         expect(result.html).toBe(
-            '<button>+</button><p>n=2</p><ul><!--[--><li>a</li><!--]--><!--[--><li>b</li><!--]--></ul><!--[--><small>nonzero</small><!--]-->',
+            '<button>+</button><p>n=2</p><ul><!--a--><!--[--><li>a</li><!--]--><!--[--><li>b</li><!--]--></ul><!--[--><small>nonzero</small><!--]-->',
         )
         expect(result.state).toEqual({ count: 2, items: ['a', 'b'] })
     })

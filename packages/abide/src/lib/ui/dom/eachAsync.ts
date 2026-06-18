@@ -3,6 +3,7 @@ import { claimChild } from '../runtime/claimChild.ts'
 import { OWNER } from '../runtime/OWNER.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { scope } from '../runtime/scope.ts'
+import { enterNamespace } from './enterNamespace.ts'
 import { removeRange } from './removeRange.ts'
 import type { EachRow } from './types/EachRow.ts'
 
@@ -28,6 +29,7 @@ export function eachAsync<T>(
     render: (parent: Node, item: T) => void,
     /* Absent → an iterator rejection surfaces instead of rendering a catch branch. */
     renderCatch: ((parent: Node, error: unknown) => void) | undefined,
+    before: Node | null = null,
 ): void {
     const rows = new Map<string, EachRow>()
     const hydration = RENDER.hydration
@@ -35,7 +37,7 @@ export function eachAsync<T>(
     if (hydration !== undefined) {
         parent.insertBefore(anchor, claimChild(hydration, parent)) // no server rows to claim
     } else {
-        parent.appendChild(anchor)
+        parent.insertBefore(anchor, before) // `before` places rows before a static suffix
     }
 
     /* Build a content range and insert it just before the anchor (arrival order). */
@@ -44,7 +46,9 @@ export function eachAsync<T>(
         const end = document.createComment(']')
         const fragment = document.createDocumentFragment()
         fragment.appendChild(start)
-        const dispose = scope(() => build(fragment))
+        const dispose = enterNamespace(anchor.parentNode ?? parent, () =>
+            scope(() => build(fragment)),
+        )
         fragment.appendChild(end)
         /* Insert via the anchor's LIVE parent: when this `each` is a bare child of a
            control-flow branch, the captured `parent` is the branch's build fragment,
