@@ -1,5 +1,19 @@
 # abide
 
+## 0.32.2
+
+### Patch Changes
+
+- [`786f07a`](https://github.com/briancray/abide/commit/786f07a3c23986e988b2f0c0b3326e050129c959) - sync examples and ui README to current API ([`923bb86`](https://github.com/briancray/abide/commit/923bb8674814e8efcacc954beac0f1c7982b0e2c))
+
+- [`786f07a`](https://github.com/briancray/abide/commit/786f07a3c23986e988b2f0c0b3326e050129c959) - reject a static import in a nested <template> script ([`b9e7c76`](https://github.com/briancray/abide/commit/b9e7c76509d2401484d3f997b0cb904af4b5080c))
+
+- [`786f07a`](https://github.com/briancray/abide/commit/786f07a3c23986e988b2f0c0b3326e050129c959) - merge valueAtPath + pathExists into a single-pass walkPath ([`bad087b`](https://github.com/briancray/abide/commit/bad087b39c4b5427bf44fec6c3f2eb1fdbccf9c2))
+
+- [`786f07a`](https://github.com/briancray/abide/commit/786f07a3c23986e988b2f0c0b3326e050129c959) - remap any HTML-element-named component wrapper, not just void ([`bbbbe35`](https://github.com/briancray/abide/commit/bbbbe353e22b5d016cd47e81eb8bc9a786fbe336))
+
+- [`786f07a`](https://github.com/briancray/abide/commit/786f07a3c23986e988b2f0c0b3326e050129c959) - extract the static-clone template cache, keyed per document ([`d35beaa`](https://github.com/briancray/abide/commit/d35beaa956a449b79a5be63034473262226ad44d))
+
 ## 0.32.1
 
 ### Patch Changes
