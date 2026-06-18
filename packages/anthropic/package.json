@@ -39,6 +39,6 @@
         "@anthropic-ai/sdk": "^0.102.0"
     },
     "peerDependencies": {
-        "abide": ">=0.19.2"
+        "@abide/abide": ">=0.19.2"
     }
 }

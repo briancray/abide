@@ -36,10 +36,10 @@
         "src"
     ],
     "peerDependencies": {
-        "abide": ">=0.27.0"
+        "@abide/abide": ">=0.27.0"
     },
     "peerDependenciesMeta": {
-        "abide": {
+        "@abide/abide": {
             "optional": true
         }
     }
