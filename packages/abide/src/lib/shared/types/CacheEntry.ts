@@ -39,20 +39,20 @@ into `__SSR__`; ones still pending were consumed via `{#await}` (render emitted
 the pending branch without blocking) and stream a resolve chunk instead.
 
 `refreshing` flips true while this entry is reloading data it already held —
-either a policy stale-while-revalidate refetch (value still visible) or the
-default drop-then-reload (the prior entry was invalidated and dropped, this is
-its replacement read). It backs refreshing(), distinguishing a reload from a
+either an `swr` refetch (stale value still visible) or the default
+drop-then-reload (the prior entry was invalidated and dropped, this is its
+replacement read). It backs refreshing(), distinguishing a reload from a
 first-ever load; cleared when the read settles.
 
-`invalidation` holds an `invalidate` throttle/debounce policy: the refetch
-thunk (the call captured with its args) plus the policy and its runtime timer
-state, so invalidate() can rate-limit refetches of this key instead of dropping
-the entry and refetching on every invalidation. Set at registration when the
-creating read declared a policy, or attached by a later read declaring one on
-an entry that lacks it (hydrated snapshot entries always start without one) —
-first policy wins. An armed `timer` is cleared if the entry is evicted, so a
-dead key never refetches. Wrap-time validation guarantees a policy never
-coexists with ttl: 0 and never sits on a non-replayable remote method.
+`invalidation` holds the entry's `swr` policy: the refetch thunk (the call
+captured with its args) plus its optional throttle/debounce window and runtime
+timer state, so invalidate() keeps the stale value and revalidates this key —
+rate-limited by the window — instead of dropping the entry. Set at registration
+when the creating read declared `swr`, or attached by a later read declaring it
+on an entry that lacks it (hydrated snapshot entries always start without one) —
+first wins. An armed `timer` is cleared if the entry is evicted, so a dead key
+never refetches. Wrap-time validation guarantees `swr` never coexists with
+ttl: 0 and never sits on a non-replayable remote method.
 */
 export type CacheEntry = {
     key: string

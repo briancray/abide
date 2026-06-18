@@ -216,30 +216,47 @@ export function cache<Args, Return>(
 }
 
 /*
+Normalises the `swr` option to its window, or undefined when off. `true` (or
+`{}`) is stale-while-revalidate with no window — refetch immediately on every
+invalidate; an object carries the throttle/debounce window. `false`/omitted is
+off. Collapsing the boolean here lets every downstream site treat "is SWR on"
+as a single defined/undefined check.
+*/
+function swrWindow(
+    options: CacheOptions | undefined,
+): { throttle?: number; debounce?: number } | undefined {
+    const swr = options?.swr
+    if (swr === undefined || swr === false) {
+        return undefined
+    }
+    return swr === true ? {} : swr
+}
+
+/*
 Guards impossible option combinations at wrap time, where the call site is on
-the stack. A policy declares "this call is safe to re-run unprompted", so a
-non-replayable remote method (a write) must never carry one — replaying a write
+the stack. `swr` declares "this call is safe to re-run unprompted", so a
+non-replayable remote method (a write) must never carry it — replaying a write
 through the invalidation grammar would be a state change disguised as a
 refresh. Producers are opaque (no method to check); the same contract is on
-the caller there. ttl: 0 retains nothing, so there is nothing for a policy to
-revalidate; and the two coalescing strategies are exclusive by construction.
+the caller there. ttl: 0 retains nothing, so there is nothing to revalidate;
+and the two coalescing windows are exclusive by construction.
 */
 function validatePolicy(options: CacheOptions | undefined, method: string | undefined): void {
-    const policy = options?.invalidate
-    if (!policy || (policy.throttle === undefined && policy.debounce === undefined)) {
+    const policy = swrWindow(options)
+    if (!policy) {
         return
     }
     if (policy.throttle !== undefined && policy.debounce !== undefined) {
-        throw new Error('[abide] cache(): set invalidate.throttle or invalidate.debounce, not both')
+        throw new Error('[abide] cache(): set swr.throttle or swr.debounce, not both')
     }
     if (options?.ttl === 0) {
         throw new Error(
-            '[abide] cache(): an invalidate policy requires retention — ttl: 0 keeps nothing to revalidate',
+            '[abide] cache(): swr requires retention — ttl: 0 keeps nothing to revalidate',
         )
     }
     if (method !== undefined && !REPLAYABLE_METHODS.has(method.toUpperCase())) {
         throw new Error(
-            `[abide] cache(): an invalidate policy re-runs the call unprompted — ${method.toUpperCase()} is a write and must not be replayed`,
+            `[abide] cache(): swr re-runs the call unprompted — ${method.toUpperCase()} is a write and must not be replayed`,
         )
     }
 }
@@ -334,12 +351,11 @@ function registerEntry(
     refetch: () => Promise<unknown>,
 ): CacheEntry {
     const ttl = options?.ttl
-    /* Capture the refetch thunk + policy only when an invalidate window was asked for. */
-    const policy = options?.invalidate
-    const invalidation =
-        policy?.throttle !== undefined || policy?.debounce !== undefined
-            ? { refetch, throttle: policy.throttle, debounce: policy.debounce }
-            : undefined
+    /* Capture the refetch thunk + window only when swr was asked for. */
+    const policy = swrWindow(options)
+    const invalidation = policy
+        ? { refetch, throttle: policy.throttle, debounce: policy.debounce }
+        : undefined
     /*
     A prior entry for this key was dropped by invalidate() and is awaiting its
     next read — consume the marker so this replacement read reports as a reload
@@ -477,7 +493,7 @@ Invalidates every entry matching the selector (see selectorMatcher) across both
 the request/tab store and the process-level store, and notifies readers.
 `args` narrows a fn selector to exactly that call's entry — derived through
 the same encoders the read path uses, so other args variants stay warm. An entry
-with an invalidate throttle/debounce policy is kept and its refetch coalesced (stale served
+with an swr policy is kept and its refetch coalesced (stale served
 until it resolves); every other match is dropped so the next read refetches —
 its key recorded in pendingRefresh so that read reports as a reload (refreshing())
 rather than a first-ever load. An empty or unmatched selector is a no-op on the
@@ -722,9 +738,9 @@ cache.on = on
 Optimistic write: applies `updater` as a prediction now — the reactive read
 shows it immediately — runs `call`, then reconciles. On resolve the server is
 the truth: the prediction is dropped and the selector invalidated, so the value
-refetches authoritatively, coalesced per the read's own invalidate policy
-(cache(fn, { invalidate: { throttle } }) bounds an optimistic-write storm with no
-extra knob here; without a policy it is a plain drop-and-refetch). On reject the
+refetches authoritatively, coalesced per the read's own swr window
+(cache(fn, { swr: { throttle } }) bounds an optimistic-write storm with no
+extra knob here; without swr it is a plain drop-and-refetch). On reject the
 prediction rolls back. The returned promise is transparent over `call` —
 resolves to `call`'s value (the mutation result, e.g. a created id), rejects
 with its error, settling only after the cache reflects the reconciled state: an
@@ -769,10 +785,12 @@ function patch<Args, Return, Result>(
 cache.patch = patch
 
 /*
-Schedules a coalesced refetch per the entry's invalidate policy. debounce: (re)arm
-a timer that fires after N ms of quiet. throttle: fire on the leading edge when a
-full window has elapsed since the last fire, else arm a single trailing timer for
-the remainder — so a continuous invalidation stream refetches at most once per window.
+Schedules a coalesced refetch per the entry's swr policy. No window (swr: true):
+fire immediately (throttle defaults to 0, so the leading-edge branch always
+takes). debounce: (re)arm a timer that fires after N ms of quiet. throttle: fire
+on the leading edge when a full window has elapsed since the last fire, else arm
+a single trailing timer for the remainder — so a continuous invalidation stream
+refetches at most once per window.
 */
 function scheduleInvalidationRefetch(store: CacheStore, entry: CacheEntry): void {
     const policy = entry.invalidation
@@ -932,12 +950,8 @@ function attachPolicy(
     options: CacheOptions | undefined,
     refetch: () => Promise<unknown>,
 ): void {
-    const policy = options?.invalidate
-    if (
-        entry.invalidation ||
-        !policy ||
-        (policy.throttle === undefined && policy.debounce === undefined)
-    ) {
+    const policy = swrWindow(options)
+    if (entry.invalidation || !policy) {
         return
     }
     entry.invalidation = { refetch, throttle: policy.throttle, debounce: policy.debounce }

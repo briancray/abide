@@ -18,19 +18,20 @@ function preview(value: unknown): string | undefined {
     }
 }
 
-/* The entry's armed invalidate policy as a label, if it declared one. */
+/* The entry's armed swr policy as a label, if it declared one. A bare `swr: true`
+   has no window, so it labels as plain `swr`. */
 function policyLabel(entry: CacheEntry): string | undefined {
     const policy = entry.invalidation
     if (!policy) {
         return undefined
     }
     if (policy.debounce !== undefined) {
-        return `debounce ${policy.debounce}ms`
+        return `swr debounce ${policy.debounce}ms`
     }
     if (policy.throttle !== undefined) {
-        return `throttle ${policy.throttle}ms`
+        return `swr throttle ${policy.throttle}ms`
     }
-    return undefined
+    return 'swr'
 }
 
 function projectEntry(entry: CacheEntry, now: number): InspectorCacheEntry {

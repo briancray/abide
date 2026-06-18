@@ -18,22 +18,26 @@ for per-request data: the default keeps a per-user response from leaking across
 requests. Write only `global: true`; there is no `false` form. On the client
 there is a single tab store, so the flag is a no-op there.
 
-`invalidate` controls how a `cache.invalidate` hit on this key is applied, in ms.
-`{ throttle: N }` refetches on the leading edge then at most once per N ms while
-invalidations keep arriving; `{ debounce: N }` refetches only after N ms of
-quiet. Both coalesce a burst of invalidations (e.g. a socket spraying
-`cache.invalidate`) into far fewer calls and keep serving the existing (stale)
-value until the refetch resolves — stale-while-revalidate. They affect only the
-refetch-after-invalidate; the first fetch and arg-change fetches stay immediate.
-A policy declares the call safe to re-run unprompted: cache() throws at wrap
-time on both set at once, on ttl: 0 (nothing retained, nothing to revalidate),
-and on a non-replayable remote method (replaying a write is a state change
-disguised as a refresh). Producers are uncheckable — declare a policy only on
-a producer that is a pure read.
+`swr` is stale-while-revalidate: it changes what a `cache.invalidate` hit does
+to this key. Without it, an invalidate drops the entry and the next read shows
+`pending()`. With it, the entry is kept and refetched in the background — the
+existing (stale) value stays visible and `refreshing()` reports the in-flight
+reload — so the reader never blanks. It governs only the refetch-after-invalidate;
+the first fetch and arg-change fetches stay immediate regardless.
+
+`swr: true` refetches immediately on every invalidate. An optional window
+coalesces a burst (e.g. a socket spraying `cache.invalidate`) into far fewer
+calls: `swr: { throttle: N }` refetches on the leading edge then at most once
+per N ms while invalidations keep arriving; `swr: { debounce: N }` refetches
+only after N ms of quiet. `swr` declares the call safe to re-run unprompted:
+cache() throws at wrap time on throttle+debounce set at once, on ttl: 0 (nothing
+retained, nothing to revalidate), and on a non-replayable remote method
+(replaying a write is a state change disguised as a refresh). Producers are
+uncheckable — set `swr` only on a producer that is a pure read.
 */
 export type CacheOptions = {
     ttl?: number
     scope?: string | string[]
     global?: boolean
-    invalidate?: { throttle?: number; debounce?: number }
+    swr?: boolean | { throttle?: number; debounce?: number }
 }
