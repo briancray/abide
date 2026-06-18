@@ -14,7 +14,7 @@ the same as each package checked on its own — and the same as the LSP. Returns
 the error count so the CLI can set its exit code.
 */
 export async function checkAbide({ cwd }: { cwd: string }): Promise<number> {
-    const diagnostics = collectByProject(cwd)
+    const { diagnostics, checked } = collectByProject(cwd)
     const byFile = new Map<string, AbideDiagnostic[]>()
     for (const diagnostic of diagnostics) {
         const bucket = byFile.get(diagnostic.file) ?? []
@@ -32,11 +32,14 @@ export async function checkAbide({ cwd }: { cwd: string }): Promise<number> {
     const errors = diagnostics.filter(
         (diagnostic) => diagnostic.category === ts.DiagnosticCategory.Error,
     ).length
-    const relative = byFile.size
+    /* Success reports components *checked* (the glob count); failure reports the
+       files *with* errors. Reporting `byFile.size` on success printed `0` — it only
+       holds files that had diagnostics. */
+    const fileCount = byFile.size
     console.log(
         errors === 0
-            ? `\n[abide check] no type errors in ${relative} component${relative === 1 ? '' : 's'}`
-            : `\n[abide check] ${errors} error${errors === 1 ? '' : 's'} in ${relative} file${relative === 1 ? '' : 's'}`,
+            ? `\n[abide check] no type errors in ${checked} component${checked === 1 ? '' : 's'}`
+            : `\n[abide check] ${errors} error${errors === 1 ? '' : 's'} in ${fileCount} file${fileCount === 1 ? '' : 's'}`,
     )
     return errors
 }
@@ -45,7 +48,7 @@ export async function checkAbide({ cwd }: { cwd: string }): Promise<number> {
    project's components against that project's options, then concatenates the
    diagnostics. Imported components from another project resolve on demand through
    the host, so the per-project root set stays each project's own files. */
-function collectByProject(cwd: string): AbideDiagnostic[] {
+function collectByProject(cwd: string): { diagnostics: AbideDiagnostic[]; checked: number } {
     const byProject = new Map<string, string[]>()
     for (const relative of new Bun.Glob('**/*.abide').scanSync({ cwd, onlyFiles: true })) {
         if (relative.includes('node_modules')) {
@@ -55,9 +58,11 @@ function collectByProject(cwd: string): AbideDiagnostic[] {
         const root = nearestProjectRoot(path, cwd)
         byProject.set(root, [...(byProject.get(root) ?? []), path])
     }
-    return [...byProject].flatMap(([root, paths]) =>
+    const diagnostics = [...byProject].flatMap(([root, paths]) =>
         collectAbideDiagnostics(createShadowProgram(root, paths)),
     )
+    const checked = [...byProject.values()].reduce((total, paths) => total + paths.length, 0)
+    return { diagnostics, checked }
 }
 
 /* Renders one diagnostic as `path:line:col severity message` plus the offending

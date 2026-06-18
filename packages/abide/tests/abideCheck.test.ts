@@ -125,4 +125,45 @@ describe('abide check', () => {
         expect(diagnostics).toHaveLength(1)
         expect(diagnostics[0]!.message).toContain('bogus')
     })
+
+    /* `state<T>()` (no initial) is `T | undefined`: a guard narrows cleanly (no
+       "never"), an unguarded access is flagged possibly-undefined, and the bare
+       declaration is not a use-before-assign false-positive. */
+    test('a no-arg state is a defined T | undefined that narrows', () => {
+        const guarded = project({
+            'g.abide': `<script>\nlet x = state<string>()\n</script>\n<template if={x !== undefined}><span>{x.toUpperCase()}</span></template>\n`,
+        })
+        expect(collectAbideDiagnostics(createShadowProgram(guarded))).toHaveLength(0)
+
+        const unguarded = project({
+            'u.abide': `<script>\nlet x = state<string>()\n</script>\n<span>{x.toUpperCase()}</span>\n`,
+        })
+        const diagnostics = collectAbideDiagnostics(createShadowProgram(unguarded))
+        expect(diagnostics).toHaveLength(1)
+        expect(diagnostics[0]!.message).toContain('possibly')
+    })
+
+    /* The full range model accepts any branch content, including a component plus
+       static text directly in a branch — type-checks clean. */
+    test('check accepts a component and text directly in a control-flow branch', () => {
+        const dir = project({
+            'child.abide': `<script>\nlet label = prop<string>('label')\n</script>\n<span>{label}</span>\n`,
+            'ok.abide': `<script>\nimport Child from './child.abide'\nlet on = state(true)\n</script>\n<template if={on}><Child label="x"/>plain</template>\n`,
+        })
+        expect(
+            collectAbideDiagnostics(createShadowProgram(dir)).filter((diagnostic) =>
+                diagnostic.file.endsWith('ok.abide'),
+            ),
+        ).toEqual([])
+    })
+
+    /* A nested scoped `<script>`'s bindings reach the branch's later siblings,
+       including a nested if/each within the same branch (emitted inline, not in a
+       trapping block that left them "Cannot find name"). */
+    test('a nested-script binding reaches a deeply nested block in the branch', () => {
+        const dir = project({
+            'nested.abide': `<script>\nlet p = state(Promise.resolve(1))\n</script>\n<template await={p} then={v}>\n<script>const label = String(v)</script>\n<div><template if={v > 0}><span>{label}</span></template></div>\n</template>\n`,
+        })
+        expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
+    })
 })
