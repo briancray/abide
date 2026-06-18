@@ -1,5 +1,6 @@
 import { OUTLET_TAG } from '../runtime/OUTLET_TAG.ts'
 import { bindListenEvent } from './bindListenEvent.ts'
+import { componentWrapperTag } from './componentWrapperTag.ts'
 import { groupBindParts } from './groupBindParts.ts'
 import { lowerContext } from './lowerContext.ts'
 import { partitionSlots } from './partitionSlots.ts'
@@ -283,10 +284,14 @@ export function generateBuild(
         node: Extract<TemplateNode, { kind: 'component' }>,
         parentVar: string,
     ): string {
-        return mountComponent(
+        const { tag, transparent } = componentWrapperTag(node.name)
+        const { code, varName } = mountComponent(
             node,
-            `openChild(${parentVar}, ${JSON.stringify(node.name.toLowerCase())})`,
-        ).code
+            `openChild(${parentVar}, ${JSON.stringify(tag)})`,
+        )
+        /* A void-name remap is layout-transparent so the child's root stays a direct
+           child of the parent (idempotent on a claimed SSR node that already has it). */
+        return transparent ? `${code}${varName}.setAttribute("style", "display:contents");\n` : code
     }
 
     /* An await block: pending → resolved(value) / error branches. Each branch is a

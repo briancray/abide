@@ -81,4 +81,32 @@ describe('SSR component composition', () => {
         ).serializeMiniDom(host)
         expect(clientHtml).toBe(server.html)
     })
+
+    test('a component named after a void element gets a non-void transparent wrapper', () => {
+        /* `Input`→`input` is a VOID tag: a raw `<input>` wrapper self-closes and the
+           browser reparents the child's own markup as siblings, so hydration claims
+           null inside the empty wrapper and crashes. The wrapper must instead be a
+           hyphenated custom element (never void), kept layout-transparent so the
+           child's root still lays out as a direct child of the parent. */
+        const Input = component(`
+            <script>let value = prop('value')</script>
+            <input value={value} />
+        `)
+        const parentSource = `
+            <script>let q = state('hi')</script>
+            <div><Input value={q} /></div>
+        `
+
+        const server = component(parentSource, { Input }).render() as SsrRender
+        expect(server.html).toBe(
+            '<div><abide-input style="display:contents"><input value="hi"></abide-input></div>',
+        )
+
+        const host = document.createElement('div')
+        component(parentSource, { Input })(host)
+        const clientHtml = (
+            globalThis as unknown as { serializeMiniDom: (h: unknown) => string }
+        ).serializeMiniDom(host)
+        expect(clientHtml).toBe(server.html)
+    })
 })
