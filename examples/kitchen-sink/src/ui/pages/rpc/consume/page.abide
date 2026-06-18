@@ -1,11 +1,11 @@
 <script>
 import { cache } from '@abide/abide/shared/cache'
-import CodeBlock from '$ui/CodeBlock.abide'
-import RpcHeader from '$ui/RpcHeader.abide'
 import { createEcho } from '$server/rpc/createEcho.ts'
 import { getEcho } from '$server/rpc/getEcho.ts'
 import { getReport } from '$server/rpc/getReport.ts'
 import { tickFeed } from '$server/rpc/tickFeed.ts'
+import CodeBlock from '$ui/CodeBlock.abide'
+import RpcHeader from '$ui/RpcHeader.abide'
 
 let decoded = state('(not called)')
 let raw = state('(not called)')

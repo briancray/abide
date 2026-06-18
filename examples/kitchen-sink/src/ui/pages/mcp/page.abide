@@ -26,7 +26,10 @@ async function callGetProduct() {
     callOutput = await call(4, 'tools/call', { name: 'getProduct', arguments: { id: '1' } })
 }
 async function callCreateEcho() {
-    callOutput = await call(5, 'tools/call', { name: 'createEcho', arguments: { message: 'hello from /__abide/mcp' } })
+    callOutput = await call(5, 'tools/call', {
+        name: 'createEcho',
+        arguments: { message: 'hello from /__abide/mcp' },
+    })
 }
 async function callChatTail() {
     callOutput = await call(8, 'tools/call', { name: 'chat-tail', arguments: { count: 5 } })
@@ -38,7 +41,10 @@ async function readAbout() {
     callOutput = await call(6, 'resources/read', { uri: 'abide://resources/about.md' })
 }
 async function getSummarizePrompt() {
-    callOutput = await call(7, 'prompts/get', { name: 'summarize', arguments: { topic: 'otters', tone: 'playful' } })
+    callOutput = await call(7, 'prompts/get', {
+        name: 'summarize',
+        arguments: { topic: 'otters', tone: 'playful' },
+    })
 }
 </script>
 

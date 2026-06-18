@@ -1,7 +1,6 @@
 <script>
 import { cache } from '@abide/abide/shared/cache'
 import { pending } from '@abide/abide/shared/pending'
-import CodeBlock from '$ui/CodeBlock.abide'
 import { getChatCount } from '$server/rpc/getChatCount.ts'
 import { getChatLog } from '$server/rpc/getChatLog.ts'
 import { getCounter } from '$server/rpc/getCounter.ts'
@@ -9,6 +8,7 @@ import { incrementCounter } from '$server/rpc/incrementCounter.ts'
 import { publishChat } from '$server/rpc/publishChat.ts'
 import { resetCounter } from '$server/rpc/resetCounter.ts'
 import { chat } from '$server/sockets/chat.ts'
+import CodeBlock from '$ui/CodeBlock.abide'
 
 /* Two reads against the same cache key + scope share one entry, so any invalidation
    re-runs both. `counter` streams; `mirror` is a second read of the same entry. */

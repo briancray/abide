@@ -1,10 +1,10 @@
 <script>
 import '../app.css'
-import { navigate } from '@abide/abide/ui/navigate'
 import { onMenu } from '@abide/abide/bundle/onMenu'
 import { cache } from '@abide/abide/shared/cache'
 import { page } from '@abide/abide/shared/page'
 import { url } from '@abide/abide/shared/url'
+import { navigate } from '@abide/abide/ui/navigate'
 import { getSession } from '$server/rpc/getSession.ts'
 import { logout } from '$server/rpc/logout.ts'
 

@@ -1,7 +1,7 @@
 <script>
-import CodeBlock from '$ui/CodeBlock.abide'
 import { probeOriginGate } from '$server/rpc/probeOriginGate.ts'
 import { trackPageview } from '$server/rpc/trackPageview.ts'
+import CodeBlock from '$ui/CodeBlock.abide'
 
 let probe = state('(not probed)')
 let beacon = state('(not sent)')

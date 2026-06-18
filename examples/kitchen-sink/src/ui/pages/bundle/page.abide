@@ -1,7 +1,7 @@
 <script>
 import { bundled } from '@abide/abide/bundle/bundled'
-import CodeBlock from '$ui/CodeBlock.abide'
 import { getDataDir } from '$server/rpc/getDataDir.ts'
+import CodeBlock from '$ui/CodeBlock.abide'
 </script>
 
 <h1 class="text-3xl font-bold">bundle</h1>

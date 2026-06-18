@@ -1,8 +1,8 @@
 <script>
 import { log } from '@abide/abide/shared/log'
 import { trace } from '@abide/abide/shared/trace'
-import CodeBlock from '$ui/CodeBlock.abide'
 import { getRates } from '$server/rpc/getRates.ts'
+import CodeBlock from '$ui/CodeBlock.abide'
 
 /* trace() is isomorphic: server-side from the request scope, browser-side from the
    trace stamped into __SSR__ — the traceparent of the request that rendered this page. */

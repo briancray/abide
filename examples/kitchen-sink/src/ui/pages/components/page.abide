@@ -17,6 +17,22 @@ effect(() => {
     return () => clearInterval(id)
 })
 
+// state(v, transform) — the transform coerces every write (here: clamp into 1..99).
+let qty = state(1, (n) => Math.max(1, Math.min(99, Math.round(Number(n) || 0))))
+
+// linked(fn) — a local draft seeded reactively from upstream. Edits stay local;
+// when the source changes, the draft reseeds (reclaims) from it.
+let serverName = state('ada')
+let nameDraft = linked(() => serverName)
+
+// derived(get, set) — a writable lens: the value derives from celsius, and writing
+// it runs `set`, which writes back *through* to celsius (no local copy).
+let celsius = state(20, (n) => Number(n) || 0)
+const fahrenheit = derived(
+    () => Math.round((celsius * 9) / 5 + 32),
+    (f) => (celsius = (((Number(f) || 0) - 32) * 5) / 9),
+)
+
 let items = state(['alpha', 'beta'])
 let draft = state('')
 function addItem(event: SubmitEvent) {
@@ -28,6 +44,13 @@ function addItem(event: SubmitEvent) {
 
 let open = state(true)
 let tab = state('one')
+
+// await demo: a stand-in async source. `attempt` is read by the <template await>
+// expression, so bumping it re-runs the promise (and re-seeds the branch).
+let attempt = state(0)
+function loadNames(_attempt: number): Promise<string[]> {
+    return new Promise((resolve) => setTimeout(() => resolve(['ada', 'grace', 'linus']), 400))
+}
 </script>
 
 <h1 class="text-3xl font-bold">Components</h1>
@@ -52,12 +75,16 @@ let tab = state('one')
             </thead>
             <tbody class="divide-y divide-slate-100">
                 <tr>
-                    <td class="px-4 py-2 font-mono">state(value)</td>
-                    <td class="px-4 py-2 text-slate-600">a writable cell — bound to a <code class="font-mono">let</code> and read/reassigned as a plain variable</td>
+                    <td class="px-4 py-2 font-mono">state(value, transform?)</td>
+                    <td class="px-4 py-2 text-slate-600">a writable cell — read/reassigned as a plain variable; optional <code class="font-mono">transform(next, prev)</code> coerces every write (return <code class="font-mono">prev</code> to reject)</td>
                 </tr>
                 <tr>
-                    <td class="px-4 py-2 font-mono">derived(fn)</td>
-                    <td class="px-4 py-2 text-slate-600">a computed value — re-runs when a cell it reads changes</td>
+                    <td class="px-4 py-2 font-mono">linked(fn, transform?)</td>
+                    <td class="px-4 py-2 text-slate-600">a writable local draft seeded from upstream — reseeds when the source changes, edits stay local (an edit-form copy)</td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">derived(fn, set?)</td>
+                    <td class="px-4 py-2 text-slate-600">a computed value — re-runs when a cell it reads changes; with <code class="font-mono">set</code>, a writable lens that writes back through to its sources</td>
                 </tr>
                 <tr>
                     <td class="px-4 py-2 font-mono">effect(fn)</td>
@@ -94,6 +121,51 @@ effect(() => {                             // client-only; cleanup on unmount
     const id = setInterval(() => (ticks = ticks + 1), 1000)
     return () => clearInterval(id)
 })
+</script>`} />
+    </div>
+
+    <!-- Writable variants: transform, linked draft, lens -->
+    <div class="mt-3 grid gap-3 sm:grid-cols-3">
+        <div class="rounded-lg border border-slate-200 bg-white p-5">
+            <h3 class="text-xs font-semibold text-slate-500">state(v, transform)</h3>
+            <p class="mt-1 text-xs text-slate-500">Type anything — the write is clamped to 1..99.</p>
+            <input type="number" bind:value={qty} class="mt-2 w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
+            <p class="mt-2 font-mono text-xs text-slate-600">qty = {qty}</p>
+        </div>
+
+        <div class="rounded-lg border border-slate-200 bg-white p-5">
+            <h3 class="text-xs font-semibold text-slate-500">linked(fn) — draft</h3>
+            <p class="mt-1 text-xs text-slate-500">Edit the draft; "pull" reseeds it from the source.</p>
+            <input bind:value={nameDraft} class="mt-2 w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
+            <div class="mt-2 flex items-center gap-2">
+                <button type="button" class="rounded-md border border-slate-300 px-2 py-1 text-xs hover:bg-slate-100" onclick={() => (serverName = serverName === 'ada' ? 'grace' : 'ada')}>pull from source</button>
+                <span class="font-mono text-xs text-slate-500">source = {serverName}</span>
+            </div>
+        </div>
+
+        <div class="rounded-lg border border-slate-200 bg-white p-5">
+            <h3 class="text-xs font-semibold text-slate-500">derived(get, set) — lens</h3>
+            <p class="mt-1 text-xs text-slate-500">Edit either; °F writes back through to °C.</p>
+            <label class="mt-2 flex items-center gap-2 text-sm">°C <input type="number" bind:value={celsius} class="w-full rounded-md border border-slate-300 px-3 py-1.5" /></label>
+            <label class="mt-2 flex items-center gap-2 text-sm">°F <input type="number" bind:value={fahrenheit} class="w-full rounded-md border border-slate-300 px-3 py-1.5" /></label>
+        </div>
+    </div>
+
+    <div class="mt-3">
+        <CodeBlock title="writable variants — transform, linked draft, lens" code={`<script>
+// transform coerces every write (clamp 1..99)
+let qty = state(1, (n) => Math.max(1, Math.min(99, Math.round(Number(n) || 0))))
+
+// linked: a local draft seeded from upstream; reseeds when the source changes
+let serverName = state('ada')
+let nameDraft = linked(() => serverName)
+
+// derived lens: derives from celsius, writes back through to it (no local copy)
+let celsius = state(20, (n) => Number(n) || 0)
+const fahrenheit = derived(
+    () => Math.round(celsius * 9 / 5 + 32),
+    (f) => (celsius = ((Number(f) || 0) - 32) * 5 / 9),
+)
 </script>`} />
     </div>
 </section>
@@ -217,6 +289,52 @@ effect(() => {                             // client-only; cleanup on unmount
                 <li class="font-mono">• {item}</li>
             </template>
         </ul>
+    </div>
+
+    <div class="mt-3 rounded-lg border border-slate-200 bg-white p-5">
+        <h3 class="text-xs font-semibold text-slate-500">await — a branch is a lexical scope</h3>
+        <p class="mt-1 text-xs text-slate-500">
+            The resolved value binds into the <code class="font-mono">then</code> branch, where a nested
+            <code class="font-mono">&lt;script&gt;</code> declares branch-local signals derived from it,
+            and a nested <code class="font-mono">&lt;style&gt;</code> scopes to that branch alone.
+        </p>
+        <button type="button" class="mt-2 rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100" onclick={() => (attempt = attempt + 1)}>reload</button>
+        <template await={loadNames(attempt)}>
+            <p class="mt-2 text-sm text-slate-500">loading…</p>
+            <template then="names">
+                <script>
+                    // `names` (the resolved value) is in lexical scope here. This nested
+                    // <script> owns a branch-local derived, re-seeded on each reload.
+                    let total = derived(() => names.length)
+                </script>
+                <p class="resolved mt-2 text-sm">{total} names: {names.join(', ')}</p>
+                <style>
+                    /* scoped to this branch alone — not the whole component */
+                    .resolved {
+                        font-weight: 600;
+                        color: #047857;
+                    }
+                </style>
+            </template>
+            <template catch="error">
+                <p class="mt-2 text-sm text-rose-700">failed: {error.message}</p>
+            </template>
+        </template>
+    </div>
+
+    <div class="mt-3">
+        <CodeBlock title="await — the then branch is a lexical scope (nested <script> + <style>)" code={`<template await={loadNames(attempt)}>
+    <p>loading…</p>
+    <template then="names">
+        <script>
+            // \`names\` (the resolved value) is in scope; branch-local, re-seeded each mount
+            let total = derived(() => names.length)
+        </script>
+        <p class="resolved">{total} names: {names.join(', ')}</p>
+        <style>.resolved { font-weight: 600 }</style>   <!-- scoped to this branch alone -->
+    </template>
+    <template catch="error"><p>failed: {error.message}</p></template>
+</template>`} />
     </div>
 </section>
 

@@ -1,9 +1,9 @@
 <script>
 import { cache } from '@abide/abide/shared/cache'
-import CodeBlock from '$ui/CodeBlock.abide'
-import RpcHeader from '$ui/RpcHeader.abide'
 import { getSession } from '$server/rpc/getSession.ts'
 import { whoAmI } from '$server/rpc/whoAmI.ts'
+import CodeBlock from '$ui/CodeBlock.abide'
+import RpcHeader from '$ui/RpcHeader.abide'
 </script>
 
 <RpcHeader />

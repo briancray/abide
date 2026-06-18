@@ -46,8 +46,8 @@ every page, and `.abide` files are the only component format.
   `<template await>`/`then`/`catch`, `<template switch>`/`case`/`default`.
 - **Components** are capitalised tags (`<Layout title="…">`); children fill the
   child's `<slot>`. Props are reactive (passed as thunks).
-- **Scoped styles**: a `<style>` block is scoped per component via a
-  `[data-b-<hash>]` attribute.
+- **Scoped styles**: a `<style>` block is scoped via a `[data-a-<hash>]`
+  attribute — per component, or per control-flow branch when nested in one.
 
 ## Substrate (why it's fast)
 

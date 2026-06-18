@@ -1,8 +1,8 @@
 <script>
-import CodeBlock from '$ui/CodeBlock.abide'
-import RpcHeader from '$ui/RpcHeader.abide'
 import { countLog } from '$server/rpc/countLog.ts'
 import { tickFeed } from '$server/rpc/tickFeed.ts'
+import CodeBlock from '$ui/CodeBlock.abide'
+import RpcHeader from '$ui/RpcHeader.abide'
 
 let sseFrames = state([])
 let jsonlFrames = state([])

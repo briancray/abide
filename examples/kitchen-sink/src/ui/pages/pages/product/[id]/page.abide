@@ -1,10 +1,10 @@
 <script>
-import { navigate } from '@abide/abide/ui/navigate'
 import { cache } from '@abide/abide/shared/cache'
 import { HttpError } from '@abide/abide/shared/HttpError'
 import { page } from '@abide/abide/shared/page'
-import CodeBlock from '$ui/CodeBlock.abide'
+import { navigate } from '@abide/abide/ui/navigate'
 import { getProduct } from '$server/rpc/getProduct.ts'
+import CodeBlock from '$ui/CodeBlock.abide'
 
 /* Dynamic route params arrive on the page proxy (plain values), reactive across nav. */
 const id = derived(() => page.params.id)
@@ -57,8 +57,9 @@ async function loadProduct(productId) {
 <section class="mt-6 space-y-3">
     <CodeBlock title="this page — [id] segment + per-id cache" code={`import { cache } from '@abide/abide/shared/cache'
 import { getProduct } from '$server/rpc/getProduct.ts'
+import { page } from '@abide/abide/shared/page'
 
-let id = prop('id')    // typed via src/.abide/routes.d.ts
+const id = derived(() => page.params.id)    // typed via src/.abide/routes.d.ts
 
 <template await={loadProduct(id)}>
     <template then="product">...{product.name}...</template>

@@ -2,9 +2,9 @@
 import { cache } from '@abide/abide/shared/cache'
 import { pending } from '@abide/abide/shared/pending'
 import { refreshing } from '@abide/abide/shared/refreshing'
-import CodeBlock from '$ui/CodeBlock.abide'
 import { createEcho } from '$server/rpc/createEcho.ts'
 import { getRates } from '$server/rpc/getRates.ts'
+import CodeBlock from '$ui/CodeBlock.abide'
 
 /* Mutation idiom: ttl 0 retains nothing, so the wrap buys double-submit coalescing
    plus probe visibility — pending(createEcho) is true from anywhere while in flight. */

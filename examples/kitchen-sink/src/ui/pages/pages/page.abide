@@ -1,7 +1,7 @@
 <script>
-import { navigate } from '@abide/abide/ui/navigate'
 import { page } from '@abide/abide/shared/page'
 import { url } from '@abide/abide/shared/url'
+import { navigate } from '@abide/abide/ui/navigate'
 import CodeBlock from '$ui/CodeBlock.abide'
 
 /* page.url is reassigned on every navigation, so reading it inside a derived re-runs. */

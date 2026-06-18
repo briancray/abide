@@ -1,6 +1,6 @@
 <script>
-import CodeBlock from '$ui/CodeBlock.abide'
 import { chat } from '$server/rpc/chat.ts'
+import CodeBlock from '$ui/CodeBlock.abide'
 
 let messages = state([])
 let toolCalls = state([])
@@ -66,13 +66,18 @@ function apply(frame) {
     } else if (frame.type === 'tool_use') {
         const lastIndex = messages.length - 1
         messages = messages.map((message, index) =>
-            index === lastIndex && message.role === 'assistant' && message.text && !message.text.endsWith('\n')
+            index === lastIndex &&
+            message.role === 'assistant' &&
+            message.text &&
+            !message.text.endsWith('\n')
                 ? { ...message, text: message.text + '\n\n' }
                 : message,
         )
         toolCalls = [...toolCalls, { id: frame.id, name: frame.name, input: frame.input }]
     } else if (frame.type === 'tool_result') {
-        toolCalls = toolCalls.map((call) => (call.id === frame.id ? { ...call, ok: frame.ok } : call))
+        toolCalls = toolCalls.map((call) =>
+            call.id === frame.id ? { ...call, ok: frame.ok } : call,
+        )
     }
 }
 </script>

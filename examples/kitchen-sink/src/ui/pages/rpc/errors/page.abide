@@ -1,10 +1,10 @@
 <script>
 import { HttpError } from '@abide/abide/shared/HttpError'
-import CodeBlock from '$ui/CodeBlock.abide'
-import RpcHeader from '$ui/RpcHeader.abide'
 import { boom } from '$server/rpc/boom.ts'
 import { getEcho } from '$server/rpc/getEcho.ts'
 import { getProduct } from '$server/rpc/getProduct.ts'
+import CodeBlock from '$ui/CodeBlock.abide'
+import RpcHeader from '$ui/RpcHeader.abide'
 
 let outcome404 = state('(not triggered)')
 let outcome405 = state('(not triggered)')

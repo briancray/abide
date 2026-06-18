@@ -1,7 +1,5 @@
 <script>
 import { HttpError } from '@abide/abide/shared/HttpError'
-import CodeBlock from '$ui/CodeBlock.abide'
-import RpcHeader from '$ui/RpcHeader.abide'
 import { convertTemp } from '$server/rpc/convertTemp.ts'
 import { createEcho } from '$server/rpc/createEcho.ts'
 import { deleteEcho } from '$server/rpc/deleteEcho.ts'
@@ -10,6 +8,8 @@ import { headEcho } from '$server/rpc/headEcho.ts'
 import { patchEcho } from '$server/rpc/patchEcho.ts'
 import { replaceEcho } from '$server/rpc/replaceEcho.ts'
 import { uploadNote } from '$server/rpc/uploadNote.ts'
+import CodeBlock from '$ui/CodeBlock.abide'
+import RpcHeader from '$ui/RpcHeader.abide'
 
 let log = state([])
 let message = state('hello')

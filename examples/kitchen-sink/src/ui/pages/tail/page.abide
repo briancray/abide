@@ -1,8 +1,8 @@
 <script>
 import { tail } from '@abide/abide/ui/tail'
-import CodeBlock from '$ui/CodeBlock.abide'
 import { publishChat } from '$server/rpc/publishChat.ts'
 import { chat } from '$server/sockets/chat.ts'
+import CodeBlock from '$ui/CodeBlock.abide'
 
 const latest = derived(() => tail(chat))
 const recent = derived(() => tail(chat, { last: 5 }))
