@@ -27,7 +27,7 @@ Response out.
 
 A page with no `await` block renders synchronously and ships buffered. A page with
 await blocks STREAMS: the pending shell flushes first, then each resolved fragment
-(`<abide-resolve data-resume>`) as its promise settles, swapped into its boundary
+(`<abide-resolve>` carrying a JSON `<script>`) as its promise settles, swapped into its boundary
 by the inline SSR_SWAP_SCRIPT — which also registers the value into the resume
 manifest so client hydration adopts it without re-fetching (see abide/ui/awaitBlock).
 

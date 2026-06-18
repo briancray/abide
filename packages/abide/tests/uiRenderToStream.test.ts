@@ -56,10 +56,10 @@ describe('renderToStream — out-of-order SSR streaming', () => {
         // 2) resolved fragments out of order: fast (id 1) before slow (id 0), each
         //    carrying its serialized value for the resume manifest
         expect(chunks[1]).toBe(
-            '<abide-resolve data-id="1" data-resume="{&quot;ok&quot;:true,&quot;value&quot;:&quot;FAST&quot;}"><b>FAST</b></abide-resolve>',
+            '<abide-resolve data-id="1"><script type="application/json">{"ok":true,"value":"FAST"}</script><b>FAST</b></abide-resolve>',
         )
         expect(chunks[2]).toBe(
-            '<abide-resolve data-id="0" data-resume="{&quot;ok&quot;:true,&quot;value&quot;:&quot;SLOW&quot;}"><span>SLOW</span></abide-resolve>',
+            '<abide-resolve data-id="0"><script type="application/json">{"ok":true,"value":"SLOW"}</script><span>SLOW</span></abide-resolve>',
         )
         expect(chunks).toHaveLength(3)
     })
@@ -75,7 +75,7 @@ describe('renderToStream — out-of-order SSR streaming', () => {
         `)
         expect(chunks[0]).toContain('<!--abide:await:0--><p>loading</p><!--/abide:await:0-->')
         expect(chunks[1]).toBe(
-            '<abide-resolve data-id="0" data-resume="{&quot;ok&quot;:false,&quot;error&quot;:&quot;nope&quot;}"><i>nope</i></abide-resolve>',
+            '<abide-resolve data-id="0"><script type="application/json">{"ok":false,"error":"nope"}</script><i>nope</i></abide-resolve>',
         )
     })
 
@@ -151,7 +151,7 @@ describe('renderToStream — out-of-order SSR streaming', () => {
         expect(chunks[0]).toContain('<!--abide:await:1--><p>loading</p><!--/abide:await:1-->')
         expect(chunks[0]).toContain('{"0":{"ok":true,"value":"NOW"}}')
         expect(chunks[1]).toBe(
-            '<abide-resolve data-id="1" data-resume="{&quot;ok&quot;:true,&quot;value&quot;:&quot;LATER&quot;}"><span>LATER</span></abide-resolve>',
+            '<abide-resolve data-id="1"><script type="application/json">{"ok":true,"value":"LATER"}</script><span>LATER</span></abide-resolve>',
         )
     })
 })

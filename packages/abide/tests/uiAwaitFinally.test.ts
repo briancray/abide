@@ -98,7 +98,9 @@ describe('<template finally>', () => {
         const model = doc({ load: Promise.resolve('ok') })
         const streamed = await ssrStream(FULL, model)
         // the resolved fragment the swap script would inline into the boundary
-        const resolved = streamed.match(/<abide-resolve[^>]*>([\s\S]*?)<\/abide-resolve>/)?.[1]
+        const resolved = streamed.match(
+            /<abide-resolve[^>]*><script[^>]*>[\s\S]*?<\/script>([\s\S]*?)<\/abide-resolve>/,
+        )?.[1]
         expect(resolved).toBe('<span>ok</span><i>done</i>')
     })
 })

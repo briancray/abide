@@ -63,7 +63,8 @@ describe('createUiPageRenderer', () => {
         )
         expect(html).toContain('loading') // pending shell flushed first
         expect(html).toContain('<abide-resolve data-id="0"') // resolved fragment streamed
-        expect(html).toContain('data-resume=') // value serialized for the resume manifest
+        // value serialized for the resume manifest, in a leading JSON script
+        expect(html).toContain('<abide-resolve data-id="0"><script type="application/json">')
         expect(html).toContain('<b>ada</b>')
         expect(html).toContain('__abideSwap()') // swap script invoked per fragment
         expect(html).toContain('window.__SSR__ =') // state shipped in the streamed head

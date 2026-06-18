@@ -187,6 +187,11 @@ export function installMiniDom(): () => void {
                 this.content = new MiniNode()
             }
         }
+        /* The DOM uppercases element node names (HTML namespace); mirror it so callers
+           can match against `nodeName === 'SCRIPT'` as they would in a browser. */
+        get nodeName(): string {
+            return this.tagName.toUpperCase()
+        }
         get children(): MiniElement[] {
             return this.childNodes.filter(
                 (child): child is MiniElement => child instanceof MiniElement,

@@ -5,10 +5,11 @@ import type { SsrAwait, SsrRender } from './runtime/types/SsrRender.ts'
 Out-of-order SSR streaming. Yields the pending shell first (so the browser paints
 immediately), then one resolved fragment per await block as its promise settles —
 in completion order, not source order, so a slow read never blocks a fast one.
-Each resolved fragment is a `<abide-resolve data-id="ID" data-resume="…">…</abide-resolve>`
-that `applyResolved` swaps into the matching `<!--abide:await:ID-->` boundary; the
-`data-resume` payload is the JSON-serialized value, registered for hydration so an
-`await` block adopts the resolved branch on resume instead of re-running.
+Each resolved fragment is a `<abide-resolve data-id="ID"><script type="application/json">
+…</script>…</abide-resolve>` that `applyResolved` swaps into the matching
+`<!--abide:await:ID-->` boundary; the leading script holds the JSON-serialized value,
+registered for hydration so an `await` block adopts the resolved branch on resume
+instead of re-running.
 
 This is the await-block-streams half of the cache rule: a top-level `await` in the
 script would have blocked the shell (inlined), but an await *block* flushes its
@@ -46,7 +47,9 @@ export async function* renderToStream(render: () => SsrRender): AsyncGenerator<s
         const resolved = await Promise.race(inflight.values())
         inflight.delete(resolved.id)
         const resume = encodeResume(resolved.resume)
-        yield `<abide-resolve data-id="${resolved.id}" data-resume="${resume}">${resolved.html}</abide-resolve>`
+        yield `<abide-resolve data-id="${resolved.id}">` +
+            `<script type="application/json">${resume}</script>` +
+            `${resolved.html}</abide-resolve>`
     }
 }
 
@@ -94,11 +97,11 @@ function settle(block: SsrAwait): Promise<Settled> {
     )
 }
 
-/* JSON for an HTML double-quoted attribute: escape `"` and `&` (and `<` for safety
-   inside markup). `applyResolved`/the inline swap script decode it via the DOM. */
+/* JSON for a `<script type="application/json">` data block: script content is raw
+   text, so only `<` needs neutralizing (emitted as a unicode escape) to keep a
+   literal `</script>` from closing the block early — quotes stay raw. Far cheaper
+   than attribute escaping (no full-string `"`/`&` passes) and JSON.parse decodes it
+   back. `applyResolved`/the inline swap script read it via `.textContent`. */
 function encodeResume(resume: ResumeEntry): string {
-    return JSON.stringify(resume)
-        .replace(/&/g, '&amp;')
-        .replace(/"/g, '&quot;')
-        .replace(/</g, '&lt;')
+    return JSON.stringify(resume).replace(/</g, '\\u003c')
 }

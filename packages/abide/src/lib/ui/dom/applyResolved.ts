@@ -2,8 +2,8 @@ import { RESUME } from '../runtime/RESUME.ts'
 
 /*
 Client consumer of an SSR stream fragment. Parses a streamed
-`<abide-resolve data-id="ID" data-resume="…">…</abide-resolve>` frame, registers
-its serialized value in the resume manifest (for later hydration), finds the
+`<abide-resolve data-id="ID"><script type="application/json">…</script>…</abide-resolve>`
+frame, registers its serialized value in the resume manifest (for later hydration), finds the
 matching `<!--abide:await:ID-->…<!--/abide:await:ID-->` boundary in `root`, removes
 the pending nodes between the markers, and inserts the resolved content in their
 place. The pending shell painted instantly; this swaps in each value as it
@@ -21,14 +21,17 @@ export function applyResolved(root: Element, frame: string): void {
     if (id === null) {
         return
     }
-    /* Record the resolved value so a later hydrate adopts this branch (no re-fetch). */
-    const resume = resolved.getAttribute('data-resume')
-    if (resume !== null) {
+    /* The resolved value rides in a leading <script type=application/json>; parse and
+       remove it so only the resolved markup moves into the boundary. Recording it lets a
+       later hydrate adopt this branch (no re-fetch). */
+    const payload = resolved.firstChild as Element | null
+    if (payload !== null && payload.nodeName === 'SCRIPT') {
         try {
-            RESUME[Number(id)] = JSON.parse(resume)
+            RESUME[Number(id)] = JSON.parse(payload.textContent ?? 'null')
         } catch {
             /* malformed payload — leave unregistered, hydration re-runs the promise */
         }
+        payload.remove()
     }
     const open = `abide:await:${id}`
     const close = `/abide:await:${id}`
