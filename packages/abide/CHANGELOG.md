@@ -1,5 +1,15 @@
 # abide
 
+## 0.32.0
+
+### Minor Changes
+
+- [`786a496`](https://github.com/briancray/abide/commit/786a4965fa3c94954ea8d66aa41b0f94e0ec8320) - render control-flow branches into marker-bounded ranges ([`23efa06`](https://github.com/briancray/abide/commit/23efa0606b90b69ff262679673d660a71baf443c))
+
+### Patch Changes
+
+- [`786a496`](https://github.com/briancray/abide/commit/786a4965fa3c94954ea8d66aa41b0f94e0ec8320) - report checked component count on success ([`9ea83bb`](https://github.com/briancray/abide/commit/9ea83bb3c072d72e67486906b191964505e872f2))
+
 ## 0.31.1
 
 ### Patch Changes
