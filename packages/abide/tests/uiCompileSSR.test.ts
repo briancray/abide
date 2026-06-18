@@ -34,17 +34,18 @@ describe('compileSSR — server render to string', () => {
             </template>
         `)
         expect(result.html).toBe(
-            '<button>+</button><p>n=2</p><ul><li>a</li><li>b</li></ul><small>nonzero</small>',
+            '<button>+</button><p>n=2</p><ul><!--[--><li>a</li><!--]--><!--[--><li>b</li><!--]--></ul><!--[--><small>nonzero</small><!--]-->',
         )
         expect(result.state).toEqual({ count: 2, items: ['a', 'b'] })
     })
 
-    test('a falsy if renders nothing', () => {
+    test('a falsy if renders an empty range', () => {
         const result = render(`
             <script>let show = state(false)</script>
             <template if={show}><span>hi</span></template>
         `)
-        expect(result.html).toBe('')
+        // the `when` range markers are always present; the false branch is empty
+        expect(result.html).toBe('<!--[--><!--]-->')
     })
 
     test('dynamic values are HTML-escaped', () => {

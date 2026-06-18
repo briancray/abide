@@ -10,7 +10,6 @@ import { awaitBlock } from '../src/lib/ui/dom/awaitBlock.ts'
 import { each } from '../src/lib/ui/dom/each.ts'
 import { on } from '../src/lib/ui/dom/on.ts'
 import { openChild } from '../src/lib/ui/dom/openChild.ts'
-import { openRoot } from '../src/lib/ui/dom/openRoot.ts'
 import { switchBlock } from '../src/lib/ui/dom/switchBlock.ts'
 import { text } from '../src/lib/ui/dom/text.ts'
 import { when } from '../src/lib/ui/dom/when.ts'
@@ -28,7 +27,6 @@ const RUNTIME = {
     derived,
     effect,
     openChild,
-    openRoot,
     appendText,
     appendStatic,
     text,
@@ -82,7 +80,7 @@ describe('if / else', () => {
                 <template else><span>OFF</span></template>
             </template>
         `
-        expect(ssr(source)).toBe('<span>OFF</span>')
+        expect(ssr(source)).toBe('<!--[--><span>OFF</span><!--]-->')
     })
 })
 
@@ -101,7 +99,7 @@ describe('switch / case / default', () => {
     })
 
     test('SSR renders the matching case', () => {
-        expect(ssr(source)).toBe('<span>🚚</span>')
+        expect(ssr(source)).toBe('<!--[--><span>🚚</span><!--]-->')
     })
 
     test('SSR falls back to default for an unmatched subject', () => {
@@ -112,6 +110,6 @@ describe('switch / case / default', () => {
                 <template default><span>?</span></template>
             </template>
         `
-        expect(ssr(unmatched)).toBe('<span>?</span>')
+        expect(ssr(unmatched)).toBe('<!--[--><span>?</span><!--]-->')
     })
 })

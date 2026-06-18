@@ -1,8 +1,10 @@
 import { relative } from 'node:path'
 import type { BunPlugin } from 'bun'
+import { AbideCompileError } from './AbideCompileError.ts'
 import { analyzeComponent } from './analyzeComponent.ts'
 import { compileModule } from './compileModule.ts'
 import { nearestProjectRoot } from './nearestProjectRoot.ts'
+import { offsetToLineColumn } from './offsetToLineColumn.ts'
 
 /*
 Bun plugin that loads `.abide` single-file components: compiles each to the ES
@@ -40,11 +42,32 @@ export const abideUiPlugin: BunPlugin = {
             const source = await Bun.file(args.path).text()
             const moduleId = relative(nearestProjectRoot(args.path, process.cwd()), args.path)
             const isLayout = (args.path.split('/').pop() ?? '') === 'layout.abide'
-            const code = compileModule(source, { isLayout, moduleId })
+            /* Bun frames a plugin throw at `<file>:0` regardless of the real spot, so
+               carry the component path + resolved line:col in the message — otherwise a
+               control-flow / compile error reads as `:0` and (in deep imports) can look
+               like it came from the entry page rather than this component. */
+            const compileAbide = <T>(step: () => T): T => {
+                try {
+                    return step()
+                } catch (error) {
+                    const offset = error instanceof AbideCompileError ? error.offset : undefined
+                    const at =
+                        offset === undefined
+                            ? moduleId
+                            : (({ line, column }) => `${moduleId}:${line}:${column}`)(
+                                  offsetToLineColumn(source, offset),
+                              )
+                    const message = error instanceof Error ? error.message : String(error)
+                    throw new Error(`${message.replace(/^\[abide\]\s*/, `[abide] ${at} — `)}`)
+                }
+            }
+            const code = compileAbide(() => compileModule(source, { isLayout, moduleId }))
             /* Browser build with `<style>`(s): concatenate every scoped block's CSS and
                pull it into the bundle via one virtual import, keyed by `moduleId` so the
                registry id and the CSS id agree. */
-            const styles = toBrowser ? analyzeComponent(source, moduleId).styles : []
+            const styles = compileAbide(() =>
+                toBrowser ? analyzeComponent(source, moduleId).styles : [],
+            )
             if (styles.length === 0) {
                 return { contents: code, loader: 'ts' }
             }

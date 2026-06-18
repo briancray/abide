@@ -6,41 +6,35 @@ import { discardBoundary } from './discardBoundary.ts'
 /*
 Synchronous error boundary — the runtime for `<template try>`. Builds the guarded
 subtree (`renderTry`); if building it throws — including a throw from an initial
-reactive read, since effects run during build — it tears down the partial scope
-and builds `renderCatch(error)` instead. Both branches are a range of element
-roots tracked together. No `renderCatch` (no `<template catch>`) re-throws, so the
-error propagates to the nearest enclosing boundary (or the server 500 / stream).
+reactive read, since effects run during build — it tears down the partial scope and
+builds `renderCatch(error)` instead. Each branch builds its content (any content)
+into the parent. No `renderCatch` (no `<template catch>`) re-throws, so the error
+propagates to the nearest enclosing boundary. The block renders once and never
+re-renders, so its content needs no range markers — an enclosing block's range
+removes it on teardown.
 
-Catches throws during the BUILD of the subtree (mount, hydrate adoption, and the
-initial reactive reads). A throw in a later effect re-run is outside this lexical
-build and is not caught here.
-
-On hydrate it claims the SSR boundary (`<!--abide:try:N-->…<!--/abide:try:N-->`):
-the happy path adopts the guarded nodes in place; a throw discards the boundary's
-server nodes and builds the catch fresh.
+On create the guarded content is built into a fragment first, so a throw mid-build
+discards the partial nodes (they never entered the document) before the catch
+builds. On hydrate it claims the SSR boundary
+(`<!--abide:try:N-->…<!--/abide:try:N-->`): the happy path adopts the guarded nodes
+in place; a throw discards the boundary's server nodes and builds the catch fresh.
 */
 // @readme plumbing
 export function tryBlock(
     parent: Node,
     id: number,
-    renderTry: (parent: Node) => Node[],
-    renderCatch?: (parent: Node, error: unknown) => Node[],
+    renderTry: (parent: Node) => void,
+    renderCatch?: (parent: Node, error: unknown) => void,
 ): void {
-    /* Run a build under a fresh ownership scope; on throw, tear down the partial
-       effects/listeners it registered and rethrow so the caller can fall back.
-       Deliberately not `scope()`: that returns a deferred disposer and leaks the
-       partial scope on throw (it only restores the owner), whereas an error boundary
-       must dispose eagerly when the guarded build throws and hand back the built
-       `Node[]` (not a disposer) on success — those nodes belong to the enclosing
-       scope. Different return type, different throw semantics; merging would be wrong. */
-    const buildScoped = (build: () => Node[]): Node[] => {
+    /* Run a void build under a fresh ownership scope; on throw, tear down the partial
+       effects/listeners it registered and rethrow so the caller can fall back. */
+    const guard = (build: () => void): void => {
         const previous = OWNER.current
         const disposers: Array<() => void> = []
         OWNER.current = disposers
         try {
-            const nodes = build()
+            build()
             OWNER.current = previous
-            return nodes
         } catch (error) {
             OWNER.current = previous
             for (let index = disposers.length - 1; index >= 0; index -= 1) {
@@ -55,12 +49,12 @@ export function tryBlock(
         const open = claimChild(hydration, parent)
         hydration.next.set(parent, open?.nextSibling ?? null) // advance past the open marker
         try {
-            buildScoped(() => renderTry(parent)) // claims the guarded nodes in place
+            guard(() => renderTry(parent)) // claims the guarded nodes in place
             const close = claimChild(hydration, parent) // claim the close marker
             hydration.next.set(parent, close?.nextSibling ?? null)
         } catch (error) {
-            /* The server rendered (or partially built) something that didn't adopt —
-               drop the whole boundary and build the catch fresh in its place. */
+            /* The server markup didn't adopt — drop the whole boundary and build the
+               catch fresh in its place. */
             const after = discardBoundary(parent, open, `/abide:try:${id}`, hydration)
             if (renderCatch === undefined) {
                 throw error
@@ -68,9 +62,9 @@ export function tryBlock(
             const previous = RENDER.hydration
             RENDER.hydration = undefined
             try {
-                for (const node of buildScoped(() => renderCatch(parent, error))) {
-                    parent.insertBefore(node, after)
-                }
+                const fragment = document.createDocumentFragment()
+                guard(() => renderCatch(fragment, error))
+                parent.insertBefore(fragment, after)
             } finally {
                 RENDER.hydration = previous
             }
@@ -78,16 +72,18 @@ export function tryBlock(
         return
     }
 
-    let nodes: Node[]
+    /* Create: build into a fragment so a throw mid-build discards the partial nodes
+       (they never entered the document) before the catch builds. */
     try {
-        nodes = buildScoped(() => renderTry(parent))
+        const fragment = document.createDocumentFragment()
+        guard(() => renderTry(fragment))
+        parent.appendChild(fragment)
     } catch (error) {
         if (renderCatch === undefined) {
             throw error
         }
-        nodes = buildScoped(() => renderCatch(parent, error))
-    }
-    for (const node of nodes) {
-        parent.appendChild(node)
+        const fragment = document.createDocumentFragment()
+        guard(() => renderCatch(fragment, error))
+        parent.appendChild(fragment)
     }
 }

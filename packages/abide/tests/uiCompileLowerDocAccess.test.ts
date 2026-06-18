@@ -27,6 +27,18 @@ describe('lowerDocAccess — emitted shape', () => {
         )
     })
 
+    test('logical assignment reads then replaces with the combined value', () => {
+        expect(lower("model.text ||= 'x'")).toContain(
+            'model.replace("text", model.read("text") || \'x\')',
+        )
+        expect(lower('model.count ??= 0')).toContain(
+            'model.replace("count", model.read("count") ?? 0)',
+        )
+        expect(lower('model.flag &&= false')).toContain(
+            'model.replace("flag", model.read("flag") && false)',
+        )
+    })
+
     test('array push becomes an add patch at the - slot', () => {
         expect(lower('model.lines.push(v)')).toContain('model.add("lines/-", v)')
     })

@@ -22,7 +22,6 @@ import { each } from '../src/lib/ui/dom/each.ts'
 import { hydrate } from '../src/lib/ui/dom/hydrate.ts'
 import { on } from '../src/lib/ui/dom/on.ts'
 import { openChild } from '../src/lib/ui/dom/openChild.ts'
-import { openRoot } from '../src/lib/ui/dom/openRoot.ts'
 import { effect } from '../src/lib/ui/effect.ts'
 import { renderToStream } from '../src/lib/ui/renderToStream.ts'
 import { RESUME } from '../src/lib/ui/runtime/RESUME.ts'
@@ -126,7 +125,6 @@ describe('cache() snapshot → UI hydration (full server→client loop)', () => 
             derived,
             effect,
             openChild,
-            openRoot,
             appendText,
             appendStatic,
             on,

@@ -10,7 +10,6 @@ const { derived } = await import('../src/lib/ui/derived.ts')
 const { effect } = await import('../src/lib/ui/effect.ts')
 const { mount } = await import('../src/lib/ui/dom/mount.ts')
 const { openChild } = await import('../src/lib/ui/dom/openChild.ts')
-const { openRoot } = await import('../src/lib/ui/dom/openRoot.ts')
 const { appendText } = await import('../src/lib/ui/dom/appendText.ts')
 const { appendStatic } = await import('../src/lib/ui/dom/appendStatic.ts')
 const { attr } = await import('../src/lib/ui/dom/attr.ts')
@@ -83,7 +82,6 @@ const runtime = {
     derived,
     effect,
     openChild,
-    openRoot,
     appendText,
     appendStatic,
     attr,

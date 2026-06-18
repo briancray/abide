@@ -45,14 +45,11 @@ export function installMiniDom(): () => void {
         childNodes: MiniNode[] = []
         parentNode: MiniNode | undefined = undefined
 
-        appendChild(child: MiniNode): MiniNode {
-            child.remove()
-            child.parentNode = this
-            this.childNodes.push(child)
-            return child
-        }
-
-        insertBefore(node: MiniNode, reference: MiniNode | null): MiniNode {
+        /* The core single-node placement. Fragment spreads route here directly (not
+           back through the public methods) so a `insertBefore(fragment)` is one public
+           call — matching the native DOM, where moving a fragment's children doesn't
+           re-enter insertBefore (a spy counting moves sees one call, not N). */
+        private place(node: MiniNode, reference: MiniNode | null): void {
             node.remove()
             node.parentNode = this
             const index = reference === null ? -1 : this.childNodes.indexOf(reference)
@@ -61,6 +58,28 @@ export function installMiniDom(): () => void {
             } else {
                 this.childNodes.splice(index, 0, node)
             }
+        }
+
+        appendChild(child: MiniNode): MiniNode {
+            /* A fragment inserts its children and is left empty (real DocumentFragment). */
+            if (child instanceof MiniFragment) {
+                for (const node of [...child.childNodes]) {
+                    this.place(node, null)
+                }
+                return child
+            }
+            this.place(child, null)
+            return child
+        }
+
+        insertBefore(node: MiniNode, reference: MiniNode | null): MiniNode {
+            if (node instanceof MiniFragment) {
+                for (const child of [...node.childNodes]) {
+                    this.place(child, reference)
+                }
+                return node
+            }
+            this.place(node, reference)
             return node
         }
 
@@ -149,6 +168,9 @@ export function installMiniDom(): () => void {
             return new MiniComment(this.data)
         }
     }
+
+    /* A DocumentFragment — a holder whose children move into the target on insert. */
+    class MiniFragment extends MiniNode {}
 
     class MiniElement extends MiniNode {
         tagName: string
@@ -345,6 +367,7 @@ export function installMiniDom(): () => void {
         createElement: (tagName: string) => new MiniElement(tagName),
         createTextNode: (data: string) => new MiniText(data),
         createComment: (data: string) => new MiniComment(data),
+        createDocumentFragment: () => new MiniFragment(),
     }
 
     const target = globalThis as Record<string, unknown>

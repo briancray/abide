@@ -9,7 +9,6 @@ import { attr } from '../src/lib/ui/dom/attr.ts'
 import { each } from '../src/lib/ui/dom/each.ts'
 import { on } from '../src/lib/ui/dom/on.ts'
 import { openChild } from '../src/lib/ui/dom/openChild.ts'
-import { openRoot } from '../src/lib/ui/dom/openRoot.ts'
 import { text } from '../src/lib/ui/dom/text.ts'
 import { when } from '../src/lib/ui/dom/when.ts'
 import { effect } from '../src/lib/ui/effect.ts'
@@ -42,7 +41,6 @@ function mountClient(source: string): { host: HTMLElement; model: ReturnType<typ
         'derived',
         'text',
         'openChild',
-        'openRoot',
         'appendText',
         'appendStatic',
         'attr',
@@ -58,7 +56,6 @@ function mountClient(source: string): { host: HTMLElement; model: ReturnType<typ
         derived,
         text,
         openChild,
-        openRoot,
         appendText,
         appendStatic,
         attr,
@@ -100,17 +97,17 @@ describe('bind:group SSR', () => {
     test('checkbox: checked attribute present only for members of the array', () => {
         // cheese + olive are in the array, mushroom is not
         expect(renderSSR(CHECKBOXES)).toBe(
-            '<input type="checkbox" value="cheese" checked>' +
-                '<input type="checkbox" value="mushroom">' +
-                '<input type="checkbox" value="olive" checked>',
+            '<!--[--><input type="checkbox" value="cheese" checked><!--]-->' +
+                '<!--[--><input type="checkbox" value="mushroom"><!--]-->' +
+                '<!--[--><input type="checkbox" value="olive" checked><!--]-->',
         )
     })
 
     test('radio: checked attribute present only on the selected value', () => {
         expect(renderSSR(RADIOS)).toBe(
-            '<input type="radio" value="small">' +
-                '<input type="radio" value="medium" checked>' +
-                '<input type="radio" value="large">',
+            '<!--[--><input type="radio" value="small"><!--]-->' +
+                '<!--[--><input type="radio" value="medium" checked><!--]-->' +
+                '<!--[--><input type="radio" value="large"><!--]-->',
         )
     })
 

@@ -85,14 +85,14 @@ describe('teardown leaks', () => {
                 list,
                 () => model.read<string[]>('order'),
                 (key) => key,
-                (_parent, key) => {
+                (parent, key) => {
                     const li = document.createElement('li')
                     li.setAttribute('data-id', key)
                     effect(() => {
                         extern.value
                         rowRuns += 1
                     })
-                    return li
+                    parent.appendChild(li)
                 },
             )
             h.appendChild(list)
@@ -113,10 +113,10 @@ describe('teardown leaks', () => {
                 list,
                 () => feed.iterable,
                 (item) => item.id,
-                (_parent, item) => {
+                (parent, item) => {
                     const li = document.createElement('li')
                     li.setAttribute('data-id', item.id)
-                    return li
+                    parent.appendChild(li)
                 },
                 undefined,
             )

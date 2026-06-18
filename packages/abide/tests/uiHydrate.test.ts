@@ -11,7 +11,6 @@ import { each } from '../src/lib/ui/dom/each.ts'
 import { hydrate } from '../src/lib/ui/dom/hydrate.ts'
 import { on } from '../src/lib/ui/dom/on.ts'
 import { openChild } from '../src/lib/ui/dom/openChild.ts'
-import { openRoot } from '../src/lib/ui/dom/openRoot.ts'
 import { switchBlock } from '../src/lib/ui/dom/switchBlock.ts'
 import { when } from '../src/lib/ui/dom/when.ts'
 import { effect } from '../src/lib/ui/effect.ts'
@@ -89,7 +88,6 @@ describe('hydrate — adopt server DOM', () => {
             derived,
             effect,
             openChild,
-            openRoot,
             appendText,
             appendStatic,
             on,
@@ -140,7 +138,6 @@ describe('hydrate — adopt server DOM', () => {
             derived,
             effect,
             openChild,
-            openRoot,
             appendText,
             appendStatic,
             on,
@@ -159,7 +156,7 @@ describe('hydrate — adopt server DOM', () => {
             'model',
             compileSSR(source),
         )(doc, state, derived, effect, model) as SsrRender
-        expect(server.html).toBe('<main><span>hi</span></main>')
+        expect(server.html).toBe('<main><!--[--><span>hi</span><!--]--></main>')
 
         // parse + hydrate
         const host = document.createElement('div')
@@ -202,7 +199,6 @@ describe('hydrate — adopt server DOM', () => {
             derived,
             effect,
             openChild,
-            openRoot,
             appendText,
             appendStatic,
             on,
@@ -221,27 +217,30 @@ describe('hydrate — adopt server DOM', () => {
             'model',
             compileSSR(source),
         )(doc, state, derived, effect, model) as SsrRender
-        expect(server.html).toBe('<main><ul><li>1</li><li>2</li></ul></main>')
+        expect(server.html).toBe(
+            '<main><ul><!--[--><li>1</li><!--]--><!--[--><li>2</li><!--]--></ul></main>',
+        )
 
         const host = document.createElement('div')
         host.innerHTML = server.html
         const ul = (host.childNodes[0] as unknown as { childNodes: unknown[] })
             .childNodes[0] as unknown as {
             childNodes: { textContent: string }[]
+            children: { textContent: string }[]
         }
-        const firstRow = ul.childNodes[0]
+        const firstRow = ul.children[0] // [.children] skips the per-row range markers
         const body = compileComponent(source)
         hydrate(host, (target) => {
             new Function('host', ...names, body)(target, ...values)
         })
 
         // rows adopted in place, not recreated
-        expect(ul.childNodes[0]).toBe(firstRow)
+        expect(ul.children[0]).toBe(firstRow)
         expect(ul.childNodes.map((c) => c.textContent).filter(Boolean)).toEqual(['1', '2'])
 
         // a row field updates in place; appending a row works post-hydration
         model.replace('byId/a/n', 9)
-        expect(ul.childNodes[0].textContent).toBe('9')
+        expect(ul.children[0].textContent).toBe('9')
         model.add('order/-', 'c')
         expect(ul.childNodes.map((c) => c.textContent).filter(Boolean)).toEqual(['9', '2', '3'])
     })
@@ -263,7 +262,6 @@ describe('hydrate — adopt server DOM', () => {
             derived,
             effect,
             openChild,
-            openRoot,
             appendText,
             appendStatic,
             on,
@@ -283,7 +281,7 @@ describe('hydrate — adopt server DOM', () => {
             'model',
             compileSSR(source),
         )(doc, state, derived, effect, model) as SsrRender
-        expect(server.html).toBe('<main><span>B</span></main>')
+        expect(server.html).toBe('<main><!--[--><span>B</span><!--]--></main>')
 
         const host = document.createElement('div')
         host.innerHTML = server.html
@@ -312,7 +310,6 @@ describe('hydrate — adopt server DOM', () => {
             derived,
             effect,
             openChild,
-            openRoot,
             appendText,
             appendStatic,
             on,
@@ -425,7 +422,6 @@ describe('hydrate — adopt server DOM', () => {
             derived,
             effect,
             openChild,
-            openRoot,
             appendText,
             appendStatic,
             on,
@@ -467,7 +463,6 @@ describe('hydrate — adopt server DOM', () => {
             derived,
             effect,
             openChild,
-            openRoot,
             appendText,
             appendStatic,
             on,
@@ -493,15 +488,16 @@ describe('hydrate — adopt server DOM', () => {
         host.innerHTML = server.html
         const section = host.childNodes[0] as unknown as {
             childNodes: { tagName?: string; textContent: string }[]
+            children: { textContent: string }[]
         }
-        const pBefore = section.childNodes[2] // after the two buttons
+        const pBefore = section.children[2] // the two buttons, then the else <p> (markers skipped)
 
         hydrate(host, (target) => {
             new Function('host', ...names, body(source))(target, ...values)
         })
 
         // the else <p> was adopted in place, not built over a shifted node
-        expect(section.childNodes[2]).toBe(pBefore)
+        expect(section.children[2]).toBe(pBefore)
         expect((pBefore as { textContent: string }).textContent).toBe('empty')
 
         // reactive after hydrate: showing the list swaps the empty branch for the ul

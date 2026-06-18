@@ -16,7 +16,6 @@ import { mount } from './dom/mount.ts'
 import { mountChild } from './dom/mountChild.ts'
 import { on } from './dom/on.ts'
 import { openChild } from './dom/openChild.ts'
-import { openRoot } from './dom/openRoot.ts'
 import { switchBlock } from './dom/switchBlock.ts'
 import { tryBlock } from './dom/tryBlock.ts'
 import { when } from './dom/when.ts'
@@ -50,7 +49,6 @@ export function installHotBridge(): void {
         effect,
         mount,
         openChild,
-        openRoot,
         appendText,
         appendSnippet,
         appendStatic,

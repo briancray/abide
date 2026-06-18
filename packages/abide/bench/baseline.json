@@ -1,42 +1,42 @@
 {
     "reactivity.fanout": {
-        "value": 155.615417,
+        "value": 184.03120800000002,
         "unit": "ms"
     },
     "reactivity.chain": {
-        "value": 353.648584,
+        "value": 301.31154100000003,
         "unit": "ms"
     },
     "reactivity.dynamicDeps": {
-        "value": 112.33129199999996,
+        "value": 113.28920900000003,
         "unit": "ms"
     },
     "listChurn.append": {
-        "value": 341.4476665,
+        "value": 578.4653125,
         "unit": "us/op"
     },
     "listChurn.removeHead": {
-        "value": 1082.5936875,
+        "value": 1959.4317500000002,
         "unit": "us/op"
     },
     "listChurn.reorder": {
-        "value": 103.01699999999983,
+        "value": 329.9690840000003,
         "unit": "us/op"
     },
     "mount.page": {
-        "value": 4.203467549999934,
+        "value": 4.308977149999954,
         "unit": "us/mount"
     },
     "ssr.render": {
-        "value": 0.14435443339999998,
+        "value": 0.16020764159999998,
         "unit": "ms/render"
     },
     "hydrate.run": {
-        "value": 0.4566456739999988,
+        "value": 0.990774656,
         "unit": "ms/hydration"
     },
     "coldStart.median": {
-        "value": 114.95404199999984,
+        "value": 115.36262499999998,
         "unit": "ms"
     }
 }

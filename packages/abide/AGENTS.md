@@ -174,7 +174,7 @@ Same selector grammar as `cache.invalidate`; also accept a `Subscribable`. See C
 - `abide/ui/router(...)`, `abide/ui/startClient(...)`, `abide/ui/renderToStream(render)` — bootstrap/render runtime (compiler/launcher uses these).
 
 ### DOM + render runtime — `@readme plumbing` (compiler-emitted; you don't hand-write these)
-`abide/ui/dom/{mount,mountChild,hydrate,text,openChild,openRoot,appendText,appendSnippet,appendStatic,cloneStatic,attr,on,attach,each,eachAsync,when,awaitBlock,tryBlock,switchBlock,applyResolved}` and `abide/ui/runtime/{nextBlockId,enterRenderPass,exitRenderPass}`. These are what `analyzeComponent → generateBuild/generateSSR` lower a `.abide` file into. Read them only to understand compiler output.
+`abide/ui/dom/{mount,mountChild,hydrate,text,openChild,appendText,appendSnippet,appendStatic,cloneStatic,attr,on,attach,each,eachAsync,when,awaitBlock,tryBlock,switchBlock,applyResolved}` and `abide/ui/runtime/{nextBlockId,enterRenderPass,exitRenderPass}`. These are what `analyzeComponent → generateBuild/generateSSR` lower a `.abide` file into. Read them only to understand compiler output.
 - `abide/ui/remoteProxy`, `abide/ui/socketProxy` — the browser-side implementations the bundler swaps in for `GET(...)` / `socket(...)`.
 
 ### `.abide` component format (see `src/lib/ui/README.md`)

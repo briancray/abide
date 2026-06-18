@@ -1,12 +1,12 @@
 import { OUTLET_TAG } from '../runtime/OUTLET_TAG.ts'
-import { branchElements } from './branchElements.ts'
-import { escapeHtml } from './escapeHtml.ts'
+import { bindListenEvent } from './bindListenEvent.ts'
 import { groupBindParts } from './groupBindParts.ts'
-import { lowerDocAccess } from './lowerDocAccess.ts'
+import { lowerContext } from './lowerContext.ts'
 import { partitionSlots } from './partitionSlots.ts'
-import { nestedBindingNames } from './prepareNestedScript.ts'
-import { renameSignalRefs } from './renameSignalRefs.ts'
+import { scopeAttr } from './scopeAttr.ts'
+import { staticAttr } from './staticAttr.ts'
 import { staticAttrValue } from './staticAttrValue.ts'
+import { staticTextPart } from './staticTextPart.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
 import { VOID_TAGS } from './VOID_TAGS.ts'
 
@@ -29,24 +29,12 @@ export function generateBuild(
     let counter = 0
     const nextVar = (prefix: string): string => `${prefix}${counter++}`
 
-    /* Branch-scoped signal bindings (from nested `<script>`s) — they deref to
-       `.value` like a `derived`. Pushed while a branch's script + markup compile,
-       popped after, so they shadow only within that subtree. */
-    const localDerived = new Set<string>()
-    const derefScope = (): ReadonlySet<string> =>
-        localDerived.size === 0 ? derivedNames : new Set([...derivedNames, ...localDerived])
-
-    /* Rewrites signal refs, then lowers a single expression (no trailing `;`). */
-    function lowerExpression(code: string): string {
-        const renamed = renameSignalRefs(code, stateNames, derefScope())
-        return lowerDocAccess(renamed, 'model').trim().replace(/;$/, '')
-    }
-
-    /* As above but keeps the trailing `;` for a handler body. */
-    function lowerStatement(code: string): string {
-        const renamed = renameSignalRefs(code, stateNames, derefScope())
-        return lowerDocAccess(renamed, 'model').trim()
-    }
+    /* The shared signal→`model` lowering + branch-scoped nested-script deref scope. */
+    const {
+        expression: lowerExpression,
+        statement: lowerStatement,
+        withNestedScripts,
+    } = lowerContext(stateNames, derivedNames)
 
     /* Builds an element and its children; returns the build code and its var.
        `varExpr` is how the element is obtained — `openChild(parent, tag)` for a
@@ -90,37 +78,18 @@ export function generateBuild(
                 }
             } else {
                 /* Two-way: drive the property from the path, and write the path
-                   back on input. The path is an lvalue, so the write is lowered
-                   as an assignment statement. */
+                   back on the property's native event (`input` for most fields,
+                   but `toggle` for `<details open>`, `change` for checked/select).
+                   The path is an lvalue, so the write lowers to an assignment. */
+                const event = bindListenEvent(attr.property, node.tag)
                 code += `effect(() => { ${varName}.${attr.property} = ${lowerExpression(attr.code)}; });\n`
-                code += `on(${varName}, "input", () => { ${lowerStatement(`${attr.code} = ${varName}.${attr.property}`)} });\n`
+                code += `on(${varName}, ${JSON.stringify(event)}, () => { ${lowerStatement(`${attr.code} = ${varName}.${attr.property}`)} });\n`
             }
         }
         /* A `<script>` among the children scopes its bindings to this element's
            subtree (its later siblings auto-deref them); pop after. */
-        const added = scopeNestedScripts(node.children)
-        code += generateChildren(node.children, varName)
-        for (const name of added) {
-            localDerived.delete(name)
-        }
+        code += withNestedScripts(node.children, () => generateChildren(node.children, varName))
         return { code, varName }
-    }
-
-    /* Adds the binding names of any `<script>` children to the deref scope, returning
-       the names it added (for the caller to pop). */
-    function scopeNestedScripts(children: TemplateNode[]): string[] {
-        const added: string[] = []
-        for (const child of children) {
-            if (child.kind === 'script') {
-                for (const name of nestedBindingNames(child.code)) {
-                    if (!localDerived.has(name)) {
-                        localDerived.add(name)
-                        added.push(name)
-                    }
-                }
-            }
-        }
-        return added
     }
 
     /* Emits code appending `node` to `parentVar`. */
@@ -238,13 +207,11 @@ export function generateBuild(
                 (child): child is Extract<TemplateNode, { kind: 'case' }> => child.kind === 'case',
             )
             .map((branch) => {
-                const param = nextVar('p')
-                const roots = elementRoots(branch.children, '<template case>', param)
                 const match =
                     branch.match === undefined
                         ? 'undefined'
                         : `() => (${lowerExpression(branch.match)})`
-                return `{ match: ${match}, render: (${param}) => {\n${roots.code}return ${roots.expr};\n} }`
+                return `{ match: ${match}, render: ${branchThunk(branch.children)} }`
             })
             .join(', ')
         return `switchBlock(${parentVar}, () => (${lowerExpression(node.subject)}), [${cases}]);\n`
@@ -275,17 +242,12 @@ export function generateBuild(
 
     /* Mounts a child component into a wrapper element, passing each prop as a
        reactive thunk so the child re-reads when the parent expression changes. */
-    function generateComponent(
-        node: Extract<TemplateNode, { kind: 'component' }>,
-        parentVar: string,
-    ): string {
-        const wrapper = nextVar('cmp')
+    /* The prop + slot thunks a child mount receives — its props as value thunks and
+       its slot content as host-taking builders (`$children` / `$slots[name]`). */
+    function componentParts(node: Extract<TemplateNode, { kind: 'component' }>): string[] {
         const parts = node.props.map(
             (prop) => `${JSON.stringify(prop.name)}: () => (${lowerExpression(prop.code)})`,
         )
-        /* Slot content compiles to builders the child mounts into the host it passes
-           from each <slot> position: the default markup as `$children`, and each
-           `slot="name"` group as `$slots[name]`. */
         const groups = partitionSlots(node.children)
         const slotCode = groups.default.map((child) => generateChild(child, '$slot')).join('')
         if (slotCode.trim() !== '') {
@@ -300,13 +262,31 @@ export function generateBuild(
                 .join(', ')
             parts.push(`"$slots": { ${entries} }`)
         }
-        /* openChild appends (create) or claims the SSR wrapper (hydrate); since
-           hydration is still active, the child's own build then adopts its server
-           markup inside the wrapper. */
-        return (
-            `const ${wrapper} = openChild(${parentVar}, ${JSON.stringify(node.name.toLowerCase())});\n` +
-            `mountChild(${wrapper}, ${node.name}, { ${parts.join(', ')} });\n`
-        )
+        return parts
+    }
+
+    /* Mounts a child into a wrapper obtained via `varExpr` (openChild — appends on
+       create / claims on hydrate). Hydration stays active, so the child adopts its
+       server markup inside the wrapper. Returns the wrapper var. */
+    function mountComponent(
+        node: Extract<TemplateNode, { kind: 'component' }>,
+        varExpr: string,
+    ): { code: string; varName: string } {
+        const wrapper = nextVar('cmp')
+        const code =
+            `const ${wrapper} = ${varExpr};\n` +
+            `mountChild(${wrapper}, ${node.name}, { ${componentParts(node).join(', ')} });\n`
+        return { code, varName: wrapper }
+    }
+
+    function generateComponent(
+        node: Extract<TemplateNode, { kind: 'component' }>,
+        parentVar: string,
+    ): string {
+        return mountComponent(
+            node,
+            `openChild(${parentVar}, ${JSON.stringify(node.name.toLowerCase())})`,
+        ).code
     }
 
     /* An await block: pending → resolved(value) / error branches. Each branch is a
@@ -324,17 +304,16 @@ export function generateBuild(
         const pending = node.blocking
             ? []
             : node.children.filter((child) => child.kind !== 'branch')
+        const thenBranch = node.children.find(isBranch('then'))
         const thenThunk = node.blocking
-            ? renderRangeThunk(
+            ? branchThunk(
                   node.children.filter((child) => child.kind !== 'branch'),
                   node.as ?? '_value',
-                  '<template await then>',
                   finallyChildren,
               )
-            : renderSettledThunk(
-                  node.children.find(isBranch('then')),
-                  '_value',
-                  '<template then>',
+            : branchThunk(
+                  branchChildren(thenBranch),
+                  branchVar(thenBranch) ?? '_value',
                   finallyChildren,
               )
         /* Neither catch nor finally → pass `undefined` so awaitBlock re-throws the
@@ -343,10 +322,15 @@ export function generateBuild(
         const catchThunk =
             catchBranch === undefined && finallyChildren.length === 0
                 ? 'undefined'
-                : renderSettledThunk(catchBranch, '_error', '<template catch>', finallyChildren)
+                : branchThunk(
+                      branchChildren(catchBranch),
+                      branchVar(catchBranch) ?? '_error',
+                      finallyChildren,
+                  )
+        const pendingThunk = hasRenderableContent(pending) ? branchThunk(pending) : 'undefined'
         return (
             `awaitBlock(${parentVar}, nextBlockId(), () => (${lowerExpression(node.promise)}), ` +
-            `${renderThunk(pending, undefined, '<template await> pending')}, ` +
+            `${pendingThunk}, ` +
             `${thenThunk}, ` +
             `${catchThunk});\n`
         )
@@ -362,98 +346,45 @@ export function generateBuild(
         return branch !== undefined && branch.kind === 'branch' ? branch.as : undefined
     }
 
-    /* Builds the element roots of a branch into `parentVar` (each via openRoot, so
-       detached on create / claimed on hydrate), returning the code plus an array
-       expression of the root nodes the block tracks as a range. */
-    function elementRoots(
+    /* A branch's content as a void render thunk `(parent[, value]) => void` that
+       builds its children — and an optional trailing `finally` branch — into
+       `parent`. The full-range model tracks the built content between markers, so a
+       branch holds ANY content (components, text, nested control-flow, snippets) and
+       is generated exactly like a normal child list. `valueParam` binds a resolved /
+       error / item value into scope. Nested `<script>`s are emitted in document order
+       by `generateChildren`; `withNestedScripts` puts their bindings in deref scope. */
+    function branchThunk(
         children: TemplateNode[],
-        context: string,
-        parentVar: string,
-        allowEmpty = false,
-    ): { code: string; expr: string } {
-        /* Nested `<script>`s: add their bindings to the deref scope (so the script
-           body + this branch's markup auto-deref them), emit the lowered script
-           bodies first, then build the element roots — all within the scope, which
-           we pop afterward. The scripts run when the branch mounts, owned by its
-           scope. */
-        const added: string[] = []
-        for (const child of children) {
-            if (child.kind === 'script') {
-                for (const name of nestedBindingNames(child.code)) {
-                    if (!localDerived.has(name)) {
-                        localDerived.add(name)
-                        added.push(name)
-                    }
-                }
-            }
-        }
-        const scriptCode = children
-            .filter(
-                (child): child is Extract<TemplateNode, { kind: 'script' }> =>
-                    child.kind === 'script',
-            )
-            .map((child) => `${lowerStatement(child.code)}\n`)
-            .join('')
-        const built = branchElements(children, context, allowEmpty).map((element) =>
-            generateElement(element, `openRoot(${parentVar}, ${JSON.stringify(element.tag)})`),
-        )
-        for (const name of added) {
-            localDerived.delete(name)
-        }
-        return {
-            code: scriptCode + built.map((part) => part.code).join(''),
-            expr: `[${built.map((part) => part.varName).join(', ')}]`,
-        }
-    }
-
-    /* A `(parent[, value]) => Node[]` thunk over a branch's element roots, or
-       `undefined` when empty (a `<template await>` with no pending branch).
-       `paramName`/`fallback` name the resolved/error value the branch binds. */
-    function renderThunk(
-        children: TemplateNode[],
-        paramName: string | undefined,
-        context: string,
-        fallback?: string,
-    ): string {
-        const hasElement = children.some((child) => child.kind === 'element')
-        const parentParam = nextVar('p')
-        if (!hasElement) {
-            const value = fallback === undefined ? '' : `, ${paramName ?? fallback}`
-            return fallback === undefined ? 'undefined' : `(${parentParam}${value}) => []`
-        }
-        const roots = elementRoots(children, context, parentParam)
-        const value = fallback === undefined ? '' : `, ${paramName ?? fallback}`
-        return `(${parentParam}${value}) => {\n${roots.code}return ${roots.expr};\n}`
-    }
-
-    /* A thunk over a node range: `children`'s roots concatenated with the `finally`
-       roots, both possibly empty. `param` names a bound value (the resolved/error
-       value, or the caught error); undefined for a value-less branch (try/pending). */
-    function renderRangeThunk(
-        children: TemplateNode[],
-        param: string | undefined,
-        context: string,
-        finallyChildren: TemplateNode[],
+        valueParam?: string,
+        finallyChildren: TemplateNode[] = [],
     ): string {
         const parentParam = nextVar('p')
-        const head = param === undefined ? `(${parentParam})` : `(${parentParam}, ${param})`
-        const roots = elementRoots(children, context, parentParam, true)
-        const finallyRoots = elementRoots(finallyChildren, '<template finally>', parentParam, true)
-        return `${head} => {\n${roots.code}${finallyRoots.code}return [...${roots.expr}, ...${finallyRoots.expr}];\n}`
+        const head =
+            valueParam === undefined ? `(${parentParam})` : `(${parentParam}, ${valueParam})`
+        const body = withNestedScripts(children, () => generateChildren(children, parentParam))
+        const finallyBody =
+            finallyChildren.length > 0
+                ? withNestedScripts(finallyChildren, () =>
+                      generateChildren(finallyChildren, parentParam),
+                  )
+                : ''
+        return `${head} => {\n${body}${finallyBody}}`
     }
 
-    /* A settled (then/catch) thunk: the outcome branch's roots ++ `finally`. */
-    function renderSettledThunk(
-        branch: TemplateNode | undefined,
-        fallback: string,
-        context: string,
-        finallyChildren: TemplateNode[],
-    ): string {
-        return renderRangeThunk(
-            branchChildren(branch),
-            branchVar(branch) ?? fallback,
-            context,
-            finallyChildren,
+    /* True when a branch has content worth a render thunk — vs an absent/empty branch
+       a block represents with `undefined` (an `await` with no pending markup). */
+    function hasRenderableContent(children: TemplateNode[]): boolean {
+        return children.some(
+            (child) =>
+                child.kind === 'element' ||
+                child.kind === 'component' ||
+                child.kind === 'if' ||
+                child.kind === 'each' ||
+                child.kind === 'await' ||
+                child.kind === 'try' ||
+                child.kind === 'switch' ||
+                child.kind === 'snippet' ||
+                (child.kind === 'text' && !isWhitespaceText(child)),
         )
     }
 
@@ -475,62 +406,46 @@ export function generateBuild(
         const catchBranch = findBranch(node.children, 'catch')
         const finallyChildren = branchChildren(findBranch(node.children, 'finally'))
         const guarded = node.children.filter((child) => child.kind !== 'branch')
-        const tryThunk = renderRangeThunk(guarded, undefined, '<template try>', finallyChildren)
+        const tryThunk = branchThunk(guarded, undefined, finallyChildren)
         const catchThunk =
             catchBranch === undefined
                 ? 'undefined'
-                : renderRangeThunk(
+                : branchThunk(
                       branchChildren(catchBranch),
                       branchVar(catchBranch) ?? '_error',
-                      '<template catch>',
                       finallyChildren,
                   )
         return `tryBlock(${parentVar}, nextBlockId(), ${tryThunk}, ${catchThunk});\n`
     }
 
-    /* A conditional with an optional nested `<template else>` (a `case` child).
-       Both branches are single-element roots. */
+    /* A conditional with an optional nested `<template else>` (a `case` child). Each
+       branch is a content range the runtime tracks between markers. */
     function generateIf(node: Extract<TemplateNode, { kind: 'if' }>, parentVar: string): string {
         const elseBranch = node.children.find(
             (child): child is Extract<TemplateNode, { kind: 'case' }> => child.kind === 'case',
         )
         const thenChildren = node.children.filter((child) => child.kind !== 'case')
-        const thenParam = nextVar('p')
-        const thenRoots = elementRoots(thenChildren, '<template if>', thenParam)
-        const thenThunk = `(${thenParam}) => {\n${thenRoots.code}return ${thenRoots.expr};\n}`
+        const thenThunk = branchThunk(thenChildren)
         if (elseBranch === undefined) {
             return `when(${parentVar}, () => (${lowerExpression(node.condition)}), ${thenThunk});\n`
         }
-        const elseParam = nextVar('p')
-        const elseRoots = elementRoots(elseBranch.children, '<template else>', elseParam)
-        const elseThunk = `(${elseParam}) => {\n${elseRoots.code}return ${elseRoots.expr};\n}`
+        const elseThunk = branchThunk(elseBranch.children)
         return `when(${parentVar}, () => (${lowerExpression(node.condition)}), ${thenThunk}, ${elseThunk});\n`
     }
 
-    /* A keyed each. The row must have a single element root (it returns one node). */
+    /* A keyed each. Each row is a content RANGE (any content, tracked between the
+       row's markers), built by a `(rowParent, item) => void` thunk. */
     function generateEach(
         node: Extract<TemplateNode, { kind: 'each' }>,
         parentVar: string,
     ): string {
         const rowParam = nextVar('p')
-        /* A `<script>` in the row body declares per-row local signals (seeded from
-           the row item), scoped to this row's render thunk. */
-        const added = scopeNestedScripts(node.children)
-        const scriptCode = node.children
-            .filter(
-                (child): child is Extract<TemplateNode, { kind: 'script' }> =>
-                    child.kind === 'script',
-            )
-            .map((child) => `${lowerStatement(child.code)}\n`)
-            .join('')
-        const row = singleElementRoot(
-            node.children,
-            '<template each> must contain a single element row',
-            rowParam,
+        /* The row body builds its children (a `<script>` declares per-row local signals,
+           emitted in document order) into the row parent. A `<template catch>` child is
+           consumed by the async-each, not the row — `generateChildren` skips it. */
+        const rowBody = withNestedScripts(node.children, () =>
+            generateChildren(node.children, rowParam),
         )
-        for (const name of added) {
-            localDerived.delete(name)
-        }
         const keyExpression = node.key === undefined ? node.as : lowerExpression(node.key)
         /* `await` → the AsyncIterable runtime, drained row-by-row on the client, with an
            optional `<template catch>` branch rendered (after the streamed rows) when the
@@ -540,28 +455,12 @@ export function generateBuild(
             (child) => child.kind === 'branch' && child.branch === 'catch',
         )
         const catchArg = node.async
-            ? `, ${catchBranch === undefined ? 'undefined' : renderSettledThunk(catchBranch, '_error', '<template catch>', [])}`
+            ? `, ${catchBranch === undefined ? 'undefined' : branchThunk(branchChildren(catchBranch), branchVar(catchBranch) ?? '_error')}`
             : ''
         return (
             `${fn}(${parentVar}, () => (${lowerExpression(node.items)}), ` +
-            `(${node.as}) => (${keyExpression}), (${rowParam}, ${node.as}) => {\n${scriptCode}${row.code}return ${row.varName};\n}${catchArg});\n`
+            `(${node.as}) => (${keyExpression}), (${rowParam}, ${node.as}) => {\n${rowBody}}${catchArg});\n`
         )
-    }
-
-    /* Builds the lone element child of a control-flow block (each/if return one
-       node), erroring if the block isn't a single element. The root is opened
-       with `openRoot(parentVar, tag)` so it's detached on create and claimed on
-       hydrate — `parentVar` is the render thunk's parent parameter. */
-    function singleElementRoot(
-        children: TemplateNode[],
-        message: string,
-        parentVar: string,
-    ): { code: string; varName: string } {
-        const root = children.find((child) => child.kind === 'element')
-        if (root === undefined || root.kind !== 'element') {
-            throw new Error(`[abide] ${message}`)
-        }
-        return generateElement(root, `openRoot(${parentVar}, ${JSON.stringify(root.tag)})`)
     }
 
     return generateChildren(nodes, hostVar)
@@ -613,9 +512,7 @@ template and the server markup parse to the same DOM. Only handles the shapes
 function staticHtml(node: TemplateNode): string {
     if (node.kind === 'text') {
         return node.parts
-            .map((part) =>
-                part.kind === 'static' && part.value.trim() !== '' ? escapeHtml(part.value) : '',
-            )
+            .map((part) => (part.kind === 'static' ? staticTextPart(part.value) : ''))
             .join('')
     }
     if (node.kind !== 'element') {
@@ -623,11 +520,11 @@ function staticHtml(node: TemplateNode): string {
     }
     let html = `<${node.tag}`
     for (const scope of node.scopes ?? []) {
-        html += ` ${scope}=""`
+        html += scopeAttr(scope)
     }
     for (const attr of node.attrs) {
         if (attr.kind === 'static') {
-            html += ` ${attr.name}="${escapeHtml(attr.value)}"`
+            html += staticAttr(attr.name, attr.value)
         }
     }
     html += '>'

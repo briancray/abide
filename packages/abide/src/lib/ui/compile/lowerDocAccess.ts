@@ -32,12 +32,17 @@ export function lowerDocAccess(code: string, docName: string): string {
 /* A path segment is either a literal key or a runtime expression (a dynamic index). */
 type Segment = { kind: 'literal'; value: string } | { kind: 'expression'; node: ts.Expression }
 
-/* Maps a compound-assignment operator to its plain binary counterpart. */
+/* Maps a compound-assignment operator to its plain binary counterpart. Logical
+   assignments (`||=`/`&&=`/`??=`) lower to an unconditional replace of the
+   combined value — consistent with how `+=` lowers (the patch always writes). */
 const COMPOUND_OPERATORS = new Map<ts.SyntaxKind, ts.BinaryOperator>([
     [ts.SyntaxKind.PlusEqualsToken, ts.SyntaxKind.PlusToken],
     [ts.SyntaxKind.MinusEqualsToken, ts.SyntaxKind.MinusToken],
     [ts.SyntaxKind.AsteriskEqualsToken, ts.SyntaxKind.AsteriskToken],
     [ts.SyntaxKind.SlashEqualsToken, ts.SyntaxKind.SlashToken],
+    [ts.SyntaxKind.BarBarEqualsToken, ts.SyntaxKind.BarBarToken],
+    [ts.SyntaxKind.AmpersandAmpersandEqualsToken, ts.SyntaxKind.AmpersandAmpersandToken],
+    [ts.SyntaxKind.QuestionQuestionEqualsToken, ts.SyntaxKind.QuestionQuestionToken],
 ])
 
 function docAccessTransformer(docName: string): ts.TransformerFactory<ts.SourceFile> {

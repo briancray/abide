@@ -8,7 +8,6 @@ import { attr } from '../src/lib/ui/dom/attr.ts'
 import { each } from '../src/lib/ui/dom/each.ts'
 import { on } from '../src/lib/ui/dom/on.ts'
 import { openChild } from '../src/lib/ui/dom/openChild.ts'
-import { openRoot } from '../src/lib/ui/dom/openRoot.ts'
 import { text } from '../src/lib/ui/dom/text.ts'
 import { when } from '../src/lib/ui/dom/when.ts'
 import { effect } from '../src/lib/ui/effect.ts'
@@ -27,7 +26,6 @@ function render(source: string): HTMLElement {
         'doc',
         'text',
         'openChild',
-        'openRoot',
         'appendText',
         'appendStatic',
         'attr',
@@ -36,7 +34,7 @@ function render(source: string): HTMLElement {
         'when',
         'effect',
         body,
-    )(host, doc, text, openChild, openRoot, appendText, appendStatic, attr, on, each, when, effect)
+    )(host, doc, text, openChild, appendText, appendStatic, attr, on, each, when, effect)
     return host
 }
 
@@ -105,7 +103,6 @@ describe('compileComponent — end to end', () => {
             'doc',
             'text',
             'openChild',
-            'openRoot',
             'appendText',
             'appendStatic',
             'attr',
@@ -115,21 +112,7 @@ describe('compileComponent — end to end', () => {
             'effect',
             'model',
             body,
-        )(
-            host,
-            doc,
-            text,
-            openChild,
-            openRoot,
-            appendText,
-            appendStatic,
-            attr,
-            on,
-            each,
-            when,
-            effect,
-            model,
-        )
+        )(host, doc, text, openChild, appendText, appendStatic, attr, on, each, when, effect, model)
         const div = host.childNodes[0] as unknown as { textContent: string }
         expect(div.textContent).toBe('hi')
         model.replace('label', 'yo') // field-reactive while shown
@@ -167,7 +150,6 @@ describe('compileComponent — end to end', () => {
             'doc',
             'text',
             'openChild',
-            'openRoot',
             'appendText',
             'appendStatic',
             'attr',
@@ -176,20 +158,7 @@ describe('compileComponent — end to end', () => {
             'effect',
             'model',
             body,
-        )(
-            host,
-            doc,
-            text,
-            openChild,
-            openRoot,
-            appendText,
-            appendStatic,
-            attr,
-            on,
-            each,
-            effect,
-            model,
-        )
+        )(host, doc, text, openChild, appendText, appendStatic, attr, on, each, effect, model)
         const list = host.childNodes[0] as unknown as { children: Element[] }
         expect(list.children.map((child) => child.textContent)).toEqual(['1', '2'])
         model.replace('byId/a/n', 9)
@@ -213,5 +182,33 @@ describe('compileComponent — end to end', () => {
         expect(body).toContain('"onclick": () => (handleClick)')
         expect(body).toContain('"bind:open": () => (state.open)')
         expect(body).toContain('"attach": () => (register)')
+    })
+
+    test('two-way bind listens on the property native event', () => {
+        // regression: every generic bind listened on `input`, so `<details>`
+        // (which fires `toggle`) and select/checkbox (which fire `change`) never
+        // synced back.
+        expect(
+            compileComponent(`<details bind:open={isOpen}><summary>x</summary></details>`),
+        ).toContain('on(el0, "toggle", () => { isOpen = el0.open; })')
+        expect(compileComponent(`<input bind:value={name}/>`)).toContain(
+            'on(el0, "input", () => { name = el0.value; })',
+        )
+        expect(
+            compileComponent(`<select bind:value={choice}><option>a</option></select>`),
+        ).toContain('on(el0, "change", () => { choice = el0.value; })')
+        expect(compileComponent(`<input type="checkbox" bind:checked={agree}/>`)).toContain(
+            'on(el0, "change", () => { agree = el0.checked; })',
+        )
+    })
+
+    test('a bare object literal as a whole prop/attr value stays an object', () => {
+        // regression: `{ a: 1 }` parsed in statement position became labeled
+        // statements (`a;`), dropping all but the first pair.
+        const prop = compileComponent(`<Child params={{ id: routeId, rest: '' }} />`)
+        expect(prop).toContain('"params": () => ({ id: routeId, rest: \'\' })')
+
+        const attr = compileComponent(`<b data-x={{ a: 1, b: '' }}>y</b>`)
+        expect(attr).toContain('attr(el0, "data-x", () => ({ a: 1, b: \'\' }))')
     })
 })

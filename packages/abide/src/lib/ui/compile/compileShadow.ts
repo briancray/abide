@@ -229,7 +229,14 @@ function scopeLineFor(
         const annotation = typeNode === undefined ? '' : `: ${verbatim(typeNode)}`
         const init = call.arguments[0]
         if (init === undefined) {
-            return { text: `let ${name}${annotation};`, segments: [] }
+            /* No initial (`state<T>()`): the value is `T | undefined`. A definite-
+               assignment assertion (`!`) gives that union without a use-before-assign
+               false-positive AND without control-flow narrowing it to just `undefined`
+               (an `= undefined` initializer, never reassigned in the shadow, would make
+               a guard like `x !== undefined` collapse to `never`). Unguarded access is
+               then correctly flagged possibly-undefined; a guard narrows cleanly. */
+            const valueType = annotation === '' ? ': unknown' : `${annotation} | undefined`
+            return { text: `let ${name}!${valueType};`, segments: [] }
         }
         const prefix = `let ${name}${annotation} = (`
         return { text: `${prefix}${verbatim(init)});`, segments: [span(init, prefix.length)] }
@@ -457,9 +464,14 @@ function emitNode(node: TemplateNode, builder: Builder): void {
             builder.raw('};\n')
             return
         case 'script':
-            /* A scoped reactive `<script>` block — its body is author TS; emit it so
-               its references check. Not yet position-mapped (rare). */
-            builder.raw(`{\n${node.code}\n}\n`)
+            /* A scoped reactive `<script>`: emit its body INLINE in the current block,
+               not a nested `{…}` — so its bindings are visible to the branch's later
+               siblings (a nested if/each within the same branch), matching runtime
+               scope where a nested script's declarations deref through the rest of the
+               branch. A wrapping block trapped them, surfacing "Cannot find name" on a
+               sibling. Leading `;` guards a preceding semicolon-less call from merging
+               in (see the component case). Not yet position-mapped (rare). */
+            builder.raw(`;\n${node.code}\n`)
             return
         case 'style':
             /* CSS, not TypeScript — nothing for the shadow to type-check. */

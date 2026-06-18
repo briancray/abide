@@ -82,7 +82,6 @@
         "./ui/dom/hydrate": "./src/lib/ui/dom/hydrate.ts",
         "./ui/dom/text": "./src/lib/ui/dom/text.ts",
         "./ui/dom/openChild": "./src/lib/ui/dom/openChild.ts",
-        "./ui/dom/openRoot": "./src/lib/ui/dom/openRoot.ts",
         "./ui/dom/appendText": "./src/lib/ui/dom/appendText.ts",
         "./ui/dom/appendSnippet": "./src/lib/ui/dom/appendSnippet.ts",
         "./ui/dom/appendStatic": "./src/lib/ui/dom/appendStatic.ts",

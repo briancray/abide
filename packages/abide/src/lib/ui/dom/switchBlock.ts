@@ -1,34 +1,29 @@
 import { effect } from '../effect.ts'
-import { claimChild } from '../runtime/claimChild.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { scope } from '../runtime/scope.ts'
+import { clearBetween } from './clearBetween.ts'
+import { fillBefore } from './fillBefore.ts'
+import { openMarker } from './openMarker.ts'
 import type { SwitchCase } from './types/SwitchCase.ts'
 
 /*
-Multi-branch binding — the runtime for `<template switch>`. An effect evaluates
-the subject, picks the first case whose `match` equals it (strict `===`), falling
-back to the default (`match` undefined); the chosen branch renders in its own
-scope, anchored for placement. A branch is a RANGE of element roots, tracked as a
-node array so a multi-root case inserts/removes as a unit. Staying on the same
-branch across a subject change leaves it mounted; switching disposes the old.
+Multi-branch binding — the runtime for `<template switch>`. An effect evaluates the
+subject, picks the first case whose `match` equals it (strict `===`), falling back
+to the default (`match` undefined); the chosen case's content lives in a RANGE
+bounded by two comment markers, so a case holds any content. Staying on the same
+case across a subject change leaves it mounted; switching clears the range and
+builds the new case fresh.
 
-On hydrate it adopts the case the server rendered (in place) and anchors after it;
-the effect's first run picks the same case and is a no-op, later changes swap fresh.
+On hydrate it adopts the case the server rendered: claim the start marker, run the
+matching case in place, claim the end marker. The effect's first run picks the same
+case and is a no-op; later changes swap the range.
 */
 // @readme plumbing
 export function switchBlock(parent: Node, subject: () => unknown, cases: SwitchCase[]): void {
     const hydration = RENDER.hydration
-    let active: { nodes: Node[]; dispose: () => void } | undefined
-    let activeIndex = -1
-    let anchor: Node
-
-    const build = (chosen: SwitchCase): { nodes: Node[]; dispose: () => void } => {
-        let nodes: Node[] = []
-        const dispose = scope(() => {
-            nodes = chosen.render(parent)
-        })
-        return { nodes, dispose }
-    }
+    let dispose: (() => void) | undefined
+    let activeIndex: number
+    let end: Comment
 
     const select = (value: unknown): number => {
         const matched = cases.findIndex(
@@ -36,18 +31,24 @@ export function switchBlock(parent: Node, subject: () => unknown, cases: SwitchC
         )
         return matched === -1 ? cases.findIndex((entry) => entry.match === undefined) : matched
     }
+    const caseAt = (index: number): SwitchCase | undefined =>
+        index === -1 ? undefined : cases[index]
 
+    const start = openMarker(parent, '[')
     if (hydration !== undefined) {
         activeIndex = select(subject())
-        const chosen = activeIndex === -1 ? undefined : cases[activeIndex]
+        const chosen = caseAt(activeIndex)
         if (chosen !== undefined) {
-            active = build(chosen)
+            dispose = scope(() => chosen.render(parent)) // claim the SSR nodes in place
         }
-        anchor = document.createTextNode('')
-        parent.insertBefore(anchor, claimChild(hydration, parent))
+        end = openMarker(parent, ']')
     } else {
-        anchor = document.createTextNode('')
-        parent.appendChild(anchor)
+        end = openMarker(parent, ']')
+        activeIndex = select(subject())
+        const chosen = caseAt(activeIndex)
+        if (chosen !== undefined) {
+            dispose = fillBefore(end, (p) => chosen.render(p))
+        }
     }
 
     effect(() => {
@@ -55,21 +56,12 @@ export function switchBlock(parent: Node, subject: () => unknown, cases: SwitchC
         if (index === activeIndex) {
             return
         }
-        if (active !== undefined) {
-            active.dispose()
-            for (const node of active.nodes) {
-                parent.removeChild(node)
-            }
-            active = undefined
-        }
+        clearBetween(start, end, dispose)
+        dispose = undefined
         activeIndex = index
-        const chosen = index === -1 ? undefined : cases[index]
-        if (chosen === undefined) {
-            return
-        }
-        active = build(chosen)
-        for (const node of active.nodes) {
-            parent.insertBefore(node, anchor)
+        const chosen = caseAt(index)
+        if (chosen !== undefined) {
+            dispose = fillBefore(end, (p) => chosen.render(p))
         }
     })
 }

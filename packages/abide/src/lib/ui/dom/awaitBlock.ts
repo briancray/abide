@@ -29,11 +29,11 @@ export function awaitBlock(
     parent: Node,
     id: number,
     promiseThunk: () => unknown,
-    renderPending: ((parent: Node) => Node[]) | undefined,
-    renderThen: (parent: Node, value: unknown) => Node[],
+    renderPending: ((parent: Node) => void) | undefined,
+    renderThen: (parent: Node, value: unknown) => void,
     /* Absent when the block has no catch branch — a rejection then surfaces (re-throws
        to the unhandled-rejection path) instead of rendering an empty branch. */
-    renderCatch: ((parent: Node, error: unknown) => Node[]) | undefined,
+    renderCatch: ((parent: Node, error: unknown) => void) | undefined,
 ): void {
     const hydration = RENDER.hydration
     let active: { nodes: Node[]; dispose: () => void } | undefined
@@ -45,24 +45,27 @@ export function awaitBlock(
     const detach = (): void => {
         if (active !== undefined) {
             active.dispose()
+            /* Remove via each node's LIVE parent, not the captured `parent` — when this
+               await is a bare child of a control-flow branch, `parent` is the branch's
+               build fragment, emptied into the document once the enclosing block placed
+               it (`place` already inserts via `anchor.parentNode` for the same reason). */
             for (const node of active.nodes) {
-                parent.removeChild(node)
+                node.parentNode?.removeChild(node)
             }
             active = undefined
         }
     }
 
-    /* Replace the current content with a freshly-built range, before the anchor. */
-    const place = (build: (parent: Node) => Node[]): void => {
+    /* Replace the current content with a freshly-built branch, before the anchor. The
+       branch builds into a fragment (so any content — components, text, nested blocks
+       — appends freely), whose top-level nodes are tracked for the next swap. */
+    const place = (build: (parent: Node) => void): void => {
         detach()
-        let nodes: Node[] = []
-        const dispose = scope(() => {
-            nodes = build(parent)
-        })
+        const fragment = document.createDocumentFragment()
+        const dispose = scope(() => build(fragment))
+        const nodes = [...fragment.childNodes]
+        ;(anchor?.parentNode ?? parent).insertBefore(fragment, anchor ?? null)
         active = { nodes, dispose }
-        for (const node of nodes) {
-            parent.insertBefore(node, anchor ?? null)
-        }
     }
 
     /* Render a settled-or-pending result into the current generation. */
@@ -96,17 +99,20 @@ export function awaitBlock(
         )
     }
 
-    /* Adopt an SSR-resolved branch in place (its roots claim the existing nodes),
-       then park an anchor just before the close marker for later swaps. */
-    const adopt = (open: Node | null, build: (parent: Node) => Node[]): void => {
+    /* Adopt an SSR-resolved branch in place (its content claims the existing nodes),
+       then park an anchor just before the close marker for later swaps. The adopted
+       content is everything the build claimed between the open and close markers. */
+    const adopt = (open: Node | null, build: (parent: Node) => void): void => {
         const cursor = hydration as NonNullable<typeof hydration>
         cursor.next.set(parent, open?.nextSibling ?? null)
-        let nodes: Node[] = []
-        const dispose = scope(() => {
-            nodes = build(parent)
-        })
+        const dispose = scope(() => build(parent))
         const close = claimChild(cursor, parent)
         cursor.next.set(parent, close?.nextSibling ?? null)
+        const nodes: Node[] = []
+        for (let node = open?.nextSibling ?? null; node !== null && node !== close; ) {
+            nodes.push(node)
+            node = node.nextSibling
+        }
         anchor = document.createTextNode('')
         parent.insertBefore(anchor, close)
         active = { nodes, dispose }
@@ -143,7 +149,7 @@ export function awaitBlock(
         const open = claimChild(cursor, parent)
         const entry = RESUME[id]
         if (entry !== undefined) {
-            let build: (host: Node) => Node[]
+            let build: (host: Node) => void
             if (entry.ok) {
                 build = (host) => renderThen(host, entry.value)
             } else if (renderCatch !== undefined) {

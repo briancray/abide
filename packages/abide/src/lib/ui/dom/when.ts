@@ -1,51 +1,51 @@
 import { effect } from '../effect.ts'
-import { claimChild } from '../runtime/claimChild.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { scope } from '../runtime/scope.ts'
+import { clearBetween } from './clearBetween.ts'
+import { fillBefore } from './fillBefore.ts'
+import { openMarker } from './openMarker.ts'
 
 /*
-Conditional binding — the runtime for `<template if>` (with optional `else`). An
-effect tracks `condition()` and mounts the matching branch (`render` truthy,
-`renderElse` falsy), anchored for placement; only a truthy↔falsy flip swaps. A
-branch is a RANGE of element roots (one or more), tracked as a node array so a
-multi-root branch inserts/removes as a unit.
+Conditional binding — the runtime for `<template if>` (with optional `else`). The
+branch's content lives in a RANGE bounded by two comment markers, so a branch may
+hold anything — elements, components, text, nested control-flow, snippets — not
+just element roots. An effect tracks `condition()` and swaps the range's content
+on a truthy↔falsy flip (`render` truthy, `renderElse` falsy); an unchanged
+condition is a no-op.
 
-On hydrate it adopts the branch the server rendered: it runs the matching render
-in place (its roots claim the existing nodes), then inserts an anchor after them
-for future toggles. The effect's first run sees the same branch and is a no-op;
-later toggles (after hydration ends) build fresh.
+On hydrate it adopts the server-rendered range: claim the start marker, run the
+matching render in place (its content claims the existing nodes), then claim the
+end marker. The effect's first run sees the same branch and is a no-op; later
+toggles clear the range and build fresh into a fragment.
 */
 // @readme plumbing
 export function when(
     parent: Node,
     condition: () => unknown,
-    render: (parent: Node) => Node[],
-    renderElse?: (parent: Node) => Node[],
+    render: (parent: Node) => void,
+    renderElse?: (parent: Node) => void,
 ): void {
     const hydration = RENDER.hydration
-    let active: { nodes: Node[]; dispose: () => void } | undefined
-    let activeBranch: 'then' | 'else' | undefined
-    let anchor: Node
+    const chosenFor = (branch: 'then' | 'else') => (branch === 'then' ? render : renderElse)
+    let dispose: (() => void) | undefined
+    let activeBranch: 'then' | 'else'
+    let end: Comment
 
-    const build = (chosen: (parent: Node) => Node[]): { nodes: Node[]; dispose: () => void } => {
-        let nodes: Node[] = []
-        const dispose = scope(() => {
-            nodes = chosen(parent)
-        })
-        return { nodes, dispose }
-    }
-
+    const start = openMarker(parent, '[')
     if (hydration !== undefined) {
         activeBranch = condition() ? 'then' : 'else'
-        const chosen = activeBranch === 'then' ? render : renderElse
+        const chosen = chosenFor(activeBranch)
         if (chosen !== undefined) {
-            active = build(chosen) // roots claim the SSR nodes in place
+            dispose = scope(() => chosen(parent)) // content claims the SSR nodes in place
         }
-        anchor = document.createTextNode('')
-        parent.insertBefore(anchor, claimChild(hydration, parent))
+        end = openMarker(parent, ']')
     } else {
-        anchor = document.createTextNode('')
-        parent.appendChild(anchor)
+        end = openMarker(parent, ']')
+        activeBranch = condition() ? 'then' : 'else'
+        const chosen = chosenFor(activeBranch)
+        if (chosen !== undefined) {
+            dispose = fillBefore(end, chosen)
+        }
     }
 
     effect(() => {
@@ -53,21 +53,12 @@ export function when(
         if (branch === activeBranch) {
             return
         }
-        if (active !== undefined) {
-            active.dispose()
-            for (const node of active.nodes) {
-                parent.removeChild(node)
-            }
-            active = undefined
-        }
+        clearBetween(start, end, dispose)
+        dispose = undefined
         activeBranch = branch
-        const chosen = branch === 'then' ? render : renderElse
-        if (chosen === undefined) {
-            return
-        }
-        active = build(chosen)
-        for (const node of active.nodes) {
-            parent.insertBefore(node, anchor)
+        const chosen = chosenFor(branch)
+        if (chosen !== undefined) {
+            dispose = fillBefore(end, chosen)
         }
     })
 }

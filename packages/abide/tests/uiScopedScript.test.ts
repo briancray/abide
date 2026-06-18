@@ -11,7 +11,6 @@ import { each } from '../src/lib/ui/dom/each.ts'
 import { hydrate } from '../src/lib/ui/dom/hydrate.ts'
 import { on } from '../src/lib/ui/dom/on.ts'
 import { openChild } from '../src/lib/ui/dom/openChild.ts'
-import { openRoot } from '../src/lib/ui/dom/openRoot.ts'
 import { switchBlock } from '../src/lib/ui/dom/switchBlock.ts'
 import { when } from '../src/lib/ui/dom/when.ts'
 import { effect } from '../src/lib/ui/effect.ts'
@@ -36,7 +35,6 @@ const RUNTIME = {
     derived,
     effect,
     openChild,
-    openRoot,
     appendText,
     appendStatic,
     attr,
@@ -74,9 +72,9 @@ describe('scoped <script> in a control-flow branch', () => {
 
     test('SSR renders the branch-local signal seeded from doc data', () => {
         expect(ssr(IF, doc({ on: true, base: 5 })).html).toBe(
-            '<main><p>5</p><button>+</button></main>',
+            '<main><!--[--><p>5</p><button>+</button><!--]--></main>',
         )
-        expect(ssr(IF, doc({ on: false, base: 5 })).html).toBe('<main></main>')
+        expect(ssr(IF, doc({ on: false, base: 5 })).html).toBe('<main><!--[--><!--]--></main>')
     })
 
     test('client mount: the local signal is reactive, and re-seeds on re-entry', () => {
@@ -85,9 +83,9 @@ describe('scoped <script> in a control-flow branch', () => {
         run(IF, host, model, 'mount')
         const main = host.childNodes[0] as unknown as {
             textContent: string
-            childNodes: { dispatchEvent: (e: Event) => void }[]
+            children: { dispatchEvent: (e: Event) => void }[]
         }
-        const button = main.childNodes[1]
+        const button = main.children[1] // [0] is <p>, [1] is <button> (markers excluded)
         expect(main.textContent).toBe('5+')
 
         button.dispatchEvent(new (globalThis as { Event: typeof Event }).Event('click'))
@@ -106,22 +104,24 @@ describe('scoped <script> in a control-flow branch', () => {
         host.innerHTML = ssr(IF, model).html
         const main = host.childNodes[0] as unknown as {
             textContent: string
-            childNodes: { dispatchEvent: (e: Event) => void }[]
+            children: { dispatchEvent: (e: Event) => void }[]
         }
-        const pBefore = main.childNodes[0]
+        const pBefore = main.children[0]
 
         run(IF, host, model, 'hydrate')
-        expect(main.childNodes[0]).toBe(pBefore) // adopted, not recreated
+        expect(main.children[0]).toBe(pBefore) // adopted, not recreated
         expect(main.textContent).toBe('5+')
 
-        const button = main.childNodes[1]
+        const button = main.children[1]
         button.dispatchEvent(new (globalThis as { Event: typeof Event }).Event('click'))
         expect(main.textContent).toBe('6+')
     })
 
     test('a switch case carries its own scoped signal', () => {
         const SWITCH = `<main><template switch={model.k}><template case="'a'"><script>let label = state(model.base + '!')</script><span>{label}</span></template><template default><b>?</b></template></template></main>`
-        expect(ssr(SWITCH, doc({ k: 'a', base: 'hi' })).html).toBe('<main><span>hi!</span></main>')
+        expect(ssr(SWITCH, doc({ k: 'a', base: 'hi' })).html).toBe(
+            '<main><!--[--><span>hi!</span><!--]--></main>',
+        )
 
         const model = doc({ k: 'a', base: 'hi' })
         const host = document.createElement('div')
@@ -146,7 +146,9 @@ describe('scoped <script> in a control-flow branch', () => {
                     ],
                 }),
             ).html,
-        ).toBe('<ul><li><button>10</button></li><li><button>20</button></li></ul>')
+        ).toBe(
+            '<ul><!--[--><li><button>10</button></li><!--]--><!--[--><li><button>20</button></li><!--]--></ul>',
+        )
     })
 
     test('client mount: rows hold isolated, reactive per-row state', () => {
@@ -159,11 +161,12 @@ describe('scoped <script> in a control-flow branch', () => {
         const host = document.createElement('div')
         run(EACH, host, model, 'mount')
         const ul = host.childNodes[0] as unknown as {
-            childNodes: {
-                childNodes: { dispatchEvent: (e: Event) => void; textContent: string }[]
+            children: {
+                children: { dispatchEvent: (e: Event) => void; textContent: string }[]
             }[]
         }
-        const rowButton = (index: number) => ul.childNodes[index].childNodes[0]
+        // each row is a marker-bounded range; `children` skips the markers to the <li>
+        const rowButton = (index: number) => ul.children[index].children[0]
         expect(rowButton(0).textContent).toBe('10')
         expect(rowButton(1).textContent).toBe('20')
 
@@ -198,7 +201,7 @@ effect(() => record(n + ':' + model.base))</script><button onclick={() => (n = n
     test('SSR strips the effect — it never runs server-side', () => {
         effectLog = []
         const html = ssr(FX, doc({ on: true, base: 5 })).html
-        expect(html).toBe('<main><button>5</button></main>') // markup still seeded
+        expect(html).toBe('<main><!--[--><button>5</button><!--]--></main>') // markup still seeded
         expect(effectLog).toEqual([]) // effect body did not run
     })
 

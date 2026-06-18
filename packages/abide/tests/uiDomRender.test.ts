@@ -82,10 +82,10 @@ describe('keyed each', () => {
                 list,
                 () => model.read<string[]>('order'),
                 (key) => key,
-                (_parent, key) => {
+                (parent, key) => {
                     const li = document.createElement('li')
                     li.appendChild(text(() => model.read(`byId/${key}/n`)))
-                    return li
+                    parent.appendChild(li)
                 },
             )
             h.appendChild(list)
@@ -114,10 +114,10 @@ describe('keyed each', () => {
                 list,
                 () => model.read<string[]>('order'),
                 (key) => key,
-                (_parent, key) => {
+                (parent, key) => {
                     const li = document.createElement('li')
                     li.setAttribute('data-id', key)
-                    return li
+                    parent.appendChild(li)
                 },
             )
             h.appendChild(list)
@@ -149,11 +149,11 @@ describe('keyed each', () => {
                 list,
                 () => model.read<{ id: string }[]>('items'),
                 (item) => item.id,
-                (_parent, item) => {
+                (parent, item) => {
                     const li = document.createElement('li')
                     li.setAttribute('data-id', item.id)
                     nodes[item.id] = li
-                    return li
+                    parent.appendChild(li)
                 },
             )
             h.appendChild(list)
@@ -179,10 +179,10 @@ describe('keyed each', () => {
                     }
                 },
                 (item) => item.id,
-                (_parent, item) => {
+                (parent, item) => {
                     const li = document.createElement('li')
                     li.setAttribute('data-id', item.id)
-                    return li
+                    parent.appendChild(li)
                 },
             )
             h.appendChild(list)

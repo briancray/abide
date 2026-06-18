@@ -15,7 +15,6 @@ import { each } from '../src/lib/ui/dom/each.ts'
 import { hydrate } from '../src/lib/ui/dom/hydrate.ts'
 import { on } from '../src/lib/ui/dom/on.ts'
 import { openChild } from '../src/lib/ui/dom/openChild.ts'
-import { openRoot } from '../src/lib/ui/dom/openRoot.ts'
 import { effect } from '../src/lib/ui/effect.ts'
 import { RESUME } from '../src/lib/ui/runtime/RESUME.ts'
 import { state } from '../src/lib/ui/state.ts'
@@ -102,10 +101,13 @@ describe('cache() + UI await-block hydration', () => {
 
         const host = document.createElement('div')
         host.innerHTML =
-            '<main><!--abide:await:0--><ul><li>ada</li><li>margaret</li></ul><!--/abide:await:0--></main>'
+            '<main><!--abide:await:0--><ul><!--[--><li>ada</li><!--]--><!--[--><li>margaret</li><!--]--></ul><!--/abide:await:0--></main>'
         const ul = (host.childNodes[0] as unknown as { childNodes: unknown[] })
-            .childNodes[1] as unknown as { childNodes: { textContent: string }[] }
-        const firstRowBefore = ul.childNodes[0]
+            .childNodes[1] as unknown as {
+            childNodes: { textContent: string }[]
+            children: { textContent: string }[]
+        }
+        const firstRowBefore = ul.children[0] // [.children] skips the per-row markers
 
         const source = `
             <script>let load = cache(getUsers)</script>
@@ -124,7 +126,6 @@ describe('cache() + UI await-block hydration', () => {
             derived,
             effect,
             openChild,
-            openRoot,
             appendText,
             appendStatic,
             on,
@@ -141,7 +142,7 @@ describe('cache() + UI await-block hydration', () => {
         })
 
         expect(fetched).toBe(false) // adopted from the manifest — cache never dispatched
-        expect(ul.childNodes[0]).toBe(firstRowBefore) // SSR rows adopted in place, no flash
+        expect(ul.children[0]).toBe(firstRowBefore) // SSR rows adopted in place, no flash
         expect(ul.childNodes.map((row) => row.textContent).filter(Boolean)).toEqual([
             'ada',
             'margaret',
@@ -175,7 +176,6 @@ describe('cache() + UI await-block hydration', () => {
             derived,
             effect,
             openChild,
-            openRoot,
             appendText,
             appendStatic,
             on,

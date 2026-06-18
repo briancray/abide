@@ -18,15 +18,24 @@ mirror of `derived`'s write-through `set` — here the value lives in this cell,
 the gate *returns* what to store rather than writing an external target. The
 construction `initial` is taken verbatim; the gate runs on writes only.
 */
+/* No-arg form for an undefined initial with a declared type: `state<Foo>()` is
+   `State<Foo | undefined>`. Without it `state<Foo>(undefined)` is an arity/assign
+   error and `state(undefined)` infers `T = undefined` (every `.value` access then
+   narrows to `never`). */
 // @readme plumbing
-export function state<T>(initial: T, transform?: (next: T, previous: T) => T): State<T> {
+export function state<T>(): State<T | undefined>
+export function state<T>(initial: T, transform?: (next: T, previous: T) => T): State<T>
+export function state<T>(
+    initial?: T,
+    transform?: (next: T, previous: T) => T,
+): State<T | undefined> {
     const node = createSignalNode(initial)
     return {
-        get value(): T {
-            return readNode(node) as T
+        get value(): T | undefined {
+            return readNode(node) as T | undefined
         },
-        set value(next: T) {
-            writeNode(node, transform === undefined ? next : transform(next, node.value as T))
+        set value(next: T | undefined) {
+            writeNode(node, transform === undefined ? next : transform(next as T, node.value as T))
         },
     }
 }

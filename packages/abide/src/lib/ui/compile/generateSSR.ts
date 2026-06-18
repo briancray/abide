@@ -1,15 +1,21 @@
 import { OUTLET_TAG } from '../runtime/OUTLET_TAG.ts'
-import { branchElements } from './branchElements.ts'
-import { escapeHtml } from './escapeHtml.ts'
 import { groupBindParts } from './groupBindParts.ts'
-import { lowerDocAccess } from './lowerDocAccess.ts'
+import { lowerContext } from './lowerContext.ts'
 import { partitionSlots } from './partitionSlots.ts'
-import { nestedBindingNames } from './prepareNestedScript.ts'
-import { renameSignalRefs } from './renameSignalRefs.ts'
+import { scopeAttr } from './scopeAttr.ts'
+import { staticAttr } from './staticAttr.ts'
 import { staticAttrValue } from './staticAttrValue.ts'
+import { staticTextPart } from './staticTextPart.ts'
 import { stripEffects } from './stripEffects.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
 import { VOID_TAGS } from './VOID_TAGS.ts'
+
+/* The range boundary comments a control-flow block emits around its content. They
+   serialize exactly as the client's `document.createComment('[' | ']')` markers, so
+   the client claims the same `[ … ]` boundary it builds — the comment-marked range
+   that lets a branch hold any content. */
+const RANGE_OPEN = '<!--[-->'
+const RANGE_CLOSE = '<!--]-->'
 
 /*
 Server code generator: turns the parsed template into statements that push HTML
@@ -36,24 +42,16 @@ export function generateSSR(
     let varCounter = 0
     const nextVar = (prefix: string): string => `${prefix}${varCounter++}`
 
-    /* Branch-scoped nested-script bindings, deref'd to `.value` (see generateBuild). */
-    const localDerived = new Set<string>()
-    const derefScope = (): ReadonlySet<string> =>
-        localDerived.size === 0 ? derivedNames : new Set([...derivedNames, ...localDerived])
+    /* The shared signal→`model` lowering + branch-scoped nested-script deref scope. */
+    const {
+        expression: lowerExpression,
+        statement,
+        withNestedScripts,
+    } = lowerContext(stateNames, derivedNames)
 
-    function lowerExpression(code: string): string {
-        return lowerDocAccess(renameSignalRefs(code, stateNames, derefScope()), 'model')
-            .trim()
-            .replace(/;$/, '')
-    }
-
-    /* Lowers a scoped-script body for SSR: rename refs, lower doc access, then strip
-       effects (client-only lifecycle that emits no HTML). */
-    function lowerScript(code: string): string {
-        return stripEffects(
-            lowerDocAccess(renameSignalRefs(code, stateNames, derefScope()), 'model').trim(),
-        )
-    }
+    /* A scoped-script body for SSR: the shared lowering, then strip effects
+       (client-only lifecycle that emits no HTML) — the one SSR-side asymmetry. */
+    const lowerScript = (code: string): string => stripEffects(statement(code))
 
     function push(target: string, literal: string): string {
         return `${target}.push(${JSON.stringify(literal)});\n`
@@ -63,41 +61,25 @@ export function generateSSR(
         return children.map((child) => generate(child, target)).join('')
     }
 
-    /* A control-flow branch's body: run its nested `<script>`s (lowered, in scope)
-       first, then push the element markup — so SSR re-seeds the same local signals
-       the client build does, keeping hydration aligned. */
-    function branchInto(children: TemplateNode[], context: string, target: string): string {
-        const added: string[] = []
-        for (const child of children) {
-            if (child.kind === 'script') {
-                for (const name of nestedBindingNames(child.code)) {
-                    if (!localDerived.has(name)) {
-                        localDerived.add(name)
-                        added.push(name)
-                    }
-                }
-            }
-        }
-        const scriptCode = children
-            .filter(
-                (child): child is Extract<TemplateNode, { kind: 'script' }> =>
-                    child.kind === 'script',
-            )
-            .map((child) => `${lowerScript(child.code)}\n`)
-            .join('')
-        const markup = generateInto(branchElements(children, context, true), target)
-        for (const name of added) {
-            localDerived.delete(name)
-        }
-        return scriptCode + markup
+    /* A control-flow branch's content, generated exactly like a normal child list so
+       a branch holds ANY content (components, text, nested blocks). `generate` emits
+       nested `<script>`s in document order; `withNestedScripts` puts their bindings in
+       scope — matching the client build, so hydration stays aligned. The caller wraps
+       it in the `[ … ]` range markers the runtime tracks (unconditionally per block,
+       so an empty/false branch still emits the boundary the client claims). */
+    function branchContent(children: TemplateNode[], target: string): string {
+        return withNestedScripts(children, () => generateInto(children, target))
     }
+    const openRange = (target: string): string => push(target, RANGE_OPEN)
+    const closeRange = (target: string): string => push(target, RANGE_CLOSE)
 
     function generate(node: TemplateNode, target: string): string {
         if (node.kind === 'text') {
             return node.parts
                 .map((part) => {
                     if (part.kind === 'static') {
-                        return part.value.trim() === '' ? '' : push(target, escapeHtml(part.value))
+                        const markup = staticTextPart(part.value)
+                        return markup === '' ? '' : push(target, markup)
                     }
                     return `${target}.push($text(${lowerExpression(part.code)}));\n`
                 })
@@ -106,11 +88,11 @@ export function generateSSR(
         if (node.kind === 'if') {
             const elseBranch = node.children.find((child) => child.kind === 'case')
             const thenChildren = node.children.filter((child) => child.kind !== 'case')
-            let code = `if (${lowerExpression(node.condition)}) {\n${branchInto(thenChildren, '<template if>', target)}}`
+            let code = `if (${lowerExpression(node.condition)}) {\n${branchContent(thenChildren, target)}}`
             if (elseBranch !== undefined && elseBranch.kind === 'case') {
-                code += ` else {\n${branchInto(elseBranch.children, '<template else>', target)}}`
+                code += ` else {\n${branchContent(elseBranch.children, target)}}`
             }
-            return `${code}\n`
+            return `${openRange(target)}${code}\n${closeRange(target)}`
         }
         if (node.kind === 'switch') {
             const cases = node.children.filter(
@@ -120,15 +102,15 @@ export function generateSSR(
             let started = false
             for (const branch of cases) {
                 if (branch.match !== undefined) {
-                    code += `${started ? 'else ' : ''}if ($s === (${lowerExpression(branch.match)})) {\n${branchInto(branch.children, '<template case>', target)}}\n`
+                    code += `${started ? 'else ' : ''}if ($s === (${lowerExpression(branch.match)})) {\n${branchContent(branch.children, target)}}\n`
                     started = true
                 }
             }
             const fallback = cases.find((branch) => branch.match === undefined)
             if (fallback !== undefined) {
-                code += `${started ? 'else ' : ''}{\n${branchInto(fallback.children, '<template case>', target)}}\n`
+                code += `${started ? 'else ' : ''}{\n${branchContent(fallback.children, target)}}\n`
             }
-            return `${code}}\n`
+            return `${openRange(target)}${code}}\n${closeRange(target)}`
         }
         if (node.kind === 'case') {
             return ''
@@ -156,7 +138,7 @@ export function generateSSR(
             if (node.async) {
                 return ''
             }
-            return `for (const ${node.as} of (${lowerExpression(node.items)})) {\n${branchInto(node.children, '<template each>', target)}}\n`
+            return `for (const ${node.as} of (${lowerExpression(node.items)})) {\n${openRange(target)}${branchContent(node.children, target)}${closeRange(target)}}\n`
         }
         if (node.kind === 'await') {
             return generateAwait(node, target)
@@ -218,14 +200,11 @@ export function generateSSR(
         /* Every `<style>` active at this element (own siblings + ancestors) — same set
            the client stamps, so server and client markup carry identical attributes. */
         for (const scope of node.scopes ?? []) {
-            code += push(target, ` ${scope}=""`)
+            code += push(target, scopeAttr(scope))
         }
         for (const attr of node.attrs) {
             if (attr.kind === 'static') {
-                /* Escape the literal value so a `"`/`&`/`<` in it can't break out of
-                   the attribute or inject markup (the client uses setAttribute, which
-                   needs no escaping — escaping here keeps SSR and client in sync). */
-                code += push(target, ` ${attr.name}="${escapeHtml(attr.value)}"`)
+                code += push(target, staticAttr(attr.name, attr.value))
             } else if (attr.kind === 'expression') {
                 /* present/absent semantics matching the client `attr` binding:
                    false/null/undefined drops it, true emits the bare attribute. */
@@ -249,21 +228,7 @@ export function generateSSR(
         code += push(target, '>')
         if (!VOID_TAGS.has(node.tag)) {
             /* A `<script>` child scopes its bindings to this element's subtree. */
-            const added: string[] = []
-            for (const child of node.children) {
-                if (child.kind === 'script') {
-                    for (const name of nestedBindingNames(child.code)) {
-                        if (!localDerived.has(name)) {
-                            localDerived.add(name)
-                            added.push(name)
-                        }
-                    }
-                }
-            }
-            code += generateInto(node.children, target)
-            for (const name of added) {
-                localDerived.delete(name)
-            }
+            code += withNestedScripts(node.children, () => generateInto(node.children, target))
             code += push(target, `</${node.tag}>`)
         }
         return code
@@ -318,24 +283,24 @@ export function generateSSR(
         const id = nextVar('$aid')
         let code = `const ${id} = nextBlockId();\n`
         code += `${target}.push("<!--abide:await:" + ${id} + "-->");\n`
-        code += branchInto(pending, '<template await> pending', target)
+        code += branchContent(pending, target)
         code += `${target}.push("<!--/abide:await:" + ${id} + "-->");\n`
         /* The settled closures append `finally` after the outcome markup, matching the
            client's concatenated node range so hydration aligns. */
-        const settled = (binding: string, children: TemplateNode[], context: string) =>
-            `(${binding}) => { const $o = []; ${branchInto(children, context, '$o')}${branchInto(finallyChildren, '<template finally>', '$o')}return $o.join(''); }`
+        const settled = (binding: string, children: TemplateNode[]) =>
+            `(${binding}) => { const $o = []; ${branchContent(children, '$o')}${branchContent(finallyChildren, '$o')}return $o.join(''); }`
         /* Neither catch nor finally → omit `catch` so a rejection surfaces to the
            stream/error path (renderToStream re-throws) instead of rendering an empty
            branch. A finally-only block keeps a catch closure that renders just finally. */
         const catchProp =
             catchBranch === undefined && finallyChildren.length === 0
                 ? ''
-                : `catch: ${settled(catchBranch?.as ?? '_error', catchBranch?.children ?? [], '<template catch>')} `
+                : `catch: ${settled(catchBranch?.as ?? '_error', catchBranch?.children ?? [])} `
         code +=
             `$awaits.push({ id: ${id}, ` +
             (node.blocking ? 'blocking: true, ' : '') +
             `promise: () => (${lowerExpression(node.promise)}), ` +
-            `then: ${settled(resolvedAs ?? '_value', resolvedChildren, node.blocking ? '<template await then>' : '<template then>')}, ` +
+            `then: ${settled(resolvedAs ?? '_value', resolvedChildren)}, ` +
             `${catchProp}});\n`
         return code
     }
@@ -362,12 +327,12 @@ export function generateSSR(
         code += `${target}.push("<!--abide:try:" + ${id} + "-->");\n`
         code += `const ${mark} = ${target}.length;\n`
         code += `try {\n`
-        code += branchInto(guarded, '<template try>', target)
-        code += branchInto(finallyChildren, '<template finally>', target)
+        code += branchContent(guarded, target)
+        code += branchContent(finallyChildren, target)
         code += `} catch (${errName}) {\n${target}.length = ${mark};\n`
         if (catchBranch !== undefined) {
-            code += branchInto(catchBranch.children, '<template catch>', target)
-            code += branchInto(finallyChildren, '<template finally>', target)
+            code += branchContent(catchBranch.children, target)
+            code += branchContent(finallyChildren, target)
         } else {
             code += `throw ${errName};\n`
         }

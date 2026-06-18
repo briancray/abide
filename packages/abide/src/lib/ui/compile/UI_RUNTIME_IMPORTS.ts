@@ -15,7 +15,6 @@ export const UI_RUNTIME_IMPORTS: { name: string; specifier: string }[] = [
     { name: 'effect', specifier: 'ui/effect' },
     { name: 'mount', specifier: 'ui/dom/mount' },
     { name: 'openChild', specifier: 'ui/dom/openChild' },
-    { name: 'openRoot', specifier: 'ui/dom/openRoot' },
     { name: 'appendText', specifier: 'ui/dom/appendText' },
     { name: 'appendSnippet', specifier: 'ui/dom/appendSnippet' },
     { name: 'appendStatic', specifier: 'ui/dom/appendStatic' },

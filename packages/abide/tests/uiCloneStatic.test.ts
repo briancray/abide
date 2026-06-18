@@ -11,7 +11,6 @@ import { each } from '../src/lib/ui/dom/each.ts'
 import { hydrate } from '../src/lib/ui/dom/hydrate.ts'
 import { on } from '../src/lib/ui/dom/on.ts'
 import { openChild } from '../src/lib/ui/dom/openChild.ts'
-import { openRoot } from '../src/lib/ui/dom/openRoot.ts'
 import { when } from '../src/lib/ui/dom/when.ts'
 import { effect } from '../src/lib/ui/effect.ts'
 import { state } from '../src/lib/ui/state.ts'
@@ -48,7 +47,6 @@ const RUNTIME = {
     derived,
     effect,
     openChild,
-    openRoot,
     appendText,
     appendStatic,
     attr,
