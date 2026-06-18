@@ -20,6 +20,12 @@ text, never mistaken for a real style. Keeping it in the tree lets the front-end
 scope it to its sibling subtree (`analyzeComponent`); the node emits no DOM/markup.
 */
 
+/* A line-leading static `import` in a nested script body. The `(?=\s)` requires
+   whitespace after the keyword (sparing `import.meta` and no-space `import(...)`),
+   and `(?!\s*\()` spares a dynamic `import (...)` written with whitespace before the
+   paren — both legitimate lazy paths — so only a true static import statement matches. */
+const NESTED_STATIC_IMPORT = /^[ \t]*import(?=\s)(?!\s*\()/m
+
 /* A braced template expression with the absolute source offset of its first
    (post-trim) character, so the type-checking shadow can map a diagnostic back. */
 type Braced = { code: string; loc: number }
@@ -179,6 +185,18 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
             const end = close === -1 ? source.length : close
             const code = source.slice(cursor, end)
             cursor = close === -1 ? source.length : end + '</script>'.length
+            /* A static `import` can't live here: a nested script compiles INTO the
+               branch's render-function body, where an import is illegal — and an
+               import nested in a branch falsely implies conditional/lazy loading ES
+               imports can't do (they hoist module-wide and load unconditionally). The
+               leading `<script>` hoists imports to module scope for the whole template,
+               so they belong there. The pattern spares dynamic `import(...)` (with or
+               without whitespace) and `import.meta` — the real lazy paths. */
+            if (NESTED_STATIC_IMPORT.test(code)) {
+                throw new Error(
+                    "import statements must live in the component's leading <script>, not a nested <template> script — they hoist to module scope for the whole template. For lazy loading, use a dynamic import() inside an effect.",
+                )
+            }
             return { kind: 'script', code }
         }
         /* A capitalised tag is a child component; its attributes become props and

@@ -176,6 +176,34 @@ describe('abide check', () => {
         ).toEqual([])
     })
 
+    /* A static `import` in a nested `<template>` script is rejected with a clear
+       diagnostic pointing at the leading `<script>` — it can't compile (an import is
+       illegal inside the branch's render body) and would falsely imply lazy loading. */
+    test('a static import in a nested script is rejected with a clear diagnostic', () => {
+        const dir = project({
+            'badimport.abide': `<script>\nlet on = state(true)\n</script>\n<template if={on}>\n<script>import Heavy from './child.abide'</script>\n</template>\n`,
+            'child.abide': `<script>\nlet label = prop<string>('label')\n</script>\n<span>{label}</span>\n`,
+        })
+        const diagnostics = collectAbideDiagnostics(createShadowProgram(dir)).filter((diagnostic) =>
+            diagnostic.file.endsWith('badimport.abide'),
+        )
+        expect(diagnostics).toHaveLength(1)
+        expect(diagnostics[0]!.message).toContain('leading <script>')
+    })
+
+    /* A dynamic `import()` in a nested script is the legitimate lazy path — not flagged. */
+    test('a dynamic import in a nested script is allowed', () => {
+        const dir = project({
+            'lazy.abide': `<script>\nlet p = state(Promise.resolve(1))\n</script>\n<template await={p} then={v}>\n<script>effect(() => { void import('./child.abide') })</script>\n<span>{v}</span>\n</template>\n`,
+            'child.abide': `<script>\nlet label = prop<string>('label')\n</script>\n<span>{label}</span>\n`,
+        })
+        expect(
+            collectAbideDiagnostics(createShadowProgram(dir)).filter((diagnostic) =>
+                diagnostic.file.endsWith('lazy.abide'),
+            ),
+        ).toEqual([])
+    })
+
     /* A nested scoped `<script>`'s bindings reach the branch's later siblings,
        including a nested if/each within the same branch (emitted inline, not in a
        trapping block that left them "Cannot find name"). */
