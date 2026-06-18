@@ -8,11 +8,11 @@
     ],
     "scripts": {
         "format": "biome check --write --linter-enabled=false && bun run format:abide",
-        "format:abide": "bun run scripts/formatAbide.ts",
+        "format:abide": "prettier --write \"**/*.abide\"",
         "lint": "biome lint",
         "test": "bun test ./packages/*/tests && for d in examples/*/; do if [ -d \"$d/test\" ]; then (cd \"$d\" && bun test) || exit 1; fi; done",
         "check": "biome check --write",
-        "typecheck": "tsgo -p packages/abide/tsconfig.json && tsgo -p packages/abide/tsconfig.consumer.json",
+        "typecheck": "tsgo -p packages/abide/tsconfig.json && tsgo -p packages/abide/tsconfig.consumer.json && tsgo -p packages/prettier-plugin-abide/tsconfig.json",
         "check:readme-tags": "bun run packages/abide/scripts/readmeSurfaces.ts",
         "bench": "for f in packages/abide/bench/*.bench.ts; do bun \"$f\"; done",
         "bench:gate": "bun packages/abide/bench/gate.ts",
@@ -26,6 +26,7 @@
         "@changesets/cli": "^2.29.7",
         "@types/bun": "latest",
         "@typescript/native-preview": "latest",
+        "prettier": "^3.8.4",
         "typescript": "^6.0.3"
     }
 }
