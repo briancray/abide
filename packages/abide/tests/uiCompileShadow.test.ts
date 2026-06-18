@@ -98,4 +98,26 @@ let property = prop<FilePropertyName>('property')
         expect(typeAt).toBeLessThan(fnAt)
         expect(code).toContain('"property": FilePropertyName')
     })
+
+    test('value-projects a nested control-flow <script> like the leading one', () => {
+        /* A nested signal read in the branch's markup must type-check as its value,
+           not the raw `Derived`/`State` — matching the runtime deref. */
+        const { code } = compileShadow(`<script>
+let ready = state(false)
+</script>
+<template await={Promise.resolve('x')} then="loaded">
+  <script>
+  const upper = loaded.toUpperCase()
+  let layout = state(upper)
+  let label = derived(() => layout + '!')
+  </script>
+  <p>{label === 'A!' ? layout : upper}</p>
+</template>`)
+        /* Reactive decls projected to value types; the plain const stays verbatim. */
+        expect(code).toContain('const upper = loaded.toUpperCase()')
+        expect(code).toContain('let layout = (upper);')
+        expect(code).toContain("const label = (() => layout + '!')();")
+        /* No raw `derived(` call survives into the nested branch body. */
+        expect(code).not.toContain("let label = derived(() => layout + '!')")
+    })
 })

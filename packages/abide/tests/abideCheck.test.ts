@@ -89,13 +89,32 @@ describe('abide check', () => {
         expect(diagnostics[0]!.message).toContain('not assignable')
     })
 
-    /* The `else` branch is fused into a real `if (…) {…} else {…}`, so it carries the
-       condition's negative narrowing — here `v` is `number` in the else, not the union. */
-    test('the else branch carries the condition negative narrowing', () => {
+    /* The `<template else>` is a CHILD of the `<template if>` (the canonical syntax the
+       runtime pairs — see `generateIf`), emitted as a real `if (…) {…} else {…}`, so its
+       body carries the condition's NEGATIVE narrowing — here `v` is `number` in the else,
+       not the union. Regression: the else child was emitted inside the `if` block and got
+       the positive narrowing, so `toFixed` errored on the narrowed `string`. */
+    test('a nested else child carries the condition negative narrowing', () => {
         const dir = project({
-            'elseok.abide': `<script>\nlet v = prop<string | number>('v')\n</script>\n<template if={typeof v === 'string'}>{v.toUpperCase()}</template>\n<template else>{v.toFixed(2)}</template>\n`,
+            'elseok.abide': `<script>\nlet v = prop<string | number>('v')\n</script>\n<template if={typeof v === 'string'}>{v.toUpperCase()}<template else>{v.toFixed(2)}</template></template>\n`,
         })
         expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
+    })
+
+    /* A template-literal-union subject narrows across an if/else and a switch the same as
+       a plain literal union. Regression: inside the else child the subject kept the if's
+       positive narrowing, so a compare against another member read as "no overlap" — the
+       error a downstream app worked around with hand-rolled string-cast deriveds. */
+    test('a template-literal union narrows across a nested if/else and a switch', () => {
+        const head = `<script>\ntype LayoutKey = \`layout-\${'home' | 'about'}\`\nlet layoutKey = prop<LayoutKey>('layoutKey')\n</script>\n`
+        const ifElse = project({
+            'a.abide': `${head}<template if={layoutKey === 'layout-home'}>home<template else>{layoutKey === 'layout-about' ? 'a' : 'x'}</template></template>\n`,
+        })
+        expect(collectAbideDiagnostics(createShadowProgram(ifElse))).toHaveLength(0)
+        const switched = project({
+            'b.abide': `${head}<template switch={layoutKey}>\n<template case={'layout-home'}>home</template>\n<template default>{layoutKey}</template>\n</template>\n`,
+        })
+        expect(collectAbideDiagnostics(createShadowProgram(switched))).toHaveLength(0)
     })
 
     /* A real `switch` narrows the discriminant subject into each case body. */

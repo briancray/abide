@@ -211,4 +211,19 @@ describe('compileComponent — end to end', () => {
         const attr = compileComponent(`<b data-x={{ a: 1, b: '' }}>y</b>`)
         expect(attr).toContain('attr(el0, "data-x", () => ({ a: 1, b: \'\' }))')
     })
+
+    /* An inline object-type declaration in the script is plain TypeScript: the emitted
+       module carries it, and the `ts` loader the bundler runs strips it. So it never
+       reaches the build as invalid JS — guards a report where an inline `type` was
+       believed to leak (it does not; moving it to a module is hygiene, not a fix). */
+    test('an inline object-type alias is stripped by the build, not leaked', () => {
+        const source = `<script>\ntype AppHealth = { status: 'ok' | 'down'; uptime: number }\nlet health = prop<AppHealth>('health')\n</script>\n<p>{health.status}</p>\n`
+        const module = compileModule(source, { moduleId: 'x' })
+        // The emitted module is TypeScript and carries the alias verbatim…
+        expect(module).toContain('type AppHealth')
+        // …which the bundler's `ts` loader erases, leaving valid JS with no type.
+        const built = new Bun.Transpiler({ loader: 'ts' }).transformSync(module)
+        expect(built).not.toContain('AppHealth')
+        expect(built).not.toContain('uptime')
+    })
 })

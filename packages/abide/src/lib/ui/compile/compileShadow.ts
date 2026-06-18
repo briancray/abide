@@ -184,6 +184,27 @@ function analyzeScript(scriptBody: string, scriptStart: number): ScriptAnalysis 
     return { imports, types, scope, props }
 }
 
+/* Value-projects a nested control-flow `<script>` body the way `analyzeScript`
+   projects the leading script's scope: reactive declarations become their value
+   type, every other statement stays verbatim. Returns the projected source text
+   (unmapped — nested scripts carry no source offset yet), so a branch's markup
+   reads a nested signal as its value type instead of the raw `State`/`Derived`. */
+function projectNestedScript(code: string): string {
+    const file = ts.createSourceFile('nested.ts', code, ts.ScriptTarget.Latest, true)
+    const verbatim = (node: ts.Node): string => code.slice(node.getStart(file), node.getEnd())
+    /* No mapping: a zero-length segment the caller drops. */
+    const span = (): ShadowMapping => ({ shadowStart: 0, sourceStart: 0, length: 0 })
+    return file.statements
+        .flatMap((statement) => {
+            const reactive = reactiveDeclarations(statement)
+            if (reactive === undefined) {
+                return [verbatim(statement)]
+            }
+            return reactive.map((declaration) => scopeLineFor(declaration, [], verbatim, span).text)
+        })
+        .join('\n')
+}
+
 /* The `state`/`derived`/`prop` declarations in a variable statement, or undefined
    if it isn't one declaring them (so the caller emits it verbatim). A statement
    mixing reactive and plain declarations is rare; treated as all-verbatim. */
@@ -264,51 +285,13 @@ function scopeLineFor(
     return { text: `let ${name} = props[${JSON.stringify(keyText)}];`, segments: [] }
 }
 
-/* Emits a sibling list. Walks with lookahead so an `if` and its trailing `else`
-   (the next meaningful sibling — a `case` with no match) fuse into one
-   `if (…) {…} else {…}`, giving the else branch the condition's negative narrowing
-   instead of being checked bare against the un-narrowed type. Every other node is
-   emitted standalone via `emitNode`. */
+/* Emits a sibling list — each node standalone via `emitNode`. */
 function emitNodes(nodes: TemplateNode[], builder: Builder): void {
-    for (let index = 0; index < nodes.length; index += 1) {
-        const node = nodes[index]
-        if (node === undefined) {
-            continue
-        }
-        if (node.kind !== 'if') {
+    for (const node of nodes) {
+        if (node !== undefined) {
             emitNode(node, builder)
-            continue
-        }
-        builder.raw('if ')
-        builder.expr(node.condition, node.loc)
-        builder.raw(' {\n')
-        emitNodes(node.children, builder)
-        builder.raw('}')
-        const elseIndex = nextMeaningful(nodes, index + 1)
-        const elseNode = elseIndex === -1 ? undefined : nodes[elseIndex]
-        if (elseNode?.kind === 'case' && elseNode.match === undefined) {
-            builder.raw(' else {\n')
-            emitNodes(elseNode.children, builder)
-            builder.raw('}')
-            index = elseIndex
-        }
-        builder.raw('\n')
-    }
-}
-
-/* Index of the next node that isn't whitespace-only text (which separates the `if`
-   and `else` tags in source but carries no checkable content); -1 if none remain. */
-function nextMeaningful(nodes: TemplateNode[], from: number): number {
-    for (let index = from; index < nodes.length; index += 1) {
-        const node = nodes[index]
-        const blank =
-            node?.kind === 'text' &&
-            node.parts.every((part) => part.kind === 'static' && part.value.trim() === '')
-        if (!blank) {
-            return index
         }
     }
-    return -1
 }
 
 /* Emits a template node's expressions into the shadow's render body. Control flow
@@ -353,15 +336,31 @@ function emitNode(node: TemplateNode, builder: Builder): void {
             emitNodes(node.children, builder)
             return
         }
-        case 'if':
-            /* Reached only for an `if` emitted outside a sibling list (none today);
-               `emitNodes` owns the `if`/`else` fusion. Emit without an else. */
+        case 'if': {
+            /* The optional `<template else>` is a match-less `case` CHILD (the runtime
+               pairs it the same way — see `generateIf`); the rest are the then-content.
+               Emitting it as a real `else` gives its body the condition's NEGATIVE
+               narrowing — emitting it inside the `if` block (as a plain child) instead
+               gave it the positive narrowing, so a literal-union compare read as a
+               "no overlap" and a typeof-narrowed branch saw the wrong member. */
+            const elseChild = node.children.find(
+                (child): child is Extract<TemplateNode, { kind: 'case' }> =>
+                    child.kind === 'case' && child.match === undefined,
+            )
+            const thenChildren = node.children.filter((child) => child !== elseChild)
             builder.raw('if ')
             builder.expr(node.condition, node.loc)
             builder.raw(' {\n')
-            emitNodes(node.children, builder)
-            builder.raw('}\n')
+            emitNodes(thenChildren, builder)
+            builder.raw('}')
+            if (elseChild !== undefined) {
+                builder.raw(' else {\n')
+                emitNodes(elseChild.children, builder)
+                builder.raw('}')
+            }
+            builder.raw('\n')
             return
+        }
         case 'each':
             /* `for await` over an async each's AsyncIterable, plain `for…of` otherwise —
                so the item binds to the element type under either iteration protocol. */
@@ -436,8 +435,8 @@ function emitNode(node: TemplateNode, builder: Builder): void {
             builder.raw('}\n')
             return
         case 'case':
-            /* Reached only for a stray case outside a switch/if-else (none today); a
-               `switch` emits its own cases and `emitNodes` consumes an `else`. */
+            /* Reached only for a stray case outside a switch/if (none today); a `switch`
+               emits its own cases and the `if` handler consumes its `else` child. */
             if (node.match !== undefined) {
                 builder.stmt(node.match, node.loc)
             }
@@ -464,14 +463,16 @@ function emitNode(node: TemplateNode, builder: Builder): void {
             builder.raw('};\n')
             return
         case 'script':
-            /* A scoped reactive `<script>`: emit its body INLINE in the current block,
-               not a nested `{…}` — so its bindings are visible to the branch's later
-               siblings (a nested if/each within the same branch), matching runtime
-               scope where a nested script's declarations deref through the rest of the
-               branch. A wrapping block trapped them, surfacing "Cannot find name" on a
-               sibling. Leading `;` guards a preceding semicolon-less call from merging
-               in (see the component case). Not yet position-mapped (rare). */
-            builder.raw(`;\n${node.code}\n`)
+            /* A scoped reactive `<script>`: value-project its reactive declarations to
+               their value types (`derived(…)` → the computed value, `state(…)` → the
+               initial) exactly as the leading script's scope lines are, so the branch's
+               markup type-checks a nested signal as its value — matching the runtime,
+               which derefs nested-script signals through the rest of the branch. Emitted
+               INLINE in the current block, not a nested `{…}`, so its bindings reach the
+               branch's later siblings (a nested if/each); a wrapping block trapped them,
+               surfacing "Cannot find name". Leading `;` guards a preceding semicolon-less
+               call from merging in (see the component case). Not yet position-mapped. */
+            builder.raw(`;\n${projectNestedScript(node.code)}\n`)
             return
         case 'style':
             /* CSS, not TypeScript — nothing for the shadow to type-check. */
