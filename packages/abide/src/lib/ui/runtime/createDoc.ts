@@ -1,7 +1,6 @@
 import { applyPatchToTree } from './applyPatchToTree.ts'
 import { createSignalNode } from './createSignalNode.ts'
 import { flushEffects } from './flushEffects.ts'
-import { pathExists } from './pathExists.ts'
 import { REACTIVE_CONTEXT } from './REACTIVE_CONTEXT.ts'
 import { readNode } from './readNode.ts'
 import { trigger } from './trigger.ts'
@@ -9,7 +8,7 @@ import type { Cell } from './types/Cell.ts'
 import type { Doc } from './types/Doc.ts'
 import type { Patch } from './types/Patch.ts'
 import type { ReactiveNode } from './types/ReactiveNode.ts'
-import { valueAtPath } from './valueAtPath.ts'
+import { walkPath } from './walkPath.ts'
 import { writeNode } from './writeNode.ts'
 
 /*
@@ -39,7 +38,7 @@ export function createDoc(initial: unknown): Doc {
     function nodeFor(path: string): ReactiveNode {
         let node = nodes.get(path)
         if (node === undefined) {
-            node = createSignalNode(valueAtPath(tree, path))
+            node = createSignalNode(walkPath(tree, path).value)
             nodes.set(path, node)
         }
         return node
@@ -60,7 +59,7 @@ export function createDoc(initial: unknown): Doc {
     paying a scan over every minted node.
     */
     function wakeSubtree(rootPath: string, force: boolean, descend: boolean): void {
-        const rootValue = valueAtPath(tree, rootPath)
+        const rootValue = walkPath(tree, rootPath).value
         const rootNode = nodes.get(rootPath)
         if (rootNode !== undefined) {
             if (force) {
@@ -82,8 +81,9 @@ export function createDoc(initial: unknown): Doc {
                    and this very descend scan degrades linearly with it. The woken
                    reader re-mints a fresh node on its flush if the path ever returns.
                    Deleting the current entry mid-iteration is safe on a Map. */
-                if (pathExists(tree, candidate)) {
-                    writeNode(node, valueAtPath(tree, candidate))
+                const walk = walkPath(tree, candidate)
+                if (walk.exists) {
+                    writeNode(node, walk.value)
                 } else {
                     writeNode(node, undefined)
                     nodes.delete(candidate)
@@ -95,8 +95,11 @@ export function createDoc(initial: unknown): Doc {
     function apply(patch: Patch): void {
         const segments = patch.path === '' ? [] : patch.path.split('/')
         tree = applyPatchToTree(tree, patch, segments)
-        const parentPath = segments.slice(0, -1).join('/')
-        const parentValue = valueAtPath(tree, parentPath)
+        /* parentPath is patch.path minus its last segment — the same string
+           `segments.slice(0, -1).join('/')` rebuilds, taken by one slice instead. */
+        const lastSlash = patch.path.lastIndexOf('/')
+        const parentPath = lastSlash === -1 ? '' : patch.path.slice(0, lastSlash)
+        const parentValue = walkPath(tree, parentPath).value
         const leafKey = segments[segments.length - 1] as string | undefined
         /* A structural change (add/remove, or an array element replaced by index)
            reshapes the parent; a plain value replace reshapes only its own path. */
