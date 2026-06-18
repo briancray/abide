@@ -1,0 +1,21 @@
+<script>
+/*
+Root layout. A layout.abide wraps every page at or below its folder — here
+src/ui/pages/, so it wraps the whole app. The page lands in the <slot/> outlet;
+the resolver finds it by filename (no per-page import), and the client router
+keeps it mounted across navigation, so this chrome never re-mounts. A nested
+layout.abide (in a subfolder) wraps inside this one. Runs on the server during
+SSR and on the client after hydration.
+*/
+import '../app.css'
+</script>
+
+<header>
+    <nav>
+        <a href="/">Home</a>
+        <a href="/about">About</a>
+    </nav>
+</header>
+<main>
+    <slot></slot>
+</main>

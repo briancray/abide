@@ -1,7 +1,7 @@
 <script>
 /*
 Root page — served at GET /. Every folder under src/ui/pages/ that contains a
-page.abide mounts at that folder's URL.
+page.abide mounts at that folder's URL; the root layout.abide wraps it.
 
 The blocking await-block below (the `then` attribute sits ON the <template await>)
 resolves on the server during SSR and renders inline — no pending placeholder. The
@@ -11,12 +11,9 @@ instead would stream the resolution in out of order.
 */
 import { cache } from '@abide/abide/shared/cache'
 import { getHello } from '$server/rpc/getHello.ts'
-import Layout from '../Layout.abide'
 </script>
 
-<Layout>
-    <template await={cache(getHello)()} then="hello">
-        <h1>{hello.message}</h1>
-    </template>
-    <p>Edit <code>src/ui/pages/page.abide</code> and the page hot-reloads.</p>
-</Layout>
+<template await={cache(getHello)()} then="hello">
+    <h1>{hello.message}</h1>
+</template>
+<p>Edit <code>src/ui/pages/page.abide</code> and the page hot-reloads.</p>
