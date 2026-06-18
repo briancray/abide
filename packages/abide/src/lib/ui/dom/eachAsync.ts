@@ -69,7 +69,7 @@ export function eachAsync<T>(
     effect(() => {
         generation += 1
         const generationAtStart = generation
-        iterator?.return?.() // close the superseded run's iterator before re-streaming
+        iterator?.return?.(undefined)?.catch(() => undefined) // close the superseded run's iterator before re-streaming
         iterator = undefined
         clearError() // a fresh run drops a prior error branch
         const iterable = items() // read (subscribe) synchronously
@@ -128,7 +128,7 @@ export function eachAsync<T>(
     if (OWNER.current !== undefined) {
         OWNER.current.push(() => {
             generation += 1
-            iterator?.return?.()
+            iterator?.return?.(undefined)?.catch(() => undefined)
             iterator = undefined
             clearError()
             for (const row of rows.values()) {
