@@ -81,7 +81,18 @@ function spawnWorker(port: number): { proc: Subprocess; ready: Promise<void> } {
     const proc = Bun.spawn({
         cmd: ['bun', '--preload', PRELOAD, SERVER_ENTRY],
         cwd,
-        env: { ...process.env, PORT: String(port), ABIDE_DEV: '1' },
+        /*
+        ABIDE_PARENT_PID activates serverEntry's exitWithParent watchdog: the
+        worker polls this orchestrator and self-exits if it dies abruptly
+        (kill -9, OOM) without running its shutdown handlers, so a wedged
+        orchestrator can't leave the worker orphaned holding the dev port.
+        */
+        env: {
+            ...process.env,
+            PORT: String(port),
+            ABIDE_DEV: '1',
+            ABIDE_PARENT_PID: String(process.pid),
+        },
         stdio: ['inherit', 'inherit', 'inherit'],
         // The child's POST /__abide/reload route signals a rebuild over IPC, so the
         // trigger rides the app's own port instead of a side channel.

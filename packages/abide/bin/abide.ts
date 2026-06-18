@@ -36,8 +36,11 @@ handler the parent's default action kills it instantly — abandoning the
 `await child.exited` and orphaning the child, which (for a server) can then
 linger holding the port. Forwarding the signal and awaiting the child's exit
 (with a SIGKILL watchdog for a wedged child) guarantees the child is reaped
-before the parent leaves. Mirrors the child's exit code so callers and CI see
-the real result.
+before the parent leaves. SIGHUP (terminal close) is forwarded too: if Bun
+spawns the child in its own process group the kernel's terminal-close signal
+never reaches it, so the child only learns to shut down by this relay — without
+it a closed terminal orphans the child on the port. Mirrors the child's exit
+code so callers and CI see the real result.
 */
 async function runChild(cmd: string[]): Promise<never> {
     const child = Bun.spawn({ cmd, cwd, stdio: ['inherit', 'inherit', 'inherit'] })
@@ -47,6 +50,7 @@ async function runChild(cmd: string[]): Promise<never> {
     }
     process.on('SIGINT', () => forward('SIGINT'))
     process.on('SIGTERM', () => forward('SIGTERM'))
+    process.on('SIGHUP', () => forward('SIGHUP'))
     process.exit(await child.exited)
 }
 
