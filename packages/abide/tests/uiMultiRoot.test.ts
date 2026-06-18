@@ -132,9 +132,10 @@ describe('multi-root branches', () => {
 
     test('a component is a valid branch root: SSR, mount, and hydrate agree', () => {
         const SRC = `<main><template if={model.on}><Button label="hi"/></template></main>`
-        // a component renders into its wrapper element, both server and client
+        // a component renders into its wrapper element, both server and client; a
+        // name colliding with an HTML element remaps to a transparent abide-* wrapper
         expect(ssr(SRC, doc({ on: true })).html).toBe(
-            '<main><!--[--><button><span>hi</span></button><!--]--></main>',
+            '<main><!--[--><abide-button style="display:contents"><span>hi</span></abide-button><!--]--></main>',
         )
         expect(ssr(SRC, doc({ on: false })).html).toBe('<main><!--[--><!--]--></main>')
 
@@ -163,7 +164,7 @@ describe('multi-root branches', () => {
     test('a component is a valid each row', () => {
         const SRC = `<ul><template each={model.items} as="i" key="i"><Button label={i}/></template></ul>`
         expect(ssr(SRC, doc({ items: ['a', 'b'] })).html).toBe(
-            '<ul><!--[--><button><span>a</span></button><!--]--><!--[--><button><span>b</span></button><!--]--></ul>',
+            '<ul><!--[--><abide-button style="display:contents"><span>a</span></abide-button><!--]--><!--[--><abide-button style="display:contents"><span>b</span></abide-button><!--]--></ul>',
         )
         const model = doc({ items: ['a', 'b'] })
         const host = document.createElement('div')
