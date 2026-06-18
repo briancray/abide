@@ -1,5 +1,11 @@
 # abide
 
+## 0.33.1
+
+### Patch Changes
+
+- [`e9fb88f`](https://github.com/briancray/abide/commit/e9fb88f517d9c7eac24044a6b65f473263525a6e) - keep a wedged dev orchestrator from orphaning the server on the port ([`a29800d`](https://github.com/briancray/abide/commit/a29800d76300ff4d1c99a4d27dc790562a4af57b))
+
 ## 0.33.0
 
 ### Minor Changes
