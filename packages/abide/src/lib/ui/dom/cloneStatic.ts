@@ -1,22 +1,6 @@
 import { claimChild } from '../runtime/claimChild.ts'
 import { RENDER } from '../runtime/RENDER.ts'
-
-/*
-Parsed-once `<template>` per unique static-skeleton string, reused across every
-mount. A `<template>` (not a detached `<div>`) so table/select content parses by
-the real content model, exactly as the browser parsed the server markup.
-*/
-const TEMPLATES = new Map<string, HTMLTemplateElement>()
-
-function templateFor(html: string): HTMLTemplateElement {
-    let template = TEMPLATES.get(html)
-    if (template === undefined) {
-        template = document.createElement('template')
-        template.innerHTML = html
-        TEMPLATES.set(html, template)
-    }
-    return template
-}
+import { templateFor } from './templateFor.ts'
 
 /*
 Appends a fully-static subtree (one or more top-level nodes) under `parent` — what
