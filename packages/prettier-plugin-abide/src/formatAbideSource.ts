@@ -65,26 +65,76 @@ function componentPlaceholder(name: string, index: number): string {
 
 /* Rewrites every PascalCase tag name (open and close) to its placeholder, in
    first-seen order, so the markup pass treats components as inert custom elements
-   instead of HTML it may lowercase. */
+   instead of HTML it may lowercase. Scans with the same text/tag/quote awareness as
+   scanRegions so only a real tag-name position is touched — never a `<Generic<T>>`
+   inside a quoted attribute value, where `<` is literal. */
 function protectComponentTags(masked: string): {
     protectedSource: string
     componentNames: string[]
 } {
     const componentNames: string[] = []
     const indexOfName = new Map<string, number>()
-    const protectedSource = masked.replace(
-        /(<\/?)([A-Z][A-Za-z0-9]*)/g,
-        (_match, bracket: string, name: string) => {
-            let index = indexOfName.get(name)
-            if (index === undefined) {
-                index = componentNames.length
-                componentNames.push(name)
-                indexOfName.set(name, index)
+    const length = masked.length
+    let output = ''
+    let cursor = 0
+    let state: 'text' | 'tag' = 'text'
+    while (cursor < length) {
+        const char = masked.charAt(cursor)
+        if (state === 'text') {
+            if (char === '<') {
+                // A `<` in element flow always opens a tag; read its (optional `/` +)
+                // name and, when PascalCase, swap it for the placeholder.
+                let nameStart = cursor + 1
+                const closing = masked.charAt(nameStart) === '/'
+                if (closing) {
+                    nameStart += 1
+                }
+                let nameEnd = nameStart
+                while (nameEnd < length && /[A-Za-z0-9]/.test(masked.charAt(nameEnd))) {
+                    nameEnd += 1
+                }
+                const name = masked.slice(nameStart, nameEnd)
+                if (/^[A-Z]/.test(name)) {
+                    let index = indexOfName.get(name)
+                    if (index === undefined) {
+                        index = componentNames.length
+                        componentNames.push(name)
+                        indexOfName.set(name, index)
+                    }
+                    output += `<${closing ? '/' : ''}${componentPlaceholder(name, index)}`
+                    cursor = nameEnd
+                } else {
+                    output += char
+                    cursor += 1
+                }
+                state = 'tag'
+            } else {
+                output += char
+                cursor += 1
             }
-            return `${bracket}${componentPlaceholder(name, index)}`
-        },
-    )
-    return { protectedSource, componentNames }
+        } else if (char === '"' || char === "'") {
+            // Quoted attribute value: copied verbatim, so a `<` inside stays literal.
+            const quote = char
+            output += char
+            cursor += 1
+            while (cursor < length && masked.charAt(cursor) !== quote) {
+                output += masked.charAt(cursor)
+                cursor += 1
+            }
+            // Emit the closing quote so the next iteration doesn't reopen it.
+            if (cursor < length) {
+                output += masked.charAt(cursor)
+                cursor += 1
+            }
+        } else {
+            if (char === '>') {
+                state = 'text'
+            }
+            output += char
+            cursor += 1
+        }
+    }
+    return { protectedSource: output, componentNames }
 }
 
 /* Restores each placeholder tag back to its original PascalCase component name. */
