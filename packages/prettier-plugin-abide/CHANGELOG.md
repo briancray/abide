@@ -1,5 +1,11 @@
 # @abide/prettier-plugin-abide
 
+## 0.1.1
+
+### Patch Changes
+
+- [`748438c`](https://github.com/briancray/abide/commit/748438c6c166de2f2256179197a36e5014f2bd06) - shield component tags from the HTML lowercasing pass ([`5f09a4c`](https://github.com/briancray/abide/commit/5f09a4ce59bb0722993e8ce6427dd42d46f754df))
+
 ## 0.1.0
 
 ### Minor Changes

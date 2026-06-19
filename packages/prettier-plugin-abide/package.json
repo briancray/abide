@@ -1,6 +1,6 @@
 {
     "name": "@abide/prettier-plugin-abide",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "type": "module",
     "description": "Prettier plugin for abide single-file components (.abide) — formats <script> as TypeScript, <style> as CSS, and every {…} expression, leaving template markup verbatim",
     "license": "MIT",
