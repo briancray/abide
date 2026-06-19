@@ -48,13 +48,13 @@ describe('pending()', () => {
         })
     })
 
-    test('scope selector tracks only entries tagged with the scope', async () => {
+    test('tags selector tracks only entries carrying the tag', async () => {
         await runWithRequestScope(new Request('https://test.local/'), options, async () => {
-            const post = cache(getPost, { scope: 'feed' })()
-            expect(pending({ scope: 'feed' })).toBe(true)
-            expect(pending({ scope: 'profile' })).toBe(false)
+            const post = cache(getPost, { tags: 'feed' })()
+            expect(pending({ tags: 'feed' })).toBe(true)
+            expect(pending({ tags: 'profile' })).toBe(false)
             await post
-            expect(pending({ scope: 'feed' })).toBe(false)
+            expect(pending({ tags: 'feed' })).toBe(false)
             return json(null)
         })
     })

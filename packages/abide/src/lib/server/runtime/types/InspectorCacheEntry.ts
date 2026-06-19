@@ -15,8 +15,8 @@ export type InspectorCacheEntry = {
     ttl: number | undefined
     /* Ms until expiry from snapshot time; undefined = no expiry armed. */
     expiresInMs: number | undefined
-    /* The call's scope tags (cache.invalidate({ scope }) targets). */
-    scope: string[]
+    /* The call's tags (cache.invalidate({ tags }) targets). */
+    tags: string[]
     /* A short JSON preview of the decoded warm value, when the entry holds one. */
     value: string | undefined
     /* An armed swr policy (`swr`, optionally + throttle/debounce + ms), if declared. */

@@ -1,6 +1,6 @@
 import { keyMatchesPrefix } from './keyMatchesPrefix.ts'
 import { selectorPrefix } from './selectorPrefix.ts'
-import { toScopeSet } from './toScopeSet.ts'
+import { toTagSet } from './toTagSet.ts'
 import type { CacheEntry } from './types/CacheEntry.ts'
 import type { CacheSelector } from './types/CacheSelector.ts'
 
@@ -16,7 +16,7 @@ pending(), and refreshing() so all three interpret the call shapes identically:
   producer fn          → that producer's calls (reference id prefix). Matches
                          only if the producer was cached at least once (else it
                          has no id and nothing matches).
-  { scope }            → any entry sharing one of the requested scope tags. An
+  { tags }             → any entry sharing one of the requested tags. An
                          empty selector matches nothing.
   fn + args            → exactly that call's entry (the key derived from the
                          same encoders the read path uses); other args
@@ -46,11 +46,11 @@ export function selectorMatcher<Args, Return>(
         }
         return (entry) => keyMatchesPrefix(entry.key, prefix)
     }
-    if (arg.scope === undefined) {
+    if (arg.tags === undefined) {
         return () => false
     }
-    const requestedScopes = toScopeSet(arg.scope)
-    return (entry) => entry.scope !== undefined && intersects(entry.scope, requestedScopes)
+    const requestedTags = toTagSet(arg.tags)
+    return (entry) => entry.tags !== undefined && intersects(entry.tags, requestedTags)
 }
 
 /*
@@ -58,9 +58,9 @@ True when an entry's tags and the requested tags overlap on any tag. A plain
 for-of over the Set rather than .values().some() — Iterator Helpers are too new
 for this module's browser baseline (see producerKey).
 */
-function intersects(entryScopes: Set<string>, requestedScopes: Set<string>): boolean {
-    for (const scope of requestedScopes) {
-        if (entryScopes.has(scope)) {
+function intersects(entryTags: Set<string>, requestedTags: Set<string>): boolean {
+    for (const tag of requestedTags) {
+        if (entryTags.has(tag)) {
             return true
         }
     }

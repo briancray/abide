@@ -15,7 +15,7 @@ import { REPLAYABLE_METHODS } from './REPLAYABLE_METHODS.ts'
 import { SocketDisconnectedError } from './SocketDisconnectedError.ts'
 import { selectorMatcher } from './selectorMatcher.ts'
 import { selectorPrefix } from './selectorPrefix.ts'
-import { toScopeSet } from './toScopeSet.ts'
+import { toTagSet } from './toTagSet.ts'
 import type { CacheEntry } from './types/CacheEntry.ts'
 import type { CacheOnContext } from './types/CacheOnContext.ts'
 import type { CacheOptions } from './types/CacheOptions.ts'
@@ -173,7 +173,7 @@ export function cache<Args, Return>(
         const existing = store.entries.get(key)
         recordRead(options?.global ? activeCacheStore() : store, key, existing)
         if (existing) {
-            tagScope(existing, options?.scope)
+            tagEntry(existing, options?.tags)
             attachPolicy(existing, options, () => remote(args as Args))
             adoptTtl(store, existing, options)
         }
@@ -278,7 +278,7 @@ function warnAnonymousProducer(producer: (args?: never) => unknown): void {
     }
     warnedAnonymousProducers.add(source)
     abideLog.warn(
-        'cache() received an anonymous function — each call mints a fresh identity, so it never coalesces and pending()/refreshing() never match it. Hoist it to a named binding, or add a scope tag to probe it from elsewhere.',
+        'cache() received an anonymous function — each call mints a fresh identity, so it never coalesces and pending()/refreshing() never match it. Hoist it to a named binding, or add a tag to probe it from elsewhere.',
     )
 }
 
@@ -298,7 +298,7 @@ function invokeProducer<Args, Return>(
     const existing = store.entries.get(key)
     recordRead(options?.global ? activeCacheStore() : store, key, existing)
     if (existing) {
-        tagScope(existing, options?.scope)
+        tagEntry(existing, options?.tags)
         attachPolicy(existing, options, () => producer(args))
         const shared = existing.promise as Promise<Return>
         /* A coalesced join waits on the in-flight producer — time the block so the
@@ -368,7 +368,7 @@ function registerEntry(
         request,
         ttl,
         expiresAt: undefined,
-        scope: options?.scope === undefined ? undefined : toScopeSet(options.scope),
+        tags: options?.tags === undefined ? undefined : toTagSet(options.tags),
         refreshing,
         invalidation,
     }
@@ -451,7 +451,7 @@ function armTtlExpiry(store: CacheStore, entry: CacheEntry, ttl: number): void {
 }
 
 /*
-Mirrors tagScope/attachPolicy for retention: a hydrated snapshot entry ships
+Mirrors tagEntry/attachPolicy for retention: a hydrated snapshot entry ships
 without its wrap options (they live at call sites, not on the wire), so the
 first read adopts its call site's ttl declaration. Omitted = forever, exactly
 as shipped; ttl > 0 = the expiry clock starts at this read; ttl = 0 = the warm
@@ -530,7 +530,7 @@ function invalidate<Args, Return>(arg?: CacheSelector<Args, Return>, args?: Args
 Human-readable selector identity for the tripwire and cache.on coverage: the
 key prefix for fn selectors — the exact key when args narrow it — falling
 back to the function's name for a producer never cached, the tag list for
-scopes, `*` for the bare form.
+a `{ tags }` selector, `*` for the bare form.
 */
 function selectorLabel<Args, Return>(
     arg?: CacheSelector<Args, Return>,
@@ -543,7 +543,7 @@ function selectorLabel<Args, Return>(
     if (typeof arg === 'function') {
         return prefix ?? selectorPrefix(arg, args) ?? (arg.name || 'anonymous producer')
     }
-    return `scope: ${[...toScopeSet(arg.scope ?? [])].join(', ')}`
+    return `tags: ${[...toTagSet(arg.tags ?? [])].join(', ')}`
 }
 
 cache.invalidate = invalidate
@@ -920,24 +920,24 @@ function settleRefetchFailure(store: CacheStore, entry: CacheEntry, status?: num
 }
 
 /* Folds new tags into an entry's existing set without duplicating them. */
-function mergeScopes(existing: Set<string> | undefined, incoming: string | string[]): Set<string> {
-    return new Set([...(existing ?? []), ...toScopeSet(incoming)])
+function mergeTags(existing: Set<string> | undefined, incoming: string | string[]): Set<string> {
+    return new Set([...(existing ?? []), ...toTagSet(incoming)])
 }
 
 /*
-Tags an existing entry with a read's scope so a later cache.invalidate({ scope })
-reaches entries hydrated from the SSR snapshot (which carry a value but no scope)
+Tags an existing entry with a read's tags so a later cache.invalidate({ tags })
+reaches entries hydrated from the SSR snapshot (which carry a value but no tags)
 without a refetch. Merges rather than replaces so a read tagging one group can't
-drop tags another read site already added; a no-op when the read passes no scope.
+drop tags another read site already added; a no-op when the read passes no tags.
 */
-function tagScope(entry: CacheEntry, scope: CacheOptions['scope']): void {
-    if (scope !== undefined) {
-        entry.scope = mergeScopes(entry.scope, scope)
+function tagEntry(entry: CacheEntry, tags: CacheOptions['tags']): void {
+    if (tags !== undefined) {
+        entry.tags = mergeTags(entry.tags, tags)
     }
 }
 
 /*
-Mirrors tagScope for invalidate policies: a read declaring a policy arms an
+Mirrors tagEntry for invalidate policies: a read declaring a policy arms an
 existing entry that lacks one. Hydrated snapshot entries carry a value but no
 refetch thunk — without this, the first invalidate after hydration would hard-
 drop the entry (a pending flash) instead of revalidating stale-in-place, and a

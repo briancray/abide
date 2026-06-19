@@ -223,7 +223,7 @@ describe('cache() swr (stale-while-revalidate)', () => {
         const fetchValue = counter()
         /* First read declares no policy — the entry starts bare. */
         expect(await cache(fetchValue)()).toBe(1)
-        /* A later read (hit) declares one; it attaches like a scope tag would. */
+        /* A later read (hit) declares one; it attaches like a tag would. */
         expect(await cache(fetchValue, { swr: { debounce: 10 } })()).toBe(1)
 
         cache.invalidate(fetchValue)

@@ -28,8 +28,8 @@ ttl = 0 = the warm value exists only to complete the hydration render and is
 evicted a macrotask later). Live entries never carry it; their ttl was fixed
 at registration.
 
-`scope` holds the cache() call's scope tags as a Set so
-`cache.invalidate({ scope })` can drop every entry sharing any tag with O(1)
+`tags` holds the cache() call's tags as a Set so
+`cache.invalidate({ tags })` can drop every entry sharing any tag with O(1)
 membership; a re-read merges new tags in rather than replacing them.
 
 `settled` flips true once the stored promise resolves. SSR snapshot
@@ -61,7 +61,7 @@ export type CacheEntry = {
     ttl: number | undefined
     expiresAt: number | undefined
     value?: unknown
-    scope?: Set<string>
+    tags?: Set<string>
     settled?: boolean
     hydrated?: boolean
     refreshing?: boolean

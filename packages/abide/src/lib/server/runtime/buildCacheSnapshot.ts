@@ -41,7 +41,7 @@ function projectEntry(entry: CacheEntry, now: number): InspectorCacheEntry {
         remote: entry.request !== undefined,
         ttl: entry.ttl,
         expiresInMs: entry.expiresAt !== undefined ? entry.expiresAt - now : undefined,
-        scope: entry.scope ? [...entry.scope] : [],
+        tags: entry.tags ? [...entry.tags] : [],
         value: preview(entry.value),
         policy: policyLabel(entry),
     }

@@ -16,14 +16,14 @@ re-runs whenever a matching call or stream changes state. The tap is scoped
 to the selector: a fn selector taps only its own prefix channel, so reading
 `pending(fn)` in an effect can't be re-woken by unrelated cache events (an
 effect that probes one fn and invalidates another no longer feeds itself);
-bare and scope selectors scan many entries and tap the store-wide channel. A
+bare and tag selectors scan many entries and tap the store-wide channel. A
 producer never cached resolves no prefix yet and taps store-wide — its first
 cache() marks that channel, the re-derive resolves the prefix, and the scope
 re-tracks narrowed. `matchesEntry` is the probe's cache-side question;
 `field` selects the stream-side answer; `unprobed` is the answer for a
 stream no prober can see (server, or tail never imported) — matching what
 tail() itself reports there. The bare form (no selector) spans both
-registries; fn/scope selectors are cache identities only. Outside a tracking
+registries; fn/tag selectors are cache identities only. Outside a tracking
 scope the taps are no-ops and the current value returns.
 */
 export function probeRegistries<Args, Return>(

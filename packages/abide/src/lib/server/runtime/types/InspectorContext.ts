@@ -17,7 +17,7 @@ export type InspectorContext = {
     /* Eager-loads the registries, then projects the current RPC + socket catalog. */
     loadSurface: () => Promise<InspectorSurface>
     /* Snapshots the persistent (global) cache store — current entries with their
-       lifecycle state, retention, scope tags, and a value preview. */
+       lifecycle state, retention, tags, and a value preview. */
     cacheSnapshot: () => InspectorCacheSnapshot
     /*
     Subscribes to the unified event stream: every emitted log record (the log's

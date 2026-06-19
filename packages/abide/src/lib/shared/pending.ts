@@ -11,7 +11,7 @@ tail registry (streams). Pending means "no value yet":
   pending(fn)            → that function's calls (per-route spinner; remote or
                            producer, same selector grammar as cache.invalidate)
   pending(fn, args)      → exactly that call (per-row spinner)
-  pending({ scope })     → a tagged group
+  pending({ tags })      → a tagged group
   pending(subscribable)  → that stream awaiting its first frame
                            (tail.status === 'pending'; true when nothing
                            is reading yet — there is no value either way)

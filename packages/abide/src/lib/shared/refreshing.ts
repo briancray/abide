@@ -9,7 +9,7 @@ value it already had while a fresher source is in flight":
   refreshing()              → anything reloading data it already had
   refreshing(fn)            → that function's calls (per-route "updating…" badge)
   refreshing(fn, args)      → exactly that call (per-row badge)
-  refreshing({ scope })     → a tagged group
+  refreshing({ tags })      → a tagged group
   refreshing(subscribable)  → that stream reconnecting with its last value
                               retained — never merely `open`; a live stream's
                               arriving frames are its normal mode, not a reload

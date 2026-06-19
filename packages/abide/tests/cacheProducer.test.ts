@@ -72,10 +72,10 @@ describe('cache() producer', () => {
         expect(await cache(fetchValue)()).toBe(2)
     })
 
-    test('invalidate by scope drops tagged producer entries', async () => {
+    test('invalidate by tag drops tagged producer entries', async () => {
         const fetchValue = counter()
-        await cache(fetchValue, { scope: 'external' })()
-        cache.invalidate({ scope: 'external' })
+        await cache(fetchValue, { tags: 'external' })()
+        cache.invalidate({ tags: 'external' })
         expect(cacheStoreSlot.fallback!.entries.size).toBe(0)
     })
 

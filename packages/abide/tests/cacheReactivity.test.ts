@@ -83,13 +83,13 @@ describe('cache() reactive refetch', () => {
 
     /*
     A live pending()/refreshing() probe arms the lifecycle channel's notifier.
-    A cold read taken inside a derived (the documented read idiom) then calls
+    A cold read taken inside a computed (the documented read idiom) then calls
     registerEntry, which marks the channel — the mark must reach the probe
-    without writing subscriber state synchronously inside the derived's
+    without writing subscriber state synchronously inside the computed's
     evaluation, which would re-enter the dependency collection mid-flush.
     */
-    test('a cold read inside derived with a live probe does not throw', async () => {
-        const get = countingRemote('GET', '/rpc/derived-cold')
+    test('a cold read inside computed with a live probe does not throw', async () => {
+        const get = countingRemote('GET', '/rpc/computed-cold')
         const probe = track(() => pending(get))
         await settle()
         expect(probe.current()).toBe(false)
@@ -97,7 +97,7 @@ describe('cache() reactive refetch', () => {
         const tracked = trackDerived(() => cache(get)())
         await settle()
 
-        // The read survived derived evaluation and the probe saw the settle.
+        // The read survived computed evaluation and the probe saw the settle.
         expect(await tracked.current()!.then((r) => r.json())).toEqual({ n: 1 })
         expect(probe.current()).toBe(false)
         tracked.stop()

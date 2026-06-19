@@ -35,89 +35,89 @@ describe('cache.invalidate selector', () => {
         cacheStoreSlot.fallback = undefined
     })
 
-    test('{ scope } drops every entry tagged with the scope, leaving others', async () => {
+    test('{ tags } drops every entry carrying the tag, leaving others', async () => {
         const getPosts = fakeRemote<undefined>('GET', '/rpc/posts')
         const getTags = fakeRemote<undefined>('GET', '/rpc/tags')
         const getUser = fakeRemote<undefined>('GET', '/rpc/user')
         const store = cacheStoreSlot.fallback!
 
-        await cache(getPosts, { scope: 'dashboard' })()
-        await cache(getTags, { scope: 'dashboard' })()
-        await cache(getUser, { scope: 'profile' })()
+        await cache(getPosts, { tags: 'dashboard' })()
+        await cache(getTags, { tags: 'dashboard' })()
+        await cache(getUser, { tags: 'profile' })()
         expect(store.entries.size).toBe(3)
 
-        cache.invalidate({ scope: 'dashboard' })
+        cache.invalidate({ tags: 'dashboard' })
 
         expect(Array.from(store.entries.keys())).toEqual(['GET /rpc/user'])
     })
 
-    test('{ scope } notifies subscribers of every affected key', async () => {
+    test('{ tags } notifies subscribers of every affected key', async () => {
         const getPosts = fakeRemote<undefined>('GET', '/rpc/posts')
         const store = cacheStoreSlot.fallback!
-        await cache(getPosts, { scope: 'dashboard' })()
+        await cache(getPosts, { tags: 'dashboard' })()
 
         let notified: CacheInvalidation | undefined
         store.events.addEventListener('invalidate', (event) => {
             notified = (event as CustomEvent<CacheInvalidation>).detail
         })
 
-        cache.invalidate({ scope: 'dashboard' })
+        cache.invalidate({ tags: 'dashboard' })
         expect(notified?.has('GET /rpc/posts')).toBe(true)
     })
 
-    test('unknown scope is a no-op without dispatching an event', async () => {
+    test('an unknown tag is a no-op without dispatching an event', async () => {
         const getPosts = fakeRemote<undefined>('GET', '/rpc/posts')
         const store = cacheStoreSlot.fallback!
-        await cache(getPosts, { scope: 'dashboard' })()
+        await cache(getPosts, { tags: 'dashboard' })()
 
         let dispatched = false
         store.events.addEventListener('invalidate', () => {
             dispatched = true
         })
 
-        cache.invalidate({ scope: 'nonexistent' })
+        cache.invalidate({ tags: 'nonexistent' })
         expect(dispatched).toBe(false)
         expect(store.entries.size).toBe(1)
     })
 
-    test('a re-read with a scope tags an entry that was created without one', async () => {
+    test('a re-read with tags tags an entry that was created without one', async () => {
         const getPosts = fakeRemote<undefined>('GET', '/rpc/posts')
         const store = cacheStoreSlot.fallback!
 
         await cache(getPosts)()
-        expect(store.entries.get('GET /rpc/posts')?.scope).toBeUndefined()
+        expect(store.entries.get('GET /rpc/posts')?.tags).toBeUndefined()
 
-        await cache(getPosts, { scope: 'dashboard' })()
-        expect(store.entries.get('GET /rpc/posts')?.scope?.has('dashboard')).toBe(true)
+        await cache(getPosts, { tags: 'dashboard' })()
+        expect(store.entries.get('GET /rpc/posts')?.tags?.has('dashboard')).toBe(true)
 
-        cache.invalidate({ scope: 'dashboard' })
+        cache.invalidate({ tags: 'dashboard' })
         expect(store.entries.size).toBe(0)
     })
 
-    test('an array scope makes an entry reachable from any of its groups', async () => {
+    test('an array of tags makes an entry reachable from any of its groups', async () => {
         const getGrid = fakeRemote<undefined>('GET', '/rpc/grid')
         const store = cacheStoreSlot.fallback!
 
-        await cache(getGrid, { scope: ['media', 'sources'] })()
-        cache.invalidate({ scope: 'sources' })
+        await cache(getGrid, { tags: ['media', 'sources'] })()
+        cache.invalidate({ tags: 'sources' })
         expect(store.entries.size).toBe(0)
 
-        await cache(getGrid, { scope: ['media', 'sources'] })()
-        cache.invalidate({ scope: 'media' })
+        await cache(getGrid, { tags: ['media', 'sources'] })()
+        cache.invalidate({ tags: 'media' })
         expect(store.entries.size).toBe(0)
     })
 
-    test('an array scope selector drops entries matching any requested tag', async () => {
+    test('an array-of-tags selector drops entries matching any requested tag', async () => {
         const getPosts = fakeRemote<undefined>('GET', '/rpc/posts')
         const getTags = fakeRemote<undefined>('GET', '/rpc/tags')
         const getUser = fakeRemote<undefined>('GET', '/rpc/user')
         const store = cacheStoreSlot.fallback!
 
-        await cache(getPosts, { scope: 'media' })()
-        await cache(getTags, { scope: 'sources' })()
-        await cache(getUser, { scope: 'profile' })()
+        await cache(getPosts, { tags: 'media' })()
+        await cache(getTags, { tags: 'sources' })()
+        await cache(getUser, { tags: 'profile' })()
 
-        cache.invalidate({ scope: ['media', 'sources'] })
+        cache.invalidate({ tags: ['media', 'sources'] })
         expect(Array.from(store.entries.keys())).toEqual(['GET /rpc/user'])
     })
 
@@ -125,11 +125,11 @@ describe('cache.invalidate selector', () => {
         const getGrid = fakeRemote<undefined>('GET', '/rpc/grid')
         const store = cacheStoreSlot.fallback!
 
-        await cache(getGrid, { scope: 'media' })()
-        await cache(getGrid, { scope: 'sources' })()
-        expect(store.entries.get('GET /rpc/grid')?.scope).toEqual(new Set(['media', 'sources']))
+        await cache(getGrid, { tags: 'media' })()
+        await cache(getGrid, { tags: 'sources' })()
+        expect(store.entries.get('GET /rpc/grid')?.tags).toEqual(new Set(['media', 'sources']))
 
-        cache.invalidate({ scope: 'media' })
+        cache.invalidate({ tags: 'media' })
         expect(store.entries.size).toBe(0)
     })
 })
