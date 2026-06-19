@@ -145,10 +145,7 @@ function restoreComponentTags(output: string, componentNames: string[]): string 
         // The lookahead pins the whole tag name (a placeholder can be a prefix of a
         // longer one, e.g. `modaa` in `modaaa`); placeholders are letters-only, so
         // no regex escaping is needed.
-        restored = restored.replace(
-            new RegExp(`(</?)${placeholder}(?=[\\s/>])`, 'g'),
-            `$1${name}`,
-        )
+        restored = restored.replace(new RegExp(`(</?)${placeholder}(?=[\\s/>])`, 'g'), `$1${name}`)
     })
     return restored
 }
@@ -201,13 +198,18 @@ async function restoreBlocks(
     for (let index = 0; index < blocks.length; index += 1) {
         const block = blocks[index] as Extract<Segment, { kind: 'script' | 'style' }>
         const parser = block.kind === 'script' ? 'typescript' : 'css'
-        const body = await formatBlockBody(block.body, parser, options)
         const placeholder = new RegExp(
             `^([ \\t]*)<abide-${block.kind} data-i="${index}"></abide-${block.kind}>`,
             'm',
         )
         const match = restored.match(placeholder)
         const pad = match?.[1] ?? ''
+        /* Strip the indent that will be re-added below BEFORE formatting. Prettier
+           reindents code on its own, but copies the interior of block comments and
+           multi-line template literals verbatim — so re-indenting those by `pad`
+           every pass would compound their leading whitespace. Dedenting by `pad`
+           first makes the re-indent cancel out, leaving such interiors fixed. */
+        const body = await formatBlockBody(dedent(block.body, pad.length), parser, options)
         const indentedBody = body
             .split('\n')
             .map((line) => (line === '' ? line : pad + line))
@@ -218,6 +220,25 @@ async function restoreBlocks(
         )
     }
     return restored
+}
+
+/* Removes up to `amount` leading spaces/tabs from every line — the inverse of the
+   re-indent applied after formatting, so verbatim-preserved spans (comment and
+   template-literal interiors) round-trip unchanged instead of accumulating indent. */
+function dedent(text: string, amount: number): string {
+    if (amount === 0) {
+        return text
+    }
+    return text
+        .split('\n')
+        .map((line) => {
+            let cut = 0
+            while (cut < amount && (line[cut] === ' ' || line[cut] === '\t')) {
+                cut += 1
+            }
+            return line.slice(cut)
+        })
+        .join('\n')
 }
 
 /* The block body formatted as a program, or the original on failure. */

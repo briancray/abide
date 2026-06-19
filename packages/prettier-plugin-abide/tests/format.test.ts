@@ -124,4 +124,13 @@ describe('prettier-plugin-abide', () => {
         const once = await format(source)
         expect(await format(once)).toBe(once)
     })
+
+    test('is idempotent for a multi-line block comment in a nested script', async () => {
+        // Prettier copies a block comment's interior verbatim; re-indenting it each
+        // pass used to compound its leading whitespace. The continuation must hold.
+        const source = `<Layout>\n<div>\n<script>\nconst a = 1\n/* first line\n   second line stays put */\neffect(() => f(a))\n</script>\n</div>\n</Layout>\n`
+        const once = await format(source)
+        expect(once).toContain('   second line stays put */')
+        expect(await format(once)).toBe(once)
+    })
 })
