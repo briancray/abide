@@ -32,13 +32,22 @@ function renderGuarded() {
         <template catch="error">
             <div>
                 <h2 class="text-xl font-bold text-red-700">caught</h2>
-                <pre class="mt-2 overflow-x-auto rounded-md bg-slate-900 p-4 text-xs leading-relaxed text-red-200"><code>{error.message}</code></pre>
+                <pre
+                    class="mt-2 overflow-x-auto rounded-md bg-slate-900 p-4 text-xs leading-relaxed text-red-200"><code>{error.message}</code></pre>
             </div>
         </template>
     </template>
 </section>
 
 <div class="mt-4 flex flex-wrap gap-2 text-sm">
-    <a href="/pages/boundary?explode=1" class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100">throw during render → caught by &lt;template try&gt;</a>
-    <a href="/pages/boundary" class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100">render normally</a>
+    <a
+        href="/pages/boundary?explode=1"
+        class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+        >throw during render → caught by &lt;template try&gt;</a
+    >
+    <a
+        href="/pages/boundary"
+        class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+        >render normally</a
+    >
 </div>

@@ -16,15 +16,18 @@ async function probeHealth() {
 
 <h1 class="text-3xl font-bold">CLI</h1>
 <p class="mt-2 text-slate-600">
-    <code class="font-mono">abide cli</code> builds a standalone binary — a thin remote client with the
-    rpc manifest baked in, shipped beside the compiled <em>server</em>. Schema-bearing rpcs auto-expose
-    as commands; argv parses against the same JSON Schema MCP uses. Each socket adds a
+    <code class="font-mono">abide cli</code> builds a standalone binary — a thin remote client with
+    the rpc manifest baked in, shipped beside the compiled <em>server</em>. Schema-bearing rpcs
+    auto-expose as commands; argv parses against the same JSON Schema MCP uses. Each socket adds a
     <code class="font-mono">&lt;name&gt;-tail</code> command.
 </p>
 
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
     <h2 class="text-sm font-semibold">Connection</h2>
-    <p class="mt-1 text-sm text-slate-600">One rule: <code class="font-mono">/</code> manages the connection, a bare word runs a command.</p>
+    <p class="mt-1 text-sm text-slate-600">
+        One rule: <code class="font-mono">/</code> manages the connection, a bare word runs a
+        command.
+    </p>
     <div class="mt-3 overflow-x-auto rounded-lg border border-slate-200">
         <table class="w-full text-sm">
             <thead class="border-b border-slate-200 bg-slate-50 text-left">
@@ -34,24 +37,56 @@ async function probeHealth() {
                 </tr>
             </thead>
             <tbody class="divide-y divide-slate-100">
-                <tr><td class="px-4 py-2 font-mono">app /connect &lt;url&gt;</td><td class="px-4 py-2 text-slate-600">connect to a remote server, open a session</td></tr>
-                <tr><td class="px-4 py-2 font-mono">app /start</td><td class="px-4 py-2 text-slate-600">start a local instance, open a session</td></tr>
-                <tr><td class="px-4 py-2 font-mono">app /disconnect</td><td class="px-4 py-2 text-slate-600">forget the saved connection</td></tr>
-                <tr><td class="px-4 py-2 font-mono">app &lt;command&gt; [--flags]</td><td class="px-4 py-2 text-slate-600">one-shot dispatch (scripting)</td></tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">app /connect &lt;url&gt;</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        connect to a remote server, open a session
+                    </td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">app /start</td>
+                    <td class="px-4 py-2 text-slate-600">start a local instance, open a session</td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">app /disconnect</td>
+                    <td class="px-4 py-2 text-slate-600">forget the saved connection</td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">app &lt;command&gt; [--flags]</td>
+                    <td class="px-4 py-2 text-slate-600">one-shot dispatch (scripting)</td>
+                </tr>
             </tbody>
         </table>
     </div>
-    <p class="mt-3 text-sm text-slate-600"><code class="font-mono">ABIDE_APP_URL</code> is the default server URL; <code class="font-mono">ABIDE_APP_TOKEN</code> is sent as <code class="font-mono">Authorization: Bearer &lt;value&gt;</code>.</p>
+    <p class="mt-3 text-sm text-slate-600">
+        <code class="font-mono">ABIDE_APP_URL</code> is the default server URL;
+        <code class="font-mono">ABIDE_APP_TOKEN</code> is sent as
+        <code class="font-mono">Authorization: Bearer &lt;value&gt;</code>.
+    </p>
 </section>
 
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
     <h2 class="text-sm font-semibold">Server-side install endpoint</h2>
-    <p class="mt-1 text-sm text-slate-600">A running server offers <code class="font-mono">GET /__abide/cli</code> (shell installer) and <code class="font-mono">GET /__abide/cli/&lt;platform&gt;</code> (gzipped tarball).</p>
+    <p class="mt-1 text-sm text-slate-600">
+        A running server offers <code class="font-mono">GET /__abide/cli</code> (shell installer)
+        and <code class="font-mono">GET /__abide/cli/&lt;platform&gt;</code> (gzipped tarball).
+    </p>
     <div class="mt-3 flex flex-wrap gap-2 text-sm">
-        <button type="button" class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100" onclick={fetchInstaller}>GET /__abide/cli</button>
-        <button type="button" class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100" onclick={probeHealth}>GET /__abide/health (connect probe)</button>
+        <button
+            type="button"
+            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+            onclick={fetchInstaller}>
+            GET /__abide/cli
+        </button>
+        <button
+            type="button"
+            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+            onclick={probeHealth}>
+            GET /__abide/health (connect probe)
+        </button>
     </div>
-    <pre class="mt-3 overflow-x-auto rounded-md bg-slate-900 p-3 text-xs leading-relaxed text-slate-100"><code>installer: {installer}
+    <pre
+        class="mt-3 overflow-x-auto rounded-md bg-slate-900 p-3 text-xs leading-relaxed text-slate-100"><code>installer: {installer}
 identity: {identity}</code></pre>
 </section>
 
@@ -59,7 +94,10 @@ identity: {identity}</code></pre>
     <CodeBlock title="build — cli binary plus its sibling server" lang="sh" code={`abide cli                  # writes ./dist/cli and ./dist/server
 abide cli --platforms=linux-x64,darwin-arm64`} />
 
-    <CodeBlock title="connect, start, resume — open an interactive session" lang="sh" code={`./dist/cli /start                        # boot a local instance, drop into a session
+    <CodeBlock
+        title="connect, start, resume — open an interactive session"
+        lang="sh"
+        code={`./dist/cli /start                        # boot a local instance, drop into a session
 ./dist/cli /connect https://app.example  # connect to a remote server
 ./dist/cli                               # resume the saved connection`} />
 

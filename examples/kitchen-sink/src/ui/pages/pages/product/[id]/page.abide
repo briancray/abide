@@ -30,8 +30,8 @@ async function loadProduct(productId) {
 </nav>
 <h1 class="text-3xl font-bold">Product {id}</h1>
 <p class="mt-2 text-slate-600">
-    Dynamic page segment <code class="font-mono">[id]</code> from the folder name. The cache key folds in
-    the call args, so each id gets its own entry; the await block re-runs on nav.
+    Dynamic page segment <code class="font-mono">[id]</code> from the folder name. The cache key
+    folds in the call args, so each id gets its own entry; the await block re-runs on nav.
 </p>
 
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
@@ -49,7 +49,12 @@ async function loadProduct(productId) {
     </template>
     <div class="mt-4 flex flex-wrap gap-2 text-sm">
         <template each={['1', '2', '3']} as="candidate" key="candidate">
-            <button type="button" class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100" onclick={() => navigate(`/pages/product/${candidate}`)}>navigate to /product/{candidate}</button>
+            <button
+                type="button"
+                class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+                onclick={() => navigate(`/pages/product/${candidate}`)}>
+                navigate to /product/{candidate}
+            </button>
         </template>
     </div>
 </section>

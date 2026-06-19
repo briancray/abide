@@ -47,11 +47,20 @@ const chatLog = derived(() => cache(getChatLog)())
 </p>
 
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
-    <h2 class="text-sm font-semibold"><code class="font-mono">cache.on</code> — event-driven invalidate &amp; patch</h2>
-    <p class="mt-1 text-xs text-slate-500"><code class="font-mono">cache.on(source, handler)</code> runs the handler once per frame of a socket or rpc stream. <code class="font-mono">invalidate</code> drops the entry and refetches; <code class="font-mono">patch</code> folds the frame's payload into the cached value with no round-trip.</p>
+    <h2 class="text-sm font-semibold">
+        <code class="font-mono">cache.on</code> — event-driven invalidate &amp; patch
+    </h2>
+    <p class="mt-1 text-xs text-slate-500">
+        <code class="font-mono">cache.on(source, handler)</code> runs the handler once per frame of
+        a socket or rpc stream. <code class="font-mono">invalidate</code> drops the entry and
+        refetches; <code class="font-mono">patch</code> folds the frame's payload into the cached
+        value with no round-trip.
+    </p>
     <div class="mt-3 grid gap-3 sm:grid-cols-2">
         <div class="rounded-md border border-slate-200 p-3">
-            <p class="text-xs text-slate-500">messages published — <code class="font-mono">invalidate</code> (refetched)</p>
+            <p class="text-xs text-slate-500">
+                messages published — <code class="font-mono">invalidate</code> (refetched)
+            </p>
             <template await={chatCount}>
                 <p class="mt-1 font-mono text-3xl text-slate-400">…</p>
                 <template then="data">
@@ -60,7 +69,9 @@ const chatLog = derived(() => cache(getChatLog)())
             </template>
         </div>
         <div class="rounded-md border border-slate-200 p-3">
-            <p class="text-xs text-slate-500">recent — <code class="font-mono">patch</code> (folded in, no refetch)</p>
+            <p class="text-xs text-slate-500">
+                recent — <code class="font-mono">patch</code> (folded in, no refetch)
+            </p>
             <template await={chatLog}>
                 <template then="data">
                     <div>
@@ -79,7 +90,12 @@ const chatLog = derived(() => cache(getChatLog)())
             </template>
         </div>
     </div>
-    <button type="button" class="mt-3 rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100" onclick={() => publishChat({ from: 'cache page', text: 'ping' })}>{"publishChat({ from, text })"}</button>
+    <button
+        type="button"
+        class="mt-3 rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100"
+        onclick={() => publishChat({ from: 'cache page', text: 'ping' })}>
+        {'publishChat({ from, text })'}
+    </button>
 </section>
 
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
@@ -87,7 +103,10 @@ const chatLog = derived(() => cache(getChatLog)())
         <h2 class="text-sm font-semibold">Try it</h2>
         <span class={`rounded-full px-2 py-0.5 text-xs ${loading ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-400'}`}>{loading ? 'fetching…' : 'idle'}</span>
     </div>
-    <p class="mt-1 text-xs text-slate-500">Two reads against the same key — both update together because they share one entry. The badge reads <code class="font-mono">pending(getCounter)</code>.</p>
+    <p class="mt-1 text-xs text-slate-500">
+        Two reads against the same key — both update together because they share one entry. The
+        badge reads <code class="font-mono">pending(getCounter)</code>.
+    </p>
     <div class="mt-3 grid gap-3 sm:grid-cols-2">
         <div class="rounded-md border border-slate-200 p-3">
             <p class="text-xs text-slate-500">counter</p>
@@ -111,9 +130,24 @@ const chatLog = derived(() => cache(getChatLog)())
         </div>
     </div>
     <div class="mt-4 flex flex-wrap gap-2 text-sm">
-        <button type="button" class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100" onclick={increment}>POST + invalidate</button>
-        <button type="button" class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100" onclick={reset}>DELETE + invalidate</button>
-        <button type="button" class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100" onclick={() => cache.invalidate({ scope: 'counter' })}>invalidate scope</button>
+        <button
+            type="button"
+            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+            onclick={increment}>
+            POST + invalidate
+        </button>
+        <button
+            type="button"
+            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+            onclick={reset}>
+            DELETE + invalidate
+        </button>
+        <button
+            type="button"
+            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+            onclick={() => cache.invalidate({ scope: 'counter' })}>
+            invalidate scope
+        </button>
     </div>
 </section>
 

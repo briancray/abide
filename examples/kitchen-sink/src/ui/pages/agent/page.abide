@@ -84,14 +84,14 @@ function apply(frame) {
 
 <h1 class="text-3xl font-bold">agent</h1>
 <p class="mt-2 text-slate-600">
-    <code class="font-mono">agent(engine, messages)</code> runs a model against this app's own gated MCP
-    surface and streams back <code class="font-mono">AgentFrame</code>s. Here the
+    <code class="font-mono">agent(engine, messages)</code> runs a model against this app's own gated
+    MCP surface and streams back <code class="font-mono">AgentFrame</code>s. Here the
     <code class="font-mono">@abide/claude-code</code> engine drives Claude Code over the app's
     schema-bearing verbs.
 </p>
 <p class="mt-2 text-xs text-slate-500">
-    Permission is fixed server-side: <code class="font-mono">tools: []</code> drops every Claude Code
-    built-in and <code class="font-mono">dontAsk</code> denies anything not in the
+    Permission is fixed server-side: <code class="font-mono">tools: []</code> drops every Claude
+    Code built-in and <code class="font-mono">dontAsk</code> denies anything not in the
     <code class="font-mono">allow</code> list, so the agent can only call
     <code class="font-mono">getProduct</code> and <code class="font-mono">getRates</code>.
 </p>
@@ -125,8 +125,18 @@ function apply(frame) {
     </template>
 
     <form class="mt-4 flex gap-2" onsubmit={(event) => { event.preventDefault(); void send() }}>
-        <input type="text" bind:value={draft} disabled={streaming} placeholder="Ask the agent…" class="flex-1 rounded-md border border-slate-300 px-3 py-1.5 text-sm outline-none focus:border-slate-500 disabled:opacity-60" />
-        <button type="submit" disabled={streaming} class="rounded-md bg-slate-900 px-4 py-1.5 text-sm text-white hover:bg-slate-700 disabled:opacity-60">{streaming ? 'streaming…' : 'send'}</button>
+        <input
+            type="text"
+            bind:value={draft}
+            disabled={streaming}
+            placeholder="Ask the agent…"
+            class="flex-1 rounded-md border border-slate-300 px-3 py-1.5 text-sm outline-none focus:border-slate-500 disabled:opacity-60" />
+        <button
+            type="submit"
+            disabled={streaming}
+            class="rounded-md bg-slate-900 px-4 py-1.5 text-sm text-white hover:bg-slate-700 disabled:opacity-60">
+            {streaming ? 'streaming…' : 'send'}
+        </button>
     </form>
 
     <template if={error}>
