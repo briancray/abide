@@ -30,14 +30,77 @@ export async function formatAbideSource(source: string, options: Options): Promi
             blocks.push(segment)
         }
     }
+    // Shield component tags from the HTML pass, which lowercases recognized HTML
+    // tag names (`Button` -> `button`, `Input` -> `input`) — silently demoting a
+    // component to a dead native element. Each PascalCase name maps to an inert
+    // all-lowercase placeholder Prettier leaves untouched, restored after reflow.
+    const { protectedSource, componentNames } = protectComponentTags(masked)
     let output: string
     try {
-        output = await format(masked, htmlOptions(options))
+        output = await format(protectedSource, htmlOptions(options))
     } catch {
         return source
     }
+    output = restoreComponentTags(output, componentNames)
     output = await restoreExpressions(output, expressions, options)
     return restoreBlocks(output, blocks, options)
+}
+
+const ALPHABET = 'abcdefghijklmnopqrstuvwxyz'
+
+/* An inert, all-lowercase stand-in for a component tag, kept the SAME length as the
+   original name so the markup pass makes identical line-wrap decisions (a longer
+   token would spuriously wrap attributes). Built from the lowercased name with its
+   last char(s) overwritten by the index — unique across components, never a real
+   HTML tag, and untouched by Prettier (unknown elements keep case + self-closing). */
+function componentPlaceholder(name: string, index: number): string {
+    const chars = name.toLowerCase().split('')
+    const last = chars.length - 1
+    chars[last] = ALPHABET[index % 26] as string
+    if (index >= 26 && last >= 1) {
+        chars[last - 1] = ALPHABET[Math.floor(index / 26) % 26] as string
+    }
+    return chars.join('')
+}
+
+/* Rewrites every PascalCase tag name (open and close) to its placeholder, in
+   first-seen order, so the markup pass treats components as inert custom elements
+   instead of HTML it may lowercase. */
+function protectComponentTags(masked: string): {
+    protectedSource: string
+    componentNames: string[]
+} {
+    const componentNames: string[] = []
+    const indexOfName = new Map<string, number>()
+    const protectedSource = masked.replace(
+        /(<\/?)([A-Z][A-Za-z0-9]*)/g,
+        (_match, bracket: string, name: string) => {
+            let index = indexOfName.get(name)
+            if (index === undefined) {
+                index = componentNames.length
+                componentNames.push(name)
+                indexOfName.set(name, index)
+            }
+            return `${bracket}${componentPlaceholder(name, index)}`
+        },
+    )
+    return { protectedSource, componentNames }
+}
+
+/* Restores each placeholder tag back to its original PascalCase component name. */
+function restoreComponentTags(output: string, componentNames: string[]): string {
+    let restored = output
+    componentNames.forEach((name, index) => {
+        const placeholder = componentPlaceholder(name, index)
+        // The lookahead pins the whole tag name (a placeholder can be a prefix of a
+        // longer one, e.g. `modaa` in `modaaa`); placeholders are letters-only, so
+        // no regex escaping is needed.
+        restored = restored.replace(
+            new RegExp(`(</?)${placeholder}(?=[\\s/>])`, 'g'),
+            `$1${name}`,
+        )
+    })
+    return restored
 }
 
 /* A unique, regex-safe placeholder for the expression at `index`. The trailing `X`

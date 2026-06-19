@@ -108,4 +108,20 @@ describe('prettier-plugin-abide', () => {
         const once = await format(source)
         expect(await format(once)).toBe(once)
     })
+
+    test('preserves component tags whose name collides with an HTML element', async () => {
+        // The HTML pass lowercases recognized tag names; a `<Button>`/`<Input>`
+        // component must survive as-authored, not decay into a dead native element.
+        const out = await format(`<Button href={x}>\n<Input value={y} />\n</Button>\n`)
+        expect(out).toContain('<Button href={x}>')
+        expect(out).toContain('<Input value={y} />')
+        expect(out).not.toContain('<button')
+        expect(out).not.toContain('<input')
+    })
+
+    test('is idempotent for an HTML-named component near the print width', async () => {
+        const source = `<Modal open={searching} close={() => (searching = false)} class="relative w-xl">\n<Button href={url('/media')} color="stone" size="md">{label}</Button>\n</Modal>\n`
+        const once = await format(source)
+        expect(await format(once)).toBe(once)
+    })
 })
