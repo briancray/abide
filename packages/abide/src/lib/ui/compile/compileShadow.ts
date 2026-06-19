@@ -6,23 +6,24 @@ import type { CompiledShadow, ShadowMapping } from './types/CompiledShadow.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
 
 /*
-Framework callables the `.abide` loader injects into a component's scope, imported
-into the shadow with their real types so author calls (`effect`, `html`, …)
-type-check. `state`/`derived` are imported too as a fallback for stray uses; their
-declarations are rewritten to value types so the import is normally unused (fine —
-the shadow program disables noUnusedLocals). `prop` has no runtime export, so it
-never appears here — every `prop()` declaration is rewritten away. `$props` is the
-legacy untyped prop bag (pre-`prop()` sugar) made available raw.
+Framework callables the `.abide` loader injects into a component's scope. `effect`,
+`html`, `snippet` keep their real published types via imports so author calls
+type-check. `state`/`linked`/`computed` are compiler sugar with no runtime export, so
+they're declared ambiently as a fallback for stray uses (a `state()` call nested in a
+function rather than a top-level declaration); their top-level declarations are
+rewritten to value types, so these fallbacks are normally unused (fine — the shadow
+program disables noUnusedLocals). `prop` is sugar too, but every `prop()` declaration
+is rewritten away, so it never appears here. `$props` is the legacy untyped prop bag
+(pre-`prop()` sugar) made available raw.
 */
-const SHADOW_PREAMBLE = `import { state } from '${ABIDE_PACKAGE_NAME}/ui/state'
-import { linked } from '${ABIDE_PACKAGE_NAME}/ui/linked'
-import { derived } from '${ABIDE_PACKAGE_NAME}/ui/derived'
-import { effect } from '${ABIDE_PACKAGE_NAME}/ui/effect'
-import { doc } from '${ABIDE_PACKAGE_NAME}/ui/doc'
+const SHADOW_PREAMBLE = `import { effect } from '${ABIDE_PACKAGE_NAME}/ui/effect'
 import { html } from '${ABIDE_PACKAGE_NAME}/shared/html'
 import { snippet } from '${ABIDE_PACKAGE_NAME}/shared/snippet'
+declare function state<T>(initial?: T, transform?: (next: T, previous: T) => T): { value: T }
+declare function linked<T>(seed: () => T, transform?: (next: T, previous: T) => T): { value: T }
+declare function computed<T>(compute: () => T): { readonly value: T }
 declare const $props: Record<string, (() => unknown) | undefined>
-void [state, linked, derived, effect, doc, html, snippet]
+void [effect, html, snippet]
 `
 
 /*
@@ -35,10 +36,10 @@ returned segments.
 
 The script's signal surface is rewritten to value types:
   let count = state(0)            →  let count = (0)
-  const total = derived(() => …)  →  const total = (() => …)()
+  const total = computed(() => …)  →  const total = (() => …)()
   let title = prop<string>('t')   →  Props field + `let title = props['t']`
 Everything else (functions, plain consts, imports) is emitted verbatim, so
-expressions inside it (e.g. a derived's compute body) are checked and mapped too.
+expressions inside it (e.g. a computed's compute body) are checked and mapped too.
 */
 export function compileShadow(source: string): CompiledShadow {
     const builder = createBuilder()
@@ -188,7 +189,7 @@ function analyzeScript(scriptBody: string, scriptStart: number): ScriptAnalysis 
    projects the leading script's scope: reactive declarations become their value
    type, every other statement stays verbatim. Returns the projected source text
    (unmapped — nested scripts carry no source offset yet), so a branch's markup
-   reads a nested signal as its value type instead of the raw `State`/`Derived`. */
+   reads a nested signal as its value type instead of the raw `State`/`Computed`. */
 function projectNestedScript(code: string): string {
     const file = ts.createSourceFile('nested.ts', code, ts.ScriptTarget.Latest, true)
     const verbatim = (node: ts.Node): string => code.slice(node.getStart(file), node.getEnd())
@@ -205,7 +206,7 @@ function projectNestedScript(code: string): string {
         .join('\n')
 }
 
-/* The `state`/`derived`/`prop` declarations in a variable statement, or undefined
+/* The `state`/`computed`/`prop` declarations in a variable statement, or undefined
    if it isn't one declaring them (so the caller emits it verbatim). A statement
    mixing reactive and plain declarations is rare; treated as all-verbatim. */
 function reactiveDeclarations(statement: ts.Statement): ts.VariableDeclaration[] | undefined {
@@ -217,19 +218,21 @@ function reactiveDeclarations(statement: ts.Statement): ts.VariableDeclaration[]
     return reactive.length === declarations.length && reactive.length > 0 ? reactive : undefined
 }
 
-/* The callee name of a `NAME = state(...)` / `linked(...)` / `derived(...)` /
-   `prop(...)` decl. */
+/* The callee name of a `NAME = state(...)` / `linked(...)` / `computed(...)` /
+   `prop(...)` decl — bare or the explicit scope form (`scope().state(...)` / `c.state(...)`),
+   receiver-agnostic (the method name marks it reactive). */
 function signalCallee(declaration: ts.VariableDeclaration): string | undefined {
     const initializer = declaration.initializer
-    if (
-        initializer !== undefined &&
-        ts.isCallExpression(initializer) &&
-        ts.isIdentifier(initializer.expression) &&
-        REACTIVE_CALLEES.has(initializer.expression.text)
-    ) {
-        return initializer.expression.text
+    if (initializer === undefined || !ts.isCallExpression(initializer)) {
+        return undefined
     }
-    return undefined
+    const callee = initializer.expression
+    const name = ts.isIdentifier(callee)
+        ? callee.text
+        : ts.isPropertyAccessExpression(callee)
+          ? callee.name.text
+          : undefined
+    return name !== undefined && REACTIVE_CALLEES.has(name) ? name : undefined
 }
 
 /* Builds one scope line for a reactive declaration, projecting it to its value
@@ -242,7 +245,10 @@ function scopeLineFor(
 ): ScopeLine {
     const name = ts.isIdentifier(declaration.name) ? declaration.name.text : '_'
     const call = declaration.initializer as ts.CallExpression
-    const callee = (call.expression as ts.Identifier).text
+    /* Bare callee (`state`) or member callee (`scope().state` / `c.state`). */
+    const callee = ts.isPropertyAccessExpression(call.expression)
+        ? call.expression.name.text
+        : (call.expression as ts.Identifier).text
     if (callee === 'state') {
         /* state<T>(initial): T is the value type — carry it onto the `let` so an
            explicit annotation isn't lost to `any`/`any[]` inference of the initial. */
@@ -262,8 +268,8 @@ function scopeLineFor(
         const prefix = `let ${name}${annotation} = (`
         return { text: `${prefix}${verbatim(init)});`, segments: [span(init, prefix.length)] }
     }
-    if (callee === 'derived' || callee === 'linked') {
-        /* derived<T>(compute) / linked<T>(seed): T is the value type — the call's
+    if (callee === 'computed' || callee === 'linked') {
+        /* computed<T>(compute) / linked<T>(seed): T is the value type — the call's
            first arg is a thunk, so invoking it yields the value. Annotate so an
            explicit type argument isn't lost to inference of the thunk's return. */
         const typeNode = call.typeArguments?.[0]
@@ -464,7 +470,7 @@ function emitNode(node: TemplateNode, builder: Builder): void {
             return
         case 'script':
             /* A scoped reactive `<script>`: value-project its reactive declarations to
-               their value types (`derived(…)` → the computed value, `state(…)` → the
+               their value types (`computed(…)` → the computed value, `state(…)` → the
                initial) exactly as the leading script's scope lines are, so the branch's
                markup type-checks a nested signal as its value — matching the runtime,
                which derefs nested-script signals through the rest of the branch. Emitted

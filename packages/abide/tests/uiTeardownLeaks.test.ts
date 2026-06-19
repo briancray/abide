@@ -1,10 +1,10 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
-import { derived } from '../src/lib/ui/derived.ts'
-import { doc } from '../src/lib/ui/doc.ts'
+import { computed } from '../src/lib/ui/computed.ts'
 import { each } from '../src/lib/ui/dom/each.ts'
 import { eachAsync } from '../src/lib/ui/dom/eachAsync.ts'
 import { mount } from '../src/lib/ui/dom/mount.ts'
 import { effect } from '../src/lib/ui/effect.ts'
+import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
 import { scope } from '../src/lib/ui/runtime/scope.ts'
 import { state } from '../src/lib/ui/state.ts'
 import { installMiniDom } from './support/installMiniDom.ts'
@@ -132,12 +132,12 @@ describe('teardown leaks', () => {
         expect(list.children.length).toBe(1) // drain abandoned → no row in the detached list
     })
 
-    test('derived unlinks from its source signal when its scope tears down', () => {
+    test('computed unlinks from its source signal when its scope tears down', () => {
         const extern = state(0)
         let computes = 0
         let cell: { value: number } | undefined
         const dispose = scope(() => {
-            cell = derived(() => {
+            cell = computed(() => {
                 computes += 1
                 return extern.value
             })

@@ -1,10 +1,10 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { compileSSR } from '../src/lib/ui/compile/compileSSR.ts'
-import { derived } from '../src/lib/ui/derived.ts'
-import { doc } from '../src/lib/ui/doc.ts'
+import { computed } from '../src/lib/ui/computed.ts'
 import { applyResolved } from '../src/lib/ui/dom/applyResolved.ts'
 import { effect } from '../src/lib/ui/effect.ts'
 import { renderToStream } from '../src/lib/ui/renderToStream.ts'
+import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
 import type { SsrRender } from '../src/lib/ui/runtime/types/SsrRender.ts'
 import { state } from '../src/lib/ui/state.ts'
 import { installMiniDom } from './support/installMiniDom.ts'
@@ -37,10 +37,10 @@ describe('SSR streaming → client swap', () => {
             </div>
         `
         const render = (): SsrRender =>
-            new Function('doc', 'state', 'derived', 'effect', compileSSR(source))(
+            new Function('doc', 'state', 'computed', 'effect', compileSSR(source))(
                 doc,
                 state,
-                derived,
+                computed,
                 effect,
             ) as SsrRender
 

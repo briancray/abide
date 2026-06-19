@@ -1,7 +1,5 @@
 import { html } from '../shared/html.ts'
 import { snippet } from '../shared/snippet.ts'
-import { derived } from './derived.ts'
-import { doc } from './doc.ts'
 import { anchorCursor } from './dom/anchorCursor.ts'
 import { appendSnippet } from './dom/appendSnippet.ts'
 import { appendStatic } from './dom/appendStatic.ts'
@@ -23,13 +21,14 @@ import { switchBlock } from './dom/switchBlock.ts'
 import { tryBlock } from './dom/tryBlock.ts'
 import { when } from './dom/when.ts'
 import { effect } from './effect.ts'
-import { linked } from './linked.ts'
+import { enterScope } from './enterScope.ts'
+import { exitScope } from './exitScope.ts'
 import { enterRenderPass } from './runtime/enterRenderPass.ts'
 import { exitRenderPass } from './runtime/exitRenderPass.ts'
 import { hotReloadEnabled } from './runtime/hotReloadEnabled.ts'
 import { hotReplace } from './runtime/hotReplace.ts'
 import { nextBlockId } from './runtime/nextBlockId.ts'
-import { state } from './state.ts'
+import { scope } from './scope.ts'
 
 /*
 Dev-only: exposes the abide-ui runtime plus `hotReplace` on `window.__abide`, and
@@ -45,10 +44,9 @@ export function installHotBridge(): void {
     ;(globalThis as { __abide?: Record<string, unknown> }).__abide = {
         html,
         snippet,
-        doc,
-        state,
-        linked,
-        derived,
+        scope,
+        enterScope,
+        exitScope,
         effect,
         mount,
         appendText,

@@ -1,4 +1,4 @@
-import { claimChild } from '../runtime/claimChild.ts'
+import { claimExpected } from '../runtime/claimExpected.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 
 /*
@@ -12,8 +12,8 @@ rather than a list of single nodes.
 export function openMarker(parent: Node, data: string, before: Node | null = null): Comment {
     const hydration = RENDER.hydration
     if (hydration !== undefined) {
-        const node = claimChild(hydration, parent) as unknown as Comment
-        hydration.next.set(parent, node === null ? null : node.nextSibling)
+        const node = claimExpected(hydration, parent, `control-flow marker "${data}"`) as Comment
+        hydration.next.set(parent, node.nextSibling)
         return node
     }
     const node = document.createComment(data)

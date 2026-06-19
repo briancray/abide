@@ -93,6 +93,11 @@ ${options.moduleId === undefined ? '' : `component.__abideId = ${JSON.stringify(
         if (entry.name === 'mount' || entry.name === 'hydrate') {
             return true
         }
+        /* The SSR render always brackets itself with a per-render scope (compileSSR),
+           so these are referenced whenever the `render` export is — i.e. always. */
+        if (entry.name === 'enterScope' || entry.name === 'exitScope') {
+            return true
+        }
         /* Render-pass helpers are emitted by both back-ends (e.g. client and server
            await/try blocks both call nextBlockId); their names are distinctive enough
            that scanning both surfaces adds no false match. */

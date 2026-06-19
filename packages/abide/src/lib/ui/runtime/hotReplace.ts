@@ -1,15 +1,18 @@
+import { captureModelDoc } from './captureModelDoc.ts'
 import { hotInstances } from './hotInstances.ts'
+import { seedModelDoc } from './seedModelDoc.ts'
 import type { UiComponent } from './types/UiComponent.ts'
 
 /*
 Swaps every live instance of an edited component to its new factory. Per instance:
-dispose the current scope and its DOM (the mount disposer clears the host), then
-re-run `next` into the same host with the same props — so state above the boundary
-survives (props are thunks that re-read the parent's live signals) while the
-component's own state resets. The hot module calls this on load with its freshly
-compiled `next`. Returns whether it swapped at least one instance: false (the edited
-component has none mounted — e.g. a router-mounted page, or a hidden branch) tells
-the caller to fall back to a full reload, since nothing on screen would update.
+snapshot its model, dispose the current scope and its DOM (the mount disposer clears
+the host), re-run `next` into the same host with the same props, then re-seed the
+fresh model from the snapshot — so the user's in-progress `state` survives the edit
+(state above the boundary already survives: props are thunks re-reading the parent's
+live signals). The hot module calls this on load with its freshly compiled `next`.
+Returns whether it swapped at least one instance: false (the edited component has
+none mounted — e.g. a router-mounted page, or a hidden branch) tells the caller to
+fall back to a full reload, since nothing on screen would update.
 */
 export function hotReplace(moduleId: string, next: UiComponent): boolean {
     const set = hotInstances.get(moduleId)
@@ -17,9 +20,15 @@ export function hotReplace(moduleId: string, next: UiComponent): boolean {
         return false
     }
     for (const instance of set) {
+        const saved = instance.model?.snapshot()
         instance.dispose()
         instance.factory = next
-        instance.dispose = next(instance.host, instance.props)
+        const { dispose, model } = captureModelDoc(() => next(instance.host, instance.props))
+        instance.dispose = dispose
+        instance.model = model
+        if (saved !== undefined && model !== undefined) {
+            seedModelDoc(model, saved)
+        }
     }
     return true
 }

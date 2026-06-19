@@ -13,6 +13,7 @@ export type AnalyzedComponent = {
     imports: string
     stateNames: Set<string>
     derivedNames: Set<string>
+    computedNames: Set<string>
     nodes: TemplateNode[]
     /* One entry per non-empty `<style>` in the template (in source order): the scope
        attribute its covered elements carry (annotated onto `nodes`) and the scoped

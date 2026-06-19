@@ -3,6 +3,8 @@ import { OUTLET_TAG } from '../runtime/OUTLET_TAG.ts'
 import { bindListenEvent } from './bindListenEvent.ts'
 import { componentWrapperTag } from './componentWrapperTag.ts'
 import { groupBindParts } from './groupBindParts.ts'
+import { isControlFlow } from './isControlFlow.ts'
+import { isTextLeaf } from './isTextLeaf.ts'
 import { lowerContext } from './lowerContext.ts'
 import { scopeAttr } from './scopeAttr.ts'
 import { staticAttr } from './staticAttr.ts'
@@ -24,6 +26,7 @@ export function generateBuild(
     hostVar: string,
     stateNames: ReadonlySet<string>,
     derivedNames: ReadonlySet<string>,
+    computedNames: ReadonlySet<string>,
     isLayout = false,
 ): string {
     let counter = 0
@@ -34,7 +37,9 @@ export function generateBuild(
         expression: lowerExpression,
         statement: lowerStatement,
         withNestedScripts,
-    } = lowerContext(stateNames, derivedNames)
+        bindRead,
+        bindWrite,
+    } = lowerContext(stateNames, derivedNames, computedNames)
 
     /* Emits the wiring for one non-static attribute against an already-obtained skeleton
        element var — reactive `attr`, `on` listener, `attach`, or a two-way `bind`. */
@@ -75,14 +80,15 @@ export function generateBuild(
                 `on(${varName}, "change", () => { const $groupValue = ${value}; if (${varName}.checked) { if (!(${lowerExpression(attr.code)}).includes($groupValue)) { ${lowerStatement(`${attr.code}.push($groupValue)`)} } } else { const $groupIndex = (${lowerExpression(attr.code)}).indexOf($groupValue); if ($groupIndex !== -1) { ${lowerStatement(`delete ${attr.code}[$groupIndex]`)} } } });\n`
             )
         }
-        /* Two-way: drive the property from the path, and write the path back on the
+        /* Two-way: drive the property from the bind target, and write it back on the
            property's native event (`input` for most fields, but `toggle` for
-           `<details open>`, `change` for checked/select). The path is an lvalue, so
-           the write lowers to an assignment. */
+           `<details open>`, `change` for checked/select). An lvalue target reads as
+           itself and writes by assignment; an accessor object (`{ get, set }`) reads via
+           `.get()` and writes via `.set(v)` — see `bindRead`/`bindWrite`. */
         const event = bindListenEvent(attr.property, node.tag)
         return (
-            `effect(() => { ${varName}.${attr.property} = ${lowerExpression(attr.code)}; });\n` +
-            `on(${varName}, ${JSON.stringify(event)}, () => { ${lowerStatement(`${attr.code} = ${varName}.${attr.property}`)} });\n`
+            `effect(() => { ${varName}.${attr.property} = ${bindRead(attr.code)}; });\n` +
+            `on(${varName}, ${JSON.stringify(event)}, () => { ${bindWrite(attr.code, `${varName}.${attr.property}`)} });\n`
         )
     }
 
@@ -117,7 +123,7 @@ export function generateBuild(
                 })
                 .join('')
         }
-        if (isControlFlowNode(node)) {
+        if (isControlFlow(node)) {
             /* A control-flow block at its position: an `<!--a-->` anchor in the clone, the
                block mounted at it. `anchorCursor` parks the hydrate cursor past the anchor
                and returns the create insertion reference; the block's parent is the located
@@ -172,10 +178,7 @@ export function generateBuild(
         /* A text-leaf (only text/style children) with reactive text binds marker-free via
            `generateChildren` on the located element; otherwise reactive text is interleaved
            and uses `<!--a-->` anchors during the child recursion below. */
-        const isTextLeaf = node.children.every(
-            (child) => child.kind === 'text' || child.kind === 'style',
-        )
-        const textLeafBind = hasReactiveText && isTextLeaf
+        const textLeafBind = hasReactiveText && isTextLeaf(node)
         let openTag = `<${node.tag}`
         let elVar = ''
         if (hasReactiveAttr || textLeafBind) {
@@ -496,11 +499,7 @@ export function generateBuild(
             (child) =>
                 child.kind === 'element' ||
                 child.kind === 'component' ||
-                child.kind === 'if' ||
-                child.kind === 'each' ||
-                child.kind === 'await' ||
-                child.kind === 'try' ||
-                child.kind === 'switch' ||
+                isControlFlow(child) ||
                 child.kind === 'snippet' ||
                 (child.kind === 'text' && !isWhitespaceText(child)),
         )
@@ -601,18 +600,6 @@ export function generateBuild(
     }
 
     return generateChildren(isLayout ? nodes.map(asOutlet) : nodes, hostVar)
-}
-
-/* A control-flow block — `if`/`each`/`await`/`switch`/`try`. In a skeleton each mounts at
-   an `<!--a-->` anchor cloned into its located parent at the block's position. */
-function isControlFlowNode(node: TemplateNode): boolean {
-    return (
-        node.kind === 'if' ||
-        node.kind === 'each' ||
-        node.kind === 'await' ||
-        node.kind === 'switch' ||
-        node.kind === 'try'
-    )
 }
 
 /* A text node that is purely whitespace (no interpolation, only blank static

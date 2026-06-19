@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { hoistCells } from '../src/lib/ui/compile/hoistCells.ts'
 import { lowerDocAccess } from '../src/lib/ui/compile/lowerDocAccess.ts'
-import { doc } from '../src/lib/ui/doc.ts'
 import { effect } from '../src/lib/ui/effect.ts'
+import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
 import type { Doc } from '../src/lib/ui/runtime/types/Doc.ts'
 
 function squash(code: string): string {

@@ -1,6 +1,8 @@
 import { OUTLET_TAG } from '../runtime/OUTLET_TAG.ts'
 import { componentWrapperTag } from './componentWrapperTag.ts'
 import { groupBindParts } from './groupBindParts.ts'
+import { isControlFlow } from './isControlFlow.ts'
+import { isTextLeaf } from './isTextLeaf.ts'
 import { lowerContext } from './lowerContext.ts'
 import { scopeAttr } from './scopeAttr.ts'
 import { skeletonable } from './skeletonable.ts'
@@ -35,6 +37,7 @@ export function generateSSR(
     nodes: TemplateNode[],
     stateNames: ReadonlySet<string>,
     derivedNames: ReadonlySet<string>,
+    computedNames: ReadonlySet<string>,
     isLayout = false,
 ): string {
     /* Compile-time counter for unique temp var names (runtime block ids, child render
@@ -47,7 +50,8 @@ export function generateSSR(
         expression: lowerExpression,
         statement,
         withNestedScripts,
-    } = lowerContext(stateNames, derivedNames)
+        bindRead,
+    } = lowerContext(stateNames, derivedNames, computedNames)
 
     /* A scoped-script body for SSR: the shared lowering, then strip effects
        (client-only lifecycle that emits no HTML) — the one SSR-side asymmetry. */
@@ -98,6 +102,12 @@ export function generateSSR(
     const anchorMark = (target: string): string => (inSkeleton ? push(target, '<!--a-->') : '')
 
     function generate(node: TemplateNode, target: string): string {
+        /* A control-flow block is positioned by an `<!--a-->` anchor when in a skeleton
+           context. Emit it ONCE here — one decision site gated by the shared `isControlFlow`,
+           mirroring the client's single `skeletonMarkup` control-flow branch — rather than
+           prefixing each block kind's own `anchorMark` call (six sites that had to stay in
+           lock-step). `anchorMark` no-ops outside a skeleton, so non-block nodes ignore it. */
+        const anchor = isControlFlow(node) ? anchorMark(target) : ''
         if (node.kind === 'text') {
             return node.parts
                 .map((part) => {
@@ -119,7 +129,7 @@ export function generateSSR(
             if (elseBranch !== undefined && elseBranch.kind === 'case') {
                 code += ` else {\n${branchContent(elseBranch.children, target)}}`
             }
-            return `${anchorMark(target)}${openRange(target)}${code}\n${closeRange(target)}`
+            return `${anchor}${openRange(target)}${code}\n${closeRange(target)}`
         }
         if (node.kind === 'switch') {
             const cases = node.children.filter(
@@ -137,7 +147,7 @@ export function generateSSR(
             if (fallback !== undefined) {
                 code += `${started ? 'else ' : ''}{\n${branchContent(fallback.children, target)}}\n`
             }
-            return `${anchorMark(target)}${openRange(target)}${code}}\n${closeRange(target)}`
+            return `${anchor}${openRange(target)}${code}}\n${closeRange(target)}`
         }
         if (node.kind === 'case') {
             return ''
@@ -165,15 +175,15 @@ export function generateSSR(
                skeleton the `<!--a-->` anchor still marks its position (the client mounts
                there); no range markers, since there are no server rows to claim. */
             if (node.async) {
-                return anchorMark(target)
+                return anchor
             }
-            return `${anchorMark(target)}for (const ${node.as} of (${lowerExpression(node.items)})) {\n${openRange(target)}${branchContent(node.children, target)}${closeRange(target)}}\n`
+            return `${anchor}for (const ${node.as} of (${lowerExpression(node.items)})) {\n${openRange(target)}${branchContent(node.children, target)}${closeRange(target)}}\n`
         }
         if (node.kind === 'await') {
-            return `${anchorMark(target)}${generateAwait(node, target)}`
+            return `${anchor}${generateAwait(node, target)}`
         }
         if (node.kind === 'try') {
-            return `${anchorMark(target)}${generateTry(node, target)}`
+            return `${anchor}${generateTry(node, target)}`
         }
         if (node.kind === 'branch') {
             return ''
@@ -239,9 +249,9 @@ export function generateSSR(
             } else if (attr.kind === 'bind' && attr.property === 'checked') {
                 /* A boolean property — its mere presence means checked, so emit the
                    attribute only when truthy (a string `checked="false"` still checks). */
-                code += `${target}.push((${lowerExpression(attr.code)}) ? ' checked' : '');\n`
+                code += `${target}.push((${bindRead(attr.code)}) ? ' checked' : '');\n`
             } else if (attr.kind === 'bind') {
-                code += `${target}.push(${JSON.stringify(` ${attr.property}="`)} + $esc(${lowerExpression(attr.code)}) + '"');\n`
+                code += `${target}.push(${JSON.stringify(` ${attr.property}="`)} + $esc(${bindRead(attr.code)}) + '"');\n`
             }
         }
         code += push(target, '>')
@@ -254,10 +264,7 @@ export function generateSSR(
                 inSkeleton = true
             }
             const previousMark = markText
-            const isTextLeaf = node.children.every(
-                (child) => child.kind === 'text' || child.kind === 'style',
-            )
-            markText = inSkeleton && !isTextLeaf
+            markText = inSkeleton && !isTextLeaf(node)
             /* A `<script>` child scopes its bindings to this element's subtree. */
             code += withNestedScripts(node.children, () => generateInto(node.children, target))
             markText = previousMark

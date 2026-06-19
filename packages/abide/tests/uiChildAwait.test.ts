@@ -1,14 +1,14 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { compileComponent } from '../src/lib/ui/compile/compileComponent.ts'
 import { compileSSR } from '../src/lib/ui/compile/compileSSR.ts'
-import { derived } from '../src/lib/ui/derived.ts'
-import { doc } from '../src/lib/ui/doc.ts'
+import { computed } from '../src/lib/ui/computed.ts'
 import { appendStatic } from '../src/lib/ui/dom/appendStatic.ts'
 import { appendText } from '../src/lib/ui/dom/appendText.ts'
 import { awaitBlock } from '../src/lib/ui/dom/awaitBlock.ts'
 import { mount } from '../src/lib/ui/dom/mount.ts'
 import { effect } from '../src/lib/ui/effect.ts'
 import { renderToStream } from '../src/lib/ui/renderToStream.ts'
+import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
 import type { SsrRender } from '../src/lib/ui/runtime/types/SsrRender.ts'
 import { state } from '../src/lib/ui/state.ts'
 import { installMiniDom } from './support/installMiniDom.ts'
@@ -20,7 +20,7 @@ beforeAll(() => {
 const RUNTIME = {
     doc,
     state,
-    derived,
+    computed,
     effect,
     appendText,
     appendStatic,
@@ -51,12 +51,12 @@ async function streamToString(render: () => SsrRender): Promise<string> {
 
 describe('child-component await blocks join the page SSR stream', () => {
     const Child = component(`
-        <script>let inner = state(Promise.resolve('C'))</script>
+        <script>let inner = scope().state(Promise.resolve('C'))</script>
         <template await={inner}><p>child-pending</p><template then="c"><span>child:{c}</span></template></template>
     `)
     const Parent = component(
         `
-        <script>let top = state(Promise.resolve('T'))</script>
+        <script>let top = scope().state(Promise.resolve('T'))</script>
         <div>
             <template await={top}><p>top-pending</p><template then="t"><b>top:{t}</b></template></template>
             <Child />

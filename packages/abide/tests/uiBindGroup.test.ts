@@ -1,8 +1,7 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { compileComponent } from '../src/lib/ui/compile/compileComponent.ts'
 import { compileSSR } from '../src/lib/ui/compile/compileSSR.ts'
-import { derived } from '../src/lib/ui/derived.ts'
-import { doc } from '../src/lib/ui/doc.ts'
+import { computed } from '../src/lib/ui/computed.ts'
 import { appendStatic } from '../src/lib/ui/dom/appendStatic.ts'
 import { appendText } from '../src/lib/ui/dom/appendText.ts'
 import { attr } from '../src/lib/ui/dom/attr.ts'
@@ -11,6 +10,7 @@ import { on } from '../src/lib/ui/dom/on.ts'
 import { text } from '../src/lib/ui/dom/text.ts'
 import { when } from '../src/lib/ui/dom/when.ts'
 import { effect } from '../src/lib/ui/effect.ts'
+import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
 import { state } from '../src/lib/ui/state.ts'
 import { installMiniDom } from './support/installMiniDom.ts'
 
@@ -20,10 +20,10 @@ beforeAll(() => {
 
 /* Runs a compiled SSR body to its HTML string. */
 function renderSSR(source: string): string {
-    const result = new Function('doc', 'state', 'derived', 'effect', compileSSR(source))(
+    const result = new Function('doc', 'state', 'computed', 'effect', compileSSR(source))(
         doc,
         state,
-        derived,
+        computed,
         effect,
     ) as { html: string }
     return result.html
@@ -37,7 +37,7 @@ function mountClient(source: string): { host: HTMLElement; model: ReturnType<typ
         'host',
         'doc',
         'state',
-        'derived',
+        'computed',
         'text',
         'appendText',
         'appendStatic',
@@ -51,7 +51,7 @@ function mountClient(source: string): { host: HTMLElement; model: ReturnType<typ
         host,
         doc,
         state,
-        derived,
+        computed,
         text,
         appendText,
         appendStatic,
@@ -65,14 +65,14 @@ function mountClient(source: string): { host: HTMLElement; model: ReturnType<typ
 }
 
 const CHECKBOXES = `
-    <script>let toppings = state(['cheese', 'olive'])</script>
+    <script>let toppings = scope().state(['cheese', 'olive'])</script>
     <template each={['cheese', 'mushroom', 'olive']} as="t" key="t">
         <input type="checkbox" value={t} bind:group={toppings}>
     </template>
 `
 
 const RADIOS = `
-    <script>let size = state('medium')</script>
+    <script>let size = scope().state('medium')</script>
     <template each={['small', 'medium', 'large']} as="s" key="s">
         <input type="radio" value={s} bind:group={size}>
     </template>
@@ -110,7 +110,7 @@ describe('bind:group SSR', () => {
 
     test('bind:checked renders as a boolean attribute, absent when false', () => {
         const html = renderSSR(`
-            <script>let on = state(false)</script>
+            <script>let on = scope().state(false)</script>
             <input type="checkbox" bind:checked={on}>
         `)
         expect(html).toBe('<input type="checkbox">')
@@ -147,5 +147,46 @@ describe('bind:group client', () => {
         large.checked = true
         large.dispatchEvent(new (globalThis as { Event: typeof Event }).Event('change'))
         expect(model.read<string>('size')).toBe('large')
+    })
+})
+
+/*
+`bind:value={{ get, set }}` — the accessor form, the only way to two-way-bind a value whose
+write goes somewhere other than the read target (the replacement for the removed writable
+`computed(compute, set)` lens). Reads via `.get()`, writes via `.set(v)`; refs inside both
+bodies lower like any expression. Binding a read-only `computed` bare is a compile error.
+*/
+const ACCESSOR = `
+    <script>let celsius = scope().state(0)</script>
+    <input
+        type="number"
+        bind:value={{
+            get: () => Math.round((celsius * 9) / 5 + 32),
+            set: (f) => (celsius = (((f) - 32) * 5) / 9),
+        }}
+    >
+`
+
+describe('bind:value accessor {get,set}', () => {
+    test('client wiring reads via .get() and writes via .set(), lowering refs in both', () => {
+        const body = compileComponent(ACCESSOR)
+        expect(body).toContain('}).get();') // driving effect reads the accessor
+        expect(body).toContain('}).set(') // listener writes through the accessor
+        expect(body).toContain('model.cell("celsius")') // celsius lowered to the doc API
+    })
+
+    test('SSR renders the initial value through the accessor get()', () => {
+        expect(compileSSR(ACCESSOR)).toContain('.get()')
+    })
+
+    test('binding a read-only computed is a compile error pointing at the accessor', () => {
+        const source = `
+            <script>
+                let celsius = scope().state(0)
+                const fahrenheit = scope().computed(() => (celsius * 9) / 5 + 32)
+            </script>
+            <input bind:value={fahrenheit}>
+        `
+        expect(() => compileComponent(source)).toThrow(/read-only computed/)
     })
 })

@@ -1,8 +1,7 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { compileComponent } from '../src/lib/ui/compile/compileComponent.ts'
 import { compileSSR } from '../src/lib/ui/compile/compileSSR.ts'
-import { derived } from '../src/lib/ui/derived.ts'
-import { doc } from '../src/lib/ui/doc.ts'
+import { computed } from '../src/lib/ui/computed.ts'
 import { appendStatic } from '../src/lib/ui/dom/appendStatic.ts'
 import { appendText } from '../src/lib/ui/dom/appendText.ts'
 import { attr } from '../src/lib/ui/dom/attr.ts'
@@ -13,6 +12,7 @@ import { on } from '../src/lib/ui/dom/on.ts'
 import { switchBlock } from '../src/lib/ui/dom/switchBlock.ts'
 import { when } from '../src/lib/ui/dom/when.ts'
 import { effect } from '../src/lib/ui/effect.ts'
+import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
 import type { SsrRender } from '../src/lib/ui/runtime/types/SsrRender.ts'
 import { state } from '../src/lib/ui/state.ts'
 import { installMiniDom } from './support/installMiniDom.ts'
@@ -31,7 +31,7 @@ const record = (value: unknown): void => {
 const RUNTIME = {
     doc,
     state,
-    derived,
+    computed,
     effect,
     appendText,
     appendStatic,
@@ -65,8 +65,8 @@ function run(source: string, host: Element, model: unknown, mode: 'mount' | 'hyd
 
 describe('scoped <script> in a control-flow branch', () => {
     /* An `if` branch declares a PLAIN local signal seeded from in-scope doc data;
-       its markup auto-derefs the binding, like a `derived`. */
-    const IF = `<main><template if={model.on}><script>let n = state(model.base)</script><p>{n}</p><button onclick={() => (n = n + 1)}>+</button></template></main>`
+       its markup auto-derefs the binding, like a `computed`. */
+    const IF = `<main><template if={model.on}><script>let n = scope().state(model.base)</script><p>{n}</p><button onclick={() => (n = n + 1)}>+</button></template></main>`
 
     test('SSR renders the branch-local signal seeded from doc data', () => {
         expect(ssr(IF, doc({ on: true, base: 5 })).html).toBe(
@@ -118,7 +118,7 @@ describe('scoped <script> in a control-flow branch', () => {
     })
 
     test('a switch case carries its own scoped signal', () => {
-        const SWITCH = `<main><template switch={model.k}><template case="'a'"><script>let label = state(model.base + '!')</script><span>{label}</span></template><template default><b>?</b></template></template></main>`
+        const SWITCH = `<main><template switch={model.k}><template case="'a'"><script>let label = scope().state(model.base + '!')</script><span>{label}</span></template><template default><b>?</b></template></template></main>`
         expect(ssr(SWITCH, doc({ k: 'a', base: 'hi' })).html).toBe(
             '<main><!--a--><!--[--><span>hi!</span><!--]--></main>',
         )
@@ -133,7 +133,7 @@ describe('scoped <script> in a control-flow branch', () => {
 
     /* Each row gets its OWN scoped signal, seeded from that row's item — per-row
        local state, isolated row to row. */
-    const EACH = `<ul><template each={model.items} as="item" key={item.id}><script>let n = state(item.base * 10)</script><li><button onclick={() => (n = n + 1)}>{n}</button></li></template></ul>`
+    const EACH = `<ul><template each={model.items} as="item" key={item.id}><script>let n = scope().state(item.base * 10)</script><li><button onclick={() => (n = n + 1)}>{n}</button></li></template></ul>`
 
     test('SSR seeds each row independently', () => {
         expect(
@@ -177,7 +177,7 @@ describe('scoped <script> in a control-flow branch', () => {
 
     /* A branch-scoped `effect` is owned by the branch's render scope: it runs on
        mount, re-runs on its deps, and disposes when the branch leaves. */
-    const FX = `<main><template if={model.on}><script>let n = state(model.base)
+    const FX = `<main><template if={model.on}><script>let n = scope().state(model.base)
 effect(() => record(n + ':' + model.base))</script><button onclick={() => (n = n + 1)}>{n}</button></template></main>`
 
     test('client: branch effect runs, is reactive, disposes on leave, re-seeds', () => {
@@ -205,10 +205,10 @@ effect(() => record(n + ':' + model.base))</script><button onclick={() => (n = n
         expect(effectLog).toEqual([]) // effect body did not run
     })
 
-    /* The headline case: a `then` branch declares state derived from the resolved
+    /* The headline case: a `then` branch declares state computed from the resolved
        value — the ergonomic that top-level await gave, without async ownership. */
     test('await then: scoped state seeded from the resolved value', async () => {
-        const AWAIT = `<main><template await={model.load}><p>loading</p><template then="foo"><script>let a = state(foo.bar)</script><span>{a}</span></template></template></main>`
+        const AWAIT = `<main><template await={model.load}><p>loading</p><template then="foo"><script>let a = scope().state(foo.bar)</script><span>{a}</span></template></template></main>`
         const host = document.createElement('div')
         run(AWAIT, host, doc({ load: Promise.resolve({ bar: 'ready' }) }), 'mount')
         expect(host.textContent).toBe('loading')
@@ -225,7 +225,7 @@ describe('scoped <script> directly under a bound element (skeleton path)', () =>
        located nodes. The imperative `openChild` path no longer exists, so this exercises the
        unified backend. (The signal is read by a LATER sibling, never the parent's own
        attribute — that would read it before the script's `let` runs, in either backend.) */
-    const SRC = `<div><script>let open = state(false)</script><p class={open ? 'on' : 'off'}>{open}</p><button onclick={() => (open = !open)}>x</button></div>`
+    const SRC = `<div><script>let open = scope().state(false)</script><p class={open ? 'on' : 'off'}>{open}</p><button onclick={() => (open = !open)}>x</button></div>`
 
     test('SSR === client mount for a script under a bound element', () => {
         const server = ssr(SRC, doc({})).html

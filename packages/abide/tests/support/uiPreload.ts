@@ -5,15 +5,18 @@ import { cloneStatic } from '../../src/lib/ui/dom/cloneStatic.ts'
 import { mountChild } from '../../src/lib/ui/dom/mountChild.ts'
 import { mountSlot } from '../../src/lib/ui/dom/mountSlot.ts'
 import { skeleton } from '../../src/lib/ui/dom/skeleton.ts'
+import { enterScope } from '../../src/lib/ui/enterScope.ts'
+import { exitScope } from '../../src/lib/ui/exitScope.ts'
 import { enterRenderPass } from '../../src/lib/ui/runtime/enterRenderPass.ts'
 import { exitRenderPass } from '../../src/lib/ui/runtime/exitRenderPass.ts'
 import { nextBlockId } from '../../src/lib/ui/runtime/nextBlockId.ts'
+import { scope } from '../../src/lib/ui/scope.ts'
 
 /*
 Test preload registering abide-ui's `.abide` loader so fixture pages/components
 import and compile through the runtime the server and client bundles use. abide-ui
 is the only UI runtime, and the reactive test harnesses are plain `.ts` (abide-ui
-effect/derived), needing no loader.
+effect/computed), needing no loader.
 */
 Bun.plugin(abideUiPlugin)
 
@@ -44,3 +47,9 @@ globals.appendTextAt = appendTextAt
 globals.anchorCursor = anchorCursor
 /* `mountSlot` mounts a `<slot>`'s content as a marker-bounded range at its anchor. */
 globals.mountSlot = mountSlot
+/* The lowering emits `const model = scope()`; harness bodies resolve `scope` as a
+   bare global (the real bundle imports it). Client mount/hydrate establish the
+   per-component scope; SSR establishes one per render (see enterScope). */
+globals.scope = scope
+globals.enterScope = enterScope
+globals.exitScope = exitScope

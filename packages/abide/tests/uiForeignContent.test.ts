@@ -1,8 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { compileComponent } from '../src/lib/ui/compile/compileComponent.ts'
 import { compileSSR } from '../src/lib/ui/compile/compileSSR.ts'
-import { derived } from '../src/lib/ui/derived.ts'
-import { doc } from '../src/lib/ui/doc.ts'
+import { computed } from '../src/lib/ui/computed.ts'
 import { appendStatic } from '../src/lib/ui/dom/appendStatic.ts'
 import { appendText } from '../src/lib/ui/dom/appendText.ts'
 import { appendTextAt } from '../src/lib/ui/dom/appendTextAt.ts'
@@ -15,6 +14,7 @@ import { on } from '../src/lib/ui/dom/on.ts'
 import { skeleton } from '../src/lib/ui/dom/skeleton.ts'
 import { when } from '../src/lib/ui/dom/when.ts'
 import { effect } from '../src/lib/ui/effect.ts'
+import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
 import { state } from '../src/lib/ui/state.ts'
 import { installHappyDom } from './support/installHappyDom.ts'
 
@@ -26,7 +26,7 @@ const SVG_NS = 'http://www.w3.org/2000/svg'
    imperative path used to hit. A fully-static sibling svg proves the clone path too. */
 const BOUND_SVG = `
 <script>
-  let size = state(24)
+  let size = scope().state(24)
 </script>
 <svg width={size} viewBox="0 0 24 24"><path d="M0 0"/><circle cx="12"/></svg>
 `
@@ -38,7 +38,7 @@ function runBuild(source: string, host: Element, hydrating: boolean): void {
     const runtime = {
         doc,
         state,
-        derived,
+        computed,
         effect,
         cloneStatic,
         skeleton,
@@ -84,10 +84,10 @@ describe('foreign content (real parser) — SVG namespace', () => {
     })
 
     test('client HYDRATE: claiming server SVG markup keeps the SVG namespace', () => {
-        const server = new Function('doc', 'state', 'derived', 'effect', compileSSR(BOUND_SVG))(
+        const server = new Function('doc', 'state', 'computed', 'effect', compileSSR(BOUND_SVG))(
             doc,
             state,
-            derived,
+            computed,
             effect,
         ) as { html: string }
         const host = document.createElement('div')
@@ -103,7 +103,7 @@ describe('foreign content (real parser) — SVG namespace', () => {
    parser, or the static `<svg>` builds in the HTML namespace. */
 const STATIC_SVG_DYNAMIC_CHILD = `
 <script>
-  let color = state('red')
+  let color = scope().state('red')
 </script>
 <svg viewBox="0 0 24 24"><path fill={color} d="M0 0"/></svg>
 `
@@ -111,7 +111,7 @@ const STATIC_SVG_DYNAMIC_CHILD = `
 /* A foreign subtree nested under a static HTML element with a hole deeper still. */
 const NESTED_SVG = `
 <script>
-  let r = state(6)
+  let r = scope().state(6)
 </script>
 <div class="icon"><svg viewBox="0 0 24 24"><circle r={r} cx="12"/></svg></div>
 `
@@ -137,7 +137,7 @@ describe('foreign content — holes on descendants', () => {
    (parsed inside the SVG wrapper) while binding the text on the located `<text>` node. */
 const SVG_REACTIVE_TEXT = `
 <script>
-  let label = state('hi')
+  let label = scope().state('hi')
 </script>
 <svg viewBox="0 0 24 24"><text x="0">{label}</text></svg>
 `
@@ -147,7 +147,7 @@ const SVG_REACTIVE_TEXT = `
    still parse into the foreign namespace. */
 const SVG_MIXED_STATIC = `
 <script>
-  let show = state(true)
+  let show = scope().state(true)
 </script>
 <svg viewBox="0 0 24 24"><path d="M0 0"/><template if={show}><circle cx="12"/></template></svg>
 `
@@ -156,7 +156,7 @@ const SVG_MIXED_STATIC = `
    detached fragment before insertion, so the each must carry the ambient namespace. */
 const SVG_EACH = `
 <script>
-  let rs = state([2, 4, 6])
+  let rs = scope().state([2, 4, 6])
 </script>
 <svg viewBox="0 0 24 24"><template each={rs} as="r" key="r"><circle r={r}/></template></svg>
 `
@@ -216,7 +216,7 @@ describe('foreign content — imperative path with dynamic children', () => {
    the suffix is claimed structure. */
 const SUFFIX_IF = `
 <script>
-  let on = state(true)
+  let on = scope().state(true)
 </script>
 <p><template if={on}><b>shown</b></template> the tail</p>
 `
@@ -231,10 +231,10 @@ describe('control flow with a static suffix', () => {
     })
 
     test('HYDRATE: adopts the branch and suffix in place (no duplication)', () => {
-        const server = new Function('doc', 'state', 'derived', 'effect', compileSSR(SUFFIX_IF))(
+        const server = new Function('doc', 'state', 'computed', 'effect', compileSSR(SUFFIX_IF))(
             doc,
             state,
-            derived,
+            computed,
             effect,
         ) as { html: string }
         const host = document.createElement('div')
@@ -252,17 +252,17 @@ describe('control flow with a static suffix', () => {
    its server range, not the prefix. */
 const PREFIXED_IF = `
 <script>
-  let on = state(true)
+  let on = scope().state(true)
 </script>
 <div class="card"><h2>Title</h2><p>Body</p><template if={on}><span>shown</span></template></div>
 `
 
 describe('control flow with a static prefix (skeleton + cursorAfterElements)', () => {
     test('HYDRATE: adopts the prefix and the if branch in place (no duplication)', () => {
-        const server = new Function('doc', 'state', 'derived', 'effect', compileSSR(PREFIXED_IF))(
+        const server = new Function('doc', 'state', 'computed', 'effect', compileSSR(PREFIXED_IF))(
             doc,
             state,
-            derived,
+            computed,
             effect,
         ) as { html: string }
         const host = document.createElement('div')

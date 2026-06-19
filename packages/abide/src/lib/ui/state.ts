@@ -14,7 +14,7 @@ needs no magic.
 `transform` is an optional coercion gate on the write path: every `.value =`
 runs it and stores what it returns, with `previous` for clamp-relative writes or
 rejection (`return previous` is an `Object.is` no-op). It is the local-truth
-mirror of `derived`'s write-through `set` — here the value lives in this cell, so
+mirror of `computed`'s write-through `set` — here the value lives in this cell, so
 the gate *returns* what to store rather than writing an external target. The
 construction `initial` is taken verbatim; the gate runs on writes only.
 */
@@ -22,7 +22,6 @@ construction `initial` is taken verbatim; the gate runs on writes only.
    `State<Foo | undefined>`. Without it `state<Foo>(undefined)` is an arity/assign
    error and `state(undefined)` infers `T = undefined` (every `.value` access then
    narrows to `never`). */
-// @readme plumbing
 export function state<T>(): State<T | undefined>
 export function state<T>(initial: T, transform?: (next: T, previous: T) => T): State<T>
 export function state<T>(

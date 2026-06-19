@@ -1,4 +1,5 @@
 import type { PathWalk } from './types/PathWalk.ts'
+import { unescapeKey } from './unescapeKey.ts'
 
 /*
 Walks a `/`-joined path through a plain tree in one pass, returning both whether
@@ -17,7 +18,8 @@ export function walkPath(tree: unknown, path: string): PathWalk {
         return { exists: tree !== undefined, value: tree }
     }
     let current: unknown = tree
-    for (const segment of path.split('/')) {
+    for (const rawSegment of path.split('/')) {
+        const segment = unescapeKey(rawSegment)
         if (current === null || typeof current !== 'object' || !(segment in current)) {
             return { exists: false, value: undefined }
         }

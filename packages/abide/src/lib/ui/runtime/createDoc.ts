@@ -1,6 +1,8 @@
 import { applyPatchToTree } from './applyPatchToTree.ts'
+import { createComputedNode } from './createComputedNode.ts'
 import { createSignalNode } from './createSignalNode.ts'
 import { flushEffects } from './flushEffects.ts'
+import { PATCH_BUS } from './PATCH_BUS.ts'
 import { REACTIVE_CONTEXT } from './REACTIVE_CONTEXT.ts'
 import { readNode } from './readNode.ts'
 import { trigger } from './trigger.ts'
@@ -8,6 +10,7 @@ import type { Cell } from './types/Cell.ts'
 import type { Doc } from './types/Doc.ts'
 import type { Patch } from './types/Patch.ts'
 import type { ReactiveNode } from './types/ReactiveNode.ts'
+import { unescapeKey } from './unescapeKey.ts'
 import { walkPath } from './walkPath.ts'
 import { writeNode } from './writeNode.ts'
 
@@ -34,6 +37,16 @@ the change.
 export function createDoc(initial: unknown): Doc {
     let tree = initial
     const nodes = new Map<string, ReactiveNode>()
+    /* Computed slots: a path whose value is a function of other paths, not stored
+       truth. Held apart from `nodes` so the structural wake/eviction never touches
+       them; their dirtiness is driven entirely by the deps they read (the signal
+       graph), not by tree mutations. They are not in `tree`, so `snapshot` omits
+       them, and they never pass through `apply`, so they never hit the patch bus —
+       a recompute is a downstream reaction, not a change to journal/persist/sync. */
+    const computed = new Map<string, ReactiveNode>()
+    /* Set to the returned document before any apply runs, so a PATCH_BUS event can
+       name the document it came from (reference identity, the undo/persistence key). */
+    let self: Doc
 
     function nodeFor(path: string): ReactiveNode {
         let node = nodes.get(path)
@@ -45,7 +58,25 @@ export function createDoc(initial: unknown): Doc {
     }
 
     function read<T>(path: string): T {
+        /* Size-gated so a doc with no computed slots pays nothing on the stored hot
+           path — only one `.size` check, not a `.get` per read. */
+        if (computed.size > 0) {
+            const computedNode = computed.get(path)
+            if (computedNode !== undefined) {
+                return readNode(computedNode) as T
+            }
+        }
         return readNode(nodeFor(path)) as T
+    }
+
+    /* Registers a computed slot at `path` and returns a string-free reader bound to
+       its node — the hoisted accessor the compiler would emit (the `computed` form),
+       so a hot read skips the path lookup. Reading the compute subscribes it to
+       whatever doc paths it touches; those deps then drive its recomputation. */
+    function derive<T>(path: string, compute: () => T): () => T {
+        const node = createComputedNode(compute as () => unknown)
+        computed.set(path, node)
+        return () => readNode(node) as T
     }
 
     /*
@@ -93,7 +124,13 @@ export function createDoc(initial: unknown): Doc {
     }
 
     function apply(patch: Patch): void {
-        const segments = patch.path === '' ? [] : patch.path.split('/')
+        /* Segments index the tree, so they carry the REAL keys (unescaped); the path
+           strings (parentPath, node-map keys) stay escaped, re-walked through walkPath. */
+        const segments = patch.path === '' ? [] : patch.path.split('/').map(unescapeKey)
+        /* Capture the pre-image only when a consumer is listening (the inverse's only
+           cost): a replace/remove inverts to the value it overwrote, an add to a
+           remove (computed post-apply, below, to resolve an array append's index). */
+        const before = PATCH_BUS.active ? walkPath(tree, patch.path) : undefined
         tree = applyPatchToTree(tree, patch, segments)
         /* parentPath is patch.path minus its last segment — the same string
            `segments.slice(0, -1).join('/')` rebuilds, taken by one slice instead. */
@@ -140,7 +177,38 @@ export function createDoc(initial: unknown): Doc {
         } finally {
             REACTIVE_CONTEXT.batchDepth -= 1
         }
+        /* Announce the change before flushing effects, so a patch an effect emits in
+           reaction lands AFTER this one on the bus — the journal stays chronological. */
+        if (PATCH_BUS.active) {
+            PATCH_BUS.emit({ doc: self, patch, inverse: inverseOf(patch, before) })
+        }
         flushEffects()
+    }
+
+    /* The patch that undoes `patch`, from the pre-image `before` (a value the change
+       overwrote/removed) and the now-mutated tree. An add inverts to removing the slot
+       it created — resolving an array append (`-`) to the concrete last index it took.
+       A replace/remove of a path that held nothing inverts to remove/nothing. */
+    function inverseOf(
+        patch: Patch,
+        before: ReturnType<typeof walkPath> | undefined,
+    ): Patch | undefined {
+        if (patch.op === 'add') {
+            const lastSlash = patch.path.lastIndexOf('/')
+            const parentPath = lastSlash === -1 ? '' : patch.path.slice(0, lastSlash)
+            const parent = walkPath(tree, parentPath).value
+            const resolved =
+                Array.isArray(parent) && patch.path.endsWith('/-')
+                    ? `${parentPath}/${parent.length - 1}`
+                    : patch.path
+            return { op: 'remove', path: resolved }
+        }
+        if (patch.op === 'replace') {
+            return before?.exists
+                ? { op: 'replace', path: patch.path, value: before.value }
+                : { op: 'remove', path: patch.path }
+        }
+        return before?.exists ? { op: 'add', path: patch.path, value: before.value } : undefined
     }
 
     /*
@@ -153,7 +221,7 @@ export function createDoc(initial: unknown): Doc {
     */
     function cell<T>(path: string): Cell<T> {
         const node = nodeFor(path)
-        const segments = path.split('/')
+        const segments = path.split('/').map(unescapeKey)
         const leafKey = segments[segments.length - 1] as string
         let parent = tree as Record<string, unknown>
         for (const segment of segments.slice(0, -1)) {
@@ -168,13 +236,15 @@ export function createDoc(initial: unknown): Doc {
         }
     }
 
-    return {
+    self = {
         read,
         cell,
+        derive,
         apply,
         replace: (path, value) => apply({ op: 'replace', path, value }),
         add: (path, value) => apply({ op: 'add', path, value }),
         remove: (path) => apply({ op: 'remove', path }),
         snapshot: () => tree,
     }
+    return self
 }

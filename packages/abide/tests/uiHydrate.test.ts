@@ -1,8 +1,7 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { compileComponent } from '../src/lib/ui/compile/compileComponent.ts'
 import { compileSSR } from '../src/lib/ui/compile/compileSSR.ts'
-import { derived } from '../src/lib/ui/derived.ts'
-import { doc } from '../src/lib/ui/doc.ts'
+import { computed } from '../src/lib/ui/computed.ts'
 import { appendStatic } from '../src/lib/ui/dom/appendStatic.ts'
 import { appendText } from '../src/lib/ui/dom/appendText.ts'
 import { applyResolved } from '../src/lib/ui/dom/applyResolved.ts'
@@ -15,6 +14,7 @@ import { switchBlock } from '../src/lib/ui/dom/switchBlock.ts'
 import { when } from '../src/lib/ui/dom/when.ts'
 import { effect } from '../src/lib/ui/effect.ts'
 import { renderToStream } from '../src/lib/ui/renderToStream.ts'
+import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
 import { RESUME } from '../src/lib/ui/runtime/RESUME.ts'
 import type { SsrRender } from '../src/lib/ui/runtime/types/SsrRender.ts'
 import { state } from '../src/lib/ui/state.ts'
@@ -26,7 +26,7 @@ beforeAll(() => {
 
 const COUNTER = `
     <script>
-        let count = state(0)
+        let count = scope().state(0)
         function inc() { count += 1 }
     </script>
     <main>
@@ -37,10 +37,10 @@ const COUNTER = `
 describe('hydrate — adopt server DOM', () => {
     test('claims existing nodes (no re-render) and wires reactivity in place', () => {
         // 1) server render → HTML
-        const server = new Function('doc', 'state', 'derived', 'effect', compileSSR(COUNTER))(
+        const server = new Function('doc', 'state', 'computed', 'effect', compileSSR(COUNTER))(
             doc,
             state,
-            derived,
+            computed,
             effect,
         ) as SsrRender
         expect(server.html).toBe('<main><button>count: 0</button></main>')
@@ -56,7 +56,7 @@ describe('hydrate — adopt server DOM', () => {
 
         // 3) hydrate: adopt the existing DOM
         const body = compileComponent(COUNTER)
-        const runtime = { doc, state, derived, effect, appendText, appendStatic, on }
+        const runtime = { doc, state, computed, effect, appendText, appendStatic, on }
         const names = Object.keys(runtime)
         hydrate(host, (target) => {
             new Function('host', ...names, body)(
@@ -85,7 +85,7 @@ describe('hydrate — adopt server DOM', () => {
         const runtime = {
             doc,
             state,
-            derived,
+            computed,
             effect,
             appendText,
             appendStatic,
@@ -98,11 +98,11 @@ describe('hydrate — adopt server DOM', () => {
         const server = new Function(
             'doc',
             'state',
-            'derived',
+            'computed',
             'effect',
             'model',
             compileSSR(source),
-        )(doc, state, derived, effect, model) as SsrRender
+        )(doc, state, computed, effect, model) as SsrRender
         expect(server.html).toBe('<main>Item</main>')
 
         const host = document.createElement('div')
@@ -134,7 +134,7 @@ describe('hydrate — adopt server DOM', () => {
         const runtime = {
             doc,
             state,
-            derived,
+            computed,
             effect,
             appendText,
             appendStatic,
@@ -149,11 +149,11 @@ describe('hydrate — adopt server DOM', () => {
         const server = new Function(
             'doc',
             'state',
-            'derived',
+            'computed',
             'effect',
             'model',
             compileSSR(source),
-        )(doc, state, derived, effect, model) as SsrRender
+        )(doc, state, computed, effect, model) as SsrRender
         expect(server.html).toBe('<main><!--a--><!--[--><span>hi</span><!--]--></main>')
 
         // parse + hydrate
@@ -194,7 +194,7 @@ describe('hydrate — adopt server DOM', () => {
         const runtime = {
             doc,
             state,
-            derived,
+            computed,
             effect,
             appendText,
             appendStatic,
@@ -209,11 +209,11 @@ describe('hydrate — adopt server DOM', () => {
         const server = new Function(
             'doc',
             'state',
-            'derived',
+            'computed',
             'effect',
             'model',
             compileSSR(source),
-        )(doc, state, derived, effect, model) as SsrRender
+        )(doc, state, computed, effect, model) as SsrRender
         expect(server.html).toBe(
             '<main><ul><!--a--><!--[--><li>1</li><!--]--><!--[--><li>2</li><!--]--></ul></main>',
         )
@@ -364,7 +364,7 @@ describe('hydrate — adopt server DOM', () => {
         const runtime = {
             doc,
             state,
-            derived,
+            computed,
             effect,
             appendText,
             appendStatic,
@@ -380,11 +380,11 @@ describe('hydrate — adopt server DOM', () => {
         const server = new Function(
             'doc',
             'state',
-            'derived',
+            'computed',
             'effect',
             'model',
             compileSSR(source),
-        )(doc, state, derived, effect, model) as SsrRender
+        )(doc, state, computed, effect, model) as SsrRender
         expect(server.html).toBe('<main><!--a--><!--[--><span>B</span><!--]--></main>')
 
         const host = document.createElement('div')
@@ -411,7 +411,7 @@ describe('hydrate — adopt server DOM', () => {
         const runtime = {
             doc,
             state,
-            derived,
+            computed,
             effect,
             appendText,
             appendStatic,
@@ -437,17 +437,17 @@ describe('hydrate — adopt server DOM', () => {
             },
         )
 
-        const parentSource = `<script>let name = state('world')</script><div><Greeting label={name} /></div>`
+        const parentSource = `<script>let name = scope().state('world')</script><div><Greeting label={name} /></div>`
 
         // SSR the parent (server-renders the child)
         const server = new Function(
             'doc',
             'state',
-            'derived',
+            'computed',
             'effect',
             'Greeting',
             compileSSR(parentSource),
-        )(doc, state, derived, effect, Greeting) as SsrRender
+        )(doc, state, computed, effect, Greeting) as SsrRender
         expect(server.html).toBe('<div><greeting><span>Hi world</span></greeting></div>')
 
         // parse + hydrate
@@ -490,10 +490,10 @@ describe('hydrate — adopt server DOM', () => {
 
         // 1) server render → stream the pending shell, then the resolved fragment
         const render = (): SsrRender =>
-            new Function('doc', 'state', 'derived', 'effect', compileSSR(source))(
+            new Function('doc', 'state', 'computed', 'effect', compileSSR(source))(
                 doc,
                 state,
-                derived,
+                computed,
                 effect,
             ) as SsrRender
         const chunks: string[] = []
@@ -522,7 +522,7 @@ describe('hydrate — adopt server DOM', () => {
         const runtime = {
             doc,
             state,
-            derived,
+            computed,
             effect,
             appendText,
             appendStatic,
@@ -568,7 +568,7 @@ describe('hydrate — adopt server DOM', () => {
         host.innerHTML =
             '<main><!--a--><!--abide:await:0--><p>loading…</p><!--/abide:await:0--></main>'
 
-        const runtime = { doc, state, derived, effect, appendText, appendStatic, on, awaitBlock }
+        const runtime = { doc, state, computed, effect, appendText, appendStatic, on, awaitBlock }
         const names = Object.keys(runtime)
         const values = names.map((n) => runtime[n as keyof typeof runtime])
         const body = compileComponent(source)
@@ -603,7 +603,7 @@ describe('hydrate — adopt server DOM', () => {
         const runtime = {
             doc,
             state,
-            derived,
+            computed,
             effect,
             appendText,
             appendStatic,
@@ -618,11 +618,11 @@ describe('hydrate — adopt server DOM', () => {
         const server = new Function(
             'doc',
             'state',
-            'derived',
+            'computed',
             'effect',
             'model',
             compileSSR(source),
-        )(doc, state, derived, effect, model) as SsrRender
+        )(doc, state, computed, effect, model) as SsrRender
         // No <style> in the SSR markup — the scoped sheet is linked by the shell.
         expect(server.html).not.toContain('<style>')
 

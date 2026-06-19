@@ -1,5 +1,6 @@
 import { effect } from '../effect.ts'
 import { claimChild } from '../runtime/claimChild.ts'
+import { claimExpected } from '../runtime/claimExpected.ts'
 import { OWNER } from '../runtime/OWNER.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { scope } from '../runtime/scope.ts'
@@ -44,10 +45,10 @@ export function each<T>(
     const buildRow = (item: T): EachRow => {
         const hydration = RENDER.hydration
         if (hydration !== undefined) {
-            const start = claimChild(hydration, parent) as Node
+            const start = claimExpected(hydration, parent, 'each row start marker')
             hydration.next.set(parent, start.nextSibling)
             const dispose = scope(() => render(parent, item))
-            const end = claimChild(hydration, parent) as Node
+            const end = claimExpected(hydration, parent, 'each row end marker')
             hydration.next.set(parent, end.nextSibling)
             return { start, end, dispose }
         }

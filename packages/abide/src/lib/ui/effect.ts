@@ -1,4 +1,6 @@
+import { CURRENT_SCOPE } from './runtime/CURRENT_SCOPE.ts'
 import { createEffectNode } from './runtime/createEffectNode.ts'
+import { inScope } from './runtime/inScope.ts'
 import type { EffectResult } from './runtime/types/EffectResult.ts'
 
 /*
@@ -12,5 +14,8 @@ grounded in abide's own reactive core.
 */
 // @readme plumbing
 export function effect(fn: () => EffectResult): () => void {
-    return createEffectNode(fn)
+    /* Re-runs fire after the build, so pin the scope this effect was created under
+       (the dep-tracking observer is managed separately, so this can't disturb it). */
+    const captured = CURRENT_SCOPE.current
+    return createEffectNode(() => inScope(captured, fn))
 }

@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import { compileSSR } from '../src/lib/ui/compile/compileSSR.ts'
-import { derived } from '../src/lib/ui/derived.ts'
-import { doc } from '../src/lib/ui/doc.ts'
+import { computed } from '../src/lib/ui/computed.ts'
 import { effect } from '../src/lib/ui/effect.ts'
 import { renderToStream } from '../src/lib/ui/renderToStream.ts'
+import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
 import type { SsrRender } from '../src/lib/ui/runtime/types/SsrRender.ts'
 import { state } from '../src/lib/ui/state.ts'
 
@@ -11,10 +11,10 @@ import { state } from '../src/lib/ui/state.ts'
 function renderer(source: string): () => SsrRender {
     const body = compileSSR(source)
     return () =>
-        new Function('doc', 'state', 'derived', 'effect', body)(
+        new Function('doc', 'state', 'computed', 'effect', body)(
             doc,
             state,
-            derived,
+            computed,
             effect,
         ) as SsrRender
 }
@@ -81,7 +81,7 @@ describe('renderToStream — out-of-order SSR streaming', () => {
 
     test('a fully synchronous component streams just the shell', async () => {
         const chunks = await collect(`
-            <script>let name = state('ada')</script>
+            <script>let name = scope().state('ada')</script>
             <p>{name}</p>
         `)
         expect(chunks).toEqual(['<p>ada</p>'])

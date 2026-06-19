@@ -1,14 +1,19 @@
 import { describe, expect, test } from 'bun:test'
 import { compileSSR } from '../src/lib/ui/compile/compileSSR.ts'
-import { derived } from '../src/lib/ui/derived.ts'
-import { doc } from '../src/lib/ui/doc.ts'
+import { computed } from '../src/lib/ui/computed.ts'
 import { effect } from '../src/lib/ui/effect.ts'
+import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
 import { state } from '../src/lib/ui/state.ts'
 
 /* Runs a compiled SSR body, returning { html, state }. No DOM — pure string. */
 function render(source: string): { html: string; state: unknown } {
     const body = compileSSR(source)
-    return new Function('doc', 'state', 'derived', 'effect', body)(doc, state, derived, effect) as {
+    return new Function('doc', 'state', 'computed', 'effect', body)(
+        doc,
+        state,
+        computed,
+        effect,
+    ) as {
         html: string
         state: unknown
     }
@@ -18,9 +23,9 @@ describe('compileSSR — server render to string', () => {
     test('renders interpolation, list, and conditional to HTML; serializes state', () => {
         const result = render(`
             <script>
-                let count = state(2)
-                let items = state(['a', 'b'])
-                let label = derived(() => 'n=' + count)
+                let count = scope().state(2)
+                let items = scope().state(['a', 'b'])
+                let label = scope().computed(() => 'n=' + count)
             </script>
             <button onclick={() => count += 1}>+</button>
             <p>{label}</p>
@@ -41,7 +46,7 @@ describe('compileSSR — server render to string', () => {
 
     test('a falsy if renders an empty range', () => {
         const result = render(`
-            <script>let show = state(false)</script>
+            <script>let show = scope().state(false)</script>
             <template if={show}><span>hi</span></template>
         `)
         // the `when` range markers are always present; the false branch is empty
@@ -50,7 +55,7 @@ describe('compileSSR — server render to string', () => {
 
     test('dynamic values are HTML-escaped', () => {
         const result = render(`
-            <script>let name = state('<b>&"')</script>
+            <script>let name = scope().state('<b>&"')</script>
             <p>{name}</p>
         `)
         expect(result.html).toBe('<p>&lt;b&gt;&amp;&quot;</p>')
@@ -58,7 +63,7 @@ describe('compileSSR — server render to string', () => {
 
     test('bind:value renders the current value as an attribute', () => {
         const result = render(`
-            <script>let draft = state('hello')</script>
+            <script>let draft = scope().state('hello')</script>
             <input bind:value={draft}>
         `)
         expect(result.html).toBe('<input value="hello">')
@@ -66,12 +71,12 @@ describe('compileSSR — server render to string', () => {
 
     test('a dynamic attribute follows present/absent boolean semantics', () => {
         const off = render(`
-            <script>let busy = state(false)</script>
+            <script>let busy = scope().state(false)</script>
             <button disabled={busy}>go</button>
         `)
         expect(off.html).toBe('<button>go</button>') // false → attribute omitted, not disabled="false"
         const on = render(`
-            <script>let busy = state(true)</script>
+            <script>let busy = scope().state(true)</script>
             <button disabled={busy}>go</button>
         `)
         expect(on.html).toBe('<button disabled>go</button>') // true → bare attribute

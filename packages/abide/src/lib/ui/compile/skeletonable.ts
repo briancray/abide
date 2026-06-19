@@ -1,18 +1,5 @@
+import { isControlFlow } from './isControlFlow.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
-
-/* A control-flow block — `if`/`each`/`await`/`switch`/`try`. In a skeleton it mounts at an
-   `<!--a-->` anchor cloned into the located parent at the block's position (see
-   `anchorCursor`), so a block can sit ANYWHERE among static siblings — no contiguity or
-   prefix-shape constraint. */
-function isControlFlow(node: TemplateNode): boolean {
-    return (
-        node.kind === 'if' ||
-        node.kind === 'each' ||
-        node.kind === 'await' ||
-        node.kind === 'switch' ||
-        node.kind === 'try'
-    )
-}
 
 /* Whether a subtree is skeleton STRUCTURE — anything the parser-backed clone can carry with
    its holes mounted in place: elements, `<style>`, text (static OR reactive), child

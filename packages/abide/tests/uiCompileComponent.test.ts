@@ -1,28 +1,55 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { compileComponent } from '../src/lib/ui/compile/compileComponent.ts'
 import { compileModule } from '../src/lib/ui/compile/compileModule.ts'
-import { doc } from '../src/lib/ui/doc.ts'
+import { createScope } from '../src/lib/ui/createScope.ts'
 import { appendStatic } from '../src/lib/ui/dom/appendStatic.ts'
 import { appendText } from '../src/lib/ui/dom/appendText.ts'
 import { attr } from '../src/lib/ui/dom/attr.ts'
 import { each } from '../src/lib/ui/dom/each.ts'
+import { mount } from '../src/lib/ui/dom/mount.ts'
 import { on } from '../src/lib/ui/dom/on.ts'
 import { text } from '../src/lib/ui/dom/text.ts'
 import { when } from '../src/lib/ui/dom/when.ts'
 import { effect } from '../src/lib/ui/effect.ts'
+import { scope } from '../src/lib/ui/scope.ts'
+import type { Scope } from '../src/lib/ui/types/Scope.ts'
 import { installMiniDom } from './support/installMiniDom.ts'
 
 beforeAll(() => {
     installMiniDom()
 })
 
-/* Runs a compiled component body against a fresh host, returns the host. */
+/* Runs a compiled component body against a fresh host, under `mount` so the body's
+   `const model = scope()` resolves to its own per-mount scope (isolated per render). */
 function render(source: string): HTMLElement {
     const body = compileComponent(source)
     const host = document.createElement('div')
+    mount(host, (target) => {
+        new Function(
+            'host',
+            'scope',
+            'text',
+            'appendText',
+            'appendStatic',
+            'attr',
+            'on',
+            'each',
+            'when',
+            'effect',
+            body,
+        )(target, scope, text, appendText, appendStatic, attr, on, each, when, effect)
+    })
+    return host
+}
+
+/* Mounts a body that reads an externally-driven `model` (a scope, which mirrors the
+   document data interface), returning the scope so the test can mutate it. */
+function renderWithModel(source: string, initial: unknown): { host: HTMLElement; model: Scope } {
+    const body = compileComponent(source)
+    const host = document.createElement('div')
+    const model = createScope(initial)
     new Function(
         'host',
-        'doc',
         'text',
         'appendText',
         'appendStatic',
@@ -31,18 +58,19 @@ function render(source: string): HTMLElement {
         'each',
         'when',
         'effect',
+        'model',
         body,
-    )(host, doc, text, appendText, appendStatic, attr, on, each, when, effect)
-    return host
+    )(host, text, appendText, appendStatic, attr, on, each, when, effect, model)
+    return { host, model }
 }
 
 describe('compileComponent — end to end', () => {
-    test('renders interpolated text from the document', () => {
+    test('renders interpolated text from state', () => {
         const host = render(`
             <script>
-                const model = doc({ name: 'ada' })
+                let name = scope().state('ada')
             </script>
-            <p>Hello {model.name}</p>
+            <p>Hello {name}</p>
         `)
         expect(host.textContent).toContain('Hello ada')
     })
@@ -62,11 +90,11 @@ describe('compileComponent — end to end', () => {
     test('a counter button updates reactively through the lowered patch', () => {
         const host = render(`
             <script>
-                const model = doc({ count: 0 })
-                function increment() { model.count += 1 }
+                let count = scope().state(0)
+                function increment() { count += 1 }
             </script>
             <button onclick={increment}>+</button>
-            <p>Count: {model.count}</p>
+            <p>Count: {count}</p>
         `)
         expect(host.textContent).toContain('Count: 0')
         const button = Array.from(host.childNodes).find(
@@ -79,37 +107,24 @@ describe('compileComponent — end to end', () => {
 
     test('compiled output uses hoisted cells for the template read', () => {
         const body = compileComponent(`
-            <script>const model = doc({ count: 0 })</script>
-            <p>{model.count}</p>
+            <script>let count = scope().state(0)</script>
+            <p>{count}</p>
         `)
         expect(body).toContain('model.cell("count")')
         expect(body).toContain('.get()')
     })
 
     test('if control flow toggles a branch and stays field-reactive', () => {
-        const model = doc({ show: true, label: 'hi' })
-        const body = compileComponent(`
+        const { host, model } = renderWithModel(
+            `
             <div>
                 <template if={model.show}>
                     <span>{model.label}</span>
                 </template>
             </div>
-        `)
-        const host = document.createElement('div')
-        new Function(
-            'host',
-            'doc',
-            'text',
-            'appendText',
-            'appendStatic',
-            'attr',
-            'on',
-            'each',
-            'when',
-            'effect',
-            'model',
-            body,
-        )(host, doc, text, appendText, appendStatic, attr, on, each, when, effect, model)
+        `,
+            { show: true, label: 'hi' },
+        )
         const div = host.childNodes[0] as unknown as { textContent: string }
         expect(div.textContent).toBe('hi')
         model.replace('label', 'yo') // field-reactive while shown
@@ -122,39 +137,27 @@ describe('compileComponent — end to end', () => {
 
     test('compileModule emits a mountable ES module with abide/ui imports', () => {
         const module = compileModule(`
-            <script>const model = doc({ count: 0 })</script>
-            <p>{model.count}</p>
+            <script>let count = scope().state(0)</script>
+            <p>{count}</p>
         `)
         expect(module).toContain("import { mount } from '@abide/abide/ui/dom/mount'")
-        expect(module).toContain("import { doc } from '@abide/abide/ui/doc'")
+        expect(module).toContain("import { scope } from '@abide/abide/ui/scope'")
         expect(module).toContain('export default function component(host, $props)')
         expect(module).toContain('mount(host, (host) =>')
         expect(module).toContain('model.cell("count")')
     })
 
     test('keyed each renders a list and stays field-reactive', () => {
-        const model = doc({ order: ['a', 'b'], byId: { a: { n: 1 }, b: { n: 2 } } })
-        const body = compileComponent(`
+        const { host, model } = renderWithModel(
+            `
             <ul>
                 <template each={model.order} as="key" key="key">
                     <li>{model.byId[key].n}</li>
                 </template>
             </ul>
-        `)
-        const host = document.createElement('div')
-        new Function(
-            'host',
-            'doc',
-            'text',
-            'appendText',
-            'appendStatic',
-            'attr',
-            'on',
-            'each',
-            'effect',
-            'model',
-            body,
-        )(host, doc, text, appendText, appendStatic, attr, on, each, effect, model)
+        `,
+            { order: ['a', 'b'], byId: { a: { n: 1 }, b: { n: 2 } } },
+        )
         const list = host.childNodes[0] as unknown as { children: Element[] }
         expect(list.children.map((child) => child.textContent)).toEqual(['1', '2'])
         model.replace('byId/a/n', 9)

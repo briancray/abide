@@ -49,7 +49,7 @@ describe('MCP dispatch happy path', () => {
         expect(await call('ping')).toEqual({})
     })
 
-    test('tools/list carries verb-derived annotations and output schema', async () => {
+    test('tools/list carries verb-computed annotations and output schema', async () => {
         const { tools } = (await call('tools/list')) as { tools: Tool[] }
         const echo = findTool(tools, 'mcp-echo')
         expect(echo?.annotations).toEqual({ readOnlyHint: true, destructiveHint: false })

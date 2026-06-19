@@ -3,12 +3,12 @@ import { compileShadow } from '../src/lib/ui/compile/compileShadow.ts'
 
 const SOURCE = `<script>
 import Child from './Child.abide'
-let count = state(0)
+let count = scope().state(0)
 let todos = state<string[]>([])
 let title = prop<string>('title')
 let lang = prop<string | undefined>('lang')
-const doubled = derived(() => count * 2)
-const label = derived<string>(() => String(count))
+const doubled = scope().computed(() => count * 2)
+const label = computed<string>(() => String(count))
 function bump() { count += 1 }
 </script>
 
@@ -103,13 +103,13 @@ let property = prop<FilePropertyName>('property')
         /* A nested signal read in the branch's markup must type-check as its value,
            not the raw `Derived`/`State` — matching the runtime deref. */
         const { code } = compileShadow(`<script>
-let ready = state(false)
+let ready = scope().state(false)
 </script>
 <template await={Promise.resolve('x')} then="loaded">
   <script>
   const upper = loaded.toUpperCase()
-  let layout = state(upper)
-  let label = derived(() => layout + '!')
+  let layout = scope().state(upper)
+  let label = scope().computed(() => layout + '!')
   </script>
   <p>{label === 'A!' ? layout : upper}</p>
 </template>`)
@@ -117,7 +117,7 @@ let ready = state(false)
         expect(code).toContain('const upper = loaded.toUpperCase()')
         expect(code).toContain('let layout = (upper);')
         expect(code).toContain("const label = (() => layout + '!')();")
-        /* No raw `derived(` call survives into the nested branch body. */
-        expect(code).not.toContain("let label = derived(() => layout + '!')")
+        /* No raw `computed(` call survives into the nested branch body. */
+        expect(code).not.toContain("let label = computed(() => layout + '!')")
     })
 })

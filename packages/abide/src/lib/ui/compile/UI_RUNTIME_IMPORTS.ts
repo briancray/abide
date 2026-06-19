@@ -8,10 +8,9 @@ that populates `window.__abide`. Order is the emit order.
 export const UI_RUNTIME_IMPORTS: { name: string; specifier: string }[] = [
     { name: 'html', specifier: 'shared/html' },
     { name: 'snippet', specifier: 'shared/snippet' },
-    { name: 'doc', specifier: 'ui/doc' },
-    { name: 'state', specifier: 'ui/state' },
-    { name: 'linked', specifier: 'ui/linked' },
-    { name: 'derived', specifier: 'ui/derived' },
+    { name: 'scope', specifier: 'ui/scope' },
+    { name: 'enterScope', specifier: 'ui/enterScope' },
+    { name: 'exitScope', specifier: 'ui/exitScope' },
     { name: 'effect', specifier: 'ui/effect' },
     { name: 'mount', specifier: 'ui/dom/mount' },
     { name: 'appendText', specifier: 'ui/dom/appendText' },

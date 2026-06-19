@@ -6,8 +6,7 @@ import { createCacheStore } from '../src/lib/shared/createCacheStore.ts'
 import { keyForRemoteCall } from '../src/lib/shared/keyForRemoteCall.ts'
 import { REMOTE_FUNCTION } from '../src/lib/shared/REMOTE_FUNCTION.ts'
 import { compileComponent } from '../src/lib/ui/compile/compileComponent.ts'
-import { derived } from '../src/lib/ui/derived.ts'
-import { doc } from '../src/lib/ui/doc.ts'
+import { computed } from '../src/lib/ui/computed.ts'
 import { appendStatic } from '../src/lib/ui/dom/appendStatic.ts'
 import { appendText } from '../src/lib/ui/dom/appendText.ts'
 import { awaitBlock } from '../src/lib/ui/dom/awaitBlock.ts'
@@ -15,6 +14,7 @@ import { each } from '../src/lib/ui/dom/each.ts'
 import { hydrate } from '../src/lib/ui/dom/hydrate.ts'
 import { on } from '../src/lib/ui/dom/on.ts'
 import { effect } from '../src/lib/ui/effect.ts'
+import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
 import { RESUME } from '../src/lib/ui/runtime/RESUME.ts'
 import { state } from '../src/lib/ui/state.ts'
 import { installMiniDom } from './support/installMiniDom.ts'
@@ -122,7 +122,7 @@ describe('cache() + UI await-block hydration', () => {
         const runtime = {
             doc,
             state,
-            derived,
+            computed,
             effect,
             appendText,
             appendStatic,
@@ -171,7 +171,7 @@ describe('cache() + UI await-block hydration', () => {
         const runtime = {
             doc,
             state,
-            derived,
+            computed,
             effect,
             appendText,
             appendStatic,

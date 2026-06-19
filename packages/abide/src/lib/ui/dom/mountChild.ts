@@ -1,3 +1,4 @@
+import { captureModelDoc } from '../runtime/captureModelDoc.ts'
 import { hotReloadEnabled } from '../runtime/hotReloadEnabled.ts'
 import { OWNER } from '../runtime/OWNER.ts'
 import { registerHotInstance } from '../runtime/registerHotInstance.ts'
@@ -24,7 +25,10 @@ export function mountChild(
         factory(host, props)
         return
     }
-    const instance = { host, factory, props, dispose: factory(host, props) }
+    /* Capture the component's model alongside its disposer, so a later swap can carry
+       its state across (see `hotReplace`). */
+    const { dispose, model } = captureModelDoc(() => factory(host, props))
+    const instance = { host, factory, props, dispose, model }
     const remove = registerHotInstance(moduleId, instance)
     OWNER.current?.push(() => {
         instance.dispose()

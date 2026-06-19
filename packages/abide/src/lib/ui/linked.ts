@@ -17,7 +17,6 @@ never holds an un-coerced value (`return previous` rejects via the `Object.is`
 no-op). The seed is captured by reference: callers clone in the thunk
 (`linked(() => structuredClone(x))`) when they want isolation.
 */
-// @readme plumbing
 export function linked<T>(seed: () => T, transform?: (next: T, previous: T) => T): State<T> {
     /* The cell is a plain `state` — same store, same write path, so `transform` gates
        reseeds and explicit writes identically. */

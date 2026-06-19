@@ -1,3 +1,5 @@
+import { CURRENT_SCOPE } from '../runtime/CURRENT_SCOPE.ts'
+import { inScope } from '../runtime/inScope.ts'
 import { OWNER } from '../runtime/OWNER.ts'
 import { toTeardown } from '../runtime/toTeardown.ts'
 import type { EffectResult } from '../runtime/types/EffectResult.ts'
@@ -13,8 +15,11 @@ async; its teardown then runs once the promise settles. Runtime target for an
 */
 // @readme plumbing
 export function attach(element: Element, attachment: (node: Element) => EffectResult): void {
+    /* The attachment body runs now (scope already current); pin the teardown, which
+       fires on dispose, so an ambient `scope()` in it resolves the component. */
+    const captured = CURRENT_SCOPE.current
     const teardown = toTeardown(attachment(element))
     if (teardown !== undefined && OWNER.current !== undefined) {
-        OWNER.current.push(teardown)
+        OWNER.current.push(() => inScope(captured, teardown))
     }
 }

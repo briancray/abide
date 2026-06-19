@@ -1,7 +1,6 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { compileComponent } from '../src/lib/ui/compile/compileComponent.ts'
-import { derived } from '../src/lib/ui/derived.ts'
-import { doc } from '../src/lib/ui/doc.ts'
+import { computed } from '../src/lib/ui/computed.ts'
 import { appendStatic } from '../src/lib/ui/dom/appendStatic.ts'
 import { appendText } from '../src/lib/ui/dom/appendText.ts'
 import { attr } from '../src/lib/ui/dom/attr.ts'
@@ -10,6 +9,7 @@ import { on } from '../src/lib/ui/dom/on.ts'
 import { text } from '../src/lib/ui/dom/text.ts'
 import { when } from '../src/lib/ui/dom/when.ts'
 import { effect } from '../src/lib/ui/effect.ts'
+import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
 import { state } from '../src/lib/ui/state.ts'
 import { installMiniDom } from './support/installMiniDom.ts'
 
@@ -50,7 +50,7 @@ describe('kitchen-sink .abide component', () => {
             'host',
             'doc',
             'state',
-            'derived',
+            'computed',
             'text',
             'appendText',
             'appendStatic',
@@ -60,7 +60,7 @@ describe('kitchen-sink .abide component', () => {
             'when',
             'effect',
             body,
-        )(host, doc, state, derived, text, appendText, appendStatic, attr, on, each, when, effect)
+        )(host, doc, state, computed, text, appendText, appendStatic, attr, on, each, when, effect)
 
         const list = findTag(host, 'ul') as { children: { textContent: string }[] }
         const input = findTag(host, 'input') as {
@@ -74,7 +74,7 @@ describe('kitchen-sink .abide component', () => {
         // initial render from the document
         expect(list.children.map((child) => child.textContent)).toEqual(['first'])
         expect(host.textContent).toContain('Draft: ')
-        expect(host.textContent).toContain('Count: 1') // derived(() => order.length)
+        expect(host.textContent).toContain('Count: 1') // computed(() => order.length)
         expect(host.textContent).not.toContain('typing…')
 
         // type into the input → bind writes the draft → <p> + if-block react
@@ -83,11 +83,11 @@ describe('kitchen-sink .abide component', () => {
         expect(host.textContent).toContain('Draft: second')
         expect(host.textContent).toContain('typing…')
 
-        // click Add → new keyed row, draft cleared, if-block hidden, derived recomputed
+        // click Add → new keyed row, draft cleared, if-block hidden, computed recomputed
         button.dispatchEvent({ type: 'click' })
         expect(list.children.map((child) => child.textContent)).toEqual(['first', 'second'])
         expect(host.textContent).toContain('Draft: ')
-        expect(host.textContent).toContain('Count: 2') // derived tracked the push
+        expect(host.textContent).toContain('Count: 2') // computed tracked the push
         expect(host.textContent).not.toContain('typing…')
 
         // the cleared draft also flowed back to the input (two-way)

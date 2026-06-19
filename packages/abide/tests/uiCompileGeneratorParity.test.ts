@@ -38,7 +38,7 @@ type Fixture = {
 const FIXTURES: Fixture[] = [
     {
         name: 'text interpolation',
-        source: `<script>let count = state(1)</script><p>{count}</p>`,
+        source: `<script>let count = scope().state(1)</script><p>{count}</p>`,
         build: 'render',
         ssr: 'render',
         loweredBoth: 'model.read("count")',
@@ -51,67 +51,67 @@ const FIXTURES: Fixture[] = [
     },
     {
         name: 'expression attribute',
-        source: `<script>let count = state(1)</script><div title={count}></div>`,
+        source: `<script>let count = scope().state(1)</script><div title={count}></div>`,
         build: 'render',
         ssr: 'render',
         loweredBoth: 'model.read("count")',
     },
     {
         name: 'event handler (build-only lowering)',
-        source: `<script>let count = state(1)</script><button onclick={count = 2}>x</button>`,
+        source: `<script>let count = scope().state(1)</script><button onclick={count = 2}>x</button>`,
         build: 'render',
         ssr: 'render',
         loweredBuildOnly: 'model.replace("count"',
     },
     {
         name: 'two-way bind',
-        source: `<script>let v = state('')</script><input bind:value={v} />`,
+        source: `<script>let v = scope().state('')</script><input bind:value={v} />`,
         build: 'render',
         ssr: 'render',
     },
     {
         name: 'group bind',
-        source: `<script>let choice = state('a')</script><input type="radio" bind:group={choice} value="a" />`,
+        source: `<script>let choice = scope().state('a')</script><input type="radio" bind:group={choice} value="a" />`,
         build: 'render',
         ssr: 'render',
     },
     {
         name: 'if',
-        source: `<script>let count = state(1)</script><template if={count}><p>x</p></template>`,
+        source: `<script>let count = scope().state(1)</script><template if={count}><p>x</p></template>`,
         build: 'render',
         ssr: 'render',
         loweredBoth: 'model.read("count")',
     },
     {
         name: 'switch / case',
-        source: `<script>let k = state('a')</script><template switch={k}><template case="'a'"><p>A</p></template></template>`,
+        source: `<script>let k = scope().state('a')</script><template switch={k}><template case="'a'"><p>A</p></template></template>`,
         build: 'render',
         ssr: 'render',
         loweredBoth: 'model.read("k")',
     },
     {
         name: 'each (sync)',
-        source: `<script>let items = state([1, 2])</script><template each={items} as="it" key="it"><li>{it}</li></template>`,
+        source: `<script>let items = scope().state([1, 2])</script><template each={items} as="it" key="it"><li>{it}</li></template>`,
         build: 'render',
         ssr: 'render',
         loweredBoth: 'model.read("items")',
     },
     {
         name: 'each (async) — SSR drops the rows',
-        source: `<script>let stream = state([])</script><template each={stream} as="n" key="n" await><li>{n}</li></template>`,
+        source: `<script>let stream = scope().state([])</script><template each={stream} as="n" key="n" await><li>{n}</li></template>`,
         build: 'render',
         ssr: 'empty',
     },
     {
         name: 'await (streaming)',
-        source: `<script>let p = state(Promise.resolve(1))</script><template await={p}><span>loading</span><template then="v"><b>{v}</b></template></template>`,
+        source: `<script>let p = scope().state(Promise.resolve(1))</script><template await={p}><span>loading</span><template then="v"><b>{v}</b></template></template>`,
         build: 'render',
         ssr: 'render',
         loweredBoth: 'model.read("p")',
     },
     {
         name: 'await (blocking)',
-        source: `<script>let p = state(Promise.resolve(1))</script><template await={p} then="v"><b>{v}</b></template>`,
+        source: `<script>let p = scope().state(Promise.resolve(1))</script><template await={p} then="v"><b>{v}</b></template>`,
         build: 'render',
         ssr: 'render',
         loweredBoth: 'model.read("p")',
@@ -142,7 +142,7 @@ const FIXTURES: Fixture[] = [
     },
     {
         name: 'nested script in element subtree',
-        source: `<div><script>let local = state(1)</script><p>{local}</p></div>`,
+        source: `<div><script>let local = scope().state(1)</script><p>{local}</p></div>`,
         build: 'render',
         ssr: 'render',
     },
@@ -151,9 +151,11 @@ const FIXTURES: Fixture[] = [
 describe('generator parity — build ↔ SSR at the node-walk seam', () => {
     for (const fixture of FIXTURES) {
         test(fixture.name, () => {
-            const { stateNames, derivedNames, nodes } = analyzeComponent(fixture.source)
-            const build = generateBuild(nodes, 'host', stateNames, derivedNames)
-            const ssr = generateSSR(nodes, stateNames, derivedNames)
+            const { stateNames, derivedNames, computedNames, nodes } = analyzeComponent(
+                fixture.source,
+            )
+            const build = generateBuild(nodes, 'host', stateNames, derivedNames, computedNames)
+            const ssr = generateSSR(nodes, stateNames, derivedNames, computedNames)
 
             // coverage: each generator emits iff it should render the kind
             expect(build.trim() !== '').toBe(fixture.build === 'render')

@@ -2,8 +2,7 @@ import { beforeAll, describe, expect, test } from 'bun:test'
 import { snippet } from '../src/lib/shared/snippet.ts'
 import { compileComponent } from '../src/lib/ui/compile/compileComponent.ts'
 import { compileSSR } from '../src/lib/ui/compile/compileSSR.ts'
-import { derived } from '../src/lib/ui/derived.ts'
-import { doc } from '../src/lib/ui/doc.ts'
+import { computed } from '../src/lib/ui/computed.ts'
 import { appendSnippet } from '../src/lib/ui/dom/appendSnippet.ts'
 import { appendStatic } from '../src/lib/ui/dom/appendStatic.ts'
 import { appendText } from '../src/lib/ui/dom/appendText.ts'
@@ -14,6 +13,7 @@ import { mount } from '../src/lib/ui/dom/mount.ts'
 import { on } from '../src/lib/ui/dom/on.ts'
 import { when } from '../src/lib/ui/dom/when.ts'
 import { effect } from '../src/lib/ui/effect.ts'
+import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
 import type { SsrRender } from '../src/lib/ui/runtime/types/SsrRender.ts'
 import { state } from '../src/lib/ui/state.ts'
 import { installMiniDom } from './support/installMiniDom.ts'
@@ -25,7 +25,7 @@ beforeAll(() => {
 const RUNTIME = {
     doc,
     state,
-    derived,
+    computed,
     effect,
     appendText,
     appendSnippet,
@@ -61,7 +61,7 @@ const serialize = (host: unknown): string =>
 describe('snippets (<template name args> called like a function)', () => {
     /* A snippet that closes over the component scope (`prefix`) and takes an arg. */
     const source = `
-        <script>let prefix = state('#')</script>
+        <script>let prefix = scope().state('#')</script>
         <template name="item" args={label}><li>{prefix}{label}</li></template>
         <ul>{item('a')}{item('b')}</ul>
     `
@@ -119,7 +119,7 @@ describe('snippets passed across components', () => {
        PARENT's scope. */
     const List = `<script>let item = prop('item')</script><ul>{item('x')}{item('y')}</ul>`
     const parent = `
-        <script>let prefix = state('•')</script>
+        <script>let prefix = scope().state('•')</script>
         <template name="row" args={label}><li>{prefix}{label}</li></template>
         <List item={row} />
     `

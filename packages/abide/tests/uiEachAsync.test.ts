@@ -1,14 +1,14 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { compileComponent } from '../src/lib/ui/compile/compileComponent.ts'
 import { compileSSR } from '../src/lib/ui/compile/compileSSR.ts'
-import { derived } from '../src/lib/ui/derived.ts'
-import { doc } from '../src/lib/ui/doc.ts'
+import { computed } from '../src/lib/ui/computed.ts'
 import { appendStatic } from '../src/lib/ui/dom/appendStatic.ts'
 import { appendText } from '../src/lib/ui/dom/appendText.ts'
 import { attr } from '../src/lib/ui/dom/attr.ts'
 import { eachAsync } from '../src/lib/ui/dom/eachAsync.ts'
 import { effect } from '../src/lib/ui/effect.ts'
 import { renderToStream } from '../src/lib/ui/renderToStream.ts'
+import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
 import type { SsrRender } from '../src/lib/ui/runtime/types/SsrRender.ts'
 import { state } from '../src/lib/ui/state.ts'
 import { installMiniDom } from './support/installMiniDom.ts'
@@ -20,7 +20,7 @@ beforeAll(() => {
 const RUNTIME = {
     doc,
     state,
-    derived,
+    computed,
     effect,
     appendText,
     appendStatic,

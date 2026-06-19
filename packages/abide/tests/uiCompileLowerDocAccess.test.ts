@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { lowerDocAccess } from '../src/lib/ui/compile/lowerDocAccess.ts'
-import { doc } from '../src/lib/ui/doc.ts'
+import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
 import type { Doc } from '../src/lib/ui/runtime/types/Doc.ts'
 
 /* Normalises printer whitespace so substring assertions are stable. */

@@ -1,8 +1,7 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { compileComponent } from '../src/lib/ui/compile/compileComponent.ts'
 import { compileSSR } from '../src/lib/ui/compile/compileSSR.ts'
-import { derived } from '../src/lib/ui/derived.ts'
-import { doc } from '../src/lib/ui/doc.ts'
+import { computed } from '../src/lib/ui/computed.ts'
 import { appendStatic } from '../src/lib/ui/dom/appendStatic.ts'
 import { appendText } from '../src/lib/ui/dom/appendText.ts'
 import { attr } from '../src/lib/ui/dom/attr.ts'
@@ -12,6 +11,7 @@ import { hydrate } from '../src/lib/ui/dom/hydrate.ts'
 import { on } from '../src/lib/ui/dom/on.ts'
 import { when } from '../src/lib/ui/dom/when.ts'
 import { effect } from '../src/lib/ui/effect.ts'
+import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
 import { state } from '../src/lib/ui/state.ts'
 import { installMiniDom } from './support/installMiniDom.ts'
 
@@ -23,8 +23,8 @@ beforeAll(() => {
    plus a couple of dynamic holes — the shape static-template cloning targets. */
 const PAGE = `
     <script>
-        let title = state('Reference')
-        let count = state(3)
+        let title = scope().state('Reference')
+        let count = scope().state(3)
     </script>
     <main class="page">
         <header>
@@ -43,7 +43,7 @@ const PAGE = `
 const RUNTIME = {
     doc,
     state,
-    derived,
+    computed,
     effect,
     appendText,
     appendStatic,
@@ -62,10 +62,10 @@ function runBody(host: Element, body: string): void {
 
 function serverHtml(source: string): string {
     return (
-        new Function('doc', 'state', 'derived', 'effect', compileSSR(source))(
+        new Function('doc', 'state', 'computed', 'effect', compileSSR(source))(
             doc,
             state,
-            derived,
+            computed,
             effect,
         ) as { html: string }
     ).html

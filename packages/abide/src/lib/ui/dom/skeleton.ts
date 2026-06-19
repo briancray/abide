@@ -53,7 +53,7 @@ function isCloseMarker(data: string): boolean {
    SHALLOW template (block positions are `<!--a-->` anchors, no content), so on hydrate the
    expanded tree must skip that inline content or a hole positioned after a block shifts. In
    create mode the clone is shallow (no markers), so depth stays 0 — a plain element count. */
-function elementChildAt(children: ArrayLike<Node>, index: number): Element {
+function elementChildAt(children: ArrayLike<Node>, index: number): Element | undefined {
     let seen = 0
     let depth = 0
     for (let cursor = 0; cursor < children.length; cursor += 1) {
@@ -72,7 +72,7 @@ function elementChildAt(children: ArrayLike<Node>, index: number): Element {
             depth += 1
         }
     }
-    return undefined as unknown as Element
+    return undefined
 }
 
 /* Records each element hole's element-only path in PRE-ORDER (the `HOLE_ATTRIBUTE`
@@ -152,11 +152,19 @@ function compile(html: string, wrapper: string | undefined): CompiledSkeleton {
     return compiled
 }
 
-/* Walks an element-only path from the top-level node list to the target element. */
+/* Walks an element-only path from the top-level node list to the target element. A step
+   that resolves to nothing means the claimed server run is missing an element the skeleton
+   expects here — a hydration desync; throw AT it (naming the path) rather than returning
+   the undefined that derefs in the downstream `mountChild`/`attr`, far from the cause. */
 function resolveElementHole(topLevel: ArrayLike<Node>, path: number[]): Element {
     let node = elementChildAt(topLevel, path[0] as number)
-    for (let depth = 1; depth < path.length; depth += 1) {
+    for (let depth = 1; depth < path.length && node !== undefined; depth += 1) {
         node = elementChildAt(node.childNodes, path[depth] as number)
+    }
+    if (node === undefined) {
+        throw new Error(
+            `[abide] hydration desync: skeleton element hole [${path.join(',')}] resolved to no node — the server DOM is missing an element the client build expects here.`,
+        )
     }
     return node
 }

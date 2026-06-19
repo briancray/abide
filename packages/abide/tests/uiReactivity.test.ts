@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import { createSubscriber } from '../src/lib/shared/createSubscriber.ts'
-import { derived } from '../src/lib/ui/derived.ts'
-import { doc } from '../src/lib/ui/doc.ts'
+import { computed } from '../src/lib/ui/computed.ts'
 import { effect } from '../src/lib/ui/effect.ts'
 import { linked } from '../src/lib/ui/linked.ts'
+import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
 import { state } from '../src/lib/ui/state.ts'
 
 describe('reactive cells', () => {
@@ -24,11 +24,11 @@ describe('reactive cells', () => {
         expect(runs).toBe(2) // disposed → detached
     })
 
-    test('derived recomputes lazily and only when a dependency changed', () => {
+    test('computed recomputes lazily and only when a dependency changed', () => {
         const a = state(2)
         const b = state(3)
         let computes = 0
-        const sum = derived(() => {
+        const sum = computed(() => {
             computes += 1
             return a.value + b.value
         })
@@ -123,18 +123,19 @@ describe('write-coercion and reactive seeds', () => {
         expect(seen).toEqual([1, 2, 9])
     })
 
-    test('derived lens writes through to upstream and recomputes', () => {
+    test('computed is read-only — it recomputes from upstream and has no setter', () => {
         const celsius = state(0)
-        const fahrenheit = derived(
-            () => (celsius.value * 9) / 5 + 32,
-            (f) => {
-                celsius.value = ((f - 32) * 5) / 9
-            },
-        )
+        const fahrenheit = computed(() => (celsius.value * 9) / 5 + 32)
         expect(fahrenheit.value).toBe(32)
-        fahrenheit.value = 212
-        expect(celsius.value).toBe(100) // write went through to upstream
-        expect(fahrenheit.value).toBe(212) // recomputed from upstream, no local clobber
+        /* A computed is purely a function of its sources — there is no write-through.
+           Assigning a getter-only property throws in strict mode (ES modules are strict);
+           a write to a computed is expressed at the binding (`bind:value={{ get, set }}`). */
+        expect(() => {
+            // @ts-expect-error — Computed.value is readonly
+            fahrenheit.value = 212
+        }).toThrow()
+        celsius.value = 100
+        expect(fahrenheit.value).toBe(212) // recomputes from upstream
     })
 })
 
@@ -276,20 +277,20 @@ describe('reactive document', () => {
     })
 
     /*
-    Regression: a derived over a createSubscriber resource (e.g. tail()), read by
+    Regression: a computed over a createSubscriber resource (e.g. tail()), read by
     an effect, must wake the effect exactly once per update. A single update used
     to loop forever — trigger walked the live observer Set while the flush it
-    fired re-ran the derived, whose runNode deletes-then-re-adds itself to that
+    fired re-ran the computed, whose runNode deletes-then-re-adds itself to that
     same Set, re-yielding it to the in-progress for…of without end.
     */
-    test('a derived over a createSubscriber wakes its effect once per update, no loop', () => {
+    test('a computed over a createSubscriber wakes its effect once per update, no loop', () => {
         let value: unknown
         let fire: () => void = () => {}
         const tap = createSubscriber((update) => {
             fire = update
             return () => {}
         })
-        const latest = derived(() => {
+        const latest = computed(() => {
             tap()
             return value
         })

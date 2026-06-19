@@ -3,8 +3,7 @@ import { analyzeComponent } from '../src/lib/ui/compile/analyzeComponent.ts'
 import { compileComponent } from '../src/lib/ui/compile/compileComponent.ts'
 import { compileSSR } from '../src/lib/ui/compile/compileSSR.ts'
 import { scopeCss } from '../src/lib/ui/compile/scopeCss.ts'
-import { derived } from '../src/lib/ui/derived.ts'
-import { doc } from '../src/lib/ui/doc.ts'
+import { computed } from '../src/lib/ui/computed.ts'
 import { appendStatic } from '../src/lib/ui/dom/appendStatic.ts'
 import { appendText } from '../src/lib/ui/dom/appendText.ts'
 import { attr } from '../src/lib/ui/dom/attr.ts'
@@ -15,6 +14,7 @@ import { switchBlock } from '../src/lib/ui/dom/switchBlock.ts'
 import { text } from '../src/lib/ui/dom/text.ts'
 import { when } from '../src/lib/ui/dom/when.ts'
 import { effect } from '../src/lib/ui/effect.ts'
+import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
 import { state } from '../src/lib/ui/state.ts'
 import { installMiniDom } from './support/installMiniDom.ts'
 
@@ -39,7 +39,7 @@ describe('scopeCss', () => {
 const RUNTIME = {
     doc,
     state,
-    derived,
+    computed,
     effect,
     appendText,
     appendStatic,
@@ -53,7 +53,7 @@ const RUNTIME = {
 }
 
 const STYLED = `
-    <script>let n = state(7)</script>
+    <script>let n = scope().state(7)</script>
     <main>
         <h1>title</h1>
         <p class="muted">{n}</p>
@@ -94,10 +94,10 @@ describe('scoped <style> — client', () => {
 
 describe('scoped <style> — SSR', () => {
     test('no <style> in the markup; the scope attribute is on elements', () => {
-        const render = new Function('doc', 'state', 'derived', 'effect', compileSSR(STYLED))(
+        const render = new Function('doc', 'state', 'computed', 'effect', compileSSR(STYLED))(
             doc,
             state,
-            derived,
+            computed,
             effect,
         ) as { html: string }
         expect(render.html).not.toContain('<style>')
@@ -129,10 +129,10 @@ describe('a <style> inside an expression is text, not the component style', () =
     })
 
     test('SSR renders the quoted style as escaped text, emits no real <style>', () => {
-        const render = new Function('doc', 'state', 'derived', 'effect', compileSSR(QUOTED_STYLE))(
+        const render = new Function('doc', 'state', 'computed', 'effect', compileSSR(QUOTED_STYLE))(
             doc,
             state,
-            derived,
+            computed,
             effect,
         ) as { html: string }
         expect(render.html).not.toContain('<style>')
@@ -156,10 +156,10 @@ const NESTED_STYLE = `
 
 const renderSSR = (source: string) =>
     (
-        new Function('doc', 'state', 'derived', 'effect', compileSSR(source))(
+        new Function('doc', 'state', 'computed', 'effect', compileSSR(source))(
             doc,
             state,
-            derived,
+            computed,
             effect,
         ) as { html: string }
     ).html

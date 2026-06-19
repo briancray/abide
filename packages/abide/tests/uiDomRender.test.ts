@@ -1,10 +1,10 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
-import { doc } from '../src/lib/ui/doc.ts'
 import { attr } from '../src/lib/ui/dom/attr.ts'
 import { each } from '../src/lib/ui/dom/each.ts'
 import { mount } from '../src/lib/ui/dom/mount.ts'
 import { on } from '../src/lib/ui/dom/on.ts'
 import { text } from '../src/lib/ui/dom/text.ts'
+import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
 import { installMiniDom } from './support/installMiniDom.ts'
 
 /* The dom bindings read a global `document`; the mini-DOM provides one headless. */

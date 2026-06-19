@@ -11,6 +11,9 @@ plain, serializable data, which is what makes the document resumable.
 export type Doc = {
     read: <T>(path: string) => T
     cell: <T>(path: string) => Cell<T>
+    /* Registers a computed slot at `path` (a value computed from other paths, never
+       stored/serialized/journalled) and returns a string-free reader bound to it. */
+    derive: <T>(path: string, compute: () => T) => () => T
     apply: (patch: Patch) => void
     replace: (path: string, value: unknown) => void
     add: (path: string, value: unknown) => void

@@ -30,7 +30,7 @@ export function analyzeComponent(source: string, scopeSeed?: string): AnalyzedCo
     const scriptBody = (scriptMatch?.[1] ?? '').trim()
     const template = source.replace(/^\s*<script[^>]*>[\s\S]*?<\/script>/, '').trim()
 
-    const { code: desugared, stateNames, derivedNames } = desugarSignals(scriptBody)
+    const { code: desugared, stateNames, derivedNames, computedNames } = desugarSignals(scriptBody)
     const lowered = desugared.trim() === '' ? '' : lowerDocAccess(desugared, 'model')
     /* Hoist top-level import statements (e.g. child components) out of the script
        so the module wrapper can place them at module scope — they can't live
@@ -54,6 +54,7 @@ export function analyzeComponent(source: string, scopeSeed?: string): AnalyzedCo
         imports: imports.join('\n'),
         stateNames,
         derivedNames,
+        computedNames,
         nodes,
         styles,
         /* Hydration adopts every block in place — including `await`, which resumes

@@ -1,8 +1,7 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { compileComponent } from '../src/lib/ui/compile/compileComponent.ts'
 import { compileSSR } from '../src/lib/ui/compile/compileSSR.ts'
-import { derived } from '../src/lib/ui/derived.ts'
-import { doc } from '../src/lib/ui/doc.ts'
+import { computed } from '../src/lib/ui/computed.ts'
 import { appendStatic } from '../src/lib/ui/dom/appendStatic.ts'
 import { appendText } from '../src/lib/ui/dom/appendText.ts'
 import { attr } from '../src/lib/ui/dom/attr.ts'
@@ -13,6 +12,7 @@ import { on } from '../src/lib/ui/dom/on.ts'
 import { text } from '../src/lib/ui/dom/text.ts'
 import { when } from '../src/lib/ui/dom/when.ts'
 import { effect } from '../src/lib/ui/effect.ts'
+import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
 import type { SsrRender } from '../src/lib/ui/runtime/types/SsrRender.ts'
 import { state } from '../src/lib/ui/state.ts'
 import { installMiniDom } from './support/installMiniDom.ts'
@@ -24,7 +24,7 @@ beforeAll(() => {
 const RUNTIME = {
     doc,
     state,
-    derived,
+    computed,
     effect,
     appendText,
     appendStatic,
@@ -63,7 +63,7 @@ describe('SSR component composition', () => {
             <span>Hi {label}</span>
         `)
         const parentSource = `
-            <script>let name = state('world')</script>
+            <script>let name = scope().state('world')</script>
             <div><Greeting label={name} /></div>
         `
 
@@ -91,7 +91,7 @@ describe('SSR component composition', () => {
             <input value={value} />
         `)
         const parentSource = `
-            <script>let q = state('hi')</script>
+            <script>let q = scope().state('hi')</script>
             <div><Input value={q} /></div>
         `
 

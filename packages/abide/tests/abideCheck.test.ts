@@ -67,7 +67,7 @@ describe('abide check', () => {
            bug; expect none. */
         const dir = project({
             'child.abide': `<script>\nlet open = prop<boolean>('open')\n</script>\n<span>{open}</span>\n`,
-            'host.abide': `<script>\nimport Child from './child.abide'\nlet shown = state(true)\neffect(() => { console.log(shown) })\n</script>\n<Child open={shown} />\n`,
+            'host.abide': `<script>\nimport Child from './child.abide'\nlet shown = scope().state(true)\neffect(() => { console.log(shown) })\n</script>\n<Child open={shown} />\n`,
         })
         const diagnostics = collectAbideDiagnostics(createShadowProgram(dir))
         expect(diagnostics.filter((diagnostic) => diagnostic.file.endsWith('host.abide'))).toEqual(
@@ -80,7 +80,7 @@ describe('abide check', () => {
            unterminated call still surfaces. */
         const dir = project({
             'child.abide': `<script>\nlet open = prop<boolean>('open')\n</script>\n<span>{open}</span>\n`,
-            'host.abide': `<script>\nimport Child from './child.abide'\nlet shown = state(0)\neffect(() => { console.log(shown) })\n</script>\n<Child open={shown} />\n`,
+            'host.abide': `<script>\nimport Child from './child.abide'\nlet shown = scope().state(0)\neffect(() => { console.log(shown) })\n</script>\n<Child open={shown} />\n`,
         })
         const diagnostics = collectAbideDiagnostics(createShadowProgram(dir)).filter((diagnostic) =>
             diagnostic.file.endsWith('host.abide'),
@@ -167,7 +167,7 @@ describe('abide check', () => {
     test('check accepts a component and text directly in a control-flow branch', () => {
         const dir = project({
             'child.abide': `<script>\nlet label = prop<string>('label')\n</script>\n<span>{label}</span>\n`,
-            'ok.abide': `<script>\nimport Child from './child.abide'\nlet on = state(true)\n</script>\n<template if={on}><Child label="x"/>plain</template>\n`,
+            'ok.abide': `<script>\nimport Child from './child.abide'\nlet on = scope().state(true)\n</script>\n<template if={on}><Child label="x"/>plain</template>\n`,
         })
         expect(
             collectAbideDiagnostics(createShadowProgram(dir)).filter((diagnostic) =>
@@ -181,7 +181,7 @@ describe('abide check', () => {
        illegal inside the branch's render body) and would falsely imply lazy loading. */
     test('a static import in a nested script is rejected with a clear diagnostic', () => {
         const dir = project({
-            'badimport.abide': `<script>\nlet on = state(true)\n</script>\n<template if={on}>\n<script>import Heavy from './child.abide'</script>\n</template>\n`,
+            'badimport.abide': `<script>\nlet on = scope().state(true)\n</script>\n<template if={on}>\n<script>import Heavy from './child.abide'</script>\n</template>\n`,
             'child.abide': `<script>\nlet label = prop<string>('label')\n</script>\n<span>{label}</span>\n`,
         })
         const diagnostics = collectAbideDiagnostics(createShadowProgram(dir)).filter((diagnostic) =>
@@ -194,7 +194,7 @@ describe('abide check', () => {
     /* A dynamic `import()` in a nested script is the legitimate lazy path — not flagged. */
     test('a dynamic import in a nested script is allowed', () => {
         const dir = project({
-            'lazy.abide': `<script>\nlet p = state(Promise.resolve(1))\n</script>\n<template await={p} then={v}>\n<script>effect(() => { void import('./child.abide') })</script>\n<span>{v}</span>\n</template>\n`,
+            'lazy.abide': `<script>\nlet p = scope().state(Promise.resolve(1))\n</script>\n<template await={p} then={v}>\n<script>effect(() => { void import('./child.abide') })</script>\n<span>{v}</span>\n</template>\n`,
             'child.abide': `<script>\nlet label = prop<string>('label')\n</script>\n<span>{label}</span>\n`,
         })
         expect(
@@ -209,7 +209,7 @@ describe('abide check', () => {
        trapping block that left them "Cannot find name"). */
     test('a nested-script binding reaches a deeply nested block in the branch', () => {
         const dir = project({
-            'nested.abide': `<script>\nlet p = state(Promise.resolve(1))\n</script>\n<template await={p} then={v}>\n<script>const label = String(v)</script>\n<div><template if={v > 0}><span>{label}</span></template></div>\n</template>\n`,
+            'nested.abide': `<script>\nlet p = scope().state(Promise.resolve(1))\n</script>\n<template await={p} then={v}>\n<script>const label = String(v)</script>\n<div><template if={v > 0}><span>{label}</span></template></div>\n</template>\n`,
         })
         expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
     })

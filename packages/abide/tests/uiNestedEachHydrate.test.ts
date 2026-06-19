@@ -1,8 +1,7 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { compileComponent } from '../src/lib/ui/compile/compileComponent.ts'
 import { compileSSR } from '../src/lib/ui/compile/compileSSR.ts'
-import { derived } from '../src/lib/ui/derived.ts'
-import { doc } from '../src/lib/ui/doc.ts'
+import { computed } from '../src/lib/ui/computed.ts'
 import { anchorCursor } from '../src/lib/ui/dom/anchorCursor.ts'
 import { appendText } from '../src/lib/ui/dom/appendText.ts'
 import { attr } from '../src/lib/ui/dom/attr.ts'
@@ -12,6 +11,7 @@ import { hydrate } from '../src/lib/ui/dom/hydrate.ts'
 import { skeleton } from '../src/lib/ui/dom/skeleton.ts'
 import { when } from '../src/lib/ui/dom/when.ts'
 import { effect } from '../src/lib/ui/effect.ts'
+import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
 import { RENDER } from '../src/lib/ui/runtime/RENDER.ts'
 import type { SsrRender } from '../src/lib/ui/runtime/types/SsrRender.ts'
 import { state } from '../src/lib/ui/state.ts'
@@ -32,7 +32,7 @@ const groups = [
   { title: 'A', links: ['a1','a2'] },
   { title: 'B', links: ['b1','b2'] },
 ]
-let flag = state(true)
+let flag = scope().state(true)
 </script>
 <nav>
   <template each={groups} as="group" key="group.title">
@@ -53,10 +53,10 @@ let flag = state(true)
 
 describe('nested each hydrate', () => {
     test('skeleton collects only its OWN anchors, not nested block anchors', () => {
-        const server = new Function('doc', 'state', 'derived', 'effect', compileSSR(SRC))(
+        const server = new Function('doc', 'state', 'computed', 'effect', compileSSR(SRC))(
             doc,
             state,
-            derived,
+            computed,
             effect,
         ) as SsrRender
         const host = document.createElement('div')
@@ -73,10 +73,10 @@ describe('nested each hydrate', () => {
     })
 
     test('hydrates with every group keeping its links and the trailing block last', () => {
-        const server = new Function('doc', 'state', 'derived', 'effect', compileSSR(SRC))(
+        const server = new Function('doc', 'state', 'computed', 'effect', compileSSR(SRC))(
             doc,
             state,
-            derived,
+            computed,
             effect,
         ) as SsrRender
         const host = document.createElement('div')
@@ -85,7 +85,7 @@ describe('nested each hydrate', () => {
         const runtime = {
             doc,
             state,
-            derived,
+            computed,
             effect,
             appendText,
             each,
@@ -111,17 +111,17 @@ describe('nested each hydrate', () => {
     test('resolves an element hole positioned after a block (skips inline block elements)', () => {
         const src = `
             <script>
-            let label = state('go')
+            let label = scope().state('go')
             </script>
             <section>
               <template each={[1,2]} as="n" key="n"><i>{n}</i></template>
               <button class={label}>x</button>
             </section>
         `
-        const server = new Function('doc', 'state', 'derived', 'effect', compileSSR(src))(
+        const server = new Function('doc', 'state', 'computed', 'effect', compileSSR(src))(
             doc,
             state,
-            derived,
+            computed,
             effect,
         ) as SsrRender
         const host = document.createElement('div')
@@ -130,7 +130,7 @@ describe('nested each hydrate', () => {
         const runtime = {
             doc,
             state,
-            derived,
+            computed,
             effect,
             appendText,
             attr,
