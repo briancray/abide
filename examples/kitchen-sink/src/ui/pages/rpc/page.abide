@@ -11,10 +11,10 @@ import { uploadNote } from '$server/rpc/uploadNote.ts'
 import CodeBlock from '$ui/CodeBlock.abide'
 import RpcHeader from '$ui/RpcHeader.abide'
 
-let log = state([])
-let message = state('hello')
-let celsius = state(100)
-let converted = state('(not called)')
+let log = scope().state([])
+let message = scope().state('hello')
+let celsius = scope().state(100)
+let converted = scope().state('(not called)')
 let seq = 0
 
 async function convert() {

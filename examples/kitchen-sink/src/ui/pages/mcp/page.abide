@@ -1,8 +1,8 @@
 <script>
 import CodeBlock from '$ui/CodeBlock.abide'
 
-let listOutput = state('(not called)')
-let callOutput = state('(not called)')
+let listOutput = scope().state('(not called)')
+let callOutput = scope().state('(not called)')
 
 async function call(id, method, params) {
     const response = await fetch('/__abide/mcp', {
@@ -52,7 +52,7 @@ async function getSummarizePrompt() {
 <p class="mt-2 text-slate-600">
     Auto-mounted at <code class="font-mono">POST /__abide/mcp</code> — JSON-RPC 2.0, MCP protocol
     <code class="font-mono">2025-06-18</code>. Zero config: tools, prompts, and resources are
-    derived from code you already wrote.
+    computed from code you already wrote.
 </p>
 
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">

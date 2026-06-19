@@ -4,8 +4,8 @@ import { tickFeed } from '$server/rpc/tickFeed.ts'
 import CodeBlock from '$ui/CodeBlock.abide'
 import RpcHeader from '$ui/RpcHeader.abide'
 
-let sseFrames = state([])
-let jsonlFrames = state([])
+let sseFrames = scope().state([])
+let jsonlFrames = scope().state([])
 
 function runSse() {
     sseFrames = []

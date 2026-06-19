@@ -2,11 +2,11 @@
 import { chat } from '$server/rpc/chat.ts'
 import CodeBlock from '$ui/CodeBlock.abide'
 
-let messages = state([])
-let toolCalls = state([])
-let draft = state('Which tools can you call? Use one and show me the result.')
-let streaming = state(false)
-let error = state(undefined)
+let messages = scope().state([])
+let toolCalls = scope().state([])
+let draft = scope().state('Which tools can you call? Use one and show me the result.')
+let streaming = scope().state(false)
+let error = scope().state(undefined)
 
 /* POST the running transcript, then read the JSONL response frame-by-frame,
    folding each AgentFrame into the live assistant turn. */

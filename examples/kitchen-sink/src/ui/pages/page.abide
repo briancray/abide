@@ -26,7 +26,7 @@ const groups = [
             {
                 href: '/cache',
                 title: 'cache',
-                body: 'Isomorphic memoise + coalesce — identical in-flight calls share one flight, ttl is only the retention dial, and cache.invalidate re-runs every derived that read a dropped entry.',
+                body: 'Isomorphic memoise + coalesce — identical in-flight calls share one flight, ttl is only the retention dial, and cache.invalidate re-runs every computed that read a dropped entry.',
             },
         ],
     },
@@ -36,7 +36,7 @@ const groups = [
             {
                 href: '/components',
                 title: 'components',
-                body: 'The .abide grammar — reactive primitives (state / derived / effect / prop), {expr} and bind: bindings, every <template> control-flow directive, snippets, components & slots, and scoped <style>.',
+                body: 'The .abide grammar — reactive primitives (state / computed / effect / prop), {expr} and bind: bindings, every <template> control-flow directive, snippets, components & slots, and scoped <style>.',
             },
             {
                 href: '/pages',
@@ -51,7 +51,7 @@ const groups = [
             {
                 href: '/tail',
                 title: 'tail',
-                body: 'The reactive consumer for anything streaming — a socket or fn.stream(args). First derived read opens the stream, last reader closes it; transport drops self-heal.',
+                body: 'The reactive consumer for anything streaming — a socket or fn.stream(args). First computed read opens the stream, last reader closes it; transport drops self-heal.',
             },
             {
                 href: '/health',
@@ -76,7 +76,7 @@ const groups = [
             {
                 href: '/cli',
                 title: 'cli',
-                body: 'A standalone binary: subcommands with schema-derived flags, streamed jsonl/sse, and a REPL — installable via curl <app>/__abide/cli | sh.',
+                body: 'A standalone binary: subcommands with schema-computed flags, streamed jsonl/sse, and a REPL — installable via curl <app>/__abide/cli | sh.',
             },
             {
                 href: '/bundle',

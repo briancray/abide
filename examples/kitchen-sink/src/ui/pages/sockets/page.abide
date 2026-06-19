@@ -4,16 +4,16 @@ import { publishChat } from '$server/rpc/publishChat.ts'
 import { chat } from '$server/sockets/chat.ts'
 import CodeBlock from '$ui/CodeBlock.abide'
 
-const latest = derived(() => tail(chat))
+const latest = scope().computed(() => tail(chat))
 
-let from = state('alice')
-let text = state('hello socket!')
+let from = scope().state('alice')
+let text = scope().state('hello socket!')
 async function send() {
     await publishChat({ from, text })
 }
 
-let restTail = state('(not fetched)')
-let restPublish = state('(not tried)')
+let restTail = scope().state('(not fetched)')
+let restPublish = scope().state('(not tried)')
 
 async function fetchRestTail() {
     const response = await fetch('/__abide/sockets/chat?tail=3')
@@ -117,5 +117,5 @@ export type ChatMessage = z.infer<typeof schema>`} />
     <CodeBlock title="this page — reactive read" code={`import { tail } from '@abide/abide/ui/tail'
 import { chat } from '$server/sockets/chat.ts'
 
-const latest = derived(() => tail(chat))     // re-renders on every new frame`} />
+const latest = computed(() => tail(chat))     // re-renders on every new frame`} />
 </section>

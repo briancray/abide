@@ -7,10 +7,10 @@ import { tickFeed } from '$server/rpc/tickFeed.ts'
 import CodeBlock from '$ui/CodeBlock.abide'
 import RpcHeader from '$ui/RpcHeader.abide'
 
-let decoded = state('(not called)')
-let raw = state('(not called)')
-let plainBody = state('(not called)')
-let streamFrames = state([])
+let decoded = scope().state('(not called)')
+let raw = scope().state('(not called)')
+let plainBody = scope().state('(not called)')
+let streamFrames = scope().state([])
 
 async function readDecoded() {
     const body = await getEcho({ message: 'hello' })
@@ -39,7 +39,7 @@ async function callPlainFetch() {
     plainBody = `status=${response.status} body=${await response.text()}`
 }
 
-const cachedRaw = derived(() => cache(getReport.raw)({ id: 'r-1' }))
+const cachedRaw = scope().computed(() => cache(getReport.raw)({ id: 'r-1' }))
 </script>
 
 <RpcHeader />
@@ -170,5 +170,5 @@ const cachedRaw = derived(() => cache(getReport.raw)({ id: 'r-1' }))
     <CodeBlock title="client — all three forms, same rpc import" code={`const body = await getReport({ id: 'r-1' })            // decoded body, HttpError on non-2xx
 const response = await getReport.raw({ id: 'r-1' })    // full Response
 for await (const frame of tickFeed.stream()) { /* iterate jsonl/sse frames */ }
-const cachedRaw = derived(() => cache(getReport.raw)({ id: 'r-1' }))  // shared cache key`} />
+const cachedRaw = computed(() => cache(getReport.raw)({ id: 'r-1' }))  // shared cache key`} />
 </section>

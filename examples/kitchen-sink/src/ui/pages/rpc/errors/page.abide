@@ -6,9 +6,9 @@ import { getProduct } from '$server/rpc/getProduct.ts'
 import CodeBlock from '$ui/CodeBlock.abide'
 import RpcHeader from '$ui/RpcHeader.abide'
 
-let outcome404 = state('(not triggered)')
-let outcome405 = state('(not triggered)')
-let outcome500 = state('(not triggered)')
+let outcome404 = scope().state('(not triggered)')
+let outcome405 = scope().state('(not triggered)')
+let outcome500 = scope().state('(not triggered)')
 
 async function trigger404() {
     try {

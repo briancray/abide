@@ -3,11 +3,11 @@ import { health } from '@abide/abide/shared/health'
 import { online } from '@abide/abide/shared/online'
 import CodeBlock from '$ui/CodeBlock.abide'
 
-/* Both reads are reactive: the derived re-runs when online/offline events fire
+/* Both reads are reactive: the computed re-runs when online/offline events fire
    (online) or a poll lands (health). Reading health() opens the poll. Both ran
    during SSR, so the payload rode the document and hydration seeds from __SSR__. */
-const connected = derived(() => online())
-const backend = derived(() => health())
+const connected = scope().computed(() => online())
+const backend = scope().computed(() => health())
 </script>
 
 <h1 class="text-3xl font-bold">
@@ -73,8 +73,8 @@ const backend = derived(() => health())
     <CodeBlock title="this page — both reads live" code={`import { online } from '@abide/abide/shared/online'
 import { health } from '@abide/abide/shared/health'
 
-const connected = derived(() => online())  // browser online/offline events
-const backend = derived(() => health())     // { reachable, ...AppHealth }`} />
+const connected = computed(() => online())  // browser online/offline events
+const backend = computed(() => health())     // { reachable, ...AppHealth }`} />
 
     <CodeBlock
         title="the wire — always unauthenticated, identity included"

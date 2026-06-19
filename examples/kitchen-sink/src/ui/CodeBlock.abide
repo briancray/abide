@@ -10,7 +10,7 @@ join the page's SSR stream. `title` is optional; `lang` defaults to ts.
 */
 let title = prop('title')
 let code = prop('code')
-let lang = derived(() => $props['lang']?.() ?? 'ts')
+let lang = scope().computed(() => $props['lang']?.() ?? 'ts')
 </script>
 
 <template if={title}>

@@ -4,12 +4,12 @@ import { publishChat } from '$server/rpc/publishChat.ts'
 import { chat } from '$server/sockets/chat.ts'
 import CodeBlock from '$ui/CodeBlock.abide'
 
-const latest = derived(() => tail(chat))
-const recent = derived(() => tail(chat, { last: 5 }))
-const status = derived(() => tail.status(chat))
+const latest = scope().computed(() => tail(chat))
+const recent = scope().computed(() => tail(chat, { last: 5 }))
+const status = scope().computed(() => tail.status(chat))
 
-let from = state('alice')
-let text = state('hello from tail')
+let from = scope().state('alice')
+let text = scope().state('hello from tail')
 async function send() {
     await publishChat({ from, text })
 }
@@ -83,7 +83,7 @@ async function send() {
     <CodeBlock title="this page — latest + window + publish-through-rpc" code={`import { tail } from '@abide/abide/ui/tail'
 import { chat } from '$server/sockets/chat.ts'
 
-const latest = derived(() => tail(chat))                 // newest frame
-const recent = derived(() => tail(chat, { last: 5 }))    // last ≤5 frames
-const status = derived(() => tail.status(chat))          // 'pending' | 'open' | 'done' | 'error'`} />
+const latest = computed(() => tail(chat))                 // newest frame
+const recent = computed(() => tail(chat, { last: 5 }))    // last ≤5 frames
+const status = computed(() => tail.status(chat))          // 'pending' | 'open' | 'done' | 'error'`} />
 </section>
