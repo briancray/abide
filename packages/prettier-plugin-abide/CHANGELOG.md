@@ -1,5 +1,13 @@
 # @abide/prettier-plugin-abide
 
+## 0.1.2
+
+### Patch Changes
+
+- [`df051ca`](https://github.com/briancray/abide/commit/df051ca7014e557f62bc6ac8eebcdf2036e8cac4) - make nested block-body formatting idempotent ([`3f86bb3`](https://github.com/briancray/abide/commit/3f86bb32aaa8fe260063ae412a4247baf0fc490e))
+
+- [`df051ca`](https://github.com/briancray/abide/commit/df051ca7014e557f62bc6ac8eebcdf2036e8cac4) - shield component tags inside quoted attribute values ([`ec9905a`](https://github.com/briancray/abide/commit/ec9905a4ef6e59038773d47133234f808fc54e4d))
+
 ## 0.1.1
 
 ### Patch Changes
