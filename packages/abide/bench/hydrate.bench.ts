@@ -16,7 +16,7 @@ globals.mountChild = mountChild
 
 const { compileComponent } = await import('../src/lib/ui/compile/compileComponent.ts')
 const { compileSSR } = await import('../src/lib/ui/compile/compileSSR.ts')
-const { doc } = await import('../src/lib/ui/doc.ts')
+const { createDoc: doc } = await import('../src/lib/ui/runtime/createDoc.ts')
 const { state } = await import('../src/lib/ui/state.ts')
 const { derived } = await import('../src/lib/ui/derived.ts')
 const { effect } = await import('../src/lib/ui/effect.ts')

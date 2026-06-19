@@ -1,4 +1,4 @@
-import { doc } from '../src/lib/ui/doc.ts'
+import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
 import type { BenchResult } from './types/BenchResult.ts'
 
 /*

@@ -2,7 +2,7 @@ import { installMiniDom } from '../tests/support/installMiniDom.ts'
 
 installMiniDom()
 
-const { doc } = await import('../src/lib/ui/doc.ts')
+const { createDoc: doc } = await import('../src/lib/ui/runtime/createDoc.ts')
 const { mount } = await import('../src/lib/ui/dom/mount.ts')
 const { each } = await import('../src/lib/ui/dom/each.ts')
 const { text } = await import('../src/lib/ui/dom/text.ts')
