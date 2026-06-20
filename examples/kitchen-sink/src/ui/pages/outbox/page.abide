@@ -1,0 +1,130 @@
+<script>
+import { outbox } from '@abide/abide/ui/outbox'
+import { saveMessage } from '$server/rpc/saveMessage.ts'
+import CodeBlock from '$ui/CodeBlock.abide'
+
+/*
+outbox() — a durable, FIFO queue for local-first writes: "act now, sync later".
+enqueue records a serializable payload (persisted, so it survives a reload) and
+drains head-first while online(); a rejection while still online is permanent, so
+the entry is dropped and onDrop fires for rollback. Delivery is at-least-once, so
+the send target (saveMessage) is keyed by id and idempotent.
+*/
+
+// Simulated connectivity — passed as the outbox's online() override so the demo
+// can go "offline" without dropping the real socket. Toggling it back on hits the
+// online edge the outbox's internal effect watches, which re-drains the queue.
+let offline = scope().state(false)
+
+// Optimistic UI: messages render the instant they're enqueued; a permanent
+// failure rolls the entry back out and surfaces it as dropped.
+let submitted = scope().state([])
+let dropped = scope().state([])
+
+const box = outbox({
+    key: 'kitchen-sink-outbox',
+    online: () => !offline,
+    send: async ({ id, text }) => {
+        await saveMessage({ id, text })
+    },
+    onDrop: ({ id, text }) => {
+        submitted = submitted.filter((message) => message.id !== id)
+        dropped = [...dropped, { id, text }]
+    },
+})
+
+// box.pending() reads the queued doc, so a tracking scope re-runs as it drains.
+const queued = scope().computed(() => box.pending())
+
+let draft = scope().state('type a message — include "fail" to force a drop')
+function submit(event: SubmitEvent) {
+    event.preventDefault()
+    const text = draft.trim()
+    if (text === '') {
+        return
+    }
+    const id = crypto.randomUUID()
+    submitted = [...submitted, { id, text }] // optimistic
+    box.enqueue({ id, text }) // durable, then drains when online
+    draft = ''
+}
+</script>
+
+<h1 class="text-3xl font-bold"><code class="font-mono">outbox()</code></h1>
+<p class="mt-2 text-slate-600">
+    The local-first half of "act now, sync later": a durable, FIFO queue of pending mutations that
+    drains when the client is online. <code class="font-mono">enqueue</code> records a serializable
+    payload — persisted, so it survives a reload — and tries to drain;
+    <code class="font-mono">pending()</code> is a reactive read of what is still in flight;
+    <code class="font-mono">flush()</code> drains on demand. Delivery is at-least-once, so the send
+    target must be idempotent.
+</p>
+
+<section class="mt-6">
+    <h2 class="text-sm font-semibold">Offline → online, and permanent failures</h2>
+    <p class="mt-2 text-sm text-slate-600">
+        Go offline and queue a few messages — they persist and wait. Back online, the queue drains
+        head-first. A message containing <code class="font-mono">fail</code> is a 422 while online:
+        a permanent rejection, so the outbox drops it and
+        <code class="font-mono">onDrop</code> rolls back the optimistic entry.
+    </p>
+</section>
+
+<section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
+    <div class="flex items-center justify-between">
+        <h2 class="text-sm font-semibold">Try it</h2>
+        <label class="flex items-center gap-2 text-xs font-medium">
+            <input type="checkbox" bind:checked={offline} /> simulate offline
+        </label>
+    </div>
+    <p class="mt-1 font-mono text-xs text-slate-500">unsynced: {queued.length}{offline ? ' (offline — holding)' : ''}</p>
+    <form class="mt-3 flex flex-wrap items-end gap-2" onsubmit={submit}>
+        <label class="flex-1 text-xs font-medium">
+            message
+            <input
+                bind:value={draft}
+                class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
+        </label>
+        <button
+            type="submit"
+            class="rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100">
+            enqueue
+        </button>
+    </form>
+
+    <template if={submitted.length > 0}>
+        <p class="mt-4 text-xs font-medium text-slate-500">submitted (dropped entries removed)</p>
+        <ul class="mt-1 space-y-1">
+            <template each={submitted} as="message" key="message.id">
+                <li class="rounded-md bg-slate-100 px-3 py-1.5 font-mono text-xs text-slate-700">
+                    {message.text}
+                </li>
+            </template>
+        </ul>
+    </template>
+
+    <template if={dropped.length > 0}>
+        <p class="mt-4 text-xs font-medium text-rose-600">dropped (rolled back via onDrop)</p>
+        <ul class="mt-1 space-y-1">
+            <template each={dropped} as="message" key="message.id">
+                <li class="rounded-md bg-rose-50 px-3 py-1.5 font-mono text-xs text-rose-700">
+                    {message.text}
+                </li>
+            </template>
+        </ul>
+    </template>
+</section>
+
+<section class="mt-6 space-y-3">
+    <CodeBlock title="this page — durable queue, optimistic UI, rollback" code={`import { outbox } from '@abide/abide/ui/outbox'
+import { saveMessage } from '$server/rpc/saveMessage.ts'
+
+const box = outbox({
+    key: 'kitchen-sink-outbox',                 // persistence key — survives reload
+    send: async ({ id, text }) => { await saveMessage({ id, text }) }, // idempotent
+    onDrop: ({ id }) => { /* permanent failure — roll back the optimistic write */ },
+})
+
+const queued = scope().computed(() => box.pending())  // reactive "N unsynced"
+box.enqueue({ id: crypto.randomUUID(), text })         // durable, then drains when online`} />
+</section>

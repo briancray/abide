@@ -117,5 +117,5 @@ export type ChatMessage = z.infer<typeof schema>`} />
     <CodeBlock title="this page — reactive read" code={`import { tail } from '@abide/abide/ui/tail'
 import { chat } from '$server/sockets/chat.ts'
 
-const latest = computed(() => tail(chat))     // re-renders on every new frame`} />
+const latest = scope().computed(() => tail(chat))     // re-renders on every new frame`} />
 </section>

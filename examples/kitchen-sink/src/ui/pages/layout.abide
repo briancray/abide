@@ -53,6 +53,7 @@ const groups = [
             { href: '/pages', label: 'pages' },
             { href: '/probes', label: 'pending / refreshing' },
             { href: '/tail', label: 'tail' },
+            { href: '/outbox', label: 'outbox' },
             { href: '/health', label: 'online / health' },
         ],
     },

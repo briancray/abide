@@ -83,7 +83,7 @@ async function send() {
     <CodeBlock title="this page — latest + window + publish-through-rpc" code={`import { tail } from '@abide/abide/ui/tail'
 import { chat } from '$server/sockets/chat.ts'
 
-const latest = computed(() => tail(chat))                 // newest frame
-const recent = computed(() => tail(chat, { last: 5 }))    // last ≤5 frames
-const status = computed(() => tail.status(chat))          // 'pending' | 'open' | 'done' | 'error'`} />
+const latest = scope().computed(() => tail(chat))              // newest frame
+const recent = scope().computed(() => tail(chat, { last: 5 })) // last ≤5 frames
+const status = scope().computed(() => tail.status(chat))       // 'pending' | 'open' | 'done' | 'error'`} />
 </section>

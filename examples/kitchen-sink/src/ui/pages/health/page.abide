@@ -73,8 +73,8 @@ const backend = scope().computed(() => health())
     <CodeBlock title="this page — both reads live" code={`import { online } from '@abide/abide/shared/online'
 import { health } from '@abide/abide/shared/health'
 
-const connected = computed(() => online())  // browser online/offline events
-const backend = computed(() => health())     // { reachable, ...AppHealth }`} />
+const connected = scope().computed(() => online())  // browser online/offline events
+const backend = scope().computed(() => health())     // { reachable, ...AppHealth }`} />
 
     <CodeBlock
         title="the wire — always unauthenticated, identity included"

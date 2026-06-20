@@ -102,8 +102,8 @@ const updating = scope().computed(() => refreshing(getRates, { base: 'USD' }))
 
 <section class="mt-6 space-y-3">
     <CodeBlock title="this page — both probes live" code={`const submit = cache(createEcho, { ttl: 0 })
-const submitting = computed(() => pending(createEcho))
+const submitting = scope().computed(() => pending(createEcho))
 
-const rates = computed(() => cache(getRates, { invalidate: { debounce: 300 } })({ base: 'USD' }))
-const updating = computed(() => refreshing(getRates, { base: 'USD' }))`} />
+const rates = scope().computed(() => cache(getRates, { invalidate: { debounce: 300 } })({ base: 'USD' }))
+const updating = scope().computed(() => refreshing(getRates, { base: 'USD' }))`} />
 </section>

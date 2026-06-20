@@ -12,8 +12,8 @@ import CodeBlock from '$ui/CodeBlock.abide'
 
 /* Two reads against the same cache key + scope share one entry, so any invalidation
    re-runs both. `counter` streams; `mirror` is a second read of the same entry. */
-const counter = scope().computed(() => cache(getCounter, { scope: 'counter' })())
-const mirror = scope().computed(() => cache(getCounter, { scope: 'counter' })())
+const counter = scope().computed(() => cache(getCounter, { tags: 'counter' })())
+const mirror = scope().computed(() => cache(getCounter, { tags: 'counter' })())
 const loading = scope().computed(() => pending(getCounter))
 
 async function increment() {
@@ -32,9 +32,9 @@ const chatCount = scope().computed(() => cache(getChatCount)())
 
 /* patch: the frame IS the new data — fold it into the cached list, no refetch. */
 effect(() =>
-    cache.on(chat, (message, { patch }) =>
-        patch(getChatLog, (log) => ({ messages: [...log.messages, message].slice(-20) })),
-    ),
+    cache.on(chat, (message, { patch }) => {
+        patch(getChatLog, (log) => ({ messages: [...log.messages, message].slice(-20) }))
+    }),
 )
 const chatLog = scope().computed(() => cache(getChatLog)())
 </script>
@@ -72,20 +72,16 @@ const chatLog = scope().computed(() => cache(getChatLog)())
             <p class="text-xs text-slate-500">
                 recent — <code class="font-mono">patch</code> (folded in, no refetch)
             </p>
-            <template await={chatLog}>
-                <template then="data">
-                    <div>
-                        <template if={data.messages.length === 0}>
-                            <p class="mt-1 text-sm text-slate-400">none yet</p>
-                            <template else>
-                                <ul class="mt-1 space-y-0.5 text-sm text-slate-700">
-                                    <template each={data.messages.slice(-5)} as="message" key="message.id">
-                                        <li><strong>{message.from}</strong>: {message.text}</li>
-                                    </template>
-                                </ul>
+            <template await={chatLog} then="data">
+                <template if={data.messages.length === 0}>
+                    <p class="mt-1 text-sm text-slate-400">none yet</p>
+                    <template else>
+                        <ul class="mt-1 space-y-0.5 text-sm text-slate-700">
+                            <template each={data.messages.slice(-5)} as="message" key="message.id">
+                                <li><strong>{message.from}</strong>: {message.text}</li>
                             </template>
-                        </template>
-                    </div>
+                        </ul>
+                    </template>
                 </template>
             </template>
         </div>
@@ -145,7 +141,7 @@ const chatLog = scope().computed(() => cache(getChatLog)())
         <button
             type="button"
             class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
-            onclick={() => cache.invalidate({ scope: 'counter' })}>
+            onclick={() => cache.invalidate({ tags: 'counter' })}>
             invalidate scope
         </button>
     </div>
@@ -154,10 +150,10 @@ const chatLog = scope().computed(() => cache(getChatLog)())
 <section class="mt-6 space-y-3">
     <CodeBlock title="option grammar" code={`cache(fn)()                             // cached until invalidated
 cache(fn, { ttl: 0 })()                 // coalesce only — the mutation idiom
-cache(fn, { scope: 'orders' })()        // tag for grouped invalidation/probing
+cache(fn, { tags: 'orders' })()        // tag for grouped invalidation/probing
 cache(fn, { global: true })()           // process-level store (server reuse)
 cache.invalidate(fn)                    // drop one function's calls
-cache.invalidate({ scope: 'orders' })   // drop every entry sharing the tag`} />
+cache.invalidate({ tags: 'orders' })   // drop every entry sharing the tag`} />
 
     <CodeBlock title="cache.on — invalidate vs patch" code={`// invalidate: a frame stales a computed read — drop it, let the next read refetch
 effect(() => cache.on(chat, (_m, { invalidate }) => invalidate(getChatCount)))

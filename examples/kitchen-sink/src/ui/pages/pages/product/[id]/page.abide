@@ -64,7 +64,7 @@ async function loadProduct(productId) {
 import { getProduct } from '$server/rpc/getProduct.ts'
 import { page } from '@abide/abide/shared/page'
 
-const id = computed(() => page.params.id)    // typed via src/.abide/routes.d.ts
+const id = scope().computed(() => page.params.id)    // typed via src/.abide/routes.d.ts
 
 <template await={loadProduct(id)}>
     <template then="product">...{product.name}...</template>
