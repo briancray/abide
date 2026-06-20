@@ -1,5 +1,19 @@
 # abide
 
+## 0.34.2
+
+### Patch Changes
+
+- [`91b03c5`](https://github.com/briancray/abide/commit/91b03c540e7139205f1518a6e2429411df43b859) - enforce the msg frame against the shared wire type ([`77fedf1`](https://github.com/briancray/abide/commit/77fedf17787b8bd8fbcdc56c722016ec4e905836))
+
+- [`91b03c5`](https://github.com/briancray/abide/commit/91b03c540e7139205f1518a6e2429411df43b859) - extract the shared sub registry + frame routing ([`b81dcce`](https://github.com/briancray/abide/commit/b81dcceb63ccd92dd04f9108173510e8c132a02c))
+
+- [`91b03c5`](https://github.com/briancray/abide/commit/91b03c540e7139205f1518a6e2429411df43b859) - classify response body kind once for live and warm decode ([`bd4fb4c`](https://github.com/briancray/abide/commit/bd4fb4cec2813f3d58ee6b277d2428ba75e521ae))
+
+- [`c1242f3`](https://github.com/briancray/abide/commit/c1242f3bd4343c760362950d7953a172b2d112f5) - fix(cache): honor the streaming guard in the SSR cache-snapshot round-trip. The snapshot path's content-type classifiers were hand-mirrored against `decodeResponse` but omitted its `isStreamingResponse` refusal, so a `cache()`d GET to a streaming endpoint (SSE / NDJSON / JSONL) would (a) hang SSR — `snapshotEntryFromCache` called `response.text()` on a never-ending body — and (b) break isomorphism — `warmValueFromSnapshot` warm-decoded the body to a value while a live read throws the "use tail()/stream()" error. The server now skips streaming responses (shared `isStreamingResponse`) and the warm decoder defers them to the async path, keeping it a strict subset of `decodeResponse`.
+
+- [`f710ba8`](https://github.com/briancray/abide/commit/f710ba8a6266f67c7ff03d9117e1484a7c63f59a) - fix(ui): single shared `skeletonContext` pass drives `<!--a-->` anchor placement for both back-ends, so the SSR string and client build can't disagree about skeleton markers. Previously the server tracked skeleton position as mutable traversal state reset at each fresh-context boundary; a forgotten reset (component slot content, snippet bodies) leaked an anchor the client never emitted, desyncing hydration. Boundaries are now enumerated once, declaratively. Adds a generative, reference-checked congruence harness (`uiRenderCongruenceFuzz`) that combinatorially nests every fresh-context boundary inside skeletonable parents and checks marker congruence + content against a by-construction reference + a hydration round-trip — catching this whole drift class without hand-enumerating shapes.
+
 ## 0.34.1
 
 ### Patch Changes
