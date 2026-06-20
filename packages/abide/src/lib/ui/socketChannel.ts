@@ -1,24 +1,17 @@
 import type { SocketClientFrame } from '../server/sockets/types/SocketClientFrame.ts'
 import type { SocketServerFrame } from '../server/sockets/types/SocketServerFrame.ts'
+import { createSocketSubRegistry } from '../shared/createSocketSubRegistry.ts'
 import { SOCKETS_PATH } from '../shared/SOCKETS_PATH.ts'
 import type { SocketChannel } from '../shared/types/SocketChannel.ts'
-import type { SocketSubCallbacks } from '../shared/types/SocketSubCallbacks.ts'
 import { withBase } from '../shared/withBase.ts'
 
 let singleton: SocketChannel | undefined
 
 /*
-Lazily opens the single multiplexed ws used by every socket proxy on
-the page. Routes inbound frames:
-  `msg`    → all local subs of that socket
-  `replay` → the matching sub (its batched seed)
-  `end`    → the matching sub
-  `err`    → the matching sub
-
-`msg` frames carry no sub id: one publish from the server fans out to
-every connected ws via Bun's native publish, and each ws delivers the
-message to every local sub of that socket. `replay`/`end`/`err` are
-per-sub — a seed batch belongs to the sub that requested it.
+Lazily opens the single multiplexed ws used by every socket proxy on the page.
+The sub registry + inbound `msg`/`replay`/`end`/`err` routing lives in
+`createSocketSubRegistry` (shared with the test harness); this channel owns the
+transport that wraps it — connect, reconnect/backoff, and visibility.
 
 Outbound frames sent before `ws.onopen` fires are queued and flushed
 on open. The channel reconnects on close with bounded backoff;
@@ -46,8 +39,6 @@ export function getSocketChannel(): SocketChannel {
     if (singleton) {
         return singleton
     }
-    const subs = new Map<string, { socket: string; callbacks: SocketSubCallbacks }>()
-    const subsBySocket = new Map<string, Set<string>>()
     let ws: WebSocket | undefined
     let pendingSends: string[] = []
     let backoffMs = 250
@@ -72,6 +63,10 @@ export function getSocketChannel(): SocketChannel {
         pendingSends.push(message)
         connect()
     }
+
+    /* The local sub registry + inbound frame routing; this channel owns only the
+       transport (connect/reconnect/backoff/visibility) around it. */
+    const registry = createSocketSubRegistry(send)
 
     function connect(): void {
         /* Backoff window owns reconnection; queued frames flush when its attempt opens. */
@@ -99,64 +94,26 @@ export function getSocketChannel(): SocketChannel {
             } catch {
                 return
             }
-            if (frame.type === 'msg') {
-                /*
-                One Bun-published frame fans out to every local sub of
-                that socket on this ws — addressed by socket name, not
-                per-sub id.
-                */
-                const targets = subsBySocket.get(frame.socket)
-                if (!targets) {
-                    return
-                }
-                for (const subId of targets) {
-                    subs.get(subId)?.callbacks.onMessage(frame.message)
-                }
-                return
-            }
-            if (frame.type === 'replay') {
-                subs.get(frame.sub)?.callbacks.onReplay(frame.messages)
-                return
-            }
-            if (frame.type === 'end') {
-                const sub = subs.get(frame.sub)
-                if (!sub) {
-                    return
-                }
-                dropSub(frame.sub)
-                sub.callbacks.onEnd()
-                return
-            }
-            if (frame.type === 'err') {
-                const sub = subs.get(frame.sub)
-                if (!sub) {
-                    return
-                }
-                dropSub(frame.sub)
-                sub.callbacks.onError(frame.message)
-                return
-            }
+            registry.routeFrame(frame)
         })
         ws.addEventListener('close', () => {
-            const active = [...subs.values()]
-            subs.clear()
-            subsBySocket.clear()
+            const active = registry.drainSubs()
             /*
             Drop any queued frames too. We've just torn down every local
             sub, so replaying their `sub`/`unsub`/`pub` frames on
             reconnect would open ghost subscriptions on the server that
             no client object tracks (and never gets an `unsub`). This
             keeps the "channel never re-subscribes" contract above
-            honest — consumers re-open fresh subs. Cleared before the
-            callbacks run so a consumer reacting to the disconnect (its
-            catch resolves in a microtask, after this handler) queues
-            onto a fresh list.
+            honest — consumers re-open fresh subs. `drainSubs` cleared the
+            registry before these callbacks run so a consumer reacting to
+            the disconnect (its catch resolves in a microtask, after this
+            handler) registers onto a fresh list.
             */
             const hadPending = pendingSends.length > 0
             pendingSends = []
             ws = undefined
-            for (const sub of active) {
-                sub.callbacks.onDisconnect()
+            for (const callbacks of active) {
+                callbacks.onDisconnect()
             }
             if (active.length === 0 && !hadPending) {
                 return
@@ -167,21 +124,6 @@ export function getSocketChannel(): SocketChannel {
             }, backoffMs)
             backoffMs = Math.min(backoffMs * 2, 5000)
         })
-    }
-
-    function dropSub(id: string): void {
-        const entry = subs.get(id)
-        if (!entry) {
-            return
-        }
-        subs.delete(id)
-        const set = subsBySocket.get(entry.socket)
-        if (set) {
-            set.delete(id)
-            if (set.size === 0) {
-                subsBySocket.delete(entry.socket)
-            }
-        }
     }
 
     /*
@@ -200,28 +142,6 @@ export function getSocketChannel(): SocketChannel {
         }
     })
 
-    singleton = {
-        subscribe(id, socket, replay, callbacks) {
-            subs.set(id, { socket, callbacks })
-            /* Not getOrInsertComputed: browser-side code, and Safari/Chrome only shipped it within the last browser cycle (26.2 / 145). */
-            let set = subsBySocket.get(socket)
-            if (!set) {
-                set = new Set()
-                subsBySocket.set(socket, set)
-            }
-            set.add(id)
-            send({ type: 'sub', sub: id, socket, replay })
-        },
-        unsubscribe(id) {
-            if (!subs.has(id)) {
-                return
-            }
-            dropSub(id)
-            send({ type: 'unsub', sub: id })
-        },
-        publish(socket, message) {
-            send({ type: 'pub', socket, message })
-        },
-    }
+    singleton = registry.channel
     return singleton
 }

@@ -2,8 +2,7 @@ import type { Socket } from '../server/sockets/types/Socket.ts'
 import type { SocketClientFrame } from '../server/sockets/types/SocketClientFrame.ts'
 import type { SocketServerFrame } from '../server/sockets/types/SocketServerFrame.ts'
 import { buildSocketOverChannel } from '../shared/buildSocketOverChannel.ts'
-import type { SocketChannel } from '../shared/types/SocketChannel.ts'
-import type { SocketSubCallbacks } from '../shared/types/SocketSubCallbacks.ts'
+import { createSocketSubRegistry } from '../shared/createSocketSubRegistry.ts'
 
 /*
 Test-side substitute for the browser socketChannel: one ws to the booted
@@ -23,8 +22,6 @@ export function createTestSocketChannel(wsUrl: string): {
     /* `using channel = createTestSocketChannel(url)` — disposal closes the ws. */
     [Symbol.dispose]: () => void
 } {
-    const subs = new Map<string, { socket: string; callbacks: SocketSubCallbacks }>()
-    const subsBySocket = new Map<string, Set<string>>()
     let pendingSends: string[] = []
 
     const ws = new WebSocket(wsUrl)
@@ -48,20 +45,9 @@ export function createTestSocketChannel(wsUrl: string): {
         pendingSends.push(message)
     }
 
-    function dropSub(id: string): void {
-        const entry = subs.get(id)
-        if (!entry) {
-            return
-        }
-        subs.delete(id)
-        const set = subsBySocket.get(entry.socket)
-        if (set) {
-            set.delete(id)
-            if (set.size === 0) {
-                subsBySocket.delete(entry.socket)
-            }
-        }
-    }
+    /* Same sub registry + frame routing the browser channel uses; this harness owns
+       only the bare ws (no reconnect — a test drives the lifecycle through close()). */
+    const registry = createSocketSubRegistry(send)
 
     ws.addEventListener('open', flushPending)
     ws.addEventListener('message', (event) => {
@@ -71,70 +57,23 @@ export function createTestSocketChannel(wsUrl: string): {
         } catch {
             return
         }
-        if (frame.type === 'msg') {
-            const targets = subsBySocket.get(frame.socket)
-            if (!targets) {
-                return
-            }
-            for (const subId of targets) {
-                subs.get(subId)?.callbacks.onMessage(frame.message)
-            }
-            return
-        }
-        if (frame.type === 'replay') {
-            subs.get(frame.sub)?.callbacks.onReplay(frame.messages)
-            return
-        }
-        const sub = subs.get(frame.sub)
-        if (!sub) {
-            return
-        }
-        dropSub(frame.sub)
-        if (frame.type === 'end') {
-            sub.callbacks.onEnd()
-        } else {
-            sub.callbacks.onError(frame.message)
-        }
+        registry.routeFrame(frame)
     })
     /* A drop after subs are live is unexpected; surface it so iterators unblock
        instead of awaiting a frame that never comes. Idempotent — the first of
-       error/close clears subs, the second finds none. error covers a failed
+       error/close drains the subs, the second finds none. error covers a failed
        handshake (no open, no clean close) that close alone would miss. */
     function disconnectAll(): void {
-        const active = [...subs.values()]
-        subs.clear()
-        subsBySocket.clear()
-        for (const sub of active) {
-            sub.callbacks.onDisconnect()
+        for (const callbacks of registry.drainSubs()) {
+            callbacks.onDisconnect()
         }
     }
     ws.addEventListener('close', disconnectAll)
     ws.addEventListener('error', disconnectAll)
 
-    const channel: SocketChannel = {
-        subscribe(id, socket, replay, callbacks) {
-            subs.set(id, { socket, callbacks })
-            let set = subsBySocket.get(socket)
-            if (!set) {
-                set = new Set()
-                subsBySocket.set(socket, set)
-            }
-            set.add(id)
-            send({ type: 'sub', sub: id, socket, replay })
-        },
-        unsubscribe(id) {
-            if (!subs.has(id)) {
-                return
-            }
-            dropSub(id)
-            send({ type: 'unsub', sub: id })
-        },
-        publish: (socket, message) => send({ type: 'pub', socket, message }),
-    }
-
     /* Same Socket<T> builder the browser proxy uses, over this test channel. */
     function socket<T>(name: string): Socket<T> {
-        return buildSocketOverChannel<T>(name, () => channel)
+        return buildSocketOverChannel<T>(name, () => registry.channel)
     }
 
     const close = () => ws.close()
