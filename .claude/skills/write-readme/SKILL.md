@@ -1,240 +1,212 @@
 ---
 name: write-readme
-description: Regenerate the abide README. Use when the user asks to rewrite, update, or refresh the README, or after API changes the README should reflect.
+description: Regenerate the abide README (the curated 3-primitive intro) and AGENTS.md (the exhaustive public-surface map). Use when the user asks to rewrite or refresh the README or AGENTS.md, or after API changes the docs should reflect.
 ---
 
-# Writing the abide README
+# Writing the abide docs
 
-The README makes its argument with artifacts — the declare snippet, the
-fan-out diagram, the boot surface map — and then gets out of the way. It is
-**terse by contract**: code and tables carry the content; prose only appears
-where a snippet or table can't. Treat the code as the only authority for
-facts; treat the budgets below as the authority for length.
+This skill regenerates **two generated docs**, both re-derived from
+`packages/abide/src` + `package.json` `exports` every run — never patched:
+
+- **`packages/abide/README.md`** — the curated human intro. A lean pitch
+  backed by three runnable artifacts (an RPC, a socket, one `.abide` component
+  consuming both). It does **not** document every export; it teaches the three
+  foundational primitives and the template grammar that ties them together.
+- **`packages/abide/AGENTS.md`** — the exhaustive surface map. *Every* `exports`
+  key appears, grouped by namespace, with its import specifier + a one-line
+  spec, so an agent grasps the whole API in one read. This is where the
+  every-export-accountable contract lives (it's why the README needn't).
+
+Both are terse by contract — code and tables carry the content; prose only
+appears where a snippet or table can't. Treat `packages/abide/src` as the only
+authority for facts and the budgets below as the authority for length. When
+either doc and the code disagree, change the doc, not the code.
 
 ## Source of truth — non-negotiable
 
 * **`packages/abide/src` is the SOLE source of factual / API truth.** Read it
   before you write. Do not state a behaviour, option, default, path, or
-  guarantee that you have not seen in that tree. If the code doesn't back it,
-  it doesn't go in.
-* **`packages/abide/package.json` backs the meta-claims:** import paths (the
-  `exports` map — pin every `abide/...` to a real key), dependency
-  footprint (`dependencies` / `peerDependencies`), runtime (`engines`).
-* Do **not** mine `examples/`, the current README, CHANGELOG, or docs for
-  facts. The current README is not a source — rebuild completely. (The
-  CHANGELOG may be consulted only to date a rename if one must be mentioned.)
-* Never document internal APIs (anything not in the `exports` map).
+  guarantee you have not seen in that tree. If the code doesn't back it, it
+  doesn't go in.
+* **`packages/abide/package.json` backs the import paths** — pin every
+  `@abide/abide/...` to a real `exports` key — and the footprint claims
+  (`dependencies` / `peerDependencies`, `engines`).
+* Do **not** mine `examples/`, the current docs, CHANGELOG, or other docs for
+  facts. The current README and AGENTS.md are not sources — rebuild each
+  completely. (The CHANGELOG may be consulted only to date a rename if one must
+  be mentioned.)
 * If a claim below no longer matches the code, **change the claim, not the
-  code** — the README reflects what is true today. That includes structure:
-  if a feature in the section plan no longer exists, drop its section; if a
-  new public surface exists, add one at the same altitude and budget.
+  code** — the docs reflect what is true today.
 
-## Run the inventory first — the generative spine
+## README — four sections, nothing else
 
-Do not start from a remembered list of surfaces; lists drift. Derive the
-surface set from the code every run:
+Exactly four sections, in this order. The first is the pitch; the next three
+are the foundational primitives, each a single artifact with the minimum prose
+to read it. The three artifacts form **one story**: §4's component imports the
+verb from §2 and the socket from §3. Target ~150 lines, ceiling ~180.
 
-```sh
-bun run packages/abide/scripts/readmeSurfaces.ts
-```
+### 1. Intro
 
-It reports four things and **fails** if any export is undocumented-by-omission:
+* `# abide` (lowercase), then the bold capability line.
+* ≤ 2 sentences on what abide is: typed RPCs fan out to HTTP, a CLI, an MCP,
+  and an OpenAPI spec from one declaration; the bundler swaps the runtime per
+  side. Built for humans *and* machines.
+* The footprint bullet(s) true today (zero runtime dependencies; single
+  runtime).
+* `## Quick start` — two paths: `bunx abide scaffold <name>` (state in a
+  trailing comment that it scaffolds, installs, and starts dev only if the
+  code still does all three), and the kitchen-sink clone (verify every command
+  against `examples/kitchen-sink/package.json` before pasting).
 
-1. **exports grouped by `@readme` disposition.** Every `exports` target
-   carries a `// @readme <slug>` tag *above its export*, co-located so
-   placement can't drift from the code (a renamed/moved export takes its
-   disposition with it). The slug names the section the export is documented
-   in; `plumbing` means a build/bundler/codegen/test helper that carries no
-   prose. **The inventory's printed groups are the section list — don't keep a
-   copy of the slugs here.** Some sections are **structural**: no export is
-   tagged for them because they describe cross-cutting behaviour or repo shape
-   (the body plan marks which). An untagged export is a hard failure — a
-   capability with no disposition; add a `// @readme <slug>` line (use
-   `plumbing` only if it genuinely carries no user-facing prose), then place
-   it at that slug's altitude. A brand-new slug means a new section.
-2. **env vars** split `DOCUMENT` vs `internal`. Every `DOCUMENT` row must
-   appear in the README (Deploy / Reference / its section).
-3. **routes** split the same way; every `DOCUMENT` route must appear.
-4. **change ledger** — every source file and changeset added/removed/modified
-   since the README was last regenerated (working tree included, so
-   uncommitted work counts). This is the only check that catches *behaviour*
-   changes, not just new export keys: walk every `A`/`D` line and every
-   changeset and give each an explicit disposition — reflected in the README,
-   or internal-only. (This is how an `online()`/timeout behaviour change or a
-   `createTestClient → createTestApp` rename gets caught.)
+**Do not add**: a comparison / "why not X" section, a stability table, a
+maturity essay, adjectives, or any paragraph whose job is to justify adoption.
+The artifacts argue; prose doesn't.
 
-When the inventory and a hardcoded claim below disagree, the inventory wins —
-fix the claim.
+### 2. RPCs
 
-## The opening — a lean banner
+* What an RPC is: one export per file under `src/server/rpc/`, the file path is
+  the URL, the schema validates args and projects the MCP tool, CLI flags, and
+  OpenAPI operation. Standard Schema is the contract (zod / valibot / arktype,
+  unadapted).
+* One `GET` example (a `getMessages`-style verb with an `inputSchema`).
+* The **fan-out diagram** — one declared verb branching to: SSR call
+  (`cache(fn)()`), browser fetch (typed proxy), MCP tool, CLI subcommand,
+  OpenAPI op. This diagram is the whole premise; keep it.
+* The gating note: a schema unlocks the CLI and (for read-only verbs) MCP; a
+  mutating verb never auto-exposes to MCP — it needs explicit
+  `clients: { mcp: true }`. Note the consume forms (`cache(fn)()` in-process,
+  swapped `fetch` in the browser, `.raw(args)`, `.stream(args)`).
+* `> ` warning: query args travel as strings — use `z.coerce.*`. The per-verb
+  `timeout` (504, every surface) is distinct from `ABIDE_CLIENT_TIMEOUT`.
 
-The banner is a pitch, not a demo: the proof artifacts (declare snippet,
-fan-out diagram, boot map) open the first body phase instead, so the page
-leads with the claim and the demonstration lands where the reader starts
-reading. Lowercase `# abide`, then in order, nothing else between:
+### 3. Sockets
 
-1. The bold capability line: **"Write one function. Get a web app, a CLI, and
-   an MCP — from the same line of code."**
-2. As few sentences as carry it (terse cap, not a target) on what abide is
-   and that the bundler swaps the runtime per target.
-3. One bullet per footprint fact that is true today (today two: zero runtime
-   dependencies; one runtime)
-4. The quickstart, two paths:
-   - **Start a project** — ideally one command (`abide scaffold <name>`).
-     State in a trailing comment what it does (scaffolds, installs, starts
-     dev) only if the code still does all three.
-   - **See everything live** — clone the repo and run the kitchen-sink
-     example, which exercises every surface. Verify the commands against
-     `examples/kitchen-sink/package.json` before pasting:
+* What a socket is: one broadcast topic per file under `src/server/sockets/`;
+  a `Socket<T>` is an isomorphic `AsyncIterable<T>`; every socket multiplexes
+  onto one ws at `/__abide/sockets`.
+* One `socket({ schema, tail, ttl })` example.
+* The HTTP face: `/__abide/sockets/<name>` — `GET` returns the retained tail,
+  `POST` publishes (gated by `clientPublish`).
 
-     ```sh
-     git clone https://github.com/briancray/abide
-     cd abide && bun install
-     cd examples/kitchen-sink && bun run dev
-     ```
+### 4. Components — the full template
 
-**Do not add**: a comparison/"why not X" section, an API stability table, a
-scope/maturity essay, adjectives, superlatives, or any paragraph whose job is
-to justify adoption. The artifacts argue; prose doesn't.
+The payoff: **one `.abide` component that imports the §2 verb and §3 socket**
+and exercises most of the template grammar in a single realistic page. Keep it
+to one snippet. It should show, in order:
 
-## The body — the story arc
+* `<script>` — imports (`cache`, `tail`, the rpc verbs and socket via `$server/…`,
+  a child component via `$ui/…`), `prop(...)` reads, reactive reads through
+  `scope().computed(...)`, local `scope().state(...)`, and an event handler that
+  calls a mutating verb.
+* a `<template name="…" args={…}>` snippet (reusable builder).
+* a `<form>` with `bind:value` / `bind:checked` / `bind:group` and a
+  `disabled={…}` button.
+* `<template if>`/`<template else>`, `<template switch>`/`case`/`default`,
+  `<template await>`/`then`/`catch` wrapping `<template each={…} as="…" key="…">`.
+* a component-scoped `<style>`.
 
-Budget: target ~400 lines, ceiling ~450 (the phase headers and merged
-sections cost a little over the old flat layout). Per concept: **one snippet,
-one table, at most one `>` warning line, prose ≤ 2 sentences.** Tables first
-for anything enumerable; bullets for one-line rules; prose only for a nuance
-neither can hold. Over budget → cut prose, never facts.
+Close the file with a single `MIT` line.
 
-The body is a **four-phase story arc**: each phase a `##` with a one-line
-intent, each surface a `###` under it. The phase arc and which surface sits in
-which phase is the one editorial layer the code can't derive — everything else
-comes from the inventory. The table gives each surface its **altitude** only
-(snippet / table / budget); read its internal sub-surfaces (which options,
-which consume forms) from the code each time, so the plan can't go stale one
-level down. *Structural* sections carry no `@readme` export (cross-cutting
-behaviour or repo shape). A slug the inventory reports with no row = a new
-capability; slot it into the phase its neighbours imply. A merged section
-(e.g. Sockets & tail) draws from more than one slug — note both.
+## AGENTS.md — the exhaustive surface map
 
-**The demonstration leads the first phase, not the banner**: declare snippet →
-fan-out diagram → boot surface map (copied from `logExposedSurfaces.ts`'s
-actual format — it prints by default, no `DEBUG=abide`) → the one-line gating
-note (schema gates the machine surfaces; mutations need explicit
-`clients: { mcp: true }`).
+Where the README curates, AGENTS.md is **complete**: every `exports` key
+appears exactly once with its import specifier and a one-line spec, so this is
+the doc that carries the every-export-accountable contract. Target ~250 lines.
+Its skeleton (re-derive the *content* of each from the code; the order is the
+editorial layer):
 
-| Phase (`##`) | Section (`###`) | From | Altitude & budget |
-| --- | --- | --- | --- |
-| **Define behaviour once** | rpc | `rpc` | verb-list line + options table (incl. `timeout`) + consume table + one `withJsonSchema` line |
-| | Response helpers | `response` | table + one line on shared defaults |
-| | Request scope | `request-scope` | table + forward-headers warning |
-| **Build the web app** | Pages | `pages` | bullets + `page` snippet |
-| | navigate | `navigate` | snippet + ≤ 2 lines |
-| | cache | `cache` | snippet (one-shot + `derived()` reactive + `ttl:0`) + options table + `cache.invalidate`/`cache.on` line + nuance bullets |
-| | pending / refreshing / online | `probes` | snippet (all three) + ≤ 2 lines |
-| | Sockets & tail | `sockets` + `tail` | socket snippet + options table + tail snippet + status/reconnect + SSR no-op |
-| | url | `url` | snippet + base-prefix line |
-| **Reach it beyond the browser** | CLI | structural | ≤ 2 lines (human + script surface) |
-| | MCP & agent | structural + `agent` | MCP mount line + agent snippet + ≤ 2 lines |
-| | bundle | `bundle` | ≤ 2 lines (window/menu/`appDataDir`) |
-| **Configure, test, ship** | Configuration | `configuration` | typed-env snippet + app-hooks line |
-| | Security defaults | structural | bullets (Origin gate + opt-out, MCP same check, boot warning) + `app.handle` snippet + `Host` caveat |
-| | Testing | `testing` | `createTestApp` prose + bunfig preload + example |
-| | Deploy | structural | single-process truth + the Dockerfile + `PORT`/idle line |
-| | Observability | `observability` | grouped: `health()` + `reachable()` + `log`/`trace`, a snippet per cluster |
-| | Reference | structural + `reference` | structure (namespace sentence + project tree) + commands table + routes table + env table |
-| | (last line) | — | `MIT` |
+* **Preamble blockquote** — what the file is (the exhaustive map vs. the
+  README's 3-primitive intro; CONTEXT.md is the glossary, `docs/adr/` the
+  rationale), the no-barrels / namespace-marks-the-side ground rule, the
+  package name + runtime (Bun ≥ version from `engines`, zero runtime deps), and
+  the import-specifier-vs-file-path note.
+* **The premise** — the fan-out diagram + the schema-gating sentence (same
+  facts as README §2; AGENTS.md keeps its own copy).
+* **File-based conventions** — table (path → meaning) for every bundler-read
+  path: `src/server/rpc|sockets/<name>`, prompts, `config.ts`, `app.ts`,
+  `bundle/window.ts`, `page.abide`/`layout.abide`, `src/.abide/*.d.ts`,
+  `public/`, `dist/`.
+* **CLI** — table (command → does) for every `abide <cmd>`; the `bun test`
+  preload line.
+* **Surface sections, grouped by namespace** — `## Server surface —
+  abide/server/*`, `## Isomorphic surface — abide/shared/*`, `## UI surface —
+  abide/ui/* (client-only)`, then `## Build / tooling`, `## Desktop bundle`,
+  `## MCP`, `## Testing`. Under each, a `### <Title> — @documentation <slug>`
+  per slug, and **one bullet per export**: its `abide/...` import specifier +
+  a one-line spec of behaviour/options read from the source. Plumbing slugs
+  appear too (often condensed to one bullet listing the family, e.g. the
+  `ui/dom/*` runtime), labelled `@documentation plumbing`.
+* **Generated machine surfaces** — the runtime routes (`/openapi.json`,
+  `/__abide/mcp|health|sockets|cli|…`).
+* **Environment variables** — table (var → effect) for every `DOCUMENT` env var
+  from the inventory.
+* **Maintenance footer** — the one-line "mirrors `exports`; run
+  `readmeSurfaces.ts` after adding/renaming an export" note.
 
-**Non-derivable nuances to carry** (not in the claim ledger, easy to lose):
+The accountability gate (below) is what keeps this map honest — every export,
+env var, and route the inventory reports must land somewhere here.
 
-* *Reference / structure* — the namespace sentence is about *import*
-  namespaces: spell the full `abide/server|ui|shared/*` prefixes
-  and name example `shared/*` exports, because `shared/*` is not a project
-  directory and the tree must not imply it is. Lead the tree with "A project:";
-  tree comments ≤ ~72 cols.
-* *rpc* — the `z.coerce` query-args-travel-as-strings warning; the per-verb
-  `timeout` (504, server-side) is distinct from `ABIDE_CLIENT_TIMEOUT`
-  (client fetch wait).
-* *Pages* — the framework resolves only `page.abide` files under
-  `src/ui/pages/` as routes (`[id]`/`[...rest]` segments → params). **Layouts
-  resolve via a nearest `layout.abide`** (by directory prefix, wrapping the page
-  through its `<slot/>`); a page may also import and wrap a component directly.
-  **Error boundaries are userland** — the framework resolves no `error.*`; a
-  render throw is caught by a `<template try>`/`<template catch>`. Component
-  files are `.abide` (never `.svelte`), and the boot map's pages table is a
-  single `page` column (route only).
-* *cache* — the one-shot vs `derived()`-reactive read (`cache.invalidate`
-  re-runs the scope) and the `ttl: 0` mutation idiom in the snippet, plus one
-  bullet each for the uniform-`Promise` warm read (resolves on a microtask,
-  so `.then`/`.catch`/`.finally` work), the top-level-await sweep, and producer
-  hoisting.
-* *tail* — the SSR no-op (seed with `cache()`, layer `tail()`).
-* *Deploy* — the Dockerfile ships the **compiled binary**, never `bun run
-  build` + `bun run start`: a multi-stage build that runs `abide compile` in
-  an `oven/bun` stage, then `COPY --from=build` the standalone binary into a
-  minimal runtime image (e.g. `debian:bookworm-slim`) needing neither Bun nor
-  `node_modules`.
+## abide-ui idioms — read from `.abide` files, never invent
+
+Read these from real `.abide` files in `examples/`; never write Svelte syntax.
+
+* **Reactive state is reached only through `scope()`**: `scope().state(v)`,
+  `scope().computed(fn)` (read-only), `scope().linked(...)`. Bare
+  `state`/`computed`/`linked`/`derived` no longer exist and are a compile
+  error — a writable computed is expressed at the binding
+  (`bind:value={{ get, set }}`). `prop(name)` and `effect(fn)` remain plain
+  in-scope functions (no import, no `scope()`). These are functions, **not**
+  `$state`/`$derived`.
+* Control flow is native `<template>`: `<template if>`/`<template else>`,
+  `<template each={…} as="x" key="x">`, `<template await={p}>`/
+  `<template then="v">`/`<template catch="e">`, `<template switch>`/`case`/
+  `default`. `{expr}` text, `name={expr}` attrs, `onclick={fn}`,
+  `bind:value={x}`. Components are capitalised tags filling a `<slot>`;
+  `<style>` is component-scoped. Component files end in `.abide`, never
+  `.svelte`.
 
 ## Validation pass — run before finishing
 
-1. **Import paths**: extract every `abide/...` from the README and
-   check each against the `exports` map (namespace prefixes ending in `/*`
-   are prose, not imports). Example:
+1. **Import paths** (both docs): every `@abide/abide/...` must be a real
+   `exports` key (namespace prefixes ending in `/*` are prose, not imports) —
+   fix the doc, not the map.
 
    ```sh
-   grep -oE '@abide/abide/[a-zA-Z/-]+' packages/abide/README.md | sort -u
+   grep -ohE '@abide/abide/[a-zA-Z/-]+' packages/abide/README.md packages/abide/AGENTS.md | sort -u
    ```
 
-   Every concrete path must be an exports key. Fix the README, not the map.
-2. **Surface accountability — re-run the inventory.** Import-path checking
-   only proves what's *in* the README is real; it can't catch a surface the
-   draft skipped (this is how the `url` helper and `APP_URL` mounting once
-   shipped undocumented). The inventory from the top of this skill is the
-   gate — re-run it against the finished draft:
+2. **Surface accountability (AGENTS.md)** — run the inventory; it must exit OK
+   (every export carries an `@documentation` tag) and you must point each
+   export, each `DOCUMENT` env var, and each `DOCUMENT` route to a line in
+   AGENTS.md. Then walk the **change ledger** it prints (every `A`/`D`/changeset
+   since the docs were last regenerated, working tree included) and give each a
+   disposition — reflected in AGENTS.md, or consciously internal. This is the
+   check that catches behaviour changes, not just new export keys.
 
    ```sh
    bun run packages/abide/scripts/readmeSurfaces.ts
    ```
 
-   It must exit OK (every export tagged), and you must be able to point each
-   **non-plumbing** export, each `DOCUMENT` env var, and each `DOCUMENT`
-   route to a place in the README. The disposition lives in the code (the
-   `@readme` tag), so there is no allowlist to maintain here: an export that
-   should carry no prose is marked `// @readme plumbing` at its source, and a
-   new untagged export fails the script. Then walk the **change ledger** one
-   more time — every `A`/`D`/changeset since the last README — and confirm
-   each is either reflected or consciously internal.
-3. **Budget**: `wc -l` ≤ 450.
-4. **Tree width**: no line in a `text` tree block over ~76 columns (GitHub
+3. **One story (README)**: the §4 component imports the §2 verb and the §3
+   socket — the three artifacts connect, not three disconnected snippets.
+4. **Budgets**: README `wc -l` ≤ 180; AGENTS.md ≤ ~260.
+5. **Tree / diagram width**: no line in a `text` block over ~76 columns (GitHub
    clips them).
-5. **Boot map**: matches the current `logExposedSurfaces.ts` columns exactly,
-   and is introduced as default-on (no `DEBUG=abide` prefix).
-6. **Phase order**: the four `##` phases appear in arc order, surfaces as
-   `###` under them; the demonstration leads the first phase, structure sits
-   in Reference.
 
-## Write to the right file
+## Write to the right files
 
-Write to `packages/abide/README.md` — the canonical, npm-shipped file. The
-repo-root `README.md` is a separate, longer project landing page (not a symlink);
-this skill regenerates only the npm-shipped `packages/abide/README.md`.
+Write the canonical, npm-shipped copies under `packages/abide/`:
+`packages/abide/README.md` and `packages/abide/AGENTS.md`. The repo-root
+`README.md` and `AGENTS.md` are both symlinks to these, so writing the package
+copies updates both paths — never write the root paths directly.
 
 ## Style
 
-* Title lowercase `# abide`; section headings sentence-case, mostly one word.
+* README title is lowercase `# abide`; AGENTS.md keeps its
+  `# AGENTS.md — abide complete surface map` H1. Section headings sentence-case.
 * No emojis, no superlatives, no competitor names.
 * Right language tag on every fence (`ts`, `sh`, `text`, `toml`,
-  `dockerfile`); for `.abide` component snippets use the `html` fence — abide-ui
-  templates are valid HTML (`<script>` + native `<template if/each/await>` +
-  `<style>`, dynamic bits in `{ }`), so `html` highlights them and there is no
-  Svelte anywhere. Filenames and URL paths in backticks; component files end in
-  `.abide`, never `.svelte`.
-* abide-ui idioms (read from `.abide` files, never invent Svelte syntax):
-  reactive primitives are `state(v)` / `derived(fn)` / `effect(fn)` / `prop(n)`
-  (plain functions, **not** `$state`/`$derived`); control flow is
-  `<template if>`/`<template else>`, `<template each={…} as="x" key="x">`,
-  `<template await={p}>`/`<template then="v">`/`<template catch="e">`,
-  `<template switch>`/`case`/`default`; `{expr}` text, `name={expr}`,
-  `onclick={fn}`, `bind:value={x}`; components are capitalised tags filling a
-  `<slot>`; `<style>` is component-scoped.
-* Warnings are single `>` lines (or a single `>` bullet list in cache), not
-  callout paragraphs.
+  `dockerfile`); for `.abide` component snippets use the `html` fence —
+  abide-ui templates are valid HTML, so `html` highlights them and there is no
+  Svelte anywhere. Filenames and URL paths in backticks.
+* Warnings are single `>` lines, not callout paragraphs.
