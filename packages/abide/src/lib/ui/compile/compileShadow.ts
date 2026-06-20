@@ -280,14 +280,21 @@ function scopeLineFor(
         const typeNode = call.typeArguments?.[0]
         const annotation = typeNode === undefined ? '' : `: ${verbatim(typeNode)}`
         const fn = call.arguments[0]
+        /* `linked` is a writable `State<T>` at runtime (it reseeds AND accepts `.value =`
+           writes), so project it as `let`; `computed` is genuinely read-only, so `const`. */
+        const keyword = callee === 'linked' ? 'let' : 'const'
+        /* binding-name map offset = past the keyword + space (`let ` = 4, `const ` = 6) */
+        const keywordOffset = keyword.length + 1
         if (fn === undefined) {
-            /* map the binding name (offset 6, past `const `) for hover/go-to */
-            return { text: `const ${name} = undefined;`, segments: [span(declaration.name, 6)] }
+            return {
+                text: `${keyword} ${name} = undefined;`,
+                segments: [span(declaration.name, keywordOffset)],
+            }
         }
-        const prefix = `const ${name}${annotation} = (`
+        const prefix = `${keyword} ${name}${annotation} = (`
         return {
             text: `${prefix}${verbatim(fn)})();`,
-            segments: [span(declaration.name, 6), span(fn, prefix.length)],
+            segments: [span(declaration.name, keywordOffset), span(fn, prefix.length)],
         }
     }
     /* prop<T>('key'): Props field `key[?]: T`, scope binding read from props. */

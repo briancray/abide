@@ -9,7 +9,9 @@ let title = prop<string>('title')
 let lang = prop<string | undefined>('lang')
 const doubled = scope().computed(() => count * 2)
 const label = computed<string>(() => String(count))
-function bump() { count += 1 }
+let start = scope().linked(() => title)
+let offset = linked<number>(() => count)
+function bump() { count += 1; start = 'reset'; offset = 0 }
 </script>
 
 <style>.x { color: red }</style>
@@ -32,6 +34,18 @@ describe('compileShadow', () => {
         expect(code).toContain('let count = (0);')
         expect(code).toContain('const doubled = (() => count * 2)();')
         expect(code).toContain('let title = props["title"];')
+    })
+
+    test('projects linked as a writable let, computed as a read-only const', () => {
+        /* `linked` is a writable `State<T>` at runtime (it reseeds AND takes `.value =`
+           writes), so reassigning it must not false-positive `abide check` with
+           "Cannot assign to 'x' because it is a constant." `computed` stays `const`. */
+        expect(code).toContain('let start = (() => title)();')
+        expect(code).toContain('let offset: number = (() => count)();')
+        expect(code).toContain('const doubled = (() => count * 2)();')
+        /* The reassignment in bump() is legal against a `let` binding. */
+        expect(code).not.toContain('const start =')
+        expect(code).not.toContain('const offset')
     })
 
     test('carries an explicit type argument onto the value binding', () => {
