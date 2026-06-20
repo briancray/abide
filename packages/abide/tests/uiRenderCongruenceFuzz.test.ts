@@ -11,7 +11,9 @@ import { each } from '../src/lib/ui/dom/each.ts'
 import { hydrate } from '../src/lib/ui/dom/hydrate.ts'
 import { mount } from '../src/lib/ui/dom/mount.ts'
 import { on } from '../src/lib/ui/dom/on.ts'
+import { switchBlock } from '../src/lib/ui/dom/switchBlock.ts'
 import { text } from '../src/lib/ui/dom/text.ts'
+import { tryBlock } from '../src/lib/ui/dom/tryBlock.ts'
 import { when } from '../src/lib/ui/dom/when.ts'
 import { effect } from '../src/lib/ui/effect.ts'
 import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
@@ -36,6 +38,8 @@ const RUNTIME = {
     on,
     each,
     when,
+    switchBlock,
+    tryBlock,
     mount,
     snippet,
 }
@@ -62,12 +66,17 @@ const Box = `<div class="box"><slot></slot></div>`
 const serialize = (host: unknown): string =>
     (globalThis as unknown as { serializeMiniDom: (h: unknown) => string }).serializeMiniDom(host)
 
-/* Snippet invocation wraps its output in server-only `<!--abide:snippet-->` markers the
-   client never re-emits (see uiSnippets) — normalize that ONE documented asymmetry away so
-   raw-markup comparison still polices the skeleton anchors (`<!--a-->`) and ranges (`[`/`]`)
-   that actually drift. */
-const stripSnippetMarkers = (html: string): string =>
-    html.replaceAll('<!--abide:snippet-->', '').replaceAll('<!--/abide:snippet-->', '')
+/* Some constructs emit server-only resumption/boundary markers the client's FRESH build
+   never re-emits but its HYDRATION path consumes (snippet invocation `<!--abide:snippet-->`,
+   try boundaries `<!--abide:try:N-->`). Normalize those documented asymmetries away so raw-
+   markup comparison still polices the skeleton anchors (`<!--a-->`) and ranges (`[`/`]`) that
+   actually drift — invariant #4 (the client adopting the server DOM markers and all) proves
+   the markers themselves are congruent. */
+const stripServerOnlyMarkers = (html: string): string =>
+    html
+        .replaceAll('<!--abide:snippet-->', '')
+        .replaceAll('<!--/abide:snippet-->', '')
+        .replace(/<!--\/?abide:try:\d+-->/g, '')
 
 /* The visible text a browser would show: drop every comment marker and tag. The generator
    computes the SAME string by construction (the `text` field) — that independently-known
@@ -140,6 +149,22 @@ const boundaries: Array<{ name: string; wrap: (inner: Fragment) => Fragment }> =
             text: inner.text,
         }),
     },
+    {
+        name: 'switch-case',
+        wrap: (inner) => ({
+            html:
+                `<template switch={label}><template case="'hi'">${inner.html}</template>` +
+                `<template default><i>D</i></template></template>`,
+            text: inner.text,
+        }),
+    },
+    {
+        name: 'try-body',
+        wrap: (inner) => ({
+            html: `<template try>${inner.html}<template catch="err"><i>{err}</i></template></template>`,
+            text: inner.text,
+        }),
+    },
 ]
 
 /* The outer context: top level (not in a skeleton) vs inside a skeletonable element (a
@@ -204,7 +229,7 @@ describe('render congruence (generative, reference-checked)', () => {
             const serverMarkup = built.render().html
 
             // 1. marker congruence (client DOM === SSR markup)
-            expect(clientMarkup).toBe(stripSnippetMarkers(serverMarkup))
+            expect(clientMarkup).toBe(stripServerOnlyMarkers(serverMarkup))
 
             // 2 + 3. both sides render the reference content
             expect(visibleText(clientMarkup)).toBe(expected)
@@ -225,6 +250,6 @@ describe('render congruence (generative, reference-checked)', () => {
     }
 
     test('corpus is non-trivial', () => {
-        expect(corpus.length).toBe(60) // 2 contexts × 6 boundaries × 5 leaves
+        expect(corpus.length).toBe(80) // 2 contexts × 8 boundaries × 5 leaves
     })
 })
