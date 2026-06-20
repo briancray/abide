@@ -6,6 +6,7 @@ import { getActiveServer } from '../runtime/getActiveServer.ts'
 import { registerSocket } from './registerSocket.ts'
 import type { Socket } from './types/Socket.ts'
 import type { SocketOptions } from './types/SocketOptions.ts'
+import type { SocketServerFrame } from './types/SocketServerFrame.ts'
 
 /*
 Server-side construction of a Socket. The bundler rewrites every
@@ -118,7 +119,11 @@ export function defineSocket<T>(name: string, opts: SocketOptions = {}): Socket<
         }
         const server = cachedServer
         if (server) {
-            server.publish(topic, JSON.stringify({ type: 'msg', socket: name, message: validated }))
+            /* Typed against the shared wire contract so a `SocketServerFrame` change can't
+               silently drift from this construction site (the dispatcher's `send` is already
+               typed; this was the last `msg` frame built through an unchecked JSON.stringify). */
+            const frame: SocketServerFrame = { type: 'msg', socket: name, message: validated }
+            server.publish(topic, JSON.stringify(frame))
         }
     }
 
