@@ -1,45 +1,34 @@
 import { isReplayableMethod } from '../../shared/isReplayableMethod.ts'
-import type { CacheEntry } from '../../shared/types/CacheEntry.ts'
-import type { CacheSnapshot } from '../../shared/types/CacheSnapshot.ts'
 import type { CacheSnapshotEntry } from '../../shared/types/CacheSnapshotEntry.ts'
 import type { CacheStore } from '../../shared/types/CacheStore.ts'
 import { snapshotEntryFromCache } from './snapshotEntryFromCache.ts'
 
 /*
-Partitions the request-scoped cache for SSR. Entries settled by the time
-`render()` returns were consumed via `await` (render blocked on them) and ship
-inline in the document's `__SSR__` blob. Entries still pending were consumed
-via `{#await}` — render emitted their pending branch without blocking — so they
-go to `pending` for the response streamer to drain and resolve over the wire.
+Snapshots the request-scoped cache for SSR at a single instant: every replayable
+(GET/DELETE) entry settled by now, serialized to a wire-safe CacheSnapshotEntry the
+client seeds its store from. Unsettled and non-replayable entries are skipped; a body
+that can't ship (binary / streaming / rejected) drops out via snapshotEntryFromCache.
 
-Unlike the old buffer-everything path, this never awaits the pending promises:
-that's the whole point of streaming. Settled entries are read concurrently (the
-awaits are immediate since they're already resolved, but their body reads run in
-parallel); pending entries are handed back as-is for the streamer to await one
-chunk at a time.
+Snapshots concurrently — the awaits are immediate (entries are already settled), but
+their body reads run in parallel. Never blocks on an unsettled entry.
+
+WHEN it's called decides what it sees. createUiPageRenderer calls it at render-return
+for `__SSR__` — that catches only top-level `await` reads (render blocked on them). A
+`{#await cache()}` read does NOT appear: its expression is a thunk renderToStream runs
+lazily, so its entry is created mid-stream, after this snapshot. The renderer snapshots
+AGAIN once the stream has drained (entries then exist and are settled) and seeds those
+over the wire — see its post-stream `__abideResolve` pass. So for a streaming page the
+render-return snapshot is typically empty; the warm cache arrives over the stream.
 */
-export async function serializeCacheSnapshot(store: CacheStore): Promise<CacheSnapshot> {
-    const settled: CacheEntry[] = []
-    const pending: CacheEntry[] = []
-    for (const entry of store.entries.values()) {
-        /* Producer entries carry no wire request — nothing to rehydrate against, skip. */
-        if (!entry.request) {
-            continue
-        }
-        if (!isReplayableMethod(entry.request.method.toUpperCase())) {
-            continue
-        }
-        if (entry.settled) {
-            settled.push(entry)
-        } else {
-            pending.push(entry)
-        }
-    }
+export async function serializeCacheSnapshot(store: CacheStore): Promise<CacheSnapshotEntry[]> {
+    const settled = Array.from(store.entries.values()).filter(
+        (entry) =>
+            entry.settled === true &&
+            entry.request !== undefined &&
+            isReplayableMethod(entry.request.method.toUpperCase()),
+    )
     const snapshots = await Promise.all(
         settled.map((entry) => snapshotEntryFromCache(store, entry)),
     )
-    const inline = snapshots.filter(
-        (snapshot): snapshot is CacheSnapshotEntry => snapshot !== undefined,
-    )
-    return { inline, pending }
+    return snapshots.filter((snapshot): snapshot is CacheSnapshotEntry => snapshot !== undefined)
 }

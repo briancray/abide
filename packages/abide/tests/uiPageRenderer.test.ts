@@ -1,12 +1,25 @@
-import { describe, expect, test } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { json } from '../src/lib/server/json.ts'
+import { defineVerb } from '../src/lib/server/rpc/defineVerb.ts'
 import { createUiPageRenderer } from '../src/lib/server/runtime/createUiPageRenderer.ts'
 import { requestContext } from '../src/lib/server/runtime/requestContext.ts'
 import { runWithRequestScope } from '../src/lib/server/runtime/runWithRequestScope.ts'
 import type { RequestStore } from '../src/lib/server/runtime/types/RequestStore.ts'
+import { cache } from '../src/lib/shared/cache.ts'
+import { cacheStoreSlot } from '../src/lib/shared/cacheStoreSlot.ts'
 import type { SsrRender } from '../src/lib/ui/runtime/types/SsrRender.ts'
 import type { UiComponent } from '../src/lib/ui/runtime/types/UiComponent.ts'
 
 const options = { logRequests: false }
+
+/* Real remote reads so a {#await cache()} thunk creates its entry lazily — mid-stream,
+   after the render-return snapshot — exactly as a compiled page does. */
+const getUsers = defineVerb('GET', '/rpc/page-users', () => json(['ada']))
+const getAvatar = defineVerb(
+    'GET',
+    '/rpc/page-avatar',
+    () => new Response(new Uint8Array([1, 2, 3])),
+)
 const SHELL =
     '<!doctype html><html lang="en"><head><!--ssr:head--></head><body><div id="app"><!--ssr:body--></div><!--ssr:state--></body></html>'
 
@@ -34,6 +47,14 @@ function render(pages: Record<string, () => Promise<{ default: UiComponent }>>):
         return renderer(pages).renderPage('/', {}, store)
     }).then((response) => response.text())
 }
+
+/* cache() resolves against the request-scoped store, exactly as the server entry installs. */
+beforeAll(() => {
+    cacheStoreSlot.resolver = () => requestContext.getStore()?.cache
+})
+afterAll(() => {
+    cacheStoreSlot.resolver = undefined
+})
 
 describe('createUiPageRenderer', () => {
     test('a page with no await ships buffered, with the body and __SSR__', async () => {
@@ -68,5 +89,43 @@ describe('createUiPageRenderer', () => {
         expect(html).toContain('<b>ada</b>')
         expect(html).toContain('__abideSwap()') // swap script invoked per fragment
         expect(html).toContain('window.__SSR__ =') // state shipped in the streamed head
+    })
+
+    test('seeds a {#await cache()} read created mid-stream via __abideResolve; a miss marker for an unshippable body', async () => {
+        /* The await thunks run a real cache() read, so each entry is created and settled
+           DURING the stream — after the render-return snapshot, which is therefore empty.
+           Post-stream the renderer drains them: a textual body ships a warm snapshot, a
+           binary body a `{ key, miss }` marker (→ client live refetch). */
+        const usersRead = cache(getUsers)
+        const avatarRead = cache(getAvatar)
+        const pages = page(() => ({
+            html:
+                '<main><!--abide:await:0-->loading<!--/abide:await:0-->' +
+                '<!--abide:await:1-->loading<!--/abide:await:1--></main>',
+            awaits: [
+                {
+                    id: 0,
+                    promise: () => usersRead(),
+                    then: (value) => `<b>${(value as string[]).join(',')}</b>`,
+                    catch: () => '',
+                },
+                {
+                    id: 1,
+                    promise: () => avatarRead().catch(() => undefined),
+                    then: () => '<img>',
+                    catch: () => '',
+                },
+            ],
+            state: undefined,
+        }))
+        const html = await render(pages)
+
+        expect(html).toContain('window.__abideResolve=function') // collector defined ahead of body
+        expect(html).toContain('"cache":[]') // render-return snapshot empty — reads are lazy
+        expect(html).toContain('__abideResolve(') // post-stream seed shipped
+        expect(html).toContain('GET /rpc/page-users') // the warm entry's key
+        expect(html).toContain('"body":"[\\"ada\\"]"') // its snapshot body
+        expect(html).toContain('GET /rpc/page-avatar') // the unshippable entry
+        expect(html).toContain('"miss":true') // streamed as a miss marker
     })
 })

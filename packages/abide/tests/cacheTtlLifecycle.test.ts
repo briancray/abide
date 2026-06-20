@@ -76,7 +76,7 @@ describe('ttl=0 (dedupe only)', () => {
             await cache(countedRemote, { ttl: 0 })()
             /* Settled, but retained: the snapshot runs after render() returns. */
             expect(store.entries.size).toBe(1)
-            const { inline } = await serializeCacheSnapshot(store)
+            const inline = await serializeCacheSnapshot(store)
             expect(inline).toHaveLength(1)
         })
     })
@@ -112,7 +112,7 @@ describe('ttl=0 (dedupe only)', () => {
             expect(writes).toBe(1)
             expect(store.entries.size).toBe(1)
             /* The kept entry serves the request only — a write never ships to the client. */
-            const { inline } = await serializeCacheSnapshot(store)
+            const inline = await serializeCacheSnapshot(store)
             expect(inline).toHaveLength(0)
         })
     })

@@ -1,13 +1,23 @@
 import { RESUME } from '../runtime/RESUME.ts'
+import { seedStreamedResolution } from '../seedStreamedResolution.ts'
 
 /*
-Client consumer of an SSR stream fragment. Parses a streamed
-`<abide-resolve data-id="ID"><script type="application/json">…</script>…</abide-resolve>`
-frame, registers its serialized value in the resume manifest (for later hydration), finds the
-matching `<!--abide:await:ID-->…<!--/abide:await:ID-->` boundary in `root`, removes
-the pending nodes between the markers, and inserts the resolved content in their
-place. The pending shell painted instantly; this swaps in each value as it
-arrives — completing the out-of-order streaming loop on the client.
+Bundle-side consumer of an SSR stream chunk, the counterpart of the doc stream's inline
+vanilla scripts (SSR_SWAP_SCRIPT's `__abideSwap` + `__abideResolve`) for a stream the
+running bundle consumes itself — streaming SPA navigation, socket-delivered SSR. It routes
+the two chunk kinds the stream interleaves:
+
+  - `<abide-cache>{StreamedResolution}</abide-cache>` → seed the streamed cache partition.
+    A script set via innerHTML never runs, so the cache channel rides a data frame here
+    (not the doc stream's `<script>__abideResolve(…)</script>`); seeding it keeps the
+    pending {#await} read warm instead of cold-missing to the network.
+  - `<abide-resolve data-id="ID"><script type="application/json">…</script>…</abide-resolve>`
+    → register the value in the resume manifest (for hydration), find the matching
+    `<!--abide:await:ID-->…<!--/abide:await:ID-->` boundary in `root`, remove the pending
+    nodes between the markers, and insert the resolved content in their place.
+
+The pending shell painted instantly; this swaps in each value as it arrives — completing
+the out-of-order streaming loop on the client.
 */
 // @documentation plumbing
 export function applyResolved(root: Element, frame: string): void {
@@ -15,6 +25,16 @@ export function applyResolved(root: Element, frame: string): void {
     holder.innerHTML = frame
     const resolved = holder.firstChild as Element | null
     if (resolved === null || resolved.getAttribute === undefined) {
+        return
+    }
+    /* A cache-seed frame warms the streamed cache partition — paired with the DOM swap so a
+       bundle-consumed stream can't adopt a resolved branch while dropping its cache key. */
+    if (resolved.nodeName === 'ABIDE-CACHE') {
+        try {
+            seedStreamedResolution(JSON.parse(resolved.textContent ?? 'null'))
+        } catch {
+            /* malformed payload — leave unseeded; the read falls back to a live fetch */
+        }
         return
     }
     const id = resolved.getAttribute('data-id')

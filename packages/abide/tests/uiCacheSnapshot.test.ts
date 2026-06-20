@@ -66,38 +66,45 @@ afterEach(() => {
 })
 
 describe('cache() snapshot → UI hydration (full server→client loop)', () => {
-    test('serializes the request store and resumes the await branch warm, no re-dispatch', async () => {
+    test('streams a {#await} read created mid-stream and resumes it warm, no re-dispatch', async () => {
         handlerCalls = 0
 
-        // 1) server: render the shell, drain the stream (settles the cache entry),
-        //    then serialize the request-scoped store with abide's real serializer.
+        // 1) server: mirror createUiPageRenderer's ordering. Render ONCE, snapshot the store
+        //    AT RENDER-RETURN (the {#await} thunk hasn't run, so the store is empty — this is
+        //    the timing the bug lived in), then drain the stream (which runs the thunk,
+        //    creating + settling the entry) and snapshot again to get the warm partition.
         //    (runWithRequestScope's callback returns a Response, so stash outputs.)
         let chunks: string[] = []
-        let inline: CacheSnapshotEntry[] = []
+        let streamed: CacheSnapshotEntry[] = []
         await runWithRequestScope(new Request('https://test.local/data'), options, async () => {
-            const render = (): SsrRender =>
-                new Function(
-                    'doc',
-                    'state',
-                    'computed',
-                    'effect',
-                    'cache',
-                    'getUsers',
-                    compileSSR(SOURCE),
-                )(doc, state, computed, effect, cache, getUsers) as SsrRender
+            const ssr = new Function(
+                'doc',
+                'state',
+                'computed',
+                'effect',
+                'cache',
+                'getUsers',
+                compileSSR(SOURCE),
+            )(doc, state, computed, effect, cache, getUsers) as SsrRender
+            const store = requestContext.getStore()?.cache as CacheStore
+
+            const atReturn = await serializeCacheSnapshot(store)
+            expect(atReturn).toHaveLength(0) // lazy {#await} read — not created yet
+            expect(store.entries.size).toBe(0)
+
             const collected: string[] = []
-            for await (const chunk of renderToStream(render)) {
+            for await (const chunk of renderToStream(() => ssr)) {
                 collected.push(chunk)
             }
             /* Flush the microtask that flips the cache entry's settled flag. */
             await new Promise((resolve) => setTimeout(resolve, 0))
             chunks = collected
-            const store = requestContext.getStore()?.cache as CacheStore
-            inline = (await serializeCacheSnapshot(store)).inline
+            /* Created and settled during the stream — the partition the client seeds from. */
+            streamed = await serializeCacheSnapshot(store)
             return json(null)
         })
         expect(handlerCalls).toBe(1) // the verb dispatched once, on the server
-        expect(inline).toHaveLength(1) // the settled entry serialized inline
+        expect(streamed).toHaveLength(1) // the mid-stream entry serialized post-drain
 
         // 2) reconstruct the server DOM the browser received
         const host = document.createElement('div')
@@ -109,11 +116,11 @@ describe('cache() snapshot → UI hydration (full server→client loop)', () => 
             .childNodes[2] as unknown as { childNodes: { textContent: string }[] }
         const firstRowBefore = ul.childNodes[0]
 
-        // 3) client: a fresh store seeded from the snapshot (warms post-hydration
-        //    reads), then hydrate — the await block adopts the SSR DOM from the
-        //    streamed resume manifest, so the verb is never re-dispatched
+        // 3) client: a fresh store seeded from the streamed snapshot (warms post-hydration
+        //    reads), then hydrate — the await block adopts the SSR DOM from the streamed
+        //    resume manifest, so the verb is never re-dispatched
         const clientStore = createCacheStore()
-        for (const entry of inline) {
+        for (const entry of streamed) {
             clientStore.entries.set(entry.key, cacheEntryFromSnapshot(entry))
         }
         cacheStoreSlot.resolver = () => clientStore
@@ -145,6 +152,37 @@ describe('cache() snapshot → UI hydration (full server→client loop)', () => 
                 'ada',
                 'margaret',
             ])
+        } finally {
+            cacheStoreSlot.resolver = () => requestContext.getStore()?.cache
+        }
+    })
+
+    /* The bundle-side stream consumer (streaming SPA nav / socket SSR): a script set via
+       innerHTML never runs, so the cache channel rides an `<abide-cache>` data frame that
+       applyResolved seeds — paired with the DOM swap so the reserved path can't adopt a
+       resolved branch while dropping its cache key (the asymmetry behind the refetch). */
+    test('applyResolved seeds the store from an <abide-cache> frame; a miss frame is a no-op', () => {
+        const store = createCacheStore()
+        cacheStoreSlot.resolver = () => store
+        try {
+            const host = document.createElement('div')
+            const snapshot = {
+                key: 'GET /rpc/streamed',
+                url: 'https://test.local/rpc/streamed',
+                method: 'GET' as const,
+                status: 200,
+                statusText: 'OK',
+                headers: [['content-type', 'application/json']] as Array<[string, string]>,
+                body: JSON.stringify(['ada']),
+            }
+            applyResolved(host, `<abide-cache>${JSON.stringify(snapshot)}</abide-cache>`)
+            expect(store.entries.get(snapshot.key)?.value).toEqual(['ada']) // warmed, no fetch
+
+            applyResolved(
+                host,
+                `<abide-cache>${JSON.stringify({ key: 'GET /rpc/miss', miss: true })}</abide-cache>`,
+            )
+            expect(store.entries.has('GET /rpc/miss')).toBe(false) // miss → left cold, re-fetches
         } finally {
             cacheStoreSlot.resolver = () => requestContext.getStore()?.cache
         }

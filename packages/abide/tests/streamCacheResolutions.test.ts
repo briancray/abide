@@ -33,20 +33,20 @@ function entry(key: string, promise: Promise<Response>, settled: boolean): Cache
     }
 }
 
-describe('serializeCacheSnapshot partition', () => {
-    test('settled GET entries inline; unsettled ones go to pending', async () => {
+describe('serializeCacheSnapshot', () => {
+    test('snapshots settled GET entries; skips unsettled ones (never blocks on them)', async () => {
         const settled = entry('a', Promise.resolve(jsonResponse({ a: 1 })), true)
-        const pendingEntry = entry('b', new Promise<Response>(() => {}), false)
-        const store = storeWith([settled, pendingEntry])
+        /* A never-resolving promise: it must be excluded, not awaited — else the snapshot hangs. */
+        const unsettled = entry('b', new Promise<Response>(() => {}), false)
+        const store = storeWith([settled, unsettled])
 
-        const { inline, pending } = await serializeCacheSnapshot(store)
+        const inline = await serializeCacheSnapshot(store)
 
         expect(inline.map((item) => item.key)).toEqual(['a'])
         expect(inline[0].body).toBe(JSON.stringify({ a: 1 }))
-        expect(pending.map((item) => item.key)).toEqual(['b'])
     })
 
-    test('non-GET/DELETE entries are excluded from both buckets', async () => {
+    test('excludes non-GET/DELETE entries (a write must not replay from a snapshot)', async () => {
         const post: CacheEntry = {
             key: 'p',
             promise: Promise.resolve(jsonResponse({ ok: true })),
@@ -55,10 +55,8 @@ describe('serializeCacheSnapshot partition', () => {
             expiresAt: undefined,
             settled: true,
         }
-        const { inline, pending } = await serializeCacheSnapshot(storeWith([post]))
 
-        expect(inline).toHaveLength(0)
-        expect(pending).toHaveLength(0)
+        expect(await serializeCacheSnapshot(storeWith([post]))).toHaveLength(0)
     })
 })
 

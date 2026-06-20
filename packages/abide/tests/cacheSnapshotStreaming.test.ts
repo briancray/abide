@@ -63,8 +63,9 @@ describe('cache snapshot ↔ streaming responses', () => {
     })
 
     test('serializeCacheSnapshot excludes streaming entries (and does not hang buffering them)', async () => {
-        const { serializeCacheSnapshot } =
-            await import('../src/lib/server/runtime/serializeCacheSnapshot.ts')
+        const { serializeCacheSnapshot } = await import(
+            '../src/lib/server/runtime/serializeCacheSnapshot.ts'
+        )
         const store = createCacheStore()
         for (const entry of [
             settledRemoteEntry('text/event-stream', 'data: hi\n\n'),
@@ -74,7 +75,7 @@ describe('cache snapshot ↔ streaming responses', () => {
             store.entries.set(entry.key, entry) // map key must equal entry.key
         }
 
-        const { inline } = await serializeCacheSnapshot(store)
+        const inline = await serializeCacheSnapshot(store)
 
         // only the JSON entry survives; the streaming ones are skipped before `response.text()`
         expect(inline.map((entry) => entry.key)).toEqual(['GET /rpc/x application/json'])

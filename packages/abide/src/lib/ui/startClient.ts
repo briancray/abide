@@ -1,15 +1,16 @@
-import { cacheEntryFromSnapshot } from '../shared/cacheEntryFromSnapshot.ts'
 import { createCacheStore } from '../shared/createCacheStore.ts'
 import { setBaseResolver } from '../shared/setBaseResolver.ts'
 import { setCacheStoreResolver } from '../shared/setCacheStoreResolver.ts'
 import { setGlobalCacheStoreResolver } from '../shared/setGlobalCacheStoreResolver.ts'
 import { setPageResolver } from '../shared/setPageResolver.ts'
 import type { CacheSnapshotEntry } from '../shared/types/CacheSnapshotEntry.ts'
+import type { StreamedResolution } from '../shared/types/StreamedResolution.ts'
 import { installHotBridge } from './installHotBridge.ts'
 import { probeNavigation } from './probeNavigation.ts'
 import { router } from './router.ts'
 import { clientPage } from './runtime/clientPage.ts'
 import type { RouteLoader } from './runtime/types/RouteLoader.ts'
+import { seedStreamedResolution } from './seedStreamedResolution.ts'
 
 /* The server's __SSR__ payload this entry consumes. */
 type SsrPayload = { cache?: CacheSnapshotEntry[]; base?: string }
@@ -50,9 +51,22 @@ export function startClient(
     setCacheStoreResolver(() => store)
     /* One tab store: cache(fn, { global: true }) shares it, so global is a no-op here. */
     setGlobalCacheStoreResolver(() => store)
-    for (const entry of ssr.cache ?? []) {
-        store.entries.set(entry.key, cacheEntryFromSnapshot(entry))
+    /* Seed both SSR cache partitions through the one streamed-resolution sink: `ssr.cache`
+       (inline — reads settled at render-return, in __SSR__) and `__abideResumeCache` (pending
+       {#await} reads whose `__abideResolve(...)` chunks the stream pushed during parse, before
+       this deferred bundle ran). A warm entry lets a `cache()` read resolve synchronously so
+       `<template await>` adopts without a refetch; a miss marker re-fetches live. */
+    const streamed =
+        (globalThis as { __abideResumeCache?: StreamedResolution[] }).__abideResumeCache ?? []
+    for (const resolution of [...(ssr.cache ?? []), ...streamed]) {
+        seedStreamedResolution(resolution)
     }
+    /* Keep the cache channel live past boot: replace the head's buffering collector with
+       the store-connected sink so a post-load resolution — streaming SPA navigation or a
+       socket-delivered SSR frame, both routed through applyResolved — seeds the store
+       directly instead of pushing to a buffer nothing drains again. */
+    ;(globalThis as { __abideResolve?: (resolution: StreamedResolution) => void }).__abideResolve =
+        seedStreamedResolution
 
     return router(target, routes, layoutRoutes, probeNavigation)
 }
