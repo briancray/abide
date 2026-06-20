@@ -7,23 +7,24 @@ import type { TemplateNode } from './types/TemplateNode.ts'
 
 /*
 Framework callables the `.abide` loader injects into a component's scope. `effect`,
-`html`, `snippet` keep their real published types via imports so author calls
-type-check. `state`/`linked`/`computed` are compiler sugar with no runtime export, so
-they're declared ambiently as a fallback for stray uses (a `state()` call nested in a
-function rather than a top-level declaration); their top-level declarations are
-rewritten to value types, so these fallbacks are normally unused (fine — the shadow
-program disables noUnusedLocals). `prop` is sugar too, but every `prop()` declaration
-is rewritten away, so it never appears here. `$props` is the legacy untyped prop bag
-(pre-`prop()` sugar) made available raw.
+`html`, `snippet`, and `scope` keep their real published types via imports so author
+calls type-check — `scope()` is the authored reactive surface (`scope().state(...)` /
+`.computed(...)` / `.undo()` …), so it must resolve like any import. `state`/`linked`/
+`computed` are ALSO declared ambiently as a fallback for the rare bare/nested use the
+top-level rewrite doesn't project (their top-level declarations become value types, so
+these are normally unused — fine, the shadow disables noUnusedLocals). `prop` is sugar
+too, but every `prop()` declaration is rewritten away, so it never appears here.
+`$props` is the legacy untyped prop bag (pre-`prop()` sugar) made available raw.
 */
 const SHADOW_PREAMBLE = `import { effect } from '${ABIDE_PACKAGE_NAME}/ui/effect'
 import { html } from '${ABIDE_PACKAGE_NAME}/shared/html'
 import { snippet } from '${ABIDE_PACKAGE_NAME}/shared/snippet'
+import { scope } from '${ABIDE_PACKAGE_NAME}/ui/scope'
 declare function state<T>(initial?: T, transform?: (next: T, previous: T) => T): { value: T }
 declare function linked<T>(seed: () => T, transform?: (next: T, previous: T) => T): { value: T }
 declare function computed<T>(compute: () => T): { readonly value: T }
 declare const $props: Record<string, (() => unknown) | undefined>
-void [effect, html, snippet]
+void [effect, html, snippet, scope]
 `
 
 /*
@@ -263,10 +264,14 @@ function scopeLineFor(
                a guard like `x !== undefined` collapse to `never`). Unguarded access is
                then correctly flagged possibly-undefined; a guard narrows cleanly. */
             const valueType = annotation === '' ? ': unknown' : `${annotation} | undefined`
-            return { text: `let ${name}!${valueType};`, segments: [] }
+            /* map the binding name (offset 4, past `let `) so hover/go-to resolve on it */
+            return { text: `let ${name}!${valueType};`, segments: [span(declaration.name, 4)] }
         }
         const prefix = `let ${name}${annotation} = (`
-        return { text: `${prefix}${verbatim(init)});`, segments: [span(init, prefix.length)] }
+        return {
+            text: `${prefix}${verbatim(init)});`,
+            segments: [span(declaration.name, 4), span(init, prefix.length)],
+        }
     }
     if (callee === 'computed' || callee === 'linked') {
         /* computed<T>(compute) / linked<T>(seed): T is the value type — the call's
@@ -276,10 +281,14 @@ function scopeLineFor(
         const annotation = typeNode === undefined ? '' : `: ${verbatim(typeNode)}`
         const fn = call.arguments[0]
         if (fn === undefined) {
-            return { text: `const ${name} = undefined;`, segments: [] }
+            /* map the binding name (offset 6, past `const `) for hover/go-to */
+            return { text: `const ${name} = undefined;`, segments: [span(declaration.name, 6)] }
         }
         const prefix = `const ${name}${annotation} = (`
-        return { text: `${prefix}${verbatim(fn)})();`, segments: [span(fn, prefix.length)] }
+        return {
+            text: `${prefix}${verbatim(fn)})();`,
+            segments: [span(declaration.name, 6), span(fn, prefix.length)],
+        }
     }
     /* prop<T>('key'): Props field `key[?]: T`, scope binding read from props. */
     const key = call.arguments[0]
@@ -288,7 +297,10 @@ function scopeLineFor(
     const typeText = typeNode === undefined ? 'unknown' : verbatim(typeNode)
     const optional = typeNode === undefined || /\bundefined\b/.test(typeText)
     props.push(`    ${JSON.stringify(keyText)}${optional ? '?' : ''}: ${typeText}`)
-    return { text: `let ${name} = props[${JSON.stringify(keyText)}];`, segments: [] }
+    return {
+        text: `let ${name} = props[${JSON.stringify(keyText)}];`,
+        segments: [span(declaration.name, 4)],
+    }
 }
 
 /* Emits a sibling list — each node standalone via `emitNode`. */

@@ -46,4 +46,21 @@ describe('shadow language service quickInfo', () => {
         /* The `<h1` tag is template markup, not a checked expression. */
         expect(service.quickInfo(path, SOURCE.indexOf('<h1>'))).toBeUndefined()
     })
+
+    /* The binding NAME at its declaration is mapped (not just the initializer), so
+       hovering a reactive var shows its projected value type. Regression: only the
+       initializer span was mapped, so `count` at its declaration had no hover. */
+    test('reports the value type when hovering a reactive binding at its declaration', () => {
+        const source = `<script>\nconst count = scope().state(0)\nconst doubled = scope().computed(() => count * 2)\n</script>\n<p>{count}{doubled}</p>\n`
+        const { service, path } = open(source)
+
+        const countInfo = service.quickInfo(path, source.indexOf('count = scope'))
+        expect(countInfo).toBeDefined()
+        expect(countInfo!.text).toContain('number')
+        expect(source.slice(countInfo!.start, countInfo!.start + countInfo!.length)).toBe('count')
+
+        const doubledInfo = service.quickInfo(path, source.indexOf('doubled = scope'))
+        expect(doubledInfo).toBeDefined()
+        expect(doubledInfo!.text).toContain('number')
+    })
 })

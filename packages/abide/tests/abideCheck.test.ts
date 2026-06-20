@@ -204,6 +204,18 @@ describe('abide check', () => {
         ).toEqual([])
     })
 
+    /* `scope()` is the authored reactive surface, so it must resolve in the shadow:
+       a captured handle (`const s = scope()`) and capability calls (`s.undo()`) are
+       emitted verbatim and need the real `Scope` type; reactive declarations
+       (`scope().state/.computed`) are projected to their value type. Regression for the
+       shadow preamble missing the `scope` import after the doc→scope migration. */
+    test('scope() resolves — handle, capability calls, and reactive declarations type-check', () => {
+        const dir = project({
+            'scoped.abide': `<script>\nconst s = scope()\nconst count = scope().state(0)\nconst doubled = scope().computed(() => count * 2)\nfunction undo() { s.undo() }\n</script>\n<button onclick={undo}>{count} {doubled}</button>\n`,
+        })
+        expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
+    })
+
     /* A nested scoped `<script>`'s bindings reach the branch's later siblings,
        including a nested if/each within the same branch (emitted inline, not in a
        trapping block that left them "Cannot find name"). */
