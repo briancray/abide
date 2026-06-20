@@ -27,7 +27,7 @@ tool) are fenced by static rules in the engine's config.
 */
 
 // A turn in the conversation, provider-neutral. The engine maps these to its provider's wire shape.
-// @readme agent
+// @documentation agent
 export type NeutralMessage =
     | { role: 'user'; text: string }
     | {

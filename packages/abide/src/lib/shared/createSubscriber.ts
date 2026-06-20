@@ -24,7 +24,7 @@ resource down and reopening it across a re-run. Called outside any tracking scop
 `track` is a no-op, observers stay empty, and the resource never opens — matching
 the open-on-first-read contract.
 */
-// @readme plumbing
+// @documentation plumbing
 export function createSubscriber(start: (update: () => void) => () => void): () => void {
     const node = createSignalNode(undefined)
     let cleanup: (() => void) | undefined

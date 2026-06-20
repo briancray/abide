@@ -27,7 +27,7 @@ On hydrate the SSR rows are already in place and in order: each row claims its
 markers and content where they sit (no reordering), the anchor parks after them,
 and the first reconcile is skipped.
 */
-// @readme plumbing
+// @documentation plumbing
 export function each<T>(
     parent: Node,
     items: () => Iterable<T>,

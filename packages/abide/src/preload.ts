@@ -1,4 +1,4 @@
-// @readme plumbing
+// @documentation plumbing
 import { plugin } from 'bun'
 import { abideResolverPlugin } from './abideResolverPlugin.ts'
 import { abideUiPlugin } from './lib/ui/compile/abideUiPlugin.ts'

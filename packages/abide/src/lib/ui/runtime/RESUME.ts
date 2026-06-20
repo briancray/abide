@@ -12,5 +12,5 @@ export type ResumeEntry = { ok: true; value: unknown } | { ok: false; error: unk
 const globalScope = globalThis as { __abideResume?: Record<number, ResumeEntry> }
 globalScope.__abideResume ??= {}
 
-// @readme plumbing
+// @documentation plumbing
 export const RESUME: Record<number, ResumeEntry> = globalScope.__abideResume

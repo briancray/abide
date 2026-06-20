@@ -14,7 +14,7 @@ On hydrate the builder runs against the server-rendered nodes between the
 claim them in place. The cursor is advanced past the open marker before, and past
 the close marker after, so the markers themselves are skipped.
 */
-// @readme plumbing
+// @documentation plumbing
 export function appendSnippet(parent: Node, read: () => unknown): void {
     const builder = snippetPayload(read())
     if (typeof builder !== 'function') {

@@ -32,7 +32,7 @@ last-good server) survives instead of crashing and orphaning the child. By
 default a failure exits the process (one-shot `abide build` / `compile`);
 the dev orchestrator passes `exitOnFailure: false`.
 */
-// @readme plumbing
+// @documentation building
 export async function build({
     cwd = process.cwd(),
     minify = true,

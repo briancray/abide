@@ -13,7 +13,7 @@ Inside request scopes, the live Bun.Server is reachable via the
 exported `server()` function from `abide/server`; `init` receives it
 explicitly because it runs outside a request.
 */
-// @readme plumbing
+// @documentation plumbing
 export type AppModule = {
     /*
     Extra inbound header names to forward onto in-process rpc Requests, on

@@ -15,7 +15,7 @@ Returns the collected frames plus the `done` frame so a scenario can layer
 its provider-specific assertions on top. This is the conformance seam: one
 suite of invariants, N engine adapters run against it.
 */
-// @readme plumbing
+// @documentation plumbing
 export async function assertAgentFrameConformance(
     stream: AsyncIterable<AgentFrame>,
 ): Promise<{ frames: AgentFrame[]; done: Extract<AgentFrame, { type: 'done' }> }> {

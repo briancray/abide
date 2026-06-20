@@ -26,7 +26,7 @@ called server-side it both notifies in-process iterators and broadcasts
 to remote subscribers; called client-side (via socketProxy) it sends a
 `pub` frame the dispatcher validates and forwards.
 */
-// @readme plumbing
+// @documentation plumbing
 export function defineSocket<T>(name: string, opts: SocketOptions = {}): Socket<T> {
     const retention = opts.tail ?? 0
     const ttl = opts.ttl

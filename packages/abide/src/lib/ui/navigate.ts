@@ -4,7 +4,7 @@ import { runtimePath } from './runtime/runtimePath.ts'
    reactive route, which re-mounts the matching page via `router`. `replace` swaps
    the current entry instead of pushing — used when honouring a server redirect, so
    the blocked URL isn't left behind in history. */
-// @readme plumbing
+// @documentation navigate
 export function navigate(path: string, replace = false): void {
     if (typeof history !== 'undefined') {
         if (replace) {

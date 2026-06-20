@@ -18,7 +18,7 @@ matching render in place (its content claims the existing nodes), then claim the
 end marker. The effect's first run sees the same branch and is a no-op; later
 toggles clear the range and build fresh into a fragment.
 */
-// @readme plumbing
+// @documentation plumbing
 export function when(
     parent: Node,
     condition: () => unknown,

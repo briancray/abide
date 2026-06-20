@@ -9,7 +9,7 @@ Builds a Prompt from a name + options. The resolver plugin parses every
 path becomes the prompt's identity. Registers itself so the MCP dispatcher
 can enumerate and render it.
 */
-// @readme plumbing
+// @documentation plumbing
 export function definePrompt(name: string, opts: PromptOptions): Prompt {
     const self: Prompt = {
         name,

@@ -22,7 +22,7 @@ the query string (GET/DELETE/HEAD). Plain `fn(args)` decodes the Response
 by Content-Type and throws HttpError on non-2xx; `.raw(args)` is the
 escape hatch that returns the Response untouched.
 */
-// @readme plumbing
+// @documentation plumbing
 export function remoteProxy<Args, Return>(
     method: HttpVerb,
     url: string,

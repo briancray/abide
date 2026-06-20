@@ -25,7 +25,7 @@ Hydration adopts in place, by precedence:
 After the first (adopting) run, later invalidations swap content before an anchor
 parked just before the close marker.
 */
-// @readme plumbing
+// @documentation plumbing
 export function awaitBlock(
     parent: Node,
     id: number,

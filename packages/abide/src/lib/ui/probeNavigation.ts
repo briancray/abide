@@ -12,7 +12,7 @@ cross-origin a full browser load. A non-OK status (handle() blocked it) or a thr
 fetch (offline) also hands off to the browser, so the server's real response —
 a login page, an error page — is what renders.
 */
-// @readme plumbing
+// @documentation plumbing
 export async function probeNavigation(path: string): Promise<NavVerdict> {
     let response: Response
     try {

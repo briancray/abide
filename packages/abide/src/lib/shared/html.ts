@@ -17,7 +17,7 @@ Calling `html` is the explicit opt-in to raw insertion; plain `{value}` always
 escapes. The tag does NOT auto-escape interpolations (it's raw by intent), so only
 build markup from values you trust, or escape them yourself.
 */
-// @readme plumbing
+// @documentation templating
 export function html(strings: TemplateStringsArray | string, ...values: unknown[]): RawHtml {
     if (typeof strings === 'string') {
         return { [RAW_HTML]: strings }

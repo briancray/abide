@@ -9,7 +9,7 @@ any scope (boot, a script) it mints a detached root once and reuses it. `scope('
 returns the root of the current tree (the app-global scope). The returned value is
 passable: hand it to a child or a helper and it can read/extend/undo that scope.
 */
-// @readme plumbing
+// @documentation reactive-state
 export function scope(address?: string): Scope {
     const current = CURRENT_SCOPE.current ?? (CURRENT_SCOPE.current = createScope())
     return address === '/' ? current.root() : current

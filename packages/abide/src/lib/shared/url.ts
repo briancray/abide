@@ -15,7 +15,7 @@ verb, so url('/rpc/search', { q }) types its args against the verb's own
 signature. Empty by default — an absent entry falls through to the page/asset
 branch, so the helper works before the generated d.ts lands.
 */
-// @readme url
+// @documentation url
 // biome-ignore lint/suspicious/noEmptyInterface: augmented by the generated rpc.d.ts
 export interface RpcRoutes {}
 

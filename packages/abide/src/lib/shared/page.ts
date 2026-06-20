@@ -13,7 +13,7 @@ navigation updates the snapshot (the client resolver reads a abide-ui signal).
 prefix (the server re-applies it to the proxy-stripped request URL), so compare
 active state against url() output, e.g. `page.url.pathname.startsWith(url('/x'))`.
 */
-// @readme page
+// @documentation page
 export const page: PageSnapshot = {
     get route(): string {
         return activePage().route

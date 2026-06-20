@@ -44,7 +44,7 @@ the Request via parseArgs).
 Every raw invocation records the synthesized Request against the returned
 promise so cache() can stash it on the entry without re-building.
 */
-// @readme plumbing
+// @documentation plumbing
 export function defineVerb<Args, Return>(
     method: HttpVerb,
     url: string,

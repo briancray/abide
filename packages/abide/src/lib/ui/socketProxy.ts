@@ -19,7 +19,7 @@ Backpressure is unbounded — a slow consumer with a chatty socket will
 grow the per-iterator buffer; bounded policies belong in a future
 socketProxy API, not the wire layer.
 */
-// @readme plumbing
+// @documentation plumbing
 export function socketProxy<T>(name: string): Socket<T> {
     return buildSocketOverChannel<T>(name, getSocketChannel)
 }

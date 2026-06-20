@@ -23,7 +23,7 @@ feeds each rpc tool's annotations. Auth inherits from the inbound request
 each rpc handler. An optional `authorize` hook in opts can short-circuit
 the request before any tool dispatches.
 */
-// @readme plumbing
+// @documentation mcp
 export function createMcpServer(opts: McpServerOptions = {}): McpServer {
     const serverInfo = {
         name: opts.name ?? DEFAULT_NAME,

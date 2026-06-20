@@ -4,7 +4,7 @@ status. Carries the raw Response so callers can inspect body, headers, or
 status text — useful for showing user-friendly error UI without having to
 opt every call site into the `.raw()` escape hatch.
 */
-// @readme response
+// @documentation response
 export class HttpError extends Error {
     readonly status: number
     readonly statusText: string

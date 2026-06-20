@@ -6,7 +6,7 @@ import type { SocketOptions } from './sockets/types/SocketOptions.ts'
 Declares a Socket inside a file under `src/server/sockets/`. Each file contains
 exactly one export, named after the file (e.g. `chat.ts` →
 `export const chat = socket<ChatMessage>(...)`). The bundler reads the
-// @readme sockets
+// @documentation sockets
 export name from the filename and the socket name from the file path
 under `src/server/sockets/`, then rewrites this call to bind the name into the
 runtime implementation (defineSocket on the server, socketProxy on the

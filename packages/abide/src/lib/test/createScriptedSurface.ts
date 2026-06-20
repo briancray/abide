@@ -17,7 +17,7 @@ surface out, with every `call` recorded so a test can assert exactly which
 tools an engine dispatched and with what arguments. Prompts and resources are
 empty — engines must tolerate an app exposing none.
 */
-// @readme plumbing
+// @documentation plumbing
 export function createScriptedSurface(
     tools: ScriptedTool[] = [],
 ): AgentSurface & { calls: RecordedCall[] } {

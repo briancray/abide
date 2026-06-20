@@ -13,7 +13,7 @@ built-in File menu (Start server / Connect / Disconnect) are always installed.
 `menu` adds custom top-level menus between the Edit and Window menus; their items
 emit `abide:menu` events the app handles. See BundleMenuItem.
 */
-// @readme bundle
+// @documentation bundle
 export type BundleWindow = {
     title?: string
     width?: number

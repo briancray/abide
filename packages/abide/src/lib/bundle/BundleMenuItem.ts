@@ -18,7 +18,7 @@ calls `webview_navigate` with the given URL (the native side, on the UI thread).
 That's how the built-in Server menu drives the connect screen — `emit` reaches
 the loaded page, `navigate` repoints the window itself.
 */
-// @readme bundle
+// @documentation bundle
 export type BundleMenuItem =
     | { separator: true }
     | { label: string; shortcut?: string; emit: string }

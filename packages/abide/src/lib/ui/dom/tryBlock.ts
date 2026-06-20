@@ -20,7 +20,7 @@ builds. On hydrate it claims the SSR boundary
 (`<!--abide:try:N-->…<!--/abide:try:N-->`): the happy path adopts the guarded nodes
 in place; a throw discards the boundary's server nodes and builds the catch fresh.
 */
-// @readme plumbing
+// @documentation plumbing
 export function tryBlock(
     parent: Node,
     id: number,

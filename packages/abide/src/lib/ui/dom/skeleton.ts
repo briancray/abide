@@ -181,7 +181,7 @@ client-side — no server marker). Anchor holes resolve by scanning for their `a
 markers (present in both clone and server DOM). Create mode clones the parsed top-level
 nodes; hydrate mode claims the matching server run.
 */
-// @readme plumbing
+// @documentation plumbing
 export function skeleton(parent: Node, html: string): SkeletonHoles {
     const { source, elementPaths, topLevelCount } = compile(html, foreignWrapperTag(parent))
     const hydration = RENDER.hydration

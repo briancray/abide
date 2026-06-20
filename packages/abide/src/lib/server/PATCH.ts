@@ -6,5 +6,5 @@ PATCH verb helper. The bundler rewrites every `export const x = PATCH(fn)` insid
 `src/server/rpc/<file>.ts` into a defineVerb call (server target) or a
 remoteProxy stub (client target). Calling this directly throws.
 */
-// @readme rpc
+// @documentation rpc
 export const PATCH: VerbHelper = (_fn: any, _opts?: any) => unprocessed('PATCH')

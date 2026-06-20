@@ -16,7 +16,7 @@ entry. Defaults
 the target to the host platform and appends `.exe` for windows targets.
 Returns the path of the emitted binary; exits the process on build failure.
 */
-// @readme plumbing
+// @documentation building
 export async function compile({
     cwd = process.cwd(),
     target = detectTarget(),

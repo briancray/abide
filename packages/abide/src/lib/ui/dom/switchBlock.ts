@@ -18,7 +18,7 @@ On hydrate it adopts the case the server rendered: claim the start marker, run t
 matching case in place, claim the end marker. The effect's first run picks the same
 case and is a no-op; later changes swap the range.
 */
-// @readme plumbing
+// @documentation plumbing
 export function switchBlock(
     parent: Node,
     subject: () => unknown,

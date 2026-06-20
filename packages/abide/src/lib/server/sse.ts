@@ -31,7 +31,7 @@ import { withResponseDefaults } from './runtime/withResponseDefaults.ts'
 
 const KEEPALIVE_INTERVAL_MS = 15000
 
-// @readme response
+// @documentation response
 export function sse<Frame>(
     iterable: AsyncIterable<Frame>,
     init?: ResponseInit,

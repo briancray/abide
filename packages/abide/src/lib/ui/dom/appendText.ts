@@ -20,7 +20,7 @@ between `<!--abide:html-->`/`<!--/abide:html-->` markers are adopted (hydrate), 
 a change re-parses and swaps. A binding is text or raw for its lifetime (decided by
 its first value), so plain text — the common case — stays a cheap single node.
 */
-// @readme plumbing
+// @documentation plumbing
 export function appendText(parent: Node, read: () => unknown, splitAlways = false): void {
     /* A snippet call (`{row(args)}`) mounts its builder; a `html\`\`` value inserts
        raw markup; everything else is escaped text — decided by the first value. */

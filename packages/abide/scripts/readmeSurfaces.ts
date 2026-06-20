@@ -1,18 +1,19 @@
 /*
-README surface inventory — the generative spine of the write-readme skill.
-Instead of the skill hardcoding which surfaces exist (lists that go stale),
-this derives them from the code every run:
+Documentation surface inventory — the generative spine of the docs (AGENTS.md
+surface map + the kitchen-sink example nav). Instead of those hardcoding which
+surfaces exist (lists that go stale), this derives them from the code every run:
 
-  1. exports — each `exports` target must carry an `@readme <slug>` tag
-     (co-located with the code so placement can't drift). Untagged = a new
-     capability with no disposition: hard failure.
+  1. exports — each `exports` target must carry an `@documentation <slug>` tag
+     (co-located with the code so placement can't drift). The slug is its
+     documentation section; it groups into the kitchen-sink nav. Untagged = a
+     new capability with no disposition: hard failure.
   2. env / routes — enumerated, split into documented vs internal-only.
   3. change ledger — every source surface and changeset added/removed since
      the README was last regenerated, so behaviour changes (not just new
      export keys) demand a conscious disposition.
 
 Run: `bun run scripts/readmeSurfaces.ts`. Exits non-zero if any export is
-untagged. Everything else is reported for the writer to account for.
+untagged. Everything else is reported for the doc/example writer to account for.
 */
 
 const ROOT = new URL('../', import.meta.url).pathname
@@ -38,17 +39,42 @@ const INTERNAL_ROUTES = new Set([
     '/__abide/config',
 ])
 
+/* The documentation information architecture: each section (a `@documentation`
+   slug) rolls up into one of four top-level groups — these groups are the
+   kitchen-sink example's nav structure, and the slugs are its sections. The
+   reference index is a separate axis — every public export appears there too, as
+   a non-prose listing — so it isn't a group here. `plumbing` is internal
+   (reference-only, no demo). A non-plumbing slug missing from this map is
+   reported as ungrouped. */
+const SECTION_GROUPS: Record<string, string[]> = {
+    'beyond the browser': ['agent', 'bundle', 'cli', 'mcp'],
+    'build the server': ['configuration', 'request-scope', 'response', 'rpc', 'sockets'],
+    'build the ui': [
+        'templating',
+        'cache',
+        'page',
+        'navigate',
+        'probes',
+        'tail',
+        'url',
+        'effect',
+        'reactive-state',
+        'ui',
+    ],
+    deploy: ['observability', 'testing', 'building'],
+}
+
 /* run argv directly (no shell) so regex metacharacters pass through literally */
 const run = (cmd: string[]) =>
     new Response(Bun.spawn(cmd, { cwd: REPO, stdout: 'pipe', stderr: 'ignore' }).stdout).text()
 
-/* 1. exports → @readme tag */
+/* 1. exports → @documentation tag */
 const pkg = await Bun.file(`${ROOT}package.json`).json()
 const exportsMap: Record<string, string> = pkg.exports
 const bySlug = new Map<string, string[]>()
 const untagged: string[] = []
 
-/* one mapped export per file (project rule), so one @readme tag per file */
+/* one mapped export per file (project rule), so one @documentation tag per file */
 for (const [key, relative] of Object.entries(exportsMap)) {
     const path = ROOT + (relative as string).replace(/^\.\//, '')
     // tsconfig and other non-source targets carry no tag — treat as plumbing
@@ -57,7 +83,7 @@ for (const [key, relative] of Object.entries(exportsMap)) {
         continue
     }
     const source = await Bun.file(path).text()
-    const tag = source.match(/^\/\/ @readme ([a-z-]+)/m)?.[1]
+    const tag = source.match(/^\/\/ @documentation ([a-z-]+)/m)?.[1]
     if (!tag) {
         untagged.push(key)
         continue
@@ -95,13 +121,29 @@ const changesets = (await run(['ls', '.changeset']))
 /* report */
 const section = (title: string, body: string) => console.log(`\n### ${title}\n${body || '(none)'}`)
 
+/* documentation IA: each top-level group → its sections (slugs) → exports */
 section(
-    'exports by @readme disposition',
-    [...bySlug.entries()]
-        .sort()
-        .map(([slug, keys]) => `${slug}: ${keys.join(', ')}`)
+    'sections by group',
+    Object.entries(SECTION_GROUPS)
+        .map(([group, slugs]) => {
+            const rows = slugs.map(
+                (slug) => `  ${slug}: ${(bySlug.get(slug) ?? ['(no exports yet)']).join(', ')}`,
+            )
+            return `${group}\n${rows.join('\n')}`
+        })
         .join('\n'),
 )
+
+/* a non-plumbing slug not rolled into a group has no home in the IA */
+const groupedSlugs = new Set(Object.values(SECTION_GROUPS).flat())
+const ungroupedSlugs = [...bySlug.keys()].filter(
+    (slug) => slug !== 'plumbing' && !groupedSlugs.has(slug),
+)
+section('ungrouped slugs (assign each to a group in SECTION_GROUPS)', ungroupedSlugs.join('\n'))
+
+/* reference axis: every public export, the full non-prose index (incl. plumbing) */
+const allExports = [...bySlug.values()].flat().sort()
+section(`reference — all ${allExports.length} public exports`, allExports.join(', '))
 section(
     'env vars',
     envVars
@@ -119,10 +161,10 @@ section('pending changesets (each needs a disposition)', changesets.join('\n'))
 
 if (untagged.length > 0) {
     console.error(
-        `\nFAIL: ${untagged.length} export(s) with no @readme tag — a new capability with no home:\n` +
+        `\nFAIL: ${untagged.length} export(s) with no @documentation tag — a new capability with no home:\n` +
             untagged.map((key) => `  ${key}`).join('\n') +
-            `\nAdd a // @readme <slug> line above each export, then place it at that altitude.`,
+            `\nAdd a // @documentation <slug> line above each export, then place it at that group.`,
     )
     process.exit(1)
 }
-console.log('\nOK: every export carries an @readme disposition.')
+console.log('\nOK: every export carries an @documentation disposition.')

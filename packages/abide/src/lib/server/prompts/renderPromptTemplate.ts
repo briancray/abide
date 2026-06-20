@@ -9,7 +9,7 @@ string — MCP only enforces `required` at the client, so an optional
 argument the model omits should vanish from the text. Called by the
 render closure the resolver plugin generates for every `.md` prompt.
 */
-// @readme plumbing
+// @documentation plumbing
 export function renderPromptTemplate(template: string, args: Record<string, string>): string {
     return template.replace(PLACEHOLDER, (_match, key: string) =>
         args[key] === undefined ? '' : String(args[key]),

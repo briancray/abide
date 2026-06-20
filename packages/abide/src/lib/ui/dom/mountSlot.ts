@@ -14,7 +14,7 @@ claiming.
 Create fills the range before the end marker; hydrate adopts the server range in place
 (claiming from the parked cursor). Mirrors `when` without the conditional swap.
 */
-// @readme plumbing
+// @documentation plumbing
 export function mountSlot(
     parent: Node,
     render: (host: Node) => void,

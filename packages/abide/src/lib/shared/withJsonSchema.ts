@@ -12,7 +12,7 @@ the schema is declared:
 Mutates and returns the same schema with the method attached, so the wrapped
 value stays usable everywhere the bare schema was.
 */
-// @readme rpc
+// @documentation rpc
 export function withJsonSchema<Schema extends StandardSchemaV1>(
     schema: Schema,
     toJsonSchema: (schema: Schema) => Record<string, unknown>,

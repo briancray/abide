@@ -116,7 +116,7 @@ keep streaming reads in a parent that never top-level awaits — the
 await-everything mode is per component instance, so a child's await blocks only
 the child.
 */
-// @readme cache
+// @documentation cache
 export function cache<Args, Return>(
     fn: RemoteFunction<Args, Return>,
     options?: CacheOptions,

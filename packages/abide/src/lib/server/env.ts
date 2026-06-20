@@ -26,7 +26,7 @@ Validation must be synchronous — boot can't await config — so a schema whose
 (path + message) so a misconfigured deploy shows the full list rather than one
 variable per restart.
 */
-// @readme configuration
+// @documentation configuration
 export function env<Schema extends StandardSchemaV1>(
     schema: Schema,
 ): StandardSchemaV1.InferOutput<Schema> {

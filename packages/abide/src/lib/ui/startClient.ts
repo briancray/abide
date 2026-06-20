@@ -24,7 +24,7 @@ navigation — importing each further page's chunk on first visit and probing th
 destination through the server's app.handle so auth/redirect gating still applies.
 Returns a disposer. `target` defaults to `#app`; pass one explicitly in tests.
 */
-// @readme plumbing
+// @documentation plumbing
 export function startClient(
     routes: Record<string, RouteLoader>,
     layoutRoutes: Record<string, RouteLoader> = {},

@@ -14,7 +14,7 @@ Brackets a render pass so the outermost mount resets the block-id counter and an
 inlined child component's mount continues it — keeping await/try ids aligned with
 the SSR stream (see `enterRenderPass`).
 */
-// @readme plumbing
+// @documentation plumbing
 export function mount(host: Element, build: (host: Element) => void): () => void {
     enterRenderPass()
     /* Establish this component's lexical scope, nested under the enclosing one, in

@@ -29,7 +29,7 @@ that same linked sheet, so a page renders styled before the client bundle loads,
 no inlined `<style>`. The elements still carry their `data-a-…` scope attributes
 either way (one per `<style>` covering them — see `analyzeComponent`).
 */
-// @readme plumbing
+// @documentation plumbing
 export const abideUiPlugin: BunPlugin = {
     name: 'abide-ui',
     setup(build) {

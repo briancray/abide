@@ -20,7 +20,7 @@ the value (a streamed `RESUME[id]` or a warm-sync/cache read); only a genuinely-
 pending `await` — no resume, not cache-warm — discards its boundary and builds
 the pending branch fresh (see `awaitBlock`).
 */
-// @readme plumbing
+// @documentation plumbing
 export function hydrate(host: Element, build: (host: Element) => void): () => void {
     const previous = RENDER.hydration
     RENDER.hydration = { next: new Map() }

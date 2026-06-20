@@ -4,5 +4,5 @@
    it; on the client the router mounts/hydrates the child into it and finds it by
    tag. Shared by both compiler back-ends, the SSR chain composer, and the router so
    they all agree on the marker. */
-// @readme plumbing
+// @documentation plumbing
 export const OUTLET_TAG = 'abide-outlet'

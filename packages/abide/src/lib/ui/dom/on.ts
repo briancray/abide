@@ -10,7 +10,7 @@ lowered patches (`model.replace(...)`) run. The handler is pinned to the scope i
 was attached under, so an ambient `scope()` inside it (e.g. `scope().undo()`)
 resolves the component, not whatever is current when the event fires.
 */
-// @readme plumbing
+// @documentation plumbing
 export function on(element: Element, type: string, handler: EventListener): void {
     const captured = CURRENT_SCOPE.current
     const wrapped: EventListener = (event) => inScope(captured, () => handler(event))

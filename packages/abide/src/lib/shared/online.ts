@@ -40,7 +40,7 @@ const subscribeOnline =
               }
           })
 
-// @readme probes
+// @documentation probes
 export function online(): boolean {
     /* window, not navigator: Bun defines a partial navigator with no onLine. */
     if (typeof window === 'undefined') {

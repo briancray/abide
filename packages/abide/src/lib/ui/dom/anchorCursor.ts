@@ -13,7 +13,7 @@ the parent's claim cursor there, so the block claims its own server range in pla
 block ignores the returned reference on hydrate). `parentNode` is the located element the
 anchor was cloned into.
 */
-// @readme plumbing
+// @documentation plumbing
 export function anchorCursor(anchor: Node): Node | null {
     const reference = anchor.nextSibling
     const hydration = RENDER.hydration

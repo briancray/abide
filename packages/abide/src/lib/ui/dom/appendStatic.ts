@@ -7,7 +7,7 @@ mode), or claimed from the server-rendered text (hydrate mode). As with reactive
 text, a merged SSR text node is split at this literal's length so the next claim
 lines up; nothing is bound since the text never changes.
 */
-// @readme plumbing
+// @documentation plumbing
 export function appendStatic(parent: Node, value: string, splitAlways = false): void {
     const hydration = RENDER.hydration
     if (hydration !== undefined) {

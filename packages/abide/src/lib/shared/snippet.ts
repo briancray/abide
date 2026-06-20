@@ -10,7 +10,7 @@ export type Snippet<Payload> = { readonly [SNIPPET]: Payload }
    inserting escaped text. The compiler wraps a snippet's body in this — the client
    builder closes over the defining component's scope, the server string is its SSR
    render — so a snippet value passes through props like any other value. */
-// @readme plumbing
+// @documentation templating
 export function snippet<Payload>(payload: Payload): Snippet<Payload> {
     return { [SNIPPET]: payload }
 }

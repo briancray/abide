@@ -37,7 +37,7 @@ async function probeOrigin(origin: string): Promise<boolean> {
     }
 }
 
-// @readme observability
+// @documentation observability
 export const reachable = createReachable({
     probe: probeOrigin,
     intervalMs: TTL_MS,

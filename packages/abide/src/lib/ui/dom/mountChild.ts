@@ -14,7 +14,7 @@ together when the parent (or branch/row) tears down. The factory already mounts
 under its own scope (see `mount`), so the recorded disposer tears down just this
 instance.
 */
-// @readme plumbing
+// @documentation plumbing
 export function mountChild(
     host: Element,
     factory: UiComponent,

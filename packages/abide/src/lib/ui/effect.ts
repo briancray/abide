@@ -12,7 +12,7 @@ the final teardown and detaches it from the graph. This is abide's from-scratch
 effect primitive: the open-on-first-read / close-on-last-reader lifecycle,
 grounded in abide's own reactive core.
 */
-// @readme plumbing
+// @documentation effect
 export function effect(fn: () => EffectResult): () => void {
     /* Re-runs fire after the build, so pin the scope this effect was created under
        (the dep-tracking observer is managed separately, so this can't disturb it). */

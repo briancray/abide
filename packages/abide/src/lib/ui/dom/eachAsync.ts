@@ -21,7 +21,7 @@ On a mid-stream rejection the already-streamed rows stay and the `<template catc
 branch (`renderCatch`) renders after them; absent a catch branch the rejection
 surfaces (re-throws), mirroring `<template await>`.
 */
-// @readme plumbing
+// @documentation plumbing
 export function eachAsync<T>(
     parent: Node,
     items: () => AsyncIterable<T>,

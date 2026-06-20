@@ -15,7 +15,7 @@ edits to *different* paths never conflict, by construction of the doc's wake. A
 late joiner needs a snapshot seed before live patches (a transport concern, out of
 this core). Returns a disposer.
 */
-// @readme plumbing
+// @documentation plumbing
 export function sync(doc: Doc, transport: SyncTransport): () => void {
     /* True only while applying a received patch, so its bus echo isn't re-sent. */
     let applying = false

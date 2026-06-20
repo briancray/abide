@@ -9,7 +9,7 @@ __SSR__ — so a client-side read returns the trace of the request that
 rendered the page. The string is propagation-ready: hand it to your own logs,
 error reports, or `propagation.extract` when attaching OpenTelemetry spans.
 */
-// @readme observability
+// @documentation observability
 export function trace(): string | undefined {
     const scope = requestScopeSlot.resolver?.()
     return scope ? formatTraceparent(scope.trace) : undefined

@@ -19,7 +19,7 @@ Probes report, never act: reading one opens no fetch and no stream. SSR
 loading state is driven by {#await}, not this. Scan semantics (tap order,
 selector grammar, registry spans) live in probeRegistries.
 */
-// @readme probes
+// @documentation probes
 export function pending<Args, Return>(
     arg?: CacheSelector<Args, Return> | Subscribable<unknown>,
     args?: Args,

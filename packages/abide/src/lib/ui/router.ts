@@ -42,7 +42,7 @@ adopts a document handle() already ran on, so it isn't probed. There is no serve
 router — the server picks the page by request URL directly; this is the client
 half. `*` is the fallback route.
 */
-// @readme plumbing
+// @documentation plumbing
 export function router(
     host: Element,
     loaders: Record<string, RouteLoader>,

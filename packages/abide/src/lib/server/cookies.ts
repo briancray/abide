@@ -17,7 +17,7 @@ Materialized lazily on first call and cached on the request store, so a request
 that never touches cookies parses nothing and emits no `Set-Cookie`. Throws
 outside a request scope, like request().
 */
-// @readme request-scope
+// @documentation request-scope
 export function cookies(): Bun.CookieMap {
     const store = requestContext.getStore()
     if (!store) {

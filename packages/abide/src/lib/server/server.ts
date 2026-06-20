@@ -18,7 +18,7 @@ When no Bun.serve has booted, resolution forks on the request scope:
   app.ts init); keep throwing — silent undefined would mask it and strand
   later property reads with cryptic errors.
 */
-// @readme request-scope
+// @documentation request-scope
 export function server(): Server<unknown> {
     const active = getActiveServer()
     if (active) {

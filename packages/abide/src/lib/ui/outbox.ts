@@ -24,7 +24,7 @@ Delivery is at-least-once (a crash between a successful send and its dequeue
 re-sends on reload), so `send` should be idempotent. Reconnect RESYNC of reads is
 `cache.on`'s job, not this. Client-intended: `send` performs a network mutation.
 */
-// @readme plumbing
+// @documentation ui
 export function outbox<T>({
     key,
     send,

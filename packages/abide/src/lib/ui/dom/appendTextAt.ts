@@ -21,7 +21,7 @@ Hydrate delegates to `appendText` with the cursor temporarily pointed at the anc
 content (the server rendered `<!--a-->value`, so the value is the anchor's next sibling),
 reusing its text-split / snippet / raw-html claiming.
 */
-// @readme plumbing
+// @documentation plumbing
 export function appendTextAt(anchor: Node, read: () => unknown): void {
     const parent = anchor.parentNode as Node
     if (RENDER.hydration !== undefined) {

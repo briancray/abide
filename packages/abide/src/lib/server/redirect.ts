@@ -30,7 +30,7 @@ the wire response is a 3xx with no body the caller resolves to, so it
 must not pollute the inferred `Return` of a route that conditionally
 redirects vs returns json.
 */
-// @readme response
+// @documentation response
 export function redirect(
     url: string,
     status: RedirectStatus = 302,

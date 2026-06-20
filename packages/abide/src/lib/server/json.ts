@@ -27,7 +27,7 @@ paths, so a handler typed `Shape | undefined` round-trips the wire. The
 helper owns the 204 (a body-bearing status with no body would break the
 round trip), so it wins over any `init.status`.
 */
-// @readme response
+// @documentation response
 export function json<T>(data: T, init?: ResponseInit): TypedResponse<T> {
     if (data === undefined) {
         return new Response(

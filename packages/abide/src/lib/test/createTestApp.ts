@@ -52,7 +52,7 @@ build's writeTestRpcDts / writeTestSocketsDts emit one entry per verb/socket
 with no imports. Empty here; types arrive once the app has been built. Mirrors
 url's RpcRoutes / health's AppHealthMap.
 */
-// @readme testing
+// @documentation testing
 // biome-ignore lint/suspicious/noEmptyInterface: augmented by the generated testRpc.d.ts
 export interface RpcClient {}
 // biome-ignore lint/suspicious/noEmptyInterface: augmented by the generated testSockets.d.ts

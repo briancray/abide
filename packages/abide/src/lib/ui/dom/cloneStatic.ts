@@ -17,7 +17,7 @@ claim cursor past the run's top-level nodes (nothing inside binds, so none need
 claiming individually). The node count comes from the parsed template, which has
 the same top-level node count as the server markup.
 */
-// @readme plumbing
+// @documentation plumbing
 export function cloneStatic(parent: Node, html: string): void {
     /* When `parent` is a foreign element built imperatively, the run's markup has no
        foreign ancestor of its own, so a bare `<path>` would parse into the HTML

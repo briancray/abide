@@ -10,7 +10,7 @@ to restore (see `exitScope`). The client gets its per-component scope from
 isolated scope, so `scope()` and `model` don't bleed across renders. Nests via the
 returned previous, like `mount`'s save/restore.
 */
-// @readme plumbing
+// @documentation plumbing
 export function enterScope(): Scope | undefined {
     const previous = CURRENT_SCOPE.current
     CURRENT_SCOPE.current = createScope({}, previous, true)

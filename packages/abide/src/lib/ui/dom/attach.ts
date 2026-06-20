@@ -13,7 +13,7 @@ the attachment sets up. Node-lifetime, not reactive — for param reactivity put
 async; its teardown then runs once the promise settles. Runtime target for an
 `attach={…}` binding.
 */
-// @readme plumbing
+// @documentation plumbing
 export function attach(element: Element, attachment: (node: Element) => EffectResult): void {
     /* The attachment body runs now (scope already current); pin the teardown, which
        fires on dispose, so an ambient `scope()` in it resolves the component. */

@@ -13,7 +13,7 @@ Augmented by the generated `src/.abide/health.d.ts` with
 `health()` reads type against its own hook. Unaugmented (no app.ts, or no
 hook), AppHealth resolves to no fields.
 */
-// @readme observability
+// @documentation observability
 // biome-ignore lint/suspicious/noEmptyInterface: augmented by the generated health.d.ts
 export interface AppHealthMap {}
 export type AppHealth = AppHealthMap extends { fields: infer Fields }

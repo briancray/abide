@@ -27,7 +27,7 @@ import type { TypedResponse } from './rpc/types/TypedResponse.ts'
 import { streamFromIterator } from './runtime/streamFromIterator.ts'
 import { withResponseDefaults } from './runtime/withResponseDefaults.ts'
 
-// @readme response
+// @documentation response
 export function jsonl<Frame>(
     iterable: AsyncIterable<Frame>,
     init?: ResponseInit,

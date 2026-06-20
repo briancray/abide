@@ -9,7 +9,7 @@ the pending nodes between the markers, and inserts the resolved content in their
 place. The pending shell painted instantly; this swaps in each value as it
 arrives — completing the out-of-order streaming loop on the client.
 */
-// @readme plumbing
+// @documentation plumbing
 export function applyResolved(root: Element, frame: string): void {
     const holder = document.createElement('div')
     holder.innerHTML = frame

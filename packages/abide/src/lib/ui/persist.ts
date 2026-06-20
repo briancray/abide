@@ -17,7 +17,7 @@ lacks), so a doc that boots empty fills from the snapshot while a key added in a
 newer app version keeps its fresh default. Writes coalesce into one per `debounce`
 window and flush when the tab is hidden, so the tail of a burst isn't lost.
 */
-// @readme plumbing
+// @documentation plumbing
 export function persist(
     doc: Doc,
     key: string,

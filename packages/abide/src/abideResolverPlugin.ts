@@ -99,7 +99,7 @@ Also rewrites modules under src/server/rpc and src/server/sockets:
   defineSocket on the server (with the socket name + opts) or
   socketProxy on the client (name only — opts are server-side).
 */
-// @readme plumbing
+// @documentation plumbing
 export function abideResolverPlugin({
     cwd = process.cwd(),
     embedAssets = false,

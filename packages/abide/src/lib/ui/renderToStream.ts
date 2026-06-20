@@ -22,7 +22,7 @@ into the resume manifest inline — so the value is in the first paint, no pendi
 shell, no swap. The first yield therefore awaits all blocking blocks; only the
 remaining streaming blocks flush out of order after it.
 */
-// @readme plumbing
+// @documentation plumbing
 export async function* renderToStream(render: () => SsrRender): AsyncGenerator<string> {
     const { html, awaits } = render()
     /* Blocking awaits (a `then` on the `await` tag) settle BEFORE the first flush:

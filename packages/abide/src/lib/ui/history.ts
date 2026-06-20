@@ -13,7 +13,7 @@ it, keeping the move reversible). A genuine new edit clears the redo stack.
 `transaction(fn)` groups every patch `fn` emits into one entry. `limit` caps
 depth — the oldest entry drops. Inert (but harmless) on the server.
 */
-// @readme plumbing
+// @documentation plumbing
 export function history(doc: Doc, { limit = 100 }: { limit?: number } = {}): History {
     const undoStack: Patch[][] = []
     const redoStack: Patch[][] = []
