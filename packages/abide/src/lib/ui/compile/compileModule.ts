@@ -115,10 +115,33 @@ ${userImports}
 ${moduleBody}`
 }
 
-/* Indents a body block for embedding inside a wrapper function. */
+/* Indents a body block for embedding inside a wrapper function. Lines whose start
+   sits inside a multi-line template literal are left untouched — their leading
+   whitespace is significant string content (e.g. a CodeBlock's `code={`…`}`
+   snippet), and indenting it would corrupt the rendered sample. An odd count of
+   unescaped backticks on a line flips in/out of a literal. */
 function indent(body: string): string {
+    let insideTemplateLiteral = false
     return body
         .split('\n')
-        .map((line) => (line === '' ? line : `    ${line}`))
+        .map((line) => {
+            const indented = insideTemplateLiteral || line === '' ? line : `    ${line}`
+            if (unescapedBacktickCount(line) % 2 === 1) {
+                insideTemplateLiteral = !insideTemplateLiteral
+            }
+            return indented
+        })
         .join('\n')
+}
+
+/* Counts backticks not preceded by a backslash — the template-literal delimiters
+   on a line, ignoring escaped `\`` inside one. */
+function unescapedBacktickCount(line: string): number {
+    let count = 0
+    for (let index = 0; index < line.length; index += 1) {
+        if (line[index] === '`' && line[index - 1] !== '\\') {
+            count += 1
+        }
+    }
+    return count
 }
