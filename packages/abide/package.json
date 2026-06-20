@@ -99,6 +99,7 @@
         "./ui/dom/tryBlock": "./src/lib/ui/dom/tryBlock.ts",
         "./ui/dom/switchBlock": "./src/lib/ui/dom/switchBlock.ts",
         "./ui/dom/applyResolved": "./src/lib/ui/dom/applyResolved.ts",
+        "./ui/runtime/escapeKey": "./src/lib/ui/runtime/escapeKey.ts",
         "./ui/runtime/nextBlockId": "./src/lib/ui/runtime/nextBlockId.ts",
         "./ui/runtime/enterRenderPass": "./src/lib/ui/runtime/enterRenderPass.ts",
         "./ui/runtime/exitRenderPass": "./src/lib/ui/runtime/exitRenderPass.ts",

@@ -11,6 +11,7 @@ import { text } from '../src/lib/ui/dom/text.ts'
 import { when } from '../src/lib/ui/dom/when.ts'
 import { effect } from '../src/lib/ui/effect.ts'
 import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
+import { escapeKey } from '../src/lib/ui/runtime/escapeKey.ts'
 import { state } from '../src/lib/ui/state.ts'
 import { installMiniDom } from './support/installMiniDom.ts'
 
@@ -20,12 +21,14 @@ beforeAll(() => {
 
 /* Runs a compiled SSR body to its HTML string. */
 function renderSSR(source: string): string {
-    const result = new Function('doc', 'state', 'computed', 'effect', compileSSR(source))(
-        doc,
-        state,
-        computed,
-        effect,
-    ) as { html: string }
+    const result = new Function(
+        'doc',
+        'state',
+        'computed',
+        'effect',
+        'escapeKey',
+        compileSSR(source),
+    )(doc, state, computed, effect, escapeKey) as { html: string }
     return result.html
 }
 
@@ -46,6 +49,7 @@ function mountClient(source: string): { host: HTMLElement; model: ReturnType<typ
         'each',
         'when',
         'effect',
+        'escapeKey',
         `${compileComponent(source)}\nreturn typeof model !== 'undefined' ? model : undefined;`,
     )(
         host,
@@ -60,6 +64,7 @@ function mountClient(source: string): { host: HTMLElement; model: ReturnType<typ
         each,
         when,
         effect,
+        escapeKey,
     ) as ReturnType<typeof doc>
     return { host, model }
 }

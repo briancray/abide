@@ -11,6 +11,7 @@ import { on } from '../src/lib/ui/dom/on.ts'
 import { text } from '../src/lib/ui/dom/text.ts'
 import { when } from '../src/lib/ui/dom/when.ts'
 import { effect } from '../src/lib/ui/effect.ts'
+import { escapeKey } from '../src/lib/ui/runtime/escapeKey.ts'
 import { scope } from '../src/lib/ui/scope.ts'
 import type { Scope } from '../src/lib/ui/types/Scope.ts'
 import { installMiniDom } from './support/installMiniDom.ts'
@@ -58,9 +59,10 @@ function renderWithModel(source: string, initial: unknown): { host: HTMLElement;
         'each',
         'when',
         'effect',
+        'escapeKey',
         'model',
         body,
-    )(host, text, appendText, appendStatic, attr, on, each, when, effect, model)
+    )(host, text, appendText, appendStatic, attr, on, each, when, effect, escapeKey, model)
     return { host, model }
 }
 

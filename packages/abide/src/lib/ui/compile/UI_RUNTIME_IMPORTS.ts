@@ -32,6 +32,7 @@ export const UI_RUNTIME_IMPORTS: { name: string; specifier: string }[] = [
     { name: 'mountSlot', specifier: 'ui/dom/mountSlot' },
     { name: 'mountChild', specifier: 'ui/dom/mountChild' },
     { name: 'hydrate', specifier: 'ui/dom/hydrate' },
+    { name: 'escapeKey', specifier: 'ui/runtime/escapeKey' },
     { name: 'nextBlockId', specifier: 'ui/runtime/nextBlockId' },
     { name: 'enterRenderPass', specifier: 'ui/runtime/enterRenderPass' },
     { name: 'exitRenderPass', specifier: 'ui/runtime/exitRenderPass' },

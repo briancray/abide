@@ -24,6 +24,7 @@ import { effect } from './effect.ts'
 import { enterScope } from './enterScope.ts'
 import { exitScope } from './exitScope.ts'
 import { enterRenderPass } from './runtime/enterRenderPass.ts'
+import { escapeKey } from './runtime/escapeKey.ts'
 import { exitRenderPass } from './runtime/exitRenderPass.ts'
 import { hotReloadEnabled } from './runtime/hotReloadEnabled.ts'
 import { hotReplace } from './runtime/hotReplace.ts'
@@ -68,6 +69,7 @@ export function installHotBridge(): void {
         mountSlot,
         mountChild,
         hydrate,
+        escapeKey,
         nextBlockId,
         enterRenderPass,
         exitRenderPass,

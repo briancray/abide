@@ -15,6 +15,7 @@ import { when } from '../src/lib/ui/dom/when.ts'
 import { effect } from '../src/lib/ui/effect.ts'
 import { renderToStream } from '../src/lib/ui/renderToStream.ts'
 import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
+import { escapeKey } from '../src/lib/ui/runtime/escapeKey.ts'
 import { RESUME } from '../src/lib/ui/runtime/RESUME.ts'
 import type { SsrRender } from '../src/lib/ui/runtime/types/SsrRender.ts'
 import { state } from '../src/lib/ui/state.ts'
@@ -201,6 +202,7 @@ describe('hydrate — adopt server DOM', () => {
             on,
             when,
             each,
+            escapeKey,
             model,
         }
         const names = Object.keys(runtime)
@@ -211,9 +213,10 @@ describe('hydrate — adopt server DOM', () => {
             'state',
             'computed',
             'effect',
+            'escapeKey',
             'model',
             compileSSR(source),
-        )(doc, state, computed, effect, model) as SsrRender
+        )(doc, state, computed, effect, escapeKey, model) as SsrRender
         expect(server.html).toBe(
             '<main><ul><!--a--><!--[--><li>1</li><!--]--><!--[--><li>2</li><!--]--></ul></main>',
         )

@@ -1,4 +1,5 @@
 import ts from 'typescript'
+import { escapeKey } from '../runtime/escapeKey.ts'
 
 /*
 The linchpin compiler pass. Rewrites idiomatic data access on a reactive document
@@ -9,16 +10,19 @@ component hit the fast path instead of building path strings by hand:
   model.note = 'x'        →  model.replace("note", 'x')
   model.count += 1        →  model.replace("count", model.read("count") + 1)
   model.lines.push(v)     →  model.add("lines/-", v)
-  delete model.byId[key]  →  model.remove(`byId/${key}`)
+  delete model.byId[key]  →  model.remove("byId/" + escapeKey(key))
   model.lines[0].sku      →  model.read("lines/0/sku")
-  model.lines[i].sku      →  model.read(`lines/${i}/sku`)
+  model.lines[i].sku      →  model.read("lines/" + escapeKey(i) + "/sku")
 
 A member/element-access chain rooted at `docName` becomes a `/`-joined path:
 literal keys and numeric indices fold into one string literal; a non-literal
-index makes the path a template (a dynamic segment). Reads are lowered to
-`read(path)`; a later pass hoists static-path reads to a `cell` bound once at
-component init (the string-free hot path the bench measured). Index expressions
-are themselves visited, so a read used as an index lowers too.
+index makes the path a template (a dynamic segment). Path segments are
+JSON-Pointer-escaped so a key holding `/` or `~` addresses one segment, not
+many — literal keys at compile time, dynamic ones wrapped in a runtime
+`escapeKey(...)`. Reads are lowered to `read(path)`; a later pass hoists
+static-path reads to a `cell` bound once at component init (the string-free hot
+path the bench measured). Index expressions are themselves visited, so a read
+used as an index lowers too.
 */
 export function lowerDocAccess(code: string, docName: string): string {
     const source = ts.createSourceFile('component.ts', code, ts.ScriptTarget.Latest, true)
@@ -54,12 +58,15 @@ function docAccessTransformer(docName: string): ts.TransformerFactory<ts.SourceF
             let current: ts.Expression = node
             while (true) {
                 if (ts.isPropertyAccessExpression(current)) {
-                    segments.unshift({ kind: 'literal', value: current.name.text })
+                    /* A property name is an identifier — escapeKey is a no-op on it, but
+                       a string-literal element key (`model["a/b"]`) can carry `/`|`~` and
+                       must escape at compile time so the `/`-joined path doesn't mis-split. */
+                    segments.unshift({ kind: 'literal', value: escapeKey(current.name.text) })
                     current = current.expression
                 } else if (ts.isElementAccessExpression(current)) {
                     const argument = current.argumentExpression
                     if (ts.isStringLiteral(argument) || ts.isNumericLiteral(argument)) {
-                        segments.unshift({ kind: 'literal', value: argument.text })
+                        segments.unshift({ kind: 'literal', value: escapeKey(argument.text) })
                     } else {
                         segments.unshift({
                             kind: 'expression',
@@ -165,8 +172,8 @@ function docCall(docName: string, method: string, args: ts.Expression[]): ts.Cal
 /*
 Turns segments into a path expression: an all-literal path is one string literal
 (`"lines/0/sku"`); a path with a dynamic segment is a string-concatenation that
-evaluates to the path at runtime (`"lines/" + i + "/sku"`), kept string-typed by
-leading with a literal.
+evaluates to the path at runtime (`"lines/" + escapeKey(i) + "/sku"`), kept
+string-typed by leading with a literal.
 */
 function buildPath(segments: Segment[]): ts.Expression {
     if (segments.every((segment) => segment.kind === 'literal')) {
@@ -194,7 +201,15 @@ function buildPath(segments: Segment[]): ts.Expression {
             if (separator !== '') {
                 appendText(separator)
             }
-            fragments.push(segment.node)
+            /* A dynamic key's value is unknown at compile time — escape it at runtime so a
+               key holding `/`|`~` (a date, a composite id) addresses one segment, not many. */
+            fragments.push(
+                ts.factory.createCallExpression(
+                    ts.factory.createIdentifier('escapeKey'),
+                    undefined,
+                    [segment.node],
+                ),
+            )
         }
     })
     const head = fragments[0]

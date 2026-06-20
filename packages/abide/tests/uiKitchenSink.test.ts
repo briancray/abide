@@ -10,6 +10,7 @@ import { text } from '../src/lib/ui/dom/text.ts'
 import { when } from '../src/lib/ui/dom/when.ts'
 import { effect } from '../src/lib/ui/effect.ts'
 import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
+import { escapeKey } from '../src/lib/ui/runtime/escapeKey.ts'
 import { state } from '../src/lib/ui/state.ts'
 import { installMiniDom } from './support/installMiniDom.ts'
 
@@ -59,8 +60,23 @@ describe('kitchen-sink .abide component', () => {
             'each',
             'when',
             'effect',
+            'escapeKey',
             body,
-        )(host, doc, state, computed, text, appendText, appendStatic, attr, on, each, when, effect)
+        )(
+            host,
+            doc,
+            state,
+            computed,
+            text,
+            appendText,
+            appendStatic,
+            attr,
+            on,
+            each,
+            when,
+            effect,
+            escapeKey,
+        )
 
         const list = findTag(host, 'ul') as { children: { textContent: string }[] }
         const input = findTag(host, 'input') as {
