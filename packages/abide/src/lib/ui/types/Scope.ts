@@ -1,7 +1,6 @@
 import type { computed } from '../computed.ts'
 import type { linked } from '../linked.ts'
 import type { Cell } from '../runtime/types/Cell.ts'
-import type { Doc } from '../runtime/types/Doc.ts'
 import type { Patch } from '../runtime/types/Patch.ts'
 import type { state } from '../state.ts'
 import type { SyncTransport } from './SyncTransport.ts'
