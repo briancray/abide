@@ -11,6 +11,7 @@ import { renderToStream } from '../../ui/renderToStream.ts'
 import type { UiComponent } from '../../ui/runtime/types/UiComponent.ts'
 import { pageUrlFromStore } from './pageUrlFromStore.ts'
 import { SSR_SWAP_SCRIPT } from './SSR_SWAP_SCRIPT.ts'
+import { STREAMED_HTML_HEADER } from './STREAMED_HTML_HEADER.ts'
 import { safeJsonForScript } from './safeJsonForScript.ts'
 import { serializeCacheSnapshot } from './serializeCacheSnapshot.ts'
 import { streamCacheResolutions } from './streamCacheResolutions.ts'
@@ -222,6 +223,10 @@ export function createUiPageRenderer({
                 headers: {
                     'Content-Type': 'text/html; charset=utf-8',
                     'Cache-Control': SSR_CACHE_CONTROL,
+                    /* Mark the progressively-flushed document so gzipResponse compresses it
+                       with a per-chunk-flushing gzip (the plain CompressionStream buffers the
+                       head and defeats streaming); the marker is stripped before send. */
+                    [STREAMED_HTML_HEADER]: '1',
                 },
             },
         )

@@ -1,0 +1,5 @@
+---
+"@abide/abide": patch
+---
+
+fix(ssr): compress streamed SSR documents with a per-chunk-flushing gzip so the head reaches the browser decodable mid-stream. `gzipResponse` piped every dynamic body through the web `CompressionStream`, which buffers until its deflate window fills — for a streamed `text/html` page that held the whole head until ~stream close, so the browser couldn't preload-scan the entry/CSS links or paint the pending shell until the document nearly finished (defeating streaming for every gzip-accepting client, i.e. all browsers; curl missed it by not sending `Accept-Encoding: gzip`). The renderer now marks its streamed document (`STREAMED_HTML_HEADER`, stripped before send) and `gzipResponse` routes it through `flushingGzipStream` (node:zlib gzip with `Z_SYNC_FLUSH` after each chunk — the web `CompressionStream` exposes no flush). Buffered responses keep the one-shot `CompressionStream` (best ratio). Net: streamed pages stay compressed **and** flush progressively — head decodes in ~2 ms instead of ~stream-end.
