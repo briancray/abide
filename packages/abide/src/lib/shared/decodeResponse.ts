@@ -1,6 +1,6 @@
+import { contentBodyKind } from './contentBodyKind.ts'
 import { contentTypeOf } from './contentTypeOf.ts'
 import { HttpError } from './HttpError.ts'
-import { isStreamingResponse } from './isStreamingResponse.ts'
 
 /*
 Decodes a Response into the natural body value based on Content-Type:
@@ -33,15 +33,16 @@ export async function decodeResponse(response: Response): Promise<unknown> {
         return undefined
     }
     const contentType = contentTypeOf(response.headers)
-    if (isStreamingResponse(response)) {
+    const kind = contentBodyKind(contentType)
+    if (kind === 'streaming') {
         throw new Error(
             `[abide] response at ${response.url} is a stream (${contentType}) — use tail(fn.stream(args)) for a reactive view, or fn.stream(args) for per-call iteration, instead of awaiting the bare call or cache()`,
         )
     }
-    if (contentType.includes('json')) {
+    if (kind === 'json') {
         return response.json()
     }
-    if (contentType.startsWith('text/')) {
+    if (kind === 'text') {
         return response.text()
     }
     return response.blob()

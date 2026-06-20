@@ -1,5 +1,5 @@
+import { contentBodyKind } from './contentBodyKind.ts'
 import { contentTypeOf } from './contentTypeOf.ts'
-import { STREAMING_CONTENT_TYPES } from './STREAMING_CONTENT_TYPES.ts'
 import type { CacheEntry } from './types/CacheEntry.ts'
 import type { CacheSnapshotEntry } from './types/CacheSnapshotEntry.ts'
 
@@ -32,37 +32,31 @@ export function cacheEntryFromSnapshot(entry: CacheSnapshotEntry): CacheEntry {
 
 /*
 Synchronously decodes a snapshot body so the warm entry reads without a
-microtask hop on first render. Mirrors decodeResponse for the textual cases the
-snapshot ships; non-2xx and 204 yield no warm value and fall back to the async
-path, which throws HttpError / returns undefined exactly as a live call would.
-Binary/xml bodies also skip the warm path and decode asynchronously.
+microtask hop on first render. A strict subset of `decodeResponse`: it warms
+only the `json`/`text` kinds (the same `contentBodyKind` the live read switches
+on, so the two cannot disagree about a body), returning a value identical to
+what awaiting the Response would yield. Every other kind — non-2xx, 204,
+streaming, binary — yields no warm value and defers to the async path, which
+throws HttpError / returns the streaming error / blobs exactly as a live call
+would.
 */
 function warmValueFromSnapshot(status: number, headers: Headers, body: string): unknown {
     if (status === 204 || status < 200 || status >= 300) {
         return undefined
     }
-    const contentType = contentTypeOf(headers)
-    /* A streaming body (SSE / JSONL / NDJSON) must NOT warm — `decodeResponse` throws a
-       "use tail()/stream()" error for it, so warming a value here would make a hydrated read
-       return data a live read rejects. Defer to the async path (return undefined) to keep the
-       warm decoder a strict subset of `decodeResponse`. */
-    if (STREAMING_CONTENT_TYPES.some((type) => contentType.startsWith(type))) {
-        return undefined
-    }
-    if (contentType.includes('json')) {
-        /*
-        `.includes('json')` also matches streaming/non-JSON types like
-        application/x-ndjson; fall back to the async path (return undefined)
-        rather than throwing a SyntaxError synchronously during hydration.
-        */
+    const kind = contentBodyKind(contentTypeOf(headers))
+    if (kind === 'json') {
+        /* The body may still be malformed JSON; fall back to the async path rather than
+           throwing a SyntaxError synchronously during hydration. */
         try {
             return JSON.parse(body)
         } catch {
             return undefined
         }
     }
-    if (contentType.startsWith('text/')) {
+    if (kind === 'text') {
         return body
     }
+    /* streaming and binary defer to the async path (the live decode throws / blobs). */
     return undefined
 }
