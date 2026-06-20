@@ -1,4 +1,5 @@
 import { isReplayableMethod } from '../../shared/isReplayableMethod.ts'
+import { isStreamingResponse } from '../../shared/isStreamingResponse.ts'
 import type { CacheEntry } from '../../shared/types/CacheEntry.ts'
 import type { CacheSnapshotEntry } from '../../shared/types/CacheSnapshotEntry.ts'
 import type { CacheStore } from '../../shared/types/CacheStore.ts'
@@ -36,6 +37,14 @@ export async function snapshotEntryFromCache(
         return undefined
     }
     if (store.entries.get(entry.key) !== entry) {
+        return undefined
+    }
+    /* A streaming body (SSE / JSONL / NDJSON) can't ship: `response.text()` below would
+       hang buffering a never-ending stream, and `decodeResponse` refuses it on the client
+       anyway — so a snapshot value would diverge from a live read. Skip it (the same guard
+       `decodeResponse` applies), letting the client live-fetch and get the proper streaming
+       error. */
+    if (isStreamingResponse(response)) {
         return undefined
     }
     const contentType = (response.headers.get('content-type') ?? '').toLowerCase()

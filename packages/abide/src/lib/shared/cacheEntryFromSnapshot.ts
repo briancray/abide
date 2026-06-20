@@ -1,4 +1,5 @@
 import { contentTypeOf } from './contentTypeOf.ts'
+import { STREAMING_CONTENT_TYPES } from './STREAMING_CONTENT_TYPES.ts'
 import type { CacheEntry } from './types/CacheEntry.ts'
 import type { CacheSnapshotEntry } from './types/CacheSnapshotEntry.ts'
 
@@ -41,6 +42,13 @@ function warmValueFromSnapshot(status: number, headers: Headers, body: string): 
         return undefined
     }
     const contentType = contentTypeOf(headers)
+    /* A streaming body (SSE / JSONL / NDJSON) must NOT warm — `decodeResponse` throws a
+       "use tail()/stream()" error for it, so warming a value here would make a hydrated read
+       return data a live read rejects. Defer to the async path (return undefined) to keep the
+       warm decoder a strict subset of `decodeResponse`. */
+    if (STREAMING_CONTENT_TYPES.some((type) => contentType.startsWith(type))) {
+        return undefined
+    }
     if (contentType.includes('json')) {
         /*
         `.includes('json')` also matches streaming/non-JSON types like
