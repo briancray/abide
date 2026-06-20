@@ -848,10 +848,17 @@ async function loadShell(cwd: string): Promise<string> {
 /*
 Injects the framework's client entry references so app.html stays a clean
 template — page structure plus the SSR markers, no framework asset bookkeeping.
-The css <link> lands before </head>, the module <script> before </body>. Each is
-skipped when the shell already carries that reference, so a custom app.html that
-still spells the tags out (or one already processed) doesn't get a duplicate.
-rewriteHashedClientEntries then swaps both for the hashed entry filenames.
+The css <link> and the entry's <link rel="modulepreload"> land before </head>,
+the module <script> before </body>. Each is skipped when the shell already
+carries that reference, so a custom app.html that still spells the tags out (or
+one already processed) doesn't get a duplicate. rewriteHashedClientEntries then
+swaps every reference for the hashed entry filenames.
+
+The modulepreload makes the browser fetch the entry during a streamed render —
+the closing </body> <script> tag arrives only after the whole stream, so without
+it the entry download is serialized after the body. Execution still defers to
+parse-end (module script), so hydration ordering is unchanged; only the transfer
+overlaps the stream.
 */
 function injectShellAssets(shell: string): string {
     let result = shell
@@ -863,7 +870,16 @@ function injectShellAssets(shell: string): string {
             'src/ui/app.html has no </head>',
         )
     }
-    if (!result.includes('/_app/client.js')) {
+    if (!result.includes('rel="modulepreload"')) {
+        result = injectBeforeTag(
+            result,
+            '<link rel="modulepreload" href="/_app/client.js" />',
+            'head',
+            'src/ui/app.html has no </head>',
+        )
+    }
+    // Guard on `src=` so the modulepreload's matching href doesn't mask a missing <script>.
+    if (!result.includes('src="/_app/client.js"')) {
         result = injectBeforeTag(
             result,
             '<script type="module" src="/_app/client.js"></script>',
@@ -898,9 +914,10 @@ function injectBeforeTag(
 Scans `dist/_app/` for the hashed client entry filenames produced by
 build.ts (e.g. `client-abc12345.js`, `client-abc12345.css`) and swaps the
 shell's literal `/_app/client.js` and `/_app/client.css` references for
-them. When the directory is missing (someone running the server before a
-build) the shell is returned unchanged so the existing broken-asset
-behaviour is preserved.
+them. The js reference appears twice (the modulepreload <link> and the entry
+<script>), so replaceAll covers both. When the directory is missing (someone
+running the server before a build) the shell is returned unchanged so the
+existing broken-asset behaviour is preserved.
 */
 async function rewriteHashedClientEntries(shell: string, cwd: string): Promise<string> {
     const appDir = `${cwd}/dist/_app`
@@ -914,10 +931,37 @@ async function rewriteHashedClientEntries(shell: string, cwd: string): Promise<s
     const cssEntry = entries.find((file) => /^client-[a-z0-9]+\.css$/i.test(file))
     let result = shell
     if (jsEntry) {
-        result = result.replace('/_app/client.js', `/_app/${jsEntry}`)
+        result = result.replaceAll('/_app/client.js', `/_app/${jsEntry}`)
+        result = await injectEntryDepPreloads(result, `${appDir}/${jsEntry}`)
     }
     if (cssEntry) {
         result = result.replace('/_app/client.css', `/_app/${cssEntry}`)
     }
     return result
+}
+
+/* Static-import specifiers in the built entry: `import {…} from "./chunk.js"` and
+   side-effect `import "./chunk.js"`, minified (no spaces) or not. The leading
+   `import` plus the `[^"'()]` guard excludes dynamic `import("./page-….js")`, so
+   only the runtime graph matches — route chunks stay lazy. */
+const ENTRY_STATIC_IMPORT = /import\s*(?:[^"'()]*?\bfrom\s*)?["']\.\/([\w.-]+\.js)["']/g
+
+/*
+SPIKE: preload the entry's static dependency chunks. The entry <script> statically
+imports the abide-ui runtime as ~60 one-export `clientEntry-<hash>.js` chunks; the
+browser can't discover them until it has downloaded and PARSED the entry, which on a
+streamed page is ~stream-close — so the runtime waterfalls in a second wave after the
+body finishes. Emitting a <link rel="modulepreload"> for each static dep into <head>
+lets the whole graph transfer DURING the stream alongside the entry, so hydration is
+network-ready at stream-close instead of after it. Route chunks (`import("./page-…")`)
+are dynamic, so they don't match and stay lazy — code-splitting still pays off.
+*/
+async function injectEntryDepPreloads(shell: string, entryPath: string): Promise<string> {
+    const source = await Bun.file(entryPath).text()
+    const deps = [...new Set([...source.matchAll(ENTRY_STATIC_IMPORT)].map((match) => match[1]))]
+    if (deps.length === 0) {
+        return shell
+    }
+    const links = deps.map((dep) => `<link rel="modulepreload" href="/_app/${dep}" />`).join('\n')
+    return injectBeforeTag(shell, links, 'head', 'src/ui/app.html has no </head>')
 }
