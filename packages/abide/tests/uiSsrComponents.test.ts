@@ -80,6 +80,36 @@ describe('SSR component composition', () => {
         expect(clientHtml).toBe(server.html)
     })
 
+    test('slot content inside a skeletonable parent agrees between SSR and client', () => {
+        /* Regression: SSR carries a stateful `inSkeleton` flag the client back-end has no
+           equivalent of (its skeleton vs imperative choice is structural). The component
+           branch built slot content WITHOUT resetting that flag, so a component sitting
+           inside a skeletonable subtree (a reactive-attr parent) leaked `<!--a-->` anchors
+           / interleaved-text markers into the slot's server markup — markers the client's
+           `componentParts` slot builder never emits. The extra comment shifted the claimed
+           server run and an inner skeleton's element hole walked off the end at hydrate.
+           The parent's reactive `class` makes `<section>` skeletonable; `Box`'s slot holds a
+           control-flow block, the exact shape that leaked. */
+        const Box = component(`<div class="box"><slot></slot></div>`)
+        const parentSource = `
+            <script>let active = scope().state(true)</script>
+            <section class={active ? 'on' : 'off'}>
+                <Box>
+                    <template if={active}><span>shown</span></template>
+                </Box>
+            </section>
+        `
+
+        const server = component(parentSource, { Box }).render() as SsrRender
+
+        const host = document.createElement('div')
+        component(parentSource, { Box })(host)
+        const clientHtml = (
+            globalThis as unknown as { serializeMiniDom: (h: unknown) => string }
+        ).serializeMiniDom(host)
+        expect(clientHtml).toBe(server.html) // no leaked anchor — server and client agree
+    })
+
     test('a component named after a void element gets a non-void transparent wrapper', () => {
         /* `Input`→`input` is a VOID tag: a raw `<input>` wrapper self-closes and the
            browser reparents the child's own markup as siblings, so hydration claims
