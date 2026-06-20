@@ -244,4 +244,31 @@ describe('compileComponent — end to end', () => {
         expect(built).not.toContain('AppHealth')
         expect(built).not.toContain('uptime')
     })
+
+    /* Regression: signal-ref lowering must respect lexical scope. A callback parameter
+       (or nested local) that shadows a component signal refers to the inner binding, so
+       it must NOT be rewritten to the signal's doc form. Before the fix, the `option`
+       loop variable below was rewritten to `option()` — `option is not a function` at
+       runtime, since the array element is a string. */
+    test('a callback param shadowing a prop signal is not lowered to the prop reader', () => {
+        const body = compileComponent(
+            `<script>\nlet option = prop('option')\nconst labels = ['Title'].map(option => option.toUpperCase())\n</script>\n<ul><template each={labels} as="l" key="l"><li>{l}</li></template></ul>`,
+        )
+        // The loop variable stays a plain reference inside its callback…
+        expect(body).toContain('option => option.toUpperCase()')
+        // …and is never confused with the prop reader.
+        expect(body).not.toContain('option().toUpperCase()')
+    })
+
+    test('a nested local and a function param shadow state/computed signals', () => {
+        const body = compileComponent(
+            `<script>\nlet count = scope().state(0)\nconst total = scope().computed(() => count + 1)\nfunction reset(items) {\n  return items.map(count => count + total)\n}\nfunction nested() {\n  const count = 5\n  return count\n}\n</script>\n<div>{count}</div>`,
+        )
+        // The param `count` shadows the state; only the un-shadowed `total` lowers.
+        expect(body).toContain('items.map(count => count + total())')
+        expect(body).not.toContain('model.read("count") + total')
+        // A nested local `count` shadows the state too — left as a plain reference.
+        expect(body).toContain('const count = 5')
+        expect(body).toMatch(/const count = 5;?\s*\n\s*return count;?/)
+    })
 })
