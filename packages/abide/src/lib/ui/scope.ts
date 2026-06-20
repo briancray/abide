@@ -11,6 +11,9 @@ passable: hand it to a child or a helper and it can read/extend/undo that scope.
 */
 // @documentation reactive-state
 export function scope(address?: string): Scope {
-    const current = CURRENT_SCOPE.current ?? (CURRENT_SCOPE.current = createScope())
+    if (!CURRENT_SCOPE.current) {
+        CURRENT_SCOPE.current = createScope()
+    }
+    const current = CURRENT_SCOPE.current
     return address === '/' ? current.root() : current
 }
