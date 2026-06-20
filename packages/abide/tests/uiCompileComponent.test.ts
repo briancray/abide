@@ -185,6 +185,21 @@ describe('compileComponent — end to end', () => {
         expect(body).toContain('"attach": () => (register)')
     })
 
+    /* A bare attribute on a component is a boolean flag: it coerces to `true`,
+       unlike a native element where it serialises to `name=""`. An explicit empty
+       string (`disabled=""`) stays the empty string. */
+    test('a bare attribute on a component coerces to true', () => {
+        const bare = compileComponent(`<Button disabled>x</Button>`)
+        expect(bare).toContain('"disabled": () => (true)')
+
+        const empty = compileComponent(`<Button disabled="">x</Button>`)
+        expect(empty).toContain('"disabled": () => ("")')
+
+        // a native element keeps the empty-string serialisation, not `true`
+        const native = compileComponent(`<button disabled>x</button>`)
+        expect(native).toContain('<button disabled=\\"\\">x</button>')
+    })
+
     test('two-way bind listens on the property native event', () => {
         // regression: every generic bind listened on `input`, so `<details>`
         // (which fires `toggle`) and select/checkbox (which fire `change`) never

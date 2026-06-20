@@ -130,7 +130,7 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
                 cursor += 1
             }
             if (source.charAt(cursor) !== '=') {
-                attrs.push({ kind: 'static', name, value: '' }) // boolean attribute
+                attrs.push({ kind: 'static', name, value: '', bare: true }) // boolean attribute
                 continue
             }
             cursor += 1 // past '='
@@ -284,13 +284,16 @@ function rejectStrayBranches(
 /* Turns a component's attributes into props. A component has no directives —
    every attribute is a prop under its written name, so `on*`/`bind:`/`attach`
    round-trip to their original names (the kinds the tag-blind attribute parser
-   assigned) instead of being dropped. A static value becomes a string literal;
-   every other kind keeps its `code`, letting a prop hold any value, functions
-   included (e.g. an `onclick` callback). */
+   assigned) instead of being dropped. A static value becomes a string literal —
+   a bare attribute coerces to `true` instead; every other kind keeps its `code`,
+   letting a prop hold any value, functions included (e.g. an `onclick` callback). */
 function toProps(attrs: TemplateAttr[]): { name: string; code: string; loc?: number }[] {
     return attrs.map((attr) => {
         if (attr.kind === 'static') {
-            return { name: attr.name, code: JSON.stringify(attr.value) }
+            /* A bare attribute (`<Toggle on />`) is a boolean flag: coerce it to
+               `true` so the prop reads as a boolean, not the empty string a native
+               element would serialise. An explicit `on=""` stays the empty string. */
+            return { name: attr.name, code: attr.bare ? 'true' : JSON.stringify(attr.value) }
         }
         /* Every non-static kind keeps its `code`/`loc`; only the prop name differs —
            a directive (`event`/`bind`/`attach`) round-trips to its written name. */
