@@ -1,5 +1,29 @@
 # abide
 
+## 0.34.0
+
+### Minor Changes
+
+- [`3697394`](https://github.com/briancray/abide/commit/3697394b693f82266dadd227033d08cacd9df0bf) - make scope() the sole reactive surface ([`7484b44`](https://github.com/briancray/abide/commit/7484b44034542a9bdbdaeedd6c8b9bb08c71f2cf))
+
+### Patch Changes
+
+- [`1593504`](https://github.com/briancray/abide/commit/159350461d6b1070bd0981c7a8ae049655eb1c7d) - drop unused Doc import from Scope type ([`383669b`](https://github.com/briancray/abide/commit/383669b957648e4393e4df341dc9e1b01303fab5))
+
+- [`3697394`](https://github.com/briancray/abide/commit/3697394b693f82266dadd227033d08cacd9df0bf) - rename selector "scope" to "tags" ([`38c41c8`](https://github.com/briancray/abide/commit/38c41c838091448c1477f588e6fafc4e566f9830))
+
+- [`3697394`](https://github.com/briancray/abide/commit/3697394b693f82266dadd227033d08cacd9df0bf) - rename @readme export tag to @documentation ([`7045cfb`](https://github.com/briancray/abide/commit/7045cfbe5a9d3f69d165cb91fd01355f76162495))
+
+- [`3697394`](https://github.com/briancray/abide/commit/3697394b693f82266dadd227033d08cacd9df0bf) - preserve template-literal whitespace when indenting module bodies ([`89d975a`](https://github.com/briancray/abide/commit/89d975ae58dc4459c85909f414e0e46431924103))
+
+- [`3697394`](https://github.com/briancray/abide/commit/3697394b693f82266dadd227033d08cacd9df0bf) - resolve scope() in the shadow program and map binding names ([`a06c38a`](https://github.com/briancray/abide/commit/a06c38a08d417bd45509c58d661caa5f45b34ae3))
+
+- [`3697394`](https://github.com/briancray/abide/commit/3697394b693f82266dadd227033d08cacd9df0bf) - migrate to the scope() authoring surface ([`b0691fc`](https://github.com/briancray/abide/commit/b0691fc56746e516b7196eec008c063c0dda5e6d))
+
+- [`3697394`](https://github.com/briancray/abide/commit/3697394b693f82266dadd227033d08cacd9df0bf) - rewrite scope() to avoid assignment-in-expression ([`c6e021b`](https://github.com/briancray/abide/commit/c6e021b68401bb30e55f11cf587a4b1bdf6f41c9))
+
+- [`3697394`](https://github.com/briancray/abide/commit/3697394b693f82266dadd227033d08cacd9df0bf) - regenerate README/AGENTS and refocus the write-readme skill ([`d40a3fe`](https://github.com/briancray/abide/commit/d40a3fec152c339f267327a95348af51c1f62027))
+
 ## 0.33.1
 
 ### Patch Changes
