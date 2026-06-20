@@ -70,6 +70,7 @@ export function createUiPageRenderer({
     clientTimeout,
     pages,
     layouts,
+    routePreloads = {},
     healthPayload,
 }: {
     shell: string
@@ -77,6 +78,7 @@ export function createUiPageRenderer({
     clientTimeout: number | undefined
     pages: Record<string, LoadPage>
     layouts: Record<string, LoadPage>
+    routePreloads?: Record<string, string[]>
     healthPayload: (request: Request) => Promise<Record<string, unknown>>
 }): {
     renderPage: (
@@ -112,6 +114,32 @@ export function createUiPageRenderer({
             clientTimeout,
         })
         return `<script>window.__SSR__ = ${payload};</script>`
+    }
+
+    /* Per-route `<link rel=modulepreload>`s for the route's page + layout-chain chunks
+       and their route-only static runtime deps (the shell already preloads the entry's
+       shared runtime). Those chunks are dynamically imported by the entry, so the browser
+       discovers them only after the entry runs at parse-end ≈ stream-close; preloading them
+       in <head> overlaps their transfer with the stream. Rebased onto the mount base like
+       the shell's own `/_app/` refs. Cached per route — the set is render-invariant. */
+    const preloadLinkCache = new Map<string, string>()
+    function routePreloadLinks(routeUrl: string): string {
+        const cached = preloadLinkCache.get(routeUrl)
+        if (cached !== undefined) {
+            return cached
+        }
+        const links = (routePreloads[routeUrl] ?? [])
+            .map((chunk) => `<link rel="modulepreload" href="${base}/_app/${chunk}" />`)
+            .join('')
+        preloadLinkCache.set(routeUrl, links)
+        return links
+    }
+
+    /* Splices the route preloads in before the shell's </head> (case-insensitive, like the
+       build-time injector). A no-op when there are none or the shell carries no </head>. */
+    function injectRoutePreloads(html: string, routeUrl: string): string {
+        const links = routePreloadLinks(routeUrl)
+        return links === '' ? html : html.replace(/<\/head>/i, `${links}</head>`)
     }
 
     async function renderPage(
@@ -154,8 +182,11 @@ export function createUiPageRenderer({
 
         /* No await blocks → render synchronously, ship buffered. */
         if (ssr.awaits.length === 0) {
-            const html = shell.replace(SSR_MARKER, (_match, key: string) =>
-                key === 'body' ? ssr.html : key === 'state' ? '' : '',
+            const html = injectRoutePreloads(
+                shell.replace(SSR_MARKER, (_match, key: string) =>
+                    key === 'body' ? ssr.html : key === 'state' ? '' : '',
+                ),
+                routeUrl,
             )
             const withState = html.replace(
                 '</body>',
@@ -177,8 +208,11 @@ export function createUiPageRenderer({
         const head =
             `<script>${SSR_SWAP_SCRIPT}${CACHE_RESOLVE_SCRIPT}</script>` +
             `${await stateTag(routeUrl, params, store, inline)}`
-        const filled = shell.replace(/<!--ssr:(head|state)-->/g, (_match, key: string) =>
-            key === 'head' ? head : '',
+        const filled = injectRoutePreloads(
+            shell.replace(/<!--ssr:(head|state)-->/g, (_match, key: string) =>
+                key === 'head' ? head : '',
+            ),
+            routeUrl,
         )
         const [before, after] = filled.split(BODY_MARKER)
         const encoder = new TextEncoder()

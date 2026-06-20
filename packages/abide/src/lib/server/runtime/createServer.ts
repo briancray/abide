@@ -34,6 +34,7 @@ import { createSocketDispatcher } from '../sockets/createSocketDispatcher.ts'
 import type { SocketRoutes } from '../sockets/types/SocketRoutes.ts'
 import { buildHealthPayload } from './buildHealthPayload.ts'
 import { buildOpenApiSpec } from './buildOpenApiSpec.ts'
+import { buildPreloadManifest } from './buildPreloadManifest.ts'
 import { createAppAssetServer } from './createAppAssetServer.ts'
 import { createPublicAssetServer } from './createPublicAssetServer.ts'
 import { createRouteDispatcher } from './createRouteDispatcher.ts'
@@ -205,7 +206,7 @@ export async function createServer({
     browser would render; the asset servers glob public/ and the build tree
     (embedded gzip map in a compiled binary, dist/ on disk).
     */
-    const [clientFingerprint, servePublicAsset, serveAppAsset] = await Promise.all([
+    const [clientFingerprint, servePublicAsset, serveAppAsset, routePreloads] = await Promise.all([
         dev
             ? devClientFingerprint({
                   srcDir: `${process.cwd()}/src`,
@@ -216,6 +217,7 @@ export async function createServer({
             : undefined,
         createPublicAssetServer({ publicDir, publicAssets }),
         createAppAssetServer({ distDir, assets }),
+        buildPreloadManifest({ distDir, assets }),
     ])
     setRegistryManifests({ rpc, sockets, prompts })
     setMcpResourceServer(createMcpResourceServer({ resourcesDir, mcpResources }))
@@ -279,6 +281,7 @@ export async function createServer({
         clientTimeout: parseBoundedEnvInt(process.env.ABIDE_CLIENT_TIMEOUT, 1, 600_000),
         pages,
         layouts,
+        routePreloads,
         /* The wire payload, rebuilt per marked render — the __SSR__ health seed must match what /__abide/health serves. */
         healthPayload: (request) => buildHealthPayload(request, { app, appName, appVersion }),
     })
