@@ -14,7 +14,6 @@ hooks are exported here to show each one in action:
                  health() polls — see /health
 */
 import type { AppModule } from '@abide/abide/server/AppModule'
-import { sessionFromRequest } from './sessions.ts'
 
 /*
 whoAmI (see /rpc/request-scope) reads `user-agent` off the inbound request.
@@ -23,8 +22,12 @@ x-forwarded-* by default, so without this line the SSR read would see nothing.
 */
 export const forwardHeaders = ['user-agent']
 
+/* Boot timestamp recorded in `init`, reported as uptime by the `health` hook. */
+let bootedAt = 0
+
 export const init: AppModule['init'] = () => {
-    // one-time setup goes here; abide already logs the boot URL, so nothing to print
+    // one-time setup goes here; record boot time so the health hook can report uptime
+    bootedAt = Date.now()
 }
 
 export const handle: AppModule['handle'] = async (request, next) => {
@@ -40,10 +43,9 @@ export const handleError: AppModule['handleError'] = (error) => {
 
 /*
 Fields merged into the /__abide/health payload the client health() polls.
-Runs ahead of `handle` (reporting "authenticated: false" requires answering
-without auth) and outside any request scope, so the session is read off the
-raw Request. The payload is public — never put secrets in it.
+Runs outside any request scope — it takes the raw Request but needs nothing
+off it here. The payload is public — never put secrets in it.
 */
-export const health: AppModule['health'] = (request) => ({
-    authenticated: sessionFromRequest(request) !== undefined,
+export const health: AppModule['health'] = () => ({
+    uptimeSeconds: Math.floor((Date.now() - bootedAt) / 1000),
 })

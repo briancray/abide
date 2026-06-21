@@ -17,9 +17,9 @@ const backend = scope().computed(() => health())
     Reactive connectivity reads in the
     <a class="underline" href="/probes"><code class="font-mono">pending / refreshing</code></a>
     family. <code class="font-mono">online()</code> reports the browser's own network state;
-    <code class="font-mono">health()</code> answers "can I reach my backend, and what does it say
-    about me" — polled from <code class="font-mono">/__abide/health</code> only while a tracking
-    scope reads it.
+    <code class="font-mono">health()</code> answers "can I reach my backend, and what does it
+    report" — polled from <code class="font-mono">/__abide/health</code> only while a tracking scope
+    reads it.
 </p>
 
 <section class="mt-6 grid gap-4 sm:grid-cols-2">
@@ -60,12 +60,8 @@ const backend = scope().computed(() => health())
     <p class="mt-1 text-xs text-slate-500">
         The extra keys above come from the <code class="font-mono">health(request)</code> hook in
         <code class="font-mono">src/app.ts</code> — this app reports
-        <code class="font-mono">authenticated</code> from the session cookie (<a
-            class="underline"
-            href="/auth/login"
-            >log in</a
-        >
-        and watch it flip). The payload is public — never put secrets in it.
+        <code class="font-mono">uptimeSeconds</code>, computed from the boot time recorded in the
+        <code class="font-mono">init</code> hook. The payload is public — never put secrets in it.
     </p>
 </section>
 
@@ -76,9 +72,6 @@ import { health } from '@abide/abide/shared/health'
 const connected = scope().computed(() => online())  // browser online/offline events
 const backend = scope().computed(() => health())     // { reachable, ...AppHealth }`} />
 
-    <CodeBlock
-        title="the wire — always unauthenticated, identity included"
-        lang="sh"
-        code={`curl -s http://localhost:3000/__abide/health
-# { "authenticated": false, "abide": "<version>", "name": "kitchen-sink", "version": "0.0.0" }`} />
+    <CodeBlock title="the wire — public, app fields included" lang="sh" code={`curl -s http://localhost:3000/__abide/health
+# { "uptimeSeconds": 42, "abide": "<version>", "name": "kitchen-sink", "version": "0.0.0" }`} />
 </section>

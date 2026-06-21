@@ -46,16 +46,6 @@ const externalHref = scope().computed(() => url('https://bun.sh', { utm: 'abide'
                 </tr>
                 <tr>
                     <td class="px-4 py-2">
-                        <a class="underline" href="/auth/dashboard">/auth/dashboard</a>
-                    </td>
-                    <td class="px-4 py-2 text-slate-600">
-                        nested <code class="font-mono">layout.abide</code> —
-                        <code class="font-mono">auth/layout.abide</code> wraps inside the root
-                        layout (the chain)
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2">
                         <a class="underline" href="/pages/boundary?explode=1"
                             >/pages/boundary?explode=1</a
                         >

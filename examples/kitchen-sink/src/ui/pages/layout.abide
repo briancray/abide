@@ -1,20 +1,17 @@
 <script>
 import '../app.css'
 import { onMenu } from '@abide/abide/bundle/onMenu'
-import { cache } from '@abide/abide/shared/cache'
 import { page } from '@abide/abide/shared/page'
 import { url } from '@abide/abide/shared/url'
 import { navigate } from '@abide/abide/ui/navigate'
-import { getSession } from '$server/rpc/getSession.ts'
-import { logout } from '$server/rpc/logout.ts'
 
 /*
 First-party root layout. A `layout.abide` wraps every page at or below its
 folder — here src/ui/pages/, so it wraps the whole app. The page lands in the
 <slot/> outlet; the resolver finds it by filename (no per-page import), and the
 client router keeps it mounted across navigation, so the sidebar never re-mounts.
-A nested layout.abide (see auth/) wraps inside this one — the chain applies
-every ancestor's layout, outermost-first.
+A nested layout.abide wraps inside this one — the chain applies every ancestor's
+layout, outermost-first.
 
 Custom bundle menu items are inert during SSR and in a plain browser tab. effects
 are client-only (stripped from SSR), so each registers its onMenu handler once on
@@ -26,7 +23,7 @@ effect(() => onMenu('open-mcp', () => void navigate('/mcp')))
 /* Active-link styling reads page.url (reassigned on every SPA nav), so a class
    thunk re-runs without per-link plumbing. Compared against url() output so it
    stays correct under an APP_URL subpath — page.url is browser-space both sides.
-   `match` defaults to href, letting a link (auth) highlight on a wider prefix. */
+   A link also highlights for its sub-paths (e.g. /rpc for /rpc/request-scope). */
 const linkClass = (prefix) =>
     page.url.pathname === url(prefix) || page.url.pathname.startsWith(url(prefix) + '/')
         ? 'font-semibold text-slate-900'
@@ -40,21 +37,20 @@ const groups = [
         title: 'build the server',
         links: [
             { href: '/rpc', label: 'rpc' },
-            { href: '/security', label: 'security' },
             { href: '/sockets', label: 'sockets' },
-            { href: '/cache', label: 'cache' },
-            { href: '/auth/dashboard', label: 'auth', match: '/auth' },
+            { href: '/security', label: 'security' },
         ],
     },
     {
         title: 'build the ui',
         links: [
-            { href: '/components', label: 'components' },
             { href: '/pages', label: 'pages' },
-            { href: '/probes', label: 'pending / refreshing' },
+            { href: '/components', label: 'components' },
+            { href: '/cache', label: 'cache' },
             { href: '/tail', label: 'tail' },
-            { href: '/outbox', label: 'outbox' },
+            { href: '/probes', label: 'pending / refreshing' },
             { href: '/health', label: 'online / health' },
+            { href: '/outbox', label: 'outbox' },
         ],
     },
     {
@@ -94,35 +90,12 @@ const groups = [
                         </h2>
                         <ul class="space-y-1">
                             <template each={group.links} as="link" key="link.href">
-                                <li><a href={url(link.href)} class={linkClass(link.match ?? link.href)}>{link.label}</a></li>
+                                <li><a href={url(link.href)} class={linkClass(link.href)}>{link.label}</a></li>
                             </template>
                         </ul>
                     </div>
                 </template>
             </nav>
-            <template await={cache(getSession)()}>
-                <template then="session">
-                    <div class="mt-8 border-t border-slate-200 pt-4 text-sm">
-                        <template if={session && session.user}>
-                            <p class="text-slate-600">signed in as <strong>{session.user}</strong></p>
-                            <form action={logout.url} method={logout.method} class="mt-2">
-                                <button
-                                    type="submit"
-                                    class="rounded-md border border-slate-300 px-3 py-1 hover:bg-slate-100">
-                                    Log out
-                                </button>
-                            </form>
-                            <template else>
-                                <a
-                                    href="/auth/login"
-                                    class="inline-block rounded-md bg-slate-900 px-3 py-1 text-white hover:bg-slate-700"
-                                    >Log in</a
-                                >
-                            </template>
-                        </template>
-                    </div>
-                </template>
-            </template>
         </aside>
         <main class="min-w-0 flex-1 py-10">
             <slot></slot>

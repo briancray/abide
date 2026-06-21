@@ -76,11 +76,4 @@ describe('createTestApp', () => {
         expect(dir.length).toBeGreaterThan(0)
         expect(dir.startsWith('/')).toBe(true)
     })
-
-    test('layout chain wraps /auth/dashboard in both the root and the nested auth layout', async () => {
-        const html = await (await app.fetch('/auth/dashboard')).text()
-        // root layout.abide chrome (the sidebar brand) + nested auth/layout.abide header
-        expect(html).toContain('abide kitchen-sink')
-        expect(html).toContain('auth area · nested layout')
-    })
 })

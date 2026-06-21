@@ -2,7 +2,7 @@
 /*
 Kitchen-sink index — the framework reference, grouped the way the sidebar reads:
 stand up the server, build the UI, reach past the browser, ship it, look it up.
-Each card is a runnable, documented page. The composed auth showcase sits below.
+Each card is a runnable, documented page.
 */
 const groups = [
     {
@@ -14,19 +14,14 @@ const groups = [
                 body: 'One verb per file under src/server/rpc/ — GET / POST / PUT / PATCH / DELETE / HEAD. The schema validates args and projects the MCP tool, CLI flags, and OpenAPI operation from one declaration.',
             },
             {
-                href: '/security',
-                title: 'security',
-                body: 'Mutating verbs 403 a cross-origin browser Origin before the handler runs; crossOrigin: true is the per-verb opt-out. /__abide/mcp gets the same check, and boot warns when MCP tools ship with no auth middleware.',
-            },
-            {
                 href: '/sockets',
                 title: 'sockets',
                 body: 'One broadcast topic per file under src/server/sockets/. publish() is isomorphic, retention is opt-in via tail: n, and every browser subscription multiplexes one WebSocket.',
             },
             {
-                href: '/cache',
-                title: 'cache',
-                body: 'Isomorphic memoise + coalesce — identical in-flight calls share one flight, ttl is only the retention dial, and cache.invalidate re-runs every computed that read a dropped entry.',
+                href: '/security',
+                title: 'security',
+                body: 'Mutating verbs 403 a cross-origin browser Origin before the handler runs; crossOrigin: true is the per-verb opt-out. /__abide/mcp gets the same check, and boot warns when MCP tools ship with no auth middleware.',
             },
         ],
     },
@@ -34,24 +29,29 @@ const groups = [
         title: 'build the ui',
         cards: [
             {
-                href: '/components',
-                title: 'components',
-                body: 'The .abide grammar — reactive primitives (state / computed / effect / prop), {expr} and bind: bindings, every <template> control-flow directive, snippets, components & slots, and scoped <style>.',
-            },
-            {
                 href: '/pages',
                 title: 'pages',
                 body: 'Folders under src/ui/pages/ are routes — [id] params, nested layout.abide chains, try/catch failure boundaries — plus the reactive page state, navigate(), and the typed base-correct url() builder.',
             },
             {
-                href: '/probes',
-                title: 'pending / refreshing',
-                body: 'Standalone reactive probes spanning calls and streams. pending = no value yet; refreshing = value held, fresher source in flight. They report, never act.',
+                href: '/components',
+                title: 'components',
+                body: 'The .abide grammar — reactive primitives (state / computed / effect / prop), {expr} and bind: bindings, every <template> control-flow directive, snippets, components & slots, and scoped <style>.',
+            },
+            {
+                href: '/cache',
+                title: 'cache',
+                body: 'Isomorphic memoise + coalesce — identical in-flight calls share one flight, ttl is only the retention dial, and cache.invalidate re-runs every computed that read a dropped entry.',
             },
             {
                 href: '/tail',
                 title: 'tail',
                 body: 'The reactive consumer for anything streaming — a socket or fn.stream(args). First computed read opens the stream, last reader closes it; transport drops self-heal.',
+            },
+            {
+                href: '/probes',
+                title: 'pending / refreshing',
+                body: 'Standalone reactive probes spanning calls and streams. pending = no value yet; refreshing = value held, fresher source in flight. They report, never act.',
             },
             {
                 href: '/health',
@@ -137,16 +137,3 @@ const groups = [
         </div>
     </section>
 </template>
-
-<section class="mt-10 rounded-lg border border-slate-200 bg-white p-5">
-    <h2 class="text-lg font-semibold">Composed showcase: cookie-session auth</h2>
-    <p class="mt-1 text-sm text-slate-600">
-        <a class="underline" href="/auth/dashboard">/auth/dashboard</a>
-        is gated by an auth layout:
-        <code class="font-mono">src/ui/pages/auth/layout.abide</code> wraps every page under
-        <code class="font-mono">/auth</code> and itself nests inside the root
-        <code class="font-mono">layout.abide</code> (the chain applies every ancestor), and the
-        session rides a cookie written through <code class="font-mono">cookies()</code> — see
-        <a class="underline" href="/rpc/request-scope">Request scope</a>.
-    </p>
-</section>
