@@ -1,4 +1,5 @@
 import { carriesBodyArgs } from '../../shared/carriesBodyArgs.ts'
+import { contentTypeOf } from '../../shared/contentTypeOf.ts'
 import { HttpError } from '../../shared/HttpError.ts'
 import type { HttpVerb } from '../../shared/types/HttpVerb.ts'
 import { error } from '../error.ts'
@@ -86,7 +87,7 @@ export async function parseArgs(
                 store.req = bounded
             }
         }
-        const contentType = (bounded.headers.get('content-type') ?? '').toLowerCase()
+        const contentType = contentTypeOf(bounded.headers)
         try {
             if (contentType.includes('application/json')) {
                 const text = await bounded.text()
@@ -116,6 +117,16 @@ export async function parseArgs(
         return body
     }
 
+    /*
+    TODO(query-coercion): query params arrive as strings, so a numeric/boolean
+    field reaches schema validation as `'2'`/`'true'`. Deferred deliberately:
+    parseArgs has no access to the verb's inputSchema (it lives in defineVerb),
+    and Standard Schema exposes no type structure to drive type-aware coercion.
+    Blind value-shape coercion is unsafe — it would corrupt legitimately
+    string-typed fields whose value looks numeric/boolean (ids, zip codes,
+    version strings like '1.0'), silently breaking GET validation. A correct fix
+    needs the schema threaded in here (or a coercing schema adapter at the verb).
+    */
     const bodyObject = (body ?? {}) as Record<string, unknown>
     const merged = { ...Object.fromEntries(url.searchParams), ...bodyObject }
     if (Object.keys(merged).length === 0) {

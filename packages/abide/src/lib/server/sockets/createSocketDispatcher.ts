@@ -170,7 +170,13 @@ export function createSocketDispatcher(sockets: SocketRoutes): SocketDispatcher 
         can ask for "as many as available, up to N" — `0` (bare
         `for await`) replays nothing.
         */
-        send(ws, { type: 'replay', sub: frame.sub, messages: entry.snapshotTail(frame.replay) })
+        /*
+        A non-finite `replay` (NaN/Infinity from a buggy client) would make
+        snapshotTail's slice(NaN) leak the whole retained buffer — coerce it
+        to undefined, matching the REST `?tail=` guard below.
+        */
+        const replay = Number.isFinite(frame.replay) ? frame.replay : undefined
+        send(ws, { type: 'replay', sub: frame.sub, messages: entry.snapshotTail(replay) })
     }
 
     function handleUnsub(

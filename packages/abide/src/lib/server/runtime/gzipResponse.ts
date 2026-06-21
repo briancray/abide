@@ -1,3 +1,4 @@
+import { contentTypeOf } from '../../shared/contentTypeOf.ts'
 import { isStreamingResponse } from '../../shared/isStreamingResponse.ts'
 import { acceptsGzip } from './acceptsGzip.ts'
 import { flushingGzipStream } from './flushingGzipStream.ts'
@@ -40,7 +41,7 @@ export function gzipResponse(req: Request, response: Response): Response {
     if (!acceptsGzip(req) || isStreamingResponse(response)) {
         return response
     }
-    const contentType = (response.headers.get('content-type') ?? '').toLowerCase()
+    const contentType = contentTypeOf(response.headers)
     if (!COMPRESSIBLE_TYPE.test(contentType)) {
         return response
     }

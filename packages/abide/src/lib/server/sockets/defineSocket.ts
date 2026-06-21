@@ -176,7 +176,12 @@ export function defineSocket<T>(name: string, opts: SocketOptions = {}): Socket<
         clients,
         snapshotTail: (count?: number) => {
             pruneExpired(Date.now())
-            const start = count === undefined ? 0 : Math.max(0, buffer.length - count)
+            /* A non-finite count (NaN/Infinity) would make slice() leak the whole
+               buffer — treat it as absent (full tail), the same as count === undefined. */
+            const start =
+                count === undefined || !Number.isFinite(count)
+                    ? 0
+                    : Math.max(0, buffer.length - count)
             return buffer.slice(start).map((entry) => entry.value)
         },
     })

@@ -20,5 +20,14 @@ export function acceptsGzip(req: Request): boolean {
         return false
     }
     const quality = directive.match(/;\s*q=([\d.]+)/)
-    return quality === null || Number(quality[1]) > 0
+    if (quality === null) {
+        return true
+    }
+    /*
+    A malformed q (e.g. `q=.` → NaN) is not an explicit refusal — fall back to
+    the default-accept path, matching how an absent q is treated. Only a parsed
+    quality of exactly 0 denies compression.
+    */
+    const parsed = Number(quality[1])
+    return Number.isNaN(parsed) || parsed > 0
 }

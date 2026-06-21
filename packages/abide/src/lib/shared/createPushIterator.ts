@@ -59,9 +59,14 @@ export function createPushIterator<T>(
             wake(slot)
             return
         }
-        // Drop the oldest pending value before exceeding the cap.
+        /* Drop the OLDEST value slot before exceeding the cap — never a control or
+           terminal slot (end/error/disconnect), which the contract guarantees are
+           never dropped. If the buffer holds only non-value slots, drop nothing. */
         if (slot.kind === 'value' && buffer.length >= maxBuffer) {
-            buffer.shift()
+            const oldestValue = buffer.findIndex((pending) => pending.kind === 'value')
+            if (oldestValue !== -1) {
+                buffer.splice(oldestValue, 1)
+            }
         }
         buffer.push(slot)
     }

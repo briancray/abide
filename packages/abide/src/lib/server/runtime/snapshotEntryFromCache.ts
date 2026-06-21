@@ -1,3 +1,4 @@
+import { contentTypeOf } from '../../shared/contentTypeOf.ts'
 import { isReplayableMethod } from '../../shared/isReplayableMethod.ts'
 import { isStreamingResponse } from '../../shared/isStreamingResponse.ts'
 import type { CacheEntry } from '../../shared/types/CacheEntry.ts'
@@ -47,7 +48,7 @@ export async function snapshotEntryFromCache(
     if (isStreamingResponse(response)) {
         return undefined
     }
-    const contentType = (response.headers.get('content-type') ?? '').toLowerCase()
+    const contentType = contentTypeOf(response.headers)
     if (!isTextual(contentType)) {
         return undefined
     }

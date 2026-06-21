@@ -46,6 +46,14 @@ export function streamFromIterator<T>(
                     enqueue throws on a closed/errored stream, and an uncaught
                     throw in a timer crashes the process. Guard + self-stop.
                     */
+                    /*
+                    Skip the tick under backpressure: a stalled consumer leaves
+                    desiredSize <= 0, and enqueuing anyway grows the internal
+                    queue unbounded. null = no HWM set, > 0 = consumer keeping up.
+                    */
+                    if (controller.desiredSize !== null && controller.desiredSize <= 0) {
+                        return
+                    }
                     try {
                         controller.enqueue(payload)
                     } catch {
