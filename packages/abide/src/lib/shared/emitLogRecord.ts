@@ -66,6 +66,15 @@ function formatElapsed(ms: number): string {
     return `+${ms.toFixed(2)}ms`
 }
 
+/* `14:23:01.072` — local wall-clock to the ms. Every record carries `ts`, so the
+   tsv line always leads with one; `+elapsedMs` still trails as the request-relative
+   timing — the two are different axes (when it happened vs how long it took). */
+function formatClock(ts: number): string {
+    const date = new Date(ts)
+    const pad = (value: number, width = 2): string => String(value).padStart(width, '0')
+    return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}.${pad(date.getMilliseconds(), 3)}`
+}
+
 /*
 Builds the record from the emission's own fields plus the ambient request
 scope (trace, elapsed, verb+path), then renders it through the active
@@ -123,11 +132,12 @@ function consoleFor(level: LogRecord['level']): (...args: unknown[]) => void {
 
 /*
 The unified tsv line (the default format): tab-separated
-`<trace8>	<verb path>	[channel] <message>	+0.00ms`. Inside a
-request scope the trace column leads and the elapsed-at-emission timing
-trails; a closing record emitted outside one (asset hits sidestep the scope)
-pads a blank trace column and trails its serve duration instead, so request
-lines stay aligned whatever produced them. Every record speaks on a channel
+`<clock>	<trace8>	<verb path>	[channel] <message>	+0.00ms`. The
+wall-clock leads every line (each record carries `ts`); inside a request scope
+the trace column follows and the elapsed-at-emission timing trails; a closing
+record emitted outside one (asset hits sidestep the scope) pads a blank trace
+column and trails its serve duration instead, so request lines stay aligned
+whatever produced them. Every record speaks on a channel
 (the app name, 'abide', or a diagnostic channel), shown as a dim `[name]`
 tag opening the message field. The verb+path pair is one field — it's the
 line's anchor unit — and the tag folds into the message field so field
@@ -136,6 +146,9 @@ positions stay stable for cut/awk consumers.
 function printTsv(record: LogRecord, voice?: LogVoice): void {
     const fields: string[] = []
     const closing = record.status !== undefined
+    /* Wall-clock leads every line — a stable first column, unlike the conditional
+       trace field, and the axis `+elapsedMs` can't give (when, not how-long). */
+    fields.push(dim(formatClock(record.ts)))
     if (record.trace) {
         fields.push(dim(record.trace.slice(0, 8)))
     } else if (closing) {

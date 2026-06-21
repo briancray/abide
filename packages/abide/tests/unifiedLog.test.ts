@@ -17,6 +17,14 @@ const SCOPE: RequestScopeInfo = {
 const ANSI_ESCAPE = new RegExp(`${String.fromCharCode(27)}\\[[^m]*m`, 'g')
 const stripAnsi = (line: string) => line.replace(ANSI_ESCAPE, '')
 
+/* Every tsv line now leads with a wall-clock column; assert its shape and strip
+   it so the column assertions below stay about the stable trace/path/message fields. */
+const CLOCK = /^\d\d:\d\d:\d\d\.\d{3}\t/
+function stripClock(line: string): string {
+    expect(line).toMatch(CLOCK)
+    return line.replace(CLOCK, '')
+}
+
 /* Captures console output for one synchronous-ish emission, restoring everything after. */
 function capture(level: 'log' | 'warn' | 'error', run: () => void | Promise<void>) {
     const lines: unknown[][] = []
@@ -71,7 +79,7 @@ describe('unified log format', () => {
     test('in-scope lines carry the trace8 +elapsed verb+path prefix', () => {
         requestScopeSlot.resolver = () => SCOPE
         const lines = capture('log', () => log('user created', { id: 7 })) as unknown[][]
-        const line = stripAnsi(String(lines[0]?.[0]))
+        const line = stripClock(stripAnsi(String(lines[0]?.[0])))
         expect(line).toBe('a3ce929d\tGET /post/1\t[app] user created\t+12.30ms')
         // The data argument passes through untouched for object inspection.
         expect(lines[0]?.[1]).toEqual({ id: 7 })
@@ -80,7 +88,7 @@ describe('unified log format', () => {
     test('out-of-scope lines are just the message', () => {
         requestScopeSlot.resolver = undefined
         const lines = capture('log', () => log('plain fact')) as unknown[][]
-        expect(stripAnsi(String(lines[0]?.[0]))).toBe('[app] plain fact')
+        expect(stripClock(stripAnsi(String(lines[0]?.[0])))).toBe('[app] plain fact')
     })
 
     test('trace() reflects the scope and goes undefined outside one', () => {
@@ -141,7 +149,7 @@ describe('unified log format', () => {
         expect(silent).toHaveLength(0)
         process.env.DEBUG = 'abide:*'
         const lines = capture('log', () => channel('miss posts(1)')) as unknown[][]
-        expect(stripAnsi(String(lines[0]?.[0]))).toBe('[abide:cache] miss posts(1)')
+        expect(stripClock(stripAnsi(String(lines[0]?.[0])))).toBe('[abide:cache] miss posts(1)')
     })
 
     test('log.trace times the work, names the record, and passes the result through', async () => {
@@ -150,7 +158,7 @@ describe('unified log format', () => {
             const result = await log.trace('checkout.submit', () => Promise.resolve(42))
             expect(result).toBe(42)
         })) as unknown[][]
-        const line = stripAnsi(String(lines[0]?.[0]))
+        const line = stripClock(stripAnsi(String(lines[0]?.[0])))
         expect(line).toMatch(
             /^a3ce929d\tGET \/post\/1\t\[app\] checkout\.submit \d+\.\d\dms\t\+12\.30ms$/,
         )
