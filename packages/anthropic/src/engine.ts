@@ -96,9 +96,14 @@ function toolResultText(result: Record<string, unknown>): string {
     const content = result.content
     if (Array.isArray(content)) {
         return content
-            .map((block) =>
-                block && typeof block === 'object' && 'text' in block ? String(block.text) : '',
-            )
+            .map((block) => {
+                if (block && typeof block === 'object' && 'text' in block) {
+                    return String(block.text)
+                }
+                // Serialize a non-text block (e.g. an image) to JSON so the model
+                // still receives the structured payload instead of an empty string.
+                return JSON.stringify(block)
+            })
             .join('')
     }
     return JSON.stringify(result.structuredContent ?? result)
