@@ -1,5 +1,6 @@
 import { relative } from 'node:path'
 import type { BunPlugin } from 'bun'
+import { messageFromError } from '../../shared/messageFromError.ts'
 import { AbideCompileError } from './AbideCompileError.ts'
 import { analyzeComponent } from './analyzeComponent.ts'
 import { compileModule } from './compileModule.ts'
@@ -57,7 +58,7 @@ export const abideUiPlugin: BunPlugin = {
                             : (({ line, column }) => `${moduleId}:${line}:${column}`)(
                                   offsetToLineColumn(source, offset),
                               )
-                    const message = error instanceof Error ? error.message : String(error)
+                    const message = messageFromError(error)
                     throw new Error(`${message.replace(/^\[abide\]\s*/, `[abide] ${at} — `)}`)
                 }
             }

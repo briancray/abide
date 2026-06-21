@@ -35,8 +35,15 @@ export function renameSignalRefs(
         if (ts.isPropertyAccessExpression(node)) {
             skip.add(node.name)
         }
-        if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
-            skip.add(node.name)
+        /* A declaration name is a binding, not a value read. A plain identifier is
+           skipped directly; a destructuring pattern's leaf names are collected so a
+           bound name shadowing a signal (`const { count } = …`) is never rewritten. */
+        if (ts.isVariableDeclaration(node)) {
+            if (ts.isIdentifier(node.name)) {
+                skip.add(node.name)
+            } else {
+                collectBindingIdentifiers(node.name, skip)
+            }
         }
         if (ts.isParameter(node) && ts.isIdentifier(node.name)) {
             skip.add(node.name)
@@ -177,6 +184,22 @@ function collectStatementBindings(statement: ts.Statement, into: Set<string>): v
         statement.name !== undefined
     ) {
         into.add(statement.name.text)
+    }
+}
+
+/* The identifier NODES a binding name binds — a plain identifier or the leaves of a
+   destructuring pattern (object/array, including nested patterns and rest elements).
+   For `{ a: b }` only the bound name `b` is a binding; `a` is the source property.
+   Feeds the skip set so a destructured name shadowing a signal is never rewritten. */
+function collectBindingIdentifiers(name: ts.BindingName, into: Set<ts.Node>): void {
+    if (ts.isIdentifier(name)) {
+        into.add(name)
+        return
+    }
+    for (const element of name.elements) {
+        if (ts.isBindingElement(element)) {
+            collectBindingIdentifiers(element.name, into)
+        }
     }
 }
 

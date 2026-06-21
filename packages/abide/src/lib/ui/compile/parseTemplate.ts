@@ -148,7 +148,7 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
                 } else {
                     attrs.push({ kind: 'expression', name, code, loc })
                 }
-            } else {
+            } else if (source.charAt(cursor) === '"' || source.charAt(cursor) === "'") {
                 const quote = source.charAt(cursor)
                 cursor += 1
                 let value = ''
@@ -157,6 +157,15 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
                     cursor += 1
                 }
                 cursor += 1 // past closing quote
+                attrs.push({ kind: 'static', name, value })
+            } else {
+                /* Unquoted value (`<input type=text>`): runs to the next whitespace or
+                   `>`, per the HTML unquoted-attribute rule. No delimiter to consume. */
+                let value = ''
+                while (cursor < source.length && !/[\s>]/.test(source.charAt(cursor))) {
+                    value += source.charAt(cursor)
+                    cursor += 1
+                }
                 attrs.push({ kind: 'static', name, value })
             }
         }
