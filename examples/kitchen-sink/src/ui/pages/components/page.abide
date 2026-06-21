@@ -57,9 +57,8 @@ function loadNames(_attempt: number): Promise<string[]> {
     <code class="font-mono">&lt;template&gt;</code> control flow,
     <code class="font-mono">{'{expr}'}</code> bindings, and a component-scoped
     <code class="font-mono">&lt;style&gt;</code>. Reactive cells are created through
-    <code class="font-mono">scope()</code>; <code class="font-mono">effect</code>,
-    <code class="font-mono">prop</code>, and <code class="font-mono">$props</code> are in scope
-    without import.
+    <code class="font-mono">scope()</code>; <code class="font-mono">effect</code> and
+    <code class="font-mono">props</code> are in scope without import.
 </p>
 
 <!-- Reactive primitives -->
@@ -71,9 +70,8 @@ function loadNames(_attempt: number): Promise<string[]> {
             class="font-mono"
             >computed</code
         >
-        is a compile error. <code class="font-mono">effect</code>,
-        <code class="font-mono">prop</code>, and <code class="font-mono">$props</code> are in scope
-        without import.
+        is a compile error. <code class="font-mono">effect</code> and
+        <code class="font-mono">props</code> are in scope without import.
     </p>
     <div class="mt-2 overflow-x-auto rounded-lg border border-slate-200 bg-white">
         <table class="w-full text-sm">
@@ -114,17 +112,11 @@ function loadNames(_attempt: number): Promise<string[]> {
                     </td>
                 </tr>
                 <tr>
-                    <td class="px-4 py-2 font-mono">prop(name)</td>
+                    <td class="px-4 py-2 font-mono">{'props()'}</td>
                     <td class="px-4 py-2 text-slate-600">
-                        read one prop reactively —
-                        <code class="font-mono">let id = prop('id')</code>
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">$props[name]()</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        the raw props object — each entry is a thunk;
-                        <code class="font-mono">$props['lang']?.()</code>
+                        destructure props — each binding is reactive and read-only, an
+                        <code class="font-mono">= default</code> fills in when the prop is absent:
+                        <code class="font-mono">{"const { id, lang = 'ts' } = props()"}</code>
                     </td>
                 </tr>
             </tbody>
@@ -495,7 +487,7 @@ let celsius = scope().state(20, (n) => Number(n) || 0)
 </Card>
 
 <!-- inside Card.abide -->
-<script>let title = prop('title')</script>
+<script>const { title } = props()</script>
 <section><h2>{title}</h2><slot></slot><footer><slot name="footer"></slot></footer></section>`} />
     <!-- Live scoped-style demo: the real <style> below is this component's own.
          The <style> quoted inside the CodeBlock is just text in an expression —

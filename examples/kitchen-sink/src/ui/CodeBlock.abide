@@ -1,6 +1,6 @@
 <script>
 import { cache } from '@abide/abide/shared/cache'
-import { highlightCode } from '$server/rpc/highlightCode.ts'
+import { highlightCode, type Lang } from '$server/rpc/highlightCode.ts'
 
 /*
 Reusable code-snippet card. Highlighting runs on the server via the highlightCode
@@ -8,9 +8,7 @@ rpc (shiki never reaches the browser bundle); cache() captures the rendered HTML
 into the SSR snapshot, and the await block streams it — a child component's awaits
 join the page's SSR stream. `title` is optional; `lang` defaults to ts.
 */
-let title = prop('title')
-let code = prop('code')
-let lang = scope().computed(() => $props['lang']?.() ?? 'ts')
+const { title, code, lang = 'ts' } = props<{ title?: string; code: string; lang?: Lang }>()
 </script>
 
 <template if={title}>

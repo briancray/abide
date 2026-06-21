@@ -2,7 +2,7 @@ import { json } from '@abide/abide/server/json'
 import { POST } from '@abide/abide/server/POST'
 import { createHighlighter, type HighlighterGeneric } from 'shiki/bundle/web'
 
-type Lang = 'ts' | 'sh' | 'toml' | 'dockerfile' | 'text'
+export type Lang = 'ts' | 'sh' | 'toml' | 'dockerfile' | 'text'
 type Theme = 'github-dark'
 
 let cached: Promise<HighlighterGeneric<Lang, Theme>> | undefined
