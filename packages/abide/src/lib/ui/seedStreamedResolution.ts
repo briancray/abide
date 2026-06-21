@@ -18,5 +18,14 @@ export function seedStreamedResolution(resolution: StreamedResolution): void {
     if ('miss' in resolution) {
         return
     }
-    activeCacheStore().entries.set(resolution.key, cacheEntryFromSnapshot(resolution))
+    /* Only seed when nothing live holds the key — or when the existing entry is itself
+       an unconsumed hydrated seed (`hydrated === true`, cleared by the first cache()
+       read). A live/settled non-hydrated entry is authoritative; clobbering it with a
+       stale snapshot would drop a fresher value (e.g. one a live fetch already wrote). */
+    const { entries } = activeCacheStore()
+    const existing = entries.get(resolution.key)
+    if (existing !== undefined && existing.hydrated !== true) {
+        return
+    }
+    entries.set(resolution.key, cacheEntryFromSnapshot(resolution))
 }

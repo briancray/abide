@@ -870,6 +870,12 @@ function fireRefetch(store: CacheStore, entry: CacheEntry): void {
             entry.promise = inflight
             entry.value = undefined
             entry.settled = true
+            /* Restart the freshness clock from the revalidation — without this the
+               entry keeps its original expiresAt and is evicted at the old deadline
+               despite holding fresh data. Mirrors registerEntry's settle path. */
+            if (entry.ttl !== undefined && entry.ttl !== 0) {
+                armTtlExpiry(store, entry, entry.ttl)
+            }
             store.markLifecycle(entry.key)
             emit(store, [entry.key])
         },
