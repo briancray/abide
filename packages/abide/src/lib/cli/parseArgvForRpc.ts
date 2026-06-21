@@ -26,9 +26,12 @@ export async function parseArgvForRpc(
     /*
     Stdin override: if a JSON object is piped in, treat it as the
     starting args bag. `Bun.stdin.text()` reads the whole pipe; if
-    nothing was piped, the read resolves with an empty string.
+    nothing was piped, the read resolves with an empty string. Skip the
+    read entirely when argv already supplied args — a non-TTY pipe that
+    never sends EOF would otherwise hang the call forever even though the
+    args are fully on the command line.
     */
-    if (!process.stdin.isTTY) {
+    if (!process.stdin.isTTY && argv.length === 0) {
         const text = await Bun.stdin.text()
         if (text.trim()) {
             try {
@@ -81,7 +84,9 @@ export async function parseArgvForRpc(
             throw new Error(`--${name} requires a value`)
         }
         if (propType === 'number' || propType === 'integer') {
-            const n = Number(value)
+            // Reject a blank value explicitly — `Number('')` / `Number('  ')` is 0,
+            // not NaN, so the NaN guard alone would silently coerce it to zero.
+            const n = value.trim() === '' ? Number.NaN : Number(value)
             if (Number.isNaN(n)) {
                 throw new Error(`--${name} expects a number, got ${value}`)
             }
