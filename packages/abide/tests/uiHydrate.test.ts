@@ -427,7 +427,7 @@ describe('hydrate — adopt server DOM', () => {
         const values = names.map((n) => runtime[n as keyof typeof runtime])
 
         // a child component with a prop, available as client mounter + SSR render
-        const childSource = `<script>let label = prop('label')</script><span>Hi {label}</span>`
+        const childSource = `<script>const { label } = props()</script><span>Hi {label}</span>`
         const childClient = compileComponent(childSource)
         const childSsr = compileSSR(childSource)
         const Greeting = Object.assign(

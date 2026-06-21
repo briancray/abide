@@ -12,9 +12,10 @@ calls type-check — `scope()` is the authored reactive surface (`scope().state(
 `.computed(...)` / `.undo()` …), so it must resolve like any import. `state`/`linked`/
 `computed` are ALSO declared ambiently as a fallback for the rare bare/nested use the
 top-level rewrite doesn't project (their top-level declarations become value types, so
-these are normally unused — fine, the shadow disables noUnusedLocals). `prop` is sugar
-too, but every `prop()` declaration is rewritten away, so it never appears here.
-`$props` is the legacy untyped prop bag (pre-`prop()` sugar) made available raw.
+these are normally unused — fine, the shadow disables noUnusedLocals). `props` is the prop
+reader — destructured (`const { a = 1 } = props<Shape>()`); declared returning its type
+argument (default `Record<string, any>`) so each binding inherits its prop type and its
+`= default` narrows.
 */
 const SHADOW_PREAMBLE = `import { effect } from '${ABIDE_PACKAGE_NAME}/ui/effect'
 import { html } from '${ABIDE_PACKAGE_NAME}/shared/html'
@@ -23,7 +24,7 @@ import { scope } from '${ABIDE_PACKAGE_NAME}/ui/scope'
 declare function state<T>(initial?: T, transform?: (next: T, previous: T) => T): { value: T }
 declare function linked<T>(seed: () => T, transform?: (next: T, previous: T) => T): { value: T }
 declare function computed<T>(compute: () => T): { readonly value: T }
-declare const $props: Record<string, (() => unknown) | undefined>
+declare function props<T = Record<string, any>>(): T
 void [effect, html, snippet, scope]
 `
 
@@ -36,9 +37,9 @@ expressions and child-component props, with diagnostics mapped back through the
 returned segments.
 
 The script's signal surface is rewritten to value types:
-  let count = state(0)            →  let count = (0)
-  const total = computed(() => …)  →  const total = (() => …)()
-  let title = prop<string>('t')   →  Props field + `let title = props['t']`
+  let count = state(0)               →  let count = (0)
+  const total = computed(() => …)     →  const total = (() => …)()
+  const { a } = props<{ a: T }>()    →  `__Props = { a: T }` + the verbatim destructure
 Everything else (functions, plain consts, imports) is emitted verbatim, so
 expressions inside it (e.g. a computed's compute body) are checked and mapped too.
 */
@@ -50,7 +51,7 @@ export function compileShadow(source: string): CompiledShadow {
     const scriptStart = leadingScript ? source.indexOf('>', leadingScript.index) + 1 : 0
     const templateStart = leadingScript ? (leadingScript.index ?? 0) + leadingScript[0].length : 0
 
-    const { imports, types, scope, props } = analyzeScript(scriptBody, scriptStart)
+    const { imports, types, scope, propsShapes } = analyzeScript(scriptBody, scriptStart)
     builder.raw(SHADOW_PREAMBLE)
     for (const line of imports) {
         builder.flush(line)
@@ -62,11 +63,20 @@ export function compileShadow(source: string): CompiledShadow {
     for (const line of types) {
         builder.flush(line)
     }
-    builder.raw(`interface __Props {\n${props.join('\n')}\n}\n`)
-    /* async so `await` blocks are legal; never executed, so the return is void. */
-    builder.raw('export default async function (props: __Props): Promise<void> {\n')
+    /* `__Props` is the parent-facing prop shape: each `props<Shape>()` destructure
+       contributes its whole `Shape` (intersected if there's more than one), or an empty
+       object for a component that reads no props. */
+    builder.raw(
+        propsShapes.length > 0
+            ? `type __Props = ${propsShapes.join(' & ')}\n`
+            : `interface __Props {}\n`,
+    )
+    /* `__props` (not `props`) so the destructuring `props()` sugar resolves to the
+       declared function, not this parameter. async so `await` blocks are legal; never
+       executed, so the return is void. */
+    builder.raw('export default async function (__props: __Props): Promise<void> {\n')
     /* Reference props so an all-optional bag with no reads doesn't read as unused. */
-    builder.raw('void props;\n')
+    builder.raw('void __props;\n')
     for (const line of scope) {
         builder.flush(line)
     }
@@ -137,20 +147,20 @@ type ScriptAnalysis = {
     imports: ScopeLine[]
     types: ScopeLine[]
     scope: ScopeLine[]
-    props: string[]
+    propsShapes: string[]
 }
 
 /* Walks the leading `<script>` and produces the shadow's module imports, the
-   module-scope type declarations, the value-typed scope lines, and the Props
-   interface fields. `scriptStart` is the body's absolute offset in the source, so
-   verbatim spans map back exactly. */
+   module-scope type declarations, the value-typed scope lines, and the `props<Shape>()`
+   prop shapes. `scriptStart` is the body's absolute offset in the source, so verbatim
+   spans map back exactly. */
 function analyzeScript(scriptBody: string, scriptStart: number): ScriptAnalysis {
     const imports: ScopeLine[] = []
     const types: ScopeLine[] = []
     const scope: ScopeLine[] = []
-    const props: string[] = []
+    const propsShapes: string[] = []
     if (scriptBody.trim() === '') {
-        return { imports, types, scope, props }
+        return { imports, types, scope, propsShapes }
     }
     const file = ts.createSourceFile('script.ts', scriptBody, ts.ScriptTarget.Latest, true)
     /* A verbatim span: original text + the segment mapping it back, relative to the
@@ -180,10 +190,10 @@ function analyzeScript(scriptBody: string, scriptStart: number): ScriptAnalysis 
             continue
         }
         for (const declaration of reactive) {
-            scope.push(scopeLineFor(declaration, props, verbatim, span))
+            scope.push(scopeLineFor(declaration, propsShapes, verbatim, span))
         }
     }
-    return { imports, types, scope, props }
+    return { imports, types, scope, propsShapes }
 }
 
 /* Value-projects a nested control-flow `<script>` body the way `analyzeScript`
@@ -207,8 +217,8 @@ function projectNestedScript(code: string): string {
         .join('\n')
 }
 
-/* The `state`/`computed`/`prop` declarations in a variable statement, or undefined
-   if it isn't one declaring them (so the caller emits it verbatim). A statement
+/* The `state`/`computed`/`linked`/`props()` declarations in a variable statement, or
+   undefined if it isn't one declaring them (so the caller emits it verbatim). A statement
    mixing reactive and plain declarations is rare; treated as all-verbatim. */
 function reactiveDeclarations(statement: ts.Statement): ts.VariableDeclaration[] | undefined {
     if (!ts.isVariableStatement(statement)) {
@@ -220,7 +230,7 @@ function reactiveDeclarations(statement: ts.Statement): ts.VariableDeclaration[]
 }
 
 /* The callee name of a `NAME = state(...)` / `linked(...)` / `computed(...)` /
-   `prop(...)` decl — bare or the explicit scope form (`scope().state(...)` / `c.state(...)`),
+   `props()` decl — bare or the explicit scope form (`scope().state(...)` / `c.state(...)`),
    receiver-agnostic (the method name marks it reactive). */
 function signalCallee(declaration: ts.VariableDeclaration): string | undefined {
     const initializer = declaration.initializer
@@ -237,10 +247,10 @@ function signalCallee(declaration: ts.VariableDeclaration): string | undefined {
 }
 
 /* Builds one scope line for a reactive declaration, projecting it to its value
-   type. `prop` also contributes a Props field (pushed into `props`). */
+   type. A `props()` destructure contributes its whole shape (pushed into `propsShapes`). */
 function scopeLineFor(
     declaration: ts.VariableDeclaration,
-    props: string[],
+    propsShapes: string[],
     verbatim: (node: ts.Node) => string,
     span: (node: ts.Node, prefixLength: number) => ShadowMapping,
 ): ScopeLine {
@@ -250,6 +260,14 @@ function scopeLineFor(
     const callee = ts.isPropertyAccessExpression(call.expression)
         ? call.expression.name.text
         : (call.expression as ts.Identifier).text
+    if (callee === 'props') {
+        /* `const {…} = props<Shape>()`: the type arg (default `Record<string, any>`)
+           IS the parent-facing prop shape, and the destructure projects verbatim against
+           the declared typed `props()` so each binding inherits its value type. */
+        const shape = call.typeArguments?.[0]
+        propsShapes.push(shape === undefined ? 'Record<string, any>' : verbatim(shape))
+        return { text: `const ${verbatim(declaration)};`, segments: [span(declaration, 6)] }
+    }
     if (callee === 'state') {
         /* state<T>(initial): T is the value type — carry it onto the `let` so an
            explicit annotation isn't lost to `any`/`any[]` inference of the initial. */
@@ -273,40 +291,27 @@ function scopeLineFor(
             segments: [span(declaration.name, 4), span(init, prefix.length)],
         }
     }
-    if (callee === 'computed' || callee === 'linked') {
-        /* computed<T>(compute) / linked<T>(seed): T is the value type — the call's
-           first arg is a thunk, so invoking it yields the value. Annotate so an
-           explicit type argument isn't lost to inference of the thunk's return. */
-        const typeNode = call.typeArguments?.[0]
-        const annotation = typeNode === undefined ? '' : `: ${verbatim(typeNode)}`
-        const fn = call.arguments[0]
-        /* `linked` is a writable `State<T>` at runtime (it reseeds AND accepts `.value =`
-           writes), so project it as `let`; `computed` is genuinely read-only, so `const`. */
-        const keyword = callee === 'linked' ? 'let' : 'const'
-        /* binding-name map offset = past the keyword + space (`let ` = 4, `const ` = 6) */
-        const keywordOffset = keyword.length + 1
-        if (fn === undefined) {
-            return {
-                text: `${keyword} ${name} = undefined;`,
-                segments: [span(declaration.name, keywordOffset)],
-            }
-        }
-        const prefix = `${keyword} ${name}${annotation} = (`
+    /* computed<T>(compute) / linked<T>(seed) — the only callees left: T is the value
+       type — the call's first arg is a thunk, so invoking it yields the value. Annotate
+       so an explicit type argument isn't lost to inference of the thunk's return. */
+    const typeNode = call.typeArguments?.[0]
+    const annotation = typeNode === undefined ? '' : `: ${verbatim(typeNode)}`
+    const fn = call.arguments[0]
+    /* `linked` is a writable `State<T>` at runtime (it reseeds AND accepts `.value =`
+       writes), so project it as `let`; `computed` is genuinely read-only, so `const`. */
+    const keyword = callee === 'linked' ? 'let' : 'const'
+    /* binding-name map offset = past the keyword + space (`let ` = 4, `const ` = 6) */
+    const keywordOffset = keyword.length + 1
+    if (fn === undefined) {
         return {
-            text: `${prefix}${verbatim(fn)})();`,
-            segments: [span(declaration.name, keywordOffset), span(fn, prefix.length)],
+            text: `${keyword} ${name} = undefined;`,
+            segments: [span(declaration.name, keywordOffset)],
         }
     }
-    /* prop<T>('key'): Props field `key[?]: T`, scope binding read from props. */
-    const key = call.arguments[0]
-    const keyText = key !== undefined && ts.isStringLiteralLike(key) ? key.text : name
-    const typeNode = call.typeArguments?.[0]
-    const typeText = typeNode === undefined ? 'unknown' : verbatim(typeNode)
-    const optional = typeNode === undefined || /\bundefined\b/.test(typeText)
-    props.push(`    ${JSON.stringify(keyText)}${optional ? '?' : ''}: ${typeText}`)
+    const prefix = `${keyword} ${name}${annotation} = (`
     return {
-        text: `let ${name} = props[${JSON.stringify(keyText)}];`,
-        segments: [span(declaration.name, 4)],
+        text: `${prefix}${verbatim(fn)})();`,
+        segments: [span(declaration.name, keywordOffset), span(fn, prefix.length)],
     }
 }
 

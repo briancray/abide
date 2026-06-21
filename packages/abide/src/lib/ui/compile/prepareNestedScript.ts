@@ -3,7 +3,7 @@ import { REACTIVE_CALLEES } from './REACTIVE_CALLEES.ts'
 
 /*
 The signal binding names a `<script>` nested in a control-flow branch declares
-(`state`/`linked`/`computed`/`prop`). The back-end adds them to the deref scope so both the
+(`state`/`linked`/`computed`). The back-end adds them to the deref scope so both the
 script body and the branch's markup rewrite `{a}` → `a.value` — these stay PLAIN
 signals (local to the branch's render, owned by its scope, re-seeded from the
 in-scope data each mount), unlike the top-level component script which desugars to
@@ -30,7 +30,7 @@ export function nestedBindingNames(code: string): Set<string> {
     return names
 }
 
-/* The callee name of a `NAME = state(...)` / `computed(...)` / `prop(...)` declaration —
+/* The callee name of a `NAME = state(...)` / `computed(...)` / `linked(...)` declaration —
    bare or the explicit scope form (`scope().state(...)` / `c.state(...)`), receiver-agnostic. */
 function signalCallee(declaration: ts.VariableDeclaration): string | undefined {
     const initializer = declaration.initializer

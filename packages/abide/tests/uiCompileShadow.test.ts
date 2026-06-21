@@ -5,8 +5,8 @@ const SOURCE = `<script>
 import Child from './Child.abide'
 let count = scope().state(0)
 let todos = state<string[]>([])
-let title = prop<string>('title')
-let lang = prop<string | undefined>('lang')
+const { title } = props<{ title: string }>()
+const { lang } = props<{ lang?: string }>()
 const doubled = scope().computed(() => count * 2)
 const label = computed<string>(() => String(count))
 let start = scope().linked(() => title)
@@ -33,7 +33,8 @@ describe('compileShadow', () => {
     test('reconstructs the scope with value types', () => {
         expect(code).toContain('let count = (0);')
         expect(code).toContain('const doubled = (() => count * 2)();')
-        expect(code).toContain('let title = props["title"];')
+        /* A `props()` destructure projects verbatim against the typed `props()`. */
+        expect(code).toContain('const { title } = props<{ title: string }>();')
     })
 
     test('projects linked as a writable let, computed as a read-only const', () => {
@@ -63,9 +64,8 @@ describe('compileShadow', () => {
         )
     })
 
-    test('emits a Props interface honouring required vs optional', () => {
-        expect(code).toContain('"title": string')
-        expect(code).toContain('"lang"?: string | undefined')
+    test('intersects each props() shape into __Props, keeping required vs optional', () => {
+        expect(code).toContain('type __Props = { title: string } & { lang?: string }')
     })
 
     test('checks child props against the imported component', () => {
@@ -99,18 +99,18 @@ describe('compileShadow', () => {
     test('hoists component-local types above __Props so prop annotations resolve them', () => {
         const { code } = compileShadow(`<script>
 type FilePropertyName = 'audio' | 'size'
-let property = prop<FilePropertyName>('property')
+const { property } = props<{ property: FilePropertyName }>()
 </script>
 <p>{property}</p>`)
         /* The type alias must precede the interface that references it; emitting it as
            an in-function scope line (below __Props) reintroduces the resolution bug. */
         const typeAt = code.indexOf("type FilePropertyName = 'audio' | 'size'")
-        const propsAt = code.indexOf('interface __Props')
+        const propsAt = code.indexOf('type __Props')
         const fnAt = code.indexOf('export default async function')
         expect(typeAt).toBeGreaterThan(-1)
         expect(typeAt).toBeLessThan(propsAt)
         expect(typeAt).toBeLessThan(fnAt)
-        expect(code).toContain('"property": FilePropertyName')
+        expect(code).toContain('type __Props = { property: FilePropertyName }')
     })
 
     test('value-projects a nested control-flow <script> like the leading one', () => {

@@ -75,7 +75,7 @@ For clients that can't speak the ws multiplex, each socket has an HTTP face at `
 
 ## Components
 
-Components are `.abide` files — valid HTML with `<script>`, native `<template>` control flow, `{expr}` bindings, and a component-scoped `<style>`. Reactive state is reached through `scope()` (`scope().state(v)`, `scope().computed(fn)`); `prop` and `effect` are in scope without import. This page reads the verb above through `cache()`, tails the socket live, and exercises most of the template grammar:
+Components are `.abide` files — valid HTML with `<script>`, native `<template>` control flow, `{expr}` bindings, and a component-scoped `<style>`. Reactive state is reached through `scope()` (`scope().state(v)`, `scope().computed(fn)`); props are read by destructuring `props()` (`const { room } = props()`), and `effect` is in scope without import. This page reads the verb above through `cache()`, tails the socket live, and exercises most of the template grammar:
 
 ```html
 <script>
@@ -86,7 +86,7 @@ import { publishChat } from '$server/rpc/publishChat.ts'
 import { chat } from '$server/sockets/chat.ts'
 import Avatar from '$ui/Avatar.abide'
 
-let room = prop('room')                                            // typed via src/.abide/routes.d.ts
+const { room } = props()                                           // typed via src/.abide/routes.d.ts
 const history = scope().computed(() => cache(getMessages)({ room })) // SSR snapshot + reactive refetch
 const latest = scope().computed(() => tail(chat))                  // re-renders on every new frame
 

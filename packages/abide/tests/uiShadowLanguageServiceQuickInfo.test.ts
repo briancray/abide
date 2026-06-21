@@ -28,7 +28,7 @@ function open(source: string): {
 }
 
 describe('shadow language service quickInfo', () => {
-    const SOURCE = `<script>\nlet title = prop<string>('title')\n</script>\n<h1>{title}</h1>\n`
+    const SOURCE = `<script>\nconst { title } = props<{ title: string }>()\n</script>\n<h1>{title}</h1>\n`
 
     test('reports the value type of a template expression', () => {
         const { service, path } = open(SOURCE)

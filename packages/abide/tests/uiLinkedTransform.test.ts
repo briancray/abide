@@ -185,7 +185,7 @@ describe('explicit scope().X authoring surface', () => {
         }
         // `prop` stays bare — it reads parent props, not scope data
         expect(() =>
-            compileComponent(`<script>let id = prop('id')</script><p>{id}</p>`),
+            compileComponent(`<script>const { id } = props()</script><p>{id}</p>`),
         ).not.toThrow()
     })
 })

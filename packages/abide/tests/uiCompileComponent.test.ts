@@ -235,7 +235,7 @@ describe('compileComponent — end to end', () => {
        reaches the build as invalid JS — guards a report where an inline `type` was
        believed to leak (it does not; moving it to a module is hygiene, not a fix). */
     test('an inline object-type alias is stripped by the build, not leaked', () => {
-        const source = `<script>\ntype AppHealth = { status: 'ok' | 'down'; uptime: number }\nlet health = prop<AppHealth>('health')\n</script>\n<p>{health.status}</p>\n`
+        const source = `<script>\ntype AppHealth = { status: 'ok' | 'down'; uptime: number }\nconst { health } = props<{ health: AppHealth }>()\n</script>\n<p>{health.status}</p>\n`
         const module = compileModule(source, { moduleId: 'x' })
         // The emitted module is TypeScript and carries the alias verbatim…
         expect(module).toContain('type AppHealth')
@@ -252,12 +252,18 @@ describe('compileComponent — end to end', () => {
        runtime, since the array element is a string. */
     test('a callback param shadowing a prop signal is not lowered to the prop reader', () => {
         const body = compileComponent(
-            `<script>\nlet option = prop('option')\nconst labels = ['Title'].map(option => option.toUpperCase())\n</script>\n<ul><template each={labels} as="l" key="l"><li>{l}</li></template></ul>`,
+            `<script>\nconst { option } = props()\nconst labels = ['Title'].map(option => option.toUpperCase())\n</script>\n<ul><template each={labels} as="l" key="l"><li>{l}</li></template></ul>`,
         )
         // The loop variable stays a plain reference inside its callback…
         expect(body).toContain('option => option.toUpperCase()')
         // …and is never confused with the prop reader.
         expect(body).not.toContain('option().toUpperCase()')
+    })
+
+    test('the removed `prop()` reader throws a migration error pointing at props()', () => {
+        expect(() =>
+            compileComponent(`<script>\nlet id = prop('id')\n</script>\n<p>{id}</p>`),
+        ).toThrow(/has been removed — read props by destructuring/)
     })
 
     test('a nested local and a function param shadow state/computed signals', () => {

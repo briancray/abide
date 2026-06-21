@@ -2,26 +2,28 @@ import ts from 'typescript'
 import { REACTIVE_CALLEES } from './REACTIVE_CALLEES.ts'
 import { renameSignalRefs } from './renameSignalRefs.ts'
 
-/* The reactive primitives that must be reached through a scope (`prop` is excluded — it
-   reads parent-passed props, not scope data, so it stays a bare call). A bare call to one
-   of these is a compile error: reactive state is owned by a scope and the surface must show
+/* The reactive primitives that must be reached through a scope. A bare call to one of
+   these is a compile error: reactive state is owned by a scope and the surface must show
    it (`scope().state(...)`), so a reader always sees the scope interaction. */
 const SCOPE_PRIMITIVES: ReadonlySet<string> = new Set(['state', 'linked', 'computed'])
 
-/* Throws if the script calls a scope primitive bare (`state(0)`) instead of through a scope
-   (`scope().state(0)` / `c.state(0)`). Walks all calls, so a stray one nested in a function
-   is caught too, not just top-level declarations. */
+/* Throws on a bare scope primitive (`state(0)` instead of `scope().state(0)`) or on the
+   removed `prop(...)` reader — props are now read by destructuring `props()`. Walks all
+   calls, so a stray one nested in a function is caught too, not just top-level declarations. */
 function assertScopedPrimitives(source: ts.SourceFile): void {
     const visit = (node: ts.Node): void => {
-        if (
-            ts.isCallExpression(node) &&
-            ts.isIdentifier(node.expression) &&
-            SCOPE_PRIMITIVES.has(node.expression.text)
-        ) {
+        if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
             const name = node.expression.text
-            throw new Error(
-                `abide: bare \`${name}(...)\` is not allowed — reactive state lives on a scope. Use \`scope().${name}(...)\` (or a captured handle: \`const s = scope(); s.${name}(...)\`).`,
-            )
+            if (SCOPE_PRIMITIVES.has(name)) {
+                throw new Error(
+                    `abide: bare \`${name}(...)\` is not allowed — reactive state lives on a scope. Use \`scope().${name}(...)\` (or a captured handle: \`const s = scope(); s.${name}(...)\`).`,
+                )
+            }
+            if (name === 'prop') {
+                throw new Error(
+                    'abide: `prop(...)` has been removed — read props by destructuring `props()`, e.g. `const { name } = props()` (with a default: `const { name = fallback } = props()`).',
+                )
+            }
         }
         ts.forEachChild(node, visit)
     }
@@ -64,6 +66,19 @@ export function desugarSignals(scriptBody: string): {
         }
         for (const declaration of statement.declarationList.declarations) {
             const callee = signalCallee(declaration)
+            if (callee === 'props') {
+                /* `const {…} = props()` — each destructured binding is a read-only
+                   computed over the parent thunk, read as `name()`. */
+                if (!ts.isObjectBindingPattern(declaration.name)) {
+                    throw new Error(
+                        'abide: `props()` must be destructured — `const { a, b } = props()`',
+                    )
+                }
+                for (const binding of propsBindings(declaration)) {
+                    computedNames.add(binding.local)
+                }
+                continue
+            }
             if (!ts.isIdentifier(declaration.name)) {
                 continue
             }
@@ -71,9 +86,9 @@ export function desugarSignals(scriptBody: string): {
                 /* Plain `state(initial)` → a serializable `model` doc slot. */
                 stateNames.add(declaration.name.text)
             } else if (isComputedSlot(declaration)) {
-                /* Read-only `computed(compute)` / `prop` → a computed `scope().derive`
-                   doc slot, referenced as `name()` (its string-free reader): a function
-                   of other paths, recomputed via the graph, never stored/serialized. */
+                /* Read-only `computed(compute)` → a computed `scope().derive` doc slot,
+                   referenced as `name()` (its string-free reader): a function of other
+                   paths, recomputed via the graph, never stored/serialized. */
                 computedNames.add(declaration.name.text)
             } else if (callee !== undefined && REACTIVE_CALLEES.has(callee)) {
                 /* `.value` cells: `linked` and `state(initial, transform)` — they own
@@ -95,14 +110,14 @@ export function desugarSignals(scriptBody: string): {
     for (const statement of source.statements) {
         const stateAssignments = stateDeclarationAssignments(statement, printer, source)
         const computedDeclarations = computedDeclarationLines(statement, printer, source)
-        const propDeclarations = propDeclarationLines(statement, printer, source)
+        const propsDestructure = propsDestructureLines(statement, printer, source)
         const cellDeclarations = cellDeclarationLines(statement, printer, source)
         if (stateAssignments !== undefined) {
             lines.push(...stateAssignments)
         } else if (computedDeclarations !== undefined) {
             lines.push(...computedDeclarations)
-        } else if (propDeclarations !== undefined) {
-            lines.push(...propDeclarations)
+        } else if (propsDestructure !== undefined) {
+            lines.push(...propsDestructure)
         } else if (cellDeclarations !== undefined) {
             lines.push(...cellDeclarations)
         } else {
@@ -118,16 +133,12 @@ export function desugarSignals(scriptBody: string): {
 }
 
 /* True for a read-only computed slot — `computed(compute)` with no write-through
-   `set`, or a `prop` (a read-only computed over the parent thunk). The writable
-   `computed(compute, set)` lens keeps a `.value` cell (handled by the caller). */
+   `set`. The writable `computed(compute, set)` lens keeps a `.value` cell (handled by
+   the caller). */
 function isComputedSlot(declaration: ts.VariableDeclaration): boolean {
-    const callee = signalCallee(declaration)
-    if (callee === 'prop') {
-        return true
-    }
     const initializer = declaration.initializer
     return (
-        callee === 'computed' &&
+        signalCallee(declaration) === 'computed' &&
         initializer !== undefined &&
         ts.isCallExpression(initializer) &&
         initializer.arguments.length === 1
@@ -234,10 +245,51 @@ function signalCallee(declaration: ts.VariableDeclaration): string | undefined {
     return undefined
 }
 
-/* If `statement` declares `prop(...)` bindings, returns a reactive computed over
-   the parent-supplied `$props` thunk for each; otherwise undefined. The optional
-   call (`?.()`) tolerates an omitted prop. */
-function propDeclarationLines(
+/* One destructured prop: the local binding name, the parent prop key it reads, and
+   the optional `= default` expression (the fallback when the prop is absent). */
+type PropsBinding = { local: string; key: string; initializer: ts.Expression | undefined }
+
+/* The bindings of a `const {…} = props()` pattern. Rest (`...rest`) and nested
+   destructuring have no single prop key, so they throw a legible compile error. */
+function propsBindings(declaration: ts.VariableDeclaration): PropsBinding[] {
+    const pattern = declaration.name as ts.ObjectBindingPattern
+    return pattern.elements.map((element) => {
+        if (element.dotDotDotToken !== undefined) {
+            throw new Error('abide: `...rest` in `props()` destructuring is not supported')
+        }
+        if (!ts.isIdentifier(element.name)) {
+            throw new Error('abide: nested destructuring in `props()` is not supported')
+        }
+        return {
+            local: element.name.text,
+            key: propsBindingKey(element),
+            initializer: element.initializer,
+        }
+    })
+}
+
+/* The parent prop key a binding element reads — its rename source (`name: alias` →
+   `name`) or, absent a rename, the local name itself. */
+function propsBindingKey(element: ts.BindingElement): string {
+    const propertyName = element.propertyName
+    if (propertyName === undefined) {
+        return (element.name as ts.Identifier).text
+    }
+    if (
+        ts.isIdentifier(propertyName) ||
+        ts.isStringLiteralLike(propertyName) ||
+        ts.isNumericLiteral(propertyName)
+    ) {
+        return propertyName.text
+    }
+    throw new Error('abide: computed prop keys in `props()` destructuring are not supported')
+}
+
+/* If `statement` is a `const {…} = props()` destructure, returns one reactive
+   computed per binding — `scope().derive("name", () => $props["key"]?.() ?? default)`
+   — read as `name()`; otherwise undefined. The `?? default` applies the binding's
+   `= default` fallback when the prop is absent. */
+function propsDestructureLines(
     statement: ts.Statement,
     printer: ts.Printer,
     source: ts.SourceFile,
@@ -247,15 +299,18 @@ function propDeclarationLines(
     }
     const lines: string[] = []
     for (const declaration of statement.declarationList.declarations) {
-        if (signalCallee(declaration) !== 'prop' || !ts.isIdentifier(declaration.name)) {
+        if (signalCallee(declaration) !== 'props' || !ts.isObjectBindingPattern(declaration.name)) {
             return undefined
         }
-        const key = (declaration.initializer as ts.CallExpression).arguments[0]
-        const keyText =
-            key === undefined ? "''" : printer.printNode(ts.EmitHint.Unspecified, key, source)
-        lines.push(
-            `const ${declaration.name.text} = scope().derive(${JSON.stringify(declaration.name.text)}, () => $props[${keyText}]?.())`,
-        )
+        for (const { local, key, initializer } of propsBindings(declaration)) {
+            const fallback =
+                initializer === undefined
+                    ? ''
+                    : ` ?? (${printer.printNode(ts.EmitHint.Unspecified, initializer, source)})`
+            lines.push(
+                `const ${local} = scope().derive(${JSON.stringify(local)}, () => $props[${JSON.stringify(key)}]?.()${fallback})`,
+            )
+        }
     }
     return lines
 }

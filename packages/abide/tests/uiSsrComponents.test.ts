@@ -59,7 +59,7 @@ function component(
 describe('SSR component composition', () => {
     test('a parent server-renders its child, and SSR matches the client DOM', () => {
         const Greeting = component(`
-            <script>let label = prop('label')</script>
+            <script>const { label } = props()</script>
             <span>Hi {label}</span>
         `)
         const parentSource = `
@@ -117,7 +117,7 @@ describe('SSR component composition', () => {
            hyphenated custom element (never void), kept layout-transparent so the
            child's root still lays out as a direct child of the parent. */
         const Input = component(`
-            <script>let value = prop('value')</script>
+            <script>const { value } = props()</script>
             <input value={value} />
         `)
         const parentSource = `

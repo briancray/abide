@@ -14,8 +14,8 @@ The rewrite is lexically scope-aware: a reference whose name is re-bound by an
 enclosing scope (a function/arrow parameter or a nested local declaration) refers
 to that inner binding, not the component signal, so it is left untouched. Without
 this, a callback like `list.map(option => option.toUpperCase())` in a component
-that also has a `prop('option')` would have its loop variable rewritten to
-`option()` and blow up at runtime (`option is not a function`).
+that also has an `option` prop (`const { option } = props()`) would have its loop
+variable rewritten to `option()` and blow up at runtime (`option is not a function`).
 */
 export function renameSignalRefs(
     code: string,

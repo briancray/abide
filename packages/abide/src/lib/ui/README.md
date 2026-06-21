@@ -36,7 +36,7 @@ every page, and `.abide` files are the only component format.
 
 ## Idioms
 
-- **Signals are the surface**: `state(v)`, `derived(fn)`, `effect(fn)`, `prop(name)`.
+- **Signals are the surface**: `state(v)`, `derived(fn)`, `effect(fn)`, `props()`.
   You write plain assignment (`count += 1`, `items.push(x)`); the compiler lowers
   it. Templates auto-read (`{count}`); ordering and cross-references compose.
 - **Everything dynamic lives in `{ }`** — `{expr}` text, `name={expr}`,

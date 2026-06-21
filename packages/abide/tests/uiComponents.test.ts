@@ -55,7 +55,7 @@ function component(
 describe('component composition', () => {
     test('a child receives a reactive prop that updates from the parent', () => {
         const Greeting = component(`
-            <script>let label = prop('label')</script>
+            <script>const { label } = props()</script>
             <span>Hi {label}</span>
         `)
 
@@ -104,11 +104,69 @@ describe('component composition', () => {
 
     test('a static prop is passed through', () => {
         const Badge = component(`
-            <script>let kind = prop('kind')</script>
+            <script>const { kind } = props()</script>
             <em>{kind}</em>
         `)
         const host = document.createElement('div')
         component(`<div><Badge kind="new" /></div>`, { Badge })(host)
         expect(host.textContent).toContain('new')
+    })
+
+    test('a `props()` destructure default fills in for an absent prop', () => {
+        const Badge = component(`
+            <script>const { lang = 'ts' } = props()</script>
+            <em>{lang}</em>
+        `)
+        const absent = document.createElement('div')
+        component(`<div><Badge /></div>`, { Badge })(absent)
+        expect(absent.textContent).toContain('ts')
+
+        const passed = document.createElement('div')
+        component(`<div><Badge lang="js" /></div>`, { Badge })(passed)
+        expect(passed.textContent).toContain('js')
+    })
+
+    test('a `props()` binding stays reactive and honours a rename', () => {
+        const Greeting = component(`
+            <script>const { who: name = 'world' } = props()</script>
+            <span>Hi {name}</span>
+        `)
+        const host = document.createElement('div')
+        component(
+            `
+            <script>
+                let name = scope().state('world')
+                function change() { name = 'abide' }
+            </script>
+            <div>
+                <Greeting who={name} />
+                <button onclick={change}>go</button>
+            </div>
+        `,
+            { Greeting },
+        )(host)
+        expect(host.textContent).toContain('Hi world')
+        const findButton = (node: {
+            childNodes: { tagName?: string; childNodes?: unknown[] }[]
+        }): {
+            dispatchEvent: (event: { type: string }) => void
+        } => {
+            for (const child of node.childNodes) {
+                if (child.tagName === 'button') {
+                    return child as unknown as { dispatchEvent: (event: { type: string }) => void }
+                }
+                if (child.childNodes !== undefined) {
+                    const found = findButton(
+                        child as { childNodes: { tagName?: string }[] } as never,
+                    )
+                    if (found !== undefined) {
+                        return found
+                    }
+                }
+            }
+            return undefined as never
+        }
+        findButton(host as never).dispatchEvent({ type: 'click' })
+        expect(host.textContent).toContain('Hi abide')
     })
 })

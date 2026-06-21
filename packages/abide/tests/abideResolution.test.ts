@@ -25,7 +25,7 @@ describe('asset module imports', () => {
         writeFileSync(join(dir, 'tsconfig.json'), tsconfig())
         writeFileSync(
             join(dir, 'Styled.abide'),
-            `<script>\nimport './app.css'\nlet title = prop<string>('title')\n</script>\n<h1>{title}</h1>\n`,
+            `<script>\nimport './app.css'\nconst { title } = props<{ title: string }>()\n</script>\n<h1>{title}</h1>\n`,
         )
         expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
     })
@@ -41,7 +41,7 @@ describe('aliased imports', () => {
         )
         writeFileSync(
             join(dir, 'src/ui/Child.abide'),
-            `<script>\nlet label = prop<string>('label')\n</script>\n<span>{label}</span>\n`,
+            `<script>\nconst { label } = props<{ label: string }>()\n</script>\n<span>{label}</span>\n`,
         )
         writeFileSync(
             join(dir, 'src/ui/Parent.abide'),
@@ -78,7 +78,7 @@ describe('checkAbide groups by project', () => {
         )
         writeFileSync(
             join(root, 'app/src/ui/Child.abide'),
-            `<script>\nlet label = prop<string>('label')\n</script>\n<span>{label}</span>\n`,
+            `<script>\nconst { label } = props<{ label: string }>()\n</script>\n<span>{label}</span>\n`,
         )
         writeFileSync(
             join(root, 'app/src/ui/Parent.abide'),

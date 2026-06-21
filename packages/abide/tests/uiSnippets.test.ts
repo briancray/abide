@@ -117,7 +117,7 @@ describe('snippets passed across components', () => {
     /* The parent defines a snippet closing over its own `prefix` and hands it to the
        child as a prop; the child calls it like a function. The body still reads the
        PARENT's scope. */
-    const List = `<script>let item = prop('item')</script><ul>{item('x')}{item('y')}</ul>`
+    const List = `<script>const { item } = props()</script><ul>{item('x')}{item('y')}</ul>`
     const parent = `
         <script>let prefix = scope().state('•')</script>
         <template name="row" args={label}><li>{prefix}{label}</li></template>
