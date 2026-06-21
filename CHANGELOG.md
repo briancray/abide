@@ -1,5 +1,35 @@
 # abide
 
+## 0.38.0
+
+### Minor Changes
+
+- [`bcfd15a`](https://github.com/briancray/abide/commit/bcfd15af169787d733355d5879bf95aec164e698) - feat(dom): make `{snippet(args)}` interpolations reactive in their arguments. Previously `appendSnippet` read the call once at mount and never re-ran, so an argument derived from reactive state froze its initial value (e.g. `{grouped(Object.groupBy([...aired, ...upcoming]))}` rendered with `upcoming` still `[]`, never updating when a later effect populated it). The call is now bounded by a range and wrapped in an effect — like `when`/`each` — so an argument change tears the snippet down and re-mounts it with fresh args (the body's own reads stay fine-grained within a mount; args behave like props). Create mode now emits the `<!--abide:snippet-->` range markers the server already rendered, so the markers are congruent on both sides rather than a server-only asymmetry.
+
+### Patch Changes
+
+- [`2efd4ad`](https://github.com/briancray/abide/commit/2efd4ad1e572c46a0611d3d1d5cd1a02f80da629) - restart ttl on revalidation and don't clobber a live streamed seed ([`2d07d53`](https://github.com/briancray/abide/commit/2d07d53b5aec54681e34f7490f636de2bf47fc7a))
+
+- [`2efd4ad`](https://github.com/briancray/abide/commit/2efd4ad1e572c46a0611d3d1d5cd1a02f80da629) - harden rpc/runtime/socket edge cases ([`39581f4`](https://github.com/briancray/abide/commit/39581f46601b71ccad6c6112e37c55a03b069068))
+
+- [`2efd4ad`](https://github.com/briancray/abide/commit/2efd4ad1e572c46a0611d3d1d5cd1a02f80da629) - propagate control-server worker start failure ([`3bb529b`](https://github.com/briancray/abide/commit/3bb529b00dc939c73212215cf6ae027b1078c053))
+
+- [`2efd4ad`](https://github.com/briancray/abide/commit/2efd4ad1e572c46a0611d3d1d5cd1a02f80da629) - handle JSON-RPC notifications without replying ([`4315aa1`](https://github.com/briancray/abide/commit/4315aa11c7b834607e315e6403bc41c4c9bd6a8c))
+
+- [`2efd4ad`](https://github.com/briancray/abide/commit/2efd4ad1e572c46a0611d3d1d5cd1a02f80da629) - drop unused error-page manifest ([`7f4f78a`](https://github.com/briancray/abide/commit/7f4f78af9829dca10a6062dd76b6e7fb9fddf739))
+
+- [`2efd4ad`](https://github.com/briancray/abide/commit/2efd4ad1e572c46a0611d3d1d5cd1a02f80da629) - auto-vivify nested bind paths and escape persisted doc keys ([`a2f7d15`](https://github.com/briancray/abide/commit/a2f7d1546201b6edb3b645ffede56519890415cf))
+
+- [`2efd4ad`](https://github.com/briancray/abide/commit/2efd4ad1e572c46a0611d3d1d5cd1a02f80da629) - avoid stdin hang and reject blank numeric flags ([`f1d47ef`](https://github.com/briancray/abide/commit/f1d47ef731235d7a4c4ebb727a83bb642102aac0))
+
+- [`2efd4ad`](https://github.com/briancray/abide/commit/2efd4ad1e572c46a0611d3d1d5cd1a02f80da629) - parse unquoted attributes and skip destructured binding rewrites ([`ff66d57`](https://github.com/briancray/abide/commit/ff66d57f5362af68f06d0e62dfc78d5f95322f99))
+
+- [`fab46dd`](https://github.com/briancray/abide/commit/fab46ddb0d3b8c4c8a1fa4f4615e8c5b1dfbf9e9) - fix(dom): skip control-flow rebuild when the end marker is detached. An effect for a `when`/`switch` block could fire one final time after an enclosing await/each block tore its branch down in the same microtask flush (before the owner scope disposed it), making `fillBefore` insert a fragment before a parentless comment — `HierarchyRequestError: The operation would yield an incorrect node tree`. `fillBefore` now bails when `end.parentNode` is null.
+
+- [`b081dd5`](https://github.com/briancray/abide/commit/b081dd5f7087c9f88960349d2477eab2c8d78005) - fix(compile): unify the layout `<slot/>` outlet rewrite across both back-ends and emit it scope-free. The hole-numbering refactor keys skeleton hole indices by node identity, but `generateBuild` ran `skeletonContext` over the original nodes while traversing `nodes.map(asOutlet)` — and `asOutlet` clones every element it descends, so a layout with any reactive hole (e.g. the kitchen-sink `layout.abide`'s active-link `<a href={url('/')}>`) threw `[abide] skeleton hole not numbered by the shared positional walk` at compile time, failing the page render. Both back-ends now apply the shared `asOutlet` before `skeletonContext`, so the indexed tree and the traversed tree are one. The rewrite also strips the outlet's style scope: the client cloned `<abide-outlet>` with the slot's annotated `data-a-…` scope while the server emitted it bare, a hydration mismatch (and `renderChain` folds the child layer via an exact bare-`<abide-outlet></abide-outlet>` match) — the outlet is a structural mount container, not styled content, so it now carries no attributes or scope on either side.
+
+- [`b081dd5`](https://github.com/briancray/abide/commit/b081dd5f7087c9f88960349d2477eab2c8d78005) - refactor(compile): fold skeleton hole numbering into the single `skeletonContext` walk. `generateBuild` previously threaded its own mutable `{ el, an }` counter through a second document-order walk parallel to the decision walk, free to drift from it — the compiler half of the hand-mirrored hole-ordering protocol. `skeletonContext` now assigns each hole its `el`/`an` index in the same pass that records `inSkeleton`/`markText` (el keyed by node, an keyed by node or by the reactive-text part), and `generateBuild` reads them via `holeIndex` instead of counting. One walk owns both the decisions and the numbering, so a counter-vs-decision drift is structurally impossible; a hole the shared walk didn't number now throws at compile time rather than surfacing as a runtime hydration desync. Behavior-preserving — no API or output change.
+
 ## 0.37.0
 
 ### Minor Changes
