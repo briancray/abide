@@ -107,6 +107,14 @@ async function safeCall(verb, fn) {
                     </td>
                     <td class="px-4 py-2 text-slate-600">Bun's server-wide ceiling</td>
                 </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">timeout</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        per-verb handler deadline (ms); 504 once exceeded on every surface, aborting
+                        <code class="font-mono">request().signal</code>
+                    </td>
+                    <td class="px-4 py-2 text-slate-500">none</td>
+                </tr>
             </tbody>
         </table>
     </div>
