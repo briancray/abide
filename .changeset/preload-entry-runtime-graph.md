@@ -1,5 +1,0 @@
----
-"@abide/abide": patch
----
-
-perf(ssr): preload the client entry's static runtime chunks in `<head>` so the whole hydration graph downloads during a streamed render. The entry `modulepreload` only covered `client.js` itself; its ~dozen static `clientEntry-<hash>.js` runtime chunks (one abide-ui primitive each, split out by `splitting:true`) are discovered only after the browser downloads and *parses* the entry — which on a streamed page is ~stream-close — so the runtime waterfalled in a second wave after the body finished. `rewriteHashedClientEntries` now reads the built entry, extracts its static import specifiers (regex excludes dynamic `import("./page-…")`, so route chunks stay lazy and code-splitting still pays off), and emits a `<link rel="modulepreload">` for each into `<head>`. The runtime graph now transfers alongside the entry during the stream, so hydration is network-ready at stream-close instead of waterfalling after it. Builds on the entry-preload + per-chunk-flushing-gzip work that made `<head>` decodable mid-stream.
