@@ -6,7 +6,9 @@ import { clientPage } from './runtime/clientPage.ts'
 import { enterRenderPass } from './runtime/enterRenderPass.ts'
 import { exitRenderPass } from './runtime/exitRenderPass.ts'
 import { firstOutlet } from './runtime/firstOutlet.ts'
+import { historyEntries } from './runtime/historyEntries.ts'
 import { runtimePath } from './runtime/runtimePath.ts'
+import type { AbideHistoryState } from './runtime/types/AbideHistoryState.ts'
 import type { NavVerdict } from './runtime/types/NavVerdict.ts'
 import type { Route } from './runtime/types/Route.ts'
 import type { RouteLoader } from './runtime/types/RouteLoader.ts'
@@ -19,6 +21,15 @@ type MountedLayout = { key: string; dispose: () => void; outlet: Element }
 
 /* A layout mount that returns no disposer still needs one for the chain teardown. */
 const noop = (): void => {}
+
+/* The destination URL for a navigation `path`. On the server / headless there is no
+   `location`, so resolve against a localhost origin; in the browser, against the real
+   origin — `location` is already updated to `path` by the time a swap reads it, so this
+   matches `new URL(location.href)`. */
+const resolveUrl = (path: string): URL =>
+    typeof location === 'undefined'
+        ? new URL(`http://localhost${path}`)
+        : new URL(path, location.origin)
 
 /*
 A minimal client router on the History API. `router` matches the current path
@@ -33,6 +44,11 @@ and DOM survive); from the first divergent layout down — the leaf layers — e
 is disposed and rebuilt, and the page (always the leaf) re-mounts every time. The
 reactive `page` proxy means a persisted layout reading route/params updates in place
 without a remount. Each chunk loads only on first visit, cached after.
+
+Scroll restoration is manual (`historyEntries`): because the page is rebuilt after the
+browser would restore scroll, each history entry's offset is bucketed by an `abideEntry`
+id and reapplied once the destination DOM exists — back/forward returns to its offset, a
+fresh navigation scrolls to the top.
 
 `probe` (when given) runs each post-boot navigation's destination through the
 server's app.handle first, so auth/redirect gating applies to client navigation
@@ -134,8 +150,21 @@ export function router(
         run()
     }
 
+    const entryOf = (): number =>
+        (history.state as AbideHistoryState | null)?.abideEntry ?? historyEntries.current
     const onPopState = (): void => {
+        /* Bucket the leaving entry's scroll (current still its id) before adopting the
+           one back/forward landed on; `swap` restores the adopted entry's offset once
+           its DOM is rebuilt. */
+        historyEntries.save()
+        historyEntries.adopt(entryOf())
         runtimePath.value = location.pathname + location.search + location.hash
+    }
+    const onPageHide = (): void => {
+        /* Mirror the live scroll into the active entry's state before it unloads, so a
+           reload can recover it — the in-memory bucket is gone and `manual` keeps the
+           browser from restoring. */
+        historyEntries.persist()
     }
     const onClick = (event: MouseEvent): void => {
         /* Let the browser own anything that isn't a plain primary-button click:
@@ -175,7 +204,22 @@ export function router(
         navigate(destination.pathname + destination.search + destination.hash)
     }
     if (typeof window !== 'undefined') {
+        /* Own scroll restoration: the browser would restore against the pre-teardown
+           DOM. Adopt the initial entry's id (survives a reload) and stamp it onto the
+           landing entry — merging so any `scroll` a prior unload persisted into this
+           entry's state stays put for the first-paint `restore` to recover. */
+        if ('scrollRestoration' in history) {
+            history.scrollRestoration = 'manual'
+        }
+        historyEntries.adopt(entryOf())
+        const landingState = (history.state as AbideHistoryState | null) ?? {}
+        history.replaceState(
+            { ...landingState, abideEntry: historyEntries.current },
+            '',
+            location.href,
+        )
         window.addEventListener('popstate', onPopState)
+        window.addEventListener('pagehide', onPageHide)
         document.addEventListener('click', onClick as EventListener)
     }
 
@@ -200,6 +244,29 @@ export function router(
             /* The route matches on the pathname only; the query/hash ride along for
                the probe (so server gating sees them) and for clientPage.url. */
             const pathname = path.split(/[?#]/)[0] ?? path
+            /* A same-document navigation — only the `#hash` (and thus scroll) differs from
+               the mounted page — needs no teardown: the live page stays, page.url
+               republishes (so `page.url.hash` updates in place), and we restore the entry's
+               scroll bucket or scroll to the anchor. A differing pathname or query still
+               rebuilds (a query is page data). Skipped on first paint — nothing is mounted. */
+            const targetUrl = resolveUrl(path)
+            const mountedUrl = clientPage.value.url
+            if (
+                !first &&
+                mountedUrl.pathname === targetUrl.pathname &&
+                mountedUrl.search === targetUrl.search &&
+                mountedUrl.hash !== targetUrl.hash
+            ) {
+                /* Invalidate any in-flight full navigation so its late `.then` can't
+                   rebuild over the page this hash hop keeps mounted (the token guard
+                   only bails on a NEWER sequence). That bailed `.then` is also the only
+                   writer of `navigating: false`, so clear the flag here — a hash hop is
+                   synchronous and settles immediately. */
+                sequence += 1
+                clientPage.value = { ...clientPage.value, url: targetUrl, navigating: false }
+                historyEntries.restore(targetUrl.hash)
+                return
+            }
             const matched = matchRoute(patterns, pathname)
             const key = matched?.route ?? '*'
             const params = matched?.params ?? {}
@@ -275,19 +342,19 @@ export function router(
                        while it's still mounted. Disposing first kills that scope; surviving
                        prefix layouts then update in place on publish. */
                     const base = disposeFrom(divergence)
-                    clientPage.value = {
-                        route: chainRoute,
-                        params,
-                        url:
-                            typeof location === 'undefined'
-                                ? new URL(`http://localhost${path}`)
-                                : new URL(location.href),
-                        navigating: false,
-                    }
+                    const url = resolveUrl(path)
+                    clientPage.value = { route: chainRoute, params, url, navigating: false }
                     if (!hydrating) {
                         base.textContent = ''
                     }
                     buildFrom(base, divergence, chainKeys, layoutViews, pageView, params, hydrating)
+                    /* Reapply the destination entry's scroll once its DOM exists — a
+                       back/forward restores its offset, a fresh nav scrolls to the `#hash`
+                       anchor (now built) or the top. Runs on the initial paint too: with
+                       `scrollRestoration='manual'` the browser does NOT restore a reload's
+                       offset, so first paint recovers it from the persisted `history.state`
+                       (a fresh load with no persisted offset falls through to hash/top). */
+                    historyEntries.restore(url.hash)
                 }
                 /* Wrap the swap in a View Transition where the browser supports it, so
                    the page change cross-fades (and shared `view-transition-name` elements
@@ -311,6 +378,7 @@ export function router(
         disposed = true
         if (typeof window !== 'undefined') {
             window.removeEventListener('popstate', onPopState)
+            window.removeEventListener('pagehide', onPageHide)
             document.removeEventListener('click', onClick as EventListener)
         }
         stop()

@@ -247,6 +247,88 @@ describe('router', () => {
         pageSlot.fallback = undefined
     })
 
+    /* A same-document navigation (only the #hash differs) keeps the live page mounted —
+       no teardown — and republishes page.url so an in-page anchor scroll is all that
+       happens. A differing query is page data and still rebuilds. */
+    test('a hash-only change keeps the page mounted; a query change rebuilds', async () => {
+        const host = document.createElement('div')
+        let mounts = 0
+        const view: Route = (target: Element): (() => void) => {
+            mounts += 1
+            target.appendChild(document.createTextNode('page'))
+            return () => undefined
+        }
+        const home: Route = (target: Element) => {
+            target.appendChild(document.createTextNode('home'))
+            return () => undefined
+        }
+        const dispose = router(host, {
+            '/': loader(home),
+            '/page': loader(view),
+            '*': loader(home),
+        })
+
+        navigate('/page')
+        await flush()
+        expect(mounts).toBe(1)
+
+        navigate('/page#section')
+        await flush()
+        expect(mounts).toBe(1) // hash-only — no remount
+        expect(clientPage.value.url.hash).toBe('#section') // page.url updated in place
+
+        navigate('/page?q=1')
+        await flush()
+        expect(mounts).toBe(2) // query differs — full rebuild
+
+        dispose()
+    })
+
+    /* A hash hop while a slower full navigation's chunk is still in flight must invalidate
+       that navigation, so its late resolution can't rebuild over the page the hash hop keeps
+       mounted (the token guard only bails on a NEWER sequence — the shortcut must bump it). */
+    test('a hash hop invalidates an in-flight navigation so its late resolve cannot clobber the page', async () => {
+        const host = document.createElement('div')
+        let landSlow: (chunk: { default: Route }) => void = () => undefined
+        const slowLoader = (): Promise<{ default: Route }> =>
+            new Promise((resolve) => {
+                landSlow = resolve
+            })
+        const home: Route = (target: Element) => {
+            target.appendChild(document.createTextNode('home'))
+            return () => undefined
+        }
+        const slow: Route = (target: Element) => {
+            target.appendChild(document.createTextNode('slow'))
+            return () => undefined
+        }
+        const dispose = router(host, {
+            '/': loader(home),
+            '/slow': slowLoader,
+            '*': loader(home),
+        })
+
+        navigate('/')
+        await flush()
+        expect(host.textContent).toBe('home')
+
+        navigate('/slow') // chunk import in flight — no swap yet
+        await flush()
+        expect(host.textContent).toBe('home') // still on the old page
+
+        navigate('/#section') // hash hop on the mounted page; bumps sequence
+        await flush()
+        expect(clientPage.value.url.hash).toBe('#section')
+        expect(host.textContent).toBe('home')
+
+        landSlow({ default: slow }) // the stale navigation resolves late
+        await flush()
+        expect(host.textContent).toBe('home') // invalidated — not rebuilt over
+        expect(clientPage.value.url.hash).toBe('#section')
+
+        dispose()
+    })
+
     test('does not mount when the verdict hands off to a full browser load', async () => {
         const host = document.createElement('div')
         const page =
