@@ -1,17 +1,23 @@
+import { enterScope } from '../src/lib/ui/enterScope.ts'
+import { exitScope } from '../src/lib/ui/exitScope.ts'
 import { enterRenderPass } from '../src/lib/ui/runtime/enterRenderPass.ts'
 import { exitRenderPass } from '../src/lib/ui/runtime/exitRenderPass.ts'
 import { nextBlockId } from '../src/lib/ui/runtime/nextBlockId.ts'
+import { scope } from '../src/lib/ui/scope.ts'
 
-/* The compiled SSR body references render-pass helpers as bare globals. */
+/* The compiled SSR body references render-pass + scope helpers as bare globals. */
 const globals = globalThis as Record<string, unknown>
 globals.enterRenderPass = enterRenderPass
 globals.exitRenderPass = exitRenderPass
 globals.nextBlockId = nextBlockId
+globals.scope = scope
+globals.enterScope = enterScope
+globals.exitScope = exitScope
 
 const { compileSSR } = await import('../src/lib/ui/compile/compileSSR.ts')
 const { createDoc: doc } = await import('../src/lib/ui/runtime/createDoc.ts')
 const { state } = await import('../src/lib/ui/state.ts')
-const { derived } = await import('../src/lib/ui/derived.ts')
+const { computed } = await import('../src/lib/ui/computed.ts')
 const { effect } = await import('../src/lib/ui/effect.ts')
 
 import type { SsrRender } from '../src/lib/ui/runtime/types/SsrRender.ts'
@@ -20,7 +26,7 @@ import type { SsrRender } from '../src/lib/ui/runtime/types/SsrRender.ts'
    first request pays. Kept off the parent's clock by running in its own process. */
 const PAGE = `
     <script>
-        let items = state(
+        let items = scope().state(
             Array.from({ length: 200 }, (_, index) => ({ id: index, label: 'row-' + index })),
         )
     </script>
@@ -35,10 +41,10 @@ const PAGE = `
 `
 
 const body = compileSSR(PAGE)
-const result = new Function('doc', 'state', 'derived', 'effect', body)(
+const result = new Function('doc', 'state', 'computed', 'effect', body)(
     doc,
     state,
-    derived,
+    computed,
     effect,
 ) as SsrRender
 

@@ -2,29 +2,26 @@ import { installMiniDom } from '../tests/support/installMiniDom.ts'
 
 installMiniDom()
 
-const { enterRenderPass } = await import('../src/lib/ui/runtime/enterRenderPass.ts')
-const { exitRenderPass } = await import('../src/lib/ui/runtime/exitRenderPass.ts')
-const { nextBlockId } = await import('../src/lib/ui/runtime/nextBlockId.ts')
-const { mountChild } = await import('../src/lib/ui/dom/mountChild.ts')
-
-/* Compiled bodies reference these as bare globals (the real bundle imports them). */
-const globals = globalThis as Record<string, unknown>
-globals.enterRenderPass = enterRenderPass
-globals.exitRenderPass = exitRenderPass
-globals.nextBlockId = nextBlockId
-globals.mountChild = mountChild
+/* Sets the bare render-pass globals (scope, enterRenderPass, exitRenderPass,
+   nextBlockId, skeleton, anchorCursor, mountSlot, appendTextAt, cloneStatic,
+   mountChild, …) the compiled server and client bodies reference by name, and
+   keeps the block-id counter shared between the server render and the client
+   hydrate so the hydration cursor adopts. Registers the `.abide` loader plugin. */
+import '../tests/support/uiPreload.ts'
 
 const { compileComponent } = await import('../src/lib/ui/compile/compileComponent.ts')
 const { compileSSR } = await import('../src/lib/ui/compile/compileSSR.ts')
 const { createDoc: doc } = await import('../src/lib/ui/runtime/createDoc.ts')
 const { state } = await import('../src/lib/ui/state.ts')
-const { derived } = await import('../src/lib/ui/derived.ts')
+const { computed } = await import('../src/lib/ui/computed.ts')
 const { effect } = await import('../src/lib/ui/effect.ts')
-const { openChild } = await import('../src/lib/ui/dom/openChild.ts')
 const { appendText } = await import('../src/lib/ui/dom/appendText.ts')
 const { appendStatic } = await import('../src/lib/ui/dom/appendStatic.ts')
 const { attr } = await import('../src/lib/ui/dom/attr.ts')
+const { on } = await import('../src/lib/ui/dom/on.ts')
 const { each } = await import('../src/lib/ui/dom/each.ts')
+const { when } = await import('../src/lib/ui/dom/when.ts')
+const { cloneStatic } = await import('../src/lib/ui/dom/cloneStatic.ts')
 const { hydrate } = await import('../src/lib/ui/dom/hydrate.ts')
 
 import type { SsrRender } from '../src/lib/ui/runtime/types/SsrRender.ts'
@@ -40,7 +37,7 @@ user's first interaction waits on. Run:
 
 const LIST_PAGE = `
     <script>
-        let items = state(
+        let items = scope().state(
             Array.from({ length: 1000 }, (_, index) => ({ id: index, label: 'row-' + index })),
         )
     </script>
@@ -56,13 +53,15 @@ const LIST_PAGE = `
 const runtime = {
     doc,
     state,
-    derived,
+    computed,
     effect,
-    openChild,
     appendText,
     appendStatic,
     attr,
+    on,
     each,
+    when,
+    cloneStatic,
 }
 const names = Object.keys(runtime)
 const values = names.map((name) => runtime[name as keyof typeof runtime])
@@ -70,10 +69,10 @@ const values = names.map((name) => runtime[name as keyof typeof runtime])
 const clientBody = compileComponent(LIST_PAGE)
 
 /* One server render, reused as the DOM every hydration adopts. */
-const server = new Function('doc', 'state', 'derived', 'effect', compileSSR(LIST_PAGE))(
+const server = new Function('doc', 'state', 'computed', 'effect', compileSSR(LIST_PAGE))(
     doc,
     state,
-    derived,
+    computed,
     effect,
 ) as SsrRender
 

@@ -1,4 +1,4 @@
-import { derived } from '../src/lib/ui/derived.ts'
+import { computed } from '../src/lib/ui/computed.ts'
 import { effect } from '../src/lib/ui/effect.ts'
 import { state } from '../src/lib/ui/state.ts'
 import { emitMetric } from './emitMetric.ts'
@@ -61,10 +61,10 @@ dirty, each tail read recomputes the whole chain and re-tracks every edge.
 */
 function deepChain(depth: number, reads: number): number {
     const head = state(0)
-    let tail = derived(() => head.value + 1)
+    let tail = computed(() => head.value + 1)
     for (let level = 1; level < depth; level += 1) {
         const previous = tail
-        tail = derived(() => previous.value + 1)
+        tail = computed(() => previous.value + 1)
     }
     let sink = 0
     const start = performance.now()

@@ -1,4 +1,4 @@
-import { derived } from '../src/lib/ui/derived.ts'
+import { computed } from '../src/lib/ui/computed.ts'
 import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
 import { state } from '../src/lib/ui/state.ts'
 import type { BenchResult } from './types/BenchResult.ts'
@@ -8,7 +8,7 @@ The data-collapse spike: is `derived` as a computed DOC SLOT competitive with th
 standalone signal-cell `derived`? Three contenders, two workloads.
 
 Contenders:
-  - standalone   — `derived(() => s.value * 2)`, read `.value` (today's form).
+  - standalone   — `computed(() => s.value * 2)`, read `.value` (today's form).
   - doc bound    — `doc.derive(path, …)` → the string-free reader (what the
                    compiler would hoist a computed read to).
   - doc path     — `doc.read(path)` resolving the computed by string every read
@@ -24,7 +24,7 @@ for stored reads.
 
 const ITERS = 500_000
 
-function pureRead(label: string, read: () => number): BenchResult {
+function pureRead(read: () => number): BenchResult {
     let sink = 0
     const start = performance.now()
     for (let i = 0; i < ITERS; i += 1) {
@@ -36,12 +36,12 @@ function pureRead(label: string, read: () => number): BenchResult {
 /* ---- standalone derived ---- */
 function standaloneRead(): BenchResult {
     const s = state(1)
-    const d = derived(() => s.value * 2)
-    return pureRead('standalone', () => d.value)
+    const d = computed(() => s.value * 2)
+    return pureRead(() => d.value)
 }
 function standaloneUpdate(): BenchResult {
     const s = state(1)
-    const d = derived(() => s.value * 2)
+    const d = computed(() => s.value * 2)
     let sink = 0
     const start = performance.now()
     for (let i = 0; i < ITERS; i += 1) {
@@ -55,12 +55,12 @@ function standaloneUpdate(): BenchResult {
 function docBoundRead(): BenchResult {
     const document = doc({ n: 1 })
     const d = document.derive('doubled', () => document.read<number>('n') * 2)
-    return pureRead('doc bound', d)
+    return pureRead(d)
 }
 function docPathRead(): BenchResult {
     const document = doc({ n: 1 })
     document.derive('doubled', () => document.read<number>('n') * 2)
-    return pureRead('doc path', () => document.read<number>('doubled'))
+    return pureRead(() => document.read<number>('doubled'))
 }
 /* Unspecialised: string write + the compute reads its dep by string. */
 function docBoundUpdate(): BenchResult {

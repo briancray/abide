@@ -1,18 +1,12 @@
-import { enterRenderPass } from '../src/lib/ui/runtime/enterRenderPass.ts'
-import { exitRenderPass } from '../src/lib/ui/runtime/exitRenderPass.ts'
-import { nextBlockId } from '../src/lib/ui/runtime/nextBlockId.ts'
-
-/* The compiled SSR body references the render-pass helpers as bare globals (the
-   real bundle imports them); expose them before compiling, as uiPreload does. */
-const globals = globalThis as Record<string, unknown>
-globals.enterRenderPass = enterRenderPass
-globals.exitRenderPass = exitRenderPass
-globals.nextBlockId = nextBlockId
+/* Sets the bare render-pass globals (enterRenderPass, exitRenderPass, nextBlockId,
+   scope, …) the compiled SSR body references by name, and registers the `.abide`
+   loader plugin. */
+import '../tests/support/uiPreload.ts'
 
 const { compileSSR } = await import('../src/lib/ui/compile/compileSSR.ts')
 const { createDoc: doc } = await import('../src/lib/ui/runtime/createDoc.ts')
 const { state } = await import('../src/lib/ui/state.ts')
-const { derived } = await import('../src/lib/ui/derived.ts')
+const { computed } = await import('../src/lib/ui/computed.ts')
 const { effect } = await import('../src/lib/ui/effect.ts')
 
 import type { SsrRender } from '../src/lib/ui/runtime/types/SsrRender.ts'
@@ -29,7 +23,7 @@ coalescing in generateSSR earns its keep. Run:
 
 const LIST_PAGE = `
     <script>
-        let items = state(
+        let items = scope().state(
             Array.from({ length: 1000 }, (_, index) => ({ id: index, label: 'row-' + index })),
         )
     </script>
@@ -47,10 +41,10 @@ const LIST_PAGE = `
 function renderer(source: string): () => SsrRender {
     const body = compileSSR(source)
     return () =>
-        new Function('doc', 'state', 'derived', 'effect', body)(
+        new Function('doc', 'state', 'computed', 'effect', body)(
             doc,
             state,
-            derived,
+            computed,
             effect,
         ) as SsrRender
 }

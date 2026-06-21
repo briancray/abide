@@ -3,32 +3,24 @@ import { emitMetric } from './emitMetric.ts'
 
 installMiniDom()
 
+/* Sets the bare render-pass globals (scope, skeleton, anchorCursor, mountSlot,
+   appendTextAt, cloneStatic, mountChild, nextBlockId, …) the compiled body
+   references by name, and registers the `.abide` loader plugin. */
+import '../tests/support/uiPreload.ts'
+
 const { compileComponent } = await import('../src/lib/ui/compile/compileComponent.ts')
 const { createDoc: doc } = await import('../src/lib/ui/runtime/createDoc.ts')
 const { state } = await import('../src/lib/ui/state.ts')
-const { derived } = await import('../src/lib/ui/derived.ts')
+const { computed } = await import('../src/lib/ui/computed.ts')
 const { effect } = await import('../src/lib/ui/effect.ts')
 const { mount } = await import('../src/lib/ui/dom/mount.ts')
-const { openChild } = await import('../src/lib/ui/dom/openChild.ts')
 const { appendText } = await import('../src/lib/ui/dom/appendText.ts')
 const { appendStatic } = await import('../src/lib/ui/dom/appendStatic.ts')
 const { attr } = await import('../src/lib/ui/dom/attr.ts')
 const { on } = await import('../src/lib/ui/dom/on.ts')
 const { each } = await import('../src/lib/ui/dom/each.ts')
 const { when } = await import('../src/lib/ui/dom/when.ts')
-const { mountChild } = await import('../src/lib/ui/dom/mountChild.ts')
-const { cloneStatic } = await import('../src/lib/ui/dom/cloneStatic.ts').catch(() => ({
-    cloneStatic: undefined,
-}))
-const { skeleton } = await import('../src/lib/ui/dom/skeleton.ts').catch(() => ({
-    skeleton: undefined,
-}))
-const { appendTextAt } = await import('../src/lib/ui/dom/appendTextAt.ts').catch(() => ({
-    appendTextAt: undefined,
-}))
-const { cursorAfterElements } = await import('../src/lib/ui/dom/cursorAfterElements.ts').catch(
-    () => ({ cursorAfterElements: undefined }),
-)
+const { cloneStatic } = await import('../src/lib/ui/dom/cloneStatic.ts')
 
 /*
 Mount-cost benchmark: how fast a content-heavy component builds its DOM in CREATE
@@ -43,8 +35,8 @@ should win. This is the gate for that codegen change. Run:
 /* A docs-shaped page: deep static chrome + lists, a couple of dynamic holes. */
 const PAGE = `
     <script>
-        let title = state('Reference')
-        let count = state(3)
+        let title = scope().state('Reference')
+        let count = scope().state(3)
     </script>
     <main class="page">
         <header class="masthead">
@@ -89,20 +81,15 @@ const body = compileComponent(PAGE)
 const runtime = {
     doc,
     state,
-    derived,
+    computed,
     effect,
-    openChild,
     appendText,
     appendStatic,
     attr,
     on,
     each,
     when,
-    mountChild,
     cloneStatic,
-    skeleton,
-    appendTextAt,
-    cursorAfterElements,
 }
 const names = Object.keys(runtime)
 const values = names.map((name) => runtime[name as keyof typeof runtime])
