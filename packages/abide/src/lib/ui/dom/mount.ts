@@ -3,6 +3,7 @@ import { CURRENT_SCOPE } from '../runtime/CURRENT_SCOPE.ts'
 import { enterRenderPass } from '../runtime/enterRenderPass.ts'
 import { exitRenderPass } from '../runtime/exitRenderPass.ts'
 import { scope } from '../runtime/scope.ts'
+import { scopeLabel } from './scopeLabel.ts'
 
 /*
 Mounts a component into `host`: runs `build(host)` under an ownership scope so
@@ -22,7 +23,7 @@ export function mount(host: Element, build: (host: Element) => void): () => void
        `scope()` and its capabilities resolve to it during the build; the previous
        scope is restored after (synchronous build, so the restore is exact). */
     const parentScope = CURRENT_SCOPE.current
-    const lexical = createScope({}, parentScope, true)
+    const lexical = createScope({}, parentScope, true, scopeLabel(host))
     CURRENT_SCOPE.current = lexical
     const stop = scope(() => {
         try {

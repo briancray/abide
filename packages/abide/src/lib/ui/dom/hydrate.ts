@@ -4,6 +4,7 @@ import { enterRenderPass } from '../runtime/enterRenderPass.ts'
 import { exitRenderPass } from '../runtime/exitRenderPass.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { scope } from '../runtime/scope.ts'
+import { scopeLabel } from './scopeLabel.ts'
 
 /*
 Adopts existing server-rendered DOM instead of rebuilding it. Runs `build(host)`
@@ -28,7 +29,7 @@ export function hydrate(host: Element, build: (host: Element) => void): () => vo
     /* Same lexical scope establishment as `mount` — a hydrated component owns a scope
        too, adopting the model its build adopts. */
     const parentScope = CURRENT_SCOPE.current
-    const lexical = createScope({}, parentScope, true)
+    const lexical = createScope({}, parentScope, true, scopeLabel(host))
     CURRENT_SCOPE.current = lexical
     try {
         const stop = scope(() => {

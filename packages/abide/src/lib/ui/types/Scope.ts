@@ -22,6 +22,9 @@ the ONLY public entry; everything else is a method reached through it (the
 */
 export type Scope = {
     readonly id: string
+    /* Dev-only display name (the host component/element it mounted into) for the
+       inspector's Reactive tab; undefined for SSR/detached/child scopes. */
+    readonly label?: string
     readonly parent: Scope | undefined
     /* data — mirrors Doc */
     read: <T>(path: string) => T

@@ -6,6 +6,7 @@ import { setPageResolver } from '../shared/setPageResolver.ts'
 import type { CacheSnapshotEntry } from '../shared/types/CacheSnapshotEntry.ts'
 import type { StreamedResolution } from '../shared/types/StreamedResolution.ts'
 import { installHotBridge } from './installHotBridge.ts'
+import { installInspectorBridge } from './installInspectorBridge.ts'
 import { probeNavigation } from './probeNavigation.ts'
 import { router } from './router.ts'
 import { clientPage } from './runtime/clientPage.ts'
@@ -41,6 +42,11 @@ export function startClient(
        its instances (mountChild) for hot replacement. */
     if ((globalThis as { __abideDev?: boolean }).__abideDev) {
         installHotBridge()
+    }
+    /* Inspector only: the server injects `__abideInspect` when ABIDE_ENABLE_INSPECTOR
+       is on, so the scope/router bridge arms before the router builds any scope. */
+    if ((globalThis as { __abideInspect?: boolean }).__abideInspect) {
+        installInspectorBridge()
     }
     const ssr = (globalThis as { __SSR__?: SsrPayload }).__SSR__ ?? {}
     setBaseResolver(() => ssr.base ?? '')

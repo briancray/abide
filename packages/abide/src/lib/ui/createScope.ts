@@ -3,6 +3,7 @@ import { history } from './history.ts'
 import { linked } from './linked.ts'
 import { persist as persistDoc } from './persist.ts'
 import { createDoc } from './runtime/createDoc.ts'
+import { liveScopes } from './runtime/liveScopes.ts'
 import type { Doc } from './runtime/types/Doc.ts'
 import { state } from './state.ts'
 import { sync } from './sync.ts'
@@ -28,6 +29,7 @@ export function createScope(
     initial: unknown = {},
     parent: Scope | undefined = undefined,
     awaiting = false,
+    label: string | undefined = undefined,
 ): Scope {
     /* Eager unless awaiting adoption; `data()` lazily mints an empty doc if a body
        never created one (a stateless component that still reaches for its scope). */
@@ -41,6 +43,7 @@ export function createScope(
 
     const self: Scope = {
         id,
+        label,
         parent,
         read: (path) => data().read(path),
         replace: (path, value) => data().replace(path, value),
@@ -85,7 +88,15 @@ export function createScope(
             persistence = undefined
             unsync?.()
             unsync = undefined
+            if (liveScopes.enabled) {
+                liveScopes.scopes.delete(self)
+            }
         },
+    }
+    /* Dev-only: register for the inspector's scope-tree view. Gated, so production
+       never touches the set. */
+    if (liveScopes.enabled) {
+        liveScopes.scopes.add(self)
     }
     return self
 }
