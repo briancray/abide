@@ -1,23 +1,13 @@
-import { HTML_TAGS } from './HTML_TAGS.ts'
-
 /*
-The element tag a component instance mounts into. Normally the component name
-lowercased — readable in devtools, a real box like any abide wrapper. But a name
-that lowercases to a real HTML element (`Button`→`button`, `Input`→`input`) yields a
-wrapper with a content model the parser enforces: void elements self-close, and
-`<button>`/`<a>`/table/list/select families reject or foster the component's own
-markup as the wrapper's siblings — so on hydration the skeleton locates the wrapper
-empty, claims `null`, and `attr` throws on it. Those names map to a hyphenated
-custom-element tag (a custom element is never void and has no content model) made
-layout-transparent with `display:contents`, so the component's real root still lays
-out as a direct child of the parent the way the (parse-broken) wrapper would have.
-A name that is NOT a known HTML element (the common case — `Card`, `Dropdown`) is an
-inert unknown tag that holds any content untouched, so it stays as-is. Both back-ends
-call this so the SSR string and the client build agree on the wrapper.
+The element tag a component instance mounts into: always `abide-<name>` lowercased. The
+`abide-` prefix makes every wrapper a valid custom element (contains a hyphen) — never
+void, no content model — so it holds the component's own markup untouched and hydrates
+cleanly, regardless of whether the name collides with an HTML element (`Button`, `Input`).
+Emitted with `display:contents` (see the back-ends) so the wrapper stays out of layout: a
+pure mount host whose real root lays out as a direct child of the parent, keeping the
+component invisible to `grid`/`subgrid`/`flex`. Both back-ends call this so the SSR string
+and the client build agree on the wrapper.
 */
-export function componentWrapperTag(name: string): { tag: string; transparent: boolean } {
-    const lower = name.toLowerCase()
-    return HTML_TAGS.has(lower)
-        ? { tag: `abide-${lower}`, transparent: true }
-        : { tag: lower, transparent: false }
+export function componentWrapperTag(name: string): string {
+    return `abide-${name.toLowerCase()}`
 }

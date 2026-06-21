@@ -70,7 +70,7 @@ describe('slots (component children)', () => {
             globalThis as unknown as { serializeMiniDom: (h: unknown) => string }
         ).serializeMiniDom(host)
         expect(html).toBe(
-            '<card><div class="card"><!--a--><!--[-->Hello world!<!--]--></div></card>',
+            '<abide-card style="display:contents"><div class="card"><!--a--><!--[-->Hello world!<!--]--></div></abide-card>',
         )
     })
 
@@ -78,7 +78,7 @@ describe('slots (component children)', () => {
         const CardComponent = component(Card)
         const server = component(parent, { Card: CardComponent }).render()
         expect(server.html).toBe(
-            '<card><div class="card"><!--a--><!--[-->Hello world!<!--]--></div></card>',
+            '<abide-card style="display:contents"><div class="card"><!--a--><!--[-->Hello world!<!--]--></div></abide-card>',
         )
     })
 })

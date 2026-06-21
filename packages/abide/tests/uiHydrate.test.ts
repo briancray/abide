@@ -5,6 +5,7 @@ import { computed } from '../src/lib/ui/computed.ts'
 import { appendStatic } from '../src/lib/ui/dom/appendStatic.ts'
 import { appendText } from '../src/lib/ui/dom/appendText.ts'
 import { applyResolved } from '../src/lib/ui/dom/applyResolved.ts'
+import { attr } from '../src/lib/ui/dom/attr.ts'
 import { awaitBlock } from '../src/lib/ui/dom/awaitBlock.ts'
 import { each } from '../src/lib/ui/dom/each.ts'
 import { hydrate } from '../src/lib/ui/dom/hydrate.ts'
@@ -451,7 +452,9 @@ describe('hydrate — adopt server DOM', () => {
             'Greeting',
             compileSSR(parentSource),
         )(doc, state, computed, effect, Greeting) as SsrRender
-        expect(server.html).toBe('<div><greeting><span>Hi world</span></greeting></div>')
+        expect(server.html).toBe(
+            '<div><abide-greeting style="display:contents"><span>Hi world</span></abide-greeting></div>',
+        )
 
         // parse + hydrate
         const host = document.createElement('div')
@@ -650,6 +653,172 @@ describe('hydrate — adopt server DOM', () => {
         const tags = section.childNodes.map((node) => node.tagName).filter(Boolean)
         expect(tags).toContain('ul') // then-branch now shown
         expect(tags).not.toContain('p') // empty branch removed
+    })
+    test('adopts an each whose row is a slotted component, after a standalone one (MediaFilters shape)', () => {
+        /* The reported blink, isolated: a container holds a standalone slotted component
+           (the "All" button) followed by `{#each}` over more of the SAME slotted component.
+           Each row mounts a component (wrapper hole) whose body skeletons its own root +
+           slot. If SSR and client disagree on the row's wrapper contents, the row's inner
+           skeleton claims an empty run → `resolveElementHole` throws → the enclosing await
+           cold-rebuilds the whole subtree (the blink). */
+        const childSource = `<script>const { value } = props<{ value: unknown }>()</script><div data-value={value}><slot></slot></div>`
+        const childClient = compileComponent(childSource)
+        const childSsr = compileSSR(childSource)
+        const baseRuntime = {
+            doc,
+            state,
+            computed,
+            effect,
+            appendText,
+            appendStatic,
+            on,
+            attr,
+            when,
+            each,
+            escapeKey,
+        }
+        const baseNames = Object.keys(baseRuntime)
+        const baseValues = baseNames.map((n) => baseRuntime[n as keyof typeof baseRuntime])
+        const Sel = Object.assign(
+            (host: Element, props?: unknown) => {
+                new Function('host', '$props', ...baseNames, childClient)(
+                    host,
+                    props,
+                    ...baseValues,
+                )
+            },
+            {
+                render: (props?: unknown): SsrRender =>
+                    new Function('$props', ...baseNames, childSsr)(
+                        props,
+                        ...baseValues,
+                    ) as SsrRender,
+            },
+        )
+
+        const model = doc({ types: ['movie', 'series'] })
+        const parentSource = `
+            <div class="types">
+                <Sel value={undefined}><button>All</button></Sel>
+                <template each={model.types} as="t" key="t"><Sel value={t}><button>{t}</button></Sel></template>
+            </div>
+        `
+
+        const server = new Function(
+            'doc',
+            'state',
+            'computed',
+            'effect',
+            'escapeKey',
+            'Sel',
+            'model',
+            compileSSR(parentSource),
+        )(doc, state, computed, effect, escapeKey, Sel, model) as SsrRender
+
+        const host = document.createElement('div')
+        host.innerHTML = server.html
+        const textBefore = host.textContent
+
+        const parentBody = compileComponent(parentSource)
+        let threw: unknown
+        try {
+            hydrate(host, (target) => {
+                new Function('host', ...baseNames, 'Sel', 'model', parentBody)(
+                    target,
+                    ...baseValues,
+                    Sel,
+                    model,
+                )
+            })
+        } catch (error) {
+            threw = error
+        }
+
+        expect(threw).toBeUndefined() // each-row component skeleton found its server nodes
+        expect(host.textContent).toBe(textBefore) // adopted in place, no cold rebuild
+        expect(host.textContent).toContain('All')
+        expect(host.textContent).toContain('movie')
+        expect(host.textContent).toContain('series')
+
+        // reactive after hydrate: appending a row works
+        model.add('types/-', 'season')
+        expect(host.textContent).toContain('season')
+    })
+
+    test('adopts a bound element hole that a conditional sibling precedes (cards-grid layout)', () => {
+        /* The reported home-page blink: a container mixes a conditional `{#if}` sibling
+           (server-rendered INLINE) with an unconditional bound element (an element hole,
+           resolved by element-only path). On hydrate the conditional's inline content must
+           NOT shift the element-hole index — `elementChildAt` skips block-range content at
+           depth 0 — or the bound card's binding lands on the conditional's card. */
+        const model = doc({
+            showWatching: true,
+            watchingTitle: 'Watching',
+            newTitle: "What's New",
+            showPlaylists: true,
+        })
+        const source = `
+            <div class="cards">
+                <template if={model.showWatching}><card title={model.watchingTitle}>w</card></template>
+                <card title={model.newTitle}>n</card>
+                <template if={model.showPlaylists}><card>p</card></template>
+            </div>
+        `
+        const runtime = {
+            doc,
+            state,
+            computed,
+            effect,
+            appendText,
+            appendStatic,
+            on,
+            attr,
+            when,
+            model,
+        }
+        const names = Object.keys(runtime)
+        const values = names.map((n) => runtime[n as keyof typeof runtime])
+
+        const server = new Function(
+            'doc',
+            'state',
+            'computed',
+            'effect',
+            'model',
+            compileSSR(source),
+        )(doc, state, computed, effect, model) as SsrRender
+
+        const host = document.createElement('div')
+        host.innerHTML = server.html
+        const cards = host.childNodes[0] as unknown as {
+            childNodes: { tagName?: string; getAttribute?: (n: string) => string | null }[]
+            children: { getAttribute: (n: string) => string | null }[]
+        }
+        // element-order [Watching, What's New, Playlists] — the bound What's New card is index 1
+        const whatsNewBefore = cards.children[1]
+        expect(whatsNewBefore.getAttribute('title')).toBe("What's New")
+
+        const body = compileComponent(source)
+        let threw: unknown
+        try {
+            hydrate(host, (target) => {
+                new Function('host', ...names, body)(target, ...values)
+            })
+        } catch (error) {
+            threw = error
+        }
+
+        // no hydration desync throw, and the bound card adopted in place (not recreated)
+        expect(threw).toBeUndefined()
+        expect(cards.children[1]).toBe(whatsNewBefore)
+        // the binding wired onto the RIGHT card — not the conditional's Watching card
+        expect(cards.children[1].getAttribute('title')).toBe("What's New")
+        expect(cards.children[0].getAttribute('title')).toBe('Watching')
+
+        // reactive after hydrate: the binding updates the correct card
+        model.replace('newTitle', 'Fresh')
+        expect(cards.children[1].getAttribute('title')).toBe('Fresh')
+        expect(cards.children[0].getAttribute('title')).toBe('Watching')
     })
 })
 

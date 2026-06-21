@@ -69,7 +69,9 @@ describe('SSR component composition', () => {
 
         // server render — child rendered server-side, inlined in its wrapper
         const server = component(parentSource, { Greeting }).render() as SsrRender
-        expect(server.html).toBe('<div><greeting><span>Hi world</span></greeting></div>')
+        expect(server.html).toBe(
+            '<div><abide-greeting style="display:contents"><span>Hi world</span></abide-greeting></div>',
+        )
 
         // client render — should produce the identical tree
         const host = document.createElement('div')

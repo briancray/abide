@@ -204,6 +204,35 @@ const corpus = contexts.flatMap((context) =>
     ),
 )
 
+/* A trailing anchor-bearing sibling whose hole index sits AFTER the boundary's holes in
+   document order. A KEYED each, deliberately: it claims per-row start/end markers via
+   `claimExpected`, so a shifted anchor (its `sk.an[i]` pointing at the wrong node) throws
+   a hard desync rather than silently misplacing content under a coincidentally-equal
+   visible text — the failure mode that masked the bug from a softer `if` sentinel. */
+const SENTINEL: Fragment = {
+    html: `<template each={items} as="it" key="it"><em>{it}</em></template>`,
+    text: 'mn',
+}
+
+/* Sibling-adjacency corpus — the blind spot the nested-only corpus above cannot reach.
+   An over-/under-counted hole is SILENT when nested (nobody reads the extra/missing
+   `sk.an` slot); it only becomes a desync when a LATER sibling's index shifts onto the
+   wrong node. So place every boundary×leaf inside a skeletonable parent (where the parent
+   skeleton's anchor scan runs) and FOLLOW it with the sentinel: the parent must count the
+   boundary's holes EXACTLY or the sentinel claims the wrong node. This is the structural
+   failure mode of the hand-mirrored compiler-AST-walk ↔ runtime-DOM-walk hole ordering —
+   e.g. `scanAnchors` over-collecting a child component wrapper's internal slot anchor. */
+const siblingCorpus = boundaries.flatMap((boundary) =>
+    leaves.map((leaf) => {
+        const inner = boundary.wrap(leaf.make())
+        return {
+            name: `sibling › ${boundary.name} › ${leaf.name}`,
+            source: `${SCRIPT}<section class={active ? 'on' : 'off'}>${inner.html}${SENTINEL.html}</section>`,
+            expected: inner.text + SENTINEL.text,
+        }
+    }),
+)
+
 /*
 The hydration-congruence invariant, checked generatively against a reference. For every
 generated template the harness asserts, four ways:
@@ -219,7 +248,7 @@ shapes hand-written examples missed and that shipped two real desyncs.
 describe('render congruence (generative, reference-checked)', () => {
     const componentExtra = { Box: component(Box) }
 
-    for (const { name, source, expected } of corpus) {
+    for (const { name, source, expected } of [...corpus, ...siblingCorpus]) {
         test(name, () => {
             const built = component(source, componentExtra)
 
@@ -251,5 +280,6 @@ describe('render congruence (generative, reference-checked)', () => {
 
     test('corpus is non-trivial', () => {
         expect(corpus.length).toBe(80) // 2 contexts × 8 boundaries × 5 leaves
+        expect(siblingCorpus.length).toBe(40) // 8 boundaries × 5 leaves, each + trailing sentinel
     })
 })

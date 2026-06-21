@@ -4,9 +4,9 @@ import { bindListenEvent } from './bindListenEvent.ts'
 import { componentWrapperTag } from './componentWrapperTag.ts'
 import { groupBindParts } from './groupBindParts.ts'
 import { isControlFlow } from './isControlFlow.ts'
-import { isTextLeaf } from './isTextLeaf.ts'
 import { lowerContext } from './lowerContext.ts'
 import { scopeAttr } from './scopeAttr.ts'
+import { skeletonContext } from './skeletonContext.ts'
 import { staticAttr } from './staticAttr.ts'
 import { staticTextPart } from './staticTextPart.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
@@ -31,6 +31,13 @@ export function generateBuild(
 ): string {
     let counter = 0
     const nextVar = (prefix: string): string => `${prefix}${counter++}`
+
+    /* Per-node skeleton position from the SAME pass the SSR back-end reads — so the client's
+       anchor/text-leaf decisions consult one source of truth instead of re-deriving the
+       position structurally (the drift the shared context exists to prevent). `asOutlet`
+       only rewrites layout `<slot>`s and preserves text-node identity, so the original
+       `nodes` key the same text markers the build traversal looks up. */
+    const { markText } = skeletonContext(nodes)
 
     /* The shared signal→`model` lowering + branch-scoped nested-script deref scope. */
     const {
@@ -135,13 +142,12 @@ export function generateBuild(
         }
         if (node.kind === 'component') {
             /* The wrapper element is a positioned hole in the skeleton; the child mounts
-               into the located node (idempotent display:contents for a transparent wrap,
-               static so it lives in the markup). */
-            const { tag, transparent } = componentWrapperTag(node.name)
+               into the located node. display:contents (idempotent, static so it lives in
+               the markup) keeps the wrapper out of layout — a pure mount host. */
+            const tag = componentWrapperTag(node.name)
             const { code } = mountComponent(node, `${skVar}.el[${counter.el++}]`)
             binds.push(code)
-            const style = transparent ? ' style="display:contents"' : ''
-            return `<${tag} ${HOLE_ATTRIBUTE}${style}></${tag}>`
+            return `<${tag} ${HOLE_ATTRIBUTE} style="display:contents"></${tag}>`
         }
         if (node.kind === 'script') {
             /* A nested `<script>` (scoped reactive block) emits no markup — its lowered body
@@ -172,13 +178,16 @@ export function generateBuild(
             return '<!--a-->'
         }
         const hasReactiveAttr = node.attrs.some((attr) => attr.kind !== 'static')
-        const hasReactiveText = node.children.some(
+        const reactiveTextChild = node.children.find(
             (child) => child.kind === 'text' && child.parts.some((part) => part.kind !== 'static'),
         )
         /* A text-leaf (only text/style children) with reactive text binds marker-free via
            `generateChildren` on the located element; otherwise reactive text is interleaved
-           and uses `<!--a-->` anchors during the child recursion below. */
-        const textLeafBind = hasReactiveText && isTextLeaf(node)
+           and uses `<!--a-->` anchors during the child recursion below. The shared context
+           records the leaf's text as NOT interleaved (`markText` false) — read that flag the
+           SSR back-end also reads, rather than re-deriving leaf-ness via `isTextLeaf` here. */
+        const textLeafBind =
+            reactiveTextChild !== undefined && markText.get(reactiveTextChild) === false
         let openTag = `<${node.tag}`
         let elVar = ''
         if (hasReactiveAttr || textLeafBind) {

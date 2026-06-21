@@ -26,6 +26,16 @@ function isElement(node: Node): node is Element {
     return typeof (node as Element).hasAttribute === 'function'
 }
 
+/* A child component's mount wrapper (`abide-<name>`, see `componentWrapperTag`). Its
+   content is a SEPARATE skeleton (the child's own), so the parent's walks must treat it
+   as opaque: in the shallow skeleton it's an empty leaf, so the compiler counts no
+   anchors inside it; on hydrate it's populated, so a descent would over-collect the
+   child's anchors and shift every parent index past it (same hazard as a block range,
+   but bounded by the wrapper element instead of `[`…`]` markers). */
+function isComponentWrapper(node: Node): boolean {
+    return isElement(node) && (node.tagName ?? '').toLowerCase().startsWith('abide-')
+}
+
 /* A comment node's data, or undefined for elements/text. A comment is a node that is
    neither an element (`hasAttribute`) nor a text node (`splitText`); the mini-dom
    exposes no `nodeType`, so detect by method. */
@@ -113,7 +123,9 @@ function scanAnchors(nodes: ArrayLike<Node>, anchors: Node[]): void {
         const node = nodes[index] as Node
         const data = commentData(node)
         if (data === undefined) {
-            if (isElement(node) && depth === 0) {
+            /* Recurse into this skeleton's own elements, but NOT a child component's
+               wrapper — its anchors belong to the child's skeleton (see above). */
+            if (isElement(node) && depth === 0 && !isComponentWrapper(node)) {
                 scanAnchors(node.childNodes, anchors)
             }
         } else if (isCloseMarker(data)) {

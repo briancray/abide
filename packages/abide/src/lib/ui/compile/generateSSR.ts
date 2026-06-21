@@ -184,7 +184,7 @@ export function generateSSR(
                the same wrapper the client mounts into, so SSR and client agree.
                Props pass as thunks; slot content passes as a string-returning
                `$children` the child invokes from its <slot>. */
-            const { tag, transparent } = componentWrapperTag(node.name)
+            const tag = componentWrapperTag(node.name)
             const parts = node.props.map(
                 (prop) => `${JSON.stringify(prop.name)}: () => (${lowerExpression(prop.code)})`,
             )
@@ -206,7 +206,7 @@ export function generateSSR(
                the enclosing render body, including from branch closures.) */
             const result = nextVar('$child')
             return (
-                push(target, `<${tag}${transparent ? ' style="display:contents"' : ''}>`) +
+                push(target, `<${tag} style="display:contents">`) +
                 `const ${result} = ${node.name}.render({ ${parts.join(', ')} });\n` +
                 `${target}.push(${result}.html);\n` +
                 `for (const $a of ${result}.awaits) { $awaits.push($a); }\n` +

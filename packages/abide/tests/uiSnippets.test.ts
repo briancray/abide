@@ -127,16 +127,18 @@ describe('snippets passed across components', () => {
     test('client: child mounts the parent snippet, capturing parent scope', () => {
         const host = document.createElement('div')
         component(parent, { List: component(List) })(host)
-        expect(serialize(host)).toBe('<list><ul><li>•x</li><li>•y</li></ul></list>')
+        expect(serialize(host)).toBe(
+            '<abide-list style="display:contents"><ul><li>•x</li><li>•y</li></ul></abide-list>',
+        )
     })
 
     test('SSR: identical, snippet rendered inside the child', () => {
         const html = component(parent, { List: component(List) }).render().html
         expect(html).toBe(
-            '<list><ul>' +
+            '<abide-list style="display:contents"><ul>' +
                 '<!--abide:snippet--><li>•x</li><!--/abide:snippet-->' +
                 '<!--abide:snippet--><li>•y</li><!--/abide:snippet-->' +
-                '</ul></list>',
+                '</ul></abide-list>',
         )
     })
 })
