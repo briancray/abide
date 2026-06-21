@@ -1,5 +1,19 @@
 # abide
 
+## 0.37.0
+
+### Minor Changes
+
+- [`dfd9d9e`](https://github.com/briancray/abide/commit/dfd9d9e9149c16761c539f7b45358e9a969174d8) - manual scroll restoration + hash-only navigation ([`1b71ef1`](https://github.com/briancray/abide/commit/1b71ef195186c0cee5a36527307f5f981833b546))
+
+- [`dfd9d9e`](https://github.com/briancray/abide/commit/dfd9d9e9149c16761c539f7b45358e9a969174d8) - lead every tsv line with a wall-clock column ([`5784d47`](https://github.com/briancray/abide/commit/5784d47ddd2d52696fb9db111092c6f571270086))
+
+- [`dfd9d9e`](https://github.com/briancray/abide/commit/dfd9d9e9149c16761c539f7b45358e9a969174d8) - always-`abide-` component wrapper tag ([`711de46`](https://github.com/briancray/abide/commit/711de46f8b5210cbbff5c73cd7aceda410d87f47))
+
+- [`dfd9d9e`](https://github.com/briancray/abide/commit/dfd9d9e9149c16761c539f7b45358e9a969174d8) - inspector in-flight requests + prompts surface ([`823392d`](https://github.com/briancray/abide/commit/823392d0e644b3a84661293f86b28ca10d9a9de9))
+
+- [`dfd9d9e`](https://github.com/briancray/abide/commit/dfd9d9e9149c16761c539f7b45358e9a969174d8) - inspector client scope/router bridge ([`c25b45e`](https://github.com/briancray/abide/commit/c25b45e778f6f17eeaf0875a4b7ecdd63fccb978))
+
 ## 0.36.0
 
 ### Minor Changes

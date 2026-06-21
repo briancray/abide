@@ -1,5 +1,11 @@
 # @abide/inspector
 
+## 0.3.0
+
+### Minor Changes
+
+- [`dfd9d9e`](https://github.com/briancray/abide/commit/dfd9d9e9149c16761c539f7b45358e9a969174d8) - render prompts, in-flight requests, and live client state ([`85cac33`](https://github.com/briancray/abide/commit/85cac336b7ac89b9b76b47fc6481f482eaf9b21b))
+
 ## 0.2.1
 
 ### Patch Changes
