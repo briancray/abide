@@ -1,5 +1,11 @@
 # @abide/prettier-plugin-abide
 
+## 0.1.3
+
+### Patch Changes
+
+- [`2efd4ad`](https://github.com/briancray/abide/commit/2efd4ad1e572c46a0611d3d1d5cd1a02f80da629) - use function replacers to preserve $ patterns ([`38d7214`](https://github.com/briancray/abide/commit/38d72145bff970dcd78e96475f3509a209a21558))
+
 ## 0.1.2
 
 ### Patch Changes

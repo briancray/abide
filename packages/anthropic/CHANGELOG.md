@@ -1,5 +1,11 @@
 # @abide/anthropic
 
+## 0.2.3
+
+### Patch Changes
+
+- [`2efd4ad`](https://github.com/briancray/abide/commit/2efd4ad1e572c46a0611d3d1d5cd1a02f80da629) - serialize non-text tool-result blocks ([`38f0282`](https://github.com/briancray/abide/commit/38f0282be12f1f3375923533114b9745a9475f40))
+
 ## 0.2.2
 
 ### Patch Changes

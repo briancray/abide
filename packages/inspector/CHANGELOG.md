@@ -1,5 +1,11 @@
 # @abide/inspector
 
+## 0.3.1
+
+### Patch Changes
+
+- [`2efd4ad`](https://github.com/briancray/abide/commit/2efd4ad1e572c46a0611d3d1d5cd1a02f80da629) - group trace children in one pass ([`f600f59`](https://github.com/briancray/abide/commit/f600f59e86c89e14f44672eb9c2335f99d532042))
+
 ## 0.3.0
 
 ### Minor Changes
