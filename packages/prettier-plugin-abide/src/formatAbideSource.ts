@@ -169,9 +169,12 @@ async function restoreExpressions(
     for (let index = 0; index < expressions.length; index += 1) {
         const code = await formatExpression(expressions[index] as string, options)
         const token = expressionToken(index)
+        /* Function replacers insert their return value literally — a string
+           replacement would interpret `$&`, `$1`, `` $` ``, `$'`, `$$` inside the
+           formatted code as special patterns and corrupt the output. */
         restored = restored
-            .replace(new RegExp(`=(["'])${token}\\1`), `={${code}}`)
-            .replace(token, `{${code}}`)
+            .replace(new RegExp(`=(["'])${token}\\1`), () => `={${code}}`)
+            .replace(token, () => `{${code}}`)
     }
     return restored
 }
@@ -214,9 +217,11 @@ async function restoreBlocks(
             .split('\n')
             .map((line) => (line === '' ? line : pad + line))
             .join('\n')
+        /* Function replacer: the formatted body inserts literally, so special
+           replacement patterns (`$&`, `$1`, …) in the user's code stay intact. */
         restored = restored.replace(
             match ? placeholder : `<abide-${block.kind} data-i="${index}"></abide-${block.kind}>`,
-            `${pad}${block.open}\n${indentedBody}\n${pad}${block.close}`,
+            () => `${pad}${block.open}\n${indentedBody}\n${pad}${block.close}`,
         )
     }
     return restored
