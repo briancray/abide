@@ -162,7 +162,7 @@ Test suites compile `.abide` and rewrite verbs under `bun test` via `preload = [
 - `abide/ui/enterScope`, `abide/ui/exitScope` — push/pop the lexical scope around an SSR render.
 - `abide/ui/router`, `abide/ui/startClient`, `abide/ui/renderToStream` — the client router, the official client entry (reads `window.__SSR__`, seeds cache, starts the router), and the out-of-order SSR streamer.
 - `abide/ui/remoteProxy`, `abide/ui/socketProxy` — the bundler-emitted client substitutes that swap a server verb/socket import for a `fetch` proxy / ws-multiplexed `Socket`.
-- `abide/ui/dom/*` — the compiled-template DOM runtime (one node-builder per construct): `mount`, `mountChild`, `mountSlot`, `hydrate`, `skeleton`, `cloneStatic`, `anchorCursor`, `text`, `appendText`, `appendTextAt`, `appendSnippet`, `appendStatic`, `attr`, `on`, `attach`, `each`, `eachAsync`, `when`, `awaitBlock`, `tryBlock`, `switchBlock`, `applyResolved`.
+- `abide/ui/dom/*` — the compiled-template DOM runtime (one node-builder per construct): `mount`, `mountChild`, `mountSlot`, `outlet`, `hydrate`, `skeleton`, `cloneStatic`, `anchorCursor`, `text`, `appendText`, `appendTextAt`, `appendSnippet`, `appendStatic`, `attr`, `on`, `attach`, `each`, `eachAsync`, `when`, `awaitBlock`, `tryBlock`, `switchBlock`, `applyResolved`. `outlet` is the marker-range a layout `<slot/>` compiles to (no wrapper element — the router fills it with the next chain layer as a direct child).
 - `abide/ui/runtime/*` — render-pass helpers: `escapeKey` (JSON-Pointer key escaping), `nextBlockId`, `enterRenderPass`, `exitRenderPass`.
 
 ## Build / tooling — @documentation building
