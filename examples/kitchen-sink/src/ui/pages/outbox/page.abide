@@ -18,10 +18,11 @@ let offline = scope().state(false)
 
 // Optimistic UI: messages render the instant they're enqueued; a permanent
 // failure rolls the entry back out and surfaces it as dropped.
-let submitted = scope().state([])
-let dropped = scope().state([])
+type Message = { id: string; text: string }
+let submitted = scope().state<Message[]>([])
+let dropped = scope().state<Message[]>([])
 
-const box = outbox({
+const box = outbox<Message>({
     key: 'kitchen-sink-outbox',
     online: () => !offline,
     send: async ({ id, text }) => {

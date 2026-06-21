@@ -10,7 +10,9 @@ import RpcHeader from '$ui/RpcHeader.abide'
 let decoded = scope().state('(not called)')
 let raw = scope().state('(not called)')
 let plainBody = scope().state('(not called)')
-let streamFrames = scope().state([])
+type StreamFrame = { n: number; text: string }
+
+let streamFrames = scope().state<StreamFrame[]>([])
 
 async function readDecoded() {
     const body = await getEcho({ message: 'hello' })

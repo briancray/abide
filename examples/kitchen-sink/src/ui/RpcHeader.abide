@@ -15,7 +15,7 @@ const subpages = [
     { href: '/rpc/request-scope', label: 'request scope' },
 ]
 
-const pillClass = (href) =>
+const pillClass = (href: string) =>
     page.url.pathname === href
         ? 'rounded-full bg-slate-900 px-3 py-1 text-white'
         : 'rounded-full border border-slate-300 bg-white px-3 py-1 text-slate-600 hover:bg-slate-100'

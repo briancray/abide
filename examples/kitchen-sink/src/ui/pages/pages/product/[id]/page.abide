@@ -11,7 +11,7 @@ const id = scope().computed(() => page.params.id)
 
 /* cache() returns warm values synchronously, so handle errors with try/catch in
    the await form (no .catch on a warm hit). */
-async function loadProduct(productId) {
+async function loadProduct(productId: string) {
     try {
         return await cache(getProduct)({ id: productId })
     } catch (err) {

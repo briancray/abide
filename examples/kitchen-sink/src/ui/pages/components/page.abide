@@ -204,7 +204,7 @@ effect(() => {                             // client-only; cleanup on unmount
                     type="number"
                     bind:value={{
                         get: () => Math.round((celsius * 9) / 5 + 32),
-                        set: (f) => (celsius = (((Number(f) || 0) - 32) * 5) / 9),
+                        set: (f: string) => (celsius = (((Number(f) || 0) - 32) * 5) / 9),
                     }}
                     class="w-full rounded-md border border-slate-300 px-3 py-1.5"
             /></label>

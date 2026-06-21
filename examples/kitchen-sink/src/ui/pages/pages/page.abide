@@ -84,13 +84,13 @@ const externalHref = scope().computed(() => url('https://bun.sh', { utm: 'abide'
         <button
             type="button"
             class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
-            onclick={() => navigate('/pages', { replace: true })}>
-            {"navigate('/pages', { replace: true })"}
+            onclick={() => navigate('/pages', true)}>
+            {"navigate('/pages', true) // replace"}
         </button>
         <button
             type="button"
             class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
-            onclick={() => navigate(`/pages?ts=${Date.now()}`, { scroll: false })}>
+            onclick={() => navigate(`/pages?ts=${Date.now()}`)}>
             same pathname — no fetch, no remount
         </button>
     </div>

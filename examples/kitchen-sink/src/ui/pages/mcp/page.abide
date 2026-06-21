@@ -4,7 +4,7 @@ import CodeBlock from '$ui/CodeBlock.abide'
 let listOutput = scope().state('(not called)')
 let callOutput = scope().state('(not called)')
 
-async function call(id, method, params) {
+async function call(id: number, method: string, params?: unknown) {
     const response = await fetch('/__abide/mcp', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },

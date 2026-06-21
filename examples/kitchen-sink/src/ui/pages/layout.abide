@@ -24,7 +24,7 @@ effect(() => onMenu('open-mcp', () => void navigate('/mcp')))
    thunk re-runs without per-link plumbing. Compared against url() output so it
    stays correct under an APP_URL subpath — page.url is browser-space both sides.
    A link also highlights for its sub-paths (e.g. /rpc for /rpc/request-scope). */
-const linkClass = (prefix) =>
+const linkClass = (prefix: string) =>
     page.url.pathname === url(prefix) || page.url.pathname.startsWith(url(prefix) + '/')
         ? 'font-semibold text-slate-900'
         : 'text-slate-600 hover:text-slate-900'

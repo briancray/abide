@@ -1,9 +1,15 @@
 <script>
+import type { AgentFrame } from '@abide/abide/server/agent'
 import { chat } from '$server/rpc/chat.ts'
 import CodeBlock from '$ui/CodeBlock.abide'
 
-let messages = scope().state([])
-let toolCalls = scope().state([])
+// A rendered chat turn: the running transcript the page POSTs and displays.
+type ChatMessage = { id: string; role: 'user' | 'assistant'; text: string }
+// A tool call surfaced from the stream; `ok` lands later from its tool_result frame.
+type ToolCall = { id: string; name: string; input: unknown; ok?: boolean }
+
+let messages = scope().state<ChatMessage[]>([])
+let toolCalls = scope().state<ToolCall[]>([])
 let draft = scope().state('Which tools can you call? Use one and show me the result.')
 let streaming = scope().state(false)
 let error = scope().state(undefined)
@@ -17,7 +23,7 @@ async function send() {
     }
     error = undefined
     toolCalls = []
-    const history = [...messages, { id: crypto.randomUUID(), role: 'user', text }]
+    const history: ChatMessage[] = [...messages, { id: crypto.randomUUID(), role: 'user', text }]
     draft = ''
     messages = [...history, { id: crypto.randomUUID(), role: 'assistant', text: '' }]
     streaming = true
@@ -51,7 +57,7 @@ async function send() {
 
 /* Fold one frame into the live assistant turn — immutable updates so the doc cell
    re-renders (no nested-mutation reliance). */
-function apply(frame) {
+function apply(frame: AgentFrame | { $error: string }) {
     if ('$error' in frame) {
         error = frame.$error
         return
@@ -124,7 +130,7 @@ function apply(frame) {
         </div>
     </template>
 
-    <form class="mt-4 flex gap-2" onsubmit={(event) => { event.preventDefault(); void send() }}>
+    <form class="mt-4 flex gap-2" onsubmit={(event: SubmitEvent) => { event.preventDefault(); void send() }}>
         <input
             type="text"
             bind:value={draft}
