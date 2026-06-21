@@ -4,6 +4,7 @@ import { appendTextAt } from '../../src/lib/ui/dom/appendTextAt.ts'
 import { cloneStatic } from '../../src/lib/ui/dom/cloneStatic.ts'
 import { mountChild } from '../../src/lib/ui/dom/mountChild.ts'
 import { mountSlot } from '../../src/lib/ui/dom/mountSlot.ts'
+import { outlet } from '../../src/lib/ui/dom/outlet.ts'
 import { skeleton } from '../../src/lib/ui/dom/skeleton.ts'
 import { enterScope } from '../../src/lib/ui/enterScope.ts'
 import { exitScope } from '../../src/lib/ui/exitScope.ts'
@@ -47,6 +48,9 @@ globals.appendTextAt = appendTextAt
 globals.anchorCursor = anchorCursor
 /* `mountSlot` mounts a `<slot>`'s content as a marker-bounded range at its anchor. */
 globals.mountSlot = mountSlot
+/* `outlet` emits a layout's empty router fill boundary at its anchor; the router
+   fills it with the next chain layer (`fillBoundary`). */
+globals.outlet = outlet
 /* The lowering emits `const model = scope()`; harness bodies resolve `scope` as a
    bare global (the real bundle imports it). Client mount/hydrate establish the
    per-component scope; SSR establishes one per render (see enterScope). */

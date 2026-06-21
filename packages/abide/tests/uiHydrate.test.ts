@@ -431,15 +431,14 @@ describe('hydrate — adopt server DOM', () => {
         const childSource = `<script>const { label } = props()</script><span>Hi {label}</span>`
         const childClient = compileComponent(childSource)
         const childSsr = compileSSR(childSource)
-        const Greeting = Object.assign(
-            (host: Element, props?: unknown) => {
-                new Function('host', '$props', ...names, childClient)(host, props, ...values)
-            },
-            {
-                render: (props?: unknown): SsrRender =>
-                    new Function('$props', ...names, childSsr)(props, ...values) as SsrRender,
-            },
-        )
+        const greetingBuild = (host: Element, props?: unknown) => {
+            new Function('host', '$props', ...names, childClient)(host, props, ...values)
+        }
+        const Greeting = Object.assign(greetingBuild, {
+            render: (props?: unknown): SsrRender =>
+                new Function('$props', ...names, childSsr)(props, ...values) as SsrRender,
+            build: greetingBuild,
+        })
 
         const parentSource = `<script>let name = scope().state('world')</script><div><Greeting label={name} /></div>`
 
@@ -452,25 +451,22 @@ describe('hydrate — adopt server DOM', () => {
             'Greeting',
             compileSSR(parentSource),
         )(doc, state, computed, effect, Greeting) as SsrRender
-        expect(server.html).toBe(
-            '<div><abide-greeting style="display:contents"><span>Hi world</span></abide-greeting></div>',
-        )
+        expect(server.html).toBe('<div><!--a--><!--[--><span>Hi world</span><!--]--></div>')
 
         // parse + hydrate
         const host = document.createElement('div')
         host.innerHTML = server.html
-        const greeting = (host.childNodes[0] as unknown as { childNodes: unknown[] }).childNodes[0]
-        const spanBefore = (greeting as unknown as { childNodes: unknown[] }).childNodes[0]
+        const div = host.childNodes[0] as unknown as { childNodes: unknown[] }
+        // the child mounts as a marker range: <!--a-->, <!--[-->, <span>, <!--]-->
+        const spanBefore = div.childNodes[2]
         const parentBody = compileComponent(parentSource)
         hydrate(host, (target) => {
             new Function('host', 'Greeting', ...names, parentBody)(target, Greeting, ...values)
         })
 
-        // the child's wrapper and span were adopted, not recreated or duplicated
-        expect((host.childNodes[0] as unknown as { childNodes: unknown[] }).childNodes.length).toBe(
-            1,
-        )
-        expect((greeting as unknown as { childNodes: unknown[] }).childNodes[0]).toBe(spanBefore)
+        // the child's range markers and span were adopted, not recreated or duplicated
+        expect(div.childNodes.length).toBe(4)
+        expect(div.childNodes[2]).toBe(spanBefore)
         expect(host.textContent).toBe('Hi world')
     })
 
@@ -679,22 +675,14 @@ describe('hydrate — adopt server DOM', () => {
         }
         const baseNames = Object.keys(baseRuntime)
         const baseValues = baseNames.map((n) => baseRuntime[n as keyof typeof baseRuntime])
-        const Sel = Object.assign(
-            (host: Element, props?: unknown) => {
-                new Function('host', '$props', ...baseNames, childClient)(
-                    host,
-                    props,
-                    ...baseValues,
-                )
-            },
-            {
-                render: (props?: unknown): SsrRender =>
-                    new Function('$props', ...baseNames, childSsr)(
-                        props,
-                        ...baseValues,
-                    ) as SsrRender,
-            },
-        )
+        const selBuild = (host: Element, props?: unknown) => {
+            new Function('host', '$props', ...baseNames, childClient)(host, props, ...baseValues)
+        }
+        const Sel = Object.assign(selBuild, {
+            render: (props?: unknown): SsrRender =>
+                new Function('$props', ...baseNames, childSsr)(props, ...baseValues) as SsrRender,
+            build: selBuild,
+        })
 
         const model = doc({ types: ['movie', 'series'] })
         const parentSource = `

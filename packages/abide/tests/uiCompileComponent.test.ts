@@ -145,7 +145,8 @@ describe('compileComponent — end to end', () => {
         expect(module).toContain("import { mount } from '@abide/abide/ui/dom/mount'")
         expect(module).toContain("import { scope } from '@abide/abide/ui/scope'")
         expect(module).toContain('export default function component(host, $props)')
-        expect(module).toContain('mount(host, (host) =>')
+        expect(module).toContain('mount(host, build, $props)')
+        expect(module).toContain('component.build = build')
         expect(module).toContain('model.cell("count")')
     })
 

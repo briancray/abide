@@ -3,7 +3,6 @@ import { page } from '../src/lib/shared/page.ts'
 import { pageSlot } from '../src/lib/shared/pageSlot.ts'
 import { setPageResolver } from '../src/lib/shared/setPageResolver.ts'
 import { appendText } from '../src/lib/ui/dom/appendText.ts'
-import { mount } from '../src/lib/ui/dom/mount.ts'
 import { effect } from '../src/lib/ui/effect.ts'
 import { navigate } from '../src/lib/ui/navigate.ts'
 import { router } from '../src/lib/ui/router.ts'
@@ -27,19 +26,27 @@ beforeEach(() => {
    after navigation — drain the queue before asserting. */
 const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0))
 
-/* Wrap a resolved page as a code-split loader, the shape the router consumes. */
-const loader = (view: Route) => (): Promise<{ default: Route }> =>
-    Promise.resolve({ default: view })
+/* Wrap a stub build fn as a code-split loader, the shape the router consumes. The
+   router fills a layer into its outlet boundary via `.build` (a marker range, no
+   `<abide-outlet>` element); the callable form is the unused direct-mount API. */
+const route = (build: (host: Element) => unknown): Route =>
+    Object.assign(
+        (host: Element) => {
+            build(host)
+            return () => undefined
+        },
+        { build: (host: Node) => void build(host as Element) },
+    )
+const loader = (build: (host: Element) => unknown) => (): Promise<{ default: Route }> =>
+    Promise.resolve({ default: route(build) })
 
 describe('router', () => {
     test('mounts the matching page and re-mounts on navigate', async () => {
         const host = document.createElement('div')
-        const page =
-            (label: string): Route =>
-            (target: Element) => {
-                target.appendChild(document.createTextNode(label))
-                return () => undefined
-            }
+        const page = (label: string) => (target: Element) => {
+            target.appendChild(document.createTextNode(label))
+            return () => undefined
+        }
         const dispose = router(host, {
             '/': loader(page('home')),
             '/about': loader(page('about')),
@@ -74,15 +81,14 @@ describe('router', () => {
         const host = document.createElement('div')
         let mounts = 0
         let bump: (() => void) | undefined
-        const page: Route = (target: Element): (() => void) =>
-            mount(target, (host) => {
-                mounts += 1
-                const model = doc({})
-                model.replace('count', 0)
-                const cell = model.cell<number>('count')
-                bump = () => model.replace('count', cell.get() + 1)
-                appendText(host, () => cell.get())
-            })
+        const page = (target: Node) => {
+            mounts += 1
+            const model = doc({})
+            model.replace('count', 0)
+            const cell = model.cell<number>('count')
+            bump = () => model.replace('count', cell.get() + 1)
+            appendText(target, () => cell.get())
+        }
 
         const dispose = router(host, { '/': loader(page), '*': loader(page) })
         navigate('/')
@@ -106,12 +112,10 @@ describe('router', () => {
        server already ran handle() on, so it isn't probed. */
     test('probes post-boot navigations and mounts when handle() clears them', async () => {
         const host = document.createElement('div')
-        const page =
-            (label: string): Route =>
-            (target: Element) => {
-                target.appendChild(document.createTextNode(label))
-                return () => undefined
-            }
+        const page = (label: string) => (target: Element) => {
+            target.appendChild(document.createTextNode(label))
+            return () => undefined
+        }
         const probed: string[] = []
         const probe = async (path: string): Promise<NavVerdict> => {
             probed.push(path)
@@ -137,12 +141,10 @@ describe('router', () => {
 
     test('follows a redirect verdict to the route handle() pointed at', async () => {
         const host = document.createElement('div')
-        const page =
-            (label: string): Route =>
-            (target: Element) => {
-                target.appendChild(document.createTextNode(label))
-                return () => undefined
-            }
+        const page = (label: string) => (target: Element) => {
+            target.appendChild(document.createTextNode(label))
+            return () => undefined
+        }
         const probe = async (path: string): Promise<NavVerdict> =>
             path === '/admin' ? { kind: 'redirect', path: '/login' } : { kind: 'mount' }
         const dispose = router(
@@ -175,19 +177,17 @@ describe('router', () => {
         setPageResolver(() => clientPage.value)
         const host = document.createElement('div')
         const seen: (string | undefined)[] = []
-        const itemPage: Route = (target: Element): (() => void) => {
+        const itemPage = (target: Element) => {
             const stop = effect(() => {
                 seen.push(page.params.id)
             })
             target.appendChild(document.createTextNode('item'))
             return stop
         }
-        const home =
-            (label: string): Route =>
-            (target: Element) => {
-                target.appendChild(document.createTextNode(label))
-                return () => undefined
-            }
+        const home = (label: string) => (target: Element) => {
+            target.appendChild(document.createTextNode(label))
+            return () => undefined
+        }
         const dispose = router(host, {
             '/': loader(home('home')),
             '/item/[id]': loader(itemPage),
@@ -220,12 +220,10 @@ describe('router', () => {
     test('flags page.navigating during the resolve window and clears it on commit', async () => {
         setPageResolver(() => clientPage.value)
         const host = document.createElement('div')
-        const view =
-            (label: string): Route =>
-            (target: Element) => {
-                target.appendChild(document.createTextNode(label))
-                return () => undefined
-            }
+        const view = (label: string) => (target: Element) => {
+            target.appendChild(document.createTextNode(label))
+            return () => undefined
+        }
         const dispose = router(host, {
             '/': loader(view('home')),
             '/about': loader(view('about')),
@@ -253,12 +251,12 @@ describe('router', () => {
     test('a hash-only change keeps the page mounted; a query change rebuilds', async () => {
         const host = document.createElement('div')
         let mounts = 0
-        const view: Route = (target: Element): (() => void) => {
+        const view = (target: Element) => {
             mounts += 1
             target.appendChild(document.createTextNode('page'))
             return () => undefined
         }
-        const home: Route = (target: Element) => {
+        const home = (target: Element) => {
             target.appendChild(document.createTextNode('home'))
             return () => undefined
         }
@@ -294,14 +292,13 @@ describe('router', () => {
             new Promise((resolve) => {
                 landSlow = resolve
             })
-        const home: Route = (target: Element) => {
+        const home = (target: Element) => {
             target.appendChild(document.createTextNode('home'))
             return () => undefined
         }
-        const slow: Route = (target: Element) => {
+        const slow = route((target: Element) => {
             target.appendChild(document.createTextNode('slow'))
-            return () => undefined
-        }
+        })
         const dispose = router(host, {
             '/': loader(home),
             '/slow': slowLoader,
@@ -331,12 +328,10 @@ describe('router', () => {
 
     test('does not mount when the verdict hands off to a full browser load', async () => {
         const host = document.createElement('div')
-        const page =
-            (label: string): Route =>
-            (target: Element) => {
-                target.appendChild(document.createTextNode(label))
-                return () => undefined
-            }
+        const page = (label: string) => (target: Element) => {
+            target.appendChild(document.createTextNode(label))
+            return () => undefined
+        }
         const probe = async (path: string): Promise<NavVerdict> =>
             path === '/blocked' ? { kind: 'reload', url: '/blocked' } : { kind: 'mount' }
         const dispose = router(

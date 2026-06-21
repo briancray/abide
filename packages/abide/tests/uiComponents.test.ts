@@ -43,13 +43,16 @@ function component(
     const body = compileComponent(source)
     const runtime = { ...RUNTIME, ...extra }
     const names = Object.keys(runtime)
-    return (host: Element, props?: unknown) => {
+    const fn = (host: Element, props?: unknown) => {
         new Function('host', '$props', ...names, body)(
             host,
             props,
             ...names.map((n) => runtime[n as keyof typeof runtime]),
         )
     }
+    /* The fn IS the bare build (runs the body on host); a nested child mounts via
+       `mountChild`, which calls `factory.build` — see compileModule. */
+    return Object.assign(fn, { build: fn })
 }
 
 describe('component composition', () => {

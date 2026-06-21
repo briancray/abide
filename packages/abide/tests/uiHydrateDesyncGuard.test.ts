@@ -44,7 +44,7 @@ function component(source: string, extra: Record<string, unknown> = {}) {
         new Function('host', '$props', ...names, clientBody)(host, props, ...values)
     fn.render = (props?: unknown): SsrRender =>
         new Function('$props', ...names, ssrBody)(props, ...values) as SsrRender
-    return fn
+    return Object.assign(fn, { build: fn })
 }
 
 const Loading = component(`<i class="spin">o</i>`)
@@ -84,7 +84,7 @@ describe('bare component as control-flow branch root hydrates (no flip)', () => 
 })
 
 describe('hydration desync surfaces as a named error, not a downstream null-deref', () => {
-    test('a missing wrapper element throws an [abide] hydration desync, not a TypeError', () => {
+    test('a missing range marker throws an [abide] hydration desync, not a TypeError', () => {
         const parent = component(
             `
             <script>let busy = scope().state(false)</script>
@@ -92,8 +92,9 @@ describe('hydration desync surfaces as a named error, not a downstream null-dere
             { Loading, HardDrive },
         )
         const host = document.createElement('div')
-        // server DOM with the <harddrive> wrapper ABSENT — a structural SSR/client disagreement
-        host.innerHTML = '<div><!--a--><!--[--><!--]--></div>'
+        // server DOM with the if-block's range markers ABSENT (only the anchor) — a structural
+        // SSR/client disagreement: the build expects to claim a `[` marker at the anchor.
+        host.innerHTML = '<div><!--a--></div>'
         expect(() => hydrate(host, (t: Element) => parent(t))).toThrow(/hydration desync/)
     })
 })

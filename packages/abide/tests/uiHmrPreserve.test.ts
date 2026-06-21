@@ -18,21 +18,29 @@ afterEach(() => {
     hotReloadEnabled.current = false
 })
 
-/* A stand-in for a compiled component: mints its own `model` (seeded by patches,
-   exactly like the desugared `const model = doc({})` + init), then renders into
-   `host` reactively. `render` reads through `model.read` so the effect tracks it. */
+/* A stand-in for a compiled component: its `build` (what `mountChild`/`mountRange`
+   calls) mints its own `model` (seeded by patches, exactly like the desugared
+   `const model = doc({})` + init), then renders into a tracked text node appended to
+   its build host. A nested child mounts as a marker range, so `build` receives the
+   build fragment — append a node and update IT reactively (not the host's textContent,
+   which the fragment loses once it lands in the range). The effect self-registers with
+   the mount scope, so the swap's dispose tears it down. */
 const makeComponent = (
     id: string,
     init: (model: Doc) => void,
     render: (model: Doc) => string,
 ): UiComponent => {
-    const factory = ((host: Element) => {
+    const build = (host: Node) => {
         const model = doc({})
         init(model)
-        return effect(() => {
-            host.textContent = render(model)
+        const node = document.createTextNode('')
+        host.appendChild(node)
+        effect(() => {
+            node.data = render(model)
         })
-    }) as UiComponent
+    }
+    const factory = (() => undefined) as unknown as UiComponent
+    factory.build = build as UiComponent['build']
     factory.__abideId = id
     return factory
 }

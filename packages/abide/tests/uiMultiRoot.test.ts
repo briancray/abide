@@ -25,13 +25,17 @@ beforeAll(() => {
    label, claiming its server markup on hydrate via the skeleton primitive), and
    `.render` on the server (the same markup as a string). Stands in for a compiled
    `.abide` child so a component-as-root can be exercised end to end. */
+const buildButton = (host: Node, props: { label: () => unknown }): void => {
+    const sk = skeleton(host, '<span data-abide-hole></span>')
+    appendText(sk.el[0] as Node, () => props.label())
+}
 const Button = Object.assign(
     (host: Element, props: { label: () => unknown }): (() => void) => {
-        const sk = skeleton(host, '<span data-abide-hole></span>')
-        appendText(sk.el[0] as Node, () => props.label())
+        buildButton(host, props)
         return () => {}
     },
     {
+        build: buildButton,
         render: (props: { label: () => unknown }): SsrRender => ({
             html: `<span>${String(props.label())}</span>`,
             state: undefined,
@@ -131,10 +135,10 @@ describe('multi-root branches', () => {
 
     test('a component is a valid branch root: SSR, mount, and hydrate agree', () => {
         const SRC = `<main><template if={model.on}><Button label="hi"/></template></main>`
-        // a component renders into its wrapper element, both server and client; a
-        // name colliding with an HTML element remaps to a transparent abide-* wrapper
+        // a component renders as a marker range (no wrapper element), both server and
+        // client; the inner `[`…`]` is the component, the outer is the if-branch range
         expect(ssr(SRC, doc({ on: true })).html).toBe(
-            '<main><!--a--><!--[--><abide-button style="display:contents"><span>hi</span></abide-button><!--]--></main>',
+            '<main><!--a--><!--[--><!--[--><span>hi</span><!--]--><!--]--></main>',
         )
         expect(ssr(SRC, doc({ on: false })).html).toBe('<main><!--a--><!--[--><!--]--></main>')
 
@@ -163,7 +167,7 @@ describe('multi-root branches', () => {
     test('a component is a valid each row', () => {
         const SRC = `<ul><template each={model.items} as="i" key="i"><Button label={i}/></template></ul>`
         expect(ssr(SRC, doc({ items: ['a', 'b'] })).html).toBe(
-            '<ul><!--a--><!--[--><abide-button style="display:contents"><span>a</span></abide-button><!--]--><!--[--><abide-button style="display:contents"><span>b</span></abide-button><!--]--></ul>',
+            '<ul><!--a--><!--[--><!--[--><span>a</span><!--]--><!--]--><!--[--><!--[--><span>b</span><!--]--><!--]--></ul>',
         )
         const model = doc({ items: ['a', 'b'] })
         const host = document.createElement('div')

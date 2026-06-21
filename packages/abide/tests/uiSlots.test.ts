@@ -53,7 +53,7 @@ function component(
     }
     fn.render = (props?: unknown): SsrRender =>
         new Function('$props', ...names, ssrBody)(props, ...values) as SsrRender
-    return fn
+    return Object.assign(fn, { build: fn })
 }
 
 describe('slots (component children)', () => {
@@ -70,7 +70,7 @@ describe('slots (component children)', () => {
             globalThis as unknown as { serializeMiniDom: (h: unknown) => string }
         ).serializeMiniDom(host)
         expect(html).toBe(
-            '<abide-card style="display:contents"><div class="card"><!--a--><!--[-->Hello world!<!--]--></div></abide-card>',
+            '<!--[--><div class="card"><!--a--><!--[-->Hello world!<!--]--></div><!--]-->',
         )
     })
 
@@ -78,7 +78,7 @@ describe('slots (component children)', () => {
         const CardComponent = component(Card)
         const server = component(parent, { Card: CardComponent }).render()
         expect(server.html).toBe(
-            '<abide-card style="display:contents"><div class="card"><!--a--><!--[-->Hello world!<!--]--></div></abide-card>',
+            '<!--[--><div class="card"><!--a--><!--[-->Hello world!<!--]--></div><!--]-->',
         )
     })
 })

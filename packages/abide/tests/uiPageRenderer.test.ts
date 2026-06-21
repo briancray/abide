@@ -61,7 +61,9 @@ describe('createUiPageRenderer', () => {
         const html = await render(
             page(() => ({ html: '<main>hi</main>', awaits: [], state: undefined })),
         )
-        expect(html).toContain('<div id="app"><main>hi</main></div>')
+        expect(html).toContain(
+            '<div id="app"><!--abide:outlet--><main>hi</main><!--/abide:outlet--></div>',
+        )
         expect(html).toContain('window.__SSR__ =')
         expect(html).toContain('"route":"/"')
         expect(html).not.toContain('__abideSwap') // no streaming for a static page

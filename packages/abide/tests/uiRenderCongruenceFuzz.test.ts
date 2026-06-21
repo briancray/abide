@@ -58,7 +58,7 @@ function component(
     }
     fn.render = (props?: unknown): SsrRender =>
         new Function('$props', ...names, ssrBody)(props, ...values) as SsrRender
-    return Object.assign(fn, { render: fn.render })
+    return Object.assign(fn, { render: fn.render, build: fn })
 }
 
 const Box = `<div class="box"><slot></slot></div>`

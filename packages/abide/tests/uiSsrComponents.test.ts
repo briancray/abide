@@ -53,7 +53,7 @@ function component(
     }
     fn.render = (props?: unknown): SsrRender =>
         new Function('$props', ...names, ssrBody)(props, ...values) as SsrRender
-    return Object.assign(fn, { render: fn.render })
+    return Object.assign(fn, { render: fn.render, build: fn })
 }
 
 describe('SSR component composition', () => {
@@ -67,11 +67,9 @@ describe('SSR component composition', () => {
             <div><Greeting label={name} /></div>
         `
 
-        // server render — child rendered server-side, inlined in its wrapper
+        // server render — child rendered server-side, inlined in its marker range
         const server = component(parentSource, { Greeting }).render() as SsrRender
-        expect(server.html).toBe(
-            '<div><abide-greeting style="display:contents"><span>Hi world</span></abide-greeting></div>',
-        )
+        expect(server.html).toBe('<div><!--a--><!--[--><span>Hi world</span><!--]--></div>')
 
         // client render — should produce the identical tree
         const host = document.createElement('div')
@@ -112,12 +110,11 @@ describe('SSR component composition', () => {
         expect(clientHtml).toBe(server.html) // no leaked anchor — server and client agree
     })
 
-    test('a component named after a void element gets a non-void transparent wrapper', () => {
-        /* `Input`→`input` is a VOID tag: a raw `<input>` wrapper self-closes and the
-           browser reparents the child's own markup as siblings, so hydration claims
-           null inside the empty wrapper and crashes. The wrapper must instead be a
-           hyphenated custom element (never void), kept layout-transparent so the
-           child's root still lays out as a direct child of the parent. */
+    test('a component named after a void element renders fine (no wrapper to go void)', () => {
+        /* `Input`→`input` is a VOID tag. The old `<abide-input>` wrapper dodged this by
+           being a hyphenated custom element; the marker-range mount has NO wrapper element
+           at all, so a component name can never collide with an HTML tag — the child's own
+           `<input>` is just emitted between the `[`…`]` markers as a direct child. */
         const Input = component(`
             <script>const { value } = props()</script>
             <input value={value} />
@@ -128,9 +125,7 @@ describe('SSR component composition', () => {
         `
 
         const server = component(parentSource, { Input }).render() as SsrRender
-        expect(server.html).toBe(
-            '<div><abide-input style="display:contents"><input value="hi"></abide-input></div>',
-        )
+        expect(server.html).toBe('<div><!--a--><!--[--><input value="hi"><!--]--></div>')
 
         const host = document.createElement('div')
         component(parentSource, { Input })(host)

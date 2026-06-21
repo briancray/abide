@@ -53,7 +53,7 @@ function component(
     }
     fn.render = (props?: unknown): SsrRender =>
         new Function('$props', ...names, ssrBody)(props, ...values) as SsrRender
-    return fn
+    return Object.assign(fn, { build: fn })
 }
 
 const serialize = (host: unknown): string =>
@@ -154,20 +154,20 @@ describe('snippets passed across components', () => {
         const host = document.createElement('div')
         component(parent, { List: component(List) })(host)
         expect(serialize(host)).toBe(
-            '<abide-list style="display:contents"><ul>' +
+            '<!--[--><ul>' +
                 '<!--abide:snippet--><li>•x</li><!--/abide:snippet-->' +
                 '<!--abide:snippet--><li>•y</li><!--/abide:snippet-->' +
-                '</ul></abide-list>',
+                '</ul><!--]-->',
         )
     })
 
     test('SSR: identical, snippet rendered inside the child', () => {
         const html = component(parent, { List: component(List) }).render().html
         expect(html).toBe(
-            '<abide-list style="display:contents"><ul>' +
+            '<!--[--><ul>' +
                 '<!--abide:snippet--><li>•x</li><!--/abide:snippet-->' +
                 '<!--abide:snippet--><li>•y</li><!--/abide:snippet-->' +
-                '</ul></abide-list>',
+                '</ul><!--]-->',
         )
     })
 })

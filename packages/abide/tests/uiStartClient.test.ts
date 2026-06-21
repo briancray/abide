@@ -44,10 +44,13 @@ describe('startClient', () => {
         }
 
         const host = document.createElement('div')
-        const home: Route = (target) => {
-            target.appendChild(document.createTextNode('home'))
-            return () => undefined
-        }
+        const home = Object.assign(
+            (target: Element) => {
+                target.appendChild(document.createTextNode('home'))
+                return () => undefined
+            },
+            { build: (target: Node) => target.appendChild(document.createTextNode('home')) },
+        ) as Route
         const load = (): Promise<{ default: Route }> => Promise.resolve({ default: home })
         const dispose = startClient({ '/': load, '*': load }, {}, host)
 
@@ -84,10 +87,13 @@ describe('startClient', () => {
         ]
 
         const host = document.createElement('div')
-        const home: Route = (target) => {
-            target.appendChild(document.createTextNode('home'))
-            return () => undefined
-        }
+        const home = Object.assign(
+            (target: Element) => {
+                target.appendChild(document.createTextNode('home'))
+                return () => undefined
+            },
+            { build: (target: Node) => target.appendChild(document.createTextNode('home')) },
+        ) as Route
         const load = (): Promise<{ default: Route }> => Promise.resolve({ default: home })
         const dispose = startClient({ '/': load, '*': load }, {}, host)
         await flush()
