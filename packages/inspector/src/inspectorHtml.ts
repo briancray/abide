@@ -309,9 +309,16 @@ function traceHtml(id, recs) {
   const root = byTs.find((q) => q.parent === undefined) || byTs[0]
   // A request nests under its parent when that parent is itself a request in this
   // trace (server→server); otherwise it descends from a client span we never saw,
-  // so it hangs under the journey root (the page load).
-  const childrenOf = (span) => requests.filter((q) =>
-    q !== root && (known.has(q.parent) ? q.parent === span : span === root.span))
+  // so it hangs under the journey root (the page load). Grouped once here so the
+  // recursive render is O(requests), not O(requests²) per trace.
+  const childrenByParent = new Map()
+  for (const q of requests) {
+    if (q === root) continue
+    const parent = known.has(q.parent) ? q.parent : root.span
+    if (!childrenByParent.has(parent)) childrenByParent.set(parent, [])
+    childrenByParent.get(parent).push(q)
+  }
+  const childrenOf = (span) => childrenByParent.get(span) ?? []
   const totalSpans = requests.reduce((n, q) => n + q.spans.length, 0)
   const head =
     '<div class="thead">' +
