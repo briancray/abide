@@ -100,7 +100,7 @@ Test suites compile `.abide` and rewrite verbs under `bun test` via `preload = [
 
 - `abide/server/AppModule` — the type of `src/app.ts`'s optional hooks: `init` (boot + cleanup), `handle` (middleware), `handleError`, `health` (merges into `/__abide/health`), `forwardHeaders`.
 - `abide/server/agent` — `agent(engine, messages)`: run a model engine against the current request's MCP surface (caller auth forwarded into every tool call), yielding neutral `AgentFrame`s to wrap in `jsonl`/`sse`.
-- `abide/server/InspectorContext` — the capability bundle (`app`, `loadSurface`, `cacheSnapshot`, `onRecord`) handed to `@abide/inspector` when `ABIDE_ENABLE_INSPECTOR=true`.
+- `abide/server/InspectorContext` — the capability bundle (`app`, `loadSurface`, `cacheSnapshot`, `inFlightSnapshot`, `onRecord`) handed to `@abide/inspector` when `ABIDE_ENABLE_INSPECTOR=true`.
 
 ### Prompts — @documentation plumbing
 

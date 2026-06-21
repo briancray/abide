@@ -4,7 +4,9 @@ import { requestScopeSlot } from '../../shared/requestScopeSlot.ts'
 import { socketTapSlot } from '../../shared/socketTapSlot.ts'
 import type { LogRecord } from '../../shared/types/LogRecord.ts'
 import { buildCacheSnapshot } from './buildCacheSnapshot.ts'
+import { buildInFlightSnapshot } from './buildInFlightSnapshot.ts'
 import { buildInspectorSurface } from './buildInspectorSurface.ts'
+import { inFlightRequests } from './inFlightRequests.ts'
 import { ensureRegistriesLoaded } from './registryManifests.ts'
 import type { InspectorContext } from './types/InspectorContext.ts'
 
@@ -63,6 +65,10 @@ export async function maybeMountInspector(app: {
         )
         return undefined
     }
+    /* Arm in-flight tracking now the inspector is mounting: runWithRequestScope
+       fills this Set per request, kept process-wide (the events tap teardown is
+       per-connection; the Set outlives any single feed). */
+    inFlightRequests.tracked = new Set()
     const context: InspectorContext = {
         app,
         loadSurface: async () => {
@@ -70,6 +76,7 @@ export async function maybeMountInspector(app: {
             return buildInspectorSurface()
         },
         cacheSnapshot: buildCacheSnapshot,
+        inFlightSnapshot: buildInFlightSnapshot,
         /*
         One process-wide tap each for the log and socket chokepoints; the
         inspector owns both and fans out to its readers. Socket frames arrive

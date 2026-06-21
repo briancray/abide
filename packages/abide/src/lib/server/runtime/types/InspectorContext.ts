@@ -1,5 +1,6 @@
 import type { LogRecord } from '../../../shared/types/LogRecord.ts'
 import type { InspectorCacheSnapshot } from './InspectorCacheSnapshot.ts'
+import type { InspectorInFlightSnapshot } from './InspectorInFlightSnapshot.ts'
 import type { InspectorSurface } from './InspectorSurface.ts'
 
 /*
@@ -19,6 +20,9 @@ export type InspectorContext = {
     /* Snapshots the persistent (global) cache store — current entries with their
        lifecycle state, retention, tags, and a value preview. */
     cacheSnapshot: () => InspectorCacheSnapshot
+    /* Snapshots the requests whose handler is executing right now — the live
+       counterpart to the closing records onRecord emits once a request settles. */
+    inFlightSnapshot: () => InspectorInFlightSnapshot
     /*
     Subscribes to the unified event stream: every emitted log record (the log's
     structured form, trace context and all) plus published socket frames shaped

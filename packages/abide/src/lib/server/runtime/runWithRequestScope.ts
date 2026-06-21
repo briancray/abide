@@ -5,6 +5,7 @@ import { formatTraceparent } from '../../shared/formatTraceparent.ts'
 import { isStreamingResponse } from '../../shared/isStreamingResponse.ts'
 import { logClosingRecord } from '../../shared/logClosingRecord.ts'
 import type { AppModule } from '../AppModule.ts'
+import { inFlightRequests } from './inFlightRequests.ts'
 import { internalErrorResponse } from './internalErrorResponse.ts'
 import { requestContext } from './requestContext.ts'
 import type { RequestStore } from './types/RequestStore.ts'
@@ -34,6 +35,10 @@ export function runWithRequestScope(
         start: Bun.nanoseconds(),
     }
     return requestContext.run(store, async () => {
+        /* Register the live handler for the inspector's in-flight view; the Set is
+           absent (a no-op) unless the inspector mounted. Removed once the handler
+           settles — its compute is done even if a streamed body keeps piping. */
+        inFlightRequests.tracked?.add(store)
         let response: Response
         try {
             response = await body(store)
@@ -44,6 +49,8 @@ export function runWithRequestScope(
                 abideLog.error(error)
                 response = internalErrorResponse(error)
             }
+        } finally {
+            inFlightRequests.tracked?.delete(store)
         }
         /*
         Flush any cookies the handler set onto the outgoing response. Only when

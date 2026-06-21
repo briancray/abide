@@ -1,4 +1,5 @@
 import { jsonSchemaForSchema } from '../../shared/jsonSchemaForSchema.ts'
+import { promptRegistry } from '../prompts/promptRegistry.ts'
 import { verbRegistry } from '../rpc/verbRegistry.ts'
 import { socketOperations } from '../sockets/socketOperations.ts'
 import { socketRegistry } from '../sockets/socketRegistry.ts'
@@ -33,5 +34,12 @@ export function buildInspectorSurface(): InspectorSurface {
             restUrl: operation.restUrl,
         })),
     }))
-    return { verbs, sockets }
+    /* jsonSchema is already JSON Schema (built from the frontmatter `arguments`
+       list by the resolver plugin), so it's passed through, not re-projected. */
+    const prompts = Array.from(promptRegistry.values()).map((entry) => ({
+        name: entry.prompt.name,
+        description: entry.prompt.description,
+        inputSchema: entry.jsonSchema,
+    }))
+    return { verbs, sockets, prompts }
 }

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
+import { inFlightRequests } from '../src/lib/server/runtime/inFlightRequests.ts'
 import { maybeMountInspector } from '../src/lib/server/runtime/maybeMountInspector.ts'
 import { emitLogRecord } from '../src/lib/shared/emitLogRecord.ts'
 import { logTapSlot } from '../src/lib/shared/logTapSlot.ts'
@@ -13,6 +14,8 @@ afterEach(() => {
     delete process.env.ABIDE_ENABLE_INSPECTOR
     logTapSlot.tap = undefined
     socketTapSlot.tap = undefined
+    // Disarm in-flight tracking so a mounted Set doesn't leak into other suites.
+    inFlightRequests.tracked = undefined
 })
 
 describe('maybeMountInspector', () => {
@@ -29,9 +32,14 @@ describe('maybeMountInspector', () => {
 
         const response = await handler!(...request('/__abide/inspector/surface'))
         expect(response.headers.get('Content-Type')).toContain('application/json')
-        const surface = (await response.json()) as { verbs: unknown[]; sockets: unknown[] }
+        const surface = (await response.json()) as {
+            verbs: unknown[]
+            sockets: unknown[]
+            prompts: unknown[]
+        }
         expect(Array.isArray(surface.verbs)).toBe(true)
         expect(Array.isArray(surface.sockets)).toBe(true)
+        expect(Array.isArray(surface.prompts)).toBe(true)
     })
 
     test('serves the global cache snapshot as JSON', async () => {
@@ -43,6 +51,17 @@ describe('maybeMountInspector', () => {
         expect(Array.isArray(snapshot.entries)).toBe(true)
     })
 
+    test('serves the in-flight request snapshot as JSON, armed by the mount', async () => {
+        process.env.ABIDE_ENABLE_INSPECTOR = 'true'
+        const handler = await maybeMountInspector(APP)
+        // Mounting swaps in the tracking Set so runWithRequestScope starts filling it.
+        expect(inFlightRequests.tracked).toBeInstanceOf(Set)
+        const response = await handler!(...request('/__abide/inspector/inflight'))
+        expect(response.headers.get('Content-Type')).toContain('application/json')
+        const snapshot = (await response.json()) as { requests: unknown[] }
+        expect(Array.isArray(snapshot.requests)).toBe(true)
+    })
+
     test('serves the standalone UI page for the mount root', async () => {
         process.env.ABIDE_ENABLE_INSPECTOR = 'true'
         const handler = await maybeMountInspector(APP)
@@ -51,6 +70,23 @@ describe('maybeMountInspector', () => {
         const html = await response.text()
         expect(html).toContain('abide inspector')
         expect(html).toContain(APP.name)
+        expect(html).toContain(APP.version)
+        // The client-bridge tabs + the BroadcastChannel contract the app side publishes on.
+        expect(html).toContain('data-tab="reactive"')
+        expect(html).toContain('data-tab="router"')
+        expect(html).toContain('abide:inspector')
+    })
+
+    test('renders the in-flight tab and channel client', async () => {
+        process.env.ABIDE_ENABLE_INSPECTOR = 'true'
+        const handler = await maybeMountInspector(APP)
+        const html = await (await handler!(...request('/__abide/inspector'))).text()
+        expect(html).toContain('data-tab="inflight"')
+        expect(html).toContain("fetch(root + '/inflight')")
+        // Wall-clock timestamps on log rows + trace headers (from each record's `ts`).
+        expect(html).toContain('const fmtClock')
+        expect(html).toContain('fmtClock(r.ts)')
+        expect(html).toContain('fmtClock(root.ts)')
     })
 
     test('installs a log tap whose feed replays emitted records', async () => {
