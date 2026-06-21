@@ -1,3 +1,4 @@
+import { escapeKey } from './runtime/escapeKey.ts'
 import { localStoragePersistence } from './runtime/localStoragePersistence.ts'
 import { PATCH_BUS } from './runtime/PATCH_BUS.ts'
 import type { Doc } from './runtime/types/Doc.ts'
@@ -99,8 +100,10 @@ export function persist(
 function restore(doc: Doc, saved: unknown): void {
     const current = doc.snapshot()
     if (isPlainObject(saved) && isPlainObject(current)) {
+        /* `replace` takes a `/`-delimited escaped path, so a top-level key containing
+           `/` or `~` must be escaped to a single segment or it'd be mis-routed. */
         for (const key of Object.keys(saved)) {
-            doc.replace(key, saved[key])
+            doc.replace(escapeKey(key), saved[key])
         }
         return
     }

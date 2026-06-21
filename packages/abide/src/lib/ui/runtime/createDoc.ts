@@ -14,6 +14,13 @@ import { unescapeKey } from './unescapeKey.ts'
 import { walkPath } from './walkPath.ts'
 import { writeNode } from './writeNode.ts'
 
+/* `path` minus its last segment — the parent container's path, '' at the root.
+   The same string `segments.slice(0, -1).join('/')` rebuilds, by one slice. */
+function parentPathOf(path: string): string {
+    const lastSlash = path.lastIndexOf('/')
+    return lastSlash === -1 ? '' : path.slice(0, lastSlash)
+}
+
 /*
 Builds a reactive document over `initial`. Each path read for the first time
 mints a signal node; the node is the notification token, the (mutable) tree is
@@ -132,10 +139,7 @@ export function createDoc(initial: unknown): Doc {
            remove (computed post-apply, below, to resolve an array append's index). */
         const before = PATCH_BUS.active ? walkPath(tree, patch.path) : undefined
         tree = applyPatchToTree(tree, patch, segments)
-        /* parentPath is patch.path minus its last segment — the same string
-           `segments.slice(0, -1).join('/')` rebuilds, taken by one slice instead. */
-        const lastSlash = patch.path.lastIndexOf('/')
-        const parentPath = lastSlash === -1 ? '' : patch.path.slice(0, lastSlash)
+        const parentPath = parentPathOf(patch.path)
         const parentValue = walkPath(tree, parentPath).value
         const leafKey = segments[segments.length - 1] as string | undefined
         /* A structural change (add/remove, or an array element replaced by index)
@@ -194,8 +198,7 @@ export function createDoc(initial: unknown): Doc {
         before: ReturnType<typeof walkPath> | undefined,
     ): Patch | undefined {
         if (patch.op === 'add') {
-            const lastSlash = patch.path.lastIndexOf('/')
-            const parentPath = lastSlash === -1 ? '' : patch.path.slice(0, lastSlash)
+            const parentPath = parentPathOf(patch.path)
             const parent = walkPath(tree, parentPath).value
             const resolved =
                 Array.isArray(parent) && patch.path.endsWith('/-')
@@ -223,9 +226,19 @@ export function createDoc(initial: unknown): Doc {
         const node = nodeFor(path)
         const segments = path.split('/').map(unescapeKey)
         const leafKey = segments[segments.length - 1] as string
+        /* Auto-vivify missing ancestor objects so binding a nested path on a doc
+           booted shallow (e.g. `state({})`) doesn't crash, and a later `set` writes
+           into the LIVE tree (so snapshot/persist see it). Mirrors the container
+           assumption applyPatchToTree makes — except the patch path is authored, this
+           walk is compiler-emitted, so the intermediates may not exist yet. */
         let parent = tree as Record<string, unknown>
         for (const segment of segments.slice(0, -1)) {
-            parent = parent[segment] as Record<string, unknown>
+            let next = parent[segment]
+            if (next === null || typeof next !== 'object') {
+                next = {}
+                parent[segment] = next
+            }
+            parent = next as Record<string, unknown>
         }
         return {
             get: () => readNode(node) as T,
