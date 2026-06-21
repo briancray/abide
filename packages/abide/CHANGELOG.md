@@ -1,5 +1,15 @@
 # abide
 
+## 0.36.0
+
+### Minor Changes
+
+- [`ec48c80`](https://github.com/briancray/abide/commit/ec48c805b019a299cf193c0228646af18605938a) - scope-bound RPC abort + shared control-flow teardown ([`de3b2d4`](https://github.com/briancray/abide/commit/de3b2d44b944a0906eccab3be564caa96ada8bc1))
+
+### Patch Changes
+
+- [`ec48c80`](https://github.com/briancray/abide/commit/ec48c805b019a299cf193c0228646af18605938a) - regenerate AGENTS.md and README for current surface ([`08b5fc9`](https://github.com/briancray/abide/commit/08b5fc9a1822dc6477963bdce2a0b9160ad9e323))
+
 ## 0.35.0
 
 ### Minor Changes
