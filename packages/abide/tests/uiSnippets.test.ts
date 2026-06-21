@@ -14,6 +14,7 @@ import { on } from '../src/lib/ui/dom/on.ts'
 import { when } from '../src/lib/ui/dom/when.ts'
 import { effect } from '../src/lib/ui/effect.ts'
 import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
+import { scope } from '../src/lib/ui/runtime/scope.ts'
 import type { SsrRender } from '../src/lib/ui/runtime/types/SsrRender.ts'
 import { state } from '../src/lib/ui/state.ts'
 import { installMiniDom } from './support/installMiniDom.ts'
@@ -69,7 +70,12 @@ describe('snippets (<template name args> called like a function)', () => {
     test('client mounts the snippet at each call, with args + captured scope', () => {
         const host = document.createElement('div')
         component(source)(host)
-        expect(serialize(host)).toBe('<ul><li>#a</li><li>#b</li></ul>')
+        expect(serialize(host)).toBe(
+            '<ul>' +
+                '<!--abide:snippet--><li>#a</li><!--/abide:snippet-->' +
+                '<!--abide:snippet--><li>#b</li><!--/abide:snippet-->' +
+                '</ul>',
+        )
     })
 
     test('SSR renders each call between snippet markers', () => {
@@ -99,6 +105,24 @@ describe('snippets (<template name args> called like a function)', () => {
         expect(host.textContent).toBe('#a#b')
     })
 
+    test('a snippet call is reactive in its argument: a later write re-mounts it', () => {
+        /* The bug this guards: a `{snippet(arg)}` whose arg derives from state was read
+           once at mount, freezing the initial value (e.g. grouping an array still empty
+           at mount, populated a tick later). The call must re-read its arg reactively.
+           Direct-runtime probe — `row(list)` mirrors the compiler's snippet output. */
+        const row = (list: number[]) =>
+            snippet((target: Node) => {
+                target.appendChild(document.createTextNode(list.join(',')))
+            })
+        const host = document.createElement('div')
+        const items = state<number[]>([])
+        scope(() => appendSnippet(host, () => row(items.value)))
+
+        expect(host.textContent).toBe('') // arg was [] at mount
+        items.value = [1, 2, 3]
+        expect(host.textContent).toBe('1,2,3') // re-read the arg, re-mounted
+    })
+
     test('an object arg destructures (args={{ a, b }})', () => {
         const src = `
             <template name="pair" args={{ a, b }}><span>{a}-{b}</span></template>
@@ -106,7 +130,9 @@ describe('snippets (<template name args> called like a function)', () => {
         `
         const host = document.createElement('div')
         component(src)(host)
-        expect(serialize(host)).toBe('<div><span>1-2</span></div>')
+        expect(serialize(host)).toBe(
+            '<div><!--abide:snippet--><span>1-2</span><!--/abide:snippet--></div>',
+        )
         expect(component(src).render().html).toBe(
             '<div><!--abide:snippet--><span>1-2</span><!--/abide:snippet--></div>',
         )
@@ -128,7 +154,10 @@ describe('snippets passed across components', () => {
         const host = document.createElement('div')
         component(parent, { List: component(List) })(host)
         expect(serialize(host)).toBe(
-            '<abide-list style="display:contents"><ul><li>•x</li><li>•y</li></ul></abide-list>',
+            '<abide-list style="display:contents"><ul>' +
+                '<!--abide:snippet--><li>•x</li><!--/abide:snippet-->' +
+                '<!--abide:snippet--><li>•y</li><!--/abide:snippet-->' +
+                '</ul></abide-list>',
         )
     })
 

@@ -67,16 +67,15 @@ const serialize = (host: unknown): string =>
     (globalThis as unknown as { serializeMiniDom: (h: unknown) => string }).serializeMiniDom(host)
 
 /* Some constructs emit server-only resumption/boundary markers the client's FRESH build
-   never re-emits but its HYDRATION path consumes (snippet invocation `<!--abide:snippet-->`,
-   try boundaries `<!--abide:try:N-->`). Normalize those documented asymmetries away so raw-
-   markup comparison still polices the skeleton anchors (`<!--a-->`) and ranges (`[`/`]`) that
-   actually drift — invariant #4 (the client adopting the server DOM markers and all) proves
-   the markers themselves are congruent. */
+   never re-emits but its HYDRATION path consumes (try boundaries `<!--abide:try:N-->`).
+   Normalize those documented asymmetries away so raw-markup comparison still polices the
+   skeleton anchors (`<!--a-->`) and ranges (`[`/`]`) that actually drift — invariant #4
+   (the client adopting the server DOM markers and all) proves the markers themselves are
+   congruent. Snippet markers (`<!--abide:snippet-->`) are NOT stripped: the client now
+   bounds every `{name(args)}` mount in them too (the range an argument change rebuilds), so
+   they are congruent on both sides rather than a server-only asymmetry. */
 const stripServerOnlyMarkers = (html: string): string =>
-    html
-        .replaceAll('<!--abide:snippet-->', '')
-        .replaceAll('<!--/abide:snippet-->', '')
-        .replace(/<!--\/?abide:try:\d+-->/g, '')
+    html.replace(/<!--\/?abide:try:\d+-->/g, '')
 
 /* The visible text a browser would show: drop every comment marker and tag. The generator
    computes the SAME string by construction (the `text` field) — that independently-known

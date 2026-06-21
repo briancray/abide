@@ -1,5 +1,6 @@
 import { RENDER } from '../runtime/RENDER.ts'
 import { scope } from '../runtime/scope.ts'
+import { scopeGroup } from '../runtime/scopeGroup.ts'
 import { fillBefore } from './fillBefore.ts'
 import { openMarker } from './openMarker.ts'
 
@@ -21,12 +22,16 @@ export function mountSlot(
     before: Node | null = null,
 ): void {
     const hydration = RENDER.hydration
+    /* The slot content's scope, registered with the owner so its effects/listeners
+       dispose on owner teardown (a navigation) — the slot never toggles, so the
+       group only ever tracks this one child. */
+    const group = scopeGroup()
     openMarker(parent, '[', before)
     if (hydration !== undefined) {
-        scope(() => render(parent)) // content claims the SSR range in place
+        group.track(scope(() => render(parent))) // content claims the SSR range in place
         openMarker(parent, ']')
     } else {
         const end = openMarker(parent, ']', before)
-        fillBefore(end, render)
+        group.track(fillBefore(end, render))
     }
 }
