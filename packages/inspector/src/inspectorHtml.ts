@@ -4,13 +4,17 @@ step, so the page renders standalone whatever the host app's toolchain. Data
 paths are derived from location.pathname (root + `/surface` + `/events`) so the
 page works under any mount and inherits any APP_URL base transparently.
 
-Three tabs over one event stream: Logs (the live tail, default), Traces (records
-grouped by trace id with a span waterfall), and Surface (the static catalog).
-Everything is built client-side from the buffered records, so filters and the
-waterfall need no extra server round-trips. Styling is inline (devtools-dark) —
-it can't reach the app's Tailwind from here.
+Tabs: Logs (the live tail, default), Traces (records grouped by trace id with a
+span waterfall), In-flight (handlers executing now, polled), Reactive + Router
+(the app tab's scope tree + routing, over a same-origin BroadcastChannel),
+Cache (the global store, polled), and Surface (the static catalog). The
+stream-fed tabs build client-side from the buffered records, so filters and the
+waterfall need no extra round-trips; the polled tabs snapshot on open and via a
+refresh button; the channel tabs render whatever the app side publishes. Log
+rows and trace headers carry a wall-clock timestamp from each record's `ts`.
+Styling is inline (devtools-dark) — it can't reach the app's Tailwind from here.
 */
-export function inspectorHtml(appName: string): string {
+export function inspectorHtml(appName: string, appVersion: string): string {
     return `<!doctype html>
 <html lang="en">
 <head>
@@ -29,6 +33,9 @@ export function inspectorHtml(appName: string): string {
   nav button { background: none; border: none; border-bottom: 2px solid transparent; color: #6b7280; padding: 8px 12px; cursor: pointer; font: inherit; }
   nav button.active { color: #fff; border-bottom-color: #5b8def; }
   nav .count { color: #4b5563; font-size: 11px; }
+  /* Marks tabs sourced from this browser's app tabs (BroadcastChannel), not the
+     server's global traffic — disambiguates local-session state from everyone's. */
+  nav .local { color: #4aa3a3; font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; vertical-align: 2px; }
   main { flex: 1; min-height: 0; }
   .panel { display: none; height: 100%; overflow: auto; }
   .panel.active { display: block; }
@@ -42,6 +49,7 @@ export function inspectorHtml(appName: string): string {
   .row { display: flex; gap: 10px; align-items: baseline; padding: 3px 16px; border-bottom: 1px solid #14161b; font-variant-numeric: tabular-nums; }
   .row:hover { background: #111317; }
   .row.block { align-items: flex-start; }
+  .time { flex: none; width: 92px; color: #4b5563; }
   .trace { flex: none; width: 64px; color: #5b8def; cursor: pointer; }
   .trace:hover { text-decoration: underline; }
   .body { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -63,6 +71,7 @@ export function inspectorHtml(appName: string): string {
   .thead:hover { color: #fff; }
   .tid { flex: none; width: 72px; color: #5b8def; }
   .tpath { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ttime { flex: none; color: #4b5563; font-variant-numeric: tabular-nums; }
   .span { display: grid; grid-template-columns: 220px 1fr; gap: 10px; align-items: center; margin-top: 4px; }
   .slabel { display: flex; gap: 6px; align-items: baseline; overflow: hidden; font-size: 12px; }
   .sname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #9aa0aa; }
@@ -91,18 +100,32 @@ export function inspectorHtml(appName: string): string {
   .cval { max-width: 380px; overflow: hidden; text-overflow: ellipsis; color: #9aa0aa; }
   .cstat.settled { color: #5fb87a; } .cstat.in-flight { color: #d9a441; } .cstat.refreshing { color: #56b6c2; }
   .empty { color: #4b5563; padding: 16px; }
+
+  .scope { border-bottom: 1px solid #14161b; }
+  .scope > .shead { display: flex; gap: 8px; align-items: baseline; padding: 6px 16px; }
+  .sid { color: #5b8def; }
+  .slbl { color: #5fb87a; }
+  .srec { color: #b48ead; font-size: 11px; }
+  .scope pre.json { margin: 0; padding: 2px 16px 8px; color: #9aa0aa; white-space: pre-wrap; word-break: break-word; }
+  .scope pre.json .k { color: #56b6c2; }
+  .scope.flash > .shead .sid { color: #5fb87a; }
+  dl.router { display: grid; grid-template-columns: auto 1fr; gap: 2px 16px; margin: 16px; max-width: 640px; }
+  dl.router dt { color: #6b7280; } dl.router dd { margin: 0; color: #d7dae0; word-break: break-all; }
 </style>
 </head>
 <body>
 <header>
-  <b>${escapeHtml(appName)}</b><span>abide inspector</span>
+  <b>${escapeHtml(appName)}</b><span>${escapeHtml(appVersion)}</span><span>abide inspector</span>
   <span class="warn">privileged · exposes all traffic</span>
 </header>
 <nav>
   <button data-tab="logs" class="active">Logs <span class="count" id="logsCount"></span></button>
   <button data-tab="traces">Traces <span class="count" id="tracesCount"></span></button>
+  <button data-tab="inflight">In-flight <span class="count" id="inflightCount"></span></button>
   <button data-tab="cache">Cache <span class="count" id="cacheCount"></span></button>
   <button data-tab="surface">Surface</button>
+  <button data-tab="reactive">Reactive <span class="count" id="reactiveCount"></span><span class="local" title="this browser's app tabs only — not global traffic">local</span></button>
+  <button data-tab="router">Router <span class="local" title="this browser's app tabs only — not global traffic">local</span></button>
 </nav>
 <main>
   <section class="panel active" data-tab="logs">
@@ -116,13 +139,30 @@ export function inspectorHtml(appName: string): string {
     <div id="feed"><div class="empty">waiting for activity…</div></div>
   </section>
   <section class="panel" data-tab="traces"><div id="traces"><div class="empty">no traces yet…</div></div></section>
+  <section class="panel" data-tab="inflight"><div id="inflight" class="empty">loading in-flight…</div></section>
   <section class="panel" data-tab="cache"><div id="cache" class="empty">loading cache…</div></section>
   <section class="panel" data-tab="surface"><div id="surface" class="empty">loading surface…</div></section>
+  <section class="panel" data-tab="reactive">
+    <div class="filters">
+      <select id="rTab"><option value="">no app tab connected</option></select>
+      <span class="pill" id="rPatch"></span>
+      <button id="rRefresh">refresh</button>
+    </div>
+    <div id="reactive" class="empty">open a page of this app in another tab (same browser) — its scope tree appears here</div>
+  </section>
+  <section class="panel" data-tab="router"><div id="router" class="empty">open a page of this app in another tab (same browser) — its router state appears here</div></section>
 </main>
 <script type="module">
 const root = location.pathname.replace(/\\/$/, '')
 const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
 const stripAnsi = (s) => String(s).replace(/\\u001b\\[[0-9;]*m/g, '')
+// Local wall-clock HH:MM:SS.mmm from a record's epoch ts (every record carries one).
+const pad = (n, w) => String(n).padStart(w, '0')
+const fmtClock = (ts) => {
+  if (!ts) return ''
+  const d = new Date(ts)
+  return pad(d.getHours(), 2) + ':' + pad(d.getMinutes(), 2) + ':' + pad(d.getSeconds(), 2) + '.' + pad(d.getMilliseconds(), 3)
+}
 
 // ---- state ----
 const RECORD_CAP = 4000
@@ -144,7 +184,7 @@ function matches(r) {
   if (filters.channel && channelOf(r) !== filters.channel) return false
   if (filters.trace && !(r.trace || '').includes(filters.trace)) return false
   if (filters.text) {
-    const hay = (r.msg || '') + ' ' + (r.path || '') + ' ' + (r.method || '') + ' ' + (r.data ? JSON.stringify(r.data) : '')
+    const hay = (r.msg || '') + ' ' + (r.name || '') + ' ' + (r.path || '') + ' ' + (r.method || '') + ' ' + (r.data ? JSON.stringify(r.data) : '')
     if (!hay.toLowerCase().includes(filters.text.toLowerCase())) return false
   }
   return true
@@ -165,8 +205,10 @@ function rowEl(r) {
   } else {
     block = true
     const tag = r.channel ? '<span class="channel">[' + esc(r.channel) + ']</span> ' : ''
+    // Span records (rpcLog.trace et al.) carry their text in 'name', not 'msg'.
+    const text = r.msg || r.name || ''
     const extra = r.data !== undefined ? ' ' + JSON.stringify(r.data) : ''
-    body = '<pre class="msg">' + tag + esc(stripAnsi(r.msg || '') + extra) + '</pre>'
+    body = '<pre class="msg">' + tag + esc(stripAnsi(text) + extra) + '</pre>'
   }
   const cache = r.cache && (r.cache.hits + r.cache.misses + r.cache.coalesced) > 0
     ? '<span class="cache" title="cache hits/misses/coalesced">⚡ ' + r.cache.hits + '/' + r.cache.misses + '/' + r.cache.coalesced + '</span>'
@@ -178,6 +220,7 @@ function rowEl(r) {
   const row = document.createElement('div')
   row.className = 'row lvl-' + (r.level || 'info') + (block ? ' block' : '')
   row.innerHTML =
+    '<span class="time">' + esc(fmtClock(r.ts)) + '</span>' +
     '<span class="trace" data-trace="' + esc(r.trace || '') + '">' + esc((r.trace || '').slice(0, 8)) + '</span>' +
     '<span class="body">' + body + '</span>' +
     '<span class="meta">' + meta + '</span>'
@@ -274,6 +317,7 @@ function traceHtml(id, recs) {
     '<div class="thead">' +
     '<span class="tid">' + esc(id.slice(0, 8)) + '</span>' +
     '<span class="tpath">trace · ' + requests.length + ' request' + (requests.length === 1 ? '' : 's') + '</span>' +
+    '<span class="ttime">' + esc(fmtClock(root.ts)) + '</span>' +
     '<span class="channel">' + totalSpans + ' spans</span>' +
     '</div>'
   return '<div class="twrap">' + head + requestHtml(root, childrenOf, 0) + '</div>'
@@ -325,7 +369,11 @@ for (const btn of document.querySelectorAll('nav button')) {
     for (const p of document.querySelectorAll('.panel')) p.classList.toggle('active', p.dataset.tab === activeTab)
     if (activeTab === 'logs') renderLogs()
     if (activeTab === 'traces') renderTraces()
+    if (activeTab === 'inflight') loadInFlight()
+    if (activeTab === 'reactive') renderReactive()
+    if (activeTab === 'router') renderRouter()
     if (activeTab === 'cache') loadCache()
+    syncInFlightPoll()
   }
 }
 channelSel.onchange = () => { filters.channel = channelSel.value; renderLogs() }
@@ -384,7 +432,7 @@ function verbRow(v, i) {
 async function loadSurface() {
   const surfaceEl = document.getElementById('surface')
   try {
-    const { verbs, sockets } = await (await fetch(root + '/surface')).json()
+    const { verbs, sockets, prompts } = await (await fetch(root + '/surface')).json()
     const verbTable =
       '<table class="surface"><thead><tr>' +
       '<th>method</th><th>path</th><th class="c">schema</th><th class="c">browser</th>' +
@@ -398,10 +446,25 @@ async function loadSurface() {
           '<td><pre class="schema">' + esc(s.operations.map((o) => o.method + ' ' + o.restUrl).join('\\n')) + '</pre></td></tr>').join('') +
         '</tbody></table>'
       : '<div class="empty">none</div>'
+    // Prompts (MCP-only): name, description, and the argument schema expandable
+    // like a verb's. Absent when the app declares none — keep the section out.
+    const promptList = prompts || []
+    const promptTable = promptList.length
+      ? '<table class="surface"><thead><tr><th>prompt</th><th>description</th><th class="c">args</th></tr></thead><tbody>' +
+        promptList.map((p, i) =>
+          '<tr class="vrow" data-p="' + i + '"><td class="url">' + esc(p.name) + '</td>' +
+          '<td>' + esc(p.description || '·') + '</td>' +
+          '<td class="c">' + glyph(!!p.inputSchema) + '</td></tr>' +
+          '<tr class="vdetail" hidden><td colspan="3">' +
+          (p.inputSchema ? schemaBlock('arguments', p.inputSchema) : '<div class="empty">no arguments</div>') +
+          '</td></tr>').join('') +
+        '</tbody></table>'
+      : ''
     surfaceEl.className = ''
     surfaceEl.innerHTML =
       '<h2>RPC verbs (' + verbs.length + ')</h2>' + verbTable +
-      '<h2>Sockets (' + sockets.length + ')</h2>' + socketTable
+      '<h2>Sockets (' + sockets.length + ')</h2>' + socketTable +
+      (promptList.length ? '<h2>Prompts (' + promptList.length + ')</h2>' + promptTable : '')
     for (const row of surfaceEl.querySelectorAll('tr.vrow')) {
       row.onclick = () => {
         const detail = row.nextElementSibling
@@ -435,18 +498,186 @@ async function loadCache() {
         '<td>' + (e.remote ? 'remote' : 'producer') + '</td>' +
         '<td class="num">' + fmtTtl(e.ttl) + '</td>' +
         '<td class="num">' + fmtExpiry(e.expiresInMs) + '</td>' +
-        '<td>' + esc(e.scope.join(' ') || '·') + (e.policy ? ' <span class="channel">' + esc(e.policy) + '</span>' : '') + '</td>' +
+        '<td>' + esc((e.tags || []).join(' ') || '·') + (e.policy ? ' <span class="channel">' + esc(e.policy) + '</span>' : '') + '</td>' +
         '<td class="cval">' + esc(e.value || '·') + '</td></tr>').join('')
       el.className = ''
       el.innerHTML = refresh +
         '<table class="surface"><thead><tr><th>key</th><th>status</th><th>kind</th>' +
-        '<th class="num">ttl</th><th class="num">expires</th><th>scope</th><th>value</th></tr></thead><tbody>' +
+        '<th class="num">ttl</th><th class="num">expires</th><th>tags</th><th>value</th></tr></thead><tbody>' +
         rows + '</tbody></table>'
     }
     document.getElementById('cacheRefresh').onclick = loadCache
   } catch (e) {
     el.innerHTML = '<div class="empty">cache failed: ' + esc(e.message) + '</div>'
   }
+}
+
+// ---- in-flight ----
+// Snapshots handlers executing right now; elapsed keeps growing, so while the
+// tab is open it re-polls on an interval (the only live-changing snapshot tab).
+async function loadInFlight() {
+  const el = document.getElementById('inflight')
+  try {
+    const { requests } = await (await fetch(root + '/inflight')).json()
+    document.getElementById('inflightCount').textContent = requests.length || ''
+    if (!requests.length) {
+      el.className = 'empty'
+      el.innerHTML = 'no requests in flight — handlers appear here while they execute, then settle into Logs'
+      return
+    }
+    const rows = requests.map((q) =>
+      '<tr><td><span class="trace" data-trace="' + esc(q.trace) + '">' + esc((q.trace || '').slice(0, 8)) + '</span></td>' +
+      '<td><span class="method ' + esc(q.method) + '">' + esc(q.method) + '</span></td>' +
+      '<td class="url">' + esc(q.path) + (q.route ? ' <span class="channel">' + esc(q.route) + '</span>' : '') + '</td>' +
+      '<td class="num">' + q.elapsedMs.toFixed(1) + 'ms</td></tr>').join('')
+    el.className = ''
+    el.innerHTML =
+      '<div class="filters"><span class="pill">' + requests.length +
+      ' in flight</span><button id="inflightRefresh">refresh</button></div>' +
+      '<table class="surface"><thead><tr><th>trace</th><th>method</th><th>path</th>' +
+      '<th class="num">elapsed</th></tr></thead><tbody>' + rows + '</tbody></table>'
+    document.getElementById('inflightRefresh').onclick = loadInFlight
+    // Pivot to the trace from an in-flight row, same as the log rows.
+    for (const t of el.querySelectorAll('.trace')) t.onclick = () => {
+      filters.trace = t.dataset.trace
+      document.getElementById('fTrace').value = t.dataset.trace
+      activeTab = 'logs'; renderLogs()
+      for (const b of document.querySelectorAll('nav button')) b.classList.toggle('active', b.dataset.tab === 'logs')
+      for (const p of document.querySelectorAll('.panel')) p.classList.toggle('active', p.dataset.tab === 'logs')
+      syncInFlightPoll()
+    }
+  } catch (e) {
+    el.className = 'empty'
+    el.innerHTML = 'in-flight failed: ' + esc(e.message)
+  }
+}
+
+// Poll only while the In-flight tab is the active one — elapsed is the only
+// value that changes between snapshots, so an idle tab needs no traffic.
+let inFlightTimer
+function syncInFlightPoll() {
+  clearInterval(inFlightTimer)
+  if (activeTab === 'inflight') inFlightTimer = setInterval(loadInFlight, 1000)
+}
+
+// ---- client bridge (reactive + router) ----
+// App tab(s) publish scope + router state over a same-origin BroadcastChannel
+// (startClient installs the publisher when the inspector is enabled). This page
+// subscribes, lists connected tabs, and renders the selected tab's scope tree +
+// router state. No server round-trip — it's cross-tab, same origin.
+const tabs = new Map()   // tab id -> { url, app }
+const snaps = new Map()  // tab id -> { scopes, router }
+let selectedTab = ''
+let patchCount = 0
+const rTabSel = document.getElementById('rTab')
+
+function refreshTabOptions() {
+  rTabSel.innerHTML = tabs.size
+    ? [...tabs].map(([id, t]) => '<option value="' + esc(id) + '">' + esc(t.url || id) + '</option>').join('')
+    : '<option value="">no app tab connected</option>'
+  if (tabs.has(selectedTab)) rTabSel.value = selectedTab
+}
+
+function selectTab(id) {
+  selectedTab = id
+  refreshTabOptions()
+  if (chan) chan.postMessage({ kind: 'request', tab: id })
+  renderReactive(); renderRouter()
+}
+
+rTabSel.onchange = () => { if (rTabSel.value) selectTab(rTabSel.value) }
+document.getElementById('rRefresh').onclick = () => {
+  if (selectedTab && chan) chan.postMessage({ kind: 'request', tab: selectedTab })
+}
+
+// Flat [{id,parent,state,recorded}] list → nested tree by parent id (the app side
+// can't ship the children array, so the inspector rebuilds the forest here).
+function renderReactive() {
+  const el = document.getElementById('reactive')
+  const snap = snaps.get(selectedTab)
+  const scopes = (snap && snap.scopes) || []
+  document.getElementById('reactiveCount').textContent = scopes.length || ''
+  document.getElementById('rPatch').textContent = patchCount ? patchCount + ' patches' : ''
+  if (!selectedTab || !scopes.length) {
+    el.className = 'empty'
+    el.innerHTML = tabs.size
+      ? 'no scopes in this tab yet — interact with the app to create reactive state'
+      : 'open a page of this app in another tab (same browser) — its scope tree appears here'
+    return
+  }
+  const kids = new Map()
+  for (const s of scopes) {
+    const p = s.parent || ''
+    if (!kids.has(p)) kids.set(p, [])
+    kids.get(p).push(s)
+  }
+  const render = (s, depth) => {
+    // Indent by depth on top of the base 16px the .shead/.json CSS already sets.
+    const pad = 'style="padding-left:' + (16 + depth * 16) + 'px"'
+    const rec = s.recorded ? '<span class="srec">recorded</span>' : ''
+    const label = s.label ? '<span class="slbl">&lt;' + esc(s.label) + '&gt;</span>' : ''
+    const head =
+      '<div class="shead" ' + pad + '><span class="sid">' + esc(s.id) + '</span>' + label + rec + '</div>'
+    const body = '<pre class="json" ' + pad + '>' + esc(JSON.stringify(s.state, null, 2)) + '</pre>'
+    const childHtml = (kids.get(s.id) || []).map((c) => render(c, depth + 1)).join('')
+    return '<div class="scope">' + head + body + childHtml + '</div>'
+  }
+  el.className = ''
+  el.innerHTML = (kids.get('') || []).map((s) => render(s, 0)).join('')
+}
+
+function renderRouter() {
+  const el = document.getElementById('router')
+  const snap = snaps.get(selectedTab)
+  const r = snap && snap.router
+  if (!r) {
+    el.className = 'empty'
+    el.innerHTML = 'open a page of this app in another tab (same browser) — its router state appears here'
+    return
+  }
+  const row = (k, v) => '<dt>' + esc(k) + '</dt><dd>' + esc(v) + '</dd>'
+  el.className = ''
+  el.innerHTML = '<dl class="router">' +
+    row('path', r.path) + row('route', r.route || '·') +
+    row('params', JSON.stringify(r.params || {})) + row('url', r.url) +
+    row('navigating', r.navigating) + row('history entry', r.entry) + '</dl>'
+}
+
+const chan = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('abide:inspector') : undefined
+if (chan) {
+  chan.onmessage = (event) => {
+    const m = event.data || {}
+    if (!m.tab) return
+    if (m.kind === 'announce') {
+      tabs.set(m.tab, { url: m.url, app: m.app })
+      refreshTabOptions()
+      if (!selectedTab) selectTab(m.tab)
+    } else if (m.kind === 'snapshot') {
+      snaps.set(m.tab, { scopes: m.scopes, router: m.router })
+      if (m.tab === selectedTab && activeTab === 'reactive') renderReactive()
+      if (m.tab === selectedTab && activeTab === 'router') renderRouter()
+    } else if (m.kind === 'nav') {
+      const prev = snaps.get(m.tab) || {}
+      snaps.set(m.tab, { scopes: prev.scopes || [], router: m.router })
+      if (m.tab === selectedTab && activeTab === 'router') renderRouter()
+    } else if (m.kind === 'patch') {
+      if (m.tab === selectedTab) {
+        patchCount++
+        if (activeTab === 'reactive') document.getElementById('rPatch').textContent = patchCount + ' patches'
+      }
+    } else if (m.kind === 'bye') {
+      tabs.delete(m.tab); snaps.delete(m.tab)
+      // The selected tab left: fall through to another still-connected tab if one
+      // remains, else clear the selection and render the empty state.
+      if (m.tab === selectedTab) {
+        const next = tabs.keys().next().value
+        if (next) { selectTab(next) } else { selectedTab = ''; renderReactive(); renderRouter() }
+      }
+      refreshTabOptions()
+    }
+  }
+  // Announce arrival so already-open app tabs (re)publish their presence + state.
+  chan.postMessage({ kind: 'hello' })
 }
 
 // ---- live feed ----
