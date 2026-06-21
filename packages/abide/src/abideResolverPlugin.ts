@@ -201,7 +201,7 @@ export function abideResolverPlugin({
         setup(build) {
             build.onResolve(
                 {
-                    filter: /\/_virtual\/(rpc|sockets|prompts|pages|layouts|errors|app|config|mcp-resources|mcp|assets|public-assets|shell|app-info|cli-manifest|cli-name|cli-chrome|bundle-window|bundle-disconnected-component|bundle-disconnected)\.ts$/,
+                    filter: /\/_virtual\/(rpc|sockets|prompts|pages|layouts|app|config|mcp-resources|mcp|assets|public-assets|shell|app-info|cli-manifest|cli-name|cli-chrome|bundle-window|bundle-disconnected-component|bundle-disconnected)\.ts$/,
                 },
                 (args) => {
                     const name = fileStem(args.path)
@@ -431,17 +431,6 @@ ${optionLines}
                         keyForFile: pageUrlForFile,
                         importDir: pagesDir,
                         exportName: 'layouts',
-                    })
-                }
-
-                if (args.path === 'abide:errors') {
-                    const { errorFiles } = await scanPagesOnce()
-                    return manifestModule({
-                        files: errorFiles,
-                        keyForFile: pageUrlForFile,
-                        importDir: pagesDir,
-                        exportName: 'errors',
-                        label: 'error pages',
                     })
                 }
 
@@ -788,7 +777,6 @@ ${encoded.map((entry) => entry.line).join('\n')}
 type PagesScan = {
     pageFiles: string[]
     layoutFiles: string[]
-    errorFiles: string[]
 }
 
 /*
@@ -796,19 +784,17 @@ Walks src/ui/pages once and classifies each `.abide` leaf by filename: a
 `page.abide` is a route (its URL is the folder path), a `layout.abide` is a
 layout that wraps every page at or below its folder (keyed by the same folder
 URL). Any other `.abide` file (a shared component) is ignored here — free to
-live anywhere and be imported relatively. errorFiles stay empty — there is no
-framework error resolution.
+live anywhere and be imported relatively.
 */
 async function scanPages(pagesDir: string): Promise<PagesScan> {
     if (!existsSync(pagesDir)) {
-        return { pageFiles: [], layoutFiles: [], errorFiles: [] }
+        return { pageFiles: [], layoutFiles: [] }
     }
     const allFiles = await Array.fromAsync(new Glob('**/*.abide').scan({ cwd: pagesDir }))
     const leafIs = (name: string) => (file: string) => (file.split('/').pop() ?? '') === name
     return {
         pageFiles: allFiles.filter(leafIs('page.abide')),
         layoutFiles: allFiles.filter(leafIs('layout.abide')),
-        errorFiles: [],
     }
 }
 
