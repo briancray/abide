@@ -27,7 +27,13 @@ export function flushingGzipStream(): TransformStream<Uint8Array, Uint8Array> {
             gzip.destroy()
         }
     })
-    return new TransformStream({
+    /* The spec'd Transformer.cancel hook (consumer-cancellation) postdates this TS lib's
+       Transformer type; declare it locally so the literal type-checks while the platform
+       (Bun) still invokes it. Typing the const sidesteps the fresh-literal excess-property
+       check without weakening start/transform/flush. */
+    const transformer: Transformer<Uint8Array, Uint8Array> & {
+        cancel(reason?: unknown): void
+    } = {
         start(controller) {
             sink = controller
             gzip.on('error', (error) => controller.error(error))
@@ -51,5 +57,6 @@ export function flushingGzipStream(): TransformStream<Uint8Array, Uint8Array> {
             closed = true
             gzip.destroy()
         },
-    })
+    }
+    return new TransformStream(transformer)
 }

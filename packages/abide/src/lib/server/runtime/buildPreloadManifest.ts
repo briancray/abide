@@ -80,7 +80,10 @@ export async function buildPreloadManifest({
     /* route/layout key → its lazy chunk, split by the page-/layout- stem. */
     const pageChunk: Record<string, string> = {}
     const layoutChunk: Record<string, string> = {}
-    for (const [, key, chunk] of entrySource.matchAll(ROUTE_CHUNK)) {
+    for (const match of entrySource.matchAll(ROUTE_CHUNK)) {
+        /* Both capture groups are present whenever the regex matches. */
+        const key = match[1] as string
+        const chunk = match[2] as string
         if (chunk.startsWith('page-')) {
             pageChunk[key] = chunk
         } else {
@@ -97,7 +100,11 @@ export async function buildPreloadManifest({
         }
         const deps = read(name).then((source) =>
             source
-                ? [...new Set([...source.matchAll(STATIC_IMPORT)].map((match) => match[1]))]
+                ? [
+                      ...new Set(
+                          [...source.matchAll(STATIC_IMPORT)].map((match) => match[1] as string),
+                      ),
+                  ]
                 : [],
         )
         directCache.set(name, deps)
@@ -126,7 +133,7 @@ export async function buildPreloadManifest({
     const layoutKeys = Object.keys(layoutChunk)
     const manifest: Record<string, string[]> = {}
     for (const route of Object.keys(pageChunk)) {
-        const chunks = new Set<string>(await closure(pageChunk[route]))
+        const chunks = new Set<string>(await closure(pageChunk[route] as string))
         for (const key of layoutChainForRoute(route, layoutKeys)) {
             const chunk = layoutChunk[key]
             if (chunk) {
