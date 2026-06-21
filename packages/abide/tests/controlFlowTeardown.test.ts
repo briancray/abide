@@ -103,6 +103,31 @@ describe('control-flow blocks dispose mounted content with their owner', () => {
         expect(p.runs()).toBe(1)
     })
 
+    /* Regression: an enclosing block can tear a when's range out of the live DOM in
+       the same flush that re-runs its toggle effect, before the owner disposes it. The
+       end marker then has a null parent, so a rebuild has nowhere to land — fillBefore
+       must skip it instead of inserting before a parentless comment (HierarchyRequestError). */
+    test('when toggled after its range was detached does not throw', () => {
+        const host = document.createElement('div')
+        const cond = state(false)
+        scope(() =>
+            when(
+                host,
+                () => cond.value,
+                (parent) => {
+                    ;(parent as unknown as Element).appendChild(document.createElement('span'))
+                },
+            ),
+        )
+        // Detach the block's markers from the live DOM, mimicking an outer teardown.
+        while (host.firstChild) {
+            host.removeChild(host.firstChild)
+        }
+        expect(() => {
+            cond.value = true
+        }).not.toThrow()
+    })
+
     test('eachAsync (streamed row)', async () => {
         async function* one(): AsyncGenerator<number> {
             yield 1

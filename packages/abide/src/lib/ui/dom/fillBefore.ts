@@ -18,6 +18,16 @@ would otherwise make the build helpers claim SSR nodes that don't exist for fres
 content. The same cursor is restored after (mirrors awaitBlock/tryBlock/each).
 */
 export function fillBefore(end: Node, content: (into: Node) => void): () => void {
+    /* A control-flow effect can fire one final time after its block was already
+       detached — e.g. an enclosing await/each block tears the branch down in the same
+       microtask flush that re-ran this effect, before the owner scope disposes it. The
+       end marker then has no live parent, so there is nowhere to build into; inserting
+       a fragment before a parentless comment throws HierarchyRequestError ("would yield
+       an incorrect node tree"). Skip the rebuild — owner teardown disposes this dead
+       block anyway. */
+    if (!end.parentNode) {
+        return () => {}
+    }
     const fragment = document.createDocumentFragment()
     const previousHydration = RENDER.hydration
     RENDER.hydration = undefined
