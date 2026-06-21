@@ -12,6 +12,7 @@ import { binaryDirEnvPath } from './lib/shared/binaryDirEnvPath.ts'
 import { clearLastConnection } from './lib/shared/clearLastConnection.ts'
 import { createLivenessWatch } from './lib/shared/createLivenessWatch.ts'
 import { dataDirEnvPath } from './lib/shared/dataDirEnvPath.ts'
+import { messageFromError } from './lib/shared/messageFromError.ts'
 import { readEnvFile } from './lib/shared/readEnvFile.ts'
 import { readLastConnection } from './lib/shared/readLastConnection.ts'
 import { serializeEnv } from './lib/shared/serializeEnv.ts'
@@ -417,7 +418,13 @@ self.addEventListener('message', (event: MessageEvent) => {
         | { type: 'window'; handle: number }
         | { type: 'shutdown' }
     if (data.type === 'init') {
-        void start(data.init)
+        /*
+        A rejected start() would leave the launcher's `await {type:'ready'}`
+        hanging forever — surface the failure so it can fail fast instead.
+        */
+        start(data.init).catch((startError) => {
+            self.postMessage({ type: 'error', error: messageFromError(startError) })
+        })
     } else if (data.type === 'window') {
         webviewHandle = data.handle
     } else if (data.type === 'shutdown') {

@@ -80,14 +80,24 @@ the connect screen. Resolving before this means a successful resume opens straig
 at the app — no connect-screen flash — at the cost of a brief window-less moment
 while it boots/probes (the OS shows the launching dock icon meanwhile).
 */
-const { origin, target } = await new Promise<{ origin: string; target: string }>((resolve) => {
-    worker.addEventListener('message', (event: MessageEvent) => {
-        const data = event.data as { type: string; origin?: string; target?: string }
-        if (data.type === 'ready' && data.origin && data.target) {
-            resolve({ origin: data.origin, target: data.target })
-        }
-    })
-})
+const { origin, target } = await new Promise<{ origin: string; target: string }>(
+    (resolve, reject) => {
+        worker.addEventListener('message', (event: MessageEvent) => {
+            const data = event.data as {
+                type: string
+                origin?: string
+                target?: string
+                error?: string
+            }
+            if (data.type === 'ready' && data.origin && data.target) {
+                resolve({ origin: data.origin, target: data.target })
+            } else if (data.type === 'error') {
+                /* The worker's start() rejected — fail fast instead of hanging on `ready`. */
+                reject(new Error(data.error ?? 'control server worker failed to start'))
+            }
+        })
+    },
+)
 
 /*
 The built-in File menu (Start / Disconnect), placed before Edit. Each item is a
