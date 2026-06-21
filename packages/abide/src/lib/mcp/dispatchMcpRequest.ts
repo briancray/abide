@@ -53,18 +53,36 @@ export async function dispatchMcpRequest(
     request: Request,
     opts: McpServerOptions,
     serverInfo: { name: string; version: string },
-): Promise<JsonRpcResponse> {
+): Promise<JsonRpcResponse | undefined> {
     let envelope: JsonRpcRequest
     try {
         envelope = (await request.clone().json()) as JsonRpcRequest
     } catch {
         return jsonRpcError(null, -32700, 'Parse error')
     }
+    /* A notification has no `id` field at all (absent — `id: 0`/`id: null` are
+       valid ids). JSON-RPC 2.0 forbids replying to a notification, so dispatch it
+       for its side effect and return undefined to signal "no reply". */
+    const isNotification = !('id' in envelope)
     const id = envelope.id ?? null
     if (envelope.jsonrpc !== '2.0' || typeof envelope.method !== 'string') {
-        return jsonRpcError(id, -32600, 'Invalid Request')
+        return isNotification ? undefined : jsonRpcError(id, -32600, 'Invalid Request')
     }
 
+    // Run the method for its side effect, then drop the reply for a notification.
+    const response = await dispatchMethod(envelope, id, request, opts, serverInfo)
+    return isNotification ? undefined : response
+}
+
+/* Resolves a parsed, validated request to its JSON-RPC response. The caller
+   discards this for notifications; non-notifications get it verbatim. */
+async function dispatchMethod(
+    envelope: JsonRpcRequest,
+    id: string | number | null,
+    request: Request,
+    opts: McpServerOptions,
+    serverInfo: { name: string; version: string },
+): Promise<JsonRpcResponse> {
     if (opts.authorize) {
         try {
             await opts.authorize(request)

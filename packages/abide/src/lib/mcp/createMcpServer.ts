@@ -42,6 +42,14 @@ export function createMcpServer(opts: McpServerOptions = {}): McpServer {
                 })
             }
             const envelope = await dispatchMcpRequest(request, opts, serverInfo)
+            /* A notification yields no envelope — JSON-RPC forbids replying, so
+               ack the receipt with an empty 202 instead of a response body. */
+            if (envelope === undefined) {
+                return new Response(undefined, {
+                    status: 202,
+                    headers: { 'Cache-Control': NO_STORE },
+                })
+            }
             return Response.json(envelope, { headers: { 'Cache-Control': NO_STORE } })
         },
     }

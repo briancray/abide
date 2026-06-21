@@ -5,7 +5,12 @@ import { responseErrorText } from '../shared/responseErrorText.ts'
 import { streamResponse } from '../shared/streamResponse.ts'
 
 // Frames a value as MCP text content — strings verbatim, everything else as JSON.
+// An undefined body (204 / empty) becomes '' — `JSON.stringify(undefined)` is the
+// value `undefined`, not a string, which would make an invalid text content block.
 function asText(value: unknown): string {
+    if (value === undefined) {
+        return ''
+    }
     return typeof value === 'string' ? value : JSON.stringify(value)
 }
 
