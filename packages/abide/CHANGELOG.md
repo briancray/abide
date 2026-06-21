@@ -1,5 +1,13 @@
 # abide
 
+## 0.38.1
+
+### Patch Changes
+
+- [`67ac25f`](https://github.com/briancray/abide/commit/67ac25faf78b029d0b14659df1e4ec1a05ae7a10) - document outlet marker-range in AGENTS.md surface map ([`ab23673`](https://github.com/briancray/abide/commit/ab236733ee1f81e19ce09ee35fe44624e955a6e4))
+
+- [`67ac25f`](https://github.com/briancray/abide/commit/67ac25faf78b029d0b14659df1e4ec1a05ae7a10) - unify pages/layouts/outlets on marker-range model ([`df1c95f`](https://github.com/briancray/abide/commit/df1c95f89ff8d6d6806606dbece531c6be7aabdf))
+
 ## 0.38.0
 
 ### Minor Changes
