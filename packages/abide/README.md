@@ -1,153 +1,159 @@
 # abide
 
-**Write one function. Get a typed HTTP endpoint, a CLI, an MCP tool, and an OpenAPI operation — from the same line of code.**
+**One typed RPC declaration fans out to an HTTP route, a typed browser proxy, a CLI subcommand, an MCP tool, and an OpenAPI operation — built for humans and machines.**
 
-abide is a type-safe isomorphic framework built on web standards and Bun. You declare a verb once; the bundler swaps the runtime per side and projects that one declaration onto every surface — humans hit it over HTTP or the CLI, machines hit it over MCP, and you control which surfaces each verb exposes. It's a framework built for humans *and* machines.
+abide is an isomorphic framework on Bun: the same callable has the same name and behaviour on both sides, and the bundler swaps the runtime per side — a server handler in `src/server`, a `fetch` proxy in the browser. Server-render and hydrate the same `.abide` components, broadcast over multiplexed sockets, and expose every read to an agent — all in a single Bun runtime.
 
-- Zero runtime dependencies
-- A single runtime (Bun) in every mode — dev, build, and compiled binary
+- One dependency (`typescript`, for the type-checking shadow); `tailwindcss` + `bun-plugin-tailwind` are optional peers.
+- Runs on Bun `>= 1.3.0`. No bundler config, no server framework, no client router to wire up.
 
 ## Quick start
 
 ```sh
-bunx abide scaffold my-app   # scaffolds, installs, and starts the dev server
+bunx abide scaffold my-app   # scaffolds, installs deps, and (in a TTY) starts dev
 ```
 
-To see every surface live, clone the repo and run the kitchen-sink example — each page is runnable and documented:
+Or read the exhaustive demo:
 
 ```sh
 git clone https://github.com/briancray/abide
 cd abide && bun install
-cd examples/kitchen-sink && bun run dev
+cd examples/kitchen-sink && bun dev
 ```
+
+The whole public surface — every export, CLI command, route, env var, and the `.abide` grammar — is mapped in [`AGENTS.md`](./AGENTS.md).
 
 ## RPCs
 
-An RPC is a handler wrapped by its HTTP method — one export per file under `src/server/rpc/`. The file path is the URL; the schema validates args and projects the MCP tool, CLI flags, and OpenAPI operation. Standard Schema is the contract: zod, valibot, and arktype work unadapted.
+An RPC is one export per file under `src/server/rpc/`. The file path is the URL (`getMessages.ts` → `/rpc/getMessages`), and a [Standard Schema](https://standardschema.dev) (zod / valibot / arktype, unadapted) validates the args and projects every other surface.
 
 ```ts
 // src/server/rpc/getMessages.ts
 import { GET } from '@abide/abide/server/GET'
 import { json } from '@abide/abide/server/json'
 import { z } from 'zod'
+import { history } from '../../store.ts'
 
-// query args arrive as strings — coerce in the schema
-const inputSchema = z.object({ room: z.string(), limit: z.coerce.number().default(50) })
+const inputSchema = z.object({ room: z.string() })
 
-export const getMessages = GET(
-    async ({ room, limit }) => json(await db.recentMessages(room, limit)),
-    { inputSchema },
-)
+export const getMessages = GET(({ room }) => json({ messages: history(room) }), { inputSchema })
 ```
 
-One declared verb fans out to every surface — this is the whole premise:
+That one declaration fans out:
 
 ```text
-       export const getMessages = GET(fn, { inputSchema })
-                                 │
-   ┌───────────────┬────────────┼──────────────┬────────────────┐
- SSR call      browser fetch    MCP tool      CLI subcommand   OpenAPI op
-cache(fn)()   fetch /rpc/...   getMessages   app get-messages  /openapi.json
-(in-process)  (typed proxy)  (read-only+schema) (schema→flags)   (described)
+                  getMessages   (one declaration)
+                        │
+   ┌──────────┬─────────┼─────────┬──────────────┐
+   ▼          ▼         ▼         ▼              ▼
+ SSR call   browser   MCP tool   CLI sub-     OpenAPI
+cache(fn)()  fetch   (read-only) command      operation
 ```
 
-The same callable is consumed differently per side — `cache(getMessages)({ room })` in-process, the swapped `fetch` in the browser, `.raw(args)` for a `Response`, `.stream(args)` for `tail()`. A schema gates the machine surfaces: it unlocks the CLI and (for read-only verbs) MCP; a mutating verb never auto-exposes to MCP — it needs an explicit `clients: { mcp: true }`. Per-verb `timeout` (504, on every surface) is distinct from the client-side `ABIDE_CLIENT_TIMEOUT`.
+The `inputSchema` unlocks the CLI and — because a `GET`/`HEAD` is read-only — an MCP tool. A mutating verb (`POST`/`PUT`/`PATCH`/`DELETE`) never auto-exposes to an agent; opt in with `clients: { mcp: true }`. Consume the verb four ways, all typed against the declaration: `cache(getMessages)({ room })` for an SSR-memoized in-process read, the bundler-swapped `getMessages({ room })` `fetch` proxy in the browser, `.raw(args)` for the untouched `Response`, and `.stream(args)` for a frame-by-frame `jsonl`/`sse` body.
 
-> Query args travel as strings — use `z.coerce.*` so numbers and booleans validate.
+> Query args travel as strings — use `z.coerce.*` for numbers and booleans. The per-verb `timeout` option fires a `504` on every surface and is distinct from the client-wide `ABIDE_CLIENT_TIMEOUT`.
 
 ## Sockets
 
-One broadcast topic per file under `src/server/sockets/`. A `Socket<T>` is an isomorphic `AsyncIterable<T>` — every socket multiplexes onto one ws at `/__abide/sockets`. A `schema` validates publishes, infers the frame type, and flips on the MCP/CLI read faces.
+A socket is one broadcast topic per file under `src/server/sockets/`. A `Socket<T>` is an isomorphic `AsyncIterable<T>` — `for await` it on the server, or read it reactively with `tail()` in a component — and every socket multiplexes onto one WebSocket at `/__abide/sockets`.
 
 ```ts
-// src/server/sockets/chat.ts
+// src/server/sockets/messages.ts
 import { socket } from '@abide/abide/server/socket'
 import { z } from 'zod'
 
-const schema = z.object({ id: z.string(), from: z.string(), text: z.string(), at: z.number() })
+const schema = z.object({
+    id: z.string(),
+    room: z.string(),
+    from: z.string(),
+    text: z.string(),
+    at: z.number(),
+})
 
-// retain the last 100 frames, evict any older than an hour
-export const chat = socket({ schema, tail: 100, ttl: 3_600_000 })
-export type ChatMessage = z.infer<typeof schema>
+// retain the last 100 frames; lazily evict any older than an hour
+export const messages = socket({ schema, tail: 100, ttl: 3_600_000 })
+export type Message = z.infer<typeof schema>
 ```
 
-For clients that can't speak the ws multiplex, each socket has an HTTP face at `/__abide/sockets/<name>` — `GET` returns the retained tail, `POST` publishes (gated by `clientPublish`, off by default).
+The schema validates every publish and flips on the read surfaces (a `messages-tail` MCP tool / CLI command). For clients that can't speak the ws multiplex, each socket has an HTTP face at `/__abide/sockets/messages`: `GET` returns the retained tail, `POST` publishes — gated by `clientPublish` (default `false`, so browsers publish through a validating verb instead).
 
 ## Components
 
-Components are `.abide` files — valid HTML with `<script>`, native `<template>` control flow, `{expr}` bindings, and a component-scoped `<style>`. Reactive state is reached through `scope()` (`scope().state(v)`, `scope().computed(fn)`); props are read by destructuring `props()` (`const { room } = props()`), and `effect` is in scope without import. This page reads the verb above through `cache()`, tails the socket live, and exercises most of the template grammar:
+A component is an `.abide` file: valid HTML with a `<script>`, native `<template>` control flow, `{expr}` bindings, and a component-scoped `<style>`. `scope()` is the sole reactive surface; `props`, `effect`, and `html` are in scope without import. This one imports the verb and socket above:
 
 ```html
 <script>
 import { cache } from '@abide/abide/shared/cache'
 import { tail } from '@abide/abide/ui/tail'
 import { getMessages } from '$server/rpc/getMessages.ts'
-import { publishChat } from '$server/rpc/publishChat.ts'
-import { chat } from '$server/sockets/chat.ts'
+import { sendMessage } from '$server/rpc/sendMessage.ts'
+import { messages } from '$server/sockets/messages.ts'
 import Avatar from '$ui/Avatar.abide'
 
-const { room } = props()                                           // typed via src/.abide/routes.d.ts
-const history = scope().computed(() => cache(getMessages)({ room })) // SSR snapshot + reactive refetch
-const latest = scope().computed(() => tail(chat))                  // re-renders on every new frame
+const { room } = props<{ room: string }>()
 
-let from = scope().state('alice')
-let text = scope().state('')
-let filter = scope().state('all')        // all | mine | others
-let onlyUnread = scope().state(false)
+let from = scope().state('alice')               // a writable cell — read/assign as a plain var
+let draft = scope().state('')
+let pinned = scope().state(false)
+let filter = scope().state('all')
+const live = scope().computed(() => tail(messages))   // re-renders on every new frame
 
 async function send(event: SubmitEvent) {
     event.preventDefault()
-    if (text.trim() === '') return
-    await publishChat({ from, text })                              // server validates, then broadcasts
-    text = ''
+    if (draft.trim() === '') return
+    await sendMessage({ room, from, text: draft })     // a mutating verb
+    draft = ''
 }
 </script>
 
-<template name="message" args={m}>                       <!-- snippet: a reusable builder -->
-    <li class="row"><Avatar name={m.from} /> <strong>{m.from}</strong>: {m.text}</li>
+<!-- a named snippet: a reusable builder, rendered like a function -->
+<template name="bubble" args={msg}>
+    <li><Avatar name={msg.from} /> <b>{msg.from}</b>: {msg.text}</li>
 </template>
 
+<h1>#{room}</h1>
+
 <form onsubmit={send}>
-    <input bind:value={from} placeholder="you" />
-    <input bind:value={text} placeholder="say something…" />
-    <label><input type="checkbox" bind:checked={onlyUnread} /> unread only</label>
-    <fieldset>
-        <label><input type="radio" bind:group={filter} value="all" /> all</label>
-        <label><input type="radio" bind:group={filter} value="mine" /> mine</label>
-    </fieldset>
-    <button type="submit" disabled={text.trim() === ''}>send</button>
+    <input bind:value={from} />
+    <input bind:value={draft} placeholder="message" />
+    <label><input type="checkbox" bind:checked={pinned} /> pin</label>
+    <label><input type="radio" bind:group={filter} value="all" /> all</label>
+    <label><input type="radio" bind:group={filter} value="mine" /> mine</label>
+    <button type="submit" disabled={draft.trim() === ''}>send</button>
 </form>
 
-<template if={latest}>
-    <p class="ping">latest from <strong>{latest.from}</strong></p>
+<template if={live}>
+    <p class="live">latest: {live.text}</p>
     <template else>
-        <p class="ping muted">no live messages yet</p>
+        <p>no messages yet</p>
     </template>
 </template>
 
 <template switch={filter}>
-    <template case={'mine'}><p>showing your messages</p></template>
-    <template default><p>showing every message</p></template>
+    <template case={'all'}><p>showing everyone</p></template>
+    <template case={'mine'}><p>showing {from}</p></template>
+    <template default><p>—</p></template>
 </template>
 
-<template await={history}>
-    <p>loading history…</p>
-    <template then="messages">
+<template await={cache(getMessages)({ room })}>
+    <p>loading…</p>
+    <template then="history">
         <ul>
-            <template each={messages} as="m" key="m.id">
-                {message(m)}                              <!-- render the snippet -->
+            <template each={history.messages} as="msg" key="msg.id">
+                {bubble(msg)}
             </template>
         </ul>
     </template>
-    <template catch="err">
-        <p class="error">{err.message}</p>
+    <template catch="error">
+        <p>failed: {error.message}</p>
     </template>
 </template>
 
 <style>
-    .row { display: flex; gap: 0.5rem; }
-    .muted { color: #94a3b8; }
-    .error { color: #dc2626; }
+    .live {
+        font-weight: 600;
+    }
 </style>
 ```
 
