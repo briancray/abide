@@ -1,3 +1,5 @@
+import { OUTLET_TAG } from '../runtime/OUTLET_TAG.ts'
+import { isAnchorPositioned } from './isAnchorPositioned.ts'
 import { isControlFlow } from './isControlFlow.ts'
 import { isTextLeaf } from './isTextLeaf.ts'
 import { skeletonable } from './skeletonable.ts'
@@ -13,9 +15,9 @@ that decide `<!--a-->` anchor placement — and assigns each hole its `el`/`an` 
 document-order walk, so the numbering cannot drift from the decisions: one walk owns both.
 
 The index assignment is scoped per skeleton root (a `skeletonable` element not already in a
-skeleton — the unit `generateSkeleton` instantiates with `{ el: 0, an: 0 }`; a standalone
-component roots its own skeleton too). `el` numbers element holes in pre-order; `an` numbers
-anchor holes (interleaved reactive text PARTS, control-flow blocks, `<slot>` outlets) in
+skeleton — the unit `generateSkeleton` instantiates with `{ el: 0, an: 0 }`). `el` numbers
+element holes in pre-order; `an` numbers anchor holes (interleaved reactive text PARTS,
+control-flow blocks, child components, `<slot>` outlets) in
 document order — the orders the runtime's `indexElementHoles`/`scanAnchors` re-derive from
 the realized DOM, so the compile-time numbers and the runtime positions line up.
 
@@ -26,8 +28,8 @@ content, a `<slot>`'s fallback, a snippet's body) — never cloned by the enclos
 export function skeletonContext(nodes: TemplateNode[]): SkeletonContext {
     const inSkeleton = new WeakMap<TemplateNode, boolean>()
     const markText = new WeakMap<TemplateNode, boolean>()
-    /* Element holes keyed by node; anchor holes keyed by node (control-flow/slot) OR by the
-       reactive text PART object (a text node carries one anchor per reactive part). */
+    /* Element holes keyed by node; anchor holes keyed by node (control-flow/component/slot)
+       OR by the reactive text PART object (a text node carries one anchor per reactive part). */
     const elIndex = new WeakMap<TemplateNode, number>()
     const anIndex = new WeakMap<object, number>()
 
@@ -45,20 +47,15 @@ export function skeletonContext(nodes: TemplateNode[]): SkeletonContext {
         markText.set(node, nodeMarkText)
 
         /* Control-flow blocks, components, and snippets are fresh build contexts. The node
-           ITSELF is a hole in the enclosing skeleton (an anchor for a block, an element hole
-           for a component); its children re-enter the skeleton only via their own roots. */
+           ITSELF is a hole in the enclosing skeleton (an `<!--a-->` anchor for a block OR a
+           component — both mount as a marker-bounded range at that anchor); its children
+           re-enter the skeleton only via their own roots. */
         if (isControlFlow(node) || node.kind === 'component' || node.kind === 'snippet') {
-            /* A control-flow block takes an anchor only inside an enclosing skeleton (a
-               standalone block routes through `generateIf`/etc, not the skeleton path). */
-            if (counter !== undefined && isControlFlow(node)) {
+            /* A block or a component takes an anchor only inside an enclosing skeleton (a
+               standalone one routes through `generateIf`/`mountChild`, not the skeleton path);
+               a snippet declares a builder and is never anchor-positioned (`isAnchorPositioned`). */
+            if (counter !== undefined && isAnchorPositioned(node)) {
                 anIndex.set(node, counter.an++)
-            }
-            /* A component is its OWN element hole either way: in the enclosing skeleton's
-               counter when nested, else as the root (index 0) of its own standalone skeleton
-               (`generateChild` routes a lone component through `generateSkeleton` too). */
-            if (node.kind === 'component') {
-                const componentCounter = counter ?? { el: 0, an: 0 }
-                elIndex.set(node, componentCounter.el++)
             }
             for (const child of childrenOf(node)) {
                 visit(child, false, false, undefined)
@@ -90,9 +87,11 @@ export function skeletonContext(nodes: TemplateNode[]): SkeletonContext {
         if (node.kind !== 'element') {
             return // script / style carry no skeleton children and no hole
         }
-        if (node.tag === 'slot') {
-            /* The slot outlet is an anchor hole in the enclosing skeleton; its children are
-               the fallback — a fresh context built by `mountSlot`. */
+        if (node.tag === 'slot' || node.tag === OUTLET_TAG) {
+            /* A component `<slot>` content fill OR a layout's `OUTLET_TAG` router fill point
+               (`asOutlet`) is an anchor hole in the enclosing skeleton — both mount a marker
+               range at the anchor (`mountSlot` / `outlet`). A `<slot>`'s children are its
+               fallback (a fresh context); an outlet has none. */
             if (counter !== undefined) {
                 anIndex.set(node, counter.an++)
             }

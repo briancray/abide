@@ -89,6 +89,7 @@
         "./ui/dom/skeleton": "./src/lib/ui/dom/skeleton.ts",
         "./ui/dom/anchorCursor": "./src/lib/ui/dom/anchorCursor.ts",
         "./ui/dom/mountSlot": "./src/lib/ui/dom/mountSlot.ts",
+        "./ui/dom/outlet": "./src/lib/ui/dom/outlet.ts",
         "./ui/dom/attr": "./src/lib/ui/dom/attr.ts",
         "./ui/dom/on": "./src/lib/ui/dom/on.ts",
         "./ui/dom/attach": "./src/lib/ui/dom/attach.ts",

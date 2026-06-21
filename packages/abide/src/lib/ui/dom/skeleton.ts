@@ -1,7 +1,7 @@
-import { COMPONENT_WRAPPER_PREFIX } from '../COMPONENT_WRAPPER_PREFIX.ts'
 import { claimChild } from '../runtime/claimChild.ts'
 import { HOLE_ATTRIBUTE } from '../runtime/HOLE_ATTRIBUTE.ts'
 import { RENDER } from '../runtime/RENDER.ts'
+import { commentData } from './commentData.ts'
 import { foreignWrapperTag } from './foreignWrapperTag.ts'
 import type { SkeletonHoles } from './types/SkeletonHoles.ts'
 
@@ -25,28 +25,6 @@ const CACHES = new WeakMap<object, Map<string, CompiledSkeleton>>()
    `nodeType` so the walk runs under the test mini-dom too. */
 function isElement(node: Node): node is Element {
     return typeof (node as Element).hasAttribute === 'function'
-}
-
-/* A child component's mount wrapper (`abide-<name>`, see `componentWrapperTag`). Its
-   content is a SEPARATE skeleton (the child's own), so the parent's walks must treat it
-   as opaque: in the shallow skeleton it's an empty leaf, so the compiler counts no
-   anchors inside it; on hydrate it's populated, so a descent would over-collect the
-   child's anchors and shift every parent index past it (same hazard as a block range,
-   but bounded by the wrapper element instead of `[`…`]` markers). */
-function isComponentWrapper(node: Node): boolean {
-    return (
-        isElement(node) && (node.tagName ?? '').toLowerCase().startsWith(COMPONENT_WRAPPER_PREFIX)
-    )
-}
-
-/* A comment node's data, or undefined for elements/text. A comment is a node that is
-   neither an element (`hasAttribute`) nor a text node (`splitText`); the mini-dom
-   exposes no `nodeType`, so detect by method. */
-function commentData(node: Node): string | undefined {
-    if (isElement(node) || typeof (node as Text).splitText === 'function') {
-        return undefined
-    }
-    return (node as Comment).data
 }
 
 /* Block-range boundary markers. A control-flow block's rendered content sits between an
@@ -116,19 +94,22 @@ function indexElementHoles(container: Node, prefix: number[], paths: number[][])
    In hydrate mode the claimed tree is FULLY EXPANDED — a nested block's rendered content
    (each rows, branches, await/try boundaries) sits inline — so a naive descent would also
    collect the inner block's anchors, which belong to that block's OWN skeleton, shifting
-   every index past the first block. Block content is bounded by range markers, so track
-   depth per sibling list and take an anchor (and recurse into an element) only at depth 0,
-   where the skeleton's own structure lives. In create mode the clone is shallow (the blocks
-   have not built yet — no markers), so depth stays 0 and this is a plain document scan. */
+   every index past the first block. Block AND child-component content is bounded by range
+   markers (a component mounts as a `[`…`]` range at its anchor, like a block — see
+   `mountRange`), so track depth per sibling list and take an anchor (and recurse into an
+   element) only at depth 0, where the skeleton's own structure lives. In create mode the
+   clone is shallow (the ranges have not built yet — no markers), so depth stays 0 and this
+   is a plain document scan. */
 function scanAnchors(nodes: ArrayLike<Node>, anchors: Node[]): void {
     let depth = 0
     for (let index = 0; index < nodes.length; index += 1) {
         const node = nodes[index] as Node
         const data = commentData(node)
         if (data === undefined) {
-            /* Recurse into this skeleton's own elements, but NOT a child component's
-               wrapper — its anchors belong to the child's skeleton (see above). */
-            if (isElement(node) && depth === 0 && !isComponentWrapper(node)) {
+            /* Recurse into this skeleton's own elements at depth 0. A child component's
+               content sits inside its `[`…`]` range (depth > 0), so it is skipped like any
+               block range — its anchors belong to the child's own skeleton. */
+            if (isElement(node) && depth === 0) {
                 scanAnchors(node.childNodes, anchors)
             }
         } else if (isCloseMarker(data)) {

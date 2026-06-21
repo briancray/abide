@@ -1,8 +1,8 @@
+import { OUTLET_CLOSE, OUTLET_OPEN } from '../runtime/OUTLET_MARKER.ts'
 import { OUTLET_TAG } from '../runtime/OUTLET_TAG.ts'
 import { asOutlet } from './asOutlet.ts'
-import { componentWrapperTag } from './componentWrapperTag.ts'
 import { groupBindParts } from './groupBindParts.ts'
-import { isControlFlow } from './isControlFlow.ts'
+import { isAnchorPositioned } from './isAnchorPositioned.ts'
 import { lowerContext } from './lowerContext.ts'
 import { scopeAttr } from './scopeAttr.ts'
 import { skeletonContext } from './skeletonContext.ts'
@@ -111,12 +111,12 @@ export function generateSSR(
         inSkeleton.get(node) ? push(target, '<!--a-->') : ''
 
     function generate(node: TemplateNode, target: string): string {
-        /* A control-flow block is positioned by an `<!--a-->` anchor when in a skeleton
-           context. Emit it ONCE here — one decision site gated by the shared `isControlFlow`,
-           mirroring the client's single `skeletonMarkup` control-flow branch — rather than
-           prefixing each block kind's own `anchorMark` call (six sites that had to stay in
-           lock-step). `anchorMark` no-ops outside a skeleton, so non-block nodes ignore it. */
-        const anchor = isControlFlow(node) ? anchorMark(node, target) : ''
+        /* Every kind that mounts as a marker range is positioned by an `<!--a-->` anchor when
+           in a skeleton context: control-flow blocks, child components, and a layout's outlet /
+           a component's `<slot>` (both elements). `isAnchorPositioned` is the ONE decision site
+           (mirrored by the client's `skeletonMarkup`); `anchorMark` no-ops outside a skeleton,
+           so non-anchored nodes ignore the precomputed `anchor`. */
+        const anchor = isAnchorPositioned(node) ? anchorMark(node, target) : ''
         if (node.kind === 'text') {
             return node.parts
                 .map((part) => {
@@ -198,11 +198,11 @@ export function generateSSR(
             return ''
         }
         if (node.kind === 'component') {
-            /* Server-render the child via its `render` and inline the HTML inside
-               the same wrapper the client mounts into, so SSR and client agree.
-               Props pass as thunks; slot content passes as a string-returning
-               `$children` the child invokes from its <slot>. */
-            const tag = componentWrapperTag(node.name)
+            /* Server-render the child via its `render` and inline the HTML inside the same
+               `[ … ]` marker range the client mounts into (`mountRange`) — no wrapper element,
+               so SSR and client agree and the child's root lays out as a direct child. Props
+               pass as thunks; slot content passes as a string-returning `$children` the child
+               invokes from its <slot>. */
             const parts = node.props.map(
                 (prop) => `${JSON.stringify(prop.name)}: () => (${lowerExpression(prop.code)})`,
             )
@@ -224,22 +224,30 @@ export function generateSSR(
                the enclosing render body, including from branch closures.) */
             const result = nextVar('$child')
             return (
-                push(target, `<${tag} style="display:contents">`) +
+                anchor +
+                push(target, RANGE_OPEN) +
                 `const ${result} = ${node.name}.render({ ${parts.join(', ')} });\n` +
                 `${target}.push(${result}.html);\n` +
                 `for (const $a of ${result}.awaits) { $awaits.push($a); }\n` +
-                push(target, `</${tag}>`)
+                push(target, RANGE_CLOSE)
             )
+        }
+        if (node.kind === 'element' && node.tag === OUTLET_TAG) {
+            /* A layout's router fill point (`asOutlet` rewrote its `<slot/>`): an `<!--a-->`
+               anchor (in a skeleton) + an empty `<!--abide:outlet-->`…`<!--/abide:outlet-->`
+               boundary the chain composer folds the child layer into (`renderChain`) and the
+               client router fills/hydrates (`outlet`/`fillBoundary`) — no wrapper element. */
+            return anchor + push(target, `<!--${OUTLET_OPEN}--><!--${OUTLET_CLOSE}-->`)
         }
         if (node.kind === 'element' && node.tag === 'slot') {
             /* `asOutlet` already rewrote a layout's top-level/element-nested `<slot/>` to an
-               `OUTLET_TAG` element (handled by the generic path below), so a `slot` node reaching
-               here in a layout is control-flow-nested — emit the same bare outlet placeholder the
-               client's nested-slot path clones, which the chain composer folds the child into. */
+               `OUTLET_TAG` element (handled above), so a `slot` node reaching here in a layout
+               is control-flow-nested — emit the same empty outlet boundary the client's
+               control-flow-nested path builds, which the chain composer folds the child into. */
             if (isLayout) {
-                return push(target, `<${OUTLET_TAG}></${OUTLET_TAG}>`)
+                return push(target, `<!--${OUTLET_OPEN}--><!--${OUTLET_CLOSE}-->`)
             }
-            return generateSlot(node, target)
+            return generateSlot(node, target, anchor)
         }
         let code = push(target, `<${node.tag}`)
         /* Every `<style>` active at this element (own siblings + ancestors) — same set
@@ -292,6 +300,7 @@ export function generateSSR(
     function generateSlot(
         node: Extract<TemplateNode, { kind: 'element' }>,
         target: string,
+        anchor: string,
     ): string {
         const wrap = inSkeleton.get(node)
         const fallback = generateInto(node.children, target)
@@ -302,7 +311,7 @@ export function generateSSR(
         if (!wrap) {
             return body
         }
-        return `${anchorMark(node, target)}${openRange(target)}${body}${closeRange(target)}`
+        return `${anchor}${openRange(target)}${body}${closeRange(target)}`
     }
 
     /* Boundary markers + a `$awaits` registration carrying the promise and

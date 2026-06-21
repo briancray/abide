@@ -16,6 +16,7 @@ import { mount } from './dom/mount.ts'
 import { mountChild } from './dom/mountChild.ts'
 import { mountSlot } from './dom/mountSlot.ts'
 import { on } from './dom/on.ts'
+import { outlet } from './dom/outlet.ts'
 import { skeleton } from './dom/skeleton.ts'
 import { switchBlock } from './dom/switchBlock.ts'
 import { tryBlock } from './dom/tryBlock.ts'
@@ -67,6 +68,7 @@ export function installHotBridge(): void {
         tryBlock,
         switchBlock,
         mountSlot,
+        outlet,
         mountChild,
         hydrate,
         escapeKey,

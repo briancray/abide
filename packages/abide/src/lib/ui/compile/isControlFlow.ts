@@ -5,7 +5,9 @@ A control-flow block — `if`/`each`/`await`/`switch`/`try`. In a skeleton each 
 `<!--a-->` anchor cloned into its located parent at the block's position (see `anchorCursor`),
 so a block can sit ANYWHERE among static siblings. The shared classification under block
 anchor placement: both back-ends — and `skeletonable` — consult this so they agree on which
-nodes are anchor-positioned, the way `componentWrapperTag`/`isTextLeaf` already are.
+nodes are anchor-positioned. A child component is anchor-positioned too (it mounts as a
+`[`…`]` range like a block, see `mountRange`); the back-ends OR this with `kind ===
+'component'` rather than folding it in here, since a standalone component routes differently.
 */
 export function isControlFlow(node: TemplateNode): boolean {
     return (

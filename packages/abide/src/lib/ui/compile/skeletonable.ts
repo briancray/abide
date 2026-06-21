@@ -1,3 +1,4 @@
+import { OUTLET_TAG } from '../runtime/OUTLET_TAG.ts'
 import { isControlFlow } from './isControlFlow.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
 
@@ -22,7 +23,7 @@ function skeletonStructure(node: TemplateNode): boolean {
     if (node.kind !== 'element') {
         return false // standalone branch|case
     }
-    if (node.tag === 'slot') {
+    if (node.tag === 'slot' || node.tag === OUTLET_TAG) {
         return true
     }
     return node.children.every(skeletonStructure)
@@ -43,7 +44,7 @@ function hasHole(node: TemplateNode): boolean {
         return node.parts.some((part) => part.kind !== 'static')
     }
     if (node.kind === 'element') {
-        if (node.tag === 'slot') {
+        if (node.tag === 'slot' || node.tag === OUTLET_TAG) {
             return true
         }
         return node.attrs.some((attr) => attr.kind !== 'static') || node.children.some(hasHole)

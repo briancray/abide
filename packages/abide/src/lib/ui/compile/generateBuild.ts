@@ -2,7 +2,6 @@ import { HOLE_ATTRIBUTE } from '../runtime/HOLE_ATTRIBUTE.ts'
 import { OUTLET_TAG } from '../runtime/OUTLET_TAG.ts'
 import { asOutlet } from './asOutlet.ts'
 import { bindListenEvent } from './bindListenEvent.ts'
-import { componentWrapperTag } from './componentWrapperTag.ts'
 import { groupBindParts } from './groupBindParts.ts'
 import { isControlFlow } from './isControlFlow.ts'
 import { lowerContext } from './lowerContext.ts'
@@ -125,6 +124,16 @@ export function generateBuild(
        block or slot drops an `<!--a-->` anchor at its position and mounts there (see
        `anchorCursor`), so it can sit ANYWHERE among static siblings. Static descendants are
        plain markup. */
+    /* The skeleton anchor var for an anchor-positioned node: declares `an<n> = sk.an[i]` as
+       a bind and returns the var name. The three anchored kinds (control-flow/component,
+       outlet, slot) all mount at this `<!--a-->` anchor, so they number through this ONE
+       site (`anIndex`) — no per-branch copy of the lookup to drift from the runtime scan. */
+    function anchorVarAt(node: TemplateNode, skVar: string, binds: string[]): string {
+        const anchorVar = nextVar('an')
+        binds.push(`const ${anchorVar} = ${skVar}.an[${holeIndex(anIndex, node)}];\n`)
+        return anchorVar
+    }
+
     function skeletonMarkup(node: TemplateNode, skVar: string, binds: string[]): string {
         if (node.kind === 'text') {
             /* Reactive text reached here is INTERLEAVED with element siblings (a text-leaf
@@ -143,24 +152,16 @@ export function generateBuild(
                 })
                 .join('')
         }
-        if (isControlFlow(node)) {
-            /* A control-flow block at its position: an `<!--a-->` anchor in the clone, the
-               block mounted at it. `anchorCursor` parks the hydrate cursor past the anchor
-               and returns the create insertion reference; the block's parent is the located
-               element the anchor was cloned into (`anchor.parentNode`). */
-            const anchorVar = nextVar('an')
-            binds.push(`const ${anchorVar} = ${skVar}.an[${holeIndex(anIndex, node)}];\n`)
+        if (isControlFlow(node) || node.kind === 'component') {
+            /* A control-flow block OR a child component at its position: an `<!--a-->` anchor
+               in the clone, its content mounted as a marker-bounded range at it. `anchorCursor`
+               parks the hydrate cursor past the anchor and returns the create insertion
+               reference; the parent is the located element the anchor was cloned into
+               (`anchor.parentNode`). A component takes an anchor like a block — no wrapper
+               element — so its root lays out as a true direct child of `anchor.parentNode`. */
+            const anchorVar = anchorVarAt(node, skVar, binds)
             binds.push(generateChild(node, `${anchorVar}.parentNode`, `anchorCursor(${anchorVar})`))
             return '<!--a-->'
-        }
-        if (node.kind === 'component') {
-            /* The wrapper element is a positioned hole in the skeleton; the child mounts
-               into the located node. display:contents (idempotent, static so it lives in
-               the markup) keeps the wrapper out of layout — a pure mount host. */
-            const tag = componentWrapperTag(node.name)
-            const { code } = mountComponent(node, `${skVar}.el[${holeIndex(elIndex, node)}]`)
-            binds.push(code)
-            return `<${tag} ${HOLE_ATTRIBUTE} style="display:contents"></${tag}>`
         }
         if (node.kind === 'script') {
             /* A nested `<script>` (scoped reactive block) emits no markup — its lowered body
@@ -179,11 +180,18 @@ export function generateBuild(
         if (node.kind !== 'element') {
             return '' // <style> emits no markup
         }
+        if (node.tag === OUTLET_TAG) {
+            /* A layout's router fill point at its position: an `<!--a-->` anchor, an empty
+               `outlet` boundary the router fills with the next chain layer (`fillBoundary`).
+               No wrapper element — the filled child lays out as a direct child of the parent. */
+            const anchorVar = anchorVarAt(node, skVar, binds)
+            binds.push(`outlet(${anchorVar}.parentNode, anchorCursor(${anchorVar}));\n`)
+            return '<!--a-->'
+        }
         if (node.tag === 'slot') {
             /* A `<slot>` outlet at its position: an `<!--a-->` anchor, the slot's content
                mounted as a marker-bounded range (`mountSlot`) so it positions like a block. */
-            const anchorVar = nextVar('an')
-            binds.push(`const ${anchorVar} = ${skVar}.an[${holeIndex(anIndex, node)}];\n`)
+            const anchorVar = anchorVarAt(node, skVar, binds)
             const hostVar = nextVar('host')
             binds.push(
                 `mountSlot(${anchorVar}.parentNode, (${hostVar}) => {\n${generateSlot(node, hostVar)}}, anchorCursor(${anchorVar}));\n`,
@@ -246,7 +254,7 @@ export function generateBuild(
        skeleton string (parsed once, cloned per mount) plus each hole's wiring against
        its located node. */
     function generateSkeleton(
-        node: Extract<TemplateNode, { kind: 'element' | 'component' }>,
+        node: Extract<TemplateNode, { kind: 'element' }>,
         parentVar: string,
     ): string {
         const skVar = nextVar('sk')
@@ -283,14 +291,19 @@ export function generateBuild(
                 })
                 .join('')
         }
+        if (node.kind === 'element' && node.tag === OUTLET_TAG) {
+            /* A standalone layout outlet (a top-level/element-nested `<slot/>` rewritten by
+               `asOutlet`, reached outside any skeleton): an empty `outlet` boundary at
+               `before`, no anchor — the router fills it with the next chain layer. */
+            return `outlet(${parentVar}, ${before});\n`
+        }
         if (node.kind === 'element' && node.tag === 'slot') {
-            /* In a layout, `<slot/>` is the router's page outlet: a bare empty `OUTLET_TAG`
-               element the router mounts the next chain layer into, cloned (create) / claimed
-               (hydrate) so it matches the SSR placeholder. (Top-level/nested-in-element layout
-               slots are rewritten to `OUTLET_TAG` up front by `asOutlet`; this covers a slot
-               reached inside a control-flow branch.) */
+            /* In a layout, `<slot/>` is the router's page outlet (`outlet` boundary the
+               router fills with the next chain layer). Top-level/element-nested layout slots
+               are rewritten to `OUTLET_TAG` up front by `asOutlet` and handled above; this
+               covers a layout slot reached inside a control-flow branch. */
             if (isLayout) {
-                return `cloneStatic(${parentVar}, ${JSON.stringify(`<${OUTLET_TAG}></${OUTLET_TAG}>`)});\n`
+                return `outlet(${parentVar}, ${before});\n`
             }
             return generateSlot(node, parentVar)
         }
@@ -314,10 +327,10 @@ export function generateBuild(
             return '' // branches are consumed by their await block, never standalone
         }
         if (node.kind === 'component') {
-            /* A standalone component builds through the skeleton too — its wrapper element
-               is a located hole, the child mounts into it (same as a component nested in a
-               skeletonable element). */
-            return generateSkeleton(node, parentVar)
+            /* A standalone component (top-level, or a bare child of a branch/row/slot) mounts
+               directly as a marker range on `parentVar` at `before` — no anchor, no wrapper,
+               same as a standalone control-flow block routes through `generateIf`/etc. */
+            return generateChildComponent(node, parentVar, before)
         }
         if (node.kind === 'switch') {
             return generateSwitch(node, parentVar, before)
@@ -402,8 +415,6 @@ export function generateBuild(
         return `if ($props && $props.$children) { ${invoke}; } else {\n${fallback}}\n`
     }
 
-    /* Mounts a child component into a wrapper element, passing each prop as a
-       reactive thunk so the child re-reads when the parent expression changes. */
     /* The prop + slot thunks a child mount receives — its props as value thunks and
        its slot content as a host-taking builder (`$children`). */
     function componentParts(node: Extract<TemplateNode, { kind: 'component' }>): string[] {
@@ -417,18 +428,18 @@ export function generateBuild(
         return parts
     }
 
-    /* Mounts a child into a wrapper obtained via `varExpr` (a skeleton-located node).
-       Hydration stays active, so the child adopts its server markup inside the wrapper.
-       Returns the wrapper var. */
-    function mountComponent(
+    /* Mounts a child component as a marker-bounded range on `parentVar`, positioned at
+       `before` (a skeleton anchor's `anchorCursor`, or `null` for a standalone child).
+       `mountRange` opens the `[`/`]` markers and builds the child between them — no
+       wrapper element — so the child's root is a true direct child of `parentVar`.
+       Hydration stays ambient, so the child claims its server range in place. The
+       component name passes as the scope label (the inspector's `<Counter>` name). */
+    function generateChildComponent(
         node: Extract<TemplateNode, { kind: 'component' }>,
-        varExpr: string,
-    ): { code: string; varName: string } {
-        const wrapper = nextVar('cmp')
-        const code =
-            `const ${wrapper} = ${varExpr};\n` +
-            `mountChild(${wrapper}, ${node.name}, { ${componentParts(node).join(', ')} });\n`
-        return { code, varName: wrapper }
+        parentVar: string,
+        before: string,
+    ): string {
+        return `mountChild(${parentVar}, ${node.name}, { ${componentParts(node).join(', ')} }, ${before}, ${JSON.stringify(node.name)});\n`
     }
 
     /* An await block: pending → resolved(value) / error branches. Each branch is a
@@ -633,7 +644,7 @@ imperative. Static text and elements nested INSIDE a qualifying element are fine
 enclosed by its tags.
 */
 function isStaticCloneableElement(node: TemplateNode): boolean {
-    if (node.kind !== 'element' || node.tag === 'slot') {
+    if (node.kind !== 'element' || node.tag === 'slot' || node.tag === OUTLET_TAG) {
         return false
     }
     if (node.attrs.some((attr) => attr.kind !== 'static')) {

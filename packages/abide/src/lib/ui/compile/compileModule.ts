@@ -42,11 +42,13 @@ export function compileModule(
         const id = JSON.stringify(options.moduleId)
         return `const { ${names}, hotReplace } = window.__abide
 ${userImports}
-function component(host, $props) {
-    return mount(host, (host) => {
+function build(host, $props) {
 ${body}
-    })
 }
+function component(host, $props) {
+    return mount(host, build, $props)
+}
+component.build = build
 component.__abideId = ${id}
 if (!hotReplace(${id}, component)) location.reload()
 `
@@ -61,17 +63,17 @@ if (!hotReplace(${id}, component)) location.reload()
        exactly which names it emitted, so it filters here. A name absent from the body
        is unreferenced; erring toward inclusion (a stray match in user script) only
        keeps a harmless unused import, never drops a needed one. */
-    const moduleBody = `export default function component(host, $props) {
-    return mount(host, (host) => {
+    const moduleBody = `function build(host, $props) {
 ${body}
-    })
+}
+
+export default function component(host, $props) {
+    return mount(host, build, $props)
 }
 
 /* Adopt the server-rendered DOM in place instead of rebuilding it. */
 export function hydrateInto(host, $props) {
-    return hydrate(host, (host) => {
-${body}
-    })
+    return hydrate(host, build, $props)
 }
 
 export function render($props) {
@@ -80,6 +82,8 @@ ${ssrBody}
 
 component.render = render
 component.hydrate = hydrateInto
+/* The bare build, so a parent can range-mount this as a nested child (no wrapper). */
+component.build = build
 component.hydratable = ${analyzed.hydratable}
 ${options.moduleId === undefined ? '' : `component.__abideId = ${JSON.stringify(options.moduleId)}\n`}`
     /* Scope each name to the surface that genuinely references it. The SSR body

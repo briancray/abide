@@ -30,6 +30,7 @@ export const UI_RUNTIME_IMPORTS: { name: string; specifier: string }[] = [
     { name: 'tryBlock', specifier: 'ui/dom/tryBlock' },
     { name: 'switchBlock', specifier: 'ui/dom/switchBlock' },
     { name: 'mountSlot', specifier: 'ui/dom/mountSlot' },
+    { name: 'outlet', specifier: 'ui/dom/outlet' },
     { name: 'mountChild', specifier: 'ui/dom/mountChild' },
     { name: 'hydrate', specifier: 'ui/dom/hydrate' },
     { name: 'escapeKey', specifier: 'ui/runtime/escapeKey' },

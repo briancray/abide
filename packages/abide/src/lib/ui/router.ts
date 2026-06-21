@@ -1,12 +1,15 @@
 import { layoutChainForRoute } from '../shared/layoutChainForRoute.ts'
+import { fillBoundary } from './dom/fillBoundary.ts'
+import { outlet } from './dom/outlet.ts'
 import { effect } from './effect.ts'
 import { matchRoute } from './matchRoute.ts'
 import { navigate } from './navigate.ts'
 import { clientPage } from './runtime/clientPage.ts'
 import { enterRenderPass } from './runtime/enterRenderPass.ts'
 import { exitRenderPass } from './runtime/exitRenderPass.ts'
-import { firstOutlet } from './runtime/firstOutlet.ts'
 import { historyEntries } from './runtime/historyEntries.ts'
+import { PENDING_OUTLET } from './runtime/PENDING_OUTLET.ts'
+import { RENDER } from './runtime/RENDER.ts'
 import { runtimePath } from './runtime/runtimePath.ts'
 import type { AbideHistoryState } from './runtime/types/AbideHistoryState.ts'
 import type { NavVerdict } from './runtime/types/NavVerdict.ts'
@@ -14,13 +17,15 @@ import type { Route } from './runtime/types/Route.ts'
 import type { RouteLoader } from './runtime/types/RouteLoader.ts'
 import { untrack } from './runtime/untrack.ts'
 
-/* A layout mounted in the active chain: its route key (the directory URL — its
-   identity for the diff), the disposer that stops its reactivity, and the outlet
-   element the next layer mounts into. */
-type MountedLayout = { key: string; dispose: () => void; outlet: Element }
+/* An outlet boundary — the `<!--abide:outlet-->`…`<!--/abide:outlet-->` marker pair a
+   layer's content lives between (a layout's `<slot/>`, or the router's root boundary in
+   the mount host). The next chain layer fills it; no `<abide-outlet>` element. */
+type Boundary = { open: Comment; close: Comment }
 
-/* A layout mount that returns no disposer still needs one for the chain teardown. */
-const noop = (): void => {}
+/* A layout mounted in the active chain: its route key (the directory URL — its identity
+   for the diff), the disposer that stops its reactivity and clears its content, and the
+   boundary of its own `<slot/>` — where the next layer mounts. */
+type MountedLayout = { key: string; dispose: () => void; slot: Boundary }
 
 /* The destination URL for a navigation `path`. On the server / headless there is no
    `location`, so resolve against a localhost origin; in the browser, against the real
@@ -68,6 +73,10 @@ export function router(
     /* The mounted layout chain (outermost first) + the page disposer. */
     const mountedLayouts: MountedLayout[] = []
     let disposePage: (() => void) | undefined
+    /* The root outlet boundary in `host` (`#app`) the outermost layer fills — established
+       once on the first mount (claimed from the SSR DOM when hydrating, created otherwise)
+       and reused across navigations, since `#app` itself never re-mounts. */
+    let rootBoundary: Boundary | undefined
     const patterns = Object.keys(loaders).filter((key) => key !== '*')
     const layoutKeys = Object.keys(layoutLoaders)
 
@@ -90,60 +99,94 @@ export function router(
     const resolvePage = resolver(loaders)
     const resolveLayout = resolver(layoutLoaders)
 
-    /* Tear down the page and every layout from `index` inward (innermost first), then
-       return the container the rebuild mounts into — the surviving layout's outlet, or
-       `host` when the whole chain goes. */
-    const disposeFrom = (index: number): Element => {
+    /* Tear down the page and every layout from `index` inward (innermost first). Each
+       layer's disposer stops its reactivity and clears its content from its boundary
+       (the outermost cleared range removes the inner DOM too — harmless double-clears).
+       Leaves the boundary markers in place so the rebuild fills the same boundary. */
+    const disposeFrom = (index: number): void => {
         disposePage?.()
         disposePage = undefined
         for (let depth = mountedLayouts.length - 1; depth >= index; depth -= 1) {
             mountedLayouts[depth]?.dispose()
         }
-        const base = index === 0 ? host : (mountedLayouts[index - 1] as MountedLayout).outlet
         mountedLayouts.length = index
-        return base
     }
 
-    /* Mount (or hydrate) the chain tail — layouts `[index..]` then the page — into
-       `base`, threading each layer into the previous one's outlet. Hydration brackets
-       ONE render pass across all layers so await/try block ids stay unique and aligned
-       with the SSR stream; a fresh mount needs no shared pass. */
+    /* The outlet boundary the layer at `index` fills: the root boundary for the outermost
+       layer, else the surviving parent layout's `<slot/>`. */
+    const baseBoundary = (index: number): Boundary =>
+        index === 0 ? (rootBoundary as Boundary) : (mountedLayouts[index - 1] as MountedLayout).slot
+
+    /* Build (or hydrate) the chain tail — layouts `[index..]` then the page — filling each
+       layer into the previous one's `<slot/>` boundary (the root boundary for the
+       outermost). `outlet()` records each layer's own slot in `PENDING_OUTLET` as the
+       layer builds, so the next layer knows where to mount — no DOM scan. Hydration
+       brackets ONE render pass + claim cursor across all layers so await/try block ids
+       stay unique and aligned with the SSR stream; a fresh mount needs no shared pass. */
     const buildFrom = (
-        base: Element,
         index: number,
         chainKeys: string[],
         layoutViews: Route[],
         pageView: Route | undefined,
+        pageKey: string,
         params: Record<string, string>,
         hydrating: boolean,
     ): void => {
         const run = (): void => {
-            let container = base
+            /* Establish the root boundary on the first mount — `outlet(host)` claims the
+               SSR root boundary (hydrating) or creates it (fresh), recording it in
+               `PENDING_OUTLET`. Reused across navigations thereafter. A fresh first mount
+               (no claim cursor — e.g. a non-hydratable page whose SSR shell can't be
+               adopted) discards whatever the server put in `#app` first, so the created
+               boundary is the only content. */
+            if (rootBoundary === undefined) {
+                if (RENDER.hydration === undefined) {
+                    host.textContent = ''
+                }
+                outlet(host)
+                rootBoundary = PENDING_OUTLET.current as Boundary
+            }
+            let boundary = baseBoundary(index)
             for (let depth = index; depth < layoutViews.length; depth += 1) {
                 const view = layoutViews[depth] as Route
-                const dispose = hydrating
-                    ? (view.hydrate as NonNullable<Route['hydrate']>)(container, params)
-                    : (view(container, params) ?? noop)
-                const outlet = firstOutlet(container)
-                if (outlet === undefined) {
+                PENDING_OUTLET.current = undefined
+                const { dispose } = fillBoundary(
+                    boundary.open,
+                    boundary.close,
+                    view.build,
+                    params,
+                    /* The layout's route key names its scope in the inspector's Reactive tab
+                       (no host element to read a tag from — see `scopeLabel`). */
+                    chainKeys[depth],
+                )
+                const slot = PENDING_OUTLET.current
+                if (slot === undefined) {
                     throw new Error('[abide] a layout.abide must contain a <slot/> outlet')
                 }
-                mountedLayouts.push({ key: chainKeys[depth] as string, dispose, outlet })
-                container = outlet
+                mountedLayouts.push({ key: chainKeys[depth] as string, dispose, slot })
+                boundary = slot
             }
             if (pageView === undefined) {
                 return
             }
-            disposePage = hydrating
-                ? (pageView.hydrate as NonNullable<Route['hydrate']>)(container, params)
-                : (pageView(container, params) ?? undefined)
+            disposePage = fillBoundary(
+                boundary.open,
+                boundary.close,
+                pageView.build,
+                params,
+                /* The page's route key names its scope in the inspector (see above). */
+                pageKey,
+            ).dispose
         }
         if (hydrating) {
+            const previous = RENDER.hydration
+            RENDER.hydration = { next: new Map() }
             enterRenderPass()
             try {
                 run()
             } finally {
                 exitRenderPass()
+                RENDER.hydration = previous
             }
             return
         }
@@ -329,11 +372,11 @@ export function router(
                 ) {
                     divergence += 1
                 }
-                const hydrating =
-                    first && pageView?.hydratable === true && pageView.hydrate !== undefined
+                const hydrating = first && pageView?.hydratable === true
                 first = false
-                /* The DOM mutation a navigation makes: tear the divergent chain down,
-                   clear its DOM (a fresh mount; hydration adopts in place), rebuild. */
+                /* The DOM mutation a navigation makes: tear the divergent chain down
+                   (clearing its content from its boundary) and rebuild into the same
+                   boundary (hydration adopts in place). */
                 const swap = (): void => {
                     /* Tear the outgoing page + divergent layouts down BEFORE publishing the
                        new snapshot. Publishing first would re-run the doomed leaf page's
@@ -341,13 +384,10 @@ export function router(
                        `undefined`, e.g. `Number(page.params.id)` → NaN → a bogus request)
                        while it's still mounted. Disposing first kills that scope; surviving
                        prefix layouts then update in place on publish. */
-                    const base = disposeFrom(divergence)
+                    disposeFrom(divergence)
                     const url = resolveUrl(path)
                     clientPage.value = { route: chainRoute, params, url, navigating: false }
-                    if (!hydrating) {
-                        base.textContent = ''
-                    }
-                    buildFrom(base, divergence, chainKeys, layoutViews, pageView, params, hydrating)
+                    buildFrom(divergence, chainKeys, layoutViews, pageView, key, params, hydrating)
                     /* Reapply the destination entry's scroll once its DOM exists — a
                        back/forward restores its offset, a fresh nav scrolls to the `#hash`
                        anchor (now built) or the top. Runs on the initial paint too: with

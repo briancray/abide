@@ -1,10 +1,12 @@
 /*
-The human-readable name for the scope a mount/hydrate establishes, derived from
-its host element's tag. A nested component mounts into its `abide-<name>` wrapper
-(see `componentWrapperTag`), so stripping the `abide-` prefix recovers the
-component name; any other host (a page/layout outlet) yields its lowercased tag.
-Dev-only — feeds the inspector's Reactive tab so a scope reads `<Counter>` rather
-than an opaque counter id. Returns undefined when there's no element to name from.
+The human-readable name for the scope the direct-mount entry (`mount`/`hydrate`)
+establishes, derived from its host element's tag. The router instead fills layers into
+marker boundaries with no host element, so it passes each layer's route key as an
+explicit label (`fillBoundary`); a nested child likewise passes its component name (see
+`mountRange`). The `abide-` prefix strip turns a framework host tag like `abide-resolve`
+into `resolve`; any other host yields its lowercased tag. Dev-only — feeds the
+inspector's Reactive tab a readable scope name. Returns undefined when there's no element
+to name from.
 */
 import { COMPONENT_WRAPPER_PREFIX } from '../COMPONENT_WRAPPER_PREFIX.ts'
 

@@ -8,7 +8,7 @@ located element (`generateBuild`) / emits it without an `<!--a-->` prefix (`gene
 reactive text interleaved with element children is anchor-positioned instead. Computing it
 once keeps the SSR string and the client skeleton from disagreeing about a `<!--a-->` — the
 first slice of lifting the positional model out of the two parallel traversals, alongside
-the already-shared `componentWrapperTag` and `skeletonable`.
+the already-shared `isControlFlow` and `skeletonable`.
 */
 export function isTextLeaf(node: Extract<TemplateNode, { kind: 'element' }>): boolean {
     return node.children.every((child) => child.kind === 'text' || child.kind === 'style')

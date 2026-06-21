@@ -8,11 +8,12 @@ structure AND lets BOTH back-ends feed the same tree to `skeletonContext` — on
 for "a layout slot is an outlet, not an anchor", instead of the client running `asOutlet` while
 SSR mirrors it with an inline special-case.
 
-The outlet is a structural mount container, not styled content, so it carries NO attrs and NO
-style scope — keeping it byte-identical to the placeholder `renderChain` folds the child layer
-into (an exact `<abide-outlet></abide-outlet>` string match). Stripping `scopes` is what makes
-the two back-ends agree: the SSR special-case emitted the outlet bare, but the client clone read
-the slot's annotated `scopes` and stamped them — a hydration mismatch for any scoped layout.
+The outlet is a structural mount point, not styled content, so it carries NO attrs and NO style
+scope — both back-ends lower it to the bare `<!--abide:outlet-->`…`<!--/abide:outlet-->` boundary
+`renderChain` folds the child layer into (matching its `OUTLET_PLACEHOLDER`). Stripping `scopes`
+is what makes the two back-ends agree: SSR emits the boundary bare, but without this the client
+clone would read the slot's annotated `scopes` and stamp them — a hydration mismatch for any
+scoped layout.
 
 Control-flow children are fresh build contexts (their own runtime mounts a nested slot), so they
 are not descended into — a `<slot>` inside an `{#if}` stays a slot node, handled at its own
