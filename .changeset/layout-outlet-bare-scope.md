@@ -1,0 +1,5 @@
+---
+"@abide/abide": patch
+---
+
+fix(compile): unify the layout `<slot/>` outlet rewrite across both back-ends and emit it scope-free. The hole-numbering refactor keys skeleton hole indices by node identity, but `generateBuild` ran `skeletonContext` over the original nodes while traversing `nodes.map(asOutlet)` — and `asOutlet` clones every element it descends, so a layout with any reactive hole (e.g. the kitchen-sink `layout.abide`'s active-link `<a href={url('/')}>`) threw `[abide] skeleton hole not numbered by the shared positional walk` at compile time, failing the page render. Both back-ends now apply the shared `asOutlet` before `skeletonContext`, so the indexed tree and the traversed tree are one. The rewrite also strips the outlet's style scope: the client cloned `<abide-outlet>` with the slot's annotated `data-a-…` scope while the server emitted it bare, a hydration mismatch (and `renderChain` folds the child layer via an exact bare-`<abide-outlet></abide-outlet>` match) — the outlet is a structural mount container, not styled content, so it now carries no attributes or scope on either side.

@@ -1,5 +1,6 @@
 import { HOLE_ATTRIBUTE } from '../runtime/HOLE_ATTRIBUTE.ts'
 import { OUTLET_TAG } from '../runtime/OUTLET_TAG.ts'
+import { asOutlet } from './asOutlet.ts'
 import { bindListenEvent } from './bindListenEvent.ts'
 import { componentWrapperTag } from './componentWrapperTag.ts'
 import { groupBindParts } from './groupBindParts.ts'
@@ -32,12 +33,29 @@ export function generateBuild(
     let counter = 0
     const nextVar = (prefix: string): string => `${prefix}${counter++}`
 
+    /* In a layout, `<slot/>` outlets are rewritten to `OUTLET_TAG` elements up front
+       (`asOutlet`) so the static-clone path carries them as ordinary structure. `asOutlet`
+       CLONES every element it descends through and drops the slot's anchor hole, so the
+       shared skeleton context must walk THIS rewritten tree — the one the build traversal
+       below reads — or its node-keyed hole indices key the originals and never match. */
+    const rootNodes = isLayout ? nodes.map(asOutlet) : nodes
+
     /* Per-node skeleton position from the SAME pass the SSR back-end reads — so the client's
        anchor/text-leaf decisions consult one source of truth instead of re-deriving the
-       position structurally (the drift the shared context exists to prevent). `asOutlet`
-       only rewrites layout `<slot>`s and preserves text-node identity, so the original
-       `nodes` key the same text markers the build traversal looks up. */
-    const { markText } = skeletonContext(nodes)
+       position structurally (the drift the shared context exists to prevent). */
+    const { markText, elIndex, anIndex } = skeletonContext(rootNodes)
+
+    /* The hole's index, assigned by the shared skeletonContext walk — the sole numberer. A
+       missing entry means this back-end reached a hole the shared walk didn't number: a
+       structural divergence between the two, surfaced loudly at compile time rather than as a
+       runtime hydration desync. */
+    function holeIndex(map: WeakMap<object, number>, key: object): number {
+        const index = map.get(key)
+        if (index === undefined) {
+            throw new Error('[abide] skeleton hole not numbered by the shared positional walk')
+        }
+        return index
+    }
 
     /* The shared signal→`model` lowering + branch-scoped nested-script deref scope. */
     const {
@@ -107,12 +125,7 @@ export function generateBuild(
        block or slot drops an `<!--a-->` anchor at its position and mounts there (see
        `anchorCursor`), so it can sit ANYWHERE among static siblings. Static descendants are
        plain markup. */
-    function skeletonMarkup(
-        node: TemplateNode,
-        skVar: string,
-        counter: { el: number; an: number },
-        binds: string[],
-    ): string {
+    function skeletonMarkup(node: TemplateNode, skVar: string, binds: string[]): string {
         if (node.kind === 'text') {
             /* Reactive text reached here is INTERLEAVED with element siblings (a text-leaf
                is bound via `generateChildren` instead). It can't be element-positioned, so
@@ -124,7 +137,7 @@ export function generateBuild(
                         return staticTextPart(part.value)
                     }
                     binds.push(
-                        `appendTextAt(${skVar}.an[${counter.an++}], () => (${lowerExpression(part.code)}));\n`,
+                        `appendTextAt(${skVar}.an[${holeIndex(anIndex, part)}], () => (${lowerExpression(part.code)}));\n`,
                     )
                     return '<!--a-->'
                 })
@@ -136,7 +149,7 @@ export function generateBuild(
                and returns the create insertion reference; the block's parent is the located
                element the anchor was cloned into (`anchor.parentNode`). */
             const anchorVar = nextVar('an')
-            binds.push(`const ${anchorVar} = ${skVar}.an[${counter.an++}];\n`)
+            binds.push(`const ${anchorVar} = ${skVar}.an[${holeIndex(anIndex, node)}];\n`)
             binds.push(generateChild(node, `${anchorVar}.parentNode`, `anchorCursor(${anchorVar})`))
             return '<!--a-->'
         }
@@ -145,7 +158,7 @@ export function generateBuild(
                into the located node. display:contents (idempotent, static so it lives in
                the markup) keeps the wrapper out of layout — a pure mount host. */
             const tag = componentWrapperTag(node.name)
-            const { code } = mountComponent(node, `${skVar}.el[${counter.el++}]`)
+            const { code } = mountComponent(node, `${skVar}.el[${holeIndex(elIndex, node)}]`)
             binds.push(code)
             return `<${tag} ${HOLE_ATTRIBUTE} style="display:contents"></${tag}>`
         }
@@ -170,7 +183,7 @@ export function generateBuild(
             /* A `<slot>` outlet at its position: an `<!--a-->` anchor, the slot's content
                mounted as a marker-bounded range (`mountSlot`) so it positions like a block. */
             const anchorVar = nextVar('an')
-            binds.push(`const ${anchorVar} = ${skVar}.an[${counter.an++}];\n`)
+            binds.push(`const ${anchorVar} = ${skVar}.an[${holeIndex(anIndex, node)}];\n`)
             const hostVar = nextVar('host')
             binds.push(
                 `mountSlot(${anchorVar}.parentNode, (${hostVar}) => {\n${generateSlot(node, hostVar)}}, anchorCursor(${anchorVar}));\n`,
@@ -195,7 +208,7 @@ export function generateBuild(
                index BEFORE recursing, so holes number in pre-order — the order the runtime's
                path walk produces them. */
             elVar = nextVar('el')
-            binds.push(`const ${elVar} = ${skVar}.el[${counter.el++}];\n`)
+            binds.push(`const ${elVar} = ${skVar}.el[${holeIndex(elIndex, node)}];\n`)
             openTag += ` ${HOLE_ATTRIBUTE}`
             for (const attr of node.attrs) {
                 if (attr.kind !== 'static') {
@@ -224,7 +237,7 @@ export function generateBuild(
         /* A nested `<script>` among the children scopes its bindings to this subtree (its
            later siblings auto-deref them); pop after. */
         const inner = withNestedScripts(node.children, () =>
-            node.children.map((child) => skeletonMarkup(child, skVar, counter, binds)).join(''),
+            node.children.map((child) => skeletonMarkup(child, skVar, binds)).join(''),
         )
         return `${openTag}${inner}</${node.tag}>`
     }
@@ -238,7 +251,7 @@ export function generateBuild(
     ): string {
         const skVar = nextVar('sk')
         const binds: string[] = []
-        const html = skeletonMarkup(node, skVar, { el: 0, an: 0 }, binds)
+        const html = skeletonMarkup(node, skVar, binds)
         return `const ${skVar} = skeleton(${parentVar}, ${JSON.stringify(html)});\n${binds.join('')}`
     }
 
@@ -595,20 +608,7 @@ export function generateBuild(
         )
     }
 
-    /* In a layout the `<slot/>` page outlet is a bare empty `OUTLET_TAG` element (the
-       router fills it later) — exactly the SSR placeholder. Rewriting it to an element
-       node up front lets the static-clone path carry it as ordinary structure. */
-    function asOutlet(node: TemplateNode): TemplateNode {
-        if (node.kind !== 'element') {
-            return node
-        }
-        if (node.tag === 'slot') {
-            return { ...node, tag: OUTLET_TAG, attrs: [], children: [] }
-        }
-        return { ...node, children: node.children.map(asOutlet) }
-    }
-
-    return generateChildren(isLayout ? nodes.map(asOutlet) : nodes, hostVar)
+    return generateChildren(rootNodes, hostVar)
 }
 
 /* A text node that is purely whitespace (no interpolation, only blank static

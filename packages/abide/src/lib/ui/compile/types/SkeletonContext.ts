@@ -12,4 +12,10 @@ filled by one shared `skeletonContext` pass over the parsed tree.
 export type SkeletonContext = {
     inSkeleton: WeakMap<TemplateNode, boolean>
     markText: WeakMap<TemplateNode, boolean>
+    /* Per-hole indices assigned in the same walk, so `generateBuild` reads its `sk.el`/`sk.an`
+       numbering rather than re-deriving it. `elIndex` keyed by element/component node;
+       `anIndex` keyed by control-flow/slot node OR by a reactive text PART object (a text node
+       carries one anchor per reactive part). */
+    elIndex: WeakMap<TemplateNode, number>
+    anIndex: WeakMap<object, number>
 }

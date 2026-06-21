@@ -8,6 +8,8 @@ pure mount host whose real root lays out as a direct child of the parent, keepin
 component invisible to `grid`/`subgrid`/`flex`. Both back-ends call this so the SSR string
 and the client build agree on the wrapper.
 */
+import { COMPONENT_WRAPPER_PREFIX } from '../COMPONENT_WRAPPER_PREFIX.ts'
+
 export function componentWrapperTag(name: string): string {
-    return `abide-${name.toLowerCase()}`
+    return `${COMPONENT_WRAPPER_PREFIX}${name.toLowerCase()}`
 }

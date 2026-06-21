@@ -1,4 +1,5 @@
 import { OUTLET_TAG } from '../runtime/OUTLET_TAG.ts'
+import { asOutlet } from './asOutlet.ts'
 import { componentWrapperTag } from './componentWrapperTag.ts'
 import { groupBindParts } from './groupBindParts.ts'
 import { isControlFlow } from './isControlFlow.ts'
@@ -17,6 +18,17 @@ import { VOID_TAGS } from './VOID_TAGS.ts'
    that lets a branch hold any content. */
 const RANGE_OPEN = '<!--[-->'
 const RANGE_CLOSE = '<!--]-->'
+
+/* The `then`/`catch`/`finally` branch child of an await/try block, or undefined. */
+function branchNamed(
+    children: TemplateNode[],
+    which: 'then' | 'catch' | 'finally',
+): Extract<TemplateNode, { kind: 'branch' }> | undefined {
+    return children.find(
+        (child): child is Extract<TemplateNode, { kind: 'branch' }> =>
+            child.kind === 'branch' && child.branch === which,
+    )
+}
 
 /*
 Server code generator: turns the parsed template into statements that push HTML
@@ -64,11 +76,17 @@ export function generateSSR(
         return children.map((child) => generate(child, target)).join('')
     }
 
+    /* In a layout, rewrite `<slot/>` outlets to `OUTLET_TAG` elements up front (the same shared
+       `asOutlet` the client back-end runs), then drive both the skeleton context and the
+       traversal from this tree — one decision site for the outlet, and the outlet emitted bare
+       through the generic element path exactly as the client clones it. */
+    const rootNodes = isLayout ? nodes.map(asOutlet) : nodes
+
     /* Per-node skeleton position, computed once. Both back-ends read this single source of
        truth so their `<!--a-->` anchor placement cannot drift — the fresh-context boundaries
        (control-flow branches, component/slot/snippet content) are enumerated there, not
        re-tracked here as mutable state that a forgotten reset could leak past. */
-    const { inSkeleton, markText } = skeletonContext(nodes)
+    const { inSkeleton, markText } = skeletonContext(rootNodes)
 
     /* A control-flow branch's content, generated exactly like a normal child list so
        a branch holds ANY content (components, text, nested blocks). `generate` emits
@@ -214,8 +232,10 @@ export function generateSSR(
             )
         }
         if (node.kind === 'element' && node.tag === 'slot') {
-            /* A layout's `<slot/>` is the router's page outlet: emit an empty
-               placeholder the chain composer folds the child layer's html into. */
+            /* `asOutlet` already rewrote a layout's top-level/element-nested `<slot/>` to an
+               `OUTLET_TAG` element (handled by the generic path below), so a `slot` node reaching
+               here in a layout is control-flow-nested — emit the same bare outlet placeholder the
+               client's nested-slot path clones, which the chain composer folds the child into. */
             if (isLayout) {
                 return push(target, `<${OUTLET_TAG}></${OUTLET_TAG}>`)
             }
@@ -291,17 +311,12 @@ export function generateSSR(
        an empty boundary — its resolved branch is the children bound to `node.as` — and
        flags the entry so `renderToStream` settles it before the first flush. */
     function generateAwait(node: Extract<TemplateNode, { kind: 'await' }>, target: string): string {
-        const branchOf = (which: 'then' | 'catch' | 'finally') =>
-            node.children.find(
-                (child): child is Extract<TemplateNode, { kind: 'branch' }> =>
-                    child.kind === 'branch' && child.branch === which,
-            )
-        const catchBranch = branchOf('catch')
-        const finallyChildren = branchOf('finally')?.children ?? []
+        const catchBranch = branchNamed(node.children, 'catch')
+        const finallyChildren = branchNamed(node.children, 'finally')?.children ?? []
         /* Resolved branch + its bound value: the children directly when blocking, the
            `then` child when streaming. Pending (streaming only) is the non-branch
            children. */
-        const thenBranch = branchOf('then')
+        const thenBranch = branchNamed(node.children, 'then')
         const resolvedChildren = node.blocking
             ? node.children.filter((child) => child.kind !== 'branch')
             : (thenBranch?.children ?? [])
@@ -342,13 +357,8 @@ export function generateSSR(
        an enclosing boundary / the 500 / the stream). Boundary comments let hydration
        discard the server content if the client adoption fails. */
     function generateTry(node: Extract<TemplateNode, { kind: 'try' }>, target: string): string {
-        const branchOf = (which: 'catch' | 'finally') =>
-            node.children.find(
-                (child): child is Extract<TemplateNode, { kind: 'branch' }> =>
-                    child.kind === 'branch' && child.branch === which,
-            )
-        const catchBranch = branchOf('catch')
-        const finallyChildren = branchOf('finally')?.children ?? []
+        const catchBranch = branchNamed(node.children, 'catch')
+        const finallyChildren = branchNamed(node.children, 'finally')?.children ?? []
         const guarded = node.children.filter((child) => child.kind !== 'branch')
         const errName = catchBranch?.as ?? '_error'
         const id = nextVar('$tid')
@@ -371,5 +381,5 @@ export function generateSSR(
         return code
     }
 
-    return generateInto(nodes, '$out')
+    return generateInto(rootNodes, '$out')
 }

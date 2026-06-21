@@ -1,3 +1,4 @@
+import { COMPONENT_WRAPPER_PREFIX } from '../COMPONENT_WRAPPER_PREFIX.ts'
 import { claimChild } from '../runtime/claimChild.ts'
 import { HOLE_ATTRIBUTE } from '../runtime/HOLE_ATTRIBUTE.ts'
 import { RENDER } from '../runtime/RENDER.ts'
@@ -33,7 +34,9 @@ function isElement(node: Node): node is Element {
    child's anchors and shift every parent index past it (same hazard as a block range,
    but bounded by the wrapper element instead of `[`…`]` markers). */
 function isComponentWrapper(node: Node): boolean {
-    return isElement(node) && (node.tagName ?? '').toLowerCase().startsWith('abide-')
+    return (
+        isElement(node) && (node.tagName ?? '').toLowerCase().startsWith(COMPONENT_WRAPPER_PREFIX)
+    )
 }
 
 /* A comment node's data, or undefined for elements/text. A comment is a node that is

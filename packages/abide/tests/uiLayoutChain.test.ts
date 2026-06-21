@@ -63,6 +63,18 @@ describe('layout compiler outlet', () => {
         expect(module).toContain('$props.$children')
         expect(module).not.toContain('abide-outlet')
     })
+
+    test('a layout with reactive holes around its <slot/> compiles', () => {
+        /* `asOutlet` CLONES every element it descends through (rewriting the `<slot/>` to
+           `<abide-outlet>`), so the shared skeleton context must walk that same rewritten
+           tree — feeding it the originals leaves a reactive hole's node-keyed index missing
+           and the build throws "skeleton hole not numbered". Regression for the
+           kitchen-sink `layout.abide`, whose `<a href={url('/')}>` is such a hole. */
+        const source =
+            '<div class={shell}><nav><a href={href}>{label}</a></nav><main><slot /></main></div>'
+        expect(() => compileComponent(source, true)).not.toThrow()
+        expect(compileModule(source, { isLayout: true })).toContain('<abide-outlet></abide-outlet>')
+    })
 })
 
 describe('renderChain', () => {
@@ -147,6 +159,21 @@ describe('compiled layout round-trip', () => {
                 new Function('$props', ...names, ssrBody)(props, ...values) as SsrRender,
         }) as unknown as UiComponent
     }
+
+    test('a scoped layout emits a bare outlet on BOTH sides (no style scope on the mount container)', () => {
+        /* The outlet is a structural mount container, not styled content. The client cloned it
+           WITH the slot's annotated style scope while SSR emitted it bare — a hydration mismatch,
+           and `renderChain` folds the child into the exact bare `<abide-outlet></abide-outlet>`
+           string. The shared `asOutlet` strips the scope so both back-ends agree. */
+        const source = '<style>.shell { color: red }</style><div class="shell"><slot /></div>'
+        const client = compileComponent(source, true)
+        /* The client clone carries the outlet bare — no attrs, no `data-a-…` scope. */
+        expect(client).toContain('<abide-outlet></abide-outlet>')
+        expect(client).not.toMatch(/<abide-outlet[^>]+>/)
+        /* And the SSR render folds the page into that same bare placeholder. */
+        const ssr = renderChain([compiled(source, true), compiled('<main>page</main>', false)], {})
+        expect(ssr.html).toContain('<abide-outlet><main>page</main></abide-outlet>')
+    })
 
     test('the SSR chain and the client-nested chain produce identical markup', () => {
         const layout = compiled('<div class="shell">[shell]<slot /></div>', true)
