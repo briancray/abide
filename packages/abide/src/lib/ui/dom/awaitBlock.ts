@@ -3,6 +3,7 @@ import { claimChild } from '../runtime/claimChild.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { RESUME } from '../runtime/RESUME.ts'
 import { scope } from '../runtime/scope.ts'
+import { scopeGroup } from '../runtime/scopeGroup.ts'
 import { discardBoundary } from './discardBoundary.ts'
 import { enterNamespace } from './enterNamespace.ts'
 
@@ -41,6 +42,9 @@ export function awaitBlock(
     before: Node | null = null,
 ): void {
     const hydration = RENDER.hydration
+    /* The live branch's scope, registered with the owner so it disposes on owner
+       teardown — not only when a settle/re-run swaps branches via detach. */
+    const group = scopeGroup()
     let active: { nodes: Node[]; dispose: () => void } | undefined
     let anchor: Node | undefined
     let first = true
@@ -67,8 +71,8 @@ export function awaitBlock(
     const place = (build: (parent: Node) => void): void => {
         detach()
         const fragment = document.createDocumentFragment()
-        const dispose = enterNamespace(anchor?.parentNode ?? parent, () =>
-            scope(() => build(fragment)),
+        const dispose = group.track(
+            enterNamespace(anchor?.parentNode ?? parent, () => scope(() => build(fragment))),
         )
         const nodes = [...fragment.childNodes]
         ;(anchor?.parentNode ?? parent).insertBefore(fragment, anchor ?? null)
@@ -112,7 +116,7 @@ export function awaitBlock(
     const adopt = (open: Node | null, build: (parent: Node) => void): void => {
         const cursor = hydration as NonNullable<typeof hydration>
         cursor.next.set(parent, open?.nextSibling ?? null)
-        const dispose = scope(() => build(parent))
+        const dispose = group.track(scope(() => build(parent)))
         const close = claimChild(cursor, parent)
         cursor.next.set(parent, close?.nextSibling ?? null)
         const nodes: Node[] = []

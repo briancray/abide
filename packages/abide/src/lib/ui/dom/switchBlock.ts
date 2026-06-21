@@ -1,6 +1,7 @@
 import { effect } from '../effect.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { scope } from '../runtime/scope.ts'
+import { scopeGroup } from '../runtime/scopeGroup.ts'
 import { clearBetween } from './clearBetween.ts'
 import { fillBefore } from './fillBefore.ts'
 import { openMarker } from './openMarker.ts'
@@ -26,6 +27,9 @@ export function switchBlock(
     before: Node | null = null,
 ): void {
     const hydration = RENDER.hydration
+    /* The live case's scope, registered with the owner so it disposes on owner
+       teardown — not only when the subject switches cases via clearBetween. */
+    const group = scopeGroup()
     let dispose: (() => void) | undefined
     let activeIndex: number
     let end: Comment
@@ -46,7 +50,7 @@ export function switchBlock(
         activeIndex = select(subject())
         const chosen = caseAt(activeIndex)
         if (chosen !== undefined) {
-            dispose = scope(() => chosen.render(parent)) // claim the SSR nodes in place
+            dispose = group.track(scope(() => chosen.render(parent))) // claim the SSR nodes in place
         }
         end = openMarker(parent, ']')
     } else {
@@ -54,7 +58,7 @@ export function switchBlock(
         activeIndex = select(subject())
         const chosen = caseAt(activeIndex)
         if (chosen !== undefined) {
-            dispose = fillBefore(end, (p) => chosen.render(p))
+            dispose = group.track(fillBefore(end, (p) => chosen.render(p)))
         }
     }
 
@@ -68,7 +72,7 @@ export function switchBlock(
         activeIndex = index
         const chosen = caseAt(index)
         if (chosen !== undefined) {
-            dispose = fillBefore(end, (p) => chosen.render(p))
+            dispose = group.track(fillBefore(end, (p) => chosen.render(p)))
         }
     })
 }

@@ -24,6 +24,7 @@ import type { CacheStore } from './types/CacheStore.ts'
 import type { RawRemoteFunction } from './types/RawRemoteFunction.ts'
 import type { RemoteFunction } from './types/RemoteFunction.ts'
 import type { Subscribable } from './types/Subscribable.ts'
+import { withCacheManaged } from './withCacheManaged.ts'
 
 type AnyRemote<Args, Return> = RemoteFunction<Args, Return> | RawRemoteFunction<Args>
 type Producer<Args, Return> = (args?: Args) => Promise<Return>
@@ -309,8 +310,12 @@ function invokeProducer<Args, Return>(
     }
     /* Miss: time the producer run — where a request's time actually goes (an
        external fetch, a computation). Producer path only; the remote path must
-       keep its own promise so getRemoteMeta can read the recorded Request. */
-    const promise = cacheLog.trace<Return>(`cache ${key}`, () => producer(args))
+       keep its own promise so getRemoteMeta can read the recorded Request. The
+       producer runs cache-managed so a bare RPC inside it isn't scope-bound — the
+       cache coalesces and owns this flight. */
+    const promise = cacheLog.trace<Return>(`cache ${key}`, () =>
+        withCacheManaged(() => producer(args)),
+    )
     registerEntry(store, key, promise, options, undefined, () => producer(args))
     return promise
 }
@@ -326,7 +331,9 @@ function invokeRemote<Args>(
     if (existing) {
         return shareable(existing.promise as Promise<Response>)
     }
-    const promise = rawFn(args as Args)
+    /* Cache-managed: the shared flight isn't bound to the reader that triggered the
+       miss, so its scope disposing can't abort a request other readers still join. */
+    const promise = withCacheManaged(() => rawFn(args as Args))
     const request = getRemoteMeta(promise)
     if (!request) {
         throw new Error(

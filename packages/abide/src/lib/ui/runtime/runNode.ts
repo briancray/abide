@@ -1,5 +1,7 @@
+import { abortNode } from './abortNode.ts'
 import { endTracking } from './endTracking.ts'
 import { REACTIVE_CONTEXT } from './REACTIVE_CONTEXT.ts'
+import { reactiveAbortState } from './reactiveAbortState.ts'
 import type { ReactiveNode } from './types/ReactiveNode.ts'
 
 /*
@@ -12,6 +14,13 @@ taken this run leaves its edges past the cursor, so they are dropped here. Retur
 the fresh value (used by lazy computed reads).
 */
 export function runNode(node: ReactiveNode): unknown {
+    /* This run supersedes the prior one — abort any RPC it left in flight before
+       re-tracking, so a stale request never lands after a newer one started. The
+       `armed` gate inlines here so an app that never fires a reactive RPC pays one
+       property read on this hot path, not a call. */
+    if (reactiveAbortState.armed) {
+        abortNode(node)
+    }
     /* Rewind: track() walks forward from here, reusing matching edges in order. */
     node.depsTail = undefined
     const previous = REACTIVE_CONTEXT.observer

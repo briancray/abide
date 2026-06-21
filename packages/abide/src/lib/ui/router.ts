@@ -209,6 +209,17 @@ export function router(
             const chainKeys = layoutChainForRoute(chainRoute, layoutKeys)
             sequence += 1
             const token = sequence
+            /* Flag the outgoing page as navigating for the resolve window — chunk
+               import + probe + the view transition all run before the swap commits.
+               Published on the CURRENT snapshot (route/params unchanged) so a spinner
+               bound to `page.navigating` shows over the page being left; `swap`
+               republishes with the destination and `navigating: false` on commit.
+               Skipped on first paint — there is no page to leave. An instant SPA hop
+               (chunk cached, no probe) flips it back within the same microtask, so the
+               browser never paints the intermediate state — no flash. */
+            if (!first && !clientPage.value.navigating) {
+                clientPage.value = { ...clientPage.value, navigating: true }
+            }
             /* First paint adopts a document the server already ran handle() on;
                only later navigations re-run it through the probe. */
             const verdict: Promise<NavVerdict> =
@@ -238,16 +249,6 @@ export function router(
                     }
                     return
                 }
-                /* Publish the active page so the `page` proxy resolves route/params/url. */
-                clientPage.value = {
-                    route: chainRoute,
-                    params,
-                    url:
-                        typeof location === 'undefined'
-                            ? new URL(`http://localhost${path}`)
-                            : new URL(location.href),
-                    navigating: false,
-                }
                 const layoutViews = resolvedLayouts.filter(
                     (view): view is Route => view !== undefined,
                 )
@@ -267,7 +268,22 @@ export function router(
                 /* The DOM mutation a navigation makes: tear the divergent chain down,
                    clear its DOM (a fresh mount; hydration adopts in place), rebuild. */
                 const swap = (): void => {
+                    /* Tear the outgoing page + divergent layouts down BEFORE publishing the
+                       new snapshot. Publishing first would re-run the doomed leaf page's
+                       computeds against the new route's params (a missing `[id]` reads back
+                       `undefined`, e.g. `Number(page.params.id)` → NaN → a bogus request)
+                       while it's still mounted. Disposing first kills that scope; surviving
+                       prefix layouts then update in place on publish. */
                     const base = disposeFrom(divergence)
+                    clientPage.value = {
+                        route: chainRoute,
+                        params,
+                        url:
+                            typeof location === 'undefined'
+                                ? new URL(`http://localhost${path}`)
+                                : new URL(location.href),
+                        navigating: false,
+                    }
                     if (!hydrating) {
                         base.textContent = ''
                     }

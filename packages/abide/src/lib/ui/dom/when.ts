@@ -1,6 +1,7 @@
 import { effect } from '../effect.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { scope } from '../runtime/scope.ts'
+import { scopeGroup } from '../runtime/scopeGroup.ts'
 import { clearBetween } from './clearBetween.ts'
 import { fillBefore } from './fillBefore.ts'
 import { openMarker } from './openMarker.ts'
@@ -28,6 +29,9 @@ export function when(
 ): void {
     const hydration = RENDER.hydration
     const chosenFor = (branch: 'then' | 'else') => (branch === 'then' ? render : renderElse)
+    /* The live branch's scope, registered with the owner so it disposes on owner
+       teardown — not only on a branch flip via clearBetween. */
+    const group = scopeGroup()
     let dispose: (() => void) | undefined
     let activeBranch: 'then' | 'else'
     let end: Comment
@@ -40,7 +44,7 @@ export function when(
         activeBranch = condition() ? 'then' : 'else'
         const chosen = chosenFor(activeBranch)
         if (chosen !== undefined) {
-            dispose = scope(() => chosen(parent)) // content claims the SSR nodes in place
+            dispose = group.track(scope(() => chosen(parent))) // content claims the SSR nodes in place
         }
         end = openMarker(parent, ']')
     } else {
@@ -48,7 +52,7 @@ export function when(
         activeBranch = condition() ? 'then' : 'else'
         const chosen = chosenFor(activeBranch)
         if (chosen !== undefined) {
-            dispose = fillBefore(end, chosen)
+            dispose = group.track(fillBefore(end, chosen))
         }
     }
 
@@ -62,7 +66,7 @@ export function when(
         activeBranch = branch
         const chosen = chosenFor(branch)
         if (chosen !== undefined) {
-            dispose = fillBefore(end, chosen)
+            dispose = group.track(fillBefore(end, chosen))
         }
     })
 }

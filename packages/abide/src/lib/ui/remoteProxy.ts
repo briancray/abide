@@ -8,6 +8,8 @@ import { trace } from '../shared/trace.ts'
 import type { HttpVerb } from '../shared/types/HttpVerb.ts'
 import type { RemoteFunction } from '../shared/types/RemoteFunction.ts'
 import { withBase } from '../shared/withBase.ts'
+import { currentAbortSignal } from './runtime/currentAbortSignal.ts'
+import { REQUEST_SUPERSEDED } from './runtime/REQUEST_SUPERSEDED.ts'
 
 /*
 Client-side substitute for a verb-defined handler. The bundler emits one
@@ -54,17 +56,26 @@ export function remoteProxy<Args, Return>(
 }
 
 /*
-Applies the env-configured client timeout (ABIDE_CLIENT_TIMEOUT, ms) when one
-is set; an unset slot fetches unbounded, exactly as before. A timeout abort
-surfaces as a 504 HttpError so a consumer reads an honest status instead of a
-raw DOMException → 500. Other rejections (genuine network failure) propagate untouched.
+Fetches under two optional aborts: the reactive scope that fired the call (so a
+superseded/torn-down read cancels its in-flight request — currentAbortSignal) and
+the env-configured client timeout (ABIDE_CLIENT_TIMEOUT, ms). Neither present →
+the unbounded fetch, exactly as before. A timeout surfaces as a 504 HttpError so a
+consumer reads an honest status instead of a raw DOMException → 500. Our scope abort
+(reason REQUEST_SUPERSEDED) is swallowed into a never-settling promise: the reactive
+owner is gone, so the result must neither resolve into a dead tree nor surface as a
+rejection. Other rejections (genuine network failure) propagate untouched.
 */
 function fetchWithTimeout(request: Request): Promise<Response> {
     const timeout = rpcTimeoutSlot.ms
-    if (timeout === undefined) {
+    const timeoutSignal = timeout === undefined ? undefined : AbortSignal.timeout(timeout)
+    const signal = combineSignals(currentAbortSignal(), timeoutSignal)
+    if (signal === undefined) {
         return fetch(request)
     }
-    return fetch(request, { signal: AbortSignal.timeout(timeout) }).catch((error: unknown) => {
+    return fetch(request, { signal }).catch((error: unknown) => {
+        if (error === REQUEST_SUPERSEDED) {
+            return new Promise<Response>(() => {})
+        }
         if (error instanceof DOMException && error.name === 'TimeoutError') {
             throw new HttpError(
                 new Response('client timeout', { status: 504, statusText: 'Gateway Timeout' }),
@@ -72,6 +83,21 @@ function fetchWithTimeout(request: Request): Promise<Response> {
         }
         throw error
     })
+}
+
+/* One AbortSignal from the scope-abort and timeout sources: whichever is present,
+   AbortSignal.any when both, or undefined when neither (the unbounded fetch). */
+function combineSignals(
+    scopeSignal: AbortSignal | undefined,
+    timeoutSignal: AbortSignal | undefined,
+): AbortSignal | undefined {
+    if (scopeSignal === undefined) {
+        return timeoutSignal
+    }
+    if (timeoutSignal === undefined) {
+        return scopeSignal
+    }
+    return AbortSignal.any([scopeSignal, timeoutSignal])
 }
 
 /*

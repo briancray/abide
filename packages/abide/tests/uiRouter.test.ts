@@ -1,8 +1,13 @@
 import { beforeAll, beforeEach, describe, expect, test } from 'bun:test'
+import { page } from '../src/lib/shared/page.ts'
+import { pageSlot } from '../src/lib/shared/pageSlot.ts'
+import { setPageResolver } from '../src/lib/shared/setPageResolver.ts'
 import { appendText } from '../src/lib/ui/dom/appendText.ts'
 import { mount } from '../src/lib/ui/dom/mount.ts'
+import { effect } from '../src/lib/ui/effect.ts'
 import { navigate } from '../src/lib/ui/navigate.ts'
 import { router } from '../src/lib/ui/router.ts'
+import { clientPage } from '../src/lib/ui/runtime/clientPage.ts'
 import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
 import { runtimePath } from '../src/lib/ui/runtime/runtimePath.ts'
 import type { NavVerdict } from '../src/lib/ui/runtime/types/NavVerdict.ts'
@@ -159,6 +164,87 @@ describe('router', () => {
         expect(host.textContent).toBe('login')
 
         dispose()
+    })
+
+    /* Regression: navigating off a `[id]` page must dispose that page BEFORE the new
+       route's params publish to the `page` proxy. Publishing first re-runs the outgoing
+       leaf's computeds against params that no longer carry `id` (it reads back undefined
+       → e.g. `Number(page.params.id)` → NaN → a bogus request) while still mounted.
+       With the page disposed first, its effect never observes the new params. */
+    test('disposes the outgoing [id] page before publishing the new route params', async () => {
+        setPageResolver(() => clientPage.value)
+        const host = document.createElement('div')
+        const seen: (string | undefined)[] = []
+        const itemPage: Route = (target: Element): (() => void) => {
+            const stop = effect(() => {
+                seen.push(page.params.id)
+            })
+            target.appendChild(document.createTextNode('item'))
+            return stop
+        }
+        const home =
+            (label: string): Route =>
+            (target: Element) => {
+                target.appendChild(document.createTextNode(label))
+                return () => undefined
+            }
+        const dispose = router(host, {
+            '/': loader(home('home')),
+            '/item/[id]': loader(itemPage),
+            '*': loader(home('x')),
+        })
+
+        navigate('/item/7')
+        await flush()
+        expect(seen).toEqual(['7'])
+
+        navigate('/')
+        await flush()
+        expect(host.textContent).toBe('home')
+        // The leaf's scope was disposed before `/`'s params published, so its effect
+        // never re-ran against the absent id. It MAY re-run with the unchanged id when
+        // `navigating` flips (a harmless repeat of '7'); the invariant is that it never
+        // observes the missing id — a `undefined` reading is the bug. toContain checks
+        // membership, which (unlike toEqual) a trailing-undefined element can't slip past.
+        expect(seen).not.toContain(undefined)
+        expect(new Set(seen)).toEqual(new Set(['7']))
+
+        dispose()
+        pageSlot.resolver = undefined
+        pageSlot.fallback = undefined
+    })
+
+    /* `page.navigating` is true from the moment a post-boot navigation starts until
+       its destination commits — the window where the chunk imports and the probe runs.
+       First paint is exempt (no page to leave). */
+    test('flags page.navigating during the resolve window and clears it on commit', async () => {
+        setPageResolver(() => clientPage.value)
+        const host = document.createElement('div')
+        const view =
+            (label: string): Route =>
+            (target: Element) => {
+                target.appendChild(document.createTextNode(label))
+                return () => undefined
+            }
+        const dispose = router(host, {
+            '/': loader(view('home')),
+            '/about': loader(view('about')),
+            '*': loader(view('x')),
+        })
+
+        navigate('/')
+        await flush()
+        expect(page.navigating).toBe(false) // first paint never flags navigating
+
+        navigate('/about')
+        expect(page.navigating).toBe(true) // resolve window: chunk import in flight
+        await flush()
+        expect(page.navigating).toBe(false) // committed
+        expect(host.textContent).toBe('about')
+
+        dispose()
+        pageSlot.resolver = undefined
+        pageSlot.fallback = undefined
     })
 
     test('does not mount when the verdict hands off to a full browser load', async () => {

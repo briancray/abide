@@ -3,6 +3,7 @@ import { claimChild } from '../runtime/claimChild.ts'
 import { OWNER } from '../runtime/OWNER.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { scope } from '../runtime/scope.ts'
+import { scopeGroup } from '../runtime/scopeGroup.ts'
 import { enterNamespace } from './enterNamespace.ts'
 import { removeRange } from './removeRange.ts'
 import type { EachRow } from './types/EachRow.ts'
@@ -32,6 +33,9 @@ export function eachAsync<T>(
     before: Node | null = null,
 ): void {
     const rows = new Map<string, EachRow>()
+    /* Each row's (and the error branch's) scope, registered with the owner so they
+       dispose on owner teardown; the block's own teardown only stops the stream. */
+    const group = scopeGroup()
     const hydration = RENDER.hydration
     const anchor = document.createTextNode('')
     if (hydration !== undefined) {
@@ -46,8 +50,8 @@ export function eachAsync<T>(
         const end = document.createComment(']')
         const fragment = document.createDocumentFragment()
         fragment.appendChild(start)
-        const dispose = enterNamespace(anchor.parentNode ?? parent, () =>
-            scope(() => build(fragment)),
+        const dispose = group.track(
+            enterNamespace(anchor.parentNode ?? parent, () => scope(() => build(fragment))),
         )
         fragment.appendChild(end)
         /* Insert via the anchor's LIVE parent: when this `each` is a bare child of a
@@ -127,18 +131,13 @@ export function eachAsync<T>(
     })
 
     /* Stop the live stream when the enclosing scope tears down: bump the generation so
-       the drain abandons its loop, `return()` the iterator to release the source, drop
-       the error branch, and dispose every surviving row. */
+       the drain abandons its loop and `return()` the iterator to release the source. The
+       rows and error branch are disposed by the group (their scopes were tracked). */
     if (OWNER.current !== undefined) {
         OWNER.current.push(() => {
             generation += 1
             iterator?.return?.(undefined)?.catch(() => undefined)
             iterator = undefined
-            clearError()
-            for (const row of rows.values()) {
-                row.dispose()
-            }
-            rows.clear()
         })
     }
 }

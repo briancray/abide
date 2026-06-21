@@ -1,9 +1,9 @@
 import { effect } from '../effect.ts'
 import { claimChild } from '../runtime/claimChild.ts'
 import { claimExpected } from '../runtime/claimExpected.ts'
-import { OWNER } from '../runtime/OWNER.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { scope } from '../runtime/scope.ts'
+import { scopeGroup } from '../runtime/scopeGroup.ts'
 import { enterNamespace } from './enterNamespace.ts'
 import { moveRange } from './moveRange.ts'
 import { removeRange } from './removeRange.ts'
@@ -36,6 +36,9 @@ export function each<T>(
     before: Node | null = null,
 ): void {
     const rows = new Map<string, EachRow>()
+    /* Each row's scope, registered with the owner so every live row disposes on owner
+       teardown (the effect's own disposer only unsubscribes it from `items()`). */
+    const group = scopeGroup()
 
     /* Build a row's range. Hydrate mode (only while the claim cursor is active —
        read fresh, since a row built by a post-hydration reconcile must create, not
@@ -47,7 +50,7 @@ export function each<T>(
         if (hydration !== undefined) {
             const start = claimExpected(hydration, parent, 'each row start marker')
             hydration.next.set(parent, start.nextSibling)
-            const dispose = scope(() => render(parent, item))
+            const dispose = group.track(scope(() => render(parent, item)))
             const end = claimExpected(hydration, parent, 'each row end marker')
             hydration.next.set(parent, end.nextSibling)
             return { start, end, dispose }
@@ -58,7 +61,9 @@ export function each<T>(
         pending.appendChild(start)
         /* Build under `parent`'s foreign namespace so foreign row elements (svg/math)
            built into the detached fragment are namespaced, not built as HTML. */
-        const dispose = enterNamespace(parent, () => scope(() => render(pending, item)))
+        const dispose = group.track(
+            enterNamespace(parent, () => scope(() => render(pending, item))),
+        )
         pending.appendChild(end)
         return { start, end, dispose, pending }
     }
@@ -146,16 +151,4 @@ export function each<T>(
             RENDER.hydration = previousHydration
         }
     })
-
-    /* Dispose every row still live when the enclosing scope tears down (the effect's
-       own disposer only unsubscribes it from `items()`). The host's DOM is cleared by
-       `mount`, so disposal need not remove the nodes. */
-    if (OWNER.current !== undefined) {
-        OWNER.current.push(() => {
-            for (const row of rows.values()) {
-                row.dispose()
-            }
-            rows.clear()
-        })
-    }
 }

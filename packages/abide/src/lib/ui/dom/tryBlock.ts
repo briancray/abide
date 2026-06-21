@@ -1,6 +1,7 @@
 import { claimChild } from '../runtime/claimChild.ts'
 import { OWNER } from '../runtime/OWNER.ts'
 import { RENDER } from '../runtime/RENDER.ts'
+import { scopeGroup } from '../runtime/scopeGroup.ts'
 import { discardBoundary } from './discardBoundary.ts'
 import { enterNamespace } from './enterNamespace.ts'
 
@@ -28,20 +29,30 @@ export function tryBlock(
     renderCatch?: (parent: Node, error: unknown) => void,
     before: Node | null = null,
 ): void {
-    /* Run a void build under a fresh ownership scope; on throw, tear down the partial
-       effects/listeners it registered and rethrow so the caller can fall back. */
+    /* The guarded subtree's scope, registered with the owner so it disposes on owner
+       teardown. The block renders once, so there is at most one tracked subtree (the
+       try branch, or the catch branch if try threw). */
+    const group = scopeGroup()
+    /* Run a void build under a fresh ownership scope. On success, hand its disposers to
+       the group so the subtree tears down with the owner (they were previously dropped —
+       the leak). On throw, tear down the partial build now and rethrow so the caller can
+       fall back to the catch branch. */
     const guard = (build: () => void): void => {
         const previous = OWNER.current
         const disposers: Array<() => void> = []
         OWNER.current = disposers
-        try {
-            build()
-            OWNER.current = previous
-        } catch (error) {
-            OWNER.current = previous
+        const disposeAll = (): void => {
             for (let index = disposers.length - 1; index >= 0; index -= 1) {
                 disposers[index]?.()
             }
+        }
+        try {
+            build()
+            OWNER.current = previous
+            group.track(disposeAll)
+        } catch (error) {
+            OWNER.current = previous
+            disposeAll()
             throw error
         }
     }
