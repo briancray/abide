@@ -224,8 +224,10 @@ export function router(
             return
         }
         const target = event.target as Element
+        /* `closest?.` is undefined when the target is a non-Element (text node, document)
+           that has no `closest`; `== null` catches both that and a genuine no-match null. */
         const link = target.closest?.('a[href]') as HTMLAnchorElement | null
-        if (link === null) {
+        if (link == null) {
             return
         }
         /* Defer to the browser for links it should own: a new-tab target, a
@@ -341,76 +343,104 @@ export function router(
                 resolvePage(key),
                 Promise.all(chainKeys.map((layoutKey) => resolveLayout(layoutKey))),
                 verdict,
-            ]).then(([pageView, resolvedLayouts, decision]) => {
-                if (token !== sequence || disposed) {
-                    return
-                }
-                /* handle() redirected: go where it pointed, replacing the blocked
-                   URL so back doesn't trap on it. The router re-probes the target. */
-                if (decision.kind === 'redirect') {
-                    navigate(decision.path, true)
-                    return
-                }
-                /* handle() blocked it / redirected off-origin / the probe failed:
-                   let the browser load the server's real response. */
-                if (decision.kind === 'reload') {
-                    if (typeof location !== 'undefined') {
-                        location.href = decision.url
+            ])
+                .then(([pageView, resolvedLayouts, decision]) => {
+                    if (token !== sequence || disposed) {
+                        return
                     }
-                    return
-                }
-                const layoutViews = resolvedLayouts.filter(
-                    (view): view is Route => view !== undefined,
-                )
-                /* The shared prefix of layouts (same route key at the same depth) stays
+                    /* handle() redirected: go where it pointed, replacing the blocked
+                   URL so back doesn't trap on it. The router re-probes the target. */
+                    if (decision.kind === 'redirect') {
+                        navigate(decision.path, true)
+                        return
+                    }
+                    /* handle() blocked it / redirected off-origin / the probe failed:
+                   let the browser load the server's real response. */
+                    if (decision.kind === 'reload') {
+                        if (typeof location !== 'undefined') {
+                            location.href = decision.url
+                        }
+                        return
+                    }
+                    const layoutViews = resolvedLayouts.filter(
+                        (view): view is Route => view !== undefined,
+                    )
+                    /* The shared prefix of layouts (same route key at the same depth) stays
                    mounted; the first divergence and everything inward is rebuilt. */
-                let divergence = 0
-                while (
-                    divergence < mountedLayouts.length &&
-                    divergence < chainKeys.length &&
-                    mountedLayouts[divergence]?.key === chainKeys[divergence]
-                ) {
-                    divergence += 1
-                }
-                const hydrating = first && pageView?.hydratable === true
-                first = false
-                /* The DOM mutation a navigation makes: tear the divergent chain down
+                    let divergence = 0
+                    while (
+                        divergence < mountedLayouts.length &&
+                        divergence < chainKeys.length &&
+                        mountedLayouts[divergence]?.key === chainKeys[divergence]
+                    ) {
+                        divergence += 1
+                    }
+                    const hydrating = first && pageView?.hydratable === true
+                    first = false
+                    /* The DOM mutation a navigation makes: tear the divergent chain down
                    (clearing its content from its boundary) and rebuild into the same
                    boundary (hydration adopts in place). */
-                const swap = (): void => {
-                    /* Tear the outgoing page + divergent layouts down BEFORE publishing the
+                    const swap = (): void => {
+                        /* `startViewTransition` runs this callback in a later frame, so a newer
+                           navigation may have superseded this one since the token guard above —
+                           re-check before mutating, or a stale swap clobbers the newer page. */
+                        if (token !== sequence || disposed) {
+                            return
+                        }
+                        /* Tear the outgoing page + divergent layouts down BEFORE publishing the
                        new snapshot. Publishing first would re-run the doomed leaf page's
                        computeds against the new route's params (a missing `[id]` reads back
                        `undefined`, e.g. `Number(page.params.id)` → NaN → a bogus request)
                        while it's still mounted. Disposing first kills that scope; surviving
                        prefix layouts then update in place on publish. */
-                    disposeFrom(divergence)
-                    const url = resolveUrl(path)
-                    clientPage.value = { route: chainRoute, params, url, navigating: false }
-                    buildFrom(divergence, chainKeys, layoutViews, pageView, key, params, hydrating)
-                    /* Reapply the destination entry's scroll once its DOM exists — a
+                        disposeFrom(divergence)
+                        const url = resolveUrl(path)
+                        clientPage.value = { route: chainRoute, params, url, navigating: false }
+                        buildFrom(
+                            divergence,
+                            chainKeys,
+                            layoutViews,
+                            pageView,
+                            key,
+                            params,
+                            hydrating,
+                        )
+                        /* Reapply the destination entry's scroll once its DOM exists — a
                        back/forward restores its offset, a fresh nav scrolls to the `#hash`
                        anchor (now built) or the top. Runs on the initial paint too: with
                        `scrollRestoration='manual'` the browser does NOT restore a reload's
                        offset, so first paint recovers it from the persisted `history.state`
                        (a fresh load with no persisted offset falls through to hash/top). */
-                    historyEntries.restore(url.hash)
-                }
-                /* Wrap the swap in a View Transition where the browser supports it, so
+                        historyEntries.restore(url.hash)
+                    }
+                    /* Wrap the swap in a View Transition where the browser supports it, so
                    the page change cross-fades (and shared `view-transition-name` elements
                    morph) — the synchronous swap is exactly the mutation the API snapshots
                    around. Skipped while hydrating: the first paint adopts SSR DOM in place,
                    not animate. CSS owns opting out (e.g. prefers-reduced-motion). */
-                if (
-                    !hydrating &&
-                    typeof document !== 'undefined' &&
-                    'startViewTransition' in document
-                ) {
-                    document.startViewTransition(swap)
-                } else {
-                    swap()
-                }
-            })
+                    if (
+                        !hydrating &&
+                        typeof document !== 'undefined' &&
+                        'startViewTransition' in document
+                    ) {
+                        document.startViewTransition(swap)
+                    } else {
+                        swap()
+                    }
+                })
+                .catch(() => {
+                    /* A page/layout chunk import (or the probe) rejected — offline, a hashed
+                   chunk filename rotated by a deploy, or a transient asset 5xx. Without
+                   this the navigating:true latched above never clears (a bound spinner
+                   spins forever) and the rejection surfaces as an unhandledrejection.
+                   Fall back to a full browser load so the server serves the target. */
+                    if (token !== sequence || disposed) {
+                        return
+                    }
+                    if (typeof location !== 'undefined') {
+                        location.href = resolveUrl(path).href
+                    }
+                })
         })
     })
 

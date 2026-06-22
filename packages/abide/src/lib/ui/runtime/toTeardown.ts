@@ -15,11 +15,16 @@ export function toTeardown(result: EffectResult): Teardown | undefined {
     }
     if (result instanceof Promise) {
         return () => {
-            result.then((teardown) => {
-                if (typeof teardown === 'function') {
-                    teardown()
-                }
-            })
+            /* Swallow a rejection: an async body that rejected (e.g. an aborted RPC) must
+               not surface as an unhandled rejection when the teardown runs at dispose. */
+            result.then(
+                (teardown) => {
+                    if (typeof teardown === 'function') {
+                        teardown()
+                    }
+                },
+                () => undefined,
+            )
         }
     }
     return undefined

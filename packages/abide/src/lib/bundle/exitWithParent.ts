@@ -10,10 +10,12 @@ the var is absent (standalone `abide start`).
 */
 export function exitWithParent(): void {
     const parent = process.env.ABIDE_PARENT_PID
-    if (!parent) {
+    const parentPid = Number(parent)
+    /* A non-numeric value is truthy but coerces to NaN; without the integer guard
+       process.kill(NaN, 0) throws on the first tick and exits a healthy server. */
+    if (!parent || !Number.isInteger(parentPid)) {
         return
     }
-    const parentPid = Number(parent)
     const timer = setInterval(() => {
         try {
             // Signal 0 sends nothing — it only probes existence, throwing when the

@@ -52,7 +52,10 @@ export async function snapshotEntryFromCache(
     if (!isTextual(contentType)) {
         return undefined
     }
-    const body = await response.text()
+    /* Read a CLONE, not the original: a reader that captured this same `entry.promise`
+       before the replacement below still holds `response` and may `.clone()` it — reading
+       the original here would lock its body and throw "Body already used" for that reader. */
+    const body = await response.clone().text()
     entry.promise = Promise.resolve(
         new Response(body, {
             status: response.status,

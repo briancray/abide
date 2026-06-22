@@ -25,7 +25,14 @@ export function localStoragePersistence(): PersistenceStore | undefined {
             }
         },
         save: (key, snapshot) => {
-            localStorage.setItem(key, JSON.stringify(snapshot))
+            /* Swallow a failed write (QuotaExceededError, storage disabled mid-session) —
+               it fires from a debounced flush / pagehide handler with no caller to catch it,
+               and a dropped persist must not crash the app. */
+            try {
+                localStorage.setItem(key, JSON.stringify(snapshot))
+            } catch {
+                // best-effort persistence
+            }
         },
         remove: (key) => {
             localStorage.removeItem(key)

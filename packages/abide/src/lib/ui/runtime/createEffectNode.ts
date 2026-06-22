@@ -49,6 +49,11 @@ export function createEffectNode(fn: () => EffectResult): () => void {
     const dispose = () => {
         runCleanup()
         unlinkDeps(node)
+        /* Clearing compute makes runNode a no-op: an effect disposed mid-flush (by an
+           earlier effect in the same batch) is still in flushEffects' snapshot array
+           after pendingEffects.delete, so it would otherwise re-run its body and
+           re-link into the graph — a disposed effect resurrected. */
+        node.compute = undefined
         REACTIVE_CONTEXT.pendingEffects.delete(node)
     }
     if (OWNER.current !== undefined) {

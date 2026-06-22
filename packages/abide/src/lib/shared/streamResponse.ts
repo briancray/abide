@@ -122,6 +122,11 @@ async function* parseSse<T>(response: Response): AsyncGenerator<T> {
         if (errorMessage !== undefined) {
             throw new Error(errorMessage)
         }
+        /* A frame with an empty `data:` value (a keepalive) carries no payload — skip it
+           rather than letting JSON.parse('') throw and tear down the whole iteration. */
+        if (frame.data === '') {
+            continue
+        }
         yield JSON.parse(frame.data) as T
     }
 }
@@ -157,7 +162,9 @@ consumer loops can react to mid-stream failure.
 */
 async function* parseJsonLines<T>(response: Response): AsyncGenerator<T> {
     for await (const raw of frameReader(response, '\n')) {
-        if (raw.length === 0) {
+        /* Skip blank lines: a CRLF stream yields a lone `\r` (non-zero length) between
+           records, and JSON.parse('\r') would throw and tear down the whole iteration. */
+        if (raw.trim().length === 0) {
             continue
         }
         const parsed = JSON.parse(raw)

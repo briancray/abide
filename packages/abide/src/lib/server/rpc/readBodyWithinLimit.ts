@@ -40,5 +40,8 @@ export async function readBodyWithinLimit(request: Request, maxBytes: number): P
         method: request.method,
         headers: request.headers,
         body: buffered,
+        /* Carry the inbound signal forward so a handler reading `request().signal` still
+           aborts on client disconnect — a fresh Request would otherwise drop it. */
+        signal: request.signal,
     })
 }

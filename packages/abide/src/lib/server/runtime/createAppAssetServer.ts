@@ -34,13 +34,19 @@ export async function createAppAssetServer({
 }): Promise<(req: Request, url: URL) => Promise<Response>> {
     // Per-pathname asset header bundles, hashed-chunk-aware Cache-Control.
     const headersForAsset = createAssetHeaderCache(cacheControlForAsset)
-    const diskGzipPaths = assets
+    /* Boot snapshot of every disk `_app` path, mirroring createPublicAssetServer: the
+       header cache keys on (request-controlled) pathnames, so building bundles for junk
+       `/_app/*` probes would grow it without bound. A rebuild restarts the server (same
+       restart `bun --watch` triggers on a code change), re-snapshotting. */
+    const diskPaths = assets
         ? new Set<string>()
-        : await globToPathSet(
-              `${distDir}/_app`,
-              '**/*.gz',
-              (file) => `/_app/${file.replace(/\.gz$/, '')}`,
-          )
+        : await globToPathSet(`${distDir}/_app`, '**/*', (file) => `/_app/${file}`)
+    /* Derive the precompressed `.gz` sibling set from the single tree scan (it already
+       includes the `.gz` files) — a gzip-capable client gets those bytes without
+       on-the-fly compression. Keyed by the base path (the `.gz` suffix stripped). */
+    const diskGzipPaths = new Set(
+        [...diskPaths].filter((path) => path.endsWith('.gz')).map((path) => path.slice(0, -3)),
+    )
 
     return async function serveAppAsset(req, url) {
         if (containsTraversal(req.url)) {
@@ -49,8 +55,20 @@ export async function createAppAssetServer({
                 headers: { 'Content-Type': TEXT_PLAIN, 'Cache-Control': NO_STORE },
             })
         }
+        /* Embed map and gzip Set hold decoded filesystem names; url.pathname stays
+           percent-encoded — decode so a chunk/asset with a non-ASCII name matches and
+           Bun.file opens the real path, not a literal `%xx` name. */
+        let assetPath: string
+        try {
+            assetPath = decodeURIComponent(url.pathname)
+        } catch {
+            return new Response('Not Found', {
+                status: 404,
+                headers: { 'Content-Type': TEXT_PLAIN, 'Cache-Control': NO_STORE },
+            })
+        }
         if (assets) {
-            const compressed = assets[url.pathname]
+            const compressed = assets[assetPath]
             /* Miss-check before header work: the header cache keys on
                (request-controlled) pathnames, so building bundles for junk
                `/_app/*` probes would grow it without bound. */
@@ -63,12 +81,20 @@ export async function createAppAssetServer({
             return respondWithEmbeddedAsset(
                 compressed,
                 acceptsGzip(req),
-                headersForAsset(url.pathname),
+                headersForAsset(assetPath),
             )
         }
-        const { base: baseHeaders, gzip: gzipHeaders } = headersForAsset(url.pathname)
-        const diskPath = distDir + url.pathname
-        if (acceptsGzip(req) && diskGzipPaths.has(url.pathname)) {
+        /* Miss-check before header work so probes for non-existent chunks can't grow the
+           header cache (the embed branch above guards the same way). */
+        if (!diskPaths.has(assetPath)) {
+            return new Response('Not Found', {
+                status: 404,
+                headers: { 'Content-Type': TEXT_PLAIN, 'Cache-Control': NO_STORE },
+            })
+        }
+        const { base: baseHeaders, gzip: gzipHeaders } = headersForAsset(assetPath)
+        const diskPath = distDir + assetPath
+        if (acceptsGzip(req) && diskGzipPaths.has(assetPath)) {
             return new Response(Bun.file(`${diskPath}.gz`), { headers: gzipHeaders })
         }
         return new Response(Bun.file(diskPath), { headers: baseHeaders })

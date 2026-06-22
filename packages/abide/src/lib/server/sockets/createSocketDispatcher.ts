@@ -152,6 +152,13 @@ export function createSocketDispatcher(sockets: SocketRoutes): SocketDispatcher 
             return fail(resolution.message)
         }
         const { entry } = resolution
+        /* A client reusing a live `sub` id rebinds it: drop the prior binding first (and
+           unsubscribe its topic if that was the last local sub) so the old socket's Set
+           doesn't retain the id forever, leaking the topic subscription. */
+        const rebound = removeSub(state, frame.sub)
+        if (rebound) {
+            ws.unsubscribe(`socket:${rebound}`)
+        }
         const isFirstLocalSub = addSub(state, frame.socket, frame.sub)
         if (isFirstLocalSub) {
             ws.subscribe(`socket:${frame.socket}`)

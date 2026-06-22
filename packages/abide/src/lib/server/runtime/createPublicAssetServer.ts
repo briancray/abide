@@ -50,18 +50,27 @@ export async function createPublicAssetServer({
         if (containsTraversal(req.url)) {
             return undefined
         }
+        /* Both the embed map and the disk Set hold decoded filesystem names, but
+           url.pathname stays percent-encoded — decode it so a file whose name has a
+           space or non-ASCII char matches. A malformed escape can't name a real file. */
+        let assetPath: string
+        try {
+            assetPath = decodeURIComponent(url.pathname)
+        } catch {
+            return undefined
+        }
         if (publicAssets) {
-            const compressed = publicAssets[url.pathname]
+            const compressed = publicAssets[assetPath]
             if (!compressed) {
                 return undefined
             }
-            return respondWithEmbeddedAsset(compressed, acceptsGzip(req), headersFor(url.pathname))
+            return respondWithEmbeddedAsset(compressed, acceptsGzip(req), headersFor(assetPath))
         }
-        if (!diskPaths.has(url.pathname)) {
+        if (!diskPaths.has(assetPath)) {
             return undefined
         }
-        return new Response(Bun.file(publicDir + url.pathname), {
-            headers: headersFor(url.pathname).base,
+        return new Response(Bun.file(publicDir + assetPath), {
+            headers: headersFor(assetPath).base,
         })
     }
 }
