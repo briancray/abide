@@ -142,11 +142,14 @@ function createConnection(url: string): Connection {
             onOpen()
         }
         ws.onmessage = (event) => {
-            const { id, frame } = JSON.parse(event.data as string) as {
-                id: number
-                frame: AgentFrame
+            // A malformed/non-JSON frame must not throw out of the handler; drop it instead.
+            let parsed: { id: number; frame: AgentFrame }
+            try {
+                parsed = JSON.parse(event.data as string)
+            } catch {
+                return
             }
-            inflight.get(id)?.(frame)
+            inflight.get(parsed.id)?.(parsed.frame)
         }
         ws.onclose = () => {
             connected = false

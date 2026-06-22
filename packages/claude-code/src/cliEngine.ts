@@ -37,6 +37,19 @@ async function* readStreamJson(stdout: ReadableStream<Uint8Array>): AsyncIterabl
             newline = buffer.indexOf('\n')
         }
     }
+    /* Flush a final line the binary emitted without a trailing newline — otherwise the
+       terminal `type:'result'` message is dropped, so framesFromMessages never yields a
+       `done` frame and the consuming snapshot stays stuck mid-stream. A killed child (the
+       consumer stopped iterating, or abort fired) can leave a PARTIAL fragment here, so a
+       parse failure is an expected end-of-stream, not an error to throw out of the generator. */
+    const last = buffer.trim()
+    if (last) {
+        try {
+            yield JSON.parse(last) as StreamMessage
+        } catch {
+            // Incomplete trailing JSON from an interrupted stream — nothing to yield.
+        }
+    }
 }
 
 /*
