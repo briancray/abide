@@ -107,35 +107,72 @@ function docAccessTransformer(docName: string): ts.TransformerFactory<ts.SourceF
                     }
                 }
             }
-            /* doc array `.push(x)` → add patch at the array's `-` slot. */
+            /* doc array `.push(a, b, …)` → one `add` patch per argument at the array's `-`
+               slot, matching native multi-arg push (each lands at the end in order). */
             if (
                 ts.isCallExpression(node) &&
                 ts.isPropertyAccessExpression(node.expression) &&
                 node.expression.name.text === 'push'
             ) {
                 const segments = pathSegments(node.expression.expression)
-                const pushed = node.arguments[0]
-                if (segments && pushed !== undefined) {
-                    return docCall(docName, 'add', [
-                        buildPath([...segments, { kind: 'literal', value: '-' }]),
-                        ts.visitNode(pushed, visit) as ts.Expression,
-                    ])
+                if (segments && node.arguments.length > 0) {
+                    const adds = node.arguments.map(
+                        (pushed) =>
+                            docCall(docName, 'add', [
+                                buildPath([...segments, { kind: 'literal', value: '-' }]),
+                                ts.visitNode(pushed, visit) as ts.Expression,
+                            ]) as ts.Expression,
+                    )
+                    /* `node.arguments.length > 0` above guarantees `adds` is non-empty, so the
+                       single-element branch's `adds[0]` is defined. */
+                    return adds.length === 1 ? adds[0]! : ts.factory.createCommaListExpression(adds)
                 }
             }
             /* A called member on a doc chain is a method on the read value, not a
-               deeper path: `model.draft.trim()` → `model.read("draft").trim()`,
-               `model.items.map(f)` → `model.read("items").map(f)`. (Array `.push`
+               deeper path: `model.draft.trim()` → `readCall(model.read("draft"), …)`,
+               `model.items.map(f)` → `readCall(model.read("items"), …)`. (Array `.push`
                above is the exception — it lowers to an `add` patch.) */
             if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
-                const segments = pathSegments(node.expression.expression)
+                const access = node.expression
+                const segments = pathSegments(access.expression)
                 if (segments) {
+                    const read = docCall(docName, 'read', [buildPath(segments)])
+                    const args = node.arguments.map(
+                        (arg) => ts.visitNode(arg, visit) as ts.Expression,
+                    )
+                    /* Optional chaining is the author's explicit skip-if-absent: a nullish
+                       read short-circuits the whole call to `undefined`. Keep it bare —
+                       routing it through the throwing guard would invert that semantics.
+                       The call continues the chain whenever the access OR the call carries a
+                       `?.`, so `model.x?.m()` short-circuits the call too. */
+                    if (access.questionDotToken || node.questionDotToken) {
+                        const member = access.questionDotToken
+                            ? ts.factory.createPropertyAccessChain(
+                                  read,
+                                  access.questionDotToken,
+                                  access.name,
+                              )
+                            : ts.factory.createPropertyAccessExpression(read, access.name.text)
+                        return ts.factory.createCallChain(
+                            member,
+                            node.questionDotToken,
+                            node.typeArguments,
+                            args,
+                        )
+                    }
+                    /* A non-optional call on an absent read throws the engine's opaque
+                       `undefined is not an object`. Route it through `readCall`, which throws
+                       naming the authored scope path and member — the key and member are both
+                       in hand here, the `.abide` location comes free off the mapped stack. */
                     return ts.factory.createCallExpression(
-                        ts.factory.createPropertyAccessExpression(
-                            docCall(docName, 'read', [buildPath(segments)]),
-                            node.expression.name.text,
-                        ),
-                        node.typeArguments,
-                        node.arguments.map((arg) => ts.visitNode(arg, visit) as ts.Expression),
+                        ts.factory.createIdentifier('readCall'),
+                        undefined,
+                        [
+                            read,
+                            buildPath(segments),
+                            ts.factory.createStringLiteral(access.name.text),
+                            ts.factory.createArrayLiteralExpression(args),
+                        ],
                     )
                 }
             }

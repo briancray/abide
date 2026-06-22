@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { lowerDocAccess } from '../src/lib/ui/compile/lowerDocAccess.ts'
+import { readCall } from '../src/lib/ui/dom/readCall.ts'
 import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
 import { escapeKey } from '../src/lib/ui/runtime/escapeKey.ts'
 import type { Doc } from '../src/lib/ui/runtime/types/Doc.ts'
@@ -52,16 +53,31 @@ describe('lowerDocAccess — emitted shape', () => {
         expect(lower('model.lines.push(v)')).toContain('model.add("lines/-", v)')
     })
 
-    test('a called member reads the receiver and invokes the method on the value', () => {
-        // a method call is not a deeper path: `draft.trim()` ≠ read("draft/trim")
-        expect(lower('model.draft.trim()')).toContain('model.read("draft").trim()')
-        expect(lower('model.name.toUpperCase()')).toContain('model.read("name").toUpperCase()')
+    test('a called member reads the receiver and guards the method on the value', () => {
+        // a method call is not a deeper path: `draft.trim()` ≠ read("draft/trim"). It routes
+        // through `readCall`, carrying the path + member so a nullish read throws naming them.
+        expect(lower('model.draft.trim()')).toContain(
+            'readCall(model.read("draft"), "draft", "trim", [])',
+        )
+        expect(lower('model.name.toUpperCase()')).toContain(
+            'readCall(model.read("name"), "name", "toUpperCase", [])',
+        )
     })
 
-    test('a method on a nested path reads up to the method, then calls it', () => {
+    test('a method on a nested path reads up to the method, then guards the call', () => {
+        // only the first call is on the doc read; the chained `.map` runs on its result.
         expect(lower('model.items.filter(a => a).map(b => b)')).toContain(
-            'model.read("items").filter(a => a).map(b => b)',
+            'readCall(model.read("items"), "items", "filter", [a => a]).map(b => b)',
         )
+    })
+
+    test('optional chaining is preserved through the lowered method call', () => {
+        // dropping `?.` made `model.read("modal").close()` throw when the read was undefined
+        expect(lower('model.modal?.close()')).toContain('model.read("modal")?.close()')
+        // an optional call token survives too
+        expect(lower('model.modal.close?.()')).toContain('model.read("modal").close?.()')
+        // an inner `?.` folds into the path (read traverses safely), the trailing one stays
+        expect(lower('model.modal?.items?.map(f)')).toContain('model.read("modal/items")?.map(f)')
     })
 
     test('delete becomes a remove patch', () => {
@@ -79,11 +95,12 @@ describe('lowerDocAccess — emitted shape', () => {
     })
 })
 
-/* Runs lowered source against a real document by binding `model` (and the `escapeKey`
-   runtime helper the lowering emits for dynamic segments — the real module imports it). */
+/* Runs lowered source against a real document by binding `model` and the runtime helpers
+   the lowering emits — `escapeKey` for dynamic segments, `readCall` for guarded method
+   calls — exactly the names the real module imports. */
 function run(document: Doc, body: string): unknown {
     const lowered = lowerDocAccess(body, 'model')
-    return new Function('model', 'escapeKey', lowered)(document, escapeKey)
+    return new Function('model', 'escapeKey', 'readCall', lowered)(document, escapeKey, readCall)
 }
 
 describe('lowerDocAccess — executed semantics', () => {
@@ -111,6 +128,23 @@ describe('lowerDocAccess — executed semantics', () => {
         const d = doc({ draft: '  hi  ', tags: ['a', 'b'] })
         expect(run(d, 'return model.draft.trim()')).toBe('hi')
         expect(run(d, 'return model.tags.join("-")')).toBe('a-b')
+    })
+
+    test('a non-optional call on an absent read throws naming the path and member', () => {
+        // the screenshot bug: `model.read("modal").close()` threw the engine's opaque
+        // `undefined is not an object`; the guard names the authored scope value instead.
+        const d = doc({})
+        expect(() => run(d, 'return model.modal.close()')).toThrow(
+            'abide: cannot call .close() — scope value "modal" is undefined',
+        )
+    })
+
+    test('an optional call on an undefined read short-circuits instead of throwing', () => {
+        // the bug: `modal?.close()` lost its `?.` and threw at mount when `modal` was undefined
+        const d = doc({})
+        expect(run(d, 'return model.modal?.close()')).toBeUndefined()
+        d.replace('modal', { close: () => 'closed' })
+        expect(run(d, 'return model.modal?.close()')).toBe('closed')
     })
 
     test('a key containing / round-trips — read and remove address the whole key', () => {

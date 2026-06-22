@@ -1,6 +1,7 @@
 import { clientBuildPlugins } from './clientBuildPlugins.ts'
 import { abideLog } from './lib/shared/abideLog.ts'
 import { exitOnBuildFailure } from './lib/shared/exitOnBuildFailure.ts'
+import { markFrameworkSourcesIgnored } from './lib/shared/markFrameworkSourcesIgnored.ts'
 
 const CLIENT_ENTRY = new URL('./clientEntry.ts', import.meta.url).pathname
 
@@ -96,6 +97,19 @@ export async function build({
             })
             return false
         }
+
+        /* Ignore-list abide's own framework sources in every emitted map, so a debugger
+           collapses the mount-stack wall (scope/mountRange/runNode/…) and a stack trace
+           shows only authored `.abide`/`.ts` frames. Runs before the gzip step so the
+           `.gz` siblings compress the updated maps. */
+        await Promise.all(
+            result.outputs
+                .filter((output) => output.kind === 'sourcemap')
+                .map(async (output) => {
+                    const map = await Bun.file(output.path).json()
+                    await Bun.write(output.path, JSON.stringify(markFrameworkSourcesIgnored(map)))
+                }),
+        )
 
         // Dev skips the gzip siblings (paths still point into stagingDir here).
         const compressedBytes = compress
