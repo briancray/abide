@@ -1,5 +1,21 @@
 # abide
 
+## 0.39.0
+
+### Minor Changes
+
+- [`ae15b27`](https://github.com/briancray/abide/commit/ae15b2733c3c569b9bde9e4d79f9b768836b3a46) - async SSR render with inline nested-blocking awaits and spread/rest props ([`514a796`](https://github.com/briancray/abide/commit/514a796833c5be4caa296b295d63fda6c8452a36))
+
+- [`527795d`](https://github.com/briancray/abide/commit/527795d1035f7cb169723a03571603a9ce8556e1) - Remote functions now accept an optional trailing options bag — `fn(args, opts)` — for per-call transport control: `signal`, `keepalive`, `priority`, `cache`, and `headers`. It's a curated `Pick` of `RequestInit`, not a raw passthrough: the server handler never observes these, so the call stays isomorphic, and a caller can't clobber the method, body, or framework headers the RPC contract owns. `opts.signal` merges with the scope abort and client timeout (`AbortSignal.any`) rather than replacing them, and is ignored under `cache()` so one reader can't abort a coalesced flight the others share. `opts.headers` merge onto abide's headers with the framework winning — a caller adds transport metadata (idempotency-key, authorization) but can't overwrite `traceparent`, the offline marker, or `content-type`.
+
+### Patch Changes
+
+- [`ae15b27`](https://github.com/briancray/abide/commit/ae15b2733c3c569b9bde9e4d79f9b768836b3a46) - harden client router, asset serving, sockets, and runtime edge cases ([`4735920`](https://github.com/briancray/abide/commit/4735920edea942dcd2954c522673b0c8af5a9a7f))
+
+- [`ae15b27`](https://github.com/briancray/abide/commit/ae15b2733c3c569b9bde9e4d79f9b768836b3a46) - consolidate escapeHtml and safeJsonForScript into shared/ ([`ae2d602`](https://github.com/briancray/abide/commit/ae2d6022f6dc23994164d1764bf5b812b136e383))
+
+- [`76a4a19`](https://github.com/briancray/abide/commit/76a4a19048fd5373b0d3ed75f2c6de017e33c7a3) - Make reactive errors and stack traces read in authored terms. A method call lowered onto a reactive-doc read now routes through a guard (`readCall`) that throws naming the scope path and member (`cannot call .close() — scope value "modal" is undefined`) instead of the engine's opaque `undefined is not an object`. The client build's source maps ignore-list abide's own framework sources, so a debugger collapses the mount-stack wall (`scope`/`mountRange`/`runNode`/…) and shows only authored `.abide`/`.ts` frames. Reactive bindings emit named thunks (`attr_title`/`text`/`bind_value`) so those surviving frames carry a name instead of `(anonymous)`.
+
 ## 0.38.1
 
 ### Patch Changes

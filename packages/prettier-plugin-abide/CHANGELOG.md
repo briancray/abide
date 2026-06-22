@@ -1,5 +1,11 @@
 # @abide/prettier-plugin-abide
 
+## 0.1.4
+
+### Patch Changes
+
+- [`ae15b27`](https://github.com/briancray/abide/commit/ae15b2733c3c569b9bde9e4d79f9b768836b3a46) - skip > inside quoted attrs when scanning raw-body open tags ([`a271ebb`](https://github.com/briancray/abide/commit/a271ebbb649bbf6215f691fe063fcf7cc908d25e))
+
 ## 0.1.3
 
 ### Patch Changes

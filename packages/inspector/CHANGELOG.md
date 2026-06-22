@@ -1,5 +1,11 @@
 # @abide/inspector
 
+## 0.3.2
+
+### Patch Changes
+
+- [`ae15b27`](https://github.com/briancray/abide/commit/ae15b2733c3c569b9bde9e4d79f9b768836b3a46) - bail before subscribing when the stream closed during replay ([`8b90d41`](https://github.com/briancray/abide/commit/8b90d416e0b0db472b77981ce87dd672fbc60a62))
+
 ## 0.3.1
 
 ### Patch Changes
