@@ -124,67 +124,79 @@ export function engine(config: AnthropicConfig): AgentEngine {
             .filter((message) => !(Array.isArray(message.content) && message.content.length === 0))
         const tools = surface.tools.map(toAnthropicTool)
 
-        for (let step = 0; ; step += 1) {
-            const stream = client.messages.stream({
-                model: config.model,
-                max_tokens: config.maxTokens ?? 64000,
-                thinking: { type: 'adaptive' },
-                ...(config.effort ? { output_config: { effort: config.effort } } : {}),
-                tools,
-                messages: conversation,
-            })
-
-            // Stream text live; defer tool inputs to the final message (already JSON-parsed there).
-            for await (const event of stream) {
-                if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-                    yield { type: 'text', delta: event.delta.text }
-                }
-            }
-
-            const final = await stream.finalMessage()
-            conversation.push({ role: 'assistant', content: final.content })
-
-            // Server paused a long-running turn: resume by re-requesting with the turn
-            // so far rather than ending and truncating the output. The step cap bounds it.
-            if (final.stop_reason === 'pause_turn') {
-                if (step + 1 < maxSteps) {
-                    continue
-                }
-                // Paused at the step cap — the turn is incomplete, so stop with 'error'
-                // rather than mapping pause_turn to a clean 'end' that hides the truncation.
-                yield { type: 'done', stop: 'error' }
-                return
-            }
-            if (final.stop_reason !== 'tool_use') {
-                yield { type: 'done', stop: mapStop(final.stop_reason) }
-                return
-            }
-            if (step + 1 >= maxSteps) {
-                // Tool-loop cap hit: stop instead of dispatching another round.
-                yield { type: 'done', stop: 'error' }
-                return
-            }
-
-            const results: Anthropic.ToolResultBlockParam[] = []
-            for (const block of final.content) {
-                if (block.type !== 'tool_use') {
-                    continue
-                }
-                yield { type: 'tool_use', id: block.id, name: block.name, input: block.input }
-                const result = await surface.call(
-                    block.name,
-                    block.input as Record<string, unknown>,
+        /* Abort the in-flight request when the consumer stops iterating (the jsonl client
+           disconnects, so the generator is `.return()`d at a `yield` and never resumes) —
+           otherwise the SDK keeps draining the SSE response to completion, leaking the
+           connection and billing for tokens nobody reads. */
+        const abort = new AbortController()
+        try {
+            for (let step = 0; ; step += 1) {
+                const stream = client.messages.stream(
+                    {
+                        model: config.model,
+                        max_tokens: config.maxTokens ?? 64000,
+                        thinking: { type: 'adaptive' },
+                        ...(config.effort ? { output_config: { effort: config.effort } } : {}),
+                        tools,
+                        messages: conversation,
+                    },
+                    { signal: abort.signal },
                 )
-                const isError = result.isError === true
-                yield { type: 'tool_result', id: block.id, name: block.name, ok: !isError }
-                results.push({
-                    type: 'tool_result',
-                    tool_use_id: block.id,
-                    content: toolResultText(result),
-                    is_error: isError,
-                })
+
+                // Stream text live; defer tool inputs to the final message (already JSON-parsed there).
+                for await (const event of stream) {
+                    if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+                        yield { type: 'text', delta: event.delta.text }
+                    }
+                }
+
+                const final = await stream.finalMessage()
+                conversation.push({ role: 'assistant', content: final.content })
+
+                // Server paused a long-running turn: resume by re-requesting with the turn
+                // so far rather than ending and truncating the output. The step cap bounds it.
+                if (final.stop_reason === 'pause_turn') {
+                    if (step + 1 < maxSteps) {
+                        continue
+                    }
+                    // Paused at the step cap — the turn is incomplete, so stop with 'error'
+                    // rather than mapping pause_turn to a clean 'end' that hides the truncation.
+                    yield { type: 'done', stop: 'error' }
+                    return
+                }
+                if (final.stop_reason !== 'tool_use') {
+                    yield { type: 'done', stop: mapStop(final.stop_reason) }
+                    return
+                }
+                if (step + 1 >= maxSteps) {
+                    // Tool-loop cap hit: stop instead of dispatching another round.
+                    yield { type: 'done', stop: 'error' }
+                    return
+                }
+
+                const results: Anthropic.ToolResultBlockParam[] = []
+                for (const block of final.content) {
+                    if (block.type !== 'tool_use') {
+                        continue
+                    }
+                    yield { type: 'tool_use', id: block.id, name: block.name, input: block.input }
+                    const result = await surface.call(
+                        block.name,
+                        block.input as Record<string, unknown>,
+                    )
+                    const isError = result.isError === true
+                    yield { type: 'tool_result', id: block.id, name: block.name, ok: !isError }
+                    results.push({
+                        type: 'tool_result',
+                        tool_use_id: block.id,
+                        content: toolResultText(result),
+                        is_error: isError,
+                    })
+                }
+                conversation.push({ role: 'user', content: results })
             }
-            conversation.push({ role: 'user', content: results })
+        } finally {
+            abort.abort()
         }
     }
 }
