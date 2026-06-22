@@ -47,7 +47,9 @@ const RUNTIME = {
 function component(
     source: string,
     extra: Record<string, unknown> = {},
-): ((host: Element, props?: unknown) => void) & { render: (props?: unknown) => SsrRender } {
+): ((host: Element, props?: unknown) => void) & {
+    render: (props?: unknown, ctx?: unknown) => SsrRender | Promise<SsrRender>
+} {
     const clientBody = compileComponent(source)
     const ssrBody = compileSSR(source)
     const runtime = { ...RUNTIME, ...extra }
@@ -56,8 +58,10 @@ function component(
     const fn = (host: Element, props?: unknown) => {
         new Function('host', '$props', ...names, clientBody)(host, props, ...values)
     }
-    fn.render = (props?: unknown): SsrRender =>
-        new Function('$props', ...names, ssrBody)(props, ...values) as SsrRender
+    fn.render = (props?: unknown, ctx?: unknown): SsrRender | Promise<SsrRender> =>
+        new Function('$props', '$ctx', ...names, ssrBody)(props, ctx, ...values) as
+            | SsrRender
+            | Promise<SsrRender>
     return Object.assign(fn, { render: fn.render, build: fn })
 }
 
@@ -112,14 +116,14 @@ describe('skeleton-context parity across fresh-context boundaries', () => {
     ]
 
     for (const { name, source } of cases) {
-        test(name, () => {
-            const server = component(source, { Box: component(Box) }).render() as SsrRender
+        test(name, async () => {
+            const server = (await component(source, { Box: component(Box) }).render()) as SsrRender
             const client = clientHtml((host) => component(source, { Box: component(Box) })(host))
             expect(client).toBe(server.html)
         })
     }
 
-    test('snippet body with a control-flow block hydrates without desync', () => {
+    test('snippet body with a control-flow block hydrates without desync', async () => {
         /* A snippet invocation (`{row()}`) wraps its output in server-only
            `<!--abide:snippet-->` markers the client never re-emits (see uiSnippets), so raw
            markup parity doesn't apply — but the snippet BODY must still place skeleton anchors
@@ -134,7 +138,7 @@ describe('skeleton-context parity across fresh-context boundaries', () => {
             </section>`
         const built = component(source)
         const host = document.createElement('div')
-        host.innerHTML = built.render().html
+        host.innerHTML = (await built.render()).html
 
         const clientBody = compileComponent(source)
         const names = Object.keys(RUNTIME)
@@ -151,7 +155,7 @@ describe('skeleton-context parity across fresh-context boundaries', () => {
         expect(host.textContent).toBe('x')
     })
 
-    test('slot fallback content with a control-flow block', () => {
+    test('slot fallback content with a control-flow block', async () => {
         /* The fallback (used when the parent passes no slot content) is its own fresh context
            inside the child's skeletonable `<aside>`. */
         const Panel = `
@@ -159,7 +163,7 @@ describe('skeleton-context parity across fresh-context boundaries', () => {
             <aside class={open ? 'open' : 'shut'}>
                 <slot><template if={open}><span>fallback</span></template></slot>
             </aside>`
-        const server = component(Panel).render() as SsrRender
+        const server = (await component(Panel).render()) as SsrRender
         const client = clientHtml((host) => component(Panel)(host))
         expect(client).toBe(server.html)
     })

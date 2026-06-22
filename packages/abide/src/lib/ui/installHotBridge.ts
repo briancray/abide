@@ -12,12 +12,17 @@ import { cloneStatic } from './dom/cloneStatic.ts'
 import { each } from './dom/each.ts'
 import { eachAsync } from './dom/eachAsync.ts'
 import { hydrate } from './dom/hydrate.ts'
+import { mergeProps } from './dom/mergeProps.ts'
 import { mount } from './dom/mount.ts'
 import { mountChild } from './dom/mountChild.ts'
 import { mountSlot } from './dom/mountSlot.ts'
 import { on } from './dom/on.ts'
 import { outlet } from './dom/outlet.ts'
+import { readCall } from './dom/readCall.ts'
+import { restProps } from './dom/restProps.ts'
 import { skeleton } from './dom/skeleton.ts'
+import { spreadAttrs } from './dom/spreadAttrs.ts'
+import { spreadProps } from './dom/spreadProps.ts'
 import { switchBlock } from './dom/switchBlock.ts'
 import { tryBlock } from './dom/tryBlock.ts'
 import { when } from './dom/when.ts'
@@ -70,6 +75,11 @@ export function installHotBridge(): void {
         mountSlot,
         outlet,
         mountChild,
+        mergeProps,
+        spreadProps,
+        restProps,
+        spreadAttrs,
+        readCall,
         hydrate,
         escapeKey,
         nextBlockId,

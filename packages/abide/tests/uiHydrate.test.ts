@@ -411,7 +411,7 @@ describe('hydrate — adopt server DOM', () => {
         expect(host.textContent).toBe('?') // default
     })
 
-    test('adopts a child component (and its slot) in place', () => {
+    test('adopts a child component (and its slot) in place', async () => {
         const runtime = {
             doc,
             state,
@@ -435,22 +435,24 @@ describe('hydrate — adopt server DOM', () => {
             new Function('host', '$props', ...names, childClient)(host, props, ...values)
         }
         const Greeting = Object.assign(greetingBuild, {
-            render: (props?: unknown): SsrRender =>
-                new Function('$props', ...names, childSsr)(props, ...values) as SsrRender,
+            render: (props?: unknown, ctx?: unknown): SsrRender | Promise<SsrRender> =>
+                new Function('$props', '$ctx', ...names, childSsr)(props, ctx, ...values) as
+                    | SsrRender
+                    | Promise<SsrRender>,
             build: greetingBuild,
         })
 
         const parentSource = `<script>let name = scope().state('world')</script><div><Greeting label={name} /></div>`
 
         // SSR the parent (server-renders the child)
-        const server = new Function(
+        const server = (await new Function(
             'doc',
             'state',
             'computed',
             'effect',
             'Greeting',
             compileSSR(parentSource),
-        )(doc, state, computed, effect, Greeting) as SsrRender
+        )(doc, state, computed, effect, Greeting)) as SsrRender
         expect(server.html).toBe('<div><!--a--><!--[--><span>Hi world</span><!--]--></div>')
 
         // parse + hydrate
@@ -650,7 +652,7 @@ describe('hydrate — adopt server DOM', () => {
         expect(tags).toContain('ul') // then-branch now shown
         expect(tags).not.toContain('p') // empty branch removed
     })
-    test('adopts an each whose row is a slotted component, after a standalone one (MediaFilters shape)', () => {
+    test('adopts an each whose row is a slotted component, after a standalone one (MediaFilters shape)', async () => {
         /* The reported blink, isolated: a container holds a standalone slotted component
            (the "All" button) followed by `{#each}` over more of the SAME slotted component.
            Each row mounts a component (wrapper hole) whose body skeletons its own root +
@@ -679,8 +681,10 @@ describe('hydrate — adopt server DOM', () => {
             new Function('host', '$props', ...baseNames, childClient)(host, props, ...baseValues)
         }
         const Sel = Object.assign(selBuild, {
-            render: (props?: unknown): SsrRender =>
-                new Function('$props', ...baseNames, childSsr)(props, ...baseValues) as SsrRender,
+            render: (props?: unknown, ctx?: unknown): SsrRender | Promise<SsrRender> =>
+                new Function('$props', '$ctx', ...baseNames, childSsr)(props, ctx, ...baseValues) as
+                    | SsrRender
+                    | Promise<SsrRender>,
             build: selBuild,
         })
 
@@ -692,7 +696,7 @@ describe('hydrate — adopt server DOM', () => {
             </div>
         `
 
-        const server = new Function(
+        const server = (await new Function(
             'doc',
             'state',
             'computed',
@@ -701,7 +705,7 @@ describe('hydrate — adopt server DOM', () => {
             'Sel',
             'model',
             compileSSR(parentSource),
-        )(doc, state, computed, effect, escapeKey, Sel, model) as SsrRender
+        )(doc, state, computed, effect, escapeKey, Sel, model)) as SsrRender
 
         const host = document.createElement('div')
         host.innerHTML = server.html

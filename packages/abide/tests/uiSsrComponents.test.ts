@@ -42,7 +42,9 @@ const RUNTIME = {
 function component(
     source: string,
     extra: Record<string, unknown> = {},
-): ((host: Element, props?: unknown) => void) & { render: (props?: unknown) => SsrRender } {
+): ((host: Element, props?: unknown) => void) & {
+    render: (props?: unknown, ctx?: unknown) => SsrRender | Promise<SsrRender>
+} {
     const clientBody = compileComponent(source)
     const ssrBody = compileSSR(source)
     const runtime = { ...RUNTIME, ...extra }
@@ -51,13 +53,15 @@ function component(
     const fn = (host: Element, props?: unknown) => {
         new Function('host', '$props', ...names, clientBody)(host, props, ...values)
     }
-    fn.render = (props?: unknown): SsrRender =>
-        new Function('$props', ...names, ssrBody)(props, ...values) as SsrRender
+    fn.render = (props?: unknown, ctx?: unknown): SsrRender | Promise<SsrRender> =>
+        new Function('$props', '$ctx', ...names, ssrBody)(props, ctx, ...values) as
+            | SsrRender
+            | Promise<SsrRender>
     return Object.assign(fn, { render: fn.render, build: fn })
 }
 
 describe('SSR component composition', () => {
-    test('a parent server-renders its child, and SSR matches the client DOM', () => {
+    test('a parent server-renders its child, and SSR matches the client DOM', async () => {
         const Greeting = component(`
             <script>const { label } = props()</script>
             <span>Hi {label}</span>
@@ -68,7 +72,7 @@ describe('SSR component composition', () => {
         `
 
         // server render — child rendered server-side, inlined in its marker range
-        const server = component(parentSource, { Greeting }).render() as SsrRender
+        const server = await component(parentSource, { Greeting }).render()
         expect(server.html).toBe('<div><!--a--><!--[--><span>Hi world</span><!--]--></div>')
 
         // client render — should produce the identical tree
@@ -80,7 +84,7 @@ describe('SSR component composition', () => {
         expect(clientHtml).toBe(server.html)
     })
 
-    test('slot content inside a skeletonable parent agrees between SSR and client', () => {
+    test('slot content inside a skeletonable parent agrees between SSR and client', async () => {
         /* Regression: SSR carries a stateful `inSkeleton` flag the client back-end has no
            equivalent of (its skeleton vs imperative choice is structural). The component
            branch built slot content WITHOUT resetting that flag, so a component sitting
@@ -100,7 +104,7 @@ describe('SSR component composition', () => {
             </section>
         `
 
-        const server = component(parentSource, { Box }).render() as SsrRender
+        const server = await component(parentSource, { Box }).render()
 
         const host = document.createElement('div')
         component(parentSource, { Box })(host)
@@ -110,7 +114,7 @@ describe('SSR component composition', () => {
         expect(clientHtml).toBe(server.html) // no leaked anchor — server and client agree
     })
 
-    test('a component named after a void element renders fine (no wrapper to go void)', () => {
+    test('a component named after a void element renders fine (no wrapper to go void)', async () => {
         /* `Input`→`input` is a VOID tag. The old `<abide-input>` wrapper dodged this by
            being a hyphenated custom element; the marker-range mount has NO wrapper element
            at all, so a component name can never collide with an HTML tag — the child's own
@@ -124,11 +128,78 @@ describe('SSR component composition', () => {
             <div><Input value={q} /></div>
         `
 
-        const server = component(parentSource, { Input }).render() as SsrRender
+        const server = await component(parentSource, { Input }).render()
         expect(server.html).toBe('<div><!--a--><!--[--><input value="hi"><!--]--></div>')
 
         const host = document.createElement('div')
         component(parentSource, { Input })(host)
+        const clientHtml = (
+            globalThis as unknown as { serializeMiniDom: (h: unknown) => string }
+        ).serializeMiniDom(host)
+        expect(clientHtml).toBe(server.html)
+    })
+
+    test('a `{...object}` spread server-renders and matches the client DOM', async () => {
+        const Card = component(`
+            <script>const { title, body } = props()</script>
+            <article>{title}: {body}</article>
+        `)
+        /* Spread mixed with an explicit prop that overrides one spread key. */
+        const parentSource = `
+            <script>const data = { title: 'Hi', body: 'spread' }</script>
+            <div><Card {...data} body="explicit" /></div>
+        `
+
+        const server = await component(parentSource, { Card }).render()
+        expect(server.html).toBe(
+            '<div><!--a--><!--[--><article>Hi: explicit</article><!--]--></div>',
+        )
+
+        const host = document.createElement('div')
+        component(parentSource, { Card })(host)
+        const clientHtml = (
+            globalThis as unknown as { serializeMiniDom: (h: unknown) => string }
+        ).serializeMiniDom(host)
+        expect(clientHtml).toBe(server.html)
+    })
+
+    test('an explicit attr wins over a spread of the same key, with no duplicate (SSR == client)', async () => {
+        const Field = component(`
+            <script>const { ...rest } = props()</script>
+            <input type="text" {...rest} />
+        `)
+        /* The forwarded rest carries `type`, colliding with the explicit `type="text"`. */
+        const parentSource = `<div><Field type="email" placeholder="x" /></div>`
+
+        const server = await component(parentSource, { Field }).render()
+        /* The explicit `type="text"` wins; the spread skips it (no duplicate `type` attr). */
+        expect(server.html).toBe(
+            '<div><!--a--><!--[--><input type="text" placeholder="x"><!--]--></div>',
+        )
+
+        const host = document.createElement('div')
+        component(parentSource, { Field })(host)
+        const clientHtml = (
+            globalThis as unknown as { serializeMiniDom: (h: unknown) => string }
+        ).serializeMiniDom(host)
+        expect(clientHtml).toBe(server.html)
+    })
+
+    test('rest props forwarded onto a native element render server-side and match the client', async () => {
+        const Field = component(`
+            <script>const { label, ...rest } = props()</script>
+            <input {...rest} />
+        `)
+        const parentSource = `<div><Field label="Name" type="email" placeholder="x" /></div>`
+
+        const server = await component(parentSource, { Field }).render()
+        /* The consumed `label` is dropped; the rest render as element attributes. */
+        expect(server.html).toBe(
+            '<div><!--a--><!--[--><input type="email" placeholder="x"><!--]--></div>',
+        )
+
+        const host = document.createElement('div')
+        component(parentSource, { Field })(host)
         const clientHtml = (
             globalThis as unknown as { serializeMiniDom: (h: unknown) => string }
         ).serializeMiniDom(host)

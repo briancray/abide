@@ -121,6 +121,24 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
             if (char === '>' || char === '/' || char === undefined) {
                 break
             }
+            /* `{...expr}` standing where an attribute name would — a spread of an object's
+               keys onto the tag: props on a component, attributes on a native element. Only
+               a `<template>` directive rejects it (see `readElement`). */
+            if (char === '{') {
+                const { code, loc } = readBracedExpression()
+                if (!code.startsWith('...')) {
+                    throw new Error(
+                        `[abide] a bare {expr} is not a valid attribute — write {...expr} to spread an object's keys as props`,
+                    )
+                }
+                /* Advance `loc` past `...` and any whitespace so it points at the spread
+                   EXPRESSION, not the dots — the shadow source-map invariant (source text at
+                   `loc` equals the emitted code) requires `loc` and `code` to align. */
+                const inner = code.slice(3)
+                const leading = inner.length - inner.trimStart().length
+                attrs.push({ kind: 'spread', code: inner.trim(), loc: loc + 3 + leading })
+                continue
+            }
             let name = ''
             while (cursor < source.length && !/[\s=>/]/.test(source.charAt(cursor))) {
                 name += source.charAt(cursor)
@@ -163,6 +181,12 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
                    `>`, per the HTML unquoted-attribute rule. No delimiter to consume. */
                 let value = ''
                 while (cursor < source.length && !/[\s>]/.test(source.charAt(cursor))) {
+                    /* Stop before a `/` that closes the tag (`<Comp x=y/>`) so the value
+                       doesn't swallow the self-closing slash and defeat detection; a `/`
+                       elsewhere (e.g. a URL `href=/a/b`) stays part of the value. */
+                    if (source.charAt(cursor) === '/' && source.charAt(cursor + 1) === '>') {
+                        break
+                    }
                     value += source.charAt(cursor)
                     cursor += 1
                 }
@@ -213,6 +237,11 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
         if (/^[A-Z]/.test(tag)) {
             const slotted = selfClosing ? [] : readChildren(tag)
             return { kind: 'component', name: tag, props: toProps(attrs), children: slotted }
+        }
+        /* `{...expr}` spreads onto a component (its props) or a native element (its
+           attributes), but a `<template>` directive has no such bag — reject it there. */
+        if (tag === 'template' && attrs.some((attr) => attr.kind === 'spread')) {
+            throw new Error('[abide] {...expr} spread is not supported on a <template> directive')
         }
         const children = selfClosing || VOID_TAGS.has(tag) ? [] : readChildren(tag)
         if (tag === 'template') {
@@ -296,8 +325,15 @@ function rejectStrayBranches(
    assigned) instead of being dropped. A static value becomes a string literal —
    a bare attribute coerces to `true` instead; every other kind keeps its `code`,
    letting a prop hold any value, functions included (e.g. an `onclick` callback). */
-function toProps(attrs: TemplateAttr[]): { name: string; code: string; loc?: number }[] {
+function toProps(
+    attrs: TemplateAttr[],
+): { name: string; code: string; loc?: number; spread?: boolean }[] {
     return attrs.map((attr) => {
+        /* A `{...expr}` spread carries no name — its keys merge in at runtime
+           (`mergeProps`/`spreadProps`); `spread: true` marks it for the back-ends. */
+        if (attr.kind === 'spread') {
+            return { name: '', code: attr.code, loc: attr.loc, spread: true }
+        }
         if (attr.kind === 'static') {
             /* A bare attribute (`<Toggle on />`) is a boolean flag: coerce it to
                `true` so the prop reads as a boolean, not the empty string a native
@@ -346,6 +382,13 @@ function attrName(attr: TemplateAttr): string {
     }
     if (attr.kind === 'attach') {
         return 'attach'
+    }
+    /* A spread has no name. `attrName` only feeds `<template>` directive lookups, and a
+       spread on a `<template>` is rejected at parse, so this branch is unreachable in
+       practice. (Spread itself IS supported — on components as props and on native
+       elements as attributes; only `<template>` directives reject it.) */
+    if (attr.kind === 'spread') {
+        return ''
     }
     return attr.name
 }

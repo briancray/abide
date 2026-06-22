@@ -59,7 +59,7 @@ afterAll(() => {
 describe('createUiPageRenderer', () => {
     test('a page with no await ships buffered, with the body and __SSR__', async () => {
         const html = await render(
-            page(() => ({ html: '<main>hi</main>', awaits: [], state: undefined })),
+            page(() => ({ html: '<main>hi</main>', awaits: [], state: undefined, resume: {} })),
         )
         expect(html).toContain(
             '<div id="app"><!--abide:outlet--><main>hi</main><!--/abide:outlet--></div>',
@@ -77,11 +77,12 @@ describe('createUiPageRenderer', () => {
                     {
                         id: 0,
                         promise: () => Promise.resolve('ada'),
-                        then: (value) => `<b>${value}</b>`,
-                        catch: () => '',
+                        then: async (value) => `<b>${value}</b>`,
+                        catch: async () => '',
                     },
                 ],
                 state: undefined,
+                resume: {},
             })),
         )
         expect(html).toContain('loading') // pending shell flushed first
@@ -108,17 +109,18 @@ describe('createUiPageRenderer', () => {
                 {
                     id: 0,
                     promise: () => usersRead(),
-                    then: (value) => `<b>${(value as string[]).join(',')}</b>`,
-                    catch: () => '',
+                    then: async (value) => `<b>${(value as string[]).join(',')}</b>`,
+                    catch: async () => '',
                 },
                 {
                     id: 1,
                     promise: () => avatarRead().catch(() => undefined),
-                    then: () => '<img>',
-                    catch: () => '',
+                    then: async () => '<img>',
+                    catch: async () => '',
                 },
             ],
             state: undefined,
+            resume: {},
         }))
         const html = await render(pages)
 

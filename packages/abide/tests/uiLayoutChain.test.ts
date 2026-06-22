@@ -130,23 +130,30 @@ describe('layout compiler outlet', () => {
 })
 
 describe('renderChain', () => {
-    const view = (render: () => SsrRender): UiComponent =>
+    const view = (render: UiComponent['render']): UiComponent =>
         Object.assign(() => () => undefined, { render }) as unknown as UiComponent
 
-    test('folds the page html into each layout outlet, outermost last, under a root boundary', () => {
-        const ssr = renderChain(
+    test('folds the page html into each layout outlet, outermost last, under a root boundary', async () => {
+        const ssr = await renderChain(
             [
                 view(() => ({
                     html: `<div class="a">${O}${C}</div>`,
                     awaits: [],
                     state: { a: 1 },
+                    resume: {},
                 })),
                 view(() => ({
                     html: `<section>${O}${C}</section>`,
                     awaits: [],
                     state: { b: 2 },
+                    resume: {},
                 })),
-                view(() => ({ html: '<main>page</main>', awaits: [], state: { c: 3 } })),
+                view(() => ({
+                    html: '<main>page</main>',
+                    awaits: [],
+                    state: { c: 3 },
+                    resume: {},
+                })),
             ],
             {},
         )
@@ -158,38 +165,54 @@ describe('renderChain', () => {
         expect(ssr.state).toEqual({ a: 1, b: 2, c: 3 })
     })
 
-    test('shares one block-id pass so await ids stay unique across layers', () => {
+    test('shares one block-id pass so await ids stay unique across layers', async () => {
+        /* Stubs draw their id from the SHARED `$ctx` renderChain threads through each
+           layer — the real mechanism (no module-global counter), so the layer and page
+           get consecutive ids. */
         const layerWithAwait = (tag: string): UiComponent =>
-            view(() => {
-                const id = nextBlockId()
+            view((_params, ctx) => {
+                const id = ctx?.next ?? 0
+                if (ctx) {
+                    ctx.next += 1
+                }
                 return {
                     html: `<${tag}>${O}${C}<!--abide:await:${id}--></${tag}>`,
-                    awaits: [{ id, promise: () => Promise.resolve(1), then: () => '' }],
+                    awaits: [{ id, promise: () => Promise.resolve(1), then: async () => '' }],
                     state: {},
+                    resume: {},
                 }
             })
-        const page = view(() => {
-            const id = nextBlockId()
+        const page = view((_params, ctx) => {
+            const id = ctx?.next ?? 0
+            if (ctx) {
+                ctx.next += 1
+            }
             return {
                 html: `<main><!--abide:await:${id}--></main>`,
-                awaits: [{ id, promise: () => Promise.resolve(2), then: () => '' }],
+                awaits: [{ id, promise: () => Promise.resolve(2), then: async () => '' }],
                 state: {},
+                resume: {},
             }
         })
-        const ssr = renderChain([layerWithAwait('div'), page], {})
+        const ssr = await renderChain([layerWithAwait('div'), page], {})
         expect(ssr.awaits.map((block) => block.id)).toEqual([0, 1]) // unique, layer order
     })
 
-    test('throws a clear error when a layout has no outlet', () => {
-        expect(() =>
+    test('throws a clear error when a layout has no outlet', async () => {
+        await expect(
             renderChain(
                 [
-                    view(() => ({ html: '<div>no outlet</div>', awaits: [], state: {} })),
-                    view(() => ({ html: '<main>page</main>', awaits: [], state: {} })),
+                    view(() => ({
+                        html: '<div>no outlet</div>',
+                        awaits: [],
+                        state: {},
+                        resume: {},
+                    })),
+                    view(() => ({ html: '<main>page</main>', awaits: [], state: {}, resume: {} })),
                 ],
                 {},
             ),
-        ).toThrow('<slot/> outlet')
+        ).rejects.toThrow('<slot/> outlet')
     })
 })
 
@@ -210,28 +233,33 @@ describe('compiled layout round-trip', () => {
             return () => undefined
         }
         return Object.assign(mount, {
-            render: (props?: unknown) =>
-                new Function('$props', ...names, ssrBody)(props, ...values) as SsrRender,
+            render: (props?: unknown, ctx?: unknown): SsrRender | Promise<SsrRender> =>
+                new Function('$props', '$ctx', ...names, ssrBody)(props, ctx, ...values) as
+                    | SsrRender
+                    | Promise<SsrRender>,
             build,
         }) as unknown as UiComponent
     }
 
-    test('a layout slot carries no style scope onto the folded child (bare boundary)', () => {
+    test('a layout slot carries no style scope onto the folded child (bare boundary)', async () => {
         /* The outlet was once an `<abide-outlet>` element that the client clone stamped the
            slot's style scope onto while SSR emitted it bare — a hydration mismatch. Now it is
            a bare comment boundary on both sides, so the child folds in with no scoped wrapper. */
         const source = '<style>.shell { color: red }</style><div class="shell"><slot /></div>'
         const client = compileComponent(source, true)
         expect(client).toContain('outlet(')
-        const ssr = renderChain([compiled(source, true), compiled('<main>page</main>', false)], {})
+        const ssr = await renderChain(
+            [compiled(source, true), compiled('<main>page</main>', false)],
+            {},
+        )
         expect(ssr.html).toContain(`${O}<main>page</main>${C}`)
     })
 
-    test('the SSR chain and the client-nested chain produce identical markup', () => {
+    test('the SSR chain and the client-nested chain produce identical markup', async () => {
         const layout = compiled('<div class="shell">[shell]<slot /></div>', true)
         const page = compiled('<main>page</main>', false)
 
-        const ssr = renderChain([layout, page], {})
+        const ssr = await renderChain([layout, page], {})
         expect(ssr.html).toBe(
             `${O}<div class="shell">[shell]<!--a-->${O}<main>page</main>${C}</div>${C}`,
         )
@@ -243,10 +271,10 @@ describe('compiled layout round-trip', () => {
         expect(serialize(host)).toBe(ssr.html)
     })
 
-    test('hydration claims the outlet boundary in place, leaving the page nodes for the page', () => {
+    test('hydration claims the outlet boundary in place, leaving the page nodes for the page', async () => {
         const layout = compiled('<div class="shell">[shell]<slot /></div>', true)
         const page = compiled('<main>page</main>', false)
-        const ssr = renderChain([layout, page], {})
+        const ssr = await renderChain([layout, page], {})
 
         const host = document.createElement('div')
         host.innerHTML = ssr.html

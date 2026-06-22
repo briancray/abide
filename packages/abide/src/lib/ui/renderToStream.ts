@@ -1,88 +1,96 @@
+import { resumeSeedScript } from './resumeSeedScript.ts'
 import type { ResumeEntry } from './runtime/RESUME.ts'
 import type { SsrAwait, SsrRender } from './runtime/types/SsrRender.ts'
 
 /*
-Out-of-order SSR streaming. Yields the pending shell first (so the browser paints
-immediately), then one resolved fragment per await block as its promise settles —
-in completion order, not source order, so a slow read never blocks a fast one.
-Each resolved fragment is a `<abide-resolve data-id="ID"><script type="application/json">
-…</script>…</abide-resolve>` that `applyResolved` swaps into the matching
-`<!--abide:await:ID-->` boundary; the leading script holds the JSON-serialized value,
-registered for hydration so an `await` block adopts the resolved branch on resume
-instead of re-running.
+Out-of-order SSR streaming. Yields the shell first (so the browser paints
+immediately), then one resolved fragment per STREAMING await block as its promise
+settles — in completion order, not source order, so a slow read never blocks a fast
+one. Each resolved fragment is a `<abide-resolve data-id="ID"><script
+type="application/json">…</script>…</abide-resolve>` that `applyResolved` swaps into
+the matching `<!--abide:await:ID-->` boundary; the leading script holds the
+JSON-serialized value, registered for hydration so an `await` block adopts the
+resolved branch on resume instead of re-running.
 
 This is the await-block-streams half of the cache rule: a top-level `await` in the
-script would have blocked the shell (inlined), but an await *block* flushes its
-shell now and streams the value when ready. Driven by a plain `render()` result,
+script would have blocked the shell (inlined), but a streaming await *block* flushes
+its shell now and streams the value when ready. Driven by an async `render()` result,
 so it composes with any transport (HTTP chunked, a socket frame, a test).
 
-A `then` on the `await` tag makes the block BLOCKING: it settles before the first
-flush, its resolved branch spliced into its (empty) boundary and its value seeded
-into the resume manifest inline — so the value is in the first paint, no pending
-shell, no swap. The first yield therefore awaits all blocking blocks; only the
-remaining streaming blocks flush out of order after it.
+A `then` on the `await` tag makes the block BLOCKING: it is NOT streamed — it renders
+inline during the async render pass (depth-first, matching the client) and its value
+lands in `render().resume`. The shell already carries the resolved branch, so the
+first yield just seeds those values into the manifest; only streaming blocks flush
+out of order after it.
 */
 // @documentation plumbing
-export async function* renderToStream(render: () => SsrRender): AsyncGenerator<string> {
-    const { html, awaits } = render()
-    /* Blocking awaits (a `then` on the `await` tag) settle BEFORE the first flush:
-       their resolved branch is spliced into its empty boundary and its value registered
-       inline, so the first paint already has the value — no pending, no swap. */
-    const blocking = awaits.filter((block) => block.blocking === true)
-    let shell = html
-    const resumed: Record<number, ResumeEntry> = {}
-    for (const settled of await Promise.all(blocking.map(settle))) {
-        shell = spliceResolved(shell, settled.id, settled.html)
-        resumed[settled.id] = settled.resume
+export async function* renderToStream(
+    render: () => SsrRender | Promise<SsrRender>,
+): AsyncGenerator<string> {
+    const { html, awaits, resume } = await render()
+    /* The shell already contains every blocking await's resolved branch (rendered
+       inline); seed their values so hydration adopts them without a refetch. */
+    yield html + resumeSeedScript(resume)
+    /* A BLOCKING await nested inside a streaming branch renders inline during `settle`
+       (after the seed above), writing its value onto this same `$resume` object — so the
+       initial seed misses it. Track which resume ids are already seeded and emit the delta
+       alongside each streamed fragment, so the client adopts the nested blocking branch
+       instead of refetching. (`resume` is the render body's live object, so late writes
+       appear here.) */
+    const seededResume = new Set<number>(Object.keys(resume).map(Number))
+    const resumeDelta = (): Record<number, ResumeEntry> => {
+        const delta: Record<number, ResumeEntry> = {}
+        for (const [key, entry] of Object.entries(resume)) {
+            const id = Number(key)
+            if (!seededResume.has(id)) {
+                seededResume.add(id)
+                delta[id] = entry
+            }
+        }
+        return delta
     }
-    yield shell + resumeScript(resumed)
-    /* Streaming awaits flush their resolved fragment out of order as each settles. */
+    /* Streaming awaits flush their resolved fragment out of order as each settles. A
+       streaming block's async resolved/error renderer may itself register NESTED streaming
+       awaits — its `branchContent` runs `$awaits.push(...)` onto this same `awaits` array
+       during `settle`, AFTER the initial scan. So re-scan for newly-appended blocks after
+       every settle (tracking which ids are already enqueued), composing to any depth. */
     const inflight = new Map<number, Promise<Settled>>()
-    for (const block of awaits) {
-        if (block.blocking !== true) {
-            inflight.set(block.id, settle(block))
+    const enqueued = new Set<number>()
+    const enqueueNew = (): void => {
+        for (const block of awaits) {
+            if (!enqueued.has(block.id)) {
+                enqueued.add(block.id)
+                inflight.set(block.id, settle(block))
+            }
         }
     }
+    enqueueNew()
     while (inflight.size > 0) {
         const resolved = await Promise.race(inflight.values())
         inflight.delete(resolved.id)
-        const resume = encodeResume(resolved.resume)
-        yield `<abide-resolve data-id="${resolved.id}">` +
-            `<script type="application/json">${resume}</script>` +
+        enqueueNew()
+        const encoded = encodeResume(resolved.resume)
+        yield resumeSeedScript(resumeDelta()) +
+            `<abide-resolve data-id="${resolved.id}">` +
+            `<script type="application/json">${encoded}</script>` +
             `${resolved.html}</abide-resolve>`
     }
 }
 
-/* Inserts a blocking await's resolved markup into its (empty) boundary in the shell,
-   between the open and close markers. */
-function spliceResolved(shell: string, id: number, resolved: string): string {
-    const open = `<!--abide:await:${id}-->`
-    const close = `<!--/abide:await:${id}-->`
-    /* A function replacement, so a `$&`/`$\`` etc. in the rendered value is inserted
-       literally rather than interpreted as a special replacement pattern. */
-    return shell.replace(`${open}${close}`, () => `${open}${resolved}${close}`)
-}
-
-/* A self-contained script seeding the resume manifest with the blocking values, so
-   client hydration adopts each resolved branch instead of re-running the promise.
-   Empty when no blocking awaits settled. */
-function resumeScript(resumed: Record<number, ResumeEntry>): string {
-    if (Object.keys(resumed).length === 0) {
-        return ''
-    }
-    const payload = JSON.stringify(resumed).replace(/</g, '\\u003c')
-    return `<script>Object.assign(window.__abideResume=window.__abideResume||{},${payload})</script>`
-}
-
 type Settled = { id: number; html: string; resume: ResumeEntry }
 
-/* Awaits one block's promise and renders the resolved or error branch to HTML,
-   capturing the value (serializable) for the resume manifest. Errors serialize as
-   their message — enough for the catch branch, without leaking a stack. */
+/* Awaits one streaming block's promise and renders the resolved or error branch to
+   HTML (the renderers are async so a nested `await` block composes), capturing the
+   value (serializable) for the resume manifest. Errors serialize as their message —
+   enough for the catch branch, without leaking a stack. */
 function settle(block: SsrAwait): Promise<Settled> {
     return Promise.resolve(block.promise()).then(
-        (value) => ({ id: block.id, html: block.then(value), resume: { ok: true, value } }),
-        (error) => {
+        async (value) => ({
+            id: block.id,
+            html: await block.then(value),
+            resume: { ok: true, value },
+        }),
+        async (error) => {
             /* No catch branch → surface the rejection (500 before the first flush,
                mid-stream error after) instead of swallowing it into an empty fragment. */
             if (block.catch === undefined) {
@@ -90,7 +98,7 @@ function settle(block: SsrAwait): Promise<Settled> {
             }
             return {
                 id: block.id,
-                html: block.catch(error),
+                html: await block.catch(error),
                 resume: { ok: false, error: String(error) },
             }
         },

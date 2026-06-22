@@ -3,16 +3,17 @@ import { SSR_CACHE_CONTROL } from '../../shared/CACHE_CONTROL_VALUES.ts'
 import { formatTraceparent } from '../../shared/formatTraceparent.ts'
 import { isReplayableMethod } from '../../shared/isReplayableMethod.ts'
 import { layoutChainForRoute } from '../../shared/layoutChainForRoute.ts'
+import { safeJsonForScript } from '../../shared/safeJsonForScript.ts'
 import type { CacheEntry } from '../../shared/types/CacheEntry.ts'
 import type { CacheSnapshotEntry } from '../../shared/types/CacheSnapshotEntry.ts'
 import type { StreamedResolution } from '../../shared/types/StreamedResolution.ts'
 import { renderChain } from '../../ui/renderChain.ts'
 import { renderToStream } from '../../ui/renderToStream.ts'
+import { resumeSeedScript } from '../../ui/resumeSeedScript.ts'
 import type { UiComponent } from '../../ui/runtime/types/UiComponent.ts'
 import { pageUrlFromStore } from './pageUrlFromStore.ts'
 import { SSR_SWAP_SCRIPT } from './SSR_SWAP_SCRIPT.ts'
 import { STREAMED_HTML_HEADER } from './STREAMED_HTML_HEADER.ts'
-import { safeJsonForScript } from './safeJsonForScript.ts'
 import { serializeCacheSnapshot } from './serializeCacheSnapshot.ts'
 import { streamCacheResolutions } from './streamCacheResolutions.ts'
 import type { RequestStore } from './types/RequestStore.ts'
@@ -33,11 +34,11 @@ function wantsJson(request: Request): boolean {
 const CACHE_RESOLVE_SCRIPT =
     'window.__abideResolve=function(r){(window.__abideResumeCache=window.__abideResumeCache||[]).push(r)}'
 
-/* One streamed cache resolution as an inline `__abideResolve(...)` call. `<` is escaped
-   (as in encodeResume) so a body value can't close the script early. */
+/* One streamed cache resolution as an inline `__abideResolve(...)` call. Encoded via
+   safeJsonForScript so `<`, `-->`, and U+2028/U+2029 can't close the script early or
+   parse as line terminators — the same escaping the page's other inline scripts use. */
 function resolveChunk(resolution: StreamedResolution): string {
-    const payload = JSON.stringify(resolution).replace(/</g, '\\u003c')
-    return `<script>__abideResolve(${payload})</script>`
+    return `<script>__abideResolve(${safeJsonForScript(resolution)})</script>`
 }
 
 /*
@@ -168,19 +169,21 @@ export function createUiPageRenderer({
             ...chainKeys.map((key) => layouts[key]?.().then((module) => module.default)),
             loadPage().then((module) => module.default),
         ])
-        const ssr = renderChain(
+        const ssr = await renderChain(
             views.filter((view): view is UiComponent => view !== undefined),
             params,
         )
 
-        /* Snapshot the cache settled by render-return — top-level `await` reads (render
-           blocked on them) — into __SSR__. A `{#await}` read is NOT here: its expression
-           is a thunk `renderToStream` runs lazily, so its entry is created mid-stream and
-           seeded after the drain (see below). */
+        /* Snapshot the cache settled by render-return — top-level `await` reads and blocking
+           `{#await … then}` reads (the async render awaited them inline) — into __SSR__. A
+           STREAMING `{#await}` read is NOT here: its expression is a thunk `renderToStream`
+           runs lazily, so its entry is created mid-stream and seeded after the drain (below). */
         const inline = await serializeCacheSnapshot(store.cache)
         const inlinedKeys = new Set(inline.map((entry) => entry.key))
 
-        /* No await blocks → render synchronously, ship buffered. */
+        /* No STREAMING await blocks → ship buffered. Blocking `{#await … then}` blocks
+           rendered inline (their markup is already in `ssr.html`); seed their resolved
+           values so hydration adopts them without a refetch. */
         if (ssr.awaits.length === 0) {
             const html = injectRoutePreloads(
                 shell.replace(SSR_MARKER, (_match, key: string) =>
@@ -190,7 +193,7 @@ export function createUiPageRenderer({
             )
             const withState = html.replace(
                 '</body>',
-                `${await stateTag(routeUrl, params, store, inline)}</body>`,
+                `${resumeSeedScript(ssr.resume)}${await stateTag(routeUrl, params, store, inline)}</body>`,
             )
             return new Response(withState, {
                 headers: {
@@ -219,38 +222,46 @@ export function createUiPageRenderer({
         return new Response(
             new ReadableStream({
                 async start(controller) {
-                    controller.enqueue(encoder.encode(before ?? ''))
-                    let first = true
-                    for await (const chunk of renderToStream(() => ssr)) {
-                        controller.enqueue(
-                            encoder.encode(
-                                first ? chunk : `${chunk}<script>__abideSwap()</script>`,
-                            ),
+                    /* The shell `before` already flushed, so a mid-stream render rejection
+                       (a streaming `{#await}` with no `:catch`) can't become a 500 — surface it
+                       on the stream (`controller.error`) so the response terminates legibly
+                       instead of leaking an unhandledrejection (process-fatal under Bun). */
+                    try {
+                        controller.enqueue(encoder.encode(before ?? ''))
+                        let first = true
+                        for await (const chunk of renderToStream(() => ssr)) {
+                            controller.enqueue(
+                                encoder.encode(
+                                    first ? chunk : `${chunk}<script>__abideSwap()</script>`,
+                                ),
+                            )
+                            first = false
+                        }
+                        /* The {#await} reads created (and settled) their cache entries DURING the
+                           stream — the await expression is a thunk `renderToStream` ran lazily —
+                           so they missed the render-return snapshot. Drain them now: each lands an
+                           inline `__abideResolve(...)` chunk (a warm snapshot, or a `{ key, miss }`
+                           marker for an unshippable body → live refetch) before the deferred
+                           bundle, so startClient seeds the store and the block's subscription read
+                           is warm. Skip keys already shipped inline in __SSR__. */
+                        const streamedEntries = Array.from(store.cache.entries.values()).filter(
+                            (entry: CacheEntry) =>
+                                entry.settled === true &&
+                                entry.request !== undefined &&
+                                isReplayableMethod(entry.request.method.toUpperCase()) &&
+                                !inlinedKeys.has(entry.key),
                         )
-                        first = false
+                        for await (const resolution of streamCacheResolutions(
+                            store.cache,
+                            streamedEntries,
+                        )) {
+                            controller.enqueue(encoder.encode(resolveChunk(resolution)))
+                        }
+                        controller.enqueue(encoder.encode(after ?? ''))
+                        controller.close()
+                    } catch (streamError) {
+                        controller.error(streamError)
                     }
-                    /* The {#await} reads created (and settled) their cache entries DURING the
-                       stream — the await expression is a thunk `renderToStream` ran lazily —
-                       so they missed the render-return snapshot. Drain them now: each lands an
-                       inline `__abideResolve(...)` chunk (a warm snapshot, or a `{ key, miss }`
-                       marker for an unshippable body → live refetch) before the deferred
-                       bundle, so startClient seeds the store and the block's subscription read
-                       is warm. Skip keys already shipped inline in __SSR__. */
-                    const streamedEntries = Array.from(store.cache.entries.values()).filter(
-                        (entry: CacheEntry) =>
-                            entry.settled === true &&
-                            entry.request !== undefined &&
-                            isReplayableMethod(entry.request.method.toUpperCase()) &&
-                            !inlinedKeys.has(entry.key),
-                    )
-                    for await (const resolution of streamCacheResolutions(
-                        store.cache,
-                        streamedEntries,
-                    )) {
-                        controller.enqueue(encoder.encode(resolveChunk(resolution)))
-                    }
-                    controller.enqueue(encoder.encode(after ?? ''))
-                    controller.close()
                 },
             }),
             {

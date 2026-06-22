@@ -60,6 +60,9 @@ export function desugarSignals(scriptBody: string): {
     const stateNames = new Set<string>()
     const derivedNames = new Set<string>()
     const computedNames = new Set<string>()
+    /* A `props()` destructure must be lowered even when it declares no reactive binding
+       (a rest-only `const { ...rest } = props()`), so track its presence on its own. */
+    let hasPropsDestructure = false
     for (const statement of source.statements) {
         if (!ts.isVariableStatement(statement)) {
             continue
@@ -67,14 +70,16 @@ export function desugarSignals(scriptBody: string): {
         for (const declaration of statement.declarationList.declarations) {
             const callee = signalCallee(declaration)
             if (callee === 'props') {
-                /* `const {…} = props()` — each destructured binding is a read-only
-                   computed over the parent thunk, read as `name()`. */
+                /* `const {…, ...rest} = props()` — each named binding is a read-only computed
+                   over the parent thunk (read as `name()`); a `...rest` binding stays a plain
+                   const (a `restProps` bag), so it joins no reactive set. */
                 if (!ts.isObjectBindingPattern(declaration.name)) {
                     throw new Error(
                         'abide: `props()` must be destructured — `const { a, b } = props()`',
                     )
                 }
-                for (const binding of propsBindings(declaration)) {
+                hasPropsDestructure = true
+                for (const binding of propsDestructure(declaration).bindings) {
                     computedNames.add(binding.local)
                 }
                 continue
@@ -98,7 +103,12 @@ export function desugarSignals(scriptBody: string): {
             }
         }
     }
-    if (stateNames.size === 0 && derivedNames.size === 0 && computedNames.size === 0) {
+    if (
+        stateNames.size === 0 &&
+        derivedNames.size === 0 &&
+        computedNames.size === 0 &&
+        !hasPropsDestructure
+    ) {
         return { code: scriptBody, stateNames, derivedNames, computedNames }
     }
 
@@ -249,23 +259,34 @@ function signalCallee(declaration: ts.VariableDeclaration): string | undefined {
    the optional `= default` expression (the fallback when the prop is absent). */
 type PropsBinding = { local: string; key: string; initializer: ts.Expression | undefined }
 
-/* The bindings of a `const {…} = props()` pattern. Rest (`...rest`) and nested
-   destructuring have no single prop key, so they throw a legible compile error. */
-function propsBindings(declaration: ts.VariableDeclaration): PropsBinding[] {
+/* The destructure of a `const {…, ...rest} = props()` pattern — its named bindings
+   plus an optional rest binding (the unconsumed props, gathered by `restProps`).
+   Nested destructuring has no single prop key, so it throws a legible compile error. */
+function propsDestructure(declaration: ts.VariableDeclaration): {
+    bindings: PropsBinding[]
+    rest: string | undefined
+} {
     const pattern = declaration.name as ts.ObjectBindingPattern
-    return pattern.elements.map((element) => {
+    const bindings: PropsBinding[] = []
+    let rest: string | undefined
+    for (const element of pattern.elements) {
         if (element.dotDotDotToken !== undefined) {
-            throw new Error('abide: `...rest` in `props()` destructuring is not supported')
+            if (!ts.isIdentifier(element.name)) {
+                throw new Error('abide: `...rest` in `props()` must bind a plain name')
+            }
+            rest = element.name.text
+            continue
         }
         if (!ts.isIdentifier(element.name)) {
             throw new Error('abide: nested destructuring in `props()` is not supported')
         }
-        return {
+        bindings.push({
             local: element.name.text,
             key: propsBindingKey(element),
             initializer: element.initializer,
-        }
-    })
+        })
+    }
+    return { bindings, rest }
 }
 
 /* The parent prop key a binding element reads — its rename source (`name: alias` →
@@ -285,10 +306,11 @@ function propsBindingKey(element: ts.BindingElement): string {
     throw new Error('abide: computed prop keys in `props()` destructuring are not supported')
 }
 
-/* If `statement` is a `const {…} = props()` destructure, returns one reactive
-   computed per binding — `scope().derive("name", () => $props["key"]?.() ?? default)`
-   — read as `name()`; otherwise undefined. The `?? default` applies the binding's
-   `= default` fallback when the prop is absent. */
+/* If `statement` is a `const {…, ...rest} = props()` destructure, returns one reactive
+   computed per named binding — `scope().derive("name", () => $props["key"]?.() ?? default)`,
+   read as `name()` — plus a `const rest = restProps($props, [consumed])` line for a rest
+   binding; otherwise undefined. The `?? default` applies the binding's `= default` fallback
+   when the prop is absent. */
 function propsDestructureLines(
     statement: ts.Statement,
     printer: ts.Printer,
@@ -302,7 +324,8 @@ function propsDestructureLines(
         if (signalCallee(declaration) !== 'props' || !ts.isObjectBindingPattern(declaration.name)) {
             return undefined
         }
-        for (const { local, key, initializer } of propsBindings(declaration)) {
+        const { bindings, rest } = propsDestructure(declaration)
+        for (const { local, key, initializer } of bindings) {
             const fallback =
                 initializer === undefined
                     ? ''
@@ -310,6 +333,11 @@ function propsDestructureLines(
             lines.push(
                 `const ${local} = scope().derive(${JSON.stringify(local)}, () => $props[${JSON.stringify(key)}]?.()${fallback})`,
             )
+        }
+        /* The rest bag gathers every prop not named above (and not `$children`). */
+        if (rest !== undefined) {
+            const consumed = bindings.map((binding) => binding.key)
+            lines.push(`const ${rest} = restProps($props, ${JSON.stringify(consumed)})`)
         }
     }
     return lines

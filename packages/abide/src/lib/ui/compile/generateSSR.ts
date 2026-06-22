@@ -1,11 +1,13 @@
 import { OUTLET_CLOSE, OUTLET_OPEN } from '../runtime/OUTLET_MARKER.ts'
 import { OUTLET_TAG } from '../runtime/OUTLET_TAG.ts'
 import { asOutlet } from './asOutlet.ts'
+import { composeProps } from './composeProps.ts'
 import { groupBindParts } from './groupBindParts.ts'
 import { isAnchorPositioned } from './isAnchorPositioned.ts'
 import { lowerContext } from './lowerContext.ts'
 import { scopeAttr } from './scopeAttr.ts'
 import { skeletonContext } from './skeletonContext.ts'
+import { spreadExcludedNames } from './spreadExcludedNames.ts'
 import { staticAttr } from './staticAttr.ts'
 import { staticTextPart } from './staticTextPart.ts'
 import { stripEffects } from './stripEffects.ts'
@@ -37,12 +39,14 @@ listeners). Same expression lowering as the client back-end, so server and clien
 render the same markup. Dynamic values go through `$esc`; `if` is a plain `if`,
 `each` a `for…of`.
 
-An `await` block emits boundary comments (`<!--abide:await:N-->…<!--/abide:await:N-->`)
-and registers the promise plus its resolved/error string-renderers on `$awaits`. A
-streaming block (no `then` on the tag) puts its pending branch between the markers;
-`renderToStream` flushes each resolved fragment out of order — the await-block-streams
-half of the cache rule. A blocking block (`then` on the tag) emits an empty boundary
-and flags the entry, so `renderToStream` settles it before the first flush.
+An `await` block emits boundary comments (`<!--abide:await:N-->…<!--/abide:await:N-->`).
+A streaming block (no `then` on the tag) puts its pending branch between the markers and
+registers the promise + async resolved/error renderers on `$awaits`; `renderToStream`
+flushes each resolved fragment out of order — the await-block-streams half of the cache
+rule. A blocking block (`then` on the tag) is `await`ed INLINE at its structural position
+and its resolved branch rendered between the markers, so the render body is async and its
+id (`$ctx.next++`) allocates depth-first like the client; the resolved value lands in
+`$resume`. Block ids draw from the request-local `$ctx`, shared with inlined child renders.
 */
 export function generateSSR(
     nodes: TemplateNode[],
@@ -52,7 +56,7 @@ export function generateSSR(
     isLayout = false,
 ): string {
     /* Compile-time counter for unique temp var names (runtime block ids, child render
-       results) — block ids themselves are allocated at runtime via nextBlockId(). */
+       results) — block ids themselves are allocated at runtime via `$ctx.next++`. */
     let varCounter = 0
     const nextVar = (prefix: string): string => `${prefix}${varCounter++}`
 
@@ -81,6 +85,75 @@ export function generateSSR(
        traversal from this tree — one decision site for the outlet, and the outlet emitted bare
        through the generic element path exactly as the client clones it. */
     const rootNodes = isLayout ? nodes.map(asOutlet) : nodes
+
+    /* A snippet name (any identifier, `$` included) interpolated into a RegExp must have its
+       regex metacharacters escaped, or e.g. a trailing `$` would read as an end-anchor and the
+       call site would never match — leaving an un-awaited Promise stringified as `[object
+       Promise]`. */
+    const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    /* A leading boundary that, unlike `\b`, also fires before a `$`-leading name: `\b$row`
+       never matches (`$` is a non-word char, so there is no word boundary before it), which
+       would silently miss every `$row(...)` call. A negative lookbehind for word-or-`$`
+       matches the same call sites as `\b` for word-leading names while also catching them. */
+    const callPattern = (name: string): RegExp =>
+        new RegExp(`(?<![$\\w])${escapeRegExp(name)}\\s*\\(`)
+    /* A subtree call to any of `names` from a TEXT interpolation (`name()` / `name(args)`). */
+    const subtreeCalls = (children: TemplateNode[], names: ReadonlySet<string>): boolean =>
+        children.some((child) => {
+            if (child.kind === 'text') {
+                return child.parts.some(
+                    (part) =>
+                        part.kind !== 'static' &&
+                        [...names].some((name) => callPattern(name).test(part.code)),
+                )
+            }
+            return 'children' in child && subtreeCalls(child.children, names)
+        })
+
+    /* Snippet names whose body produces an `await`, so the snippet must be an `async function`
+       and its `{name(...)}` call sites awaited: it inlines a child component / holds an await
+       block (a structural scan), OR it text-calls another async snippet. The latter is a
+       dependency between snippets, so resolve it to a fixpoint — seed with the structural set,
+       then keep adding any snippet that calls an already-async one until nothing changes. */
+    const subtreeAwaits = (children: TemplateNode[]): boolean =>
+        children.some(
+            (child) =>
+                child.kind === 'component' ||
+                child.kind === 'await' ||
+                ('children' in child && subtreeAwaits(child.children)),
+        )
+    const snippetDefs = new Map<string, TemplateNode[]>()
+    const collectSnippetDefs = (children: TemplateNode[]): void => {
+        for (const child of children) {
+            if (child.kind === 'snippet') {
+                snippetDefs.set(child.name, child.children)
+            }
+            if ('children' in child) {
+                collectSnippetDefs(child.children)
+            }
+        }
+    }
+    collectSnippetDefs(rootNodes)
+    const asyncSnippets = new Set<string>()
+    for (const [name, children] of snippetDefs) {
+        if (subtreeAwaits(children)) {
+            asyncSnippets.add(name)
+        }
+    }
+    let grew = true
+    while (grew) {
+        grew = false
+        for (const [name, children] of snippetDefs) {
+            if (!asyncSnippets.has(name) && subtreeCalls(children, asyncSnippets)) {
+                asyncSnippets.add(name)
+                grew = true
+            }
+        }
+    }
+    /* A text-part expression that calls an async snippet, so its value is `await`ed before
+       `$text`. */
+    const callsAsyncSnippet = (code: string): boolean =>
+        [...asyncSnippets].some((name) => callPattern(name).test(code))
 
     /* Per-node skeleton position, computed once. Both back-ends read this single source of
        truth so their `<!--a-->` anchor placement cannot drift — the fresh-context boundaries
@@ -124,7 +197,14 @@ export function generateSSR(
                         const markup = staticTextPart(part.value)
                         return markup === '' ? '' : push(target, markup)
                     }
-                    const value = `$text(${lowerExpression(part.code)})`
+                    /* A call to an async snippet returns a Promise — `await` it before `$text`.
+                       (The enclosing context is async: the render body and async-snippet bodies.)
+                       Plain expressions stay sync, so a component with only interpolation keeps a
+                       sync render. */
+                    const lowered = lowerExpression(part.code)
+                    const value = callsAsyncSnippet(part.code)
+                        ? `$text(await (${lowered}))`
+                        : `$text(${lowered})`
                     return markText.get(node)
                         ? `${target}.push('<!--a-->' + ${value});\n`
                         : `${target}.push(${value});\n`
@@ -165,7 +245,11 @@ export function generateSSR(
             /* A hoisted function returning the snippet's `$snip`-branded HTML string;
                `{name(args)}` pushes it via `$text`, which wraps it in markers. */
             const body = generateInto(node.children, '$o')
-            return `function ${node.name}(${node.params ?? ''}) {\nconst $o = [];\n${body}return $snip($o.join(''));\n}\n`
+            /* `async` only when the body produces an `await` (it inlines a child component) — then
+               call sites `await` it (`$text(await frag())`). A sync snippet stays a plain function
+               called inline, preserving the sync render contract. */
+            const keyword = asyncSnippets.has(node.name) ? 'async function' : 'function'
+            return `${keyword} ${node.name}(${node.params ?? ''}) {\nconst $o = [];\n${body}return $snip($o.join(''));\n}\n`
         }
         if (node.kind === 'script') {
             /* A scoped reactive block: re-seed its local signals (lowered, in scope)
@@ -203,32 +287,42 @@ export function generateSSR(
                so SSR and client agree and the child's root lays out as a direct child. Props
                pass as thunks; slot content passes as a string-returning `$children` the child
                invokes from its <slot>. */
-            const parts = node.props.map(
-                (prop) => `${JSON.stringify(prop.name)}: () => (${lowerExpression(prop.code)})`,
-            )
             /* Slot content is a fresh build context — the child's `<slot>` mounts it via
                `mountSlot`, not the parent skeleton clone, and the client builds it through
-               `componentParts`/`generateChildren` (never the skeleton path). `skeletonContext`
+               `propsArg`/`generateChildren` (never the skeleton path). `skeletonContext`
                records it reset, so its children emit no enclosing-skeleton anchors the client
                slot builder would lack. */
             const slotCode = generateInto(node.children, '$slot')
-            if (slotCode.trim() !== '') {
-                parts.push(
-                    `"$children": () => { const $slot = []; ${slotCode}return $slot.join(''); }`,
-                )
-            }
-            /* Render the child and MERGE its await blocks into this page's `$awaits`
-               so they join the page's SSR stream — their markers carry render-pass
-               block ids (nextBlockId), unique across page + children, so the streamed
-               fragments resolve into the right boundaries. ($awaits is captured from
-               the enclosing render body, including from branch closures.) */
+            /* `$children` is an ASYNC builder the child `await`s at its `<slot>` position
+               (`generateSlot`), NOT a pre-resolved string. Pre-resolving here would run the
+               slot's `$ctx.next++` block ids BEFORE the child render's own, but the client
+               builds slot content lazily at the `<slot>` site — so a child with an await/try
+               before its `<slot>` would allocate ids in the opposite order and desync hydration.
+               Keeping the slot lazy makes the slot's ids draw at the `<slot>` site on both
+               sides. The builder shares the enclosing render's `$ctx`/`$awaits`/`$resume` (a
+               closure), so nested awaits register and number correctly during the child render.
+               A child with a `<slot>` is therefore always an async render. */
+            const slotPart =
+                slotCode.trim() === ''
+                    ? undefined
+                    : `"$children": async () => { const $slot = []; ${slotCode}return $slot.join(''); }`
+            /* The same last-wins layering the client build emits (`composeProps`), so SSR
+               and hydration read the same prop bag. */
+            const propsExpr = composeProps(node.props, lowerExpression, slotPart)
+            /* Render the child (awaited — render is async) sharing this render's `$ctx`,
+               so its `await`/`try` block ids draw from the same depth-first counter,
+               unique across page + children, and the streamed fragments resolve into the
+               right boundaries. MERGE its streaming awaits into `$awaits` and its inline
+               blocking values into `$resume`. ($awaits/$resume are captured from the
+               enclosing render body, including from branch closures.) */
             const result = nextVar('$child')
             return (
                 anchor +
                 push(target, RANGE_OPEN) +
-                `const ${result} = ${node.name}.render({ ${parts.join(', ')} });\n` +
+                `const ${result} = await ${node.name}.render(${propsExpr}, $ctx);\n` +
                 `${target}.push(${result}.html);\n` +
                 `for (const $a of ${result}.awaits) { $awaits.push($a); }\n` +
+                `Object.assign($resume, ${result}.resume);\n` +
                 push(target, RANGE_CLOSE)
             )
         }
@@ -262,6 +356,12 @@ export function generateSSR(
                 /* present/absent semantics matching the client `attr` binding:
                    false/null/undefined drops it, true emits the bare attribute. */
                 code += `${target}.push($attr(${JSON.stringify(attr.name)}, ${lowerExpression(attr.code)}));\n`
+            } else if (attr.kind === 'spread') {
+                /* `{...expr}` element spread: each key as an attribute, functions (event
+                   handlers) skipped — the client `spreadAttrs` wires those on hydrate. Keys
+                   explicitly named on the element are skipped (the explicit attr wins), so
+                   no duplicate attribute is emitted and the client DOM agrees. */
+                code += `${target}.push($spread(${lowerExpression(attr.code)}, ${JSON.stringify(spreadExcludedNames(node.attrs))}));\n`
             } else if (attr.kind === 'bind' && attr.property === 'group') {
                 /* Render the checked state as a boolean attribute: present when the
                    path holds (radio) or contains (checkbox) this control's value. */
@@ -304,57 +404,101 @@ export function generateSSR(
     ): string {
         const wrap = inSkeleton.get(node)
         const fallback = generateInto(node.children, target)
+        /* `$children` is an async builder the parent passes lazily; `await` it here so the
+           slot content's block ids allocate AT the `<slot>` position — the same order the
+           client builds slot content — keeping hydration congruent. The `await` makes a
+           component with a `<slot>` an async render (its caller already `await`s `render()`). */
         const body =
             fallback.trim() === ''
-                ? `if ($props && $props.$children) { ${target}.push($props.$children()); }\n`
-                : `if ($props && $props.$children) { ${target}.push($props.$children()); } else {\n${fallback}}\n`
+                ? `if ($props && $props.$children) { ${target}.push(await $props.$children()); }\n`
+                : `if ($props && $props.$children) { ${target}.push(await $props.$children()); } else {\n${fallback}}\n`
         if (!wrap) {
             return body
         }
         return `${anchor}${openRange(target)}${body}${closeRange(target)}`
     }
 
-    /* Boundary markers + a `$awaits` registration carrying the promise and
-       string-renderers for the resolved/error branches. Streaming emits the pending
-       branch between the markers (flushed now, value streamed later); blocking emits
-       an empty boundary — its resolved branch is the children bound to `node.as` — and
-       flags the entry so `renderToStream` settles it before the first flush. */
+    /* A blocking await (`then` on the tag) renders INLINE during the async render pass;
+       a streaming await defers its resolved branch to `renderToStream`. */
     function generateAwait(node: Extract<TemplateNode, { kind: 'await' }>, target: string): string {
+        return node.blocking
+            ? generateBlockingAwait(node, target)
+            : generateStreamingAwait(node, target)
+    }
+
+    /*
+    A blocking await — `await`ed at its structural position in the async render pass and
+    its resolved branch rendered INLINE into `target`, between the boundary markers. This
+    matches the client (which runs `then` inline during adopt): one render pass, so the
+    block id (`$ctx.next++`) and any nested await's id are allocated depth-first in the
+    same order the client hydrates them, and the resolved value is captured into `$resume`
+    for the manifest. The resolved children bind `node.as`; `finally` appends after, matching
+    the client's concatenated node range. With no catch/finally branch a rejection propagates
+    (renderToStream / the 500 surfaces it); otherwise the catch branch renders and seeds an
+    error resume. The value `const` is block-scoped to its `try`, so sibling blocking awaits
+    that bind the same name don't collide.
+    */
+    function generateBlockingAwait(
+        node: Extract<TemplateNode, { kind: 'await' }>,
+        target: string,
+    ): string {
         const catchBranch = branchNamed(node.children, 'catch')
         const finallyChildren = branchNamed(node.children, 'finally')?.children ?? []
-        /* Resolved branch + its bound value: the children directly when blocking, the
-           `then` child when streaming. Pending (streaming only) is the non-branch
-           children. */
-        const thenBranch = branchNamed(node.children, 'then')
-        const resolvedChildren = node.blocking
-            ? node.children.filter((child) => child.kind !== 'branch')
-            : (thenBranch?.children ?? [])
-        const resolvedAs = node.blocking ? node.as : thenBranch?.as
-        const pending = node.blocking
-            ? []
-            : node.children.filter((child) => child.kind !== 'branch')
-        /* Runtime block id (shared with the client + child components in this pass). */
+        const resolvedChildren = node.children.filter((child) => child.kind !== 'branch')
+        const resolvedAs = node.as ?? '_value'
+        const errorAs = catchBranch?.as ?? '_error'
         const id = nextVar('$aid')
-        let code = `const ${id} = nextBlockId();\n`
+        let code = `const ${id} = $ctx.next++;\n`
+        code += `${target}.push("<!--abide:await:" + ${id} + "-->");\n`
+        code += `try {\n`
+        code += `const ${resolvedAs} = await (${lowerExpression(node.promise)});\n`
+        code += branchContent(resolvedChildren, target)
+        code += branchContent(finallyChildren, target)
+        code += `$resume[${id}] = { ok: true, value: ${resolvedAs} };\n`
+        if (catchBranch === undefined && finallyChildren.length === 0) {
+            /* No catch/finally → let the rejection surface instead of an empty branch. */
+            code += `} catch (_error) { throw _error; }\n`
+        } else {
+            code += `} catch (${errorAs}) {\n`
+            code += branchContent(catchBranch?.children ?? [], target)
+            code += branchContent(finallyChildren, target)
+            code += `$resume[${id}] = { ok: false, error: String(${errorAs}) };\n`
+            code += `}\n`
+        }
+        code += `${target}.push("<!--/abide:await:" + ${id} + "-->");\n`
+        return code
+    }
+
+    /* A streaming await — emits the pending branch between the markers (flushed now) and
+       registers the promise + async string-renderers on `$awaits`; `renderToStream`
+       flushes the resolved fragment out of order. The renderers are async so a nested
+       `await` block inside the branch composes. `finally` appends after the outcome,
+       matching the client's concatenated node range. Neither catch nor finally → omit
+       `catch` so a rejection surfaces (renderToStream re-throws); a finally-only block
+       keeps a catch renderer that renders just finally. */
+    function generateStreamingAwait(
+        node: Extract<TemplateNode, { kind: 'await' }>,
+        target: string,
+    ): string {
+        const catchBranch = branchNamed(node.children, 'catch')
+        const finallyChildren = branchNamed(node.children, 'finally')?.children ?? []
+        const thenBranch = branchNamed(node.children, 'then')
+        const pending = node.children.filter((child) => child.kind !== 'branch')
+        const id = nextVar('$aid')
+        let code = `const ${id} = $ctx.next++;\n`
         code += `${target}.push("<!--abide:await:" + ${id} + "-->");\n`
         code += branchContent(pending, target)
         code += `${target}.push("<!--/abide:await:" + ${id} + "-->");\n`
-        /* The settled closures append `finally` after the outcome markup, matching the
-           client's concatenated node range so hydration aligns. */
         const settled = (binding: string, children: TemplateNode[]) =>
-            `(${binding}) => { const $o = []; ${branchContent(children, '$o')}${branchContent(finallyChildren, '$o')}return $o.join(''); }`
-        /* Neither catch nor finally → omit `catch` so a rejection surfaces to the
-           stream/error path (renderToStream re-throws) instead of rendering an empty
-           branch. A finally-only block keeps a catch closure that renders just finally. */
+            `async (${binding}) => { const $o = []; ${branchContent(children, '$o')}${branchContent(finallyChildren, '$o')}return $o.join(''); }`
         const catchProp =
             catchBranch === undefined && finallyChildren.length === 0
                 ? ''
                 : `catch: ${settled(catchBranch?.as ?? '_error', catchBranch?.children ?? [])} `
         code +=
             `$awaits.push({ id: ${id}, ` +
-            (node.blocking ? 'blocking: true, ' : '') +
             `promise: () => (${lowerExpression(node.promise)}), ` +
-            `then: ${settled(resolvedAs ?? '_value', resolvedChildren)}, ` +
+            `then: ${settled(thenBranch?.as ?? '_value', thenBranch?.children ?? [])}, ` +
             `${catchProp}});\n`
         return code
     }
@@ -372,7 +516,7 @@ export function generateSSR(
         const errName = catchBranch?.as ?? '_error'
         const id = nextVar('$tid')
         const mark = nextVar('$trim')
-        let code = `const ${id} = nextBlockId();\n`
+        let code = `const ${id} = $ctx.next++;\n`
         code += `${target}.push("<!--abide:try:" + ${id} + "-->");\n`
         code += `const ${mark} = ${target}.length;\n`
         code += `try {\n`

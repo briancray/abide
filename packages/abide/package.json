@@ -79,6 +79,11 @@
         "./ui/outbox": "./src/lib/ui/outbox.ts",
         "./ui/dom/mount": "./src/lib/ui/dom/mount.ts",
         "./ui/dom/mountChild": "./src/lib/ui/dom/mountChild.ts",
+        "./ui/dom/mergeProps": "./src/lib/ui/dom/mergeProps.ts",
+        "./ui/dom/spreadProps": "./src/lib/ui/dom/spreadProps.ts",
+        "./ui/dom/restProps": "./src/lib/ui/dom/restProps.ts",
+        "./ui/dom/spreadAttrs": "./src/lib/ui/dom/spreadAttrs.ts",
+        "./ui/dom/readCall": "./src/lib/ui/dom/readCall.ts",
         "./ui/dom/hydrate": "./src/lib/ui/dom/hydrate.ts",
         "./ui/dom/text": "./src/lib/ui/dom/text.ts",
         "./ui/dom/appendText": "./src/lib/ui/dom/appendText.ts",
@@ -126,6 +131,9 @@
         "./ui/remoteProxy": "./src/lib/ui/remoteProxy.ts",
         "./ui/socketProxy": "./src/lib/ui/socketProxy.ts",
         "./server/prompts/renderPromptTemplate": "./src/lib/server/prompts/renderPromptTemplate.ts"
+    },
+    "scripts": {
+        "test": "bun test ./tests"
     },
     "bin": {
         "abide": "./bin/abide.ts"

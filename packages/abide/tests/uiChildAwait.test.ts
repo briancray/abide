@@ -36,12 +36,16 @@ function component(source: string, extra: Record<string, unknown> = {}) {
     const values = names.map((name) => runtime[name as keyof typeof runtime])
     const fn = (host: Element, props?: unknown) =>
         new Function('host', '$props', ...names, clientBody)(host, props, ...values)
-    fn.render = (props?: unknown): SsrRender =>
-        new Function('$props', ...names, ssrBody)(props, ...values) as SsrRender
+    /* `$ctx` (the request-local block-id counter) is threaded so a child shares the
+       page's depth-first numbering; the page render passes it when inlining the child. */
+    fn.render = (props?: unknown, ctx?: unknown): SsrRender | Promise<SsrRender> =>
+        new Function('$props', '$ctx', ...names, ssrBody)(props, ctx, ...values) as
+            | SsrRender
+            | Promise<SsrRender>
     return fn
 }
 
-async function streamToString(render: () => SsrRender): Promise<string> {
+async function streamToString(render: () => SsrRender | Promise<SsrRender>): Promise<string> {
     let html = ''
     for await (const chunk of renderToStream(render)) {
         html += chunk

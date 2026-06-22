@@ -73,6 +73,36 @@ describe('compileShadow', () => {
         expect(code).toContain('(title)')
     })
 
+    test('checks a {...spread} against a Partial of the child props', () => {
+        const { code } = compileShadow(`<script>
+import Child from './Child.abide'
+const extra = { name: 'x' }
+</script>
+<Child {...extra} />`)
+        /* The spread is checked against `Partial<Props>` (subset, not completeness) and the
+           spread expression lands in the checkable position. */
+        expect(code).toContain('Partial<Parameters<typeof Child>[0]>')
+        expect(code).toContain('(extra)')
+    })
+
+    test('a {...spread} maps its expression span past the dots', () => {
+        const src = `<script>
+import Child from './Child.abide'
+const extra = { name: 'x' }
+</script>
+<Child {...extra} />`
+        const { code: spreadCode, mappings: spreadMappings } = compileShadow(src)
+        /* The spread's mapping must point at `extra`, not the `...` — without the dots-skip
+           it would land 3 chars early and break the source-text == shadow-text invariant. */
+        const exprLoc = src.indexOf('extra}')
+        expect(spreadMappings.some((entry) => entry.sourceStart === exprLoc)).toBe(true)
+        for (const { shadowStart, sourceStart, length } of spreadMappings) {
+            expect(spreadCode.slice(shadowStart, shadowStart + length)).toBe(
+                src.slice(sourceStart, sourceStart + length),
+            )
+        }
+    })
+
     test('every mapping points at the exact source span it stands for', () => {
         /* The shadow text at shadowStart equals the source text at sourceStart —
            the invariant the diagnostic remapper relies on. */

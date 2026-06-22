@@ -9,7 +9,10 @@ Wraps a component into a complete ES module with two entry points:
 
   - default `component(host, $props)` — mounts the client build, returns the
     disposer (`import Counter from './Counter.abide'; const stop = Counter(host)`);
-  - `render($props)` — server-renders to `{ html, state, awaits }` for SSR.
+  - `render($props, $ctx)` — async, server-renders to `{ html, state, awaits, resume }`
+    for SSR. `$ctx` is the request-local block-id counter, threaded so a child's
+    `await`/`try` ids share the page's depth-first numbering; omitted at the top level
+    (a fresh counter defaults in).
 
 `render` is also attached to the default export (`component.render`) so a parent
 can server-render a child it imported by its default name. Both entry points share
@@ -76,7 +79,7 @@ export function hydrateInto(host, $props) {
     return hydrate(host, build, $props)
 }
 
-export function render($props) {
+export function render($props, $ctx) {
 ${ssrBody}
 }
 

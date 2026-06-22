@@ -40,6 +40,7 @@ const Button = Object.assign(
             html: `<span>${String(props.label())}</span>`,
             state: undefined,
             awaits: [],
+            resume: {},
         }),
     },
 )
@@ -59,10 +60,12 @@ const RUNTIME = {
     Button,
 }
 
-function ssr(source: string, model: unknown): SsrRender {
+async function ssr(source: string, model: unknown): Promise<SsrRender> {
     const names = [...Object.keys(RUNTIME), 'model']
     const values = [...Object.values(RUNTIME), model]
-    return new Function(...names, compileSSR(source))(...values) as SsrRender
+    /* render may return a Promise when the component inlines a child; awaiting a
+       sync value is always safe. */
+    return (await new Function(...names, compileSSR(source))(...values)) as SsrRender
 }
 
 function run(source: string, host: Element, model: unknown, mode: 'mount' | 'hydrate'): void {
@@ -81,11 +84,13 @@ function run(source: string, host: Element, model: unknown, mode: 'mount' | 'hyd
 describe('multi-root branches', () => {
     const IF = `<main><template if={model.on}><h1>A</h1><p>B</p></template></main>`
 
-    test('SSR renders all branch roots, no wrapper', () => {
-        expect(ssr(IF, doc({ on: true })).html).toBe(
+    test('SSR renders all branch roots, no wrapper', async () => {
+        expect((await ssr(IF, doc({ on: true }))).html).toBe(
             '<main><!--a--><!--[--><h1>A</h1><p>B</p><!--]--></main>',
         )
-        expect(ssr(IF, doc({ on: false })).html).toBe('<main><!--a--><!--[--><!--]--></main>')
+        expect((await ssr(IF, doc({ on: false }))).html).toBe(
+            '<main><!--a--><!--[--><!--]--></main>',
+        )
     })
 
     test('client mounts all roots, and toggling adds/removes the whole range', () => {
@@ -101,10 +106,10 @@ describe('multi-root branches', () => {
         expect(main.childNodes.map((n) => n.tagName).filter(Boolean)).toEqual(['h1', 'p'])
     })
 
-    test('hydration adopts every root in place, then toggles', () => {
+    test('hydration adopts every root in place, then toggles', async () => {
         const model = doc({ on: true })
         const host = document.createElement('div')
-        host.innerHTML = ssr(IF, model).html
+        host.innerHTML = (await ssr(IF, model)).html
         const main = host.childNodes[0] as unknown as { children: Node[] }
         const [h1Before, pBefore] = [main.children[0], main.children[1]]
 
@@ -120,9 +125,9 @@ describe('multi-root branches', () => {
         expect(host.textContent).toBe('AB')
     })
 
-    test('switch case supports multiple roots', () => {
+    test('switch case supports multiple roots', async () => {
         const SWITCH = `<main><template switch={model.k}><template case="'a'"><h1>A1</h1><h2>A2</h2></template><template default><span>?</span></template></template></main>`
-        expect(ssr(SWITCH, doc({ k: 'a' })).html).toBe(
+        expect((await ssr(SWITCH, doc({ k: 'a' }))).html).toBe(
             '<main><!--a--><!--[--><h1>A1</h1><h2>A2</h2><!--]--></main>',
         )
         const model = doc({ k: 'a' })
@@ -133,14 +138,16 @@ describe('multi-root branches', () => {
         expect(host.textContent).toBe('?')
     })
 
-    test('a component is a valid branch root: SSR, mount, and hydrate agree', () => {
+    test('a component is a valid branch root: SSR, mount, and hydrate agree', async () => {
         const SRC = `<main><template if={model.on}><Button label="hi"/></template></main>`
         // a component renders as a marker range (no wrapper element), both server and
         // client; the inner `[`…`]` is the component, the outer is the if-branch range
-        expect(ssr(SRC, doc({ on: true })).html).toBe(
+        expect((await ssr(SRC, doc({ on: true }))).html).toBe(
             '<main><!--a--><!--[--><!--[--><span>hi</span><!--]--><!--]--></main>',
         )
-        expect(ssr(SRC, doc({ on: false })).html).toBe('<main><!--a--><!--[--><!--]--></main>')
+        expect((await ssr(SRC, doc({ on: false }))).html).toBe(
+            '<main><!--a--><!--[--><!--]--></main>',
+        )
 
         // client mount
         const model = doc({ on: true })
@@ -155,7 +162,7 @@ describe('multi-root branches', () => {
         // hydrate adopts the server-rendered wrapper in place
         const hModel = doc({ on: true })
         const hHost = document.createElement('div')
-        hHost.innerHTML = ssr(SRC, hModel).html
+        hHost.innerHTML = (await ssr(SRC, hModel)).html
         const wrapperBefore = (hHost.childNodes[0] as unknown as { children: Node[] }).children[0]
         run(SRC, hHost, hModel, 'hydrate')
         expect((hHost.childNodes[0] as unknown as { children: Node[] }).children[0]).toBe(
@@ -164,9 +171,9 @@ describe('multi-root branches', () => {
         expect(hHost.textContent).toBe('hi')
     })
 
-    test('a component is a valid each row', () => {
+    test('a component is a valid each row', async () => {
         const SRC = `<ul><template each={model.items} as="i" key="i"><Button label={i}/></template></ul>`
-        expect(ssr(SRC, doc({ items: ['a', 'b'] })).html).toBe(
+        expect((await ssr(SRC, doc({ items: ['a', 'b'] }))).html).toBe(
             '<ul><!--a--><!--[--><!--[--><span>a</span><!--]--><!--]--><!--[--><!--[--><span>b</span><!--]--><!--]--></ul>',
         )
         const model = doc({ items: ['a', 'b'] })
@@ -175,12 +182,14 @@ describe('multi-root branches', () => {
         expect(host.textContent).toBe('ab')
     })
 
-    test('static text is a valid branch root: SSR, mount, and hydrate agree', () => {
+    test('static text is a valid branch root: SSR, mount, and hydrate agree', async () => {
         const SRC = `<main><template if={model.on}>plain text</template></main>`
-        expect(ssr(SRC, doc({ on: true })).html).toBe(
+        expect((await ssr(SRC, doc({ on: true }))).html).toBe(
             '<main><!--a--><!--[-->plain text<!--]--></main>',
         )
-        expect(ssr(SRC, doc({ on: false })).html).toBe('<main><!--a--><!--[--><!--]--></main>')
+        expect((await ssr(SRC, doc({ on: false }))).html).toBe(
+            '<main><!--a--><!--[--><!--]--></main>',
+        )
 
         const model = doc({ on: true })
         const host = document.createElement('div')
@@ -193,14 +202,14 @@ describe('multi-root branches', () => {
 
         const hModel = doc({ on: true })
         const hHost = document.createElement('div')
-        hHost.innerHTML = ssr(SRC, hModel).html
+        hHost.innerHTML = (await ssr(SRC, hModel)).html
         run(SRC, hHost, hModel, 'hydrate')
         expect(hHost.textContent).toBe('plain text')
     })
 
-    test('a dynamic interpolation is a valid branch root: SSR, mount, and hydrate agree', () => {
+    test('a dynamic interpolation is a valid branch root: SSR, mount, and hydrate agree', async () => {
         const SRC = `<main><template if={model.on}>{model.name}!</template></main>`
-        expect(ssr(SRC, doc({ on: true, name: 'Ada' })).html).toBe(
+        expect((await ssr(SRC, doc({ on: true, name: 'Ada' }))).html).toBe(
             '<main><!--a--><!--[-->Ada!<!--]--></main>',
         )
 
@@ -213,16 +222,16 @@ describe('multi-root branches', () => {
 
         const hModel = doc({ on: true, name: 'Ada' })
         const hHost = document.createElement('div')
-        hHost.innerHTML = ssr(SRC, hModel).html
+        hHost.innerHTML = (await ssr(SRC, hModel)).html
         run(SRC, hHost, hModel, 'hydrate')
         expect(hHost.textContent).toBe('Ada!')
         hModel.replace('name', 'Bo')
         expect(hHost.textContent).toBe('Bo!')
     })
 
-    test('a nested control-flow <template> directly in a branch renders (full range model)', () => {
+    test('a nested control-flow <template> directly in a branch renders (full range model)', async () => {
         const SRC = `<main><template if={model.on}><template if={model.b}><span>x</span></template></template></main>`
-        expect(ssr(SRC, doc({ on: true, b: true })).html).toBe(
+        expect((await ssr(SRC, doc({ on: true, b: true }))).html).toBe(
             '<main><!--a--><!--[--><!--[--><span>x</span><!--]--><!--]--></main>',
         )
         const model = doc({ on: true, b: true })

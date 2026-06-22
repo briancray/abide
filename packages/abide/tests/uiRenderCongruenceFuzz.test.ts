@@ -47,7 +47,9 @@ const RUNTIME = {
 function component(
     source: string,
     extra: Record<string, unknown> = {},
-): ((host: Element, props?: unknown) => void) & { render: (props?: unknown) => SsrRender } {
+): ((host: Element, props?: unknown) => void) & {
+    render: (props?: unknown, ctx?: unknown) => SsrRender | Promise<SsrRender>
+} {
     const clientBody = compileComponent(source)
     const ssrBody = compileSSR(source)
     const runtime = { ...RUNTIME, ...extra }
@@ -56,8 +58,10 @@ function component(
     const fn = (host: Element, props?: unknown) => {
         new Function('host', '$props', ...names, clientBody)(host, props, ...values)
     }
-    fn.render = (props?: unknown): SsrRender =>
-        new Function('$props', ...names, ssrBody)(props, ...values) as SsrRender
+    fn.render = (props?: unknown, ctx?: unknown): SsrRender | Promise<SsrRender> =>
+        new Function('$props', '$ctx', ...names, ssrBody)(props, ctx, ...values) as
+            | SsrRender
+            | Promise<SsrRender>
     return Object.assign(fn, { render: fn.render, build: fn })
 }
 
@@ -248,13 +252,13 @@ describe('render congruence (generative, reference-checked)', () => {
     const componentExtra = { Box: component(Box) }
 
     for (const { name, source, expected } of [...corpus, ...siblingCorpus]) {
-        test(name, () => {
+        test(name, async () => {
             const built = component(source, componentExtra)
 
             const host = document.createElement('div')
             built(host)
             const clientMarkup = serialize(host)
-            const serverMarkup = built.render().html
+            const serverMarkup = (await built.render()).html
 
             // 1. marker congruence (client DOM === SSR markup)
             expect(clientMarkup).toBe(stripServerOnlyMarkers(serverMarkup))

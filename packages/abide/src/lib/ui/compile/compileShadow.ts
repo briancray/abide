@@ -357,9 +357,17 @@ function emitNode(node: TemplateNode, builder: Builder): void {
                    unterminated (a script ending in a call with no trailing semicolon,
                    e.g. `effect(() => …)`) merges across the newline into `effect(…)(…)`
                    — a spurious "not callable" on the author's last statement. */
-                builder.raw(
-                    `;((__prop: Parameters<typeof ${node.name}>[0][${JSON.stringify(prop.name)}]) => {})(`,
-                )
+                if (prop.spread) {
+                    /* A `{...expr}` spread contributes a SUBSET of the props (required ones
+                       may come from another spread/explicit prop), so check it against
+                       `Partial<Props>` — every key it does carry must match the child's
+                       declared type, without demanding completeness. */
+                    builder.raw(`;((__spread: Partial<Parameters<typeof ${node.name}>[0]>) => {})(`)
+                } else {
+                    builder.raw(
+                        `;((__prop: Parameters<typeof ${node.name}>[0][${JSON.stringify(prop.name)}]) => {})(`,
+                    )
+                }
                 builder.expr(prop.code, prop.loc)
                 builder.raw(');\n')
             }

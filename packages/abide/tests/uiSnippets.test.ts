@@ -42,7 +42,9 @@ const RUNTIME = {
 function component(
     source: string,
     extra: Record<string, unknown> = {},
-): ((host: Element, props?: unknown) => void) & { render: (props?: unknown) => SsrRender } {
+): ((host: Element, props?: unknown) => void) & {
+    render: (props?: unknown, ctx?: unknown) => SsrRender | Promise<SsrRender>
+} {
     const clientBody = compileComponent(source)
     const ssrBody = compileSSR(source)
     const runtime = { ...RUNTIME, ...extra }
@@ -51,9 +53,11 @@ function component(
     const fn = (host: Element, props?: unknown) => {
         new Function('host', '$props', ...names, clientBody)(host, props, ...values)
     }
-    fn.render = (props?: unknown): SsrRender =>
-        new Function('$props', ...names, ssrBody)(props, ...values) as SsrRender
-    return Object.assign(fn, { build: fn })
+    fn.render = (props?: unknown, ctx?: unknown): SsrRender | Promise<SsrRender> =>
+        new Function('$props', '$ctx', ...names, ssrBody)(props, ctx, ...values) as
+            | SsrRender
+            | Promise<SsrRender>
+    return Object.assign(fn, { render: fn.render, build: fn })
 }
 
 const serialize = (host: unknown): string =>
@@ -78,8 +82,8 @@ describe('snippets (<template name args> called like a function)', () => {
         )
     })
 
-    test('SSR renders each call between snippet markers', () => {
-        const html = component(source).render().html
+    test('SSR renders each call between snippet markers', async () => {
+        const html = (await component(source).render()).html
         expect(html).toBe(
             '<ul>' +
                 '<!--abide:snippet--><li>#a</li><!--/abide:snippet-->' +
@@ -88,9 +92,9 @@ describe('snippets (<template name args> called like a function)', () => {
         )
     })
 
-    test('hydration adopts the server-rendered snippet nodes in place', () => {
+    test('hydration adopts the server-rendered snippet nodes in place', async () => {
         const host = document.createElement('div')
-        host.innerHTML = component(source).render().html
+        host.innerHTML = (await component(source).render()).html
         const ul = host.childNodes[0] as unknown as { childNodes: unknown[] }
         const firstLi = ul.childNodes[1] // [0] is the open marker comment
 
@@ -123,7 +127,7 @@ describe('snippets (<template name args> called like a function)', () => {
         expect(host.textContent).toBe('1,2,3') // re-read the arg, re-mounted
     })
 
-    test('an object arg destructures (args={{ a, b }})', () => {
+    test('an object arg destructures (args={{ a, b }})', async () => {
         const src = `
             <template name="pair" args={{ a, b }}><span>{a}-{b}</span></template>
             <div>{pair({ a: 1, b: 2 })}</div>
@@ -133,7 +137,7 @@ describe('snippets (<template name args> called like a function)', () => {
         expect(serialize(host)).toBe(
             '<div><!--abide:snippet--><span>1-2</span><!--/abide:snippet--></div>',
         )
-        expect(component(src).render().html).toBe(
+        expect((await component(src).render()).html).toBe(
             '<div><!--abide:snippet--><span>1-2</span><!--/abide:snippet--></div>',
         )
     })
@@ -161,8 +165,8 @@ describe('snippets passed across components', () => {
         )
     })
 
-    test('SSR: identical, snippet rendered inside the child', () => {
-        const html = component(parent, { List: component(List) }).render().html
+    test('SSR: identical, snippet rendered inside the child', async () => {
+        const html = (await component(parent, { List: component(List) }).render()).html
         expect(html).toBe(
             '<!--[--><ul>' +
                 '<!--abide:snippet--><li>•x</li><!--/abide:snippet-->' +

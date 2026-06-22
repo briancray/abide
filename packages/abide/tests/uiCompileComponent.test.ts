@@ -186,6 +186,55 @@ describe('compileComponent — end to end', () => {
         expect(body).toContain('"attach": () => (register)')
     })
 
+    /* A `{...expr}` on a component spreads the object's keys as props: the build
+       composes a `mergeProps` of ordered layers (explicit runs + `spreadProps`),
+       resolved last-wins, with the spread source passed as a thunk so it stays live. */
+    test('a {...spread} compiles to mergeProps with a spreadProps layer', () => {
+        const body = compileComponent(`<Card {...rest} title="Hi" />`)
+        expect(body).toContain('mergeProps([')
+        expect(body).toContain('spreadProps(() => (rest))')
+        expect(body).toContain('{ "title": () => ("Hi") }')
+        /* The spread layer precedes the explicit one (source order → last wins). */
+        expect(body.indexOf('spreadProps')).toBeLessThan(body.indexOf('"title"'))
+    })
+
+    /* No spread → the plain object literal stays the path, unchanged. */
+    test('a component without a spread keeps the plain prop object (no mergeProps)', () => {
+        const body = compileComponent(`<Card title="Hi" />`)
+        expect(body).not.toContain('mergeProps')
+        expect(body).toContain('{ "title": () => ("Hi") }')
+    })
+
+    /* `{...expr}` on a native element forwards its keys as attributes via `spreadAttrs`
+       (each key reactive; an `on<event>` function becomes a listener). */
+    test('a {...spread} on a native element compiles to spreadAttrs', () => {
+        const body = compileComponent(`<div {...rest}></div>`)
+        expect(body).toContain('spreadAttrs(')
+        expect(body).toContain('function spread() { return (rest) }')
+    })
+
+    /* A `<template>` directive has no attribute/prop bag, so a spread there is rejected. */
+    test('a {...spread} on a <template> directive is a compile error', () => {
+        expect(() =>
+            compileComponent(`<template {...rest} each={xs} as={x}><b>{x}</b></template>`),
+        ).toThrow(/not supported on a <template>/)
+    })
+
+    /* `const { foo, ...rest } = props()` lowers to the named computeds plus a `restProps`
+       bag of the unconsumed props. */
+    test('a props() rest binding lowers to restProps over the unconsumed keys', () => {
+        const body = compileComponent(
+            `<script>const { foo, ...rest } = props()</script><i>{foo}</i>`,
+        )
+        expect(body).toContain('const rest = restProps($props, ["foo"])')
+        expect(body).toContain('const foo = scope().derive("foo", () => $props["foo"]?.())')
+    })
+
+    /* A bare `{expr}` at attribute position is a likely-mistaken spread missing its dots. */
+    test('a bare {expr} attribute is a compile error pointing at spread syntax', () => {
+        expect(() => compileComponent(`<Card {rest} />`)).toThrow(/write \{\.\.\.expr\}/)
+    })
+
     /* A bare attribute on a component is a boolean flag: it coerces to `true`,
        unlike a native element where it serialises to `name=""`. An explicit empty
        string (`disabled=""`) stays the empty string. */
@@ -228,7 +277,24 @@ describe('compileComponent — end to end', () => {
         expect(prop).toContain('"params": () => ({ id: routeId, rest: \'\' })')
 
         const attr = compileComponent(`<b data-x={{ a: 1, b: '' }}>y</b>`)
-        expect(attr).toContain('attr(el1, "data-x", () => ({ a: 1, b: \'\' }))')
+        expect(attr).toContain(
+            'attr(el1, "data-x", function attr_data_x() { return ({ a: 1, b: \'\' }) })',
+        )
+    })
+
+    /* Reactive thunks are emitted as named function expressions, not anonymous arrows, so a
+       stack frame reads `attr_title`/`text`/`bind_value` instead of `(anonymous)` —
+       disambiguating which binding a frame is when several share a source line. The name is
+       a sanitized authored label (`data-x` → `attr_data_x`); minify strips it in production. */
+    test('reactive bindings emit named thunks for legible stack frames', () => {
+        const body = compileComponent(
+            `<script>\nlet name = scope().state('')\n</script>\n<div title={name}><span>{name}</span><input bind:value={name}/></div>`,
+        )
+        expect(body).toContain('attr(el1, "title", function attr_title() {')
+        expect(body).toContain('appendText(el2, function text() {')
+        expect(body).toContain('effect(function bind_value() {')
+        // never the old anonymous-arrow form for these bindings
+        expect(body).not.toContain('attr(el1, "title", () =>')
     })
 
     /* An inline object-type declaration in the script is plain TypeScript: the emitted
@@ -259,6 +325,25 @@ describe('compileComponent — end to end', () => {
         expect(body).toContain('option => option.toUpperCase()')
         // …and is never confused with the prop reader.
         expect(body).not.toContain('option().toUpperCase()')
+    })
+
+    /* A non-optional method call on a doc read routes through `readCall`, which carries
+       the authored path + member so a nullish read throws `cannot call .trim() — scope
+       value "draft" is undefined` instead of the engine's opaque `undefined is not an
+       object`. Optional-chained calls keep their skip-if-absent semantics, so they stay
+       bare — never wrapped. */
+    test('a method call on a doc read lowers to the guarded `readCall`', () => {
+        const body = compileComponent(
+            `<script>\nlet draft = scope().state("")\nfunction go() {\n  draft.trim()\n  draft.items.map(x => x)\n  draft?.toUpperCase()\n}\n</script>\n<p>{draft}</p>`,
+        )
+        // Non-optional calls carry the path and member into the guard…
+        expect(body).toContain('readCall(model.read("draft"), "draft", "trim", [])')
+        expect(body).toContain(
+            'readCall(model.read("draft/items"), "draft/items", "map", [x => x])',
+        )
+        // …while an optional-chained call keeps short-circuiting and is never guarded.
+        expect(body).toContain('model.read("draft")?.toUpperCase()')
+        expect(body).not.toContain('readCall(model.read("draft"), "draft", "toUpperCase"')
     })
 
     test('the removed `prop()` reader throws a migration error pointing at props()', () => {

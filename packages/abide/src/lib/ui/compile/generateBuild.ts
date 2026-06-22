@@ -2,11 +2,13 @@ import { HOLE_ATTRIBUTE } from '../runtime/HOLE_ATTRIBUTE.ts'
 import { OUTLET_TAG } from '../runtime/OUTLET_TAG.ts'
 import { asOutlet } from './asOutlet.ts'
 import { bindListenEvent } from './bindListenEvent.ts'
+import { composeProps } from './composeProps.ts'
 import { groupBindParts } from './groupBindParts.ts'
 import { isControlFlow } from './isControlFlow.ts'
 import { lowerContext } from './lowerContext.ts'
 import { scopeAttr } from './scopeAttr.ts'
 import { skeletonContext } from './skeletonContext.ts'
+import { spreadExcludedNames } from './spreadExcludedNames.ts'
 import { staticAttr } from './staticAttr.ts'
 import { staticTextPart } from './staticTextPart.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
@@ -21,6 +23,25 @@ surface (`count` → `model.count`) and then lowered to the doc patch/read API
 `hostVar` and expects the dom bindings, `doc`, `effect`, and the component's
 `model` in scope — the body the component compiler wraps and hoists cells into.
 */
+
+/* A JS-identifier-safe frame name from an authored construct label (an attribute name
+   like `aria-label`, a bound property). Non-identifier chars → `_`; a leading digit gets
+   an `_` prefix; empty falls back to `thunk`. Callers prefix the label (`attr_`/`bind_`),
+   so the result is never a bare reserved word. */
+function thunkName(label: string): string {
+    const safe = label.replace(/[^A-Za-z0-9_$]/g, '_').replace(/^(?=\d)/, '_')
+    return safe === '' ? 'thunk' : safe
+}
+
+/* Names a reactive thunk so a stack frame reads `name@File.abide:line` instead of
+   `(anonymous)` — disambiguating which binding a frame is when several share a line. Emits
+   a named function expression (the only form whose name a debugger displays); the named
+   bodies never reference `this`/`arguments`, so the arrow→function swap is behaviour-safe,
+   and minify strips the name, so it costs nothing in production. */
+function namedThunk(name: string, body: string): string {
+    return `function ${thunkName(name)}() { ${body} }`
+}
+
 export function generateBuild(
     nodes: TemplateNode[],
     hostVar: string,
@@ -76,7 +97,7 @@ export function generateBuild(
         varName: string,
     ): string {
         if (attr.kind === 'expression') {
-            return `attr(${varName}, ${JSON.stringify(attr.name)}, () => (${lowerExpression(attr.code)}));\n`
+            return `attr(${varName}, ${JSON.stringify(attr.name)}, ${namedThunk(`attr_${attr.name}`, `return (${lowerExpression(attr.code)})`)});\n`
         }
         if (attr.kind === 'event') {
             return `on(${varName}, ${JSON.stringify(attr.event)}, (${lowerExpression(attr.code)}));\n`
@@ -95,12 +116,12 @@ export function generateBuild(
             const value = lowerExpression(valueCode)
             if (isRadio) {
                 return (
-                    `effect(() => { ${varName}.checked = (${lowerExpression(attr.code)}) === (${value}); });\n` +
+                    `effect(${namedThunk('bind_group', `${varName}.checked = (${lowerExpression(attr.code)}) === (${value});`)});\n` +
                     `on(${varName}, "change", () => { if (${varName}.checked) { ${lowerStatement(`${attr.code} = ${valueCode}`)} } });\n`
                 )
             }
             return (
-                `effect(() => { ${varName}.checked = (${lowerExpression(attr.code)}).includes(${value}); });\n` +
+                `effect(${namedThunk('bind_group', `${varName}.checked = (${lowerExpression(attr.code)}).includes(${value});`)});\n` +
                 `on(${varName}, "change", () => { const $groupValue = ${value}; if (${varName}.checked) { if (!(${lowerExpression(attr.code)}).includes($groupValue)) { ${lowerStatement(`${attr.code}.push($groupValue)`)} } } else { const $groupIndex = (${lowerExpression(attr.code)}).indexOf($groupValue); if ($groupIndex !== -1) { ${lowerStatement(`delete ${attr.code}[$groupIndex]`)} } } });\n`
             )
         }
@@ -111,7 +132,7 @@ export function generateBuild(
            `.get()` and writes via `.set(v)` — see `bindRead`/`bindWrite`. */
         const event = bindListenEvent(attr.property, node.tag)
         return (
-            `effect(() => { ${varName}.${attr.property} = ${bindRead(attr.code)}; });\n` +
+            `effect(${namedThunk(`bind_${attr.property}`, `${varName}.${attr.property} = ${bindRead(attr.code)};`)});\n` +
             `on(${varName}, ${JSON.stringify(event)}, () => { ${bindWrite(attr.code, `${varName}.${attr.property}`)} });\n`
         )
     }
@@ -146,7 +167,7 @@ export function generateBuild(
                         return staticTextPart(part.value)
                     }
                     binds.push(
-                        `appendTextAt(${skVar}.an[${holeIndex(anIndex, part)}], () => (${lowerExpression(part.code)}));\n`,
+                        `appendTextAt(${skVar}.an[${holeIndex(anIndex, part)}], ${namedThunk('text', `return (${lowerExpression(part.code)})`)});\n`,
                     )
                     return '<!--a-->'
                 })
@@ -219,7 +240,14 @@ export function generateBuild(
             binds.push(`const ${elVar} = ${skVar}.el[${holeIndex(elIndex, node)}];\n`)
             openTag += ` ${HOLE_ATTRIBUTE}`
             for (const attr of node.attrs) {
-                if (attr.kind !== 'static') {
+                if (attr.kind === 'spread') {
+                    /* `{...expr}` onto the element: each key binds as a reactive attribute
+                       (or an `on<event>` function as a listener) via `spreadAttrs`, skipping
+                       any key explicitly named on the element (the explicit attr wins). */
+                    binds.push(
+                        `spreadAttrs(${elVar}, ${namedThunk('spread', `return (${lowerExpression(attr.code)})`)}, ${JSON.stringify(spreadExcludedNames(node.attrs))});\n`,
+                    )
+                } else if (attr.kind !== 'static') {
                     binds.push(dynamicAttr(node, attr, elVar))
                 }
             }
@@ -287,7 +315,7 @@ export function generateBuild(
                     const splitAlways = index < consumers.length - 1 ? ', true' : ''
                     return part.kind === 'static'
                         ? `appendStatic(${parentVar}, ${JSON.stringify(part.value)}${splitAlways});\n`
-                        : `appendText(${parentVar}, () => (${lowerExpression(part.code)})${splitAlways});\n`
+                        : `appendText(${parentVar}, ${namedThunk('text', `return (${lowerExpression(part.code)})`)}${splitAlways});\n`
                 })
                 .join('')
         }
@@ -415,17 +443,17 @@ export function generateBuild(
         return `if ($props && $props.$children) { ${invoke}; } else {\n${fallback}}\n`
     }
 
-    /* The prop + slot thunks a child mount receives — its props as value thunks and
-       its slot content as a host-taking builder (`$children`). */
-    function componentParts(node: Extract<TemplateNode, { kind: 'component' }>): string[] {
-        const parts = node.props.map(
-            (prop) => `${JSON.stringify(prop.name)}: () => (${lowerExpression(prop.code)})`,
-        )
+    /* The child's slot content as a host-taking builder (`$children`), or undefined when
+       the component has no slotted children. */
+    function slotPart(node: Extract<TemplateNode, { kind: 'component' }>): string | undefined {
         const slotCode = generateChildren(node.children, '$slot')
-        if (slotCode.trim() !== '') {
-            parts.push(`"$children": ($slot) => {\n${slotCode}}`)
-        }
-        return parts
+        return slotCode.trim() === '' ? undefined : `"$children": ($slot) => {\n${slotCode}}`
+    }
+
+    /* The props bag a child mount receives — composed by the shared `composeProps` so the
+       build and SSR back-ends emit the same last-wins layering. */
+    function propsArg(node: Extract<TemplateNode, { kind: 'component' }>): string {
+        return composeProps(node.props, lowerExpression, slotPart(node))
     }
 
     /* Mounts a child component as a marker-bounded range on `parentVar`, positioned at
@@ -439,7 +467,7 @@ export function generateBuild(
         parentVar: string,
         before: string,
     ): string {
-        return `mountChild(${parentVar}, ${node.name}, { ${componentParts(node).join(', ')} }, ${before}, ${JSON.stringify(node.name)});\n`
+        return `mountChild(${parentVar}, ${node.name}, ${propsArg(node)}, ${before}, ${JSON.stringify(node.name)});\n`
     }
 
     /* An await block: pending → resolved(value) / error branches. Each branch is a

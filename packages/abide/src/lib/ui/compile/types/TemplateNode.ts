@@ -61,7 +61,9 @@ export type TemplateNode =
     | {
           kind: 'component'
           name: string
-          props: { name: string; code: string; loc?: number }[]
+          /* Each authored attribute as a prop. A `spread` entry (`{...code}`) carries no
+             `name`; its keys merge in at runtime (`mergeProps`/`spreadProps`). */
+          props: { name: string; code: string; loc?: number; spread?: boolean }[]
           children: TemplateNode[]
       }
     | { kind: 'switch'; subject: string; children: TemplateNode[]; loc?: number }

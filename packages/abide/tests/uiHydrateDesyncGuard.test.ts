@@ -42,8 +42,10 @@ function component(source: string, extra: Record<string, unknown> = {}) {
     const values = names.map((n) => runtime[n as keyof typeof runtime])
     const fn = (host: Element, props?: unknown) =>
         new Function('host', '$props', ...names, clientBody)(host, props, ...values)
-    fn.render = (props?: unknown): SsrRender =>
-        new Function('$props', ...names, ssrBody)(props, ...values) as SsrRender
+    fn.render = (props?: unknown, ctx?: unknown): SsrRender | Promise<SsrRender> =>
+        new Function('$props', '$ctx', ...names, ssrBody)(props, ctx, ...values) as
+            | SsrRender
+            | Promise<SsrRender>
     return Object.assign(fn, { build: fn })
 }
 
@@ -54,28 +56,28 @@ const serialize = (host: unknown) =>
     (globalThis as unknown as { serializeMiniDom: (h: unknown) => string }).serializeMiniDom(host)
 
 describe('bare component as control-flow branch root hydrates (no flip)', () => {
-    test('skeleton context: <if> inside an element', () => {
+    test('skeleton context: <if> inside an element', async () => {
         const parent = component(
             `
             <script>let busy = scope().state(false)</script>
             <div><template if={busy}><Loading/><template else><HardDrive/></template></template></div>`,
             { Loading, HardDrive },
         )
-        const server = parent.render() as SsrRender
+        const server = (await parent.render()) as SsrRender
         const host = document.createElement('div')
         host.innerHTML = server.html
         hydrate(host, (t: Element) => parent(t))
         expect(serialize(host)).toBe(server.html)
     })
 
-    test('non-skeleton context: <if> at component top level', () => {
+    test('non-skeleton context: <if> at component top level', async () => {
         const parent = component(
             `
             <script>let busy = scope().state(false)</script>
             <template if={busy}><Loading/><template else><HardDrive/></template></template>`,
             { Loading, HardDrive },
         )
-        const server = parent.render() as SsrRender
+        const server = (await parent.render()) as SsrRender
         const host = document.createElement('div')
         host.innerHTML = server.html
         hydrate(host, (t: Element) => parent(t))

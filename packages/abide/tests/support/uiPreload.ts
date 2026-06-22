@@ -2,10 +2,14 @@ import { abideUiPlugin } from '../../src/lib/ui/compile/abideUiPlugin.ts'
 import { anchorCursor } from '../../src/lib/ui/dom/anchorCursor.ts'
 import { appendTextAt } from '../../src/lib/ui/dom/appendTextAt.ts'
 import { cloneStatic } from '../../src/lib/ui/dom/cloneStatic.ts'
+import { mergeProps } from '../../src/lib/ui/dom/mergeProps.ts'
 import { mountChild } from '../../src/lib/ui/dom/mountChild.ts'
 import { mountSlot } from '../../src/lib/ui/dom/mountSlot.ts'
 import { outlet } from '../../src/lib/ui/dom/outlet.ts'
+import { restProps } from '../../src/lib/ui/dom/restProps.ts'
 import { skeleton } from '../../src/lib/ui/dom/skeleton.ts'
+import { spreadAttrs } from '../../src/lib/ui/dom/spreadAttrs.ts'
+import { spreadProps } from '../../src/lib/ui/dom/spreadProps.ts'
 import { enterScope } from '../../src/lib/ui/enterScope.ts'
 import { exitScope } from '../../src/lib/ui/exitScope.ts'
 import { enterRenderPass } from '../../src/lib/ui/runtime/enterRenderPass.ts'
@@ -35,6 +39,14 @@ globals.exitRenderPass = exitRenderPass
    it. Off the hot path (hotReloadEnabled stays false here) it just runs the
    factory, exactly as the previous direct call did. */
 globals.mountChild = mountChild
+/* A `{...expr}` spread compiles to `mergeProps([spreadProps(expr), …])`; the real
+   bundle imports both, the harnesses resolve them as bare globals. */
+globals.mergeProps = mergeProps
+globals.spreadProps = spreadProps
+/* `const { foo, ...rest } = props()` lowers to `restProps($props, [...])`, and a native
+   `<el {...rest}>` to `spreadAttrs(el, () => rest)`; the bundle imports both. */
+globals.restProps = restProps
+globals.spreadAttrs = spreadAttrs
 /* The build emits `cloneStatic` for fully-static element runs; the real bundle
    imports it, the `new Function` harnesses resolve it as a bare global. */
 globals.cloneStatic = cloneStatic
