@@ -1,5 +1,11 @@
 # @abide/anthropic
 
+## 0.2.4
+
+### Patch Changes
+
+- [`ae15b27`](https://github.com/briancray/abide/commit/ae15b2733c3c569b9bde9e4d79f9b768836b3a46) - abort the in-flight request when the consumer stops iterating ([`b77d946`](https://github.com/briancray/abide/commit/b77d946b5838f1ab02aec77067086ac4907e95b6))
+
 ## 0.2.3
 
 ### Patch Changes

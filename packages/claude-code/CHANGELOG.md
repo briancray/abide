@@ -1,5 +1,11 @@
 # @abide/claude-code
 
+## 0.5.5
+
+### Patch Changes
+
+- [`ae15b27`](https://github.com/briancray/abide/commit/ae15b2733c3c569b9bde9e4d79f9b768836b3a46) - guard malformed frames and flush the trailing stream line ([`9906c01`](https://github.com/briancray/abide/commit/9906c014fc48fa8719cc591f2a29989fedaeb79d))
+
 ## 0.5.4
 
 ### Patch Changes
@@ -36,11 +42,11 @@
 
 - [`9cbca7d`](https://github.com/briancray/abide/commit/9cbca7d28c258d4574ac450811628f107e502711) - Bundle apps auto-start the local assistant. When a bundled abide app connects (embedded or remote) and the app ships `@abide/claude-code` (its UI uses `browser/assistant`) with `claude` on PATH, the bundle launcher runs the loopback bridge for you and hands the page its port+token via the URL fragment — no copy-paste command. The bridge is loopback-only and dies with the connection. abide takes **no dependency** on `@abide/claude-code`: it's a guarded optional import that no-ops (and compiles fine) when the app doesn't ship it.
 
-  `assistant()` gains a `status` — `'ready' | 'starting' | 'manual' | 'unavailable'` — so the same UI works in a browser (`manual` → show `command`) and a bundle (`starting`/`ready` auto-managed, or `unavailable` when `claude` isn't installed → show an install hint). `command` is now `string | undefined` (undefined whenever a host manages the bridge).
+    `assistant()` gains a `status` — `'ready' | 'starting' | 'manual' | 'unavailable'` — so the same UI works in a browser (`manual` → show `command`) and a bundle (`starting`/`ready` auto-managed, or `unavailable` when `claude` isn't installed → show an install hint). `command` is now `string | undefined` (undefined whenever a host manages the bridge).
 
 - [`aca78cc`](https://github.com/briancray/abide/commit/aca78cc726e71a85e37dc654693243893d4627e4) - `serve` and `launch` now drive your installed `claude` binary instead of the bundled SDK, so `bunx @abide/claude-code serve` (and `launch`) need only Bun and `claude` on PATH — the serve bridge has **zero runtime dependencies**. `@anthropic-ai/claude-agent-sdk` is no longer a hard dependency: it's an optional peer, required only by the SDK-backed `engine()` (embedded server-side `agent()` where there's no local `claude`); install it explicitly for that path.
 
-  A new internal `cliEngine` drives `claude -p --output-format stream-json` over the same MCP contract and isolation as the SDK engine, sharing the message→frame mapping. Note: `launch`'s `permissions` option is now `permissionMode`.
+    A new internal `cliEngine` drives `claude -p --output-format stream-json` over the same MCP contract and isolation as the SDK engine, sharing the message→frame mapping. Note: `launch`'s `permissions` option is now `permissionMode`.
 
 ### Patch Changes
 
@@ -52,16 +58,16 @@
 
 - [`c93735a`](https://github.com/briancray/abide/commit/c93735ac8985a1a86036b1c9707994f6fbe96a14) - Add local-assistant surfaces alongside the `agent()` engine, all over the app's MCP surface:
 
-  - `bunx @abide/claude-code` launches the interactive `claude` TUI wired to your local app's MCP (`--url` retargets a deployed app); `bunx @abide/claude-code serve` runs a loopback bridge so a remote site's browser can drive the user's local Claude.
-  - `@abide/claude-code/browser/assistant` — reactive `assistant(config)` handle over a loopback WebSocket: `available` is the connection being open (no polling), `ask(messages)` returns a `Subscribable` of accumulating reply snapshots for `subscribe(assistant.ask(messages))` (dedupes by conversation, so the run doesn't re-fire on re-render), and `command` is the copy-paste first-run hint. Capabilities/systemPrompt are page-side _requests_ only; tools/permissions stay user-controlled in `serve` (default `tools: []`). The browser↔bridge channel is WebSocket; Claude→app MCP stays HTTP.
-  - `@abide/claude-code/serve` and `@abide/claude-code/launch` exported for programmatic use.
-  - The app's MCP server is now registered under its own `serverInfo.name` as `mcp__<appname>__*` (discovered via a pre-flight `initialize`, scope kept and sanitized) instead of the hardcoded `mcp__app__*`, so multi-site sessions no longer collide.
-  - The engine now streams text token-by-token (`includePartialMessages`) instead of one frame per completed turn, matching the `@abide/anthropic` engine's live-delta cadence.
+    - `bunx @abide/claude-code` launches the interactive `claude` TUI wired to your local app's MCP (`--url` retargets a deployed app); `bunx @abide/claude-code serve` runs a loopback bridge so a remote site's browser can drive the user's local Claude.
+    - `@abide/claude-code/browser/assistant` — reactive `assistant(config)` handle over a loopback WebSocket: `available` is the connection being open (no polling), `ask(messages)` returns a `Subscribable` of accumulating reply snapshots for `subscribe(assistant.ask(messages))` (dedupes by conversation, so the run doesn't re-fire on re-render), and `command` is the copy-paste first-run hint. Capabilities/systemPrompt are page-side _requests_ only; tools/permissions stay user-controlled in `serve` (default `tools: []`). The browser↔bridge channel is WebSocket; Claude→app MCP stays HTTP.
+    - `@abide/claude-code/serve` and `@abide/claude-code/launch` exported for programmatic use.
+    - The app's MCP server is now registered under its own `serverInfo.name` as `mcp__<appname>__*` (discovered via a pre-flight `initialize`, scope kept and sanitized) instead of the hardcoded `mcp__app__*`, so multi-site sessions no longer collide.
+    - The engine now streams text token-by-token (`includePartialMessages`) instead of one frame per completed turn, matching the `@abide/anthropic` engine's live-delta cadence.
 
 ### Patch Changes
 
 - Updated dependencies [[`946b6c4`](https://github.com/briancray/abide/commit/946b6c44b09ca30f28f4ab38d43ad5f9db452c2a), [`946b6c4`](https://github.com/briancray/abide/commit/946b6c44b09ca30f28f4ab38d43ad5f9db452c2a)]:
-  - abide@0.19.4
+    - abide@0.19.4
 
 ## 0.3.0
 
@@ -76,7 +82,7 @@
 - [`e772716`](https://github.com/briancray/abide/commit/e772716a190f826f0041b8358271604ad5a230a5) - surface abnormal engine stops and bound the tool loops ([`d2c3215`](https://github.com/briancray/abide/commit/d2c3215bb50ba41b2407eb8878e426a164927d9d))
 
 - Updated dependencies [[`e772716`](https://github.com/briancray/abide/commit/e772716a190f826f0041b8358271604ad5a230a5), [`e772716`](https://github.com/briancray/abide/commit/e772716a190f826f0041b8358271604ad5a230a5), [`e772716`](https://github.com/briancray/abide/commit/e772716a190f826f0041b8358271604ad5a230a5)]:
-  - abide@0.19.2
+    - abide@0.19.2
 
 ## 0.2.0
 
