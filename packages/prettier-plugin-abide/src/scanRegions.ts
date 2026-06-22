@@ -72,8 +72,28 @@ export function scanRegions(source: string): Segment[] {
     /* Reads a `<script>`/`<style>` element at `cursor` into its own segment: open
        tag and close tag kept verbatim, body handed to the printer for the named
        sub-language. An unterminated element runs to end (no close tag). */
+    /* Index of the `>` that ends the open tag at `from`, skipping any `>` inside a quoted
+       attribute value so `<script data-x="a > b">` isn't cut mid-tag. Runs to end if
+       unterminated. Mirrors the quote awareness the rest of the scan already applies. */
+    function openTagEnd(from: number): number {
+        let position = from
+        while (position < length) {
+            const char = source.charAt(position)
+            if (char === '"' || char === "'") {
+                position += 1
+                while (position < length && source.charAt(position) !== char) {
+                    position += 1
+                }
+            } else if (char === '>') {
+                return position
+            }
+            position += 1
+        }
+        return length
+    }
+
     function readRawBodyElement(kind: 'script' | 'style', closeTag: string): void {
-        const openEnd = source.indexOf('>', cursor)
+        const openEnd = openTagEnd(cursor)
         const bodyStart = openEnd + 1
         const closeIndex = source.indexOf(closeTag, bodyStart)
         const end = closeIndex === -1 ? length : closeIndex + closeTag.length
