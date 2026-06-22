@@ -1,5 +1,6 @@
 import { browserClientFlags } from '../shared/browserClientFlags.ts'
 import { buildRpcRequest } from '../shared/buildRpcRequest.ts'
+import { cacheManagedSlot } from '../shared/cacheManagedSlot.ts'
 import { createRemoteFunction } from '../shared/createRemoteFunction.ts'
 import { HttpError } from '../shared/HttpError.ts'
 import { OFFLINE_HEADER } from '../shared/OFFLINE_HEADER.ts'
@@ -7,6 +8,7 @@ import { rpcTimeoutSlot } from '../shared/rpcTimeoutSlot.ts'
 import { trace } from '../shared/trace.ts'
 import type { HttpVerb } from '../shared/types/HttpVerb.ts'
 import type { RemoteFunction } from '../shared/types/RemoteFunction.ts'
+import type { RpcOptions } from '../shared/types/RpcOptions.ts'
 import { withBase } from '../shared/withBase.ts'
 import { currentAbortSignal } from './runtime/currentAbortSignal.ts'
 import { REQUEST_SUPERSEDED } from './runtime/REQUEST_SUPERSEDED.ts'
@@ -38,41 +40,51 @@ export function remoteProxy<Args, Return>(
         proxy (/v2/rpc/…); the cache key keeps the bare `url` (keyForRemoteCall
         reads fn.url), so SSR snapshots round-trip base-independently.
         */
-        buildRequest: (args) =>
+        buildRequest: (args, opts) =>
             buildRpcRequest({
                 method,
                 url: withBase(url),
                 args,
                 baseUrl: window.location.href,
-                headers: rpcHeaders(),
+                headers: rpcHeaders(opts?.headers),
             }),
         /*
         Forcing `getRequest()` once builds the Request and seeds the
         cache meta thunk in createRemoteFunction with the same instance,
         so cache() readers don't reconstruct it.
         */
-        invoke: (_args, getRequest) => fetchWithTimeout(getRequest()),
+        invoke: (_args, getRequest, opts) => fetchWithTimeout(getRequest(), opts),
     })
 }
 
 /*
-Fetches under two optional aborts: the reactive scope that fired the call (so a
-superseded/torn-down read cancels its in-flight request — currentAbortSignal) and
-the env-configured client timeout (ABIDE_CLIENT_TIMEOUT, ms). Neither present →
-the unbounded fetch, exactly as before. A timeout surfaces as a 504 HttpError so a
-consumer reads an honest status instead of a raw DOMException → 500. Our scope abort
-(reason REQUEST_SUPERSEDED) is swallowed into a never-settling promise: the reactive
-owner is gone, so the result must neither resolve into a dead tree nor surface as a
-rejection. Other rejections (genuine network failure) propagate untouched.
+Fetches under three optional aborts: the reactive scope that fired the call (so a
+superseded/torn-down read cancels its in-flight request — currentAbortSignal), the
+caller-supplied opts.signal, and the env-configured client timeout
+(ABIDE_CLIENT_TIMEOUT, ms). None present and no transport opts → the unbounded
+fetch, exactly as before. A timeout surfaces as a 504 HttpError so a consumer reads
+an honest status instead of a raw DOMException → 500. Our scope abort (reason
+REQUEST_SUPERSEDED) is swallowed into a never-settling promise: the reactive owner is
+gone, so the result must neither resolve into a dead tree nor surface as a rejection.
+Other rejections (genuine network failure) propagate untouched. The caller's
+keepalive/priority/cache opts pass through to fetch unchanged.
 */
-function fetchWithTimeout(request: Request): Promise<Response> {
+function fetchWithTimeout(request: Request, opts?: RpcOptions): Promise<Response> {
     const timeout = rpcTimeoutSlot.ms
     const timeoutSignal = timeout === undefined ? undefined : AbortSignal.timeout(timeout)
-    const signal = combineSignals(currentAbortSignal(), timeoutSignal)
-    if (signal === undefined) {
+    /*
+    A cache-managed flight is shared across readers (cache() owns its lifetime), so a
+    single caller's signal must not abort it for the others — the same opt-out
+    currentAbortSignal makes for the scope signal. keepalive/priority/cache are
+    harmless to keep there.
+    */
+    const callerSignal = cacheManagedSlot.active ? undefined : (opts?.signal ?? undefined)
+    const signal = combineSignals(currentAbortSignal(), callerSignal, timeoutSignal)
+    const init = fetchInit(signal, opts)
+    if (init === undefined) {
         return fetch(request)
     }
-    return fetch(request, { signal }).catch((error: unknown) => {
+    return fetch(request, init).catch((error: unknown) => {
         if (error === REQUEST_SUPERSEDED) {
             return new Promise<Response>(() => {})
         }
@@ -85,39 +97,59 @@ function fetchWithTimeout(request: Request): Promise<Response> {
     })
 }
 
-/* One AbortSignal from the scope-abort and timeout sources: whichever is present,
-   AbortSignal.any when both, or undefined when neither (the unbounded fetch). */
-function combineSignals(
-    scopeSignal: AbortSignal | undefined,
-    timeoutSignal: AbortSignal | undefined,
-): AbortSignal | undefined {
-    if (scopeSignal === undefined) {
-        return timeoutSignal
+/*
+The fetch init from the merged abort signal plus the caller's transport opts
+(keepalive/priority/cache). headers are deliberately absent — they live on the
+Request built in buildRequest, since fetch(request, { headers }) replaces rather than
+merges. undefined when nothing applies, preserving the allocation-free unbounded
+fetch for the common reactive-free call.
+*/
+function fetchInit(signal: AbortSignal | undefined, opts?: RpcOptions): RequestInit | undefined {
+    const init: RequestInit = {}
+    if (signal !== undefined) {
+        init.signal = signal
     }
-    if (timeoutSignal === undefined) {
-        return scopeSignal
+    if (opts?.keepalive !== undefined) {
+        init.keepalive = opts.keepalive
     }
-    return AbortSignal.any([scopeSignal, timeoutSignal])
+    if (opts?.priority !== undefined) {
+        init.priority = opts.priority
+    }
+    if (opts?.cache !== undefined) {
+        init.cache = opts.cache
+    }
+    return Object.keys(init).length === 0 ? undefined : init
+}
+
+/* One AbortSignal merging the scope abort, the caller signal, and the timeout:
+   AbortSignal.any over those present, the lone one when one, undefined when none
+   (the unbounded fetch). */
+function combineSignals(...signals: Array<AbortSignal | undefined>): AbortSignal | undefined {
+    const present = signals.filter((signal): signal is AbortSignal => signal !== undefined)
+    if (present.length <= 1) {
+        return present[0]
+    }
+    return AbortSignal.any(present)
 }
 
 /*
-abide's per-RPC headers: the page traceparent (continues the server trace) and,
-only while offline, the offline marker so the handler's online() reflects the
-caller's connectivity. Returns undefined when neither applies so the
-allocation-free fetch path stays the common case.
+abide's per-RPC headers, merged onto the caller's opts.headers: the page traceparent
+(continues the server trace) and, only while offline, the offline marker so the
+handler's online() reflects the caller's connectivity. Caller headers go in first and
+the framework's are set last, so a caller adds transport metadata (idempotency-key,
+authorization) but can never overwrite traceparent or the offline marker; content-type
+stays owned by buildRpcRequest. Returns undefined when neither caller nor framework set
+a header, so the allocation-free fetch path stays the common case.
 */
-function rpcHeaders(): Headers | undefined {
-    const headers = new Headers()
-    let any = false
+function rpcHeaders(callerHeaders?: HeadersInit): Headers | undefined {
+    const headers = new Headers(callerHeaders)
     const traceparent = trace()
     if (traceparent) {
         headers.set('traceparent', traceparent)
-        any = true
     }
     /* Presence = offline; absence = online/unknown. navigator.onLine's offline signal is the reliable direction. */
     if (typeof navigator !== 'undefined' && navigator.onLine === false) {
         headers.set(OFFLINE_HEADER, '1')
-        any = true
     }
-    return any ? headers : undefined
+    return headers.keys().next().done ? undefined : headers
 }

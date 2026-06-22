@@ -143,3 +143,91 @@ describe('remoteProxy scope abort', () => {
         stop()
     })
 })
+
+/* RpcOptions: the curated per-call transport bag (signal/keepalive/priority/cache/
+   headers) reaches the Request and the fetch init, framework headers win on conflict,
+   the caller signal merges with the scope signal, and cache management gates it. */
+describe('remoteProxy RpcOptions', () => {
+    const globals = globalThis as Record<string, unknown>
+    let restore: (() => void) | undefined
+    let captured: { request?: Request; init?: RequestInit }
+
+    /* A stub fetch that records the Request + init and resolves with a decodable
+       JSON body, so the plain call's decode path doesn't reject. */
+    function stubFetch(): void {
+        const originalFetch = globals.fetch
+        const originalWindow = globals.window
+        globals.window = { location: { href: 'http://localhost/' } }
+        captured = {}
+        globals.fetch = (input: unknown, init?: RequestInit): Promise<Response> => {
+            captured.request = input as Request
+            captured.init = init
+            return Promise.resolve(
+                new Response('null', { headers: { 'content-type': 'application/json' } }),
+            )
+        }
+        restore = () => {
+            globals.fetch = originalFetch
+            globals.window = originalWindow
+        }
+    }
+
+    afterEach(() => {
+        restore?.()
+        restore = undefined
+    })
+
+    test('merges caller headers onto the request; framework owns content-type', async () => {
+        stubFetch()
+        const postThing = remoteProxy<{ x: number }, unknown>('POST', '/rpc/thing')
+        await postThing(
+            { x: 1 },
+            { headers: { 'x-idempotency-key': 'abc', 'content-type': 'text/plain' } },
+        )
+        expect(captured.request?.headers.get('x-idempotency-key')).toBe('abc')
+        /* buildRpcRequest sets content-type last, so the framework's JSON wins. */
+        expect(captured.request?.headers.get('content-type')).toBe('application/json')
+    })
+
+    test('passes keepalive/priority/cache through to fetch', async () => {
+        stubFetch()
+        const postThing = remoteProxy<{ x: number }, unknown>('POST', '/rpc/thing')
+        await postThing({ x: 1 }, { keepalive: true, priority: 'low', cache: 'no-store' })
+        expect(captured.init?.keepalive).toBe(true)
+        expect(captured.init?.priority).toBe('low')
+        expect(captured.init?.cache).toBe('no-store')
+    })
+
+    test('a caller signal aborts the fetch outside any reactive scope', () => {
+        stubFetch()
+        const controller = new AbortController()
+        const postThing = remoteProxy<{ x: number }, unknown>('POST', '/rpc/thing')
+        void postThing({ x: 1 }, { signal: controller.signal })
+        expect(captured.init?.signal?.aborted).toBe(false)
+        controller.abort()
+        expect(captured.init?.signal?.aborted).toBe(true)
+    })
+
+    test('merges the caller signal with the scope signal (either aborts the fetch)', () => {
+        stubFetch()
+        const controller = new AbortController()
+        const postThing = remoteProxy<{ x: number }, unknown>('POST', '/rpc/thing')
+        const stop = effect(() => {
+            void postThing({ x: 1 }, { signal: controller.signal })
+        })
+        const merged = captured.init?.signal
+        expect(merged?.aborted).toBe(false)
+        controller.abort() // the caller source alone aborts the merged signal
+        expect(merged?.aborted).toBe(true)
+        stop()
+    })
+
+    test('ignores the caller signal under cache management so a coalesced flight survives', async () => {
+        stubFetch()
+        const controller = new AbortController()
+        const postThing = remoteProxy<{ x: number }, unknown>('POST', '/rpc/thing')
+        await withCacheManaged(() => postThing({ x: 1 }, { signal: controller.signal }))
+        /* No scope + caller signal gated → no signal reaches fetch (unbounded). */
+        expect(captured.init?.signal).toBeUndefined()
+    })
+})

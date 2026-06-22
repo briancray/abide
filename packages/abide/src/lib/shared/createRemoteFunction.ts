@@ -8,6 +8,7 @@ import type { ClientFlags } from './types/ClientFlags.ts'
 import type { HttpVerb } from './types/HttpVerb.ts'
 import type { RawRemoteFunction } from './types/RawRemoteFunction.ts'
 import type { RemoteFunction } from './types/RemoteFunction.ts'
+import type { RpcOptions } from './types/RpcOptions.ts'
 import type { Subscribable } from './types/Subscribable.ts'
 
 /*
@@ -39,8 +40,12 @@ export function createRemoteFunction<Args, Return>(opts: {
     clients: ClientFlags
     /* Server-side only: exempts a mutating verb from the router's same-origin CSRF gate. */
     crossOrigin?: boolean
-    buildRequest: (args: Args | undefined) => Request
-    invoke: (args: Args | undefined, getRequest: () => Request) => Promise<Response>
+    buildRequest: (args: Args | undefined, opts?: RpcOptions) => Request
+    invoke: (
+        args: Args | undefined,
+        getRequest: () => Request,
+        opts?: RpcOptions,
+    ) => Promise<Response>
     parseArgsForFetch?: (request: Request) => Promise<Args | undefined>
 }): RemoteFunction<Args, Return> {
     const { method, url, clients, crossOrigin, buildRequest, invoke, parseArgsForFetch } = opts
@@ -52,15 +57,19 @@ export function createRemoteFunction<Args, Return>(opts: {
     short-circuits to the prebuilt one — and caches the result so the
     client invoke + the cache meta reader share a single Request.
     */
-    function dispatch(args: Args | undefined, prebuilt?: Request): Promise<Response> {
+    function dispatch(
+        args: Args | undefined,
+        opts?: RpcOptions,
+        prebuilt?: Request,
+    ): Promise<Response> {
         let cached = prebuilt
         function getRequest(): Request {
             if (cached === undefined) {
-                cached = buildRequest(args)
+                cached = buildRequest(args, opts)
             }
             return cached
         }
-        const promise = invoke(args, getRequest)
+        const promise = invoke(args, getRequest, opts)
         recordRemoteMeta(promise, getRequest)
         return promise
     }
@@ -72,8 +81,8 @@ export function createRemoteFunction<Args, Return>(opts: {
     contained type lie — buildRpcRequest's `instanceof FormData` branch handles
     it at runtime.
     */
-    function rawCall(args: Args | FormData): Promise<Response> {
-        return dispatch(args as Args)
+    function rawCall(args: Args | FormData, opts?: RpcOptions): Promise<Response> {
+        return dispatch(args as Args, opts)
     }
     rawCall.method = method
     rawCall.url = url
@@ -81,8 +90,8 @@ export function createRemoteFunction<Args, Return>(opts: {
     Object.defineProperty(rawCall, REMOTE_FUNCTION, { value: true })
     const raw = rawCall as RawRemoteFunction<Args>
 
-    function callable(args: Args | FormData): Promise<Return> {
-        return raw(args).then(decodeResponse) as Promise<Return>
+    function callable(args: Args | FormData, opts?: RpcOptions): Promise<Return> {
+        return raw(args, opts).then(decodeResponse) as Promise<Return>
     }
     callable.method = method
     callable.url = url
@@ -113,10 +122,10 @@ export function createRemoteFunction<Args, Return>(opts: {
                   }
                   throw error
               }
-              return dispatch(args, request)
+              return dispatch(args, undefined, request)
           }
         : (request: Request): Promise<Response> => {
-              return dispatch(undefined, request)
+              return dispatch(undefined, undefined, request)
           }
     return callable as RemoteFunction<Args, Return>
 }
