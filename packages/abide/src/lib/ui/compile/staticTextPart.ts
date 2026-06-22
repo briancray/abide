@@ -1,4 +1,4 @@
-import { escapeHtml } from './escapeHtml.ts'
+import { escapeHtml } from '../../shared/escapeHtml.ts'
 
 /*
 Serializes one static text part to its markup: whitespace-only parts drop (both

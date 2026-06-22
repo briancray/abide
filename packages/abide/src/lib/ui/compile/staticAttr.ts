@@ -1,4 +1,4 @@
-import { escapeHtml } from './escapeHtml.ts'
+import { escapeHtml } from '../../shared/escapeHtml.ts'
 
 /*
 Serializes one static attribute to its markup fragment, leading space included.
