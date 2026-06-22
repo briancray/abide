@@ -93,6 +93,12 @@ export function eventStreamResponse(
             for (const entry of buffer.since(afterId)) {
                 send(entry)
             }
+            /* An enqueue failure during the replay above already ran teardown (closed=true)
+               while `unsubscribe` was still undefined — subscribing now would register a
+               listener teardown can never remove. Bail before subscribing on that path. */
+            if (closed) {
+                return
+            }
             unsubscribe = buffer.subscribe(send)
             heartbeat = setInterval(() => safeEnqueue(encoder.encode(': ping\n\n')), HEARTBEAT_MS)
         },
