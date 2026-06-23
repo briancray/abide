@@ -6,6 +6,7 @@ import { composeProps } from './composeProps.ts'
 import { groupBindParts } from './groupBindParts.ts'
 import { isControlFlow } from './isControlFlow.ts'
 import { lowerContext } from './lowerContext.ts'
+import { resolveBranches } from './resolveBranches.ts'
 import { scopeAttr } from './scopeAttr.ts'
 import { skeletonContext } from './skeletonContext.ts'
 import { spreadExcludedNames } from './spreadExcludedNames.ts'
@@ -477,27 +478,25 @@ export function generateBuild(
         parentVar: string,
         before: string,
     ): string {
-        const isBranch = (which: 'then' | 'catch' | 'finally') => (child: TemplateNode) =>
-            child.kind === 'branch' && child.branch === which
-        const catchBranch = node.children.find(isBranch('catch'))
-        const finallyChildren = branchChildren(node.children.find(isBranch('finally')))
+        const [thenBranch, catchBranch, finallyBranch] = resolveBranches(
+            node,
+            'then',
+            'catch',
+            'finally',
+        )
+        const finallyChildren = finallyBranch?.children ?? []
         /* Blocking: no pending, the children are the resolved branch bound to `node.as`.
            Streaming: pending is the non-branch children, resolved is the `then` child. */
         const pending = node.blocking
             ? []
             : node.children.filter((child) => child.kind !== 'branch')
-        const thenBranch = node.children.find(isBranch('then'))
         const thenThunk = node.blocking
             ? branchThunk(
                   node.children.filter((child) => child.kind !== 'branch'),
                   node.as ?? '_value',
                   finallyChildren,
               )
-            : branchThunk(
-                  branchChildren(thenBranch),
-                  branchVar(thenBranch) ?? '_value',
-                  finallyChildren,
-              )
+            : branchThunk(thenBranch?.children ?? [], thenBranch?.as ?? '_value', finallyChildren)
         /* Neither catch nor finally → pass `undefined` so awaitBlock re-throws the
            rejection (surfacing it) instead of rendering an empty branch. A finally-only
            block keeps a catch thunk that renders just finally. */
@@ -505,8 +504,8 @@ export function generateBuild(
             catchBranch === undefined && finallyChildren.length === 0
                 ? 'undefined'
                 : branchThunk(
-                      branchChildren(catchBranch),
-                      branchVar(catchBranch) ?? '_error',
+                      catchBranch?.children ?? [],
+                      catchBranch?.as ?? '_error',
                       finallyChildren,
                   )
         const pendingThunk = hasRenderableContent(pending) ? branchThunk(pending) : 'undefined'
@@ -516,16 +515,6 @@ export function generateBuild(
             `${thenThunk}, ` +
             `${catchThunk}, ${before});\n`
         )
-    }
-
-    /* Children of a branch node (then/catch), or [] when the branch is absent. */
-    function branchChildren(branch: TemplateNode | undefined): TemplateNode[] {
-        return branch !== undefined && branch.kind === 'branch' ? branch.children : []
-    }
-
-    /* The value/error variable name a branch binds, if any. */
-    function branchVar(branch: TemplateNode | undefined): string | undefined {
-        return branch !== undefined && branch.kind === 'branch' ? branch.as : undefined
     }
 
     /* A branch's content as a void render thunk `(parent[, value]) => void` that
@@ -566,17 +555,6 @@ export function generateBuild(
         )
     }
 
-    /* The branch child of a control block matching `which` (then/catch/finally). */
-    function findBranch(
-        children: TemplateNode[],
-        which: 'then' | 'catch' | 'finally',
-    ): Extract<TemplateNode, { kind: 'branch' }> | undefined {
-        return children.find(
-            (child): child is Extract<TemplateNode, { kind: 'branch' }> =>
-                child.kind === 'branch' && child.branch === which,
-        )
-    }
-
     /* A sync error boundary: build the guarded subtree (++ finally); a throw while
        building swaps to the catch branch (++ finally). No catch → `undefined`, which
        makes the runtime re-throw to the nearest enclosing boundary. */
@@ -585,18 +563,14 @@ export function generateBuild(
         parentVar: string,
         before: string,
     ): string {
-        const catchBranch = findBranch(node.children, 'catch')
-        const finallyChildren = branchChildren(findBranch(node.children, 'finally'))
+        const [catchBranch, finallyBranch] = resolveBranches(node, 'catch', 'finally')
+        const finallyChildren = finallyBranch?.children ?? []
         const guarded = node.children.filter((child) => child.kind !== 'branch')
         const tryThunk = branchThunk(guarded, undefined, finallyChildren)
         const catchThunk =
             catchBranch === undefined
                 ? 'undefined'
-                : branchThunk(
-                      branchChildren(catchBranch),
-                      branchVar(catchBranch) ?? '_error',
-                      finallyChildren,
-                  )
+                : branchThunk(catchBranch.children, catchBranch.as ?? '_error', finallyChildren)
         return `tryBlock(${parentVar}, nextBlockId(), ${tryThunk}, ${catchThunk}, ${before});\n`
     }
 
@@ -635,11 +609,9 @@ export function generateBuild(
            optional `<template catch>` branch rendered (after the streamed rows) when the
            iterator rejects. Absent → `undefined`, so the rejection surfaces instead. */
         const fn = node.async ? 'eachAsync' : 'each'
-        const catchBranch = node.children.find(
-            (child) => child.kind === 'branch' && child.branch === 'catch',
-        )
+        const [catchBranch] = resolveBranches(node, 'catch')
         const catchArg = node.async
-            ? `, ${catchBranch === undefined ? 'undefined' : branchThunk(branchChildren(catchBranch), branchVar(catchBranch) ?? '_error')}`
+            ? `, ${catchBranch === undefined ? 'undefined' : branchThunk(catchBranch.children, catchBranch.as ?? '_error')}`
             : ''
         return (
             `${fn}(${parentVar}, () => (${lowerExpression(node.items)}), ` +

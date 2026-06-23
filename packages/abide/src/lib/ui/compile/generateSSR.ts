@@ -5,6 +5,7 @@ import { composeProps } from './composeProps.ts'
 import { groupBindParts } from './groupBindParts.ts'
 import { isAnchorPositioned } from './isAnchorPositioned.ts'
 import { lowerContext } from './lowerContext.ts'
+import { resolveBranches } from './resolveBranches.ts'
 import { scopeAttr } from './scopeAttr.ts'
 import { skeletonContext } from './skeletonContext.ts'
 import { spreadExcludedNames } from './spreadExcludedNames.ts'
@@ -20,17 +21,6 @@ import { VOID_TAGS } from './VOID_TAGS.ts'
    that lets a branch hold any content. */
 const RANGE_OPEN = '<!--[-->'
 const RANGE_CLOSE = '<!--]-->'
-
-/* The `then`/`catch`/`finally` branch child of an await/try block, or undefined. */
-function branchNamed(
-    children: TemplateNode[],
-    which: 'then' | 'catch' | 'finally',
-): Extract<TemplateNode, { kind: 'branch' }> | undefined {
-    return children.find(
-        (child): child is Extract<TemplateNode, { kind: 'branch' }> =>
-            child.kind === 'branch' && child.branch === which,
-    )
-}
 
 /*
 Server code generator: turns the parsed template into statements that push HTML
@@ -442,8 +432,8 @@ export function generateSSR(
         node: Extract<TemplateNode, { kind: 'await' }>,
         target: string,
     ): string {
-        const catchBranch = branchNamed(node.children, 'catch')
-        const finallyChildren = branchNamed(node.children, 'finally')?.children ?? []
+        const [catchBranch, finallyBranch] = resolveBranches(node, 'catch', 'finally')
+        const finallyChildren = finallyBranch?.children ?? []
         const resolvedChildren = node.children.filter((child) => child.kind !== 'branch')
         const resolvedAs = node.as ?? '_value'
         const errorAs = catchBranch?.as ?? '_error'
@@ -480,9 +470,13 @@ export function generateSSR(
         node: Extract<TemplateNode, { kind: 'await' }>,
         target: string,
     ): string {
-        const catchBranch = branchNamed(node.children, 'catch')
-        const finallyChildren = branchNamed(node.children, 'finally')?.children ?? []
-        const thenBranch = branchNamed(node.children, 'then')
+        const [thenBranch, catchBranch, finallyBranch] = resolveBranches(
+            node,
+            'then',
+            'catch',
+            'finally',
+        )
+        const finallyChildren = finallyBranch?.children ?? []
         const pending = node.children.filter((child) => child.kind !== 'branch')
         const id = nextVar('$aid')
         let code = `const ${id} = $ctx.next++;\n`
@@ -510,8 +504,8 @@ export function generateSSR(
        an enclosing boundary / the 500 / the stream). Boundary comments let hydration
        discard the server content if the client adoption fails. */
     function generateTry(node: Extract<TemplateNode, { kind: 'try' }>, target: string): string {
-        const catchBranch = branchNamed(node.children, 'catch')
-        const finallyChildren = branchNamed(node.children, 'finally')?.children ?? []
+        const [catchBranch, finallyBranch] = resolveBranches(node, 'catch', 'finally')
+        const finallyChildren = finallyBranch?.children ?? []
         const guarded = node.children.filter((child) => child.kind !== 'branch')
         const errName = catchBranch?.as ?? '_error'
         const id = nextVar('$tid')
