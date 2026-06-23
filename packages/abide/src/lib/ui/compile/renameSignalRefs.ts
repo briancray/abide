@@ -107,11 +107,16 @@ that are not value reads (type space and import/export subtrees are skipped whol
 in the visitor above), so a name-slot identifier is left untouched and everything else
 is a value read that rewrites.
 
-Classifying by the identifier's slot in its parent — checked at visit time against the
-live tree — rather than by a pre-collected node set is what makes a forgotten position
-fail safe: an unrecognised parent kind falls through to `false`, so the identifier is
-left exactly as written, never rewritten into broken syntax. The syntax fuzz corpus
-guards the completeness of this list.
+Rewrite is the DEFAULT — value reads appear under almost any expression parent, so
+they can't be allow-listed; this function instead exhaustively lists the non-read
+slots. Classifying by the identifier's slot in its parent — checked at visit time
+against the live tree — rather than by a pre-collected node set is the precision win:
+it is positional, so `pending` in `import { pending as p }` and `pending` in
+`pending(query)` are told apart by where they sit, not by node identity. A non-read
+slot not listed here would be misread as a value read and rewritten into broken
+syntax, so completeness is NOT self-evident — it is guarded empirically by the syntax
+fuzz corpus (`uiCompileSyntaxFuzz.test.ts`), which transpiles each pass's output and
+fails on any corruption.
 */
 function isNameSlot(id: ts.Identifier): boolean {
     const parent = id.parent
