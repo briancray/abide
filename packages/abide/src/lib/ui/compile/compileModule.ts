@@ -1,6 +1,7 @@
 import ts from 'typescript'
 import { ABIDE_PACKAGE_NAME } from '../../shared/ABIDE_PACKAGE_NAME.ts'
 import { analyzeComponent } from './analyzeComponent.ts'
+import { assertRuntimeHelpersBound } from './assertRuntimeHelpersBound.ts'
 import { assertTranspiles } from './assertTranspiles.ts'
 import { compileComponent } from './compileComponent.ts'
 import { compileSSR } from './compileSSR.ts'
@@ -108,6 +109,11 @@ ${moduleBody}`
        template shape no test exercises) otherwise ships as a broken bundle; this surfaces
        it as a located compile error for every component. */
     assertTranspiles(module, 'component module generation')
+    /* `assertTranspiles` only proves the output PARSES — a call to an un-imported helper is
+       valid syntax, so it slips through. This second guard proves the output is BOUND: every
+       runtime helper it calls is actually imported (an independent check of the dead-import
+       filter above), turning a runtime `ReferenceError` into a located compile error. */
+    assertRuntimeHelpersBound(module, 'component module generation')
     return module
 }
 
@@ -142,26 +148,29 @@ function unescapedBacktickCount(line: string): number {
     return count
 }
 
-/* The identifier names a generated module references — every Identifier token, scanned
-   from the real output so string / comment / HTML-literal contents are excluded. Used to
-   decide which runtime helpers to import; reading the output (vs hand-tracking emit
-   sites) can never drop a needed import. */
+/* The identifier names a generated module references — every Identifier node, walked
+   from the real output's AST so string / comment / HTML-literal contents are excluded.
+   Used to decide which runtime helpers to import; reading the output (vs hand-tracking
+   emit sites) can never drop a needed import. A full parse (not a raw token scan) is what
+   keeps template literals honest: a `${…}` substitution — e.g. `navigate(`/p?ts=${Date.now()}`)`
+   in a handler — leaves the scanner unable to find the substitution's closing `}` without
+   the parser's re-scan, so a token-only pass mis-reads the rest of the module as template
+   text and drops every helper referenced after it (an `import`-less `effect`/`mountChild`
+   → a `ReferenceError` at mount → the router's reload fallback → a refresh loop). */
 function collectIdentifiers(code: string): Set<string> {
-    const scanner = ts.createScanner(
-        ts.ScriptTarget.Latest,
-        /* skipTrivia */ true,
-        ts.LanguageVariant.Standard,
+    const source = ts.createSourceFile(
+        'module.ts',
         code,
+        ts.ScriptTarget.Latest,
+        /* setParentNodes */ false,
     )
     const names = new Set<string>()
-    for (
-        let token = scanner.scan();
-        token !== ts.SyntaxKind.EndOfFileToken;
-        token = scanner.scan()
-    ) {
-        if (token === ts.SyntaxKind.Identifier) {
-            names.add(scanner.getTokenValue())
+    const visit = (node: ts.Node): void => {
+        if (ts.isIdentifier(node)) {
+            names.add(node.text)
         }
+        node.forEachChild(visit)
     }
+    visit(source)
     return names
 }
