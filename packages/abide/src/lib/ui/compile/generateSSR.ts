@@ -1,3 +1,4 @@
+import { assertExhaustive } from '../../shared/assertExhaustive.ts'
 import { OUTLET_CLOSE, OUTLET_OPEN } from '../runtime/OUTLET_MARKER.ts'
 import { OUTLET_TAG } from '../runtime/OUTLET_TAG.ts'
 import { asOutlet } from './asOutlet.ts'
@@ -340,6 +341,12 @@ export function generateSSR(
                 return push(target, `<!--${OUTLET_OPEN}--><!--${OUTLET_CLOSE}-->`)
             }
             return generateSlot(node, target, anchor)
+        }
+        /* Every non-element kind returned above; a kind reaching the element builder
+           that isn't an element is a compiler gap — fail loud rather than emit it as a
+           bogus `<undefined>` tag. (`node` narrows to `never` in this branch.) */
+        if (node.kind !== 'element') {
+            return assertExhaustive(node, 'template node kind')
         }
         let code = push(target, `<${node.tag}`)
         /* Every `<style>` active at this element (own siblings + ancestors) — same set

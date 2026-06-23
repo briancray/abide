@@ -1,3 +1,4 @@
+import { assertExhaustive } from '../../shared/assertExhaustive.ts'
 import { HOLE_ATTRIBUTE } from '../runtime/HOLE_ATTRIBUTE.ts'
 import { OUTLET_TAG } from '../runtime/OUTLET_TAG.ts'
 import { asOutlet } from './asOutlet.ts'
@@ -371,7 +372,13 @@ export function generateBuild(
         if (node.kind === 'snippet') {
             return generateSnippet(node)
         }
-        return generateEach(node, parentVar, before)
+        if (node.kind === 'each') {
+            return generateEach(node, parentVar, before)
+        }
+        /* Every TemplateNode kind is handled above; `node` is `never` here. A new kind
+           reaching this point is a compiler gap — fail loud instead of silently routing
+           it to the wrong branch. */
+        return assertExhaustive(node, 'template node kind')
     }
 
     /* Builds a sibling list, coalescing maximal runs of fully-static element subtrees
