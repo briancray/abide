@@ -12,6 +12,13 @@ resolves the component, not whatever is current when the event fires.
 */
 // @documentation plumbing
 export function on(element: Element, type: string, handler: EventListener): void {
+    /* A caller that omits an optional `on*` prop forwards it as undefined, yet the
+       compiler still emits this on() call — so skip attaching a non-function rather
+       than invoke undefined when the event fires (e.g. input/keydown on a search box,
+       which would throw "handler is not a function" on every keystroke). */
+    if (typeof handler !== 'function') {
+        return
+    }
     const captured = CURRENT_SCOPE.current
     const wrapped: EventListener = (event) => inScope(captured, () => handler(event))
     element.addEventListener(type, wrapped)
