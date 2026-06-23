@@ -1,4 +1,5 @@
 import ts from 'typescript'
+import { TS_PRINTER } from './TS_PRINTER.ts'
 
 /*
 Rewrites references to a component's signal bindings into the document form the
@@ -27,8 +28,7 @@ export function renameSignalRefs(
     const result = ts.transform(source, [
         signalRefsTransformer(stateNames, derivedNames, computedNames),
     ])
-    const printer = ts.createPrinter({ newLine: ts.NewLineKind.LineFeed })
-    const output = printer.printFile(result.transformed[0] as ts.SourceFile)
+    const output = TS_PRINTER.printFile(result.transformed[0] as ts.SourceFile)
     result.dispose()
     return output
 }

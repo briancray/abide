@@ -1,5 +1,6 @@
 import ts from 'typescript'
 import { escapeKey } from '../runtime/escapeKey.ts'
+import { TS_PRINTER } from './TS_PRINTER.ts'
 
 /*
 The linchpin compiler pass. Rewrites idiomatic data access on a reactive document
@@ -27,8 +28,7 @@ used as an index lowers too.
 export function lowerDocAccess(code: string, docName: string): string {
     const source = ts.createSourceFile('component.ts', code, ts.ScriptTarget.Latest, true)
     const result = ts.transform(source, [docAccessTransformer(docName)])
-    const printer = ts.createPrinter({ newLine: ts.NewLineKind.LineFeed })
-    const output = printer.printFile(result.transformed[0] as ts.SourceFile)
+    const output = TS_PRINTER.printFile(result.transformed[0] as ts.SourceFile)
     result.dispose()
     return output
 }

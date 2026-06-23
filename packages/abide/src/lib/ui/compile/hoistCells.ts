@@ -1,4 +1,5 @@
 import ts from 'typescript'
+import { TS_PRINTER } from './TS_PRINTER.ts'
 
 /*
 The perf pass that follows `lowerDocAccess`. Within a render scope, a static path
@@ -35,8 +36,7 @@ export function hoistCells(code: string, docName: string): string {
     }
 
     const result = ts.transform(source, [hoistTransformer(docName, cellIdForPath)])
-    const printer = ts.createPrinter({ newLine: ts.NewLineKind.LineFeed })
-    const output = printer.printFile(result.transformed[0] as ts.SourceFile)
+    const output = TS_PRINTER.printFile(result.transformed[0] as ts.SourceFile)
     result.dispose()
     return output
 }

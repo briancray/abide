@@ -2,10 +2,9 @@ import ts from 'typescript'
 import { docAccessTransformer } from './lowerDocAccess.ts'
 import { nestedBindingNames } from './prepareNestedScript.ts'
 import { signalRefsTransformer } from './renameSignalRefs.ts'
+import { TS_PRINTER } from './TS_PRINTER.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
 import { unwrapParens } from './unwrapParens.ts'
-
-const printer = ts.createPrinter({ newLine: ts.NewLineKind.LineFeed })
 
 /*
 The shared expression-lowering context both back-ends build on: the signal→`model`
@@ -39,7 +38,7 @@ export function lowerContext(
             signalRefsTransformer(stateNames, derefScope(), computedNames),
             docAccessTransformer('model'),
         ])
-        const output = printer.printFile(result.transformed[0] as ts.SourceFile).trim()
+        const output = TS_PRINTER.printFile(result.transformed[0] as ts.SourceFile).trim()
         result.dispose()
         return output
     }

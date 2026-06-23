@@ -1,4 +1,5 @@
 import ts from 'typescript'
+import { TS_PRINTER } from './TS_PRINTER.ts'
 
 /*
 Removes `effect(...)` calls from a script for the SSR back-end. Effects are client
@@ -11,8 +12,7 @@ binding keeps a defined (unused) name. Client compilation keeps effects untouche
 export function stripEffects(code: string): string {
     const source = ts.createSourceFile('script.ts', code, ts.ScriptTarget.Latest, true)
     const result = ts.transform(source, [stripEffectsTransformer()])
-    const printer = ts.createPrinter({ newLine: ts.NewLineKind.LineFeed })
-    const output = printer.printFile(result.transformed[0] as ts.SourceFile)
+    const output = TS_PRINTER.printFile(result.transformed[0] as ts.SourceFile)
     result.dispose()
     return output
 }

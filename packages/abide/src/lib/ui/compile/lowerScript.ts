@@ -4,6 +4,7 @@ import { desugarSignals } from './desugarSignals.ts'
 import { docAccessTransformer } from './lowerDocAccess.ts'
 import { signalRefsTransformer } from './renameSignalRefs.ts'
 import { stripEffectsTransformer } from './stripEffects.ts'
+import { TS_PRINTER } from './TS_PRINTER.ts'
 
 /*
 The component-script lowering, done in ONE parse. The script is parsed once, then
@@ -19,8 +20,6 @@ reassembled output is transpiled as a fail-loud guard: if a future un-handled re
 position corrupts the script (the failure mode the syntax fuzz corpus also guards), it
 surfaces here as a located compile error instead of shipping a broken bundle.
 */
-
-const printer = ts.createPrinter({ newLine: ts.NewLineKind.LineFeed })
 
 export function lowerScript(scriptBody: string): {
     body: string
@@ -45,15 +44,15 @@ export function lowerScript(scriptBody: string): {
         (statement) => !ts.isImportDeclaration(statement),
     )
     const imports = importStatements
-        .map((statement) => printer.printNode(ts.EmitHint.Unspecified, statement, transformed))
+        .map((statement) => TS_PRINTER.printNode(ts.EmitHint.Unspecified, statement, transformed))
         .join('\n')
     const bodyFile = ts.factory.updateSourceFile(transformed, bodyStatements)
-    const body = printer.printFile(bodyFile).trim()
+    const body = TS_PRINTER.printFile(bodyFile).trim()
     /* The SSR variant strips client-only `effect(...)` calls — run over the SAME lowered
        tree (one extra transform + print, no reparse) instead of re-parsing the printed
        script downstream. */
     const ssrResult = ts.transform(bodyFile, [stripEffectsTransformer()])
-    const ssrBody = printer.printFile(ssrResult.transformed[0] as ts.SourceFile).trim()
+    const ssrBody = TS_PRINTER.printFile(ssrResult.transformed[0] as ts.SourceFile).trim()
     ssrResult.dispose()
     result.dispose()
 
