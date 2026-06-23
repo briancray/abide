@@ -1,5 +1,7 @@
 import type { ServerWebSocket } from 'bun'
 import { abideLog } from '../../shared/abideLog.ts'
+import { decodeRefJson } from '../../shared/decodeRefJson.ts'
+import { encodeRefJson } from '../../shared/encodeRefJson.ts'
 import { memoizeByKey } from '../../shared/memoizeByKey.ts'
 import { messageFromError } from '../../shared/messageFromError.ts'
 import { error } from '../error.ts'
@@ -104,7 +106,7 @@ export function createSocketDispatcher(sockets: SocketRoutes): SocketDispatcher 
         if (ws.readyState !== WebSocket.OPEN) {
             return
         }
-        ws.send(JSON.stringify(frame))
+        ws.send(encodeRefJson(frame))
     }
 
     function addSub(state: ConnectionState, name: string, sub: string): boolean {
@@ -312,11 +314,18 @@ export function createSocketDispatcher(sockets: SocketRoutes): SocketDispatcher 
             const text = typeof data === 'string' ? data : textDecoder.decode(data)
             let frame: SocketClientFrame
             try {
-                frame = JSON.parse(text) as SocketClientFrame
+                /* ref-json from abide's own client; a non-abide client sends a plain-JSON
+                   frame, which decodeRefJson rejects (a frame is always an object, never the
+                   `[root, slots]` envelope) — fall back to JSON.parse so raw WS clients work. */
+                try {
+                    frame = decodeRefJson(text) as SocketClientFrame
+                } catch {
+                    frame = JSON.parse(text) as SocketClientFrame
+                }
             } catch {
                 return
             }
-            // JSON.parse succeeds on `null`/`42`/`true`; ignore anything that isn't a frame object.
+            // both codecs yield a value for `null`/`42`/`true` too; ignore anything that isn't a frame object.
             if (typeof frame !== 'object' || frame === null) {
                 return
             }

@@ -41,16 +41,13 @@ export function applyResolved(root: Element, frame: string): void {
     if (id === null) {
         return
     }
-    /* The resolved value rides in a leading <script type=application/json>; parse and
-       remove it so only the resolved markup moves into the boundary. Recording it lets a
-       later hydrate adopt this branch (no re-fetch). */
+    /* The resolved value rides in a leading <script type=application/json> as ref-json
+       text; store it raw and remove the node so only the resolved markup moves into the
+       boundary. Decoding is deferred to the read in `awaitBlock` (which has the codec);
+       recording it lets a later hydrate adopt this branch (no re-fetch). */
     const payload = resolved.firstChild as Element | null
     if (payload !== null && payload.nodeName === 'SCRIPT') {
-        try {
-            RESUME[Number(id)] = JSON.parse(payload.textContent ?? 'null')
-        } catch {
-            /* malformed payload — leave unregistered, hydration re-runs the promise */
-        }
+        RESUME[Number(id)] = payload.textContent ?? ''
         payload.remove()
     }
     const open = `abide:await:${id}`

@@ -1,6 +1,8 @@
 import { carriesBodyArgs } from '../../shared/carriesBodyArgs.ts'
 import { contentTypeOf } from '../../shared/contentTypeOf.ts'
+import { decodeRefJson } from '../../shared/decodeRefJson.ts'
 import { HttpError } from '../../shared/HttpError.ts'
+import { REF_JSON_HEADER } from '../../shared/REF_JSON_HEADER.ts'
 import type { HttpVerb } from '../../shared/types/HttpVerb.ts'
 import { error } from '../error.ts'
 import { requestContext } from '../runtime/requestContext.ts'
@@ -92,7 +94,14 @@ export async function parseArgs(
             if (contentType.includes('application/json')) {
                 const text = await bounded.text()
                 if (text !== '') {
-                    body = JSON.parse(text)
+                    /* abide's own client flags ref-json with REF_JSON_HEADER (restores
+                       cycles/shared refs JSON can't carry); a non-abide client (curl, an
+                       OpenAPI SDK) omits it and sends ordinary JSON — read with plain
+                       JSON.parse, since the ref-json envelope is ambiguous with a 2-element
+                       array body. */
+                    body = bounded.headers.has(REF_JSON_HEADER)
+                        ? decodeRefJson(text)
+                        : JSON.parse(text)
                 }
             } else if (
                 contentType.includes('application/x-www-form-urlencoded') ||

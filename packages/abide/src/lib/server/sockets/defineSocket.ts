@@ -1,4 +1,5 @@
 import { createPushIterator } from '../../shared/createPushIterator.ts'
+import { encodeRefJson } from '../../shared/encodeRefJson.ts'
 import { resolveClientFlags } from '../../shared/resolveClientFlags.ts'
 import { socketTapSlot } from '../../shared/socketTapSlot.ts'
 import type { TailHooks } from '../../shared/types/TailHooks.ts'
@@ -123,7 +124,8 @@ export function defineSocket<T>(name: string, opts: SocketOptions = {}): Socket<
                silently drift from this construction site (the dispatcher's `send` is already
                typed; this was the last `msg` frame built through an unchecked JSON.stringify). */
             const frame: SocketServerFrame = { type: 'msg', socket: name, message: validated }
-            server.publish(topic, JSON.stringify(frame))
+            // ref-json (matching the dispatcher + client) so a message graph with cycles/shared refs fans out intact.
+            server.publish(topic, encodeRefJson(frame))
         }
     }
 

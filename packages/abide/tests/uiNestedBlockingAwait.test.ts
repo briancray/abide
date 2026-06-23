@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { decodeRefJson } from '../src/lib/shared/decodeRefJson.ts'
 import { compileComponent } from '../src/lib/ui/compile/compileComponent.ts'
 import { compileSSR } from '../src/lib/ui/compile/compileSSR.ts'
 import { computed } from '../src/lib/ui/computed.ts'
@@ -61,10 +62,17 @@ async function streamToString(render: () => SsrRender | Promise<SsrRender>): Pro
 }
 
 /* The blocking-resume manifest the inline `__abideResume` seed script carries, keyed by
-   boundary id. Parsed from the streamed HTML so a test can assert id → value alignment. */
+   boundary id. Parsed from the streamed HTML so a test can assert id → value alignment.
+   Each seeded entry is a ref-json string, decoded back to its ResumeEntry. */
 function resumeManifest(html: string): Record<string, ResumeEntry> {
     const match = html.match(/window\.__abideResume\|\|\{\},(\{.*?\})\)<\/script>/)
-    return match ? (JSON.parse(match[1]) as Record<string, ResumeEntry>) : {}
+    if (!match) {
+        return {}
+    }
+    const encoded = JSON.parse(match[1]) as Record<string, string>
+    return Object.fromEntries(
+        Object.entries(encoded).map(([id, entry]) => [id, decodeRefJson(entry) as ResumeEntry]),
+    )
 }
 
 describe('nested blocking awaits render inline, depth-first, on SSR', () => {

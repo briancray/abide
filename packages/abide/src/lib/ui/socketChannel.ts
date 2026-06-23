@@ -1,6 +1,8 @@
 import type { SocketClientFrame } from '../server/sockets/types/SocketClientFrame.ts'
 import type { SocketServerFrame } from '../server/sockets/types/SocketServerFrame.ts'
 import { createSocketSubRegistry } from '../shared/createSocketSubRegistry.ts'
+import { decodeRefJson } from '../shared/decodeRefJson.ts'
+import { encodeRefJson } from '../shared/encodeRefJson.ts'
 import { SOCKETS_PATH } from '../shared/SOCKETS_PATH.ts'
 import type { SocketChannel } from '../shared/types/SocketChannel.ts'
 import { withBase } from '../shared/withBase.ts'
@@ -55,7 +57,8 @@ export function getSocketChannel(): SocketChannel {
     }
 
     function send(frame: SocketClientFrame): void {
-        const message = JSON.stringify(frame)
+        // ref-json frame so a published message graph with cycles/shared refs survives the wire.
+        const message = encodeRefJson(frame)
         if (ws && ws.readyState === WebSocket.OPEN) {
             ws.send(message)
             return
@@ -90,7 +93,7 @@ export function getSocketChannel(): SocketChannel {
         ws.addEventListener('message', (event) => {
             let frame: SocketServerFrame
             try {
-                frame = JSON.parse(event.data) as SocketServerFrame
+                frame = decodeRefJson(event.data) as SocketServerFrame
             } catch {
                 return
             }

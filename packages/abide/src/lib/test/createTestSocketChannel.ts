@@ -3,6 +3,8 @@ import type { SocketClientFrame } from '../server/sockets/types/SocketClientFram
 import type { SocketServerFrame } from '../server/sockets/types/SocketServerFrame.ts'
 import { buildSocketOverChannel } from '../shared/buildSocketOverChannel.ts'
 import { createSocketSubRegistry } from '../shared/createSocketSubRegistry.ts'
+import { decodeRefJson } from '../shared/decodeRefJson.ts'
+import { encodeRefJson } from '../shared/encodeRefJson.ts'
 
 /*
 Test-side substitute for the browser socketChannel: one ws to the booted
@@ -37,7 +39,8 @@ export function createTestSocketChannel(wsUrl: string): {
     }
 
     function send(frame: SocketClientFrame): void {
-        const message = JSON.stringify(frame)
+        // ref-json, matching the browser channel + the server's dispatcher/publish codec.
+        const message = encodeRefJson(frame)
         if (ws.readyState === WebSocket.OPEN) {
             ws.send(message)
             return
@@ -53,7 +56,8 @@ export function createTestSocketChannel(wsUrl: string): {
     ws.addEventListener('message', (event) => {
         let frame: SocketServerFrame
         try {
-            frame = JSON.parse(event.data as string) as SocketServerFrame
+            // The server sends ref-json frames (createSocketDispatcher/defineSocket); decode to match.
+            frame = decodeRefJson(event.data as string) as SocketServerFrame
         } catch {
             return
         }

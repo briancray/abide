@@ -1,6 +1,8 @@
+import { decodeRefJson } from '../../shared/decodeRefJson.ts'
 import { effect } from '../effect.ts'
 import { claimChild } from '../runtime/claimChild.ts'
 import { RENDER } from '../runtime/RENDER.ts'
+import type { ResumeEntry } from '../runtime/RESUME.ts'
 import { RESUME } from '../runtime/RESUME.ts'
 import { scope } from '../runtime/scope.ts'
 import { scopeGroup } from '../runtime/scopeGroup.ts'
@@ -161,7 +163,18 @@ export function awaitBlock(
     const firstHydrate = (result: unknown): void => {
         const cursor = hydration as NonNullable<typeof hydration>
         const open = claimChild(cursor, parent)
-        const entry = RESUME[id]
+        /* RESUME holds the ref-json-encoded entry STRING; decode here, where the codec
+           lives. A decode failure (malformed/absent payload) reads as "no resume" — fall
+           through to the live promise rather than crash hydration. */
+        const raw = RESUME[id]
+        let entry: ResumeEntry | undefined
+        if (raw !== undefined) {
+            try {
+                entry = decodeRefJson(raw) as ResumeEntry
+            } catch {
+                entry = undefined
+            }
+        }
         if (entry !== undefined) {
             let build: (host: Node) => void
             if (entry.ok) {

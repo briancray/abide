@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
+import { decodeRefJson } from '../src/lib/shared/decodeRefJson.ts'
 import { compileComponent } from '../src/lib/ui/compile/compileComponent.ts'
 import { compileSSR } from '../src/lib/ui/compile/compileSSR.ts'
 import { computed } from '../src/lib/ui/computed.ts'
@@ -513,7 +514,8 @@ describe('hydrate — adopt server DOM', () => {
         for (const frame of chunks.slice(1)) {
             applyResolved(host, frame)
         }
-        expect(RESUME[0]).toEqual({ ok: true, value: ['ada', 'margaret'] })
+        // RESUME holds the ref-json-encoded entry string; decode to assert the value.
+        expect(decodeRefJson(RESUME[0])).toEqual({ ok: true, value: ['ada', 'margaret'] })
         const ul = (host.childNodes[0] as unknown as { childNodes: unknown[] })
             .childNodes[2] as unknown as { childNodes: { textContent: string }[] }
         const firstRowBefore = ul.childNodes[0]

@@ -1,6 +1,7 @@
 import { resumeSeedScript } from './resumeSeedScript.ts'
 import type { ResumeEntry } from './runtime/RESUME.ts'
 import type { SsrAwait, SsrRender } from './runtime/types/SsrRender.ts'
+import { tryEncodeResume } from './tryEncodeResume.ts'
 
 /*
 Out-of-order SSR streaming. Yields the shell first (so the browser paints
@@ -69,10 +70,15 @@ export async function* renderToStream(
         const resolved = await Promise.race(inflight.values())
         inflight.delete(resolved.id)
         enqueueNew()
-        const encoded = encodeResume(resolved.resume)
+        /* An unserializable value (e.g. a cyclic media tree) streams its rendered HTML
+           with NO seed script: both swap consumers (SSR_SWAP_SCRIPT, applyResolved) skip
+           registration when the leading child isn't a parseable script, so hydration
+           re-runs this one branch's promise — degrading to a refetch instead of aborting
+           the whole stream. */
+        const encoded = encodeStreamResume(resolved.resume, resolved.id)
         yield resumeSeedScript(resumeDelta()) +
             `<abide-resolve data-id="${resolved.id}">` +
-            `<script type="application/json">${encoded}</script>` +
+            (encoded === undefined ? '' : `<script type="application/json">${encoded}</script>`) +
             `${resolved.html}</abide-resolve>`
     }
 }
@@ -105,11 +111,13 @@ function settle(block: SsrAwait): Promise<Settled> {
     )
 }
 
-/* JSON for a `<script type="application/json">` data block: script content is raw
-   text, so only `<` needs neutralizing (emitted as a unicode escape) to keep a
-   literal `</script>` from closing the block early — quotes stay raw. Far cheaper
-   than attribute escaping (no full-string `"`/`&` passes) and JSON.parse decodes it
-   back. `applyResolved`/the inline swap script read it via `.textContent`. */
-function encodeResume(resume: ResumeEntry): string {
-    return JSON.stringify(resume).replace(/</g, '\\u003c')
+/* ref-json for a `<script type="application/json">` data block: script content is
+   raw text, so only `<` needs neutralizing (emitted as a unicode escape) to keep a
+   literal `</script>` from closing the block early — quotes stay raw, and the escape
+   survives `decodeRefJson`'s inner JSON.parse since `<` only ever appears inside JSON
+   strings. `tryEncodeResume` handles the serialize-or-refetch policy (undefined → no
+   script → the swap consumers skip registration → hydration re-runs that one promise).
+   `applyResolved`/the inline swap script store it via `.textContent`; `awaitBlock` decodes it. */
+function encodeStreamResume(resume: ResumeEntry, id: number): string | undefined {
+    return tryEncodeResume(resume, id)?.replace(/</g, '\\u003c')
 }

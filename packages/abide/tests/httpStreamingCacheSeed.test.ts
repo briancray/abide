@@ -54,10 +54,13 @@ describe('streaming {#await cache()} over the real HTTP entrypoint', () => {
             // the {#await} read is lazy — created mid-stream, so __SSR__.cache is empty
             expect(ssrState(html).cache).toEqual([])
 
-            // …and its warm snapshot ships over the stream for the client to adopt
+            // …and its warm snapshot ships over the stream for the client to adopt. The
+            // cached value rides the __abideResolve seed as the response body string (JSON,
+            // escaped); the resume frame now ref-json-encodes its value with slot indices,
+            // so the literal `n:1` lives only in the seed body.
             expect(html).toContain('__abideResolve(')
             expect(html).toContain('http-slow')
-            expect(html).toContain('"n":1')
+            expect(html).toContain('{\\"n\\":1}')
 
             // the verb dispatched exactly once on the server (the seed is reused, not refetched)
             expect(slowGate.calls).toBe(1)

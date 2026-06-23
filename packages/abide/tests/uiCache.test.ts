@@ -3,6 +3,7 @@ import { cache } from '../src/lib/shared/cache.ts'
 import { cacheEntryFromSnapshot } from '../src/lib/shared/cacheEntryFromSnapshot.ts'
 import { cacheStoreSlot } from '../src/lib/shared/cacheStoreSlot.ts'
 import { createCacheStore } from '../src/lib/shared/createCacheStore.ts'
+import { encodeRefJson } from '../src/lib/shared/encodeRefJson.ts'
 import { keyForRemoteCall } from '../src/lib/shared/keyForRemoteCall.ts'
 import { REMOTE_FUNCTION } from '../src/lib/shared/REMOTE_FUNCTION.ts'
 import { compileComponent } from '../src/lib/ui/compile/compileComponent.ts'
@@ -96,7 +97,7 @@ describe('cache() + UI await-block hydration', () => {
         /* The store is warm (snapshot) for post-hydration reads; the resume manifest
            carries the streamed value the await block adopts the SSR DOM from. */
         cacheStoreSlot.resolver = () => warmStore()
-        RESUME[0] = { ok: true, value: ['ada', 'margaret'] }
+        RESUME[0] = encodeRefJson({ ok: true, value: ['ada', 'margaret'] })
 
         const host = document.createElement('div')
         host.innerHTML =
@@ -159,7 +160,7 @@ describe('cache() + UI await-block hydration', () => {
             runs += 1
             return Promise.resolve(`v${runs}`)
         }
-        RESUME[0] = { ok: true, value: 'resumed' }
+        RESUME[0] = encodeRefJson({ ok: true, value: 'resumed' })
 
         const host = document.createElement('div')
         host.innerHTML =

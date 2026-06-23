@@ -1,8 +1,12 @@
 import { describe, expect, test } from 'bun:test'
 import { json } from '../src/lib/server/json.ts'
 import { defineVerb } from '../src/lib/server/rpc/defineVerb.ts'
+import { encodeRefJson } from '../src/lib/shared/encodeRefJson.ts'
+import { REF_JSON_HEADER } from '../src/lib/shared/REF_JSON_HEADER.ts'
 
 const JSON_HEADERS = { 'content-type': 'application/json' }
+/* The abide client flags a ref-json body so the server decodes it with the matching codec. */
+const REF_JSON_HEADERS = { ...JSON_HEADERS, [REF_JSON_HEADER]: '1' }
 
 function postRequest(url: string, body: BodyInit, headers = JSON_HEADERS): Request {
     return new Request(`https://test.local${url}`, { method: 'POST', headers, body })
@@ -13,7 +17,9 @@ describe('maxBodySize', () => {
         const echo = defineVerb('POST', '/rpc/limit-ok', async (args) => json(args), {
             maxBodySize: 64,
         })
-        const response = await echo.fetch(postRequest('/rpc/limit-ok', '{"name":"ok"}'))
+        const response = await echo.fetch(
+            postRequest('/rpc/limit-ok', encodeRefJson({ name: 'ok' }), REF_JSON_HEADERS),
+        )
         expect(response.status).toBe(200)
         expect(await response.json()).toEqual({ name: 'ok' })
     })
@@ -48,7 +54,11 @@ describe('maxBodySize', () => {
     test('without maxBodySize, no abide-level cap applies', async () => {
         const verb = defineVerb('POST', '/rpc/no-limit', async (args) => json(args))
         const response = await verb.fetch(
-            postRequest('/rpc/no-limit', `{"data":"${'x'.repeat(4096)}"}`),
+            postRequest(
+                '/rpc/no-limit',
+                encodeRefJson({ data: 'x'.repeat(4096) }),
+                REF_JSON_HEADERS,
+            ),
         )
         expect(response.status).toBe(200)
     })

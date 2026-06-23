@@ -4,6 +4,8 @@ import { createSocketDispatcher } from '../src/lib/server/sockets/createSocketDi
 import { defineSocket } from '../src/lib/server/sockets/defineSocket.ts'
 import type { SocketClientFrame } from '../src/lib/server/sockets/types/SocketClientFrame.ts'
 import type { SocketServerFrame } from '../src/lib/server/sockets/types/SocketServerFrame.ts'
+import { decodeRefJson } from '../src/lib/shared/decodeRefJson.ts'
+import { encodeRefJson } from '../src/lib/shared/encodeRefJson.ts'
 import { routesFor } from './support/routesFor.ts'
 import { settle } from './support/settle.ts'
 
@@ -20,7 +22,7 @@ function fakeSocket() {
     const ws = {
         readyState: WebSocket.OPEN,
         send: (data: string) => {
-            sent.push(JSON.parse(data) as SocketServerFrame)
+            sent.push(decodeRefJson(data) as SocketServerFrame)
         },
         subscribe: (topic: string) => subscribed.push(topic),
         unsubscribe: (topic: string) => unsubscribed.push(topic),
@@ -29,7 +31,7 @@ function fakeSocket() {
 }
 
 function frame(value: SocketClientFrame): string {
-    return JSON.stringify(value)
+    return encodeRefJson(value)
 }
 
 describe('socket ws multiplex happy path', () => {

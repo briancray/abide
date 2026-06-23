@@ -1,5 +1,7 @@
 import { carriesBodyArgs } from './carriesBodyArgs.ts'
+import { encodeRefJson } from './encodeRefJson.ts'
 import { queryStringFromArgs } from './queryStringFromArgs.ts'
+import { REF_JSON_HEADER } from './REF_JSON_HEADER.ts'
 import type { HttpVerb } from './types/HttpVerb.ts'
 
 /*
@@ -49,11 +51,16 @@ export function buildRpcRequest({
             body: args,
         })
     }
+    /* ref-json (still valid JSON, so the content-type holds) so an arg graph with
+       cycles or shared back-references reaches the handler instead of throwing here.
+       The REF_JSON_HEADER flags the encoding so parseArgs decodes it with the same
+       codec; a non-abide client omits it and parseArgs reads plain JSON.parse. */
     requestHeaders.set('content-type', 'application/json')
+    requestHeaders.set(REF_JSON_HEADER, '1')
     return new Request(new URL(url, baseUrl).href, {
         method,
         headers: requestHeaders,
-        body: JSON.stringify(args),
+        body: encodeRefJson(args),
     })
 }
 

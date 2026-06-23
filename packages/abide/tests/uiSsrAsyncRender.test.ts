@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
+import { decodeRefJson } from '../src/lib/shared/decodeRefJson.ts'
 import { compileComponent } from '../src/lib/ui/compile/compileComponent.ts'
 import { compileSSR } from '../src/lib/ui/compile/compileSSR.ts'
 import { computed } from '../src/lib/ui/computed.ts'
@@ -60,13 +61,17 @@ async function streamToString(render: () => SsrRender | Promise<SsrRender>): Pro
 }
 
 /* Merge every inline `__abideResume` seed script in the streamed HTML (the shell seed
-   plus each fragment's delta) into one id → value manifest. */
+   plus each fragment's delta) into one id → value manifest. Each seeded entry is a
+   ref-json string, so decode it back to the ResumeEntry the manifest carries. */
 function resumeManifest(html: string): Record<string, ResumeEntry> {
     const merged: Record<string, ResumeEntry> = {}
     for (const match of html.matchAll(
         /window\.__abideResume\|\|\{\},(\{[\s\S]*?\})\)<\/script>/g,
     )) {
-        Object.assign(merged, JSON.parse(match[1]))
+        const encoded = JSON.parse(match[1]) as Record<string, string>
+        for (const [id, entry] of Object.entries(encoded)) {
+            merged[id] = decodeRefJson(entry) as ResumeEntry
+        }
     }
     return merged
 }

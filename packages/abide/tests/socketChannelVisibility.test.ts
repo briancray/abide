@@ -1,5 +1,6 @@
 import { afterAll, describe, expect, test } from 'bun:test'
 import type { SocketClientFrame } from '../src/lib/server/sockets/types/SocketClientFrame.ts'
+import { decodeRefJson } from '../src/lib/shared/decodeRefJson.ts'
 import { getSocketChannel } from '../src/lib/ui/socketChannel.ts'
 
 /*
@@ -63,7 +64,7 @@ function setHidden(hidden: boolean): void {
 }
 
 function sentFrames(socket: FakeWebSocket): SocketClientFrame[] {
-    return socket.sent.map((message) => JSON.parse(message) as SocketClientFrame)
+    return socket.sent.map((message) => decodeRefJson(message) as SocketClientFrame)
 }
 
 const globals = globalThis as Record<string, unknown>
