@@ -49,7 +49,9 @@ function routerState() {
     return {
         path: runtimePath.value,
         route: page.route,
-        params: page.params,
+        /* `page.params` is a reactive Proxy — structuredClone (postMessage) can't carry
+           a Proxy and throws, dropping every router frame. Spread to a plain object. */
+        params: { ...page.params },
         navigating: page.navigating,
         url: page.url.href,
         entry: historyEntries.current,
