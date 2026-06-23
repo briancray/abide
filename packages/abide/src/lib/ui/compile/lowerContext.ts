@@ -1,8 +1,11 @@
-import { lowerDocAccess } from './lowerDocAccess.ts'
+import ts from 'typescript'
+import { docAccessTransformer } from './lowerDocAccess.ts'
 import { nestedBindingNames } from './prepareNestedScript.ts'
-import { renameSignalRefs } from './renameSignalRefs.ts'
+import { signalRefsTransformer } from './renameSignalRefs.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
 import { unwrapParens } from './unwrapParens.ts'
+
+const printer = ts.createPrinter({ newLine: ts.NewLineKind.LineFeed })
 
 /*
 The shared expression-lowering context both back-ends build on: the signal→`model`
@@ -27,19 +30,30 @@ export function lowerContext(
     const derefScope = (): ReadonlySet<string> =>
         localDerived.size === 0 ? derivedNames : new Set([...derivedNames, ...localDerived])
 
-    /* Rewrites signal refs, then lowers a single expression (no trailing `;`).
-       Wrapped in parens so a bare object literal (`{ a: 1 }`) parses as an
-       expression, not a block of labeled statements, through both rewrite passes;
-       the wrapper is then peeled back off. */
+    /* Parse `code` once and chain the reference rename and doc-access lowering over the
+       one tree — the two string passes would each parse + reprint. `derefScope()` is read
+       per call so a nested-`<script>` binding pushed mid-compile is honoured. */
+    function lowerOnce(code: string): string {
+        const source = ts.createSourceFile('expr.ts', code, ts.ScriptTarget.Latest, true)
+        const result = ts.transform(source, [
+            signalRefsTransformer(stateNames, derefScope(), computedNames),
+            docAccessTransformer('model'),
+        ])
+        const output = printer.printFile(result.transformed[0] as ts.SourceFile).trim()
+        result.dispose()
+        return output
+    }
+
+    /* Lowers a single expression (no trailing `;`). Wrapped in parens so a bare object
+       literal (`{ a: 1 }`) parses as an expression, not a block of labeled statements,
+       through the rewrite; the wrapper is then peeled back off. */
     function expression(code: string): string {
-        const renamed = renameSignalRefs(`(${code})`, stateNames, derefScope(), computedNames)
-        return unwrapParens(lowerDocAccess(renamed, 'model').trim().replace(/;$/, ''))
+        return unwrapParens(lowerOnce(`(${code})`).replace(/;$/, ''))
     }
 
     /* As above but keeps the trailing `;` for a statement/handler body. */
     function statement(code: string): string {
-        const renamed = renameSignalRefs(code, stateNames, derefScope(), computedNames)
-        return lowerDocAccess(renamed, 'model').trim()
+        return lowerOnce(code)
     }
 
     /* A two-way bind target is either an LVALUE (`count`, `model.lines[i]`) — reads as

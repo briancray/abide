@@ -135,8 +135,10 @@ function isNameSlot(id: ts.Identifier): boolean {
     if (parent === undefined) {
         return false
     }
-    /* `obj.NAME` — the member name; the object side (`parent.expression`) is the read. */
-    if (ts.isPropertyAccessExpression(parent) || ts.isQualifiedName(parent)) {
+    /* `obj.NAME` — the member name; the object side (`parent.expression`) is the read.
+       (`QualifiedName` is type-space only and never reached — the visitor early-returns
+       on the enclosing type node.) */
+    if (ts.isPropertyAccessExpression(parent)) {
         return parent.name === id
     }
     /* `NAME: value`, and method/property/accessor/enum-member names in classes,
