@@ -230,6 +230,19 @@ describe('compileComponent — end to end', () => {
         expect(body).toContain('const foo = scope().derive("foo", () => $props["foo"]?.())')
     })
 
+    /* A named prop type whose members share the destructured signal names must NOT be
+       rewritten into the signal form (`option?: …` → `option(): …`). The `...rest` binding
+       forces the type to be emitted into the build, so a mangled member would be invalid TS. */
+    test('a named prop type with a rest binding survives the signal rewrite', () => {
+        const body = compileComponent(
+            `<script>type Props = { option?: (v: string) => unknown; size?: 'a' | 'b' }
+const { option, ...rest } = props<Props>()</script><i {...rest}>{option}</i>`,
+        )
+        expect(body).toContain('option?: (v: string) => unknown')
+        expect(body).toContain("size?: 'a' | 'b'")
+        expect(body).not.toContain('option():')
+    })
+
     /* A bare `{expr}` at attribute position is a likely-mistaken spread missing its dots. */
     test('a bare {expr} attribute is a compile error pointing at spread syntax', () => {
         expect(() => compileComponent(`<Card {rest} />`)).toThrow(/write \{\.\.\.expr\}/)

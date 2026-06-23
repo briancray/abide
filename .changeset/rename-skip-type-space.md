@@ -1,0 +1,5 @@
+---
+"@abide/abide": patch
+---
+
+Stop the signal-ref rewrite from descending into type space. `renameSignalRefs` rewrote every value-position identifier matching a signal name, but never skipped TypeScript type aliases, interfaces, or type annotations — so a component that destructures a prop (`const { option, ...rest } = props<Props>()`) and names that prop in its own type (`type Props = { option?: (value: T) => unknown; … }`) had the type member rewritten into a call (`option(): …`). This only surfaced once a `...rest` binding forced the named prop type to be emitted into the build (a no-rest `props<{…}>()` strips its type argument); with simple property types the mangle landed as accidentally-valid method-signature syntax, but optional/function/union members (`option?: (v) => unknown`, `value?: T | T[] | string`) became invalid TS and failed the page build. The visitor now leaves type aliases, interfaces, and any type node untouched — type space never holds a runtime read, and types erase at build regardless.

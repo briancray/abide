@@ -68,6 +68,18 @@ export function renameSignalRefs(
                with that name added, so shadowing is per-branch (a sibling scope is unaffected). */
             const makeVisitor = (shadowed: ReadonlySet<string>): ts.Visitor => {
                 const visit = (node: ts.Node): ts.Node => {
+                    /* Type space never holds a value read. A type alias, an interface, or any
+                       type annotation can name a signal — a prop-type member `option?: …`, a
+                       `typeof x` — without it being a runtime reference. Leave the whole type
+                       subtree untouched so it isn't rewritten into a call/access (`option()`)
+                       and emitted as broken code (types erase at build anyway). */
+                    if (
+                        ts.isTypeAliasDeclaration(node) ||
+                        ts.isInterfaceDeclaration(node) ||
+                        ts.isTypeNode(node)
+                    ) {
+                        return node
+                    }
                     /* Shorthand `{ count }` → `{ count: model.count }` / `{ total: total.value }`,
                        unless a nearer scope shadows the name. */
                     if (ts.isShorthandPropertyAssignment(node) && !shadowed.has(node.name.text)) {
