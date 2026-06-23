@@ -1,15 +1,15 @@
 import ts from 'typescript'
+import { desugarSignals } from './desugarSignals.ts'
 import { docAccessTransformer } from './lowerDocAccess.ts'
 import { signalRefsTransformer } from './renameSignalRefs.ts'
 
 /*
-The component-script lowering, done in ONE parse. The desugared script is parsed
-once, then `signalRefsTransformer` and `docAccessTransformer` run as a chained
-`ts.transform` over the SAME tree — `renameSignalRefs` then `lowerDocAccess` as
-standalone string passes would each parse + reprint, and the import hoist used to
-text-scan their output with a single-line regex that only worked because the reprints
-happened to normalise multi-line imports first. Chaining removes both the extra parse
-and that hidden coupling.
+The component-script lowering, done in ONE parse. The script is parsed once, then
+`desugarSignals` (signal declarations → `model` slots / `scope().derive`), reference
+renaming (`count` → `model.count`), and doc-access lowering (`model.count` → patch/read)
+run as a chained `ts.transform` over the SAME tree — each as a standalone string pass
+would parse + reprint. desugar returns a transformer rather than rebuilt source text
+precisely so it can chain here; the name sets it collects feed the rename transformer.
 
 Imports are partitioned off the transformed tree structurally (`ts.isImportDeclaration`),
 not by regex, so a multi-line import hoists correctly regardless of formatting. The
@@ -23,14 +23,17 @@ const printer = ts.createPrinter({ newLine: ts.NewLineKind.LineFeed })
 /* Throws on invalid syntax — the corruption tripwire for the rewrite passes. */
 const transpiler = new Bun.Transpiler({ loader: 'ts' })
 
-export function lowerScript(
-    code: string,
-    stateNames: ReadonlySet<string>,
-    derivedNames: ReadonlySet<string>,
-    computedNames: ReadonlySet<string>,
-): { body: string; imports: string } {
-    const source = ts.createSourceFile('component.ts', code, ts.ScriptTarget.Latest, true)
+export function lowerScript(scriptBody: string): {
+    body: string
+    imports: string
+    stateNames: Set<string>
+    derivedNames: Set<string>
+    computedNames: Set<string>
+} {
+    const source = ts.createSourceFile('component.ts', scriptBody, ts.ScriptTarget.Latest, true)
+    const { transformer, stateNames, derivedNames, computedNames } = desugarSignals(source)
     const result = ts.transform(source, [
+        transformer,
         signalRefsTransformer(stateNames, derivedNames, computedNames),
         docAccessTransformer('model'),
     ])
@@ -55,5 +58,5 @@ export function lowerScript(
             `[abide] component script lowering produced invalid syntax — please report this with the component source. Lowered output:\n${reassembled}\n\n${String(error)}`,
         )
     }
-    return { body, imports }
+    return { body, imports, stateNames, derivedNames, computedNames }
 }

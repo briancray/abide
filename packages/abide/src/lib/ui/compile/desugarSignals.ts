@@ -1,6 +1,8 @@
 import ts from 'typescript'
 import { REACTIVE_CALLEES } from './REACTIVE_CALLEES.ts'
 
+const factory = ts.factory
+
 /* The reactive primitives that must be reached through a scope. A bare call to one of
    these is a compile error: reactive state is owned by a scope and the surface must show
    it (`scope().state(...)`), so a reader always sees the scope interaction. */
@@ -33,28 +35,28 @@ function assertScopedPrimitives(source: ts.SourceFile): void {
 Desugars the signal surface into the document form. A component's `<script>`
 declares reactive state as signals:
 
-  let count = state(0)
-  let items = state([])
-  const total = computed(() => count + items.length)
+  let count = scope().state(0)
+  let items = scope().state([])
+  const total = scope().computed(() => count() + items.length)
 
-This collects the binding names, turns each plain `state(initial)` declaration
-into an initialising assignment on a shared `model` document (in source order, so
-a later state can read an earlier one), keeps the rest, then renames every
-reference through `renameSignalRefs`. Plain `state` becomes `model.x` access that
-`lowerDocAccess` lowers to patches/reads — the document substrate's deep,
-fine-grained, serializable reactivity for free. `linked`, `computed`, and
-`state(initial, transform)` stay verbatim as runtime `.value` cells (referenced
-as `name.value`): they own no doc slot, so they reseed/recompute on resume rather
-than serialize. No reactive declarations → the script is returned untouched (the
-explicit `const model = doc(...)` form still works).
+This walks the already-parsed script once to collect the binding names, then returns
+a `ts.TransformerFactory` that rewrites the declarations onto a shared `model`
+document: each plain `state(initial)` becomes an initialising assignment (`model.x =
+initial`, in source order so a later state can read an earlier one), each `computed`
+and destructured prop becomes a `scope().derive` slot, and `linked` /
+`state(initial, transform)` stay `.value` cells routed onto the scope. Returning a
+TRANSFORMER (not rebuilt source text) lets the caller (`lowerScript`) chain it with
+reference renaming and doc-access lowering over ONE parsed tree — no print-then-reparse
+between passes. Plain `state` becomes `model.x` access that `lowerDocAccess` lowers to
+patches/reads. No reactive declarations → an identity transformer (the explicit
+`const model = doc(...)` form still works).
 */
-export function desugarSignals(scriptBody: string): {
-    code: string
+export function desugarSignals(source: ts.SourceFile): {
+    transformer: ts.TransformerFactory<ts.SourceFile>
     stateNames: Set<string>
     derivedNames: Set<string>
     computedNames: Set<string>
 } {
-    const source = ts.createSourceFile('script.ts', scriptBody, ts.ScriptTarget.Latest, true)
     assertScopedPrimitives(source)
     const stateNames = new Set<string>()
     const derivedNames = new Set<string>()
@@ -102,47 +104,70 @@ export function desugarSignals(scriptBody: string): {
             }
         }
     }
-    if (
-        stateNames.size === 0 &&
-        derivedNames.size === 0 &&
-        computedNames.size === 0 &&
-        !hasPropsDestructure
-    ) {
-        return { code: scriptBody, stateNames, derivedNames, computedNames }
+
+    const hasReactive =
+        stateNames.size > 0 ||
+        derivedNames.size > 0 ||
+        computedNames.size > 0 ||
+        hasPropsDestructure
+
+    const transformer: ts.TransformerFactory<ts.SourceFile> = () => (root) => {
+        if (!hasReactive) {
+            return root
+        }
+        const statements: ts.Statement[] = []
+        /* A shared `model = scope()` host for the state slots, prepended once. */
+        if (stateNames.size > 0) {
+            statements.push(
+                constDeclaration(
+                    'model',
+                    factory.createCallExpression(factory.createIdentifier('scope'), undefined, []),
+                ),
+            )
+        }
+        for (const statement of root.statements) {
+            statements.push(...loweredStatement(statement))
+        }
+        return factory.updateSourceFile(root, statements)
     }
 
-    const printer = ts.createPrinter({ newLine: ts.NewLineKind.LineFeed })
-    const lines: string[] = []
-    if (stateNames.size > 0) {
-        lines.push('const model = scope()')
-    }
-    for (const statement of source.statements) {
-        const stateAssignments = stateDeclarationAssignments(statement, printer, source)
-        const computedDeclarations = computedDeclarationLines(statement, printer, source)
-        const propsDestructure = propsDestructureLines(statement, printer, source)
-        const cellDeclarations = cellDeclarationLines(statement, printer, source)
-        if (stateAssignments !== undefined) {
-            lines.push(...stateAssignments)
-        } else if (computedDeclarations !== undefined) {
-            lines.push(...computedDeclarations)
-        } else if (propsDestructure !== undefined) {
-            lines.push(...propsDestructure)
-        } else if (cellDeclarations !== undefined) {
-            lines.push(...cellDeclarations)
-        } else {
-            lines.push(printer.printNode(ts.EmitHint.Unspecified, statement, source))
-        }
-    }
-    /* The structural rewrite only (state→model slots, props→derive, cells onto scope).
-       Reference renaming (`count` → `model.count`) is NOT applied here: the caller
-       (`lowerScript`) chains it with doc-access lowering over a single parsed tree, so
-       desugar returns the rebuilt source un-renamed plus the collected name sets. */
-    return {
-        code: lines.join('\n'),
-        stateNames,
-        derivedNames,
-        computedNames,
-    }
+    return { transformer, stateNames, derivedNames, computedNames }
+}
+
+/* The lowered form of a top-level statement: state slots → `model.x = init`
+   assignments, computed → `scope().derive` consts, props → derive consts (+ restProps),
+   cells → `scope().<callee>(...)` consts; anything else passes through verbatim. The
+   per-statement dispatch mirrors the name-collection pass. */
+function loweredStatement(statement: ts.Statement): ts.Statement[] {
+    return (
+        stateAssignmentStatements(statement) ??
+        computedStatements(statement) ??
+        propsStatements(statement) ??
+        cellStatements(statement) ?? [statement]
+    )
+}
+
+/* `const NAME = <init>` — a fresh const declaration reusing the original initializer node. */
+function constDeclaration(name: string, initializer: ts.Expression): ts.VariableStatement {
+    return factory.createVariableStatement(
+        undefined,
+        factory.createVariableDeclarationList(
+            [factory.createVariableDeclaration(name, undefined, undefined, initializer)],
+            ts.NodeFlags.Const,
+        ),
+    )
+}
+
+/* `scope().<method>(...args)` — the reactive method routed onto the ambient scope. */
+function scopeMethodCall(method: string, args: readonly ts.Expression[]): ts.CallExpression {
+    return factory.createCallExpression(
+        factory.createPropertyAccessExpression(
+            factory.createCallExpression(factory.createIdentifier('scope'), undefined, []),
+            method,
+        ),
+        undefined,
+        args,
+    )
 }
 
 /* True for a read-only computed slot — `computed(compute)` with no write-through
@@ -162,15 +187,11 @@ function isComputedSlot(declaration: ts.VariableDeclaration): boolean {
    routed onto the scope: `linked(seed)` → `const x = scope().linked(seed)`. The cell
    stays a standalone non-serializing cell (its refs stay `name.value`); the rewrite only
    removes the bare runtime import so the sole reactive surface is `scope()`. */
-function cellDeclarationLines(
-    statement: ts.Statement,
-    printer: ts.Printer,
-    source: ts.SourceFile,
-): string[] | undefined {
+function cellStatements(statement: ts.Statement): ts.Statement[] | undefined {
     if (!ts.isVariableStatement(statement)) {
         return undefined
     }
-    const lines: string[] = []
+    const statements: ts.Statement[] = []
     for (const declaration of statement.declarationList.declarations) {
         const callee = signalCallee(declaration)
         if (
@@ -181,24 +202,18 @@ function cellDeclarationLines(
             return undefined
         }
         const args = (declaration.initializer as ts.CallExpression).arguments
-            .map((argument) => printer.printNode(ts.EmitHint.Unspecified, argument, source))
-            .join(', ')
-        lines.push(`const ${declaration.name.text} = scope().${callee}(${args})`)
+        statements.push(constDeclaration(declaration.name.text, scopeMethodCall(callee, args)))
     }
-    return lines
+    return statements
 }
 
 /* `let total = computed(compute)` → `const total = scope().derive("total", compute)`
    — a computed doc slot whose reader the references lower to `total()`. */
-function computedDeclarationLines(
-    statement: ts.Statement,
-    printer: ts.Printer,
-    source: ts.SourceFile,
-): string[] | undefined {
+function computedStatements(statement: ts.Statement): ts.Statement[] | undefined {
     if (!ts.isVariableStatement(statement)) {
         return undefined
     }
-    const lines: string[] = []
+    const statements: ts.Statement[] = []
     for (const declaration of statement.declarationList.declarations) {
         if (
             !ts.isIdentifier(declaration.name) ||
@@ -207,16 +222,25 @@ function computedDeclarationLines(
         ) {
             return undefined
         }
-        const compute = (declaration.initializer as ts.CallExpression).arguments[0]
-        const computeText =
-            compute === undefined
-                ? '() => undefined'
-                : printer.printNode(ts.EmitHint.Unspecified, compute, source)
-        lines.push(
-            `const ${declaration.name.text} = scope().derive(${JSON.stringify(declaration.name.text)}, ${computeText})`,
+        const name = declaration.name.text
+        const compute =
+            (declaration.initializer as ts.CallExpression).arguments[0] ??
+            factory.createArrowFunction(
+                undefined,
+                undefined,
+                [],
+                undefined,
+                factory.createToken(ts.SyntaxKind.EqualsGreaterThanToken),
+                factory.createIdentifier('undefined'),
+            )
+        statements.push(
+            constDeclaration(
+                name,
+                scopeMethodCall('derive', [factory.createStringLiteral(name), compute]),
+            ),
         )
     }
-    return lines
+    return statements
 }
 
 /* True for `state(initial, transform)` — the write-coercion transform forces a
@@ -311,65 +335,99 @@ function propsBindingKey(element: ts.BindingElement): string {
 
 /* If `statement` is a `const {…, ...rest} = props()` destructure, returns one reactive
    computed per named binding — `scope().derive("name", () => $props["key"]?.() ?? default)`,
-   read as `name()` — plus a `const rest = restProps($props, [consumed])` line for a rest
-   binding; otherwise undefined. The `?? default` applies the binding's `= default` fallback
-   when the prop is absent. */
-function propsDestructureLines(
-    statement: ts.Statement,
-    printer: ts.Printer,
-    source: ts.SourceFile,
-): string[] | undefined {
+   read as `name()` — plus a `const rest = restProps($props, [consumed])` for a rest
+   binding; otherwise undefined. The `?? default` applies the binding's `= default`
+   fallback when the prop is absent. */
+function propsStatements(statement: ts.Statement): ts.Statement[] | undefined {
     if (!ts.isVariableStatement(statement)) {
         return undefined
     }
-    const lines: string[] = []
+    const statements: ts.Statement[] = []
     for (const declaration of statement.declarationList.declarations) {
         if (signalCallee(declaration) !== 'props' || !ts.isObjectBindingPattern(declaration.name)) {
             return undefined
         }
         const { bindings, rest } = propsDestructure(declaration)
         for (const { local, key, initializer } of bindings) {
-            const fallback =
+            /* `$props["key"]?.()` — the parent thunk, optionally called. */
+            const read = factory.createCallChain(
+                factory.createElementAccessExpression(
+                    factory.createIdentifier('$props'),
+                    factory.createStringLiteral(key),
+                ),
+                factory.createToken(ts.SyntaxKind.QuestionDotToken),
+                undefined,
+                [],
+            )
+            /* `?? default` only when the binding declared a `= default` fallback. */
+            const body =
                 initializer === undefined
-                    ? ''
-                    : ` ?? (${printer.printNode(ts.EmitHint.Unspecified, initializer, source)})`
-            lines.push(
-                `const ${local} = scope().derive(${JSON.stringify(local)}, () => $props[${JSON.stringify(key)}]?.()${fallback})`,
+                    ? read
+                    : factory.createBinaryExpression(
+                          read,
+                          factory.createToken(ts.SyntaxKind.QuestionQuestionToken),
+                          factory.createParenthesizedExpression(initializer),
+                      )
+            const thunk = factory.createArrowFunction(
+                undefined,
+                undefined,
+                [],
+                undefined,
+                factory.createToken(ts.SyntaxKind.EqualsGreaterThanToken),
+                body,
+            )
+            statements.push(
+                constDeclaration(
+                    local,
+                    scopeMethodCall('derive', [factory.createStringLiteral(local), thunk]),
+                ),
             )
         }
         /* The rest bag gathers every prop not named above (and not `$children`). */
         if (rest !== undefined) {
-            const consumed = bindings.map((binding) => binding.key)
-            lines.push(`const ${rest} = restProps($props, ${JSON.stringify(consumed)})`)
+            const consumed = bindings.map((binding) => factory.createStringLiteral(binding.key))
+            statements.push(
+                constDeclaration(
+                    rest,
+                    factory.createCallExpression(factory.createIdentifier('restProps'), undefined, [
+                        factory.createIdentifier('$props'),
+                        factory.createArrayLiteralExpression(consumed),
+                    ]),
+                ),
+            )
         }
     }
-    return lines
+    return statements
 }
 
 /* If `statement` declares `state(...)` bindings, returns `model.<name> = <init>`
-   assignment lines (one per declaration); otherwise undefined. */
-function stateDeclarationAssignments(
-    statement: ts.Statement,
-    printer: ts.Printer,
-    source: ts.SourceFile,
-): string[] | undefined {
+   assignment statements (one per declaration); otherwise undefined. */
+function stateAssignmentStatements(statement: ts.Statement): ts.Statement[] | undefined {
     if (!ts.isVariableStatement(statement)) {
         return undefined
     }
-    const assignments: string[] = []
+    const statements: ts.Statement[] = []
     for (const declaration of statement.declarationList.declarations) {
         if (!ts.isIdentifier(declaration.name) || !isPlainStateSlot(declaration)) {
             /* Only a plain `state(initial)` becomes a slot; `state(initial, transform)`
-               (and everything else) is a `.value` cell — print it verbatim so the
+               (and everything else) is a `.value` cell — pass it through so the
                runtime call (and its transform) survives. */
             return undefined
         }
-        const initial = (declaration.initializer as ts.CallExpression).arguments[0]
-        const initialText =
-            initial === undefined
-                ? 'undefined'
-                : printer.printNode(ts.EmitHint.Unspecified, initial, source)
-        assignments.push(`model.${declaration.name.text} = ${initialText}`)
+        const initial =
+            (declaration.initializer as ts.CallExpression).arguments[0] ??
+            factory.createIdentifier('undefined')
+        statements.push(
+            factory.createExpressionStatement(
+                factory.createAssignment(
+                    factory.createPropertyAccessExpression(
+                        factory.createIdentifier('model'),
+                        declaration.name.text,
+                    ),
+                    initial,
+                ),
+            ),
+        )
     }
-    return assignments
+    return statements
 }

@@ -1,4 +1,3 @@
-import { desugarSignals } from './desugarSignals.ts'
 import { lowerScript } from './lowerScript.ts'
 import { parseTemplate } from './parseTemplate.ts'
 import { scopeCss } from './scopeCss.ts'
@@ -30,15 +29,17 @@ export function analyzeComponent(source: string, scopeSeed?: string): AnalyzedCo
     const scriptBody = (scriptMatch?.[1] ?? '').trim()
     const template = source.replace(/^\s*<script[^>]*>[\s\S]*?<\/script>/, '').trim()
 
-    const { code: desugared, stateNames, derivedNames, computedNames } = desugarSignals(scriptBody)
-    /* `lowerScript` parses the desugared script once, chains reference renaming and
-       doc-access lowering over that single tree, and hoists top-level imports off the
-       tree structurally — imports live at module scope, not inside the mount/render
-       function the body becomes. */
-    const { body: script, imports } =
-        desugared.trim() === ''
-            ? { body: '', imports: '' }
-            : lowerScript(desugared, stateNames, derivedNames, computedNames)
+    /* `lowerScript` parses the script ONCE and chains signal desugaring, reference
+       renaming, and doc-access lowering over that single tree, then hoists top-level
+       imports off the tree structurally — imports live at module scope, not inside the
+       mount/render function the body becomes. It returns the collected signal name sets. */
+    const {
+        body: script,
+        imports,
+        stateNames,
+        derivedNames,
+        computedNames,
+    } = lowerScript(scriptBody)
     /* The parser keeps each `<style>` as an in-place node (one inside an expression
        is text, never a node). `annotateScopes` mutates the tree — assigning each
        style its scope attribute and stamping covered elements — and returns the
