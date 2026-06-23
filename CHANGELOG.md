@@ -1,5 +1,52 @@
 # abide
 
+## 0.40.0
+
+### Minor Changes
+
+- [`05ea7e2`](https://github.com/briancray/abide/commit/05ea7e235b1e7c035d3b4313e12fc83733fa814b) - <template elseif> conditional chains ([`c3237cc`](https://github.com/briancray/abide/commit/c3237ccc0d222c36e8b00ce68595eb92609ef856))
+
+- [`15c0ad3`](https://github.com/briancray/abide/commit/15c0ad334f698dfb49a9dcd0e0361925afc4f6c8) - `navigate` takes an options object — `navigate(path, { replace?, keepScroll? })` — replacing the old `navigate(path, replace?)` boolean. **Breaking:** a caller passing a boolean (`navigate(path, true)`) must migrate to `navigate(path, { replace: true })`; a bare `navigate(path)` is unchanged. The new `keepScroll` flag carries the live scroll offset onto the destination entry so an in-page URL swap — e.g. selecting another episode on the same detail page — restores to the current position instead of jumping to top. A push re-buckets the offset under the freshly minted entry id; a `replace` keeps the entry's bucket instead of discarding it.
+
+- [`ba56bb2`](https://github.com/briancray/abide/commit/ba56bb28be06fa0a11ab57fb10fa2d6b75ab8656) - Add `share`/`shared` context to `scope()`. The reactive doc does not inherit down the scope tree (each scope owns a separate document), so passing a value from an ancestor to a descendant previously meant threading it through every layer as props. `scope().share(key, value)` now puts a named value on a scope's own side-map, and `scope().shared(key)` reads the closest ancestor (self included) that has the key — an existence-checked, non-tracking upward walk, returning `undefined` when no scope provides it. The value is held by reference and the lookup never subscribes, so reactive context is expressed by sharing a `cell` (or a scope) rather than a plain object — reactivity rides what you share, not the share itself. A shared `undefined` shadows an ancestor (the walk stops on `has`, not truthiness). The shared map is released on `dispose`.
+
+### Patch Changes
+
+- [`a5a37f9`](https://github.com/briancray/abide/commit/a5a37f94258a56c4f24eb2b5539a280ce877bdfc) - extract resolveBranches for branch lookup ([`19a28a1`](https://github.com/briancray/abide/commit/19a28a1236e38a78c53a2adff0a981c8ad20b698))
+
+- [`a5a37f9`](https://github.com/briancray/abide/commit/a5a37f94258a56c4f24eb2b5539a280ce877bdfc) - sync AGENTS.md surface map for scope share/shared and navigate options ([`3e41255`](https://github.com/briancray/abide/commit/3e4125516164c94cfe9c9e6baa35f9ff9ec9c3e0))
+
+- [`a5a37f9`](https://github.com/briancray/abide/commit/a5a37f94258a56c4f24eb2b5539a280ce877bdfc) - use Promise.withResolvers in runWithVerbTimeout ([`504bdca`](https://github.com/briancray/abide/commit/504bdcac285cfd3762c8390fd1b6d640e62029bc))
+
+- [`a5a37f9`](https://github.com/briancray/abide/commit/a5a37f94258a56c4f24eb2b5539a280ce877bdfc) - extract VerbBaseOpts for shared verb options ([`d7414ca`](https://github.com/briancray/abide/commit/d7414cab7a557b54395321026d818b9fba82ba34))
+
+- [`ccc7f87`](https://github.com/briancray/abide/commit/ccc7f879d0506af084335785026200aeb38fdde4) - `on()` no longer attaches a non-function event handler. A component that omits an optional `on*` prop forwards it as `undefined`, yet the compiler still emits the `on()` call — so the listener fired `undefined(event)` and threw "handler is not a function" on every matching event (a keystroke or input on a search box, a click, …). `on()` now skips attaching when the handler is not a function, so an omitted optional handler is a no-op rather than a per-event crash.
+
+- [`c29dcd2`](https://github.com/briancray/abide/commit/c29dcd2796b5caa3ee41857aa612322b1e4220fa) - Parse `html`-branded raw markup in the parent's namespace. The client-side raw-HTML
+  binding parsed markup by setting `innerHTML` on a throwaway `<div>`, so the fragment
+  parser always used the HTML namespace — markup bound inside an `<svg>` produced
+  HTML-namespaced `<path>`/`<circle>` elements that exist in the DOM but never render.
+  This only surfaced on client-created or re-rendered nodes; the initial SSR/hydration
+  path adopts the server markup verbatim and kept the correct namespace, so an icon
+  component (`{html(svgInnerMarkup)}` inside `<svg>`) rendered on first paint but
+  vanished the moment its subtree was rebuilt on the client (e.g. a live cache delta).
+  A new `parseRawNodes` helper picks an SVG holder when the parent is SVG-namespaced,
+  shared by both `appendText` and `appendTextAt`.
+
+- [`9a74da6`](https://github.com/briancray/abide/commit/9a74da67c1f65cdb37e7a47af2e7b104cfe7620f) - Stop the signal-ref rewrite from descending into type space. `renameSignalRefs` rewrote every value-position identifier matching a signal name, but never skipped TypeScript type aliases, interfaces, or type annotations — so a component that destructures a prop (`const { option, ...rest } = props<Props>()`) and names that prop in its own type (`type Props = { option?: (value: T) => unknown; … }`) had the type member rewritten into a call (`option(): …`). This only surfaced once a `...rest` binding forced the named prop type to be emitted into the build (a no-rest `props<{…}>()` strips its type argument); with simple property types the mangle landed as accidentally-valid method-signature syntax, but optional/function/union members (`option?: (v) => unknown`, `value?: T | T[] | string`) became invalid TS and failed the page build. The visitor now leaves type aliases, interfaces, and any type node untouched — type space never holds a runtime read, and types erase at build regardless.
+
+- [`92597f0`](https://github.com/briancray/abide/commit/92597f0cbabc1e44449c0f0f812048481c38c579) - RPC bodies and socket frames now ship as ref-json (cycles, shared references, and
+  the types JSON drops/coerces — `undefined`, `bigint`, `Date`, `Map`, `Set`, `NaN`,
+  `±Infinity`, `-0` — survive the wire), and the server still accepts ordinary JSON from
+  non-abide clients. abide's own client flags a ref-json body with the `abide-ref-json`
+  header so the server decodes it with the matching codec; a request without the header
+  (curl, an OpenAPI-generated SDK, a webhook) is read with plain `JSON.parse`, so the
+  documented HTTP/OpenAPI body contract keeps working. The header is the discriminator
+  rather than the payload shape because ref-json's `[root, slots]` envelope is ambiguous
+  with a legitimate plain-JSON two-element array body. Socket frames need no header — a
+  frame is always an object, never the envelope array, so a plain-JSON frame falls back
+  to `JSON.parse` unambiguously.
+
 ## 0.39.0
 
 ### Minor Changes
