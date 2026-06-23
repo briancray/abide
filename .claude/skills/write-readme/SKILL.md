@@ -111,15 +111,18 @@ Close the file with a single `MIT` line.
 
 Where the README curates, AGENTS.md is **complete**: every `exports` key
 appears exactly once with its import specifier and a one-line spec, so this is
-the doc that carries the every-export-accountable contract. Target ~250 lines.
-Its skeleton (re-derive the *content* of each from the code; the order is the
-editorial layer):
+the doc that carries the every-export-accountable contract. It has **no length
+ceiling** — make it as long as completeness and clarity require; never merge or
+condense sections to hit a line count. Favour one bullet per export (including
+plumbing) over family-paragraph shortcuts where the per-export form reads
+clearer. Its skeleton (re-derive the *content* of each from the code; the order
+is the editorial layer):
 
 * **Preamble blockquote** — what the file is (the exhaustive map vs. the
   README's 3-primitive intro; CONTEXT.md is the glossary, `docs/adr/` the
   rationale), the no-barrels / namespace-marks-the-side ground rule, the
-  package name + runtime (Bun ≥ version from `engines`, zero runtime deps), and
-  the import-specifier-vs-file-path note.
+  package name + runtime (Bun ≥ version from `engines`, the direct-dependency
+  count from `package.json`), and the import-specifier-vs-file-path note.
 * **The premise** — the fan-out diagram + the schema-gating sentence (same
   facts as README §2; AGENTS.md keeps its own copy).
 * **File-based conventions** — table (path → meaning) for every bundler-read
@@ -128,14 +131,32 @@ editorial layer):
   `public/`, `dist/`.
 * **CLI** — table (command → does) for every `abide <cmd>`; the `bun test`
   preload line.
+* **Authoring contracts** — the shape of the code each convention path holds and
+  the contract enforced: the RPC verb (handler receives `InferOutput<inputSchema>`,
+  reads `request()`/`cookies()`, returns `json`/`jsonl`/`sse`/`error`/`redirect`/raw
+  `Response`; the `opts` fields incl. `clients: { browser, mcp, cli }`,
+  `crossOrigin`, `timeout`, `filesSchema`; the `z.coerce` query-arg rule; the four
+  consume forms), the socket, page/layout (`[id]` → `page.params`, layout outlet,
+  `url`/`navigate`), `app.ts`/`config.ts`, and the isomorphism move (`cache()` for
+  warm hydration). Read each contract from the source types — do not invent.
+* **.abide template grammar** — the component file anatomy + the ambient names
+  (`scope`, `props`, `effect`, `html`, `snippet`), then tables for reactive state
+  (`scope().state/.computed/.linked`, `effect`, `props()`), bindings (`{expr}`,
+  `name={expr}`, `on<event>`, `bind:value/checked/group`, `bind:value={{get,set}}`),
+  and control flow (`if/elseif/else`, `each as/key`, `await/then/catch/finally`,
+  `switch/case/default`, `try`, snippet `name`/`args`), plus components + slots.
+  Re-derive the directive set from `compile/parseTemplate.ts` / `isControlFlow.ts`;
+  read real `.abide` files for syntax, never write Svelte. (CLAUDE.md mandates this
+  section.)
 * **Surface sections, grouped by namespace** — `## Server surface —
   abide/server/*`, `## Isomorphic surface — abide/shared/*`, `## UI surface —
   abide/ui/* (client-only)`, then `## Build / tooling`, `## Desktop bundle`,
   `## MCP`, `## Testing`. Under each, a `### <Title> — @documentation <slug>`
   per slug, and **one bullet per export**: its `abide/...` import specifier +
   a one-line spec of behaviour/options read from the source. Plumbing slugs
-  appear too (often condensed to one bullet listing the family, e.g. the
-  `ui/dom/*` runtime), labelled `@documentation plumbing`.
+  appear too — give them one bullet per export (preferred, now there is no
+  length ceiling); a condensed family paragraph is a fallback only when the
+  per-export form adds nothing. Label them `@documentation plumbing`.
 * **Generated machine surfaces** — the runtime routes (`/openapi.json`,
   `/__abide/mcp|health|sockets|cli|…`).
 * **Environment variables** — table (var → effect) for every `DOCUMENT` env var
@@ -157,7 +178,7 @@ Read these from real `.abide` files in `examples/`; never write Svelte syntax.
   (`bind:value={{ get, set }}`). `prop(name)` and `effect(fn)` remain plain
   in-scope functions (no import, no `scope()`). These are functions, **not**
   `$state`/`$derived`.
-* Control flow is native `<template>`: `<template if>`/`<template else>`,
+* Control flow is native `<template>`: `<template if>`/`<template elseif>`/`<template else>`,
   `<template each={…} as="x" key="x">`, `<template await={p}>`/
   `<template then="v">`/`<template catch="e">`, `<template switch>`/`case`/
   `default`. `{expr}` text, `name={expr}` attrs, `onclick={fn}`,
@@ -189,7 +210,8 @@ Read these from real `.abide` files in `examples/`; never write Svelte syntax.
 
 3. **One story (README)**: the §4 component imports the §2 verb and the §3
    socket — the three artifacts connect, not three disconnected snippets.
-4. **Budgets**: README `wc -l` ≤ 180; AGENTS.md ≤ ~260.
+4. **Budget**: README `wc -l` ≤ 180. AGENTS.md has no ceiling — length is
+   whatever completeness requires.
 5. **Tree / diagram width**: no line in a `text` block over ~76 columns (GitHub
    clips them).
 
