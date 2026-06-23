@@ -133,6 +133,11 @@ async function send() {
     <button disabled={!text} class="border px-3">send</button>
 </form>
 
+<template if={pinned}>
+    <p class="text-xs text-amber-700">room pinned</p>
+    <template else><p class="text-xs text-slate-400">not pinned</p></template>
+</template>
+
 <template switch={sort}>
     <template case={'newest'}><p class="text-xs">newest first</p></template>
     <template default><p class="text-xs">oldest first</p></template>

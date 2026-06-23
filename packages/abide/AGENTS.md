@@ -58,7 +58,8 @@ Aliases: `$server` → `src/server/`, `$ui` → `src/ui/`, `$shared` → `src/sh
 | `abide run <file> [args]` | Run a script under the abide preload (jobs, tests) |
 | `abide compile` | Build a standalone server executable with embedded assets |
 | `abide cli` | Build a thin CLI binary that ships the server (`--platforms` cross-compiles) |
-| `abide bundle` | Build a movable, self-contained desktop app bundle for this platform |
+| `abide bundle` | Build a movable, self-contained desktop app bundle for this platform (unsigned `.app` on macOS, flat dir elsewhere) |
+| `abide lsp` | Run the `.abide` language server over stdio (JSON-RPC editor diagnostics) |
 | `abide init-agent` | Write/refresh a `CLAUDE.md` pointer to this surface map |
 
 Tests preload the framework: `preload = ["@abide/abide/preload"]` in `bunfig.toml`
