@@ -142,7 +142,7 @@ Test suites compile `.abide` and rewrite verbs under `bun test` via `preload = [
 
 ### Reactive state — @documentation reactive-state
 
-- `abide/ui/scope` — `scope()`: the sole reactive surface. `.state(initial?, transform?)` (writable cell), `.computed(fn)` (read-only), `.linked(seed, transform?)` (local draft reseeded from upstream). Bare `state`/`computed`/`linked` are a compile error; a writable computed is expressed at the binding (`bind:value={{ get, set }}`). Also carries doc/persistence/undo/broadcast methods.
+- `abide/ui/scope` — `scope()`: the sole reactive surface. `.state(initial?, transform?)` (writable cell), `.computed(fn)` (read-only), `.linked(seed, transform?)` (local draft reseeded from upstream). Bare `state`/`computed`/`linked` are a compile error; a writable computed is expressed at the binding (`bind:value={{ get, set }}`). `.share(key, value)`/`.shared(key)` pass context down the tree (closest-ancestor lookup; the reactive doc itself doesn't inherit, so share a `cell` for reactive context). Also carries doc/persistence/undo/broadcast methods.
 
 ### Effect — @documentation effect
 
@@ -151,7 +151,7 @@ Test suites compile `.abide` and rewrite verbs under `bun test` via `preload = [
 ### Tail & navigate — @documentation tail · navigate
 
 - `abide/ui/tail` — `tail(subscribable)`: latest frame of a `Socket`/stream (reactive); window form `tail(s, { last })` → array; `tail.error`/`tail.status` probes.
-- `abide/ui/navigate` — `navigate(path, replace?)`: client navigation through the router.
+- `abide/ui/navigate` — `navigate(path, options?)`: client navigation through the router. `options` is `{ replace?, keepScroll? }` — `replace` swaps the current history entry, `keepScroll` preserves the live scroll offset across an in-page URL swap.
 
 ### Outbox — @documentation ui
 
