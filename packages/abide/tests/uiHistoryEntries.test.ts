@@ -9,6 +9,7 @@ const view = globalThis as {
     scrollX?: number
     scrollY?: number
     scrollTo?: (x: number, y: number) => void
+    requestAnimationFrame?: (cb: (time: number) => void) => number
     document?: { getElementById: (id: string) => { scrollIntoView: () => void } | null }
     history?: { state: unknown; replaceState: (state: unknown, unused: string) => void }
 }
@@ -16,6 +17,7 @@ const previous = {
     scrollX: view.scrollX,
     scrollY: view.scrollY,
     scrollTo: view.scrollTo,
+    requestAnimationFrame: view.requestAnimationFrame,
     document: view.document,
     history: view.history,
 }
@@ -42,6 +44,7 @@ afterAll(() => {
     view.scrollX = previous.scrollX
     view.scrollY = previous.scrollY
     view.scrollTo = previous.scrollTo
+    view.requestAnimationFrame = previous.requestAnimationFrame
     view.document = previous.document
     view.history = previous.history
 })
@@ -134,6 +137,74 @@ describe('historyEntries — manual scroll restoration buckets', () => {
         view.scrollTo?.(0, 0)
         historyEntries.restore()
         expect([view.scrollX, view.scrollY]).toEqual([0, 0]) // foreign scroll not applied
+    })
+
+    /* A manual rAF queue + a scrollTo that clamps to a growable `maxScrollY`, modelling a
+       page whose async `<template await>` content fills in after the restore lands. */
+    function installClampingSurface() {
+        const frames: Array<() => void> = []
+        let maxScrollY = 0
+        view.requestAnimationFrame = (cb) => frames.push(() => cb(0))
+        view.scrollTo = (x, y) => {
+            view.scrollX = x
+            view.scrollY = Math.min(y, maxScrollY)
+        }
+        return {
+            frames,
+            grow: (height: number) => {
+                maxScrollY = height
+            },
+        }
+    }
+
+    test('restore re-applies a saved offset once async content grows the page tall enough', () => {
+        const surface = installClampingSurface()
+        surface.grow(600)
+        const here = historyEntries.next()
+        view.scrollTo?.(0, 600)
+        historyEntries.save() // bucket here → [0, 600]
+
+        // Navigate away, then back onto a freshly-rebuilt page that is momentarily short.
+        historyEntries.next()
+        historyEntries.adopt(here)
+        surface.grow(0) // content torn down — the document collapsed
+        view.scrollY = 0
+
+        historyEntries.restore() // clamps to 0 (the bug) and schedules a retry frame
+        expect(view.scrollY).toBe(0)
+        expect(surface.frames.length).toBe(1)
+
+        // The awaited content materialises: the page is tall again. The frame re-applies.
+        surface.grow(600)
+        surface.frames.shift()?.()
+        expect(view.scrollY).toBe(600)
+        expect(surface.frames.length).toBe(0) // reached → no further frame scheduled
+    })
+
+    test('a later restore supersedes a pending retry chain so a stale offset never lands', () => {
+        const surface = installClampingSurface()
+        surface.grow(600)
+        const here = historyEntries.next()
+        view.scrollTo?.(0, 600)
+        historyEntries.save()
+
+        historyEntries.next()
+        historyEntries.adopt(here)
+        surface.grow(0)
+        view.scrollY = 0
+        historyEntries.restore() // chain A: one retry frame queued for offset [0, 600]
+        expect(surface.frames.length).toBe(1)
+
+        // A second navigation to a fresh entry (no bucket) restores to the top — supersedes A.
+        historyEntries.next()
+        historyEntries.restore()
+        expect(view.scrollY).toBe(0)
+
+        // The page grows and chain A's stale frame runs — but its token is superseded, so
+        // it must not yank scroll back to 600.
+        surface.grow(600)
+        surface.frames.shift()?.()
+        expect(view.scrollY).toBe(0)
     })
 
     test('with no scroll surface, save and restore are no-ops (no throw)', () => {

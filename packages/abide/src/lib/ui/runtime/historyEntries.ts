@@ -51,6 +51,39 @@ const offsets = new Map<number, [number, number]>()
 let current = 0
 let seq = 0
 
+/* Generation token for an in-flight `restore` retry chain (below); a newer restore
+   bumps it so a stale chain — from a superseded navigation — stops re-applying. */
+let restoreToken = 0
+/* Frame budget for re-applying a saved offset while the page is still filling in.
+   ~half a second at 60fps — long enough for an async page's content to settle, short
+   enough not to fight a user who starts scrolling. */
+const MAX_RESTORE_FRAMES = 30
+
+/* Re-apply a saved offset until it sticks. A restore can land before the page's async
+   content has materialised — `disposeFrom` empties the document, `buildFrom` mounts a
+   page whose blocking `<template await>` is still pending, so the document is momentarily
+   short and the browser clamps the requested offset to its tiny max (an in-page episode
+   swap reset to the top this way). Each frame re-applies; once `scrollTo` is no longer
+   clamped (the content has grown tall enough to honour the offset) the chain stops, so
+   the common case — a page already tall — applies exactly once and schedules no frame. */
+function reapplyOffset(offset: [number, number], token: number): void {
+    const apply = (framesLeft: number): void => {
+        // A newer restore superseded this chain, or the scroll surface vanished.
+        if (token !== restoreToken || typeof view.scrollTo !== 'function') {
+            return
+        }
+        view.scrollTo(offset[0], offset[1])
+        // The browser clamps to the current max; an honoured offset means the page is
+        // tall enough now — stop. Otherwise retry next frame as the content fills in.
+        const reached = (view.scrollY ?? 0) >= offset[1] && (view.scrollX ?? 0) >= offset[0]
+        if (reached || framesLeft <= 0 || typeof view.requestAnimationFrame !== 'function') {
+            return
+        }
+        view.requestAnimationFrame(() => apply(framesLeft - 1))
+    }
+    apply(MAX_RESTORE_FRAMES)
+}
+
 export const historyEntries = {
     /* The active history entry's id — stamped into history.state by `navigate`. */
     get current(): number {
@@ -98,9 +131,14 @@ export const historyEntries = {
         if (typeof view.scrollTo !== 'function') {
             return
         }
+        /* Any restore supersedes a pending retry chain — including this top/anchor path,
+           so a later navigation to a fresh page can't have an earlier keepScroll swap's
+           re-apply fire its stale offset over it. */
+        restoreToken += 1
+        const token = restoreToken
         const offset = offsets.get(current) ?? persistedOffset()
         if (offset !== undefined) {
-            view.scrollTo(offset[0], offset[1])
+            reapplyOffset(offset, token)
             return
         }
         const anchor = anchorFor(hash)
