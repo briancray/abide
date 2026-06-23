@@ -93,6 +93,12 @@ const externalHref = scope().computed(() => url('https://bun.sh', { utm: 'abide'
             onclick={() => navigate(`/pages?ts=${Date.now()}`)}>
             same pathname — no fetch, no remount
         </button>
+        <button
+            type="button"
+            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+            onclick={() => navigate(`/pages?ts=${Date.now()}`, { keepScroll: true })}>
+            {"navigate(url, { keepScroll: true }) — hold scroll on in-page swap"}
+        </button>
     </div>
 </section>
 
@@ -159,7 +165,7 @@ const externalHref = scope().computed(() => url('https://bun.sh', { utm: 'abide'
 import { navigate } from '@abide/abide/ui/navigate'
 import { url } from '@abide/abide/shared/url'
 
-await navigate('/pages/product/1')                        // opts: { replace, scroll }
+await navigate('/pages/product/1')                        // opts: { replace, keepScroll }
 
 url('/rpc/getProduct', { id })          // /rpc/getProduct?id=2   — rpc args
 url('/pages/product/[id]', { id })      // /pages/product/2       — page params
