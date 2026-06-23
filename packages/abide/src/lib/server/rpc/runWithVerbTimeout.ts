@@ -19,18 +19,16 @@ export function runWithVerbTimeout(
     ms: number,
     onTimeout: () => void,
 ): Promise<Response> {
-    let timer: ReturnType<typeof setTimeout> | undefined
     let timedOut = false
-    const deadline = new Promise<Response>((resolve) => {
-        timer = setTimeout(() => {
-            timedOut = true
-            onTimeout()
-            resolve(error(504, 'handler timeout'))
-        }, ms)
-    })
+    const deadline = Promise.withResolvers<Response>()
+    const timer = setTimeout(() => {
+        timedOut = true
+        onTimeout()
+        deadline.resolve(error(504, 'handler timeout'))
+    }, ms)
     return (async () => {
         try {
-            return await Promise.race([work, deadline])
+            return await Promise.race([work, deadline.promise])
         } finally {
             clearTimeout(timer)
             if (timedOut) {
