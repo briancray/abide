@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { compileModule } from '../src/lib/ui/compile/compileModule.ts'
 import { lowerDocAccess } from '../src/lib/ui/compile/lowerDocAccess.ts'
 import { renameSignalRefs } from '../src/lib/ui/compile/renameSignalRefs.ts'
 
@@ -69,6 +70,28 @@ describe('renameSignalRefs — value-read snippets rewrite and stay valid', () =
             const out = renameSignalRefs(code, STATE, NONE)
             assertValid(out, label)
             expect(out).toContain('model.sig')
+        })
+    }
+})
+
+describe('compileModule — whole components with tricky syntax stay valid', () => {
+    /* End-to-end: corruption anywhere in the pipeline (desugar, lowerScript, the
+       per-expression lowerOnce, the generators) shows up as an unparseable module. */
+    const componentCorpus: Record<string, string> = {
+        'aliased import colliding with a prop, used in template': `<script>import { pending as pendingProbe } from 'm'
+const { query, pending = false } = props()
+const busy = scope().computed(() => pending && pendingProbe(query))</script><i>{busy}</i>`,
+        'optional chaining in an interpolation': `<script>const user = scope().state({})</script><i>{user?.name?.first}</i>`,
+        'optional-chain items in an each': `<script>const data = scope().state({})</script><ul><template each={data?.rows ?? []} as="row" key="row"><li>{row.id}</li></template></ul>`,
+        'destructure with colliding source key in a handler': `<script>const count = scope().state(0)
+const onClick = () => { const { count: c } = window; count(c) }</script><button on:click={onClick}>x</button>`,
+        'computed key referencing a signal': `<script>const k = scope().state('a')
+const obj = scope().computed(() => ({ [k]: 1 }))</script><i>{obj[k]}</i>`,
+        'nullish-coalescing in a binding': `<script>const name = scope().state('')</script><i>{name ?? 'anon'}</i>`,
+    }
+    for (const [label, source] of Object.entries(componentCorpus)) {
+        test(label, () => {
+            assertValid(compileModule(source, { isLayout: false }), label)
         })
     }
 })
