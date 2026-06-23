@@ -1,3 +1,4 @@
+import ts from 'typescript'
 import { ABIDE_PACKAGE_NAME } from '../../shared/ABIDE_PACKAGE_NAME.ts'
 import { analyzeComponent } from './analyzeComponent.ts'
 import { compileComponent } from './compileComponent.ts'
@@ -58,14 +59,6 @@ if (!hotReplace(${id}, component)) location.reload()
     }
 
     const ssrBody = indent(compileSSR(source, isLayout, options.moduleId, analyzed))
-    /* Per-component dead-import elimination: emit only the runtime names this module
-       actually references. A component that uses no `each`/`await`/`html` shouldn't
-       drag those modules into its chunk. The package isn't globally side-effect-free
-       (the dev/runtime entries register globals), so a bundler can't tree-shake the
-       unused imports for us — but the generated code is the one place that knows
-       exactly which names it emitted, so it filters here. A name absent from the body
-       is unreferenced; erring toward inclusion (a stray match in user script) only
-       keeps a harmless unused import, never drops a needed one. */
     const moduleBody = `function build(host, $props) {
 ${body}
 }
@@ -89,31 +82,19 @@ component.hydrate = hydrateInto
 component.build = build
 component.hydratable = ${analyzed.hydratable}
 ${options.moduleId === undefined ? '' : `component.__abideId = ${JSON.stringify(options.moduleId)}\n`}`
-    /* Scope each name to the surface that genuinely references it. The SSR body
-       carries fixed boilerplate ($attr/$text helpers, `<!--abide:html-->` markers,
-       the `{ html, state, awaits }` return shape) whose substrings would falsely
-       match value/DOM imports — so client helpers are matched against the client
-       build, render-pass helpers against the SSR body, and the two wrapper calls
-       (mount/hydrate) are always present. */
-    const clientSurface = `${userImports}\n${body}`
-    const isReferenced = (entry: { name: string; specifier: string }): boolean => {
-        if (entry.name === 'mount' || entry.name === 'hydrate') {
-            return true
-        }
-        /* The SSR render always brackets itself with a per-render scope (compileSSR),
-           so these are referenced whenever the `render` export is — i.e. always. */
-        if (entry.name === 'enterScope' || entry.name === 'exitScope') {
-            return true
-        }
-        /* Render-pass helpers are emitted by both back-ends (e.g. client and server
-           await/try blocks both call nextBlockId); their names are distinctive enough
-           that scanning both surfaces adds no false match. */
-        const surface = entry.specifier.startsWith('ui/runtime/')
-            ? `${clientSurface}\n${ssrBody}`
-            : clientSurface
-        return new RegExp(`\\b${entry.name}\\b`).test(surface)
-    }
-    const importBlock = UI_RUNTIME_IMPORTS.filter(isReferenced)
+    /* Per-component dead-import elimination: emit only the runtime helpers this module
+       references. A component using no `each`/`await`/`html` shouldn't drag those modules
+       into its chunk, and the package isn't globally side-effect-free (the dev/runtime
+       entries register globals), so a bundler can't tree-shake them for us.
+       Which to keep: tokenize the generated body and keep the names it genuinely
+       references. Reading the ACTUAL output (not hand-tracking emit sites) is safe by
+       construction — it can never drop a needed import, the way a missed emit-site tag
+       could. Tokenizing rather than substring-matching (`\bname\b`) means a name inside a
+       string/comment/HTML literal (e.g. an `on`-attribute in static markup) no longer
+       forces a spurious import, so no per-surface scoping is needed: a client-only helper
+       simply doesn't appear as an identifier in the SSR body. */
+    const referenced = collectIdentifiers(`${userImports}\n${body}\n${ssrBody}\n${moduleBody}`)
+    const importBlock = UI_RUNTIME_IMPORTS.filter((entry) => referenced.has(entry.name))
         .map((entry) => `import { ${entry.name} } from '${ABIDE_PACKAGE_NAME}/${entry.specifier}'`)
         .join('\n')
     return `${importBlock}
@@ -151,4 +132,28 @@ function unescapedBacktickCount(line: string): number {
         }
     }
     return count
+}
+
+/* The identifier names a generated module references — every Identifier token, scanned
+   from the real output so string / comment / HTML-literal contents are excluded. Used to
+   decide which runtime helpers to import; reading the output (vs hand-tracking emit
+   sites) can never drop a needed import. */
+function collectIdentifiers(code: string): Set<string> {
+    const scanner = ts.createScanner(
+        ts.ScriptTarget.Latest,
+        /* skipTrivia */ true,
+        ts.LanguageVariant.Standard,
+        code,
+    )
+    const names = new Set<string>()
+    for (
+        let token = scanner.scan();
+        token !== ts.SyntaxKind.EndOfFileToken;
+        token = scanner.scan()
+    ) {
+        if (token === ts.SyntaxKind.Identifier) {
+            names.add(scanner.getTokenValue())
+        }
+    }
+    return names
 }

@@ -259,6 +259,24 @@ const busy = scope().computed(() => pending && pendingProbe(query))</script><i>{
         expect(module).not.toMatch(/^from;/m)
     })
 
+    /* Dead-import elimination keeps every runtime helper the body references (never
+       drops a needed one) and excludes a helper NAME that only appears inside a string
+       literal (the substring regex used to over-include those). */
+    test('runtime imports cover what the body uses, and exclude string-literal matches', () => {
+        const module = compileModule(
+            `<script>const rows = scope().state([1, 2])</script><ul><template each={rows} as="r" key="r"><li>{r}</li></template></ul>`,
+        )
+        // the each block needs its helper imported
+        expect(module).toContain("from '@abide/abide/ui/dom/each'")
+        // and the module is valid (no dropped import would leave a dangling reference)
+        expect(() => new Bun.Transpiler({ loader: 'ts' }).transformSync(module)).not.toThrow()
+
+        /* `on` appears only inside static text — not as a real reference — so the event
+           helper must NOT be imported (a substring match would have pulled it in). */
+        const staticText = compileModule(`<i>turn it on and off</i>`)
+        expect(staticText).not.toContain("from '@abide/abide/ui/dom/on'")
+    })
+
     /* Imports hoist off the parsed tree structurally (not by a single-line regex), so a
        multi-line import lands at module scope regardless of formatting. */
     test('a multi-line import hoists to module scope', () => {
