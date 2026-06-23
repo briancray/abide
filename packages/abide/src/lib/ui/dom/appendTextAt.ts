@@ -4,6 +4,7 @@ import { effect } from '../effect.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { appendSnippet } from './appendSnippet.ts'
 import { appendText } from './appendText.ts'
+import { parseRawNodes } from './parseRawNodes.ts'
 
 /*
 A reactive `{expr}` interpolation mounted at a skeleton anchor comment (`<!--a-->`), used
@@ -51,9 +52,7 @@ export function appendTextAt(anchor: Node, read: () => unknown): void {
             for (const node of nodes) {
                 parent.removeChild(node)
             }
-            const holder = document.createElement('div')
-            holder.innerHTML = rawHtmlString(read()) ?? ''
-            nodes = [...holder.childNodes]
+            nodes = parseRawNodes(parent, rawHtmlString(read()) ?? '')
             /* Insert the fresh markup just after the anchor (its live re-insertion point). */
             const after = anchor.nextSibling
             for (const node of nodes) {

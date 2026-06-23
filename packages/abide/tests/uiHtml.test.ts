@@ -7,6 +7,7 @@ import { appendStatic } from '../src/lib/ui/dom/appendStatic.ts'
 import { appendText } from '../src/lib/ui/dom/appendText.ts'
 import { hydrate } from '../src/lib/ui/dom/hydrate.ts'
 import { on } from '../src/lib/ui/dom/on.ts'
+import { SVG_NAMESPACE } from '../src/lib/ui/dom/SVG_NAMESPACE.ts'
 import { effect } from '../src/lib/ui/effect.ts'
 import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
 import type { SsrRender } from '../src/lib/ui/runtime/types/SsrRender.ts'
@@ -79,5 +80,23 @@ describe('html`` raw markup via {expr}', () => {
 
         model.replace('code', html('<span>new</span>'))
         expect(host.textContent).toBe('new')
+    })
+
+    test('raw markup inside <svg> parses in the SVG namespace, on mount and on change', () => {
+        // An icon component: SVG inner markup injected via {html()} into an <svg> parent.
+        // The bare <path> must land in the SVG namespace or it renders as nothing.
+        const src = `<svg>{model.icon}</svg>`
+        const host = document.createElement('div')
+        const model = doc({ icon: html('<path d="M1 1"/>') })
+        run(src, host, model, 'mount')
+
+        const svg = host.childNodes[0] as unknown as { childNodes: { namespaceURI?: string }[] }
+        const path = svg.childNodes.find((n) => n.namespaceURI !== undefined)
+        expect(path?.namespaceURI).toBe(SVG_NAMESPACE)
+
+        // The client re-parse path (set on change) must keep the namespace too.
+        model.replace('icon', html('<circle r="2"/>'))
+        const circle = svg.childNodes.find((n) => n.namespaceURI !== undefined)
+        expect(circle?.namespaceURI).toBe(SVG_NAMESPACE)
     })
 })

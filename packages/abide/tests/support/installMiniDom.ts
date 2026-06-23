@@ -8,6 +8,25 @@ parsing, and HTML serialization. Installs `document`, `Event`, `Node`,
 `serializeMiniDom`, and `parseHTML` on globalThis and returns a reset.
 */
 export function installMiniDom(): () => void {
+    const HTML_NS = 'http://www.w3.org/1999/xhtml'
+    const SVG_NS = 'http://www.w3.org/2000/svg'
+    const MATHML_NS = 'http://www.w3.org/1998/Math/MathML'
+    /* The namespace an element gets given the namespace it is parsed in: `<svg>`/`<math>`
+       enter their foreign namespace; everything else stays in the current one — mirroring
+       the HTML parser's foreign-content rules. */
+    const elementNamespace = (tagName: string, current: string): string => {
+        if (tagName === 'svg') {
+            return SVG_NS
+        }
+        if (tagName === 'math') {
+            return MATHML_NS
+        }
+        return current
+    }
+    /* The namespace this element's children parse in. `<foreignObject>` is SVG's re-entry
+       point back into HTML, so its children revert despite its own SVG namespace. */
+    const childNamespace = (tagName: string, own: string): string =>
+        own === SVG_NS && tagName === 'foreignObject' ? HTML_NS : own
     const VOID = new Set([
         'area',
         'base',
@@ -182,15 +201,21 @@ export function installMiniDom(): () => void {
 
     class MiniElement extends MiniNode {
         tagName: string
+        /* The element's namespace, mirroring the real DOM: `createElement` is HTML,
+           `createElementNS` is the given one, and `innerHTML` propagates the holder's
+           namespace to parsed descendants — so a `<path>` parsed under an SVG holder
+           reports the SVG namespace (the property `parseRawNodes` keys off). */
+        namespaceURI: string
         attributes = new Map<string, string>()
         listeners = new Map<string, Set<EventListener>>()
         /* A `<template>` parses its `innerHTML` into `.content` (a holder node), not
            its own children — matching the real DocumentFragment. `cloneStatic` clones
            `content`'s children. */
         content: MiniNode | undefined = undefined
-        constructor(tagName: string) {
+        constructor(tagName: string, namespaceURI = HTML_NS) {
             super()
             this.tagName = tagName
+            this.namespaceURI = namespaceURI
             if (tagName === 'template') {
                 this.content = new MiniNode()
             }
@@ -199,6 +224,11 @@ export function installMiniDom(): () => void {
            can match against `nodeName === 'SCRIPT'` as they would in a browser. */
         get nodeName(): string {
             return this.tagName.toUpperCase()
+        }
+        /* The lowercased tag, as the real DOM exposes it — `inheritedNamespace` reads it
+           to spot `<foreignObject>` (SVG's re-entry into HTML). */
+        get localName(): string {
+            return this.tagName
         }
         get children(): MiniElement[] {
             return this.childNodes.filter(
@@ -239,12 +269,19 @@ export function installMiniDom(): () => void {
                 child.parentNode = undefined
             }
             target.childNodes = []
-            for (const node of parseHTML(html)) {
+            /* Parse in this element's child namespace so `svg.innerHTML = '<path/>'`
+               namespaces the path — the property the foreign-content paths key off. A
+               <template>'s content is an HTML context regardless of the template's own ns. */
+            const context =
+                this.content !== undefined
+                    ? HTML_NS
+                    : childNamespace(this.tagName, this.namespaceURI)
+            for (const node of parseHTML(html, context)) {
                 target.appendChild(node)
             }
         }
         cloneNode(deep = false): MiniNode {
-            const clone = new MiniElement(this.tagName)
+            const clone = new MiniElement(this.tagName, this.namespaceURI)
             clone.attributes = new Map(this.attributes)
             if (this.content !== undefined) {
                 clone.content = this.content.cloneNode(true)
@@ -266,9 +303,9 @@ export function installMiniDom(): () => void {
     }
 
     /* Recursive-descent HTML parser → mini nodes (elements, text, comments). */
-    function parseHTML(html: string): MiniNode[] {
+    function parseHTML(html: string, namespace = HTML_NS): MiniNode[] {
         let cursor = 0
-        const parseNodes = (closeTag: string | undefined): MiniNode[] => {
+        const parseNodes = (closeTag: string | undefined, currentNs: string): MiniNode[] => {
             const nodes: MiniNode[] = []
             while (cursor < html.length) {
                 if (html.startsWith('<!--', cursor)) {
@@ -284,7 +321,7 @@ export function installMiniDom(): () => void {
                         return nodes
                     }
                 } else if (html.charAt(cursor) === '<') {
-                    nodes.push(parseElement())
+                    nodes.push(parseElement(currentNs))
                 } else {
                     const next = html.indexOf('<', cursor)
                     const stop = next === -1 ? html.length : next
@@ -294,14 +331,15 @@ export function installMiniDom(): () => void {
             }
             return nodes
         }
-        const parseElement = (): MiniNode => {
+        const parseElement = (currentNs: string): MiniNode => {
             cursor += 1
             let name = ''
             while (cursor < html.length && !/[\s>/]/.test(html.charAt(cursor))) {
                 name += html.charAt(cursor)
                 cursor += 1
             }
-            const element = new MiniElement(name)
+            const ownNs = elementNamespace(name, currentNs)
+            const element = new MiniElement(name, ownNs)
             while (
                 cursor < html.length &&
                 html.charAt(cursor) !== '>' &&
@@ -348,13 +386,13 @@ export function installMiniDom(): () => void {
                 cursor += 1
             }
             if (!selfClosing && !VOID.has(name)) {
-                for (const child of parseNodes(name)) {
+                for (const child of parseNodes(name, childNamespace(name, ownNs))) {
                     element.appendChild(child)
                 }
             }
             return element
         }
-        return parseNodes(undefined)
+        return parseNodes(undefined, namespace)
     }
 
     const serializeNode = (node: MiniNode): string => {

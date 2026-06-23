@@ -4,6 +4,7 @@ import { effect } from '../effect.ts'
 import { claimChild } from '../runtime/claimChild.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { appendSnippet } from './appendSnippet.ts'
+import { parseRawNodes } from './parseRawNodes.ts'
 
 const CLOSE = '/abide:html'
 
@@ -73,9 +74,7 @@ function appendRawHtml(parent: Node, read: () => unknown): void {
         for (const node of nodes) {
             parent.removeChild(node)
         }
-        const holder = document.createElement('div')
-        holder.innerHTML = value
-        nodes = [...holder.childNodes]
+        nodes = parseRawNodes(parent, value)
         for (const node of nodes) {
             parent.insertBefore(node, anchor)
         }
