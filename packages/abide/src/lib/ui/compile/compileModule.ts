@@ -1,6 +1,7 @@
 import ts from 'typescript'
 import { ABIDE_PACKAGE_NAME } from '../../shared/ABIDE_PACKAGE_NAME.ts'
 import { analyzeComponent } from './analyzeComponent.ts'
+import { assertTranspiles } from './assertTranspiles.ts'
 import { compileComponent } from './compileComponent.ts'
 import { compileSSR } from './compileSSR.ts'
 import { UI_RUNTIME_IMPORTS } from './UI_RUNTIME_IMPORTS.ts'
@@ -97,10 +98,17 @@ ${options.moduleId === undefined ? '' : `component.__abideId = ${JSON.stringify(
     const importBlock = UI_RUNTIME_IMPORTS.filter((entry) => referenced.has(entry.name))
         .map((entry) => `import { ${entry.name} } from '${ABIDE_PACKAGE_NAME}/${entry.specifier}'`)
         .join('\n')
-    return `${importBlock}
+    const module = `${importBlock}
 ${userImports}
 
 ${moduleBody}`
+    /* Fail-loud over the WHOLE module, not just the script: the `generateBuild` /
+       `generateSSR` back-ends emit the build and render bodies as string-codegen, the
+       largest un-typed surface in the pipeline. A corruption there (a bad emit on a
+       template shape no test exercises) otherwise ships as a broken bundle; this surfaces
+       it as a located compile error for every component. */
+    assertTranspiles(module, 'component module generation')
+    return module
 }
 
 /* Indents a body block for embedding inside a wrapper function. Lines whose start

@@ -107,6 +107,32 @@ export function docAccessTransformer(docName: string): ts.TransformerFactory<ts.
                     }
                 }
             }
+            /* `path++` / `++path` / `path--` on a doc path → a replace patch (the same
+               shape as `+= 1`). A bare `++` would otherwise survive onto the lowered read
+               (`model.read("n")++` / `cell.get()++`) — invalid, since a call result is not
+               an lvalue. abide handlers are statements, so the postfix/prefix value is
+               discarded and both lower identically. Only `++`/`--` are handled here; other
+               unary operators (`!path`, `-path`) fall through so their operand lowers as a
+               normal read. */
+            if (
+                (ts.isPostfixUnaryExpression(node) || ts.isPrefixUnaryExpression(node)) &&
+                (node.operator === ts.SyntaxKind.PlusPlusToken ||
+                    node.operator === ts.SyntaxKind.MinusMinusToken)
+            ) {
+                const segments = pathSegments(node.operand)
+                if (segments) {
+                    const step =
+                        node.operator === ts.SyntaxKind.PlusPlusToken
+                            ? ts.SyntaxKind.PlusToken
+                            : ts.SyntaxKind.MinusToken
+                    const next = ts.factory.createBinaryExpression(
+                        docCall(docName, 'read', [buildPath(segments)]),
+                        step,
+                        ts.factory.createNumericLiteral(1),
+                    )
+                    return docCall(docName, 'replace', [buildPath(segments), next])
+                }
+            }
             /* doc array `.push(a, b, …)` → one `add` patch per argument at the array's `-`
                slot, matching native multi-arg push (each lands at the end in order). */
             if (

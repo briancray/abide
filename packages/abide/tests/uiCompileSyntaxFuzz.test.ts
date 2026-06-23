@@ -88,6 +88,7 @@ const onClick = () => { const { count: c } = window; count(c) }</script><button 
         'computed key referencing a signal': `<script>const k = scope().state('a')
 const obj = scope().computed(() => ({ [k]: 1 }))</script><i>{obj[k]}</i>`,
         'nullish-coalescing in a binding': `<script>const name = scope().state('')</script><i>{name ?? 'anon'}</i>`,
+        'increment in an event handler': `<script>const n = scope().state(0)</script><button on:click={n++}>count {n}</button>`,
     }
     for (const [label, source] of Object.entries(componentCorpus)) {
         test(label, () => {

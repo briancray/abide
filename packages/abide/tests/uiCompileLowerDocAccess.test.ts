@@ -15,6 +15,19 @@ describe('lowerDocAccess — emitted shape', () => {
         expect(lower("model.note = 'x'")).toContain('model.replace("note", \'x\')')
     })
 
+    test('increment/decrement on a doc path becomes a replace patch', () => {
+        /* `n++` would otherwise leave `model.read("n")++` (or `cell.get()++`) — invalid,
+           a call result is not an lvalue. Postfix and prefix lower identically. */
+        expect(lower('model.n++')).toContain('model.replace("n", model.read("n") + 1)')
+        expect(lower('++model.n')).toContain('model.replace("n", model.read("n") + 1)')
+        expect(lower('model.n--')).toContain('model.replace("n", model.read("n") - 1)')
+    })
+
+    test('a non-inc/dec unary operator lowers its operand as a normal read', () => {
+        expect(lower('-model.n')).toContain('-model.read("n")')
+        expect(lower('!model.flag')).toContain('!model.read("flag")')
+    })
+
     test('nested static path folds into one string literal', () => {
         expect(lower('model.lines[0].sku')).toContain('model.read("lines/0/sku")')
     })

@@ -1,4 +1,5 @@
 import ts from 'typescript'
+import { assertTranspiles } from './assertTranspiles.ts'
 import { desugarSignals } from './desugarSignals.ts'
 import { docAccessTransformer } from './lowerDocAccess.ts'
 import { signalRefsTransformer } from './renameSignalRefs.ts'
@@ -19,9 +20,6 @@ surfaces here as a located compile error instead of shipping a broken bundle.
 */
 
 const printer = ts.createPrinter({ newLine: ts.NewLineKind.LineFeed })
-
-/* Throws on invalid syntax — the corruption tripwire for the rewrite passes. */
-const transpiler = new Bun.Transpiler({ loader: 'ts' })
 
 export function lowerScript(scriptBody: string): {
     body: string
@@ -50,13 +48,9 @@ export function lowerScript(scriptBody: string): {
     const body = printer.printFile(ts.factory.updateSourceFile(transformed, bodyStatements)).trim()
     result.dispose()
 
-    const reassembled = [imports, body].filter((part) => part !== '').join('\n')
-    try {
-        transpiler.transformSync(reassembled)
-    } catch (error) {
-        throw new Error(
-            `[abide] component script lowering produced invalid syntax — please report this with the component source. Lowered output:\n${reassembled}\n\n${String(error)}`,
-        )
-    }
+    assertTranspiles(
+        [imports, body].filter((part) => part !== '').join('\n'),
+        'component script lowering',
+    )
     return { body, imports, stateNames, derivedNames, computedNames }
 }
