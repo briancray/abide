@@ -80,6 +80,14 @@ export function renameSignalRefs(
                     ) {
                         return node
                     }
+                    /* Import/export specifiers are binding/module names, never value reads.
+                       An aliased import whose original name collides with a signal
+                       (`import { pending as p }` next to a `pending` prop) would otherwise
+                       have its `pending` specifier rewritten to the reader form, corrupting
+                       the declaration. Leave the whole subtree untouched. */
+                    if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
+                        return node
+                    }
                     /* Shorthand `{ count }` → `{ count: model.count }` / `{ total: total.value }`,
                        unless a nearer scope shadows the name. */
                     if (ts.isShorthandPropertyAssignment(node) && !shadowed.has(node.name.text)) {

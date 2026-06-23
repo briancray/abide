@@ -243,6 +243,22 @@ const { option, ...rest } = props<Props>()</script><i {...rest}>{option}</i>`,
         expect(body).not.toContain('option():')
     })
 
+    /* An aliased import whose ORIGINAL name collides with a signal binding
+       (`import { pending as p }` alongside a `pending` prop) must survive the
+       signal rewrite — the specifier is a binding name, not a value read. */
+    test('an aliased import surviving a colliding signal binding', () => {
+        const module = compileModule(
+            `<script>import { pending as pendingProbe } from '@abide/abide/shared/pending'
+const { query, pending = false } = props()
+const busy = scope().computed(() => pending && pendingProbe(query))</script><i>{busy}</i>`,
+        )
+        expect(module).toContain(
+            "import { pending as pendingProbe } from '@abide/abide/shared/pending'",
+        )
+        expect(module).not.toContain('from ()')
+        expect(module).not.toMatch(/^from;/m)
+    })
+
     /* A bare `{expr}` at attribute position is a likely-mistaken spread missing its dots. */
     test('a bare {expr} attribute is a compile error pointing at spread syntax', () => {
         expect(() => compileComponent(`<Card {rest} />`)).toThrow(/write \{\.\.\.expr\}/)
