@@ -282,6 +282,48 @@ describe('router', () => {
         dispose()
     })
 
+    /* A navigation within the same route key — only a path param differs (e.g. stepping
+       between episodes on one detail page) — keeps the leaf page mounted and updates it
+       through the reactive `page` proxy, no teardown. A differing query still rebuilds. */
+    test('a same-route-key param change updates in place without re-mounting the page', async () => {
+        setPageResolver(() => clientPage.value)
+        const host = document.createElement('div')
+        let mounts = 0
+        const seen: string[] = []
+        const itemPage = (target: Element) => {
+            mounts += 1
+            const stop = effect(() => {
+                seen.push(page.params.rest ?? '')
+            })
+            target.appendChild(document.createTextNode('item'))
+            return stop
+        }
+        const dispose = router(host, {
+            '/item/[...rest]': loader(itemPage),
+            '*': loader((target: Element) => {
+                target.appendChild(document.createTextNode('x'))
+                return () => undefined
+            }),
+        })
+
+        navigate('/item/a')
+        await flush()
+        expect(mounts).toBe(1)
+
+        navigate('/item/b') // same route key, different path param
+        await flush()
+        expect(mounts).toBe(1) // in place — not re-mounted
+        expect(seen.at(-1)).toBe('b') // the proxy update propagated to the live page
+
+        navigate('/item/c?q=1') // a query is page data — this one rebuilds
+        await flush()
+        expect(mounts).toBe(2)
+
+        dispose()
+        pageSlot.resolver = undefined
+        pageSlot.fallback = undefined
+    })
+
     /* A hash hop while a slower full navigation's chunk is still in flight must invalidate
        that navigation, so its late resolution can't rebuild over the page the hash hop keeps
        mounted (the token guard only bails on a NEWER sequence — the shortcut must bump it). */
@@ -353,5 +395,42 @@ describe('router', () => {
         expect(host.textContent).toBe('home')
 
         dispose()
+    })
+
+    /* Containment: a page that THROWS while mounting (a codegen defect — e.g. a dropped
+       runtime import — or a throw in user render) is deterministic; reloading re-runs the
+       same failure. The router must surface the error and stay alive, never escalate to the
+       reload path (which, in a browser, would loop forever). */
+    test('a page that throws while mounting is contained, not reloaded', async () => {
+        const host = document.createElement('div')
+        const errors: string[] = []
+        const originalError = console.error
+        console.error = (...args: unknown[]) => {
+            errors.push(args.map(String).join(' '))
+        }
+        try {
+            const dispose = router(host, {
+                '/boom': loader(() => {
+                    throw new Error('render kaboom')
+                }),
+                '/ok': loader((target) => {
+                    target.appendChild(document.createTextNode('ok'))
+                }),
+            })
+
+            navigate('/boom')
+            await flush()
+            // Surfaced, not swallowed — and explicitly NOT reloaded.
+            expect(errors.some((message) => message.includes('threw while mounting'))).toBe(true)
+
+            // The router is not wedged: a working route still mounts after the failure.
+            navigate('/ok')
+            await flush()
+            expect(host.textContent).toBe('ok')
+
+            dispose()
+        } finally {
+            console.error = originalError
+        }
     })
 })

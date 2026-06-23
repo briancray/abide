@@ -55,6 +55,71 @@ describe('page proxy', () => {
         expect(page.navigating).toBe(false)
     })
 
+    test('params are granular: a reader of one param does not wake on another param change', () => {
+        setPageResolver(() => clientPage.value)
+        clientPage.value = {
+            route: '/media/[id]/[...rest]',
+            params: { id: '87755', rest: 's/1/e/1' },
+            url: new URL('https://app.test/media/87755/s/1/e/1'),
+            navigating: false,
+        }
+        let idReads = 0
+        let restReads = 0
+        const stopId = effect(() => {
+            void page.params.id
+            idReads += 1
+        })
+        const stopRest = effect(() => {
+            void page.params.rest
+            restReads += 1
+        })
+        expect([idReads, restReads]).toEqual([1, 1])
+
+        // step the episode: only `rest` changes — the id reader must stay asleep
+        clientPage.value = {
+            route: '/media/[id]/[...rest]',
+            params: { id: '87755', rest: 's/1/e/2' },
+            url: new URL('https://app.test/media/87755/s/1/e/2'),
+            navigating: false,
+        }
+        expect(idReads).toBe(1) // granular: unchanged id did not wake
+        expect(restReads).toBe(2) // rest changed → its reader woke
+
+        // change the id → its reader wakes
+        clientPage.value = {
+            route: '/media/[id]/[...rest]',
+            params: { id: '99999', rest: 's/1/e/2' },
+            url: new URL('https://app.test/media/99999/s/1/e/2'),
+            navigating: false,
+        }
+        expect(idReads).toBe(2)
+        stopId()
+        stopRest()
+    })
+
+    test('a param the new route drops reads back undefined and wakes its reader', () => {
+        setPageResolver(() => clientPage.value)
+        clientPage.value = {
+            route: '/media/[id]/[...rest]',
+            params: { id: '1', rest: 'a' },
+            url: new URL('https://app.test/media/1/a'),
+            navigating: false,
+        }
+        const seen: (string | undefined)[] = []
+        const stop = effect(() => {
+            seen.push(page.params.rest)
+        })
+        expect(seen).toEqual(['a'])
+        clientPage.value = {
+            route: '/media/[id]',
+            params: { id: '1' },
+            url: new URL('https://app.test/media/1'),
+            navigating: false,
+        }
+        expect(seen).toEqual(['a', undefined]) // the dropped param cleared and woke
+        stop()
+    })
+
     test('is reactive: reading page.url in an effect re-runs when clientPage updates', () => {
         setPageResolver(() => clientPage.value)
         clientPage.value = {

@@ -36,6 +36,47 @@ const resolveUrl = (path: string): URL =>
         ? new URL(`http://localhost${path}`)
         : new URL(path, location.origin)
 
+/* A full browser load is the recovery for an import/probe failure — offline, a hashed
+   chunk name rotated by a deploy, a transient 5xx. But a DETERMINISTIC failure (a chunk
+   that throws every load) would reload forever. Bound it per destination: after
+   MAX_RECOVERY_RELOADS consecutive reloads of the same URL, stop and leave the error
+   visible instead of thrashing. `sessionStorage` so the count survives the reload it
+   triggers (and clears with the tab); absent it (SSR / privacy mode), fall back to a
+   single reload. `clearRecoveryReloads` resets the count once that URL mounts cleanly,
+   so a later genuine blip gets its reload again. */
+const MAX_RECOVERY_RELOADS = 2
+const reloadCountKey = (url: string): string => `abide:reload:${url}`
+
+function boundedReload(url: string): void {
+    if (typeof location === 'undefined') {
+        return
+    }
+    let count = 0
+    try {
+        count = Number(sessionStorage.getItem(reloadCountKey(url)) ?? '0')
+        sessionStorage.setItem(reloadCountKey(url), String(count + 1))
+    } catch {
+        /* sessionStorage blocked — proceed with an unbounded single reload. */
+    }
+    if (count >= MAX_RECOVERY_RELOADS) {
+        console.error(
+            `[abide] gave up reloading ${url} after ${count} attempts — the page keeps failing to load. See the error above.`,
+        )
+        return
+    }
+    location.href = url
+}
+
+/* A URL mounted cleanly — forget its reload history so a future transient failure there
+   is allowed to recover by reloading again. */
+function clearRecoveryReloads(url: string): void {
+    try {
+        sessionStorage.removeItem(reloadCountKey(url))
+    } catch {
+        /* nothing persisted — nothing to clear. */
+    }
+}
+
 /*
 A minimal client router on the History API. `router` matches the current path
 against the route patterns (literal / `[name]` / `[...rest]`, via matchRoute),
@@ -73,6 +114,11 @@ export function router(
     /* The mounted layout chain (outermost first) + the page disposer. */
     const mountedLayouts: MountedLayout[] = []
     let disposePage: (() => void) | undefined
+    /* The route key of the currently mounted leaf page — its identity for the
+       same-page in-place diff: when a navigation resolves to this same key with an
+       unchanged layout chain, only params/url differ, so the page stays mounted and
+       updates through the reactive `page` proxy (no teardown). */
+    let mountedPageKey: string | undefined
     /* The root outlet boundary in `host` (`#app`) the outermost layer fills — established
        once on the first mount (claimed from the SSR DOM when hydrating, created otherwise)
        and reused across navigations, since `#app` itself never re-mounts. */
@@ -167,6 +213,7 @@ export function router(
                 boundary = slot
             }
             if (pageView === undefined) {
+                mountedPageKey = undefined
                 return
             }
             disposePage = fillBoundary(
@@ -177,6 +224,7 @@ export function router(
                 /* The page's route key names its scope in the inspector (see above). */
                 pageKey,
             ).dispose
+            mountedPageKey = pageKey
         }
         if (hydrating) {
             const previous = RENDER.hydration
@@ -357,9 +405,7 @@ export function router(
                     /* handle() blocked it / redirected off-origin / the probe failed:
                    let the browser load the server's real response. */
                     if (decision.kind === 'reload') {
-                        if (typeof location !== 'undefined') {
-                            location.href = decision.url
-                        }
+                        boundedReload(decision.url)
                         return
                     }
                     const layoutViews = resolvedLayouts.filter(
@@ -377,6 +423,36 @@ export function router(
                     }
                     const hydrating = first && pageView?.hydratable === true
                     first = false
+                    /* Same page, same layout chain — only params/url differ (e.g. stepping
+                       between episodes on one detail page). The whole structure survives, so
+                       publish the new snapshot on the reactive `page` proxy and let the mounted
+                       page + layouts re-derive in place — no teardown, no rebuild, so local
+                       state, scroll, and DOM are kept (the persistence layouts already get,
+                       now extended to the leaf). A reader keyed on an *unchanged* param (a page
+                       whose data is `cache(...)({ id: page.params.id })`) doesn't re-fire at
+                       all — value-memoised computeds stop the equal id from waking it — so the
+                       page's blocking await never re-suspends. No view transition: nothing
+                       structurally swaps. */
+                    const targetUrl = resolveUrl(path)
+                    const samePageInPlace =
+                        pageView !== undefined &&
+                        key === mountedPageKey &&
+                        divergence === mountedLayouts.length &&
+                        divergence === chainKeys.length &&
+                        /* A differing query is page data — it still rebuilds, matching the
+                           hash-only fast path's guard. Only path-param changes within the same
+                           route key (e.g. the episode segment) take the in-place route. */
+                        clientPage.value.url.search === targetUrl.search
+                    if (samePageInPlace) {
+                        clientPage.value = {
+                            route: chainRoute,
+                            params,
+                            url: targetUrl,
+                            navigating: false,
+                        }
+                        historyEntries.restore(targetUrl.hash)
+                        return
+                    }
                     /* The DOM mutation a navigation makes: tear the divergent chain down
                    (clearing its content from its boundary) and rebuild into the same
                    boundary (hydration adopts in place). */
@@ -413,6 +489,23 @@ export function router(
                        (a fresh load with no persisted offset falls through to hash/top). */
                         historyEntries.restore(url.hash)
                     }
+                    /* Build / hydrate is the deterministic surface — a codegen defect or a
+                       throw in user render code fails the SAME way every load, so reloading
+                       would loop forever. Catch it HERE (not in the outer `.catch`, which a
+                       hydrating swap's synchronous throw would otherwise reach): surface the
+                       error and stop, never reload. A clean mount clears any prior recovery
+                       reloads for this URL so a later transient failure can recover again. */
+                    const commit = (): void => {
+                        try {
+                            swap()
+                            clearRecoveryReloads(resolveUrl(path).href)
+                        } catch (error) {
+                            console.error(
+                                `[abide] page at ${path} threw while mounting — not reloading (a reload would re-run the same failure):`,
+                                error,
+                            )
+                        }
+                    }
                     /* Wrap the swap in a View Transition where the browser supports it, so
                    the page change cross-fades (and shared `view-transition-name` elements
                    morph) — the synchronous swap is exactly the mutation the API snapshots
@@ -423,23 +516,23 @@ export function router(
                         typeof document !== 'undefined' &&
                         'startViewTransition' in document
                     ) {
-                        document.startViewTransition(swap)
+                        document.startViewTransition(commit)
                     } else {
-                        swap()
+                        commit()
                     }
                 })
-                .catch(() => {
-                    /* A page/layout chunk import (or the probe) rejected — offline, a hashed
-                   chunk filename rotated by a deploy, or a transient asset 5xx. Without
-                   this the navigating:true latched above never clears (a bound spinner
-                   spins forever) and the rejection surfaces as an unhandledrejection.
-                   Fall back to a full browser load so the server serves the target. */
+                .catch((error) => {
+                    /* A page/layout chunk IMPORT (or the probe) rejected — offline, a hashed
+                   chunk filename rotated by a deploy, or a transient asset 5xx: recoverable,
+                   so a full browser load is the right fallback (and clears the latched
+                   navigating:true, so a bound spinner doesn't spin forever). Bounded, so a
+                   chunk that fails to import every time can't reload-loop. Deterministic
+                   render throws don't land here — `commit` swallows them above. */
                     if (token !== sequence || disposed) {
                         return
                     }
-                    if (typeof location !== 'undefined') {
-                        location.href = resolveUrl(path).href
-                    }
+                    console.error(`[abide] failed to load page at ${path} — reloading:`, error)
+                    boundedReload(resolveUrl(path).href)
                 })
         })
     })
