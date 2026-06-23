@@ -52,7 +52,7 @@ describe('navigate — history-entry identity + scroll capture', () => {
         navigate('/b')
         expect((globals.history as { state: EntryState }).state.abideEntry).toBe(first + 1)
 
-        navigate('/b', true) // replace honouring a redirect — same history position
+        navigate('/b', { replace: true }) // replace honouring a redirect — same history position
         expect((globals.history as { state: EntryState }).state.abideEntry).toBe(first + 1)
     })
 

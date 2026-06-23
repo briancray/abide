@@ -351,7 +351,7 @@ export function router(
                     /* handle() redirected: go where it pointed, replacing the blocked
                    URL so back doesn't trap on it. The router re-probes the target. */
                     if (decision.kind === 'redirect') {
-                        navigate(decision.path, true)
+                        navigate(decision.path, { replace: true })
                         return
                     }
                     /* handle() blocked it / redirected off-origin / the probe failed:
