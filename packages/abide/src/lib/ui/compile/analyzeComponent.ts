@@ -35,6 +35,7 @@ export function analyzeComponent(source: string, scopeSeed?: string): AnalyzedCo
        mount/render function the body becomes. It returns the collected signal name sets. */
     const {
         body: script,
+        ssrBody: ssrScript,
         imports,
         stateNames,
         derivedNames,
@@ -48,6 +49,7 @@ export function analyzeComponent(source: string, scopeSeed?: string): AnalyzedCo
     const styles = annotateScopes(nodes, [], scopeSeed, { count: 0 })
     return {
         script,
+        ssrScript,
         imports,
         stateNames,
         derivedNames,

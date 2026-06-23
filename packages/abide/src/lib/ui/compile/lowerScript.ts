@@ -3,6 +3,7 @@ import { assertTranspiles } from './assertTranspiles.ts'
 import { desugarSignals } from './desugarSignals.ts'
 import { docAccessTransformer } from './lowerDocAccess.ts'
 import { signalRefsTransformer } from './renameSignalRefs.ts'
+import { stripEffectsTransformer } from './stripEffects.ts'
 
 /*
 The component-script lowering, done in ONE parse. The script is parsed once, then
@@ -24,6 +25,7 @@ const printer = ts.createPrinter({ newLine: ts.NewLineKind.LineFeed })
 export function lowerScript(scriptBody: string): {
     body: string
     imports: string
+    ssrBody: string
     stateNames: Set<string>
     derivedNames: Set<string>
     computedNames: Set<string>
@@ -45,12 +47,19 @@ export function lowerScript(scriptBody: string): {
     const imports = importStatements
         .map((statement) => printer.printNode(ts.EmitHint.Unspecified, statement, transformed))
         .join('\n')
-    const body = printer.printFile(ts.factory.updateSourceFile(transformed, bodyStatements)).trim()
+    const bodyFile = ts.factory.updateSourceFile(transformed, bodyStatements)
+    const body = printer.printFile(bodyFile).trim()
+    /* The SSR variant strips client-only `effect(...)` calls — run over the SAME lowered
+       tree (one extra transform + print, no reparse) instead of re-parsing the printed
+       script downstream. */
+    const ssrResult = ts.transform(bodyFile, [stripEffectsTransformer()])
+    const ssrBody = printer.printFile(ssrResult.transformed[0] as ts.SourceFile).trim()
+    ssrResult.dispose()
     result.dispose()
 
     assertTranspiles(
         [imports, body].filter((part) => part !== '').join('\n'),
         'component script lowering',
     )
-    return { body, imports, stateNames, derivedNames, computedNames }
+    return { body, imports, ssrBody, stateNames, derivedNames, computedNames }
 }

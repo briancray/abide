@@ -7,7 +7,12 @@ The shared front-end result for a component, consumed by both the client
 (so template expressions rewrite consistently), and the parsed template tree.
 */
 export type AnalyzedComponent = {
+    /* The lowered client script — keeps `effect(...)` calls (client lifecycle). */
     script: string
+    /* The same lowered script with `effect(...)` calls stripped, for the SSR render
+       (effects emit no HTML and must not run on the server). Produced from the one
+       parse `script` came from, not a downstream re-parse. */
+    ssrScript: string
     /* Top-level import statements hoisted out of the script (e.g. child
        components), placed at module scope by the module wrapper. */
     imports: string

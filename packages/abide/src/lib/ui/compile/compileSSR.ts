@@ -1,7 +1,6 @@
 import { analyzeComponent } from './analyzeComponent.ts'
 import { generateSSR } from './generateSSR.ts'
 import { SSR_ESCAPE } from './SSR_ESCAPE.ts'
-import { stripEffects } from './stripEffects.ts'
 import type { AnalyzedComponent } from './types/AnalyzedComponent.ts'
 
 /*
@@ -44,8 +43,7 @@ export function compileSSR(
     scopeSeed?: string,
     analyzed: AnalyzedComponent = analyzeComponent(source, scopeSeed),
 ): string {
-    const { script, stateNames, derivedNames, computedNames, nodes } = analyzed
-    const lowered = stripEffects(script)
+    const { ssrScript: lowered, stateNames, derivedNames, computedNames, nodes } = analyzed
     const ssr = generateSSR(nodes, stateNames, derivedNames, computedNames, isLayout)
     /* No `<style>` in the markup — the scoped CSS is bundled into the entry stylesheet
        the shell links (see `abideUiPlugin`), so SSR output is styled by that sheet. The
