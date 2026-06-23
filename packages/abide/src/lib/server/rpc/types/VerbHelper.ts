@@ -4,6 +4,21 @@ import type { StandardSchemaV1 } from '../../../shared/types/StandardSchemaV1.ts
 import type { RemoteHandler } from './RemoteHandler.ts'
 
 /*
+Options every verb overload accepts: the OpenAPI 200 `outputSchema`, the
+`clients` surface flags, the same-origin CSRF exemption (`crossOrigin`), the
+pre-parse body-byte ceiling (`maxBodySize`), and the per-surface handler
+`timeout` (ms). The schema-bearing overloads intersect this with their own
+`inputSchema`/`filesSchema` members.
+*/
+type VerbBaseOpts = {
+    outputSchema?: StandardSchemaV1
+    clients?: Partial<ClientFlags>
+    crossOrigin?: boolean
+    maxBodySize?: number
+    timeout?: number
+}
+
+/*
 Shared signature for every verb helper (GET / POST / …). Three overloads:
 
   - `Verb(fn, { inputSchema, outputSchema?, clients? })` — `Args` infers
@@ -50,36 +65,18 @@ export type VerbHelper = {
             StandardSchemaV1.InferOutput<InputSchema> & StandardSchemaV1.InferOutput<FilesSchema>,
             Return
         >,
-        opts: {
+        opts: VerbBaseOpts & {
             inputSchema: InputSchema
             filesSchema: FilesSchema
-            outputSchema?: StandardSchemaV1
-            clients?: Partial<ClientFlags>
-            crossOrigin?: boolean
-            maxBodySize?: number
-            timeout?: number
         },
     ): RemoteFunction<StandardSchemaV1.InferInput<InputSchema>, Return>
     <Return = unknown, InputSchema extends StandardSchemaV1 = StandardSchemaV1>(
         fn: RemoteHandler<StandardSchemaV1.InferOutput<InputSchema>, Return>,
-        opts: {
-            inputSchema: InputSchema
-            outputSchema?: StandardSchemaV1
-            clients?: Partial<ClientFlags>
-            crossOrigin?: boolean
-            maxBodySize?: number
-            timeout?: number
-        },
+        opts: VerbBaseOpts & { inputSchema: InputSchema },
     ): RemoteFunction<StandardSchemaV1.InferInput<InputSchema>, Return>
     <Args = undefined, Return = unknown>(
         fn: RemoteHandler<Args, Return>,
-        opts: {
-            outputSchema?: StandardSchemaV1
-            clients?: Partial<ClientFlags>
-            crossOrigin?: boolean
-            maxBodySize?: number
-            timeout?: number
-        },
+        opts: VerbBaseOpts,
     ): RemoteFunction<Args, Return>
     <Args = undefined, Return = unknown>(
         fn: RemoteHandler<Args, Return>,
