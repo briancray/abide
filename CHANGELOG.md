@@ -1,5 +1,47 @@
 # abide
 
+## 0.40.1
+
+### Patch Changes
+
+- [`32d6cb9`](https://github.com/briancray/abide/commit/32d6cb97a9ce2ad63b3fd768c02379e708c6d599) - share a single TS printer across compile passes ([`0626e68`](https://github.com/briancray/abide/commit/0626e68500b6cc8e7e2c770184ec4aa0fd06106d))
+
+- [`32d6cb9`](https://github.com/briancray/abide/commit/32d6cb97a9ce2ad63b3fd768c02379e708c6d599) - bind-check generated modules and collect identifiers via AST ([`1e9d350`](https://github.com/briancray/abide/commit/1e9d3506873121ffd978039653f920edbed6c9ce))
+
+- [`32d6cb9`](https://github.com/briancray/abide/commit/32d6cb97a9ce2ad63b3fd768c02379e708c6d599) - value-memoised push-pull reactivity (CLEAN/CHECK/DIRTY) ([`2ae8f14`](https://github.com/briancray/abide/commit/2ae8f141da5873bea0eb31a9a59d81182ca5a12a))
+
+- [`32d6cb9`](https://github.com/briancray/abide/commit/32d6cb97a9ce2ad63b3fd768c02379e708c6d599) - syntax fuzz corpus for the identifier-rewrite passes ([`2e7d604`](https://github.com/briancray/abide/commit/2e7d6043aeeb9ca894bdb45f3f27893fbc5bf2f8))
+
+- [`32d6cb9`](https://github.com/briancray/abide/commit/32d6cb97a9ce2ad63b3fd768c02379e708c6d599) - build control-flow subtrees untracked ([`33c0d8e`](https://github.com/briancray/abide/commit/33c0d8e834e5145a84d872ff496df122bbb0da95))
+
+- [`32d6cb9`](https://github.com/briancray/abide/commit/32d6cb97a9ce2ad63b3fd768c02379e708c6d599) - lower the component script in a single parse ([`53098f8`](https://github.com/briancray/abide/commit/53098f8c2fe36e46e61b41d8a617aba6ac75e96f))
+
+- [`32d6cb9`](https://github.com/briancray/abide/commit/32d6cb97a9ce2ad63b3fd768c02379e708c6d599) - regenerate README and AGENTS surface map ([`6bb6a39`](https://github.com/briancray/abide/commit/6bb6a3906d5aba522a4fe33bffae0911adf0b0fe))
+
+- [`32d6cb9`](https://github.com/briancray/abide/commit/32d6cb97a9ce2ad63b3fd768c02379e708c6d599) - spread reactive page.params before postMessage in inspector bridge ([`7c99395`](https://github.com/briancray/abide/commit/7c993959e9dfc0c7f7038f694f95b59093a10dfc))
+
+- [`32d6cb9`](https://github.com/briancray/abide/commit/32d6cb97a9ce2ad63b3fd768c02379e708c6d599) - make signal-rewrite parent-independent ([`868717a`](https://github.com/briancray/abide/commit/868717a6f7ff824b24ef8a96e5e5f59add5ceed1))
+
+- [`32d6cb9`](https://github.com/briancray/abide/commit/32d6cb97a9ce2ad63b3fd768c02379e708c6d599) - pick runtime imports by tokenizing the output, not substring grep ([`a102986`](https://github.com/briancray/abide/commit/a102986bef90609297246ea001528a32e111be53))
+
+- [`32d6cb9`](https://github.com/briancray/abide/commit/32d6cb97a9ce2ad63b3fd768c02379e708c6d599) - re-apply saved scroll offset until async content grows the page ([`a813b47`](https://github.com/briancray/abide/commit/a813b47387289c0049e63997a72a6805e461b18c))
+
+- [`32d6cb9`](https://github.com/briancray/abide/commit/32d6cb97a9ce2ad63b3fd768c02379e708c6d599) - aliased import mangled when its name collides with a signal ([`abfe25d`](https://github.com/briancray/abide/commit/abfe25dcf7c00e61156b5d36fe82f290fc6c4cfb))
+
+- [`32d6cb9`](https://github.com/briancray/abide/commit/32d6cb97a9ce2ad63b3fd768c02379e708c6d599) - granular reactive page snapshot + in-place same-route navigation ([`b561eb5`](https://github.com/briancray/abide/commit/b561eb52439577d3a75a7872befee4b9f0e98267))
+
+- [`32d6cb9`](https://github.com/briancray/abide/commit/32d6cb97a9ce2ad63b3fd768c02379e708c6d599) - lower the component script in a literal single parse ([`b72b238`](https://github.com/briancray/abide/commit/b72b238377ff6545de549589d36b49ad4ecebb2d))
+
+- [`32d6cb9`](https://github.com/briancray/abide/commit/32d6cb97a9ce2ad63b3fd768c02379e708c6d599) - chain per-expression lowering over a single parse ([`d808317`](https://github.com/briancray/abide/commit/d808317d817ae8a414695b7bfb037b8aff7017c3))
+
+- [`32d6cb9`](https://github.com/briancray/abide/commit/32d6cb97a9ce2ad63b3fd768c02379e708c6d599) - classify signal-rewrite positions at visit time ([`d99577e`](https://github.com/briancray/abide/commit/d99577e2ac77d8742088608fba554ff5c2e799a4))
+
+- [`32d6cb9`](https://github.com/briancray/abide/commit/32d6cb97a9ce2ad63b3fd768c02379e708c6d599) - make template-node generators exhaustive ([`e0f246d`](https://github.com/briancray/abide/commit/e0f246dfbbf4ea4f2dc481fc543a6e9f0a6fa43b))
+
+- [`32d6cb9`](https://github.com/briancray/abide/commit/32d6cb97a9ce2ad63b3fd768c02379e708c6d599) - lower ++/-- on a doc path; guard the whole generated module ([`f49c122`](https://github.com/briancray/abide/commit/f49c122354fc4ef65f4c44db820d703078dd57f4))
+
+- [`32d6cb9`](https://github.com/briancray/abide/commit/32d6cb97a9ce2ad63b3fd768c02379e708c6d599) - fold SSR effect-stripping into the single-parse chain ([`fa4515d`](https://github.com/briancray/abide/commit/fa4515d07164765ea0ee609cf1847535a41f95ed))
+
 ## 0.40.0
 
 ### Minor Changes
