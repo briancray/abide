@@ -101,6 +101,27 @@ describe('abide check', () => {
         expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
     })
 
+    /* An `<template elseif>` compiles to a real `else if`, so its body inherits the prior
+       conditions' negative narrowing plus its own positive — here the discriminant lands
+       each branch on the right union member, so every member access is well-typed. */
+    test('an elseif branch carries the correct discriminated narrowing', () => {
+        const dir = project({
+            'shape.abide': `<script>\nconst { s } = props<{ s: { k: 'circle'; r: number } | { k: 'square'; side: number } | { k: 'none' } }>()\n</script>\n<template if={s.k === 'circle'}>{s.r}<template elseif={s.k === 'square'}>{s.side}</template><template else>none</template></template>\n`,
+        })
+        expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
+    })
+
+    /* The same chain, but the elseif body reads a member that only exists on a DIFFERENT
+       member — proof the branch is narrowed to `square`, not the widened union. */
+    test('a wrong member inside an elseif branch is caught', () => {
+        const dir = project({
+            'shapebad.abide': `<script>\nconst { s } = props<{ s: { k: 'circle'; r: number } | { k: 'square'; side: number } }>()\n</script>\n<template if={s.k === 'circle'}>{s.r}<template elseif={s.k === 'square'}>{s.r}</template></template>\n`,
+        })
+        const diagnostics = collectAbideDiagnostics(createShadowProgram(dir))
+        expect(diagnostics).toHaveLength(1)
+        expect(diagnostics[0]!.message).toContain('r')
+    })
+
     /* A template-literal-union subject narrows across an if/else and a switch the same as
        a plain literal union. Regression: inside the else child the subject kept the if's
        positive narrowing, so a compare against another member read as "no overlap" — the

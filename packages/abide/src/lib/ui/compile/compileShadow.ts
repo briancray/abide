@@ -381,19 +381,26 @@ function emitNode(node: TemplateNode, builder: Builder): void {
                narrowing — emitting it inside the `if` block (as a plain child) instead
                gave it the positive narrowing, so a literal-union compare read as a
                "no overlap" and a typeof-narrowed branch saw the wrong member. */
-            const elseChild = node.children.find(
-                (child): child is Extract<TemplateNode, { kind: 'case' }> =>
-                    child.kind === 'case' && child.match === undefined,
+            const branches = node.children.filter(
+                (child): child is Extract<TemplateNode, { kind: 'case' }> => child.kind === 'case',
             )
-            const thenChildren = node.children.filter((child) => child !== elseChild)
+            const thenChildren = node.children.filter((child) => child.kind !== 'case')
             builder.raw('if ')
             builder.expr(node.condition, node.loc)
             builder.raw(' {\n')
             emitNodes(thenChildren, builder)
             builder.raw('}')
-            if (elseChild !== undefined) {
-                builder.raw(' else {\n')
-                emitNodes(elseChild.children, builder)
+            /* `elseif` → a real `else if` so its body inherits the prior conditions' negative
+               narrowing plus its own positive; `else` → the trailing block. */
+            for (const branch of branches) {
+                if (branch.condition !== undefined) {
+                    builder.raw(' else if ')
+                    builder.expr(branch.condition, branch.loc)
+                    builder.raw(' {\n')
+                } else {
+                    builder.raw(' else {\n')
+                }
+                emitNodes(branch.children, builder)
                 builder.raw('}')
             }
             builder.raw('\n')

@@ -412,6 +412,64 @@ describe('hydrate — adopt server DOM', () => {
         expect(host.textContent).toBe('?') // default
     })
 
+    test('adopts the matching if/elseif/else branch in place, then flips', () => {
+        const model = doc({ n: 2 })
+        const source = `
+            <main>
+                <template if={model.n === 1}>
+                    <span>one</span>
+                    <template elseif={model.n === 2}><span>two</span></template>
+                    <template else><span>other</span></template>
+                </template>
+            </main>
+        `
+        const runtime = {
+            doc,
+            state,
+            computed,
+            effect,
+            appendText,
+            appendStatic,
+            on,
+            when,
+            each,
+            switchBlock,
+            model,
+        }
+        const names = Object.keys(runtime)
+        const values = names.map((n) => runtime[n as keyof typeof runtime])
+
+        const server = new Function(
+            'doc',
+            'state',
+            'computed',
+            'effect',
+            'model',
+            compileSSR(source),
+        )(doc, state, computed, effect, model) as SsrRender
+        expect(server.html).toBe('<main><!--a--><!--[--><span>two</span><!--]--></main>')
+
+        const host = document.createElement('div')
+        host.innerHTML = server.html
+        const spanBefore = (host.childNodes[0] as unknown as { childNodes: unknown[] })
+            .childNodes[0]
+        const body = compileComponent(source)
+        hydrate(host, (target) => {
+            new Function('host', ...names, body)(target, ...values)
+        })
+
+        // the server's elseif node is adopted, not re-rendered (no hydration blink)
+        expect((host.childNodes[0] as unknown as { childNodes: unknown[] }).childNodes[0]).toBe(
+            spanBefore,
+        )
+        expect(host.textContent).toBe('two')
+
+        model.replace('n', 1)
+        expect(host.textContent).toBe('one') // if
+        model.replace('n', 3)
+        expect(host.textContent).toBe('other') // else
+    })
+
     test('adopts a child component (and its slot) in place', async () => {
         const runtime = {
             doc,

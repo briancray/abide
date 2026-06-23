@@ -202,11 +202,19 @@ export function generateSSR(
                 .join('')
         }
         if (node.kind === 'if') {
-            const elseBranch = node.children.find((child) => child.kind === 'case')
+            /* `case` children are the `elseif`/`else` branches in source order; the rest are
+               the `then` content. Each `elseif` becomes an `else if`, the match-less `else`
+               the trailing `else`. */
+            const branches = node.children.filter(
+                (child): child is Extract<TemplateNode, { kind: 'case' }> => child.kind === 'case',
+            )
             const thenChildren = node.children.filter((child) => child.kind !== 'case')
             let code = `if (${lowerExpression(node.condition)}) {\n${branchContent(thenChildren, target)}}`
-            if (elseBranch !== undefined && elseBranch.kind === 'case') {
-                code += ` else {\n${branchContent(elseBranch.children, target)}}`
+            for (const branch of branches) {
+                code +=
+                    branch.condition !== undefined
+                        ? ` else if (${lowerExpression(branch.condition)}) {\n${branchContent(branch.children, target)}}`
+                        : ` else {\n${branchContent(branch.children, target)}}`
             }
             return `${anchor}${openRange(target)}${code}\n${closeRange(target)}`
         }

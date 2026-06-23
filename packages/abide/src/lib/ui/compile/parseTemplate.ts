@@ -1,4 +1,5 @@
 import { decodeHtmlEntities } from './decodeHtmlEntities.ts'
+import { isWhitespaceText } from './isWhitespaceText.ts'
 import type { TemplateAttr } from './types/TemplateAttr.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
 import type { TextPart } from './types/TextPart.ts'
@@ -303,6 +304,13 @@ function rejectStrayBranches(
                 '[abide] <template else>/<template case> must be nested inside its <template if>/<template switch> — a sibling branch is not supported',
             )
         }
+        /* `elseif` is an `if`-chain branch; inside a `switch` it would silently read as the
+           default (match-less), so reject the cross-construct mix. */
+        if (node.kind === 'case' && node.condition !== undefined && parentKind === 'switch') {
+            throw new Error(
+                '[abide] <template elseif> belongs to a <template if> chain, not a <template switch> — use <template case>',
+            )
+        }
         if (
             node.kind === 'branch' &&
             parentKind !== 'await' &&
@@ -313,8 +321,58 @@ function rejectStrayBranches(
                 '[abide] <template then>/<template catch>/<template finally> must be nested inside its <template await>/<template try>/<template each await>',
             )
         }
+        if (node.kind === 'if' || node.kind === 'switch') {
+            rejectMisplacedBranchContent(node)
+        }
         if ('children' in node) {
             rejectStrayBranches(node.children, node.kind)
+        }
+    }
+}
+
+/* A `<template if>` chain's `then` content precedes its first branch tag
+   (`elseif`/`else`); a `<template switch>` renders only its branch tags. So rendered
+   content sitting AFTER the first branch in an `if` — or ANYWHERE in a `switch` —
+   belongs to no branch: today it silently folds into `then` / is dropped. Reject it so
+   the misplacement surfaces. Whitespace stays transparent, and `<script>`/`<style>` are
+   directives (scoping, not rendered output), so both remain legal anywhere. */
+function rejectMisplacedBranchContent(
+    node: Extract<TemplateNode, { kind: 'if' | 'switch' }>,
+): void {
+    const firstBranch = node.children.findIndex((child) => child.kind === 'case')
+    node.children.forEach((child, index) => {
+        const isRenderedContent =
+            child.kind !== 'case' &&
+            child.kind !== 'script' &&
+            child.kind !== 'style' &&
+            !isWhitespaceText(child)
+        /* In a switch nothing but branches renders, so every position is illegal; in an if
+           only content past the first branch is (the leading then-content is legal). */
+        const illegalPosition =
+            node.kind === 'switch' || (firstBranch !== -1 && index > firstBranch)
+        if (isRenderedContent && illegalPosition) {
+            throw new Error(
+                node.kind === 'switch'
+                    ? '[abide] a <template switch> renders only its <template case>/<template default> branches — move stray content into a branch'
+                    : '[abide] content after a <template elseif>/<template else> belongs to no branch — the then-content must precede the first branch tag',
+            )
+        }
+    })
+    /* In an `if` chain the match-less `<template else>` is the trailing block, so any
+       branch after it (a second `else`, or an `elseif`) compiles to invalid `} else {…}
+       else if {…}` (SSR/type-shadow) or a silently-shadowed branch (the `switchBlock`
+       default wins). Reject so the misordering surfaces here, not as opaque codegen. */
+    if (node.kind === 'if') {
+        const branches = node.children.filter(
+            (child): child is Extract<TemplateNode, { kind: 'case' }> => child.kind === 'case',
+        )
+        const elseIndex = branches.findIndex(
+            (branch) => branch.match === undefined && branch.condition === undefined,
+        )
+        if (elseIndex !== -1 && elseIndex < branches.length - 1) {
+            throw new Error(
+                '[abide] <template else> must be the last branch of its <template if> chain — no <template elseif>/<template else> may follow it',
+            )
         }
     }
 }
@@ -467,6 +525,22 @@ function toControlFlow(attrs: TemplateAttr[], children: TemplateNode[]): Templat
             throw new Error('[abide] <template case> requires a value expression')
         }
         return { kind: 'case', match: matchCode, children, loc: attrLoc(caseAttr) }
+    }
+    /* `<template elseif={c}>` is a match-less case carrying a condition — a branch of the
+       enclosing `<template if>` chain, truthy-tested in source order. */
+    const elseif = find('elseif')
+    if (elseif !== undefined) {
+        const conditionCode = attrText(elseif)
+        if (conditionCode === undefined) {
+            throw new Error('[abide] <template elseif> requires a condition expression')
+        }
+        return {
+            kind: 'case',
+            match: undefined,
+            condition: conditionCode,
+            children,
+            loc: attrLoc(elseif),
+        }
     }
     if (find('default') !== undefined || find('else') !== undefined) {
         return { kind: 'case', match: undefined, children } // default (switch) / else (if)

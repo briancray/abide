@@ -90,6 +90,119 @@ describe('if / else', () => {
     })
 })
 
+describe('if / elseif / else', () => {
+    const chain = (a: string, b: string) => `
+        <script>
+            let a = scope().state(${a})
+            let b = scope().state(${b})
+        </script>
+        <template if={a}>
+            <span>A</span>
+            <template elseif={b}><span>B</span></template>
+            <template else><span>C</span></template>
+        </template>
+    `
+
+    test('SSR picks the matching elseif branch', () => {
+        expect(ssr(chain('false', 'true'))).toBe('<!--[--><span>B</span><!--]-->')
+    })
+
+    test('SSR falls through to else when no condition holds', () => {
+        expect(ssr(chain('false', 'false'))).toBe('<!--[--><span>C</span><!--]-->')
+    })
+
+    test('SSR: the if wins over a later truthy elseif', () => {
+        expect(ssr(chain('true', 'true'))).toBe('<!--[--><span>A</span><!--]-->')
+    })
+
+    test('client renders the matching elseif branch', () => {
+        expect(render(chain('false', 'true')).textContent).toBe('B')
+    })
+
+    test('client flips across if / elseif / else reactively', () => {
+        const host = render(`
+            <script>let n = scope().state(0)</script>
+            <button onclick={() => n += 1}>+</button>
+            <template if={n === 1}>
+                <span>one</span>
+                <template elseif={n === 2}><span>two</span></template>
+                <template else><span>other</span></template>
+            </template>
+        `)
+        const button = Array.from(host.childNodes).find(
+            (node) => (node as { tagName?: string }).tagName === 'button',
+        ) as unknown as { dispatchEvent: (event: { type: string }) => void }
+        expect(host.textContent).toBe('+other') // n=0 → else
+        button.dispatchEvent({ type: 'click' })
+        expect(host.textContent).toBe('+one') // n=1 → if
+        button.dispatchEvent({ type: 'click' })
+        expect(host.textContent).toBe('+two') // n=2 → elseif
+        button.dispatchEvent({ type: 'click' })
+        expect(host.textContent).toBe('+other') // n=3 → else
+    })
+
+    test('a non-boolean elseif condition coerces truthily', () => {
+        const source = `
+            <script>
+                let a = scope().state(0)
+                let items = scope().state(['x'])
+            </script>
+            <template if={a}>
+                <span>A</span>
+                <template elseif={items.length}><span>has</span></template>
+                <template else><span>empty</span></template>
+            </template>
+        `
+        expect(ssr(source)).toBe('<!--[--><span>has</span><!--]-->')
+    })
+
+    test('rejects an elseif nested in a switch', () => {
+        const bad = `
+            <template switch={s}>
+                <template case="1"><span>1</span></template>
+                <template elseif={x}><span>x</span></template>
+            </template>
+        `
+        expect(() => compileComponent(bad)).toThrow(/elseif/)
+    })
+
+    /* Loose content sitting AFTER a branch tag belongs to no branch — it would silently
+       fold into the `then`. Reject it; whitespace and the leading then-content stay legal. */
+    test('rejects rendered content after a branch in an if-chain', () => {
+        const stray = `
+            <template if={a}>
+                <span>A</span>
+                <template elseif={b}><span>B</span></template>stray
+                <template else><span>C</span></template>
+            </template>
+        `
+        expect(() => compileComponent(stray)).toThrow(/belongs to no branch/)
+    })
+
+    test('rejects a rendered element after a branch in an if-chain', () => {
+        const stray = `
+            <template if={a}>
+                <span>A</span>
+                <template else><span>C</span></template>
+                <span>orphan</span>
+            </template>
+        `
+        expect(() => compileComponent(stray)).toThrow(/belongs to no branch/)
+    })
+
+    test('the then-content before the first branch and whitespace around branches compile', () => {
+        const ok = `
+            <script>let a = scope().state(true)</script>
+            <template if={a}>
+                <span>then</span>
+                <template elseif={a}><span>B</span></template>
+                <template else><span>C</span></template>
+            </template>
+        `
+        expect(typeof compileComponent(ok)).toBe('string')
+    })
+})
+
 describe('switch / case / default', () => {
     const source = `
         <script>let status = scope().state('shipped')</script>
@@ -106,6 +219,19 @@ describe('switch / case / default', () => {
 
     test('SSR renders the matching case', () => {
         expect(ssr(source)).toBe('<!--[--><span>🚚</span><!--]-->')
+    })
+
+    /* A `switch` renders only its case/default branches — loose content anywhere in its
+       body (it would be silently dropped) is rejected. */
+    test('rejects rendered content in a switch body', () => {
+        const stray = `
+            <template switch={s}>
+                stray
+                <template case="'a'"><span>A</span></template>
+                <template default><span>D</span></template>
+            </template>
+        `
+        expect(() => compileComponent(stray)).toThrow(/renders only its/)
     })
 
     test('SSR falls back to default for an unmatched subject', () => {

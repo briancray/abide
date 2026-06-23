@@ -5,6 +5,7 @@ import { bindListenEvent } from './bindListenEvent.ts'
 import { composeProps } from './composeProps.ts'
 import { groupBindParts } from './groupBindParts.ts'
 import { isControlFlow } from './isControlFlow.ts'
+import { isWhitespaceText } from './isWhitespaceText.ts'
 import { lowerContext } from './lowerContext.ts'
 import { resolveBranches } from './resolveBranches.ts'
 import { scopeAttr } from './scopeAttr.ts'
@@ -581,13 +582,33 @@ export function generateBuild(
         parentVar: string,
         before: string,
     ): string {
-        const elseBranch = node.children.find(
+        /* The `case` children are the chain's `elseif`/`else` branches in source order;
+           the rest are the `then` content. */
+        const branches = node.children.filter(
             (child): child is Extract<TemplateNode, { kind: 'case' }> => child.kind === 'case',
         )
         const thenChildren = node.children.filter((child) => child.kind !== 'case')
-        const thenThunk = branchThunk(thenChildren)
-        const elseThunk = elseBranch === undefined ? 'undefined' : branchThunk(elseBranch.children)
-        return `when(${parentVar}, () => (${lowerExpression(node.condition)}), ${thenThunk}, ${elseThunk}, ${before});\n`
+        const hasElseif = branches.some((branch) => branch.condition !== undefined)
+        /* Fast path: a plain `if` (with optional `else`) is the binary `when` runtime. */
+        if (!hasElseif) {
+            const elseBranch = branches.find((branch) => branch.condition === undefined)
+            const thenThunk = branchThunk(thenChildren)
+            const elseThunk =
+                elseBranch === undefined ? 'undefined' : branchThunk(elseBranch.children)
+            return `when(${parentVar}, () => (${lowerExpression(node.condition)}), ${thenThunk}, ${elseThunk}, ${before});\n`
+        }
+        /* if/elseif/else is a cond-chain — reuse `switchBlock` over a constant `true`
+           subject with `Boolean`-coerced match thunks, so the first truthy branch wins
+           (`else` is the match-less default). */
+        const entries = [
+            `{ match: () => Boolean(${lowerExpression(node.condition)}), render: ${branchThunk(thenChildren)} }`,
+            ...branches.map((branch) =>
+                branch.condition !== undefined
+                    ? `{ match: () => Boolean(${lowerExpression(branch.condition)}), render: ${branchThunk(branch.children)} }`
+                    : `{ match: undefined, render: ${branchThunk(branch.children)} }`,
+            ),
+        ]
+        return `switchBlock(${parentVar}, () => true, [${entries.join(', ')}], ${before});\n`
     }
 
     /* A keyed each. Each row is a content RANGE (any content, tracked between the
@@ -620,16 +641,6 @@ export function generateBuild(
     }
 
     return generateChildren(rootNodes, hostVar)
-}
-
-/* A text node that is purely whitespace (no interpolation, only blank static
-   parts). Both back-ends drop it, so it neither contributes markup nor breaks a
-   static clone run — it stays transparent so `<a/>\n<b/>` still coalesces. */
-function isWhitespaceText(node: TemplateNode): boolean {
-    return (
-        node.kind === 'text' &&
-        node.parts.every((part) => part.kind === 'static' && part.value.trim() === '')
-    )
 }
 
 /*

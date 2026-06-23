@@ -4,7 +4,7 @@ import type { TextPart } from './TextPart.ts'
 /*
 A parsed template node. `text` carries interpolation parts; `element` carries
 attributes and children; `each` is the `<template each as key>` control flow over
-a list. (if/await/switch are future siblings.)
+a list; `if`/`await`/`switch`/`try` are its control-flow siblings.
 
 `loc` (where present) is the absolute offset of the node's primary expression in
 the original `.abide` source — additive, set only when the parser tracks
@@ -67,7 +67,17 @@ export type TemplateNode =
           children: TemplateNode[]
       }
     | { kind: 'switch'; subject: string; children: TemplateNode[]; loc?: number }
-    | { kind: 'case'; match: string | undefined; children: TemplateNode[]; loc?: number }
+    /* A branch of a `<template switch>` (`match` set) or `<template if>` chain. Inside an
+       `if`, `<template elseif={c}>` sets `condition` (match-less, truthy-tested), and
+       `<template else>` leaves both unset (the default). `loc` points at whichever
+       expression the node carries (`match` or `condition`). */
+    | {
+          kind: 'case'
+          match: string | undefined
+          condition?: string
+          children: TemplateNode[]
+          loc?: number
+      }
     /* A `<template name="row" args={item}>` snippet: a named, scope-capturing
        builder declared once and called like a function (`{row(item)}`). `params`
        is the raw `args` source spliced into the builder's parameter list. */
