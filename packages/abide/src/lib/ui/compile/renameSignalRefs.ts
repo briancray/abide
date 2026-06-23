@@ -48,6 +48,13 @@ export function signalRefsTransformer(
        scope tracking, so we ignore every other local binding. */
     const signalNames = new Set<string>([...stateNames, ...derivedNames, ...computedNames])
     return (context) => (root) => {
+        /* The identifier nodes that are names, not value reads — collected by walking
+           each parent and recording its name children (`parent.name`, a label, a
+           specifier). Read structurally, NOT via `child.parent`, so it holds on
+           synthesized nodes too — `desugar`'s rewritten declarations carry no parent
+           pointers, and chaining this transformer after `desugarTransformer` over one
+           tree must still classify their refs correctly. */
+        const nameSlots = collectNameSlots(root)
         /* Each visitor carries the set of signal names shadowed by the scopes it sits
            inside; entering a scope that re-binds a signal name produces a fresh visitor
            with that name added, so shadowing is per-branch (a sibling scope is unaffected). */
@@ -86,7 +93,7 @@ export function signalRefsTransformer(
                         return ts.factory.createPropertyAssignment(node.name.text, replacement)
                     }
                 }
-                if (ts.isIdentifier(node) && !isNameSlot(node) && !shadowed.has(node.text)) {
+                if (ts.isIdentifier(node) && !nameSlots.has(node) && !shadowed.has(node.text)) {
                     const replacement = referenceFor(
                         node.text,
                         stateNames,
@@ -113,84 +120,82 @@ export function signalRefsTransformer(
 }
 
 /*
-True when `id` occupies a name/label/specifier slot of its parent — a position that
-DECLARES, NAMES, or LABELS rather than READS. These are the only identifier positions
-that are not value reads (type space and import/export subtrees are skipped wholesale
-in the visitor above), so a name-slot identifier is left untouched and everything else
-is a value read that rewrites.
-
-Rewrite is the DEFAULT — value reads appear under almost any expression parent, so
-they can't be allow-listed; this function instead exhaustively lists the non-read
-slots. Classifying by the identifier's slot in its parent — checked at visit time
-against the live tree — rather than by a pre-collected node set is the precision win:
-it is positional, so `pending` in `import { pending as p }` and `pending` in
-`pending(query)` are told apart by where they sit, not by node identity. A non-read
-slot not listed here would be misread as a value read and rewritten into broken
-syntax, so completeness is NOT self-evident — it is guarded empirically by the syntax
-fuzz corpus (`uiCompileSyntaxFuzz.test.ts`), which transpiles each pass's output and
-fails on any corruption.
+Collects every identifier NODE that occupies a name/label/specifier slot — a position
+that DECLARES, NAMES, or LABELS rather than READS. Walks each PARENT and records its
+name children (`parent.name`, a label, a specifier), so it reads structure top-down
+and never touches `child.parent` — it therefore holds on synthesized nodes (e.g.
+`desugar`'s rewritten declarations), which carry no parent pointers. The visitor then
+rewrites any identifier NOT in this set (rewrite is the default — value reads appear
+under almost any expression parent and can't be allow-listed), so this set is the
+exhaustive list of non-read slots. It is positional, so `pending` in
+`import { pending as p }` and `pending` in `pending(query)` are told apart by where
+they sit. A non-read slot missing here would be misread as a value read and rewritten
+into broken syntax, so completeness is NOT self-evident — it is guarded empirically by
+the syntax fuzz corpus (`uiCompileSyntaxFuzz.test.ts`), which transpiles each pass's
+output and fails on any corruption.
 */
-function isNameSlot(id: ts.Identifier): boolean {
-    const parent = id.parent
-    if (parent === undefined) {
-        return false
+function collectNameSlots(root: ts.Node): Set<ts.Node> {
+    const slots = new Set<ts.Node>()
+    const add = (name: ts.Node | undefined): void => {
+        if (name !== undefined && ts.isIdentifier(name)) {
+            slots.add(name)
+        }
     }
-    /* `obj.NAME` — the member name; the object side (`parent.expression`) is the read.
-       (`QualifiedName` is type-space only and never reached — the visitor early-returns
-       on the enclosing type node.) */
-    if (ts.isPropertyAccessExpression(parent)) {
-        return parent.name === id
+    const visit = (node: ts.Node): void => {
+        /* `obj.NAME` — the member name; the object side (`.expression`) is the read. */
+        if (ts.isPropertyAccessExpression(node)) {
+            add(node.name)
+        }
+        /* `NAME: value`, and method/property/accessor/enum-member names in classes,
+           object literals, and type members. */
+        if (
+            ts.isPropertyAssignment(node) ||
+            ts.isMethodDeclaration(node) ||
+            ts.isPropertyDeclaration(node) ||
+            ts.isGetAccessorDeclaration(node) ||
+            ts.isSetAccessorDeclaration(node) ||
+            ts.isMethodSignature(node) ||
+            ts.isPropertySignature(node) ||
+            ts.isEnumMember(node)
+        ) {
+            add(node.name)
+        }
+        /* Declaration names: const/let/var, parameters, named functions and classes. */
+        if (
+            ts.isVariableDeclaration(node) ||
+            ts.isParameter(node) ||
+            ts.isFunctionDeclaration(node) ||
+            ts.isFunctionExpression(node) ||
+            ts.isClassDeclaration(node) ||
+            ts.isClassExpression(node)
+        ) {
+            add(node.name)
+        }
+        /* A destructure element binds (`{ a }` / `[a]`) or renames (`{ a: b }`): both
+           the bound name and the source key are names, not reads. */
+        if (ts.isBindingElement(node)) {
+            add(node.name)
+            add(node.propertyName)
+        }
+        /* Labels: `NAME:` and `break NAME` / `continue NAME`. */
+        if (ts.isLabeledStatement(node)) {
+            add(node.label)
+        }
+        if (ts.isBreakStatement(node) || ts.isContinueStatement(node)) {
+            add(node.label)
+        }
+        /* Import/export specifier and clause names. */
+        if (ts.isImportSpecifier(node) || ts.isExportSpecifier(node)) {
+            add(node.name)
+            add(node.propertyName)
+        }
+        if (ts.isImportClause(node) || ts.isNamespaceImport(node) || ts.isNamespaceExport(node)) {
+            add(node.name)
+        }
+        ts.forEachChild(node, visit)
     }
-    /* `NAME: value`, and method/property/accessor/enum-member names in classes,
-       object literals, and type members. */
-    if (
-        ts.isPropertyAssignment(parent) ||
-        ts.isMethodDeclaration(parent) ||
-        ts.isPropertyDeclaration(parent) ||
-        ts.isGetAccessorDeclaration(parent) ||
-        ts.isSetAccessorDeclaration(parent) ||
-        ts.isMethodSignature(parent) ||
-        ts.isPropertySignature(parent) ||
-        ts.isEnumMember(parent)
-    ) {
-        return parent.name === id
-    }
-    /* Declaration names: const/let/var, parameters, named functions and classes. */
-    if (
-        ts.isVariableDeclaration(parent) ||
-        ts.isParameter(parent) ||
-        ts.isFunctionDeclaration(parent) ||
-        ts.isFunctionExpression(parent) ||
-        ts.isClassDeclaration(parent) ||
-        ts.isClassExpression(parent)
-    ) {
-        return parent.name === id
-    }
-    /* A destructure element binds (`{ a }` / `[a]`) or renames (`{ a: b }`): both the
-       bound name and the source key are names, not reads. */
-    if (ts.isBindingElement(parent)) {
-        return parent.name === id || parent.propertyName === id
-    }
-    /* Labels: `NAME:` and `break NAME` / `continue NAME`. */
-    if (
-        ts.isLabeledStatement(parent) ||
-        ts.isBreakStatement(parent) ||
-        ts.isContinueStatement(parent)
-    ) {
-        return parent.label === id
-    }
-    /* Import/export specifier and clause names (the surrounding declaration subtree is
-       also skipped wholesale upstream, but a stray specifier here is a name too). */
-    if (
-        ts.isImportSpecifier(parent) ||
-        ts.isExportSpecifier(parent) ||
-        ts.isImportClause(parent) ||
-        ts.isNamespaceImport(parent) ||
-        ts.isNamespaceExport(parent)
-    ) {
-        return true
-    }
-    return false
+    visit(root)
+    return slots
 }
 
 /* The shadowed-name set for `node`'s children: the parent set plus any signal name
