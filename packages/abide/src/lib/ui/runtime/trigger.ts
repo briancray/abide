@@ -1,43 +1,59 @@
 import { flushEffects } from './flushEffects.ts'
+import { NODE_STATE } from './NODE_STATE.ts'
 import { REACTIVE_CONTEXT } from './REACTIVE_CONTEXT.ts'
 import type { ReactiveNode } from './types/ReactiveNode.ts'
 
 /*
-Invalidates the observer cone of a just-written node: effect observers are
-queued, computed observers are marked dirty and recursed into (their value may
-now differ, so their own observers must learn of it). Recompute is lazy — a
-computed recomputes on next read — so this pass only invalidates and collects.
-
-The subscriber list is walked live: invalidate runs no compute and no effect, so
-nothing re-subscribes (the only mutators of a subscriber list, `track` and
-`runNode`, run inside compute execution, which only `flushEffects` reaches — after
-this pass). The re-subscribe hazard belongs to the flush, where `flushEffects`
-defends with its own snapshot. `nextSub` is read before recursing, so the walk
-holds no reference a downstream pass could invalidate.
+Raises `node` to at least `status` and propagates the news up its subscriber cone.
+An effect crossing out of CLEAN is queued (whether it became CHECK or DIRTY — the
+flush decides whether it really runs). A computed crossing out of CLEAN propagates
+CHECK to *its* subscribers, so the whole cone learns a dependency *might* have
+changed; it does so exactly once (a later CHECK→DIRTY upgrade re-notifies nobody —
+its subscribers are already CHECK). No compute runs here, so no subscriber list is
+re-linked mid-walk (`track`/`runNode` run inside compute, which only the flush
+reaches). `nextSub` is read before recursing so the walk holds no edge a deeper
+pass could detach.
 */
-function invalidate(node: ReactiveNode): void {
+function mark(node: ReactiveNode, status: number): void {
+    if (node.status >= status) {
+        return
+    }
+    const wasClean = node.status === NODE_STATE.CLEAN
+    node.status = status
+    if (node.isEffect) {
+        if (wasClean) {
+            REACTIVE_CONTEXT.pendingEffects.add(node)
+        }
+        return
+    }
+    /* A computed propagates CHECK to its subscribers only on its first move out of
+       CLEAN — they are already CHECK on any later upgrade, so re-walking is wasted. */
+    if (!wasClean) {
+        return
+    }
     let link = node.subsHead
     while (link !== undefined) {
-        const observer = link.sub
         const next = link.nextSub
-        if (observer.isEffect) {
-            REACTIVE_CONTEXT.pendingEffects.add(observer)
-        } else if (!observer.dirty) {
-            observer.dirty = true
-            invalidate(observer)
-        }
+        mark(link.sub, NODE_STATE.CHECK)
         link = next
     }
 }
 
 /*
-Propagates a change forward from a just-written node. Invalidation collects the
-whole cone first; the queued effects flush once, at the outermost trigger (or,
-inside a batch, when the batch owner exits) — never mid-propagation, so an effect
-never runs against a half-invalidated graph.
+Propagates a change forward from a just-written signal: its direct subscribers read
+a value that actually changed, so they are DIRTY; the rest of their cone is CHECK
+(a transitive dependency *may* have changed — `updateIfNecessary` will verify on
+read). Recompute is lazy. The queued effects flush once, at the outermost trigger
+(or, inside a batch, when the batch owner flushes) — never mid-propagation, so an
+effect never runs against a half-marked graph.
 */
 export function trigger(node: ReactiveNode): void {
-    invalidate(node)
+    let link = node.subsHead
+    while (link !== undefined) {
+        const next = link.nextSub
+        mark(link.sub, NODE_STATE.DIRTY)
+        link = next
+    }
     if (REACTIVE_CONTEXT.batchDepth === 0) {
         flushEffects()
     }

@@ -20,6 +20,9 @@ export type ReactiveNode = {
     depsTail: ReactiveLink | undefined
     subsHead: ReactiveLink | undefined
     subsTail: ReactiveLink | undefined
-    dirty: boolean
+    /* The node's settle-state for push-pull propagation: CLEAN / CHECK / DIRTY (see
+       NODE_STATE). A signal is always CLEAN (no compute); a computed is born DIRTY and
+       cycles CLEAN→CHECK/DIRTY→CLEAN as deps change and reads settle it. */
+    status: number
     isEffect: boolean
 }

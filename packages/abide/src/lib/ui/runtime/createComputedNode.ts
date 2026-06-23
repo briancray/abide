@@ -1,7 +1,9 @@
+import { NODE_STATE } from './NODE_STATE.ts'
 import type { ReactiveNode } from './types/ReactiveNode.ts'
 
-/* Creates a lazy computed node. Born dirty so its first read computes; thereafter
-   it recomputes only when a dependency triggers it. */
+/* Creates a lazy computed node. Born DIRTY so its first read computes; thereafter a
+   read settles it — recomputing only when the check walk finds a dependency whose
+   value actually changed. */
 export function createComputedNode(compute: () => unknown): ReactiveNode {
     return {
         value: undefined,
@@ -10,7 +12,7 @@ export function createComputedNode(compute: () => unknown): ReactiveNode {
         depsTail: undefined,
         subsHead: undefined,
         subsTail: undefined,
-        dirty: true,
+        status: NODE_STATE.DIRTY,
         isEffect: false,
     }
 }

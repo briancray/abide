@@ -1,3 +1,4 @@
+import { NODE_STATE } from './NODE_STATE.ts'
 import { OWNER } from './OWNER.ts'
 import { REACTIVE_CONTEXT } from './REACTIVE_CONTEXT.ts'
 import { runNode } from './runNode.ts'
@@ -42,7 +43,8 @@ export function createEffectNode(fn: () => EffectResult): () => void {
         depsTail: undefined,
         subsHead: undefined,
         subsTail: undefined,
-        dirty: false,
+        /* Born DIRTY; the immediate `runNode` below captures deps and settles it CLEAN. */
+        status: NODE_STATE.DIRTY,
         isEffect: true,
     }
     runNode(node)

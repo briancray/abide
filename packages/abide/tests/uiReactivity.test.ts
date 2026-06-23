@@ -42,6 +42,56 @@ describe('reactive cells', () => {
         expect(computes).toBe(2)
     })
 
+    test('a computed that recomputes to an equal value does NOT wake its effect (value memoisation)', () => {
+        // distils the route case: params churn but the id-derived value is stable
+        const params = state({ id: '1', rest: 'a' })
+        const id = computed(() => params.value.id)
+        let runs = 0
+        const dispose = effect(() => {
+            id.value
+            runs += 1
+        })
+        expect(runs).toBe(1)
+        params.value = { id: '1', rest: 'b' } // id unchanged → memoised
+        expect(runs).toBe(1)
+        params.value = { id: '2', rest: 'b' } // id changed → wakes
+        expect(runs).toBe(2)
+        dispose()
+    })
+
+    test('memoisation stops at the first unchanged computed in a chain', () => {
+        const n = state(2)
+        const isEven = computed(() => n.value % 2 === 0)
+        let runs = 0
+        const dispose = effect(() => {
+            isEven.value
+            runs += 1
+        })
+        expect(runs).toBe(1)
+        n.value = 4 // still even → isEven unchanged → no wake
+        expect(runs).toBe(1)
+        n.value = 5 // odd → isEven flips → wakes
+        expect(runs).toBe(2)
+        dispose()
+    })
+
+    test('an unchanged computed still does not wake a diamond reader (glitch-free)', () => {
+        const n = state(1)
+        const a = computed(() => n.value > 0) // stable across 1→2
+        const b = computed(() => n.value > 0) // stable across 1→2
+        let runs = 0
+        const dispose = effect(() => {
+            void (a.value && b.value)
+            runs += 1
+        })
+        expect(runs).toBe(1)
+        n.value = 2 // both a and b recompute to the same boolean
+        expect(runs).toBe(1)
+        n.value = -1 // both flip
+        expect(runs).toBe(2)
+        dispose()
+    })
+
     test('dynamic dependencies: a branch not taken is not subscribed', () => {
         const useA = state(true)
         const a = state('a')

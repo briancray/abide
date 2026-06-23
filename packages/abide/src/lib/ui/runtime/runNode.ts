@@ -1,5 +1,6 @@
 import { abortNode } from './abortNode.ts'
 import { endTracking } from './endTracking.ts'
+import { NODE_STATE } from './NODE_STATE.ts'
 import { REACTIVE_CONTEXT } from './REACTIVE_CONTEXT.ts'
 import { reactiveAbortState } from './reactiveAbortState.ts'
 import type { ReactiveNode } from './types/ReactiveNode.ts'
@@ -26,8 +27,23 @@ export function runNode(node: ReactiveNode): unknown {
     const previous = REACTIVE_CONTEXT.observer
     REACTIVE_CONTEXT.observer = node
     try {
-        node.value = node.compute?.()
-        node.dirty = false
+        const next = node.compute?.()
+        /* Value memoisation: only a computed whose result actually changed marks its
+           subscribers DIRTY, so the in-progress check walk recomputes them. An
+           Object.is-equal recompute leaves them at CHECK — they settle back to CLEAN
+           on read without re-running, never waking downstream. An effect has no value
+           worth comparing and no subscribers, so this is a no-op for it (its body ran
+           inside compute above). The subscriber list isn't re-linked here — only its
+           members' `status` is bumped — so walking it live is safe. */
+        if (!Object.is(node.value, next)) {
+            node.value = next
+            let link = node.subsHead
+            while (link !== undefined) {
+                link.sub.status = NODE_STATE.DIRTY
+                link = link.nextSub
+            }
+        }
+        node.status = NODE_STATE.CLEAN
         return node.value
     } finally {
         REACTIVE_CONTEXT.observer = previous
