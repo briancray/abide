@@ -49,7 +49,7 @@ const COMPOUND_OPERATORS = new Map<ts.SyntaxKind, ts.BinaryOperator>([
     [ts.SyntaxKind.QuestionQuestionEqualsToken, ts.SyntaxKind.QuestionQuestionToken],
 ])
 
-function docAccessTransformer(docName: string): ts.TransformerFactory<ts.SourceFile> {
+export function docAccessTransformer(docName: string): ts.TransformerFactory<ts.SourceFile> {
     return (context) => (root) => {
         /* Collects the path of an access chain rooted at `docName`, visiting any
            dynamic index so reads inside it lower too. undefined if not our doc. */

@@ -1,5 +1,5 @@
 import { desugarSignals } from './desugarSignals.ts'
-import { lowerDocAccess } from './lowerDocAccess.ts'
+import { lowerScript } from './lowerScript.ts'
 import { parseTemplate } from './parseTemplate.ts'
 import { scopeCss } from './scopeCss.ts'
 import type { AnalyzedComponent } from './types/AnalyzedComponent.ts'
@@ -31,18 +31,14 @@ export function analyzeComponent(source: string, scopeSeed?: string): AnalyzedCo
     const template = source.replace(/^\s*<script[^>]*>[\s\S]*?<\/script>/, '').trim()
 
     const { code: desugared, stateNames, derivedNames, computedNames } = desugarSignals(scriptBody)
-    const lowered = desugared.trim() === '' ? '' : lowerDocAccess(desugared, 'model')
-    /* Hoist top-level import statements (e.g. child components) out of the script
-       so the module wrapper can place them at module scope — they can't live
-       inside the mount callback / render function. */
-    const imports: string[] = []
-    const script = lowered
-        .replace(/^[ \t]*import\s[^\n]*$/gm, (line) => {
-            imports.push(line.trim())
-            return ''
-        })
-        .replace(/\n{2,}/g, '\n')
-        .trim()
+    /* `lowerScript` parses the desugared script once, chains reference renaming and
+       doc-access lowering over that single tree, and hoists top-level imports off the
+       tree structurally — imports live at module scope, not inside the mount/render
+       function the body becomes. */
+    const { body: script, imports } =
+        desugared.trim() === ''
+            ? { body: '', imports: '' }
+            : lowerScript(desugared, stateNames, derivedNames, computedNames)
     /* The parser keeps each `<style>` as an in-place node (one inside an expression
        is text, never a node). `annotateScopes` mutates the tree — assigning each
        style its scope attribute and stamping covered elements — and returns the
@@ -51,7 +47,7 @@ export function analyzeComponent(source: string, scopeSeed?: string): AnalyzedCo
     const styles = annotateScopes(nodes, [], scopeSeed, { count: 0 })
     return {
         script,
-        imports: imports.join('\n'),
+        imports,
         stateNames,
         derivedNames,
         computedNames,

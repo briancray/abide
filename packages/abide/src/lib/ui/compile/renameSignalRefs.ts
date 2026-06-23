@@ -24,80 +24,92 @@ export function renameSignalRefs(
     computedNames: ReadonlySet<string> = new Set(),
 ): string {
     const source = ts.createSourceFile('component.ts', code, ts.ScriptTarget.Latest, true)
-
-    /* The signal names that a nested binding can shadow — only these matter for
-       scope tracking, so we ignore every other local binding. */
-    const signalNames = new Set<string>([...stateNames, ...derivedNames, ...computedNames])
-
     const result = ts.transform(source, [
-        (context) => (root) => {
-            /* Each visitor carries the set of signal names shadowed by the scopes it sits
-               inside; entering a scope that re-binds a signal name produces a fresh visitor
-               with that name added, so shadowing is per-branch (a sibling scope is unaffected). */
-            const makeVisitor = (shadowed: ReadonlySet<string>): ts.Visitor => {
-                const visit = (node: ts.Node): ts.Node => {
-                    /* Type space never holds a value read. A type alias, an interface, or any
-                       type annotation can name a signal — a prop-type member `option?: …`, a
-                       `typeof x` — without it being a runtime reference. Leave the whole type
-                       subtree untouched so it isn't rewritten into a call/access (`option()`)
-                       and emitted as broken code (types erase at build anyway). */
-                    if (
-                        ts.isTypeAliasDeclaration(node) ||
-                        ts.isInterfaceDeclaration(node) ||
-                        ts.isTypeNode(node)
-                    ) {
-                        return node
-                    }
-                    /* Import/export specifiers are binding/module names, never value reads.
-                       An aliased import whose original name collides with a signal
-                       (`import { pending as p }` next to a `pending` prop) would otherwise
-                       have its `pending` specifier rewritten to the reader form, corrupting
-                       the declaration. Leave the whole subtree untouched. */
-                    if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
-                        return node
-                    }
-                    /* Shorthand `{ count }` → `{ count: model.count }` / `{ total: total.value }`,
-                       unless a nearer scope shadows the name. */
-                    if (ts.isShorthandPropertyAssignment(node) && !shadowed.has(node.name.text)) {
-                        const replacement = referenceFor(
-                            node.name.text,
-                            stateNames,
-                            derivedNames,
-                            computedNames,
-                        )
-                        if (replacement !== undefined) {
-                            return ts.factory.createPropertyAssignment(node.name.text, replacement)
-                        }
-                    }
-                    if (ts.isIdentifier(node) && !isNameSlot(node) && !shadowed.has(node.text)) {
-                        const replacement = referenceFor(
-                            node.text,
-                            stateNames,
-                            derivedNames,
-                            computedNames,
-                        )
-                        if (replacement !== undefined) {
-                            return replacement
-                        }
-                    }
-                    /* Recurse with the scope this node introduces folded in (same visitor when
-                       it adds no shadowing name, so unscoped subtrees allocate nothing extra). */
-                    const inner = extendShadowed(node, shadowed, signalNames)
-                    return ts.visitEachChild(
-                        node,
-                        inner === shadowed ? visit : makeVisitor(inner),
-                        context,
-                    )
-                }
-                return visit
-            }
-            return ts.visitNode(root, makeVisitor(new Set())) as ts.SourceFile
-        },
+        signalRefsTransformer(stateNames, derivedNames, computedNames),
     ])
     const printer = ts.createPrinter({ newLine: ts.NewLineKind.LineFeed })
     const output = printer.printFile(result.transformed[0] as ts.SourceFile)
     result.dispose()
     return output
+}
+
+/*
+The signal-rewrite as a `ts.TransformerFactory`, so the script pipeline can chain it
+with `docAccessTransformer` over a SINGLE parsed tree (see `lowerScript`) instead of
+print-then-reparse between passes. `renameSignalRefs` is the standalone string wrapper
+kept for per-expression callers (`lowerContext`).
+*/
+export function signalRefsTransformer(
+    stateNames: ReadonlySet<string>,
+    derivedNames: ReadonlySet<string>,
+    computedNames: ReadonlySet<string> = new Set(),
+): ts.TransformerFactory<ts.SourceFile> {
+    /* The signal names that a nested binding can shadow — only these matter for
+       scope tracking, so we ignore every other local binding. */
+    const signalNames = new Set<string>([...stateNames, ...derivedNames, ...computedNames])
+    return (context) => (root) => {
+        /* Each visitor carries the set of signal names shadowed by the scopes it sits
+           inside; entering a scope that re-binds a signal name produces a fresh visitor
+           with that name added, so shadowing is per-branch (a sibling scope is unaffected). */
+        const makeVisitor = (shadowed: ReadonlySet<string>): ts.Visitor => {
+            const visit = (node: ts.Node): ts.Node => {
+                /* Type space never holds a value read. A type alias, an interface, or any
+                   type annotation can name a signal — a prop-type member `option?: …`, a
+                   `typeof x` — without it being a runtime reference. Leave the whole type
+                   subtree untouched so it isn't rewritten into a call/access (`option()`)
+                   and emitted as broken code (types erase at build anyway). */
+                if (
+                    ts.isTypeAliasDeclaration(node) ||
+                    ts.isInterfaceDeclaration(node) ||
+                    ts.isTypeNode(node)
+                ) {
+                    return node
+                }
+                /* Import/export specifiers are binding/module names, never value reads.
+                   An aliased import whose original name collides with a signal
+                   (`import { pending as p }` next to a `pending` prop) would otherwise
+                   have its `pending` specifier rewritten to the reader form, corrupting
+                   the declaration. Leave the whole subtree untouched. */
+                if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
+                    return node
+                }
+                /* Shorthand `{ count }` → `{ count: model.count }` / `{ total: total.value }`,
+                   unless a nearer scope shadows the name. */
+                if (ts.isShorthandPropertyAssignment(node) && !shadowed.has(node.name.text)) {
+                    const replacement = referenceFor(
+                        node.name.text,
+                        stateNames,
+                        derivedNames,
+                        computedNames,
+                    )
+                    if (replacement !== undefined) {
+                        return ts.factory.createPropertyAssignment(node.name.text, replacement)
+                    }
+                }
+                if (ts.isIdentifier(node) && !isNameSlot(node) && !shadowed.has(node.text)) {
+                    const replacement = referenceFor(
+                        node.text,
+                        stateNames,
+                        derivedNames,
+                        computedNames,
+                    )
+                    if (replacement !== undefined) {
+                        return replacement
+                    }
+                }
+                /* Recurse with the scope this node introduces folded in (same visitor when
+                   it adds no shadowing name, so unscoped subtrees allocate nothing extra). */
+                const inner = extendShadowed(node, shadowed, signalNames)
+                return ts.visitEachChild(
+                    node,
+                    inner === shadowed ? visit : makeVisitor(inner),
+                    context,
+                )
+            }
+            return visit
+        }
+        return ts.visitNode(root, makeVisitor(new Set())) as ts.SourceFile
+    }
 }
 
 /*

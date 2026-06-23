@@ -1,0 +1,59 @@
+import ts from 'typescript'
+import { docAccessTransformer } from './lowerDocAccess.ts'
+import { signalRefsTransformer } from './renameSignalRefs.ts'
+
+/*
+The component-script lowering, done in ONE parse. The desugared script is parsed
+once, then `signalRefsTransformer` and `docAccessTransformer` run as a chained
+`ts.transform` over the SAME tree — `renameSignalRefs` then `lowerDocAccess` as
+standalone string passes would each parse + reprint, and the import hoist used to
+text-scan their output with a single-line regex that only worked because the reprints
+happened to normalise multi-line imports first. Chaining removes both the extra parse
+and that hidden coupling.
+
+Imports are partitioned off the transformed tree structurally (`ts.isImportDeclaration`),
+not by regex, so a multi-line import hoists correctly regardless of formatting. The
+reassembled output is transpiled as a fail-loud guard: if a future un-handled rewrite
+position corrupts the script (the failure mode the syntax fuzz corpus also guards), it
+surfaces here as a located compile error instead of shipping a broken bundle.
+*/
+
+const printer = ts.createPrinter({ newLine: ts.NewLineKind.LineFeed })
+
+/* Throws on invalid syntax — the corruption tripwire for the rewrite passes. */
+const transpiler = new Bun.Transpiler({ loader: 'ts' })
+
+export function lowerScript(
+    code: string,
+    stateNames: ReadonlySet<string>,
+    derivedNames: ReadonlySet<string>,
+    computedNames: ReadonlySet<string>,
+): { body: string; imports: string } {
+    const source = ts.createSourceFile('component.ts', code, ts.ScriptTarget.Latest, true)
+    const result = ts.transform(source, [
+        signalRefsTransformer(stateNames, derivedNames, computedNames),
+        docAccessTransformer('model'),
+    ])
+    const transformed = result.transformed[0] as ts.SourceFile
+    /* Top-level imports must live at module scope, not inside the mount/render
+       function the script body becomes — hoist them off the tree. */
+    const importStatements = transformed.statements.filter(ts.isImportDeclaration)
+    const bodyStatements = transformed.statements.filter(
+        (statement) => !ts.isImportDeclaration(statement),
+    )
+    const imports = importStatements
+        .map((statement) => printer.printNode(ts.EmitHint.Unspecified, statement, transformed))
+        .join('\n')
+    const body = printer.printFile(ts.factory.updateSourceFile(transformed, bodyStatements)).trim()
+    result.dispose()
+
+    const reassembled = [imports, body].filter((part) => part !== '').join('\n')
+    try {
+        transpiler.transformSync(reassembled)
+    } catch (error) {
+        throw new Error(
+            `[abide] component script lowering produced invalid syntax — please report this with the component source. Lowered output:\n${reassembled}\n\n${String(error)}`,
+        )
+    }
+    return { body, imports }
+}

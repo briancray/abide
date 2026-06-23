@@ -1,6 +1,5 @@
 import ts from 'typescript'
 import { REACTIVE_CALLEES } from './REACTIVE_CALLEES.ts'
-import { renameSignalRefs } from './renameSignalRefs.ts'
 
 /* The reactive primitives that must be reached through a scope. A bare call to one of
    these is a compile error: reactive state is owned by a scope and the surface must show
@@ -134,8 +133,12 @@ export function desugarSignals(scriptBody: string): {
             lines.push(printer.printNode(ts.EmitHint.Unspecified, statement, source))
         }
     }
+    /* The structural rewrite only (state→model slots, props→derive, cells onto scope).
+       Reference renaming (`count` → `model.count`) is NOT applied here: the caller
+       (`lowerScript`) chains it with doc-access lowering over a single parsed tree, so
+       desugar returns the rebuilt source un-renamed plus the collected name sets. */
     return {
-        code: renameSignalRefs(lines.join('\n'), stateNames, derivedNames, computedNames),
+        code: lines.join('\n'),
         stateNames,
         derivedNames,
         computedNames,

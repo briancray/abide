@@ -259,6 +259,23 @@ const busy = scope().computed(() => pending && pendingProbe(query))</script><i>{
         expect(module).not.toMatch(/^from;/m)
     })
 
+    /* Imports hoist off the parsed tree structurally (not by a single-line regex), so a
+       multi-line import lands at module scope regardless of formatting. */
+    test('a multi-line import hoists to module scope', () => {
+        const module = compileModule(
+            `<script>import {
+  Foo,
+  Bar,
+} from './children'
+const label = 'hi'</script><i>{label}</i>`,
+        )
+        const buildAt = module.indexOf('function build')
+        const importAt = module.indexOf("from './children'")
+        expect(importAt).toBeGreaterThanOrEqual(0)
+        // the import sits above the build function, i.e. at module scope
+        expect(importAt).toBeLessThan(buildAt)
+    })
+
     /* A bare `{expr}` at attribute position is a likely-mistaken spread missing its dots. */
     test('a bare {expr} attribute is a compile error pointing at spread syntax', () => {
         expect(() => compileComponent(`<Card {rest} />`)).toThrow(/write \{\.\.\.expr\}/)
