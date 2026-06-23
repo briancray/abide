@@ -9,9 +9,9 @@ import type { SyncTransport } from './SyncTransport.ts'
 A lexical scope: the unit that owns a region's reactive data, its lifetime, and
 the capabilities applied to it. Its data surface MIRRORS `Doc` (read/replace/add/
 remove/cell/derive/apply/snapshot) so the compiler can target a scope as a
-component's data binding directly. It nests (`child`/`root`), and carries the
-capability surface as methods so a scope is a passable value:
-`<Child parentScope={scope} />`.
+component's data binding directly. It nests (`child`/`root`), passes values
+down the tree as context (`share`/`shared`), and carries the capability surface as
+methods so a scope is a passable value: `<Child parentScope={scope} />`.
 
 Capabilities route where the scope's changes go: `record()` to an undo journal,
 `persist()` to durable storage, `broadcast()` to peers — declared once, then
@@ -46,6 +46,12 @@ export type Scope = {
     /* tree */
     child: (initial?: unknown) => Scope
     root: () => Scope
+    /* context — values shared DOWN the tree (not in the reactive doc, which doesn't
+       inherit): `share` puts a named value on this scope; `shared` reads the closest
+       ancestor (self included) that has the key, undefined if none. The value is held
+       by reference, so reactive context = share a `cell`/scope, not a plain object. */
+    share: (key: string, value: unknown) => void
+    shared: <T>(key: string) => T | undefined
     /* capabilities — enable where the scope's changes go */
     record: (options?: { limit?: number }) => void
     persist: (key?: string) => void

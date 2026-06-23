@@ -95,6 +95,47 @@ describe('scope — the lexical data + capability seam', () => {
         expect(scope('/')).toBe(root) // root of the tree
     })
 
+    test('share/shared passes context down the tree to the closest ancestor', () => {
+        const root = createScope({})
+        const child = root.child({})
+        const grandchild = child.child({})
+
+        root.share('theme', 'dark')
+        expect(grandchild.shared<string>('theme')).toBe('dark') // walks up to root
+        expect(root.shared<string>('theme')).toBe('dark') // self reads its own share
+
+        // a deeper scope shadows an ancestor for its own subtree
+        child.share('theme', 'light')
+        expect(grandchild.shared<string>('theme')).toBe('light') // closest wins
+        expect(root.shared<string>('theme')).toBe('dark') // unaffected above the override
+    })
+
+    test('shared returns undefined when no ancestor provides the key', () => {
+        const child = createScope({}).child({})
+        expect(child.shared('missing')).toBeUndefined()
+    })
+
+    test('a shared undefined shadows an ancestor (has check, not truthiness)', () => {
+        const root = createScope({})
+        const child = root.child({})
+        const grandchild = child.child({})
+
+        root.share('flag', 'on')
+        child.share('flag', undefined) // explicitly provided as undefined
+        expect(grandchild.shared('flag')).toBeUndefined() // stops at child, not root
+    })
+
+    test('reactive context: share a cell, descendants see updates', () => {
+        const root = createScope({ count: 0 })
+        const child = root.child({})
+        root.share('count', root.cell<number>('count'))
+
+        const cell = child.shared<ReturnType<typeof root.cell<number>>>('count')
+        expect(cell?.get()).toBe(0)
+        root.replace('count', 3)
+        expect(cell?.get()).toBe(3) // reactivity rides the shared cell, not share itself
+    })
+
     test('scope() outside any scope mints a detached root once', () => {
         const a = scope()
         const b = scope()

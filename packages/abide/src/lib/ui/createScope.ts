@@ -37,6 +37,9 @@ export function createScope(
     const data = (): Doc => (document ??= createDoc({}))
     const id = parent === undefined ? `scope-${nextId++}` : `${parent.id}.${nextId++}`
     const children: Scope[] = []
+    /* Context values shared down the tree, held apart from the reactive doc (which
+       a child does not inherit): keyed by name, read by the closest ancestor walk. */
+    const shared = new Map<string, unknown>()
     let past: History | undefined
     let persistence: PersistHandle | undefined
     let unsync: (() => void) | undefined
@@ -64,6 +67,16 @@ export function createScope(
             return created
         },
         root: () => (parent === undefined ? self : parent.root()),
+        /* Reference store — no tracking, so a lookup never subscribes; reactivity comes
+           from what is shared (a cell/scope), not from the share. */
+        share: (key, value) => {
+            shared.set(key, value)
+        },
+        /* Closest-ancestor resolve: own map first (self can read what it shared), then
+           defer up via each scope's own `shared`. `has` distinguishes a shared
+           `undefined` from "not provided"; undefined at the root means no provider. */
+        shared: <T>(key: string): T | undefined =>
+            shared.has(key) ? (shared.get(key) as T) : parent?.shared<T>(key),
         record: (options) => {
             past ??= history(data(), options)
         },
@@ -82,6 +95,7 @@ export function createScope(
                 created.dispose()
             }
             children.length = 0
+            shared.clear()
             past?.dispose()
             past = undefined
             persistence?.dispose()
