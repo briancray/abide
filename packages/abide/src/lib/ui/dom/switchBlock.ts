@@ -42,6 +42,10 @@ export function switchBlock(
     }
     const caseAt = (index: number): SwitchCase | undefined =>
         index === -1 ? undefined : cases[index]
+    /* The chosen case builds through `scope` (directly on hydrate, via `fillBefore` on a
+       swap), which builds untracked — so a raw reactive read in the case content doesn't
+       subscribe the swap effect below; only `subject()` (and each case's `match()`) drives
+       the swap. The case's own interpolations still track, each through its own effect. */
 
     /* `before` places the range among static siblings on create (block before a suffix);
        hydrate ignores it and uses the parked claim cursor. */

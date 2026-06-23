@@ -223,7 +223,14 @@ export function awaitBlock(
            subscribes to its reactive source (a cache key). A cache-remote read is warm
            on resume — it serves the snapshot without a network round-trip, so adoption
            stays no-flash AND a later cache.invalidate re-runs the block. Without this
-           read a resume-adopted block has no deps and invalidate is a no-op. */
+           read a resume-adopted block has no deps and invalidate is a no-op.
+
+           ONLY the promise read is tracked. The warm-sync resolve, the hydration adopt,
+           and the pending render all BUILD the branch through `scope`, which builds
+           untracked — so the branch's own reactive reads don't subscribe THIS effect
+           (otherwise the whole block re-runs and re-suspends on any branch-state change,
+           e.g. a sibling route param updating in place). The branch's own child effects
+           still track normally; the block re-runs only when the promise source does. */
         const result = promiseThunk()
         if (first) {
             first = false

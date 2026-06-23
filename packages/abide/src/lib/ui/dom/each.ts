@@ -45,6 +45,10 @@ export function each<T>(
        claim): claim the start marker, build content in place, claim the end marker.
        Create mode: markers + content in a fragment, held in `pending` until placement
        inserts it. */
+    /* Reconcile runs inside the effect below; the row build doesn't subscribe it
+       (`scope` builds untracked), so a raw reactive read in the row content — e.g. a
+       nested `<script>` body — can't re-reconcile the whole list. Only `items()` drives
+       the each; each row's own interpolations track through their own effects. */
     const buildRow = (item: T): EachRow => {
         const hydration = RENDER.hydration
         if (hydration !== undefined) {

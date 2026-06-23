@@ -28,6 +28,10 @@ export function when(
     before: Node | null = null,
 ): void {
     const hydration = RENDER.hydration
+    /* The chosen branch builds through `scope` (directly on hydrate, via `fillBefore`
+       on a swap), which builds untracked — so a raw reactive read in the branch content
+       doesn't subscribe the swap effect below; only `condition()` drives the toggle. The
+       branch's own interpolations still track, each through its own effect. */
     const chosenFor = (branch: 'then' | 'else') => (branch === 'then' ? render : renderElse)
     /* The live branch's scope, registered with the owner so it disposes on owner
        teardown — not only on a branch flip via clearBetween. */

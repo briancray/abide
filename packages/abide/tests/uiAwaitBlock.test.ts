@@ -88,6 +88,36 @@ describe('await block', () => {
         expect(host.textContent).toBe('boom')
     })
 
+    test('a then-branch build does not leak its reactive reads into the await effect', () => {
+        // The branch reads `tracker` directly during its (warm-sync) build. Without
+        // untracking that build, the read subscribes the AWAIT effect, so a later
+        // `tracker` change re-runs the whole block — re-suspending it. It must not.
+        let promiseReads = 0
+        const tracker = state(0)
+        const host = run(
+            `
+            <script></script>
+            <template await={warm()}>
+                <template then="value">
+                    <script>tracker.value</script>
+                    <span>{value}</span>
+                </template>
+            </template>
+        `,
+            {
+                warm: () => {
+                    promiseReads += 1
+                    return 'ready' // warm-sync (non-thenable) → branch builds synchronously
+                },
+                tracker,
+            },
+        )
+        expect(promiseReads).toBe(1)
+        expect(host.textContent).toBe('ready')
+        tracker.value = 1 // a value the then-branch read changed
+        expect(promiseReads).toBe(1) // the await did NOT re-run — no leak
+    })
+
     test('a warm-sync value resolves immediately — no pending flash (cache contract)', () => {
         // mimics cache()'s warm read returning a settled value synchronously
         const host = run(`
