@@ -1,5 +1,11 @@
 # abide
 
+## 0.40.2
+
+### Patch Changes
+
+- [`315bc88`](https://github.com/briancray/abide/commit/315bc8859e03a81c845f9919a759b6b1f8fb0ea1) - document the abide lsp command and add an if/else template example ([`98b7555`](https://github.com/briancray/abide/commit/98b755509e4788712b7e0516a1cb05f04355a75b))
+
 ## 0.40.1
 
 ### Patch Changes
