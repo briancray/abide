@@ -29,38 +29,6 @@ export function renameSignalRefs(
        scope tracking, so we ignore every other local binding. */
     const signalNames = new Set<string>([...stateNames, ...derivedNames, ...computedNames])
 
-    /* Identifier nodes that are names, not value reads — never rewritten. */
-    const skip = new Set<ts.Node>()
-    const collect = (node: ts.Node): void => {
-        if (ts.isPropertyAccessExpression(node)) {
-            skip.add(node.name)
-        }
-        /* A declaration name is a binding, not a value read. A plain identifier is
-           skipped directly; a destructuring pattern's leaf names are collected so a
-           bound name shadowing a signal (`const { count } = …`) is never rewritten. */
-        if (ts.isVariableDeclaration(node)) {
-            if (ts.isIdentifier(node.name)) {
-                skip.add(node.name)
-            } else {
-                collectBindingIdentifiers(node.name, skip)
-            }
-        }
-        if (ts.isParameter(node) && ts.isIdentifier(node.name)) {
-            skip.add(node.name)
-        }
-        if (ts.isPropertyAssignment(node) && ts.isIdentifier(node.name)) {
-            skip.add(node.name)
-        }
-        if (
-            (ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node)) &&
-            node.name !== undefined
-        ) {
-            skip.add(node.name)
-        }
-        ts.forEachChild(node, collect)
-    }
-    collect(source)
-
     const result = ts.transform(source, [
         (context) => (root) => {
             /* Each visitor carries the set of signal names shadowed by the scopes it sits
@@ -101,7 +69,7 @@ export function renameSignalRefs(
                             return ts.factory.createPropertyAssignment(node.name.text, replacement)
                         }
                     }
-                    if (ts.isIdentifier(node) && !skip.has(node) && !shadowed.has(node.text)) {
+                    if (ts.isIdentifier(node) && !isNameSlot(node) && !shadowed.has(node.text)) {
                         const replacement = referenceFor(
                             node.text,
                             stateNames,
@@ -130,6 +98,80 @@ export function renameSignalRefs(
     const output = printer.printFile(result.transformed[0] as ts.SourceFile)
     result.dispose()
     return output
+}
+
+/*
+True when `id` occupies a name/label/specifier slot of its parent — a position that
+DECLARES, NAMES, or LABELS rather than READS. These are the only identifier positions
+that are not value reads (type space and import/export subtrees are skipped wholesale
+in the visitor above), so a name-slot identifier is left untouched and everything else
+is a value read that rewrites.
+
+Classifying by the identifier's slot in its parent — checked at visit time against the
+live tree — rather than by a pre-collected node set is what makes a forgotten position
+fail safe: an unrecognised parent kind falls through to `false`, so the identifier is
+left exactly as written, never rewritten into broken syntax. The syntax fuzz corpus
+guards the completeness of this list.
+*/
+function isNameSlot(id: ts.Identifier): boolean {
+    const parent = id.parent
+    if (parent === undefined) {
+        return false
+    }
+    /* `obj.NAME` — the member name; the object side (`parent.expression`) is the read. */
+    if (ts.isPropertyAccessExpression(parent) || ts.isQualifiedName(parent)) {
+        return parent.name === id
+    }
+    /* `NAME: value`, and method/property/accessor/enum-member names in classes,
+       object literals, and type members. */
+    if (
+        ts.isPropertyAssignment(parent) ||
+        ts.isMethodDeclaration(parent) ||
+        ts.isPropertyDeclaration(parent) ||
+        ts.isGetAccessorDeclaration(parent) ||
+        ts.isSetAccessorDeclaration(parent) ||
+        ts.isMethodSignature(parent) ||
+        ts.isPropertySignature(parent) ||
+        ts.isEnumMember(parent)
+    ) {
+        return parent.name === id
+    }
+    /* Declaration names: const/let/var, parameters, named functions and classes. */
+    if (
+        ts.isVariableDeclaration(parent) ||
+        ts.isParameter(parent) ||
+        ts.isFunctionDeclaration(parent) ||
+        ts.isFunctionExpression(parent) ||
+        ts.isClassDeclaration(parent) ||
+        ts.isClassExpression(parent)
+    ) {
+        return parent.name === id
+    }
+    /* A destructure element binds (`{ a }` / `[a]`) or renames (`{ a: b }`): both the
+       bound name and the source key are names, not reads. */
+    if (ts.isBindingElement(parent)) {
+        return parent.name === id || parent.propertyName === id
+    }
+    /* Labels: `NAME:` and `break NAME` / `continue NAME`. */
+    if (
+        ts.isLabeledStatement(parent) ||
+        ts.isBreakStatement(parent) ||
+        ts.isContinueStatement(parent)
+    ) {
+        return parent.label === id
+    }
+    /* Import/export specifier and clause names (the surrounding declaration subtree is
+       also skipped wholesale upstream, but a stray specifier here is a name too). */
+    if (
+        ts.isImportSpecifier(parent) ||
+        ts.isExportSpecifier(parent) ||
+        ts.isImportClause(parent) ||
+        ts.isNamespaceImport(parent) ||
+        ts.isNamespaceExport(parent)
+    ) {
+        return true
+    }
+    return false
 }
 
 /* The shadowed-name set for `node`'s children: the parent set plus any signal name
@@ -204,22 +246,6 @@ function collectStatementBindings(statement: ts.Statement, into: Set<string>): v
         statement.name !== undefined
     ) {
         into.add(statement.name.text)
-    }
-}
-
-/* The identifier NODES a binding name binds — a plain identifier or the leaves of a
-   destructuring pattern (object/array, including nested patterns and rest elements).
-   For `{ a: b }` only the bound name `b` is a binding; `a` is the source property.
-   Feeds the skip set so a destructured name shadowing a signal is never rewritten. */
-function collectBindingIdentifiers(name: ts.BindingName, into: Set<ts.Node>): void {
-    if (ts.isIdentifier(name)) {
-        into.add(name)
-        return
-    }
-    for (const element of name.elements) {
-        if (ts.isBindingElement(element)) {
-            collectBindingIdentifiers(element.name, into)
-        }
     }
 }
 
