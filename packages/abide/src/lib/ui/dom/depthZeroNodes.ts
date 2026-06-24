@@ -1,16 +1,5 @@
-import { RANGE_CLOSE, RANGE_OPEN } from '../runtime/RANGE_MARKER.ts'
 import { commentData } from './commentData.ts'
-
-/* Block-range boundary markers. A control-flow block's rendered content (and a child
-   component's, which mounts as a range too) sits between an OPEN and CLOSE comment: `[`…`]`
-   for each/if/switch/slot ranges, `abide:…`…`/abide:…` for await/try/snippet/html. THIS
-   skeleton's own anchor (`a`) sits OUTSIDE any such range. */
-function isOpenMarker(data: string): boolean {
-    return data === RANGE_OPEN || data.startsWith('abide:')
-}
-function isCloseMarker(data: string): boolean {
-    return data === RANGE_CLOSE || data.startsWith('/abide:')
-}
+import { markerDepthDelta } from './markerDepthDelta.ts'
 
 /*
 A sibling list's DEPTH-0 nodes — those belonging to THIS skeleton's own structure, excluding
@@ -31,10 +20,11 @@ export function depthZeroNodes(nodes: ArrayLike<Node>): Node[] {
             if (depth === 0) {
                 own.push(node)
             }
-        } else if (isCloseMarker(data)) {
-            depth -= 1
-        } else if (isOpenMarker(data)) {
-            depth += 1
+            continue
+        }
+        const delta = markerDepthDelta(data)
+        if (delta !== 0) {
+            depth += delta
         } else if (depth === 0) {
             /* A non-marker comment (this skeleton's own `a` anchor) at depth 0. */
             own.push(node)

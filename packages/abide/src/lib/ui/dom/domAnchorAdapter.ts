@@ -2,12 +2,7 @@ import type { AnchorRole, AnchorWalkAdapter } from '../compile/walkAnchorOrder.t
 import { ANCHOR } from '../runtime/RANGE_MARKER.ts'
 import { commentData } from './commentData.ts'
 import { depthZeroNodes } from './depthZeroNodes.ts'
-
-/* An element carries `hasAttribute`; comment/text nodes do not. Detected by method (not
-   `nodeType`) so the walk runs under the test mini-dom too. */
-function isElement(node: Node): boolean {
-    return typeof (node as Element).hasAttribute === 'function'
-}
+import { isElement } from './isElement.ts'
 
 /*
 The realized-DOM side of the shared anchor-ordering rule (`walkAnchorOrder`). Classifies each

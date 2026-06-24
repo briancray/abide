@@ -2,13 +2,14 @@ import { walkAnchorOrder } from '../compile/walkAnchorOrder.ts'
 import { walkElementOrder } from '../compile/walkElementOrder.ts'
 import { claimChild } from '../runtime/claimChild.ts'
 import { HOLE_ATTRIBUTE } from '../runtime/HOLE_ATTRIBUTE.ts'
-import { RANGE_CLOSE, RANGE_OPEN } from '../runtime/RANGE_MARKER.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { commentData } from './commentData.ts'
 import { depthZeroNodes } from './depthZeroNodes.ts'
 import { domAnchorAdapter } from './domAnchorAdapter.ts'
 import { domElementAdapter } from './domElementAdapter.ts'
 import { foreignWrapperTag } from './foreignWrapperTag.ts'
+import { isElement } from './isElement.ts'
+import { markerDepthDelta } from './markerDepthDelta.ts'
 import type { SkeletonHoles } from './types/SkeletonHoles.ts'
 
 type CompiledSkeleton = {
@@ -26,23 +27,6 @@ type CompiledSkeleton = {
 /* Parsed-once skeleton per unique string, keyed by the owning document (see
    `templateFor` for the per-document rationale). */
 const CACHES = new WeakMap<object, Map<string, CompiledSkeleton>>()
-
-/* An element carries `hasAttribute`; text/comment nodes do not. Used instead of
-   `nodeType` so the walk runs under the test mini-dom too. */
-function isElement(node: Node): node is Element {
-    return typeof (node as Element).hasAttribute === 'function'
-}
-
-/* Block-range boundary markers. A control-flow block's rendered content sits between an
-   OPEN and CLOSE comment: `[`…`]` for each rows / if / switch / slot ranges, and named
-   `abide:…`…`/abide:…` boundaries for await / try / snippet / html. The skeleton's own
-   anchor (`a`) sits OUTSIDE any such range. */
-function isOpenMarker(data: string): boolean {
-    return data === RANGE_OPEN || data.startsWith('abide:')
-}
-function isCloseMarker(data: string): boolean {
-    return data === RANGE_CLOSE || data.startsWith('/abide:')
-}
 
 /* The `index`-th depth-0 ELEMENT among `children` — skipping text/comment nodes AND any
    element nested inside a block's rendered range (between `[`…`]` / `abide:…` boundaries),
@@ -63,11 +47,9 @@ function elementChildAt(children: ArrayLike<Node>, index: number): Element | und
                 }
                 seen += 1
             }
-        } else if (isCloseMarker(data)) {
-            depth -= 1
-        } else if (isOpenMarker(data)) {
-            depth += 1
+            continue
         }
+        depth += markerDepthDelta(data)
     }
     return undefined
 }

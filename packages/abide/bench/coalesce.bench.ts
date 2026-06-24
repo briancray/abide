@@ -1,5 +1,5 @@
-import { batch } from '../src/lib/ui/runtime/batch.ts'
 import { effect } from '../src/lib/ui/effect.ts'
+import { batch } from '../src/lib/ui/runtime/batch.ts'
 import { state } from '../src/lib/ui/state.ts'
 import { emitMetric } from './emitMetric.ts'
 

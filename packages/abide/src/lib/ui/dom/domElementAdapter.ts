@@ -1,11 +1,6 @@
 import type { ElementRole, ElementWalkAdapter } from '../compile/walkElementOrder.ts'
 import { HOLE_ATTRIBUTE } from '../runtime/HOLE_ATTRIBUTE.ts'
-
-/* An element carries `hasAttribute`; comment/text nodes do not. Detected by method (not
-   `nodeType`) so the walk runs under the test mini-dom too. */
-function isElement(node: Node): node is Element {
-    return typeof (node as Element).hasAttribute === 'function'
-}
+import { isElement } from './isElement.ts'
 
 /*
 The parsed-DOM side of the shared element-hole numbering rule (`walkElementOrder`). Classifies
