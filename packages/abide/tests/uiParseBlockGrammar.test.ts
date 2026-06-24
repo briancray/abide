@@ -147,3 +147,20 @@ describe('block grammar — switch', () => {
         )
     })
 })
+
+describe('block grammar — try', () => {
+    test('{#try}{:catch e}{:finally}', () => {
+        const { nodes } = parseTemplate(
+            `{#try}<x>a</x>{:catch e}<b>{e}</b>{:finally}<i>f</i>{/try}`,
+        )
+        const t = nodes[0]
+        expect(t.kind).toBe('try')
+        if (t.kind !== 'try') throw new Error('not try')
+        expect(t.children).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ kind: 'branch', branch: 'catch', as: 'e' }),
+                expect.objectContaining({ kind: 'branch', branch: 'finally', as: undefined }),
+            ]),
+        )
+    })
+})

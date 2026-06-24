@@ -191,7 +191,13 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
             const children = readBlockChildren('switch')
             return { kind: 'switch', subject, children, loc: open.loc }
         }
-        throw new Error(`[abide] {#${keyword}} is not supported yet`)
+        if (keyword === 'try') {
+            const children = readBlockChildren('try')
+            return { kind: 'try', children }
+        }
+        throw new Error(
+            `[abide] unknown control block {#${keyword}} — expected if/for/await/switch/try`,
+        )
     }
 
     /* Shared scan body for block/branch child loops. Reads one node at the current
@@ -278,6 +284,20 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
                 const as = token.body.slice(token.body.indexOf('then') + 4).trim() || undefined
                 return { kind: 'branch', branch: 'then', as, children: branchChildren }
             }
+            if (keyword === 'catch') {
+                const as = token.body.slice(token.body.indexOf('catch') + 5).trim() || undefined
+                return { kind: 'branch', branch: 'catch', as, children: branchChildren }
+            }
+            if (keyword === 'finally') {
+                return {
+                    kind: 'branch',
+                    branch: 'finally',
+                    as: undefined,
+                    children: branchChildren,
+                }
+            }
+        }
+        if (parentKeyword === 'try') {
             if (keyword === 'catch') {
                 const as = token.body.slice(token.body.indexOf('catch') + 5).trim() || undefined
                 return { kind: 'branch', branch: 'catch', as, children: branchChildren }
