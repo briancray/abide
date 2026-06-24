@@ -169,6 +169,20 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
                 loc: open.loc,
             }
         }
+        if (keyword === 'await') {
+            const afterAwait = open.body.slice(open.body.indexOf('await') + 5).trim()
+            const thenAt = indexOfKeywordAtDepthZero(afterAwait, ' then ')
+            const promise = (thenAt === -1 ? afterAwait : afterAwait.slice(0, thenAt)).trim()
+            if (promise === '') {
+                throw new Error('[abide] {#await} requires a promise expression')
+            }
+            const as =
+                thenAt === -1
+                    ? undefined
+                    : afterAwait.slice(thenAt + ' then '.length).trim() || undefined
+            const children = readBlockChildren('await')
+            return { kind: 'await', promise, blocking: thenAt !== -1, as, children, loc: open.loc }
+        }
         throw new Error(`[abide] {#${keyword}} is not supported yet`)
     }
 
@@ -238,6 +252,24 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
         if (parentKeyword === 'for' && keyword === 'catch') {
             const as = token.body.slice(token.body.indexOf('catch') + 5).trim() || undefined
             return { kind: 'branch', branch: 'catch', as, children: branchChildren }
+        }
+        if (parentKeyword === 'await') {
+            if (keyword === 'then') {
+                const as = token.body.slice(token.body.indexOf('then') + 4).trim() || undefined
+                return { kind: 'branch', branch: 'then', as, children: branchChildren }
+            }
+            if (keyword === 'catch') {
+                const as = token.body.slice(token.body.indexOf('catch') + 5).trim() || undefined
+                return { kind: 'branch', branch: 'catch', as, children: branchChildren }
+            }
+            if (keyword === 'finally') {
+                return {
+                    kind: 'branch',
+                    branch: 'finally',
+                    as: undefined,
+                    children: branchChildren,
+                }
+            }
         }
         throw new Error(`[abide] {:${keyword}} is not valid inside {#${parentKeyword}}`)
     }

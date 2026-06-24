@@ -84,3 +84,48 @@ describe('block grammar — for', () => {
         expect(each.children.some((n) => n.kind === 'branch' && n.branch === 'catch')).toBe(true)
     })
 })
+
+describe('block grammar — await', () => {
+    test('streaming {#await}{:then}{:catch}{:finally}', () => {
+        const { nodes } = parseTemplate(
+            `{#await load()}<p>loading</p>{:then v}<span>{v}</span>{:catch e}<b>{e}</b>{:finally}<i>done</i>{/await}`,
+        )
+        const a = nodes[0]
+        expect(a).toMatchObject({
+            kind: 'await',
+            promise: 'load()',
+            blocking: false,
+            as: undefined,
+        })
+        if (a.kind !== 'await') throw new Error('not await')
+        // pending content precedes the first branch
+        const firstBranch = a.children.findIndex((n) => n.kind === 'branch')
+        expect(
+            a.children.slice(0, firstBranch).some((n) => n.kind === 'element' && n.tag === 'p'),
+        ).toBe(true)
+        expect(a.children).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ kind: 'branch', branch: 'then', as: 'v' }),
+                expect.objectContaining({ kind: 'branch', branch: 'catch', as: 'e' }),
+                expect.objectContaining({ kind: 'branch', branch: 'finally', as: undefined }),
+            ]),
+        )
+    })
+
+    test('blocking {#await p then v}', () => {
+        const { nodes } = parseTemplate(`{#await user() then u}<span>{u.name}</span>{/await}`)
+        expect(nodes[0]).toMatchObject({
+            kind: 'await',
+            promise: 'user()',
+            blocking: true,
+            as: 'u',
+        })
+    })
+
+    test('then-as-keyword does not split an expression containing the word then', () => {
+        const { nodes } = parseTemplate(
+            `{#await q.then(x)}<p>w</p>{:then v}<span>{v}</span>{/await}`,
+        )
+        expect(nodes[0]).toMatchObject({ kind: 'await', promise: 'q.then(x)', blocking: false })
+    })
+})
