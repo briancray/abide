@@ -158,6 +158,33 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
         throw new Error(`[abide] {#${keyword}} is not supported yet`)
     }
 
+    /* Shared scan body for block/branch child loops. Reads one node at the current
+       cursor position and pushes it onto `nodes`. Returns false when the caller's
+       terminator fires (caller decides what to do next); returns true while scanning
+       continues. `onBranch` fires when `{:` is seen — block-children consume it as a
+       new branch node; branch-children let the caller exit instead. */
+    function scanNode(nodes: TemplateNode[], onBranch: (() => boolean) | null): boolean {
+        /* Branch/close tokens — delegate to the caller's terminator logic. */
+        if (source.startsWith('{/', cursor)) {
+            return false
+        }
+        if (source.startsWith('{:', cursor)) {
+            return onBranch === null ? false : onBranch()
+        }
+        if (atBlock()) {
+            nodes.push(readBlock())
+        } else if (source.startsWith('<!--', cursor)) {
+            skipComment()
+        } else if (atStyleTag()) {
+            nodes.push(readStyle())
+        } else if (source.charAt(cursor) === '<') {
+            nodes.push(readElement())
+        } else {
+            nodes.push(readText())
+        }
+        return true
+    }
+
     /* Reads children of a block until its close `{/<keyword>}`. A continuation token
        `{:…}` ends the current branch's children and starts a new `case`/`branch` node
        (per construct). The leading children (before the first `{:…}`) are the block's
@@ -166,24 +193,13 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
     function readBlockChildren(keyword: string): TemplateNode[] {
         const nodes: TemplateNode[] = []
         while (cursor < source.length) {
-            if (source.startsWith('{/', cursor)) {
+            const keepGoing = scanNode(nodes, () => {
+                nodes.push(readBranch(keyword))
+                return true
+            })
+            if (!keepGoing) {
                 readBlockToken() // consume the close `{/keyword}`
                 return nodes
-            }
-            if (source.startsWith('{:', cursor)) {
-                nodes.push(readBranch(keyword))
-                continue
-            }
-            if (atBlock()) {
-                nodes.push(readBlock())
-            } else if (source.startsWith('<!--', cursor)) {
-                skipComment()
-            } else if (atStyleTag()) {
-                nodes.push(readStyle())
-            } else if (source.charAt(cursor) === '<') {
-                nodes.push(readElement())
-            } else {
-                nodes.push(readText())
             }
         }
         throw new Error(`[abide] unterminated {#${keyword}} block — missing {/${keyword}}`)
@@ -212,21 +228,9 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
        (the caller's readBlockChildren loop handles those). */
     function readBranchChildren(): TemplateNode[] {
         const nodes: TemplateNode[] = []
-        while (cursor < source.length) {
-            if (source.startsWith('{:', cursor) || source.startsWith('{/', cursor)) {
-                return nodes
-            }
-            if (atBlock()) {
-                nodes.push(readBlock())
-            } else if (source.startsWith('<!--', cursor)) {
-                skipComment()
-            } else if (atStyleTag()) {
-                nodes.push(readStyle())
-            } else if (source.charAt(cursor) === '<') {
-                nodes.push(readElement())
-            } else {
-                nodes.push(readText())
-            }
+        /* Pass null for onBranch so scanNode returns false on `{:`, leaving it unconsumed. */
+        while (cursor < source.length && scanNode(nodes, null)) {
+            // continue
         }
         return nodes
     }
