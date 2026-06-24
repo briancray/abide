@@ -97,7 +97,7 @@ const externalHref = scope().computed(() => url('https://bun.sh', { utm: 'abide'
             type="button"
             class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
             onclick={() => navigate(`/pages?ts=${Date.now()}`, { keepScroll: true })}>
-            {"navigate(url, { keepScroll: true }) — hold scroll on in-page swap"}
+            {'navigate(url, { keepScroll: true }) — hold scroll on in-page swap'}
         </button>
     </div>
 </section>
