@@ -1,5 +1,4 @@
-import { RESUME } from '../runtime/RESUME.ts'
-import { seedStreamedResolution } from '../seedStreamedResolution.ts'
+import { seedResolved } from '../seedResolved.ts'
 
 /*
 Bundle-side consumer of an SSR stream chunk, the counterpart of the doc stream's inline
@@ -31,7 +30,7 @@ export function applyResolved(root: Element, frame: string): void {
        bundle-consumed stream can't adopt a resolved branch while dropping its cache key. */
     if (resolved.nodeName === 'ABIDE-CACHE') {
         try {
-            seedStreamedResolution(JSON.parse(resolved.textContent ?? 'null'))
+            seedResolved({ kind: 'cache', resolution: JSON.parse(resolved.textContent ?? 'null') })
         } catch {
             /* malformed payload — leave unseeded; the read falls back to a live fetch */
         }
@@ -47,7 +46,7 @@ export function applyResolved(root: Element, frame: string): void {
        recording it lets a later hydrate adopt this branch (no re-fetch). */
     const payload = resolved.firstChild as Element | null
     if (payload !== null && payload.nodeName === 'SCRIPT') {
-        RESUME[Number(id)] = payload.textContent ?? ''
+        seedResolved({ kind: 'resume', id: Number(id), resume: payload.textContent ?? '' })
         payload.remove()
     }
     const open = `abide:await:${id}`

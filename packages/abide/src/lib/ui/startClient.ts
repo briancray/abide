@@ -11,7 +11,7 @@ import { probeNavigation } from './probeNavigation.ts'
 import { router } from './router.ts'
 import { clientPage } from './runtime/clientPage.ts'
 import type { RouteLoader } from './runtime/types/RouteLoader.ts'
-import { seedStreamedResolution } from './seedStreamedResolution.ts'
+import { seedResolved } from './seedResolved.ts'
 
 /* The server's __SSR__ payload this entry consumes. */
 type SsrPayload = { cache?: CacheSnapshotEntry[]; base?: string }
@@ -65,14 +65,16 @@ export function startClient(
     const streamed =
         (globalThis as { __abideResumeCache?: StreamedResolution[] }).__abideResumeCache ?? []
     for (const resolution of [...(ssr.cache ?? []), ...streamed]) {
-        seedStreamedResolution(resolution)
+        seedResolved({ kind: 'cache', resolution })
     }
     /* Keep the cache channel live past boot: replace the head's buffering collector with
        the store-connected sink so a post-load resolution — streaming SPA navigation or a
        socket-delivered SSR frame, both routed through applyResolved — seeds the store
-       directly instead of pushing to a buffer nothing drains again. */
+       directly instead of pushing to a buffer nothing drains again. The inline doc-stream
+       script only ever hands this a cache `StreamedResolution`, so wrap it as a cache frame
+       through the one intake seam. */
     ;(globalThis as { __abideResolve?: (resolution: StreamedResolution) => void }).__abideResolve =
-        seedStreamedResolution
+        (resolution) => seedResolved({ kind: 'cache', resolution })
 
     return router(target, routes, layoutRoutes, probeNavigation)
 }
