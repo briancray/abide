@@ -183,6 +183,14 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
             const children = readBlockChildren('await')
             return { kind: 'await', promise, blocking: thenAt !== -1, as, children, loc: open.loc }
         }
+        if (keyword === 'switch') {
+            const subject = open.body.slice(open.body.indexOf('switch') + 6).trim()
+            if (subject === '') {
+                throw new Error('[abide] {#switch} requires a subject expression')
+            }
+            const children = readBlockChildren('switch')
+            return { kind: 'switch', subject, children, loc: open.loc }
+        }
         throw new Error(`[abide] {#${keyword}} is not supported yet`)
     }
 
@@ -252,6 +260,18 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
         if (parentKeyword === 'for' && keyword === 'catch') {
             const as = token.body.slice(token.body.indexOf('catch') + 5).trim() || undefined
             return { kind: 'branch', branch: 'catch', as, children: branchChildren }
+        }
+        if (parentKeyword === 'switch') {
+            if (keyword === 'case') {
+                const match = token.body.slice(token.body.indexOf('case') + 4).trim()
+                if (match === '') {
+                    throw new Error('[abide] {:case} requires a value expression')
+                }
+                return { kind: 'case', match, children: branchChildren }
+            }
+            if (keyword === 'default') {
+                return { kind: 'case', match: undefined, children: branchChildren }
+            }
         }
         if (parentKeyword === 'await') {
             if (keyword === 'then') {

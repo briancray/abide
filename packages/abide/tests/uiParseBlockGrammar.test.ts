@@ -129,3 +129,21 @@ describe('block grammar — await', () => {
         expect(nodes[0]).toMatchObject({ kind: 'await', promise: 'q.then(x)', blocking: false })
     })
 })
+
+describe('block grammar — switch', () => {
+    test('{#switch}{:case}{:default}', () => {
+        const { nodes } = parseTemplate(
+            `{#switch status}{:case "pending"}<span>P</span>{:case "shipped"}<span>S</span>{:default}<span>?</span>{/switch}`,
+        )
+        const sw = nodes[0]
+        expect(sw).toMatchObject({ kind: 'switch', subject: 'status' })
+        if (sw.kind !== 'switch') throw new Error('not switch')
+        expect(sw.children).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ kind: 'case', match: '"pending"' }),
+                expect.objectContaining({ kind: 'case', match: '"shipped"' }),
+                expect.objectContaining({ kind: 'case', match: undefined }),
+            ]),
+        )
+    })
+})
