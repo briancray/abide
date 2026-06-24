@@ -1,10 +1,11 @@
 import { effect } from '../effect.ts'
+import { RANGE_CLOSE, RANGE_OPEN } from '../runtime/RANGE_MARKER.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { scope } from '../runtime/scope.ts'
 import { scopeGroup } from '../runtime/scopeGroup.ts'
-import { clearBetween } from './clearBetween.ts'
 import { fillBefore } from './fillBefore.ts'
 import { openMarker } from './openMarker.ts'
+import { replaceRange } from './replaceRange.ts'
 
 /*
 Conditional binding — the runtime for `<template if>` (with optional `else`). The
@@ -34,7 +35,7 @@ export function when(
        branch's own interpolations still track, each through its own effect. */
     const chosenFor = (branch: 'then' | 'else') => (branch === 'then' ? render : renderElse)
     /* The live branch's scope, registered with the owner so it disposes on owner
-       teardown — not only on a branch flip via clearBetween. */
+       teardown — not only on a branch flip via replaceRange. */
     const group = scopeGroup()
     let dispose: (() => void) | undefined
     let activeBranch: 'then' | 'else'
@@ -43,16 +44,16 @@ export function when(
     /* `before` (a static node located by the skeleton) places the range among siblings on
        create, so the block sits before a static suffix rather than at the parent's end.
        Hydrate ignores it — the claim cursor (positioned past the prefix) drives placement. */
-    const start = openMarker(parent, '[', before)
+    const start = openMarker(parent, RANGE_OPEN, before)
     if (hydration !== undefined) {
         activeBranch = condition() ? 'then' : 'else'
         const chosen = chosenFor(activeBranch)
         if (chosen !== undefined) {
             dispose = group.track(scope(() => chosen(parent))) // content claims the SSR nodes in place
         }
-        end = openMarker(parent, ']')
+        end = openMarker(parent, RANGE_CLOSE)
     } else {
-        end = openMarker(parent, ']', before)
+        end = openMarker(parent, RANGE_CLOSE, before)
         activeBranch = condition() ? 'then' : 'else'
         const chosen = chosenFor(activeBranch)
         if (chosen !== undefined) {
@@ -65,12 +66,9 @@ export function when(
         if (branch === activeBranch) {
             return
         }
-        clearBetween(start, end, dispose)
-        dispose = undefined
         activeBranch = branch
         const chosen = chosenFor(branch)
-        if (chosen !== undefined) {
-            dispose = group.track(fillBefore(end, chosen))
-        }
+        const next = replaceRange(start, end, dispose, chosen)
+        dispose = next !== undefined ? group.track(next) : undefined
     })
 }

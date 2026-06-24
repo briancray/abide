@@ -1,11 +1,12 @@
 import { snippetPayload } from '../../shared/snippet.ts'
 import { effect } from '../effect.ts'
+import { SNIPPET_CLOSE, SNIPPET_OPEN } from '../runtime/RANGE_MARKER.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { scope } from '../runtime/scope.ts'
 import { scopeGroup } from '../runtime/scopeGroup.ts'
-import { clearBetween } from './clearBetween.ts'
 import { fillBefore } from './fillBefore.ts'
 import { openMarker } from './openMarker.ts'
+import { replaceRange } from './replaceRange.ts'
 
 /*
 A `{snippet(args)}` interpolation: mount the branded builder's nodes in a range
@@ -30,7 +31,7 @@ the args; a later argument change rebuilds fresh (the SSR markers stay as the ra
 export function appendSnippet(parent: Node, read: () => unknown): void {
     const hydration = RENDER.hydration
     /* Mount scopes register with the owner so they dispose on owner teardown, not
-       only on an argument-driven rebuild via clearBetween. */
+       only on an argument-driven rebuild via replaceRange. */
     const group = scopeGroup()
     let dispose: (() => void) | undefined
 
@@ -44,15 +45,15 @@ export function appendSnippet(parent: Node, read: () => unknown): void {
     let open: Comment
     let close: Comment
     if (hydration !== undefined) {
-        open = openMarker(parent, 'abide:snippet')
+        open = openMarker(parent, SNIPPET_OPEN)
         const builder = builderOf()
         if (builder !== undefined) {
             dispose = group.track(scope(() => builder(parent))) // content claims the SSR nodes in place
         }
-        close = openMarker(parent, '/abide:snippet')
+        close = openMarker(parent, SNIPPET_CLOSE)
     } else {
-        open = openMarker(parent, 'abide:snippet')
-        close = openMarker(parent, '/abide:snippet')
+        open = openMarker(parent, SNIPPET_OPEN)
+        close = openMarker(parent, SNIPPET_CLOSE)
         const builder = builderOf()
         if (builder !== undefined) {
             dispose = group.track(fillBefore(close, builder))
@@ -68,7 +69,7 @@ export function appendSnippet(parent: Node, read: () => unknown): void {
             first = false
             return
         }
-        clearBetween(open, close, dispose)
-        dispose = builder !== undefined ? group.track(fillBefore(close, builder)) : undefined
+        const next = replaceRange(open, close, dispose, builder)
+        dispose = next !== undefined ? group.track(next) : undefined
     })
 }

@@ -1,10 +1,11 @@
 import { effect } from '../effect.ts'
+import { RANGE_CLOSE, RANGE_OPEN } from '../runtime/RANGE_MARKER.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { scope } from '../runtime/scope.ts'
 import { scopeGroup } from '../runtime/scopeGroup.ts'
-import { clearBetween } from './clearBetween.ts'
 import { fillBefore } from './fillBefore.ts'
 import { openMarker } from './openMarker.ts'
+import { replaceRange } from './replaceRange.ts'
 import type { SwitchCase } from './types/SwitchCase.ts'
 
 /*
@@ -28,7 +29,7 @@ export function switchBlock(
 ): void {
     const hydration = RENDER.hydration
     /* The live case's scope, registered with the owner so it disposes on owner
-       teardown — not only when the subject switches cases via clearBetween. */
+       teardown — not only when the subject switches cases via replaceRange. */
     const group = scopeGroup()
     let dispose: (() => void) | undefined
     let activeIndex: number
@@ -49,16 +50,16 @@ export function switchBlock(
 
     /* `before` places the range among static siblings on create (block before a suffix);
        hydrate ignores it and uses the parked claim cursor. */
-    const start = openMarker(parent, '[', before)
+    const start = openMarker(parent, RANGE_OPEN, before)
     if (hydration !== undefined) {
         activeIndex = select(subject())
         const chosen = caseAt(activeIndex)
         if (chosen !== undefined) {
             dispose = group.track(scope(() => chosen.render(parent))) // claim the SSR nodes in place
         }
-        end = openMarker(parent, ']')
+        end = openMarker(parent, RANGE_CLOSE)
     } else {
-        end = openMarker(parent, ']', before)
+        end = openMarker(parent, RANGE_CLOSE, before)
         activeIndex = select(subject())
         const chosen = caseAt(activeIndex)
         if (chosen !== undefined) {
@@ -71,12 +72,9 @@ export function switchBlock(
         if (index === activeIndex) {
             return
         }
-        clearBetween(start, end, dispose)
-        dispose = undefined
         activeIndex = index
         const chosen = caseAt(index)
-        if (chosen !== undefined) {
-            dispose = group.track(fillBefore(end, (p) => chosen.render(p)))
-        }
+        const next = replaceRange(start, end, dispose, chosen && ((p) => chosen.render(p)))
+        dispose = next !== undefined ? group.track(next) : undefined
     })
 }
