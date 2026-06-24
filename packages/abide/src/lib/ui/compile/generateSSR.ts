@@ -1,6 +1,11 @@
 import { assertExhaustive } from '../../shared/assertExhaustive.ts'
 import { OUTLET_CLOSE, OUTLET_OPEN } from '../runtime/OUTLET_MARKER.ts'
 import { OUTLET_TAG } from '../runtime/OUTLET_TAG.ts'
+import {
+    ANCHOR,
+    RANGE_CLOSE as RANGE_CLOSE_DATA,
+    RANGE_OPEN as RANGE_OPEN_DATA,
+} from '../runtime/RANGE_MARKER.ts'
 import { asOutlet } from './asOutlet.ts'
 import { composeProps } from './composeProps.ts'
 import { groupBindParts } from './groupBindParts.ts'
@@ -16,12 +21,16 @@ import { stripEffects } from './stripEffects.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
 import { VOID_TAGS } from './VOID_TAGS.ts'
 
-/* The range boundary comments a control-flow block emits around its content. They
-   serialize exactly as the client's `document.createComment('[' | ']')` markers, so
-   the client claims the same `[ … ]` boundary it builds — the comment-marked range
-   that lets a branch hold any content. */
-const RANGE_OPEN = '<!--[-->'
-const RANGE_CLOSE = '<!--]-->'
+/* The range boundary comments a control-flow block emits around its content. Sourced
+   from the SAME wire-alphabet constants the client's `document.createComment` markers
+   use (`RANGE_MARKER`), wrapped in comment syntax — so a server-emitted boundary and the
+   client `[ … ]` boundary it claims can never drift on a literal. */
+const RANGE_OPEN = `<!--${RANGE_OPEN_DATA}-->`
+const RANGE_CLOSE = `<!--${RANGE_CLOSE_DATA}-->`
+
+/* The skeleton positioning anchor a control-flow block / slot / outlet emits, sourced
+   from the same `ANCHOR` constant the client's anchor scan matches. */
+const ANCHOR_COMMENT = `<!--${ANCHOR}-->`
 
 /*
 Server code generator: turns the parsed template into statements that push HTML
@@ -172,7 +181,7 @@ export function generateSSR(
        Outside a skeleton (top-level / inside a branch) blocks mount on the host directly,
        so no anchor. */
     const anchorMark = (node: TemplateNode, target: string): string =>
-        inSkeleton.get(node) ? push(target, '<!--a-->') : ''
+        inSkeleton.get(node) ? push(target, ANCHOR_COMMENT) : ''
 
     function generate(node: TemplateNode, target: string): string {
         /* Every kind that mounts as a marker range is positioned by an `<!--a-->` anchor when
@@ -197,7 +206,7 @@ export function generateSSR(
                         ? `$text(await (${lowered}))`
                         : `$text(${lowered})`
                     return markText.get(node)
-                        ? `${target}.push('<!--a-->' + ${value});\n`
+                        ? `${target}.push('${ANCHOR_COMMENT}' + ${value});\n`
                         : `${target}.push(${value});\n`
                 })
                 .join('')

@@ -1,3 +1,5 @@
+import { SNIPPET_CLOSE, SNIPPET_OPEN } from '../runtime/RANGE_MARKER.ts'
+
 /*
 Source text for the `$esc` / `$attr` / `$spread` / `$text` / `$snip` helpers injected
 into every SSR render body. `$esc` escapes the five HTML-significant characters. `$attr`
@@ -30,6 +32,6 @@ export const SSR_ESCAPE =
     "const $SNIP = Symbol.for('abide.snippet');\n" +
     'const $snip = (s) => ({ [$SNIP]: s });\n' +
     'const $text = (v) => (v !== null && typeof v === "object" && $SNIP in v) ' +
-    "? ('<!--abide:snippet-->' + v[$SNIP] + '<!--/abide:snippet-->') " +
+    `? ('<!--${SNIPPET_OPEN}-->' + v[$SNIP] + '<!--${SNIPPET_CLOSE}-->') ` +
     ': (v !== null && typeof v === "object" && $RAW in v) ' +
     "? ('<!--abide:html-->' + v[$RAW] + '<!--/abide:html-->') : $esc(v);"

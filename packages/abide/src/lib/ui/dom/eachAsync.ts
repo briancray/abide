@@ -2,11 +2,10 @@ import { effect } from '../effect.ts'
 import { claimChild } from '../runtime/claimChild.ts'
 import { OWNER } from '../runtime/OWNER.ts'
 import { RENDER } from '../runtime/RENDER.ts'
-import { scope } from '../runtime/scope.ts'
 import { scopeGroup } from '../runtime/scopeGroup.ts'
 import type { State } from '../runtime/types/State.ts'
 import { state } from '../state.ts'
-import { enterNamespace } from './enterNamespace.ts'
+import { buildDetachedRange } from './buildDetachedRange.ts'
 import { removeRange } from './removeRange.ts'
 import type { EachRow } from './types/EachRow.ts'
 
@@ -49,24 +48,20 @@ export function eachAsync<T>(
         parent.insertBefore(anchor, before) // `before` places rows before a static suffix
     }
 
-    /* Build a content range and insert it just before the anchor (arrival order). A bare
-       range (no item cell) — the data-row site adds the cell, the error branch needs none. */
+    /* Build a content range (the shared detached-range create primitive) and insert it
+       just before the anchor (arrival order). A bare range (no item cell) — the data-row
+       site adds the cell, the error branch needs none. */
     const insertRange = (
         build: (into: Node) => void,
     ): { start: Node; end: Node; dispose: () => void } => {
-        const start = document.createComment('[')
-        const end = document.createComment(']')
-        const fragment = document.createDocumentFragment()
-        fragment.appendChild(start)
-        const dispose = group.track(
-            enterNamespace(anchor.parentNode ?? parent, () => scope(() => build(fragment))),
-        )
-        fragment.appendChild(end)
-        /* Insert via the anchor's LIVE parent: when this `each` is a bare child of a
-           control-flow branch, the captured `parent` is the branch's build fragment,
-           emptied into the document once the enclosing block placed it. */
-        ;(anchor.parentNode ?? parent).insertBefore(fragment, anchor)
-        return { start, end, dispose }
+        /* Namespace the build off the anchor's LIVE parent, and insert there too: when this
+           `each` is a bare child of a control-flow branch, the captured `parent` is the
+           branch's build fragment, emptied into the document once the enclosing block
+           placed it. */
+        const host = anchor.parentNode ?? parent
+        const { start, end, fragment, dispose } = buildDetachedRange(host, build)
+        host.insertBefore(fragment, anchor)
+        return { start, end, dispose: group.track(dispose) }
     }
 
     /* The mounted `<template catch>` range, disposed when a fresh run re-streams. */

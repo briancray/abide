@@ -6,7 +6,7 @@ import { scope } from '../runtime/scope.ts'
 import { scopeGroup } from '../runtime/scopeGroup.ts'
 import type { State } from '../runtime/types/State.ts'
 import { state } from '../state.ts'
-import { enterNamespace } from './enterNamespace.ts'
+import { buildDetachedRange } from './buildDetachedRange.ts'
 import { moveRange } from './moveRange.ts'
 import { removeRange } from './removeRange.ts'
 import type { EachRow } from './types/EachRow.ts'
@@ -70,17 +70,13 @@ export function each<T>(
             hydration.next.set(parent, end.nextSibling)
             return { start, end, dispose, cell, indexCell }
         }
-        const start = document.createComment('[')
-        const end = document.createComment(']')
-        const pending = document.createDocumentFragment()
-        pending.appendChild(start)
-        /* Build under `parent`'s foreign namespace so foreign row elements (svg/math)
-           built into the detached fragment are namespaced, not built as HTML. */
-        const dispose = group.track(
-            enterNamespace(parent, () => scope(() => render(pending, cell as State<T>, indexCell))),
+        /* Shared detached-range create primitive: a `[ … ]` fragment built under `parent`'s
+           foreign namespace (so svg/math row children are namespaced, not built as HTML),
+           held in `pending` until placement inserts it. */
+        const { start, end, fragment, dispose } = buildDetachedRange(parent, (host) =>
+            render(host, cell as State<T>, indexCell),
         )
-        pending.appendChild(end)
-        return { start, end, dispose, cell, indexCell, pending }
+        return { start, end, dispose: group.track(dispose), cell, indexCell, pending: fragment }
     }
 
     /* Place a row so its range ends just before `cursor`: insert a fresh row's

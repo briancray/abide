@@ -1,3 +1,4 @@
+import { RANGE_CLOSE, RANGE_OPEN } from '../runtime/RANGE_MARKER.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { scope } from '../runtime/scope.ts'
 import { scopeGroup } from '../runtime/scopeGroup.ts'
@@ -26,12 +27,12 @@ export function mountSlot(
        dispose on owner teardown (a navigation) — the slot never toggles, so the
        group only ever tracks this one child. */
     const group = scopeGroup()
-    openMarker(parent, '[', before)
+    openMarker(parent, RANGE_OPEN, before)
     if (hydration !== undefined) {
         group.track(scope(() => render(parent))) // content claims the SSR range in place
-        openMarker(parent, ']')
+        openMarker(parent, RANGE_CLOSE)
     } else {
-        const end = openMarker(parent, ']', before)
+        const end = openMarker(parent, RANGE_CLOSE, before)
         group.track(fillBefore(end, render))
     }
 }

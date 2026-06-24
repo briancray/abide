@@ -1,6 +1,7 @@
 import { assertExhaustive } from '../../shared/assertExhaustive.ts'
 import { HOLE_ATTRIBUTE } from '../runtime/HOLE_ATTRIBUTE.ts'
 import { OUTLET_TAG } from '../runtime/OUTLET_TAG.ts'
+import { ANCHOR } from '../runtime/RANGE_MARKER.ts'
 import { asOutlet } from './asOutlet.ts'
 import { bindListenEvent } from './bindListenEvent.ts'
 import { composeProps } from './composeProps.ts'
@@ -17,6 +18,12 @@ import { staticAttr } from './staticAttr.ts'
 import { staticTextPart } from './staticTextPart.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
 import { VOID_TAGS } from './VOID_TAGS.ts'
+
+/* The skeleton positioning anchor a control-flow block / component / slot / outlet
+   stamps into its skeleton markup, sourced from the same `ANCHOR` wire-alphabet constant
+   the client's anchor scan (`skeleton`) matches — so the markup the build clones and the
+   markup the scan reads can never drift on a literal. */
+const ANCHOR_COMMENT = `<!--${ANCHOR}-->`
 
 /*
 Generates the build statements for a parsed template: element creation, static
@@ -213,7 +220,7 @@ export function generateBuild(
                     binds.push(
                         `appendTextAt(${skVar}.an[${holeIndex(anIndex, part)}], ${namedThunk('text', `return (${lowerExpression(part.code)})`)});\n`,
                     )
-                    return '<!--a-->'
+                    return ANCHOR_COMMENT
                 })
                 .join('')
         }
@@ -226,7 +233,7 @@ export function generateBuild(
                element — so its root lays out as a true direct child of `anchor.parentNode`. */
             const anchorVar = anchorVarAt(node, skVar, binds)
             binds.push(generateChild(node, `${anchorVar}.parentNode`, `anchorCursor(${anchorVar})`))
-            return '<!--a-->'
+            return ANCHOR_COMMENT
         }
         if (node.kind === 'script') {
             /* A nested `<script>` (scoped reactive block) emits no markup — its lowered body
@@ -251,7 +258,7 @@ export function generateBuild(
                No wrapper element — the filled child lays out as a direct child of the parent. */
             const anchorVar = anchorVarAt(node, skVar, binds)
             binds.push(`outlet(${anchorVar}.parentNode, anchorCursor(${anchorVar}));\n`)
-            return '<!--a-->'
+            return ANCHOR_COMMENT
         }
         if (node.tag === 'slot') {
             /* A `<slot>` outlet at its position: an `<!--a-->` anchor, the slot's content
@@ -261,7 +268,7 @@ export function generateBuild(
             binds.push(
                 `mountSlot(${anchorVar}.parentNode, (${hostVar}) => {\n${generateSlot(node, hostVar)}}, anchorCursor(${anchorVar}));\n`,
             )
-            return '<!--a-->'
+            return ANCHOR_COMMENT
         }
         const hasReactiveAttr = node.attrs.some((attr) => attr.kind !== 'static')
         const reactiveTextChild = node.children.find(

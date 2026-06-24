@@ -1,3 +1,4 @@
+import { RANGE_CLOSE, RANGE_OPEN } from '../runtime/RANGE_MARKER.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { scope } from '../runtime/scope.ts'
 import type { UiProps } from '../runtime/types/UiProps.ts'
@@ -31,15 +32,15 @@ export function mountRange(
     label: string | undefined = undefined,
 ): { start: Comment; end: Comment; dispose: () => void } {
     const hydration = RENDER.hydration
-    const start = openMarker(parent, '[', before)
+    const start = openMarker(parent, RANGE_OPEN, before)
     if (hydration === undefined) {
-        const end = openMarker(parent, ']', before)
+        const end = openMarker(parent, RANGE_CLOSE, before)
         return fillRange(start, end, build, props, label)
     }
     /* Hydrate: adopt the server range in place. Establish the child's lexical scope
        and render pass (same as `fillRange`), build claiming the existing nodes, then
        claim the end marker the build's content stops before. */
     const scoped = withScope(label, () => scope(() => build(parent, props)))
-    const end = openMarker(parent, ']')
+    const end = openMarker(parent, RANGE_CLOSE)
     return { start, end, dispose: disposeRange(scoped, start, end) }
 }
