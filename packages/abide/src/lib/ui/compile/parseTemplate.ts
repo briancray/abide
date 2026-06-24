@@ -90,11 +90,156 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
         return { kind: 'style', css }
     }
 
+    /* True when the cursor sits on a block-directive open `{#`. A `{:`/`{/` is only
+       valid INSIDE a block (consumed by readBlockChildren), so at top level it would be
+       a stray-branch error — handled where blocks are read, not here. */
+    function atBlock(): boolean {
+        return source.charAt(cursor) === '{' && source.charAt(cursor + 1) === '#'
+    }
+
+    /* Reads a `{#…}` / `{:…}` / `{/…}` token starting on `{`. Tracks string literals
+       and nested braces (same scan as readBracedExpression) so a brace/quote inside an
+       expression (`{#if obj.has('}')}`) doesn't end the token early. Returns the sigil,
+       the trimmed directive body WITHOUT the sigil, and the absolute loc of the body's
+       first post-trim char. */
+    function readBlockToken(): { sigil: '#' | ':' | '/'; body: string; loc: number } {
+        const sigil = source.charAt(cursor + 1) as '#' | ':' | '/'
+        cursor += 2 // past `{` and the sigil
+        const start = cursor
+        let depth = 1
+        while (cursor < source.length && depth > 0) {
+            const char = source.charAt(cursor)
+            if (char === '"' || char === "'" || char === '`') {
+                cursor += 1
+                while (cursor < source.length && source.charAt(cursor) !== char) {
+                    if (source.charAt(cursor) === '\\') {
+                        cursor += 1
+                    }
+                    cursor += 1
+                }
+            } else if (char === '{') {
+                depth += 1
+            } else if (char === '}') {
+                depth -= 1
+            }
+            cursor += 1
+        }
+        const raw = source.slice(start, cursor - 1)
+        const leading = raw.length - raw.trimStart().length
+        return { sigil, body: raw.trim(), loc: baseOffset + start + leading }
+    }
+
+    /* The leading keyword of a directive body (`if`, `for`, `await`, `switch`, `try`,
+       `else`, `then`, `catch`, `finally`, `case`, `default`). */
+    function headKeyword(body: string): string {
+        const match = body.match(/^\s*(\S+)/)
+        return match === undefined || match === null ? '' : match[1]
+    }
+
+    /* Reads a `{#…}` control block: the open token, its children up to a continuation
+       `{:…}` (a branch) or close `{/…}`, recursing. Emits the same nodes toControlFlow
+       does today (if/each/await/switch/try + case/branch children). */
+    function readBlock(): TemplateNode {
+        const open = readBlockToken() // sigil is '#'
+        const keyword = headKeyword(open.body)
+        if (keyword === 'if') {
+            const condition = open.body.slice(open.body.indexOf('if') + 2).trim()
+            if (condition === '') {
+                throw new Error('[abide] {#if} requires a condition expression')
+            }
+            const children = readBlockChildren('if')
+            return {
+                kind: 'if',
+                condition,
+                children,
+                loc: open.loc + (open.body.indexOf('if') + 2),
+            }
+        }
+        throw new Error(`[abide] {#${keyword}} is not supported yet`)
+    }
+
+    /* Reads children of a block until its close `{/<keyword>}`. A continuation token
+       `{:…}` ends the current branch's children and starts a new `case`/`branch` node
+       (per construct). The leading children (before the first `{:…}`) are the block's
+       own children (the `if`/`await`/`try` then-content). Returns the full children list
+       INCLUDING the case/branch nodes, matching toControlFlow's output. */
+    function readBlockChildren(keyword: string): TemplateNode[] {
+        const nodes: TemplateNode[] = []
+        while (cursor < source.length) {
+            if (source.startsWith('{/', cursor)) {
+                readBlockToken() // consume the close `{/keyword}`
+                return nodes
+            }
+            if (source.startsWith('{:', cursor)) {
+                nodes.push(readBranch(keyword))
+                continue
+            }
+            if (atBlock()) {
+                nodes.push(readBlock())
+            } else if (source.startsWith('<!--', cursor)) {
+                skipComment()
+            } else if (atStyleTag()) {
+                nodes.push(readStyle())
+            } else if (source.charAt(cursor) === '<') {
+                nodes.push(readElement())
+            } else {
+                nodes.push(readText())
+            }
+        }
+        throw new Error(`[abide] unterminated {#${keyword}} block — missing {/${keyword}}`)
+    }
+
+    /* Reads a continuation token `{:…}` and the children up to the NEXT continuation or
+       close, returning the branch node for the parent construct. For Task 1 only the
+       `if`-chain branches (else / else if). */
+    function readBranch(parentKeyword: string): TemplateNode {
+        const token = readBlockToken() // sigil ':'
+        const keyword = headKeyword(token.body)
+        const branchChildren = readBranchChildren()
+        if (parentKeyword === 'if') {
+            if (keyword === 'else' && headKeyword(token.body.slice(4).trim()) === 'if') {
+                const condition = token.body.slice(token.body.indexOf('if') + 2).trim()
+                return { kind: 'case', match: undefined, condition, children: branchChildren }
+            }
+            if (keyword === 'else') {
+                return { kind: 'case', match: undefined, children: branchChildren }
+            }
+        }
+        throw new Error(`[abide] {:${keyword}} is not valid inside {#${parentKeyword}}`)
+    }
+
+    /* Children of a branch: read until the next `{:…}` or `{/…}` WITHOUT consuming it
+       (the caller's readBlockChildren loop handles those). */
+    function readBranchChildren(): TemplateNode[] {
+        const nodes: TemplateNode[] = []
+        while (cursor < source.length) {
+            if (source.startsWith('{:', cursor) || source.startsWith('{/', cursor)) {
+                return nodes
+            }
+            if (atBlock()) {
+                nodes.push(readBlock())
+            } else if (source.startsWith('<!--', cursor)) {
+                skipComment()
+            } else if (atStyleTag()) {
+                nodes.push(readStyle())
+            } else if (source.charAt(cursor) === '<') {
+                nodes.push(readElement())
+            } else {
+                nodes.push(readText())
+            }
+        }
+        return nodes
+    }
+
     function readText(): TemplateNode {
         const parts: TextPart[] = []
         let literal = ''
         while (cursor < source.length && source.charAt(cursor) !== '<') {
             if (source.charAt(cursor) === '{') {
+                const next = source.charAt(cursor + 1)
+                if (next === '#' || next === ':' || next === '/') {
+                    break // a block/continuation/close token — not interpolation
+                }
                 if (literal !== '') {
                     parts.push({ kind: 'static', value: decodeHtmlEntities(literal) })
                     literal = ''
@@ -262,6 +407,8 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
                 skipComment()
             } else if (atStyleTag()) {
                 nodes.push(readStyle())
+            } else if (atBlock()) {
+                nodes.push(readBlock())
             } else if (source.charAt(cursor) === '<') {
                 nodes.push(readElement())
             } else {
@@ -277,6 +424,8 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
             skipComment()
         } else if (atStyleTag()) {
             roots.push(readStyle())
+        } else if (atBlock()) {
+            roots.push(readBlock())
         } else if (source.charAt(cursor) === '<') {
             roots.push(readElement())
         } else {
