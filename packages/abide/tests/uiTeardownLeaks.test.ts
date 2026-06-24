@@ -87,7 +87,7 @@ describe('teardown leaks', () => {
                 (key) => key,
                 (parent, key) => {
                     const li = document.createElement('li')
-                    li.setAttribute('data-id', key)
+                    li.setAttribute('data-id', key.value) // item arrives as a reactive cell
                     effect(() => {
                         extern.value
                         rowRuns += 1
@@ -115,7 +115,7 @@ describe('teardown leaks', () => {
                 (item) => item.id,
                 (parent, item) => {
                     const li = document.createElement('li')
-                    li.setAttribute('data-id', item.id)
+                    li.setAttribute('data-id', item.value.id) // item arrives as a reactive cell
                     parent.appendChild(li)
                 },
                 undefined,

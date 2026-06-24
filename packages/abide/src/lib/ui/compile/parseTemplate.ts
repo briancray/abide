@@ -560,11 +560,13 @@ function toControlFlow(attrs: TemplateAttr[], children: TemplateNode[]): Templat
     }
     const as = find('as')
     const key = find('key')
+    const index = find('index')
     return {
         kind: 'each',
         items: itemsCode,
         as: (as === undefined ? undefined : attrText(as)) ?? '_item',
         key: key === undefined ? undefined : attrText(key),
+        index: index === undefined ? undefined : attrText(index),
         async: find('await') !== undefined, // `<template each await>` over an AsyncIterable
         children,
         loc: attrLoc(items),

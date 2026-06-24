@@ -34,6 +34,8 @@ export type TemplateNode =
           items: string
           as: string
           key: string | undefined
+          /* `index="i"` → the row's reactive position, bound to this name; absent → unbound. */
+          index: string | undefined
           /* `await` on the tag → `items` is an AsyncIterable, drained on the client. */
           async: boolean
           children: TemplateNode[]

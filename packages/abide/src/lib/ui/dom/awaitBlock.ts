@@ -6,6 +6,8 @@ import type { ResumeEntry } from '../runtime/RESUME.ts'
 import { RESUME } from '../runtime/RESUME.ts'
 import { scope } from '../runtime/scope.ts'
 import { scopeGroup } from '../runtime/scopeGroup.ts'
+import type { State } from '../runtime/types/State.ts'
+import { state } from '../state.ts'
 import { discardBoundary } from './discardBoundary.ts'
 import { enterNamespace } from './enterNamespace.ts'
 
@@ -52,6 +54,15 @@ export function awaitBlock(
     let first = true
     /* Bumped each run so a prior run's in-flight promise can't clobber a newer one. */
     let generation = 0
+    /* The resolved value, held as a reactive cell so the then-branch reads it through its
+       own effects. A re-run that resolves to a NEW value SETS this cell instead of rebuilding
+       the branch — the branch (and any keyed `each` inside it) survives and updates in place,
+       so a live cache patch no longer flashes the whole subtree. The branch is rebuilt only
+       across a kind change (pending/catch ↔ then), where it has to be. */
+    let valueCell: State<unknown> | undefined
+    /* Which branch is currently mounted, so a settle knows whether it can update the cell in
+       place (then→then) or must build a fresh branch. */
+    let activeKind: 'pending' | 'then' | 'catch' | undefined
 
     const detach = (): void => {
         if (active !== undefined) {
@@ -81,33 +92,61 @@ export function awaitBlock(
         active = { nodes, dispose }
     }
 
+    /* Settle to a resolved value. then→then updates the cell in place — the branch and its
+       inner each survive (no flash); any other prior kind builds a fresh then-branch around
+       a new cell. renderThen receives the CELL (not the raw value), so the branch reads it
+       reactively and re-runs its own effects when a later settle sets it. */
+    const settleThen = (value: unknown): void => {
+        if (activeKind === 'then' && valueCell !== undefined) {
+            valueCell.value = value
+            return
+        }
+        const cell = state(value)
+        valueCell = cell
+        place((host) => renderThen(host, cell))
+        activeKind = 'then'
+    }
+
+    /* Settle to a rejection: surface it with no catch branch, else swap to the catch branch. */
+    const settleError = (error: unknown): void => {
+        if (renderCatch === undefined) {
+            throw error
+        }
+        valueCell = undefined
+        place((host) => renderCatch(host, error))
+        activeKind = 'catch'
+    }
+
     /* Render a settled-or-pending result into the current generation. */
     const render = (result: unknown): void => {
         const gen = generation
         if (!isThenable(result)) {
-            place((host) => renderThen(host, result)) // warm-sync → resolved now, no flash
+            settleThen(result) // warm-sync → resolved now, no flash
             return
         }
-        if (renderPending !== undefined) {
-            place((host) => renderPending(host))
-        } else {
-            detach()
+        /* A then-branch is already mounted (a revalidation): keep it visible and update in
+           place when the new value settles, instead of blanking to pending and rebuilding —
+           this is the no-flash live-update path. A first load (or a prior pending/catch)
+           shows the pending branch (or detaches) while the promise is in flight. */
+        if (activeKind !== 'then') {
+            if (renderPending !== undefined) {
+                place((host) => renderPending(host))
+                activeKind = 'pending'
+            } else {
+                detach()
+                activeKind = undefined
+            }
         }
         result.then(
             (value) => {
                 if (gen === generation) {
-                    place((host) => renderThen(host, value))
+                    settleThen(value)
                 }
             },
             (error) => {
-                if (gen !== generation) {
-                    return
+                if (gen === generation) {
+                    settleError(error)
                 }
-                /* No catch branch → surface the rejection instead of an empty branch. */
-                if (renderCatch === undefined) {
-                    throw error
-                }
-                place((host) => renderCatch(host, error))
             },
         )
     }
@@ -176,11 +215,21 @@ export function awaitBlock(
             }
         }
         if (entry !== undefined) {
+            /* Build the adopted branch around a value CELL (then) so a later re-run updates
+               it in place, exactly like a fresh mount. The `throw` for a catch-less rejection
+               stays OUTSIDE the adopt try/catch so it surfaces rather than triggering the
+               cold-rebuild fallback. */
             let build: (host: Node) => void
+            let cell: State<unknown> | undefined
+            let kind: 'then' | 'catch'
             if (entry.ok) {
-                build = (host) => renderThen(host, entry.value)
+                cell = state(entry.value)
+                const resolved = cell
+                build = (host) => renderThen(host, resolved)
+                kind = 'then'
             } else if (renderCatch !== undefined) {
                 build = (host) => renderCatch(host, entry.error)
+                kind = 'catch'
             } else {
                 /* A resumed rejection with no catch branch surfaces (mirrors the cold
                    path); in practice the server 500s such a block, so none resumes. */
@@ -188,14 +237,19 @@ export function awaitBlock(
             }
             try {
                 adopt(open, build)
+                valueCell = cell
+                activeKind = kind
             } catch {
                 rebuildCold(open)
             }
             return
         }
         if (!isThenable(result)) {
+            const cell = state(result)
             try {
-                adopt(open, (host) => renderThen(host, result))
+                adopt(open, (host) => renderThen(host, cell))
+                valueCell = cell
+                activeKind = 'then'
             } catch {
                 rebuildCold(open)
             }

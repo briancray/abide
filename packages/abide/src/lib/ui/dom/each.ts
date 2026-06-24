@@ -4,6 +4,8 @@ import { claimExpected } from '../runtime/claimExpected.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { scope } from '../runtime/scope.ts'
 import { scopeGroup } from '../runtime/scopeGroup.ts'
+import type { State } from '../runtime/types/State.ts'
+import { state } from '../state.ts'
 import { enterNamespace } from './enterNamespace.ts'
 import { moveRange } from './moveRange.ts'
 import { removeRange } from './removeRange.ts'
@@ -32,7 +34,11 @@ export function each<T>(
     parent: Node,
     items: () => Iterable<T>,
     keyOf: (item: T) => string,
-    render: (parent: Node, item: T) => void,
+    /* The row receives its item and its position as reactive cells (not raw snapshots): a
+       re-key with a changed value, or a reorder that shifts the row, sets the matching cell
+       and re-runs the row's effects in place. The compiler binds the `as`/`index` names to
+       read them; a direct caller reads `item.value` / `index.value`. */
+    render: (parent: Node, item: State<T>, index: State<number>) => void,
     before: Node | null = null,
 ): void {
     const rows = new Map<string, EachRow>()
@@ -49,15 +55,20 @@ export function each<T>(
        (`scope` builds untracked), so a raw reactive read in the row content — e.g. a
        nested `<script>` body — can't re-reconcile the whole list. Only `items()` drives
        the each; each row's own interpolations track through their own effects. */
-    const buildRow = (item: T): EachRow => {
+    const buildRow = (item: T, position: number): EachRow => {
+        /* Item and position are held in reactive cells the row reads, so a later re-key with
+           a changed value, or a reorder that shifts the row, updates it in place (see the
+           reconcile below) instead of rebuilding it. */
+        const cell = state(item) as State<unknown>
+        const indexCell = state(position)
         const hydration = RENDER.hydration
         if (hydration !== undefined) {
             const start = claimExpected(hydration, parent, 'each row start marker')
             hydration.next.set(parent, start.nextSibling)
-            const dispose = group.track(scope(() => render(parent, item)))
+            const dispose = group.track(scope(() => render(parent, cell as State<T>, indexCell)))
             const end = claimExpected(hydration, parent, 'each row end marker')
             hydration.next.set(parent, end.nextSibling)
-            return { start, end, dispose }
+            return { start, end, dispose, cell, indexCell }
         }
         const start = document.createComment('[')
         const end = document.createComment(']')
@@ -66,10 +77,10 @@ export function each<T>(
         /* Build under `parent`'s foreign namespace so foreign row elements (svg/math)
            built into the detached fragment are namespaced, not built as HTML. */
         const dispose = group.track(
-            enterNamespace(parent, () => scope(() => render(pending, item))),
+            enterNamespace(parent, () => scope(() => render(pending, cell as State<T>, indexCell))),
         )
         pending.appendChild(end)
-        return { start, end, dispose, pending }
+        return { start, end, dispose, cell, indexCell, pending }
     }
 
     /* Place a row so its range ends just before `cursor`: insert a fresh row's
@@ -94,8 +105,10 @@ export function each<T>(
     let adopting = false
     const hydration = RENDER.hydration
     if (hydration !== undefined) {
+        let position = 0
         for (const item of items()) {
-            rows.set(keyOf(item), buildRow(item)) // claims the SSR row where it sits
+            rows.set(keyOf(item), buildRow(item, position)) // claims the SSR row where it sits
+            position += 1
         }
         anchor = document.createTextNode('')
         parent.insertBefore(anchor, claimChild(hydration, parent))
@@ -145,8 +158,15 @@ export function each<T>(
                 const key = keys[index] as string
                 let row = rows.get(key)
                 if (row === undefined) {
-                    row = buildRow(list[index] as T)
+                    row = buildRow(list[index] as T, index)
                     rows.set(key, row)
+                } else {
+                    /* Surviving key: push the (possibly new) item and position into the row's
+                       cells. Both write through `Object.is`, so an unchanged item/position is a
+                       no-op and a changed one re-runs only the row's own effects — the row's DOM
+                       is never rebuilt. A reorder thus repaints only the moved rows' `index`. */
+                    row.cell.value = list[index]
+                    row.indexCell.value = index
                 }
                 placeBefore(row, cursor)
                 cursor = row.start

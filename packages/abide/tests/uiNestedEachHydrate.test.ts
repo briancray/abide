@@ -3,6 +3,7 @@ import { compileComponent } from '../src/lib/ui/compile/compileComponent.ts'
 import { compileSSR } from '../src/lib/ui/compile/compileSSR.ts'
 import { computed } from '../src/lib/ui/computed.ts'
 import { anchorCursor } from '../src/lib/ui/dom/anchorCursor.ts'
+import { appendStatic } from '../src/lib/ui/dom/appendStatic.ts'
 import { appendText } from '../src/lib/ui/dom/appendText.ts'
 import { attr } from '../src/lib/ui/dom/attr.ts'
 import { cloneStatic } from '../src/lib/ui/dom/cloneStatic.ts'
@@ -154,5 +155,49 @@ describe('nested each hydrate', () => {
         // the class bound to the button, NOT to the first each row's <i>
         expect(button.getAttribute('class')).toBe('go')
         expect(firstRow.getAttribute('class')).toBe(null)
+    })
+
+    test('an each with index="i" renders the position server-side and hydrates congruently', () => {
+        const src = `
+            <script>
+            const items = [{ id: 1, label: 'a' }, { id: 2, label: 'b' }]
+            </script>
+            <ul>
+              <template each={items} as="item" key="item.id" index="i"><li>{i}:{item.label}</li></template>
+            </ul>
+        `
+        const server = new Function('doc', 'state', 'computed', 'effect', compileSSR(src))(
+            doc,
+            state,
+            computed,
+            effect,
+        ) as SsrRender
+        // The server renders the indices, so a resume/hydrate adopts them (no client flash).
+        const serverText = server.html.replace(/<!--.*?-->/g, '').replace(/\s+/g, '')
+        expect(serverText).toContain('0:a')
+        expect(serverText).toContain('1:b')
+
+        const host = document.createElement('div')
+        host.innerHTML = server.html
+        const runtime = {
+            doc,
+            state,
+            computed,
+            effect,
+            appendText,
+            appendStatic,
+            each,
+            skeleton,
+            anchorCursor,
+        }
+        const names = Object.keys(runtime)
+        const values = names.map((n) => runtime[n as keyof typeof runtime])
+        const body = compileComponent(src)
+        // A desync between the server's plain index and the client's cell read would throw
+        // `claimExpected`; congruence means the same text survives hydration unchanged.
+        hydrate(host, (target) => {
+            new Function('host', ...names, body)(target, ...values)
+        })
+        expect(host.textContent.replace(/\s+/g, '')).toBe('0:a1:b')
     })
 })

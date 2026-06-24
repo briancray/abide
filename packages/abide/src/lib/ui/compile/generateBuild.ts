@@ -4,6 +4,7 @@ import { OUTLET_TAG } from '../runtime/OUTLET_TAG.ts'
 import { asOutlet } from './asOutlet.ts'
 import { bindListenEvent } from './bindListenEvent.ts'
 import { composeProps } from './composeProps.ts'
+import { destructureBindingNames } from './destructureBindingNames.ts'
 import { groupBindParts } from './groupBindParts.ts'
 import { isControlFlow } from './isControlFlow.ts'
 import { isWhitespaceText } from './isWhitespaceText.ts'
@@ -85,9 +86,49 @@ export function generateBuild(
         expression: lowerExpression,
         statement: lowerStatement,
         withNestedScripts,
+        withLocalDerived,
         bindRead,
         bindWrite,
     } = lowerContext(stateNames, derivedNames, computedNames)
+
+    /* A value binding the runtime can update in place (an `await` `then` value, a keyed `each`
+       item) is passed as a reactive `.value` cell; the consuming branch/row reads its NAME(s)
+       as a deref so it re-runs in place when a re-settle/re-key sets the cell. */
+    const isPlainIdentifier = (name: string | undefined): name is string =>
+        name !== undefined && /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name)
+
+    /* How a reactive value param binds: `param` is the thunk's value parameter (the cell),
+       `prefix` declares any per-leaf readers, `localNames` enter the deref scope for the body.
+       A plain identifier reads the cell directly (`item` → `item.value`); a destructure
+       re-applies over the cell per read so each leaf stays reactive (JS handles
+       defaults/rest/rename/nesting). The caller lowers the body with `localNames` derived. */
+    function reactiveBinding(authorParam: string): {
+        param: string
+        prefix: string
+        localNames: string[]
+    } {
+        if (isPlainIdentifier(authorParam)) {
+            return { param: authorParam, prefix: '', localNames: [authorParam] }
+        }
+        const cellParam = nextVar('aw')
+        const deriveVar = nextVar('ad')
+        const leaves = destructureBindingNames(authorParam)
+        /* Lower the destructure declaration so a default/computed-key initializer that
+           references a component signal (`{ label = fallback }`, `{ [key]: v }`) is rewritten
+           to its `model`/cell form — the bound leaf names are name-slots and stay untouched.
+           A pattern with no such initializer lowers to itself, so the common case is unchanged
+           and SSR (which lowers the same declaration) stays congruent. */
+        const declaration = lowerStatement(`const ${authorParam} = ${cellParam}.value`)
+        const prefix =
+            `const ${deriveVar} = { get value() { ${declaration} return { ${leaves.join(', ')} }; } };\n` +
+            leaves
+                .map(
+                    (leaf) =>
+                        `const ${leaf} = { get value() { return ${deriveVar}.value.${leaf}; } };\n`,
+                )
+                .join('')
+        return { param: cellParam, prefix, localNames: leaves }
+    }
 
     /* Emits the wiring for one non-static attribute against an already-obtained skeleton
        element var — reactive `attr`, `on` listener, `attach`, or a two-way `bind`. */
@@ -498,13 +539,21 @@ export function generateBuild(
         const pending = node.blocking
             ? []
             : node.children.filter((child) => child.kind !== 'branch')
+        /* The resolved value is reactive: a re-settle updates it in place rather than
+           rebuilding the branch (see awaitBlock). The branch reads it as a `.value` cell. */
         const thenThunk = node.blocking
             ? branchThunk(
                   node.children.filter((child) => child.kind !== 'branch'),
                   node.as ?? '_value',
                   finallyChildren,
+                  true,
               )
-            : branchThunk(thenBranch?.children ?? [], thenBranch?.as ?? '_value', finallyChildren)
+            : branchThunk(
+                  thenBranch?.children ?? [],
+                  thenBranch?.as ?? '_value',
+                  finallyChildren,
+                  true,
+              )
         /* Neither catch nor finally → pass `undefined` so awaitBlock re-throws the
            rejection (surfacing it) instead of rendering an empty branch. A finally-only
            block keeps a catch thunk that renders just finally. */
@@ -536,18 +585,29 @@ export function generateBuild(
         children: TemplateNode[],
         valueParam?: string,
         finallyChildren: TemplateNode[] = [],
+        reactiveValue = false,
     ): string {
         const parentParam = nextVar('p')
-        const head =
-            valueParam === undefined ? `(${parentParam})` : `(${parentParam}, ${valueParam})`
-        const body = withNestedScripts(children, () => generateChildren(children, parentParam))
+        /* A reactive value (an `await` `then`) arrives as a `.value` cell the runtime can set
+           in place, so the branch re-runs in place on a re-settle instead of being rebuilt. */
+        const binding =
+            reactiveValue && valueParam !== undefined ? reactiveBinding(valueParam) : undefined
+        const param = binding?.param ?? valueParam
+        const prefix = binding?.prefix ?? ''
+        const localNames = binding?.localNames ?? []
+        const head = param === undefined ? `(${parentParam})` : `(${parentParam}, ${param})`
+        const body = withNestedScripts(children, () =>
+            localNames.length === 0
+                ? generateChildren(children, parentParam)
+                : withLocalDerived(localNames, () => generateChildren(children, parentParam)),
+        )
         const finallyBody =
             finallyChildren.length > 0
                 ? withNestedScripts(finallyChildren, () =>
                       generateChildren(finallyChildren, parentParam),
                   )
                 : ''
-        return `${head} => {\n${body}${finallyBody}}`
+        return `${head} => {\n${prefix}${body}${finallyBody}}`
     }
 
     /* True when a branch has content worth a render thunk — vs an absent/empty branch
@@ -626,13 +686,30 @@ export function generateBuild(
         before: string,
     ): string {
         const rowParam = nextVar('p')
+        /* The item is a reactive `.value` cell so a re-key with a changed value updates the row
+           in place (no rebuild). `keyOf` receives the RAW item; the key expression is lowered
+           with the author name plain — derive it BEFORE the row body puts that name in the
+           deref scope. With no explicit `key`, default the key to the item's own identity: a
+           plain `as` returns its name; a destructuring `as` binds a fresh param and returns
+           THAT, not the pattern re-wrapped (`[i,crumb]` → `[i,crumb]` would allocate a fresh
+           array per reconcile, so keys never match and every row rebuilds). An explicit `key`
+           destructures the item via `node.as` to read its leaves. */
+        const rawItemParam = isPlainIdentifier(node.as) ? node.as : nextVar('k')
+        const keyParam = node.key === undefined ? rawItemParam : node.as
+        const keyExpression = node.key === undefined ? rawItemParam : lowerExpression(node.key)
+        const binding = reactiveBinding(node.as)
+        /* `index="i"` binds the row's position as a third reactive cell param (the runtime
+           always passes it). It is a plain identifier — read as `i.value` — so it enters the
+           body's deref scope alongside the item's leaf names; an unnamed param when absent. */
+        const indexParam = node.index === undefined ? '' : `, ${node.index}`
+        const bodyLocalNames =
+            node.index === undefined ? binding.localNames : [...binding.localNames, node.index]
         /* The row body builds its children (a `<script>` declares per-row local signals,
            emitted in document order) into the row parent. A `<template catch>` child is
            consumed by the async-each, not the row — `generateChildren` skips it. */
         const rowBody = withNestedScripts(node.children, () =>
-            generateChildren(node.children, rowParam),
+            withLocalDerived(bodyLocalNames, () => generateChildren(node.children, rowParam)),
         )
-        const keyExpression = node.key === undefined ? node.as : lowerExpression(node.key)
         /* `await` → the AsyncIterable runtime, drained row-by-row on the client, with an
            optional `<template catch>` branch rendered (after the streamed rows) when the
            iterator rejects. Absent → `undefined`, so the rejection surfaces instead. */
@@ -643,7 +720,7 @@ export function generateBuild(
             : ''
         return (
             `${fn}(${parentVar}, () => (${lowerExpression(node.items)}), ` +
-            `(${node.as}) => (${keyExpression}), (${rowParam}, ${node.as}) => {\n${rowBody}}${catchArg}, ${before});\n`
+            `(${keyParam}) => (${keyExpression}), (${rowParam}, ${binding.param}${indexParam}) => {\n${binding.prefix}${rowBody}}${catchArg}, ${before});\n`
         )
     }
 

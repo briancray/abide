@@ -4,6 +4,8 @@ import { OWNER } from '../runtime/OWNER.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { scope } from '../runtime/scope.ts'
 import { scopeGroup } from '../runtime/scopeGroup.ts'
+import type { State } from '../runtime/types/State.ts'
+import { state } from '../state.ts'
 import { enterNamespace } from './enterNamespace.ts'
 import { removeRange } from './removeRange.ts'
 import type { EachRow } from './types/EachRow.ts'
@@ -27,7 +29,10 @@ export function eachAsync<T>(
     parent: Node,
     items: () => AsyncIterable<T>,
     keyOf: (item: T) => string,
-    render: (parent: Node, item: T) => void,
+    /* The row receives its item and position as reactive cells — same contract as sync
+       `each`; the streaming runtime rebuilds the row on a re-yield rather than patching, and
+       the position is the stream arrival ordinal (a stream only appends, never reorders). */
+    render: (parent: Node, item: State<T>, index: State<number>) => void,
     /* Absent → an iterator rejection surfaces instead of rendering a catch branch. */
     renderCatch: ((parent: Node, error: unknown) => void) | undefined,
     before: Node | null = null,
@@ -44,8 +49,11 @@ export function eachAsync<T>(
         parent.insertBefore(anchor, before) // `before` places rows before a static suffix
     }
 
-    /* Build a content range and insert it just before the anchor (arrival order). */
-    const insertRange = (build: (into: Node) => void): EachRow => {
+    /* Build a content range and insert it just before the anchor (arrival order). A bare
+       range (no item cell) — the data-row site adds the cell, the error branch needs none. */
+    const insertRange = (
+        build: (into: Node) => void,
+    ): { start: Node; end: Node; dispose: () => void } => {
         const start = document.createComment('[')
         const end = document.createComment(']')
         const fragment = document.createDocumentFragment()
@@ -62,7 +70,7 @@ export function eachAsync<T>(
     }
 
     /* The mounted `<template catch>` range, disposed when a fresh run re-streams. */
-    let errorRange: EachRow | undefined
+    let errorRange: { start: Node; end: Node; dispose: () => void } | undefined
     const clearError = (): void => {
         if (errorRange !== undefined) {
             errorRange.dispose()
@@ -82,6 +90,7 @@ export function eachAsync<T>(
         clearError() // a fresh run drops a prior error branch
         const iterable = items() // read (subscribe) synchronously
         const present = new Set<string>()
+        let arrivals = 0 // stream arrival ordinal → each row's index
         const drain = async (): Promise<void> => {
             const active = iterable[Symbol.asyncIterator]()
             iterator = active
@@ -96,14 +105,18 @@ export function eachAsync<T>(
                 }
                 const key = keyOf(result.value)
                 present.add(key)
-                /* A re-yielded key rebuilds the row from the new value, swapping the old
-                   range out (v1 has no in-place field patch — rows bind plain snapshots). */
+                /* A re-yielded key rebuilds the row from the new value (arrival order), swapping
+                   the old range out. The item rides in a cell — the row reads it reactively, same
+                   contract as sync `each` — but the streaming runtime rebuilds rather than patches. */
                 const stale = rows.get(key)
-                const item = result.value
-                rows.set(
-                    key,
-                    insertRange((host) => render(host, item)),
-                )
+                const cell = state(result.value) as State<unknown>
+                const indexCell = state(arrivals)
+                arrivals += 1
+                rows.set(key, {
+                    ...insertRange((host) => render(host, cell as State<T>, indexCell)),
+                    cell,
+                    indexCell,
+                })
                 if (stale !== undefined) {
                     stale.dispose()
                     removeRange(stale.start, stale.end)

@@ -43,10 +43,19 @@ export function signalRefsTransformer(
     stateNames: ReadonlySet<string>,
     derivedNames: ReadonlySet<string>,
     computedNames: ReadonlySet<string> = new Set(),
+    /* Block-local signal bindings (an `await` `then` / keyed `each` value param, a nested
+       `<script>` declaration) — a nearer lexical scope than the component signals, so a
+       name here shadows a same-named `state`/`computed`/`derived` and derefs as a cell. */
+    blockLocal: ReadonlySet<string> = new Set(),
 ): ts.TransformerFactory<ts.SourceFile> {
     /* The signal names that a nested binding can shadow — only these matter for
        scope tracking, so we ignore every other local binding. */
-    const signalNames = new Set<string>([...stateNames, ...derivedNames, ...computedNames])
+    const signalNames = new Set<string>([
+        ...stateNames,
+        ...derivedNames,
+        ...computedNames,
+        ...blockLocal,
+    ])
     return (context) => (root) => {
         /* The identifier nodes that are names, not value reads — collected by walking
            each parent and recording its name children (`parent.name`, a label, a
@@ -88,6 +97,7 @@ export function signalRefsTransformer(
                         stateNames,
                         derivedNames,
                         computedNames,
+                        blockLocal,
                     )
                     if (replacement !== undefined) {
                         return ts.factory.createPropertyAssignment(node.name.text, replacement)
@@ -99,6 +109,7 @@ export function signalRefsTransformer(
                         stateNames,
                         derivedNames,
                         computedNames,
+                        blockLocal,
                     )
                     if (replacement !== undefined) {
                         return replacement
@@ -305,13 +316,19 @@ function functionParameters(node: ts.Node): ts.NodeArray<ts.ParameterDeclaration
 
 /* `model.<name>` for a state binding, `<name>()` for a computed doc-slot (the
    string-free reader `scope().derive` returns), `<name>.value` for a runtime cell
-   (linked / lens / transform-state), else undefined. */
+   (linked / lens / transform-state), else undefined. A `blockLocal` binding shadows
+   any same-named component signal — it is a nearer lexical scope — so it derefs as a
+   cell (`<name>.value`) regardless of a colliding `state`/`computed`/`derived`. */
 function referenceFor(
     name: string,
     stateNames: ReadonlySet<string>,
     derivedNames: ReadonlySet<string>,
     computedNames: ReadonlySet<string>,
+    blockLocal: ReadonlySet<string> = new Set(),
 ): ts.Expression | undefined {
+    if (blockLocal.has(name)) {
+        return ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier(name), 'value')
+    }
     if (stateNames.has(name)) {
         return ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier('model'), name)
     }

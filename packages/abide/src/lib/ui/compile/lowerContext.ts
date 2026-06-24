@@ -22,20 +22,21 @@ export function lowerContext(
     derivedNames: ReadonlySet<string>,
     computedNames: ReadonlySet<string> = new Set(),
 ) {
-    /* Branch-scoped signal bindings (from nested `<script>`s) — they deref to
-       `.value` like a `computed`. Pushed while a branch's script + markup compile,
-       popped after, so they shadow only within that subtree. */
+    /* Branch-scoped signal bindings (from nested `<script>`s, and the block value params
+       pushed by `withLocalDerived`) — they deref to `.value` like a `computed`, and as a
+       nearer lexical scope they SHADOW a same-named component signal. Pushed while a
+       branch's script + markup compile, popped after, so they shadow only within that
+       subtree. */
     const localDerived = new Set<string>()
-    const derefScope = (): ReadonlySet<string> =>
-        localDerived.size === 0 ? derivedNames : new Set([...derivedNames, ...localDerived])
 
     /* Parse `code` once and chain the reference rename and doc-access lowering over the
-       one tree — the two string passes would each parse + reprint. `derefScope()` is read
-       per call so a nested-`<script>` binding pushed mid-compile is honoured. */
+       one tree — the two string passes would each parse + reprint. `localDerived` is
+       snapshotted per call (as the transformer's block-local shadow set) so a binding
+       pushed mid-compile is honoured AND shadows a same-named component signal. */
     function lowerOnce(code: string): string {
         const source = ts.createSourceFile('expr.ts', code, ts.ScriptTarget.Latest, true)
         const result = ts.transform(source, [
-            signalRefsTransformer(stateNames, derefScope(), computedNames),
+            signalRefsTransformer(stateNames, derivedNames, computedNames, new Set(localDerived)),
             docAccessTransformer('model'),
         ])
         const output = TS_PRINTER.printFile(result.transformed[0] as ts.SourceFile).trim()
@@ -113,5 +114,24 @@ export function lowerContext(
         return result
     }
 
-    return { expression, statement, withNestedScripts, bindRead, bindWrite }
+    /* Pushes explicit names into the deref scope for `body` then pops them — the
+       programmatic counterpart to `withNestedScripts`, used to bind a block's value param
+       (an `await` `then` value, a keyed `each` item) as a reactive `.value` cell so the
+       branch reads it reactively and re-runs in place when the block sets the cell. */
+    function withLocalDerived<T>(names: string[], body: () => T): T {
+        const added: string[] = []
+        for (const name of names) {
+            if (!localDerived.has(name)) {
+                localDerived.add(name)
+                added.push(name)
+            }
+        }
+        const result = body()
+        for (const name of added) {
+            localDerived.delete(name)
+        }
+        return result
+    }
+
+    return { expression, statement, withNestedScripts, withLocalDerived, bindRead, bindWrite }
 }

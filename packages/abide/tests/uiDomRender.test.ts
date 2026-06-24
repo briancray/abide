@@ -83,8 +83,9 @@ describe('keyed each', () => {
                 () => model.read<string[]>('order'),
                 (key) => key,
                 (parent, key) => {
+                    const id = key.value // item arrives as a reactive cell
                     const li = document.createElement('li')
-                    li.appendChild(text(() => model.read(`byId/${key}/n`)))
+                    li.appendChild(text(() => model.read(`byId/${id}/n`)))
                     parent.appendChild(li)
                 },
             )
@@ -116,7 +117,7 @@ describe('keyed each', () => {
                 (key) => key,
                 (parent, key) => {
                     const li = document.createElement('li')
-                    li.setAttribute('data-id', key)
+                    li.setAttribute('data-id', key.value) // item arrives as a reactive cell
                     parent.appendChild(li)
                 },
             )
@@ -150,9 +151,10 @@ describe('keyed each', () => {
                 () => model.read<{ id: string }[]>('items'),
                 (item) => item.id,
                 (parent, item) => {
+                    const { id } = item.value // item arrives as a reactive cell
                     const li = document.createElement('li')
-                    li.setAttribute('data-id', item.id)
-                    nodes[item.id] = li
+                    li.setAttribute('data-id', id)
+                    nodes[id] = li
                     parent.appendChild(li)
                 },
             )
@@ -181,7 +183,7 @@ describe('keyed each', () => {
                 (item) => item.id,
                 (parent, item) => {
                     const li = document.createElement('li')
-                    li.setAttribute('data-id', item.id)
+                    li.setAttribute('data-id', item.value.id) // item arrives as a reactive cell
                     parent.appendChild(li)
                 },
             )

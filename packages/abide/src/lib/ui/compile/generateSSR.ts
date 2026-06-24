@@ -269,7 +269,15 @@ export function generateSSR(
             if (node.async) {
                 return anchor
             }
-            return `${anchor}for (const ${node.as} of (${lowerExpression(node.items)})) {\n${openRange(target)}${branchContent(node.children, target)}${closeRange(target)}}\n`
+            const rowBody = `${openRange(target)}${branchContent(node.children, target)}${closeRange(target)}`
+            /* `index="i"` binds the row position. SSR reads it as a plain number from
+               `entries()` over a materialized array; the client reads the same number from a
+               cell, so first paint is congruent. No index → a plain `for…of` over the items. */
+            const header =
+                node.index === undefined
+                    ? `for (const ${node.as} of (${lowerExpression(node.items)}))`
+                    : `for (const [${node.index}, ${node.as}] of [...(${lowerExpression(node.items)})].entries())`
+            return `${anchor}${header} {\n${rowBody}}\n`
         }
         if (node.kind === 'await') {
             return `${anchor}${generateAwait(node, target)}`

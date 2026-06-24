@@ -129,4 +129,120 @@ describe('await block', () => {
         `)
         expect(host.textContent).toBe('cached') // never showed "loading"
     })
+
+    test('re-resolving updates the then-branch IN PLACE — no rebuild, value is reactive', async () => {
+        // A reactive source (`n`) in the awaited expression re-runs the await effect when it
+        // changes. The then-branch must NOT be torn down and rebuilt (that flashes every node
+        // it owns); instead the resolved value is a reactive cell the branch reads, so the
+        // branch's own effects update in place. `<i>` is a stable marker: same node === no
+        // rebuild. `builds` counts branch builds: it must stay 1.
+        let builds = 0
+        const n = state(0)
+        const host = run(
+            `
+            <script></script>
+            <template await={make(n.value)}>
+                <template then="value">
+                    <script>mark()</script>
+                    <i></i><span>{value}</span>
+                </template>
+            </template>
+        `,
+            {
+                make: (value: number) => Promise.resolve(value),
+                n,
+                mark: () => {
+                    builds += 1
+                },
+            },
+        )
+        await Promise.resolve()
+        await Promise.resolve()
+        expect(find(host, 'span')?.textContent).toBe('0')
+        expect(builds).toBe(1)
+        const marker = find(host, 'i')
+        n.value = 7
+        await Promise.resolve()
+        await Promise.resolve()
+        expect(find(host, 'span')?.textContent).toBe('7') // reactive value updated
+        expect(find(host, 'i')).toBe(marker) // same node → built once, updated in place
+        expect(builds).toBe(1)
+    })
+
+    test('re-resolving updates a DESTRUCTURED then binding in place, per-leaf', async () => {
+        // The grid awaits `Promise.all([...])` and destructures `then="[a, b]"`. A re-settle
+        // must update each leaf reactively without rebuilding the branch: `<i>` keeps identity,
+        // and only the leaves whose value changed repaint.
+        let builds = 0
+        const n = state(0)
+        const host = run(
+            `
+            <script></script>
+            <template await={make(n.value)}>
+                <template then="[a, b]">
+                    <script>mark()</script>
+                    <i></i><span>{a}</span><b>{b}</b>
+                </template>
+            </template>
+        `,
+            {
+                make: (value: number) => Promise.resolve([value, 'fixed']),
+                n,
+                mark: () => {
+                    builds += 1
+                },
+            },
+        )
+        await Promise.resolve()
+        await Promise.resolve()
+        expect(find(host, 'span')?.textContent).toBe('0')
+        expect(find(host, 'b')?.textContent).toBe('fixed')
+        const marker = find(host, 'i')
+        n.value = 9
+        await Promise.resolve()
+        await Promise.resolve()
+        expect(find(host, 'span')?.textContent).toBe('9') // changed leaf updated
+        expect(find(host, 'b')?.textContent).toBe('fixed') // unchanged leaf intact
+        expect(find(host, 'i')).toBe(marker) // built once, updated in place
+        expect(builds).toBe(1)
+    })
+
+    test('a then-binding named like a component state SHADOWS the state, reading the resolved value', async () => {
+        // `value` is BOTH a component state and the then binding. Inside the then branch
+        // `{value.label}` is a nearer lexical scope, so it must read the RESOLVED value's
+        // cell (the awaited object), not `model.value` — without the block-local shadow it
+        // would lower to the component state and render 'STATE'.
+        const host = run(
+            `
+            <script>
+            const value = scope().state({ label: 'STATE' })
+            </script>
+            <template await={make()}>
+                <template then="value">
+                    <span>{value.label}</span>
+                </template>
+            </template>
+        `,
+            { make: () => Promise.resolve({ label: 'RESOLVED' }) },
+        )
+        await Promise.resolve()
+        await Promise.resolve()
+        expect(find(host, 'span')?.textContent).toBe('RESOLVED')
+    })
 })
+
+/* First descendant element with the given tag name (miniDom has no querySelector). */
+type DomLike = { childNodes: ArrayLike<unknown>; tagName?: string; textContent?: string | null }
+function find(node: DomLike, tag: string): DomLike | undefined {
+    for (let index = 0; index < node.childNodes.length; index += 1) {
+        const child = node.childNodes[index] as DomLike
+        if (child.tagName === tag.toUpperCase() || child.tagName === tag) {
+            return child
+        }
+        const nested = find(child, tag)
+        if (nested !== undefined) {
+            return nested
+        }
+    }
+    return undefined
+}

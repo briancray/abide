@@ -159,7 +159,7 @@ Control flow — native `<template>`:
 | Directive | Shape |
 | --- | --- |
 | `<template if={c}>` … `<template elseif={c2}>` … `<template else>` | conditional chain (`else` must be last) |
-| `<template each={list} as="x" key="x.id">` | keyed list |
+| `<template each={list} as="x" key="x.id" index="i">` | keyed list (`index` binds the row's reactive position) |
 | `<template await={p}>` `<template then="v">` `<template catch="e">` `<template finally>` | promise (streams; branch value bound by `then`/`catch`) |
 | `<template switch={s}>` `<template case={v}>` … `<template default>` | first strict-`===` match |
 | `<template try>` `<template catch="e">` `<template finally>` | synchronous error boundary |
