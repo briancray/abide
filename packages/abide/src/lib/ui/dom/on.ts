@@ -1,3 +1,4 @@
+import { batch } from '../runtime/batch.ts'
 import { CURRENT_SCOPE } from '../runtime/CURRENT_SCOPE.ts'
 import { inScope } from '../runtime/inScope.ts'
 import { OWNER } from '../runtime/OWNER.ts'
@@ -20,7 +21,11 @@ export function on(element: Element, type: string, handler: EventListener): void
         return
     }
     const captured = CURRENT_SCOPE.current
-    const wrapped: EventListener = (event) => inScope(captured, () => handler(event))
+    /* Coalesce the handler's writes: a handler setting several signals re-runs each
+       dependent effect once on batch exit, not once per write (the unbatched default
+       flushed eagerly per `trigger`). Stays synchronous — flush runs at handler-end
+       before it returns, so the causal stack (dispatch → handler → effects) is intact. */
+    const wrapped: EventListener = (event) => inScope(captured, () => batch(() => handler(event)))
     element.addEventListener(type, wrapped)
     if (OWNER.current !== undefined) {
         OWNER.current.push(() => element.removeEventListener(type, wrapped))

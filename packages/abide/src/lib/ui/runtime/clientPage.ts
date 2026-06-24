@@ -1,7 +1,6 @@
 import type { PageSnapshot } from '../../shared/types/PageSnapshot.ts'
 import { state } from '../state.ts'
-import { flushEffects } from './flushEffects.ts'
-import { REACTIVE_CONTEXT } from './REACTIVE_CONTEXT.ts'
+import { batch } from './batch.ts'
 import type { State } from './types/State.ts'
 
 /*
@@ -107,15 +106,11 @@ export const clientPage: { value: PageSnapshot } = {
            (e.g. `page.url` + `page.params.id`) re-runs once per field and transiently
            observes a half-updated snapshot (new url, stale id). Same batch idiom as
            `createDoc` — flush once, after every cell is reconciled. */
-        REACTIVE_CONTEXT.batchDepth += 1
-        try {
+        batch(() => {
             routeCell.value = next.route
             urlCell.value = next.url
             navigatingCell.value = next.navigating
             reconcileParams(next.params)
-        } finally {
-            REACTIVE_CONTEXT.batchDepth -= 1
-        }
-        flushEffects()
+        })
     },
 }

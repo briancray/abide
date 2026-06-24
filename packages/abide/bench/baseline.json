@@ -11,6 +11,10 @@
         "value": 114.78149999999994,
         "unit": "ms"
     },
+    "coalesce.batchedHandler": {
+        "value": 0.15,
+        "unit": "us/handler"
+    },
     "listChurn.append": {
         "value": 580.2921670000001,
         "unit": "us/op"

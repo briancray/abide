@@ -30,6 +30,7 @@ const baselinePath = process.env.BENCH_BASELINE ?? join(here, 'baseline.json')
    one; the rest are in-process loops. */
 const benches = [
     'reactivityGraph.bench.ts',
+    'coalesce.bench.ts',
     'listChurn.bench.ts',
     'controlFlow.bench.ts',
     'mount.bench.ts',

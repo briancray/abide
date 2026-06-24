@@ -1,9 +1,8 @@
 import { applyPatchToTree } from './applyPatchToTree.ts'
+import { batch } from './batch.ts'
 import { createComputedNode } from './createComputedNode.ts'
 import { createSignalNode } from './createSignalNode.ts'
-import { flushEffects } from './flushEffects.ts'
 import { PATCH_BUS } from './PATCH_BUS.ts'
-import { REACTIVE_CONTEXT } from './REACTIVE_CONTEXT.ts'
 import { readNode } from './readNode.ts'
 import { trigger } from './trigger.ts'
 import type { Cell } from './types/Cell.ts'
@@ -157,8 +156,7 @@ export function createDoc(initial: unknown): Doc {
         const nonShiftingAdd =
             patch.op === 'add' &&
             (!parentIsArray || leafKey === '-' || Number(leafKey) === arrayLength - 1)
-        REACTIVE_CONTEXT.batchDepth += 1
-        try {
+        batch(() => {
             if (segments.length === 0) {
                 wakeSubtree('', true, true)
             } else if (!structural) {
@@ -178,15 +176,13 @@ export function createDoc(initial: unknown): Doc {
             } else {
                 wakeSubtree(parentPath, true, true)
             }
-        } finally {
-            REACTIVE_CONTEXT.batchDepth -= 1
-        }
-        /* Announce the change before flushing effects, so a patch an effect emits in
-           reaction lands AFTER this one on the bus — the journal stays chronological. */
-        if (PATCH_BUS.active) {
-            PATCH_BUS.emit({ doc: self, patch, inverse: inverseOf(patch, before) })
-        }
-        flushEffects()
+            /* Announce the change before effects flush, so a patch an effect emits in
+               reaction lands AFTER this one on the bus — the journal stays chronological.
+               Emitting inside the batch keeps it ahead of the depth-0 flush on batch exit. */
+            if (PATCH_BUS.active) {
+                PATCH_BUS.emit({ doc: self, patch, inverse: inverseOf(patch, before) })
+            }
+        })
     }
 
     /* The patch that undoes `patch`, from the pre-image `before` (a value the change
