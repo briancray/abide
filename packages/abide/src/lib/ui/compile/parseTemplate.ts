@@ -490,6 +490,18 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
         return { kind: 'element', tag, attrs, children }
     }
 
+    /* A `{:…}`/`{/…}` reached OUTSIDE a block (the root scan or an element's children —
+       not readBlockChildren/readBranchChildren, which consume their own) is a continuation
+       or close with no open `{#…}`. Surface it as an error: readText breaks on `{:`/`{/`
+       without advancing, so falling through would loop forever. */
+    function throwIfStrayBranch(): void {
+        if (source.startsWith('{:', cursor) || source.startsWith('{/', cursor)) {
+            const end = source.indexOf('}', cursor)
+            const token = source.slice(cursor, end === -1 ? source.length : end + 1)
+            throw new Error(`[abide] ${token} has no open {#…} block`)
+        }
+    }
+
     function readChildren(closeTag: string): TemplateNode[] {
         const nodes: TemplateNode[] = []
         while (cursor < source.length) {
@@ -497,6 +509,7 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
                 cursor = source.indexOf('>', cursor) + 1
                 break
             }
+            throwIfStrayBranch()
             if (source.startsWith('<!--', cursor)) {
                 skipComment()
             } else if (atStyleTag()) {
@@ -514,6 +527,7 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
 
     const roots: TemplateNode[] = []
     while (cursor < source.length) {
+        throwIfStrayBranch()
         if (source.startsWith('<!--', cursor)) {
             skipComment()
         } else if (atStyleTag()) {

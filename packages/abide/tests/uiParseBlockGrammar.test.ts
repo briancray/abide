@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { compileComponent } from '../src/lib/ui/compile/compileComponent.ts'
 import { parseTemplate } from '../src/lib/ui/compile/parseTemplate.ts'
 
 /* The block tokenizer must emit the SAME AST the `<template>` directives do. */
@@ -162,5 +163,30 @@ describe('block grammar — try', () => {
                 expect.objectContaining({ kind: 'branch', branch: 'finally', as: undefined }),
             ]),
         )
+    })
+})
+
+describe('block grammar — guards & integration', () => {
+    test('a stray {:else} with no open block throws', () => {
+        expect(() => parseTemplate(`<p>x</p>{:else}<p>y</p>`)).toThrow()
+    })
+
+    test('an unterminated {#if} throws', () => {
+        expect(() => parseTemplate(`{#if a}<p>x</p>`)).toThrow(/unterminated/)
+    })
+
+    test('{:else} after {:else} (second else) is rejected by the existing guard', () => {
+        expect(() => parseTemplate(`{#if a}<p>1</p>{:else}<p>2</p>{:else}<p>3</p>{/if}`)).toThrow()
+    })
+
+    test('a block compiles end-to-end through compileComponent', () => {
+        const body = compileComponent(`
+            <script>let on = scope().state(true)</script>
+            {#if on}<span>ON</span>{:else}<span>OFF</span>{/if}
+        `)
+        expect(typeof body).toBe('string')
+        /* generateBuild emits `when(` for a plain if/else (no elseif chain) — confirmed in
+           generateBuild.ts generateIf() fast path at the `!hasElseif` branch */
+        expect(body).toContain('when(')
     })
 })
