@@ -1,5 +1,49 @@
 # abide
 
+## 0.41.1
+
+### Patch Changes
+
+- [`74f5312`](https://github.com/briancray/abide/commit/74f531260e17f48162397142fb19b3df9e081b2c) - shared replaceRange region-update seam ([`184cf41`](https://github.com/briancray/abide/commit/184cf41157ef0a5340a4a916d6cfc4f4e09b6c71))
+
+- [`74f5312`](https://github.com/briancray/abide/commit/74f531260e17f48162397142fb19b3df9e081b2c) - single-source the marker-depth and isElement helpers ([`188c6ff`](https://github.com/briancray/abide/commit/188c6ff29fcaff2c9c206b971a2f04daf9a18cb3))
+
+- [`74f5312`](https://github.com/briancray/abide/commit/74f531260e17f48162397142fb19b3df9e081b2c) - guard against double-dispose on reentrant branch swap ([`40600c7`](https://github.com/briancray/abide/commit/40600c7921c9fee9b6be947472c770af795f60c6))
+
+- [`74f5312`](https://github.com/briancray/abide/commit/74f531260e17f48162397142fb19b3df9e081b2c) - await block on marker ranges, not a node array ([`5d12e83`](https://github.com/briancray/abide/commit/5d12e83b7313a04a925df3464ef5c7669bcbc1e6))
+
+- [`74f5312`](https://github.com/briancray/abide/commit/74f531260e17f48162397142fb19b3df9e081b2c) - refresh AGENTS surface map, README, and kitchen-sink example ([`6cd7a3f`](https://github.com/briancray/abide/commit/6cd7a3f5686a69f4dd5faf87026d7f1ab0362bdb))
+
+- [`74f5312`](https://github.com/briancray/abide/commit/74f531260e17f48162397142fb19b3df9e081b2c) - single client warm-seed intake (seedResolved) ([`8c3c19e`](https://github.com/briancray/abide/commit/8c3c19ed0a4d4244cb2634c025ef9ff88b7c9670))
+
+- [`74f5312`](https://github.com/briancray/abide/commit/74f531260e17f48162397142fb19b3df9e081b2c) - centralize comment-marker sentinels and detached-range builder ([`99d4499`](https://github.com/briancray/abide/commit/99d44991c499b96fc016c3d204cb4dafa340cbe1))
+
+- [`74f5312`](https://github.com/briancray/abide/commit/74f531260e17f48162397142fb19b3df9e081b2c) - unify skeleton positional model on shared walks ([`cbb9daa`](https://github.com/briancray/abide/commit/cbb9daaa6f31532331df44136dd029f3e32cdfd7))
+
+- [`f3e0a13`](https://github.com/briancray/abide/commit/f3e0a132f9f9fbb020a8c783a0b54d3b37457e39) - Coalesce reactive writes inside event handlers
+
+    Event handlers now batch their writes: a handler that sets several signals re-runs
+    each dependent effect/computed/DOM-binding once on the handler's exit instead of once
+    per write (the previous default flushed eagerly per write). The change stays fully
+    synchronous — the flush runs at handler-end before it returns — so the causal stack
+    (`dispatch → handler → effects`) is intact and server/client scheduling stays identical.
+
+    Factored the batch idiom `createDoc`/`clientPage` inlined into a shared, nesting-safe
+    `batch()` (flushes only on the depth-0 exit) and migrated both onto it, so a handler
+    that triggers a doc patch now coalesces end-to-end rather than flushing mid-handler.
+
+    A handler writing N fields cuts dependent re-runs N× (bench: an 8-field form handler
+    drops aggregate re-runs 8× and runs ~4.8× faster). Single-write handlers and navigation
+    (already batched) are unchanged. New contract, pinned by tests: a handler that writes
+    then synchronously reads the bound DOM sees the pre-write value until it returns; signal
+    reads stay current.
+
+- [`f26cba2`](https://github.com/briancray/abide/commit/f26cba22b92683f7316cc7212c5fe10500bdad13) - `abide check`: declare the `each` `index` binding in the type-check shadow
+
+    `index="i"` (0.41.0) was bound in the build and SSR passes but not in the shadow the
+    type-checker reads, so `{i}` in a row body false-positived "Cannot find name 'i'". The
+    shadow now declares the index as a `number` inside the loop body, matching the runtime.
+
 ## 0.41.0
 
 ### Minor Changes
