@@ -1,6 +1,7 @@
 import { decodeRefJson } from '../../shared/decodeRefJson.ts'
 import { effect } from '../effect.ts'
 import { claimChild } from '../runtime/claimChild.ts'
+import { RANGE_CLOSE, RANGE_OPEN } from '../runtime/RANGE_MARKER.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import type { ResumeEntry } from '../runtime/RESUME.ts'
 import { RESUME } from '../runtime/RESUME.ts'
@@ -8,14 +9,17 @@ import { scope } from '../runtime/scope.ts'
 import { scopeGroup } from '../runtime/scopeGroup.ts'
 import type { State } from '../runtime/types/State.ts'
 import { state } from '../state.ts'
+import { buildDetachedRange } from './buildDetachedRange.ts'
 import { discardBoundary } from './discardBoundary.ts'
-import { enterNamespace } from './enterNamespace.ts'
+import { removeRange } from './removeRange.ts'
 
 /*
 Async binding — the runtime for `<template await>`. Renders the pending branch,
 then swaps to the resolved branch (with the value) or the error branch on settle.
-Each branch is a RANGE of element roots, tracked as a node array so a multi-root
-branch inserts/removes as a unit.
+Each branch's content lives in a RANGE bounded by two comment markers (`[`…`]`), the
+same model `when`/`switch`/`each` use — so a multi-root branch inserts as a unit
+(`buildDetachedRange`) and detaches as a unit (`removeRange`), rather than tracking and
+removing a node array by hand.
 
 The read runs inside a abide-ui `effect`, so it's reactive: `abide/shared/cache`'s
 store subscribes the key it reads to this effect (createSubscriber is abide-ui-
@@ -49,7 +53,7 @@ export function awaitBlock(
     /* The live branch's scope, registered with the owner so it disposes on owner
        teardown — not only when a settle/re-run swaps branches via detach. */
     const group = scopeGroup()
-    let active: { nodes: Node[]; dispose: () => void } | undefined
+    let active: { start: Comment; end: Comment; dispose: () => void } | undefined
     let anchor: Node | undefined
     let first = true
     /* Bumped each run so a prior run's in-flight promise can't clobber a newer one. */
@@ -67,29 +71,26 @@ export function awaitBlock(
     const detach = (): void => {
         if (active !== undefined) {
             active.dispose()
-            /* Remove via each node's LIVE parent, not the captured `parent` — when this
-               await is a bare child of a control-flow branch, `parent` is the branch's
-               build fragment, emptied into the document once the enclosing block placed
-               it (`place` already inserts via `anchor.parentNode` for the same reason). */
-            for (const node of active.nodes) {
-                node.parentNode?.removeChild(node)
-            }
+            /* `removeRange` evicts the markers AND everything between them via the end
+               marker's LIVE parent — not the captured `parent`, which (when this await is a
+               bare child of a control-flow branch) is the branch's build fragment, emptied
+               into the document once the enclosing block placed it. */
+            removeRange(active.start, active.end)
             active = undefined
         }
     }
 
-    /* Replace the current content with a freshly-built branch, before the anchor. The
-       branch builds into a fragment (so any content — components, text, nested blocks
-       — appends freely), whose top-level nodes are tracked for the next swap. */
+    /* Replace the current content with a freshly-built branch, before the anchor. The branch
+       builds into a detached `[`…`]`-bracketed fragment (so any content — components, text,
+       nested blocks — appends freely), the same create primitive the keyed-list runtimes use,
+       which lands as a marker-bounded range the next swap detaches with `removeRange`. */
     const place = (build: (parent: Node) => void): void => {
         detach()
-        const fragment = document.createDocumentFragment()
-        const dispose = group.track(
-            enterNamespace(anchor?.parentNode ?? parent, () => scope(() => build(fragment))),
-        )
-        const nodes = [...fragment.childNodes]
-        ;(anchor?.parentNode ?? parent).insertBefore(fragment, anchor ?? null)
-        active = { nodes, dispose }
+        const namespaceParent = anchor?.parentNode ?? parent
+        const { start, end, fragment, dispose } = buildDetachedRange(namespaceParent, build)
+        const tracked = group.track(dispose)
+        namespaceParent.insertBefore(fragment, anchor ?? null)
+        active = { start, end, dispose: tracked }
     }
 
     /* Settle to a resolved value. then→then updates the cell in place — the branch and its
@@ -151,23 +152,28 @@ export function awaitBlock(
         )
     }
 
-    /* Adopt an SSR-resolved branch in place (its content claims the existing nodes),
-       then park an anchor just before the close marker for later swaps. The adopted
-       content is everything the build claimed between the open and close markers. */
+    /* Adopt an SSR-resolved branch in place (its content claims the existing nodes), then
+       wrap the adopted region in `[`…`]` markers and park an anchor just before the close
+       marker for later swaps. The adopted content is everything the build claimed between
+       the open and close markers; bracketing it makes the adopted branch a marker-bounded
+       range identical to a freshly-`place`d one, so the FIRST swap detaches it with
+       `removeRange` like every later swap (no node-array special case). */
     const adopt = (open: Node | null, build: (parent: Node) => void): void => {
         const cursor = hydration as NonNullable<typeof hydration>
-        cursor.next.set(parent, open?.nextSibling ?? null)
+        const firstAdopted = open?.nextSibling ?? null
+        cursor.next.set(parent, firstAdopted)
         const dispose = group.track(scope(() => build(parent)))
         const close = claimChild(cursor, parent)
         cursor.next.set(parent, close?.nextSibling ?? null)
-        const nodes: Node[] = []
-        for (let node = open?.nextSibling ?? null; node !== null && node !== close; ) {
-            nodes.push(node)
-            node = node.nextSibling
-        }
+        /* Bracket the adopted nodes: `[` before the first claimed node (or before `close`
+           for an empty branch), `]` then the anchor just before `close`. */
+        const start = document.createComment(RANGE_OPEN)
+        parent.insertBefore(start, firstAdopted ?? close)
+        const end = document.createComment(RANGE_CLOSE)
+        parent.insertBefore(end, close)
         anchor = document.createTextNode('')
         parent.insertBefore(anchor, close)
-        active = { nodes, dispose }
+        active = { start, end, dispose }
     }
 
     /* Discard the SSR boundary and (re)build the block from the live promise, fresh
