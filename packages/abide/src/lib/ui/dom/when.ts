@@ -68,7 +68,12 @@ export function when(
         }
         activeBranch = branch
         const chosen = chosenFor(branch)
-        const next = replaceRange(start, end, dispose, chosen)
+        /* Null `dispose` before `replaceRange` builds the new branch: a reentrant flip
+           during that build (an effect in the new content writing the condition) would
+           otherwise re-enter with the already-disposed disposer and clear it twice. */
+        const prior = dispose
+        dispose = undefined
+        const next = replaceRange(start, end, prior, chosen)
         dispose = next !== undefined ? group.track(next) : undefined
     })
 }

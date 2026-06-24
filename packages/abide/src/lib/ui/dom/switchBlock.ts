@@ -74,7 +74,12 @@ export function switchBlock(
         }
         activeIndex = index
         const chosen = caseAt(index)
-        const next = replaceRange(start, end, dispose, chosen && ((p) => chosen.render(p)))
+        /* Null `dispose` before `replaceRange` builds the new case: a reentrant switch
+           during that build (an effect in the new content writing the subject) would
+           otherwise re-enter with the already-disposed disposer and clear it twice. */
+        const prior = dispose
+        dispose = undefined
+        const next = replaceRange(start, end, prior, chosen && ((p) => chosen.render(p)))
         dispose = next !== undefined ? group.track(next) : undefined
     })
 }
