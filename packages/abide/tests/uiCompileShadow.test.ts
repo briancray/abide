@@ -126,6 +126,18 @@ const extra = { name: 'x' }
         expect(code).not.toContain('color: red')
     })
 
+    test('declares an each index binding so body references type-check', () => {
+        /* `index="i"` is a row-local number (build/SSR bind it); the shadow must declare
+           it too, else `{i}` in the body false-positives "Cannot find name 'i'". */
+        const { code } = compileShadow(`<script>
+let rows = scope().state<string[]>([])
+</script>
+<template each={rows} as="row" index="i">
+  <span>{i === rows.length - 1 ? row : ''}</span>
+</template>`)
+        expect(code).toContain('const i: number = 0;')
+    })
+
     test('hoists component-local types above __Props so prop annotations resolve them', () => {
         const { code } = compileShadow(`<script>
 type FilePropertyName = 'audio' | 'size'

@@ -417,6 +417,11 @@ function emitNode(node: TemplateNode, builder: Builder): void {
             if (node.key !== undefined) {
                 builder.raw(`void (${node.key});\n`)
             }
+            /* `index="i"` binds the row's position — always a number (the row ordinal,
+               or an async stream's arrival count). Declare it so body references check. */
+            if (node.index !== undefined) {
+                builder.raw(`const ${node.index}: number = 0;\n`)
+            }
             emitNodes(node.children, builder)
             builder.raw('}\n')
             return
