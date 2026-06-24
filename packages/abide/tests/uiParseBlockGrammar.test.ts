@@ -37,3 +37,50 @@ describe('block grammar — if chain', () => {
         expect(nodes[0].kind).toBe('element')
     })
 })
+
+describe('block grammar — for', () => {
+    test('{#for a of xs} → each with defaults', () => {
+        const { nodes } = parseTemplate(`{#for item of items}<li>{item}</li>{/for}`)
+        expect(nodes[0]).toMatchObject({
+            kind: 'each',
+            items: 'items',
+            as: 'item',
+            index: undefined,
+            key: undefined,
+            async: false,
+        })
+    })
+
+    test('{#for a, i of xs by k} → each with index and key', () => {
+        const { nodes } = parseTemplate(`{#for item, i of items by item.id}<li>{i}</li>{/for}`)
+        expect(nodes[0]).toMatchObject({
+            kind: 'each',
+            items: 'items',
+            as: 'item',
+            index: 'i',
+            key: 'item.id',
+            async: false,
+        })
+    })
+
+    test('destructuring binding is preserved, comma split is depth-aware', () => {
+        const { nodes } = parseTemplate(`{#for {id, title} of posts by id}<li>{title}</li>{/for}`)
+        expect(nodes[0]).toMatchObject({
+            kind: 'each',
+            as: '{id, title}',
+            items: 'posts',
+            key: 'id',
+            index: undefined,
+        })
+    })
+
+    test('{#for await a of xs} → async each, with {:catch}', () => {
+        const { nodes } = parseTemplate(
+            `{#for await row of stream}<li>{row}</li>{:catch e}<b>{e}</b>{/for}`,
+        )
+        const each = nodes[0]
+        expect(each).toMatchObject({ kind: 'each', items: 'stream', as: 'row', async: true })
+        if (each.kind !== 'each') throw new Error('not each')
+        expect(each.children.some((n) => n.kind === 'branch' && n.branch === 'catch')).toBe(true)
+    })
+})

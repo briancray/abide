@@ -155,6 +155,20 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
                 loc: open.loc + (open.body.indexOf('if') + 2),
             }
         }
+        if (keyword === 'for') {
+            const head = parseForHead(open.body)
+            const children = readBlockChildren('for')
+            return {
+                kind: 'each',
+                items: head.items,
+                as: head.as,
+                index: head.index,
+                key: head.key,
+                async: head.async,
+                children,
+                loc: open.loc,
+            }
+        }
         throw new Error(`[abide] {#${keyword}} is not supported yet`)
     }
 
@@ -206,8 +220,8 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
     }
 
     /* Reads a continuation token `{:…}` and the children up to the NEXT continuation or
-       close, returning the branch node for the parent construct. For Task 1 only the
-       `if`-chain branches (else / else if). */
+       close, returning the branch node for the parent construct. Handles `if`-chain
+       branches (else / else if) and `for await` catch branches. */
     function readBranch(parentKeyword: string): TemplateNode {
         const token = readBlockToken() // sigil ':'
         const keyword = headKeyword(token.body)
@@ -220,6 +234,10 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
             if (keyword === 'else') {
                 return { kind: 'case', match: undefined, children: branchChildren }
             }
+        }
+        if (parentKeyword === 'for' && keyword === 'catch') {
+            const as = token.body.slice(token.body.indexOf('catch') + 5).trim() || undefined
+            return { kind: 'branch', branch: 'catch', as, children: branchChildren }
         }
         throw new Error(`[abide] {:${keyword}} is not valid inside {#${parentKeyword}}`)
     }
@@ -438,6 +456,82 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
     }
     rejectStrayBranches(roots, undefined)
     return { nodes: roots }
+}
+
+/* Finds the index of a ` <token> ` keyword (` of `, ` by `) at brace/paren/bracket
+   depth 0, scanning left to right, skipping string literals. Returns -1 if absent. */
+function indexOfKeywordAtDepthZero(text: string, keyword: string): number {
+    let depth = 0
+    let i = 0
+    while (i < text.length) {
+        const char = text.charAt(i)
+        if (char === '"' || char === "'" || char === '`') {
+            i += 1
+            while (i < text.length && text.charAt(i) !== char) {
+                if (text.charAt(i) === '\\') {
+                    i += 1
+                }
+                i += 1
+            }
+        } else if (char === '{' || char === '(' || char === '[') {
+            depth += 1
+        } else if (char === '}' || char === ')' || char === ']') {
+            depth -= 1
+        } else if (depth === 0 && text.startsWith(keyword, i)) {
+            return i
+        }
+        i += 1
+    }
+    return -1
+}
+
+/* The depth-0 comma index in a binding (`{id, title}, i` → the comma after `}`),
+   so a destructuring pattern's inner commas don't split the binding from its index. */
+function bindingCommaAtDepthZero(text: string): number {
+    let depth = 0
+    let i = 0
+    while (i < text.length) {
+        const char = text.charAt(i)
+        if (char === '{' || char === '(' || char === '[') {
+            depth += 1
+        } else if (char === '}' || char === ')' || char === ']') {
+            depth -= 1
+        } else if (char === ',' && depth === 0) {
+            return i
+        }
+        i += 1
+    }
+    return -1
+}
+
+/* Parses `for [await] <binding>[, <index>] of <iterable> [by <key>]`. */
+function parseForHead(body: string): {
+    items: string
+    as: string
+    index: string | undefined
+    key: string | undefined
+    async: boolean
+} {
+    let rest = body.slice(body.indexOf('for') + 3).trim()
+    const isAsync = /^await\b/.test(rest)
+    if (isAsync) {
+        rest = rest.slice('await'.length).trim()
+    }
+    const ofAt = indexOfKeywordAtDepthZero(rest, ' of ')
+    if (ofAt === -1) {
+        throw new Error('[abide] {#for} requires `<binding> of <iterable>`')
+    }
+    const left = rest.slice(0, ofAt).trim()
+    let right = rest.slice(ofAt + ' of '.length).trim()
+    const byAt = indexOfKeywordAtDepthZero(right, ' by ')
+    const key = byAt === -1 ? undefined : right.slice(byAt + ' by '.length).trim()
+    if (byAt !== -1) {
+        right = right.slice(0, byAt).trim()
+    }
+    const commaAt = bindingCommaAtDepthZero(left)
+    const as = (commaAt === -1 ? left : left.slice(0, commaAt)).trim()
+    const index = commaAt === -1 ? undefined : left.slice(commaAt + 1).trim()
+    return { items: right, as: as === '' ? '_item' : as, index, key, async: isAsync }
 }
 
 /* A `case` node (`<template else>`/`<template case>`/`<template default>`) is valid
