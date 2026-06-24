@@ -1,7 +1,13 @@
+import { walkAnchorOrder } from '../compile/walkAnchorOrder.ts'
+import { walkElementOrder } from '../compile/walkElementOrder.ts'
 import { claimChild } from '../runtime/claimChild.ts'
 import { HOLE_ATTRIBUTE } from '../runtime/HOLE_ATTRIBUTE.ts'
+import { RANGE_CLOSE, RANGE_OPEN } from '../runtime/RANGE_MARKER.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { commentData } from './commentData.ts'
+import { depthZeroNodes } from './depthZeroNodes.ts'
+import { domAnchorAdapter } from './domAnchorAdapter.ts'
+import { domElementAdapter } from './domElementAdapter.ts'
 import { foreignWrapperTag } from './foreignWrapperTag.ts'
 import type { SkeletonHoles } from './types/SkeletonHoles.ts'
 
@@ -32,10 +38,10 @@ function isElement(node: Node): node is Element {
    `abide:…`…`/abide:…` boundaries for await / try / snippet / html. The skeleton's own
    anchor (`a`) sits OUTSIDE any such range. */
 function isOpenMarker(data: string): boolean {
-    return data === '[' || data.startsWith('abide:')
+    return data === RANGE_OPEN || data.startsWith('abide:')
 }
 function isCloseMarker(data: string): boolean {
-    return data === ']' || data.startsWith('/abide:')
+    return data === RANGE_CLOSE || data.startsWith('/abide:')
 }
 
 /* The `index`-th depth-0 ELEMENT among `children` — skipping text/comment nodes AND any
@@ -66,60 +72,21 @@ function elementChildAt(children: ArrayLike<Node>, index: number): Element | und
     return undefined
 }
 
-/* Records each element hole's element-only path in PRE-ORDER (the `HOLE_ATTRIBUTE`
-   marks which) and strips the marker — the compiler assigns element-hole indices in the
-   same pre-order, so the arrays line up without numbering the markers. */
-function indexElementHoles(container: Node, prefix: number[], paths: number[][]): void {
-    const children = container.childNodes
-    let elementIndex = 0
-    for (let cursor = 0; cursor < children.length; cursor += 1) {
-        const child = children[cursor] as Node
-        if (!isElement(child)) {
-            continue
-        }
-        const path = [...prefix, elementIndex]
-        elementIndex += 1
-        if (child.hasAttribute(HOLE_ATTRIBUTE)) {
-            paths.push(path)
-            child.removeAttribute(HOLE_ATTRIBUTE)
-        }
-        indexElementHoles(child, path, paths)
+/* Walks an element-only path from the top-level node list to the target element. A step
+   that resolves to nothing means the claimed server run is missing an element the skeleton
+   expects here — a hydration desync; throw AT it (naming the path) rather than returning
+   the undefined that derefs in the downstream `mountChild`/`attr`, far from the cause. */
+function resolveElementHole(topLevel: ArrayLike<Node>, path: number[]): Element {
+    let node = elementChildAt(topLevel, path[0] as number)
+    for (let depth = 1; depth < path.length && node !== undefined; depth += 1) {
+        node = elementChildAt(node.childNodes, path[depth] as number)
     }
-}
-
-/* Collects THIS skeleton's own anchor holes (`a` comments) in document order, present in
-   both the cloned skeleton and the server DOM (text-width-independent). The compiler emits
-   anchors in the same order, so the arrays line up.
-
-   In hydrate mode the claimed tree is FULLY EXPANDED — a nested block's rendered content
-   (each rows, branches, await/try boundaries) sits inline — so a naive descent would also
-   collect the inner block's anchors, which belong to that block's OWN skeleton, shifting
-   every index past the first block. Block AND child-component content is bounded by range
-   markers (a component mounts as a `[`…`]` range at its anchor, like a block — see
-   `mountRange`), so track depth per sibling list and take an anchor (and recurse into an
-   element) only at depth 0, where the skeleton's own structure lives. In create mode the
-   clone is shallow (the ranges have not built yet — no markers), so depth stays 0 and this
-   is a plain document scan. */
-function scanAnchors(nodes: ArrayLike<Node>, anchors: Node[]): void {
-    let depth = 0
-    for (let index = 0; index < nodes.length; index += 1) {
-        const node = nodes[index] as Node
-        const data = commentData(node)
-        if (data === undefined) {
-            /* Recurse into this skeleton's own elements at depth 0. A child component's
-               content sits inside its `[`…`]` range (depth > 0), so it is skipped like any
-               block range — its anchors belong to the child's own skeleton. */
-            if (isElement(node) && depth === 0) {
-                scanAnchors(node.childNodes, anchors)
-            }
-        } else if (isCloseMarker(data)) {
-            depth -= 1
-        } else if (isOpenMarker(data)) {
-            depth += 1
-        } else if (data === 'a' && depth === 0) {
-            anchors.push(node)
-        }
+    if (node === undefined) {
+        throw new Error(
+            `[abide] hydration desync: skeleton element hole [${path.join(',')}] resolved to no node — the server DOM is missing an element the client build expects here.`,
+        )
     }
+    return node
 }
 
 /* When `parent` is foreign (or a control-flow fragment inside foreign content), the
@@ -140,29 +107,18 @@ function compile(html: string, wrapper: string | undefined): CompiledSkeleton {
         template.innerHTML = wrapper === undefined ? html : `<${wrapper}>${html}</${wrapper}>`
         const source =
             wrapper === undefined ? template.content : (template.content.firstChild as Node)
+        /* Element holes via the ONE shared rule (`walkElementOrder`) — the same element-only
+           pre-order the compiler numbers `elIndex` with. Record each `HOLE_ATTRIBUTE`
+           element's path and strip the marker so a clone never carries it into the live DOM. */
         const elementPaths: number[][] = []
-        indexElementHoles(source, [], elementPaths)
+        walkElementOrder(Array.from(source.childNodes), domElementAdapter, (node, path) => {
+            elementPaths.push(path)
+            ;(node as Element).removeAttribute(HOLE_ATTRIBUTE)
+        })
         compiled = { source, elementPaths, topLevelCount: source.childNodes.length }
         cache.set(key, compiled)
     }
     return compiled
-}
-
-/* Walks an element-only path from the top-level node list to the target element. A step
-   that resolves to nothing means the claimed server run is missing an element the skeleton
-   expects here — a hydration desync; throw AT it (naming the path) rather than returning
-   the undefined that derefs in the downstream `mountChild`/`attr`, far from the cause. */
-function resolveElementHole(topLevel: ArrayLike<Node>, path: number[]): Element {
-    let node = elementChildAt(topLevel, path[0] as number)
-    for (let depth = 1; depth < path.length && node !== undefined; depth += 1) {
-        node = elementChildAt(node.childNodes, path[depth] as number)
-    }
-    if (node === undefined) {
-        throw new Error(
-            `[abide] hydration desync: skeleton element hole [${path.join(',')}] resolved to no node — the server DOM is missing an element the client build expects here.`,
-        )
-    }
-    return node
 }
 
 /*
@@ -197,8 +153,13 @@ export function skeleton(parent: Node, html: string): SkeletonHoles {
             parent.appendChild(clone)
         }
     }
+    /* Anchor holes via the ONE shared ordering rule (`walkAnchorOrder`) — the same traversal
+       the compiler numbers `anIndex` with. The top-level list is depth-0-filtered up front (a
+       nested range can sit among the top-level run); the adapter filters each deeper level. */
     const an: Node[] = []
-    scanAnchors(topLevel, an)
+    walkAnchorOrder(depthZeroNodes(topLevel), domAnchorAdapter, (anchor) => {
+        an.push(anchor as Node)
+    })
     return {
         el: elementPaths.map((path) => resolveElementHole(topLevel, path)),
         an,
