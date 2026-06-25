@@ -61,10 +61,10 @@ describe('if / else', () => {
     test('renders then or else and flips reactively', () => {
         const host = render(`
             <script>let on = scope().state(true)</script>
-            <template if={on}>
+            {#if on}
                 <span>ON</span>
-                <template else><span>OFF</span></template>
-            </template>
+                {:else}<span>OFF</span>
+            {/if}
         `)
         // can't reach internal state; assert SSR for both, and client initial
         expect(host.textContent).toBe('ON')
@@ -73,10 +73,10 @@ describe('if / else', () => {
     test('SSR renders the else branch when falsy', () => {
         const source = `
             <script>let on = scope().state(false)</script>
-            <template if={on}>
+            {#if on}
                 <span>ON</span>
-                <template else><span>OFF</span></template>
-            </template>
+                {:else}<span>OFF</span>
+            {/if}
         `
         expect(ssr(source)).toBe('<!--[--><span>OFF</span><!--]-->')
     })
@@ -85,8 +85,8 @@ describe('if / else', () => {
        it would otherwise silently drop the else branch. The else must nest inside the
        `if`. */
     test('rejects a sibling else', () => {
-        const sibling = `<template if={on}><span>ON</span></template><template else><span>OFF</span></template>`
-        expect(() => compileComponent(sibling)).toThrow(/sibling branch is not supported/)
+        const sibling = `{#if on}<span>ON</span>{/if}{:else}<span>OFF</span>`
+        expect(() => compileComponent(sibling)).toThrow(/no open \{#…\} block/)
     })
 })
 
@@ -96,11 +96,11 @@ describe('if / elseif / else', () => {
             let a = scope().state(${a})
             let b = scope().state(${b})
         </script>
-        <template if={a}>
+        {#if a}
             <span>A</span>
-            <template elseif={b}><span>B</span></template>
-            <template else><span>C</span></template>
-        </template>
+            {:else if b}<span>B</span>
+            {:else}<span>C</span>
+        {/if}
     `
 
     test('SSR picks the matching elseif branch', () => {
@@ -123,11 +123,11 @@ describe('if / elseif / else', () => {
         const host = render(`
             <script>let n = scope().state(0)</script>
             <button onclick={() => n += 1}>+</button>
-            <template if={n === 1}>
+            {#if n === 1}
                 <span>one</span>
-                <template elseif={n === 2}><span>two</span></template>
-                <template else><span>other</span></template>
-            </template>
+                {:else if n === 2}<span>two</span>
+                {:else}<span>other</span>
+            {/if}
         `)
         const button = Array.from(host.childNodes).find(
             (node) => (node as { tagName?: string }).tagName === 'button',
@@ -147,57 +147,48 @@ describe('if / elseif / else', () => {
                 let a = scope().state(0)
                 let items = scope().state(['x'])
             </script>
-            <template if={a}>
+            {#if a}
                 <span>A</span>
-                <template elseif={items.length}><span>has</span></template>
-                <template else><span>empty</span></template>
-            </template>
+                {:else if items.length}<span>has</span>
+                {:else}<span>empty</span>
+            {/if}
         `
         expect(ssr(source)).toBe('<!--[--><span>has</span><!--]-->')
     })
 
     test('rejects an elseif nested in a switch', () => {
         const bad = `
-            <template switch={s}>
-                <template case="1"><span>1</span></template>
-                <template elseif={x}><span>x</span></template>
-            </template>
+            {#switch s}
+                {:case 1}<span>1</span>
+                {:else if x}<span>x</span>
+            {/switch}
         `
-        expect(() => compileComponent(bad)).toThrow(/elseif/)
+        expect(() => compileComponent(bad)).toThrow(/not valid inside/)
     })
 
-    /* Loose content sitting AFTER a branch tag belongs to no branch — it would silently
-       fold into the `then`. Reject it; whitespace and the leading then-content stay legal. */
-    test('rejects rendered content after a branch in an if-chain', () => {
-        const stray = `
-            <template if={a}>
+    /* In the block grammar a branch is lexically scoped: content after a `{:else if}` /
+       `{:else}` is part of THAT branch, so the directive-era "stray in the if body" hazard
+       is gone — trailing content simply renders inside the branch (no misplacement to
+       reject). The "else must be last" guard is covered in uiParseBlockGrammar. */
+    test('content after a branch is part of that branch (renders), not stray', () => {
+        const host = render(`
+            <script>let a = scope().state(false)</script>
+            {#if a}
                 <span>A</span>
-                <template elseif={b}><span>B</span></template>stray
-                <template else><span>C</span></template>
-            </template>
-        `
-        expect(() => compileComponent(stray)).toThrow(/belongs to no branch/)
-    })
-
-    test('rejects a rendered element after a branch in an if-chain', () => {
-        const stray = `
-            <template if={a}>
-                <span>A</span>
-                <template else><span>C</span></template>
-                <span>orphan</span>
-            </template>
-        `
-        expect(() => compileComponent(stray)).toThrow(/belongs to no branch/)
+                {:else}<span>C</span>extra
+            {/if}
+        `)
+        expect(host.textContent?.replace(/\s/g, '')).toBe('Cextra')
     })
 
     test('the then-content before the first branch and whitespace around branches compile', () => {
         const ok = `
             <script>let a = scope().state(true)</script>
-            <template if={a}>
+            {#if a}
                 <span>then</span>
-                <template elseif={a}><span>B</span></template>
-                <template else><span>C</span></template>
-            </template>
+                {:else if a}<span>B</span>
+                {:else}<span>C</span>
+            {/if}
         `
         expect(typeof compileComponent(ok)).toBe('string')
     })
@@ -206,11 +197,11 @@ describe('if / elseif / else', () => {
 describe('switch / case / default', () => {
     const source = `
         <script>let status = scope().state('shipped')</script>
-        <template switch={status}>
-            <template case="'pending'"><span>⏳</span></template>
-            <template case="'shipped'"><span>🚚</span></template>
-            <template default><span>?</span></template>
-        </template>
+        {#switch status}
+            {:case 'pending'}<span>⏳</span>
+            {:case 'shipped'}<span>🚚</span>
+            {:default}<span>?</span>
+        {/switch}
     `
 
     test('client renders the matching case', () => {
@@ -225,11 +216,11 @@ describe('switch / case / default', () => {
        body (it would be silently dropped) is rejected. */
     test('rejects rendered content in a switch body', () => {
         const stray = `
-            <template switch={s}>
+            {#switch s}
                 stray
-                <template case="'a'"><span>A</span></template>
-                <template default><span>D</span></template>
-            </template>
+                {:case 'a'}<span>A</span>
+                {:default}<span>D</span>
+            {/switch}
         `
         expect(() => compileComponent(stray)).toThrow(/renders only its/)
     })
@@ -237,10 +228,10 @@ describe('switch / case / default', () => {
     test('SSR falls back to default for an unmatched subject', () => {
         const unmatched = `
             <script>let status = scope().state('lost')</script>
-            <template switch={status}>
-                <template case="'pending'"><span>⏳</span></template>
-                <template default><span>?</span></template>
-            </template>
+            {#switch status}
+                {:case 'pending'}<span>⏳</span>
+                {:default}<span>?</span>
+            {/switch}
         `
         expect(ssr(unmatched)).toBe('<!--[--><span>?</span><!--]-->')
     })
