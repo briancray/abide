@@ -98,4 +98,45 @@ const promise = (async () => ({ status: 'ok' }))()
         const keyAt = BINDINGS.indexOf('by frame.n') + 'by '.length
         expect(service.quickInfo(path, keyAt)).toBeDefined()
     })
+
+    test('maps the {#for} index binding', () => {
+        const source = `<script>\nconst items = scope().state<string[]>([])\n</script>\n{#for item, i of items}<li>{i}:{item}</li>{/for}\n`
+        const { service, path } = open(source)
+        const declaration = source.indexOf('item, i') + 'item, '.length
+        const tokens = service.semanticClassifications(path)
+        expect(
+            tokens.some(
+                (t) => t.start === declaration && source.slice(t.start, t.start + t.length) === 'i',
+            ),
+        ).toBe(true)
+        expect(service.quickInfo(path, declaration)).toBeDefined()
+    })
+
+    test('maps the {:catch} binding', () => {
+        const source = `<script>\nconst promise = Promise.resolve(1)\n</script>\n{#await promise}p{:catch err}<p>{err}</p>{/await}\n`
+        const { service, path } = open(source)
+        const declaration = source.indexOf('{:catch err') + '{:catch '.length
+        const tokens = service.semanticClassifications(path)
+        expect(
+            tokens.some(
+                (t) =>
+                    t.start === declaration && source.slice(t.start, t.start + t.length) === 'err',
+            ),
+        ).toBe(true)
+        expect(service.quickInfo(path, declaration)).toBeDefined()
+    })
+
+    test('maps the <template args> snippet parameter binding', () => {
+        const source = `<template name="row" args={item}>\n  <li>{item}</li>\n</template>\n`
+        const { service, path } = open(source)
+        const declaration = source.indexOf('args={') + 'args={'.length
+        const tokens = service.semanticClassifications(path)
+        expect(
+            tokens.some(
+                (t) =>
+                    t.start === declaration && source.slice(t.start, t.start + t.length) === 'item',
+            ),
+        ).toBe(true)
+        expect(service.quickInfo(path, declaration)).toBeDefined()
+    })
 })

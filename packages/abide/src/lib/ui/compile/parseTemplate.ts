@@ -341,7 +341,16 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
             }
             if (keyword === 'catch') {
                 const as = token.body.slice(token.body.indexOf('catch') + 5).trim() || undefined
-                return { kind: 'branch', branch: 'catch', as, children: branchChildren }
+                return {
+                    kind: 'branch',
+                    branch: 'catch',
+                    as,
+                    children: branchChildren,
+                    asLoc:
+                        as === undefined
+                            ? undefined
+                            : exprLoc(token.loc, token.body, token.body.indexOf('catch') + 5),
+                }
             }
             if (keyword === 'finally') {
                 return {
@@ -355,7 +364,16 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
         if (parentKeyword === 'try') {
             if (keyword === 'catch') {
                 const as = token.body.slice(token.body.indexOf('catch') + 5).trim() || undefined
-                return { kind: 'branch', branch: 'catch', as, children: branchChildren }
+                return {
+                    kind: 'branch',
+                    branch: 'catch',
+                    as,
+                    children: branchChildren,
+                    asLoc:
+                        as === undefined
+                            ? undefined
+                            : exprLoc(token.loc, token.body, token.body.indexOf('catch') + 5),
+                }
             }
             if (keyword === 'finally') {
                 return {

@@ -533,7 +533,14 @@ function emitNode(node: TemplateNode, builder: Builder): void {
             builder.raw('}\n')
             return
         case 'snippet':
-            builder.raw(`const ${node.name} = (${node.params ?? ''}) => {\n`)
+            /* `args={…}` is the parameter list; `mapped` (not `raw`) so hover/highlighting
+               land on the binding. `loc` is the `args` expression's offset (see
+               toSnippetOrTemplate). The name is a static attribute with no tracked offset. */
+            builder.raw(`const ${node.name} = (`)
+            if (node.params !== undefined) {
+                builder.mapped(node.params, node.loc)
+            }
+            builder.raw(') => {\n')
             emitNodes(node.children, builder)
             builder.raw('};\n')
             return
