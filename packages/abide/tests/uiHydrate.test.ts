@@ -128,10 +128,10 @@ describe('hydrate — adopt server DOM', () => {
         const model = doc({ on: true, label: 'hi' })
         const source = `
             <main>
-                <template if={model.on}>
+                {#if model.on}
                     <span>{model.label}</span>
-                    <template else><b>off</b></template>
-                </template>
+                    {:else}<b>off</b>
+                {/if}
             </main>
         `
         const runtime = {
@@ -190,7 +190,7 @@ describe('hydrate — adopt server DOM', () => {
         const source = `
             <main>
                 <ul>
-                    <template each={model.order} as="k" key="k"><li>{model.byId[k].n}</li></template>
+                    {#for k of model.order by k}<li>{model.byId[k].n}</li>{/for}
                 </ul>
             </main>
         `
@@ -359,11 +359,11 @@ describe('hydrate — adopt server DOM', () => {
         const model = doc({ status: 'b' })
         const source = `
             <main>
-                <template switch={model.status}>
-                    <template case="'a'"><span>A</span></template>
-                    <template case="'b'"><span>B</span></template>
-                    <template default><span>?</span></template>
-                </template>
+                {#switch model.status}
+                    {:case 'a'}<span>A</span>
+                    {:case 'b'}<span>B</span>
+                    {:default}<span>?</span>
+                {/switch}
             </main>
         `
         const runtime = {
@@ -416,11 +416,11 @@ describe('hydrate — adopt server DOM', () => {
         const model = doc({ n: 2 })
         const source = `
             <main>
-                <template if={model.n === 1}>
+                {#if model.n === 1}
                     <span>one</span>
-                    <template elseif={model.n === 2}><span>two</span></template>
-                    <template else><span>other</span></template>
-                </template>
+                    {:else if model.n === 2}<span>two</span>
+                    {:else}<span>other</span>
+                {/if}
             </main>
         `
         const runtime = {
@@ -542,12 +542,11 @@ describe('hydrate — adopt server DOM', () => {
         }
         const source = `
             <main>
-                <template await={__fetchUsers()}>
+                {#await __fetchUsers()}
                     <p>loading…</p>
-                    <template then="users">
-                        <ul><template each={users} as="u" key="u"><li>{u}</li></template></ul>
-                    </template>
-                </template>
+                    {:then users}
+                        <ul>{#for u of users by u}<li>{u}</li>{/for}</ul>
+                {/await}
             </main>
         `
 
@@ -625,7 +624,7 @@ describe('hydrate — adopt server DOM', () => {
             resolve = r
         })
         ;(globalThis as { __pendingUser?: () => Promise<string> }).__pendingUser = () => pending
-        const source = `<main><template await={__pendingUser()}><p>loading…</p><template then="who"><span>{who}</span></template></template></main>`
+        const source = `<main>{#await __pendingUser()}<p>loading…</p>{:then who}<span>{who}</span>{/await}</main>`
 
         // the server pending shell — the `<!--a-->` anchor precedes the await boundary
         const host = document.createElement('div')
@@ -661,7 +660,7 @@ describe('hydrate — adopt server DOM', () => {
             <section>
                 <button>a</button>
                 <button>b</button>
-                <template if={model.total}><ul></ul><template else><p class="empty">empty</p></template></template>
+                {#if model.total}<ul></ul>{:else}<p class="empty">empty</p>{/if}
             </section>
         `
         const runtime = {
@@ -752,7 +751,7 @@ describe('hydrate — adopt server DOM', () => {
         const parentSource = `
             <div class="types">
                 <Sel value={undefined}><button>All</button></Sel>
-                <template each={model.types} as="t" key="t"><Sel value={t}><button>{t}</button></Sel></template>
+                {#for t of model.types by t}<Sel value={t}><button>{t}</button></Sel>{/for}
             </div>
         `
 
@@ -811,9 +810,9 @@ describe('hydrate — adopt server DOM', () => {
         })
         const source = `
             <div class="cards">
-                <template if={model.showWatching}><card title={model.watchingTitle}>w</card></template>
+                {#if model.showWatching}<card title={model.watchingTitle}>w</card>{/if}
                 <card title={model.newTitle}>n</card>
-                <template if={model.showPlaylists}><card>p</card></template>
+                {#if model.showPlaylists}<card>p</card>{/if}
             </div>
         `
         const runtime = {

@@ -60,7 +60,7 @@ describe('bare component as control-flow branch root hydrates (no flip)', () => 
         const parent = component(
             `
             <script>let busy = scope().state(false)</script>
-            <div><template if={busy}><Loading/><template else><HardDrive/></template></template></div>`,
+            <div>{#if busy}<Loading/>{:else}<HardDrive/>{/if}</div>`,
             { Loading, HardDrive },
         )
         const server = (await parent.render()) as SsrRender
@@ -74,7 +74,7 @@ describe('bare component as control-flow branch root hydrates (no flip)', () => 
         const parent = component(
             `
             <script>let busy = scope().state(false)</script>
-            <template if={busy}><Loading/><template else><HardDrive/></template></template>`,
+            {#if busy}<Loading/>{:else}<HardDrive/>{/if}`,
             { Loading, HardDrive },
         )
         const server = (await parent.render()) as SsrRender
@@ -90,7 +90,7 @@ describe('hydration desync surfaces as a named error, not a downstream null-dere
         const parent = component(
             `
             <script>let busy = scope().state(false)</script>
-            <div><template if={busy}><Loading/><template else><HardDrive/></template></template></div>`,
+            <div>{#if busy}<Loading/>{:else}<HardDrive/>{/if}</div>`,
             { Loading, HardDrive },
         )
         const host = document.createElement('div')

@@ -82,7 +82,7 @@ function run(source: string, host: Element, model: unknown, mode: 'mount' | 'hyd
 }
 
 describe('multi-root branches', () => {
-    const IF = `<main><template if={model.on}><h1>A</h1><p>B</p></template></main>`
+    const IF = `<main>{#if model.on}<h1>A</h1><p>B</p>{/if}</main>`
 
     test('SSR renders all branch roots, no wrapper', async () => {
         expect((await ssr(IF, doc({ on: true }))).html).toBe(
@@ -126,7 +126,7 @@ describe('multi-root branches', () => {
     })
 
     test('switch case supports multiple roots', async () => {
-        const SWITCH = `<main><template switch={model.k}><template case="'a'"><h1>A1</h1><h2>A2</h2></template><template default><span>?</span></template></template></main>`
+        const SWITCH = `<main>{#switch model.k}{:case 'a'}<h1>A1</h1><h2>A2</h2>{:default}<span>?</span>{/switch}</main>`
         expect((await ssr(SWITCH, doc({ k: 'a' }))).html).toBe(
             '<main><!--a--><!--[--><h1>A1</h1><h2>A2</h2><!--]--></main>',
         )
@@ -139,7 +139,7 @@ describe('multi-root branches', () => {
     })
 
     test('a component is a valid branch root: SSR, mount, and hydrate agree', async () => {
-        const SRC = `<main><template if={model.on}><Button label="hi"/></template></main>`
+        const SRC = `<main>{#if model.on}<Button label="hi"/>{/if}</main>`
         // a component renders as a marker range (no wrapper element), both server and
         // client; the inner `[`…`]` is the component, the outer is the if-branch range
         expect((await ssr(SRC, doc({ on: true }))).html).toBe(
@@ -172,7 +172,7 @@ describe('multi-root branches', () => {
     })
 
     test('a component is a valid each row', async () => {
-        const SRC = `<ul><template each={model.items} as="i" key="i"><Button label={i}/></template></ul>`
+        const SRC = `<ul>{#for i of model.items by i}<Button label={i}/>{/for}</ul>`
         expect((await ssr(SRC, doc({ items: ['a', 'b'] }))).html).toBe(
             '<ul><!--a--><!--[--><!--[--><span>a</span><!--]--><!--]--><!--[--><!--[--><span>b</span><!--]--><!--]--></ul>',
         )
@@ -183,7 +183,7 @@ describe('multi-root branches', () => {
     })
 
     test('static text is a valid branch root: SSR, mount, and hydrate agree', async () => {
-        const SRC = `<main><template if={model.on}>plain text</template></main>`
+        const SRC = `<main>{#if model.on}plain text{/if}</main>`
         expect((await ssr(SRC, doc({ on: true }))).html).toBe(
             '<main><!--a--><!--[-->plain text<!--]--></main>',
         )
@@ -208,7 +208,7 @@ describe('multi-root branches', () => {
     })
 
     test('a dynamic interpolation is a valid branch root: SSR, mount, and hydrate agree', async () => {
-        const SRC = `<main><template if={model.on}>{model.name}!</template></main>`
+        const SRC = `<main>{#if model.on}{model.name}!{/if}</main>`
         expect((await ssr(SRC, doc({ on: true, name: 'Ada' }))).html).toBe(
             '<main><!--a--><!--[-->Ada!<!--]--></main>',
         )
@@ -230,7 +230,7 @@ describe('multi-root branches', () => {
     })
 
     test('a nested control-flow <template> directly in a branch renders (full range model)', async () => {
-        const SRC = `<main><template if={model.on}><template if={model.b}><span>x</span></template></template></main>`
+        const SRC = `<main>{#if model.on}{#if model.b}<span>x</span>{/if}{/if}</main>`
         expect((await ssr(SRC, doc({ on: true, b: true }))).html).toBe(
             '<main><!--a--><!--[--><!--[--><span>x</span><!--]--><!--]--></main>',
         )
@@ -249,7 +249,7 @@ describe('multi-root branches', () => {
        must mutate the LIVE parent, not the emptied fragment — else the whole list is
        pulled out of the DOM. */
     test('a bare nested each in a branch reconciles in place after the branch moves', () => {
-        const SRC = `<main><template if={model.on}><template each={model.items} as="i" key="i"><b>{i}</b></template></template></main>`
+        const SRC = `<main>{#if model.on}{#for i of model.items by i}<b>{i}</b>{/for}{/if}</main>`
         const model = doc({ on: true, items: ['a', 'b'] })
         const host = document.createElement('div')
         run(SRC, host, model, 'mount')
