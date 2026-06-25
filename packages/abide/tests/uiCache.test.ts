@@ -112,12 +112,11 @@ describe('cache() + UI await-block hydration', () => {
         const source = `
             <script>let load = cache(getUsers)</script>
             <main>
-                <template await={load()}>
+                {#await load()}
                     <p>loading…</p>
-                    <template then="users">
-                        <ul><template each={users} as="u" key="u"><li>{u}</li></template></ul>
-                    </template>
-                </template>
+                    {:then users}
+                        <ul>{#for u of users by u}<li>{u}</li>{/for}</ul>
+                {/await}
             </main>
         `
         const runtime = {
@@ -167,7 +166,7 @@ describe('cache() + UI await-block hydration', () => {
             '<main><!--a--><!--abide:await:0--><span>resumed</span><!--/abide:await:0--></main>'
         const source = `
             <script>let read = cache(loadData)</script>
-            <main><template await={read()}><template then="v"><span>{v}</span></template></template></main>
+            <main>{#await read()}{:then v}<span>{v}</span>{/await}</main>
         `
         const runtime = {
             doc,

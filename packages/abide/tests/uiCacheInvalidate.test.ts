@@ -44,12 +44,11 @@ describe('cache.invalidate() re-runs an await block', () => {
         const source = `
             <script>let load = cache(loadUsers)</script>
             <main>
-                <template await={load()}>
+                {#await load()}
                     <p>loading…</p>
-                    <template then="users">
-                        <ul><template each={users} as="u" key="u"><li>{u}</li></template></ul>
-                    </template>
-                </template>
+                    {:then users}
+                        <ul>{#for u of users by u}<li>{u}</li>{/for}</ul>
+                {/await}
             </main>
         `
         const runtime = {

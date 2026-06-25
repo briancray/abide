@@ -44,12 +44,11 @@ const getUsers = defineVerb('GET', '/rpc/ui-users', () => {
 const SOURCE = `
     <script>let load = cache(getUsers)</script>
     <main>
-        <template await={load()}>
+        {#await load()}
             <p>loading…</p>
-            <template then="users">
-                <ul><template each={users} as="u" key="u"><li>{u}</li></template></ul>
-            </template>
-        </template>
+            {:then users}
+                <ul>{#for u of users by u}<li>{u}</li>{/for}</ul>
+        {/await}
     </main>
 `
 
