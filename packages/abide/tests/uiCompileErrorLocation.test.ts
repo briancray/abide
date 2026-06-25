@@ -7,18 +7,12 @@ import { offsetToLineColumn } from '../src/lib/ui/compile/offsetToLineColumn.ts'
    multi-node each row) now compile. */
 describe('control-flow accepts arbitrary branch / row content', () => {
     test('a nested control-flow template directly in an if branch compiles', () => {
-        expect(() =>
-            compileComponent(
-                `<template if={show}><template if={inner}><b>x</b></template></template>`,
-            ),
-        ).not.toThrow()
+        expect(() => compileComponent(`{#if show}{#if inner}<b>x</b>{/if}{/if}`)).not.toThrow()
     })
 
     test('a multi-node each row compiles', () => {
         expect(() =>
-            compileComponent(
-                `<template each={items} as="item"><span>{item}</span><span>x</span></template>`,
-            ),
+            compileComponent(`{#for item of items}<span>{item}</span><span>x</span>{/for}`),
         ).not.toThrow()
     })
 })

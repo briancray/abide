@@ -143,20 +143,16 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
         const open = readBlockToken() // sigil is '#'
         const keyword = headKeyword(open.body)
         if (keyword === 'if') {
-            const condition = open.body.slice(open.body.indexOf('if') + 2).trim()
+            const start = open.body.indexOf('if') + 2
+            const condition = open.body.slice(start).trim()
             if (condition === '') {
                 throw new Error('[abide] {#if} requires a condition expression')
             }
             const children = readBlockChildren('if')
-            return {
-                kind: 'if',
-                condition,
-                children,
-                loc: open.loc + (open.body.indexOf('if') + 2),
-            }
+            return { kind: 'if', condition, children, loc: exprLoc(open.loc, open.body, start) }
         }
         if (keyword === 'for') {
-            const head = parseForHead(open.body)
+            const head = parseForHead(open.body, open.loc)
             const children = readBlockChildren('for')
             return {
                 kind: 'each',
@@ -166,11 +162,12 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
                 key: head.key,
                 async: head.async,
                 children,
-                loc: open.loc,
+                loc: head.loc,
             }
         }
         if (keyword === 'await') {
-            const afterAwait = open.body.slice(open.body.indexOf('await') + 5).trim()
+            const start = open.body.indexOf('await') + 5
+            const afterAwait = open.body.slice(start)
             const thenAt = indexOfKeywordAtDepthZero(afterAwait, ' then ')
             const promise = (thenAt === -1 ? afterAwait : afterAwait.slice(0, thenAt)).trim()
             if (promise === '') {
@@ -181,15 +178,23 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
                     ? undefined
                     : afterAwait.slice(thenAt + ' then '.length).trim() || undefined
             const children = readBlockChildren('await')
-            return { kind: 'await', promise, blocking: thenAt !== -1, as, children, loc: open.loc }
+            return {
+                kind: 'await',
+                promise,
+                blocking: thenAt !== -1,
+                as,
+                children,
+                loc: exprLoc(open.loc, open.body, start),
+            }
         }
         if (keyword === 'switch') {
-            const subject = open.body.slice(open.body.indexOf('switch') + 6).trim()
+            const start = open.body.indexOf('switch') + 6
+            const subject = open.body.slice(start).trim()
             if (subject === '') {
                 throw new Error('[abide] {#switch} requires a subject expression')
             }
             const children = readBlockChildren('switch')
-            return { kind: 'switch', subject, children, loc: open.loc }
+            return { kind: 'switch', subject, children, loc: exprLoc(open.loc, open.body, start) }
         }
         if (keyword === 'try') {
             const children = readBlockChildren('try')
@@ -256,8 +261,15 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
         const branchChildren = readBranchChildren()
         if (parentKeyword === 'if') {
             if (keyword === 'else' && headKeyword(token.body.slice(4).trim()) === 'if') {
-                const condition = token.body.slice(token.body.indexOf('if') + 2).trim()
-                return { kind: 'case', match: undefined, condition, children: branchChildren }
+                const start = token.body.indexOf('if') + 2
+                const condition = token.body.slice(start).trim()
+                return {
+                    kind: 'case',
+                    match: undefined,
+                    condition,
+                    children: branchChildren,
+                    loc: exprLoc(token.loc, token.body, start),
+                }
             }
             if (keyword === 'else') {
                 return { kind: 'case', match: undefined, children: branchChildren }
@@ -269,11 +281,17 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
         }
         if (parentKeyword === 'switch') {
             if (keyword === 'case') {
-                const match = token.body.slice(token.body.indexOf('case') + 4).trim()
+                const start = token.body.indexOf('case') + 4
+                const match = token.body.slice(start).trim()
                 if (match === '') {
                     throw new Error('[abide] {:case} requires a value expression')
                 }
-                return { kind: 'case', match, children: branchChildren }
+                return {
+                    kind: 'case',
+                    match,
+                    children: branchChildren,
+                    loc: exprLoc(token.loc, token.body, start),
+                }
             }
             if (keyword === 'default') {
                 return { kind: 'case', match: undefined, children: branchChildren }
@@ -591,33 +609,65 @@ function bindingCommaAtDepthZero(text: string): number {
 }
 
 /* Parses `for [await] <binding>[, <index>] of <iterable> [by <key>]`. */
-function parseForHead(body: string): {
+/* Absolute source offset of the trimmed expression beginning at `start` within a
+   directive `body` whose first char is at absolute `bodyLoc` — skips the leading
+   whitespace `.trim()` drops so the offset points at the expression's first real char
+   (the shadow source-map invariant: source text at `loc` equals the emitted code). */
+function exprLoc(bodyLoc: number, body: string, start: number): number {
+    const raw = body.slice(start)
+    return bodyLoc + start + (raw.length - raw.trimStart().length)
+}
+
+/* Parses `for [await] <binding>[, <index>] of <iterable> [by <key>]`. Offsets are
+   tracked against the original `body` (not trimmed slices) so `loc` points at the
+   iterable expression's first char — `bodyLoc` is the absolute offset of `body[0]`. */
+function parseForHead(
+    body: string,
+    bodyLoc: number,
+): {
     items: string
     as: string
     index: string | undefined
     key: string | undefined
     async: boolean
+    loc: number
 } {
-    let rest = body.slice(body.indexOf('for') + 3).trim()
-    const isAsync = /^await\b/.test(rest)
-    if (isAsync) {
-        rest = rest.slice('await'.length).trim()
+    const skipSpace = (i: number): number => {
+        let at = i
+        while (at < body.length && /\s/.test(body.charAt(at))) {
+            at += 1
+        }
+        return at
     }
-    const ofAt = indexOfKeywordAtDepthZero(rest, ' of ')
+    let bindingStart = skipSpace(body.indexOf('for') + 3)
+    const isAsync = /^await\b/.test(body.slice(bindingStart))
+    if (isAsync) {
+        bindingStart = skipSpace(bindingStart + 'await'.length)
+    }
+    const region = body.slice(bindingStart)
+    const ofAt = indexOfKeywordAtDepthZero(region, ' of ')
     if (ofAt === -1) {
         throw new Error('[abide] {#for} requires `<binding> of <iterable>`')
     }
-    const left = rest.slice(0, ofAt).trim()
-    let right = rest.slice(ofAt + ' of '.length).trim()
-    const byAt = indexOfKeywordAtDepthZero(right, ' by ')
-    const key = byAt === -1 ? undefined : right.slice(byAt + ' by '.length).trim()
+    const left = region.slice(0, ofAt).trim()
+    const itemsStart = skipSpace(bindingStart + ofAt + ' of '.length)
+    let itemsRegion = body.slice(itemsStart)
+    const byAt = indexOfKeywordAtDepthZero(itemsRegion, ' by ')
+    const key = byAt === -1 ? undefined : itemsRegion.slice(byAt + ' by '.length).trim()
     if (byAt !== -1) {
-        right = right.slice(0, byAt).trim()
+        itemsRegion = itemsRegion.slice(0, byAt)
     }
     const commaAt = bindingCommaAtDepthZero(left)
     const as = (commaAt === -1 ? left : left.slice(0, commaAt)).trim()
     const index = commaAt === -1 ? undefined : left.slice(commaAt + 1).trim()
-    return { items: right, as: as === '' ? '_item' : as, index, key, async: isAsync }
+    return {
+        items: itemsRegion.trim(),
+        as: as === '' ? '_item' : as,
+        index,
+        key,
+        async: isAsync,
+        loc: bodyLoc + itemsStart,
+    }
 }
 
 /* A `case` node (`<template else>`/`<template case>`/`<template default>`) is valid

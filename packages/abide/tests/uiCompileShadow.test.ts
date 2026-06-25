@@ -18,12 +18,12 @@ function bump() { count += 1; start = 'reset'; offset = 0 }
 
 <h1>{title}</h1>
 <p>{doubled} and {count.toFixed(2)}</p>
-<template if={count > 0}>
+{#if count > 0}
   <button onclick={bump}>{count}</button>
-</template>
-<template each={[1, 2, 3]} as={n}>
+{/if}
+{#for n of [1, 2, 3]}
   <span>{n + count}</span>
-</template>
+{/for}
 <Child name={title} code={lang} />
 `
 
@@ -132,9 +132,9 @@ const extra = { name: 'x' }
         const { code } = compileShadow(`<script>
 let rows = scope().state<string[]>([])
 </script>
-<template each={rows} as="row" index="i">
+{#for row, i of rows}
   <span>{i === rows.length - 1 ? row : ''}</span>
-</template>`)
+{/for}`)
         expect(code).toContain('const i: number = 0;')
     })
 
@@ -161,14 +161,14 @@ const { property } = props<{ property: FilePropertyName }>()
         const { code } = compileShadow(`<script>
 let ready = scope().state(false)
 </script>
-<template await={Promise.resolve('x')} then="loaded">
+{#await Promise.resolve('x') then loaded}
   <script>
   const upper = loaded.toUpperCase()
   let layout = scope().state(upper)
   let label = scope().computed(() => layout + '!')
   </script>
   <p>{label === 'A!' ? layout : upper}</p>
-</template>`)
+{/await}`)
         /* Reactive decls projected to value types; the plain const stays verbatim. */
         expect(code).toContain('const upper = loaded.toUpperCase()')
         expect(code).toContain('let layout = (upper);')
