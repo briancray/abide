@@ -49,14 +49,14 @@ describe('renderToStream — out-of-order SSR streaming', () => {
                 let fast = () => Promise.resolve('FAST')
             </script>
             <div>
-                <template await={slow()}>
+                {#await slow()}
                     <p>loading slow</p>
-                    <template then="v"><span>{v}</span></template>
-                </template>
-                <template await={fast()}>
+                    {:then v}<span>{v}</span>
+                {/await}
+                {#await fast()}
                     <p>loading fast</p>
-                    <template then="v"><b>{v}</b></template>
-                </template>
+                    {:then v}<b>{v}</b>
+                {/await}
             </div>
         `)
 
@@ -81,11 +81,11 @@ describe('renderToStream — out-of-order SSR streaming', () => {
     test('a rejected await streams its catch branch', async () => {
         const chunks = await collect(`
             <script>let boom = () => Promise.reject('nope')</script>
-            <template await={boom()}>
+            {#await boom()}
                 <p>loading</p>
-                <template then="v"><span>{v}</span></template>
-                <template catch="e"><i>{e}</i></template>
-            </template>
+                {:then v}<span>{v}</span>
+                {:catch e}<i>{e}</i>
+            {/await}
         `)
         expect(chunks[0]).toContain('<!--abide:await:0--><p>loading</p><!--/abide:await:0-->')
         expect(chunks[1]).toBe(
@@ -108,7 +108,7 @@ describe('renderToStream — out-of-order SSR streaming', () => {
         const chunks = await collect(`
             <script>let load = () => Promise.resolve('VAL')</script>
             <div>
-                <template await={load()} then="v"><span>{v}</span></template>
+                {#await load() then v}<span>{v}</span>{/await}
             </div>
         `)
         expect(chunks).toHaveLength(1)
@@ -123,7 +123,7 @@ describe('renderToStream — out-of-order SSR streaming', () => {
         const chunks = await collect(`
             <script>let load = () => Promise.resolve('price $9 $& $\` $0 off')</script>
             <div>
-                <template await={load()} then="v"><span>{v}</span></template>
+                {#await load() then v}<span>{v}</span>{/await}
             </div>
         `)
         expect(chunks).toHaveLength(1)
@@ -135,10 +135,10 @@ describe('renderToStream — out-of-order SSR streaming', () => {
     test('a blocking await renders its catch branch on rejection, still pre-flush', async () => {
         const chunks = await collect(`
             <script>let boom = () => Promise.reject('nope')</script>
-            <template await={boom()} then="v">
+            {#await boom() then v}
                 <span>{v}</span>
-                <template catch="e"><i>{e}</i></template>
-            </template>
+                {:catch e}<i>{e}</i>
+            {/await}
         `)
         expect(chunks).toHaveLength(1)
         expect(chunks[0]).toContain('<!--abide:await:0--><i>nope</i><!--/abide:await:0-->')
@@ -154,11 +154,11 @@ describe('renderToStream — out-of-order SSR streaming', () => {
                 let streamingLoad = () => Promise.resolve('LATER')
             </script>
             <div>
-                <template await={blockingLoad()} then="v"><b>{v}</b></template>
-                <template await={streamingLoad()}>
+                {#await blockingLoad() then v}<b>{v}</b>{/await}
+                {#await streamingLoad()}
                     <p>loading</p>
-                    <template then="v"><span>{v}</span></template>
-                </template>
+                    {:then v}<span>{v}</span>
+                {/await}
             </div>
         `)
         expect(chunks[0]).toContain('<!--abide:await:0--><b>NOW</b><!--/abide:await:0-->')

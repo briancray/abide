@@ -105,12 +105,12 @@ const leaves: Array<{ name: string; make: () => Fragment }> = [
     { name: 'interleaved-text', make: () => ({ html: `<b>x</b>{label}<b>y</b>`, text: 'xhiy' }) },
     {
         name: 'nested-block',
-        make: () => ({ html: `<template if={active}><span>z</span></template>`, text: 'z' }),
+        make: () => ({ html: `{#if active}<span>z</span>{/if}`, text: 'z' }),
     },
     {
         name: 'component-block-slot',
         make: () => ({
-            html: `<Box><template if={active}><span>q</span></template></Box>`,
+            html: `<Box>{#if active}<span>q</span>{/if}</Box>`,
             text: 'q',
         }),
     },
@@ -123,14 +123,14 @@ const boundaries: Array<{ name: string; wrap: (inner: Fragment) => Fragment }> =
     {
         name: 'if-true',
         wrap: (inner) => ({
-            html: `<template if={active}>${inner.html}</template>`,
+            html: `{#if active}${inner.html}{/if}`,
             text: inner.text,
         }),
     },
     {
         name: 'if-else',
         wrap: (inner) => ({
-            html: `<template if={inactive}><i>D</i><template else>${inner.html}</template></template>`,
+            html: `{#if inactive}<i>D</i>{:else}${inner.html}{/if}`,
             text: inner.text,
         }),
     },
@@ -141,7 +141,7 @@ const boundaries: Array<{ name: string; wrap: (inner: Fragment) => Fragment }> =
     {
         name: 'each-row',
         wrap: (inner) => ({
-            html: `<template each={items} as="it" key="it">${inner.html}</template>`,
+            html: `{#for it of items by it}${inner.html}{/for}`,
             text: inner.text.repeat(2),
         }),
     },
@@ -155,16 +155,14 @@ const boundaries: Array<{ name: string; wrap: (inner: Fragment) => Fragment }> =
     {
         name: 'switch-case',
         wrap: (inner) => ({
-            html:
-                `<template switch={label}><template case="'hi'">${inner.html}</template>` +
-                `<template default><i>D</i></template></template>`,
+            html: `{#switch label}{:case 'hi'}${inner.html}` + `{:default}<i>D</i>{/switch}`,
             text: inner.text,
         }),
     },
     {
         name: 'try-body',
         wrap: (inner) => ({
-            html: `<template try>${inner.html}<template catch="err"><i>{err}</i></template></template>`,
+            html: `{#try}${inner.html}{:catch err}<i>{err}</i>{/try}`,
             text: inner.text,
         }),
     },
@@ -213,7 +211,7 @@ const corpus = contexts.flatMap((context) =>
    a hard desync rather than silently misplacing content under a coincidentally-equal
    visible text — the failure mode that masked the bug from a softer `if` sentinel. */
 const SENTINEL: Fragment = {
-    html: `<template each={items} as="it" key="it"><em>{it}</em></template>`,
+    html: `{#for it of items by it}<em>{it}</em>{/for}`,
     text: 'mn',
 }
 
