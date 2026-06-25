@@ -8,11 +8,12 @@ type ChatMessage = { id: string; role: 'user' | 'assistant'; text: string }
 // A tool call surfaced from the stream; `ok` lands later from its tool_result frame.
 type ToolCall = { id: string; name: string; input: unknown; ok?: boolean }
 
-let messages = scope().state<ChatMessage[]>([])
-let toolCalls = scope().state<ToolCall[]>([])
-let draft = scope().state('Which tools can you call? Use one and show me the result.')
-let streaming = scope().state(false)
-let error = scope().state(undefined)
+let messages = state<ChatMessage[]>([])
+let toolCalls = state<ToolCall[]>([])
+const { state } = scope()
+let draft = state('Which tools can you call? Use one and show me the result.')
+let streaming = state(false)
+let error = state(undefined)
 
 /* POST the running transcript, then read the JSONL response frame-by-frame,
    folding each AgentFrame into the live assistant turn. */

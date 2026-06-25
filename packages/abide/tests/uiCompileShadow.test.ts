@@ -69,8 +69,10 @@ describe('compileShadow', () => {
     })
 
     test('checks child props against the imported component', () => {
-        expect(code).toContain('Parameters<typeof Child>[0]["name"]')
-        expect(code).toContain('(title)')
+        /* A spread-free mount checks all data props as one object literal typed to the
+           child's whole prop shape — so missing/excess/wrong-type are all caught. */
+        expect(code).toContain('((__c: Parameters<typeof Child>[0]): void => { void __c })({')
+        expect(code).toContain('name: (title)')
     })
 
     test('checks a {...spread} against a Partial of the child props', () => {

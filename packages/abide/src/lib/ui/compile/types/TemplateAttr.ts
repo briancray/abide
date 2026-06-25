@@ -13,8 +13,8 @@ absolute offset of `code` in the original `.abide` source (see TextPart) —
 optional, set only when the parser tracks positions for the type-checking shadow.
 */
 export type TemplateAttr =
-    | { kind: 'static'; name: string; value: string; bare?: true }
-    | { kind: 'expression'; name: string; code: string; loc?: number }
+    | { kind: 'static'; name: string; value: string; bare?: true; nameLoc?: number }
+    | { kind: 'expression'; name: string; code: string; loc?: number; nameLoc?: number }
     | { kind: 'event'; event: string; code: string; loc?: number }
     | { kind: 'bind'; property: string; code: string; loc?: number }
     | { kind: 'attach'; code: string; loc?: number }

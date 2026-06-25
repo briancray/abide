@@ -6,8 +6,9 @@ import CodeBlock from '$ui/CodeBlock.abide'
 /* Both reads are reactive: the computed re-runs when online/offline events fire
    (online) or a poll lands (health). Reading health() opens the poll. Both ran
    during SSR, so the payload rode the document and hydration seeds from __SSR__. */
-const connected = scope().computed(() => online())
-const backend = scope().computed(() => health())
+const { computed } = scope()
+const connected = computed(() => online())
+const backend = computed(() => health())
 </script>
 
 <h1 class="text-3xl font-bold">

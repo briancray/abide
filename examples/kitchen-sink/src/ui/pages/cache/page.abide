@@ -12,9 +12,10 @@ import CodeBlock from '$ui/CodeBlock.abide'
 
 /* Two reads against the same cache key + scope share one entry, so any invalidation
    re-runs both. `counter` streams; `mirror` is a second read of the same entry. */
-const counter = scope().computed(() => cache(getCounter, { tags: 'counter' })())
-const mirror = scope().computed(() => cache(getCounter, { tags: 'counter' })())
-const loading = scope().computed(() => pending(getCounter))
+const { computed } = scope()
+const counter = computed(() => cache(getCounter, { tags: 'counter' })())
+const mirror = computed(() => cache(getCounter, { tags: 'counter' })())
+const loading = computed(() => pending(getCounter))
 
 async function increment() {
     await incrementCounter()
@@ -28,7 +29,7 @@ async function reset() {
 /* Event-driven invalidation: a chat frame stales the chat count. cache.on returns
    a dispose; effect runs it client-side (no-op during SSR). */
 effect(() => cache.on(chat, (_message, { invalidate }) => invalidate(getChatCount)))
-const chatCount = scope().computed(() => cache(getChatCount)())
+const chatCount = computed(() => cache(getChatCount)())
 
 /* patch: the frame IS the new data — fold it into the cached list, no refetch. */
 effect(() =>
@@ -36,7 +37,7 @@ effect(() =>
         patch(getChatLog, (log) => ({ messages: [...log.messages, message].slice(-20) }))
     }),
 )
-const chatLog = scope().computed(() => cache(getChatLog)())
+const chatLog = computed(() => cache(getChatLog)())
 </script>
 
 <h1 class="text-3xl font-bold"><code class="font-mono">cache()</code></h1>

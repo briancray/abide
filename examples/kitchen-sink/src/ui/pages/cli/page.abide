@@ -1,13 +1,13 @@
 <script>
 import CodeBlock from '$ui/CodeBlock.abide'
-
-let installer = scope().state('(not fetched)')
+const { state } = scope()
+let installer = state('(not fetched)')
 async function fetchInstaller() {
     const response = await fetch('/__abide/cli')
     installer = await response.text()
 }
 
-let identity = scope().state('(not probed)')
+let identity = state('(not probed)')
 async function probeHealth() {
     const response = await fetch('/__abide/health')
     identity = JSON.stringify(await response.json())

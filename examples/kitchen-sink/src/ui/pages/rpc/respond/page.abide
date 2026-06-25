@@ -5,10 +5,10 @@ import { getProduct } from '$server/rpc/getProduct.ts'
 import { redirectExample } from '$server/rpc/redirectExample.ts'
 import CodeBlock from '$ui/CodeBlock.abide'
 import RpcHeader from '$ui/RpcHeader.abide'
-
-let jsonOutcome = scope().state('(not called)')
-let errorOutcome = scope().state('(not called)')
-let redirectOutcome = scope().state('(not called)')
+const { state } = scope()
+let jsonOutcome = state('(not called)')
+let errorOutcome = state('(not called)')
+let redirectOutcome = state('(not called)')
 
 async function callJson() {
     const value = await getEcho({ message: 'json()' })

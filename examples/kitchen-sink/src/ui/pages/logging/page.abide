@@ -8,14 +8,14 @@ import CodeBlock from '$ui/CodeBlock.abide'
    trace stamped into __SSR__ — the traceparent of the request that rendered this page. */
 const pageTrace = trace()
 const demoChannel = log.channel('kitchen-sink:demo')
-
-let channelArmed = scope().state(false)
+const { state } = scope()
+let channelArmed = state(false)
 function armChannel() {
     localStorage.setItem('abide-debug', 'kitchen-sink:demo')
     channelArmed = true
 }
 
-let traced = scope().state('(not run)')
+let traced = state('(not run)')
 async function runTraced() {
     const rates = await log.trace('fetch rates', () => getRates({ base: 'USD' }))
     traced = `1 USD = ${rates.rates.EUR} EUR — duration logged`

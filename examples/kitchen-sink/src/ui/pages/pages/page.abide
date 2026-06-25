@@ -5,14 +5,15 @@ import { navigate } from '@abide/abide/ui/navigate'
 import CodeBlock from '$ui/CodeBlock.abide'
 
 /* page.url is reassigned on every navigation, so reading it inside a computed re-runs. */
-const currentPath = scope().computed(() => page.url.pathname)
-const navigating = scope().computed(() => page.navigating)
+const { state, computed } = scope()
+const currentPath = computed(() => page.url.pathname)
+const navigating = computed(() => page.navigating)
 
-let productId = scope().state('2')
-const rpcHref = scope().computed(() => url('/rpc/getProduct', { id: productId }))
-const pageHref = scope().computed(() => url('/pages/product/[id]', { id: productId }))
-const assetHref = scope().computed(() => url('/robots.txt'))
-const externalHref = scope().computed(() => url('https://bun.sh', { utm: 'abide' }))
+let productId = state('2')
+const rpcHref = computed(() => url('/rpc/getProduct', { id: productId }))
+const pageHref = computed(() => url('/pages/product/[id]', { id: productId }))
+const assetHref = computed(() => url('/robots.txt'))
+const externalHref = computed(() => url('https://bun.sh', { utm: 'abide' }))
 </script>
 
 <h1 class="text-3xl font-bold">Pages</h1>

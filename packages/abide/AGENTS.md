@@ -106,7 +106,8 @@ iteration is the live stream, `.tail(count?)` seeds from retention,
 
 **Page / layout** — a `[id]` folder segment becomes `page.params.id`. A layout's
 `<slot/>` is the outlet the next layer fills. Read `page` (route, params, url,
-navigating) and call `navigate(path)` for SPA transitions.
+navigating) and call `navigate(path)` (or `navigate('/p/[id]', { id })` for a route
+with params) for SPA transitions.
 
 **App / config** — `src/app.ts` default-exports an `AppModule`;
 `src/server/config.ts` runs `env(schema)` at boot.
@@ -122,15 +123,23 @@ optional component-scoped `<style>`. Control flow is `{#…}` blocks (Svelte-fre
 HTML). Ambient in-scope names need no import: `scope`, `props` / `prop`,
 `effect`, `html`, `snippet`.
 
-**Reactive state**
+**Reactive state** — destructure the primitives off `scope()` once at the top, the
+documented default (`const { state, computed, linked } = scope()`), then call them
+bare (`const count = state(0)`); `scope().state(v)` and a captured handle
+(`const s = scope(); s.state(v)`) are equivalent — receiver-agnostic, the method name
+marks the binding reactive. A bare `state(v)` with no `scope()` destructure in scope is
+a compile error. Reach for `scope(address).state(v)` only to target a non-current scope.
 
 | Form                               | Meaning                                                                            |
 | ---------------------------------- | ---------------------------------------------------------------------------------- |
-| `scope().state(v)`                 | Writable reactive cell (`{ value }`); the sole writable surface.                   |
-| `scope().computed(fn)`             | Read-only derived cell; re-runs when its reads change.                             |
-| `scope().linked(initial, reseed?)` | Cell bound to a reactive-document path; reflects/drives the root doc.              |
+| `state(v)`                         | Writable reactive cell (`{ value }`); the sole writable surface.                   |
+| `computed(fn)`                     | Read-only derived cell; re-runs when its reads change.                             |
+| `linked(initial, reseed?)`         | Cell bound to a reactive-document path; reflects/drives the root doc.              |
 | `effect(fn)`                       | Runs now, re-runs on dep change; may return a teardown; returns a disposer.        |
 | `props()` / `prop(name)`           | Read the component's props (thunks for reactivity), e.g. `const { id } = props()`. |
+
+`scope()` also destructures its capability methods — `undo` / `redo` / `canUndo` /
+`canRedo` / `record` / `persist` / `broadcast` — used bare the same way.
 
 **Bindings**
 
@@ -277,7 +286,7 @@ shadow same-named component state inside the block.
 
 ### Navigate — @documentation navigate
 
-- `@abide/abide/ui/navigate` — `navigate(path, { replace?, keepScroll? })`: client navigation; writes history and re-mounts the page chain.
+- `@abide/abide/ui/navigate` — `navigate(path, params?, { replace?, keepScroll? })`: client navigation; route literals with `[name]` segments take typed params, built base-correct through `url()` (a dynamic `/p/${id}` falls through its paramless branch); writes history and re-mounts the page chain.
 
 ### UI — @documentation ui
 

@@ -6,13 +6,13 @@ import { getReport } from '$server/rpc/getReport.ts'
 import { tickFeed } from '$server/rpc/tickFeed.ts'
 import CodeBlock from '$ui/CodeBlock.abide'
 import RpcHeader from '$ui/RpcHeader.abide'
-
-let decoded = scope().state('(not called)')
-let raw = scope().state('(not called)')
-let plainBody = scope().state('(not called)')
+const { state, computed } = scope()
+let decoded = state('(not called)')
+let raw = state('(not called)')
+let plainBody = state('(not called)')
 type StreamFrame = { n: number; text: string }
 
-let streamFrames = scope().state<StreamFrame[]>([])
+let streamFrames = state<StreamFrame[]>([])
 
 async function readDecoded() {
     const body = await getEcho({ message: 'hello' })
@@ -41,7 +41,7 @@ async function callPlainFetch() {
     plainBody = `status=${response.status} body=${await response.text()}`
 }
 
-const cachedRaw = scope().computed(() => cache(getReport.raw)({ id: 'r-1' }))
+const cachedRaw = computed(() => cache(getReport.raw)({ id: 'r-1' }))
 </script>
 
 <RpcHeader />

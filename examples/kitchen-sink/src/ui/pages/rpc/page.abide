@@ -13,10 +13,11 @@ import RpcHeader from '$ui/RpcHeader.abide'
 
 type LogEntry = { id: number; verb: string; outcome: string }
 
-let log = scope().state<LogEntry[]>([])
-let message = scope().state('hello')
-let celsius = scope().state(100)
-let converted = scope().state('(not called)')
+let log = state<LogEntry[]>([])
+const { state } = scope()
+let message = state('hello')
+let celsius = state(100)
+let converted = state('(not called)')
 let seq = 0
 
 async function convert() {

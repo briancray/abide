@@ -178,6 +178,25 @@ describe('explicit scope().X authoring surface', () => {
         expect(body).toContain('total()')
     })
 
+    test('destructured scope primitives lower identically to the call form', () => {
+        const body = compileComponent(`
+            <script>
+                const { state, computed, linked } = scope()
+                const count = state(0)
+                const qty = state(1, (n) => Math.max(1, n))
+                const draft = linked(() => count)
+                const total = computed(() => count + 1)
+            </script>
+            <p>{count}{qty}{draft}{total}</p>
+        `)
+        expect(body).toContain('model.replace("count", 0)') // plain state → doc slot
+        expect(body).toContain('const qty = scope().state(1, (n) => Math.max(1, n))')
+        expect(body).toContain('qty.value')
+        expect(body).toContain('const draft = scope().linked(() => model.read("count"))')
+        expect(body).toContain('scope().derive("total"')
+        expect(body).toContain('total()')
+    })
+
     test('a bare reactive call is a compile error pointing at scope()', () => {
         for (const primitive of ['state', 'linked', 'computed']) {
             const source = `<script>const x = ${primitive}(0)</script><p>{x}</p>`
@@ -187,5 +206,18 @@ describe('explicit scope().X authoring surface', () => {
         expect(() =>
             compileComponent(`<script>const { id } = props()</script><p>{id}</p>`),
         ).not.toThrow()
+    })
+
+    /* A primitive destructured from scope() at the top is scope-bound — calling it bare
+       below is allowed; an undestructured bare call is still the genuine mistake. */
+    test('a destructured primitive used bare does not trip the scope() guard', () => {
+        expect(() =>
+            compileComponent(
+                `<script>const { state } = scope()\nconst x = state(0)</script><p>{x}</p>`,
+            ),
+        ).not.toThrow()
+        expect(() => compileComponent(`<script>const x = state(0)</script><p>{x}</p>`)).toThrow(
+            /lives on a scope/,
+        )
     })
 })

@@ -3,7 +3,7 @@ import { fillBoundary } from './dom/fillBoundary.ts'
 import { outlet } from './dom/outlet.ts'
 import { effect } from './effect.ts'
 import { matchRoute } from './matchRoute.ts'
-import { navigate } from './navigate.ts'
+import { navigatePath } from './navigate.ts'
 import { clientPage } from './runtime/clientPage.ts'
 import { enterRenderPass } from './runtime/enterRenderPass.ts'
 import { exitRenderPass } from './runtime/exitRenderPass.ts'
@@ -294,7 +294,7 @@ export function router(
         event.preventDefault()
         /* Carry the query and hash, not just the pathname, so the destination page's
            page.url sees them and an SPA navigation matches a fresh server load. */
-        navigate(destination.pathname + destination.search + destination.hash)
+        navigatePath(destination.pathname + destination.search + destination.hash)
     }
     if (typeof window !== 'undefined') {
         /* Own scroll restoration: the browser would restore against the pre-teardown
@@ -399,7 +399,7 @@ export function router(
                     /* handle() redirected: go where it pointed, replacing the blocked
                    URL so back doesn't trap on it. The router re-probes the target. */
                     if (decision.kind === 'redirect') {
-                        navigate(decision.path, { replace: true })
+                        navigatePath(decision.path, { replace: true })
                         return
                     }
                     /* handle() blocked it / redirected off-origin / the probe failed:

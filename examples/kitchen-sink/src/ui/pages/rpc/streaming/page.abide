@@ -6,8 +6,9 @@ import RpcHeader from '$ui/RpcHeader.abide'
 
 type StreamFrame = { n: number; text: string }
 
-let sseFrames = scope().state<StreamFrame[]>([])
-let jsonlFrames = scope().state<StreamFrame[]>([])
+const { state } = scope()
+let sseFrames = state<StreamFrame[]>([])
+let jsonlFrames = state<StreamFrame[]>([])
 
 function runSse() {
     sseFrames = []

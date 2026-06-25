@@ -111,15 +111,16 @@ import { chat } from '$server/sockets/chat.ts'
 import Avatar from '$ui/Avatar.abide'
 
 const { room } = props()
+const { state, computed } = scope()
 
 // warm on the server, live on the client
-const history = scope().computed(() => cache(getMessages)({ room }))
-const latest = scope().computed(() => tail(chat))
+const history = computed(() => cache(getMessages)({ room }))
+const latest = computed(() => tail(chat))
 
-let from = scope().state('alice')
-let text = scope().state('')
-let pinned = scope().state(false)
-let view = scope().state('all')
+let from = state('alice')
+let text = state('')
+let pinned = state(false)
+let view = state('all')
 
 async function send() {
     await publishChat({ from, text })

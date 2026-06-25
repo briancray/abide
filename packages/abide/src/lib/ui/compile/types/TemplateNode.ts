@@ -72,9 +72,13 @@ export type TemplateNode =
     | {
           kind: 'component'
           name: string
+          /* Source offset of the tag name — the anchor for a whole-mount diagnostic
+             (a missing required prop, which has no supplied expression to point at). */
+          loc?: number
           /* Each authored attribute as a prop. A `spread` entry (`{...code}`) carries no
-             `name`; its keys merge in at runtime (`mergeProps`/`spreadProps`). */
-          props: { name: string; code: string; loc?: number; spread?: boolean }[]
+             `name`; its keys merge in at runtime (`mergeProps`/`spreadProps`). `nameLoc` is
+             the prop name's source offset — the anchor for an excess-prop diagnostic. */
+          props: { name: string; code: string; loc?: number; nameLoc?: number; spread?: boolean }[]
           children: TemplateNode[]
       }
     | { kind: 'switch'; subject: string; children: TemplateNode[]; loc?: number }

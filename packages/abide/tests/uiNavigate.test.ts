@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { navigate } from '../src/lib/ui/navigate.ts'
 import { historyEntries } from '../src/lib/ui/runtime/historyEntries.ts'
+import { runtimePath } from '../src/lib/ui/runtime/runtimePath.ts'
 
 /* navigate writes to the `history` global (absent in Bun) and saves scroll off
    globalThis. Install capturing stubs for both, then restore them so the mini-dom
@@ -54,6 +55,23 @@ describe('navigate — history-entry identity + scroll capture', () => {
 
         navigate('/b', { replace: true }) // replace honouring a redirect — same history position
         expect((globals.history as { state: EntryState }).state.abideEntry).toBe(first + 1)
+    })
+
+    test('a route literal with [name] params interpolates through url() into the path', () => {
+        navigate('/pages/product/[id]', { id: 7 })
+        expect(runtimePath.value).toBe('/pages/product/7')
+        expect((globals.history as { state: { abideEntry: number } }).state).toBeTruthy()
+    })
+
+    test('a paramless path with options still writes the path verbatim (root mount)', () => {
+        navigate('/pages', { replace: true })
+        expect(runtimePath.value).toBe('/pages')
+    })
+
+    test('an already-interpolated dynamic path passes through like url()', () => {
+        const candidate = 42
+        navigate(`/pages/product/${candidate}`)
+        expect(runtimePath.value).toBe('/pages/product/42')
     })
 
     test('the outgoing scroll is bucketed before history moves, restorable on return', () => {

@@ -359,23 +359,27 @@ function emitNode(node: TemplateNode, builder: Builder): void {
             emitNodes(node.children, builder)
             return
         case 'component': {
-            /* Check each prop against the child's declared type. The imported tag
-               resolves (via the shadow host) to the child's `(props: Props) => …`
-               default, so `Parameters<typeof Child>[0]["name"]` is that prop's type;
-               assigning the mapped value to it lands a mismatch diagnostic on the
-               offending expression (an annotated target reports the error on the RHS,
-               unlike an object literal which reports it on the key). */
-            for (const prop of node.props) {
-                /* Lead with a defensive `;`: this IIFE is the one shadow emission that
-                   starts with `(`, so without it a preceding scope statement left
-                   unterminated (a script ending in a call with no trailing semicolon,
-                   e.g. `effect(() => …)`) merges across the newline into `effect(…)(…)`
-                   — a spurious "not callable" on the author's last statement. */
+            /* The imported tag resolves (via the shadow host) to the child's
+               `(props: Props) => …` default, so `Parameters<typeof Child>[0]` is its prop
+               shape. `on*` / `bind:` / `attach` props are framework-handled passthrough
+               (not part of the declared shape), so they are checked leniently — each value
+               against its own declared key type — never flagged as excess. */
+            const handled = (prop: { name: string; spread?: boolean }): boolean =>
+                prop.spread === true ||
+                prop.name.startsWith('on') ||
+                prop.name.startsWith('bind:') ||
+                prop.name === 'attach'
+            const hasSpread = node.props.some((prop) => prop.spread)
+            for (const prop of node.props.filter(handled)) {
+                /* Lead with a defensive `;`: an IIFE/object-literal arg starts with `(` or
+                   `{`, so without it a preceding scope statement left unterminated (a script
+                   ending in a call with no trailing semicolon, e.g. `effect(() => …)`)
+                   merges across the newline into `effect(…)(…)` — a spurious "not callable". */
                 if (prop.spread) {
                     /* A `{...expr}` spread contributes a SUBSET of the props (required ones
                        may come from another spread/explicit prop), so check it against
-                       `Partial<Props>` — every key it does carry must match the child's
-                       declared type, without demanding completeness. */
+                       `Partial<Props>` — every key it does carry must match, without
+                       demanding completeness. */
                     builder.raw(`;((__spread: Partial<Parameters<typeof ${node.name}>[0]>) => {})(`)
                 } else {
                     builder.raw(
@@ -384,6 +388,43 @@ function emitNode(node: TemplateNode, builder: Builder): void {
                 }
                 builder.expr(prop.code, prop.loc)
                 builder.raw(');\n')
+            }
+            /* The plain data props as one object-literal argument typed to the child's whole
+               prop shape: a missing required prop errors on the literal (anchored at the tag
+               via the mapped `{`), an unknown prop errors on its key, a wrong type on its
+               value. Skipped when a spread is present — a spread may supply required props,
+               so completeness can't be demanded; the data props fall back to lenient per-key
+               checks instead. */
+            const dataProps = node.props.filter((prop) => !handled(prop))
+            if (hasSpread) {
+                for (const prop of dataProps) {
+                    builder.raw(
+                        `;((__prop: Parameters<typeof ${node.name}>[0][${JSON.stringify(prop.name)}]) => {})(`,
+                    )
+                    builder.expr(prop.code, prop.loc)
+                    builder.raw(');\n')
+                }
+            } else {
+                builder.raw(`;((__c: Parameters<typeof ${node.name}>[0]): void => { void __c })({`)
+                /* A zero-length anchor right after `{`, pointing at the tag: a missing-
+                   required-prop error spans the literal from `{`, so it overlaps this and
+                   maps to the tag (an empty span trivially satisfies the source-text ==
+                   shadow-text invariant). */
+                builder.mapped('', node.loc)
+                builder.raw('\n')
+                for (const prop of dataProps) {
+                    /* The key mapped to its source name (excess-prop errors land on the key);
+                       the value verbatim-mapped (wrong-type errors land on the value). */
+                    if (prop.nameLoc !== undefined) {
+                        builder.mapped(prop.name, prop.nameLoc)
+                    } else {
+                        builder.raw(prop.name)
+                    }
+                    builder.raw(': ')
+                    builder.expr(prop.code, prop.loc)
+                    builder.raw(',\n')
+                }
+                builder.raw('});\n')
             }
             emitNodes(node.children, builder)
             return

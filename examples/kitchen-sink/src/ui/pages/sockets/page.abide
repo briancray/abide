@@ -3,17 +3,17 @@ import { tail } from '@abide/abide/ui/tail'
 import { publishChat } from '$server/rpc/publishChat.ts'
 import { chat } from '$server/sockets/chat.ts'
 import CodeBlock from '$ui/CodeBlock.abide'
+const { state, computed } = scope()
+const latest = computed(() => tail(chat))
 
-const latest = scope().computed(() => tail(chat))
-
-let from = scope().state('alice')
-let text = scope().state('hello socket!')
+let from = state('alice')
+let text = state('hello socket!')
 async function send() {
     await publishChat({ from, text })
 }
 
-let restTail = scope().state('(not fetched)')
-let restPublish = scope().state('(not tried)')
+let restTail = state('(not fetched)')
+let restPublish = state('(not tried)')
 
 async function fetchRestTail() {
     const response = await fetch('/__abide/sockets/chat?tail=3')

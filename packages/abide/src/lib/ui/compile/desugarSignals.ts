@@ -8,14 +8,47 @@ const factory = ts.factory
    it (`scope().state(...)`), so a reader always sees the scope interaction. */
 const SCOPE_PRIMITIVES: ReadonlySet<string> = new Set(['state', 'linked', 'computed'])
 
+/* The primitive names a top-level `const { state, computed } = scope()` destructure binds.
+   Such a name is scope-bound — its bare call below is the destructured method, not a stray
+   global — so it is exempt from the bare-primitive error. Only a destructure of a `scope()`
+   call counts (receiver-agnostic on the callee name, matching signalCallee); an aliased
+   binding (`{ state: s }`) is not recognised, so the canonical name must be kept. */
+function scopeDestructuredPrimitives(source: ts.SourceFile): Set<string> {
+    const bound = new Set<string>()
+    for (const statement of source.statements) {
+        if (!ts.isVariableStatement(statement)) {
+            continue
+        }
+        for (const declaration of statement.declarationList.declarations) {
+            if (
+                signalCallee(declaration) === 'scope' &&
+                ts.isObjectBindingPattern(declaration.name)
+            ) {
+                for (const element of declaration.name.elements) {
+                    if (
+                        element.propertyName === undefined &&
+                        ts.isIdentifier(element.name) &&
+                        SCOPE_PRIMITIVES.has(element.name.text)
+                    ) {
+                        bound.add(element.name.text)
+                    }
+                }
+            }
+        }
+    }
+    return bound
+}
+
 /* Throws on a bare scope primitive (`state(0)` instead of `scope().state(0)`) or on the
    removed `prop(...)` reader — props are now read by destructuring `props()`. Walks all
-   calls, so a stray one nested in a function is caught too, not just top-level declarations. */
+   calls, so a stray one nested in a function is caught too, not just top-level declarations.
+   A primitive destructured from `scope()` at the top is scope-bound and exempt. */
 function assertScopedPrimitives(source: ts.SourceFile): void {
+    const scopeBound = scopeDestructuredPrimitives(source)
     const visit = (node: ts.Node): void => {
         if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
             const name = node.expression.text
-            if (SCOPE_PRIMITIVES.has(name)) {
+            if (SCOPE_PRIMITIVES.has(name) && !scopeBound.has(name)) {
                 throw new Error(
                     `abide: bare \`${name}(...)\` is not allowed — reactive state lives on a scope. Use \`scope().${name}(...)\` (or a captured handle: \`const s = scope(); s.${name}(...)\`).`,
                 )

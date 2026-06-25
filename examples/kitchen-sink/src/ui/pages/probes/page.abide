@@ -9,18 +9,19 @@ import CodeBlock from '$ui/CodeBlock.abide'
 /* Mutation idiom: ttl 0 retains nothing, so the wrap buys double-submit coalescing
    plus probe visibility — pending(createEcho) is true from anywhere while in flight. */
 const submit = cache(createEcho, { ttl: 0 })
-let message = scope().state('hello probes')
-let echoed = scope().state('')
+const { state, computed } = scope()
+let message = state('hello probes')
+let echoed = state('')
 async function send() {
     const result = await submit({ message })
     echoed = result.message
 }
-const submitting = scope().computed(() => pending(createEcho))
+const submitting = computed(() => pending(createEcho))
 
 /* Stale-while-revalidate: the debounce policy keeps the entry and coalesces the
    refetch — stale rates stay on screen while refreshing(...) is true. */
-const rates = scope().computed(() => cache(getRates, { swr: { debounce: 300 } })({ base: 'USD' }))
-const updating = scope().computed(() => refreshing(getRates, { base: 'USD' }))
+const rates = computed(() => cache(getRates, { swr: { debounce: 300 } })({ base: 'USD' }))
+const updating = computed(() => refreshing(getRates, { base: 'USD' }))
 </script>
 
 <h1 class="text-3xl font-bold">

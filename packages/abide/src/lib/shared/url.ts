@@ -47,7 +47,7 @@ no bracket segments yields {}, which collapses the params slot away. The
 catch-all branch recurses on its head too, so `[name]` segments before a
 `[...rest]` are kept.
 */
-type PathParams<P extends string> = P extends `${infer Head}[...${infer Rest}]${infer Tail}`
+export type PathParams<P extends string> = P extends `${infer Head}[...${infer Rest}]${infer Tail}`
     ? PathParams<Head> & { [K in Rest]: string | number } & PathParams<Tail>
     : P extends `${string}[${infer Name}]${infer Tail}`
       ? { [K in Name]: string | number } & PathParams<Tail>

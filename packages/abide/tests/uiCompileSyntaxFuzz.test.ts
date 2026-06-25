@@ -89,6 +89,10 @@ const onClick = () => { const { count: c } = window; count(c) }</script><button 
 const obj = scope().computed(() => ({ [k]: 1 }))</script><i>{obj[k]}</i>`,
         'nullish-coalescing in a binding': `<script>const name = scope().state('')</script><i>{name ?? 'anon'}</i>`,
         'increment in an event handler': `<script>const n = scope().state(0)</script><button on:click={n++}>count {n}</button>`,
+        'destructured scope primitives used bare': `<script>const { state, computed, linked } = scope()
+const count = state(0)
+const draft = linked(() => count)
+const total = computed(() => count + 1)</script><p>{count}{draft}{total}</p>`,
     }
     for (const [label, source] of Object.entries(componentCorpus)) {
         test(label, () => {

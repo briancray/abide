@@ -453,6 +453,7 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
                 continue
             }
             let name = ''
+            const nameLoc = baseOffset + cursor // absolute offset of the attribute name
             while (cursor < source.length && !/[\s=>/]/.test(source.charAt(cursor))) {
                 name += source.charAt(cursor)
                 cursor += 1
@@ -461,7 +462,7 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
                 cursor += 1
             }
             if (source.charAt(cursor) !== '=') {
-                attrs.push({ kind: 'static', name, value: '', bare: true }) // boolean attribute
+                attrs.push({ kind: 'static', name, value: '', bare: true, nameLoc }) // boolean attribute
                 continue
             }
             cursor += 1 // past '='
@@ -477,7 +478,7 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
                 } else if (name === 'attach') {
                     attrs.push({ kind: 'attach', code, loc })
                 } else {
-                    attrs.push({ kind: 'expression', name, code, loc })
+                    attrs.push({ kind: 'expression', name, code, loc, nameLoc })
                 }
             } else if (source.charAt(cursor) === '"' || source.charAt(cursor) === "'") {
                 const quote = source.charAt(cursor)
@@ -488,7 +489,7 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
                     cursor += 1
                 }
                 cursor += 1 // past closing quote
-                attrs.push({ kind: 'static', name, value })
+                attrs.push({ kind: 'static', name, value, nameLoc })
             } else {
                 /* Unquoted value (`<input type=text>`): runs to the next whitespace or
                    `>`, per the HTML unquoted-attribute rule. No delimiter to consume. */
@@ -512,6 +513,7 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
     function readElement(): TemplateNode {
         cursor += 1 // past '<'
         let tag = ''
+        const tagStart = cursor // absolute (baseOffset-relative) offset of the tag name
         while (cursor < source.length && !/[\s>/]/.test(source.charAt(cursor))) {
             tag += source.charAt(cursor)
             cursor += 1
@@ -549,7 +551,13 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
            its children become slot content (rendered where the child puts <slot>). */
         if (/^[A-Z]/.test(tag)) {
             const slotted = selfClosing ? [] : readChildren(tag)
-            return { kind: 'component', name: tag, props: toProps(attrs), children: slotted }
+            return {
+                kind: 'component',
+                name: tag,
+                loc: baseOffset + tagStart,
+                props: toProps(attrs),
+                children: slotted,
+            }
         }
         /* `{...expr}` spreads onto a component (its props) or a native element (its
            attributes), but a `<template>` directive has no such bag — reject it there. */
@@ -874,7 +882,7 @@ function rejectMisplacedBranchContent(
    letting a prop hold any value, functions included (e.g. an `onclick` callback). */
 function toProps(
     attrs: TemplateAttr[],
-): { name: string; code: string; loc?: number; spread?: boolean }[] {
+): { name: string; code: string; loc?: number; nameLoc?: number; spread?: boolean }[] {
     return attrs.map((attr) => {
         /* A `{...expr}` spread carries no name — its keys merge in at runtime
            (`mergeProps`/`spreadProps`); `spread: true` marks it for the back-ends. */
@@ -885,7 +893,11 @@ function toProps(
             /* A bare attribute (`<Toggle on />`) is a boolean flag: coerce it to
                `true` so the prop reads as a boolean, not the empty string a native
                element would serialise. An explicit `on=""` stays the empty string. */
-            return { name: attr.name, code: attr.bare ? 'true' : JSON.stringify(attr.value) }
+            return {
+                name: attr.name,
+                code: attr.bare ? 'true' : JSON.stringify(attr.value),
+                nameLoc: attr.nameLoc,
+            }
         }
         /* Every non-static kind keeps its `code`/`loc`; only the prop name differs —
            a directive (`event`/`bind`/`attach`) round-trips to its written name. */
@@ -897,7 +909,10 @@ function toProps(
                   : attr.kind === 'attach'
                     ? 'attach'
                     : attr.name
-        return { name, code: attr.code, loc: attr.loc }
+        /* Only `expression` carries a name offset; event/bind/attach are framework-handled
+           passthrough excluded from the strict prop check, so theirs is unused. */
+        const nameLoc = attr.kind === 'expression' ? attr.nameLoc : undefined
+        return { name, code: attr.code, loc: attr.loc, nameLoc }
     })
 }
 

@@ -14,13 +14,14 @@ the send target (saveMessage) is keyed by id and idempotent.
 // Simulated connectivity — passed as the outbox's online() override so the demo
 // can go "offline" without dropping the real socket. Toggling it back on hits the
 // online edge the outbox's internal effect watches, which re-drains the queue.
-let offline = scope().state(false)
+const { state, computed } = scope()
+let offline = state(false)
 
 // Optimistic UI: messages render the instant they're enqueued; a permanent
 // failure rolls the entry back out and surfaces it as dropped.
 type Message = { id: string; text: string }
-let submitted = scope().state<Message[]>([])
-let dropped = scope().state<Message[]>([])
+let submitted = state<Message[]>([])
+let dropped = state<Message[]>([])
 
 const box = outbox<Message>({
     key: 'kitchen-sink-outbox',
@@ -35,9 +36,9 @@ const box = outbox<Message>({
 })
 
 // box.pending() reads the queued doc, so a tracking scope re-runs as it drains.
-const queued = scope().computed(() => box.pending())
+const queued = computed(() => box.pending())
 
-let draft = scope().state('type a message — include "fail" to force a drop')
+let draft = state('type a message — include "fail" to force a drop')
 function submit(event: SubmitEvent) {
     event.preventDefault()
     const text = draft.trim()

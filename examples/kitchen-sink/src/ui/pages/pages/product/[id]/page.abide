@@ -7,7 +7,8 @@ import { getProduct } from '$server/rpc/getProduct.ts'
 import CodeBlock from '$ui/CodeBlock.abide'
 
 /* Dynamic route params arrive on the page proxy (plain values), reactive across nav. */
-const id = scope().computed(() => page.params.id)
+const { computed } = scope()
+const id = computed(() => page.params.id)
 
 /* cache() returns warm values synchronously, so handle errors with try/catch in
    the await form (no .catch on a warm hit). */

@@ -1,11 +1,12 @@
 import { describe, expect, test } from 'bun:test'
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { collectAbideDiagnostics } from '../src/lib/ui/compile/collectAbideDiagnostics.ts'
 import { createShadowProgram } from '../src/lib/ui/compile/createShadowProgram.ts'
 
-/* A throwaway project with the given `.abide` files and a strict tsconfig. */
+/* A throwaway project with the given `.abide` files (paths may be nested) and a strict
+   tsconfig. */
 function project(files: Record<string, string>): string {
     const dir = mkdtempSync(join(tmpdir(), 'abide-check-'))
     writeFileSync(
@@ -20,7 +21,9 @@ function project(files: Record<string, string>): string {
         }),
     )
     for (const [name, contents] of Object.entries(files)) {
-        writeFileSync(join(dir, name), contents)
+        const path = join(dir, name)
+        mkdirSync(dirname(path), { recursive: true })
+        writeFileSync(path, contents)
     }
     return dir
 }
@@ -272,5 +275,48 @@ describe('abide check', () => {
             'nested.abide': `<script>\nlet p = scope().state(Promise.resolve(1))\n</script>\n{#await p then v}\n<script>const label = String(v)</script>\n<div>{#if v > 0}<span>{label}</span>{/if}</div>\n{/await}\n`,
         })
         expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
+    })
+
+    /* A missing REQUIRED child prop is caught in the parent — the mount must demand the
+       component's full prop shape, not just check the props that were supplied. */
+    test('a missing required child prop is caught in the parent', () => {
+        const dir = project({
+            'child.abide': `<script>\nconst { label } = props<{ label: string }>()\n</script>\n<span>{label}</span>\n`,
+            'parent.abide': `<script>\nimport Child from './child.abide'\n</script>\n<Child />\n`,
+        })
+        const parent = collectAbideDiagnostics(createShadowProgram(dir)).filter((diagnostic) =>
+            diagnostic.file.endsWith('parent.abide'),
+        )
+        expect(parent).toHaveLength(1)
+        expect(parent[0]!.message).toContain('label')
+    })
+
+    /* An unknown/excess child prop is caught in the parent — a typo'd prop name should
+       not pass silently. */
+    test('an excess unknown child prop is caught in the parent', () => {
+        const dir = project({
+            'child.abide': `<script>\nconst { label } = props<{ label: string }>()\n</script>\n<span>{label}</span>\n`,
+            'parent.abide': `<script>\nimport Child from './child.abide'\n</script>\n<Child label="x" bogusProp={1} />\n`,
+        })
+        const parent = collectAbideDiagnostics(createShadowProgram(dir)).filter((diagnostic) =>
+            diagnostic.file.endsWith('parent.abide'),
+        )
+        expect(parent).toHaveLength(1)
+        expect(parent[0]!.message).toContain('bogusProp')
+    })
+
+    /* A parent-directory relative `.abide` import resolves in the shadow, so a wrong prop
+       on a component imported via `../` is still caught (not a phantom "Cannot find
+       module"). */
+    test('a parent-relative .abide import resolves and type-checks', () => {
+        const dir = project({
+            'ui/Card.abide': `<script>\nconst { title } = props<{ title: string }>()\n</script>\n<h2>{title}</h2>\n`,
+            'ui/pages/page.abide': `<script>\nimport Card from '../Card.abide'\n</script>\n<Card title={42} />\n`,
+        })
+        const diagnostics = collectAbideDiagnostics(createShadowProgram(dir)).filter((diagnostic) =>
+            diagnostic.file.endsWith('page.abide'),
+        )
+        expect(diagnostics).toHaveLength(1)
+        expect(diagnostics[0]!.message).toContain('not assignable')
     })
 })
