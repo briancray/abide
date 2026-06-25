@@ -6,6 +6,7 @@ import type {
 } from './lib/ui/compile/createShadowLanguageService.ts'
 import { createShadowLanguageService } from './lib/ui/compile/createShadowLanguageService.ts'
 import { nearestProjectRoot } from './lib/ui/compile/nearestProjectRoot.ts'
+import { offsetToPosition } from './lib/ui/compile/offsetToPosition.ts'
 import type { AbideDiagnostic } from './lib/ui/compile/types/AbideDiagnostic.ts'
 
 /*
@@ -192,13 +193,6 @@ function toLspHover(text: string, info: ShadowQuickInfo): object {
             end: offsetToPosition(text, info.start + info.length),
         },
     }
-}
-
-/* An absolute offset → LSP `{ line, character }` (0-based, UTF-16 code units). */
-function offsetToPosition(text: string, offset: number): { line: number; character: number } {
-    const before = text.slice(0, offset)
-    const line = before.split('\n').length - 1
-    return { line, character: offset - (before.lastIndexOf('\n') + 1) }
 }
 
 /* An LSP `{ line, character }` (0-based) → absolute offset in `text`. */
