@@ -40,6 +40,11 @@ export type TemplateNode =
           async: boolean
           children: TemplateNode[]
           loc?: number
+          /* Source offsets of the binding name, `by` key, and index — so the shadow
+             maps hover/highlighting onto them (absent for synthesised/missing parts). */
+          asLoc?: number
+          keyLoc?: number
+          indexLoc?: number
       }
     | { kind: 'if'; condition: string; children: TemplateNode[]; loc?: number }
     | {
@@ -52,6 +57,8 @@ export type TemplateNode =
           as: string | undefined
           children: TemplateNode[]
           loc?: number
+          /* Source offset of an inline blocking `then` binding (`{#await p then v}`). */
+          asLoc?: number
       }
     | { kind: 'try'; children: TemplateNode[] }
     | {
@@ -59,6 +66,8 @@ export type TemplateNode =
           branch: 'then' | 'catch' | 'finally'
           as: string | undefined
           children: TemplateNode[]
+          /* Source offset of the `then`/`catch` binding, so the shadow maps it. */
+          asLoc?: number
       }
     | {
           kind: 'component'

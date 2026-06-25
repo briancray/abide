@@ -46,4 +46,56 @@ describe('shadow language service semanticClassifications', () => {
         const { service, path } = open(`<h1>Hello</h1>\n`)
         expect(service.semanticClassifications(path)).toEqual([])
     })
+
+    /* Regression: block BINDING declarations (`{#for frame …}`, `{:then response}`)
+       and the `by` key were emitted as unmapped scaffolding, so neither hover nor
+       semantic tokens landed on them — only their body uses worked. */
+    const BINDINGS = `<script>
+const frames = scope().state<{ n: number; text: string }[]>([])
+const promise = (async () => ({ status: 'ok' }))()
+</script>
+{#for frame of frames by frame.n}
+  <li>{frame.text}</li>
+{/for}
+{#await promise}
+  loading
+{:then response}
+  <p>{response.status}</p>
+{/await}
+`
+
+    test('classifies the {#for} binding at its declaration', () => {
+        const { service, path } = open(BINDINGS)
+        const declaration = BINDINGS.indexOf('{#for frame') + '{#for '.length
+        const tokens = service.semanticClassifications(path)
+        expect(
+            tokens.some(
+                (t) =>
+                    t.start === declaration &&
+                    BINDINGS.slice(t.start, t.start + t.length) === 'frame',
+            ),
+        ).toBe(true)
+        /* hover (same mappings) now resolves on the binding too */
+        expect(service.quickInfo(path, declaration)).toBeDefined()
+    })
+
+    test('classifies the {:then} binding at its declaration', () => {
+        const { service, path } = open(BINDINGS)
+        const declaration = BINDINGS.indexOf('{:then response') + '{:then '.length
+        const tokens = service.semanticClassifications(path)
+        expect(
+            tokens.some(
+                (t) =>
+                    t.start === declaration &&
+                    BINDINGS.slice(t.start, t.start + t.length) === 'response',
+            ),
+        ).toBe(true)
+        expect(service.quickInfo(path, declaration)).toBeDefined()
+    })
+
+    test('maps the {#for … by <key>} expression', () => {
+        const { service, path } = open(BINDINGS)
+        const keyAt = BINDINGS.indexOf('by frame.n') + 'by '.length
+        expect(service.quickInfo(path, keyAt)).toBeDefined()
+    })
 })

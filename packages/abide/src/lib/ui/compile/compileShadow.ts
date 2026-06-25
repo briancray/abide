@@ -91,6 +91,10 @@ export function compileShadow(source: string): CompiledShadow {
    pre-assembled scope line carrying its own embedded segments. */
 type Builder = {
     raw: (text: string) => void
+    /* Appends `text` verbatim and maps it back to source, WITHOUT the `expr`
+       parens — for binding names and other spans that must stay bare TS syntax
+       (`for (const NAME of …)`). `text` must equal the source at `sourceLoc`. */
+    mapped: (text: string, sourceLoc: number | undefined) => void
     expr: (code: string, sourceLoc: number | undefined) => void
     stmt: (code: string, sourceLoc: number | undefined) => void
     flush: (line: ScopeLine) => void
@@ -113,6 +117,16 @@ function createBuilder(): Builder {
             return `__${base}_${uniqueCounter++}`
         },
         raw(text) {
+            code += text
+        },
+        mapped(text, sourceLoc) {
+            if (sourceLoc !== undefined) {
+                mappings.push({
+                    shadowStart: code.length,
+                    sourceStart: sourceLoc,
+                    length: text.length,
+                })
+            }
             code += text
         },
         expr(exprCode, sourceLoc) {
@@ -408,19 +422,24 @@ function emitNode(node: TemplateNode, builder: Builder): void {
         }
         case 'each':
             /* `for await` over an async each's AsyncIterable, plain `for…of` otherwise —
-               so the item binds to the element type under either iteration protocol. */
-            builder.raw(
-                node.async ? `for await (const ${node.as} of ` : `for (const ${node.as} of `,
-            )
+               so the item binds to the element type under either iteration protocol. The
+               binding name is `mapped` (not `raw`) so hover/highlighting land on it. */
+            builder.raw(node.async ? 'for await (const ' : 'for (const ')
+            builder.mapped(node.as, node.asLoc)
+            builder.raw(' of ')
             builder.expr(node.items, node.loc)
             builder.raw(') {\n')
             if (node.key !== undefined) {
-                builder.raw(`void (${node.key});\n`)
+                builder.raw('void ')
+                builder.expr(node.key, node.keyLoc)
+                builder.raw(';\n')
             }
             /* `index="i"` binds the row's position — always a number (the row ordinal,
                or an async stream's arrival count). Declare it so body references check. */
             if (node.index !== undefined) {
-                builder.raw(`const ${node.index}: number = 0;\n`)
+                builder.raw('const ')
+                builder.mapped(node.index, node.indexLoc)
+                builder.raw(': number = 0;\n')
             }
             emitNodes(node.children, builder)
             builder.raw('}\n')
@@ -439,7 +458,9 @@ function emitNode(node: TemplateNode, builder: Builder): void {
             const pending = node.children.filter((child) => child.kind !== 'branch')
             const branches = node.children.filter((child) => child.kind === 'branch')
             if (node.blocking && node.as !== undefined) {
-                builder.raw(`{\nconst ${node.as} = ${resolved};\n`)
+                builder.raw('{\nconst ')
+                builder.mapped(node.as, node.asLoc)
+                builder.raw(` = ${resolved};\n`)
                 emitNodes(pending, builder)
                 builder.raw('}\n')
             } else {
@@ -451,9 +472,13 @@ function emitNode(node: TemplateNode, builder: Builder): void {
                 }
                 builder.raw('{\n')
                 if (branch.branch === 'then' && branch.as !== undefined) {
-                    builder.raw(`const ${branch.as} = ${resolved};\n`)
+                    builder.raw('const ')
+                    builder.mapped(branch.as, branch.asLoc)
+                    builder.raw(` = ${resolved};\n`)
                 } else if (branch.branch === 'catch' && branch.as !== undefined) {
-                    builder.raw(`const ${branch.as} = undefined as any;\n`)
+                    builder.raw('const ')
+                    builder.mapped(branch.as, branch.asLoc)
+                    builder.raw(' = undefined as any;\n')
                 }
                 emitNodes(branch.children, builder)
                 builder.raw('}\n')

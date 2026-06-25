@@ -163,12 +163,15 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
                 async: head.async,
                 children,
                 loc: head.loc,
+                asLoc: head.asLoc,
+                keyLoc: head.keyLoc,
+                indexLoc: head.indexLoc,
             }
         }
         if (keyword === 'await') {
             const start = open.body.indexOf('await') + 5
             const afterAwait = open.body.slice(start)
-            const thenAt = indexOfKeywordAtDepthZero(afterAwait, ' then ')
+            const thenAt = keywordAtDepthZero(afterAwait, 'then')
             const promise = (thenAt === -1 ? afterAwait : afterAwait.slice(0, thenAt)).trim()
             if (promise === '') {
                 throw new Error('[abide] {#await} requires a promise expression')
@@ -176,7 +179,7 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
             const as =
                 thenAt === -1
                     ? undefined
-                    : afterAwait.slice(thenAt + ' then '.length).trim() || undefined
+                    : afterAwait.slice(thenAt + 'then'.length).trim() || undefined
             const children = readBlockChildren('await')
             return {
                 kind: 'await',
@@ -185,6 +188,10 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
                 as,
                 children,
                 loc: exprLoc(open.loc, open.body, start),
+                asLoc:
+                    as === undefined
+                        ? undefined
+                        : exprLoc(open.loc, open.body, start + thenAt + 'then'.length),
             }
         }
         if (keyword === 'switch') {
@@ -210,13 +217,13 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
        terminator fires (caller decides what to do next); returns true while scanning
        continues. `onBranch` fires when `{:` is seen — block-children consume it as a
        new branch node; branch-children let the caller exit instead. */
-    function scanNode(nodes: TemplateNode[], onBranch: (() => boolean) | null): boolean {
+    function scanNode(nodes: TemplateNode[], onBranch: (() => boolean) | undefined): boolean {
         /* Branch/close tokens — delegate to the caller's terminator logic. */
         if (source.startsWith('{/', cursor)) {
             return false
         }
         if (source.startsWith('{:', cursor)) {
-            return onBranch === null ? false : onBranch()
+            return onBranch === undefined ? false : onBranch()
         }
         if (atBlock()) {
             nodes.push(readBlock())
@@ -245,7 +252,16 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
                 return true
             })
             if (!keepGoing) {
-                readBlockToken() // consume the close `{/keyword}`
+                const close = readBlockToken() // consume the close `{/keyword}`
+                const closeKeyword = headKeyword(close.body)
+                /* The close must name its open block — a mismatch (`{#if}…{/for}`) or
+                   crossed nesting (`{#if}{#for}…{/if}{/for}`) would otherwise silently
+                   mis-parse into a structurally wrong tree. */
+                if (closeKeyword !== keyword) {
+                    throw new Error(
+                        `[abide] {/${closeKeyword}} does not close the open {#${keyword}} — expected {/${keyword}}`,
+                    )
+                }
                 return nodes
             }
         }
@@ -263,6 +279,9 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
             if (keyword === 'else' && headKeyword(token.body.slice(4).trim()) === 'if') {
                 const start = token.body.indexOf('if') + 2
                 const condition = token.body.slice(start).trim()
+                if (condition === '') {
+                    throw new Error('[abide] {:else if} requires a condition expression')
+                }
                 return {
                     kind: 'case',
                     match: undefined,
@@ -277,7 +296,16 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
         }
         if (parentKeyword === 'for' && keyword === 'catch') {
             const as = token.body.slice(token.body.indexOf('catch') + 5).trim() || undefined
-            return { kind: 'branch', branch: 'catch', as, children: branchChildren }
+            return {
+                kind: 'branch',
+                branch: 'catch',
+                as,
+                children: branchChildren,
+                asLoc:
+                    as === undefined
+                        ? undefined
+                        : exprLoc(token.loc, token.body, token.body.indexOf('catch') + 5),
+            }
         }
         if (parentKeyword === 'switch') {
             if (keyword === 'case') {
@@ -300,7 +328,16 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
         if (parentKeyword === 'await') {
             if (keyword === 'then') {
                 const as = token.body.slice(token.body.indexOf('then') + 4).trim() || undefined
-                return { kind: 'branch', branch: 'then', as, children: branchChildren }
+                return {
+                    kind: 'branch',
+                    branch: 'then',
+                    as,
+                    children: branchChildren,
+                    asLoc:
+                        as === undefined
+                            ? undefined
+                            : exprLoc(token.loc, token.body, token.body.indexOf('then') + 4),
+                }
             }
             if (keyword === 'catch') {
                 const as = token.body.slice(token.body.indexOf('catch') + 5).trim() || undefined
@@ -336,8 +373,8 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
        (the caller's readBlockChildren loop handles those). */
     function readBranchChildren(): TemplateNode[] {
         const nodes: TemplateNode[] = []
-        /* Pass null for onBranch so scanNode returns false on `{:`, leaving it unconsumed. */
-        while (cursor < source.length && scanNode(nodes, null)) {
+        /* Pass undefined for onBranch so scanNode returns false on `{:`, leaving it unconsumed. */
+        while (cursor < source.length && scanNode(nodes, undefined)) {
             // continue
         }
         return nodes
@@ -589,6 +626,42 @@ function indexOfKeywordAtDepthZero(text: string, keyword: string): number {
     return -1
 }
 
+/* Index of a bare keyword (`then`) at brace/paren/bracket depth 0, requiring whitespace
+   on both sides — so it isn't matched inside an identifier (`q.then(x)`) and MAY sit
+   terminally. Unlike ` of `/` by `, an await `then` can end the head: `{#await p then}`
+   is a blocking await with no value binding, which a trailing-space match would miss
+   (folding `then` into the promise). Skips string literals. -1 if absent. */
+function keywordAtDepthZero(text: string, word: string): number {
+    let depth = 0
+    let i = 0
+    while (i < text.length) {
+        const char = text.charAt(i)
+        if (char === '"' || char === "'" || char === '`') {
+            i += 1
+            while (i < text.length && text.charAt(i) !== char) {
+                if (text.charAt(i) === '\\') {
+                    i += 1
+                }
+                i += 1
+            }
+        } else if (char === '{' || char === '(' || char === '[') {
+            depth += 1
+        } else if (char === '}' || char === ')' || char === ']') {
+            depth -= 1
+        } else if (
+            depth === 0 &&
+            text.startsWith(word, i) &&
+            i > 0 &&
+            /\s/.test(text.charAt(i - 1)) &&
+            (i + word.length === text.length || /\s/.test(text.charAt(i + word.length)))
+        ) {
+            return i
+        }
+        i += 1
+    }
+    return -1
+}
+
 /* The depth-0 comma index in a binding (`{id, title}, i` → the comma after `}`),
    so a destructuring pattern's inner commas don't split the binding from its index. */
 function bindingCommaAtDepthZero(text: string): number {
@@ -608,7 +681,6 @@ function bindingCommaAtDepthZero(text: string): number {
     return -1
 }
 
-/* Parses `for [await] <binding>[, <index>] of <iterable> [by <key>]`. */
 /* Absolute source offset of the trimmed expression beginning at `start` within a
    directive `body` whose first char is at absolute `bodyLoc` — skips the leading
    whitespace `.trim()` drops so the offset points at the expression's first real char
@@ -631,7 +703,11 @@ function parseForHead(
     key: string | undefined
     async: boolean
     loc: number
+    asLoc: number | undefined
+    keyLoc: number | undefined
+    indexLoc: number | undefined
 } {
+    const leadingSpace = (text: string): number => text.length - text.trimStart().length
     const skipSpace = (i: number): number => {
         let at = i
         while (at < body.length && /\s/.test(body.charAt(at))) {
@@ -653,13 +729,19 @@ function parseForHead(
     const itemsStart = skipSpace(bindingStart + ofAt + ' of '.length)
     let itemsRegion = body.slice(itemsStart)
     const byAt = indexOfKeywordAtDepthZero(itemsRegion, ' by ')
-    const key = byAt === -1 ? undefined : itemsRegion.slice(byAt + ' by '.length).trim()
+    const keyRaw = byAt === -1 ? '' : itemsRegion.slice(byAt + ' by '.length)
+    const key = byAt === -1 ? undefined : keyRaw.trim()
+    const keyLoc =
+        byAt === -1 ? undefined : bodyLoc + itemsStart + byAt + ' by '.length + leadingSpace(keyRaw)
     if (byAt !== -1) {
         itemsRegion = itemsRegion.slice(0, byAt)
     }
     const commaAt = bindingCommaAtDepthZero(left)
     const as = (commaAt === -1 ? left : left.slice(0, commaAt)).trim()
-    const index = commaAt === -1 ? undefined : left.slice(commaAt + 1).trim()
+    const indexRaw = commaAt === -1 ? '' : left.slice(commaAt + 1)
+    const index = commaAt === -1 ? undefined : indexRaw.trim()
+    /* `left` is trimmed and starts at `bindingStart` (skipSpace'd), so the binding
+       name begins exactly there; the index sits past the comma. */
     return {
         items: itemsRegion.trim(),
         as: as === '' ? '_item' : as,
@@ -667,6 +749,12 @@ function parseForHead(
         key,
         async: isAsync,
         loc: bodyLoc + itemsStart,
+        asLoc: as === '' ? undefined : bodyLoc + bindingStart,
+        keyLoc,
+        indexLoc:
+            commaAt === -1
+                ? undefined
+                : bodyLoc + bindingStart + commaAt + 1 + leadingSpace(indexRaw),
     }
 }
 
