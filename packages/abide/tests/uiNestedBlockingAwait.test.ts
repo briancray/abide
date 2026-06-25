@@ -88,11 +88,11 @@ describe('nested blocking awaits render inline, depth-first, on SSR', () => {
                 let sib = () => Promise.resolve('SIB')
             </script>
             <div>
-                <template await={outer()} then="o">
+                {#await outer() then o}
                     <b>{o}</b>
-                    <template await={inner()} then="i"><span>{i}</span></template>
-                </template>
-                <template await={sib()} then="s"><em>{s}</em></template>
+                    {#await inner() then i}<span>{i}</span>{/await}
+                {/await}
+                {#await sib() then s}<em>{s}</em>{/await}
             </div>
         `).render
         const html = await streamToString(render)
@@ -116,7 +116,7 @@ describe('nested blocking awaits render inline, depth-first, on SSR', () => {
     test('sibling blocking awaits whose then renders a child-with-await keep unique ids', async () => {
         const Card = component(`
             <script>let load = () => Promise.resolve('CARD')</script>
-            <template await={load()} then="v"><span>card:{v}</span></template>
+            {#await load() then v}<span>card:{v}</span>{/await}
         `)
         const render = component(
             `
@@ -125,8 +125,8 @@ describe('nested blocking awaits render inline, depth-first, on SSR', () => {
                 let b = () => Promise.resolve('B')
             </script>
             <div>
-                <template await={a()} then="x"><h1>{x}</h1><Card /></template>
-                <template await={b()} then="y"><h2>{y}</h2><Card /></template>
+                {#await a() then x}<h1>{x}</h1><Card />{/await}
+                {#await b() then y}<h2>{y}</h2><Card />{/await}
             </div>
         `,
             { Card },
@@ -160,8 +160,8 @@ describe('nested blocking awaits render inline, depth-first, on SSR', () => {
                 let two = () => Promise.resolve('TWO')
             </script>
             <div>
-                <template await={one()} then="a"><b>{a}</b></template>
-                <template await={two()} then="b"><i>{b}</i></template>
+                {#await one() then a}<b>{a}</b>{/await}
+                {#await two() then b}<i>{b}</i>{/await}
             </div>
         `).render
         const html = await streamToString(render)

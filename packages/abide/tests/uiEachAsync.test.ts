@@ -70,14 +70,14 @@ async function* failingFeed<T>(rows: T[], error: unknown): AsyncGenerator<T> {
     throw error
 }
 
-const SOURCE = `<ul><template each={model.source} await as="row" key="row.id">
+const SOURCE = `<ul>{#for await row of model.source by row.id}
     <li data-id={row.id}>{row.text}</li>
-</template></ul>`
+{/for}</ul>`
 
-const SOURCE_CATCH = `<ul><template each={model.source} await as="row" key="row.id">
+const SOURCE_CATCH = `<ul>{#for await row of model.source by row.id}
     <li data-id={row.id}>{row.text}</li>
-    <template catch="err"><li>{err}</li></template>
-</template></ul>`
+    {:catch err}<li>{err}</li>
+{/for}</ul>`
 
 describe('<template each await>', () => {
     test('compiles to eachAsync', () => {

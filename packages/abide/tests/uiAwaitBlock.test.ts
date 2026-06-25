@@ -61,11 +61,11 @@ describe('await block', () => {
         const host = run(
             `
             <script>let load = () => Promise.resolve('done')</script>
-            <template await={load()}>
+            {#await load()}
                 <p>loading</p>
-                <template then="value"><span>{value}</span></template>
-                <template catch="err"><b>{err}</b></template>
-            </template>
+                {:then value}<span>{value}</span>
+                {:catch err}<b>{err}</b>
+            {/await}
         `,
         )
         expect(host.textContent).toBe('loading') // pending shell first
@@ -77,11 +77,11 @@ describe('await block', () => {
     test('rejection renders the catch branch', async () => {
         const host = run(`
             <script>let load = () => Promise.reject('boom')</script>
-            <template await={load()}>
+            {#await load()}
                 <p>loading</p>
-                <template then="value"><span>{value}</span></template>
-                <template catch="err"><b>{err}</b></template>
-            </template>
+                {:then value}<span>{value}</span>
+                {:catch err}<b>{err}</b>
+            {/await}
         `)
         await Promise.resolve()
         await Promise.resolve()
@@ -97,12 +97,11 @@ describe('await block', () => {
         const host = run(
             `
             <script></script>
-            <template await={warm()}>
-                <template then="value">
+            {#await warm()}
+                {:then value}
                     <script>tracker.value</script>
                     <span>{value}</span>
-                </template>
-            </template>
+            {/await}
         `,
             {
                 warm: () => {
@@ -122,10 +121,10 @@ describe('await block', () => {
         // mimics cache()'s warm read returning a settled value synchronously
         const host = run(`
             <script>let warm = () => 'cached'</script>
-            <template await={warm()}>
+            {#await warm()}
                 <p>loading</p>
-                <template then="value"><span>{value}</span></template>
-            </template>
+                {:then value}<span>{value}</span>
+            {/await}
         `)
         expect(host.textContent).toBe('cached') // never showed "loading"
     })
@@ -141,12 +140,11 @@ describe('await block', () => {
         const host = run(
             `
             <script></script>
-            <template await={make(n.value)}>
-                <template then="value">
+            {#await make(n.value)}
+                {:then value}
                     <script>mark()</script>
                     <i></i><span>{value}</span>
-                </template>
-            </template>
+            {/await}
         `,
             {
                 make: (value: number) => Promise.resolve(value),
@@ -178,12 +176,11 @@ describe('await block', () => {
         const host = run(
             `
             <script></script>
-            <template await={make(n.value)}>
-                <template then="[a, b]">
+            {#await make(n.value)}
+                {:then [a, b]}
                     <script>mark()</script>
                     <i></i><span>{a}</span><b>{b}</b>
-                </template>
-            </template>
+            {/await}
         `,
             {
                 make: (value: number) => Promise.resolve([value, 'fixed']),
@@ -217,11 +214,10 @@ describe('await block', () => {
             <script>
             const value = scope().state({ label: 'STATE' })
             </script>
-            <template await={make()}>
-                <template then="value">
+            {#await make()}
+                {:then value}
                     <span>{value.label}</span>
-                </template>
-            </template>
+            {/await}
         `,
             { make: () => Promise.resolve({ label: 'RESOLVED' }) },
         )

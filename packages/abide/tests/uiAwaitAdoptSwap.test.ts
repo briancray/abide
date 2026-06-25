@@ -123,11 +123,11 @@ describe('await block: hydrate-adopt then first swap', () => {
         const Comp = component(
             `
             <script></script>
-            <template await={make(n.value)}>
+            {#await make(n.value)}
                 <p>pending</p>
-                <template then="value"><span>{value}</span></template>
-                <template catch="err"><b>{err}</b></template>
-            </template>
+                {:then value}<span>{value}</span>
+                {:catch err}<b>{err}</b>
+            {/await}
         `,
             { make, n },
         )
@@ -148,11 +148,11 @@ describe('await block: hydrate-adopt then first swap', () => {
         const Comp = component(
             `
             <script></script>
-            <template await={make(n.value)}>
+            {#await make(n.value)}
                 <p>pending</p>
-                <template then="value"><b>tag</b><span>{value}</span></template>
-                <template catch="err"><i>{err}</i></template>
-            </template>
+                {:then value}<b>tag</b><span>{value}</span>
+                {:catch err}<i>{err}</i>
+            {/await}
         `,
             { make, n },
         )
@@ -174,11 +174,11 @@ describe('await block: hydrate-adopt then first swap', () => {
         const Comp = component(
             `
             <script>let on = scope().state(true)</script>
-            <template await={make(n.value)}>
+            {#await make(n.value)}
                 <p>pending</p>
-                <template then="value"><template if={on}><span>{value}</span></template></template>
-                <template catch="err"><b>{err}</b></template>
-            </template>
+                {:then value}{#if on}<span>{value}</span>{/if}
+                {:catch err}<b>{err}</b>
+            {/await}
         `,
             { make, n },
         )
@@ -200,9 +200,9 @@ describe('await block: hydrate-adopt then first swap', () => {
         const Comp = component(
             `
             <script></script>
-            <template await={make(n.value)}>
-                <template then="value"><i></i><span>{value}</span></template>
-            </template>
+            {#await make(n.value)}
+                {:then value}<i></i><span>{value}</span>
+            {/await}
         `,
             { make, n },
         )

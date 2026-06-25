@@ -125,16 +125,15 @@ describe('nested streaming awaits flush', () => {
                 let inner = () => Promise.resolve('IN')
             </script>
             <div>
-                <template await={outer()}>
+                {#await outer()}
                     <p>outer-pending</p>
-                    <template then="o">
+                    {:then o}
                         <b>{o}</b>
-                        <template await={inner()}>
+                        {#await inner()}
                             <p>inner-pending</p>
-                            <template then="i"><span>{i}</span></template>
-                        </template>
-                    </template>
-                </template>
+                            {:then i}<span>{i}</span>
+                        {/await}
+                {/await}
             </div>
         `).render
         const html = await streamToString(() => render())
@@ -156,13 +155,12 @@ describe('blocking await nested in a streaming branch seeds its resume', () => {
                 let inner = () => Promise.resolve('IN')
             </script>
             <div>
-                <template await={outer()}>
+                {#await outer()}
                     <p>pending</p>
-                    <template then="o">
+                    {:then o}
                         <b>{o}</b>
-                        <template await={inner()} then="i"><span>{i}</span></template>
-                    </template>
-                </template>
+                        {#await inner() then i}<span>{i}</span>{/await}
+                {/await}
             </div>
         `).render
         const html = await streamToString(() => render())
@@ -184,7 +182,7 @@ describe('slot content shares the page block-id counter (depth-first)', () => {
         const Child = component(`
             <script>let load = () => Promise.resolve('CV')</script>
             <div>
-                <template await={load()} then="v"><b>{v}</b></template>
+                {#await load() then v}<b>{v}</b>{/await}
                 <slot></slot>
             </div>
         `)
@@ -192,7 +190,7 @@ describe('slot content shares the page block-id counter (depth-first)', () => {
             `
             <script>let slotLoad = () => Promise.resolve('SV')</script>
             <Child>
-                <template await={slotLoad()} then="x"><em>{x}</em></template>
+                {#await slotLoad() then x}<em>{x}</em>{/await}
             </Child>
         `,
             { Child },
