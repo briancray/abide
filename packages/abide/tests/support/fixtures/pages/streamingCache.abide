@@ -4,10 +4,9 @@ import { slowData } from '../rpc/slowData.ts'
 </script>
 
 <main>
-    <template await={cache(slowData)()}>
+    {#await cache(slowData)()}
         <span data-state="pending">loading…</span>
-        <template then="data">
+        {:then data}
             <span data-state="ready">n={data.n}</span>
-        </template>
-    </template>
+    {/await}
 </main>
