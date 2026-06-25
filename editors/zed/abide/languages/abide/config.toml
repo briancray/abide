@@ -1,9 +1,21 @@
 name = "Abide"
-grammar = "svelte"
+grammar = "html"
 path_suffixes = ["abide"]
 block_comment = ["<!-- ", " -->"]
 wrap_characters = { start_prefix = "<", start_suffix = ">", end_prefix = "</", end_suffix = ">" }
 autoclose_before = ":\"'}]>"
+
+# Indentation for `{#…}` control-flow blocks is regex-driven, not tree-sitter,
+# so it works for every block — including `{#for …}`, `{#switch}`, and `{#try}`,
+# which the reused Svelte grammar does not parse (it knows `{#each … as}`, not
+# abide's vocabulary). A line opening a block (`{#…}`) or continuing one
+# (`{:else}`/`{:then}`/`{:case}`/`{:catch}`/`{:finally}`/`{:default}`) indents
+# the next line; a continuation or close (`{/…}`) outdents its own line — so a
+# `{:else}` lands at its `{#if}`'s depth, not one deeper. Element/script/style
+# indentation stays tree-sitter-driven (see indents.scm). Bare `{expr}`
+# interpolations and `{@const}`/`{@html}` tags match neither pattern.
+increase_indent_pattern = '^\s*\{[#:]'
+decrease_indent_pattern = '^\s*\{[:/]'
 brackets = [
     { start = "{", end = "}", close = true, newline = true },
     { start = ">", end = "</", close = false, newline = true, not_in = ["comment", "string"] },
