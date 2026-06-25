@@ -21,11 +21,11 @@ function add() {
 <p>Count: {count}</p>
 
 {#if draft}
-<small>typing…</small>
+    <small>typing…</small>
 {/if}
 
 <ul>
     {#for id of order by id}
-    <li>{byId[id].text}</li>
+        <li>{byId[id].text}</li>
     {/for}
 </ul>

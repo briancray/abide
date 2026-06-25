@@ -1,3 +1,5 @@
+import { escapeRegex } from './escapeRegex.ts'
+
 /*
 Strips the user's `import { … } from '<moduleName>'` declaration from a
 module source. Used by the $rpc / $sockets rewriters to remove the
@@ -18,7 +20,7 @@ includes newlines, so multi-line braced imports like
 still match — the body just can't contain another `}` to bound it.
 */
 export function stripImport(source: string, moduleName: string): string {
-    const escaped = moduleName.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&')
+    const escaped = escapeRegex(moduleName)
     const pattern = new RegExp(
         `^\\s*import\\s*\\{[^}]*\\}\\s*from\\s*['"]${escaped}['"]\\s*;?\\s*$`,
         'gm',

@@ -34,6 +34,6 @@ const pillClass = (href: string) =>
 </p>
 <nav class="mt-4 flex flex-wrap gap-2 text-sm">
     {#for s of subpages by s.href}
-    <a href={s.href} class={pillClass(s.href)}>{s.label}</a>
+        <a href={s.href} class={pillClass(s.href)}>{s.label}</a>
     {/for}
 </nav>

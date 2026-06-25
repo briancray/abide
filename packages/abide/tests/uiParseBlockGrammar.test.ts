@@ -129,6 +129,16 @@ describe('block grammar — await', () => {
         )
         expect(nodes[0]).toMatchObject({ kind: 'await', promise: 'q.then(x)', blocking: false })
     })
+
+    test('blocking {#await p then} with no value binding (terminal then)', () => {
+        const { nodes } = parseTemplate(`{#await preload() then}<span>ready</span>{/await}`)
+        expect(nodes[0]).toMatchObject({
+            kind: 'await',
+            promise: 'preload()',
+            blocking: true,
+            as: undefined,
+        })
+    })
 })
 
 describe('block grammar — switch', () => {
@@ -177,6 +187,22 @@ describe('block grammar — guards & integration', () => {
 
     test('{:else} after {:else} (second else) is rejected by the existing guard', () => {
         expect(() => parseTemplate(`{#if a}<p>1</p>{:else}<p>2</p>{:else}<p>3</p>{/if}`)).toThrow()
+    })
+
+    test('a mismatched close keyword ({#if}…{/for}) throws', () => {
+        expect(() => parseTemplate(`{#if a}<p>x</p>{/for}`)).toThrow(/does not close/)
+    })
+
+    test('crossed nesting ({#if}{#for}…{/if}{/for}) throws instead of mis-parsing', () => {
+        expect(() => parseTemplate(`{#if a}{#for x of xs}<li>{x}</li>{/if}{/for}`)).toThrow(
+            /does not close/,
+        )
+    })
+
+    test('an empty {:else if} condition throws', () => {
+        expect(() => parseTemplate(`{#if a}<p>x</p>{:else if}<p>y</p>{/if}`)).toThrow(
+            /requires a condition/,
+        )
     })
 
     test('a block compiles end-to-end through compileComponent', () => {

@@ -63,7 +63,7 @@ const updating = scope().computed(() => refreshing(getRates, { base: 'USD' }))
         </button>
     </div>
     {#if echoed}
-    <p class="mt-3 font-mono text-xs text-slate-500">echoed: {echoed}</p>
+        <p class="mt-3 font-mono text-xs text-slate-500">echoed: {echoed}</p>
     {/if}
 </section>
 
@@ -73,19 +73,19 @@ const updating = scope().computed(() => refreshing(getRates, { base: 'USD' }))
         <span class={`rounded-full px-2 py-0.5 text-xs ${updating ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-400'}`}>{updating ? 'updating…' : 'fresh'}</span>
     </div>
     <p class="mt-1 text-xs text-slate-500">
-        The read carries {'swr: { debounce: 300 }'}, so an invalidation keeps the entry and coalesces the refetch
-        — the stale rates stay visible while refreshing is true.
+        The read carries {'swr: { debounce: 300 }'}, so an invalidation keeps the entry and coalesces the refetch —
+        the stale rates stay visible while refreshing is true.
     </p>
     <div class="mt-3">
         {#await rates}
-        <p class="font-mono text-sm text-slate-400">loading rates…</p>
+            <p class="font-mono text-sm text-slate-400">loading rates…</p>
         {:then data}
-        <p class="font-mono text-sm text-slate-900">
-            1 {data.base} = {data.rates.EUR} EUR
-            <span class="text-slate-400">({data.date})</span>
-        </p>
+            <p class="font-mono text-sm text-slate-900">
+                1 {data.base} = {data.rates.EUR} EUR
+                <span class="text-slate-400">({data.date})</span>
+            </p>
         {:catch err}
-        <p class="font-mono text-sm text-red-600">{err.message}</p>
+            <p class="font-mono text-sm text-red-600">{err.message}</p>
         {/await}
     </div>
     <button

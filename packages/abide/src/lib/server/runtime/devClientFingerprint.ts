@@ -1,4 +1,5 @@
 import { relative } from 'node:path'
+import { fileName } from '../../shared/fileName.ts'
 import { analyzeComponent } from '../../ui/compile/analyzeComponent.ts'
 import { compileComponent } from '../../ui/compile/compileComponent.ts'
 import { nearestProjectRoot } from '../../ui/compile/nearestProjectRoot.ts'
@@ -19,7 +20,7 @@ const GENERATED = /(^|\/)\.abide\//
 // page.abide / layout.abide are router-mounted, not `mountChild`-tracked, so they
 // can't hot-swap — they fold into `structure` (a reload) instead.
 function isPageOrLayout(moduleId: string): boolean {
-    const file = moduleId.split('/').pop() ?? ''
+    const file = fileName(moduleId)
     return file === 'page.abide' || file === 'layout.abide'
 }
 

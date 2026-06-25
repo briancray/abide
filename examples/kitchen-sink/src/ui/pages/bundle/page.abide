@@ -67,10 +67,11 @@ import CodeBlock from '$ui/CodeBlock.abide'
         DB or cache lands beside abide's own <code class="font-mono">.env</code> and
         <code class="font-mono">last-connection.json</code>. This running server reports:
     </p>
-    {#await getDataDir()} {:then info}
-    <p class="mt-2 break-all font-mono text-xs text-slate-900">{info.dir}</p>
+    {#await getDataDir()}
+    {:then info}
+        <p class="mt-2 break-all font-mono text-xs text-slate-900">{info.dir}</p>
     {:catch err}
-    <p class="mt-2 text-xs text-rose-600">{err.message}</p>
+        <p class="mt-2 text-xs text-rose-600">{err.message}</p>
     {/await}
 </section>
 
@@ -97,14 +98,15 @@ import CodeBlock from '$ui/CodeBlock.abide'
     </p>
     <p class="mt-3">
         {#if bundled()}
-        <span class="rounded bg-emerald-100 px-2 py-0.5 font-medium text-emerald-800"
-            >running inside the desktop bundle</span
-        >
+            <span class="rounded bg-emerald-100 px-2 py-0.5 font-medium text-emerald-800"
+                >running inside the desktop bundle</span
+            >
         {:else}
-        <span class="rounded bg-slate-100 px-2 py-0.5 font-medium text-slate-700"
-            >running in a browser tab</span
-        >
-        — open this page from <code class="font-mono">abide bundle</code> to flip it. {/if}
+            <span class="rounded bg-slate-100 px-2 py-0.5 font-medium text-slate-700"
+                >running in a browser tab</span
+            >
+            — open this page from <code class="font-mono">abide bundle</code> to flip it.
+        {/if}
     </p>
 </section>
 

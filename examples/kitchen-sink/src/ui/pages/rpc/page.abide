@@ -169,11 +169,11 @@ async function safeCall(verb: string, fn: () => Promise<unknown>) {
         </button>
     </div>
     {#if log.length > 0}
-    <ul class="mt-3 space-y-1 font-mono text-xs text-slate-700">
-        {#for entry of log by entry.id}
-        <li>{entry.verb} →{entry.outcome}</li>
-        {/for}
-    </ul>
+        <ul class="mt-3 space-y-1 font-mono text-xs text-slate-700">
+            {#for entry of log by entry.id}
+                <li>{entry.verb} →{entry.outcome}</li>
+            {/for}
+        </ul>
     {/if}
 </section>
 

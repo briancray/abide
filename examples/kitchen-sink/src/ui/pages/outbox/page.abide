@@ -94,23 +94,24 @@ function submit(event: SubmitEvent) {
     </form>
 
     {#if submitted.length > 0}
-    <p class="mt-4 text-xs font-medium text-slate-500">submitted (dropped entries removed)</p>
-    <ul class="mt-1 space-y-1">
-        {#for message of submitted by message.id}
-        <li class="rounded-md bg-slate-100 px-3 py-1.5 font-mono text-xs text-slate-700">
-            {message.text}
-        </li>
-        {/for}
-    </ul>
-    {/if} {#if dropped.length > 0}
-    <p class="mt-4 text-xs font-medium text-rose-600">dropped (rolled back via onDrop)</p>
-    <ul class="mt-1 space-y-1">
-        {#for message of dropped by message.id}
-        <li class="rounded-md bg-rose-50 px-3 py-1.5 font-mono text-xs text-rose-700">
-            {message.text}
-        </li>
-        {/for}
-    </ul>
+        <p class="mt-4 text-xs font-medium text-slate-500">submitted (dropped entries removed)</p>
+        <ul class="mt-1 space-y-1">
+            {#for message of submitted by message.id}
+                <li class="rounded-md bg-slate-100 px-3 py-1.5 font-mono text-xs text-slate-700">
+                    {message.text}
+                </li>
+            {/for}
+        </ul>
+    {/if}
+    {#if dropped.length > 0}
+        <p class="mt-4 text-xs font-medium text-rose-600">dropped (rolled back via onDrop)</p>
+        <ul class="mt-1 space-y-1">
+            {#for message of dropped by message.id}
+                <li class="rounded-md bg-rose-50 px-3 py-1.5 font-mono text-xs text-rose-700">
+                    {message.text}
+                </li>
+            {/for}
+        </ul>
     {/if}
 </section>
 

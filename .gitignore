@@ -12,3 +12,7 @@ editors/zed/*/target/
 # Zed extension build artifacts (compiled wasm + grammar repos Zed fetches)
 editors/zed/*/extension.wasm
 editors/zed/*/grammars/
+
+# local scratch + superpowers session artifacts (not for main)
+bench-vs-svelte/
+docs/superpowers/

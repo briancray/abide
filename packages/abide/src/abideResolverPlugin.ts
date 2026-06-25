@@ -4,6 +4,8 @@ import type { BunPlugin } from 'bun'
 import { Glob } from 'bun'
 import { abideImportName } from './lib/shared/abideImportName.ts'
 import { abideLog } from './lib/shared/abideLog.ts'
+import { escapeRegex } from './lib/shared/escapeRegex.ts'
+import { fileName } from './lib/shared/fileName.ts'
 import { fileStem } from './lib/shared/fileStem.ts'
 import { jsonSchemaForPromptArguments } from './lib/shared/jsonSchemaForPromptArguments.ts'
 import { manifestModule } from './lib/shared/manifestModule.ts'
@@ -64,10 +66,6 @@ function resolveExtensionUncached(path: string): string {
 }
 
 const NS = 'abide-virtual'
-
-function escapeRegex(value: string): string {
-    return value.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&')
-}
 
 /* Memoises a zero-arg async producer so repeat calls reuse the first in-flight promise. */
 function once<T>(produce: () => Promise<T>): () => Promise<T> {
@@ -791,7 +789,7 @@ async function scanPages(pagesDir: string): Promise<PagesScan> {
         return { pageFiles: [], layoutFiles: [] }
     }
     const allFiles = await Array.fromAsync(new Glob('**/*.abide').scan({ cwd: pagesDir }))
-    const leafIs = (name: string) => (file: string) => (file.split('/').pop() ?? '') === name
+    const leafIs = (name: string) => (file: string) => fileName(file) === name
     return {
         pageFiles: allFiles.filter(leafIs('page.abide')),
         layoutFiles: allFiles.filter(leafIs('layout.abide')),

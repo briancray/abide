@@ -1,5 +1,6 @@
 import { relative } from 'node:path'
 import type { BunPlugin } from 'bun'
+import { fileName } from '../../shared/fileName.ts'
 import { messageFromError } from '../../shared/messageFromError.ts'
 import { AbideCompileError } from './AbideCompileError.ts'
 import { analyzeComponent } from './analyzeComponent.ts'
@@ -42,7 +43,7 @@ export const abideUiPlugin: BunPlugin = {
         build.onLoad({ filter: /\.abide$/ }, async (args) => {
             const source = await Bun.file(args.path).text()
             const moduleId = relative(nearestProjectRoot(args.path, process.cwd()), args.path)
-            const isLayout = (args.path.split('/').pop() ?? '') === 'layout.abide'
+            const isLayout = fileName(args.path) === 'layout.abide'
             /* Bun frames a plugin throw at `<file>:0` regardless of the real spot, so
                carry the component path + resolved line:col in the message — otherwise a
                control-flow / compile error reads as `:0` and (in deep imports) can look

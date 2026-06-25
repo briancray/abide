@@ -3,17 +3,17 @@
 Root page — served at GET /. Every folder under src/ui/pages/ that contains a
 page.abide mounts at that folder's URL; the root layout.abide wraps it.
 
-The blocking await-block below (the `then` attribute sits ON the <template await>)
+The blocking await-block below (the `then` clause sits in the `{#await}` head)
 resolves on the server during SSR and renders inline — no pending placeholder. The
 decoded body is captured into the per-request cache, serialized into the HTML, and
-replayed on the client during hydration with no second fetch. A `then` *child*
+replayed on the client during hydration with no second fetch. A `{:then}` *branch*
 instead would stream the resolution in out of order.
 */
 import { cache } from '@abide/abide/shared/cache'
 import { getHello } from '$server/rpc/getHello.ts'
 </script>
 
-<template await={cache(getHello)()} then="hello">
+{#await cache(getHello)() then hello}
     <h1>{hello.message}</h1>
-</template>
+{/await}
 <p>Edit <code>src/ui/pages/page.abide</code> and the page hot-reloads.</p>

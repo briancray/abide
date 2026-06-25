@@ -83,16 +83,17 @@ const groups = [
             <a href={url('/')} class="text-base font-semibold">abide kitchen-sink</a>
             <nav class="mt-6 space-y-6 text-sm">
                 {#for group of groups by group.title}
-                <div>
-                    <h2 class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                        {group.title}
-                    </h2>
-                    <ul class="space-y-1">
-                        {#for link of group.links by link.href}
-                        <li><a href={url(link.href)} class={linkClass(link.href)}>{link.label}</a></li>
-                        {/for}
-                    </ul>
-                </div>
+                    <div>
+                        <h2
+                            class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                            {group.title}
+                        </h2>
+                        <ul class="space-y-1">
+                            {#for link of group.links by link.href}
+                                <li><a href={url(link.href)} class={linkClass(link.href)}>{link.label}</a></li>
+                            {/for}
+                        </ul>
+                    </div>
                 {/for}
             </nav>
         </aside>

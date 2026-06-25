@@ -140,29 +140,28 @@ async function send() {
     <button disabled={!text}>send</button>
 </form>
 
-<template if={latest}>
+{#if latest}
     <p>latest from {latest.from}</p>
-<template else>
+{:else}
     <p>no messages yet</p>
-</template>
+{/if}
 
-<template switch={view}>
-<template case="mine"><p>showing your messages</p></template>
-<template default><p>showing every message</p></template>
-</template>
+{#switch view}
+{:case 'mine'}<p>showing your messages</p>
+{:default}<p>showing every message</p>
+{/switch}
 
-<template await={history}>
+{#await history}
     <p>loading…</p>
-<template then="data">
+{:then data}
     <ul>
-        <template each={data} as="message" key="message.id" index="i">
+        {#for message, i of data by message.id}
             {i}. {line(message)}
-        </template>
+        {/for}
     </ul>
-<template catch="reason">
+{:catch reason}
     <p>failed: {reason.message}</p>
-</template>
-</template>
+{/await}
 
 <style>
 form { display: flex; gap: 0.5rem; }

@@ -33,9 +33,9 @@ const PAGE = `
     <main>
         <h1>Catalogue</h1>
         <ul>
-            <template each={items} as="item" key="item.id">
+            {#for item of items by item.id}
                 <li><span>{item.label}</span> #{item.id}</li>
-            </template>
+            {/for}
         </ul>
     </main>
 `

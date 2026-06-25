@@ -3,13 +3,13 @@ import { batch } from './batch.ts'
 import { createComputedNode } from './createComputedNode.ts'
 import { createSignalNode } from './createSignalNode.ts'
 import { PATCH_BUS } from './PATCH_BUS.ts'
+import { pathSegments } from './pathSegments.ts'
 import { readNode } from './readNode.ts'
 import { trigger } from './trigger.ts'
 import type { Cell } from './types/Cell.ts'
 import type { Doc } from './types/Doc.ts'
 import type { Patch } from './types/Patch.ts'
 import type { ReactiveNode } from './types/ReactiveNode.ts'
-import { unescapeKey } from './unescapeKey.ts'
 import { walkPath } from './walkPath.ts'
 import { writeNode } from './writeNode.ts'
 
@@ -132,7 +132,7 @@ export function createDoc(initial: unknown): Doc {
     function apply(patch: Patch): void {
         /* Segments index the tree, so they carry the REAL keys (unescaped); the path
            strings (parentPath, node-map keys) stay escaped, re-walked through walkPath. */
-        const segments = patch.path === '' ? [] : patch.path.split('/').map(unescapeKey)
+        const segments = patch.path === '' ? [] : pathSegments(patch.path)
         /* Capture the pre-image only when a consumer is listening (the inverse's only
            cost): a replace/remove inverts to the value it overwrote, an add to a
            remove (computed post-apply, below, to resolve an array append's index). */
@@ -220,7 +220,7 @@ export function createDoc(initial: unknown): Doc {
     */
     function cell<T>(path: string): Cell<T> {
         const node = nodeFor(path)
-        const segments = path.split('/').map(unescapeKey)
+        const segments = pathSegments(path)
         const leafKey = segments[segments.length - 1] as string
         /* Auto-vivify missing ancestor objects so binding a nested path on a doc
            booted shallow (e.g. `state({})`) doesn't crash, and a later `set` writes

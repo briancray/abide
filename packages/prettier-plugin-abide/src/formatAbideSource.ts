@@ -15,6 +15,7 @@ export async function formatAbideSource(source: string, options: Options): Promi
     const segments = scanRegions(source)
     const expressions: string[] = []
     const blocks: Extract<Segment, { kind: 'script' | 'style' }>[] = []
+    const markers: Extract<Segment, { kind: 'block-open' | 'block-mid' | 'block-close' }>[] = []
     let masked = ''
     for (const segment of segments) {
         if (segment.kind === 'raw') {
@@ -25,6 +26,19 @@ export async function formatAbideSource(source: string, options: Options): Promi
             // quotes it, which the attribute-form restore below unwraps.
             masked += expressionToken(expressions.length)
             expressions.push(segment.value)
+        } else if (segment.kind === 'block-open') {
+            // The wrapper's open/close tags become the block's head/tail lines; the
+            // body in between is its children, which the HTML pass indents one level.
+            masked += `<abide-block data-i="${markers.length}">`
+            markers.push(segment)
+        } else if (segment.kind === 'block-mid') {
+            // A branch keyword is an empty child at body indent, dedented on restore.
+            masked += `<abide-mid data-i="${markers.length}"></abide-mid>`
+            markers.push(segment)
+        } else if (segment.kind === 'block-close') {
+            // Paired to its open by nesting on restore — close tags carry no index.
+            masked += `</abide-block>`
+            markers.push(segment)
         } else {
             masked += `<abide-${segment.kind} data-i="${blocks.length}"></abide-${segment.kind}>`
             blocks.push(segment)
@@ -42,6 +56,7 @@ export async function formatAbideSource(source: string, options: Options): Promi
         return source
     }
     output = restoreComponentTags(output, componentNames)
+    output = await restoreControlFlow(output, markers, options)
     output = await restoreExpressions(output, expressions, options)
     return restoreBlocks(output, blocks, options)
 }
@@ -177,6 +192,93 @@ async function restoreExpressions(
             .replace(token, () => `{${code}}`)
     }
     return restored
+}
+
+/* Restores every control-flow wrapper to its brace form. The HTML pass put each
+   standalone block tag on its own line at the body indent and recursed for nesting;
+   this walks the output line by line so the original indentation rides along. Open
+   tags become `{#…}` and push their matching `{/…}` onto a stack (close tags carry no
+   index — abide closes mirror their open's keyword); a branch keyword `{:…}` is pulled
+   back one level to align with its block's head/tail; an inline-kept block (left within
+   a text line) has its tags swapped in place without re-indenting. */
+async function restoreControlFlow(
+    output: string,
+    markers: Extract<Segment, { kind: 'block-open' | 'block-mid' | 'block-close' }>[],
+    options: Options,
+): Promise<string> {
+    if (markers.length === 0) {
+        return output
+    }
+    const indentUnit = options.useTabs ? '\t' : ' '.repeat(options.tabWidth ?? 4)
+    // Matching `{/…}` per open block, innermost last — popped by the next close tag.
+    const closeStack: string[] = []
+    const restored: string[] = []
+    for (const line of output.split('\n')) {
+        if (!/<abide-(?:block|mid)|<\/abide-block>/.test(line)) {
+            restored.push(line)
+            continue
+        }
+        const standaloneMid = /^\s*<abide-mid data-i="\d+"><\/abide-mid>$/.test(line)
+        const processed = await restoreMarkerLine(line, markers, closeStack, options)
+        restored.push(
+            standaloneMid && processed.startsWith(indentUnit)
+                ? processed.slice(indentUnit.length)
+                : processed,
+        )
+    }
+    return restored.join('\n')
+}
+
+/* Replaces every block-tag placeholder on one line with its brace form, in order,
+   threading the shared close-tag stack. Leading indentation and any surrounding text
+   ride along untouched, so this serves both standalone and inline-kept block tags. */
+async function restoreMarkerLine(
+    line: string,
+    markers: Extract<Segment, { kind: 'block-open' | 'block-mid' | 'block-close' }>[],
+    closeStack: string[],
+    options: Options,
+): Promise<string> {
+    const token =
+        /<abide-block data-i="(\d+)">|<abide-mid data-i="(\d+)"><\/abide-mid>|<\/abide-block>/g
+    let result = ''
+    let last = 0
+    let match: RegExpExecArray | null
+    while ((match = token.exec(line)) !== null) {
+        result += line.slice(last, match.index)
+        if (match[1] !== undefined) {
+            const code = markers[Number(match[1])]?.value as string
+            closeStack.push(`{/${markerKeyword(code)}}`)
+            result += `{${await formatMarkerCode(code, options)}}`
+        } else if (match[2] !== undefined) {
+            result += `{${await formatMarkerCode(markers[Number(match[2])]?.value as string, options)}}`
+        } else {
+            result += closeStack.pop() ?? '{/}'
+        }
+        last = match.index + match[0].length
+    }
+    return result + line.slice(last)
+}
+
+/* The keyword right after a marker's sigil (`#await expr` -> `await`), naming the
+   matching `{/…}` close. */
+function markerKeyword(code: string): string {
+    return code.slice(1).trimStart().match(/^\w+/)?.[0] ?? ''
+}
+
+/* A marker re-emitted with its trailing expression formatted: the sigil and keyword(s)
+   are kept verbatim (`{:else if cond}` keeps `:else if`), the remainder formatted as a
+   one-line TS expression — which falls back to the original for the abide connector
+   clauses (`#for x of list`, `… by key`) that aren't valid TS. */
+async function formatMarkerCode(code: string, options: Options): Promise<string> {
+    const sigil = code[0]
+    const afterSigil = code.slice(1).trimStart()
+    const keywordMatch = afterSigil.match(/^else\s+if\b|^\w+/)
+    const keyword = keywordMatch ? keywordMatch[0].replace(/\s+/g, ' ') : ''
+    const rest = afterSigil.slice(keywordMatch?.[0].length ?? 0).trim()
+    if (rest === '') {
+        return `${sigil}${keyword}`
+    }
+    return `${sigil}${keyword} ${await formatExpression(rest, options)}`
 }
 
 /* The expression formatted to one line, or the original on failure / multi-line. */

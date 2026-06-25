@@ -125,6 +125,61 @@ describe('prettier-plugin-abide', () => {
         expect(await format(once)).toBe(once)
     })
 
+    test('indents a control-flow block body, markers kept at the parent level', async () => {
+        const out = await format(
+            `<section>\n<h2>title</h2>\n{#await cachedRaw}\n<p>loading</p>\n{:then response}\n<p>status={response.status}</p>\n{/await}\n</section>\n`,
+        )
+        expect(out).toContain('    <h2>title</h2>')
+        expect(out).toContain('    {#await cachedRaw}')
+        expect(out).toContain('        <p>loading</p>')
+        expect(out).toContain('    {:then response}')
+        expect(out).toContain('        <p>status={response.status}</p>')
+        expect(out).toContain('    {/await}')
+    })
+
+    test('indents nested control-flow blocks, each marker at its own level', async () => {
+        const out = await format(
+            `<ul>\n{#each items as item}\n<li>\n{#if item.active}\n<span>{item.name}</span>\n{/if}\n</li>\n{/each}\n</ul>\n`,
+        )
+        expect(out).toContain('    {#each items as item}')
+        expect(out).toContain('        <li>')
+        expect(out).toContain('            {#if item.active}')
+        expect(out).toContain('                <span>{item.name}</span>')
+        expect(out).toContain('            {/if}')
+        expect(out).toContain('        </li>')
+        expect(out).toContain('    {/each}')
+    })
+
+    test('keeps every branch of an {:else if} chain at the block level', async () => {
+        const out = await format(
+            `{#if a}\n<p>A</p>\n{:else if b}\n<p>B</p>\n{:else}\n<p>C</p>\n{/if}\n`,
+        )
+        expect(out).toContain('{#if a}\n    <p>A</p>')
+        expect(out).toContain('{:else if b}\n    <p>B</p>')
+        expect(out).toContain('{:else}\n    <p>C</p>')
+        expect(out).toContain('{/if}')
+    })
+
+    test('normalises the head expression of a control-flow block', async () => {
+        const out = await format(
+            `{#each items.filter(  (x)=>x.on )   as item}\n<p>{item}</p>\n{/each}\n`,
+        )
+        expect(out).toContain('{#each items.filter((x) => x.on) as item}')
+    })
+
+    test('preserves an inline control-flow block within text', async () => {
+        const out = await format(`<p>Hello {#if name}{name}{:else}there{/if}!</p>\n`)
+        expect(out).toContain('{#if name}')
+        expect(out).toContain('{:else}')
+        expect(out).toContain('{/if}')
+    })
+
+    test('is idempotent for control-flow blocks', async () => {
+        const source = `<section>\n{#await p}\n<p>loading</p>\n{:then v}\n<p>{v}</p>\n{:catch e}\n<p>{e.message}</p>\n{/await}\n</section>\n`
+        const once = await format(source)
+        expect(await format(once)).toBe(once)
+    })
+
     test('is idempotent for a multi-line block comment in a nested script', async () => {
         // Prettier copies a block comment's interior verbatim; re-indenting it each
         // pass used to compound its leading whitespace. The continuation must hold.

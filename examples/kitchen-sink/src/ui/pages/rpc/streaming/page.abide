@@ -88,11 +88,11 @@ async function runJsonl() {
         run tickFeed (close after 5 frames)
     </button>
     {#if sseFrames.length > 0}
-    <ul class="mt-3 space-y-1 font-mono text-xs text-slate-700">
-        {#for frame of sseFrames by frame.n}
-        <li>{frame.text}</li>
-        {/for}
-    </ul>
+        <ul class="mt-3 space-y-1 font-mono text-xs text-slate-700">
+            {#for frame of sseFrames by frame.n}
+                <li>{frame.text}</li>
+            {/for}
+        </ul>
     {/if}
 </section>
 
@@ -105,11 +105,11 @@ async function runJsonl() {
         {'run countLog({ to: 8 })'}
     </button>
     {#if jsonlFrames.length > 0}
-    <ul class="mt-3 space-y-1 font-mono text-xs text-slate-700">
-        {#for frame of jsonlFrames by frame.n}
-        <li>{frame.text}</li>
-        {/for}
-    </ul>
+        <ul class="mt-3 space-y-1 font-mono text-xs text-slate-700">
+            {#for frame of jsonlFrames by frame.n}
+                <li>{frame.text}</li>
+            {/for}
+        </ul>
     {/if}
 </section>
 

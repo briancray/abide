@@ -22,7 +22,7 @@ const externalHref = scope().computed(() => url('https://bun.sh', { utm: 'abide'
     <code class="font-mono">pages/post/[id]/page.abide</code> →
     <code class="font-mono">/post/[id]</code>; <code class="font-mono">[...rest]</code> catches all.
     A <code class="font-mono">layout.abide</code> wraps the pages beneath its folder (chained
-    outermost-first); failure boundaries are <code class="font-mono">&lt;template try&gt;</code>.
+    outermost-first); failure boundaries are <code class="font-mono">{'{#try}'}</code>.
 </p>
 
 <section class="mt-6">
@@ -51,8 +51,8 @@ const externalHref = scope().computed(() => url('https://bun.sh', { utm: 'abide'
                         >
                     </td>
                     <td class="px-4 py-2 text-slate-600">
-                        <code class="font-mono">&lt;template try&gt;</code> catching a render throw
-                        and rendering its <code class="font-mono">&lt;template catch&gt;</code>
+                        <code class="font-mono">{'{#try}'}</code> catching a render throw and
+                        rendering its <code class="font-mono">{'{:catch}'}</code>
                     </td>
                 </tr>
             </tbody>
@@ -71,9 +71,8 @@ const externalHref = scope().computed(() => url('https://bun.sh', { utm: 'abide'
         navigations skip the fetch and remount.
     </p>
     <p class="mt-3 font-mono text-sm text-slate-700">
-        page.url.pathname = <strong>{currentPath}</strong> {#if navigating}<span class="text-amber-600"
-            >(navigating…)</span
-        >{/if}
+        page.url.pathname = <strong>{currentPath}</strong>
+        {#if navigating}<span class="text-amber-600">(navigating…)</span>{/if}
     </p>
     <div class="mt-3 flex flex-wrap gap-2 text-sm">
         <button

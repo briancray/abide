@@ -4,6 +4,7 @@ import { effect } from '../effect.ts'
 import { claimChild } from '../runtime/claimChild.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { appendSnippet } from './appendSnippet.ts'
+import { isComment } from './isComment.ts'
 import { parseRawNodes } from './parseRawNodes.ts'
 
 const CLOSE = '/abide:html'
@@ -105,9 +106,4 @@ function appendRawHtml(parent: Node, read: () => unknown): void {
     effect(() => {
         set(markup())
     })
-}
-
-/* A comment node carrying exactly `data`. */
-function isComment(node: Node, data: string): boolean {
-    return (node as { data?: string }).data === data && node.childNodes.length === 0
 }

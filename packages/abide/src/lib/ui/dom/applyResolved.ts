@@ -1,4 +1,5 @@
 import { seedResolved } from '../seedResolved.ts'
+import { isComment } from './isComment.ts'
 
 /*
 Bundle-side consumer of an SSR stream chunk, the counterpart of the doc stream's inline
@@ -69,11 +70,6 @@ export function applyResolved(root: Element, frame: string): void {
         parent.insertBefore(child, anchor)
         anchor = child.nextSibling
     }
-}
-
-/* A comment node carrying exactly `data`. */
-function isComment(node: Node, data: string): boolean {
-    return (node as { data?: string }).data === data && node.childNodes.length === 0
 }
 
 /* Depth-first search for the parent + open-marker comment of a boundary. */

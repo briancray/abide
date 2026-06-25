@@ -1,4 +1,5 @@
 import { assertExhaustive } from '../../shared/assertExhaustive.ts'
+import { escapeRegex } from '../../shared/escapeRegex.ts'
 import { OUTLET_CLOSE, OUTLET_OPEN } from '../runtime/OUTLET_MARKER.ts'
 import { OUTLET_TAG } from '../runtime/OUTLET_TAG.ts'
 import {
@@ -11,6 +12,7 @@ import { composeProps } from './composeProps.ts'
 import { groupBindParts } from './groupBindParts.ts'
 import { isAnchorPositioned } from './isAnchorPositioned.ts'
 import { lowerContext } from './lowerContext.ts'
+import { makeVarNamer } from './makeVarNamer.ts'
 import { resolveBranches } from './resolveBranches.ts'
 import { scopeAttr } from './scopeAttr.ts'
 import { skeletonContext } from './skeletonContext.ts'
@@ -55,10 +57,9 @@ export function generateSSR(
     computedNames: ReadonlySet<string>,
     isLayout = false,
 ): string {
-    /* Compile-time counter for unique temp var names (runtime block ids, child render
-       results) — block ids themselves are allocated at runtime via `$ctx.next++`. */
-    let varCounter = 0
-    const nextVar = (prefix: string): string => `${prefix}${varCounter++}`
+    /* Unique temp var names (child render results); runtime block ids are
+       allocated separately at runtime via `$ctx.next++`. */
+    const nextVar = makeVarNamer()
 
     /* The shared signal→`model` lowering + branch-scoped nested-script deref scope. */
     const {
@@ -90,13 +91,12 @@ export function generateSSR(
        regex metacharacters escaped, or e.g. a trailing `$` would read as an end-anchor and the
        call site would never match — leaving an un-awaited Promise stringified as `[object
        Promise]`. */
-    const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     /* A leading boundary that, unlike `\b`, also fires before a `$`-leading name: `\b$row`
        never matches (`$` is a non-word char, so there is no word boundary before it), which
        would silently miss every `$row(...)` call. A negative lookbehind for word-or-`$`
        matches the same call sites as `\b` for word-leading names while also catching them. */
     const callPattern = (name: string): RegExp =>
-        new RegExp(`(?<![$\\w])${escapeRegExp(name)}\\s*\\(`)
+        new RegExp(`(?<![$\\w])${escapeRegex(name)}\\s*\\(`)
     /* A subtree call to any of `names` from a TEXT interpolation (`name()` / `name(args)`). */
     const subtreeCalls = (children: TemplateNode[], names: ReadonlySet<string>): boolean =>
         children.some((child) => {

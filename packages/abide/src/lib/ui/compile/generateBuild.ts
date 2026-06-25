@@ -10,6 +10,7 @@ import { groupBindParts } from './groupBindParts.ts'
 import { isControlFlow } from './isControlFlow.ts'
 import { isWhitespaceText } from './isWhitespaceText.ts'
 import { lowerContext } from './lowerContext.ts'
+import { makeVarNamer } from './makeVarNamer.ts'
 import { resolveBranches } from './resolveBranches.ts'
 import { scopeAttr } from './scopeAttr.ts'
 import { skeletonContext } from './skeletonContext.ts'
@@ -61,8 +62,7 @@ export function generateBuild(
     computedNames: ReadonlySet<string>,
     isLayout = false,
 ): string {
-    let counter = 0
-    const nextVar = (prefix: string): string => `${prefix}${counter++}`
+    const nextVar = makeVarNamer()
 
     /* In a layout, `<slot/>` outlets are rewritten to `OUTLET_TAG` elements up front
        (`asOutlet`) so the static-clone path carries them as ordinary structure. `asOutlet`

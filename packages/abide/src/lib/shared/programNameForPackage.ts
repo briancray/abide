@@ -1,3 +1,5 @@
+import { fileName } from './fileName.ts'
+
 /*
 Derives the CLI program/binary name from a package.json `name` field.
 Scoped names (`@scope/tool`) keep only the final segment so the value is
@@ -10,5 +12,5 @@ export function programNameForPackage(name: string | undefined): string {
     if (name === undefined || name === '') {
         return 'app'
     }
-    return name.split('/').pop() || 'app'
+    return fileName(name) || 'app'
 }

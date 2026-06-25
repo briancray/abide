@@ -52,10 +52,12 @@ export function scanRegions(source: string): Segment[] {
         return position - 1
     }
 
-    /* Reads the `{…}` at `cursor` into an `expr` segment spanning the whole braced
-       run and carrying the trimmed code; the printer re-emits the hugging braces, so
-       inner padding is normalised away. An empty/whitespace expression is left in the
-       raw flow untouched (`{}` is not an expression). */
+    /* Reads the `{…}` at `cursor` into a segment spanning the whole braced run and
+       carrying the trimmed code; the printer re-emits the hugging braces, so inner
+       padding is normalised away. A leading `#`/`:`/`/` marks a control-flow block
+       open/branch/close (abide grammar: those sigils never start a bare interpolation),
+       masked to a wrapper element so the HTML pass indents the body; anything else is an
+       `expr`. An empty/whitespace expression is left in the raw flow (`{}` is not one). */
     function readExpression(): void {
         const close = matchBrace()
         const code = source.slice(cursor + 1, close).trim()
@@ -64,7 +66,15 @@ export function scanRegions(source: string): Segment[] {
             return
         }
         flushRaw(cursor)
-        segments.push({ kind: 'expr', value: code, start: cursor, end: close + 1 })
+        const kind =
+            code[0] === '#'
+                ? 'block-open'
+                : code[0] === '/'
+                  ? 'block-close'
+                  : code[0] === ':'
+                    ? 'block-mid'
+                    : 'expr'
+        segments.push({ kind, value: code, start: cursor, end: close + 1 })
         rawStart = close + 1
         cursor = close + 1
     }

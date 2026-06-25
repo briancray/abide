@@ -62,24 +62,26 @@ const chatLog = scope().computed(() => cache(getChatLog)())
                 messages published — <code class="font-mono">invalidate</code> (refetched)
             </p>
             {#await chatCount}
-            <p class="mt-1 font-mono text-3xl text-slate-400">…</p>
+                <p class="mt-1 font-mono text-3xl text-slate-400">…</p>
             {:then data}
-            <p class="mt-1 font-mono text-3xl text-slate-900">{data.published}</p>
+                <p class="mt-1 font-mono text-3xl text-slate-900">{data.published}</p>
             {/await}
         </div>
         <div class="rounded-md border border-slate-200 p-3">
             <p class="text-xs text-slate-500">
                 recent — <code class="font-mono">patch</code> (folded in, no refetch)
             </p>
-            {#await chatLog then data} {#if data.messages.length === 0}
-            <p class="mt-1 text-sm text-slate-400">none yet</p>
-            {:else}
-            <ul class="mt-1 space-y-0.5 text-sm text-slate-700">
-                {#for message of data.messages.slice(-5) by message.id}
-                <li><strong>{message.from}</strong>: {message.text}</li>
-                {/for}
-            </ul>
-            {/if} {/await}
+            {#await chatLog then data}
+                {#if data.messages.length === 0}
+                    <p class="mt-1 text-sm text-slate-400">none yet</p>
+                {:else}
+                    <ul class="mt-1 space-y-0.5 text-sm text-slate-700">
+                        {#for message of data.messages.slice(-5) by message.id}
+                            <li><strong>{message.from}</strong>: {message.text}</li>
+                        {/for}
+                    </ul>
+                {/if}
+            {/await}
         </div>
     </div>
     <button
@@ -103,17 +105,18 @@ const chatLog = scope().computed(() => cache(getChatLog)())
         <div class="rounded-md border border-slate-200 p-3">
             <p class="text-xs text-slate-500">counter</p>
             {#await counter}
-            <p class="mt-1 font-mono text-3xl text-slate-400">…</p>
+                <p class="mt-1 font-mono text-3xl text-slate-400">…</p>
             {:then data}
-            <p class="mt-1 font-mono text-3xl text-slate-900">{data.count}</p>
+                <p class="mt-1 font-mono text-3xl text-slate-900">{data.count}</p>
             {:catch err}
-            <p class="mt-1 font-mono text-sm text-red-600">{err.message}</p>
+                <p class="mt-1 font-mono text-sm text-red-600">{err.message}</p>
             {/await}
         </div>
         <div class="rounded-md border border-slate-200 p-3">
             <p class="text-xs text-slate-500">mirror</p>
-            {#await mirror} {:then data}
-            <p class="mt-1 font-mono text-3xl text-slate-900">{data.count}</p>
+            {#await mirror}
+            {:then data}
+                <p class="mt-1 font-mono text-3xl text-slate-900">{data.count}</p>
             {/await}
         </div>
     </div>
