@@ -66,7 +66,7 @@ function run(source: string, host: Element, model: unknown, mode: 'mount' | 'hyd
 describe('scoped <script> in a control-flow branch', () => {
     /* An `if` branch declares a PLAIN local signal seeded from in-scope doc data;
        its markup auto-derefs the binding, like a `computed`. */
-    const IF = `<main><template if={model.on}><script>let n = scope().state(model.base)</script><p>{n}</p><button onclick={() => (n = n + 1)}>+</button></template></main>`
+    const IF = `<main>{#if model.on}<script>let n = scope().state(model.base)</script><p>{n}</p><button onclick={() => (n = n + 1)}>+</button>{/if}</main>`
 
     test('SSR renders the branch-local signal seeded from doc data', () => {
         expect(ssr(IF, doc({ on: true, base: 5 })).html).toBe(
@@ -118,7 +118,7 @@ describe('scoped <script> in a control-flow branch', () => {
     })
 
     test('a switch case carries its own scoped signal', () => {
-        const SWITCH = `<main><template switch={model.k}><template case="'a'"><script>let label = scope().state(model.base + '!')</script><span>{label}</span></template><template default><b>?</b></template></template></main>`
+        const SWITCH = `<main>{#switch model.k}{:case 'a'}<script>let label = scope().state(model.base + '!')</script><span>{label}</span>{:default}<b>?</b>{/switch}</main>`
         expect(ssr(SWITCH, doc({ k: 'a', base: 'hi' })).html).toBe(
             '<main><!--a--><!--[--><span>hi!</span><!--]--></main>',
         )
@@ -133,7 +133,7 @@ describe('scoped <script> in a control-flow branch', () => {
 
     /* Each row gets its OWN scoped signal, seeded from that row's item — per-row
        local state, isolated row to row. */
-    const EACH = `<ul><template each={model.items} as="item" key={item.id}><script>let n = scope().state(item.base * 10)</script><li><button onclick={() => (n = n + 1)}>{n}</button></li></template></ul>`
+    const EACH = `<ul>{#for item of model.items by item.id}<script>let n = scope().state(item.base * 10)</script><li><button onclick={() => (n = n + 1)}>{n}</button></li>{/for}</ul>`
 
     test('SSR seeds each row independently', () => {
         expect(
@@ -177,8 +177,8 @@ describe('scoped <script> in a control-flow branch', () => {
 
     /* A branch-scoped `effect` is owned by the branch's render scope: it runs on
        mount, re-runs on its deps, and disposes when the branch leaves. */
-    const FX = `<main><template if={model.on}><script>let n = scope().state(model.base)
-effect(() => record(n + ':' + model.base))</script><button onclick={() => (n = n + 1)}>{n}</button></template></main>`
+    const FX = `<main>{#if model.on}<script>let n = scope().state(model.base)
+effect(() => record(n + ':' + model.base))</script><button onclick={() => (n = n + 1)}>{n}</button>{/if}</main>`
 
     test('client: branch effect runs, is reactive, disposes on leave, re-seeds', () => {
         effectLog = []
@@ -208,7 +208,7 @@ effect(() => record(n + ':' + model.base))</script><button onclick={() => (n = n
     /* The headline case: a `then` branch declares state computed from the resolved
        value — the ergonomic that top-level await gave, without async ownership. */
     test('await then: scoped state seeded from the resolved value', async () => {
-        const AWAIT = `<main><template await={model.load}><p>loading</p><template then="foo"><script>let a = scope().state(foo.bar)</script><span>{a}</span></template></template></main>`
+        const AWAIT = `<main>{#await model.load}<p>loading</p>{:then foo}<script>let a = scope().state(foo.bar)</script><span>{a}</span>{/await}</main>`
         const host = document.createElement('div')
         run(AWAIT, host, doc({ load: Promise.resolve({ bar: 'ready' }) }), 'mount')
         expect(host.textContent).toBe('loading')

@@ -92,7 +92,7 @@ describe('skeleton-context parity across fresh-context boundaries', () => {
             source: `
                 <script>let active = scope().state(true)</script>
                 <section class={active ? 'on' : 'off'}>
-                    <Box><template if={active}><span>shown</span></template></Box>
+                    <Box>{#if active}<span>shown</span>{/if}</Box>
                 </section>`,
         },
         {
@@ -108,9 +108,9 @@ describe('skeleton-context parity across fresh-context boundaries', () => {
             source: `
                 <script>let active = scope().state(true)</script>
                 <section class={active ? 'on' : 'off'}>
-                    <template if={active}>
-                        <Box><template if={active}><span>deep</span></template></Box>
-                    </template>
+                    {#if active}
+                        <Box>{#if active}<span>deep</span>{/if}</Box>
+                    {/if}
                 </section>`,
         },
     ]
@@ -133,7 +133,7 @@ describe('skeleton-context parity across fresh-context boundaries', () => {
         const source = `
             <script>let active = scope().state(true)</script>
             <section class={active ? 'on' : 'off'}>
-                <template name="row"><template if={active}><span>x</span></template></template>
+                <template name="row">{#if active}<span>x</span>{/if}</template>
                 {row()}
             </section>`
         const built = component(source)
@@ -161,7 +161,7 @@ describe('skeleton-context parity across fresh-context boundaries', () => {
         const Panel = `
             <script>let open = scope().state(true)</script>
             <aside class={open ? 'open' : 'shut'}>
-                <slot><template if={open}><span>fallback</span></template></slot>
+                <slot>{#if open}<span>fallback</span>{/if}</slot>
             </aside>`
         const server = (await component(Panel).render()) as SsrRender
         const client = clientHtml((host) => component(Panel)(host))
