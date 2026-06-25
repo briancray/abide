@@ -1,5 +1,53 @@
 # abide
 
+## 0.42.0
+
+### Minor Changes
+
+- [`568956c`](https://github.com/briancray/abide/commit/568956c88ff1d32ca79a2aa8a1a0ffffeb25afe3) - reject stray {:…}/{/…} tokens outside a block ([`1b5d54e`](https://github.com/briancray/abide/commit/1b5d54e7798acfa7c9b15ce6b65b0c2b6a8c2c07))
+
+- [`568956c`](https://github.com/briancray/abide/commit/568956c88ff1d32ca79a2aa8a1a0ffffeb25afe3) - parse {#switch}/{:case}/{:default} blocks to the switch AST ([`448da38`](https://github.com/briancray/abide/commit/448da3840c120ac3b15d239c090f123c25527fec))
+
+- [`568956c`](https://github.com/briancray/abide/commit/568956c88ff1d32ca79a2aa8a1a0ffffeb25afe3) - parse {#for … of … by …} blocks to the each AST ([`7bb2ac8`](https://github.com/briancray/abide/commit/7bb2ac8f3012e3d40cfcbe8ddf277d6a8732ee93))
+
+- [`568956c`](https://github.com/briancray/abide/commit/568956c88ff1d32ca79a2aa8a1a0ffffeb25afe3) - LSP semantic-token encoder + extract offsetToPosition ([`7daeb92`](https://github.com/briancray/abide/commit/7daeb926f045058aa452b5f539ddd75b0d8efa67))
+
+- [`568956c`](https://github.com/briancray/abide/commit/568956c88ff1d32ca79a2aa8a1a0ffffeb25afe3) - semantic-token legend + TS-classification mapping for abide lsp ([`892f97b`](https://github.com/briancray/abide/commit/892f97bbc6dfd8af9301297276995f7060fe3f9a))
+
+- [`568956c`](https://github.com/briancray/abide/commit/568956c88ff1d32ca79a2aa8a1a0ffffeb25afe3) - type-aware semanticClassifications on the shadow language service ([`9377dd2`](https://github.com/briancray/abide/commit/9377dd24d855cde790d960fceef00255904ee926))
+
+- [`568956c`](https://github.com/briancray/abide/commit/568956c88ff1d32ca79a2aa8a1a0ffffeb25afe3) - block control-flow grammar formatting + shared helpers ([`b39c0a7`](https://github.com/briancray/abide/commit/b39c0a70696b031b63ef157c67360c2da0fd60b0))
+
+- [`568956c`](https://github.com/briancray/abide/commit/568956c88ff1d32ca79a2aa8a1a0ffffeb25afe3) - zed onboarding — auto-install extension + enable semantic tokens ([`b47acc7`](https://github.com/briancray/abide/commit/b47acc7cc106956f115c70b110c29ce017a71cd0))
+
+- [`568956c`](https://github.com/briancray/abide/commit/568956c88ff1d32ca79a2aa8a1a0ffffeb25afe3) - parse {#if}/{:else if}/{:else} blocks to the if AST ([`b662397`](https://github.com/briancray/abide/commit/b66239765bae2ec7a24d70bc7b2edbcbe400614c))
+
+- [`568956c`](https://github.com/briancray/abide/commit/568956c88ff1d32ca79a2aa8a1a0ffffeb25afe3) - parse {#try}/{:catch}/{:finally} blocks to the try AST ([`b82c3dd`](https://github.com/briancray/abide/commit/b82c3ddaaec3db3941639df952e568f017d6c767))
+
+- [`568956c`](https://github.com/briancray/abide/commit/568956c88ff1d32ca79a2aa8a1a0ffffeb25afe3) - Breaking: remove <template> control-flow directives in favor of {#…} blocks ([`bf5cf89`](https://github.com/briancray/abide/commit/bf5cf89813a8dcbc967e1303bd2509e18e701761))
+
+- [`568956c`](https://github.com/briancray/abide/commit/568956c88ff1d32ca79a2aa8a1a0ffffeb25afe3) - color of/by connectors in {#for} block heads ([`c958614`](https://github.com/briancray/abide/commit/c9586147f8196e9e6301b14cdb08986b36da2751))
+
+- [`568956c`](https://github.com/briancray/abide/commit/568956c88ff1d32ca79a2aa8a1a0ffffeb25afe3) - parse {#await} streaming + blocking blocks to the await AST ([`cfd7ff0`](https://github.com/briancray/abide/commit/cfd7ff0102b2be2ac241a6c0b1965949aa6621bf))
+
+- [`568956c`](https://github.com/briancray/abide/commit/568956c88ff1d32ca79a2aa8a1a0ffffeb25afe3) - serve textDocument/semanticTokens/full for .abide ([`e152663`](https://github.com/briancray/abide/commit/e152663dae9e60e13d16f0edf4b0a140a99b1bfb))
+
+- [`568956c`](https://github.com/briancray/abide/commit/568956c88ff1d32ca79a2aa8a1a0ffffeb25afe3) - structural {#…} block framing tokenizer ([`e1e85e8`](https://github.com/briancray/abide/commit/e1e85e847e9442f8c6140df5346b1d37f8cfad54))
+
+### Patch Changes
+
+- [`568956c`](https://github.com/briancray/abide/commit/568956c88ff1d32ca79a2aa8a1a0ffffeb25afe3) - point block-construct loc at its primary expression (shadow source-map fidelity) ([`0fb0efa`](https://github.com/briancray/abide/commit/0fb0efab43639331c856969fdb6a7b83bd7ab604))
+
+- [`568956c`](https://github.com/briancray/abide/commit/568956c88ff1d32ca79a2aa8a1a0ffffeb25afe3) - unify block/branch child-scan loops behind a shared helper ([`4683098`](https://github.com/briancray/abide/commit/4683098df96edd0321dc66d200372e0fbedce2e2))
+
+- [`568956c`](https://github.com/briancray/abide/commit/568956c88ff1d32ca79a2aa8a1a0ffffeb25afe3) - document {#…} control-flow blocks in the AGENTS surface map ([`68fe96f`](https://github.com/briancray/abide/commit/68fe96f3294a228b91eef5cde37c0300673eb88a))
+
+- [`568956c`](https://github.com/briancray/abide/commit/568956c88ff1d32ca79a2aa8a1a0ffffeb25afe3) - map {#for}/{:then}/{:catch} bindings + by-key to source so hover & semantic tokens land on them ([`e8447e8`](https://github.com/briancray/abide/commit/e8447e8d54934737b80c2f49d4f4d1b134786531))
+
+- [`568956c`](https://github.com/briancray/abide/commit/568956c88ff1d32ca79a2aa8a1a0ffffeb25afe3) - map <template args> snippet param + await/try {:catch} bindings (+ index/catch/snippet tests) ([`f724d10`](https://github.com/briancray/abide/commit/f724d101f5baed79de2d39a1ab9598eb9d1eb818))
+
+- [`568956c`](https://github.com/briancray/abide/commit/568956c88ff1d32ca79a2aa8a1a0ffffeb25afe3) - satisfy noUncheckedIndexedAccess in block-token + shadow paths ([`fbb6e44`](https://github.com/briancray/abide/commit/fbb6e4443932e92277fb332b639c746663c7759b))
+
 ## 0.41.1
 
 ### Patch Changes

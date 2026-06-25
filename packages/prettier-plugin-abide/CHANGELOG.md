@@ -1,5 +1,15 @@
 # @abide/prettier-plugin-abide
 
+## 0.2.0
+
+### Minor Changes
+
+- [`568956c`](https://github.com/briancray/abide/commit/568956c88ff1d32ca79a2aa8a1a0ffffeb25afe3) - block control-flow grammar formatting + shared helpers ([`b39c0a7`](https://github.com/briancray/abide/commit/b39c0a70696b031b63ef157c67360c2da0fd60b0))
+
+### Patch Changes
+
+- [`568956c`](https://github.com/briancray/abide/commit/568956c88ff1d32ca79a2aa8a1a0ffffeb25afe3) - satisfy noUncheckedIndexedAccess in block-token + shadow paths ([`fbb6e44`](https://github.com/briancray/abide/commit/fbb6e4443932e92277fb332b639c746663c7759b))
+
 ## 0.1.4
 
 ### Patch Changes
