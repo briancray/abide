@@ -82,19 +82,18 @@ const groups = [
             class="shrink-0 py-8 md:sticky md:top-0 md:h-screen md:w-60 md:overflow-y-auto md:border-r md:border-slate-200 md:pr-6">
             <a href={url('/')} class="text-base font-semibold">abide kitchen-sink</a>
             <nav class="mt-6 space-y-6 text-sm">
-                <template each={groups} as="group" key="group.title">
-                    <div>
-                        <h2
-                            class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                            {group.title}
-                        </h2>
-                        <ul class="space-y-1">
-                            <template each={group.links} as="link" key="link.href">
-                                <li><a href={url(link.href)} class={linkClass(link.href)}>{link.label}</a></li>
-                            </template>
-                        </ul>
-                    </div>
-                </template>
+                {#for group of groups by group.title}
+                <div>
+                    <h2 class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                        {group.title}
+                    </h2>
+                    <ul class="space-y-1">
+                        {#for link of group.links by link.href}
+                        <li><a href={url(link.href)} class={linkClass(link.href)}>{link.label}</a></li>
+                        {/for}
+                    </ul>
+                </div>
+                {/for}
             </nav>
         </aside>
         <main class="min-w-0 flex-1 py-10">

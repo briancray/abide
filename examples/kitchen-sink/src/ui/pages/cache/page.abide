@@ -61,29 +61,25 @@ const chatLog = scope().computed(() => cache(getChatLog)())
             <p class="text-xs text-slate-500">
                 messages published — <code class="font-mono">invalidate</code> (refetched)
             </p>
-            <template await={chatCount}>
-                <p class="mt-1 font-mono text-3xl text-slate-400">…</p>
-                <template then="data">
-                    <p class="mt-1 font-mono text-3xl text-slate-900">{data.published}</p>
-                </template>
-            </template>
+            {#await chatCount}
+            <p class="mt-1 font-mono text-3xl text-slate-400">…</p>
+            {:then data}
+            <p class="mt-1 font-mono text-3xl text-slate-900">{data.published}</p>
+            {/await}
         </div>
         <div class="rounded-md border border-slate-200 p-3">
             <p class="text-xs text-slate-500">
                 recent — <code class="font-mono">patch</code> (folded in, no refetch)
             </p>
-            <template await={chatLog} then="data">
-                <template if={data.messages.length === 0}>
-                    <p class="mt-1 text-sm text-slate-400">none yet</p>
-                    <template else>
-                        <ul class="mt-1 space-y-0.5 text-sm text-slate-700">
-                            <template each={data.messages.slice(-5)} as="message" key="message.id">
-                                <li><strong>{message.from}</strong>: {message.text}</li>
-                            </template>
-                        </ul>
-                    </template>
-                </template>
-            </template>
+            {#await chatLog then data} {#if data.messages.length === 0}
+            <p class="mt-1 text-sm text-slate-400">none yet</p>
+            {:else}
+            <ul class="mt-1 space-y-0.5 text-sm text-slate-700">
+                {#for message of data.messages.slice(-5) by message.id}
+                <li><strong>{message.from}</strong>: {message.text}</li>
+                {/for}
+            </ul>
+            {/if} {/await}
         </div>
     </div>
     <button
@@ -106,23 +102,19 @@ const chatLog = scope().computed(() => cache(getChatLog)())
     <div class="mt-3 grid gap-3 sm:grid-cols-2">
         <div class="rounded-md border border-slate-200 p-3">
             <p class="text-xs text-slate-500">counter</p>
-            <template await={counter}>
-                <p class="mt-1 font-mono text-3xl text-slate-400">…</p>
-                <template then="data">
-                    <p class="mt-1 font-mono text-3xl text-slate-900">{data.count}</p>
-                </template>
-                <template catch="err">
-                    <p class="mt-1 font-mono text-sm text-red-600">{err.message}</p>
-                </template>
-            </template>
+            {#await counter}
+            <p class="mt-1 font-mono text-3xl text-slate-400">…</p>
+            {:then data}
+            <p class="mt-1 font-mono text-3xl text-slate-900">{data.count}</p>
+            {:catch err}
+            <p class="mt-1 font-mono text-sm text-red-600">{err.message}</p>
+            {/await}
         </div>
         <div class="rounded-md border border-slate-200 p-3">
             <p class="text-xs text-slate-500">mirror</p>
-            <template await={mirror}>
-                <template then="data">
-                    <p class="mt-1 font-mono text-3xl text-slate-900">{data.count}</p>
-                </template>
-            </template>
+            {#await mirror} {:then data}
+            <p class="mt-1 font-mono text-3xl text-slate-900">{data.count}</p>
+            {/await}
         </div>
     </div>
     <div class="mt-4 flex flex-wrap gap-2 text-sm">

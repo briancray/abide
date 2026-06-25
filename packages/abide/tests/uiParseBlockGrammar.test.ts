@@ -190,3 +190,29 @@ describe('block grammar — guards & integration', () => {
         expect(body).toContain('when(')
     })
 })
+
+describe('<template> after control-flow directive removal', () => {
+    test('<template name> snippet still parses', () => {
+        const { nodes } = parseTemplate(
+            `<template name="row" args={item}><td>{item}</td></template>`,
+        )
+        expect(nodes[0]).toMatchObject({ kind: 'snippet', name: 'row', params: 'item' })
+    })
+
+    test('<template if=…> directive is now a migration error pointing at {#if}', () => {
+        expect(() => parseTemplate(`<template if={on}><b>x</b></template>`)).toThrow(/\{#if/)
+    })
+
+    test('<template each> directive is a migration error', () => {
+        expect(() => parseTemplate(`<template each={xs} as="x"><li>{x}</li></template>`)).toThrow(
+            /control flow was removed/,
+        )
+    })
+
+    test('a plain inert <template> with no name is preserved as an element', () => {
+        const { nodes } = parseTemplate(`<template><tr><td>x</td></tr></template>`)
+        expect(nodes[0].kind).toBe('element')
+        if (nodes[0].kind !== 'element') throw new Error('not element')
+        expect(nodes[0].tag).toBe('template')
+    })
+})

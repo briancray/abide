@@ -33,7 +33,7 @@ const pillClass = (href: string) =>
     query string (GET/DELETE/HEAD) or the JSON/form body (POST/PUT/PATCH); body wins on collision.
 </p>
 <nav class="mt-4 flex flex-wrap gap-2 text-sm">
-    <template each={subpages} as="s" key="s.href">
-        <a href={s.href} class={pillClass(s.href)}>{s.label}</a>
-    </template>
+    {#for s of subpages by s.href}
+    <a href={s.href} class={pillClass(s.href)}>{s.label}</a>
+    {/for}
 </nav>

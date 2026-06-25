@@ -503,7 +503,7 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
         }
         const children = selfClosing || VOID_TAGS.has(tag) ? [] : readChildren(tag)
         if (tag === 'template') {
-            return toControlFlow(attrs, children)
+            return toSnippetOrTemplate(attrs, children)
         }
         return { kind: 'element', tag, attrs, children }
     }
@@ -835,10 +835,39 @@ function attrName(attr: TemplateAttr): string {
 }
 
 /* Turns a `<template>` directive into a control node (if/each/await + then/catch). */
-function toControlFlow(attrs: TemplateAttr[], children: TemplateNode[]): TemplateNode {
+/* The control-flow attribute names that used to drive `<template>` directives — now
+   moved to `{#…}` blocks. A `<template>` carrying one is a migration error. */
+const CONTROL_DIRECTIVES = new Set([
+    'if',
+    'elseif',
+    'else',
+    'each',
+    'await',
+    'then',
+    'catch',
+    'finally',
+    'switch',
+    'case',
+    'default',
+    'try',
+])
+
+/* A `<template>` is now ONLY a snippet declaration (`name`) or a plain inert
+   `<template>` element. Control flow moved to `{#…}` blocks; a directive attribute
+   (`if`/`each`/`await`/…) is a migration error pointing at the block form. `name`
+   makes the element callable; without it, it stays an inert reusable fragment. */
+function toSnippetOrTemplate(attrs: TemplateAttr[], children: TemplateNode[]): TemplateNode {
     const find = (name: string) => attrs.find((attr) => attrName(attr) === name)
-    /* `<template name="row" args={item}>` declares a snippet — a named builder, not
-       a control branch. `args` (its parameter list) rides the `{…}` expression slot. */
+    const directive = attrs.find((attr) => CONTROL_DIRECTIVES.has(attrName(attr)))
+    if (directive !== undefined) {
+        const name = attrName(directive)
+        const block = name === 'elseif' || name === 'else' ? 'if' : name
+        throw new Error(
+            `[abide] <template ${name}> control flow was removed — use the {#${block}…} block instead`,
+        )
+    }
+    /* `<template name="row" args={item}>` declares a snippet — a named builder. `args`
+       (its parameter list) rides the `{…}` expression slot. */
     const snippet = find('name')
     if (snippet !== undefined) {
         const name = attrText(snippet)
@@ -854,104 +883,6 @@ function toControlFlow(attrs: TemplateAttr[], children: TemplateNode[]): Templat
             loc: attrLoc(params),
         }
     }
-    /* `<template try>` is a synchronous error boundary: its children are the guarded
-       subtree; `catch`/`finally` branches handle a throw while building them. */
-    if (find('try') !== undefined) {
-        return { kind: 'try', children }
-    }
-    /* `await` alongside `each` is the async-list switch (handled in the each branch
-       below), not an await block. */
-    const promise = find('await')
-    if (promise !== undefined && find('each') === undefined) {
-        const promiseCode = attrText(promise)
-        if (promiseCode === undefined) {
-            throw new Error('[abide] <template await> requires a promise expression')
-        }
-        /* A `then` attribute ON the await tag is the blocking switch: children become
-           the resolved content bound to its value (a `then` *child* is a streaming
-           branch, handled separately below when its own tag is parsed). */
-        const boundThen = find('then')
-        return {
-            kind: 'await',
-            promise: promiseCode,
-            blocking: boundThen !== undefined,
-            as: boundThen === undefined ? undefined : attrText(boundThen) || undefined,
-            children,
-            loc: attrLoc(promise),
-        }
-    }
-    const thenAttr = find('then')
-    if (thenAttr !== undefined) {
-        return { kind: 'branch', branch: 'then', as: attrText(thenAttr) || undefined, children }
-    }
-    const catchAttr = find('catch')
-    if (catchAttr !== undefined) {
-        return { kind: 'branch', branch: 'catch', as: attrText(catchAttr) || undefined, children }
-    }
-    /* `<template finally>` renders after settle on BOTH outcomes — outcome-agnostic,
-       so it binds no value. */
-    if (find('finally') !== undefined) {
-        return { kind: 'branch', branch: 'finally', as: undefined, children }
-    }
-    const subject = find('switch')
-    if (subject !== undefined) {
-        const subjectCode = attrText(subject)
-        if (subjectCode === undefined) {
-            throw new Error('[abide] <template switch> requires a subject expression')
-        }
-        return { kind: 'switch', subject: subjectCode, children, loc: attrLoc(subject) }
-    }
-    const caseAttr = find('case')
-    if (caseAttr !== undefined) {
-        const matchCode = attrText(caseAttr)
-        if (matchCode === undefined) {
-            throw new Error('[abide] <template case> requires a value expression')
-        }
-        return { kind: 'case', match: matchCode, children, loc: attrLoc(caseAttr) }
-    }
-    /* `<template elseif={c}>` is a match-less case carrying a condition — a branch of the
-       enclosing `<template if>` chain, truthy-tested in source order. */
-    const elseif = find('elseif')
-    if (elseif !== undefined) {
-        const conditionCode = attrText(elseif)
-        if (conditionCode === undefined) {
-            throw new Error('[abide] <template elseif> requires a condition expression')
-        }
-        return {
-            kind: 'case',
-            match: undefined,
-            condition: conditionCode,
-            children,
-            loc: attrLoc(elseif),
-        }
-    }
-    if (find('default') !== undefined || find('else') !== undefined) {
-        return { kind: 'case', match: undefined, children } // default (switch) / else (if)
-    }
-    const condition = find('if')
-    if (condition !== undefined) {
-        const conditionCode = attrText(condition)
-        if (conditionCode === undefined) {
-            throw new Error('[abide] <template if> requires a condition expression')
-        }
-        return { kind: 'if', condition: conditionCode, children, loc: attrLoc(condition) }
-    }
-    const items = find('each')
-    const itemsCode = items === undefined ? undefined : attrText(items)
-    if (itemsCode === undefined) {
-        throw new Error('[abide] <template> without a supported directive (if/each)')
-    }
-    const as = find('as')
-    const key = find('key')
-    const index = find('index')
-    return {
-        kind: 'each',
-        items: itemsCode,
-        as: (as === undefined ? undefined : attrText(as)) ?? '_item',
-        key: key === undefined ? undefined : attrText(key),
-        index: index === undefined ? undefined : attrText(index),
-        async: find('await') !== undefined, // `<template each await>` over an AsyncIterable
-        children,
-        loc: attrLoc(items),
-    }
+    /* A plain inert `<template>` element (e.g. client-side cloning) — keep as an element. */
+    return { kind: 'element', tag: 'template', attrs, children }
 }

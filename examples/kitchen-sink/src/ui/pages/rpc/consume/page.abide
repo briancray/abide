@@ -127,22 +127,21 @@ const cachedRaw = scope().computed(() => cache(getReport.raw)({ id: 'r-1' }))
         <li>decoded:{decoded}</li>
         <li>raw:{raw}</li>
         <li>plain:{plainBody}</li>
-        <template each={streamFrames} as="frame" key="frame.n">
-            <li>stream[{frame.n}]:{frame.text}</li>
-        </template>
+        {#for frame of streamFrames by frame.n}
+        <li>stream[{frame.n}]:{frame.text}</li>
+        {/for}
     </ul>
 </section>
 
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
     <h2 class="text-sm font-semibold"><code class="font-mono">cache(fn.raw)</code></h2>
-    <template await={cachedRaw}>
-        <p class="mt-2 font-mono text-xs text-slate-500">…</p>
-        <template then="response">
-            <p class="mt-2 font-mono text-xs text-slate-700">
-                cached raw → status={response.status}, x-report-version={response.headers.get('x-report-version')}
-            </p>
-        </template>
-    </template>
+    {#await cachedRaw}
+    <p class="mt-2 font-mono text-xs text-slate-500">…</p>
+    {:then response}
+    <p class="mt-2 font-mono text-xs text-slate-700">
+        cached raw → status={response.status}, x-report-version={response.headers.get('x-report-version')}
+    </p>
+    {/await}
 </section>
 
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">

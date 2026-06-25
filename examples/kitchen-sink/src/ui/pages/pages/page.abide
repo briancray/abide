@@ -71,8 +71,9 @@ const externalHref = scope().computed(() => url('https://bun.sh', { utm: 'abide'
         navigations skip the fetch and remount.
     </p>
     <p class="mt-3 font-mono text-sm text-slate-700">
-        page.url.pathname = <strong>{currentPath}</strong>
-        <template if={navigating}><span class="text-amber-600">(navigating…)</span></template>
+        page.url.pathname = <strong>{currentPath}</strong> {#if navigating}<span class="text-amber-600"
+            >(navigating…)</span
+        >{/if}
     </p>
     <div class="mt-3 flex flex-wrap gap-2 text-sm">
         <button
