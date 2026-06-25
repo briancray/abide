@@ -1,5 +1,6 @@
 // node:fs existsSync — Bun plugin onResolve is sync-only; Bun.file().exists() is async
 import { existsSync, statSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import type { BunPlugin } from 'bun'
 import { Glob } from 'bun'
 import { abideImportName } from './lib/shared/abideImportName.ts'
@@ -194,9 +195,90 @@ export function abideResolverPlugin({
     const socketsFilter = new RegExp(`^${escapeRegex(socketsDir)}/.*\\.ts$`)
     const promptsFilter = new RegExp(`^${escapeRegex(promptsDir)}/.*\\.md$`)
 
+    /*
+    Side-crossing guard (client target only). The client bundle must never pull a
+    server-only name into the browser. The exception is a registered verb/socket —
+    `$server/rpc/*` and `$server/sockets/*` are replaced with remoteProxy/socketProxy
+    stubs by the onLoad hooks below — so only OTHER paths under src/server/ (helpers,
+    runtime/) and the public `abide/server/*` names are violations. `importerOf` records
+    each resolved edge so a violation can show the import chain back to its client-side
+    origin as evidence; it is reset per build in onStart.
+    */
+    const importerOf = new Map<string, string>()
+    const isProxiedServerModule = (path: string): boolean =>
+        path.startsWith(`${rpcDir}/`) || path.startsWith(`${socketsDir}/`)
+    const isServerOnlyModule = (path: string): boolean =>
+        path.startsWith(`${serverDir}/`) && !isProxiedServerModule(path)
+    const showPath = (path: string): string =>
+        path.startsWith(`${cwd}/`) ? path.slice(cwd.length + 1) : path
+    /* Walks the recorded edges from the offending importer back to a graph root (cycle-safe),
+       formatting each module relative to cwd — the evidence a side-crossing throws. */
+    function sideCrossingChain(leaf: string, importer: string): string {
+        const chain = [leaf, importer]
+        const seen = new Set([importer])
+        let cursor = importer
+        while (importerOf.has(cursor)) {
+            cursor = importerOf.get(cursor) as string
+            if (seen.has(cursor)) {
+                break
+            }
+            seen.add(cursor)
+            chain.push(cursor)
+        }
+        return chain.reverse().map(showPath).join('\n  → ')
+    }
+    function throwSideCrossing(leaf: string, label: string, importer: string): never {
+        throw new Error(
+            `[abide] a client module imports the server-only name \`${label}\` — server code must not reach the browser bundle. Move it to src/shared/ or behind an RPC. Import chain:\n  ${sideCrossingChain(leaf, importer)}`,
+        )
+    }
+    /* Records the edge and, on the client target, rejects a non-server module reaching a
+       server-only one. Shared by the relative-import and `$server` alias resolvers. */
+    function recordAndGuard(resolved: string, label: string, importer: string | undefined): void {
+        if (importer === undefined) {
+            return
+        }
+        importerOf.set(resolved, importer)
+        if (target === 'client' && isServerOnlyModule(resolved) && !isServerOnlyModule(importer)) {
+            throwSideCrossing(resolved, label, importer)
+        }
+    }
+
     return {
         name: 'abide-resolver',
         setup(build) {
+            /* Fresh edge graph each build (dev watch reuses the plugin instance). */
+            build.onStart(() => {
+                importerOf.clear()
+            })
+
+            /*
+            Relative-import edge recorder + side-crossing guard. Matches `./` and `../`
+            specifiers, records the edge for the evidence chain, and (client target) throws
+            when a non-server module reaches a server-only file. Returns undefined so normal
+            resolution proceeds — this only observes and, on violation, aborts.
+            */
+            build.onResolve({ filter: /^\.\.?\// }, (args) => {
+                if (args.importer) {
+                    const resolved = resolveExtension(join(dirname(args.importer), args.path))
+                    recordAndGuard(resolved, args.path, args.importer)
+                }
+                return undefined
+            })
+
+            /*
+            The public `abide/server/*` names are server-only. Importing one into the client
+            bundle is a side-crossing (the canonical `abide` and `@abide/abide` specifiers; a
+            custom package alias falls through to the relative/`$server` guards). The server
+            target resolves these normally.
+            */
+            build.onResolve({ filter: /(^|\/)abide\/server\// }, (args) => {
+                if (target === 'client' && args.importer && !isServerOnlyModule(args.importer)) {
+                    throwSideCrossing(args.path, args.path, args.importer)
+                }
+                return undefined
+            })
+
             build.onResolve(
                 {
                     filter: /\/_virtual\/(rpc|sockets|prompts|pages|layouts|app|config|mcp-resources|mcp|assets|public-assets|shell|app-info|cli-manifest|cli-name|cli-chrome|bundle-window|bundle-disconnected-component|bundle-disconnected)\.ts$/,
@@ -226,7 +308,11 @@ export function abideResolverPlugin({
             for (const [alias, baseDir] of Object.entries(dirAliases)) {
                 build.onResolve({ filter: new RegExp(`^\\${alias}(\\/.*)?$`) }, (args) => {
                     const subpath = args.path.slice(alias.length)
-                    return { path: resolveExtension(subpath ? `${baseDir}${subpath}` : baseDir) }
+                    const resolved = resolveExtension(subpath ? `${baseDir}${subpath}` : baseDir)
+                    /* `$server/rpc/*` + `$server/sockets/*` are proxied (allowed); other
+                       `$server/*` imports into the client bundle are side-crossings. */
+                    recordAndGuard(resolved, args.path, args.importer)
+                    return { path: resolved }
                 })
             }
 
