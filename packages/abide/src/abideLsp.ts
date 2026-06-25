@@ -1,12 +1,15 @@
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import ts from 'typescript'
+import { ABIDE_SEMANTIC_TOKENS_LEGEND } from './lib/ui/compile/ABIDE_SEMANTIC_TOKENS_LEGEND.ts'
 import type {
     ShadowLanguageService,
     ShadowQuickInfo,
 } from './lib/ui/compile/createShadowLanguageService.ts'
 import { createShadowLanguageService } from './lib/ui/compile/createShadowLanguageService.ts'
+import { encodeSemanticTokens } from './lib/ui/compile/encodeSemanticTokens.ts'
 import { nearestProjectRoot } from './lib/ui/compile/nearestProjectRoot.ts'
 import { offsetToPosition } from './lib/ui/compile/offsetToPosition.ts'
+import { structuralBlockTokens } from './lib/ui/compile/structuralBlockTokens.ts'
 import type { AbideDiagnostic } from './lib/ui/compile/types/AbideDiagnostic.ts'
 
 /*
@@ -20,6 +23,28 @@ unsaved text as overlays. Each document routes to a shadow service for its
 nearest tsconfig, so files in a monorepo opened at its root are checked against
 their own project — matching `abide check` run from that package.
 */
+/*
+The semantic-tokens `data` array for one component: the structural `{#…}` framing
+merged with the shadow's type-aware expression tokens, encoded to the LSP wire
+format. Never throws — on any internal failure it yields an empty stream so the
+editor falls back to tree-sitter highlighting.
+*/
+export function componentSemanticTokens(
+    service: ShadowLanguageService,
+    abidePath: string,
+    text: string,
+): number[] {
+    try {
+        const tokens = [
+            ...structuralBlockTokens(text),
+            ...service.semanticClassifications(abidePath),
+        ]
+        return encodeSemanticTokens(text, tokens)
+    } catch {
+        return []
+    }
+}
+
 export async function abideLsp({ cwd }: { cwd: string }): Promise<void> {
     const documentText = new Map<string, string>()
 
@@ -65,7 +90,14 @@ export async function abideLsp({ cwd }: { cwd: string }): Promise<void> {
                     jsonrpc: '2.0',
                     id: message.id,
                     result: {
-                        capabilities: { textDocumentSync: 1, hoverProvider: true },
+                        capabilities: {
+                            textDocumentSync: 1,
+                            hoverProvider: true,
+                            semanticTokensProvider: {
+                                legend: ABIDE_SEMANTIC_TOKENS_LEGEND,
+                                full: true,
+                            },
+                        },
                         serverInfo: { name: 'abide-lsp' },
                     },
                 })
@@ -114,6 +146,18 @@ export async function abideLsp({ cwd }: { cwd: string }): Promise<void> {
                     id: message.id,
                     result: info === undefined ? null : toLspHover(text, info),
                 })
+                return
+            }
+            case 'textDocument/semanticTokens/full': {
+                const { uri } = message.params.textDocument
+                const data = isAbide(uri)
+                    ? componentSemanticTokens(
+                          serviceFor(fileURLToPath(uri)),
+                          fileURLToPath(uri),
+                          documentText.get(fileURLToPath(uri)) ?? '',
+                      )
+                    : []
+                send({ jsonrpc: '2.0', id: message.id, result: { data } })
                 return
             }
             case 'textDocument/didClose': {
