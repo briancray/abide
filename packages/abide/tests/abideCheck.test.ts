@@ -96,7 +96,7 @@ describe('abide check', () => {
        the positive narrowing, so `toFixed` errored on the narrowed `string`. */
     test('a nested else child carries the condition negative narrowing', () => {
         const dir = project({
-            'elseok.abide': `<script>\nconst { v } = props<{ v: string | number }>()\n</script>\n<template if={typeof v === 'string'}>{v.toUpperCase()}<template else>{v.toFixed(2)}</template></template>\n`,
+            'elseok.abide': `<script>\nconst { v } = props<{ v: string | number }>()\n</script>\n{#if typeof v === 'string'}{v.toUpperCase()}{:else}{v.toFixed(2)}{/if}\n`,
         })
         expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
     })
@@ -106,7 +106,7 @@ describe('abide check', () => {
        each branch on the right union member, so every member access is well-typed. */
     test('an elseif branch carries the correct discriminated narrowing', () => {
         const dir = project({
-            'shape.abide': `<script>\nconst { s } = props<{ s: { k: 'circle'; r: number } | { k: 'square'; side: number } | { k: 'none' } }>()\n</script>\n<template if={s.k === 'circle'}>{s.r}<template elseif={s.k === 'square'}>{s.side}</template><template else>none</template></template>\n`,
+            'shape.abide': `<script>\nconst { s } = props<{ s: { k: 'circle'; r: number } | { k: 'square'; side: number } | { k: 'none' } }>()\n</script>\n{#if s.k === 'circle'}{s.r}{:else if s.k === 'square'}{s.side}{:else}none{/if}\n`,
         })
         expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
     })
@@ -115,7 +115,7 @@ describe('abide check', () => {
        member — proof the branch is narrowed to `square`, not the widened union. */
     test('a wrong member inside an elseif branch is caught', () => {
         const dir = project({
-            'shapebad.abide': `<script>\nconst { s } = props<{ s: { k: 'circle'; r: number } | { k: 'square'; side: number } }>()\n</script>\n<template if={s.k === 'circle'}>{s.r}<template elseif={s.k === 'square'}>{s.r}</template></template>\n`,
+            'shapebad.abide': `<script>\nconst { s } = props<{ s: { k: 'circle'; r: number } | { k: 'square'; side: number } }>()\n</script>\n{#if s.k === 'circle'}{s.r}{:else if s.k === 'square'}{s.r}{/if}\n`,
         })
         const diagnostics = collectAbideDiagnostics(createShadowProgram(dir))
         expect(diagnostics).toHaveLength(1)
@@ -129,11 +129,11 @@ describe('abide check', () => {
     test('a template-literal union narrows across a nested if/else and a switch', () => {
         const head = `<script>\ntype LayoutKey = \`layout-\${'home' | 'about'}\`\nconst { layoutKey } = props<{ layoutKey: LayoutKey }>()\n</script>\n`
         const ifElse = project({
-            'a.abide': `${head}<template if={layoutKey === 'layout-home'}>home<template else>{layoutKey === 'layout-about' ? 'a' : 'x'}</template></template>\n`,
+            'a.abide': `${head}{#if layoutKey === 'layout-home'}home{:else}{layoutKey === 'layout-about' ? 'a' : 'x'}{/if}\n`,
         })
         expect(collectAbideDiagnostics(createShadowProgram(ifElse))).toHaveLength(0)
         const switched = project({
-            'b.abide': `${head}<template switch={layoutKey}>\n<template case={'layout-home'}>home</template>\n<template default>{layoutKey}</template>\n</template>\n`,
+            'b.abide': `${head}{#switch layoutKey}\n{:case 'layout-home'}home\n{:default}{layoutKey}\n{/switch}\n`,
         })
         expect(collectAbideDiagnostics(createShadowProgram(switched))).toHaveLength(0)
     })
@@ -141,7 +141,7 @@ describe('abide check', () => {
     /* A real `switch` narrows the discriminant subject into each case body. */
     test('a switch case narrows a discriminated union subject', () => {
         const dir = project({
-            'shape.abide': `<script>\ntype Shape = { kind: 'circle'; r: number } | { kind: 'square'; side: number }\nconst { shape } = props<{ shape: Shape }>()\n</script>\n<template switch={shape.kind}>\n  <template case={'circle'}>{shape.r}</template>\n  <template case={'square'}>{shape.side}</template>\n</template>\n`,
+            'shape.abide': `<script>\ntype Shape = { kind: 'circle'; r: number } | { kind: 'square'; side: number }\nconst { shape } = props<{ shape: Shape }>()\n</script>\n{#switch shape.kind}\n  {:case 'circle'}{shape.r}\n  {:case 'square'}{shape.side}\n{/switch}\n`,
         })
         expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
     })
@@ -150,7 +150,7 @@ describe('abide check', () => {
        element type instead of erroring on the missing sync iterator. */
     test('an async each binds the AsyncIterable element type', () => {
         const dir = project({
-            'stream.abide': `<script>\nconst { stream } = props<{ stream: AsyncIterable<number> }>()\n</script>\n<template each={stream} as={n} await>{n.toFixed(2)}</template>\n`,
+            'stream.abide': `<script>\nconst { stream } = props<{ stream: AsyncIterable<number> }>()\n</script>\n{#for await n of stream}{n.toFixed(2)}{/for}\n`,
         })
         expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
     })
@@ -159,7 +159,7 @@ describe('abide check', () => {
        resolved data is caught (previously bound as `any`, silently unchecked). */
     test('a streaming then branch type-checks the resolved value', () => {
         const dir = project({
-            'await.abide': `<script>\nconst { load } = props<{ load: Promise<{ title: string }> }>()\n</script>\n<template await={load}>loading<template then={data}>{data.bogus}</template></template>\n`,
+            'await.abide': `<script>\nconst { load } = props<{ load: Promise<{ title: string }> }>()\n</script>\n{#await load}loading{:then data}{data.bogus}{/await}\n`,
         })
         const diagnostics = collectAbideDiagnostics(createShadowProgram(dir))
         expect(diagnostics).toHaveLength(1)
@@ -171,7 +171,7 @@ describe('abide check', () => {
        declaration is not a use-before-assign false-positive. */
     test('a no-arg state is a defined T | undefined that narrows', () => {
         const guarded = project({
-            'g.abide': `<script>\nlet x = state<string>()\n</script>\n<template if={x !== undefined}><span>{x.toUpperCase()}</span></template>\n`,
+            'g.abide': `<script>\nlet x = state<string>()\n</script>\n{#if x !== undefined}<span>{x.toUpperCase()}</span>{/if}\n`,
         })
         expect(collectAbideDiagnostics(createShadowProgram(guarded))).toHaveLength(0)
 
@@ -188,7 +188,7 @@ describe('abide check', () => {
     test('check accepts a component and text directly in a control-flow branch', () => {
         const dir = project({
             'child.abide': `<script>\nconst { label } = props<{ label: string }>()\n</script>\n<span>{label}</span>\n`,
-            'ok.abide': `<script>\nimport Child from './child.abide'\nlet on = scope().state(true)\n</script>\n<template if={on}><Child label="x"/>plain</template>\n`,
+            'ok.abide': `<script>\nimport Child from './child.abide'\nlet on = scope().state(true)\n</script>\n{#if on}<Child label="x"/>plain{/if}\n`,
         })
         expect(
             collectAbideDiagnostics(createShadowProgram(dir)).filter((diagnostic) =>
@@ -202,7 +202,7 @@ describe('abide check', () => {
        illegal inside the branch's render body) and would falsely imply lazy loading. */
     test('a static import in a nested script is rejected with a clear diagnostic', () => {
         const dir = project({
-            'badimport.abide': `<script>\nlet on = scope().state(true)\n</script>\n<template if={on}>\n<script>import Heavy from './child.abide'</script>\n</template>\n`,
+            'badimport.abide': `<script>\nlet on = scope().state(true)\n</script>\n{#if on}\n<script>import Heavy from './child.abide'</script>\n{/if}\n`,
             'child.abide': `<script>\nconst { label } = props<{ label: string }>()\n</script>\n<span>{label}</span>\n`,
         })
         const diagnostics = collectAbideDiagnostics(createShadowProgram(dir)).filter((diagnostic) =>
@@ -215,7 +215,7 @@ describe('abide check', () => {
     /* A dynamic `import()` in a nested script is the legitimate lazy path — not flagged. */
     test('a dynamic import in a nested script is allowed', () => {
         const dir = project({
-            'lazy.abide': `<script>\nlet p = scope().state(Promise.resolve(1))\n</script>\n<template await={p} then={v}>\n<script>effect(() => { void import('./child.abide') })</script>\n<span>{v}</span>\n</template>\n`,
+            'lazy.abide': `<script>\nlet p = scope().state(Promise.resolve(1))\n</script>\n{#await p then v}\n<script>effect(() => { void import('./child.abide') })</script>\n<span>{v}</span>\n{/await}\n`,
             'child.abide': `<script>\nconst { label } = props<{ label: string }>()\n</script>\n<span>{label}</span>\n`,
         })
         expect(
@@ -269,7 +269,7 @@ describe('abide check', () => {
        trapping block that left them "Cannot find name"). */
     test('a nested-script binding reaches a deeply nested block in the branch', () => {
         const dir = project({
-            'nested.abide': `<script>\nlet p = scope().state(Promise.resolve(1))\n</script>\n<template await={p} then={v}>\n<script>const label = String(v)</script>\n<div><template if={v > 0}><span>{label}</span></template></div>\n</template>\n`,
+            'nested.abide': `<script>\nlet p = scope().state(Promise.resolve(1))\n</script>\n{#await p then v}\n<script>const label = String(v)</script>\n<div>{#if v > 0}<span>{label}</span>{/if}</div>\n{/await}\n`,
         })
         expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
     })
