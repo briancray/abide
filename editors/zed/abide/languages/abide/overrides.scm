@@ -1,7 +1,8 @@
 (comment) @comment
 
+(quoted_attribute_value) @string
+
 [
-  (raw_text)
-  (attribute_value)
-  (quoted_attribute_value)
-] @string
+  (start_tag)
+  (end_tag)
+] @default
