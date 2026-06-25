@@ -13,8 +13,8 @@ describe('structuralBlockTokens', () => {
     })
 
     test('colors for and for await', () => {
-        expect(keywordsOf(`{#for a of xs}{/for}`)).toEqual(['for', 'for'])
-        expect(keywordsOf(`{#for await a of xs}{/for}`)).toEqual(['for await', 'for'])
+        expect(keywordsOf(`{#for a of xs}{/for}`)).toEqual(['for', 'of', 'for'])
+        expect(keywordsOf(`{#for await a of xs}{/for}`)).toEqual(['for await', 'of', 'for'])
     })
 
     test('colors await / then / catch / finally and switch / case / default and try', () => {
@@ -49,5 +49,25 @@ describe('structuralBlockTokens', () => {
     test('does not treat a non-keyword sigil run as a block', () => {
         /* `{:foo}` is not a known continuation keyword. */
         expect(structuralBlockTokens(`{:foo}`)).toEqual([])
+    })
+
+    test('colors the of/by connectors inside a for head', () => {
+        expect(keywordsOf(`{#for frame of frames by frame.n}{/for}`)).toEqual([
+            'for',
+            'of',
+            'by',
+            'for',
+        ])
+        expect(keywordsOf(`{#for await a of xs}{/for}`)).toEqual(['for await', 'of', 'for'])
+    })
+
+    test('does not color of/by nested in a destructure, call, or as an identifier', () => {
+        /* the `of` inside `({of: 1})` is depth>0; `profile`/`nearby` are not boundaries */
+        expect(keywordsOf(`{#for x of pick({of: 1}).nearby by x.id}{/for}`)).toEqual([
+            'for',
+            'of',
+            'by',
+            'for',
+        ])
     })
 })
