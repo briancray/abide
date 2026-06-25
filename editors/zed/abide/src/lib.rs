@@ -31,10 +31,13 @@ impl AbideExtension {
             });
         }
         let root = worktree.root_path();
-        let local_bin = format!("{root}/node_modules/.bin/abide");
-        if worktree.read_text_file(&local_bin).is_ok() {
+        /* `read_text_file` resolves against the worktree root and rejects an
+           absolute path, so probe with the relative path; the launched command
+           stays absolute so the process's cwd never decides resolution. */
+        let relative_bin = "node_modules/.bin/abide";
+        if worktree.read_text_file(relative_bin).is_ok() {
             return Ok(zed::Command {
-                command: local_bin,
+                command: format!("{root}/{relative_bin}"),
                 args: vec!["lsp".to_string()],
                 env,
             });
