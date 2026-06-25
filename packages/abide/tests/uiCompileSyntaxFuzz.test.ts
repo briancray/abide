@@ -82,7 +82,7 @@ describe('compileModule — whole components with tricky syntax stay valid', () 
 const { query, pending = false } = props()
 const busy = scope().computed(() => pending && pendingProbe(query))</script><i>{busy}</i>`,
         'optional chaining in an interpolation': `<script>const user = scope().state({})</script><i>{user?.name?.first}</i>`,
-        'optional-chain items in an each': `<script>const data = scope().state({})</script><ul><template each={data?.rows ?? []} as="row" key="row"><li>{row.id}</li></template></ul>`,
+        'optional-chain items in an each': `<script>const data = scope().state({})</script><ul>{#for row of data?.rows ?? [] by row}<li>{row.id}</li>{/for}</ul>`,
         'destructure with colliding source key in a handler': `<script>const count = scope().state(0)
 const onClick = () => { const { count: c } = window; count(c) }</script><button on:click={onClick}>x</button>`,
         'computed key referencing a signal': `<script>const k = scope().state('a')

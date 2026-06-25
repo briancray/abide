@@ -71,16 +71,16 @@ function mountClient(source: string): { host: HTMLElement; model: ReturnType<typ
 
 const CHECKBOXES = `
     <script>let toppings = scope().state(['cheese', 'olive'])</script>
-    <template each={['cheese', 'mushroom', 'olive']} as="t" key="t">
+    {#for t of ['cheese', 'mushroom', 'olive'] by t}
         <input type="checkbox" value={t} bind:group={toppings}>
-    </template>
+    {/for}
 `
 
 const RADIOS = `
     <script>let size = scope().state('medium')</script>
-    <template each={['small', 'medium', 'large']} as="s" key="s">
+    {#for s of ['small', 'medium', 'large'] by s}
         <input type="radio" value={s} bind:group={size}>
-    </template>
+    {/for}
 `
 
 /* The mini-DOM has no querySelectorAll; gather input elements by walking. */

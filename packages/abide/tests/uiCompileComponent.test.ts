@@ -120,9 +120,9 @@ describe('compileComponent — end to end', () => {
         const { host, model } = renderWithModel(
             `
             <div>
-                <template if={model.show}>
+                {#if model.show}
                     <span>{model.label}</span>
-                </template>
+                {/if}
             </div>
         `,
             { show: true, label: 'hi' },
@@ -154,9 +154,9 @@ describe('compileComponent — end to end', () => {
         const { host, model } = renderWithModel(
             `
             <ul>
-                <template each={model.order} as="key" key="key">
+                {#for key of model.order by key}
                     <li>{model.byId[key].n}</li>
-                </template>
+                {/for}
             </ul>
         `,
             { order: ['a', 'b'], byId: { a: { n: 1 }, b: { n: 2 } } },
@@ -264,7 +264,7 @@ const busy = scope().computed(() => pending && pendingProbe(query))</script><i>{
        literal (the substring regex used to over-include those). */
     test('runtime imports cover what the body uses, and exclude string-literal matches', () => {
         const module = compileModule(
-            `<script>const rows = scope().state([1, 2])</script><ul><template each={rows} as="r" key="r"><li>{r}</li></template></ul>`,
+            `<script>const rows = scope().state([1, 2])</script><ul>{#for r of rows by r}<li>{r}</li>{/for}</ul>`,
         )
         // the each block needs its helper imported
         expect(module).toContain("from '@abide/abide/ui/dom/each'")
@@ -383,7 +383,7 @@ const label = 'hi'</script><i>{label}</i>`,
        runtime, since the array element is a string. */
     test('a callback param shadowing a prop signal is not lowered to the prop reader', () => {
         const body = compileComponent(
-            `<script>\nconst { option } = props()\nconst labels = ['Title'].map(option => option.toUpperCase())\n</script>\n<ul><template each={labels} as="l" key="l"><li>{l}</li></template></ul>`,
+            `<script>\nconst { option } = props()\nconst labels = ['Title'].map(option => option.toUpperCase())\n</script>\n<ul>{#for l of labels by l}<li>{l}</li>{/for}</ul>`,
         )
         // The loop variable stays a plain reference inside its callback…
         expect(body).toContain('option => option.toUpperCase()')

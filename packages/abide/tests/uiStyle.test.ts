@@ -146,10 +146,10 @@ describe('a <style> inside an expression is text, not the component style', () =
    top-level one — that's the per-subtree isolation. */
 const NESTED_STYLE = `
     <div class="outer">
-        <template if={true}>
+        {#if true}
             <span class="inner">x</span>
             <style>.inner { color: green }</style>
-        </template>
+        {/if}
     </div>
     <style>.outer { color: red }</style>
 `

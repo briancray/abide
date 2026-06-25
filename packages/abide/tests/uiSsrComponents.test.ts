@@ -99,7 +99,7 @@ describe('SSR component composition', () => {
             <script>let active = scope().state(true)</script>
             <section class={active ? 'on' : 'off'}>
                 <Box>
-                    <template if={active}><span>shown</span></template>
+                    {#if active}<span>shown</span>{/if}
                 </Box>
             </section>
         `

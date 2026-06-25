@@ -30,13 +30,13 @@ describe('compileSSR — server render to string', () => {
             <button onclick={() => count += 1}>+</button>
             <p>{label}</p>
             <ul>
-                <template each={items} as="it" key="it">
+                {#for it of items by it}
                     <li>{it}</li>
-                </template>
+                {/for}
             </ul>
-            <template if={count}>
+            {#if count}
                 <small>nonzero</small>
-            </template>
+            {/if}
         `)
         expect(result.html).toBe(
             '<button>+</button><p>n=2</p><ul><!--a--><!--[--><li>a</li><!--]--><!--[--><li>b</li><!--]--></ul><!--[--><small>nonzero</small><!--]-->',
@@ -47,7 +47,7 @@ describe('compileSSR — server render to string', () => {
     test('a falsy if renders an empty range', () => {
         const result = render(`
             <script>let show = scope().state(false)</script>
-            <template if={show}><span>hi</span></template>
+            {#if show}<span>hi</span>{/if}
         `)
         // the `when` range markers are always present; the false branch is empty
         expect(result.html).toBe('<!--[--><!--]-->')

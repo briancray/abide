@@ -35,11 +35,11 @@ describe('SSR ↔ client parity', () => {
             <div class="box">
                 <h1>{label}</h1>
                 <ul>
-                    <template each={items} as="it" key="it">
+                    {#for it of items by it}
                         <li>{it}</li>
-                    </template>
+                    {/for}
                 </ul>
-                <template if={count}><p>has count</p></template>
+                {#if count}<p>has count</p>{/if}
             </div>
         `
 

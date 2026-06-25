@@ -140,7 +140,7 @@ describe('historyEntries — manual scroll restoration buckets', () => {
     })
 
     /* A manual rAF queue + a scrollTo that clamps to a growable `maxScrollY`, modelling a
-       page whose async `<template await>` content fills in after the restore lands. */
+       page whose async `{#await}` content fills in after the restore lands. */
     function installClampingSurface() {
         const frames: Array<() => void> = []
         let maxScrollY = 0
