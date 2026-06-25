@@ -7,12 +7,12 @@
 > `CONTEXT.md` is the glossary; `docs/adr/` holds the rationale.
 >
 > **No barrels.** Every public name has its own module path —
-> `@abide/abide/server/GET`, `@abide/abide/shared/cache`, `@abide/abide/ui/scope`. The namespace
-> marks the side a name runs on: `@abide/abide/server/*` is server-only,
-> `@abide/abide/ui/*` is client-only, `@abide/abide/shared/*` is isomorphic (same callable,
-> same behaviour on both sides — the bundler swaps the runtime). There is no
-> umbrella `index.ts`, so importing one name never drags in side-effecting
-> siblings.
+> `@abide/abide/server/GET`, `@abide/abide/shared/cache`, `@abide/abide/ui/scope`.
+> The namespace marks the side a name runs on: `@abide/abide/server/*` is
+> server-only, `@abide/abide/ui/*` is client-only, `@abide/abide/shared/*` is
+> isomorphic (same callable, same behaviour on both sides — the bundler swaps the
+> runtime). There is no umbrella `index.ts`, so importing one name never drags in
+> side-effecting siblings.
 >
 > Package `@abide/abide`, runtime Bun ≥ 1.3.0, one direct dependency
 > (`typescript`); `tailwindcss` + `bun-plugin-tailwind` are optional peers.
@@ -35,8 +35,8 @@ One typed verb declaration fans out to every consumer:
 
 A Standard Schema unlocks the CLI for every verb and MCP for read-only verbs
 (`GET` / `HEAD`); a mutating verb never auto-exposes to MCP — it opts in with
-`clients: { mcp: true }`. The same gating applies to sockets: a schema flips
-the MCP/CLI read faces on.
+`clients: { mcp: true }`. The same gating applies to sockets: a schema flips the
+MCP/CLI read faces on.
 
 ## File-based conventions
 
@@ -74,8 +74,10 @@ abide lsp               run the .abide language server over stdio (JSON-RPC)
 abide init-agent        write/refresh the CLAUDE.md pointer to this surface map
 ```
 
-`bun test` in a scaffolded app preloads abide via `bunfig.toml`
-(`[test] preload = ["@abide/abide/preload"]`) so `.abide` modules resolve.
+`scaffold` takes `--no-install` / `--no-dev` to skip those steps; without a TTY
+it scaffolds only. `bun test` in a scaffolded app preloads abide via
+`bunfig.toml` (`[test] preload = ["@abide/abide/preload"]`) so `.abide` modules
+resolve.
 
 ## Authoring contracts
 
@@ -87,11 +89,11 @@ request scope, and returns `json` / `jsonl` / `sse` / `error` / `redirect` or a
 raw `Response`. `opts`: `inputSchema` (validates args, infers the type, gates
 CLI + read-MCP), `outputSchema` (documents the 200 body for OpenAPI/MCP),
 `filesSchema` (multipart File parts), `clients: { browser, mcp, cli }` (explicit
-surface targeting; explicit wins over schema auto-flip), `crossOrigin` (exempt
-a mutating verb from the same-origin gate), `maxBodySize` (per-verb 413
-ceiling), `timeout` (handler deadline in ms; 504 on every surface). Query args
-arrive as strings — use `z.coerce.*`. Consume four ways: `cache(verb)(args)`
-in-process, the swapped browser `fetch`, `verb.raw(args)` for the `Response`,
+surface targeting; explicit wins over schema auto-flip), `crossOrigin` (exempt a
+mutating verb from the same-origin gate), `maxBodySize` (per-verb 413 ceiling),
+`timeout` (handler deadline in ms; 504 on every surface). Query args arrive as
+strings — use `z.coerce.*`. Consume four ways: `cache(verb)(args)` in-process,
+the swapped browser `fetch`, `verb.raw(args)` for the `Response`,
 `verb.stream(args)` to iterate a streaming body.
 
 **Socket** — `export const <name> = socket({ schema?, tail?, ttl?,
@@ -106,18 +108,19 @@ iteration is the live stream, `.tail(count?)` seeds from retention,
 `<slot/>` is the outlet the next layer fills. Read `page` (route, params, url,
 navigating) and call `navigate(path)` for SPA transitions.
 
-**App / config** — `src/app.ts` default-exports an `AppModule`; `src/server/config.ts`
-runs `env(schema)` at boot.
+**App / config** — `src/app.ts` default-exports an `AppModule`;
+`src/server/config.ts` runs `env(schema)` at boot.
 
 **Isomorphism move** — wrap an SSR read in `cache(fn)()` so the value serializes
 into the document and the client hydrates warm instead of refetching.
 
 ## .abide template grammar
 
-A component file is `<script>` (module-level JS: imports, handlers,
-reactive declarations) + optional `<template name="…">` snippet definitions +
-markup + an optional component-scoped `<style>`. Ambient in-scope names need no
-import: `scope`, `props` / `prop`, `effect`, `html`, `snippet`.
+A component file is `<script>` (module-level JS: imports, handlers, reactive
+declarations) + optional `<template name="…">` snippet definitions + markup + an
+optional component-scoped `<style>`. Control flow is `{#…}` blocks (Svelte-free
+HTML). Ambient in-scope names need no import: `scope`, `props` / `prop`,
+`effect`, `html`, `snippet`.
 
 **Reactive state**
 
@@ -131,35 +134,35 @@ import: `scope`, `props` / `prop`, `effect`, `html`, `snippet`.
 
 **Bindings**
 
-| Form                        | Meaning                                                                                      |
-| --------------------------- | -------------------------------------------------------------------------------------------- |
+| Form                        | Meaning                                                                                        |
+| --------------------------- | ---------------------------------------------------------------------------------------------- |
 | `{expr}`                    | Escaped text interpolation; raw markup via the `html` tag; `{snippet(args)}` mounts a snippet. |
-| `name={expr}`               | Reactive attribute (boolean `true` sets bare, falsy removes).                                |
-| `on<event>={fn}`            | Event listener, e.g. `onclick={handler}`.                                                    |
-| `bind:value={x}`            | Two-way input binding.                                                                       |
-| `bind:checked={x}`          | Two-way checkbox binding.                                                                    |
-| `bind:group={x}`            | Radio/checkbox group (radio → one value, checkbox → array).                                  |
-| `bind:value={{ get, set }}` | Writable computed at the binding site.                                                       |
-| `{...expr}`                 | Spread keys as attributes (elements) or props (components).                                  |
-| `attach={fn}`               | Build-time element attachment with optional teardown.                                        |
+| `name={expr}`               | Reactive attribute (boolean `true` sets bare, falsy removes).                                  |
+| `on<event>={fn}`            | Event listener, e.g. `onclick={handler}`; handler writes batch and flush once on exit.         |
+| `bind:value={x}`            | Two-way input binding.                                                                         |
+| `bind:checked={x}`          | Two-way checkbox binding.                                                                      |
+| `bind:group={x}`            | Radio/checkbox group (radio → one value, checkbox → array).                                    |
+| `bind:value={{ get, set }}` | Writable computed at the binding site.                                                         |
+| `{...expr}`                 | Spread keys as attributes (elements) or props (components).                                    |
+| `attach={fn}`               | Build-time element attachment with optional teardown.                                          |
 
 **Control flow** — `{#…}` blocks (each head reads as the JS clause it lowers to):
 
-| Form                                                                | Meaning                                                                                               |
-| ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `{#if c}` / `{:else if c}` / `{:else}` / `{/if}`                    | Conditional, source-order, re-evaluated reactively.                                                   |
-| `{#for x of list}` / `{#for x, i of list by x.id}` / `{/for}`       | Keyed list (`for…of`); `, i` index reactive; `by` key reconciles rows in place; key defaults to item. |
-| `{#for await x of asyncIter by x.id}` … `{:catch e}` / `{/for}`     | Async keyed list (`for await…of`); rows append as the iterator yields.                                |
+| Form                                                                  | Meaning                                                                                               |
+| --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `{#if c}` / `{:else if c}` / `{:else}` / `{/if}`                      | Conditional, source-order, re-evaluated reactively.                                                   |
+| `{#for x of list}` / `{#for x, i of list by x.id}` / `{/for}`         | Keyed list (`for…of`); `, i` index reactive; `by` key reconciles rows in place; key defaults to item. |
+| `{#for await x of asyncIter by x.id}` … `{:catch e}` / `{/for}`       | Async keyed list (`for await…of`); rows append as the iterator yields.                                |
 | `{#await p}` / `{:then v}` / `{:catch e}` / `{:finally}` / `{/await}` | Promise branches; pending content (before `{:then}`) streams.                                         |
-| `{#await p then v}` / `{/await}`                                    | Blocking: no pending, resolved inline (SSR settles before the first flush).                           |
-| `{#switch s}` / `{:case v}` / `{:default}` / `{/switch}`            | First strict (`===`) match wins.                                                                      |
-| `{#try}` / `{:catch e}` / `{:finally}` / `{/try}`                   | Synchronous render error boundary.                                                                    |
+| `{#await p then v}` / `{/await}`                                      | Blocking: no pending, resolved inline (SSR settles before the first flush).                           |
+| `{#switch s}` / `{:case v}` / `{:default}` / `{/switch}`              | First strict (`===`) match wins.                                                                      |
+| `{#try}` / `{:catch e}` / `{:finally}` / `{/try}`                     | Synchronous render error boundary.                                                                    |
 
 **Reusable markup** — `<template>`:
 
-| Form                                                | Meaning                                                                                                                                            |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `<template name="row" args={item}>` … `{row(item)}` | Named template (snippet) definition + call. A `<template>` with a control-flow attribute (`if`/`each`/…) is a compile error — use the `{#…}` block. |
+| Form                                                | Meaning                                                                                                                                                                                                            |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `<template name="row" args={item}>` … `{row(item)}` | Named template (snippet) definition + call; without `name` it is an inert reusable fragment. A `<template>` carrying a control-flow attribute (`if`/`each`/`await`/…) is a migration error — use the `{#…}` block. |
 
 **Components & slots** — a capitalised tag (`<Card title={x}>`) mounts a child;
 attributes become props, children fill the child's `<slot>` (with fallback when
