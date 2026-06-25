@@ -215,15 +215,21 @@ export function createShadowLanguageService(cwd: string): ShadowLanguageService 
                coords; keep only those overlapping a mapped expression segment. */
             const tokens: SemanticToken[] = []
             for (let index = 0; index + 2 < spans.length; index += 3) {
-                const mapped = mapTsClassification(spans[index + 2])
+                const spanStart = spans[index]
+                const spanLength = spans[index + 1]
+                const classification = spans[index + 2]
+                if (
+                    spanStart === undefined ||
+                    spanLength === undefined ||
+                    classification === undefined
+                ) {
+                    continue
+                }
+                const mapped = mapTsClassification(classification)
                 if (mapped === undefined) {
                     continue
                 }
-                const located = remapShadowDiagnostic(
-                    shadow.mappings,
-                    spans[index],
-                    spans[index + 1],
-                )
+                const located = remapShadowDiagnostic(shadow.mappings, spanStart, spanLength)
                 if (located === undefined) {
                     continue
                 }

@@ -35,6 +35,9 @@ export function structuralBlockTokens(source: string): SemanticToken[] {
         const braceStart = match.index
         const sigil = match[1]
         const keyword = match[2]
+        if (keyword === undefined) {
+            continue
+        }
         const keywordStart = braceStart + match[0].length - keyword.length
         tokens.push({ start: braceStart, length: 2, type: 'operator', modifiers: [] })
         tokens.push({ start: keywordStart, length: keyword.length, type: 'keyword', modifiers: [] })

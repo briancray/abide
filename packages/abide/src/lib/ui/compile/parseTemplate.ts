@@ -133,7 +133,7 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
        `else`, `then`, `catch`, `finally`, `case`, `default`). */
     function headKeyword(body: string): string {
         const match = body.match(/^\s*(\S+)/)
-        return match === undefined || match === null ? '' : match[1]
+        return match?.[1] ?? ''
     }
 
     /* Reads a `{#…}` control block: the open token, its children up to a continuation

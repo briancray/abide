@@ -242,8 +242,7 @@ async function restoreMarkerLine(
         /<abide-block data-i="(\d+)">|<abide-mid data-i="(\d+)"><\/abide-mid>|<\/abide-block>/g
     let result = ''
     let last = 0
-    let match: RegExpExecArray | null
-    while ((match = token.exec(line)) !== null) {
+    for (let match = token.exec(line); match !== null; match = token.exec(line)) {
         result += line.slice(last, match.index)
         if (match[1] !== undefined) {
             const code = markers[Number(match[1])]?.value as string
