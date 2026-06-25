@@ -73,10 +73,10 @@ describe('control-flow branch builds run untracked', () => {
         const tracker = state(0)
         const host = run(
             `<script></script>
-            <ul><template each={rows()} as="r" key="r">
+            <ul>{#for r of rows() by r}
                 <script>tracker.value</script>
                 <li>{r}</li>
-            </template></ul>`,
+            {/for}</ul>`,
             {
                 rows: () => {
                     sourceReads += 1
@@ -97,10 +97,10 @@ describe('control-flow branch builds run untracked', () => {
         const show = state(false)
         run(
             `<script></script>
-            <template if={cond()}>
+            {#if cond()}
                 <script>tracker.value</script>
                 <span>shown</span>
-            </template>`,
+            {/if}`,
             {
                 cond: () => {
                     conditionReads += 1
@@ -122,13 +122,12 @@ describe('control-flow branch builds run untracked', () => {
         const choice = state(1)
         run(
             `<script></script>
-            <template switch={subject()}>
-                <template case={1}><span>one</span></template>
-                <template case={2}>
+            {#switch subject()}
+                {:case 1}<span>one</span>
+                {:case 2}
                     <script>tracker.value</script>
                     <span>two</span>
-                </template>
-            </template>`,
+            {/switch}`,
             {
                 subject: () => {
                     subjectReads += 1

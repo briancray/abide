@@ -36,19 +36,19 @@ const groups = [
 let flag = scope().state(true)
 </script>
 <nav>
-  <template each={groups} as="group" key="group.title">
+  {#for group of groups by group.title}
     <div>
       <h2>{group.title}</h2>
       <ul>
-        <template each={group.links} as="link" key="link">
+        {#for link of group.links by link}
           <li>{link}</li>
-        </template>
+        {/for}
       </ul>
     </div>
-  </template>
-  <template if={flag}>
+  {/for}
+  {#if flag}
     <footer>tail</footer>
-  </template>
+  {/if}
 </nav>
 `
 
@@ -115,7 +115,7 @@ describe('nested each hydrate', () => {
             let label = scope().state('go')
             </script>
             <section>
-              <template each={[1,2]} as="n" key="n"><i>{n}</i></template>
+              {#for n of [1,2] by n}<i>{n}</i>{/for}
               <button class={label}>x</button>
             </section>
         `
@@ -163,7 +163,7 @@ describe('nested each hydrate', () => {
             const items = [{ id: 1, label: 'a' }, { id: 2, label: 'b' }]
             </script>
             <ul>
-              <template each={items} as="item" key="item.id" index="i"><li>{i}:{item.label}</li></template>
+              {#for item, i of items by item.id}<li>{i}:{item.label}</li>{/for}
             </ul>
         `
         const server = new Function('doc', 'state', 'computed', 'effect', compileSSR(src))(

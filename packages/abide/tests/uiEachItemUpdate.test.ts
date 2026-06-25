@@ -73,7 +73,7 @@ test('keyed each updates a changed item in place — same key, new object, same 
     const host = run(
         `
         <script></script>
-        <template each={items.value} as="item" key="item.id"><span>{item.label}</span></template>
+        {#for item of items.value by item.id}<span>{item.label}</span>{/for}
     `,
         { items },
     )
@@ -97,7 +97,7 @@ test('keyless destructured `as` renders and keys rows by item identity', () => {
     const host = run(
         `
         <script></script>
-        <template each={items.value} as="[label, n]"><span>{label}:{n}</span></template>
+        {#for [label, n] of items.value}<span>{label}:{n}</span>{/for}
     `,
         { items },
     )
@@ -119,7 +119,7 @@ test('index="i" binds each row position', () => {
     const host = run(
         `
         <script></script>
-        <template each={items.value} as="item" key="item.id" index="i"><span>{i}:{item.label}</span></template>
+        {#for item, i of items.value by item.id}<span>{i}:{item.label}</span>{/for}
     `,
         { items },
     )
@@ -136,7 +136,7 @@ test('reactive index repaints a reordered row in place — same key, new positio
     const host = run(
         `
         <script></script>
-        <template each={items.value} as="item" key="item.id" index="i"><span>{i}:{item.label}</span></template>
+        {#for item, i of items.value by item.id}<span>{i}:{item.label}</span>{/for}
     `,
         { items },
     )
@@ -159,7 +159,7 @@ test('index="i" composes with a destructured as binding', () => {
     const host = run(
         `
         <script></script>
-        <template each={items.value} as="{ id, label }" key="id" index="i"><span>{i}:{id}:{label}</span></template>
+        {#for { id, label }, i of items.value by id}<span>{i}:{id}:{label}</span>{/for}
     `,
         { items },
     )
