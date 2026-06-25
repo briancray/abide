@@ -3,11 +3,11 @@
 **One typed declaration fans out to HTTP, a CLI, an MCP tool, and an
 OpenAPI spec — the bundler swaps the runtime per side.**
 
-abide is an isomorphic framework on Bun where you write a function once and
-it serves every consumer: a browser fetch, an in-process SSR call, a CLI
-subcommand, an MCP tool, an OpenAPI operation. The same callable keeps its
-name and behaviour on both sides — the bundler decides whether it runs the
-real handler or a network proxy. Built for humans _and_ machines.
+abide is an isomorphic framework on Bun where you write a function once and it
+serves every consumer: a browser fetch, an in-process SSR call, a CLI
+subcommand, an MCP tool, an OpenAPI operation. The same callable keeps its name
+and behaviour on both sides — the bundler decides whether it runs the real
+handler or a network proxy. Built for humans _and_ machines.
 
 - One direct dependency (`typescript`); `tailwindcss` + `bun-plugin-tailwind`
   are optional peers. Single runtime: Bun ≥ 1.3.0.
@@ -15,7 +15,7 @@ real handler or a network proxy. Built for humans _and_ machines.
 ## Quick start
 
 ```sh
-bunx abide scaffold my-app   # scaffolds, installs deps, and starts dev
+bunx abide scaffold my-app   # scaffolds, installs deps, then starts dev
 ```
 
 Or read the full feature tour in the kitchen-sink example:
@@ -29,10 +29,10 @@ bun run dev
 
 ## RPCs
 
-An RPC is one export per file under `src/server/rpc/`. The file path is the
-URL; the export name is the verb. A Standard Schema (zod / valibot / arktype,
-unadapted) validates the args and projects the same shape into the MCP tool,
-the CLI flags, and the OpenAPI operation.
+An RPC is one export per file under `src/server/rpc/`. The file path is the URL;
+the export name is the verb. A Standard Schema (zod / valibot / arktype,
+unadapted) validates the args and projects the same shape into the MCP tool, the
+CLI flags, and the OpenAPI operation.
 
 ```ts
 // src/server/rpc/getMessages.ts
@@ -89,8 +89,8 @@ export const chat = socket({ schema, tail: 100, ttl: 3_600_000 })
 export type ChatMessage = z.infer<typeof schema>
 ```
 
-It also has an HTTP face for clients that can't speak the multiplex (the CLI
-and MCP): `GET /__abide/sockets/chat` returns the retained tail, and
+It also has an HTTP face for clients that can't speak the multiplex (the CLI and
+MCP): `GET /__abide/sockets/chat` returns the retained tail, and
 `POST /__abide/sockets/chat` publishes — gated by `clientPublish` (default off,
 so browsers publish through a validating verb instead).
 
