@@ -40,13 +40,13 @@ async function ssrStream(source: string, model: unknown): Promise<string> {
 }
 
 /* Streaming await, no catch / no finally → a rejection has nowhere to render. */
-const STREAMING = `<main><template await={model.load}>
+const STREAMING = `<main>{#await model.load}
     <p>loading</p>
-    <template then="v"><span>{v}</span></template>
-</template></main>`
+    {:then v}<span>{v}</span>
+{/await}</main>`
 
 /* Blocking await (then on the tag), no catch → settles before the first flush. */
-const BLOCKING = `<main><template await={model.load} then="v"><span>{v}</span></template></main>`
+const BLOCKING = `<main>{#await model.load then v}<span>{v}</span>{/await}</main>`
 
 describe('catch-less <template await> surfaces a rejection', () => {
     test('compiles renderCatch as undefined (no catch branch)', () => {

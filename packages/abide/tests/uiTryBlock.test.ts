@@ -55,9 +55,9 @@ function run(source: string, host: Element, model: unknown, mode: 'mount' | 'hyd
     }
 }
 
-const SUCCESS = `<main><template try><p>{model.label}</p><template catch="error"><b>{error}</b></template></template></main>`
-const THROW = `<main><template try><p>{boom()}</p><template catch="error"><b>caught:{error}</b></template></template></main>`
-const NO_CATCH = `<main><template try><p>{boom()}</p></template></main>`
+const SUCCESS = `<main>{#try}<p>{model.label}</p>{:catch error}<b>{error}</b>{/try}</main>`
+const THROW = `<main>{#try}<p>{boom()}</p>{:catch error}<b>caught:{error}</b>{/try}</main>`
+const NO_CATCH = `<main>{#try}<p>{boom()}</p>{/try}</main>`
 
 describe('<template try> (sync error boundary)', () => {
     test('client: success renders the guarded subtree', () => {
@@ -78,21 +78,21 @@ describe('<template try> (sync error boundary)', () => {
     })
 
     test('client: inner catch handles, outer never sees it', () => {
-        const NESTED = `<main><template try><div><template try><p>{boom()}</p><template catch="i"><b>inner:{i}</b></template></template></div><template catch="o"><b>outer:{o}</b></template></template></main>`
+        const NESTED = `<main>{#try}<div>{#try}<p>{boom()}</p>{:catch i}<b>inner:{i}</b>{/try}</div>{:catch o}<b>outer:{o}</b>{/try}</main>`
         const host = document.createElement('div')
         run(NESTED, host, doc({}), 'mount')
         expect(host.textContent).toBe('inner:kaboom')
     })
 
     test('client: an uncaught inner throw propagates to the outer catch', () => {
-        const NESTED = `<main><template try><div><template try><p>{boom()}</p></template></div><template catch="o"><b>outer:{o}</b></template></template></main>`
+        const NESTED = `<main>{#try}<div>{#try}<p>{boom()}</p>{/try}</div>{:catch o}<b>outer:{o}</b>{/try}</main>`
         const host = document.createElement('div')
         run(NESTED, host, doc({}), 'mount')
         expect(host.textContent).toBe('outer:kaboom')
     })
 
     test('client: finally renders on both success and catch', () => {
-        const FIN = `<main><template try><p>{model.label}</p><template catch="e"><b>{e}</b></template><template finally><i>fin</i></template></template></main>`
+        const FIN = `<main>{#try}<p>{model.label}</p>{:catch e}<b>{e}</b>{:finally}<i>fin</i>{/try}</main>`
         const ok = document.createElement('div')
         run(FIN, ok, doc({ label: 'hi' }), 'mount')
         expect(ok.textContent).toBe('hifin')

@@ -50,12 +50,12 @@ async function ssrStream(source: string, model: unknown): Promise<string> {
     return html
 }
 
-const FULL = `<main><template await={model.load}>
+const FULL = `<main>{#await model.load}
     <p>loading</p>
-    <template then="v"><span>{v}</span></template>
-    <template catch="e"><b>{e}</b></template>
-    <template finally><i>done</i></template>
-</template></main>`
+    {:then v}<span>{v}</span>
+    {:catch e}<b>{e}</b>
+    {:finally}<i>done</i>
+{/await}</main>`
 
 describe('<template finally>', () => {
     test('client: pending shows neither outcome nor finally', () => {
@@ -78,7 +78,7 @@ describe('<template finally>', () => {
     })
 
     test('finally-only (no then/catch) renders on both outcomes', async () => {
-        const ONLY = `<main><template await={model.load}><p>loading</p><template finally><i>done</i></template></template></main>`
+        const ONLY = `<main>{#await model.load}<p>loading</p>{:finally}<i>done</i>{/await}</main>`
         const ok = mount(ONLY, doc({ load: Promise.resolve('x') }))
         const bad = mount(ONLY, doc({ load: Promise.reject('y') }))
         await Promise.resolve()

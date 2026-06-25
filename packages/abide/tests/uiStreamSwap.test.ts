@@ -26,14 +26,14 @@ describe('SSR streaming → client swap', () => {
                 let fast = () => Promise.resolve('FAST')
             </script>
             <div>
-                <template await={slow()}>
+                {#await slow()}
                     <p>loading slow</p>
-                    <template then="v"><span>{v}</span></template>
-                </template>
-                <template await={fast()}>
+                    {:then v}<span>{v}</span>
+                {/await}
+                {#await fast()}
                     <p>loading fast</p>
-                    <template then="v"><b>{v}</b></template>
-                </template>
+                    {:then v}<b>{v}</b>
+                {/await}
             </div>
         `
         const render = (): SsrRender =>
