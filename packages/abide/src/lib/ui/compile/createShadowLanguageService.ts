@@ -1,6 +1,7 @@
 import { resolve } from 'node:path'
 import ts from 'typescript'
 import { messageFromError } from '../../shared/messageFromError.ts'
+import { mapTsClassification } from './ABIDE_SEMANTIC_TOKENS_LEGEND.ts'
 import { assetModulesFile } from './assetModulesFile.ts'
 import { compileShadow } from './compileShadow.ts'
 import { loadShadowTsConfig } from './loadShadowTsConfig.ts'
@@ -10,6 +11,7 @@ import { shadowNaming } from './shadowNaming.ts'
 import { sourceToShadowOffset } from './sourceToShadowOffset.ts'
 import type { AbideDiagnostic } from './types/AbideDiagnostic.ts'
 import type { CompiledShadow } from './types/CompiledShadow.ts'
+import type { SemanticToken } from './types/SemanticToken.ts'
 
 const { suffixed, isShadow, sourceOf } = shadowNaming
 
@@ -27,6 +29,8 @@ export type ShadowLanguageService = {
     /* Hover info at a source offset, or undefined if the offset isn't a checked
        expression (markup, whitespace) or TypeScript has nothing to report. */
     quickInfo: (abidePath: string, sourceOffset: number) => ShadowQuickInfo | undefined
+    /* Type-aware semantic tokens for every checked expression, in source coords. */
+    semanticClassifications: (abidePath: string) => SemanticToken[]
 }
 
 /*
@@ -193,6 +197,44 @@ export function createShadowLanguageService(cwd: string): ShadowLanguageService 
                 start: span?.start ?? sourceOffset,
                 length: span?.length ?? 1,
             }
+        },
+        semanticClassifications(abidePath) {
+            const fileName = suffixed(abidePath)
+            /* Compile first so the mappings cache is current. */
+            shadowText(abidePath)
+            const shadow = shadows.get(abidePath)
+            if (shadow === undefined) {
+                return []
+            }
+            const { spans } = service.getEncodedSemanticClassifications(
+                fileName,
+                { start: 0, length: shadow.code.length },
+                ts.SemanticClassificationFormat.TwentyTwenty,
+            )
+            /* `spans` is flat triples [start, length, classification, …] in shadow
+               coords; keep only those overlapping a mapped expression segment. */
+            const tokens: SemanticToken[] = []
+            for (let index = 0; index + 2 < spans.length; index += 3) {
+                const mapped = mapTsClassification(spans[index + 2])
+                if (mapped === undefined) {
+                    continue
+                }
+                const located = remapShadowDiagnostic(
+                    shadow.mappings,
+                    spans[index],
+                    spans[index + 1],
+                )
+                if (located === undefined) {
+                    continue
+                }
+                tokens.push({
+                    start: located.start,
+                    length: located.length,
+                    type: mapped.type,
+                    modifiers: mapped.modifiers,
+                })
+            }
+            return tokens
         },
     }
 }
