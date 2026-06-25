@@ -143,23 +143,29 @@ import: `scope`, `props` / `prop`, `effect`, `html`, `snippet`.
 | `{...expr}`                 | Spread keys as attributes (elements) or props (components).                                  |
 | `attach={fn}`               | Build-time element attachment with optional teardown.                                        |
 
-**Control flow** — native `<template>` tags:
+**Control flow** — `{#…}` blocks (each head reads as the JS clause it lowers to):
 
-| Form                                                                                           | Meaning                                                                                    |
-| ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `<template if={c}>` / `<template elseif={c}>` / `<template else>`                              | Conditional, source-order, re-evaluated reactively.                                        |
-| `<template each={list} as="x" key="x.id" index="i">`                                           | Keyed list; reorder/re-key updates rows in place; `index` is reactive.                     |
-| `<template each await={asyncIter} as="x" key="…">`                                             | Async keyed list; rows append as the iterator yields.                                      |
-| `<template await={p}>` / `<template then="v">` / `<template catch="e">` / `<template finally>` | Promise branches; `await={p} then="v"` on one tag renders inline (blocking) on the server. |
-| `<template switch={s}>` / `<template case="v">` / `<template default>`                         | First strict (`===`) match wins.                                                           |
-| `<template try>` / `<template catch="e">` / `<template finally>`                               | Synchronous render error boundary.                                                         |
-| `<template name="row" args={item}>` … `{row(item)}`                                            | Snippet definition + call.                                                                 |
+| Form                                                                | Meaning                                                                                               |
+| ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `{#if c}` / `{:else if c}` / `{:else}` / `{/if}`                    | Conditional, source-order, re-evaluated reactively.                                                   |
+| `{#for x of list}` / `{#for x, i of list by x.id}` / `{/for}`       | Keyed list (`for…of`); `, i` index reactive; `by` key reconciles rows in place; key defaults to item. |
+| `{#for await x of asyncIter by x.id}` … `{:catch e}` / `{/for}`     | Async keyed list (`for await…of`); rows append as the iterator yields.                                |
+| `{#await p}` / `{:then v}` / `{:catch e}` / `{:finally}` / `{/await}` | Promise branches; pending content (before `{:then}`) streams.                                         |
+| `{#await p then v}` / `{/await}`                                    | Blocking: no pending, resolved inline (SSR settles before the first flush).                           |
+| `{#switch s}` / `{:case v}` / `{:default}` / `{/switch}`            | First strict (`===`) match wins.                                                                      |
+| `{#try}` / `{:catch e}` / `{:finally}` / `{/try}`                   | Synchronous render error boundary.                                                                    |
+
+**Reusable markup** — `<template>`:
+
+| Form                                                | Meaning                                                                                                                                            |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `<template name="row" args={item}>` … `{row(item)}` | Named template (snippet) definition + call. A `<template>` with a control-flow attribute (`if`/`each`/…) is a compile error — use the `{#…}` block. |
 
 **Components & slots** — a capitalised tag (`<Card title={x}>`) mounts a child;
 attributes become props, children fill the child's `<slot>` (with fallback when
 empty). `<style>` is scoped to the component and its children. Component files
-end in `.abide`. `then`/`each` value names lexically shadow same-named
-component state inside the block.
+end in `.abide`. A block's binding names (`{:then v}`, `{#for x of …}`) lexically
+shadow same-named component state inside the block.
 
 ## Server surface — abide/server/\* (server-only)
 
