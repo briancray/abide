@@ -1,5 +1,39 @@
 # abide
 
+## 0.43.0
+
+### Minor Changes
+
+- 6453cf9: repurpose the bare outbox() export to the global reactive aggregate ([`003713d`](https://github.com/briancray/abide/commit/003713dab125b3df72d6cf832ec18ea546922c79))
+- 6453cf9: typed navigate params, scope-destructured primitives, precise prop diagnostics ([`0769896`](https://github.com/briancray/abide/commit/07698966147e96970c27e0278e2152a23e48b219))
+- 6453cf9: OutboxEntry type + status ([`08d9b03`](https://github.com/briancray/abide/commit/08d9b036501110ab24c18258cc79364f9ac71ea8))
+- 6453cf9: migrate kitchen-sink to rpc-native outbox; AGENTS.md surface ([`1b8aa3f`](https://github.com/briancray/abide/commit/1b8aa3fe631181e7798d0703eb09a0f22dba0f88))
+- 6453cf9: persist request body + content-type, replay on reload ([`26c309f`](https://github.com/briancray/abide/commit/26c309f20bf573e512b74477ba2319c22218f7d9))
+- 6453cf9: client registry of durable rpc queues ([`2b89c20`](https://github.com/briancray/abide/commit/2b89c20b1f1f1794f90152f46958ee760333bab5))
+- 6453cf9: reject server-only imports in the client bundle with an evidence chain ([`2de1730`](https://github.com/briancray/abide/commit/2de1730872898d320c240a89b570dfaa9acace7a))
+- 6453cf9: name-keyed typed errors via a handler errors ctx ([`62f75a8`](https://github.com/briancray/abide/commit/62f75a8341d61ac9cfd1e7cbeccc66ddec991643))
+- 6453cf9: createOutboxQueue enqueue + reactive/persisted entries ([`88560c9`](https://github.com/briancray/abide/commit/88560c942d0f28623a68ed1315bb2341ad66a9c3))
+- 6453cf9: bundler threads outbox:true into the client proxy emission ([`b279960`](https://github.com/briancray/abide/commit/b27996089f4a3c8786fcd1ade530057a34f086fc))
+- 6453cf9: pending() reflects the durable queue (in-flight or queued) ([`bfa505d`](https://github.com/briancray/abide/commit/bfa505d8d5326f0464be35568ac8ae6fc4bd1901))
+- 6453cf9: class: and style: directives for surgical reactive class/style writes ([`c5ee6d1`](https://github.com/briancray/abide/commit/c5ee6d13faad82ac45c6c1627c6e9435c9c59c5f))
+- 6453cf9: durable return type — outbox:true overload on mutating rpc helpers ([`d916c6b`](https://github.com/briancray/abide/commit/d916c6b5b563ddc4dee07a015cde08d32e6dd750))
+- 6453cf9: outbox:true rpc option, gated to mutating methods ([`e37f2a3`](https://github.com/briancray/abide/commit/e37f2a333e201ef40303dd25bafb9f0ca82dd220))
+- 6453cf9: drain loop — deliver/retry/error/cancel under the entry signal ([`ec32868`](https://github.com/briancray/abide/commit/ec32868eb860b6185f21c196b18f03c7b3605ba8))
+- 6453cf9: durable client invoke path + rpc.outbox face ([`f96a0c0`](https://github.com/briancray/abide/commit/f96a0c025cfda5f6daf713f4d69857854b8f3459))
+
+### Patch Changes
+
+- 6453cf9: notify() forEach callback must not return a value ([`1c7f20f`](https://github.com/briancray/abide/commit/1c7f20fa5b6a24f3a5e90ab20521f7d24ba55d57))
+- 6453cf9: Breaking: rename defineVerb export to defineRpc ([`29fe778`](https://github.com/briancray/abide/commit/29fe7782844e0de15c53fad711d6616cc90a27e0))
+- 6453cf9: rename VERB*\* constants to RPC*\* ([`391687a`](https://github.com/briancray/abide/commit/391687a252a33ba355ba929944cd1a2cef83c1ef))
+- 6453cf9: rename verb-named rpc helpers to rpc ([`4ebdd8f`](https://github.com/briancray/abide/commit/4ebdd8ff862121a48a39fbdb7b2893a14fd52022))
+- 6453cf9: rename verbRegistry to rpcRegistry ([`507adf5`](https://github.com/briancray/abide/commit/507adf5d5ae3a1b66ef85fc495ba1a974a530abf))
+- 6453cf9: rename Verb-named types/helpers/files to Rpc ([`8342e96`](https://github.com/briancray/abide/commit/8342e963babbddcb9a87dcc99fc2e4958dbc5750))
+- 6453cf9: refresh AGENTS surface map ({#…} blocks, scaffold flags, migration error) ([`88cc4d9`](https://github.com/briancray/abide/commit/88cc4d97205bd3de74a08a6dbae3f2221f0275fe))
+- 6453cf9: commit working tree — outbox, rpc errors, compile plans, cache refactor ([`c673dc7`](https://github.com/briancray/abide/commit/c673dc71522e33ad4f9b48f41ac73fa6c4f03a02))
+- 6453cf9: rename HttpVerb type to HttpMethod ([`d64a59a`](https://github.com/briancray/abide/commit/d64a59a045f77c627b98dbb1b3a12b545f3d3c60))
+- 6453cf9: scrub verb from comments, AGENTS.md, and inspector surface (rpc/method) ([`d9356ce`](https://github.com/briancray/abide/commit/d9356ce9eeba6b03d43ef67fc500cf697e34d39c))
+
 ## 0.42.0
 
 ### Minor Changes
