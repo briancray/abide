@@ -2,7 +2,6 @@
 import { countLog } from '$server/rpc/countLog.ts'
 import { tickFeed } from '$server/rpc/tickFeed.ts'
 import CodeBlock from '$ui/CodeBlock.abide'
-import RpcHeader from '$ui/RpcHeader.abide'
 
 type StreamFrame = { n: number; text: string }
 
@@ -42,7 +41,6 @@ async function runJsonl() {
 }
 </script>
 
-<RpcHeader />
 <h1 class="mt-8 text-3xl font-bold">Streaming over HTTP</h1>
 <p class="mt-2 text-slate-600">
     Wrap an <code class="font-mono">AsyncIterable</code> in <code class="font-mono">sse()</code> or

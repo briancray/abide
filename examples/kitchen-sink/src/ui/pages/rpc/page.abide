@@ -9,7 +9,6 @@ import { patchEcho } from '$server/rpc/patchEcho.ts'
 import { replaceEcho } from '$server/rpc/replaceEcho.ts'
 import { uploadNote } from '$server/rpc/uploadNote.ts'
 import CodeBlock from '$ui/CodeBlock.abide'
-import RpcHeader from '$ui/RpcHeader.abide'
 
 type LogEntry = { id: number; rpc: string; outcome: string }
 
@@ -40,8 +39,6 @@ async function safeCall(rpc: string, fn: () => Promise<unknown>) {
     }
 }
 </script>
-
-<RpcHeader />
 
 <section class="mt-6">
     <h2 class="text-sm font-semibold">Options</h2>

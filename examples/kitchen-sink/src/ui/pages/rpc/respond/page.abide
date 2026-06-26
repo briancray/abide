@@ -4,7 +4,6 @@ import { getEcho } from '$server/rpc/getEcho.ts'
 import { getProduct } from '$server/rpc/getProduct.ts'
 import { redirectExample } from '$server/rpc/redirectExample.ts'
 import CodeBlock from '$ui/CodeBlock.abide'
-import RpcHeader from '$ui/RpcHeader.abide'
 const { state } = scope()
 let jsonOutcome = state('(not called)')
 let errorOutcome = state('(not called)')
@@ -35,7 +34,6 @@ async function callRedirectFetch() {
 }
 </script>
 
-<RpcHeader />
 <h1 class="mt-8 text-3xl font-bold">Response helpers</h1>
 <p class="mt-2 text-slate-600">
     Response constructors with rpc-friendly defaults — all set

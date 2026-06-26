@@ -2,9 +2,10 @@
 import { page } from '@abide/abide/shared/page'
 
 /*
-Section masthead for every rpc page — composed inside the root layout (a shared
-component, since abide has no nested-layout resolution). Active state reads
-page.url.pathname, so it re-highlights on every SPA nav.
+Nested section layout for /rpc/*. A layout.abide wraps every page at or below
+its folder, so this masthead renders once and the chain nests it inside the
+root layout (outermost-first) — the subpage lands in this layout's <slot/>.
+Active pill state reads page.url.pathname, so it re-highlights on every SPA nav.
 */
 const subpages = [
     { href: '/rpc', label: 'overview' },
@@ -37,3 +38,5 @@ const pillClass = (href: string) =>
         <a href={s.href} class={pillClass(s.href)}>{s.label}</a>
     {/for}
 </nav>
+
+<slot></slot>

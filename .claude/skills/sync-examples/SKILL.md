@@ -81,34 +81,33 @@ directory tree / page tree / nav.** Re-derive the *shape* from the current
 `exports` map, then make the tree match. Do not assume the current tree is
 right just because it builds.
 
-## Multi-page sections share one masthead component
+## Multi-page sections share one nested layout
 
 The kitchen-sink page tree maps to the `@documentation` slug groups, not to
 README headings (the README has only three) — it *groups* related slugs under
 one nav section. When such a section has
 subpages (today only `rpc/`: its index plus `consume` / `errors` / `respond`
 / `streaming` / `request-scope`), the section title, intro paragraph, and the
-subpage pill-nav are one shared component, `src/ui/<Section>Header.abide`
-(e.g. `RpcHeader.abide`), rendered at the top of the index **and** every
-subpage so the masthead is byte-identical across the section.
+subpage pill-nav live in one nested `<section>/layout.abide`
+(e.g. `pages/rpc/layout.abide`), whose `<slot/>` renders the active subpage
+below a masthead that is byte-identical across the section.
 
-- **A component, never a nested `layout.abide`.** abide resolves the deepest
-  `layout.abide` and drops ancestors — a section layout would *replace* the
-  root chrome, not nest under it. A component composes inside the root layout.
+- **A nested layout, never a per-page component.** abide nests the full layout
+  chain — every ancestor `layout.abide` wraps the page outermost-first
+  (`shared/layoutChainForRoute.ts`), so a section layout composes *inside* the
+  root layout, it does not replace its chrome. This is also the only live demo
+  of layout chaining (a `page`-surface guarantee in AGENTS.md), so a sync must
+  keep it — don't collapse it back into a component rendered per subpage.
 - Pills read active state from `page.url.pathname` (overview = exact match;
-  subpages are distinct paths). Each subpage renders `<…Header />`, then its
-  own page title below the pills.
+  subpages are distinct paths). The layout renders the masthead; each subpage's
+  own page title sits in the slot, below the pills.
 - **Re-derive the pill list from the `@documentation` slugs that map into the
-  section** — same rule as everything else here: the component's existing array
-  is not evidence. Add / rename / drop a pill when the slug set shifts, and
-  overwrite every subpage's copy of `<…Header />`.
+  section** — same rule as everything else here: the layout's existing array is
+  not evidence. Add / rename / drop a pill when the slug set shifts.
 
-Two multi-page sections deliberately **do not** use this pattern — a sync must
-not regularise them into a masthead:
+One multi-page section deliberately **does not** use this pattern — a sync must
+not regularise it into a masthead:
 
-- `auth/` keeps its own nested `layout.abide` on purpose: it *demonstrates*
-  deepest-layout-wins by swapping the whole chrome (the live example backing
-  the layout surface in AGENTS.md). A shared masthead would delete the demo.
 - `pages/` subpages (`boundary`, `product/[id]`) demonstrate page-tree routing
   and dynamic segments themselves, not facets of one concept — no shared subnav.
 
@@ -140,9 +139,9 @@ existing content.
    that doesn't trace to a current export is stale — *including the page-tree
    folder it lives in.*
 3. **Reshape structure before content.** Make the kitchen-sink page tree,
-   `layout.abide` nav, index cards, overview pages, and any
-   `<Section>Header.abide` masthead/pill-nav (see *Multi-page sections share
-   one masthead component*) match the `@documentation` slug grouping. Move or
+   `layout.abide` nav, index cards, overview pages, and any nested
+   `<section>/layout.abide` masthead/pill-nav (see *Multi-page sections share
+   one nested layout*) match the `@documentation` slug grouping. Move or
    delete folders whose slug no longer exists.
 4. **Rebuild each demo page from the live code, not from its own old text.**
    For every page (and template/scaffold doc-comments), open the

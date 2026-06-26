@@ -5,7 +5,6 @@ import { checkout } from '$server/rpc/checkout.ts'
 import { getEcho } from '$server/rpc/getEcho.ts'
 import { getProduct } from '$server/rpc/getProduct.ts'
 import CodeBlock from '$ui/CodeBlock.abide'
-import RpcHeader from '$ui/RpcHeader.abide'
 const { state } = scope()
 let outcome404 = state('(not triggered)')
 let outcome405 = state('(not triggered)')
@@ -70,7 +69,6 @@ async function trigger500() {
 }
 </script>
 
-<RpcHeader />
 <h1 class="mt-8 text-3xl font-bold"><code class="font-mono">HttpError</code></h1>
 <p class="mt-2 text-slate-600">
     Non-2xx comes back through the same call site as the success path.

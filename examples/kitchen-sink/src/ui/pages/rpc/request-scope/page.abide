@@ -2,10 +2,8 @@
 import { cache } from '@abide/abide/shared/cache'
 import { whoAmI } from '$server/rpc/whoAmI.ts'
 import CodeBlock from '$ui/CodeBlock.abide'
-import RpcHeader from '$ui/RpcHeader.abide'
 </script>
 
-<RpcHeader />
 <h1 class="mt-8 text-3xl font-bold">Request scope</h1>
 <p class="mt-2 text-slate-600">
     Per-request accessors backed by <code class="font-mono">AsyncLocalStorage</code> — reach for
