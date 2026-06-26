@@ -1,7 +1,7 @@
 import type { RpcRegistryEntry } from './types/RpcRegistryEntry.ts'
 
 /*
-Process-wide registry of every verb-bound RPC declared in the app.
+Process-wide registry of every rpc-bound RPC declared in the app.
 defineRpc inserts on first construction (which happens at module-load
 time inside the rpc dispatcher cache or eagerly when MCP / CLI walks the
 rpc manifest). MCP server reads this to build its tools list; the CLI

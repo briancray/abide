@@ -12,7 +12,7 @@ import type { CliManifest } from './types/CliManifest.ts'
 Runs one RPC command against a target server and prints the result, returning a
 process exit code. Shared by the one-shot path (runCli) and the interactive
 session (runSession) so a command behaves identically typed at the shell or at
-the session prompt. Streaming responses (sse/jsonl — a streaming verb or a socket
+the session prompt. Streaming responses (sse/jsonl — a streaming rpc or a socket
 `tail`) print frame-by-frame as NDJSON; everything else decodes and prints once.
 */
 export async function dispatchCommand({

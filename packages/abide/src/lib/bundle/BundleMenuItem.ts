@@ -8,7 +8,7 @@ handles it:
         if (event.detail.name === 'sync') syncNow()
     })
 
-Emitting an event (rather than calling a verb directly) is what lets a menu
+Emitting an event (rather than calling a rpc directly) is what lets a menu
 drive parameterised work: a click carries no arguments, so the app computes
 them and makes the call itself. `shortcut` is the key for the Cmd-based
 equivalent (e.g. `'r'` → Cmd-R).

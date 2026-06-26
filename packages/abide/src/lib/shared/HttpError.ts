@@ -12,7 +12,7 @@ export class HttpError extends Error {
     /* Set when the handler returned a typed error (`error(errors.x(...))`) or a
        validation 422: `kind` is the declared error name (or 'validation'), `data` the
        payload it carried — parsed off the `{ $abideError, data }` body by decodeResponse.
-       `data` is typed `unknown` (a throw can't carry the verb's per-kind type to the
+       `data` is typed `unknown` (a throw can't carry the rpc's per-kind type to the
        catch); narrow it yourself. Both undefined for a plain `error(status, text)`. */
     readonly kind?: string
     readonly data?: unknown

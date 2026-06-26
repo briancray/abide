@@ -25,12 +25,12 @@ HTTP rpc isn't the place for long-lived multi-publisher subscriptions.
 `.fetch(req)` is the framework's request-dispatch entry point — used by
 the router to invoke the handler from an incoming HTTP request, not
 for user code.
-`crossOrigin` (server-side only, set via the verb's opts) exempts a
-mutating verb from the router's same-origin CSRF gate, accepting browser
+`crossOrigin` (server-side only, set via the rpc's opts) exempts a
+mutating rpc from the router's same-origin CSRF gate, accepting browser
 requests whose Origin doesn't match the app's own host.
 */
 /*
-A body verb (POST/PUT/PATCH) also accepts a FormData in place of typed args:
+A body rpc (POST/PUT/PATCH) also accepts a FormData in place of typed args:
 buildRpcRequest ships it as a multipart body and the server splits text fields
 into args (still schema-validated) and File parts into files(). FormData is
 stringly-typed, so this is the upload escape hatch — typed object args remain

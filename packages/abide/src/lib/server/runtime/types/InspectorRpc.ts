@@ -1,27 +1,27 @@
 /*
-One RPC verb projected for the inspector: the registry entry reduced to the
+One RPC rpc projected for the inspector: the registry entry reduced to the
 serializable facts the UI renders — where it mounts, its method, which
 non-browser surfaces advertise it, and its argument/result shapes as JSON
 Schema. Schemas project through jsonSchemaForSchema (same as MCP/OpenAPI), so
-a verb whose library can't render a schema still lists with an opaque shape.
+a rpc whose library can't render a schema still lists with an opaque shape.
 */
 export type InspectorRpc = {
-    /* Registry key — the rpc URL the verb mounts at (e.g. /rpc/users/create). */
+    /* Registry key — the rpc URL the rpc mounts at (e.g. /rpc/users/create). */
     url: string
-    /* HTTP method bound to the verb. */
+    /* HTTP method bound to the rpc. */
     method: string
-    /* Which surfaces advertise it (browser/mcp/cli), from the verb's ClientFlags. */
+    /* Which surfaces advertise it (browser/mcp/cli), from the rpc's ClientFlags. */
     clients: Record<string, boolean>
-    /* Argument-bag shape as JSON Schema; undefined when the verb declares none. */
+    /* Argument-bag shape as JSON Schema; undefined when the rpc declares none. */
     inputSchema: Record<string, unknown> | undefined
-    /* Success-body shape as JSON Schema; undefined when the verb declares none. */
+    /* Success-body shape as JSON Schema; undefined when the rpc declares none. */
     outputSchema: Record<string, unknown> | undefined
-    /* True when the verb declares a filesSchema — it accepts multipart File parts. */
+    /* True when the rpc declares a filesSchema — it accepts multipart File parts. */
     files: boolean
-    /* Per-verb handler deadline in ms; undefined = no deadline. */
+    /* Per-rpc handler deadline in ms; undefined = no deadline. */
     timeout: number | undefined
-    /* Per-verb received-body cap in bytes; undefined = Bun's server-wide ceiling. */
+    /* Per-rpc received-body cap in bytes; undefined = Bun's server-wide ceiling. */
     maxBodySize: number | undefined
-    /* True when the verb opts out of the same-origin CSRF gate. */
+    /* True when the rpc opts out of the same-origin CSRF gate. */
     crossOrigin: boolean | undefined
 }

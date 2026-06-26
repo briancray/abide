@@ -5,7 +5,7 @@ import type { CliTarget } from './types/CliTarget.ts'
 Prints the session's connection line. A local instance (spawned child) reads as
 "running a local instance"; a remote one reads as "connected to <name>", using the
 name the target already carries from its resolve-time probe and only re-probing
-when it doesn't. No target → the not-connected hint listing the verbs.
+when it doesn't. No target → the not-connected hint listing the rpcs.
 */
 export async function printSessionStatus(target: CliTarget | undefined): Promise<void> {
     if (!target) {

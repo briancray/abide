@@ -41,7 +41,7 @@ function splitFormData(form: FormData): Record<string, unknown> {
 }
 
 /*
-Parses + merges every source of args available for a verb-defined handler:
+Parses + merges every source of args available for a rpc-defined handler:
 - body (json or form-encoded, ignored for GET/DELETE/HEAD)
 - url query string
 
@@ -54,7 +54,7 @@ to layer the query into, and the framework's args type is a single bag rather
 than a `{body, query}` envelope. Returns undefined when no source contributes
 any key.
 
-`maxBodySize` (per-verb, opt-in) bounds the body's actual received bytes
+`maxBodySize` (per-rpc, opt-in) bounds the body's actual received bytes
 before any parse — see readBodyWithinLimit. Omitted = no abide-level check;
 Bun.serve's server-wide maxRequestBodySize is the ceiling.
 */
@@ -129,12 +129,12 @@ export async function parseArgs(
     /*
     TODO(query-coercion): query params arrive as strings, so a numeric/boolean
     field reaches schema validation as `'2'`/`'true'`. Deferred deliberately:
-    parseArgs has no access to the verb's inputSchema (it lives in defineRpc),
+    parseArgs has no access to the rpc's inputSchema (it lives in defineRpc),
     and Standard Schema exposes no type structure to drive type-aware coercion.
     Blind value-shape coercion is unsafe — it would corrupt legitimately
     string-typed fields whose value looks numeric/boolean (ids, zip codes,
     version strings like '1.0'), silently breaking GET validation. A correct fix
-    needs the schema threaded in here (or a coercing schema adapter at the verb).
+    needs the schema threaded in here (or a coercing schema adapter at the rpc).
     */
     const bodyObject = (body ?? {}) as Record<string, unknown>
     const merged = { ...Object.fromEntries(url.searchParams), ...bodyObject }

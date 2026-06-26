@@ -5,7 +5,7 @@ import type { Log } from './types/Log.ts'
 
 /*
 The unified logger: every record carries the request-scope context (short
-trace id, +elapsed, verb+path) when one is active, plus a channel — the
+trace id, +elapsed, method+path) when one is active, plus a channel — the
 line's speaker. `log(...)`/`warn`/`error`/`trace` speak on the app's own
 always-on channel (the app name, resolved per emission so boot order doesn't
 matter); `log.channel(name)` returns the same shape on a DEBUG-gated

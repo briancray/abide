@@ -2,8 +2,8 @@ import type { RpcOptions } from './RpcOptions.ts'
 
 /*
 Call signature shared by RemoteFunction and RawRemoteFunction. The base
-signature keeps `args` required so a schema'd verb can't silently drop its
-input; when `Args` admits undefined (no-input verbs) an intersected
+signature keeps `args` required so a schema'd rpc can't silently drop its
+input; when `Args` admits undefined (no-input rpcs) an intersected
 optional-arg signature lets call sites write `fn()` instead of
 `fn(undefined)`. Intersection rather than a bare conditional so the type
 stays callable while `Args` is still generic (cache() invokes producers

@@ -337,7 +337,7 @@ function invokeRemote<Args>(
     const request = getRemoteMeta(promise)
     if (!request) {
         throw new Error(
-            '[abide] cache() received a function whose call did not record metadata — was it produced by a verb helper?',
+            '[abide] cache() received a function whose call did not record metadata — was it produced by a rpc helper?',
         )
     }
     registerEntry(store, key, promise, options, request, () => rawFn(args as Args))

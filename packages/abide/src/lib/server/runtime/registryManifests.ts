@@ -7,7 +7,7 @@ Process-wide slot for the rpc + sockets + prompts manifests. createServer
 assigns once at boot (right after the route table is built); the MCP
 server, the OpenAPI emitter, and prompt enumeration read it on first
 request so they can lazy-import every module and walk the
-verb/socket/prompt registries.
+rpc/socket/prompt registries.
 
 The slot pattern (mirrors getActiveServer) lets the framework-generated
 McpServer bind to the manifests at module scope while the loaders stay

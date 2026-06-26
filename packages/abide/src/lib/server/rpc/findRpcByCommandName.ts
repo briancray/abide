@@ -3,7 +3,7 @@ import { rpcRegistry } from './rpcRegistry.ts'
 import type { RpcRegistryEntry } from './types/RpcRegistryEntry.ts'
 
 /*
-Finds the registered verb whose URL maps to a given command name (folder
+Finds the registered rpc whose URL maps to a given command name (folder
 segments joined with `-`, per commandNameForUrl). The CLI client proxy and
 the MCP tool dispatcher both key off this name, so the scan lives here once
 rather than being re-implemented — and reused — at each call site.

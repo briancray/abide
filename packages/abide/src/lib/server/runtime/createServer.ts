@@ -71,7 +71,7 @@ const DEV_REBUILD_PATH = '/__abide/reload'
 /*
 Unlike the framework's own plumbing routes above (the socket multiplex, MCP
 endpoint, CLI download), the OpenAPI document describes the app's public HTTP
-surface — the /rpc/* verbs — rather than abide internals, so it sits at the
+surface — the /rpc/* rpcs — rather than abide internals, so it sits at the
 conventional root path where external tooling and scanners expect to find it
 (/openapi.json, alongside /swagger.json, /.well-known/*) rather than under the
 /__abide/ namespace.
@@ -81,7 +81,7 @@ const OPENAPI_PATH = '/openapi.json'
 /*
 Starts a Bun HTTP server that ties together the framework conventions:
 page.abide under src/ui/pages/ for views (layout.abide wraps the pages beneath
-it), one named export per file under src/server/rpc/ for verb-bound remote
+it), one named export per file under src/server/rpc/ for rpc-bound remote
 functions, one named export
 per file under src/server/sockets/ for broadcast sockets, and an optional
 app.ts for boot-time setup, request middleware, and error fallback. Page
@@ -120,7 +120,7 @@ export async function createServer({
     /*
     Bun's server-wide request body ceiling, enforced natively by Bun.serve
     (its own default is ~128MB). Surfaced as an option + env so deployments
-    can raise/lower it; per-verb tightening is the verbs' maxBodySize.
+    can raise/lower it; per-rpc tightening is the rpcs' maxBodySize.
     */
     maxRequestBodySize = parseBoundedEnvInt(
         process.env.ABIDE_MAX_REQUEST_BODY_SIZE,
@@ -242,7 +242,7 @@ export async function createServer({
     isn't installed. Resolved at boot so the fetch route below can branch on it.
     */
     const inspectorHandler = await maybeMountInspector({ name: appName, version: appVersion })
-    /* Built on first request, then reused — the verb registry is frozen after load. */
+    /* Built on first request, then reused — the rpc registry is frozen after load. */
     let openApiSpec: ReturnType<typeof buildOpenApiSpec> | undefined
     const cliCwd = process.cwd()
 

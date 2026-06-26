@@ -2,7 +2,7 @@ import type { RpcHelper } from './rpc/types/RpcHelper.ts'
 import { unprocessed } from './rpc/unprocessed.ts'
 
 /*
-PUT verb helper. The bundler rewrites every `export const x = PUT(fn)` inside
+PUT rpc helper. The bundler rewrites every `export const x = PUT(fn)` inside
 `src/server/rpc/<file>.ts` into a defineRpc call (server target) or a
 remoteProxy stub (client target). Calling this directly throws.
 */

@@ -77,7 +77,7 @@ function formatClock(ts: number): string {
 
 /*
 Builds the record from the emission's own fields plus the ambient request
-scope (trace, elapsed, verb+path), then renders it through the active
+scope (trace, elapsed, method+path), then renders it through the active
 formatter. The scope is read at emission time so a record emitted from a
 stream-flush callback re-entered into the scope still carries its context.
 Internal seam shared by the public logger and the framework's closing-record
@@ -132,14 +132,14 @@ function consoleFor(level: LogRecord['level']): (...args: unknown[]) => void {
 
 /*
 The unified tsv line (the default format): tab-separated
-`<clock>	<trace8>	<verb path>	[channel] <message>	+0.00ms`. The
+`<clock>	<trace8>	<rpc path>	[channel] <message>	+0.00ms`. The
 wall-clock leads every line (each record carries `ts`); inside a request scope
 the trace column follows and the elapsed-at-emission timing trails; a closing
 record emitted outside one (asset hits sidestep the scope) pads a blank trace
 column and trails its serve duration instead, so request lines stay aligned
 whatever produced them. Every record speaks on a channel
 (the app name, 'abide', or a diagnostic channel), shown as a dim `[name]`
-tag opening the message field. The verb+path pair is one field — it's the
+tag opening the message field. The method+path pair is one field — it's the
 line's anchor unit — and the tag folds into the message field so field
 positions stay stable for cut/awk consumers.
 */

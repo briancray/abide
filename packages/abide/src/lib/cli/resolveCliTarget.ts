@@ -11,7 +11,7 @@ const AUTO_START_CEILING_MS = 3000
 
 /*
 Resolves the connection to resume when the CLI runs without an explicit
-connection verb — the terminal analogue of the bundle's resolveLaunchTarget.
+connection rpc — the terminal analogue of the bundle's resolveLaunchTarget.
 Reads the saved intent:
   - embedded         → boot a fresh local instance (bounded; undefined on failure)
   - url, still alive → connect to it

@@ -3,9 +3,9 @@ import { escapeRegex } from './escapeRegex.ts'
 /*
 Strips the user's `import { … } from '<moduleName>'` declaration from a
 module source. Used by the $rpc / $sockets rewriters to remove the
-verb / `socket` import after its call site has been replaced by the
+rpc / `socket` import after its call site has been replaced by the
 runtime-injected binding (defineRpc / defineSocket). Without this
-strip the dead import would still side-effect-load the verb/socket
+strip the dead import would still side-effect-load the rpc/socket
 helper module into the server bundle for every $rpc / $sockets file.
 
 The braced body is `[^}]*` rather than `[\s\S]*?` so the lazy match

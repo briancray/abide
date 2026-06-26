@@ -14,7 +14,7 @@ deep inside a handler:
 
 Reads `Bun.env` (the process environment plus any `.env` Bun loaded), so any
 Standard Schema library — zod, valibot, arktype — works without an adapter,
-same as the verb helpers. Coercion (e.g. a numeric PORT) lives in the schema.
+same as the rpc helpers. Coercion (e.g. a numeric PORT) lives in the schema.
 
 The schema is registered (envSchemaStore) so the bundle launcher can project
 the first-run setup form from the same declaration. When the launcher imports

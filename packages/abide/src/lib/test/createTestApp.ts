@@ -46,8 +46,8 @@ import type { RemoteFunction } from '../shared/types/RemoteFunction.ts'
 import { createTestSocketChannel } from './createTestSocketChannel.ts'
 
 /*
-Augmentable verb/socket maps for `app.rpc.<verb>` / `app.sockets.<name>`. The
-build's writeTestRpcDts / writeTestSocketsDts emit one entry per verb/socket
+Augmentable rpc/socket maps for `app.rpc.<rpc>` / `app.sockets.<name>`. The
+build's writeTestRpcDts / writeTestSocketsDts emit one entry per rpc/socket
 (into src/.abide/), so the keys + signatures are the project's real surface
 with no imports. Empty here; types arrive once the app has been built. Mirrors
 url's RpcRoutes / health's AppHealthMap.
@@ -58,7 +58,7 @@ export interface RpcClient {}
 // biome-ignore lint/suspicious/noEmptyInterface: augmented by the generated testSockets.d.ts
 export interface SocketClient {}
 
-/* The booted app under test. Every named subsystem is reachable as the verb
+/* The booted app under test. Every named subsystem is reachable as the rpc
    you call, the socket you iterate, or a path you fetch — over the real
    server, so the full pipeline (CSRF, cookies, base path) runs. */
 export type TestApp = {
@@ -88,7 +88,7 @@ export type TestApp = {
 Boots the real app on an ephemeral port — the same wiring serverEntry performs,
 minus the standalone-binary env layers. Imports the framework's virtual
 manifests (resolved by abideResolverPlugin, registered via `abide/preload`
-in the consumer's bunfig), so the routes, verbs, and sockets are the project's
+in the consumer's bunfig), so the routes, rpcs, and sockets are the project's
 real surface, not a fixture. Pass nothing: `await createTestApp()` is the app
 exactly as `bun start` would serve it.
 
@@ -149,8 +149,8 @@ export async function createTestApp(): Promise<TestApp> {
     )
 
     function send(remote: RemoteFunction<unknown, unknown>, args: unknown): Promise<Response> {
-        /* Same-origin Origin header so the CSRF gate admits mutating verbs; the
-           server serves verbs at their raw url (no mount base applied here). */
+        /* Same-origin Origin header so the CSRF gate admits mutating rpcs; the
+           server serves rpcs at their raw url (no mount base applied here). */
         const request = buildRpcRequest({
             method: remote.method,
             url: remote.url,

@@ -11,7 +11,7 @@ type Query = Record<string, QueryValue>
 /*
 Augmentable rpc map. Codegen emits a `declare module '<importName>/shared/url'`
 block filling this with `'/rpc/<file>': args` for each query-carrying (GET)
-verb, so url('/rpc/search', { q }) types its args against the verb's own
+rpc, so url('/rpc/search', { q }) types its args against the rpc's own
 signature. Empty by default — an absent entry falls through to the page/asset
 branch, so the helper works before the generated d.ts lands.
 */
@@ -59,7 +59,7 @@ Resolves any in-app URL to its base-correct, typed form — the single chokepoin
 so a project mounted under APP_URL's subpath (e.g. /v2) generates links, asset
 refs, and rpc hrefs that stay within the mount. Three disjoint URL kinds, keyed
 off the path:
-  - rpc (flat /rpc/*, present in RpcRoutes): the verb's args, serialised to query.
+  - rpc (flat /rpc/*, present in RpcRoutes): the rpc's args, serialised to query.
   - page route (has [name] segments): path params, then optional query.
   - asset / paramless / raw: bare path, then optional query.
 External URLs (scheme-qualified or protocol-relative) skip the base untouched,

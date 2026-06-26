@@ -6,7 +6,7 @@ import { request } from './request.ts'
 The in-app agent surface. `agent(engine, messages)` runs a model engine
 against the app's own MCP surface and returns the engine's frame stream —
 it does NOT pick a transport. The handler wraps it in `jsonl()` or `sse()`,
-so consumption is the app's choice, same as any other streaming verb:
+so consumption is the app's choice, same as any other streaming rpc:
 
   // src/server/rpc/chat.ts
   import { agent } from '@abide/abide/server/agent'
@@ -18,10 +18,10 @@ so consumption is the app's choice, same as any other streaming verb:
 
 The engine — provider-specific, lives in a `@abide/<provider>` package —
 only sees the surface in and yields frames out, so swapping providers never
-touches the verb or the UI.
+touches the rpc or the UI.
 
 Permission is decided server-side, not negotiated at runtime: the surface
-is already gated by each verb's `clients.mcp` declaration plus its own
+is already gated by each rpc's `clients.mcp` declaration plus its own
 per-call handler auth, and any provider built-ins (e.g. Claude Code's bash
 tool) are fenced by static rules in the engine's config.
 */
@@ -71,7 +71,7 @@ export type AgentEngine = (input: {
 
 /*
 Runs an engine against the current request's MCP surface and returns its
-AgentFrame stream. Must be called inside a verb's request scope —
+AgentFrame stream. Must be called inside a rpc's request scope —
 mcpSurface() forwards the caller's auth into every tool dispatch. The
 handler chooses the transport: `jsonl(agent(engine, messages))` or
 `sse(agent(engine, messages))`.

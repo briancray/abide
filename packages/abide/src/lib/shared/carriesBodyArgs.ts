@@ -1,7 +1,7 @@
 import type { HttpMethod } from './types/HttpMethod.ts'
 
 /*
-Whether a verb carries its args in the request body (POST/PUT/PATCH) vs
+Whether a rpc carries its args in the request body (POST/PUT/PATCH) vs
 on the query string (GET/DELETE/HEAD). Single source for the split so the
 synthesized Request (buildRpcRequest), the handler-side parse (parseArgs),
 the cache key (keyForRemoteCall), and the OpenAPI doc can't disagree.

@@ -19,9 +19,9 @@ import { runWithRpcTimeout } from './runWithRpcTimeout.ts'
 import type { RemoteHandler } from './types/RemoteHandler.ts'
 
 /*
-Stash for the per-request AbortController a timed verb composes into the
+Stash for the per-request AbortController a timed rpc composes into the
 inbound signal — read back in invoke's deadline callback to fire it. Lives on
-the scope's Request (one verb per .fetch — network or in-process dispatch) so
+the scope's Request (one rpc per .fetch — network or in-process dispatch) so
 an SSR pass's many in-process cache reads, which call invoke() directly and
 never reach parseArgsForFetch, can't cross-cancel.
 */
@@ -32,9 +32,9 @@ const RPC_TIMEOUT_ABORT = Symbol('abideRpcTimeoutAbort')
 const rpcLog = abideLog.channel('abide:rpc')
 
 /*
-Builds a RemoteFunction from an HTTP verb + RPC URL + handler. The bundler
-rewrites every `export const VERB = handler(fn)` inside an `$rpc/**` module
-so the verb (from the export name) and the URL (from the file path under
+Builds a RemoteFunction from an HTTP method + RPC URL + handler. The bundler
+rewrites every `export const METHOD = handler(fn)` inside an `$rpc/**` module
+so the rpc (from the export name) and the URL (from the file path under
 `src/server/rpc/`, with `/rpc/` prefix) are threaded into defineRpc.
 
 The plain call (`fn(args)`) resolves to the Content-Type-decoded body;
@@ -59,9 +59,9 @@ export function defineRpc<Args, Return>(
         errors?: ErrorSpec
         clients?: Partial<ClientFlags>
         crossOrigin?: boolean
-        /* Per-verb cap on actual received body bytes (413 past it); omitted = Bun's server-wide maxRequestBodySize. */
+        /* Per-rpc cap on actual received body bytes (413 past it); omitted = Bun's server-wide maxRequestBodySize. */
         maxBodySize?: number
-        /* Per-verb handler deadline (ms): a 504 once exceeded, on every surface (SSR/MCP/CLI/network). */
+        /* Per-rpc handler deadline (ms): a 504 once exceeded, on every surface (SSR/MCP/CLI/network). */
         timeout?: number
     },
 ): RemoteFunction<Args, Return> {
@@ -73,10 +73,10 @@ export function defineRpc<Args, Return>(
     const errors = buildErrorConstructors(opts?.errors ?? {})
     /*
     An input schema makes the handler safe to advertise to non-browser
-    surfaces. CLI flips on for any verb with one (a human/script invokes it
-    deliberately). MCP only auto-exposes read-only verbs (GET/HEAD) — a
+    surfaces. CLI flips on for any rpc with one (a human/script invokes it
+    deliberately). MCP only auto-exposes read-only rpcs (GET/HEAD) — a
     model shouldn't be able to mutate/delete just because the handler
-    carries a schema, so mutating verbs require an explicit clients.mcp.
+    carries a schema, so mutating rpcs require an explicit clients.mcp.
     Explicit `clients` always wins.
     */
     const hasSchema = inputSchema !== undefined
@@ -109,7 +109,7 @@ export function defineRpc<Args, Return>(
 
     /*
     Validates the parsed args against inputSchema (text fields), then — when the
-    verb declares filesSchema — validates the File parts parseArgs split onto
+    rpc declares filesSchema — validates the File parts parseArgs split onto
     the request store and merges them into the args bag the handler receives.
     Either schema's issues become a 422. Files stay out of inputSchema so its
     JSON-Schema projection (OpenAPI/MCP/CLI) never has to model a binary.
@@ -177,7 +177,7 @@ export function defineRpc<Args, Return>(
         /*
         On the deadline, fire the controller parseArgsForFetch composed into
         request().signal (absent on the SSR cache-read path, so a sibling
-        verb's outbound fetch is never cancelled) — then 504.
+        rpc's outbound fetch is never cancelled) — then 504.
         */
         return runWithRpcTimeout(work, timeout, abortRpcTimeout)
     }
@@ -192,17 +192,17 @@ export function defineRpc<Args, Return>(
         parseArgsForFetch: async (request) => {
             const args = await parseArgs(method, request, opts?.maxBodySize)
             /*
-            Compose this verb's deadline into request().signal so a handler's
+            Compose this rpc's deadline into request().signal so a handler's
             fetch(ext, { signal: request().signal }) is cancelled when the
             timeout fires — not just abandoned. Applied after parseArgs onto the
-            scope's *final* request: a maxBodySize verb swaps store.req for a
+            scope's *final* request: a maxBodySize rpc swaps store.req for a
             buffered copy (readBodyWithinLimit) and an app.handle hook may
             rewrite it, so composing onto the inbound `request` would leave
             request() — and abortRpcTimeout, which reads store.req — pointed at
             an un-cancellable signal. Only the signal is shadowed; the body
             stays readable. The store always exists here (network + in-process
             dispatch both run inside runWithRequestScope); SSR cache reads call
-            invoke() directly, never this path, so a sibling verb is never
+            invoke() directly, never this path, so a sibling rpc is never
             cross-cancelled.
             */
             if (timeout !== undefined) {

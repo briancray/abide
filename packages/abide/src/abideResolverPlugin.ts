@@ -81,7 +81,7 @@ function once<T>(produce: () => Promise<T>): () => Promise<T> {
 
 /*
 Bun plugin that wires every virtual import abide produces at build time:
-- `abide:rpc`     — { rpcUrl: () => import(rpc-module) } HTTP-verb manifest
+- `abide:rpc`     — { rpcUrl: () => import(rpc-module) } HTTP-method manifest
 - `abide:sockets` — { socketName: () => import(socket-module) } socket manifest
 - `abide:pages`   — { pageUrl: () => import(page.abide) } manifest
 - `abide:prompts` — { promptName: () => import(prompt-module) } manifest
@@ -92,7 +92,7 @@ Bun plugin that wires every virtual import abide produces at build time:
 - `abide:shell`   — app.html content (custom or default)
 
 Also rewrites modules under src/server/rpc and src/server/sockets:
-- src/server/rpc/<file>.ts: each HTTP-verb export is bound to a runtime
+- src/server/rpc/<file>.ts: each HTTP-method export is bound to a runtime
   implementation — defineRpc on the server, remoteProxy on the client.
 - src/server/sockets/<file>.ts: each `socket(opts)` export is bound to
   defineSocket on the server (with the socket name + opts) or
@@ -148,7 +148,7 @@ export function abideResolverPlugin({
         scanDir(rpcDir, '**/*.ts').then(async (rpcFiles) => {
             const importName = await abideImportNameOnce()
             await writeRpcDts({ cwd, rpcDir, rpcFiles, importName })
-            /* Typed createTestApp `app.rpc.<verb>` surface. */
+            /* Typed createTestApp `app.rpc.<rpc>` surface. */
             await writeTestRpcDts({ cwd, rpcFiles, importName })
             return rpcFiles
         }),
@@ -197,7 +197,7 @@ export function abideResolverPlugin({
 
     /*
     Side-crossing guard (client target only). The client bundle must never pull a
-    server-only name into the browser. The exception is a registered verb/socket —
+    server-only name into the browser. The exception is a registered rpc/socket —
     `$server/rpc/*` and `$server/sockets/*` are replaced with remoteProxy/socketProxy
     stubs by the onLoad hooks below — so only OTHER paths under src/server/ (helpers,
     runtime/) and the public `abide/server/*` names are violations. `importerOf` records
@@ -348,7 +348,7 @@ export function abideResolverPlugin({
                 const prepared = prepareRpcModule(source, importName)
                 if (!prepared) {
                     throw new Error(
-                        `[abide] src/server/rpc/${relativePath} has no \`export const <name> = <VERB>(...)\` — every $rpc module must declare exactly one remote function`,
+                        `[abide] src/server/rpc/${relativePath} has no \`export const <name> = <METHOD>(...)\` — every $rpc module must declare exactly one remote function`,
                     )
                 }
                 const expectedName = fileStem(relativePath)
@@ -366,13 +366,13 @@ export function abideResolverPlugin({
                 */
                 if (target === 'client') {
                     const contents = `import { remoteProxy as __abideRemoteProxy__ } from '${importName}/ui/remoteProxy';
-export const ${prepared.exportName} = __abideRemoteProxy__(${JSON.stringify(prepared.verb)}, ${JSON.stringify(url)});
+export const ${prepared.exportName} = __abideRemoteProxy__(${JSON.stringify(prepared.method)}, ${JSON.stringify(url)});
 `
                     return { contents, loader: 'ts' }
                 }
                 /*
-                Server target: strip the user's verb import, then rewrite
-                the `<VERB>(` call so the verb (from the identifier) and
+                Server target: strip the user's rpc import, then rewrite
+                the `<METHOD>(` call so the method (from the identifier) and
                 the URL (from the file path) are threaded into the
                 runtime constructor — defineRpc. The user's handler body
                 stays intact between the parens; any generics on the call
@@ -692,7 +692,7 @@ export const footer = ${JSON.stringify(footer)}
                 if (args.path === 'abide:mcp') {
                     /*
                     The MCP server is fully framework-generated — tools from
-                    the verb registry, prompts from src/mcp/prompts, resources
+                    the rpc registry, prompts from src/mcp/prompts, resources
                     from src/mcp/resources. createMcpServer is internal; there
                     is no user-authored server module. Server identity comes
                     from package.json so the `mcp__<name>__*` permission prefix
@@ -884,7 +884,7 @@ async function scanPages(pagesDir: string): Promise<PagesScan> {
 
 /*
 Walks one registry directory once: src/server/rpc (every `.ts` file is an
-HTTP-verb rpc handler), src/server/sockets (each `.ts` file declares one
+HTTP-method rpc handler), src/server/sockets (each `.ts` file declares one
 socket, loaded lazily on first sub/pub frame), or src/mcp/prompts (each `.md`
 file declares one MCP prompt — frontmatter for metadata, body for the
 template). Returns an empty list when the directory doesn't exist so an app

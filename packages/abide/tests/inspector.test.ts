@@ -33,11 +33,11 @@ describe('maybeMountInspector', () => {
         const response = await handler!(...request('/__abide/inspector/surface'))
         expect(response.headers.get('Content-Type')).toContain('application/json')
         const surface = (await response.json()) as {
-            verbs: unknown[]
+            rpcs: unknown[]
             sockets: unknown[]
             prompts: unknown[]
         }
-        expect(Array.isArray(surface.verbs)).toBe(true)
+        expect(Array.isArray(surface.rpcs)).toBe(true)
         expect(Array.isArray(surface.sockets)).toBe(true)
         expect(Array.isArray(surface.prompts)).toBe(true)
     })

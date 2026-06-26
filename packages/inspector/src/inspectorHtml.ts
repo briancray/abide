@@ -411,10 +411,10 @@ const fmtBytes = (n) => {
 }
 const schemaBlock = (label, s) => s ? '<pre class="schema">' + esc(label + ': ' + JSON.stringify(s, null, 2)) + '</pre>' : ''
 
-// One expandable verb: the columnar row (surfaces line up) + a hidden detail row
+// One expandable rpc: the columnar row (surfaces line up) + a hidden detail row
 // with every declared option. A JS toggle, not <details>, so WebKit's flex-summary
 // double-click bug can't apply.
-function verbRow(v, i) {
+function rpcRow(v, i) {
   // Every option is a column now; expanding adds only the full schemas.
   const detail = v.inputSchema || v.outputSchema
     ? schemaBlock('input', v.inputSchema) + schemaBlock('output', v.outputSchema)
@@ -439,13 +439,13 @@ function verbRow(v, i) {
 async function loadSurface() {
   const surfaceEl = document.getElementById('surface')
   try {
-    const { verbs, sockets, prompts } = await (await fetch(root + '/surface')).json()
-    const verbTable =
+    const { rpcs, sockets, prompts } = await (await fetch(root + '/surface')).json()
+    const rpcTable =
       '<table class="surface"><thead><tr>' +
       '<th>method</th><th>path</th><th class="c">schema</th><th class="c">browser</th>' +
       '<th class="c">mcp</th><th class="c">cli</th><th class="c">xorigin</th><th class="c">files</th>' +
       '<th class="num">timeout</th><th class="num">body</th>' +
-      '</tr></thead><tbody>' + verbs.map(verbRow).join('') + '</tbody></table>'
+      '</tr></thead><tbody>' + rpcs.map(rpcRow).join('') + '</tbody></table>'
     const socketTable = sockets.length
       ? '<table class="surface"><thead><tr><th>socket</th><th>operations</th><th>rest</th></tr></thead><tbody>' +
         sockets.map((s) =>
@@ -454,7 +454,7 @@ async function loadSurface() {
         '</tbody></table>'
       : '<div class="empty">none</div>'
     // Prompts (MCP-only): name, description, and the argument schema expandable
-    // like a verb's. Absent when the app declares none — keep the section out.
+    // like a rpc's. Absent when the app declares none — keep the section out.
     const promptList = prompts || []
     const promptTable = promptList.length
       ? '<table class="surface"><thead><tr><th>prompt</th><th>description</th><th class="c">args</th></tr></thead><tbody>' +
@@ -469,7 +469,7 @@ async function loadSurface() {
       : ''
     surfaceEl.className = ''
     surfaceEl.innerHTML =
-      '<h2>RPC verbs (' + verbs.length + ')</h2>' + verbTable +
+      '<h2>RPCs (' + rpcs.length + ')</h2>' + rpcTable +
       '<h2>Sockets (' + sockets.length + ')</h2>' + socketTable +
       (promptList.length ? '<h2>Prompts (' + promptList.length + ')</h2>' + promptTable : '')
     for (const row of surfaceEl.querySelectorAll('tr.vrow')) {

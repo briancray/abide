@@ -4,8 +4,8 @@ import { extraForwardHeaders } from './extraForwardHeaders.ts'
 Headers abide forwards from an inbound HTTP/MCP request onto every
 synthesized in-process rpc Request — cookies + bearer auth + the four
 forwarding hints proxies set when terminating TLS in front of the app.
-defineRpc uses this when an SSR pass calls a verb in-process; the MCP
-dispatcher uses it when piping a tool invocation through verb.fetch.
+defineRpc uses this when an SSR pass calls a rpc in-process; the MCP
+dispatcher uses it when piping a tool invocation through rpc.fetch.
 
 WARNING — this is an allowlist: every inbound header NOT named here (and
 not added via app.forwardHeaders) is DROPPED on the in-process path. A

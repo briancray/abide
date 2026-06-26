@@ -1,8 +1,8 @@
 import type { HttpMethod } from '../shared/types/HttpMethod.ts'
 
 /*
-Maps an HTTP verb to MCP tool annotations so a model can tell a read from
-a write before calling. Abide derives these from the verb the RPC was
+Maps an HTTP method to MCP tool annotations so a model can tell a read from
+a write before calling. Abide derives these from the rpc the RPC was
 declared with rather than asking the author to repeat the intent:
   - GET / HEAD  → read-only, non-destructive
   - POST        → creates; not idempotent, not (necessarily) destructive
@@ -10,7 +10,7 @@ declared with rather than asking the author to repeat the intent:
   - PATCH       → modifies; destructive, not idempotent
   - DELETE      → removes; idempotent + destructive
 The shape matches MCP's ToolAnnotations (readOnlyHint / destructiveHint /
-idempotentHint); fields a verb doesn't imply are left off.
+idempotentHint); fields a rpc doesn't imply are left off.
 */
 export function annotationsForMethod(method: HttpMethod): Record<string, boolean> {
     switch (method) {

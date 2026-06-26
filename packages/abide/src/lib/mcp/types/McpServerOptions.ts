@@ -7,7 +7,7 @@ package.json by the bundler when MCP is wired into createServer).
   response. Defaults come from the project's package.json.
 - `authorize`: optional boundary check. Runs once per MCP request before
   any tool/resource dispatch. Throw HttpError (or any Error) to reject.
-  Per-tool authorization stays in the underlying verb handler.
+  Per-tool authorization stays in the underlying rpc handler.
 */
 export type McpServerOptions = {
     name?: string

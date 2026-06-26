@@ -21,7 +21,7 @@
 
 ## The premise
 
-One typed verb declaration fans out to every consumer:
+One typed rpc declaration fans out to every consumer:
 
 ```text
               getMessages = GET(fn, { inputSchema })
@@ -33,8 +33,8 @@ One typed verb declaration fans out to every consumer:
                 proxy
 ```
 
-A Standard Schema unlocks the CLI for every verb and MCP for read-only verbs
-(`GET` / `HEAD`); a mutating verb never auto-exposes to MCP — it opts in with
+A Standard Schema unlocks the CLI for every rpc and MCP for read-only rpcs
+(`GET` / `HEAD`); a mutating rpc never auto-exposes to MCP — it opts in with
 `clients: { mcp: true }`. The same gating applies to sockets: a schema flips the
 MCP/CLI read faces on.
 
@@ -44,7 +44,7 @@ The bundler reads these paths by convention (`cwd` is the app root):
 
 | Path                            | Meaning                                                                                                             |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `src/server/rpc/<name>.ts`      | One RPC verb per file; export name = filename = URL under `/rpc/`. Server: real handler; client: `remoteProxy`.     |
+| `src/server/rpc/<name>.ts`      | One RPC per file; export name = filename = URL under `/rpc/`. Server: real handler; client: `remoteProxy`.     |
 | `src/server/sockets/<name>.ts`  | One socket per file; export name = filename. Server: `defineSocket`; client: `socketProxy`.                         |
 | `src/server/config.ts`          | Optional. Eager-imported for boot-time `env()` validation (virtual `abide:config`).                                 |
 | `src/mcp/prompts/*.md`          | MCP prompts; frontmatter (description, JSON Schema) + `{{name}}` body. Rewritten to `definePrompt`.                 |
@@ -81,7 +81,7 @@ resolve.
 
 ## Authoring contracts
 
-**RPC verb** — `export const <name> = GET(handler, opts?)` (same shape for
+**RPC** — `export const <name> = GET(handler, opts?)` (same shape for
 `POST` / `PUT` / `PATCH` / `DELETE` / `HEAD`). The handler receives the parsed
 args bag (`InferOutput<inputSchema>`, merged with validated files when
 `filesSchema` is set) plus a `{ errors }` ctx (its declared error constructors),
@@ -95,10 +95,10 @@ the declared status, surfacing on the client's thrown `HttpError` as `.kind` /
 `.data`; a validation 422 rides the same shape with `kind: 'validation'` and a
 field-keyed message map), `clients: { browser, mcp, cli }` (explicit surface
 targeting; explicit wins over schema auto-flip), `crossOrigin` (exempt a mutating
-verb from the same-origin gate), `maxBodySize` (per-verb 413 ceiling), `timeout`
+rpc from the same-origin gate), `maxBodySize` (per-rpc 413 ceiling), `timeout`
 (handler deadline in ms; 504 on every surface). Query args arrive as strings —
-use `z.coerce.*`. Consume four ways: `cache(verb)(args)` in-process, the swapped
-browser `fetch`, `verb.raw(args)` for the `Response`, `verb.stream(args)` to
+use `z.coerce.*`. Consume four ways: `cache(rpc)(args)` in-process, the swapped
+browser `fetch`, `rpc.raw(args)` for the `Response`, `rpc.stream(args)` to
 iterate a streaming body.
 
 **Socket** — `export const <name> = socket({ schema?, tail?, ttl?,
@@ -188,12 +188,12 @@ shadow same-named component state inside the block.
 
 ### RPC — @documentation rpc
 
-- `@abide/abide/server/GET` — declare a `GET` verb; args from the query string. Schema auto-exposes CLI + read-MCP.
-- `@abide/abide/server/POST` — declare a `POST` verb; args from JSON/form/multipart body (body wins on collision).
-- `@abide/abide/server/PUT` — declare a `PUT` verb (body args; mutating).
-- `@abide/abide/server/PATCH` — declare a `PATCH` verb (body args; mutating).
-- `@abide/abide/server/DELETE` — declare a `DELETE` verb (query args; mutating).
-- `@abide/abide/server/HEAD` — declare a `HEAD` verb (query args; read-only, headers-only response).
+- `@abide/abide/server/GET` — declare a `GET` rpc; args from the query string. Schema auto-exposes CLI + read-MCP.
+- `@abide/abide/server/POST` — declare a `POST` rpc; args from JSON/form/multipart body (body wins on collision).
+- `@abide/abide/server/PUT` — declare a `PUT` rpc (body args; mutating).
+- `@abide/abide/server/PATCH` — declare a `PATCH` rpc (body args; mutating).
+- `@abide/abide/server/DELETE` — declare a `DELETE` rpc (query args; mutating).
+- `@abide/abide/server/HEAD` — declare a `HEAD` rpc (query args; read-only, headers-only response).
 
 ### Response — @documentation response
 
@@ -236,7 +236,7 @@ shadow same-named component state inside the block.
 
 ### Cache — @documentation cache
 
-- `@abide/abide/shared/cache` — `cache(fn, opts?)`: coalesce/memoize a remote verb or producer per store (request-scoped server, tab-scoped client). `opts`: `global` (process store), `ttl`, `swr`. Methods: `cache.invalidate`, `cache.on`, `cache.patch`. Warm SSR reads resolve synchronously on hydrate.
+- `@abide/abide/shared/cache` — `cache(fn, opts?)`: coalesce/memoize a remote rpc or producer per store (request-scoped server, tab-scoped client). `opts`: `global` (process store), `ttl`, `swr`. Methods: `cache.invalidate`, `cache.on`, `cache.patch`. Warm SSR reads resolve synchronously on hydrate.
 
 ### Templating — @documentation templating
 
@@ -304,7 +304,7 @@ shadow same-named component state inside the block.
 - `@abide/abide/ui/router` — `router(host, loaders, layoutLoaders, probe?)`: History-API router; diffs the layout/page chain on nav. Returns a disposer.
 - `@abide/abide/ui/startClient` — `startClient(routes, layoutRoutes, target)`: official client entry; reads `__SSR__`, seeds cache, starts the router.
 - `@abide/abide/ui/renderToStream` — `renderToStream(render)`: out-of-order SSR streaming; yields the shell, then one `<abide-resolve>` fragment per streaming await.
-- `@abide/abide/ui/remoteProxy` — `remoteProxy(method, url)`: client substitute for a verb handler; identical `RemoteFunction` shape so `cache()` matches both sides.
+- `@abide/abide/ui/remoteProxy` — `remoteProxy(method, url)`: client substitute for a rpc handler; identical `RemoteFunction` shape so `cache()` matches both sides.
 - `@abide/abide/ui/socketProxy` — `socketProxy(name)`: client substitute for a server `Socket`; subscribes over the multiplexed ws channel.
 - `@abide/abide/ui/dom/mount` — mount a top-level page/layout into a host under an ownership scope; returns a disposer.
 - `@abide/abide/ui/dom/mountChild` — mount a child component as a marker-bounded range (no wrapper element); records the instance for hot reload.
@@ -368,7 +368,7 @@ shadow same-named component state inside the block.
 
 ### MCP — @documentation mcp
 
-- `@abide/abide/mcp/createMcpServer` — `createMcpServer(opts)`: MCP server bound to the project registry; derives tools from verbs/sockets, handles auth.
+- `@abide/abide/mcp/createMcpServer` — `createMcpServer(opts)`: MCP server bound to the project registry; derives tools from rpcs/sockets, handles auth.
 
 ### Prompts — @documentation plumbing
 
@@ -379,7 +379,7 @@ shadow same-named component state inside the block.
 
 ### Testing — @documentation testing
 
-- `@abide/abide/test/createTestApp` — `createTestApp(opts)`: in-memory test server with a typed `app.rpc.<verb>` / `app.sockets.<name>` surface.
+- `@abide/abide/test/createTestApp` — `createTestApp(opts)`: in-memory test server with a typed `app.rpc.<rpc>` / `app.sockets.<name>` surface.
 
 ### Plumbing — @documentation plumbing
 

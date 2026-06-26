@@ -5,7 +5,7 @@ import { REF_JSON_HEADER } from './REF_JSON_HEADER.ts'
 import type { HttpMethod } from './types/HttpMethod.ts'
 
 /*
-Builds the Request a verb helper uses to invoke its handler. Same shape on
+Builds the Request a rpc helper uses to invoke its handler. Same shape on
 both sides (server defineRpc + client remoteProxy) so the cache key
 derivation and SSR snapshot round-trip identically. $rpc URLs are flat
 (no `:name` segments): GET/DELETE/HEAD serialise args onto the query

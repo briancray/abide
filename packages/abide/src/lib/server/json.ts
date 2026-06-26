@@ -13,7 +13,7 @@ own per-request cache handles in-process dedupe.
       json(await db.getOrder(id)),
   )
 
-The return type carries `T` as a phantom brand so the verb helper can
+The return type carries `T` as a phantom brand so the rpc helper can
 infer the caller-facing `Return` from the handler body — no need to
 annotate `GET<Args, Return>` just to type the response shape.
 

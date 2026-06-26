@@ -1,5 +1,5 @@
 /*
-Canonical query-string encoding for a query-carrying verb's args bag. The
+Canonical query-string encoding for a query-carrying rpc's args bag. The
 single definition both the synthesized Request (buildRpcRequest) and its
 cache key (keyForRemoteCall) build their query from, so the request URL and
 the key encode every value identically and can't drift. `undefined` values

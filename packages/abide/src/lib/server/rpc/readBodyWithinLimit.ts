@@ -2,14 +2,14 @@ import { HttpError } from '../../shared/HttpError.ts'
 import { error } from '../error.ts'
 
 /*
-Enforces a verb's maxBodySize on the actual received bytes, not the
+Enforces a rpc's maxBodySize on the actual received bytes, not the
 Content-Length header (absent on chunked bodies, trivially spoofed). A
 declared Content-Length over the limit rejects before reading anything;
 otherwise the body streams into a buffer that throws 413 the moment the
 limit is crossed — aborting the read, so the remaining bytes are never
 consumed. Returns a reassembled Request carrying the buffered body and the
 original headers, so the parse path's .text()/.formData() work unchanged.
-Only called when the verb declares maxBodySize; the default ceiling is
+Only called when the rpc declares maxBodySize; the default ceiling is
 Bun.serve's server-wide maxRequestBodySize, which Bun enforces natively.
 */
 export async function readBodyWithinLimit(request: Request, maxBytes: number): Promise<Request> {

@@ -24,8 +24,8 @@ decided at construction:
     against `<url>/<manifest[name].url>` using the manifest's method.
     Auth header is set from `token` when provided.
   - Without `url`: in-process mode. Each property access looks up the
-    verb in the registry (populated by importing the project's rpc
-    modules) and calls `verb.fetch(synthesizedRequest)` — same code
+    rpc in the registry (populated by importing the project's rpc
+    modules) and calls `rpc.fetch(synthesizedRequest)` — same code
     path the HTTP router uses, no network hop.
 
 The `manifest` is the bundler-emitted CLI manifest baked into the thin
@@ -62,9 +62,9 @@ export function createClient<Api extends AnyApi = AnyApi>(opts?: {
     undefined when the name is unknown in the active mode. Remote mode (url set)
     resolves method + url from the baked manifest — registry fallback for
     same-project callers — and sends the synthesized Request over the network.
-    In-process mode resolves the verb from the registry and routes through
+    In-process mode resolves the rpc from the registry and routes through
     dispatchRpcInProcess, the same synthesize-and-fetch the MCP dispatcher
-    uses, so the two consumer surfaces can't drift on how a verb is invoked.
+    uses, so the two consumer surfaces can't drift on how a rpc is invoked.
     */
     function resolveSend(name: string): ((args?: unknown) => Promise<Response>) | undefined {
         if (url) {

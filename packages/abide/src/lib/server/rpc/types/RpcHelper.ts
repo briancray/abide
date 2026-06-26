@@ -5,7 +5,7 @@ import type { StandardSchemaV1 } from '../../../shared/types/StandardSchemaV1.ts
 import type { RemoteHandler } from './RemoteHandler.ts'
 
 /*
-Options every verb overload accepts: the OpenAPI 200 `outputSchema`, the
+Options every rpc overload accepts: the OpenAPI 200 `outputSchema`, the
 `clients` surface flags, the same-origin CSRF exemption (`crossOrigin`), the
 pre-parse body-byte ceiling (`maxBodySize`), and the per-surface handler
 `timeout` (ms). The schema-bearing overloads intersect this with their own
@@ -20,7 +20,7 @@ type RpcBaseOpts = {
 }
 
 /*
-Shared signature for every verb helper (GET / POST / …). Three overloads:
+Shared signature for every rpc helper (GET / POST / …). Three overloads:
 
   - `Rpc(fn, { inputSchema, outputSchema?, clients? })` — `Args` infers
     from `InferInput<InputSchema>`, the handler receives
@@ -30,10 +30,10 @@ Shared signature for every verb helper (GET / POST / …). Three overloads:
     the success body — it feeds the OpenAPI 200 response and the MCP tool
     `outputSchema`. JSON Schema is projected from each schema's own
     `toJSONSchema()` (wrap with withJsonSchema if the library lacks one).
-    `clients` controls which surfaces (browser / mcp / cli) expose this verb.
-    `crossOrigin: true` exempts a mutating verb from the router's same-origin
+    `clients` controls which surfaces (browser / mcp / cli) expose this rpc.
+    `crossOrigin: true` exempts a mutating rpc from the router's same-origin
     CSRF gate — by default a browser request whose Origin doesn't match the
-    app's own host is refused with 403 on every non-GET/HEAD verb.
+    app's own host is refused with 403 on every non-GET/HEAD rpc.
     `maxBodySize` caps the body's actual received bytes (413 past it),
     enforced before parsing; omitted, the only ceiling is Bun.serve's
     server-wide maxRequestBodySize. `timeout` (ms) bounds the handler's

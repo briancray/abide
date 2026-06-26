@@ -14,10 +14,10 @@ object whose `handle(request)` is the function the bun route at
 default-constructs it; there is no user-authored server module. Server
 name/version default from package.json.
 
-Tools are derived from every verb with `clients.mcp: true` (auto-on for
-read-only verbs that carry a schema; mutating verbs opt in explicitly)
+Tools are derived from every rpc with `clients.mcp: true` (auto-on for
+read-only rpcs that carry a schema; mutating rpcs opt in explicitly)
 and from every socket with `clients.mcp: true` (a `<base>-tail` read tool
-plus a `<base>-publish` tool when clientPublish is set). The HTTP verb
+plus a `<base>-publish` tool when clientPublish is set). The HTTP method
 feeds each rpc tool's annotations. Auth inherits from the inbound request
 — bearer / cookie headers flow into the synthesized Request that hits
 each rpc handler. An optional `authorize` hook in opts can short-circuit

@@ -1,10 +1,10 @@
 /*
-WeakMap that records how to obtain the synthesized Request for a verb
+WeakMap that records how to obtain the synthesized Request for a rpc
 call. The cache layer reads it to populate an entry's stored request
 without rebuilding from scratch.
 
 Stored as a thunk rather than the Request itself so SSR pages that fire
-dozens of in-process verb calls without ever reaching cache() don't pay
+dozens of in-process rpc calls without ever reaching cache() don't pay
 the URL + Headers + Request allocation per call. The thunk memoises its
 own first call inside createRemoteFunction, so cache() and any future
 meta reader see the same Request instance.

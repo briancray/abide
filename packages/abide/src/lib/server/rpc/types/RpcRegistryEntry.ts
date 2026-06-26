@@ -3,7 +3,7 @@ import type { RemoteFunction } from '../../../shared/types/RemoteFunction.ts'
 import type { StandardSchemaV1 } from '../../../shared/types/StandardSchemaV1.ts'
 
 /*
-Per-verb registry record on the server side. MCP and CLI enumerate this
+Per-rpc registry record on the server side. MCP and CLI enumerate this
 to discover which RPCs are advertised (clients flags) and what shapes
 they expect/return. The schemas and resolved clients stay off the public
 RemoteFunction shape so the browser-side proxy doesn't need to carry
@@ -26,7 +26,7 @@ export type RpcRegistryEntry = {
     outputSchema: StandardSchemaV1 | undefined
     filesSchema: StandardSchemaV1 | undefined
     clients: ClientFlags
-    /* The verb's declared opts, recorded so introspection (inspector) can report
+    /* The rpc's declared opts, recorded so introspection (inspector) can report
        the deadline/body-cap/CSRF-exemption a handler runs under. Undefined = the
        framework default (no deadline, Bun's server-wide body ceiling, gated). */
     timeout: number | undefined

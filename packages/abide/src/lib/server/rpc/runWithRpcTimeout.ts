@@ -1,11 +1,11 @@
 import { error } from '../error.ts'
 
 /*
-Bounds a verb handler's execution: races the in-flight `work` against `ms`.
+Bounds a rpc handler's execution: races the in-flight `work` against `ms`.
 On the deadline it resolves a 504 — so the caller (an SSR cache read, an
 MCP/CLI invocation, or the network response) is unblocked in time with an
 honest status — and calls `onTimeout` to cancel any
-cooperating outbound work (the network path composes the verb's deadline into
+cooperating outbound work (the network path composes the rpc's deadline into
 request().signal; see defineRpc).
 
 `work` keeps running after the deadline — JS can't cancel a running async

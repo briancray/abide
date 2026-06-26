@@ -38,7 +38,7 @@ export function createRemoteFunction<Args, Return>(opts: {
     method: HttpMethod
     url: string
     clients: ClientFlags
-    /* Server-side only: exempts a mutating verb from the router's same-origin CSRF gate. */
+    /* Server-side only: exempts a mutating rpc from the router's same-origin CSRF gate. */
     crossOrigin?: boolean
     buildRequest: (args: Args | undefined, opts?: RpcOptions) => Request
     invoke: (
@@ -75,7 +75,7 @@ export function createRemoteFunction<Args, Return>(opts: {
     }
 
     /*
-    A body verb may receive a FormData in place of typed Args (the upload
+    A body rpc may receive a FormData in place of typed Args (the upload
     escape hatch). It flows through dispatch only into buildRpcRequest /
     keyForRemoteCall, both of which take it as-is, so the cast to Args is a
     contained type lie — buildRpcRequest's `instanceof FormData` branch handles

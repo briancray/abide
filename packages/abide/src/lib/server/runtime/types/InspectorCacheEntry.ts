@@ -9,7 +9,7 @@ export type InspectorCacheEntry = {
     key: string
     /* Lifecycle: 'settled' | 'in-flight' | 'refreshing'. */
     status: string
-    /* True when the entry stores a wire Response (a remote verb), false for a plain producer value. */
+    /* True when the entry stores a wire Response (a remote rpc), false for a plain producer value. */
     remote: boolean
     /* Retention ttl in ms; undefined = forever, 0 = dedupe-only. */
     ttl: number | undefined

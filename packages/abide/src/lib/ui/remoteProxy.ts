@@ -14,8 +14,8 @@ import { currentAbortSignal } from './runtime/currentAbortSignal.ts'
 import { REQUEST_SUPERSEDED } from './runtime/REQUEST_SUPERSEDED.ts'
 
 /*
-Client-side substitute for a verb-defined handler. The bundler emits one
-call per verb export inside an `$rpc/**` module (GET / POST / …): server
+Client-side substitute for a rpc-defined handler. The bundler emits one
+call per rpc export inside an `$rpc/**` module (GET / POST / …): server
 target uses defineRpc (real handler), browser target uses remoteProxy
 (fetch over the network). Both paths produce identical RemoteFunction
 shapes and identical WeakMap metadata so cache() works the same on either

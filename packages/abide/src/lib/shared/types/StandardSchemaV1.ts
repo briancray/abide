@@ -2,7 +2,7 @@
 Mirror of the Standard Schema v1 spec interface (standardschema.dev). Any
 library that implements the spec — zod, valibot, arktype, etc. — produces
 values whose `~standard` property structurally matches this shape, so users
-can pass their existing schemas to verb helpers without an adapter.
+can pass their existing schemas to rpc helpers without an adapter.
 
 Kept inline (no `@standard-schema/spec` dep) because the spec is type-only
 and tiny; adding a package for ~30 lines of interface would be churn. The

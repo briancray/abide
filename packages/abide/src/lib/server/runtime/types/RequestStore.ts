@@ -3,7 +3,7 @@ import type { TraceContext } from '../../../shared/types/TraceContext.ts'
 
 /*
 Per-request state propagated through AsyncLocalStorage. Every field is
-populated once at the server's fetch boundary; helpers and verb-defined
+populated once at the server's fetch boundary; helpers and rpc-defined
 remote functions read from it without threading arguments through user code.
 The inbound request's AbortSignal is reached via `req.signal` rather than a
 separate field.

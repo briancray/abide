@@ -67,7 +67,7 @@ a bare word runs a command:
   /disconnect                     → forget the saved connection, exit
   <cmd> [--flags]                 → one-shot RPC against the resumed target
 
-The connection verbs are `/`-prefixed only — no bare aliases — so a bare word is
+The connection rpcs are `/`-prefixed only — no bare aliases — so a bare word is
 always an RPC command and never collides. Env layers ABIDE_APP_URL/ABIDE_APP_TOKEN (shell >
 data-dir > binary-dir) supply the baked default a fresh download resumes against.
 */

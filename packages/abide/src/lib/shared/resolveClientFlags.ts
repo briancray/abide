@@ -4,7 +4,7 @@ import type { ClientFlags } from './types/ClientFlags.ts'
 Fills in the missing keys of a user-supplied `clients` option. Browser
 always defaults to true (the historical surface). The mcp/cli auto-on
 defaults are decided by the caller and passed in, since the safe default
-differs per declaration: a read-only verb may auto-expose to MCP while a
+differs per declaration: a read-only rpc may auto-expose to MCP while a
 mutating one must not, and sockets gate differently again. Explicit
 values in `flags` always win over the computed defaults.
 */

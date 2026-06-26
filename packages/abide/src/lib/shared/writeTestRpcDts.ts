@@ -5,9 +5,9 @@ import { writeDts } from './writeDts.ts'
 
 /*
 Emits a `.d.ts` that augments createTestApp's `RpcClient` interface with one
-entry per $rpc verb, keyed by command name (the same key `app.rpc.<name>`
-resolves at runtime). Each entry lifts the verb's args + resolved return out of
-its RemoteFunction so `app.rpc.getProduct({ id })` types against the verb's own
+entry per $rpc rpc, keyed by command name (the same key `app.rpc.<name>`
+resolves at runtime). Each entry lifts the rpc's args + resolved return out of
+its RemoteFunction so `app.rpc.getProduct({ id })` types against the rpc's own
 signature — args in, decoded body out, plus `.raw` for the Response. `RpcArgs`
 drops the FormData upload variant exactly as writeRpcDts does; `RpcReturn`
 reads the resolved body type. Written to `src/.abide/testRpc.d.ts` so the

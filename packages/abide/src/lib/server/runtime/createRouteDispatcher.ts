@@ -26,7 +26,7 @@ type RenderPage = (
     store: RequestStore,
 ) => Promise<Response>
 
-/* The framework's 405 — `Allow` names the permitted verb(s), body and NO_STORE shared so the rpc and page branches can't drift. */
+/* The framework's 405 — `Allow` names the permitted rpc(s), body and NO_STORE shared so the rpc and page branches can't drift. */
 function methodNotAllowed(allow: string): Response {
     return new Response('Method Not Allowed', {
         status: 405,
@@ -36,9 +36,9 @@ function methodNotAllowed(allow: string): Response {
 
 /*
 Owns route dispatch: deciding, per registered URL, whether a request hits an
-rpc verb, a page render, or nothing — and the method-matching that picks the
+rpc rpc, a page render, or nothing — and the method-matching that picks the
 status. Page URLs (under src/ui/pages/) serve GET/HEAD by rendering; rpc
-URLs (under src/server/rpc/, `/rpc/...`) dispatch to the single declared verb,
+URLs (under src/server/rpc/, `/rpc/...`) dispatch to the single declared rpc,
 405 on method mismatch; an unregistered URL is 404. Page and rpc URLs are
 disjoint by construction, so each route lands in exactly one branch.
 
@@ -66,7 +66,7 @@ export function createRouteDispatcher({
         Each $rpc module has exactly one named export, validated at build
         time. Pick the first REMOTE_FUNCTION-branded export — exact, so an
         incidental re-export carrying method/url props can't be mistaken
-        for the verb.
+        for the rpc.
         */
         return loader().then((mod) => {
             for (const value of Object.values(mod)) {
@@ -89,7 +89,7 @@ export function createRouteDispatcher({
                     const forbidden = crossOriginGate(req, store.url, {
                         allowReadOnly: true,
                         optOut: fn.crossOrigin === true,
-                        hint: 'Declare `crossOrigin: true` on the verb to accept cross-site calls.',
+                        hint: 'Declare `crossOrigin: true` on the rpc to accept cross-site calls.',
                     })
                     if (forbidden) {
                         return forbidden
