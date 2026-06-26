@@ -11,9 +11,17 @@ const SINGLE_EXPORT_ERROR =
 
 export type PreparedRpcModule = {
     method: HttpMethod
+    /* `outbox: true` in the opts — the client proxy is emitted durable. */
+    durable: boolean
     exportName: string
     rewriteForServer: (url: string) => string
 }
+
+/* `outbox: true` as an opts key in the rpc-declaring call's arguments. A heuristic
+   (not a full parse): it scans the whole `METHOD(handler, { … })` arg text, so a
+   handler body that literally writes the key `outbox: true` would also match — rare,
+   and the effect (a durable client proxy) is visible. */
+const OUTBOX_TRUE = /\boutbox\s*:\s*true\b/
 
 /*
 Scans an `$rpc/**` module once and returns its declared method + export
@@ -51,8 +59,10 @@ export function prepareRpcModule(
         return undefined
     }
     const method = site.ident as HttpMethod
+    const durable = OUTBOX_TRUE.test(stripped.slice(site.parenStart, site.parenEnd))
     return {
         method,
+        durable,
         exportName: site.exportName,
         rewriteForServer(url: string): string {
             const binding = `__abideDefineRpc__(${JSON.stringify(method)}, ${JSON.stringify(url)}, `

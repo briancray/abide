@@ -365,8 +365,11 @@ export function abideResolverPlugin({
                 so page imports resolve identically on both sides.
                 */
                 if (target === 'client') {
+                    /* A durable rpc (`outbox: true`) gets the third arg so its client proxy
+                       queues instead of fetching immediately. */
+                    const durableArg = prepared.durable ? ', { outbox: true }' : ''
                     const contents = `import { remoteProxy as __abideRemoteProxy__ } from '${importName}/ui/remoteProxy';
-export const ${prepared.exportName} = __abideRemoteProxy__(${JSON.stringify(prepared.method)}, ${JSON.stringify(url)});
+export const ${prepared.exportName} = __abideRemoteProxy__(${JSON.stringify(prepared.method)}, ${JSON.stringify(url)}${durableArg});
 `
                     return { contents, loader: 'ts' }
                 }
