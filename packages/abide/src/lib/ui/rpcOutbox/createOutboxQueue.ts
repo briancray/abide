@@ -6,13 +6,16 @@ import { createDoc as doc } from '../runtime/createDoc.ts'
 import type { PersistenceStore } from '../types/PersistenceStore.ts'
 
 /* Persisted form of an entry — the Request reduced to its replayable parts (a live
-   Request + AbortController don't serialize). `body` is captured in a later task. */
+   Request + AbortController don't serialize). `body`/`contentType` are captured
+   asynchronously just after enqueue (Request.text() is async); they seed empty and fill
+   in before any reload, so a restored entry replays with its original body + content type. */
 type StoredEntry<Args> = {
     id: string
     args: Args
     method: string
     url: string
-    body: string | undefined
+    body: string
+    contentType: string
     status: OutboxStatus
 }
 
@@ -81,15 +84,37 @@ export function createOutboxQueue<Args>(opts: {
         if (existing !== undefined) {
             return existing.status === item.status ? existing : { ...existing, status: item.status }
         }
+        /* `body || undefined` so a bodyless method (GET/DELETE) rebuilds without one (a
+           Request with method GET + body throws); the content type rides along when set. */
         const entry = wireAbort({
             id: item.id,
             controller: new AbortController(),
-            request: new Request(item.url, { method: item.method, body: item.body }),
+            request: new Request(item.url, {
+                method: item.method,
+                body: item.body || undefined,
+                headers: item.contentType ? { 'content-type': item.contentType } : undefined,
+            }),
             args: item.args,
             status: item.status,
         })
         live.set(item.id, entry)
         return entry
+    }
+
+    /* Persist the request body + content type just after enqueue (Request.text() is
+       async). The in-session drain replays the LIVE request (body intact) regardless;
+       this fills the persisted form before any reload, so a restored entry replays
+       correctly. A bodyless method leaves the empty seed. */
+    const captureRequest = async (id: string, request: Request): Promise<void> => {
+        const body = request.body === null ? '' : await request.clone().text()
+        const contentType = request.headers.get('content-type') ?? ''
+        const index = items().findIndex((item) => item.id === id)
+        if (index === -1) {
+            return
+        }
+        stored.replace(`items/${index}/body`, body)
+        stored.replace(`items/${index}/contentType`, contentType)
+        persistence.flush()
     }
 
     /* The send runs under the entry's OWN signal only — durable survives unmount +
@@ -172,10 +197,12 @@ export function createOutboxQueue<Args>(opts: {
                 args,
                 method: request.method,
                 url: request.url,
-                body: undefined,
+                body: '',
+                contentType: '',
                 status: 'queued',
             })
             persistence.flush()
+            void captureRequest(id, request)
             void drain()
             return entry
         },
