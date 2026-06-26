@@ -96,10 +96,13 @@ the declared status, surfacing on the client's thrown `HttpError` as `.kind` /
 field-keyed message map), `clients: { browser, mcp, cli }` (explicit surface
 targeting; explicit wins over schema auto-flip), `crossOrigin` (exempt a mutating
 rpc from the same-origin gate), `maxBodySize` (per-rpc 413 ceiling), `timeout`
-(handler deadline in ms; 504 on every surface). Query args arrive as strings —
-use `z.coerce.*`. Consume four ways: `cache(rpc)(args)` in-process, the swapped
-browser `fetch`, `rpc.raw(args)` for the `Response`, `rpc.stream(args)` to
-iterate a streaming body.
+(handler deadline in ms; 504 on every surface), `outbox` (mutating rpcs only:
+the client call queues durably — survives offline + reload — and returns the
+cancelable `OutboxEntry` instead of a `Promise`; the queue drains on reconnect,
+`rpc.outbox()` reads it, `pending(rpc)` covers queued, global `outbox()`
+aggregates). Query args arrive as strings — use `z.coerce.*`. Consume four ways:
+`cache(rpc)(args)` in-process, the swapped browser `fetch`, `rpc.raw(args)` for
+the `Response`, `rpc.stream(args)` to iterate a streaming body.
 
 **Socket** — `export const <name> = socket({ schema?, tail?, ttl?,
 clientPublish?, clients? })`. `tail` retains the last N frames for late joiners
@@ -295,7 +298,7 @@ shadow same-named component state inside the block.
 
 ### UI — @documentation ui
 
-- `@abide/abide/ui/outbox` — `outbox({ key, send, store, online, onDrop })`: durable FIFO mutation queue for local-first writes; drains while online, retries on reconnect, at-least-once.
+- `@abide/abide/ui/outbox` — `outbox()`: the app-wide reactive aggregate of every durable rpc's queue (each entry tagged with its `rpc`). Durability is declared on the rpc (`{ outbox: true }`), not here — that rpc's own slice is `rpc.outbox()`, and the call returns the cancelable entry (`entry.controller.abort()`).
 
 ### Plumbing — @documentation plumbing
 

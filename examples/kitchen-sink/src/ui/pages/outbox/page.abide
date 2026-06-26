@@ -1,42 +1,40 @@
 <script>
 import { outbox } from '@abide/abide/ui/outbox'
+import { pending } from '@abide/abide/shared/pending'
 import { saveMessage } from '$server/rpc/saveMessage.ts'
 import CodeBlock from '$ui/CodeBlock.abide'
 
 /*
-outbox() — a durable, FIFO queue for local-first writes: "act now, sync later".
-enqueue records a serializable payload (persisted, so it survives a reload) and
-drains head-first while online(); a rejection while still online is permanent, so
-the entry is dropped and onDrop fires for rollback. Delivery is at-least-once, so
-the send target (saveMessage) is keyed by id and idempotent.
+Local-first writes are RPC-native: `saveMessage` is declared `outbox: true`, so calling
+it queues the write durably (survives offline + reload) and returns the cancelable
+queued entry instead of fetching immediately. `saveMessage.outbox()` is the reactive
+queue for this rpc; the bare `outbox()` is the app-wide aggregate across every durable
+rpc. The drain runs on reconnect — drive it with the browser's offline toggle (DevTools →
+Network → Offline) to watch entries hold and then flush.
 */
 
-// Simulated connectivity — passed as the outbox's online() override so the demo
-// can go "offline" without dropping the real socket. Toggling it back on hits the
-// online edge the outbox's internal effect watches, which re-drains the queue.
-const { state, computed } = scope()
-let offline = state(false)
+const { state } = scope()
 
-// Optimistic UI: messages render the instant they're enqueued; a permanent
-// failure rolls the entry back out and surfaces it as dropped.
+// Optimistic UI: a message renders the instant it's enqueued. A permanent failure
+// (a "fail" text → 422) lands the entry in the queue with status 'error'; the effect
+// below rolls the optimistic entry back out and lists it as dropped.
 type Message = { id: string; text: string }
 let submitted = state<Message[]>([])
 let dropped = state<Message[]>([])
 
-const box = outbox<Message>({
-    key: 'kitchen-sink-outbox',
-    online: () => !offline,
-    send: async ({ id, text }) => {
-        await saveMessage({ id, text })
-    },
-    onDrop: ({ id, text }) => {
-        submitted = submitted.filter((message) => message.id !== id)
-        dropped = [...dropped, { id, text }]
-    },
+// Reconcile permanent failures once each: a non-reactive set keys off the entry id so
+// aborting (which removes the entry and re-runs this effect) can't re-process it.
+const reconciled = new Set<string>()
+effect(() => {
+    for (const entry of saveMessage.outbox()) {
+        if (entry.status === 'error' && !reconciled.has(entry.args.id)) {
+            reconciled.add(entry.args.id)
+            dropped = [...dropped, entry.args]
+            submitted = submitted.filter((message) => message.id !== entry.args.id)
+            entry.controller.abort() // drop it from the queue
+        }
+    }
 })
-
-// box.pending() reads the queued doc, so a tracking scope re-runs as it drains.
-const queued = computed(() => box.pending())
 
 let draft = state('type a message — include "fail" to force a drop')
 function submit(event: SubmitEvent) {
@@ -47,39 +45,35 @@ function submit(event: SubmitEvent) {
     }
     const id = crypto.randomUUID()
     submitted = [...submitted, { id, text }] // optimistic
-    box.enqueue({ id, text }) // durable, then drains when online
+    saveMessage({ id, text }) // durable: queued now, drains when online
     draft = ''
 }
 </script>
 
-<h1 class="text-3xl font-bold"><code class="font-mono">outbox()</code></h1>
+<h1 class="text-3xl font-bold"><code class="font-mono">outbox: true</code></h1>
 <p class="mt-2 text-slate-600">
-    The local-first half of "act now, sync later": a durable, FIFO queue of pending mutations that
-    drains when the client is online. <code class="font-mono">enqueue</code> records a serializable
-    payload — persisted, so it survives a reload — and tries to drain;
-    <code class="font-mono">pending()</code> is a reactive read of what is still in flight;
-    <code class="font-mono">flush()</code> drains on demand. Delivery is at-least-once, so the send
-    target must be idempotent.
+    The local-first half of "act now, sync later", built into the RPC. A mutating rpc declared
+    <code class="font-mono">{'{ outbox: true }'}</code> queues every call durably — persisted, so it survives
+    a reload — and returns the cancelable entry instead of fetching.
+    <code class="font-mono">saveMessage.outbox()</code> is this rpc's reactive queue;
+    <code class="font-mono">pending(saveMessage)</code> is true while anything is in flight
+    <em>or</em> queued. Delivery is at-least-once, so the handler is idempotent (keyed by id).
 </p>
 
 <section class="mt-6">
     <h2 class="text-sm font-semibold">Offline → online, and permanent failures</h2>
     <p class="mt-2 text-sm text-slate-600">
-        Go offline and queue a few messages — they persist and wait. Back online, the queue drains
-        head-first. A message containing <code class="font-mono">fail</code> is a 422 while online:
-        a permanent rejection, so the outbox drops it and
-        <code class="font-mono">onDrop</code> rolls back the optimistic entry.
+        Go offline (DevTools → Network → Offline) and enqueue a few messages — they persist and
+        wait, visible in the queue with a cancel button. Back online, the queue drains head-first. A
+        message containing <code class="font-mono">fail</code> is a 422 while online: a permanent
+        rejection, so the entry stays with <code class="font-mono">status: 'error'</code> and the
+        page reconciles it (rolls back the optimistic write).
     </p>
 </section>
 
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
-    <div class="flex items-center justify-between">
-        <h2 class="text-sm font-semibold">Try it</h2>
-        <label class="flex items-center gap-2 text-xs font-medium">
-            <input type="checkbox" bind:checked={offline} /> simulate offline
-        </label>
-    </div>
-    <p class="mt-1 font-mono text-xs text-slate-500">unsynced: {queued.length}{offline ? ' (offline — holding)' : ''}</p>
+    <h2 class="text-sm font-semibold">Try it</h2>
+    <p class="mt-1 font-mono text-xs text-slate-500">unsynced: {outbox().length}</p>
     <form class="mt-3 flex flex-wrap items-end gap-2" onsubmit={submit}>
         <label class="flex-1 text-xs font-medium">
             message
@@ -94,6 +88,23 @@ function submit(event: SubmitEvent) {
         </button>
     </form>
 
+    {#if saveMessage.outbox().length > 0}
+        <p class="mt-4 text-xs font-medium text-slate-500">queue (cancel removes before send)</p>
+        <ul class="mt-1 space-y-1">
+            {#for entry of saveMessage.outbox() by entry.id}
+                <li
+                    class="flex items-center justify-between rounded-md bg-amber-50 px-3 py-1.5 font-mono text-xs text-amber-800">
+                    <span>{entry.args.text} · {entry.status}</span>
+                    <button
+                        type="button"
+                        class="rounded border border-amber-300 px-2 py-0.5 hover:bg-amber-100"
+                        onclick={() => entry.controller.abort()}>
+                        cancel
+                    </button>
+                </li>
+            {/for}
+        </ul>
+    {/if}
     {#if submitted.length > 0}
         <p class="mt-4 text-xs font-medium text-slate-500">submitted (dropped entries removed)</p>
         <ul class="mt-1 space-y-1">
@@ -105,7 +116,7 @@ function submit(event: SubmitEvent) {
         </ul>
     {/if}
     {#if dropped.length > 0}
-        <p class="mt-4 text-xs font-medium text-rose-600">dropped (rolled back via onDrop)</p>
+        <p class="mt-4 text-xs font-medium text-rose-600">dropped (rolled back on error)</p>
         <ul class="mt-1 space-y-1">
             {#for message of dropped by message.id}
                 <li class="rounded-md bg-rose-50 px-3 py-1.5 font-mono text-xs text-rose-700">
@@ -117,15 +128,17 @@ function submit(event: SubmitEvent) {
 </section>
 
 <section class="mt-6 space-y-3">
-    <CodeBlock title="this page — durable queue, optimistic UI, rollback" code={`import { outbox } from '@abide/abide/ui/outbox'
-import { saveMessage } from '$server/rpc/saveMessage.ts'
+    <CodeBlock
+        title="this page — RPC-native durable queue, optimistic UI, reconcile"
+        code={`// src/server/rpc/saveMessage.ts
+export const saveMessage = POST(handler, { inputSchema, outbox: true })
 
-const box = outbox({
-    key: 'kitchen-sink-outbox',                 // persistence key — survives reload
-    send: async ({ id, text }) => { await saveMessage({ id, text }) }, // idempotent
-    onDrop: ({ id }) => { /* permanent failure — roll back the optimistic write */ },
-})
+// the page — one call form; it queues and returns the cancelable entry
+saveMessage({ id, text })                    // durable, drains when online
+saveMessage.outbox()                          // reactive queue for this rpc
+outbox()                                      // app-wide aggregate across durable rpcs
+pending(saveMessage)                          // true while in flight OR queued
 
-const queued = scope().computed(() => box.pending())  // reactive "N unsynced"
-box.enqueue({ id: crypto.randomUUID(), text })         // durable, then drains when online`} />
+// cancel a queued entry (in the list, or after reload)
+entry.controller.abort()`} />
 </section>
