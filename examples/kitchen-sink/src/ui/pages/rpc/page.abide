@@ -12,8 +12,8 @@ import CodeBlock from '$ui/CodeBlock.abide'
 
 type LogEntry = { id: number; rpc: string; outcome: string }
 
-let log = state<LogEntry[]>([])
 const { state } = scope()
+let log = state<LogEntry[]>([])
 let message = state('hello')
 let celsius = state(100)
 let converted = state('(not called)')

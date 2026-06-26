@@ -31,12 +31,9 @@ async function reset() {
 scope().effect(() => cache.on(chat, (_message, { invalidate }) => invalidate(getChatCount)))
 const chatCount = computed(() => cache(getChatCount)())
 
-/* patch: the frame IS the new data — fold it into the cached list, no refetch. */
-scope().effect(() =>
-    cache.on(chat, (message, { patch }) => {
-        patch(getChatLog, (log) => ({ messages: [...log.messages, message].slice(-20) }))
-    }),
-)
+/* The same frame stales the recent-messages list too — invalidate drops it and the
+   next read refetches. */
+scope().effect(() => cache.on(chat, (_message, { invalidate }) => invalidate(getChatLog)))
 const chatLog = computed(() => cache(getChatLog)())
 </script>
 
@@ -49,13 +46,13 @@ const chatLog = computed(() => cache(getChatLog)())
 
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
     <h2 class="text-sm font-semibold">
-        <code class="font-mono">cache.on</code> — event-driven invalidate &amp; patch
+        <code class="font-mono">cache.on</code> — event-driven invalidation
     </h2>
     <p class="mt-1 text-xs text-slate-500">
         <code class="font-mono">cache.on(source, handler)</code> runs the handler once per frame of
-        a socket or rpc stream. <code class="font-mono">invalidate</code> drops the entry and
-        refetches; <code class="font-mono">patch</code> folds the frame's payload into the cached
-        value with no round-trip.
+        a socket or rpc stream. <code class="font-mono">invalidate</code> drops the matching entries
+        and the next read refetches — calls through the handler's scoped copy are covered, so the
+        attribution replays after a reconnect gap.
     </p>
     <div class="mt-3 grid gap-3 sm:grid-cols-2">
         <div class="rounded-md border border-slate-200 p-3">
@@ -70,7 +67,7 @@ const chatLog = computed(() => cache(getChatLog)())
         </div>
         <div class="rounded-md border border-slate-200 p-3">
             <p class="text-xs text-slate-500">
-                recent — <code class="font-mono">patch</code> (folded in, no refetch)
+                recent — <code class="font-mono">invalidate</code> (refetched)
             </p>
             {#await chatLog then data}
                 {#if data.messages.length === 0}
@@ -151,13 +148,9 @@ cache(fn, { global: true })()           // process-level store (server reuse)
 cache.invalidate(fn)                    // drop one function's calls
 cache.invalidate({ tags: 'orders' })   // drop every entry sharing the tag`} />
 
-    <CodeBlock title="cache.on — invalidate vs patch" code={`// invalidate: a frame stales a computed read — drop it, let the next read refetch
+    <CodeBlock title="cache.on — event-driven invalidation" code={`// a frame stales a computed read — drop it, let the next read refetch
 scope().effect(() => cache.on(chat, (_m, { invalidate }) => invalidate(getChatCount)))
 
-// patch: the frame IS the new data — fold it into the cached value, no refetch
-scope().effect(() =>
-    cache.on(chat, (message, { patch }) =>
-        patch(getChatLog, (log) => ({ messages: [...log.messages, message].slice(-20) })),
-    ),
-)`} />
+// the handler's invalidate is binding-scoped: covered calls replay after a reconnect gap
+scope().effect(() => cache.on(chat, (_m, { invalidate }) => invalidate(getChatLog)))`} />
 </section>

@@ -1,6 +1,6 @@
 <script>
+import { HttpError } from '@abide/abide/shared/HttpError'
 import { outbox } from '@abide/abide/ui/outbox'
-import { pending } from '@abide/abide/shared/pending'
 import { saveMessage } from '$server/rpc/saveMessage.ts'
 import CodeBlock from '$ui/CodeBlock.abide'
 
@@ -13,40 +13,37 @@ rpc. The drain runs on reconnect — drive it with the browser's offline toggle 
 Network → Offline) to watch entries hold and then flush.
 */
 
-const { state } = scope()
+const { state, computed } = scope()
 
-// Optimistic UI: a message renders the instant it's enqueued. A permanent failure
-// (a "fail" text → 422) lands the entry in the queue with status 'error'; the effect
-// below rolls the optimistic entry back out and lists it as dropped.
 type Message = { id: string; text: string }
 let submitted = state<Message[]>([])
 let dropped = state<Message[]>([])
 
-// Reconcile permanent failures once each: a non-reactive set keys off the entry id so
-// aborting (which removes the entry and re-runs this effect) can't re-process it.
-const reconciled = new Set<string>()
-scope().effect(() => {
-    for (const entry of saveMessage.outbox()) {
-        if (entry.status === 'error' && !reconciled.has(entry.args.id)) {
-            reconciled.add(entry.args.id)
-            dropped = [...dropped, entry.args]
-            submitted = submitted.filter((message) => message.id !== entry.args.id)
-            entry.controller.abort() // drop it from the queue
-        }
-    }
-})
+// This rpc's reactive queue. `.outbox` is present only on a durable rpc, hence the guard.
+const queue = computed(() => saveMessage.outbox?.() ?? [])
 
 let draft = state('type a message — include "fail" to force a drop')
-function submit(event: SubmitEvent) {
+async function submit(event: SubmitEvent) {
     event.preventDefault()
     const text = draft.trim()
     if (text === '') {
         return
     }
     const id = crypto.randomUUID()
-    submitted = [...submitted, { id, text }] // optimistic
-    saveMessage({ id, text }) // durable: queued now, drains when online
+    submitted = [...submitted, { id, text }] // optimistic — renders the instant it's enqueued
     draft = ''
+    try {
+        await saveMessage({ id, text }) // delivers now, or parks durably if unreachable
+    } catch (error) {
+        /* An unreachable server parks the call and throws `kind: 'queued'` — still optimistic, it
+           drains on reconnect. Any other rejection (a "fail" → 422) is permanent: roll the
+           optimistic entry back out and list it as dropped. */
+        if (error instanceof HttpError && error.kind === 'queued') {
+            return
+        }
+        dropped = [...dropped, { id, text }]
+        submitted = submitted.filter((message) => message.id !== id)
+    }
 }
 </script>
 
@@ -66,8 +63,8 @@ function submit(event: SubmitEvent) {
         Go offline (DevTools → Network → Offline) and enqueue a few messages — they persist and
         wait, visible in the queue with a cancel button. Back online, the queue drains head-first. A
         message containing <code class="font-mono">fail</code> is a 422 while online: a permanent
-        rejection, so the entry stays with <code class="font-mono">status: 'error'</code> and the
-        page reconciles it (rolls back the optimistic write).
+        rejection thrown at the call site (it never enters the queue), so the page catches it and
+        rolls the optimistic write back out.
     </p>
 </section>
 
@@ -88,10 +85,10 @@ function submit(event: SubmitEvent) {
         </button>
     </form>
 
-    {#if saveMessage.outbox().length > 0}
+    {#if queue.length > 0}
         <p class="mt-4 text-xs font-medium text-slate-500">queue (cancel removes before send)</p>
         <ul class="mt-1 space-y-1">
-            {#for entry of saveMessage.outbox() by entry.id}
+            {#for entry of queue by entry.id}
                 <li
                     class="flex items-center justify-between rounded-md bg-amber-50 px-3 py-1.5 font-mono text-xs text-amber-800">
                     <span>{entry.args.text} · {entry.status}</span>
