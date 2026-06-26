@@ -1,9 +1,9 @@
 import { online as systemOnline } from '../../shared/online.ts'
+import type { OutboxEntry, OutboxStatus } from '../../shared/types/OutboxEntry.ts'
 import { effect } from '../effect.ts'
 import { persist } from '../persist.ts'
 import { createDoc as doc } from '../runtime/createDoc.ts'
 import type { PersistenceStore } from '../types/PersistenceStore.ts'
-import type { OutboxEntry, OutboxStatus } from './OutboxEntry.ts'
 
 /* Persisted form of an entry — the Request reduced to its replayable parts (a live
    Request + AbortController don't serialize). `body` is captured in a later task. */

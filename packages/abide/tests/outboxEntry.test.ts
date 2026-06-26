@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { OutboxEntry } from '../src/lib/ui/rpcOutbox/OutboxEntry.ts'
+import type { OutboxEntry } from '../src/lib/shared/types/OutboxEntry.ts'
 
 describe('OutboxEntry', () => {
     test('shape carries id, controller, request, args, status', () => {

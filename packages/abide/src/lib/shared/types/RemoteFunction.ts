@@ -1,5 +1,6 @@
 import type { ClientFlags } from './ClientFlags.ts'
 import type { HttpMethod } from './HttpMethod.ts'
+import type { OutboxEntry } from './OutboxEntry.ts'
 import type { RawRemoteFunction } from './RawRemoteFunction.ts'
 import type { RemoteCallable } from './RemoteCallable.ts'
 import type { Subscribable } from './Subscribable.ts'
@@ -44,4 +45,7 @@ export type RemoteFunction<Args, Return> = RemoteCallable<Args, Return> & {
     readonly raw: RawRemoteFunction<Args>
     stream(args?: Args | FormData): Subscribable<Return>
     fetch(request: Request): Promise<Response>
+    /* Present only on a durable (`outbox: true`) RPC's client proxy: the reactive,
+       iterable queue of undelivered entries for this RPC. Undefined otherwise. */
+    readonly outbox?: () => OutboxEntry<Args>[]
 }

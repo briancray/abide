@@ -4,14 +4,22 @@ import { cacheManagedSlot } from '../shared/cacheManagedSlot.ts'
 import { createRemoteFunction } from '../shared/createRemoteFunction.ts'
 import { HttpError } from '../shared/HttpError.ts'
 import { OFFLINE_HEADER } from '../shared/OFFLINE_HEADER.ts'
+import { REMOTE_FUNCTION } from '../shared/REMOTE_FUNCTION.ts'
 import { rpcTimeoutSlot } from '../shared/rpcTimeoutSlot.ts'
 import { trace } from '../shared/trace.ts'
 import type { HttpMethod } from '../shared/types/HttpMethod.ts'
 import type { RemoteFunction } from '../shared/types/RemoteFunction.ts'
 import type { RpcOptions } from '../shared/types/RpcOptions.ts'
 import { withBase } from '../shared/withBase.ts'
+import { createOutboxQueue, type OutboxQueue } from './rpcOutbox/createOutboxQueue.ts'
+import { outboxRegistry } from './rpcOutbox/outboxRegistry.ts'
 import { currentAbortSignal } from './runtime/currentAbortSignal.ts'
 import { REQUEST_SUPERSEDED } from './runtime/REQUEST_SUPERSEDED.ts'
+import type { PersistenceStore } from './types/PersistenceStore.ts'
+
+/* A durable RPC's per-call queueing options (`outbox: true`); `store`/`online` exist
+   for testing — production uses the default persistence store + system connectivity. */
+export type DurableOptions = { outbox?: boolean; store?: PersistenceStore; online?: () => boolean }
 
 /*
 Client-side substitute for a rpc-defined handler. The bundler emits one
@@ -30,8 +38,9 @@ escape hatch that returns the Response untouched.
 export function remoteProxy<Args, Return>(
     method: HttpMethod,
     url: string,
+    durable?: DurableOptions,
 ): RemoteFunction<Args, Return> {
-    return createRemoteFunction<Args, Return>({
+    const base = createRemoteFunction<Args, Return>({
         method,
         url,
         clients: browserClientFlags,
@@ -55,6 +64,65 @@ export function remoteProxy<Args, Return>(
         */
         invoke: (_args, getRequest, opts) => fetchWithTimeout(getRequest(), opts),
     })
+    if (durable?.outbox !== true) {
+        return base
+    }
+    /*
+    Durable (`outbox: true`): the call ENQUEUES instead of fetching — it builds the
+    Request, pushes it onto the RPC's app-owned queue (created + registered once), and
+    returns the queued entry (a cancelable handle). The queue drains by `fetch`ing the
+    Request under the entry's own signal alone (createOutboxQueue applies it), so the
+    write survives unmount + waits out offline. `rpc.outbox()` reads the live queue.
+    */
+    const queue = getOrCreateOutboxQueue<Args, Return>(method, url, base, durable)
+    const durableProxy = (args: Args, opts?: RpcOptions) =>
+        queue.enqueue(
+            args,
+            buildRpcRequest({
+                method,
+                url: withBase(url),
+                args,
+                baseUrl: window.location.href,
+                headers: rpcHeaders(opts?.headers),
+            }),
+        )
+    Object.assign(durableProxy, {
+        method: base.method,
+        url: base.url,
+        clients: base.clients,
+        crossOrigin: base.crossOrigin,
+        raw: base.raw,
+        stream: base.stream,
+        fetch: base.fetch,
+        outbox: () => queue.entries(),
+    })
+    Object.defineProperty(durableProxy, REMOTE_FUNCTION, { value: true })
+    return durableProxy as unknown as RemoteFunction<Args, Return>
+}
+
+/* The single app-owned queue for a durable RPC url — created + registered on first
+   use so every call site (and the global `outbox()`) shares one queue. The send is a
+   plain `fetch`; the entry's abort signal already rides the Request (createOutboxQueue
+   wraps it), keeping scope-abort + the client timeout deliberately out. */
+function getOrCreateOutboxQueue<Args, Return>(
+    method: HttpMethod,
+    url: string,
+    rpc: RemoteFunction<Args, Return>,
+    durable: DurableOptions,
+): OutboxQueue<Args> {
+    void method
+    const existing = outboxRegistry.get(url)
+    if (existing !== undefined) {
+        return existing as OutboxQueue<Args>
+    }
+    const queue = createOutboxQueue<Args>({
+        url,
+        send: (request) => fetch(request),
+        store: durable.store,
+        online: durable.online,
+    })
+    outboxRegistry.register(url, queue as OutboxQueue<unknown>, rpc)
+    return queue
 }
 
 /*
