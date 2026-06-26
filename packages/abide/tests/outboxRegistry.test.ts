@@ -4,7 +4,8 @@ import { outboxRegistry } from '../src/lib/ui/rpcOutbox/outboxRegistry.ts'
 
 describe('outboxRegistry', () => {
     test('register + get + all by url', () => {
-        const queue = { enqueue: () => ({}) } as unknown as OutboxQueue<unknown>
+        // entries:()=>[] so the singleton-wide global outbox() can flatMap this fake safely
+        const queue = { enqueue: () => ({}), entries: () => [] } as unknown as OutboxQueue<unknown>
         const rpc = { url: '/rpc/a' }
         outboxRegistry.register('/rpc/a', queue, rpc)
         expect(outboxRegistry.get('/rpc/a')).toBe(queue)
@@ -14,8 +15,8 @@ describe('outboxRegistry', () => {
     })
 
     test('re-registering the same url keeps one entry', () => {
-        const first = {} as OutboxQueue<unknown>
-        const second = {} as OutboxQueue<unknown>
+        const first = { entries: () => [] } as unknown as OutboxQueue<unknown>
+        const second = { entries: () => [] } as unknown as OutboxQueue<unknown>
         outboxRegistry.register('/rpc/dup', first, {})
         outboxRegistry.register('/rpc/dup', second, {})
         expect(outboxRegistry.get('/rpc/dup')).toBe(second)
