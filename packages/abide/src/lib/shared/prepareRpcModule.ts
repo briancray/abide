@@ -3,8 +3,8 @@ import { importNamesToStrip } from './importNamesToStrip.ts'
 import { stripImport } from './stripImport.ts'
 import type { HttpMethod } from './types/HttpMethod.ts'
 
-const VERB_NAMES = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'] as const
-const VERB_SET = new Set<string>(VERB_NAMES)
+const RPC_NAMES = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'] as const
+const RPC_SET = new Set<string>(RPC_NAMES)
 
 const SINGLE_EXPORT_ERROR =
     '[abide] $rpc module contains more than one `<VERB>(...)` export — each file must declare exactly one remote function'
@@ -40,10 +40,10 @@ export function prepareRpcModule(
     */
     const stripped = importNamesToStrip(importName).reduce(
         (current, name) =>
-            VERB_NAMES.reduce((acc, verb) => stripImport(acc, `${name}/server/${verb}`), current),
+            RPC_NAMES.reduce((acc, verb) => stripImport(acc, `${name}/server/${verb}`), current),
         source,
     )
-    const site = findExportCallSite(stripped, (ident) => VERB_SET.has(ident), SINGLE_EXPORT_ERROR)
+    const site = findExportCallSite(stripped, (ident) => RPC_SET.has(ident), SINGLE_EXPORT_ERROR)
     if (!site) {
         return undefined
     }

@@ -10,8 +10,8 @@ than guessing. Used by the rpc.d.ts codegen to type url() against
 query-carrying verbs; matching the same convention the bundler rewrites
 keeps the two from drifting.
 */
-const VERB_EXPORT = /export\s+const\s+\w+\s*=\s*(GET|POST|PUT|PATCH|DELETE|HEAD)\s*[<(]/
+const RPC_EXPORT = /export\s+const\s+\w+\s*=\s*(GET|POST|PUT|PATCH|DELETE|HEAD)\s*[<(]/
 
 export function detectVerbMethod(source: string): HttpMethod | undefined {
-    return (source.match(VERB_EXPORT)?.[1] as HttpMethod | undefined) ?? undefined
+    return (source.match(RPC_EXPORT)?.[1] as HttpMethod | undefined) ?? undefined
 }

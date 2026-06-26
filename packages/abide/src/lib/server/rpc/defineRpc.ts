@@ -25,7 +25,7 @@ the scope's Request (one verb per .fetch — network or in-process dispatch) so
 an SSR pass's many in-process cache reads, which call invoke() directly and
 never reach parseArgsForFetch, can't cross-cancel.
 */
-const VERB_TIMEOUT_ABORT = Symbol('abideVerbTimeoutAbort')
+const RPC_TIMEOUT_ABORT = Symbol('abideVerbTimeoutAbort')
 
 /* Verb dispatch + validation spans, opt-in via DEBUG=abide:rpc. Reveals an
    in-process RPC→RPC call (same request scope, same trace) as a nested span. */
@@ -164,9 +164,9 @@ export function defineRpc<Args, Return>(
     /* Abort the controller parseArgsForFetch stashed on store.req; a no-op when none was stashed (SSR cache reads). */
     function abortVerbTimeout(): void {
         const req = requestContext.getStore()?.req as
-            | (Request & { [VERB_TIMEOUT_ABORT]?: AbortController })
+            | (Request & { [RPC_TIMEOUT_ABORT]?: AbortController })
             | undefined
-        req?.[VERB_TIMEOUT_ABORT]?.abort(new DOMException('handler timeout', 'TimeoutError'))
+        req?.[RPC_TIMEOUT_ABORT]?.abort(new DOMException('handler timeout', 'TimeoutError'))
     }
 
     function invoke(args: Args | undefined): Promise<Response> {
@@ -211,7 +211,7 @@ export function defineRpc<Args, Return>(
                     const controller = new AbortController()
                     const composed = AbortSignal.any([req.signal, controller.signal])
                     Object.defineProperty(req, 'signal', { value: composed, configurable: true })
-                    Object.defineProperty(req, VERB_TIMEOUT_ABORT, {
+                    Object.defineProperty(req, RPC_TIMEOUT_ABORT, {
                         value: controller,
                         configurable: true,
                     })
