@@ -23,7 +23,7 @@ describe('defineRpc happy path', () => {
         expect(rpcRegistry.get('/rpc/get-user')?.clients.mcp).toBe(true)
     })
 
-    test('mutating verbs are gated from mcp but stay on cli', () => {
+    test('mutating rpcs are gated from mcp but stay on cli', () => {
         const create = defineRpc('POST', '/rpc/make-thing', () => json({ ok: true }), {
             inputSchema: testSchema(),
         })
@@ -44,7 +44,7 @@ describe('defineRpc happy path', () => {
         expect(create.clients.mcp).toBe(true)
     })
 
-    test('no-input verb is callable with zero args; required args stay required', async () => {
+    test('no-input rpc is callable with zero args; required args stay required', async () => {
         const ping = defineRpc<undefined, { ok: boolean }>('GET', '/rpc/ping', () =>
             json({ ok: true }),
         )
@@ -63,7 +63,7 @@ describe('defineRpc happy path', () => {
         })
     })
 
-    test('schemaless verb is browser-only', () => {
+    test('schemaless rpc is browser-only', () => {
         const bare = defineRpc('GET', '/rpc/bare', () => json({ ok: true }))
         expect(bare.clients).toEqual({ browser: true, mcp: false, cli: false })
     })

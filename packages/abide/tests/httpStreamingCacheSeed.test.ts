@@ -7,7 +7,7 @@ import { slowGate } from './support/fixtures/rpc/slowGate.ts'
 /*
 The whole streaming-cache loop over the REAL HTTP entrypoint (createServer →
 renderPage → stream), not a reconstructed micro-harness. A page reads a gated
-verb through cache() inside {#await}, so its cache entry is created mid-stream —
+rpc through cache() inside {#await}, so its cache entry is created mid-stream —
 after the render-return __SSR__ snapshot. The fix this guards: that entry must
 ship a warm `__abideResolve(...)` seed over the stream (startClient seeds the
 store from it on boot, so the hydrate read is warm) instead of being dropped,
@@ -62,7 +62,7 @@ describe('streaming {#await cache()} over the real HTTP entrypoint', () => {
             expect(html).toContain('http-slow')
             expect(html).toContain('{\\"n\\":1}')
 
-            // the verb dispatched exactly once on the server (the seed is reused, not refetched)
+            // the rpc dispatched exactly once on the server (the seed is reused, not refetched)
             expect(slowGate.calls).toBe(1)
         } finally {
             stop()

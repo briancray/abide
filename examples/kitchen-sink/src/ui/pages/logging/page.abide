@@ -25,7 +25,7 @@ async function runTraced() {
 <h1 class="text-3xl font-bold">Logging &amp; tracing</h1>
 <p class="mt-2 text-slate-600">
     One logger, both sides. Every record carries its channel plus — inside a request — the trace id,
-    elapsed ms, and verb+path. Server lines render as TSV, or one JSON object per line under
+    elapsed ms, and rpc+path. Server lines render as TSV, or one JSON object per line under
     <code class="font-mono">ABIDE_LOG_FORMAT=json</code>.
 </p>
 

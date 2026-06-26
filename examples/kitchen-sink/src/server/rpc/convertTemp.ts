@@ -25,7 +25,7 @@ const celsiusSchema = {
                 ? { value: { celsius } }
                 : { issues: [{ message: 'celsius must be a finite number', path: ['celsius'] }] }
         },
-        // Phantom carrier the verb reads to type the handler's args (the spec's
+        // Phantom carrier the rpc reads to type the handler's args (the spec's
         // InferInput/InferOutput live here); never present at runtime.
         types: undefined as unknown as { readonly input: Celsius; readonly output: Celsius },
     },

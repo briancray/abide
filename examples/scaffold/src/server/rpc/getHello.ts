@@ -1,7 +1,7 @@
 /*
-RPC module — every file under src/server/rpc/ exposes exactly one verb-bound remote
+RPC module — every file under src/server/rpc/ exposes exactly one rpc-bound remote
 function. The filename is the export name and the URL path (under `/rpc/`),
-and the imported verb (GET / POST / PUT / PATCH / DELETE / HEAD) picks the
+and the imported rpc (GET / POST / PUT / PATCH / DELETE / HEAD) picks the
 HTTP method. The bundler swaps the runtime per build target: direct call on
 the server, fetch over the network on the client.
 

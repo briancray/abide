@@ -166,7 +166,7 @@ describe('HttpError', () => {
 })
 
 /*
-The verb and socket helpers are placeholders rewritten by the bundler; a
+The rpc and socket helpers are placeholders rewritten by the bundler; a
 direct call means the file wasn't processed, so each throws guidance instead
 of returning undefined.
 */
@@ -178,8 +178,8 @@ describe('bundler-rewritten helpers throw when called directly', () => {
         ['PATCH', PATCH],
         ['DELETE', DELETE],
         ['HEAD', HEAD],
-    ])('%s verb helper throws outside an $rpc module', (_name, verb) => {
-        expect(() => verb(() => json({}))).toThrow('outside an $rpc module')
+    ])('%s rpc helper throws outside an $rpc module', (_name, rpc) => {
+        expect(() => rpc(() => json({}))).toThrow('outside an $rpc module')
     })
 
     test('socket helper throws outside an $sockets module', () => {

@@ -11,13 +11,13 @@ const noPages: Pages = {}
 const noRpc: RemoteRoutes = {}
 const store = {} as RequestStore
 
-/* A registered rpc URL whose single verb answers `method` by echoing it. */
+/* A registered rpc URL whose single rpc answers `method` by echoing it. */
 function rpcRoute(url: string, method: HttpMethod, crossOrigin?: boolean): RemoteRoutes {
     const fn = Object.assign(() => Promise.resolve(), {
         method,
         url,
         crossOrigin,
-        fetch: async () => new Response(`verb ${method}`),
+        fetch: async () => new Response(`rpc ${method}`),
         [REMOTE_FUNCTION]: true,
     })
     return { [url]: async () => ({ fn: fn as unknown as RemoteFunction<unknown, unknown> }) }
@@ -36,7 +36,7 @@ function recordingRenderPage() {
 }
 
 describe('createRouteDispatcher', () => {
-    test('dispatches a matching method to the rpc verb', async () => {
+    test('dispatches a matching method to the rpc rpc', async () => {
         const { renderPage } = recordingRenderPage()
         const build = createRouteDispatcher({
             pages: noPages,
@@ -45,10 +45,10 @@ describe('createRouteDispatcher', () => {
         })
         const res = await build('/rpc/x')(new Request('https://t/rpc/x'), {}, store)
         expect(res.status).toBe(200)
-        expect(await res.text()).toBe('verb GET')
+        expect(await res.text()).toBe('rpc GET')
     })
 
-    test('rejects a method mismatch with 405 and an Allow header naming the verb', async () => {
+    test('rejects a method mismatch with 405 and an Allow header naming the rpc', async () => {
         const { renderPage } = recordingRenderPage()
         const build = createRouteDispatcher({
             pages: noPages,
@@ -127,11 +127,11 @@ describe('createRouteDispatcher', () => {
 })
 
 /*
-CSRF gate: a mutating verb refuses a browser request whose Origin doesn't
+CSRF gate: a mutating rpc refuses a browser request whose Origin doesn't
 match the app's own host — the cross-site form post / no-preflight fetch
 shape, where ambient cookies ride along without CORS ever consulting the
 server. Origin-less (curl/CLI/MCP) and same-origin requests pass; reads
-pass regardless; `crossOrigin: true` on the verb opts out.
+pass regardless; `crossOrigin: true` on the rpc opts out.
 */
 describe('createRouteDispatcher CSRF origin gate', () => {
     function dispatchPost(rpc: RemoteRoutes, headers: Record<string, string>) {
@@ -181,7 +181,7 @@ describe('createRouteDispatcher CSRF origin gate', () => {
         expect(res.status).toBe(200)
     })
 
-    test('allows a cross-origin mutation when the verb declares crossOrigin: true', async () => {
+    test('allows a cross-origin mutation when the rpc declares crossOrigin: true', async () => {
         const res = await dispatchPost(rpcRoute('/rpc/x', 'POST', true), {
             origin: 'https://evil.example',
         })

@@ -151,7 +151,7 @@ describe('cache() + UI await-block hydration', () => {
         /* Regression: a resume-adopted await read the manifest value, not cache, so it
            subscribed to nothing and a later invalidate was a no-op. The fix reads the
            promise on the first hydrate pass to subscribe (warm for a cache-remote). A
-           producer is used here so the cold re-run is observable without verb metadata. */
+           producer is used here so the cold re-run is observable without rpc metadata. */
         const store = createCacheStore()
         cacheStoreSlot.resolver = () => store
         let runs = 0

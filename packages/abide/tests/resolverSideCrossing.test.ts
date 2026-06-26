@@ -14,9 +14,9 @@ beforeAll(async () => {
     await mkdir(join(cwd, 'src/server/runtime'), { recursive: true })
     await mkdir(join(cwd, 'src/server/rpc'), { recursive: true })
     await mkdir(join(cwd, 'src/ui'), { recursive: true })
-    // a server-only helper (NOT a proxied verb/socket)
+    // a server-only helper (NOT a proxied rpc/socket)
     await writeFile(join(cwd, 'src/server/secret.ts'), `export const secret = () => 42\n`)
-    // a proxied verb location
+    // a proxied rpc location
     await writeFile(join(cwd, 'src/server/rpc/getThing.ts'), `export const getThing = 1\n`)
     // a client helper that pulls the server-only helper — the violation, one hop deep
     await writeFile(
@@ -25,7 +25,7 @@ beforeAll(async () => {
     )
     // the page entry imports the helper → entry → helper → server/secret is a 3-node chain
     await writeFile(join(cwd, 'src/ui/page.ts'), `import { render } from './helper.ts'\nrender()\n`)
-    // a page that imports a PROXIED verb location relatively — must be allowed
+    // a page that imports a PROXIED rpc location relatively — must be allowed
     await writeFile(
         join(cwd, 'src/ui/proxied.ts'),
         `import { getThing } from '../server/rpc/getThing.ts'\nexport const x = getThing\n`,
@@ -63,7 +63,7 @@ test('server build does NOT flag the same import', async () => {
     expect(logs).not.toContain('server-only name')
 })
 
-test('client build allows a proxied verb location (src/server/rpc/*)', async () => {
+test('client build allows a proxied rpc location (src/server/rpc/*)', async () => {
     // may fail for unrelated reasons (the stub imports abide/ui/remoteProxy, unresolvable in
     // the fixture), but it must NOT be flagged as a side-crossing.
     const { logs } = await build('src/ui/proxied.ts', 'client')

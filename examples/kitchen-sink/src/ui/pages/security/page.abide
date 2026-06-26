@@ -20,7 +20,7 @@ async function sendBeacon() {
 
 <h1 class="text-3xl font-bold">Security defaults</h1>
 <p class="mt-2 text-slate-600">
-    Mutating verbs 403 a cross-origin browser <code class="font-mono">Origin</code> before the
+    Mutating rpcs 403 a cross-origin browser <code class="font-mono">Origin</code> before the
     handler runs — the no-preflight CSRF shapes. Reads, curl, CLI, and MCP clients send no
     <code class="font-mono">Origin</code> and pass. <code class="font-mono">/__abide/mcp</code> and
     socket publishes get the same check.
@@ -46,10 +46,10 @@ async function sendBeacon() {
 
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
     <h2 class="text-sm font-semibold">
-        Per-verb opt-out: <code class="font-mono">crossOrigin: true</code>
+        Per-rpc opt-out: <code class="font-mono">crossOrigin: true</code>
     </h2>
     <p class="mt-1 text-xs text-slate-500">
-        For a verb third-party pages may legitimately call — a public beacon, an embedded widget's
+        For a rpc third-party pages may legitimately call — a public beacon, an embedded widget's
         API. Safe here because the handler reads no cookies.
     </p>
     <button
@@ -82,7 +82,7 @@ async function sendBeacon() {
 }`} />
 
     <CodeBlock
-        title="src/server/rpc/trackPageview.ts — the opt-out, declared per verb"
+        title="src/server/rpc/trackPageview.ts — the opt-out, declared per rpc"
         code={`export const trackPageview = POST(
     ({ pageUrl }) => {
         const count = (pageviews.get(pageUrl) ?? 0) + 1

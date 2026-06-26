@@ -71,7 +71,7 @@ async function trigger500() {
                 </tr>
                 <tr>
                     <td class="px-4 py-2 font-mono">405</td>
-                    <td class="px-4 py-2 text-slate-600">wrong verb sent to a known URL</td>
+                    <td class="px-4 py-2 text-slate-600">wrong rpc sent to a known URL</td>
                     <td class="px-4 py-2 text-slate-600">
                         framework adds <code class="font-mono">Allow</code> header
                     </td>

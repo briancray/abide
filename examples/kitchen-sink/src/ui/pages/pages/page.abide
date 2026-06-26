@@ -109,7 +109,7 @@ const externalHref = computed(() => url('https://bun.sh', { utm: 'abide' }))
     </h2>
     <p class="mt-1 text-sm text-slate-600">
         One builder for every in-app URL — it reads the path to pick a resolution: an
-        <code class="font-mono">/rpc/*</code> path serialises the verb's args to a query, an
+        <code class="font-mono">/rpc/*</code> path serialises the rpc's args to a query, an
         <code class="font-mono">[id]</code> route takes its params, and a bare path takes an
         optional query.
     </p>

@@ -25,10 +25,10 @@ describe('maxBodySize', () => {
     })
 
     test('a declared Content-Length over the limit rejects with 413 before reading', async () => {
-        const verb = defineRpc('POST', '/rpc/limit-header', async (args) => json(args), {
+        const rpc = defineRpc('POST', '/rpc/limit-header', async (args) => json(args), {
             maxBodySize: 8,
         })
-        const response = await verb.fetch(
+        const response = await rpc.fetch(
             postRequest('/rpc/limit-header', `{"data":"${'x'.repeat(64)}"}`),
         )
         expect(response.status).toBe(413)
@@ -36,7 +36,7 @@ describe('maxBodySize', () => {
     })
 
     test('actual streamed bytes are bounded even without a Content-Length header', async () => {
-        const verb = defineRpc('POST', '/rpc/limit-stream', async (args) => json(args), {
+        const rpc = defineRpc('POST', '/rpc/limit-stream', async (args) => json(args), {
             maxBodySize: 16,
         })
         /* A stream body carries no Content-Length — the header check can't see it. */
@@ -47,13 +47,13 @@ describe('maxBodySize', () => {
                 controller.close()
             },
         })
-        const response = await verb.fetch(postRequest('/rpc/limit-stream', body))
+        const response = await rpc.fetch(postRequest('/rpc/limit-stream', body))
         expect(response.status).toBe(413)
     })
 
     test('without maxBodySize, no abide-level cap applies', async () => {
-        const verb = defineRpc('POST', '/rpc/no-limit', async (args) => json(args))
-        const response = await verb.fetch(
+        const rpc = defineRpc('POST', '/rpc/no-limit', async (args) => json(args))
+        const response = await rpc.fetch(
             postRequest(
                 '/rpc/no-limit',
                 encodeRefJson({ data: 'x'.repeat(4096) }),

@@ -34,7 +34,7 @@ const options = { logRequests: false }
    cache() inside a `<template await>`, server-rendered and streamed, its store
    serialized by the actual serializeCacheSnapshot, seeded on a fresh client store,
    then the page hydrated — adopting the SSR branch from the warm cache without re-
-   dispatching the verb. The keyed counterpart to the positional resume manifest. */
+   dispatching the rpc. The keyed counterpart to the positional resume manifest. */
 let handlerCalls = 0
 const getUsers = defineRpc('GET', '/rpc/ui-users', () => {
     handlerCalls += 1
@@ -102,7 +102,7 @@ describe('cache() snapshot → UI hydration (full server→client loop)', () => 
             streamed = await serializeCacheSnapshot(store)
             return json(null)
         })
-        expect(handlerCalls).toBe(1) // the verb dispatched once, on the server
+        expect(handlerCalls).toBe(1) // the rpc dispatched once, on the server
         expect(streamed).toHaveLength(1) // the mid-stream entry serialized post-drain
 
         // 2) reconstruct the server DOM the browser received
@@ -117,7 +117,7 @@ describe('cache() snapshot → UI hydration (full server→client loop)', () => 
 
         // 3) client: a fresh store seeded from the streamed snapshot (warms post-hydration
         //    reads), then hydrate — the await block adopts the SSR DOM from the streamed
-        //    resume manifest, so the verb is never re-dispatched
+        //    resume manifest, so the rpc is never re-dispatched
         const clientStore = createCacheStore()
         for (const entry of streamed) {
             clientStore.entries.set(entry.key, cacheEntryFromSnapshot(entry))
@@ -145,7 +145,7 @@ describe('cache() snapshot → UI hydration (full server→client loop)', () => 
                 new Function('host', ...names, body)(target, ...values)
             })
 
-            expect(handlerCalls).toBe(1) // warm cache on the client — the verb never re-ran
+            expect(handlerCalls).toBe(1) // warm cache on the client — the rpc never re-ran
             expect(ul.childNodes[0]).toBe(firstRowBefore) // SSR rows adopted, not recreated
             expect(ul.childNodes.map((row) => row.textContent).filter(Boolean)).toEqual([
                 'ada',

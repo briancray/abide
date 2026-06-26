@@ -10,7 +10,7 @@ const pageviews = new Map<string, number>()
 A public beacon any third-party page may POST from its own origin. By default
 the router 403s a mutating browser request whose Origin doesn't match the
 app's own host — the no-preflight CSRF shapes — before the handler runs;
-`crossOrigin: true` exempts this one verb from that same-origin mutation
+`crossOrigin: true` exempts this one rpc from that same-origin mutation
 gate. The opt-out is deliberate and safe here because the handler reads no
 cookies and trusts nothing ambient, so a cross-site call can't ride a
 visitor's session. Demonstrated live at /security.

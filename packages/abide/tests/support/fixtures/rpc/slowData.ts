@@ -4,7 +4,7 @@ import { slowGate } from './slowGate.ts'
 
 /*
 Server-side shape of `export const slowData = GET(...)` after the bundler
-rewrite — the verb the streaming fixture page reads through cache() inside
+rewrite — the rpc the streaming fixture page reads through cache() inside
 {#await}, kept pending until the test releases the gate.
 */
 export const slowData = defineRpc('GET', '/rpc/http-slow', async () => {

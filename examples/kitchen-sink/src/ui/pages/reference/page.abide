@@ -22,7 +22,7 @@ import CodeBlock from '$ui/CodeBlock.abide'
   app.ts                  # optional: init, handle, handleError, forwardHeaders, health
   server/
     config.ts             # env() validation (loaded at boot)
-    rpc/<file>.ts         # one verb export per file → /rpc/<file>
+    rpc/<file>.ts         # one rpc export per file → /rpc/<file>
     sockets/<file>.ts     # one socket per file
   mcp/
     prompts/<file>.md     # MCP prompt templates

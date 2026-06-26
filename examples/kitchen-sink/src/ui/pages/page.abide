@@ -11,7 +11,7 @@ const groups = [
             {
                 href: '/rpc',
                 title: 'rpc',
-                body: 'One verb per file under src/server/rpc/ — GET / POST / PUT / PATCH / DELETE / HEAD. The schema validates args and projects the MCP tool, CLI flags, and OpenAPI operation from one declaration.',
+                body: 'One rpc per file under src/server/rpc/ — GET / POST / PUT / PATCH / DELETE / HEAD. The schema validates args and projects the MCP tool, CLI flags, and OpenAPI operation from one declaration.',
             },
             {
                 href: '/sockets',
@@ -21,7 +21,7 @@ const groups = [
             {
                 href: '/security',
                 title: 'security',
-                body: 'Mutating verbs 403 a cross-origin browser Origin before the handler runs; crossOrigin: true is the per-verb opt-out. /__abide/mcp gets the same check, and boot warns when MCP tools ship with no auth middleware.',
+                body: 'Mutating rpcs 403 a cross-origin browser Origin before the handler runs; crossOrigin: true is the per-rpc opt-out. /__abide/mcp gets the same check, and boot warns when MCP tools ship with no auth middleware.',
             },
         ],
     },
@@ -71,7 +71,7 @@ const groups = [
             {
                 href: '/mcp',
                 title: 'mcp',
-                body: 'POST /__abide/mcp, JSON-RPC — tools from clients.mcp verbs and schema-d sockets, prompts from src/mcp/prompts/*.md, resources from src/mcp/resources/.',
+                body: 'POST /__abide/mcp, JSON-RPC — tools from clients.mcp rpcs and schema-d sockets, prompts from src/mcp/prompts/*.md, resources from src/mcp/resources/.',
             },
             {
                 href: '/cli',

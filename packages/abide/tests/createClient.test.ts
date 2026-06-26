@@ -28,7 +28,7 @@ describe('createClient in-process happy path', () => {
         expect(await client['cli-where']()).toEqual({ host: 'localhost' })
     })
 
-    test('.raw on a streaming verb yields frames through streamResponse', async () => {
+    test('.raw on a streaming rpc yields frames through streamResponse', async () => {
         defineRpc('GET', '/rpc/cli-feed', () =>
             sse(
                 (async function* () {

@@ -76,7 +76,7 @@ describe('unified log format', () => {
         })
     })
 
-    test('in-scope lines carry the trace8 +elapsed verb+path prefix', () => {
+    test('in-scope lines carry the trace8 +elapsed method+path prefix', () => {
         requestScopeSlot.resolver = () => SCOPE
         const lines = capture('log', () => log('user created', { id: 7 })) as unknown[][]
         const line = stripClock(stripAnsi(String(lines[0]?.[0])))

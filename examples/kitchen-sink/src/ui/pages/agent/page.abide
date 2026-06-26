@@ -94,7 +94,7 @@ function apply(frame: AgentFrame | { $error: string }) {
     <code class="font-mono">agent(engine, messages)</code> runs a model against this app's own gated
     MCP surface and streams back <code class="font-mono">AgentFrame</code>s. Here the
     <code class="font-mono">@abide/claude-code</code> engine drives Claude Code over the app's
-    schema-bearing verbs.
+    schema-bearing rpcs.
 </p>
 <p class="mt-2 text-xs text-slate-500">
     Permission is fixed server-side: <code class="font-mono">tools: []</code> drops every Claude

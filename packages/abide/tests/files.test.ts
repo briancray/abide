@@ -86,7 +86,7 @@ describe('multipart uploads', () => {
         expect(res.status).toBe(422)
     })
 
-    test('a FormData built by the client emitter round-trips through the verb', async () => {
+    test('a FormData built by the client emitter round-trips through the rpc', async () => {
         let seen: { photos?: File[] } | undefined
         const createPost = defineRpc(
             'POST',

@@ -9,7 +9,7 @@ function createGate(): Gate {
 }
 
 /*
-Deferred the slow fixture verb blocks on, so the streaming test controls
+Deferred the slow fixture rpc blocks on, so the streaming test controls
 exactly when the pending {#await} read settles — no sleeps, no races.
 `calls` counts handler runs so a test can assert the stashed SSR promise is
 drained by the resolve stream rather than re-fetched.

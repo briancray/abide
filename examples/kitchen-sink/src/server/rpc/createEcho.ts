@@ -6,8 +6,8 @@ const inputSchema = z.object({ message: z.string() })
 
 /*
 POST — args arrive in the JSON request body. An inputSchema auto-exposes
-the rpc to the CLI. MCP only auto-exposes read-only verbs (GET/HEAD), so
-this mutating verb opts in explicitly with `clients: { mcp: true }` —
+the rpc to the CLI. MCP only auto-exposes read-only rpcs (GET/HEAD), so
+this mutating rpc opts in explicitly with `clients: { mcp: true }` —
 letting a model create an echo through the MCP tool too.
 */
 export const createEcho = POST(

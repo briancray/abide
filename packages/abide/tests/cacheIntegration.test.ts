@@ -16,7 +16,7 @@ activeCacheStore() resolves the same store cache() sees in production —
 exercising dedupe and per-request isolation through the public surface rather
 than a fake remote.
 */
-describe('cache() over a real verb in a request scope', () => {
+describe('cache() over a real rpc in a request scope', () => {
     let calls = 0
     const getCount = defineRpc('GET', '/rpc/cache-count', () => json({ hit: ++calls }))
 

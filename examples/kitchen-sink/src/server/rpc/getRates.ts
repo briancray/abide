@@ -11,7 +11,7 @@ Hoisted producer wrapping an external fetch. The cache keys on this
 function's reference + args, so a const/hoisted fn dedupes across calls;
 an inline arrow would get a fresh id every call and never hit. It returns
 a plain Promise<Rates> (no Response, no decode) — the producer path, not
-the remote-verb path.
+the remote-rpc path.
 */
 async function fetchRates(base = 'USD'): Promise<Rates> {
     const response = await fetch(`https://api.frankfurter.app/latest?from=${base}`)
@@ -27,7 +27,7 @@ entry in the process-level store so a value fetched for one request is reused
 by later requests (per-user request scoping is wrong here — the upstream is
 shared); `ttl` bounds staleness so the upstream is hit at most once per minute
 across the whole process. Same coalesce/ttl/invalidate/probe machinery the rpc
-verbs get — only the Response-based SSR streaming snapshot is unavailable,
+rpcs get — only the Response-based SSR streaming snapshot is unavailable,
 since an external fetch carries no wire metadata to snapshot.
 */
 export const getRates = GET<{ base?: string }, Rates>(async ({ base = 'USD' }) => {

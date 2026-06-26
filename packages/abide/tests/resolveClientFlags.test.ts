@@ -7,7 +7,7 @@ describe('isReadOnlyMethod', () => {
         expect(isReadOnlyMethod('GET')).toBe(true)
         expect(isReadOnlyMethod('HEAD')).toBe(true)
     })
-    test('mutating verbs are not', () => {
+    test('mutating rpcs are not', () => {
         for (const method of ['POST', 'PUT', 'PATCH', 'DELETE'] as const) {
             expect(isReadOnlyMethod(method)).toBe(false)
         }

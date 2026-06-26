@@ -29,7 +29,7 @@ async function generate(files: Record<string, string>): Promise<string> {
 }
 
 describe('writeRpcDts', () => {
-    test('maps query-carrying verbs to their args type, keyed by url', async () => {
+    test('maps query-carrying rpcs to their args type, keyed by url', async () => {
         const dts = await generate({
             'search.ts': 'export const search = GET<{ q: string }>(handler)',
             'nested/thing.ts': 'export const thing = GET(handler)',
@@ -43,7 +43,7 @@ describe('writeRpcDts', () => {
         )
     })
 
-    test('omits body verbs — a POST has no URL form', async () => {
+    test('omits body rpcs — a POST has no URL form', async () => {
         const dts = await generate({
             'read.ts': 'export const read = GET(handler)',
             'make.ts': 'export const make = POST(handler)',
@@ -52,7 +52,7 @@ describe('writeRpcDts', () => {
         expect(dts).not.toContain('/rpc/make')
     })
 
-    test('emits an inert empty interface when no verbs qualify', async () => {
+    test('emits an inert empty interface when no rpcs qualify', async () => {
         const dts = await generate({ 'make.ts': 'export const make = POST(handler)' })
         expect(dts).toContain('interface RpcRoutes {')
         expect(dts).not.toContain('/rpc/')

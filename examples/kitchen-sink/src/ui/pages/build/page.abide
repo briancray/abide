@@ -123,7 +123,7 @@ const product = await app.rpc.searchProducts({ q: 'shoes' })
     <p class="text-sm text-slate-600">
         abide is single-process: the <code class="font-mono">global</code> cache, socket
         subscriptions, and fan-out are process memory, not shared across instances — scale
-        vertically, or move shared state behind a verb. The Dockerfile ships the
+        vertically, or move shared state behind a rpc. The Dockerfile ships the
         <strong>compiled binary</strong>, which needs neither Bun nor
         <code class="font-mono">node_modules</code>.
     </p>

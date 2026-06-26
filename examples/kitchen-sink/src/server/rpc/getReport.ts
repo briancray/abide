@@ -9,7 +9,7 @@ the header off the underlying Response. Calling `getReport({...})`
 the header.
 
 The two `log.trace(...)` steps each time their work and emit a span on the
-app's always-on channel, so a call to this verb shows up in the inspector's
+app's always-on channel, so a call to this rpc shows up in the inspector's
 Traces tab as a waterfall: the request bar plus `load-rows` then `summarize`.
 log.trace runs the work, logs the name + duration at settle, and rethrows
 failures — instrumentation never changes the result or swallows errors.

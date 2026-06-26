@@ -24,7 +24,7 @@ const pillClass = (href: string) =>
 <h1 class="text-3xl font-bold">rpc</h1>
 <p class="mt-2 text-slate-600">
     One file per rpc under <code class="font-mono">src/server/rpc/</code>. Filename = export name =
-    URL path under <code class="font-mono">/rpc/</code>; the imported verb (<code class="font-mono"
+    URL path under <code class="font-mono">/rpc/</code>; the imported rpc (<code class="font-mono"
         >GET</code
     >
     / <code class="font-mono">POST</code> / <code class="font-mono">PUT</code> /

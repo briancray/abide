@@ -25,7 +25,7 @@ describe('buildOpenApiSpec happy path', () => {
         defineRpc('POST', '/rpc/oa-make', ({ name }: { name: string }) => json({ name }), {
             inputSchema: testSchema({ type: 'object', properties: { name: { type: 'string' } } }),
         })
-        // upload verb → text fields plus generic binary parts
+        // upload rpc → text fields plus generic binary parts
         defineRpc('POST', '/rpc/oa-upload', () => json({ ok: true }), {
             inputSchema: testSchema({
                 type: 'object',
@@ -68,7 +68,7 @@ describe('buildOpenApiSpec happy path', () => {
         expect(operation.requestBody?.content['multipart/form-data']).toBeUndefined()
     })
 
-    test('an upload verb emits a multipart body with text fields + generic binary parts', () => {
+    test('an upload rpc emits a multipart body with text fields + generic binary parts', () => {
         const schema = paths['/rpc/oa-upload'].post.requestBody?.content['multipart/form-data']
             .schema as Record<string, unknown>
         expect(schema).toMatchObject({
