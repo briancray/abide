@@ -11,7 +11,7 @@ pre-parse body-byte ceiling (`maxBodySize`), and the per-surface handler
 `timeout` (ms). The schema-bearing overloads intersect this with their own
 `inputSchema`/`filesSchema` members.
 */
-type VerbBaseOpts = {
+type RpcBaseOpts = {
     outputSchema?: StandardSchemaV1
     clients?: Partial<ClientFlags>
     crossOrigin?: boolean
@@ -22,7 +22,7 @@ type VerbBaseOpts = {
 /*
 Shared signature for every verb helper (GET / POST / …). Three overloads:
 
-  - `Verb(fn, { inputSchema, outputSchema?, clients? })` — `Args` infers
+  - `Rpc(fn, { inputSchema, outputSchema?, clients? })` — `Args` infers
     from `InferInput<InputSchema>`, the handler receives
     `InferOutput<InputSchema>`. Generic order is `<Return, InputSchema>` so
     users can override `Return` while letting `InputSchema` infer from
@@ -41,15 +41,15 @@ Shared signature for every verb helper (GET / POST / …). Three overloads:
     exceeded; on the network path it also aborts request().signal so a
     handler's `fetch(ext, { signal: request().signal })` is cancelled, not
     just abandoned.
-  - `Verb(fn, { clients })` — schemaless but with explicit client
+  - `Rpc(fn, { clients })` — schemaless but with explicit client
     targeting (e.g. server-internal RPC with `clients: { browser: false }`).
-  - `Verb(fn)` — bare handler. `Args` and `Return` come from the handler
+  - `Rpc(fn)` — bare handler. `Args` and `Return` come from the handler
     type; `Return` is usually inferred via the `TypedResponse<T>` brand on
     `json`/`error`/`redirect`/`jsonl`/`sse`.
 */
-export type VerbHelper = {
+export type RpcHelper = {
     /*
-    `Verb(fn, { inputSchema, filesSchema, … })` — multipart upload. The
+    `Rpc(fn, { inputSchema, filesSchema, … })` — multipart upload. The
     handler receives the text fields (`InferOutput<InputSchema>`) intersected
     with the validated File parts (`InferOutput<FilesSchema>`); both are merged
     into one args bag. The call site sends a FormData (RemoteFunction's call
@@ -68,7 +68,7 @@ export type VerbHelper = {
             Return,
             Errors
         >,
-        opts: VerbBaseOpts & {
+        opts: RpcBaseOpts & {
             inputSchema: InputSchema
             filesSchema: FilesSchema
             errors?: Errors
@@ -80,11 +80,11 @@ export type VerbHelper = {
         Errors extends ErrorSpec = Record<string, never>,
     >(
         fn: RemoteHandler<StandardSchemaV1.InferOutput<InputSchema>, Return, Errors>,
-        opts: VerbBaseOpts & { inputSchema: InputSchema; errors?: Errors },
+        opts: RpcBaseOpts & { inputSchema: InputSchema; errors?: Errors },
     ): RemoteFunction<StandardSchemaV1.InferInput<InputSchema>, Return>
     <Args = undefined, Return = unknown, Errors extends ErrorSpec = Record<never, never>>(
         fn: RemoteHandler<Args, Return, Errors>,
-        opts: VerbBaseOpts & { errors?: Errors },
+        opts: RpcBaseOpts & { errors?: Errors },
     ): RemoteFunction<Args, Return>
     <Args = undefined, Return = unknown>(
         fn: RemoteHandler<Args, Return>,

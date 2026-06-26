@@ -1,7 +1,7 @@
 import type { RemoteFunction } from '../../shared/types/RemoteFunction.ts'
 
 /*
-Verb helpers (GET / POST / …) are placeholders — the bundler rewrites every
+Rpc helpers (GET / POST / …) are placeholders — the bundler rewrites every
 `export const x = GET(fn)` inside `src/server/rpc/<file>.ts` into a call to
 defineRpc (server target) or remoteProxy (client target). If a call slips
 through, the bundler plugin didn't process the file; throwing here surfaces

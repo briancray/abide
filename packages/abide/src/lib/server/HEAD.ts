@@ -1,4 +1,4 @@
-import type { VerbHelper } from './rpc/types/VerbHelper.ts'
+import type { RpcHelper } from './rpc/types/RpcHelper.ts'
 import { unprocessed } from './rpc/unprocessed.ts'
 
 /*
@@ -7,4 +7,4 @@ HEAD verb helper. The bundler rewrites every `export const x = HEAD(fn)` inside
 remoteProxy stub (client target). Calling this directly throws.
 */
 // @documentation rpc
-export const HEAD: VerbHelper = (_fn: any, _opts?: any) => unprocessed('HEAD')
+export const HEAD: RpcHelper = (_fn: any, _opts?: any) => unprocessed('HEAD')

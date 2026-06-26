@@ -69,7 +69,7 @@ export type TestApp = {
        matches routes at raw paths — the APP_URL mount base is stripped by an
        external proxy in production, absent here — so paths carry no base. */
     fetch: (path: string, init?: RequestInit) => Promise<Response>
-    /* Verb calls over HTTP, keyed by command name: `app.rpc.getProduct({ id })`. */
+    /* Rpc calls over HTTP, keyed by command name: `app.rpc.getProduct({ id })`. */
     rpc: RpcClient
     /* Sockets keyed by name: `app.sockets.ticker` is the Socket — iterate it for
        the live stream, `.tail(n)` to seed, `.publish(m)` to send. */
@@ -138,7 +138,7 @@ export async function createTestApp(): Promise<TestApp> {
         return fetch(`${origin}${path}`, init)
     }
 
-    /* Verb modules loaded once so the registry holds every RemoteFunction; the
+    /* Rpc modules loaded once so the registry holds every RemoteFunction; the
        proxy maps command name → an HTTP call against the booted server. */
     await ensureRegistriesLoaded()
     const remotes = new Map<string, RemoteFunction<unknown, unknown>>(

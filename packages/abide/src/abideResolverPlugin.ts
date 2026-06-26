@@ -380,7 +380,7 @@ export const ${prepared.exportName} = __abideRemoteProxy__(${JSON.stringify(prep
                 tokenizer-driven so `GET` mentions inside strings and
                 comments are left alone.
                 */
-                const banner = `import { defineRpc as __abideDefineVerb__ } from '${importName}/server/rpc/defineRpc';
+                const banner = `import { defineRpc as __abideDefineRpc__ } from '${importName}/server/rpc/defineRpc';
 `
                 return { contents: `${banner}${prepared.rewriteForServer(url)}`, loader: 'ts' }
             })

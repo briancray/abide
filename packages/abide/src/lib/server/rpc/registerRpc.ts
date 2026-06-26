@@ -1,6 +1,6 @@
 import { rpcRegistry } from './rpcRegistry.ts'
-import type { VerbRegistryEntry } from './types/VerbRegistryEntry.ts'
+import type { RpcRegistryEntry } from './types/RpcRegistryEntry.ts'
 
-export function registerRpc(entry: VerbRegistryEntry): void {
+export function registerRpc(entry: RpcRegistryEntry): void {
     rpcRegistry.set(entry.remote.url, entry)
 }

@@ -18,7 +18,7 @@ export type PreparedRpcModule = {
 /*
 Scans an `$rpc/**` module once and returns its declared verb + export
 name plus a closure that, given the route URL, emits the server-side
-rewrite (`__abideDefineVerb__("VERB", "<url>", … )` spliced into the
+rewrite (`__abideDefineRpc__("VERB", "<url>", … )` spliced into the
 original source). The single scan replaces the prior separate
 extract + rewrite passes, so the resolver plugin only walks each source
 character-by-character once.
@@ -52,7 +52,7 @@ export function prepareRpcModule(
         verb,
         exportName: site.exportName,
         rewriteForServer(url: string): string {
-            const binding = `__abideDefineVerb__(${JSON.stringify(verb)}, ${JSON.stringify(url)}, `
+            const binding = `__abideDefineRpc__(${JSON.stringify(verb)}, ${JSON.stringify(url)}, `
             return stripped.slice(0, site.callStart) + binding + stripped.slice(site.parenStart + 1)
         },
     }

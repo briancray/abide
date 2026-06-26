@@ -20,7 +20,7 @@ from `inputSchema` because a File has no honest JSON-Schema conversion — it
 stays out of the MCP/CLI projection that `inputSchema` feeds, and the OpenAPI
 multipart body advertises the file parts generically as binary.
 */
-export type VerbRegistryEntry = {
+export type RpcRegistryEntry = {
     remote: RemoteFunction<unknown, unknown>
     inputSchema: StandardSchemaV1 | undefined
     outputSchema: StandardSchemaV1 | undefined

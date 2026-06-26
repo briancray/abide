@@ -5,7 +5,7 @@ non-browser surfaces advertise it, and its argument/result shapes as JSON
 Schema. Schemas project through jsonSchemaForSchema (same as MCP/OpenAPI), so
 a verb whose library can't render a schema still lists with an opaque shape.
 */
-export type InspectorVerb = {
+export type InspectorRpc = {
     /* Registry key — the rpc URL the verb mounts at (e.g. /rpc/users/create). */
     url: string
     /* HTTP method bound to the verb. */

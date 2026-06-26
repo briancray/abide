@@ -12,6 +12,6 @@ keeps the two from drifting.
 */
 const RPC_EXPORT = /export\s+const\s+\w+\s*=\s*(GET|POST|PUT|PATCH|DELETE|HEAD)\s*[<(]/
 
-export function detectVerbMethod(source: string): HttpMethod | undefined {
+export function detectRpcMethod(source: string): HttpMethod | undefined {
     return (source.match(RPC_EXPORT)?.[1] as HttpMethod | undefined) ?? undefined
 }

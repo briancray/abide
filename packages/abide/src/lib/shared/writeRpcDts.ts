@@ -1,5 +1,5 @@
 import { carriesBodyArgs } from './carriesBodyArgs.ts'
-import { detectVerbMethod } from './detectVerbMethod.ts'
+import { detectRpcMethod } from './detectRpcMethod.ts'
 import { fileStem } from './fileStem.ts'
 import { rpcUrlForFile } from './rpcUrlForFile.ts'
 import { writeDts } from './writeDts.ts'
@@ -28,7 +28,7 @@ export async function writeRpcDts({
 }): Promise<void> {
     const lines = await Promise.all(
         rpcFiles.map(async (file) => {
-            const method = detectVerbMethod(await Bun.file(`${rpcDir}/${file}`).text())
+            const method = detectRpcMethod(await Bun.file(`${rpcDir}/${file}`).text())
             // A body verb's args can't ride a URL — leave it out of the url() rpc map.
             if (!method || carriesBodyArgs(method)) {
                 return undefined

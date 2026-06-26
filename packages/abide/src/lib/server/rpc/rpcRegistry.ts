@@ -1,4 +1,4 @@
-import type { VerbRegistryEntry } from './types/VerbRegistryEntry.ts'
+import type { RpcRegistryEntry } from './types/RpcRegistryEntry.ts'
 
 /*
 Process-wide registry of every verb-bound RPC declared in the app.
@@ -8,4 +8,4 @@ rpc manifest). MCP server reads this to build its tools list; the CLI
 binary reads it to generate subcommands. The browser path never touches
 this — the client stub has no schema or clients metadata to register.
 */
-export const rpcRegistry = new Map<string, VerbRegistryEntry>()
+export const rpcRegistry = new Map<string, RpcRegistryEntry>()

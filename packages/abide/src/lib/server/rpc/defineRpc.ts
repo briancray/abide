@@ -25,9 +25,9 @@ the scope's Request (one verb per .fetch — network or in-process dispatch) so
 an SSR pass's many in-process cache reads, which call invoke() directly and
 never reach parseArgsForFetch, can't cross-cancel.
 */
-const RPC_TIMEOUT_ABORT = Symbol('abideVerbTimeoutAbort')
+const RPC_TIMEOUT_ABORT = Symbol('abideRpcTimeoutAbort')
 
-/* Verb dispatch + validation spans, opt-in via DEBUG=abide:rpc. Reveals an
+/* Rpc dispatch + validation spans, opt-in via DEBUG=abide:rpc. Reveals an
    in-process RPC→RPC call (same request scope, same trace) as a nested span. */
 const rpcLog = abideLog.channel('abide:rpc')
 
@@ -162,7 +162,7 @@ export function defineRpc<Args, Return>(
     SSR call.
     */
     /* Abort the controller parseArgsForFetch stashed on store.req; a no-op when none was stashed (SSR cache reads). */
-    function abortVerbTimeout(): void {
+    function abortRpcTimeout(): void {
         const req = requestContext.getStore()?.req as
             | (Request & { [RPC_TIMEOUT_ABORT]?: AbortController })
             | undefined
@@ -179,7 +179,7 @@ export function defineRpc<Args, Return>(
         request().signal (absent on the SSR cache-read path, so a sibling
         verb's outbound fetch is never cancelled) — then 504.
         */
-        return runWithRpcTimeout(work, timeout, abortVerbTimeout)
+        return runWithRpcTimeout(work, timeout, abortRpcTimeout)
     }
 
     const remote = createRemoteFunction<Args, Return>({
@@ -198,7 +198,7 @@ export function defineRpc<Args, Return>(
             scope's *final* request: a maxBodySize verb swaps store.req for a
             buffered copy (readBodyWithinLimit) and an app.handle hook may
             rewrite it, so composing onto the inbound `request` would leave
-            request() — and abortVerbTimeout, which reads store.req — pointed at
+            request() — and abortRpcTimeout, which reads store.req — pointed at
             an un-cancellable signal. Only the signal is shadowed; the body
             stays readable. The store always exists here (network + in-process
             dispatch both run inside runWithRequestScope); SSR cache reads call
