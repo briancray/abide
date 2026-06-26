@@ -97,7 +97,13 @@ describe('socket ws multiplex happy path', () => {
     })
 
     test('pub on a clientPublish socket fans the message into the retained tail', async () => {
-        defineSocket<{ text: string }>('ws-pub', { tail: 10, clientPublish: true })
+        // `clients: { cli: true }` — the REST probe below is the CLI/MCP face, gated to
+        // sockets exposed to a non-browser surface; a schemaless socket is browser-only.
+        defineSocket<{ text: string }>('ws-pub', {
+            tail: 10,
+            clientPublish: true,
+            clients: { cli: true },
+        })
         const dispatcher = createSocketDispatcher(routesFor('ws-pub'))
         const { ws } = fakeSocket()
 
@@ -113,7 +119,8 @@ describe('socket ws multiplex happy path', () => {
     })
 
     test('pub on a non-clientPublish socket is dropped, not thrown', async () => {
-        defineSocket('ws-readonly', { tail: 10 })
+        // cli-exposed so the retained tail is observable through the REST probe below.
+        defineSocket('ws-readonly', { tail: 10, clients: { cli: true } })
         const dispatcher = createSocketDispatcher(routesFor('ws-readonly'))
         const { ws } = fakeSocket()
 
@@ -140,5 +147,17 @@ describe('socket ws multiplex happy path', () => {
         dispatcher.close(ws)
 
         expect(unsubscribed.sort()).toEqual(['socket:ws-a', 'socket:ws-b'])
+    })
+
+    test('rest face 404s a browser-only socket — clients flags gate it', async () => {
+        // Schemaless + no explicit clients => browser-only. The REST face is the CLI/MCP
+        // transport, so it must be unreachable (404, not 403, to avoid leaking existence).
+        defineSocket('ws-browser-only', { tail: 10 })
+        const dispatcher = createSocketDispatcher(routesFor('ws-browser-only'))
+        const response = await dispatcher.rest(
+            new Request('http://x/__abide/sockets/ws-browser-only'),
+            'ws-browser-only',
+        )
+        expect(response.status).toBe(404)
     })
 })

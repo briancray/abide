@@ -180,8 +180,8 @@ export function cache<Args, Return>(
         }
         /*
         Warm path: a value pre-decoded onto the entry — by the SSR cache
-        snapshot the client seeds its store from, or by a cache.on().patch
-        broadcast — is served without a network round-trip. It resolves on a
+        snapshot the client seeds its store from — is served without a network
+        round-trip. It resolves on a
         microtask (a settled Promise), not synchronously, so every cache() read
         is uniformly `Promise<Return>` and `.then`/`.catch`/`.finally` chain
         cleanly. Raw callers take the Response path; after an invalidate the
@@ -512,24 +512,30 @@ function invalidate<Args, Return>(arg?: CacheSelector<Args, Return>, args?: Args
     const matches = selectorMatcher(arg, args, prefix)
     invalidateTripwire(selectorLabel(arg, args, prefix))
     for (const store of cacheStores()) {
+        const matched: string[] = []
         const affected: string[] = []
         /* Deleting the current entry mid-iteration is spec-safe on a Map; no snapshot needed. */
         for (const entry of store.entries.values()) {
             if (!matches(entry)) {
                 continue
             }
+            matched.push(entry.key)
             if (entry.invalidation) {
                 scheduleInvalidationRefetch(store, entry)
             } else {
                 store.entries.delete(entry.key)
-                /* Mark so the next read of this key reports as a reload via refreshing(). */
-                store.pendingRefresh.add(entry.key)
+                /* Flag the next read a reload (refreshing()) — but only if a reader is
+                   holding the value now; with none on screen the next read is a first
+                   load, and an ungated add would linger forever on the tab store. */
+                if (store.hasReader(entry.key)) {
+                    store.pendingRefresh.add(entry.key)
+                }
                 affected.push(entry.key)
             }
-            store.markLifecycle(entry.key)
         }
-        emit(store, affected)
-        store.markLifecycle()
+        /* Every match changed state (probes re-derive); only the dropped subset
+           changed its visible value (readers re-read) — swr matches stay put. */
+        notify(store, matched, affected)
     }
 }
 
@@ -554,94 +560,6 @@ function selectorLabel<Args, Return>(
 }
 
 cache.invalidate = invalidate
-
-type EntryWrite = { store: CacheStore; entry: CacheEntry; prior: unknown; next: unknown }
-
-/*
-Core value-fold shared by the authoritative (cache.on context.patch) and
-optimistic (cache.patch) write paths. Folds `updater` into every decoded remote
-entry matching the selector, writing the result to entry.value so the warm-sync
-read path serves it and emitting the keys so readers re-run (ADR-0007). Only
-entry.value is written; entry.promise is left untouched so raw readers of the
-same key keep reading the wire Response. Producer entries (no request) are
-skipped — patching is a decoded-value operation. The current value is entry.value
-when warm (hydrated or already patched), else the entry's settled Response decoded
-— hence async; the first fold of a live-fetched entry hops a decode, subsequent
-ones are synchronous. Returns the keys touched (the cache.on context registers
-them for reconnect resync) and a `restore` that reverts each write iff it still
-stands — the optimistic path runs it on a rejected call, the authoritative path
-discards it (a broadcast is truth, never undone).
-*/
-async function foldEntries<Args, Return>(
-    arg: CacheSelector<Args, Return>,
-    updater: (current: Return) => Return,
-    args: Args | undefined,
-    prefix: string | undefined,
-): Promise<{ touched: string[]; restore: () => void }> {
-    const matches = selectorMatcher(arg, args, prefix ?? selectorPrefix(arg, args))
-    const touched: string[] = []
-    const writes: EntryWrite[] = []
-    for (const store of cacheStores()) {
-        const affected: string[] = []
-        for (const entry of store.entries.values()) {
-            if (!matches(entry) || entry.request === undefined) {
-                continue
-            }
-            const prior = entry.value
-            const current = (prior ??
-                (await decodeResponse(
-                    await shareable(entry.promise as Promise<Response>),
-                ))) as Return
-            const next = structuredClone(updater(current))
-            entry.value = next
-            entry.settled = true
-            entry.refreshing = false
-            store.markLifecycle(entry.key)
-            affected.push(entry.key)
-            writes.push({ store, entry, prior, next })
-        }
-        emit(store, affected)
-        store.markLifecycle()
-        touched.push(...affected)
-    }
-    return { touched, restore: () => revertWrites(writes) }
-}
-
-/*
-Reverts each optimistic write iff entry.value still holds it — a refetch or a
-later write that already replaced it is the newer truth and is left intact — then
-notifies readers of the reverted keys per store.
-*/
-function revertWrites(writes: EntryWrite[]): void {
-    const reverted = new Map<CacheStore, string[]>()
-    for (const { store, entry, prior, next } of writes) {
-        if (store.entries.get(entry.key) !== entry || entry.value !== next) {
-            continue
-        }
-        entry.value = prior
-        store.markLifecycle(entry.key)
-        reverted.set(store, [...(reverted.get(store) ?? []), entry.key])
-    }
-    for (const [store, keys] of reverted) {
-        emit(store, keys)
-        store.markLifecycle()
-    }
-}
-
-/*
-The authoritative-broadcast fold: a cache.on frame is the truth, so foldEntries'
-write stands (no rollback) and only the touched keys are returned for coverage.
-*/
-async function patchEntries<Args, Return>(
-    arg: CacheSelector<Args, Return>,
-    updater: (current: Return) => Return,
-    args?: Args,
-    /* The caller (on().patch) resolves the prefix for its coverage label; reuse it so selectorPrefix runs once per fold. */
-    prefix?: string,
-): Promise<string[]> {
-    const { touched } = await foldEntries(arg, updater, args, prefix)
-    return touched
-}
 
 /*
 Event-driven cache maintenance: subscribes to a Subscribable (socket or rpc
@@ -685,21 +603,6 @@ function on<T>(
             coverage.set(selectorLabel(arg, args), () => invalidate(arg, args))
             invalidate(arg, args)
         },
-        /*
-        Register the selector (not the delta) for reconnect: a discarded delta
-        can't be replayed, so a transport gap resyncs the patched keys by full
-        invalidate — reusing the same coverage machinery as invalidate above.
-        */
-        patch<Args, Return>(
-            arg: CacheSelector<Args, Return>,
-            updater: (current: Return) => Return,
-            args?: Args,
-        ): Promise<string[]> {
-            /* Resolve the prefix once; the coverage label and patchEntries both consume it. */
-            const prefix = selectorPrefix(arg, args)
-            coverage.set(selectorLabel(arg, args, prefix), () => invalidate(arg, args))
-            return patchEntries(arg, updater, args, prefix)
-        },
         signal: controller.signal,
     }
     /* `let`: the reconnect path swaps in a fresh iterator; dispose closes the current one. */
@@ -740,56 +643,6 @@ function on<T>(
 }
 
 cache.on = on
-
-/*
-Optimistic write: applies `updater` as a prediction now — the reactive read
-shows it immediately — runs `call`, then reconciles. On resolve the server is
-the truth: the prediction is dropped and the selector invalidated, so the value
-refetches authoritatively, coalesced per the read's own swr window
-(cache(fn, { swr: { throttle } }) bounds an optimistic-write storm with no
-extra knob here; without swr it is a plain drop-and-refetch). On reject the
-prediction rolls back. The returned promise is transparent over `call` —
-resolves to `call`'s value (the mutation result, e.g. a created id), rejects
-with its error, settling only after the cache reflects the reconciled state: an
-explicit await reads truth, an ignored call is fire-and-forget (a pre-attached
-catch keeps an un-awaited rejection from surfacing as unhandled, while the await
-still receives it). `call` is required — a global authoritative write with no
-reconciling op would let a caller author cache values, breaking the
-producer-is-the-source invariant (ADR-0001); that path stays cache.on's
-context.patch. Single-flight per key: rollback restores by snapshot, so keep one
-mutation per key in flight (disable the trigger while pending) — concurrent
-same-key optimism wants a layered entry value, deferred (ADR-0009). The reactive
-read holds the value; the return carries the mutation result — separate by
-design (ADR-0009).
-*/
-function patch<Args, Return, Result>(
-    arg: CacheSelector<Args, Return>,
-    updater: (current: Return) => Return,
-    call: Promise<Result>,
-    args?: Args,
-): Promise<Result> {
-    const prefix = selectorPrefix(arg, args)
-    const folded = foldEntries(arg, updater, args, prefix)
-    const settled = (async () => {
-        try {
-            const result = await call
-            /* Wait for the prediction to land before reconciling to server truth. */
-            await folded
-            invalidate(arg, args)
-            return result
-        } catch (error) {
-            const { restore } = await folded
-            restore()
-            throw error
-        }
-    })()
-    /* Ignore-safe: an un-awaited rejection must not report unhandled; an explicit
-       await still receives it (this no-op handler and the await both fire). */
-    settled.catch(() => undefined)
-    return settled
-}
-
-cache.patch = patch
 
 /*
 Schedules a coalesced refetch per the entry's swr policy. No window (swr: true):
@@ -852,8 +705,9 @@ function fireRefetch(store: CacheStore, entry: CacheEntry): void {
     }
     entry.refreshing = true
     policy.lastFiredAt = Date.now()
-    /* Ping lifecycle so refreshing() re-derives when revalidation begins; the settle handlers ping again when it ends. */
-    store.markLifecycle(entry.key)
+    /* Mark, don't emit: refreshing() re-derives when revalidation begins, but the
+       stale value is still on screen — the settle handlers emit once it lands. */
+    notify(store, [entry.key], [])
     const inflight = policy.refetch()
     inflight.then(
         (result) => {
@@ -876,8 +730,8 @@ function fireRefetch(store: CacheStore, entry: CacheEntry): void {
             if (entry.ttl !== undefined && entry.ttl !== 0) {
                 armTtlExpiry(store, entry, entry.ttl)
             }
-            store.markLifecycle(entry.key)
-            emit(store, [entry.key])
+            /* Fresh value landed — mark and emit so readers re-read. */
+            notify(store, [entry.key], [entry.key])
         },
         (error) => {
             entry.refreshing = false
@@ -925,11 +779,16 @@ so a live read replaces it and surfaces the proper error once.
 function settleRefetchFailure(store: CacheStore, entry: CacheEntry, status?: number): void {
     if (status === 404) {
         evictIfCurrent(store, entry)
-        store.pendingRefresh.add(entry.key)
-        emit(store, [entry.key])
+        /* Same reader-gating as invalidate: only flag a reload if one is on screen. */
+        if (store.hasReader(entry.key)) {
+            store.pendingRefresh.add(entry.key)
+        }
+        /* Value gone — mark and emit so the next read replaces it. */
+        notify(store, [entry.key], [entry.key])
         return
     }
-    store.markLifecycle(entry.key)
+    /* Mark, don't emit: stale value kept, only the refreshing flag cleared. */
+    notify(store, [entry.key], [])
 }
 
 /* Folds new tags into an entry's existing set without duplicating them. */
@@ -968,6 +827,27 @@ function attachPolicy(
         return
     }
     entry.invalidation = { refetch, throttle: policy.throttle, debounce: policy.debounce }
+}
+
+/*
+The single notification seam, holding the cache's freshness invariant in one
+place instead of by hand at every mutation site. Two reader audiences, two
+channels: every key in `marked` had its state change, so the lifecycle channels
+fire and the pending()/refreshing() probes re-derive; only the keys in `emitted`
+had their VISIBLE value change, so the 'invalidate' event fires and the reading
+scope re-reads. The two sets diverge by design — a refetch start marks but does
+not emit (the stale value is still on screen), an invalidate-drop does both, an
+swr invalidate marks the whole match set while emitting only the dropped subset.
+The trailing store-wide mark fires even when nothing matched, so a bare probe
+still re-derives (to the same value); marks coalesce per microtask, so a key in
+both lists is not double work.
+*/
+function notify(store: CacheStore, marked: string[], emitted: string[]): void {
+    marked.forEach((key) => store.markLifecycle(key))
+    if (emitted.length > 0) {
+        emit(store, emitted)
+    }
+    store.markLifecycle()
 }
 
 function emit(store: CacheStore, keys: string[]): void {

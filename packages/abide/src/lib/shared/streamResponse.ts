@@ -1,6 +1,6 @@
 import { contentTypeOf } from './contentTypeOf.ts'
 import { decodeResponse } from './decodeResponse.ts'
-import { HttpError } from './HttpError.ts'
+import { httpErrorFor } from './httpErrorFor.ts'
 import { jsonlErrorFrame } from './jsonlErrorFrame.ts'
 import { STREAMING_CONTENT_TYPES } from './STREAMING_CONTENT_TYPES.ts'
 import { sseErrorFrame } from './sseErrorFrame.ts'
@@ -24,11 +24,12 @@ identically. Three shapes are handled:
   handler, not just the streaming ones.
 
 Non-2xx responses surface as a thrown HttpError on the first pull,
-mirroring the plain `fn(args)` decode path.
+mirroring the plain `fn(args)` decode path — typed-error body included
+(`.kind` / `.data`), parsed by httpErrorFor when the generator is pulled.
 */
 export function streamResponse<T>(response: Response): AsyncIterable<T> {
     if (!response.ok) {
-        return errorIterable<T>(new HttpError(response))
+        return errorIterable<T>(response)
     }
     const contentType = contentTypeOf(response.headers)
     if (contentType.startsWith('text/event-stream')) {
@@ -40,10 +41,12 @@ export function streamResponse<T>(response: Response): AsyncIterable<T> {
     return oneShot<T>(response)
 }
 
-/* Surfaces a non-2xx response (or any pre-stream failure) as a thrown error on the first pull. */
+/* Surfaces a non-2xx response as a thrown HttpError on the first pull — awaiting the
+   typed-error body parse here (not in the sync streamResponse body) is what lets the
+   stream path carry `.kind` / `.data` like the plain decode path. */
 // biome-ignore lint/correctness/useYield: throws on first pull; the generator shape is intentional so callers iterate it uniformly
-async function* errorIterable<T>(error: Error): AsyncGenerator<T> {
-    throw error
+async function* errorIterable<T>(response: Response): AsyncGenerator<T> {
+    throw await httpErrorFor(response)
 }
 
 /*

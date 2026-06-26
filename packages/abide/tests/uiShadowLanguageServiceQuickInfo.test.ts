@@ -63,4 +63,23 @@ describe('shadow language service quickInfo', () => {
         expect(doubledInfo).toBeDefined()
         expect(doubledInfo!.text).toContain('number')
     })
+
+    /* The reactive callee at its CALL site is dropped from the shadow (the rewrite
+       keeps only the binding name + initializer), so hovering `state` in
+       `state(0)` previously had no quick-info — only the destructured `state` did.
+       The callee identifier is now mapped to its shadow reference. */
+    test('reports the primitive signature when hovering the callee at a call site', () => {
+        const source = `<script>\nconst { state, computed } = scope()\nlet count = state(0)\nconst doubled = computed(() => count * 2)\n</script>\n<p>{count}{doubled}</p>\n`
+        const { service, path } = open(source)
+
+        const stateInfo = service.quickInfo(path, source.indexOf('state(0)'))
+        expect(stateInfo).toBeDefined()
+        expect(source.slice(stateInfo!.start, stateInfo!.start + stateInfo!.length)).toBe('state')
+
+        const computedInfo = service.quickInfo(path, source.indexOf('computed(() => count'))
+        expect(computedInfo).toBeDefined()
+        expect(source.slice(computedInfo!.start, computedInfo!.start + computedInfo!.length)).toBe(
+            'computed',
+        )
+    })
 })

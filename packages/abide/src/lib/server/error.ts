@@ -72,9 +72,12 @@ export function error(
         const descriptor = statusOrDescriptor
         return new Response(
             JSON.stringify({ $abideError: descriptor.$abideError, data: descriptor.data }),
-            withResponseDefaults(
-                undefined,
-                { 'Content-Type': 'application/json', 'Cache-Control': NO_STORE },
+            withStatusText(
+                withResponseDefaults(
+                    undefined,
+                    { 'Content-Type': 'application/json', 'Cache-Control': NO_STORE },
+                    descriptor.status,
+                ),
                 descriptor.status,
             ),
         ) as TypedResponse<never>
@@ -83,13 +86,30 @@ export function error(
     const body = message ?? STATUS_TEXT[status] ?? `HTTP ${status}`
     return new Response(
         body,
-        withResponseDefaults(
-            init,
-            {
-                'Content-Type': TEXT_PLAIN,
-                'Cache-Control': NO_STORE,
-            },
+        withStatusText(
+            withResponseDefaults(
+                init,
+                {
+                    'Content-Type': TEXT_PLAIN,
+                    'Cache-Control': NO_STORE,
+                },
+                status,
+            ),
             status,
         ),
     ) as TypedResponse<never>
+}
+
+/*
+Stamps the status's standard reason phrase onto `init.statusText` so the wire
+status line reads `404 Not Found` and the client's `HttpError.statusText` is
+populated — Bun's `Response` never derives statusText from the code. A caller's
+explicit `init.statusText` (preserved through withResponseDefaults) still wins;
+an unlisted code leaves it untouched.
+*/
+function withStatusText(init: ResponseInit, status: number): ResponseInit {
+    if (init.statusText === undefined && STATUS_TEXT[status] !== undefined) {
+        return { ...init, statusText: STATUS_TEXT[status] }
+    }
+    return init
 }

@@ -1,4 +1,5 @@
 import { computed } from './computed.ts'
+import { effect } from './effect.ts'
 import { history } from './history.ts'
 import { linked } from './linked.ts'
 import { persist as persistDoc } from './persist.ts'
@@ -37,6 +38,10 @@ export function createScope(
     const data = (): Doc => (document ??= createDoc({}))
     const id = parent === undefined ? `scope-${nextId++}` : `${parent.id}.${nextId++}`
     const children: Scope[] = []
+    /* Adopted build teardowns (the reactivity stopper from the mount core). Disposed
+       first and in reverse on teardown, before children and capabilities — so the one
+       `dispose` runs the order the call sites hand-composed as `stop(); lexical.dispose()`. */
+    const owned: Array<() => void> = []
     /* Context values shared down the tree, held apart from the reactive doc (which
        a child does not inherit): keyed by name, read by the closest ancestor walk. */
     const shared = new Map<string, unknown>()
@@ -56,11 +61,17 @@ export function createScope(
         cell: (path) => data().cell(path),
         derive: (path, compute) => data().derive(path, compute),
         snapshot: () => data().snapshot(),
-        /* The `.value`-cell signal forms, namespaced under the scope — standalone
-           non-serializing cells (owned by the render scope), reached only here. */
+        /* The reactive primitives — namespaced under the scope but AMBIENT-bound, not
+           receiver-bound: each binds whatever scope is rendering and the finest ambient
+           build window (branch/row), so the handle is namespacing, not a binding target.
+           Binding to the receiver would leak branch-local cells (see ADR-0012). */
         state,
         linked,
         computed,
+        effect,
+        own: (dispose) => {
+            owned.push(dispose)
+        },
         child: (childInitial = {}) => {
             const created = createScope(childInitial, self)
             children.push(created)
@@ -91,6 +102,13 @@ export function createScope(
         canUndo: () => past?.canUndo() ?? false,
         canRedo: () => past?.canRedo() ?? false,
         dispose: () => {
+            /* Stop the build's reactivity first (reverse order), before tearing down nested
+               children and the boundary-crossing capabilities — the order the call sites
+               hand-composed as `stop(); lexical.dispose()`. */
+            for (let index = owned.length - 1; index >= 0; index -= 1) {
+                owned[index]?.()
+            }
+            owned.length = 0
             for (const created of children) {
                 created.dispose()
             }

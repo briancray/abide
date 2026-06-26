@@ -68,9 +68,10 @@ export function createSocketDispatcher(sockets: SocketRoutes): SocketDispatcher 
 
     /*
     Loads a socket module on first use and reads its registry entry — the
-    one statement of the load/lookup failure semantics (a throwing module is
-    logged here and stays cached as failed by ensureLoaded). Each face maps
-    the failure kind to its own rendering: sub emits err+end frames, pub
+    one statement of the load/lookup failure semantics. A throwing module is
+    logged here; memoizeByKey evicts the rejected load so the next frame
+    retries (a transient import failure doesn't poison the name). Each face
+    maps the failure kind to its own rendering: sub emits err+end frames, pub
     drops silently, rest answers with HTTP errors.
     */
     async function resolveEntry(
@@ -200,10 +201,7 @@ export function createSocketDispatcher(sockets: SocketRoutes): SocketDispatcher 
         send(ws, { type: 'end', sub: frame.sub })
     }
 
-    async function handlePub(
-        ws: ServerWebSocket<unknown>,
-        frame: Extract<SocketClientFrame, { type: 'pub' }>,
-    ): Promise<void> {
+    async function handlePub(frame: Extract<SocketClientFrame, { type: 'pub' }>): Promise<void> {
         const resolution = await resolveEntry(frame.socket)
         if ('failure' in resolution) {
             return
@@ -233,11 +231,6 @@ export function createSocketDispatcher(sockets: SocketRoutes): SocketDispatcher 
         } catch (publishError) {
             abideLog.error(publishError)
         }
-        /*
-        ws parameter retained for future per-ws auth context (cookies on
-        upgrade) the canPublish hook would consult.
-        */
-        void ws
     }
 
     /*
@@ -252,7 +245,8 @@ export function createSocketDispatcher(sockets: SocketRoutes): SocketDispatcher 
            clientPublish policy and validated against its schema.
 
     Loads the socket module on first hit (same cache the ws path uses) so
-    its defineSocket call populates the registry.
+    its defineSocket call populates the registry. A socket exposed to neither
+    mcp nor cli answers 404 here — its `clients` flags gate this surface.
     */
     async function rest(req: Request, name: string): Promise<Response> {
         return socketsLog.trace(`socket-rest ${name}`, () => restImpl(req, name))
@@ -266,6 +260,13 @@ export function createSocketDispatcher(sockets: SocketRoutes): SocketDispatcher 
                 : error(404)
         }
         const { entry } = resolution
+        /* The REST face is the CLI/MCP transport (the browser uses the ws multiplex). A
+           socket advertised to neither non-browser surface has no REST consumer, so its
+           `clients` flags are access control here: 404 as if unmounted, not 403, so a
+           browser-only socket's existence doesn't leak over this surface. */
+        if (!entry.clients.mcp && !entry.clients.cli) {
+            return error(404)
+        }
         const tailParam = new URL(req.url).searchParams.get('tail')
         const parsedTail = tailParam !== null ? Number(tailParam) : undefined
         // A non-numeric ?tail= yields NaN; treat it as absent rather than letting
@@ -338,7 +339,7 @@ export function createSocketDispatcher(sockets: SocketRoutes): SocketDispatcher 
                 return
             }
             if (frame.type === 'pub') {
-                void handlePub(ws, frame)
+                void handlePub(frame)
                 return
             }
         },

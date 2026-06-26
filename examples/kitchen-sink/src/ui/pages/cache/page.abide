@@ -28,11 +28,11 @@ async function reset() {
 
 /* Event-driven invalidation: a chat frame stales the chat count. cache.on returns
    a dispose; effect runs it client-side (no-op during SSR). */
-effect(() => cache.on(chat, (_message, { invalidate }) => invalidate(getChatCount)))
+scope().effect(() => cache.on(chat, (_message, { invalidate }) => invalidate(getChatCount)))
 const chatCount = computed(() => cache(getChatCount)())
 
 /* patch: the frame IS the new data — fold it into the cached list, no refetch. */
-effect(() =>
+scope().effect(() =>
     cache.on(chat, (message, { patch }) => {
         patch(getChatLog, (log) => ({ messages: [...log.messages, message].slice(-20) }))
     }),
@@ -152,10 +152,10 @@ cache.invalidate(fn)                    // drop one function's calls
 cache.invalidate({ tags: 'orders' })   // drop every entry sharing the tag`} />
 
     <CodeBlock title="cache.on — invalidate vs patch" code={`// invalidate: a frame stales a computed read — drop it, let the next read refetch
-effect(() => cache.on(chat, (_m, { invalidate }) => invalidate(getChatCount)))
+scope().effect(() => cache.on(chat, (_m, { invalidate }) => invalidate(getChatCount)))
 
 // patch: the frame IS the new data — fold it into the cached value, no refetch
-effect(() =>
+scope().effect(() =>
     cache.on(chat, (message, { patch }) =>
         patch(getChatLog, (log) => ({ messages: [...log.messages, message].slice(-20) })),
     ),

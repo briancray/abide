@@ -11,23 +11,20 @@ under the current one in `awaiting` mode — so it adopts the model doc its firs
 creates — brackets a render pass — so its `await`/`try` block ids draw from the shared
 counter in SSR-stream order — runs `build`, then restores the previous scope (synchronous
 build, so the restore is exact). `build` returns its reactivity stopper (from `scope` or
-`fillBefore`); the caller composes its own DOM teardown (clear host vs clear range) around
-the returned `stop`/`lexical`, keeping the one scope/render-pass contract in a single place.
+`fillBefore`), which the lexical scope ADOPTS (`own`) so the scope has a single teardown:
+the caller wraps its own DOM teardown (clear host vs clear range) around one
+`lexical.dispose()`, no longer composing a separate `stop()` at every site.
 */
-export function withScope(
-    label: string | undefined,
-    build: () => () => void,
-): { stop: () => void; lexical: Scope } {
+export function withScope(label: string | undefined, build: () => () => void): { lexical: Scope } {
     const parentScope = CURRENT_SCOPE.current
     const lexical = createScope({}, parentScope, true, label)
     enterRenderPass()
     CURRENT_SCOPE.current = lexical
-    let stop: () => void = () => undefined
     try {
-        stop = build()
+        lexical.own(build())
     } finally {
         exitRenderPass()
         CURRENT_SCOPE.current = parentScope
     }
-    return { stop, lexical }
+    return { lexical }
 }

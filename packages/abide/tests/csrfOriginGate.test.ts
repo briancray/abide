@@ -19,8 +19,14 @@ const rpc: RemoteRoutes = {
     '/rpc/csrf-read': async () => ({ readThing }),
 }
 
-/* A client-publishable socket — its REST POST face fans a message to subscribers. */
-defineSocket<{ text: string }>('csrf-feed', { tail: 10, clientPublish: true })
+/* A client-publishable socket — its REST POST face fans a message to subscribers.
+   `clients: { cli: true }` keeps that REST face reachable: it's the CLI/MCP transport,
+   gated to sockets exposed to a non-browser surface (a schemaless socket is browser-only). */
+defineSocket<{ text: string }>('csrf-feed', {
+    tail: 10,
+    clientPublish: true,
+    clients: { cli: true },
+})
 const sockets: SocketRoutes = { 'csrf-feed': () => Promise.resolve({}) as never }
 
 /* The hostile-page shape: a cross-site form post carrying ambient cookies. */

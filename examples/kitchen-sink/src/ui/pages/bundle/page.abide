@@ -135,8 +135,8 @@ export default {
         code={`import { onMenu } from '@abide/abide/bundle/onMenu'
 import { navigate } from '@abide/abide/ui/navigate'
 
-effect(() => onMenu('reload-session', () => location.reload()))
-effect(() => onMenu('open-mcp', () => void navigate('/mcp')))`} />
+scope().effect(() => onMenu('reload-session', () => location.reload()))
+scope().effect(() => onMenu('open-mcp', () => void navigate('/mcp')))`} />
 
     <CodeBlock title="build the bundle (host platform)" lang="sh" code={`abide bundle           # → dist/<program>.app (macOS) or dist/<program>/
 abide compile          # just the embedded server binary the bundle spawns`} />

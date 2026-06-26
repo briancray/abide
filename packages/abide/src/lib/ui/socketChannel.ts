@@ -80,7 +80,13 @@ export function getSocketChannel(): SocketChannel {
         if (document.hidden) {
             return
         }
-        if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+        /* A socket reference in ANY non-closed state means one is already in play — bail.
+           CONNECTING/OPEN are healthy; CLOSING means a close event is still pending and the
+           close handler (which alone nulls `ws` and re-arms the backoff) hasn't run yet.
+           Spawning here would orphan that socket: its deferred close fires against the shared
+           `ws`, draining the fresh connection's subs and nulling it. The close handler always
+           clears `ws`, so reconnection is never stranded — it just sequences after the close. */
+        if (ws) {
             return
         }
         const scheme = window.location.protocol === 'https:' ? 'wss:' : 'ws:'

@@ -9,14 +9,13 @@ import type { ErrorSpec } from '../../shared/types/ErrorSpec.ts'
 import type { HttpMethod } from '../../shared/types/HttpMethod.ts'
 import type { RemoteFunction } from '../../shared/types/RemoteFunction.ts'
 import type { StandardSchemaV1 } from '../../shared/types/StandardSchemaV1.ts'
-import { json } from '../json.ts'
 import { requestContext } from '../runtime/requestContext.ts'
 import { buildErrorConstructors } from './buildErrorConstructors.ts'
-import { fieldErrorsFromIssues } from './fieldErrorsFromIssues.ts'
 import { parseArgs } from './parseArgs.ts'
 import { registerRpc } from './registerRpc.ts'
 import { runWithRpcTimeout } from './runWithRpcTimeout.ts'
 import type { RemoteHandler } from './types/RemoteHandler.ts'
+import { validationError } from './validationError.ts'
 
 /*
 Stash for the per-request AbortController a timed rpc composes into the
@@ -63,8 +62,10 @@ export function defineRpc<Args, Return>(
         maxBodySize?: number
         /* Per-rpc handler deadline (ms): a 504 once exceeded, on every surface (SSR/MCP/CLI/network). */
         timeout?: number
-        /* Local-first durability: the client proxy queues the call durably (survives
-           offline + reload) instead of fetching immediately. Mutating methods only. */
+        /* Durable delivery: on an unreachable server (transport failure / 502/503/504/52x)
+           the client proxy parks the request for replay instead of just throwing. The
+           parked write drains on `rpc.outbox.retry()` (no auto-drain). Mutating methods
+           only. */
         outbox?: boolean
     },
 ): RemoteFunction<Args, Return> {
@@ -132,16 +133,7 @@ export function defineRpc<Args, Return>(
                 inputSchema['~standard'].validate(value),
             )
             if (result.issues) {
-                return json(
-                    {
-                        $abideError: 'validation',
-                        data: {
-                            issues: result.issues,
-                            errors: fieldErrorsFromIssues(result.issues),
-                        },
-                    },
-                    { status: 422 },
-                )
+                return validationError(result.issues)
             }
             value = result.value
         }
@@ -149,16 +141,7 @@ export function defineRpc<Args, Return>(
             const files = requestContext.getStore()?.files ?? {}
             const result = await filesSchema['~standard'].validate(files)
             if (result.issues) {
-                return json(
-                    {
-                        $abideError: 'validation',
-                        data: {
-                            issues: result.issues,
-                            errors: fieldErrorsFromIssues(result.issues),
-                        },
-                    },
-                    { status: 422 },
-                )
+                return validationError(result.issues)
             }
             value = { ...(value as object), ...(result.value as object) }
         }

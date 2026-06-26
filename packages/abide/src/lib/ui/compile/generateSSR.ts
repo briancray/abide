@@ -8,18 +8,21 @@ import {
     RANGE_OPEN as RANGE_OPEN_DATA,
 } from '../runtime/RANGE_MARKER.ts'
 import { asOutlet } from './asOutlet.ts'
+import { awaitPlan } from './awaitPlan.ts'
 import { composeProps } from './composeProps.ts'
 import { groupBindParts } from './groupBindParts.ts'
+import { ifPlan } from './ifPlan.ts'
 import { isAnchorPositioned } from './isAnchorPositioned.ts'
 import { lowerContext } from './lowerContext.ts'
 import { makeVarNamer } from './makeVarNamer.ts'
-import { resolveBranches } from './resolveBranches.ts'
 import { scopeAttr } from './scopeAttr.ts'
 import { skeletonContext } from './skeletonContext.ts'
 import { spreadExcludedNames } from './spreadExcludedNames.ts'
 import { staticAttr } from './staticAttr.ts'
 import { staticTextPart } from './staticTextPart.ts'
 import { stripEffects } from './stripEffects.ts'
+import { switchPlan } from './switchPlan.ts'
+import { tryPlan } from './tryPlan.ts'
 import type { TemplateAttr } from './types/TemplateAttr.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
 import { VOID_TAGS } from './VOID_TAGS.ts'
@@ -216,12 +219,9 @@ export function generateSSR(
             /* `case` children are the `elseif`/`else` branches in source order; the rest are
                the `then` content. Each `elseif` becomes an `else if`, the match-less `else`
                the trailing `else`. */
-            const branches = node.children.filter(
-                (child): child is Extract<TemplateNode, { kind: 'case' }> => child.kind === 'case',
-            )
-            const thenChildren = node.children.filter((child) => child.kind !== 'case')
-            let code = `if (${lowerExpression(node.condition)}) {\n${branchContent(thenChildren, target)}}`
-            for (const branch of branches) {
+            const plan = ifPlan(node)
+            let code = `if (${lowerExpression(node.condition)}) {\n${branchContent(plan.thenChildren, target)}}`
+            for (const branch of plan.branches) {
                 code +=
                     branch.condition !== undefined
                         ? ` else if (${lowerExpression(branch.condition)}) {\n${branchContent(branch.children, target)}}`
@@ -230,20 +230,17 @@ export function generateSSR(
             return `${anchor}${openRange(target)}${code}\n${closeRange(target)}`
         }
         if (node.kind === 'switch') {
-            const cases = node.children.filter(
-                (child): child is Extract<TemplateNode, { kind: 'case' }> => child.kind === 'case',
-            )
+            const plan = switchPlan(node)
             let code = `{ const $s = (${lowerExpression(node.subject)});\n`
             let started = false
-            for (const branch of cases) {
+            for (const branch of plan.cases) {
                 if (branch.match !== undefined) {
                     code += `${started ? 'else ' : ''}if ($s === (${lowerExpression(branch.match)})) {\n${branchContent(branch.children, target)}}\n`
                     started = true
                 }
             }
-            const fallback = cases.find((branch) => branch.match === undefined)
-            if (fallback !== undefined) {
-                code += `${started ? 'else ' : ''}{\n${branchContent(fallback.children, target)}}\n`
+            if (plan.fallback !== undefined) {
+                code += `${started ? 'else ' : ''}{\n${branchContent(plan.fallback.children, target)}}\n`
             }
             return `${anchor}${openRange(target)}${code}}\n${closeRange(target)}`
         }
@@ -512,27 +509,23 @@ export function generateSSR(
         node: Extract<TemplateNode, { kind: 'await' }>,
         target: string,
     ): string {
-        const [catchBranch, finallyBranch] = resolveBranches(node, 'catch', 'finally')
-        const finallyChildren = finallyBranch?.children ?? []
-        const resolvedChildren = node.children.filter((child) => child.kind !== 'branch')
-        const resolvedAs = node.as ?? '_value'
-        const errorAs = catchBranch?.as ?? '_error'
+        const plan = awaitPlan(node)
         const id = nextVar('$aid')
         let code = `const ${id} = $ctx.next++;\n`
         code += `${target}.push("<!--abide:await:" + ${id} + "-->");\n`
         code += `try {\n`
-        code += `const ${resolvedAs} = await (${lowerExpression(node.promise)});\n`
-        code += branchContent(resolvedChildren, target)
-        code += branchContent(finallyChildren, target)
-        code += `$resume[${id}] = { ok: true, value: ${resolvedAs} };\n`
-        if (catchBranch === undefined && finallyChildren.length === 0) {
+        code += `const ${plan.resolvedAs} = await (${lowerExpression(node.promise)});\n`
+        code += branchContent(plan.resolvedChildren, target)
+        code += branchContent(plan.finallyChildren, target)
+        code += `$resume[${id}] = { ok: true, value: ${plan.resolvedAs} };\n`
+        if (plan.surfaceRejection) {
             /* No catch/finally → let the rejection surface instead of an empty branch. */
             code += `} catch (_error) { throw _error; }\n`
         } else {
-            code += `} catch (${errorAs}) {\n`
-            code += branchContent(catchBranch?.children ?? [], target)
-            code += branchContent(finallyChildren, target)
-            code += `$resume[${id}] = { ok: false, error: String(${errorAs}) };\n`
+            code += `} catch (${plan.catchAs}) {\n`
+            code += branchContent(plan.catchChildren, target)
+            code += branchContent(plan.finallyChildren, target)
+            code += `$resume[${id}] = { ok: false, error: String(${plan.catchAs}) };\n`
             code += `}\n`
         }
         code += `${target}.push("<!--/abide:await:" + ${id} + "-->");\n`
@@ -550,29 +543,21 @@ export function generateSSR(
         node: Extract<TemplateNode, { kind: 'await' }>,
         target: string,
     ): string {
-        const [thenBranch, catchBranch, finallyBranch] = resolveBranches(
-            node,
-            'then',
-            'catch',
-            'finally',
-        )
-        const finallyChildren = finallyBranch?.children ?? []
-        const pending = node.children.filter((child) => child.kind !== 'branch')
+        const plan = awaitPlan(node)
         const id = nextVar('$aid')
         let code = `const ${id} = $ctx.next++;\n`
         code += `${target}.push("<!--abide:await:" + ${id} + "-->");\n`
-        code += branchContent(pending, target)
+        code += branchContent(plan.pending, target)
         code += `${target}.push("<!--/abide:await:" + ${id} + "-->");\n`
         const settled = (binding: string, children: TemplateNode[]) =>
-            `async (${binding}) => { const $o = []; ${branchContent(children, '$o')}${branchContent(finallyChildren, '$o')}return $o.join(''); }`
-        const catchProp =
-            catchBranch === undefined && finallyChildren.length === 0
-                ? ''
-                : `catch: ${settled(catchBranch?.as ?? '_error', catchBranch?.children ?? [])} `
+            `async (${binding}) => { const $o = []; ${branchContent(children, '$o')}${branchContent(plan.finallyChildren, '$o')}return $o.join(''); }`
+        const catchProp = plan.surfaceRejection
+            ? ''
+            : `catch: ${settled(plan.catchAs, plan.catchChildren)} `
         code +=
             `$awaits.push({ id: ${id}, ` +
             `promise: () => (${lowerExpression(node.promise)}), ` +
-            `then: ${settled(thenBranch?.as ?? '_value', thenBranch?.children ?? [])}, ` +
+            `then: ${settled(plan.resolvedAs, plan.resolvedChildren)}, ` +
             `${catchProp}});\n`
         return code
     }
@@ -584,24 +569,21 @@ export function generateSSR(
        an enclosing boundary / the 500 / the stream). Boundary comments let hydration
        discard the server content if the client adoption fails. */
     function generateTry(node: Extract<TemplateNode, { kind: 'try' }>, target: string): string {
-        const [catchBranch, finallyBranch] = resolveBranches(node, 'catch', 'finally')
-        const finallyChildren = finallyBranch?.children ?? []
-        const guarded = node.children.filter((child) => child.kind !== 'branch')
-        const errName = catchBranch?.as ?? '_error'
+        const plan = tryPlan(node)
         const id = nextVar('$tid')
         const mark = nextVar('$trim')
         let code = `const ${id} = $ctx.next++;\n`
         code += `${target}.push("<!--abide:try:" + ${id} + "-->");\n`
         code += `const ${mark} = ${target}.length;\n`
         code += `try {\n`
-        code += branchContent(guarded, target)
-        code += branchContent(finallyChildren, target)
-        code += `} catch (${errName}) {\n${target}.length = ${mark};\n`
-        if (catchBranch !== undefined) {
-            code += branchContent(catchBranch.children, target)
-            code += branchContent(finallyChildren, target)
+        code += branchContent(plan.guarded, target)
+        code += branchContent(plan.finallyChildren, target)
+        code += `} catch (${plan.catchAs}) {\n${target}.length = ${mark};\n`
+        if (plan.hasCatch) {
+            code += branchContent(plan.catchChildren, target)
+            code += branchContent(plan.finallyChildren, target)
         } else {
-            code += `throw ${errName};\n`
+            code += `throw ${plan.catchAs};\n`
         }
         code += `}\n`
         code += `${target}.push("<!--/abide:try:" + ${id} + "-->");\n`

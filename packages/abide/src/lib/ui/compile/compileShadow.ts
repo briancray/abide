@@ -282,6 +282,14 @@ function scopeLineFor(
         propsShapes.push(shape === undefined ? 'Record<string, any>' : verbatim(shape))
         return { text: `const ${verbatim(declaration)};`, segments: [span(declaration, 6)] }
     }
+    /* The rewrite drops the callee from the line, so hovering `state`/`computed`/
+       `linked` at its call site has nothing to resolve. Append the callee as a
+       trailing reference statement (`…; state;`), mapped back to its source span,
+       so it resolves to the same primitive the destructure does. */
+    const withCalleeRef = (line: ScopeLine): ScopeLine => ({
+        text: `${line.text} ${verbatim(call.expression)};`,
+        segments: [...line.segments, span(call.expression, line.text.length + 1)],
+    })
     if (callee === 'state') {
         /* state<T>(initial): T is the value type — carry it onto the `let` so an
            explicit annotation isn't lost to `any`/`any[]` inference of the initial. */
@@ -297,13 +305,16 @@ function scopeLineFor(
                then correctly flagged possibly-undefined; a guard narrows cleanly. */
             const valueType = annotation === '' ? ': unknown' : `${annotation} | undefined`
             /* map the binding name (offset 4, past `let `) so hover/go-to resolve on it */
-            return { text: `let ${name}!${valueType};`, segments: [span(declaration.name, 4)] }
+            return withCalleeRef({
+                text: `let ${name}!${valueType};`,
+                segments: [span(declaration.name, 4)],
+            })
         }
         const prefix = `let ${name}${annotation} = (`
-        return {
+        return withCalleeRef({
             text: `${prefix}${verbatim(init)});`,
             segments: [span(declaration.name, 4), span(init, prefix.length)],
-        }
+        })
     }
     /* computed<T>(compute) / linked<T>(seed) — the only callees left: T is the value
        type — the call's first arg is a thunk, so invoking it yields the value. Annotate
@@ -317,16 +328,16 @@ function scopeLineFor(
     /* binding-name map offset = past the keyword + space (`let ` = 4, `const ` = 6) */
     const keywordOffset = keyword.length + 1
     if (fn === undefined) {
-        return {
+        return withCalleeRef({
             text: `${keyword} ${name} = undefined;`,
             segments: [span(declaration.name, keywordOffset)],
-        }
+        })
     }
     const prefix = `${keyword} ${name}${annotation} = (`
-    return {
+    return withCalleeRef({
         text: `${prefix}${verbatim(fn)})();`,
         segments: [span(declaration.name, keywordOffset), span(fn, prefix.length)],
-    }
+    })
 }
 
 /* Emits a sibling list — each node standalone via `emitNode`. */

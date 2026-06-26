@@ -16,10 +16,8 @@ settles).
 `value` is the decoded warm value served synchronously by the read path
 (cloned per read). It is set at hydration — the SSR snapshot body is
 pre-decoded so the first client render reads it without a microtask hop and
-byte-matches the SSR DOM — and also by cache.on's `context.patch`, which folds
-an authoritative frame delta straight onto it without a refetch (ADR-0007).
-Live fetches leave it undefined and take the async decode path until a patch
-populates it.
+byte-matches the SSR DOM. Live fetches leave it undefined and take the async
+decode path.
 
 `hydrated` marks an entry built from the SSR snapshot, which ships no wrap
 options — the first read consumes the flag and adopts its call site's `ttl`

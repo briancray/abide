@@ -1,6 +1,6 @@
 import { contentBodyKind } from './contentBodyKind.ts'
 import { contentTypeOf } from './contentTypeOf.ts'
-import { HttpError } from './HttpError.ts'
+import { httpErrorFor } from './httpErrorFor.ts'
 
 /*
 Decodes a Response into the natural body value based on Content-Type:
@@ -46,25 +46,4 @@ export async function decodeResponse(response: Response): Promise<unknown> {
         return response.text()
     }
     return response.blob()
-}
-
-/*
-Builds the HttpError for a non-2xx response, parsing a typed-error body
-(`{ $abideError, data }`, emitted by `error(errors.x(...))` and validation 422)
-onto `.kind` / `.data`. Reads a clone so the original `response.body` stays
-unread for callers that inspect it. A non-JSON or malformed body leaves
-`.kind` / `.data` undefined (a plain `error(status, text)`).
-*/
-async function httpErrorFor(response: Response): Promise<HttpError> {
-    if (contentBodyKind(contentTypeOf(response.headers)) === 'json') {
-        try {
-            const body = await response.clone().json()
-            if (body !== null && typeof body === 'object' && '$abideError' in body) {
-                return new HttpError(response, body.$abideError, body.data)
-            }
-        } catch {
-            /* malformed JSON error body — fall through to a plain HttpError */
-        }
-    }
-    return new HttpError(response)
 }

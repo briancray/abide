@@ -3,10 +3,12 @@ import { HOLE_ATTRIBUTE } from '../runtime/HOLE_ATTRIBUTE.ts'
 import { OUTLET_TAG } from '../runtime/OUTLET_TAG.ts'
 import { ANCHOR } from '../runtime/RANGE_MARKER.ts'
 import { asOutlet } from './asOutlet.ts'
+import { awaitPlan } from './awaitPlan.ts'
 import { bindListenEvent } from './bindListenEvent.ts'
 import { composeProps } from './composeProps.ts'
 import { destructureBindingNames } from './destructureBindingNames.ts'
 import { groupBindParts } from './groupBindParts.ts'
+import { ifPlan } from './ifPlan.ts'
 import { isControlFlow } from './isControlFlow.ts'
 import { isWhitespaceText } from './isWhitespaceText.ts'
 import { lowerContext } from './lowerContext.ts'
@@ -17,6 +19,8 @@ import { skeletonContext } from './skeletonContext.ts'
 import { spreadExcludedNames } from './spreadExcludedNames.ts'
 import { staticAttr } from './staticAttr.ts'
 import { staticTextPart } from './staticTextPart.ts'
+import { switchPlan } from './switchPlan.ts'
+import { tryPlan } from './tryPlan.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
 import { VOID_TAGS } from './VOID_TAGS.ts'
 
@@ -480,11 +484,8 @@ export function generateBuild(
         parentVar: string,
         before: string,
     ): string {
-        const cases = node.children
-            .filter(
-                (child): child is Extract<TemplateNode, { kind: 'case' }> => child.kind === 'case',
-            )
-            .map((branch) => {
+        const cases = switchPlan(node)
+            .cases.map((branch) => {
                 const match =
                     branch.match === undefined
                         ? 'undefined'
@@ -543,45 +544,26 @@ export function generateBuild(
         parentVar: string,
         before: string,
     ): string {
-        const [thenBranch, catchBranch, finallyBranch] = resolveBranches(
-            node,
-            'then',
-            'catch',
-            'finally',
-        )
-        const finallyChildren = finallyBranch?.children ?? []
-        /* Blocking: no pending, the children are the resolved branch bound to `node.as`.
-           Streaming: pending is the non-branch children, resolved is the `then` child. */
-        const pending = node.blocking
-            ? []
-            : node.children.filter((child) => child.kind !== 'branch')
+        const plan = awaitPlan(node)
         /* The resolved value is reactive: a re-settle updates it in place rather than
-           rebuilding the branch (see awaitBlock). The branch reads it as a `.value` cell. */
-        const thenThunk = node.blocking
-            ? branchThunk(
-                  node.children.filter((child) => child.kind !== 'branch'),
-                  node.as ?? '_value',
-                  finallyChildren,
-                  true,
-              )
-            : branchThunk(
-                  thenBranch?.children ?? [],
-                  thenBranch?.as ?? '_value',
-                  finallyChildren,
-                  true,
-              )
+           rebuilding the branch (see awaitBlock). The branch reads it as a `.value` cell.
+           Build settles blocking and streaming uniformly through `awaitBlock`, so the plan's
+           resolved content/binding feeds one thunk regardless of mode. */
+        const thenThunk = branchThunk(
+            plan.resolvedChildren,
+            plan.resolvedAs,
+            plan.finallyChildren,
+            true,
+        )
         /* Neither catch nor finally → pass `undefined` so awaitBlock re-throws the
            rejection (surfacing it) instead of rendering an empty branch. A finally-only
            block keeps a catch thunk that renders just finally. */
-        const catchThunk =
-            catchBranch === undefined && finallyChildren.length === 0
-                ? 'undefined'
-                : branchThunk(
-                      catchBranch?.children ?? [],
-                      catchBranch?.as ?? '_error',
-                      finallyChildren,
-                  )
-        const pendingThunk = hasRenderableContent(pending) ? branchThunk(pending) : 'undefined'
+        const catchThunk = plan.surfaceRejection
+            ? 'undefined'
+            : branchThunk(plan.catchChildren, plan.catchAs, plan.finallyChildren)
+        const pendingThunk = hasRenderableContent(plan.pending)
+            ? branchThunk(plan.pending)
+            : 'undefined'
         return (
             `awaitBlock(${parentVar}, nextBlockId(), () => (${lowerExpression(node.promise)}), ` +
             `${pendingThunk}, ` +
@@ -647,14 +629,11 @@ export function generateBuild(
         parentVar: string,
         before: string,
     ): string {
-        const [catchBranch, finallyBranch] = resolveBranches(node, 'catch', 'finally')
-        const finallyChildren = finallyBranch?.children ?? []
-        const guarded = node.children.filter((child) => child.kind !== 'branch')
-        const tryThunk = branchThunk(guarded, undefined, finallyChildren)
-        const catchThunk =
-            catchBranch === undefined
-                ? 'undefined'
-                : branchThunk(catchBranch.children, catchBranch.as ?? '_error', finallyChildren)
+        const plan = tryPlan(node)
+        const tryThunk = branchThunk(plan.guarded, undefined, plan.finallyChildren)
+        const catchThunk = plan.hasCatch
+            ? branchThunk(plan.catchChildren, plan.catchAs, plan.finallyChildren)
+            : 'undefined'
         return `tryBlock(${parentVar}, nextBlockId(), ${tryThunk}, ${catchThunk}, ${before});\n`
     }
 
@@ -667,25 +646,20 @@ export function generateBuild(
     ): string {
         /* The `case` children are the chain's `elseif`/`else` branches in source order;
            the rest are the `then` content. */
-        const branches = node.children.filter(
-            (child): child is Extract<TemplateNode, { kind: 'case' }> => child.kind === 'case',
-        )
-        const thenChildren = node.children.filter((child) => child.kind !== 'case')
-        const hasElseif = branches.some((branch) => branch.condition !== undefined)
+        const plan = ifPlan(node)
         /* Fast path: a plain `if` (with optional `else`) is the binary `when` runtime. */
-        if (!hasElseif) {
-            const elseBranch = branches.find((branch) => branch.condition === undefined)
-            const thenThunk = branchThunk(thenChildren)
+        if (!plan.hasElseif) {
+            const thenThunk = branchThunk(plan.thenChildren)
             const elseThunk =
-                elseBranch === undefined ? 'undefined' : branchThunk(elseBranch.children)
+                plan.elseBranch === undefined ? 'undefined' : branchThunk(plan.elseBranch.children)
             return `when(${parentVar}, () => (${lowerExpression(node.condition)}), ${thenThunk}, ${elseThunk}, ${before});\n`
         }
         /* if/elseif/else is a cond-chain — reuse `switchBlock` over a constant `true`
            subject with `Boolean`-coerced match thunks, so the first truthy branch wins
            (`else` is the match-less default). */
         const entries = [
-            `{ match: () => Boolean(${lowerExpression(node.condition)}), render: ${branchThunk(thenChildren)} }`,
-            ...branches.map((branch) =>
+            `{ match: () => Boolean(${lowerExpression(node.condition)}), render: ${branchThunk(plan.thenChildren)} }`,
+            ...plan.branches.map((branch) =>
                 branch.condition !== undefined
                     ? `{ match: () => Boolean(${lowerExpression(branch.condition)}), render: ${branchThunk(branch.children)} }`
                     : `{ match: undefined, render: ${branchThunk(branch.children)} }`,

@@ -43,7 +43,7 @@ either doc and the code disagree, change the doc, not the code.
 Exactly four sections, in this order. The first is the pitch; the next three
 are the foundational primitives, each a single artifact with the minimum prose
 to read it. The three artifacts form **one story**: §4's component imports the
-verb from §2 and the socket from §3. Target ~150 lines, ceiling ~180.
+RPC from §2 and the socket from §3. Target ~150 lines, ceiling ~180.
 
 ### 1. Intro
 
@@ -51,8 +51,9 @@ verb from §2 and the socket from §3. Target ~150 lines, ceiling ~180.
 * ≤ 2 sentences on what abide is: typed RPCs fan out to HTTP, a CLI, an MCP,
   and an OpenAPI spec from one declaration; the bundler swaps the runtime per
   side. Built for humans *and* machines.
-* The footprint bullet(s) true today (zero runtime dependencies; single
-  runtime).
+* The footprint bullet(s) true today (the direct-dependency footprint read
+  from `package.json` — one dep, TypeScript, at the time of writing; a single
+  runtime, Bun).
 * `## Quick start` — two paths: `bunx abide scaffold <name>` (state in a
   trailing comment that it scaffolds, installs, and starts dev only if the
   code still does all three), and the kitchen-sink clone (verify every command
@@ -68,15 +69,15 @@ The artifacts argue; prose doesn't.
   the URL, the schema validates args and projects the MCP tool, CLI flags, and
   OpenAPI operation. Standard Schema is the contract (zod / valibot / arktype,
   unadapted).
-* One `GET` example (a `getMessages`-style verb with an `inputSchema`).
-* The **fan-out diagram** — one declared verb branching to: SSR call
+* One `GET` example (a `getMessages`-style RPC with an `inputSchema`).
+* The **fan-out diagram** — one declared RPC branching to: SSR call
   (`cache(fn)()`), browser fetch (typed proxy), MCP tool, CLI subcommand,
   OpenAPI op. This diagram is the whole premise; keep it.
-* The gating note: a schema unlocks the CLI and (for read-only verbs) MCP; a
-  mutating verb never auto-exposes to MCP — it needs explicit
-  `clients: { mcp: true }`. Note the consume forms (`cache(fn)()` in-process,
-  swapped `fetch` in the browser, `.raw(args)`, `.stream(args)`).
-* `> ` warning: query args travel as strings — use `z.coerce.*`. The per-verb
+* The gating note: a schema unlocks the CLI and (for read-only methods, GET/HEAD)
+  MCP; a mutating method (POST/PUT/PATCH/DELETE) never auto-exposes to MCP — it
+  needs explicit `clients: { mcp: true }`. Note the consume forms (`cache(fn)()`
+  in-process, swapped `fetch` in the browser, `.raw(args)`, `.stream(args)`).
+* `> ` warning: query args travel as strings — use `z.coerce.*`. The per-RPC
   `timeout` (504, every surface) is distinct from `ABIDE_CLIENT_TIMEOUT`.
 
 ### 3. Sockets
@@ -90,19 +91,21 @@ The artifacts argue; prose doesn't.
 
 ### 4. Components — the full template
 
-The payoff: **one `.abide` component that imports the §2 verb and §3 socket**
+The payoff: **one `.abide` component that imports the §2 RPC and §3 socket**
 and exercises most of the template grammar in a single realistic page. Keep it
 to one snippet. It should show, in order:
 
-* `<script>` — imports (`cache`, `tail`, the rpc verbs and socket via `$server/…`,
-  a child component via `$ui/…`), `prop(...)` reads, reactive reads through
-  `scope().computed(...)`, local `scope().state(...)`, and an event handler that
-  calls a mutating verb.
-* a `<template name="…" args={…}>` snippet (reusable builder).
+* `<script>` — imports (`cache`, `tail`, the rpc + socket via `$server/…`,
+  a child component via `$ui/…`), `props()` destructure reads, reactive reads
+  through `scope().computed(...)`, local `scope().state(...)`, and an event
+  handler that calls a mutating RPC.
+* a `<template name="…" args={…}>` snippet (reusable builder), called as
+  `{name(args)}`.
 * a `<form>` with `bind:value` / `bind:checked` / `bind:group` and a
   `disabled={…}` button.
-* `<template if>`/`<template else>`, `<template switch>`/`case`/`default`,
-  `<template await>`/`then`/`catch` wrapping `<template each={…} as="…" key="…">`.
+* the mustache control-flow blocks: `{#if}`/`{:else}`,
+  `{#switch}`/`{:case}`/`{:default}`, `{#await}`/`{:then}`/`{:catch}` wrapping
+  `{#for item of list by key}` … `{/for}`.
 * a component-scoped `<style>`.
 
 Close the file with a single `MIT` line.
@@ -132,10 +135,11 @@ is the editorial layer):
 * **CLI** — table (command → does) for every `abide <cmd>`; the `bun test`
   preload line.
 * **Authoring contracts** — the shape of the code each convention path holds and
-  the contract enforced: the RPC verb (handler receives `InferOutput<inputSchema>`,
+  the contract enforced: the RPC (handler receives `InferOutput<inputSchema>`,
   reads `request()`/`cookies()`, returns `json`/`jsonl`/`sse`/`error`/`redirect`/raw
   `Response`; the `opts` fields incl. `clients: { browser, mcp, cli }`,
-  `crossOrigin`, `timeout`, `filesSchema`; the `z.coerce` query-arg rule; the four
+  `crossOrigin`, `timeout`, `maxBodySize`, `filesSchema`, `outbox`; the `z.coerce`
+  query-arg rule; the four
   consume forms), the socket, page/layout (`[id]` → `page.params`, layout outlet,
   `url`/`navigate`), `app.ts`/`config.ts`, and the isomorphism move (`cache()` for
   warm hydration). Read each contract from the source types — do not invent.
@@ -143,11 +147,15 @@ is the editorial layer):
   (`scope`, `props`, `effect`, `html`, `snippet`), then tables for reactive state
   (`scope().state/.computed/.linked`, `effect`, `props()`), bindings (`{expr}`,
   `name={expr}`, `on<event>`, `bind:value/checked/group`, `bind:value={{get,set}}`),
-  and control flow (`if/elseif/else`, `each as/key`, `await/then/catch/finally`,
-  `switch/case/default`, `try`, snippet `name`/`args`), plus components + slots.
-  Re-derive the directive set from `compile/parseTemplate.ts` / `isControlFlow.ts`;
-  read real `.abide` files for syntax, never write Svelte. (CLAUDE.md mandates this
-  section.)
+  and control flow — the mustache blocks `{#if}`/`{:elseif}`/`{:else}`/`{/if}`,
+  `{#for item of list by key}`/`{/for}` (`item, i of list`; `{#for await x of …}`),
+  `{#await}`/`{:then}`/`{:catch}`/`{:finally}`/`{/await}`,
+  `{#switch}`/`{:case}`/`{:default}`/`{/switch}`, `{#try}`/`{:catch}`/`{/try}` —
+  and the snippet `<template name args>` (called `{name(args)}`), plus
+  components + slots. `<template>` is ONLY the snippet form; control flow is the
+  `{#…}` blocks, never a `<template if>` attribute. Re-derive the directive set
+  from `compile/parseTemplate.ts` / `isControlFlow.ts`; read real `.abide` files
+  for syntax, never write Svelte. (CLAUDE.md mandates this section.)
 * **Surface sections, grouped by namespace** — `## Server surface —
   abide/server/*`, `## Isomorphic surface — abide/shared/*`, `## UI surface —
   abide/ui/* (client-only)`, then `## Build / tooling`, `## Desktop bundle`,
@@ -172,19 +180,22 @@ env var, and route the inventory reports must land somewhere here.
 Read these from real `.abide` files in `examples/`; never write Svelte syntax.
 
 * **Reactive state is reached only through `scope()`**: `scope().state(v)`,
-  `scope().computed(fn)` (read-only), `scope().linked(...)`. Bare
-  `state`/`computed`/`linked`/`derived` no longer exist and are a compile
-  error — a writable computed is expressed at the binding
-  (`bind:value={{ get, set }}`). `prop(name)` and `effect(fn)` remain plain
-  in-scope functions (no import, no `scope()`). These are functions, **not**
-  `$state`/`$derived`.
-* Control flow is native `<template>`: `<template if>`/`<template elseif>`/`<template else>`,
-  `<template each={…} as="x" key="x">`, `<template await={p}>`/
-  `<template then="v">`/`<template catch="e">`, `<template switch>`/`case`/
-  `default`. `{expr}` text, `name={expr}` attrs, `onclick={fn}`,
-  `bind:value={x}`. Components are capitalised tags filling a `<slot>`;
-  `<style>` is component-scoped. Component files end in `.abide`, never
-  `.svelte`.
+  `scope().computed(fn)` (read-only), `scope().linked(...)`, `scope().effect(fn)`
+  (client-only, stripped from SSR). Bare `state`/`computed`/`linked`/`effect`/
+  `derived` are a compile error (a writable computed is expressed at the binding,
+  `bind:value={{ get, set }}`) — though a top-level `const { state, computed } =
+  scope()` destructure lets you then call them bare. `props()` is the ambient
+  prop reader (`const { name = fallback, ...rest } = props()`, no import, no
+  `scope()`). These are functions, **not** `$state`/`$derived`.
+* Control flow is **mustache blocks**, not `<template>`: `{#if}`/`{:elseif}`/
+  `{:else}`/`{/if}`, `{#for item of list by key}`/`{/for}` (with `item, i of list`,
+  and `{#for await x of source}` over an AsyncIterable), `{#await p}`/`{:then v}`/
+  `{:catch e}`/`{:finally}`/`{/await}`, `{#switch}`/`{:case}`/`{:default}`/
+  `{/switch}`, `{#try}`/`{:catch}`/`{/try}`. `<template name args>` is ONLY the
+  snippet form (called `{name(args)}`) — there is no `<template if>`. `{expr}`
+  text, `name={expr}` attrs, `onclick={fn}`, `bind:value={x}`. Components are
+  capitalised tags filling a `<slot>`; `<style>` is component-scoped. Component
+  files end in `.abide`, never `.svelte`.
 
 ## Validation pass — run before finishing
 
@@ -208,7 +219,7 @@ Read these from real `.abide` files in `examples/`; never write Svelte syntax.
    bun run packages/abide/scripts/readmeSurfaces.ts
    ```
 
-3. **One story (README)**: the §4 component imports the §2 verb and the §3
+3. **One story (README)**: the §4 component imports the §2 RPC and the §3
    socket — the three artifacts connect, not three disconnected snippets.
 4. **Budget**: README `wc -l` ≤ 180. AGENTS.md has no ceiling — length is
    whatever completeness requires.

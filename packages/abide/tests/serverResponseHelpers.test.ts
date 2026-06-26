@@ -161,7 +161,10 @@ describe('HttpError', () => {
         expect(httpError.name).toBe('HttpError')
         expect(httpError.status).toBe(404)
         expect(httpError.response).toBe(response)
-        expect(httpError.message).toBe('HTTP 404 error')
+        /* error() stamps the standard reason phrase as statusText (Bun won't derive it),
+           so HttpError surfaces it on both .statusText and the message. */
+        expect(httpError.statusText).toBe('Not Found')
+        expect(httpError.message).toBe('HTTP 404 Not Found')
     })
 })
 

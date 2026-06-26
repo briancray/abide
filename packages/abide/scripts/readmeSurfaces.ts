@@ -91,6 +91,37 @@ for (const [key, relative] of Object.entries(exportsMap)) {
     bySlug.set(tag, [...(bySlug.get(tag) ?? []), key])
 }
 
+/* 1b. sub-methods hung off an exported object — the cache.patch class. The
+   per-file @documentation tag covers the export itself, not the methods assigned
+   to it (cache.invalidate, tail.status), so a new sub-method drifts undocumented
+   silently — exactly how cache.patch shipped unlisted in the surface map. Walk
+   each exported symbol's own file for `symbol.method =` assignments and cross-ref
+   the AGENTS.md surface map; an absent one is undocumented surface — hard failure,
+   symmetric with an untagged export. Object.assign-composed exports (outbox, log)
+   merge members through brace-bodied literals that don't regex cleanly, so they
+   are reported for a manual members check rather than gated. */
+const agents = await Bun.file(`${ROOT}AGENTS.md`).text()
+const undocumentedSubmethods: string[] = []
+const assignComposed: string[] = []
+for (const [key, relative] of Object.entries(exportsMap)) {
+    const rel = (relative as string).replace(/^\.\//, '')
+    if (!rel.endsWith('.ts')) {
+        continue
+    }
+    // one export per file, named after the export (project rule), so the path leaf is the symbol
+    const symbol = key.split('/').at(-1) as string
+    const source = await Bun.file(ROOT + rel).text()
+    for (const match of source.matchAll(new RegExp(`^${symbol}\\.([a-zA-Z]\\w*)\\s*=`, 'gm'))) {
+        const ref = `${symbol}.${match[1]}`
+        if (!agents.includes(ref)) {
+            undocumentedSubmethods.push(`${ref}  (${key})`)
+        }
+    }
+    if (new RegExp(`export const ${symbol}\\b[^\\n]*Object\\.assign\\(`).test(source)) {
+        assignComposed.push(`${symbol}  (${key})`)
+    }
+}
+
 /* 2. env + routes from source */
 const grep = async (pattern: string) =>
     (await run(['grep', '-rhoE', pattern, 'packages/abide/src'])).split('\n').filter(Boolean)
@@ -158,13 +189,23 @@ section(
 )
 section(`source surfaces changed since README (${lastReadmeCommit.slice(0, 7)})`, changedSurfaces)
 section('pending changesets (each needs a disposition)', changesets.join('\n'))
+section('Object.assign-composed exports (verify members are documented)', assignComposed.join('\n'))
 
-if (untagged.length > 0) {
-    console.error(
-        `\nFAIL: ${untagged.length} export(s) with no @documentation tag — a new capability with no home:\n` +
-            untagged.map((key) => `  ${key}`).join('\n') +
-            `\nAdd a // @documentation <slug> line above each export, then place it at that group.`,
-    )
+if (untagged.length > 0 || undocumentedSubmethods.length > 0) {
+    if (untagged.length > 0) {
+        console.error(
+            `\nFAIL: ${untagged.length} export(s) with no @documentation tag — a new capability with no home:\n` +
+                untagged.map((key) => `  ${key}`).join('\n') +
+                `\nAdd a // @documentation <slug> line above each export, then place it at that group.`,
+        )
+    }
+    if (undocumentedSubmethods.length > 0) {
+        console.error(
+            `\nFAIL: ${undocumentedSubmethods.length} sub-method(s) absent from AGENTS.md — surface hung off an export, undocumented (the cache.patch class):\n` +
+                undocumentedSubmethods.map((ref) => `  ${ref}`).join('\n') +
+                `\nDocument each in AGENTS.md beside its export, or remove it if it is not real surface.`,
+        )
+    }
     process.exit(1)
 }
-console.log('\nOK: every export carries an @documentation disposition.')
+console.log('\nOK: every export and exported sub-method carries a documentation disposition.')

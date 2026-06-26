@@ -247,8 +247,9 @@ export function abideResolverPlugin({
     return {
         name: 'abide-resolver',
         setup(build) {
-            /* Fresh edge graph each build (dev watch reuses the plugin instance). */
-            build.onStart(() => {
+            /* Fresh edge graph each build (dev watch reuses the plugin instance).
+               onStart is build-time only — absent in the runtime/preload plugin context. */
+            build.onStart?.(() => {
                 importerOf.clear()
             })
 
@@ -366,7 +367,7 @@ export function abideResolverPlugin({
                 */
                 if (target === 'client') {
                     /* A durable rpc (`outbox: true`) gets the third arg so its client proxy
-                       queues instead of fetching immediately. */
+                       parks unreachable calls onto the outbox. */
                     const durableArg = prepared.durable ? ', { outbox: true }' : ''
                     const contents = `import { remoteProxy as __abideRemoteProxy__ } from '${importName}/ui/remoteProxy';
 export const ${prepared.exportName} = __abideRemoteProxy__(${JSON.stringify(prepared.method)}, ${JSON.stringify(url)}${durableArg});

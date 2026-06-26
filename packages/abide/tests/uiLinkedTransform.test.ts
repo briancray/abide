@@ -198,13 +198,33 @@ describe('explicit scope().X authoring surface', () => {
     })
 
     test('a bare reactive call is a compile error pointing at scope()', () => {
-        for (const primitive of ['state', 'linked', 'computed']) {
+        for (const primitive of ['state', 'linked', 'computed', 'effect']) {
             const source = `<script>const x = ${primitive}(0)</script><p>{x}</p>`
             expect(() => compileComponent(source)).toThrow(/lives on a scope/)
         }
         // `prop` stays bare — it reads parent props, not scope data
         expect(() =>
             compileComponent(`<script>const { id } = props()</script><p>{id}</p>`),
+        ).not.toThrow()
+    })
+
+    test('scope().effect passes through to the runtime effect and lowers its reads', () => {
+        const body = compileComponent(`
+            <script>
+                const count = scope().state(0)
+                scope().effect(() => console.log(count))
+            </script>
+            <p>{count}</p>
+        `)
+        expect(body).toContain('scope().effect(') // the reaction stays a runtime call
+        expect(body).toContain('model.read("count")') // its reads lower like any other
+    })
+
+    test('a destructured effect used bare does not trip the scope() guard', () => {
+        expect(() =>
+            compileComponent(
+                `<script>const { effect } = scope()\neffect(() => {})</script><p>x</p>`,
+            ),
         ).not.toThrow()
     })
 

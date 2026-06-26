@@ -1,6 +1,7 @@
 <script>
 import { HttpError } from '@abide/abide/shared/HttpError'
 import { boom } from '$server/rpc/boom.ts'
+import { checkout } from '$server/rpc/checkout.ts'
 import { getEcho } from '$server/rpc/getEcho.ts'
 import { getProduct } from '$server/rpc/getProduct.ts'
 import CodeBlock from '$ui/CodeBlock.abide'
@@ -9,6 +10,36 @@ const { state } = scope()
 let outcome404 = state('(not triggered)')
 let outcome405 = state('(not triggered)')
 let outcome500 = state('(not triggered)')
+let outcomeTyped = state('(not triggered)')
+let outcomeValidation = state('(not triggered)')
+
+// A declared error: checkout.isError narrows kind AND types data from checkout's own spec — no cast.
+async function triggerTyped() {
+    try {
+        await checkout({ sku: 'abide-mug', quantity: 3 })
+        outcomeTyped = '(no error?)'
+    } catch (err) {
+        if (checkout.isError(err, 'outOfStock')) {
+            outcomeTyped = `kind=${err.kind} (${err.status}) — ${err.data.sku} has ${err.data.available} left`
+        } else {
+            outcomeTyped = String(err)
+        }
+    }
+}
+
+// A schema failure: checkout.isError(err, 'validation') types data as ValidationErrorData, no cast.
+async function triggerValidation() {
+    try {
+        await checkout({ sku: 'abide-tee', quantity: 0 })
+        outcomeValidation = '(no error?)'
+    } catch (err) {
+        if (checkout.isError(err, 'validation')) {
+            outcomeValidation = `kind=${err.kind} (${err.status}) — quantity: ${err.data.fields.quantity}`
+        } else {
+            outcomeValidation = String(err)
+        }
+    }
+}
 
 async function trigger404() {
     try {
@@ -45,7 +76,10 @@ async function trigger500() {
     Non-2xx comes back through the same call site as the success path.
     <code class="font-mono">HttpError</code> carries <code class="font-mono">status</code>,
     <code class="font-mono">statusText</code>, and the raw <code class="font-mono">response</code>.
-    All error responses are <code class="font-mono">Cache-Control: no-store</code>.
+    A <em>typed</em> error — a declared <code class="font-mono">errors</code> entry or a validation
+    422 — also carries <code class="font-mono">.kind</code> (the error name) and
+    <code class="font-mono">.data</code> (its payload). All error responses are
+    <code class="font-mono">Cache-Control: no-store</code>.
 </p>
 
 <section class="mt-6">
@@ -74,6 +108,26 @@ async function trigger500() {
                     <td class="px-4 py-2 text-slate-600">wrong rpc sent to a known URL</td>
                     <td class="px-4 py-2 text-slate-600">
                         framework adds <code class="font-mono">Allow</code> header
+                    </td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">409</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        handler returns <code class="font-mono">error(errors.outOfStock(…))</code>
+                    </td>
+                    <td class="px-4 py-2 text-slate-600">
+                        typed: <code class="font-mono">.kind</code> +
+                        <code class="font-mono">.data</code>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">422</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        <code class="font-mono">inputSchema</code> rejects the args
+                    </td>
+                    <td class="px-4 py-2 text-slate-600">
+                        <code class="font-mono">kind: 'validation'</code>, data =
+                        <code class="font-mono">ValidationErrorData</code>
                     </td>
                 </tr>
                 <tr>
@@ -109,11 +163,25 @@ async function trigger500() {
             onclick={trigger500}>
             boom() → 500
         </button>
+        <button
+            type="button"
+            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+            onclick={triggerTyped}>
+            {"checkout({ sku: 'abide-mug', quantity: 3 }) → 409 typed"}
+        </button>
+        <button
+            type="button"
+            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+            onclick={triggerValidation}>
+            {'checkout({ quantity: 0 }) → 422 validation'}
+        </button>
     </div>
     <ul class="mt-3 space-y-1 font-mono text-xs text-slate-700">
         <li>404:{outcome404}</li>
         <li>405:{outcome405}</li>
         <li>500:{outcome500}</li>
+        <li>409:{outcomeTyped}</li>
+        <li>422:{outcomeValidation}</li>
     </ul>
 </section>
 
@@ -141,6 +209,32 @@ try {
 } catch (err) {
     if (err instanceof HttpError && err.status === 404) {
         // err.response is the underlying Response
+    }
+}`} />
+
+    <CodeBlock title="src/server/rpc/checkout.ts — a declared typed error" code={`import { error } from '@abide/abide/server/error'
+import { json } from '@abide/abide/server/json'
+import { POST } from '@abide/abide/server/POST'
+import { z } from 'zod'
+
+const inputSchema = z.object({ sku: z.string(), quantity: z.coerce.number().int().min(1) })
+const errors = {
+    outOfStock: { status: 409, data: z.object({ sku: z.string(), available: z.number() }) },
+} as const
+
+export const checkout = POST(({ sku, quantity }, { errors }) => {
+    const available = stock[sku] ?? 0
+    if (quantity > available) return error(errors.outOfStock({ sku, available }))
+    return json({ ok: true, sku, quantity })
+}, { inputSchema, errors })`} />
+
+    <CodeBlock title="client — checkout.isError narrows kind + data" code={`try {
+    await checkout({ sku: 'abide-mug', quantity: 3 })
+} catch (err) {
+    if (checkout.isError(err, 'outOfStock')) {
+        err.data.available // typed from checkout's errors spec — no cast
+    } else if (checkout.isError(err, 'validation')) {
+        err.data.fields.quantity // ValidationErrorData — no cast
     }
 }`} />
 </section>

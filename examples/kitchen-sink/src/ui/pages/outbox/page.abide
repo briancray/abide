@@ -25,7 +25,7 @@ let dropped = state<Message[]>([])
 // Reconcile permanent failures once each: a non-reactive set keys off the entry id so
 // aborting (which removes the entry and re-runs this effect) can't re-process it.
 const reconciled = new Set<string>()
-effect(() => {
+scope().effect(() => {
     for (const entry of saveMessage.outbox()) {
         if (entry.status === 'error' && !reconciled.has(entry.args.id)) {
             reconciled.add(entry.args.id)

@@ -1,4 +1,5 @@
 import type { computed } from '../computed.ts'
+import type { effect } from '../effect.ts'
 import type { linked } from '../linked.ts'
 import type { Cell } from '../runtime/types/Cell.ts'
 import type { Patch } from '../runtime/types/Patch.ts'
@@ -35,14 +36,28 @@ export type Scope = {
     cell: <T>(path: string) => Cell<T>
     derive: <T>(path: string, compute: () => T) => () => T
     snapshot: () => unknown
-    /* the `.value`-cell signal forms, reachable only through a scope (the standalone
-       `state`/`linked`/`computed` are no longer exported): a writable `state(x, transform)`
-       gate, a reseeding `linked`, and the read-only `computed(compute)`. A writable
-       computed does not exist — that write is expressed at the binding (`bind:value={{
-       get, set }}`). The serializable computed doc slot is `derive` above. */
+    /* The reactive primitives — namespaced under the scope, but AMBIENT-bound, not
+       receiver-bound (unlike the data methods above, which act on THIS scope's doc).
+       `state`/`linked`/`computed`/`effect` create their cell in whatever scope is currently
+       rendering and own their teardown to the finest ambient BUILD WINDOW — a control-flow
+       branch or list row, not the whole component. So `someScope.computed(fn)` does NOT
+       create state in someScope; the receiver is namespacing only, the cells bind the
+       ambient window. Binding them to the receiver instead would leak a branch-local cell
+       past a branch flip (the build window is finer-grained than the lexical scope — see
+       ADR-0012). Forms: a writable `state(x, transform)` gate, a reseeding `linked`, the
+       read-only `computed(compute)` (a writable computed does not exist — that write is
+       expressed at the binding `bind:value={{ get, set }}`; the serializable computed doc
+       slot is `derive` above), and `effect`, the reaction re-run on dep change (the SSR
+       back-end strips it — effects are client lifecycle). */
     state: typeof state
     linked: typeof linked
     computed: typeof computed
+    effect: typeof effect
+    /* Adopts a teardown into this scope's lifetime — the build's reactivity stopper
+       (effects/listeners), run first on `dispose` (before children, before capabilities).
+       Internal: the mount core registers the build's disposer here so a component has ONE
+       teardown (`dispose`) rather than a separate stop + dispose composed at every site. */
+    own: (dispose: () => void) => void
     /* tree */
     child: (initial?: unknown) => Scope
     root: () => Scope

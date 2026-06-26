@@ -79,6 +79,32 @@ coalesce like everything else.)
 **Streaming protocol**
 The SSR→client agreement for pending `{#await}` reads: the document ships `__SSR__.streaming` placeholders (`StreamingPlaceholder`) plus a single-use `streamToken`; the resolve channel (`RESOLVE_STREAM_PATH`) streams one `StreamedResolution` per entry — a `CacheSnapshotEntry` to settle warm, or a `{ key, miss }` marker meaning "re-fetch live". Keys derive from the route template via `keyForRemoteCall` on both sides. The protocol's shapes live in `lib/shared/types/`; its enforcement is the round-trip contract test (`tests/streamingRoundTrip.test.ts`), which feeds the server half's real output into the browser half. Streaming-vs-inline is chosen by `await` vs `{#await}` in the component — never by an option.
 
+## Reactivity
+
+**Lexical scope**
+The *component*-granular reactive unit (`Scope`, established per lexical level by
+the compiler via `CURRENT_SCOPE`/`withScope`). Owns a region's reactive doc, its
+boundary-crossing capabilities (`record`/`persist`/`broadcast`), its context
+(`share`/`shared`), its identity (`id`), and an explicit `child()` tree. `scope()`
+is the sole public entry; everything else is a method reached through it. Its data
+methods (`read`/`replace`/`cell`/`derive`/…) are receiver-bound to that scope's
+doc.
+
+**Build window**
+The *finest*-granular ownership unit (`OWNER`/`scopeGroup`/`runtime/scope.ts`):
+the disposers collected during one synchronous build — a component, but equally a
+control-flow branch or a list row. Distinct from the lexical scope on purpose: a
+reactive cell built in a branch must die when the **branch** flips, which is finer
+than the component the lexical scope spans (see ADR-0012). The reactive primitives
+(`state`/`linked`/`computed`/`effect`) bind the ambient build window, not the
+lexical receiver — so `someScope.computed(fn)` does not create state in someScope.
+
+**Adoption**
+A lexical scope created in `awaiting` mode takes its doc from the first `doc()`
+its component body creates, rather than minting one eagerly — so the compiler
+emits one data-lowering whether or not a component owns a scope. A body that never
+creates a `doc()` mints an empty one lazily on first data access.
+
 ## Agents
 
 **Engine**

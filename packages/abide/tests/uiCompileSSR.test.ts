@@ -44,6 +44,22 @@ describe('compileSSR — server render to string', () => {
         expect(result.state).toEqual({ count: 2, items: ['a', 'b'] })
     })
 
+    test('scope().effect is stripped from the SSR body (effects are client-only)', () => {
+        const source = `
+            <script>
+                let count = scope().state(0)
+                scope().effect(() => {
+                    throw new Error('effects must not run during SSR')
+                })
+            </script>
+            <p>{count}</p>
+        `
+        const body = compileSSR(source)
+        expect(body).not.toContain('.effect(') // the reaction call is removed
+        // it renders without ever invoking the effect body
+        expect(render(source).html).toBe('<p>0</p>')
+    })
+
     test('a falsy if renders an empty range', () => {
         const result = render(`
             <script>let show = scope().state(false)</script>

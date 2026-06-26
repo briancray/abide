@@ -1,5 +1,4 @@
 import type { ClientFlags } from '../../../shared/types/ClientFlags.ts'
-import type { DurableRpc } from '../../../shared/types/DurableRpc.ts'
 import type { ErrorSpec } from '../../../shared/types/ErrorSpec.ts'
 import type { RemoteFunction } from '../../../shared/types/RemoteFunction.ts'
 import type { StandardSchemaV1 } from '../../../shared/types/StandardSchemaV1.ts'
@@ -10,7 +9,8 @@ Options every rpc overload accepts: the OpenAPI 200 `outputSchema`, the
 `clients` surface flags, the same-origin CSRF exemption (`crossOrigin`), the
 pre-parse body-byte ceiling (`maxBodySize`), and the per-surface handler
 `timeout` (ms). The schema-bearing overloads intersect this with their own
-`inputSchema`/`filesSchema` members.
+`inputSchema`/`filesSchema` members. Mutating helpers widen it with `outbox`
+(see MutatingRpcOpts) — a read RPC never accepts it.
 */
 type RpcBaseOpts = {
     outputSchema?: StandardSchemaV1
@@ -18,8 +18,18 @@ type RpcBaseOpts = {
     crossOrigin?: boolean
     maxBodySize?: number
     timeout?: number
-    /* Local-first durability (mutating RPCs only). When `true`, the call queues durably
-       and returns a cancelable entry — see the durable overloads, which fire first. */
+}
+
+/*
+Mutating-helper options: the shared base plus durable delivery. `outbox` lives
+here, not on RpcBaseOpts, because a read RPC has nothing to durably deliver —
+so `GET(fn, { outbox: true })` is a compile error, not the runtime throw it used
+to be. Keeps the type surface honest with the defineRpc guard.
+*/
+type MutatingRpcOpts = RpcBaseOpts & {
+    /* Durable delivery: on an unreachable server the call still throws, and the request is
+       parked for replay. Drains on `rpc.outbox.retry()` — no auto-drain. The call shape is
+       unchanged — `rpc.outbox` exposes the queue. */
     outbox?: boolean
 }
 
@@ -51,7 +61,7 @@ Shared signature for every rpc helper (GET / POST / …). Three overloads:
     type; `Return` is usually inferred via the `TypedResponse<T>` brand on
     `json`/`error`/`redirect`/`jsonl`/`sse`.
 */
-export type RpcHelper = {
+type RpcHelperOf<Opts> = {
     /*
     `Rpc(fn, { inputSchema, filesSchema, … })` — multipart upload. The
     handler receives the text fields (`InferOutput<InputSchema>`) intersected
@@ -72,52 +82,37 @@ export type RpcHelper = {
             Return,
             Errors
         >,
-        opts: RpcBaseOpts & {
+        opts: Opts & {
             inputSchema: InputSchema
             filesSchema: FilesSchema
             errors?: Errors
         },
-    ): RemoteFunction<StandardSchemaV1.InferInput<InputSchema>, Return>
+    ): RemoteFunction<StandardSchemaV1.InferInput<InputSchema>, Return, Errors>
     <
         Return = unknown,
         InputSchema extends StandardSchemaV1 = StandardSchemaV1,
         Errors extends ErrorSpec = Record<string, never>,
     >(
         fn: RemoteHandler<StandardSchemaV1.InferOutput<InputSchema>, Return, Errors>,
-        opts: RpcBaseOpts & { inputSchema: InputSchema; errors?: Errors },
-    ): RemoteFunction<StandardSchemaV1.InferInput<InputSchema>, Return>
+        opts: Opts & { inputSchema: InputSchema; errors?: Errors },
+    ): RemoteFunction<StandardSchemaV1.InferInput<InputSchema>, Return, Errors>
     <Args = undefined, Return = unknown, Errors extends ErrorSpec = Record<never, never>>(
         fn: RemoteHandler<Args, Return, Errors>,
-        opts: RpcBaseOpts & { errors?: Errors },
-    ): RemoteFunction<Args, Return>
+        opts: Opts & { errors?: Errors },
+    ): RemoteFunction<Args, Return, Errors>
     <Args = undefined, Return = unknown>(
         fn: RemoteHandler<Args, Return>,
     ): RemoteFunction<Args, Return>
 }
 
-/*
-The durable (`outbox: true`) overloads — only mutating helpers (POST/PUT/PATCH/DELETE)
-carry them (a read rpc can't be durable). The call enqueues and returns the cancelable
-`OutboxEntry` (see DurableRpc): with an inputSchema the entry's `args` type is
-`InferInput`; schemaless, it's the handler's `Args`.
-*/
-type DurableOverloads = {
-    <
-        Return = unknown,
-        InputSchema extends StandardSchemaV1 = StandardSchemaV1,
-        Errors extends ErrorSpec = Record<string, never>,
-    >(
-        fn: RemoteHandler<StandardSchemaV1.InferOutput<InputSchema>, Return, Errors>,
-        opts: RpcBaseOpts & { inputSchema: InputSchema; errors?: Errors; outbox: true },
-    ): DurableRpc<StandardSchemaV1.InferInput<InputSchema>>
-    <Args = undefined, Return = unknown, Errors extends ErrorSpec = Record<never, never>>(
-        fn: RemoteHandler<Args, Return, Errors>,
-        opts: RpcBaseOpts & { errors?: Errors; outbox: true },
-    ): DurableRpc<Args>
-}
+/* The read helpers (GET/HEAD): no `outbox` — a read has nothing to durably deliver. */
+export type RpcHelper = RpcHelperOf<RpcBaseOpts>
 
 /*
-The type of the mutating helpers. Intersecting puts the durable overloads FIRST, so
-`outbox: true` selects them; everything else falls through to RpcHelper's shapes.
+The mutating helpers (POST/PUT/PATCH/DELETE). A durable (`outbox`) call is a normal
+RemoteFunction — it throws exactly like a non-durable one and only parks the request as a
+side-effect on an unreachable server — so there is no separate return shape; `outbox` rides
+MutatingRpcOpts and `rpc.outbox` exposes the queue. The distinct opts base is what makes
+`outbox` legal here and a compile error on the read helpers.
 */
-export type MutatingRpcHelper = DurableOverloads & RpcHelper
+export type MutatingRpcHelper = RpcHelperOf<MutatingRpcOpts>

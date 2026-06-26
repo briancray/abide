@@ -1,6 +1,6 @@
 # ADR-0007: cache.on gains context.patch — fold server-pushed deltas without refetching
 
-**Status:** accepted (2026-06-13)
+**Status:** reverted (2026-06-26) — `context.patch` was removed alongside `cache.patch` (see ADR-0009): both were undocumented orphan surface, pulled pending a fuller revisit of the patch/fold story. `cache.on`'s `invalidate` + reconnect coverage remain. This record is retained for that revisit. Originally accepted (2026-06-13).
 
 ## Context
 

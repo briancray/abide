@@ -4,9 +4,12 @@ import { REACTIVE_CALLEES } from './REACTIVE_CALLEES.ts'
 const factory = ts.factory
 
 /* The reactive primitives that must be reached through a scope. A bare call to one of
-   these is a compile error: reactive state is owned by a scope and the surface must show
-   it (`scope().state(...)`), so a reader always sees the scope interaction. */
-const SCOPE_PRIMITIVES: ReadonlySet<string> = new Set(['state', 'linked', 'computed'])
+   these is a compile error: a reactive primitive is owned by a scope and the surface must
+   show it (`scope().state(...)`), so a reader always sees the scope interaction. `effect`
+   is here too — a reaction is scope-owned (it tears down with the scope), so it joins the
+   one surface; unlike the cells it stays a runtime call (`scope().effect(...)` passes
+   through to the `effect` helper), not a doc slot. */
+const SCOPE_PRIMITIVES: ReadonlySet<string> = new Set(['state', 'linked', 'computed', 'effect'])
 
 /* The primitive names a top-level `const { state, computed } = scope()` destructure binds.
    Such a name is scope-bound — its bare call below is the destructured method, not a stray
@@ -50,7 +53,7 @@ function assertScopedPrimitives(source: ts.SourceFile): void {
             const name = node.expression.text
             if (SCOPE_PRIMITIVES.has(name) && !scopeBound.has(name)) {
                 throw new Error(
-                    `abide: bare \`${name}(...)\` is not allowed — reactive state lives on a scope. Use \`scope().${name}(...)\` (or a captured handle: \`const s = scope(); s.${name}(...)\`).`,
+                    `abide: bare \`${name}(...)\` is not allowed — a reactive primitive lives on a scope. Use \`scope().${name}(...)\` (or a captured handle: \`const s = scope(); s.${name}(...)\`).`,
                 )
             }
             if (name === 'prop') {

@@ -1,8 +1,10 @@
 import type { ClientFlags } from './ClientFlags.ts'
+import type { ErrorSpec } from './ErrorSpec.ts'
 import type { HttpMethod } from './HttpMethod.ts'
-import type { OutboxEntry } from './OutboxEntry.ts'
+import type { Outbox } from './Outbox.ts'
 import type { RawRemoteFunction } from './RawRemoteFunction.ts'
 import type { RemoteCallable } from './RemoteCallable.ts'
+import type { RpcErrorGuard } from './RpcErrorGuard.ts'
 import type { Subscribable } from './Subscribable.ts'
 
 /*
@@ -37,7 +39,11 @@ into args (still schema-validated) and File parts into files(). FormData is
 stringly-typed, so this is the upload escape hatch — typed object args remain
 the default for everything else.
 */
-export type RemoteFunction<Args, Return> = RemoteCallable<Args, Return> & {
+export type RemoteFunction<
+    Args,
+    Return,
+    Errors extends ErrorSpec = Record<never, never>,
+> = RemoteCallable<Args, Return> & {
     readonly method: HttpMethod
     readonly url: string
     readonly clients: ClientFlags
@@ -45,7 +51,12 @@ export type RemoteFunction<Args, Return> = RemoteCallable<Args, Return> & {
     readonly raw: RawRemoteFunction<Args>
     stream(args?: Args | FormData): Subscribable<Return>
     fetch(request: Request): Promise<Response>
-    /* Present only on a durable (`outbox: true`) RPC's client proxy: the reactive,
-       iterable queue of undelivered entries for this RPC. Undefined otherwise. */
-    readonly outbox?: () => OutboxEntry<Args>[]
+    /* Type-guard a caught error against this rpc's declared `errors` (plus the framework
+       `'validation'` / `'queued'`): narrows `.kind` and, for a known kind, `.data` — the
+       per-rpc replacement for a global guard, since the error name → data type mapping
+       lives in the rpc's own spec. */
+    readonly isError: RpcErrorGuard<Errors>
+    /* Present only on a durable (`outbox`) RPC's client proxy: callable for the reactive
+       list of undelivered entries, with `retry()` to drain the queue. Undefined otherwise. */
+    readonly outbox?: Outbox<Args>
 }

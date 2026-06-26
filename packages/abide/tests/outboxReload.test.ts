@@ -5,18 +5,17 @@ import { memoryStore } from './support/memoryStore.ts'
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0))
 
 describe('outbox reload', () => {
-    test('a queued entry survives a reload and replays with its body', async () => {
+    test('a parked entry survives a reload and replays with its body', async () => {
         const store = memoryStore()
         const body = JSON.stringify({ text: 'persist me' })
 
-        // First "session": enqueue while offline, then drop the queue.
+        // First "session": park, then drop the queue (no drain — manual mode).
         const first = createOutboxQueue<{ text: string }>({
             url: '/rpc/reload',
-            online: () => false,
             store,
             send: async () => new Response(null, { status: 200 }),
         })
-        first.enqueue(
+        first.park(
             { text: 'persist me' },
             new Request('http://localhost/rpc/reload', {
                 method: 'POST',
@@ -27,12 +26,11 @@ describe('outbox reload', () => {
         await tick() // let the async body capture persist
         first.dispose()
 
-        // "Reload": a fresh queue over the same store, now online.
+        // "Reload": a fresh queue over the same store, drained explicitly.
         let sentBody = ''
         let sentType = ''
         const second = createOutboxQueue<{ text: string }>({
             url: '/rpc/reload',
-            online: () => true,
             store,
             send: async (request) => {
                 sentBody = await request.text()

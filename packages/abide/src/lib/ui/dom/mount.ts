@@ -23,9 +23,8 @@ export function mount(
     /* Establish this component's lexical scope (nested, `awaiting` so it adopts the model
        doc the build's first `doc()` creates) and render pass, run the build under it, and
        restore the previous scope — the shared mount core (see `withScope`). */
-    const { stop, lexical } = withScope(scopeLabel(host), () => scope(() => build(host, props)))
+    const { lexical } = withScope(scopeLabel(host), () => scope(() => build(host, props)))
     return () => {
-        stop()
         lexical.dispose()
         host.textContent = ''
     }

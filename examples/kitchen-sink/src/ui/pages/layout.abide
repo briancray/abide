@@ -17,8 +17,8 @@ Custom bundle menu items are inert during SSR and in a plain browser tab. effect
 are client-only (stripped from SSR), so each registers its onMenu handler once on
 mount; returning the unsubscribe is harmless here (the root layout never unmounts).
 */
-effect(() => onMenu('reload-session', () => location.reload()))
-effect(() => onMenu('open-mcp', () => void navigate('/mcp')))
+scope().effect(() => onMenu('reload-session', () => location.reload()))
+scope().effect(() => onMenu('open-mcp', () => void navigate('/mcp')))
 
 /* Active-link styling reads page.url (reassigned on every SPA nav), so a class
    thunk re-runs without per-link plumbing. Compared against url() output so it

@@ -103,6 +103,11 @@ export function createRemoteFunction<Args, Return>(opts: {
             raw(args as Args),
         )
     }
+    /* Uniform runtime guard for every rpc — the per-rpc data typing lives entirely in the
+       RpcErrorGuard<Errors> signature RemoteFunction projects onto it (Errors flows from the
+       rpc helper's declared type, not from here). */
+    callable.isError = (error: unknown, kind: string): boolean =>
+        error instanceof HttpError && error.kind === kind
     Object.defineProperty(callable, REMOTE_FUNCTION, { value: true })
     callable.fetch = parseArgsForFetch
         ? async (request: Request): Promise<Response> => {

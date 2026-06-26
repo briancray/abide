@@ -44,6 +44,13 @@ export function createCacheStore(): CacheStore {
                 events.removeEventListener('invalidate', onInvalidate)
                 if (subscribers.get(key) === registered) {
                     subscribers.delete(key)
+                    /* The reload marker is only ever consumed by the NEXT read of this
+                       key (registerEntry). With the last reactive reader gone there is
+                       no scope left to show refreshing() for it, and a future remount
+                       reads with nothing on screen — a first-ever load, not a reload.
+                       Drop the marker so the tab-scoped store can't accrete one per
+                       invalidated-but-never-reread key over a session. */
+                    pendingRefresh.delete(key)
                 }
             }
         })
@@ -96,6 +103,11 @@ export function createCacheStore(): CacheStore {
         entries,
         events,
         subscribe,
+        /* True while a reactive scope is reading this key — i.e. someone is holding
+           its value on screen. invalidate() gates its reload marker on this: a key
+           with no live reader has nothing to reload into, so the next read is a
+           first-ever load, not a refresh. */
+        hasReader: (key: string) => subscribers.has(key),
         trackLifecycle,
         markLifecycle,
         pendingRefresh,

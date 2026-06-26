@@ -15,7 +15,7 @@ at `node_modules/@abide/abide/README.md`.
 
 - One export per file, named after the file. No barrels — import each name by its
   own path (`@abide/abide/server/GET`, `@abide/abide/shared/cache`, …).
-- RPC verbs live in `src/server/rpc/<name>.ts`; sockets in `src/server/sockets/`;
+- RPCs live in `src/server/rpc/<name>.ts`; sockets in `src/server/sockets/`;
   pages are `**/page.abide`, layouts `**/layout.abide`.
 - Generated types land in `src/.abide/` — do not hand-edit them; run `abide dev`/
   `abide check` to regenerate.

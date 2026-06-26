@@ -1,6 +1,6 @@
 # ADR-0009: cache.patch — the optimistic write, predict-then-reconcile
 
-**Status:** accepted (2026-06-16)
+**Status:** reverted (2026-06-26) — `cache.patch` shipped but stayed undocumented and undemonstrated (orphan public surface, tests only); the verb was removed pending a fuller revisit. This record is retained as the starting point for that revisit. Originally accepted (2026-06-16).
 
 ## Context
 

@@ -29,11 +29,8 @@ export function hydrate(
     try {
         /* Same shared mount core as `mount` (see `withScope`) — a hydrated component owns a
            scope too, adopting the model its build adopts — run with the claim cursor active. */
-        const { stop, lexical } = withScope(scopeLabel(host), () => scope(() => build(host, props)))
-        return () => {
-            stop()
-            lexical.dispose()
-        }
+        const { lexical } = withScope(scopeLabel(host), () => scope(() => build(host, props)))
+        return () => lexical.dispose()
     } finally {
         RENDER.hydration = previous
     }

@@ -4,9 +4,9 @@ import { createTestApp, type TestApp } from '@abide/abide/test/createTestApp'
 
 /*
 End-to-end against the real app booted on an ephemeral port — no fixtures, no
-manifests. createTestApp imports the project's own virtual route/verb manifests
+manifests. createTestApp imports the project's own virtual route/rpc manifests
 (resolved by the abide preload), so this exercises the full pipeline: SSR,
-verb dispatch, the CSRF gate, and the health endpoint.
+rpc dispatch, the CSRF gate, and the health endpoint.
 */
 let app: TestApp
 beforeAll(async () => {

@@ -15,7 +15,7 @@ let count = state(0)
 const doubled = computed(() => count * 2)
 // effect(fn) — client-only side effect (stripped from SSR); may return a cleanup.
 let ticks = state(0)
-effect(() => {
+scope().effect(() => {
     const id = setInterval(() => (ticks = ticks + 1), 1000)
     return () => clearInterval(id)
 })
@@ -155,7 +155,7 @@ const { state, computed } = scope()                 // destructure the primitive
 let count = state(0)                                 // writable cell — the +/− buttons
 const doubled = computed(() => count * 2)            // recomputes when count changes
 let ticks = state(0)
-effect(() => {                             // client-only; cleanup on unmount
+scope().effect(() => {                             // client-only; cleanup on unmount
     const id = setInterval(() => (ticks = ticks + 1), 1000)
     return () => clearInterval(id)
 })
