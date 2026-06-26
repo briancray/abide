@@ -1,4 +1,4 @@
-import type { HttpVerb } from '../../shared/types/HttpVerb.ts'
+import type { HttpMethod } from '../../shared/types/HttpMethod.ts'
 
 /*
 Per-command manifest entry baked into the standalone CLI binary by the
@@ -9,7 +9,7 @@ both rpcs and socket commands — a socket `tail` is a GET against
 streams it live; a socket `publish` is a POST to the same path.
 */
 export type CliManifestEntry = {
-    method: HttpVerb
+    method: HttpMethod
     url: string
     jsonSchema?: Record<string, unknown>
     // Request Accept header. Socket tail sets text/event-stream to stream live frames.

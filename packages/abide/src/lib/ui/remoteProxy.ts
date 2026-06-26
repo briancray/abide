@@ -6,7 +6,7 @@ import { HttpError } from '../shared/HttpError.ts'
 import { OFFLINE_HEADER } from '../shared/OFFLINE_HEADER.ts'
 import { rpcTimeoutSlot } from '../shared/rpcTimeoutSlot.ts'
 import { trace } from '../shared/trace.ts'
-import type { HttpVerb } from '../shared/types/HttpVerb.ts'
+import type { HttpMethod } from '../shared/types/HttpMethod.ts'
 import type { RemoteFunction } from '../shared/types/RemoteFunction.ts'
 import type { RpcOptions } from '../shared/types/RpcOptions.ts'
 import { withBase } from '../shared/withBase.ts'
@@ -28,7 +28,7 @@ escape hatch that returns the Response untouched.
 */
 // @documentation plumbing
 export function remoteProxy<Args, Return>(
-    method: HttpVerb,
+    method: HttpMethod,
     url: string,
 ): RemoteFunction<Args, Return> {
     return createRemoteFunction<Args, Return>({

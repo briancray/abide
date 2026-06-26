@@ -1,4 +1,4 @@
-import type { HttpVerb } from '../../../shared/types/HttpVerb.ts'
+import type { HttpMethod } from '../../../shared/types/HttpMethod.ts'
 
 /*
 One operation a socket exposes to the non-browser surfaces. A socket
@@ -18,5 +18,5 @@ export type SocketOperation = {
     // HTTP face of the operation: `/__abide/sockets/<name>`.
     restUrl: string
     // GET for tail, POST for publish.
-    method: HttpVerb
+    method: HttpMethod
 }

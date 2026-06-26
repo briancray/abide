@@ -2,7 +2,7 @@ import { carriesBodyArgs } from './carriesBodyArgs.ts'
 import { encodeRefJson } from './encodeRefJson.ts'
 import { queryStringFromArgs } from './queryStringFromArgs.ts'
 import { REF_JSON_HEADER } from './REF_JSON_HEADER.ts'
-import type { HttpVerb } from './types/HttpVerb.ts'
+import type { HttpMethod } from './types/HttpMethod.ts'
 
 /*
 Builds the Request a verb helper uses to invoke its handler. Same shape on
@@ -24,7 +24,7 @@ export function buildRpcRequest({
     baseUrl,
     headers,
 }: {
-    method: HttpVerb
+    method: HttpMethod
     url: string
     args: unknown
     baseUrl: string
@@ -64,7 +64,7 @@ export function buildRpcRequest({
     })
 }
 
-function appendQuery(method: HttpVerb, url: string, args: unknown): string {
+function appendQuery(method: HttpMethod, url: string, args: unknown): string {
     if (args === undefined) {
         return url
     }

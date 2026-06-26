@@ -1,5 +1,5 @@
 import { isReadOnlyMethod } from '../../shared/isReadOnlyMethod.ts'
-import type { HttpVerb } from '../../shared/types/HttpVerb.ts'
+import type { HttpMethod } from '../../shared/types/HttpMethod.ts'
 import { crossOriginForbidden } from './crossOriginForbidden.ts'
 import { isCrossOriginRequest } from './isCrossOriginRequest.ts'
 
@@ -22,7 +22,7 @@ export function crossOriginGate(
     if (options.optOut) {
         return undefined
     }
-    if (options.allowReadOnly && isReadOnlyMethod(req.method as HttpVerb)) {
+    if (options.allowReadOnly && isReadOnlyMethod(req.method as HttpMethod)) {
         return undefined
     }
     return isCrossOriginRequest(req, url) ? crossOriginForbidden(options.hint) : undefined

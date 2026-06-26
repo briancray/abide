@@ -3,7 +3,7 @@ import type { RemoteRoutes } from '../src/lib/server/rpc/types/RemoteRoutes.ts'
 import { createRouteDispatcher } from '../src/lib/server/runtime/createRouteDispatcher.ts'
 import type { RequestStore } from '../src/lib/server/runtime/types/RequestStore.ts'
 import { REMOTE_FUNCTION } from '../src/lib/shared/REMOTE_FUNCTION.ts'
-import type { HttpVerb } from '../src/lib/shared/types/HttpVerb.ts'
+import type { HttpMethod } from '../src/lib/shared/types/HttpMethod.ts'
 import type { RemoteFunction } from '../src/lib/shared/types/RemoteFunction.ts'
 import type { Pages } from '../src/lib/ui/types/Pages.ts'
 
@@ -12,7 +12,7 @@ const noRpc: RemoteRoutes = {}
 const store = {} as RequestStore
 
 /* A registered rpc URL whose single verb answers `method` by echoing it. */
-function rpcRoute(url: string, method: HttpVerb, crossOrigin?: boolean): RemoteRoutes {
+function rpcRoute(url: string, method: HttpMethod, crossOrigin?: boolean): RemoteRoutes {
     const fn = Object.assign(() => Promise.resolve(), {
         method,
         url,

@@ -1,4 +1,4 @@
-import type { HttpVerb } from './types/HttpVerb.ts'
+import type { HttpMethod } from './types/HttpMethod.ts'
 
 /*
 Reads the HTTP verb of an $rpc module from its source. Every file under
@@ -12,6 +12,6 @@ keeps the two from drifting.
 */
 const VERB_EXPORT = /export\s+const\s+\w+\s*=\s*(GET|POST|PUT|PATCH|DELETE|HEAD)\s*[<(]/
 
-export function detectVerbMethod(source: string): HttpVerb | undefined {
-    return (source.match(VERB_EXPORT)?.[1] as HttpVerb | undefined) ?? undefined
+export function detectVerbMethod(source: string): HttpMethod | undefined {
+    return (source.match(VERB_EXPORT)?.[1] as HttpMethod | undefined) ?? undefined
 }

@@ -1,7 +1,7 @@
 import { findExportCallSite } from './findExportCallSite.ts'
 import { importNamesToStrip } from './importNamesToStrip.ts'
 import { stripImport } from './stripImport.ts'
-import type { HttpVerb } from './types/HttpVerb.ts'
+import type { HttpMethod } from './types/HttpMethod.ts'
 
 const VERB_NAMES = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'] as const
 const VERB_SET = new Set<string>(VERB_NAMES)
@@ -10,7 +10,7 @@ const SINGLE_EXPORT_ERROR =
     '[abide] $rpc module contains more than one `<VERB>(...)` export — each file must declare exactly one remote function'
 
 export type PreparedRpcModule = {
-    verb: HttpVerb
+    verb: HttpMethod
     exportName: string
     rewriteForServer: (url: string) => string
 }
@@ -47,7 +47,7 @@ export function prepareRpcModule(
     if (!site) {
         return undefined
     }
-    const verb = site.ident as HttpVerb
+    const verb = site.ident as HttpMethod
     return {
         verb,
         exportName: site.exportName,

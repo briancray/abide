@@ -1,4 +1,4 @@
-import type { HttpVerb } from './HttpVerb.ts'
+import type { HttpMethod } from './HttpMethod.ts'
 import type { RemoteCallable } from './RemoteCallable.ts'
 
 /*
@@ -9,6 +9,6 @@ so callers that need status / headers / body streaming or want to
 implement custom error handling can opt out of the decode.
 */
 export type RawRemoteFunction<Args> = RemoteCallable<Args, Response> & {
-    readonly method: HttpVerb
+    readonly method: HttpMethod
     readonly url: string
 }

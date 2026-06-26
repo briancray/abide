@@ -1,7 +1,7 @@
 import { canonicalJson } from './canonicalJson.ts'
 import { carriesBodyArgs } from './carriesBodyArgs.ts'
 import { queryStringFromArgs } from './queryStringFromArgs.ts'
-import type { HttpVerb } from './types/HttpVerb.ts'
+import type { HttpMethod } from './types/HttpMethod.ts'
 
 /*
 Derives a cache key from a verb-defined remote function and its args. The
@@ -11,7 +11,7 @@ the same encoder buildRpcRequest builds its query with, so the key and the
 synthesized Request can't disagree); POST/PUT/PATCH join args after a space as
 canonical JSON. The verb split mirrors buildRpcRequest exactly.
 */
-export function keyForRemoteCall(method: HttpVerb, url: string, args: unknown): string {
+export function keyForRemoteCall(method: HttpMethod, url: string, args: unknown): string {
     const prefix = `${method} ${url}`
     if (!carriesBodyArgs(method)) {
         if (args && typeof args === 'object' && !Array.isArray(args)) {

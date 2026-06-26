@@ -1,5 +1,5 @@
 import type { ClientFlags } from './ClientFlags.ts'
-import type { HttpVerb } from './HttpVerb.ts'
+import type { HttpMethod } from './HttpMethod.ts'
 import type { RawRemoteFunction } from './RawRemoteFunction.ts'
 import type { RemoteCallable } from './RemoteCallable.ts'
 import type { Subscribable } from './Subscribable.ts'
@@ -37,7 +37,7 @@ stringly-typed, so this is the upload escape hatch — typed object args remain
 the default for everything else.
 */
 export type RemoteFunction<Args, Return> = RemoteCallable<Args, Return> & {
-    readonly method: HttpVerb
+    readonly method: HttpMethod
     readonly url: string
     readonly clients: ClientFlags
     readonly crossOrigin?: boolean

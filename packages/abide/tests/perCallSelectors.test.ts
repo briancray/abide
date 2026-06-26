@@ -5,12 +5,12 @@ import { createCacheStore } from '../src/lib/shared/createCacheStore.ts'
 import { pending } from '../src/lib/shared/pending.ts'
 import { REMOTE_FUNCTION } from '../src/lib/shared/REMOTE_FUNCTION.ts'
 import { remoteMetaStore } from '../src/lib/shared/remoteMetaStore.ts'
-import type { HttpVerb } from '../src/lib/shared/types/HttpVerb.ts'
+import type { HttpMethod } from '../src/lib/shared/types/HttpMethod.ts'
 import type { RawRemoteFunction } from '../src/lib/shared/types/RawRemoteFunction.ts'
 
 /* A raw remote that resolves immediately; key derivation happens in cache(),
    so only method+url identity matters. Records request meta so cache() accepts it. */
-function argRemote(method: HttpVerb, url: string): RawRemoteFunction<{ id: number }> {
+function argRemote(method: HttpMethod, url: string): RawRemoteFunction<{ id: number }> {
     const fn = () => {
         const request = new Request(`https://test.local${url}`, { method })
         const promise = Promise.resolve(

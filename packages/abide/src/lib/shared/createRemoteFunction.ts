@@ -5,7 +5,7 @@ import { REMOTE_FUNCTION } from './REMOTE_FUNCTION.ts'
 import { recordRemoteMeta } from './recordRemoteMeta.ts'
 import { subscribableFromResponse } from './subscribableFromResponse.ts'
 import type { ClientFlags } from './types/ClientFlags.ts'
-import type { HttpVerb } from './types/HttpVerb.ts'
+import type { HttpMethod } from './types/HttpMethod.ts'
 import type { RawRemoteFunction } from './types/RawRemoteFunction.ts'
 import type { RemoteFunction } from './types/RemoteFunction.ts'
 import type { RpcOptions } from './types/RpcOptions.ts'
@@ -35,7 +35,7 @@ place so the two halves can't drift.
   forwards the request through invoke().
 */
 export function createRemoteFunction<Args, Return>(opts: {
-    method: HttpVerb
+    method: HttpMethod
     url: string
     clients: ClientFlags
     /* Server-side only: exempts a mutating verb from the router's same-origin CSRF gate. */

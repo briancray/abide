@@ -3,7 +3,7 @@ import { memoizeByKey } from '../../shared/memoizeByKey.ts'
 import { NAV_HEADER } from '../../shared/NAV_HEADER.ts'
 import { REMOTE_FUNCTION } from '../../shared/REMOTE_FUNCTION.ts'
 import { TEXT_PLAIN } from '../../shared/TEXT_PLAIN.ts'
-import type { HttpVerb } from '../../shared/types/HttpVerb.ts'
+import type { HttpMethod } from '../../shared/types/HttpMethod.ts'
 import type { RemoteFunction } from '../../shared/types/RemoteFunction.ts'
 import type { Pages } from '../../ui/types/Pages.ts'
 import type { RemoteRoutes } from '../rpc/types/RemoteRoutes.ts'
@@ -82,7 +82,7 @@ export function createRouteDispatcher({
         const hasPage = pages[routeUrl] !== undefined
         const hasRpc = rpc[routeUrl] !== undefined
         return async function routeHandler(req, pathParams, store) {
-            const method = req.method as HttpVerb
+            const method = req.method as HttpMethod
             if (hasRpc) {
                 const fn = await loadRpc(routeUrl)
                 if (fn && fn.method === method) {

@@ -6,7 +6,7 @@ import { isReadOnlyMethod } from '../../shared/isReadOnlyMethod.ts'
 import { resolveClientFlags } from '../../shared/resolveClientFlags.ts'
 import type { ClientFlags } from '../../shared/types/ClientFlags.ts'
 import type { ErrorSpec } from '../../shared/types/ErrorSpec.ts'
-import type { HttpVerb } from '../../shared/types/HttpVerb.ts'
+import type { HttpMethod } from '../../shared/types/HttpMethod.ts'
 import type { RemoteFunction } from '../../shared/types/RemoteFunction.ts'
 import type { StandardSchemaV1 } from '../../shared/types/StandardSchemaV1.ts'
 import { json } from '../json.ts'
@@ -49,7 +49,7 @@ promise so cache() can stash it on the entry without re-building.
 */
 // @documentation plumbing
 export function defineVerb<Args, Return>(
-    method: HttpVerb,
+    method: HttpMethod,
     url: string,
     handler: RemoteHandler<Args, Return>,
     opts?: {

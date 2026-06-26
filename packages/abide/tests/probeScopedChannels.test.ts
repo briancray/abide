@@ -5,7 +5,7 @@ import { createCacheStore } from '../src/lib/shared/createCacheStore.ts'
 import { pending } from '../src/lib/shared/pending.ts'
 import { REMOTE_FUNCTION } from '../src/lib/shared/REMOTE_FUNCTION.ts'
 import { remoteMetaStore } from '../src/lib/shared/remoteMetaStore.ts'
-import type { HttpVerb } from '../src/lib/shared/types/HttpVerb.ts'
+import type { HttpMethod } from '../src/lib/shared/types/HttpMethod.ts'
 import type { RawRemoteFunction } from '../src/lib/shared/types/RawRemoteFunction.ts'
 import { track } from './support/reactiveScope.ts'
 import { settle } from './support/settle.ts'
@@ -14,7 +14,7 @@ import { useBrowserWindow } from './support/useBrowserWindow.ts'
 /* A raw remote whose response is released manually, so a test can hold a
    flight open and observe pending() mid-flight. Records request meta so
    cache() accepts it. */
-function remoteStub(method: HttpVerb, url: string) {
+function remoteStub(method: HttpMethod, url: string) {
     let release: (response: Response) => void = () => undefined
     const fn = () => {
         const request = new Request(`https://test.local${url}`, { method })

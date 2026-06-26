@@ -5,7 +5,7 @@ import { createCacheStore } from '../src/lib/shared/createCacheStore.ts'
 import { pending } from '../src/lib/shared/pending.ts'
 import { REMOTE_FUNCTION } from '../src/lib/shared/REMOTE_FUNCTION.ts'
 import { remoteMetaStore } from '../src/lib/shared/remoteMetaStore.ts'
-import type { HttpVerb } from '../src/lib/shared/types/HttpVerb.ts'
+import type { HttpMethod } from '../src/lib/shared/types/HttpMethod.ts'
 import type { RawRemoteFunction } from '../src/lib/shared/types/RawRemoteFunction.ts'
 import { trackDerived } from './support/derivedScope.ts'
 import { track } from './support/reactiveScope.ts'
@@ -15,7 +15,7 @@ import { useBrowserWindow } from './support/useBrowserWindow.ts'
 /* A raw remote whose body reports its own invocation count, so a refetch is
    visible in the response (n grows) and a dedupe holds n steady. Records request
    meta so cache() accepts it. */
-function countingRemote(method: HttpVerb, url: string): RawRemoteFunction<undefined> {
+function countingRemote(method: HttpMethod, url: string): RawRemoteFunction<undefined> {
     let calls = 0
     const fn = () => {
         calls += 1

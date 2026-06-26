@@ -2,7 +2,7 @@ import { dispatchVerbInProcess } from '../server/rpc/dispatchVerbInProcess.ts'
 import { findVerbByCommandName } from '../server/rpc/findVerbByCommandName.ts'
 import { buildRpcProxy } from '../shared/buildRpcProxy.ts'
 import { buildRpcRequest } from '../shared/buildRpcRequest.ts'
-import type { HttpVerb } from '../shared/types/HttpVerb.ts'
+import type { HttpMethod } from '../shared/types/HttpMethod.ts'
 import type { RpcInvoker } from '../shared/types/RpcInvoker.ts'
 import type { CliManifest } from './types/CliManifest.ts'
 
@@ -99,7 +99,7 @@ export function createClient<Api extends AnyApi = AnyApi>(opts?: {
     // Remote-mode registry fallback for callers passing a url but no manifest.
     function registryCommand(
         name: string,
-    ): { method: HttpVerb; url: string; accept?: string } | undefined {
+    ): { method: HttpMethod; url: string; accept?: string } | undefined {
         const found = findVerbByCommandName(name)
         return found ? { method: found.remote.method, url: found.remote.url } : undefined
     }

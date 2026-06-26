@@ -3,7 +3,7 @@ import { contentTypeOf } from '../../shared/contentTypeOf.ts'
 import { decodeRefJson } from '../../shared/decodeRefJson.ts'
 import { HttpError } from '../../shared/HttpError.ts'
 import { REF_JSON_HEADER } from '../../shared/REF_JSON_HEADER.ts'
-import type { HttpVerb } from '../../shared/types/HttpVerb.ts'
+import type { HttpMethod } from '../../shared/types/HttpMethod.ts'
 import { error } from '../error.ts'
 import { requestContext } from '../runtime/requestContext.ts'
 import { readBodyWithinLimit } from './readBodyWithinLimit.ts'
@@ -59,7 +59,7 @@ before any parse — see readBodyWithinLimit. Omitted = no abide-level check;
 Bun.serve's server-wide maxRequestBodySize is the ceiling.
 */
 export async function parseArgs(
-    method: HttpVerb,
+    method: HttpMethod,
     request: Request,
     maxBodySize?: number,
 ): Promise<unknown> {

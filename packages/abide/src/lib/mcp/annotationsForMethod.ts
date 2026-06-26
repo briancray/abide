@@ -1,4 +1,4 @@
-import type { HttpVerb } from '../shared/types/HttpVerb.ts'
+import type { HttpMethod } from '../shared/types/HttpMethod.ts'
 
 /*
 Maps an HTTP verb to MCP tool annotations so a model can tell a read from
@@ -12,7 +12,7 @@ declared with rather than asking the author to repeat the intent:
 The shape matches MCP's ToolAnnotations (readOnlyHint / destructiveHint /
 idempotentHint); fields a verb doesn't imply are left off.
 */
-export function annotationsForMethod(method: HttpVerb): Record<string, boolean> {
+export function annotationsForMethod(method: HttpMethod): Record<string, boolean> {
     switch (method) {
         case 'GET':
         case 'HEAD':
