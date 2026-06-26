@@ -24,7 +24,28 @@ export function pending<Args, Return>(
     arg?: CacheSelector<Args, Return> | Subscribable<unknown>,
     args?: Args,
 ): boolean {
-    return probeRegistries(arg, args, 'pending', unsettled, true)
+    return probeRegistries(arg, args, 'pending', unsettled, true) || durableQueued(arg, args)
 }
 
 const unsettled = (entry: CacheEntry) => entry.settled !== true
+
+/*
+A durable (`outbox: true`) rpc carries an `.outbox()` face listing its undelivered
+entries (queued or sending). Those count as pending too — so `disabled={pending(rpc)}`
+guards a form against a double-submit while offline, not just while a fetch is in flight.
+The selector carries its own face, so no client-only registry import is needed (shared
+stays isomorphic; server-side there is no face and this is a no-op). `pending(rpc, args)`
+narrows to a matching queued call via a structural args compare.
+*/
+function durableQueued(arg: unknown, args: unknown): boolean {
+    const outbox = (arg as { outbox?: () => { args: unknown }[] } | undefined)?.outbox
+    if (typeof outbox !== 'function') {
+        return false
+    }
+    const entries = outbox()
+    if (args === undefined) {
+        return entries.length > 0
+    }
+    const key = JSON.stringify(args)
+    return entries.some((entry) => JSON.stringify(entry.args) === key)
+}
