@@ -84,17 +84,22 @@ resolve.
 **RPC verb** — `export const <name> = GET(handler, opts?)` (same shape for
 `POST` / `PUT` / `PATCH` / `DELETE` / `HEAD`). The handler receives the parsed
 args bag (`InferOutput<inputSchema>`, merged with validated files when
-`filesSchema` is set), may read `request()` / `cookies()` / `server()` from
-request scope, and returns `json` / `jsonl` / `sse` / `error` / `redirect` or a
-raw `Response`. `opts`: `inputSchema` (validates args, infers the type, gates
-CLI + read-MCP), `outputSchema` (documents the 200 body for OpenAPI/MCP),
-`filesSchema` (multipart File parts), `clients: { browser, mcp, cli }` (explicit
-surface targeting; explicit wins over schema auto-flip), `crossOrigin` (exempt a
-mutating verb from the same-origin gate), `maxBodySize` (per-verb 413 ceiling),
-`timeout` (handler deadline in ms; 504 on every surface). Query args arrive as
-strings — use `z.coerce.*`. Consume four ways: `cache(verb)(args)` in-process,
-the swapped browser `fetch`, `verb.raw(args)` for the `Response`,
-`verb.stream(args)` to iterate a streaming body.
+`filesSchema` is set) plus a `{ errors }` ctx (its declared error constructors),
+may read `request()` / `cookies()` / `server()` from request scope, and returns
+`json` / `jsonl` / `sse` / `error` / `redirect` or a raw `Response`. `opts`:
+`inputSchema` (validates args, infers the type, gates CLI + read-MCP),
+`outputSchema` (documents the 200 body for OpenAPI/MCP), `filesSchema` (multipart
+File parts), `errors` (name-keyed `{ status, data? }` map — typed errors:
+`return error(errors.invalidCoupon({ … }))` serializes `{ $abideError, data }` at
+the declared status, surfacing on the client's thrown `HttpError` as `.kind` /
+`.data`; a validation 422 rides the same shape with `kind: 'validation'` and a
+field-keyed message map), `clients: { browser, mcp, cli }` (explicit surface
+targeting; explicit wins over schema auto-flip), `crossOrigin` (exempt a mutating
+verb from the same-origin gate), `maxBodySize` (per-verb 413 ceiling), `timeout`
+(handler deadline in ms; 504 on every surface). Query args arrive as strings —
+use `z.coerce.*`. Consume four ways: `cache(verb)(args)` in-process, the swapped
+browser `fetch`, `verb.raw(args)` for the `Response`, `verb.stream(args)` to
+iterate a streaming body.
 
 **Socket** — `export const <name> = socket({ schema?, tail?, ttl?,
 clientPublish?, clients? })`. `tail` retains the last N frames for late joiners

@@ -5,11 +5,14 @@ import { forwardHeaders } from '../../shared/forwardHeaders.ts'
 import { isReadOnlyMethod } from '../../shared/isReadOnlyMethod.ts'
 import { resolveClientFlags } from '../../shared/resolveClientFlags.ts'
 import type { ClientFlags } from '../../shared/types/ClientFlags.ts'
+import type { ErrorSpec } from '../../shared/types/ErrorSpec.ts'
 import type { HttpVerb } from '../../shared/types/HttpVerb.ts'
 import type { RemoteFunction } from '../../shared/types/RemoteFunction.ts'
 import type { StandardSchemaV1 } from '../../shared/types/StandardSchemaV1.ts'
 import { json } from '../json.ts'
 import { requestContext } from '../runtime/requestContext.ts'
+import { buildErrorConstructors } from './buildErrorConstructors.ts'
+import { fieldErrorsFromIssues } from './fieldErrorsFromIssues.ts'
 import { parseArgs } from './parseArgs.ts'
 import { registerVerb } from './registerVerb.ts'
 import { runWithVerbTimeout } from './runWithVerbTimeout.ts'
@@ -53,6 +56,7 @@ export function defineVerb<Args, Return>(
         inputSchema?: StandardSchemaV1
         outputSchema?: StandardSchemaV1
         filesSchema?: StandardSchemaV1
+        errors?: ErrorSpec
         clients?: Partial<ClientFlags>
         crossOrigin?: boolean
         /* Per-verb cap on actual received body bytes (413 past it); omitted = Bun's server-wide maxRequestBodySize. */
@@ -65,6 +69,8 @@ export function defineVerb<Args, Return>(
     const inputSchema = opts?.inputSchema
     const outputSchema = opts?.outputSchema
     const filesSchema = opts?.filesSchema
+    /* The declared error constructors handed to the handler as its `{ errors }` ctx. */
+    const errors = buildErrorConstructors(opts?.errors ?? {})
     /*
     An input schema makes the handler safe to advertise to non-browser
     surfaces. CLI flips on for any verb with one (a human/script invokes it
@@ -97,7 +103,7 @@ export function defineVerb<Args, Return>(
     async function runHandler(args: Args | undefined): Promise<Response> {
         return rpcLog.trace(
             `rpc ${method} ${url}`,
-            () => handler(args as Args) as unknown as Response,
+            () => handler(args as Args, { errors }) as unknown as Response,
         )
     }
 
@@ -115,7 +121,16 @@ export function defineVerb<Args, Return>(
                 inputSchema['~standard'].validate(value),
             )
             if (result.issues) {
-                return json({ issues: result.issues }, { status: 422 })
+                return json(
+                    {
+                        $abideError: 'validation',
+                        data: {
+                            issues: result.issues,
+                            errors: fieldErrorsFromIssues(result.issues),
+                        },
+                    },
+                    { status: 422 },
+                )
             }
             value = result.value
         }
@@ -123,7 +138,16 @@ export function defineVerb<Args, Return>(
             const files = requestContext.getStore()?.files ?? {}
             const result = await filesSchema['~standard'].validate(files)
             if (result.issues) {
-                return json({ issues: result.issues }, { status: 422 })
+                return json(
+                    {
+                        $abideError: 'validation',
+                        data: {
+                            issues: result.issues,
+                            errors: fieldErrorsFromIssues(result.issues),
+                        },
+                    },
+                    { status: 422 },
+                )
             }
             value = { ...(value as object), ...(result.value as object) }
         }

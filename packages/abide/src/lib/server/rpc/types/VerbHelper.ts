@@ -1,4 +1,5 @@
 import type { ClientFlags } from '../../../shared/types/ClientFlags.ts'
+import type { ErrorSpec } from '../../../shared/types/ErrorSpec.ts'
 import type { RemoteFunction } from '../../../shared/types/RemoteFunction.ts'
 import type { StandardSchemaV1 } from '../../../shared/types/StandardSchemaV1.ts'
 import type { RemoteHandler } from './RemoteHandler.ts'
@@ -60,23 +61,30 @@ export type VerbHelper = {
         Return = unknown,
         InputSchema extends StandardSchemaV1 = StandardSchemaV1,
         FilesSchema extends StandardSchemaV1 = StandardSchemaV1,
+        Errors extends ErrorSpec = Record<string, never>,
     >(
         fn: RemoteHandler<
             StandardSchemaV1.InferOutput<InputSchema> & StandardSchemaV1.InferOutput<FilesSchema>,
-            Return
+            Return,
+            Errors
         >,
         opts: VerbBaseOpts & {
             inputSchema: InputSchema
             filesSchema: FilesSchema
+            errors?: Errors
         },
     ): RemoteFunction<StandardSchemaV1.InferInput<InputSchema>, Return>
-    <Return = unknown, InputSchema extends StandardSchemaV1 = StandardSchemaV1>(
-        fn: RemoteHandler<StandardSchemaV1.InferOutput<InputSchema>, Return>,
-        opts: VerbBaseOpts & { inputSchema: InputSchema },
+    <
+        Return = unknown,
+        InputSchema extends StandardSchemaV1 = StandardSchemaV1,
+        Errors extends ErrorSpec = Record<string, never>,
+    >(
+        fn: RemoteHandler<StandardSchemaV1.InferOutput<InputSchema>, Return, Errors>,
+        opts: VerbBaseOpts & { inputSchema: InputSchema; errors?: Errors },
     ): RemoteFunction<StandardSchemaV1.InferInput<InputSchema>, Return>
-    <Args = undefined, Return = unknown>(
-        fn: RemoteHandler<Args, Return>,
-        opts: VerbBaseOpts,
+    <Args = undefined, Return = unknown, Errors extends ErrorSpec = Record<never, never>>(
+        fn: RemoteHandler<Args, Return, Errors>,
+        opts: VerbBaseOpts & { errors?: Errors },
     ): RemoteFunction<Args, Return>
     <Args = undefined, Return = unknown>(
         fn: RemoteHandler<Args, Return>,

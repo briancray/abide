@@ -1,5 +1,6 @@
 import { NO_STORE } from '../shared/CACHE_CONTROL_VALUES.ts'
 import { TEXT_PLAIN } from '../shared/TEXT_PLAIN.ts'
+import type { ErrorDescriptor } from '../shared/types/ErrorDescriptor.ts'
 import type { TypedResponse } from './rpc/types/TypedResponse.ts'
 import { withResponseDefaults } from './runtime/withResponseDefaults.ts'
 
@@ -57,7 +58,28 @@ branch carries (`TypedResponse<{user}> | TypedResponse<never>` → Return
 = {user}).
 */
 // @documentation response
-export function error(status: number, message?: string, init?: ResponseInit): TypedResponse<never> {
+export function error(descriptor: ErrorDescriptor): TypedResponse<never>
+export function error(status: number, message?: string, init?: ResponseInit): TypedResponse<never>
+export function error(
+    statusOrDescriptor: number | ErrorDescriptor,
+    message?: string,
+    init?: ResponseInit,
+): TypedResponse<never> {
+    /* A typed-error descriptor (`error(errors.invalidCoupon({…}))`) serializes as a
+       JSON `{ $abideError, data }` body at the descriptor's status — the client
+       parses it back onto the thrown HttpError's `.kind` / `.data`. */
+    if (typeof statusOrDescriptor === 'object') {
+        const descriptor = statusOrDescriptor
+        return new Response(
+            JSON.stringify({ $abideError: descriptor.$abideError, data: descriptor.data }),
+            withResponseDefaults(
+                undefined,
+                { 'Content-Type': 'application/json', 'Cache-Control': NO_STORE },
+                descriptor.status,
+            ),
+        ) as TypedResponse<never>
+    }
+    const status = statusOrDescriptor
     const body = message ?? STATUS_TEXT[status] ?? `HTTP ${status}`
     return new Response(
         body,
