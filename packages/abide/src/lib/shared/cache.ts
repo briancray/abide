@@ -843,7 +843,9 @@ still re-derives (to the same value); marks coalesce per microtask, so a key in
 both lists is not double work.
 */
 function notify(store: CacheStore, marked: string[], emitted: string[]): void {
-    marked.forEach((key) => store.markLifecycle(key))
+    marked.forEach((key) => {
+        store.markLifecycle(key)
+    })
     if (emitted.length > 0) {
         emit(store, emitted)
     }
