@@ -1,4 +1,5 @@
 import type { ClientFlags } from '../../../shared/types/ClientFlags.ts'
+import type { DurableRpc } from '../../../shared/types/DurableRpc.ts'
 import type { ErrorSpec } from '../../../shared/types/ErrorSpec.ts'
 import type { RemoteFunction } from '../../../shared/types/RemoteFunction.ts'
 import type { StandardSchemaV1 } from '../../../shared/types/StandardSchemaV1.ts'
@@ -17,6 +18,9 @@ type RpcBaseOpts = {
     crossOrigin?: boolean
     maxBodySize?: number
     timeout?: number
+    /* Local-first durability (mutating RPCs only). When `true`, the call queues durably
+       and returns a cancelable entry — see the durable overloads, which fire first. */
+    outbox?: boolean
 }
 
 /*
@@ -90,3 +94,30 @@ export type RpcHelper = {
         fn: RemoteHandler<Args, Return>,
     ): RemoteFunction<Args, Return>
 }
+
+/*
+The durable (`outbox: true`) overloads — only mutating helpers (POST/PUT/PATCH/DELETE)
+carry them (a read rpc can't be durable). The call enqueues and returns the cancelable
+`OutboxEntry` (see DurableRpc): with an inputSchema the entry's `args` type is
+`InferInput`; schemaless, it's the handler's `Args`.
+*/
+type DurableOverloads = {
+    <
+        Return = unknown,
+        InputSchema extends StandardSchemaV1 = StandardSchemaV1,
+        Errors extends ErrorSpec = Record<string, never>,
+    >(
+        fn: RemoteHandler<StandardSchemaV1.InferOutput<InputSchema>, Return, Errors>,
+        opts: RpcBaseOpts & { inputSchema: InputSchema; errors?: Errors; outbox: true },
+    ): DurableRpc<StandardSchemaV1.InferInput<InputSchema>>
+    <Args = undefined, Return = unknown, Errors extends ErrorSpec = Record<never, never>>(
+        fn: RemoteHandler<Args, Return, Errors>,
+        opts: RpcBaseOpts & { errors?: Errors; outbox: true },
+    ): DurableRpc<Args>
+}
+
+/*
+The type of the mutating helpers. Intersecting puts the durable overloads FIRST, so
+`outbox: true` selects them; everything else falls through to RpcHelper's shapes.
+*/
+export type MutatingRpcHelper = DurableOverloads & RpcHelper
