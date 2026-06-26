@@ -1,6 +1,6 @@
 import { promptRegistry } from '../server/prompts/promptRegistry.ts'
-import { dispatchVerbInProcess } from '../server/rpc/dispatchVerbInProcess.ts'
-import { findVerbByCommandName } from '../server/rpc/findVerbByCommandName.ts'
+import { dispatchRpcInProcess } from '../server/rpc/dispatchRpcInProcess.ts'
+import { findRpcByCommandName } from '../server/rpc/findRpcByCommandName.ts'
 import { rpcRegistry } from '../server/rpc/rpcRegistry.ts'
 import { socketOperations } from '../server/sockets/socketOperations.ts'
 import { socketRegistry } from '../server/sockets/socketRegistry.ts'
@@ -217,14 +217,14 @@ export async function callTool(
     args: Record<string, unknown> | undefined,
     inbound: Request,
 ): Promise<ToolResult> {
-    const entry = findVerbByCommandName(toolName)
+    const entry = findRpcByCommandName(toolName)
     if (entry) {
         /* A verb owns this name. If it isn't mcp-exposed it's still unavailable —
            don't fall through to a socket op that happens to share the name. */
         if (!entry.clients.mcp) {
             throw new Error(`unknown tool: ${toolName}`)
         }
-        const response = await dispatchVerbInProcess({
+        const response = await dispatchRpcInProcess({
             remote: entry.remote,
             args,
             baseUrl: `${new URL(inbound.url).origin}/`,

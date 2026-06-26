@@ -14,8 +14,8 @@ import { requestContext } from '../runtime/requestContext.ts'
 import { buildErrorConstructors } from './buildErrorConstructors.ts'
 import { fieldErrorsFromIssues } from './fieldErrorsFromIssues.ts'
 import { parseArgs } from './parseArgs.ts'
-import { registerVerb } from './registerVerb.ts'
-import { runWithVerbTimeout } from './runWithVerbTimeout.ts'
+import { registerRpc } from './registerRpc.ts'
+import { runWithRpcTimeout } from './runWithRpcTimeout.ts'
 import type { RemoteHandler } from './types/RemoteHandler.ts'
 
 /*
@@ -179,7 +179,7 @@ export function defineRpc<Args, Return>(
         request().signal (absent on the SSR cache-read path, so a sibling
         verb's outbound fetch is never cancelled) — then 504.
         */
-        return runWithVerbTimeout(work, timeout, abortVerbTimeout)
+        return runWithRpcTimeout(work, timeout, abortVerbTimeout)
     }
 
     const remote = createRemoteFunction<Args, Return>({
@@ -220,7 +220,7 @@ export function defineRpc<Args, Return>(
             return args as Args | undefined
         },
     })
-    registerVerb({
+    registerRpc({
         remote: remote as RemoteFunction<unknown, unknown>,
         inputSchema,
         outputSchema,

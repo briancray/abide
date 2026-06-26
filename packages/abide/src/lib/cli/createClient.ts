@@ -1,5 +1,5 @@
-import { dispatchVerbInProcess } from '../server/rpc/dispatchVerbInProcess.ts'
-import { findVerbByCommandName } from '../server/rpc/findVerbByCommandName.ts'
+import { dispatchRpcInProcess } from '../server/rpc/dispatchRpcInProcess.ts'
+import { findRpcByCommandName } from '../server/rpc/findRpcByCommandName.ts'
 import { buildRpcProxy } from '../shared/buildRpcProxy.ts'
 import { buildRpcRequest } from '../shared/buildRpcRequest.ts'
 import type { HttpMethod } from '../shared/types/HttpMethod.ts'
@@ -63,7 +63,7 @@ export function createClient<Api extends AnyApi = AnyApi>(opts?: {
     resolves method + url from the baked manifest — registry fallback for
     same-project callers — and sends the synthesized Request over the network.
     In-process mode resolves the verb from the registry and routes through
-    dispatchVerbInProcess, the same synthesize-and-fetch the MCP dispatcher
+    dispatchRpcInProcess, the same synthesize-and-fetch the MCP dispatcher
     uses, so the two consumer surfaces can't drift on how a verb is invoked.
     */
     function resolveSend(name: string): ((args?: unknown) => Promise<Response>) | undefined {
@@ -83,12 +83,12 @@ export function createClient<Api extends AnyApi = AnyApi>(opts?: {
                     }),
                 )
         }
-        const entry = findVerbByCommandName(name)
+        const entry = findRpcByCommandName(name)
         if (!entry) {
             return undefined
         }
         return (args) =>
-            dispatchVerbInProcess({
+            dispatchRpcInProcess({
                 remote: entry.remote,
                 args,
                 baseUrl: 'http://localhost/',
@@ -100,7 +100,7 @@ export function createClient<Api extends AnyApi = AnyApi>(opts?: {
     function registryCommand(
         name: string,
     ): { method: HttpMethod; url: string; accept?: string } | undefined {
-        const found = findVerbByCommandName(name)
+        const found = findRpcByCommandName(name)
         return found ? { method: found.remote.method, url: found.remote.url } : undefined
     }
 

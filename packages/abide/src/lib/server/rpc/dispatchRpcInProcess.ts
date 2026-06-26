@@ -22,7 +22,7 @@ resolution, and the app's handleError (or the 500 fallback) on a throw. The
 synthesized Request is shared between the scope store and the handler fetch so
 request() returns the same Request parseArgs read from.
 */
-export function dispatchVerbInProcess({
+export function dispatchRpcInProcess({
     remote,
     args,
     baseUrl,

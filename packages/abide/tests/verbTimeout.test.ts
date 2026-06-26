@@ -2,16 +2,16 @@ import { describe, expect, test } from 'bun:test'
 import { json } from '../src/lib/server/json.ts'
 import { request } from '../src/lib/server/request.ts'
 import { defineRpc } from '../src/lib/server/rpc/defineRpc.ts'
-import { runWithVerbTimeout } from '../src/lib/server/rpc/runWithVerbTimeout.ts'
+import { runWithRpcTimeout } from '../src/lib/server/rpc/runWithRpcTimeout.ts'
 import { runWithRequestScope } from '../src/lib/server/runtime/runWithRequestScope.ts'
 
 const slowResponse = (ms: number, body = 'late') =>
     new Promise<Response>((resolve) => setTimeout(() => resolve(new Response(body)), ms))
 
-describe('runWithVerbTimeout', () => {
+describe('runWithRpcTimeout', () => {
     test('returns the handler response when it beats the deadline', async () => {
         let aborted = false
-        const res = await runWithVerbTimeout(Promise.resolve(new Response('ok')), 1000, () => {
+        const res = await runWithRpcTimeout(Promise.resolve(new Response('ok')), 1000, () => {
             aborted = true
         })
         expect(res.status).toBe(200)
@@ -21,7 +21,7 @@ describe('runWithVerbTimeout', () => {
 
     test('returns 504 and fires onTimeout when the handler is too slow', async () => {
         let aborted = false
-        const res = await runWithVerbTimeout(slowResponse(1000), 20, () => {
+        const res = await runWithRpcTimeout(slowResponse(1000), 20, () => {
             aborted = true
         })
         expect(res.status).toBe(504)
@@ -32,14 +32,14 @@ describe('runWithVerbTimeout', () => {
         const rejecting = new Promise<Response>((_, reject) =>
             setTimeout(() => reject(new Error('boom')), 20),
         )
-        const res = await runWithVerbTimeout(rejecting, 5, () => {})
+        const res = await runWithRpcTimeout(rejecting, 5, () => {})
         expect(res.status).toBe(504)
         await Bun.sleep(40) // let the rejection settle — must be swallowed
     })
 
     test('propagates a handler rejection that wins the race', async () => {
         await expect(
-            runWithVerbTimeout(Promise.reject(new Error('handler threw')), 1000, () => {}),
+            runWithRpcTimeout(Promise.reject(new Error('handler threw')), 1000, () => {}),
         ).rejects.toThrow('handler threw')
     })
 })

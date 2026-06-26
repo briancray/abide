@@ -14,7 +14,7 @@ avoid an unhandled rejection, and a late-resolved streaming Response has its
 body cancelled to release the underlying source. A handler that wants its own
 outbound I/O torn down should pass request().signal to it.
 */
-export function runWithVerbTimeout(
+export function runWithRpcTimeout(
     work: Promise<Response>,
     ms: number,
     onTimeout: () => void,
