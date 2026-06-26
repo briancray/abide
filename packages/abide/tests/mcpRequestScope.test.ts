@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { dispatchMcpRequest } from '../src/lib/mcp/dispatchMcpRequest.ts'
 import { json } from '../src/lib/server/json.ts'
 import { request } from '../src/lib/server/request.ts'
-import { defineVerb } from '../src/lib/server/rpc/defineVerb.ts'
+import { defineRpc } from '../src/lib/server/rpc/defineRpc.ts'
 import { requestContext } from '../src/lib/server/runtime/requestContext.ts'
 import { cache } from '../src/lib/shared/cache.ts'
 import { cacheStoreSlot } from '../src/lib/shared/cacheStoreSlot.ts'
@@ -44,8 +44,8 @@ describe('MCP tool dispatch request scope', () => {
 
     test('cache() is isolated per tool call — each call recomputes', async () => {
         let runs = 0
-        const producer = defineVerb('GET', '/rpc/mcp-scope-inner', () => json({ runs: ++runs }))
-        defineVerb('GET', '/rpc/mcp-scope-cached', async () => json(await cache(producer)()), {
+        const producer = defineRpc('GET', '/rpc/mcp-scope-inner', () => json({ runs: ++runs }))
+        defineRpc('GET', '/rpc/mcp-scope-cached', async () => json(await cache(producer)()), {
             inputSchema: testSchema(),
         })
 
@@ -58,14 +58,9 @@ describe('MCP tool dispatch request scope', () => {
     })
 
     test('request() resolves instead of throwing', async () => {
-        defineVerb(
-            'GET',
-            '/rpc/mcp-scope-host',
-            () => json({ host: new URL(request().url).host }),
-            {
-                inputSchema: testSchema(),
-            },
-        )
+        defineRpc('GET', '/rpc/mcp-scope-host', () => json({ host: new URL(request().url).host }), {
+            inputSchema: testSchema(),
+        })
 
         const envelope = await callTool('mcp-scope-host')
         expect(envelope.error).toBeUndefined()
@@ -73,7 +68,7 @@ describe('MCP tool dispatch request scope', () => {
     })
 
     test('a thrown handler becomes an isError result, not a JSON-RPC error', async () => {
-        defineVerb(
+        defineRpc(
             'GET',
             '/rpc/mcp-scope-boom',
             () => {

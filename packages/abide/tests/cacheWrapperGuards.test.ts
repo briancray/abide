@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { json } from '../src/lib/server/json.ts'
-import { defineVerb } from '../src/lib/server/rpc/defineVerb.ts'
+import { defineRpc } from '../src/lib/server/rpc/defineRpc.ts'
 import { cache } from '../src/lib/shared/cache.ts'
 import { pending } from '../src/lib/shared/pending.ts'
 import { refreshing } from '../src/lib/shared/refreshing.ts'
@@ -13,7 +13,7 @@ through selectorMatcher, so one guard covers pending, refreshing, and
 cache.invalidate alike.
 */
 describe('cache() wrapper brand guards', () => {
-    const getPost = defineVerb('GET', '/rpc/wrapper-guard-post', () => json({ ok: true }))
+    const getPost = defineRpc('GET', '/rpc/wrapper-guard-post', () => json({ ok: true }))
 
     test('a wrapper used as a probe selector throws', () => {
         const wrapped = cache(getPost)

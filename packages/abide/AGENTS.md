@@ -229,7 +229,7 @@ shadow same-named component state inside the block.
 
 - `@abide/abide/server/AppModule` — type of `src/app.ts`: optional `forwardHeaders`, `init`, `handle`, `handleError`, `health` hooks.
 - `@abide/abide/server/InspectorContext` — type of the capability bundle the core injects into `@abide/inspector` when `ABIDE_ENABLE_INSPECTOR=true`.
-- `@abide/abide/server/rpc/defineVerb` — `defineVerb(method, url, handler, opts?)`: low-level builder the GET/POST/… helpers wrap.
+- `@abide/abide/server/rpc/defineRpc` — `defineRpc(method, url, handler, opts?)`: low-level builder the GET/POST/… helpers wrap.
 - `@abide/abide/server/sockets/defineSocket` — `defineSocket(name, opts?)`: server-side `Socket` construction (per-subscriber queue, shared retained tail).
 
 ## Isomorphic surface — abide/shared/\* (same callable both sides)

@@ -54,7 +54,7 @@
         "./server/AppModule": "./src/lib/server/AppModule.ts",
         "./server/InspectorContext": "./src/lib/server/runtime/types/InspectorContext.ts",
         "./server/agent": "./src/lib/server/agent.ts",
-        "./server/rpc/defineVerb": "./src/lib/server/rpc/defineVerb.ts",
+        "./server/rpc/defineRpc": "./src/lib/server/rpc/defineRpc.ts",
         "./server/sockets/defineSocket": "./src/lib/server/sockets/defineSocket.ts",
         "./server/prompts/definePrompt": "./src/lib/server/prompts/definePrompt.ts",
         "./ui/tail": "./src/lib/ui/tail.ts",

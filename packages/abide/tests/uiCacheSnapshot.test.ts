@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test'
 import { json } from '../src/lib/server/json.ts'
-import { defineVerb } from '../src/lib/server/rpc/defineVerb.ts'
+import { defineRpc } from '../src/lib/server/rpc/defineRpc.ts'
 import { requestContext } from '../src/lib/server/runtime/requestContext.ts'
 import { runWithRequestScope } from '../src/lib/server/runtime/runWithRequestScope.ts'
 import { serializeCacheSnapshot } from '../src/lib/server/runtime/serializeCacheSnapshot.ts'
@@ -30,13 +30,13 @@ import { installMiniDom } from './support/installMiniDom.ts'
 
 const options = { logRequests: false }
 
-/* The whole loop, through abide's real machinery: a defineVerb remote read via
+/* The whole loop, through abide's real machinery: a defineRpc remote read via
    cache() inside a `<template await>`, server-rendered and streamed, its store
    serialized by the actual serializeCacheSnapshot, seeded on a fresh client store,
    then the page hydrated — adopting the SSR branch from the warm cache without re-
    dispatching the verb. The keyed counterpart to the positional resume manifest. */
 let handlerCalls = 0
-const getUsers = defineVerb('GET', '/rpc/ui-users', () => {
+const getUsers = defineRpc('GET', '/rpc/ui-users', () => {
     handlerCalls += 1
     return json(['ada', 'margaret'])
 })

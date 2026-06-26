@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { json } from '../src/lib/server/json.ts'
-import { defineVerb } from '../src/lib/server/rpc/defineVerb.ts'
+import { defineRpc } from '../src/lib/server/rpc/defineRpc.ts'
 import { cache } from '../src/lib/shared/cache.ts'
 import { cacheStoreSlot } from '../src/lib/shared/cacheStoreSlot.ts'
 import { createCacheStore } from '../src/lib/shared/createCacheStore.ts'
@@ -284,8 +284,8 @@ unprompted", so a write method must never carry it; ttl: 0 retains nothing to
 revalidate; the two coalescing windows are exclusive.
 */
 describe('cache() swr guards', () => {
-    const readPost = defineVerb('GET', '/rpc/policy-read', () => json({ ok: true }))
-    const writePost = defineVerb('POST', '/rpc/policy-write', () => json({ ok: true }))
+    const readPost = defineRpc('GET', '/rpc/policy-read', () => json({ ok: true }))
+    const writePost = defineRpc('POST', '/rpc/policy-write', () => json({ ok: true }))
 
     test('throttle and debounce together throw', () => {
         const fetchValue = () => Promise.resolve(1)

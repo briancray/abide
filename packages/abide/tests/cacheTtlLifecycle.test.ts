@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { json } from '../src/lib/server/json.ts'
-import { defineVerb } from '../src/lib/server/rpc/defineVerb.ts'
+import { defineRpc } from '../src/lib/server/rpc/defineRpc.ts'
 import { requestContext } from '../src/lib/server/runtime/requestContext.ts'
 import { runWithRequestScope } from '../src/lib/server/runtime/runWithRequestScope.ts'
 import { serializeCacheSnapshot } from '../src/lib/server/runtime/serializeCacheSnapshot.ts'
@@ -32,13 +32,13 @@ edges the other cache suites don't pin:
 */
 
 let calls = 0
-const countedRemote = defineVerb('GET', '/rpc/ttl-counted', () => json({ hit: ++calls }))
+const countedRemote = defineRpc('GET', '/rpc/ttl-counted', () => json({ hit: ++calls }))
 
 let writes = 0
-const countedWrite = defineVerb('POST', '/rpc/ttl-write', () => json({ write: ++writes }))
+const countedWrite = defineRpc('POST', '/rpc/ttl-write', () => json({ write: ++writes }))
 
 let failures = 0
-const flakyRemote = defineVerb('GET', '/rpc/ttl-flaky', () => {
+const flakyRemote = defineRpc('GET', '/rpc/ttl-flaky', () => {
     failures += 1
     if (failures === 1) {
         throw new Error('first call fails')
@@ -47,7 +47,7 @@ const flakyRemote = defineVerb('GET', '/rpc/ttl-flaky', () => {
 })
 
 let errorStatusCalls = 0
-const errorStatusRemote = defineVerb('GET', '/rpc/ttl-error-status', () => {
+const errorStatusRemote = defineRpc('GET', '/rpc/ttl-error-status', () => {
     errorStatusCalls += 1
     /* A 500 RESPONSE (fetch resolves on it, doesn't reject) on the first call. */
     return json({ hit: errorStatusCalls }, errorStatusCalls === 1 ? { status: 500 } : {})

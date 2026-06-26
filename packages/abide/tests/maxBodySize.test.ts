@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { json } from '../src/lib/server/json.ts'
-import { defineVerb } from '../src/lib/server/rpc/defineVerb.ts'
+import { defineRpc } from '../src/lib/server/rpc/defineRpc.ts'
 import { encodeRefJson } from '../src/lib/shared/encodeRefJson.ts'
 import { REF_JSON_HEADER } from '../src/lib/shared/REF_JSON_HEADER.ts'
 
@@ -14,7 +14,7 @@ function postRequest(url: string, body: BodyInit, headers = JSON_HEADERS): Reque
 
 describe('maxBodySize', () => {
     test('a body under the limit parses and reaches the handler', async () => {
-        const echo = defineVerb('POST', '/rpc/limit-ok', async (args) => json(args), {
+        const echo = defineRpc('POST', '/rpc/limit-ok', async (args) => json(args), {
             maxBodySize: 64,
         })
         const response = await echo.fetch(
@@ -25,7 +25,7 @@ describe('maxBodySize', () => {
     })
 
     test('a declared Content-Length over the limit rejects with 413 before reading', async () => {
-        const verb = defineVerb('POST', '/rpc/limit-header', async (args) => json(args), {
+        const verb = defineRpc('POST', '/rpc/limit-header', async (args) => json(args), {
             maxBodySize: 8,
         })
         const response = await verb.fetch(
@@ -36,7 +36,7 @@ describe('maxBodySize', () => {
     })
 
     test('actual streamed bytes are bounded even without a Content-Length header', async () => {
-        const verb = defineVerb('POST', '/rpc/limit-stream', async (args) => json(args), {
+        const verb = defineRpc('POST', '/rpc/limit-stream', async (args) => json(args), {
             maxBodySize: 16,
         })
         /* A stream body carries no Content-Length — the header check can't see it. */
@@ -52,7 +52,7 @@ describe('maxBodySize', () => {
     })
 
     test('without maxBodySize, no abide-level cap applies', async () => {
-        const verb = defineVerb('POST', '/rpc/no-limit', async (args) => json(args))
+        const verb = defineRpc('POST', '/rpc/no-limit', async (args) => json(args))
         const response = await verb.fetch(
             postRequest(
                 '/rpc/no-limit',

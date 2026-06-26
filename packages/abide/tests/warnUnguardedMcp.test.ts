@@ -1,12 +1,12 @@
 import { describe, expect, spyOn, test } from 'bun:test'
 import { createMcpServer } from '../src/lib/mcp/createMcpServer.ts'
 import { json } from '../src/lib/server/json.ts'
-import { defineVerb } from '../src/lib/server/rpc/defineVerb.ts'
+import { defineRpc } from '../src/lib/server/rpc/defineRpc.ts'
 import { testSchema } from './standardSchema.ts'
 import { bootTestServer } from './support/bootTestServer.ts'
 
 /* A schema'd GET auto-exposes to MCP, so the boot below has ≥1 exposed tool. */
-defineVerb('GET', '/rpc/warn-probe', () => json({ ok: true }), { inputSchema: testSchema() })
+defineRpc('GET', '/rpc/warn-probe', () => json({ ok: true }), { inputSchema: testSchema() })
 
 /*
 The unguarded-MCP boot warning: mounted MCP endpoint + exposed tools + no

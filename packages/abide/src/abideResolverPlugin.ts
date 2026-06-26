@@ -93,7 +93,7 @@ Bun plugin that wires every virtual import abide produces at build time:
 
 Also rewrites modules under src/server/rpc and src/server/sockets:
 - src/server/rpc/<file>.ts: each HTTP-verb export is bound to a runtime
-  implementation — defineVerb on the server, remoteProxy on the client.
+  implementation — defineRpc on the server, remoteProxy on the client.
 - src/server/sockets/<file>.ts: each `socket(opts)` export is bound to
   defineSocket on the server (with the socket name + opts) or
   socketProxy on the client (name only — opts are server-side).
@@ -374,13 +374,13 @@ export const ${prepared.exportName} = __abideRemoteProxy__(${JSON.stringify(prep
                 Server target: strip the user's verb import, then rewrite
                 the `<VERB>(` call so the verb (from the identifier) and
                 the URL (from the file path) are threaded into the
-                runtime constructor — defineVerb. The user's handler body
+                runtime constructor — defineRpc. The user's handler body
                 stays intact between the parens; any generics on the call
                 are dropped (they carry no runtime info). Rewriting is
                 tokenizer-driven so `GET` mentions inside strings and
                 comments are left alone.
                 */
-                const banner = `import { defineVerb as __abideDefineVerb__ } from '${importName}/server/rpc/defineVerb';
+                const banner = `import { defineRpc as __abideDefineVerb__ } from '${importName}/server/rpc/defineRpc';
 `
                 return { contents: `${banner}${prepared.rewriteForServer(url)}`, loader: 'ts' }
             })

@@ -29,7 +29,7 @@ export function setRegistryManifests(value: RegistryManifests): void {
 
 /*
 On first call, eagerly imports every rpc + socket + prompt module so
-defineVerb / defineSocket / definePrompt fire and populate the
+defineRpc / defineSocket / definePrompt fire and populate the
 registries. Idempotent — repeat calls reuse the same in-flight promise,
 so concurrent first requests (e.g. /openapi.json + an MCP tools/list)
 trigger exactly one load instead of racing to fire the full import set

@@ -4,7 +4,7 @@
    shape with a field-keyed message map. */
 import { expect, test } from 'bun:test'
 import { error } from '../src/lib/server/error.ts'
-import { defineVerb } from '../src/lib/server/rpc/defineVerb.ts'
+import { defineRpc } from '../src/lib/server/rpc/defineRpc.ts'
 import { runWithRequestScope } from '../src/lib/server/runtime/runWithRequestScope.ts'
 import { decodeResponse } from '../src/lib/shared/decodeResponse.ts'
 import { HttpError } from '../src/lib/shared/HttpError.ts'
@@ -31,7 +31,7 @@ const requireEmail: StandardSchemaV1 = {
 
 const couponSpec = { invalidCoupon: { status: 400, data: passthrough } } as const
 
-const buy = defineVerb(
+const buy = defineRpc(
     'POST',
     '/rpc/buy',
     (_args, ctx) => {
@@ -79,7 +79,7 @@ test('the client decode throws HttpError carrying .kind and .data', async () => 
     }
 })
 
-const signup = defineVerb('POST', '/rpc/signup', (args) => Response.json(args), {
+const signup = defineRpc('POST', '/rpc/signup', (args) => Response.json(args), {
     inputSchema: requireEmail,
 })
 
@@ -107,7 +107,7 @@ test('validation 422 carries issues + a typed field-error map, decoding to kind 
 })
 
 test('a plain error(status, text) leaves .kind / .data undefined', async () => {
-    const gone = defineVerb('GET', '/rpc/gone', () => error(410, 'gone'))
+    const gone = defineRpc('GET', '/rpc/gone', () => error(410, 'gone'))
     const req = new Request('https://test.local/rpc/gone')
     const res = await runWithRequestScope(req, options, () => gone.fetch(req))
     try {

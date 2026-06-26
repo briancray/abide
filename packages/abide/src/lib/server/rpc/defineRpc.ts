@@ -35,7 +35,7 @@ const rpcLog = abideLog.channel('abide:rpc')
 Builds a RemoteFunction from an HTTP verb + RPC URL + handler. The bundler
 rewrites every `export const VERB = handler(fn)` inside an `$rpc/**` module
 so the verb (from the export name) and the URL (from the file path under
-`src/server/rpc/`, with `/rpc/` prefix) are threaded into defineVerb.
+`src/server/rpc/`, with `/rpc/` prefix) are threaded into defineRpc.
 
 The plain call (`fn(args)`) resolves to the Content-Type-decoded body;
 non-2xx responses throw HttpError. `.raw(args)` returns the underlying
@@ -48,7 +48,7 @@ Every raw invocation records the synthesized Request against the returned
 promise so cache() can stash it on the entry without re-building.
 */
 // @documentation plumbing
-export function defineVerb<Args, Return>(
+export function defineRpc<Args, Return>(
     method: HttpMethod,
     url: string,
     handler: RemoteHandler<Args, Return>,

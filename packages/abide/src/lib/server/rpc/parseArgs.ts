@@ -129,7 +129,7 @@ export async function parseArgs(
     /*
     TODO(query-coercion): query params arrive as strings, so a numeric/boolean
     field reaches schema validation as `'2'`/`'true'`. Deferred deliberately:
-    parseArgs has no access to the verb's inputSchema (it lives in defineVerb),
+    parseArgs has no access to the verb's inputSchema (it lives in defineRpc),
     and Standard Schema exposes no type structure to drive type-aware coercion.
     Blind value-shape coercion is unsafe — it would corrupt legitimately
     string-typed fields whose value looks numeric/boolean (ids, zip codes,

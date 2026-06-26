@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { json } from '../src/lib/server/json.ts'
-import { defineVerb } from '../src/lib/server/rpc/defineVerb.ts'
+import { defineRpc } from '../src/lib/server/rpc/defineRpc.ts'
 import { createUiPageRenderer } from '../src/lib/server/runtime/createUiPageRenderer.ts'
 import { requestContext } from '../src/lib/server/runtime/requestContext.ts'
 import { runWithRequestScope } from '../src/lib/server/runtime/runWithRequestScope.ts'
@@ -14,8 +14,8 @@ const options = { logRequests: false }
 
 /* Real remote reads so a {#await cache()} thunk creates its entry lazily — mid-stream,
    after the render-return snapshot — exactly as a compiled page does. */
-const getUsers = defineVerb('GET', '/rpc/page-users', () => json(['ada']))
-const getAvatar = defineVerb(
+const getUsers = defineRpc('GET', '/rpc/page-users', () => json(['ada']))
+const getAvatar = defineRpc(
     'GET',
     '/rpc/page-avatar',
     () => new Response(new Uint8Array([1, 2, 3])),

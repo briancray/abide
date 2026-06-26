@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { json } from '../src/lib/server/json.ts'
-import { defineVerb } from '../src/lib/server/rpc/defineVerb.ts'
+import { defineRpc } from '../src/lib/server/rpc/defineRpc.ts'
 import { cache } from '../src/lib/shared/cache.ts'
 import { cacheStoreSlot } from '../src/lib/shared/cacheStoreSlot.ts'
 import { createCacheStore } from '../src/lib/shared/createCacheStore.ts'
@@ -19,7 +19,7 @@ describe('warm cache reads are isolated per reader', () => {
     })
 
     test('mutating a warm read does not affect the stored value or other readers', async () => {
-        const getValue = defineVerb('GET', '/rpc/warm-probe', () => json({ items: [1, 2, 3] }))
+        const getValue = defineRpc('GET', '/rpc/warm-probe', () => json({ items: [1, 2, 3] }))
         const store: CacheStore = createCacheStore()
         cacheStoreSlot.resolver = () => store
 

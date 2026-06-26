@@ -15,7 +15,7 @@ const redden = (text: string): string =>
     hasColor ? `${Bun.color('red', 'ansi-256')}${text}\x1b[39m` : text
 
 /*
-A declared inputSchema is what makes mcp/cli safe to advertise (see defineVerb /
+A declared inputSchema is what makes mcp/cli safe to advertise (see defineRpc /
 defineSocket), so a missing schema gets a red `·` to flag the declaration whose
 machine surfaces are gated behind it.
 */

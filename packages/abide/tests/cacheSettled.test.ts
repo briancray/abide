@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { json } from '../src/lib/server/json.ts'
-import { defineVerb } from '../src/lib/server/rpc/defineVerb.ts'
+import { defineRpc } from '../src/lib/server/rpc/defineRpc.ts'
 import { requestContext } from '../src/lib/server/runtime/requestContext.ts'
 import { runWithRequestScope } from '../src/lib/server/runtime/runWithRequestScope.ts'
 import { cache } from '../src/lib/shared/cache.ts'
@@ -15,7 +15,7 @@ doesn't block on) and flips true once it resolves (the awaited case that
 inlines into the snapshot).
 */
 describe('cache entry settled flag', () => {
-    const getValue = defineVerb('GET', '/rpc/settled-probe', () => json({ ok: true }))
+    const getValue = defineRpc('GET', '/rpc/settled-probe', () => json({ ok: true }))
 
     beforeAll(() => {
         cacheStoreSlot.resolver = () => requestContext.getStore()?.cache

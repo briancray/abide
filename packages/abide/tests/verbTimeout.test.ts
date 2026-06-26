@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { json } from '../src/lib/server/json.ts'
 import { request } from '../src/lib/server/request.ts'
-import { defineVerb } from '../src/lib/server/rpc/defineVerb.ts'
+import { defineRpc } from '../src/lib/server/rpc/defineRpc.ts'
 import { runWithVerbTimeout } from '../src/lib/server/rpc/runWithVerbTimeout.ts'
 import { runWithRequestScope } from '../src/lib/server/runtime/runWithRequestScope.ts'
 
@@ -44,20 +44,20 @@ describe('runWithVerbTimeout', () => {
     })
 })
 
-describe('defineVerb timeout', () => {
+describe('defineRpc timeout', () => {
     test('an in-process call past the deadline throws HttpError(504)', async () => {
-        const slow = defineVerb('GET', '/rpc/slow', () => slowResponse(1000), { timeout: 20 })
+        const slow = defineRpc('GET', '/rpc/slow', () => slowResponse(1000), { timeout: 20 })
         await expect(slow()).rejects.toMatchObject({ status: 504 })
     })
 
     test('a handler that beats the deadline passes through', async () => {
-        const fast = defineVerb('GET', '/rpc/fast', () => json({ ok: true }), { timeout: 1000 })
+        const fast = defineRpc('GET', '/rpc/fast', () => json({ ok: true }), { timeout: 1000 })
         expect(await fast()).toEqual({ ok: true })
     })
 
     test('the network path aborts request().signal so an outbound fetch cancels', async () => {
         let signalAborted = false
-        const fn = defineVerb(
+        const fn = defineRpc(
             'GET',
             '/rpc/sig',
             () => {

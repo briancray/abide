@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { json } from '../src/lib/server/json.ts'
-import { defineVerb } from '../src/lib/server/rpc/defineVerb.ts'
+import { defineRpc } from '../src/lib/server/rpc/defineRpc.ts'
 import { requestContext } from '../src/lib/server/runtime/requestContext.ts'
 import { runWithRequestScope } from '../src/lib/server/runtime/runWithRequestScope.ts'
 import { cache } from '../src/lib/shared/cache.ts'
@@ -9,7 +9,7 @@ import { cacheStoreSlot } from '../src/lib/shared/cacheStoreSlot.ts'
 const options = { logRequests: false }
 
 /*
-End-to-end cache integration: a real defineVerb remote, called through cache()
+End-to-end cache integration: a real defineRpc remote, called through cache()
 inside a request scope, against the request-scoped store the server installs.
 Mirrors the server entry's resolver (`requestContext.getStore()?.cache`) so
 activeCacheStore() resolves the same store cache() sees in production —
@@ -18,7 +18,7 @@ than a fake remote.
 */
 describe('cache() over a real verb in a request scope', () => {
     let calls = 0
-    const getCount = defineVerb('GET', '/rpc/cache-count', () => json({ hit: ++calls }))
+    const getCount = defineRpc('GET', '/rpc/cache-count', () => json({ hit: ++calls }))
 
     beforeAll(() => {
         cacheStoreSlot.resolver = () => requestContext.getStore()?.cache

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { json } from '../src/lib/server/json.ts'
-import { defineVerb } from '../src/lib/server/rpc/defineVerb.ts'
+import { defineRpc } from '../src/lib/server/rpc/defineRpc.ts'
 import { parseArgs } from '../src/lib/server/rpc/parseArgs.ts'
 import { runWithRequestScope } from '../src/lib/server/runtime/runWithRequestScope.ts'
 import { buildRpcRequest } from '../src/lib/shared/buildRpcRequest.ts'
@@ -54,7 +54,7 @@ describe('multipart uploads', () => {
 
     test('filesSchema validates the File parts and merges them into the handler args', async () => {
         let seen: { title?: string; photos?: File[] } | undefined
-        const createPost = defineVerb(
+        const createPost = defineRpc(
             'POST',
             '/rpc/createPost',
             (args: { title: string; photos: File[] }) => {
@@ -75,7 +75,7 @@ describe('multipart uploads', () => {
     })
 
     test('a filesSchema violation is a 422, like a bad text field', async () => {
-        const createPost = defineVerb('POST', '/rpc/createPostStrict', () => json({ ok: true }), {
+        const createPost = defineRpc('POST', '/rpc/createPostStrict', () => json({ ok: true }), {
             inputSchema: passthrough,
             filesSchema: requirePhotos,
         })
@@ -88,7 +88,7 @@ describe('multipart uploads', () => {
 
     test('a FormData built by the client emitter round-trips through the verb', async () => {
         let seen: { photos?: File[] } | undefined
-        const createPost = defineVerb(
+        const createPost = defineRpc(
             'POST',
             '/rpc/createPostRoundtrip',
             (args: { photos: File[] }) => {

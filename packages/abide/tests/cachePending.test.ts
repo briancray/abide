@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { json } from '../src/lib/server/json.ts'
-import { defineVerb } from '../src/lib/server/rpc/defineVerb.ts'
+import { defineRpc } from '../src/lib/server/rpc/defineRpc.ts'
 import { requestContext } from '../src/lib/server/runtime/requestContext.ts'
 import { runWithRequestScope } from '../src/lib/server/runtime/runWithRequestScope.ts'
 import { cache } from '../src/lib/shared/cache.ts'
@@ -15,8 +15,8 @@ invalidate's selector grammar, so the global form, the per-function form, and
 the scoped form each narrow which entries count toward "loading".
 */
 describe('pending()', () => {
-    const getPost = defineVerb('GET', '/rpc/pending-post', () => json({ ok: true }))
-    const getUser = defineVerb('GET', '/rpc/pending-user', () => json({ ok: true }))
+    const getPost = defineRpc('GET', '/rpc/pending-post', () => json({ ok: true }))
+    const getUser = defineRpc('GET', '/rpc/pending-user', () => json({ ok: true }))
 
     beforeAll(() => {
         cacheStoreSlot.resolver = () => requestContext.getStore()?.cache

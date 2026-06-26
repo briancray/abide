@@ -13,7 +13,7 @@ import type { Subscribable } from './types/Subscribable.ts'
 
 /*
 Assembles the public RemoteFunction shape used identically by the
-server-side defineVerb (in-process handler invocation) and the
+server-side defineRpc (in-process handler invocation) and the
 client-side remoteProxy (network fetch). Centralising the wiring here
 keeps the call/raw/stream/fetch semantics — including WeakMap meta
 recording, Content-Type decode, and Subscribable derivation — in one
@@ -24,7 +24,7 @@ place so the two halves can't drift.
   base; client uses window.location. The result is memoised inside the
   per-call `getRequest` thunk so the Request is built at most once per
   call regardless of how many readers pull on it.
-- `invoke(args, getRequest)` actually runs the call: server defineVerb
+- `invoke(args, getRequest)` actually runs the call: server defineRpc
   runs the handler and ignores `getRequest`; client remoteProxy calls
   `fetch(getRequest())`. The thunk lets the server skip the Request
   allocation entirely on the SSR hot path — the only consumer that ever

@@ -2,14 +2,14 @@ import { describe, expect, test } from 'bun:test'
 import { createClient } from '../src/lib/cli/createClient.ts'
 import { json } from '../src/lib/server/json.ts'
 import { request } from '../src/lib/server/request.ts'
-import { defineVerb } from '../src/lib/server/rpc/defineVerb.ts'
+import { defineRpc } from '../src/lib/server/rpc/defineRpc.ts'
 import { sse } from '../src/lib/server/sse.ts'
 import { streamResponse } from '../src/lib/shared/streamResponse.ts'
 import { testSchema } from './standardSchema.ts'
 
 describe('createClient in-process happy path', () => {
     test('plain call decodes the body; .raw returns the Response', async () => {
-        defineVerb('GET', '/rpc/cli-ping', ({ n }: { n?: string }) => json({ pong: n ?? '0' }), {
+        defineRpc('GET', '/rpc/cli-ping', ({ n }: { n?: string }) => json({ pong: n ?? '0' }), {
             inputSchema: testSchema({ type: 'object', properties: { n: { type: 'string' } } }),
         })
         const client = createClient()
@@ -22,14 +22,14 @@ describe('createClient in-process happy path', () => {
     })
 
     test('runs in a request scope — request() resolves instead of throwing', async () => {
-        defineVerb('GET', '/rpc/cli-where', () => json({ host: new URL(request().url).host }))
+        defineRpc('GET', '/rpc/cli-where', () => json({ host: new URL(request().url).host }))
         const client = createClient()
 
         expect(await client['cli-where']()).toEqual({ host: 'localhost' })
     })
 
     test('.raw on a streaming verb yields frames through streamResponse', async () => {
-        defineVerb('GET', '/rpc/cli-feed', () =>
+        defineRpc('GET', '/rpc/cli-feed', () =>
             sse(
                 (async function* () {
                     yield { n: 1 }

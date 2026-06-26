@@ -6,7 +6,7 @@ On the deadline it resolves a 504 — so the caller (an SSR cache read, an
 MCP/CLI invocation, or the network response) is unblocked in time with an
 honest status — and calls `onTimeout` to cancel any
 cooperating outbound work (the network path composes the verb's deadline into
-request().signal; see defineVerb).
+request().signal; see defineRpc).
 
 `work` keeps running after the deadline — JS can't cancel a running async
 function, only stop awaiting it — so its eventual settlement is swallowed to

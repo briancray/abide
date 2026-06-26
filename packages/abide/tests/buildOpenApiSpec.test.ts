@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { json } from '../src/lib/server/json.ts'
-import { defineVerb } from '../src/lib/server/rpc/defineVerb.ts'
+import { defineRpc } from '../src/lib/server/rpc/defineRpc.ts'
 import { buildOpenApiSpec } from '../src/lib/server/runtime/buildOpenApiSpec.ts'
 import { testSchema } from './standardSchema.ts'
 
@@ -14,7 +14,7 @@ describe('buildOpenApiSpec happy path', () => {
     let paths: Record<string, Record<string, Operation>>
 
     beforeAll(() => {
-        defineVerb('GET', '/rpc/oa-get', ({ id }: { id: string }) => json({ id }), {
+        defineRpc('GET', '/rpc/oa-get', ({ id }: { id: string }) => json({ id }), {
             inputSchema: testSchema({
                 type: 'object',
                 properties: { id: { type: 'string' } },
@@ -22,11 +22,11 @@ describe('buildOpenApiSpec happy path', () => {
             }),
             outputSchema: testSchema({ type: 'object', properties: { id: { type: 'string' } } }),
         })
-        defineVerb('POST', '/rpc/oa-make', ({ name }: { name: string }) => json({ name }), {
+        defineRpc('POST', '/rpc/oa-make', ({ name }: { name: string }) => json({ name }), {
             inputSchema: testSchema({ type: 'object', properties: { name: { type: 'string' } } }),
         })
         // upload verb → text fields plus generic binary parts
-        defineVerb('POST', '/rpc/oa-upload', () => json({ ok: true }), {
+        defineRpc('POST', '/rpc/oa-upload', () => json({ ok: true }), {
             inputSchema: testSchema({
                 type: 'object',
                 properties: { title: { type: 'string' } },

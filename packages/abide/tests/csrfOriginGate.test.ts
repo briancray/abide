@@ -1,17 +1,17 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { createMcpServer } from '../src/lib/mcp/createMcpServer.ts'
 import { json } from '../src/lib/server/json.ts'
-import { defineVerb } from '../src/lib/server/rpc/defineVerb.ts'
+import { defineRpc } from '../src/lib/server/rpc/defineRpc.ts'
 import type { RemoteRoutes } from '../src/lib/server/rpc/types/RemoteRoutes.ts'
 import { defineSocket } from '../src/lib/server/sockets/defineSocket.ts'
 import type { SocketRoutes } from '../src/lib/server/sockets/types/SocketRoutes.ts'
 import { bootTestServer } from './support/bootTestServer.ts'
 
-const createThing = defineVerb('POST', '/rpc/csrf-create', () => json({ created: true }))
-const openMutation = defineVerb('POST', '/rpc/csrf-open', () => json({ created: true }), {
+const createThing = defineRpc('POST', '/rpc/csrf-create', () => json({ created: true }))
+const openMutation = defineRpc('POST', '/rpc/csrf-open', () => json({ created: true }), {
     crossOrigin: true,
 })
-const readThing = defineVerb('GET', '/rpc/csrf-read', () => json({ ok: true }))
+const readThing = defineRpc('GET', '/rpc/csrf-read', () => json({ ok: true }))
 
 const rpc: RemoteRoutes = {
     '/rpc/csrf-create': async () => ({ createThing }),

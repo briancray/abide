@@ -21,7 +21,7 @@ the compiled server beside it, so `/start` can spawn a local instance.
   1. Client build (once): `build` produces the platform-independent `dist/_app`
      the server binaries embed. It clears dist first, so it runs before everything.
   2. Discovery: build the discovery entry into a temporary JS bundle and run it. It
-     imports every rpc/socket module so defineVerb / defineSocket populate the
+     imports every rpc/socket module so defineRpc / defineSocket populate the
      registries, then prints the CLI manifest to stdout → `dist/cli-manifest.json`.
   3. Per target: a server binary (`compile`, reusing the shared `dist/_app` via
      `buildClient:false`) plus the CLI binary, written side by side. The resolver's
