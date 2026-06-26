@@ -63,8 +63,19 @@ export function defineRpc<Args, Return>(
         maxBodySize?: number
         /* Per-rpc handler deadline (ms): a 504 once exceeded, on every surface (SSR/MCP/CLI/network). */
         timeout?: number
+        /* Local-first durability: the client proxy queues the call durably (survives
+           offline + reload) instead of fetching immediately. Mutating methods only. */
+        outbox?: boolean
     },
 ): RemoteFunction<Args, Return> {
+    /* `outbox: true` is a mutation contract — a read RPC has nothing to durably deliver,
+       so reject it at declaration rather than silently ignore. The server handler itself
+       is unaffected; durability is a client-proxy concern. */
+    if (opts?.outbox === true && isReadOnlyMethod(method)) {
+        throw new Error(
+            `[abide] outbox: true is only valid on mutating RPCs (POST/PUT/PATCH/DELETE), not ${method}`,
+        )
+    }
     const timeout = opts?.timeout
     const inputSchema = opts?.inputSchema
     const outputSchema = opts?.outputSchema
