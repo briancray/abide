@@ -17,5 +17,11 @@ export type TemplateAttr =
     | { kind: 'expression'; name: string; code: string; loc?: number; nameLoc?: number }
     | { kind: 'event'; event: string; code: string; loc?: number }
     | { kind: 'bind'; property: string; code: string; loc?: number }
+    /* `class:<name>={code}` — toggles the class on/off by `code`'s truthiness, written
+       surgically (classList.toggle) without re-rendering the element. */
+    | { kind: 'class'; name: string; code: string; loc?: number }
+    /* `style:<property>={code}` — writes one inline style/custom property (style.setProperty)
+       reactively, again without a re-render. `property` may be a CSS custom prop (`--pct`). */
+    | { kind: 'style'; property: string; code: string; loc?: number }
     | { kind: 'attach'; code: string; loc?: number }
     | { kind: 'spread'; code: string; loc?: number }

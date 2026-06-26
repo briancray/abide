@@ -20,6 +20,7 @@ import { spreadExcludedNames } from './spreadExcludedNames.ts'
 import { staticAttr } from './staticAttr.ts'
 import { staticTextPart } from './staticTextPart.ts'
 import { stripEffects } from './stripEffects.ts'
+import type { TemplateAttr } from './types/TemplateAttr.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
 import { VOID_TAGS } from './VOID_TAGS.ts'
 
@@ -371,8 +372,25 @@ export function generateSSR(
         for (const scope of node.scopes ?? []) {
             code += push(target, scopeAttr(scope))
         }
+        /* `class:`/`style:` directives collapse with any static `class`/`style` into a SINGLE
+           merged attribute (a duplicate attribute would be invalid and ignored). The client's
+           classList.toggle / style.setProperty effects re-apply the same values on hydrate, so
+           the merged SSR value already matches the post-mount DOM — no flash, no desync. */
+        const classDirectives = node.attrs.filter(
+            (attr): attr is Extract<TemplateAttr, { kind: 'class' }> => attr.kind === 'class',
+        )
+        const styleDirectives = node.attrs.filter(
+            (attr): attr is Extract<TemplateAttr, { kind: 'style' }> => attr.kind === 'style',
+        )
         for (const attr of node.attrs) {
             if (attr.kind === 'static') {
+                /* A static class/style is folded into the merge below when directives exist. */
+                if (
+                    (attr.name === 'class' && classDirectives.length > 0) ||
+                    (attr.name === 'style' && styleDirectives.length > 0)
+                ) {
+                    continue
+                }
                 code += push(target, staticAttr(attr.name, attr.value))
             } else if (attr.kind === 'expression') {
                 /* present/absent semantics matching the client `attr` binding:
@@ -399,6 +417,36 @@ export function generateSSR(
             } else if (attr.kind === 'bind') {
                 code += `${target}.push(${JSON.stringify(` ${attr.property}="`)} + $esc(${bindRead(attr.code)}) + '"');\n`
             }
+        }
+        /* Merged class: static value + each directive's name when its expression is truthy. */
+        if (classDirectives.length > 0) {
+            const staticClass = node.attrs.find(
+                (attr): attr is Extract<TemplateAttr, { kind: 'static' }> =>
+                    attr.kind === 'static' && attr.name === 'class',
+            )
+            const parts = [
+                ...(staticClass ? [JSON.stringify(staticClass.value)] : []),
+                ...classDirectives.map(
+                    (dir) => `((${lowerExpression(dir.code)}) ? ${JSON.stringify(dir.name)} : "")`,
+                ),
+            ]
+            code += `${target}.push(' class="' + $esc([${parts.join(', ')}].filter(Boolean).join(' ')) + '"');\n`
+        }
+        /* Merged style: static value + each directive's `prop:value` (String()-coerced, matching
+           the client's style.setProperty). */
+        if (styleDirectives.length > 0) {
+            const staticStyle = node.attrs.find(
+                (attr): attr is Extract<TemplateAttr, { kind: 'static' }> =>
+                    attr.kind === 'static' && attr.name === 'style',
+            )
+            const parts = [
+                ...(staticStyle ? [JSON.stringify(staticStyle.value)] : []),
+                ...styleDirectives.map(
+                    (dir) =>
+                        `(${JSON.stringify(`${dir.property}:`)} + String(${lowerExpression(dir.code)}))`,
+                ),
+            ]
+            code += `${target}.push(' style="' + $esc([${parts.join(', ')}].filter(Boolean).join(';')) + '"');\n`
         }
         code += push(target, '>')
         if (!VOID_TAGS.has(node.tag)) {

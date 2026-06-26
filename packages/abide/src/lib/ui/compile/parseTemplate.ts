@@ -475,6 +475,10 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
                     attrs.push({ kind: 'event', event: name.slice(2), code, loc })
                 } else if (name.startsWith('bind:')) {
                     attrs.push({ kind: 'bind', property: name.slice(5), code, loc })
+                } else if (name.startsWith('class:')) {
+                    attrs.push({ kind: 'class', name: name.slice(6), code, loc })
+                } else if (name.startsWith('style:')) {
+                    attrs.push({ kind: 'style', property: name.slice(6), code, loc })
                 } else if (name === 'attach') {
                     attrs.push({ kind: 'attach', code, loc })
                 } else {
@@ -900,15 +904,20 @@ function toProps(
             }
         }
         /* Every non-static kind keeps its `code`/`loc`; only the prop name differs —
-           a directive (`event`/`bind`/`attach`) round-trips to its written name. */
+           a directive (`event`/`bind`/`class`/`style`/`attach`) round-trips to its written
+           name as a passthrough prop. */
         const name =
             attr.kind === 'event'
                 ? `on${attr.event}`
                 : attr.kind === 'bind'
                   ? `bind:${attr.property}`
-                  : attr.kind === 'attach'
-                    ? 'attach'
-                    : attr.name
+                  : attr.kind === 'class'
+                    ? `class:${attr.name}`
+                    : attr.kind === 'style'
+                      ? `style:${attr.property}`
+                      : attr.kind === 'attach'
+                        ? 'attach'
+                        : attr.name
         /* Only `expression` carries a name offset; event/bind/attach are framework-handled
            passthrough excluded from the strict prop check, so theirs is unused. */
         const nameLoc = attr.kind === 'expression' ? attr.nameLoc : undefined
@@ -944,6 +953,12 @@ function attrName(attr: TemplateAttr): string {
     }
     if (attr.kind === 'attach') {
         return 'attach'
+    }
+    if (attr.kind === 'class') {
+        return `class:${attr.name}`
+    }
+    if (attr.kind === 'style') {
+        return `style:${attr.property}`
     }
     /* A spread has no name. `attrName` only feeds `<template>` directive lookups, and a
        spread on a `<template>` is rejected at parse, so this branch is unreachable in

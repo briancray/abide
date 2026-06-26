@@ -368,6 +368,8 @@ function emitNode(node: TemplateNode, builder: Builder): void {
                 prop.spread === true ||
                 prop.name.startsWith('on') ||
                 prop.name.startsWith('bind:') ||
+                prop.name.startsWith('class:') ||
+                prop.name.startsWith('style:') ||
                 prop.name === 'attach'
             const hasSpread = node.props.some((prop) => prop.spread)
             for (const prop of node.props.filter(handled)) {

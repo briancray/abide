@@ -143,7 +143,7 @@ export function generateBuild(
         node: Extract<TemplateNode, { kind: 'element' }>,
         attr: Extract<
             (typeof node.attrs)[number],
-            { kind: 'expression' | 'event' | 'attach' | 'bind' }
+            { kind: 'expression' | 'event' | 'attach' | 'bind' | 'class' | 'style' }
         >,
         varName: string,
     ): string {
@@ -155,6 +155,15 @@ export function generateBuild(
         }
         if (attr.kind === 'attach') {
             return `attach(${varName}, (${lowerExpression(attr.code)}));\n`
+        }
+        /* `class:<name>` — toggle the class by truthiness; surgical, no element re-render.
+           Layers on top of any static `class="…"` in the skeleton (classList is additive). */
+        if (attr.kind === 'class') {
+            return `effect(${namedThunk(`class_${attr.name}`, `${varName}.classList.toggle(${JSON.stringify(attr.name)}, !!(${lowerExpression(attr.code)}));`)});\n`
+        }
+        /* `style:<property>` — write one inline style / custom property reactively. */
+        if (attr.kind === 'style') {
+            return `effect(${namedThunk(`style_${attr.property}`, `${varName}.style.setProperty(${JSON.stringify(attr.property)}, String(${lowerExpression(attr.code)}));`)});\n`
         }
         if (attr.property === 'group') {
             /* Grouped two-way: radio binds the path to the single checked `value`;
