@@ -1,7 +1,7 @@
 import { promptRegistry } from '../server/prompts/promptRegistry.ts'
 import { dispatchVerbInProcess } from '../server/rpc/dispatchVerbInProcess.ts'
 import { findVerbByCommandName } from '../server/rpc/findVerbByCommandName.ts'
-import { verbRegistry } from '../server/rpc/verbRegistry.ts'
+import { rpcRegistry } from '../server/rpc/rpcRegistry.ts'
 import { socketOperations } from '../server/sockets/socketOperations.ts'
 import { socketRegistry } from '../server/sockets/socketRegistry.ts'
 import { abideLog } from '../shared/abideLog.ts'
@@ -71,7 +71,7 @@ read tool (recent buffered messages) and, when clientPublish is set, a
 */
 export function buildTools(): ToolDescriptor[] {
     const tools: ToolDescriptor[] = []
-    for (const entry of verbRegistry.values()) {
+    for (const entry of rpcRegistry.values()) {
         if (!entry.clients.mcp) {
             continue
         }

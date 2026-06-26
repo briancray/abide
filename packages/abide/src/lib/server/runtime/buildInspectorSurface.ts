@@ -1,6 +1,6 @@
 import { jsonSchemaForSchema } from '../../shared/jsonSchemaForSchema.ts'
 import { promptRegistry } from '../prompts/promptRegistry.ts'
-import { verbRegistry } from '../rpc/verbRegistry.ts'
+import { rpcRegistry } from '../rpc/rpcRegistry.ts'
 import { socketOperations } from '../sockets/socketOperations.ts'
 import { socketRegistry } from '../sockets/socketRegistry.ts'
 import type { InspectorSurface } from './types/InspectorSurface.ts'
@@ -14,7 +14,7 @@ use, so the three can't disagree on a verb's shape; a missing schema stays
 undefined to mark a verb that carries no machine-advertisable contract.
 */
 export function buildInspectorSurface(): InspectorSurface {
-    const verbs = Array.from(verbRegistry.values()).map((entry) => ({
+    const verbs = Array.from(rpcRegistry.values()).map((entry) => ({
         url: entry.remote.url,
         method: entry.remote.method,
         clients: { ...entry.remote.clients },

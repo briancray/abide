@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { json } from '../src/lib/server/json.ts'
 import { defineRpc } from '../src/lib/server/rpc/defineRpc.ts'
-import { verbRegistry } from '../src/lib/server/rpc/verbRegistry.ts'
+import { rpcRegistry } from '../src/lib/server/rpc/rpcRegistry.ts'
 import { testSchema } from './standardSchema.ts'
 
 describe('defineRpc happy path', () => {
@@ -20,7 +20,7 @@ describe('defineRpc happy path', () => {
         expect(response.status).toBe(200)
         expect(await response.json()).toEqual({ id: '42' })
 
-        expect(verbRegistry.get('/rpc/get-user')?.clients.mcp).toBe(true)
+        expect(rpcRegistry.get('/rpc/get-user')?.clients.mcp).toBe(true)
     })
 
     test('mutating verbs are gated from mcp but stay on cli', () => {
@@ -74,6 +74,6 @@ describe('defineRpc happy path', () => {
             inputSchema: testSchema(),
             outputSchema,
         })
-        expect(verbRegistry.get('/rpc/with-output')?.outputSchema).toBe(outputSchema)
+        expect(rpcRegistry.get('/rpc/with-output')?.outputSchema).toBe(outputSchema)
     })
 })

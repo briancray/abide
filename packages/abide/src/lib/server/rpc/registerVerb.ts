@@ -1,6 +1,6 @@
+import { rpcRegistry } from './rpcRegistry.ts'
 import type { VerbRegistryEntry } from './types/VerbRegistryEntry.ts'
-import { verbRegistry } from './verbRegistry.ts'
 
 export function registerVerb(entry: VerbRegistryEntry): void {
-    verbRegistry.set(entry.remote.url, entry)
+    rpcRegistry.set(entry.remote.url, entry)
 }

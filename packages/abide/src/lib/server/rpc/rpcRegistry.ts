@@ -8,4 +8,4 @@ rpc manifest). MCP server reads this to build its tools list; the CLI
 binary reads it to generate subcommands. The browser path never touches
 this — the client stub has no schema or clients metadata to register.
 */
-export const verbRegistry = new Map<string, VerbRegistryEntry>()
+export const rpcRegistry = new Map<string, VerbRegistryEntry>()

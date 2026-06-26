@@ -3,7 +3,7 @@ import { rpc } from './_virtual/rpc.ts'
 // @ts-expect-error virtual module resolved by abideResolverPlugin
 import { sockets } from './_virtual/sockets.ts'
 import type { CliManifestEntry } from './lib/cli/types/CliManifestEntry.ts'
-import { verbRegistry } from './lib/server/rpc/verbRegistry.ts'
+import { rpcRegistry } from './lib/server/rpc/rpcRegistry.ts'
 import { socketOperations } from './lib/server/sockets/socketOperations.ts'
 import { socketRegistry } from './lib/server/sockets/socketRegistry.ts'
 import { commandNameForUrl } from './lib/shared/commandNameForUrl.ts'
@@ -23,7 +23,7 @@ await Promise.all([
 
 const manifest: Record<string, CliManifestEntry> = {}
 
-for (const entry of verbRegistry.values()) {
+for (const entry of rpcRegistry.values()) {
     if (!entry.clients.cli) {
         continue
     }

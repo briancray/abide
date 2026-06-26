@@ -557,7 +557,7 @@ ${optionLines}
                     The CLI binary's bake-time manifest. Discovery (a
                     one-shot script the bundler runs separately) writes
                     `${cwd}/dist/cli-manifest.json` from the populated
-                    verbRegistry; this virtual splices that JSON in as a
+                    rpcRegistry; this virtual splices that JSON in as a
                     default-exported object. Empty manifest when the
                     discovery file is missing — the binary still works
                     but exposes no subcommands until the user runs the

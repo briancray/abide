@@ -1,7 +1,7 @@
 import { carriesBodyArgs } from '../../shared/carriesBodyArgs.ts'
 import { commandNameForUrl } from '../../shared/commandNameForUrl.ts'
 import { jsonSchemaForSchema } from '../../shared/jsonSchemaForSchema.ts'
-import { verbRegistry } from '../rpc/verbRegistry.ts'
+import { rpcRegistry } from '../rpc/rpcRegistry.ts'
 
 /*
 Turns a verb's resolved JSON Schema into OpenAPI query parameters — one
@@ -55,7 +55,7 @@ export function buildOpenApiSpec(info: {
     version: string
 }): Record<string, unknown> {
     const paths: Record<string, Record<string, unknown>> = {}
-    for (const entry of verbRegistry.values()) {
+    for (const entry of rpcRegistry.values()) {
         const url = entry.remote.url
         const method = entry.remote.method
         const jsonSchema = jsonSchemaForSchema(entry.inputSchema)

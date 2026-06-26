@@ -25,7 +25,7 @@ import { rpc } from '../../_virtual/rpc.ts'
 import { shell } from '../../_virtual/shell.ts'
 // @ts-expect-error virtual module resolved by abideResolverPlugin
 import { sockets } from '../../_virtual/sockets.ts'
-import { verbRegistry } from '../server/rpc/verbRegistry.ts'
+import { rpcRegistry } from '../server/rpc/rpcRegistry.ts'
 import { createServer } from '../server/runtime/createServer.ts'
 import { ensureRegistriesLoaded } from '../server/runtime/registryManifests.ts'
 import { requestContext } from '../server/runtime/requestContext.ts'
@@ -142,7 +142,7 @@ export async function createTestApp(): Promise<TestApp> {
        proxy maps command name → an HTTP call against the booted server. */
     await ensureRegistriesLoaded()
     const remotes = new Map<string, RemoteFunction<unknown, unknown>>(
-        Array.from(verbRegistry.values()).map((entry) => [
+        Array.from(rpcRegistry.values()).map((entry) => [
             commandNameForUrl(entry.remote.url),
             entry.remote,
         ]),

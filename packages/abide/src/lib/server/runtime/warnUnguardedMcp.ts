@@ -1,5 +1,5 @@
 import { abideLog } from '../../shared/abideLog.ts'
-import { verbRegistry } from '../rpc/verbRegistry.ts'
+import { rpcRegistry } from '../rpc/rpcRegistry.ts'
 import { socketRegistry } from '../sockets/socketRegistry.ts'
 import { ensureRegistriesLoaded } from './registryManifests.ts'
 
@@ -19,7 +19,7 @@ export async function warnUnguardedMcp(): Promise<void> {
         return
     }
     const isMcpExposed = (entry: { clients: { mcp: boolean } }): boolean => entry.clients.mcp
-    const exposed = [...verbRegistry.values(), ...socketRegistry.values()].filter(
+    const exposed = [...rpcRegistry.values(), ...socketRegistry.values()].filter(
         isMcpExposed,
     ).length
     if (exposed === 0) {

@@ -1,6 +1,6 @@
 import { abideLog } from '../../shared/abideLog.ts'
 import type { Pages } from '../../ui/types/Pages.ts'
-import { verbRegistry } from '../rpc/verbRegistry.ts'
+import { rpcRegistry } from '../rpc/rpcRegistry.ts'
 import { socketRegistry } from '../sockets/socketRegistry.ts'
 import { ensureRegistriesLoaded } from './registryManifests.ts'
 
@@ -127,12 +127,12 @@ export async function logExposedSurfaces(routing: { pages: Pages }): Promise<voi
     */
     const methodWidth = Math.max(
         'http'.length,
-        ...Array.from(verbRegistry.values(), (entry) => entry.remote.method.length),
+        ...Array.from(rpcRegistry.values(), (entry) => entry.remote.method.length),
     )
     const withMethod = (method: string, identifier: string): string =>
         method.padEnd(methodWidth + COLUMN_GAP) + identifier
 
-    const rpcRows = Array.from(verbRegistry.values(), (entry) => [
+    const rpcRows = Array.from(rpcRegistry.values(), (entry) => [
         withMethod(entry.remote.method, entry.remote.url),
         schemaCell(Boolean(entry.inputSchema)),
         flag(entry.clients.browser),
