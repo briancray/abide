@@ -1,66 +1,66 @@
 {
     "reactivity.fanout": {
-        "value": 200.846083,
+        "value": 209.84279199999997,
         "unit": "ms"
     },
     "reactivity.chain": {
-        "value": 254.490375,
+        "value": 263.029375,
         "unit": "ms"
     },
     "reactivity.dynamicDeps": {
-        "value": 118.61683300000004,
+        "value": 119.32187499999998,
         "unit": "ms"
     },
     "shallowChain.depth2": {
-        "value": 59.60487499999999,
+        "value": 59.678459000000004,
         "unit": "ms"
     },
     "shallowChain.depth3": {
-        "value": 83.089708,
+        "value": 84.67937500000001,
         "unit": "ms"
     },
     "shallowChain.depth4": {
-        "value": 107.74458299999998,
+        "value": 108.74004200000002,
         "unit": "ms"
     },
     "coalesce.batchedHandler": {
-        "value": 0.1417108400000001,
+        "value": 0.13867500000000008,
         "unit": "us/handler"
     },
     "listChurn.append": {
-        "value": 70.550229,
+        "value": 116.31275,
         "unit": "us/op"
     },
     "listChurn.removeHead": {
-        "value": 124.28281249999999,
+        "value": 215.9963545,
         "unit": "us/op"
     },
     "listChurn.reorder": {
-        "value": 386.44116600000007,
+        "value": 66.26174999999989,
         "unit": "us/op"
     },
     "controlFlow.swap": {
-        "value": 0.30736167000000003,
+        "value": 0.61586084,
         "unit": "us/op"
     },
     "controlFlow.teardown": {
-        "value": 0.3193645800000002,
+        "value": 0.8623183299999999,
         "unit": "us/op"
     },
     "mount.page": {
-        "value": 6.3991198999999375,
+        "value": 6.983751900000037,
         "unit": "us/mount"
     },
     "ssr.render": {
-        "value": 0.188404375,
+        "value": 0.2336394918,
         "unit": "ms/render"
     },
     "hydrate.run": {
-        "value": 0.7689941679999985,
+        "value": 1.0004498900000023,
         "unit": "ms/hydration"
     },
     "coldStart.median": {
-        "value": 115.67616700000008,
+        "value": 128.90316700000005,
         "unit": "ms"
     }
 }
