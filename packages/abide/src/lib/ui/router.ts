@@ -4,6 +4,7 @@ import { outlet } from './dom/outlet.ts'
 import { effect } from './effect.ts'
 import { matchRoute } from './matchRoute.ts'
 import { navigatePath } from './navigate.ts'
+import { CHILD_PRESENT } from './runtime/CHILD_PRESENT.ts'
 import { clientPage } from './runtime/clientPage.ts'
 import { enterRenderPass } from './runtime/enterRenderPass.ts'
 import { exitRenderPass } from './runtime/exitRenderPass.ts'
@@ -15,6 +16,7 @@ import type { AbideHistoryState } from './runtime/types/AbideHistoryState.ts'
 import type { NavVerdict } from './runtime/types/NavVerdict.ts'
 import type { Route } from './runtime/types/Route.ts'
 import type { RouteLoader } from './runtime/types/RouteLoader.ts'
+import type { UiProps } from './runtime/types/UiProps.ts'
 import { untrack } from './runtime/untrack.ts'
 
 /* An outlet boundary — the `<!--abide:outlet-->`…`<!--/abide:outlet-->` marker pair a
@@ -192,6 +194,23 @@ export function router(
                 outlet(host)
                 rootBoundary = PENDING_OUTLET.current as Boundary
             }
+            /* Route params as reactive thunks: reading `clientPage.value.params` inside the
+               thunk tracks the page signal, so an in-place same-route hop (params change, the
+               page stays mounted) re-runs each `props()` derive. The key set is stable across
+               same-route hops, so the bag need not rebuild. A layout also gets `$children`
+               set to `CHILD_PRESENT` when a child layer exists below it, read by
+               `{#if children}` (a layout's `{children()}` lowers to its `outlet()` boundary,
+               so it ignores this value). */
+            const propsBag = (hasChild: boolean): UiProps => {
+                const bag: UiProps = {}
+                for (const key of Object.keys(params)) {
+                    bag[key] = () => clientPage.value.params[key]
+                }
+                if (hasChild) {
+                    bag.$children = CHILD_PRESENT
+                }
+                return bag
+            }
             let boundary = baseBoundary(index)
             for (let depth = index; depth < layoutViews.length; depth += 1) {
                 const view = layoutViews[depth] as Route
@@ -200,14 +219,15 @@ export function router(
                     boundary.open,
                     boundary.close,
                     view.build,
-                    params,
+                    /* A layout always has a child below: a deeper layout, or the page. */
+                    propsBag(depth < layoutViews.length - 1 || pageView !== undefined),
                     /* The layout's route key names its scope in the inspector's Reactive tab
                        (no host element to read a tag from — see `scopeLabel`). */
                     chainKeys[depth],
                 )
                 const slot = PENDING_OUTLET.current
                 if (slot === undefined) {
-                    throw new Error('[abide] a layout.abide must contain a <slot/> outlet')
+                    throw new Error('[abide] a layout.abide must contain a {children()} outlet')
                 }
                 mountedLayouts.push({ key: chainKeys[depth] as string, dispose, slot })
                 boundary = slot
@@ -220,7 +240,8 @@ export function router(
                 boundary.open,
                 boundary.close,
                 pageView.build,
-                params,
+                /* A page is a leaf — no child layer. */
+                propsBag(false),
                 /* The page's route key names its scope in the inspector (see above). */
                 pageKey,
             ).dispose

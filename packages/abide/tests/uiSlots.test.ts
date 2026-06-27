@@ -13,6 +13,7 @@ import { switchBlock } from '../src/lib/ui/dom/switchBlock.ts'
 import { text } from '../src/lib/ui/dom/text.ts'
 import { when } from '../src/lib/ui/dom/when.ts'
 import { effect } from '../src/lib/ui/effect.ts'
+import { CHILD_PRESENT } from '../src/lib/ui/runtime/CHILD_PRESENT.ts'
 import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
 import type { SsrRender } from '../src/lib/ui/runtime/types/SsrRender.ts'
 import { state } from '../src/lib/ui/state.ts'
@@ -111,5 +112,42 @@ describe('slots (component children)', () => {
         ).serializeMiniDom(host)
         expect(html).toContain('hi')
         expect(html).not.toContain('empty')
+    })
+})
+
+describe('page params via props()', () => {
+    test('a page reads route params through props() (client + SSR)', async () => {
+        const Page = `<script>const { id } = props()</script><p>{id}</p>`
+        const host = document.createElement('div')
+        component(Page)(host, { id: () => '42' })
+        const html = (
+            globalThis as unknown as { serializeMiniDom: (h: unknown) => string }
+        ).serializeMiniDom(host)
+        expect(html).toContain('42')
+
+        const server = await component(Page).render({ id: () => '42' })
+        expect(server.html).toContain('42')
+    })
+})
+
+describe('layout {#if children} presence (3a)', () => {
+    const Layout = `<main>{#if children}<nav>has</nav>{/if}</main>`
+
+    test('renders the presence branch when a child layer exists', () => {
+        const host = document.createElement('div')
+        component(Layout)(host, { $children: CHILD_PRESENT })
+        const html = (
+            globalThis as unknown as { serializeMiniDom: (h: unknown) => string }
+        ).serializeMiniDom(host)
+        expect(html).toContain('has')
+    })
+
+    test('skips the presence branch when no child layer exists', () => {
+        const host = document.createElement('div')
+        component(Layout)(host, {})
+        const html = (
+            globalThis as unknown as { serializeMiniDom: (h: unknown) => string }
+        ).serializeMiniDom(host)
+        expect(html).not.toContain('has')
     })
 })
