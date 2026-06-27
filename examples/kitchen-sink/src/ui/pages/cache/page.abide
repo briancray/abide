@@ -12,7 +12,7 @@ import CodeBlock from '$ui/CodeBlock.abide'
 
 /* Two reads against the same cache key + scope share one entry, so any invalidation
    re-runs both. `counter` streams; `mirror` is a second read of the same entry. */
-const { computed } = scope()
+const { computed, effect } = scope()
 const counter = computed(() => cache(getCounter, { tags: 'counter' })())
 const mirror = computed(() => cache(getCounter, { tags: 'counter' })())
 const loading = computed(() => pending(getCounter))
@@ -28,12 +28,12 @@ async function reset() {
 
 /* Event-driven invalidation: a chat frame stales the chat count. cache.on returns
    a dispose; effect runs it client-side (no-op during SSR). */
-scope().effect(() => cache.on(chat, (_message, { invalidate }) => invalidate(getChatCount)))
+effect(() => cache.on(chat, (_message, { invalidate }) => invalidate(getChatCount)))
 const chatCount = computed(() => cache(getChatCount)())
 
 /* The same frame stales the recent-messages list too — invalidate drops it and the
    next read refetches. */
-scope().effect(() => cache.on(chat, (_message, { invalidate }) => invalidate(getChatLog)))
+effect(() => cache.on(chat, (_message, { invalidate }) => invalidate(getChatLog)))
 const chatLog = computed(() => cache(getChatLog)())
 </script>
 
@@ -148,9 +148,10 @@ cache(fn, { global: true })()           // process-level store (server reuse)
 cache.invalidate(fn)                    // drop one function's calls
 cache.invalidate({ tags: 'orders' })   // drop every entry sharing the tag`} />
 
-    <CodeBlock title="cache.on — event-driven invalidation" code={`// a frame stales a computed read — drop it, let the next read refetch
-scope().effect(() => cache.on(chat, (_m, { invalidate }) => invalidate(getChatCount)))
+    <CodeBlock title="cache.on — event-driven invalidation" code={`const { effect } = scope()
+// a frame stales a computed read — drop it, let the next read refetch
+effect(() => cache.on(chat, (_m, { invalidate }) => invalidate(getChatCount)))
 
 // the handler's invalidate is binding-scoped: covered calls replay after a reconnect gap
-scope().effect(() => cache.on(chat, (_m, { invalidate }) => invalidate(getChatLog)))`} />
+effect(() => cache.on(chat, (_m, { invalidate }) => invalidate(getChatLog)))`} />
 </section>

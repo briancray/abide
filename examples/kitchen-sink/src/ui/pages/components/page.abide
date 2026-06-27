@@ -7,7 +7,7 @@ Component-grammar reference. Live demos exercise the reactive primitives and the
 */
 
 // Destructure the reactive primitives off scope() once — the default authoring form.
-const { state, computed, linked } = scope()
+const { state, computed, linked, effect } = scope()
 
 // state(v) — a writable cell. Read/assign as a plain variable; the compiler desugars.
 let count = state(0)
@@ -15,7 +15,7 @@ let count = state(0)
 const doubled = computed(() => count * 2)
 // effect(fn) — client-only side effect (stripped from SSR); may return a cleanup.
 let ticks = state(0)
-scope().effect(() => {
+effect(() => {
     const id = setInterval(() => (ticks = ticks + 1), 1000)
     return () => clearInterval(id)
 })
@@ -71,13 +71,12 @@ function loadNames(_attempt: number): Promise<string[]> {
 <section class="mt-8">
     <h2 class="text-sm font-semibold">Reactive primitives</h2>
     <p class="mt-1 text-sm text-slate-600">
-        Destructure <code class="font-mono">{'{ state, computed, linked }'}</code> off
+        Destructure <code class="font-mono">{'{ state, computed, linked, effect }'}</code> off
         <code class="font-mono">scope()</code> once, then call them bare — the default form;
         <code class="font-mono">scope().state(v)</code> is equivalent. A bare
         <code class="font-mono">state(v)</code> with no
         <code class="font-mono">scope()</code> destructure in scope is a compile error.
-        <code class="font-mono">effect</code> and <code class="font-mono">props</code> are in scope
-        without import.
+        <code class="font-mono">props</code> is the one reactive name in scope without import.
     </p>
     <div class="mt-2 overflow-x-auto rounded-lg border border-slate-200 bg-white">
         <table class="w-full text-sm">
@@ -151,11 +150,11 @@ function loadNames(_attempt: number): Promise<string[]> {
 
     <div class="mt-3">
         <CodeBlock title="reactive primitives — exactly what this demo runs" code={`<script>
-const { state, computed } = scope()                 // destructure the primitives once
+const { state, computed, effect } = scope()         // destructure the primitives once
 let count = state(0)                                 // writable cell — the +/− buttons
 const doubled = computed(() => count * 2)            // recomputes when count changes
 let ticks = state(0)
-scope().effect(() => {                             // client-only; cleanup on unmount
+effect(() => {                                       // client-only; cleanup on unmount
     const id = setInterval(() => (ticks = ticks + 1), 1000)
     return () => clearInterval(id)
 })
@@ -445,7 +444,8 @@ let celsius = state(20, (n) => Number(n) || 0)
             <script>
             // `names` (the resolved value) is in lexical scope here. This nested
             // <script> owns a branch-local computed, re-seeded on each reload.
-            let total = scope().computed(() => names.length)
+            const { computed } = scope()
+            let total = computed(() => names.length)
             </script>
             <p class="resolved mt-2 text-sm">{total} names: {names.join(', ')}</p>
             <style>
@@ -468,7 +468,8 @@ let celsius = state(20, (n) => Number(n) || 0)
 {:then names}
     <script>
         // \`names\` (the resolved value) is in scope; branch-local, re-seeded each mount
-        let total = scope().computed(() => names.length)
+        const { computed } = scope()
+        let total = computed(() => names.length)
     </script>
     <p class="resolved">{total} names: {names.join(', ')}</p>
     <style>.resolved { font-weight: 600 }</style>   <!-- scoped to this branch alone -->

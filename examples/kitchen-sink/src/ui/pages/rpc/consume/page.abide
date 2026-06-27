@@ -166,8 +166,9 @@ const cachedRaw = computed(() => cache(getReport.raw)({ id: 'r-1' }))
 </section>
 
 <section class="mt-6 space-y-3">
-    <CodeBlock title="client — all three forms, same rpc import" code={`const body = await getReport({ id: 'r-1' })            // decoded body, HttpError on non-2xx
+    <CodeBlock title="client — all three forms, same rpc import" code={`const { computed } = scope()
+const body = await getReport({ id: 'r-1' })            // decoded body, HttpError on non-2xx
 const response = await getReport.raw({ id: 'r-1' })    // full Response
 for await (const frame of tickFeed.stream()) { /* iterate jsonl/sse frames */ }
-const cachedRaw = scope().computed(() => cache(getReport.raw)({ id: 'r-1' }))  // shared cache key`} />
+const cachedRaw = computed(() => cache(getReport.raw)({ id: 'r-1' }))  // shared cache key`} />
 </section>

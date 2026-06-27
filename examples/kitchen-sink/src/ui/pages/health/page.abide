@@ -70,8 +70,9 @@ const backend = computed(() => health())
     <CodeBlock title="this page — both reads live" code={`import { online } from '@abide/abide/shared/online'
 import { health } from '@abide/abide/shared/health'
 
-const connected = scope().computed(() => online())  // browser online/offline events
-const backend = scope().computed(() => health())     // { reachable, ...AppHealth }`} />
+const { computed } = scope()
+const connected = computed(() => online())  // browser online/offline events
+const backend = computed(() => health())     // { reachable, ...AppHealth }`} />
 
     <CodeBlock title="the wire — public, app fields included" lang="sh" code={`curl -s http://localhost:3000/__abide/health
 # { "uptimeSeconds": 42, "abide": "<version>", "name": "kitchen-sink", "version": "0.0.0" }`} />
