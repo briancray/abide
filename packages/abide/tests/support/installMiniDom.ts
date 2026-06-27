@@ -61,13 +61,30 @@ export function installMiniDom(): () => void {
             .replace(/&amp;/g, '&')
 
     class MiniNode {
-        childNodes: MiniNode[] = []
         parentNode: MiniNode | undefined = undefined
-        /* Forward sibling pointer, maintained O(1) by `place`/`removeChild`, so
-           `nextSibling` is O(1) like a real DOM — not an `indexOf` scan of the parent's
-           children. The reconcile reads `nextSibling` once per row; the array scan made it
-           O(n²) per pass, swamping the benches with a harness artifact the browser never pays. */
+        /* Sibling/child pointers are the source of truth for tree structure, so insert,
+           remove, and `nextSibling` are all O(1) like a real DOM. The array `indexOf`/
+           `splice` form made the keyed-`each` placement walk O(n²) per pass, swamping the
+           list benches with a harness artifact the browser never pays. `childNodes` is a
+           lazily rebuilt array VIEW over the pointers (invalidated on every structural
+           change), so the array-shaped reads tests rely on — serialize, `children`,
+           `cloneNode`, fragment spread — still work without taxing the hot path. */
         nextSib: MiniNode | null = null
+        prevSib: MiniNode | null = null
+        private firstChildPtr: MiniNode | null = null
+        private lastChildPtr: MiniNode | null = null
+        private childCache: MiniNode[] | null = null
+
+        get childNodes(): MiniNode[] {
+            if (this.childCache === null) {
+                const nodes: MiniNode[] = []
+                for (let node = this.firstChildPtr; node !== null; node = node.nextSib) {
+                    nodes.push(node)
+                }
+                this.childCache = nodes
+            }
+            return this.childCache
+        }
 
         /* The core single-node placement. Fragment spreads route here directly (not
            back through the public methods) so a `insertBefore(fragment)` is one public
@@ -77,30 +94,27 @@ export function installMiniDom(): () => void {
             /* A non-null reference that isn't a child throws `NotFoundError` in a real DOM
                (strict in WebKit) — replicate it so a stale insertion ref (e.g. a node a
                control-flow block already removed) surfaces here, not only in the browser. */
-            const index = reference === null ? -1 : this.childNodes.indexOf(reference)
-            if (reference !== null && index === -1) {
+            if (reference !== null && reference.parentNode !== this) {
                 throw new Error('NotFoundError: insertBefore reference node is not a child')
             }
+            /* Unlink from any current parent first (O(1)); when moving within this parent
+               this also fixes `reference`'s neighbours before we read `prevSib` below. */
             node.remove()
             node.parentNode = this
-            if (index === -1) {
-                const previous = this.childNodes[this.childNodes.length - 1]
-                this.childNodes.push(node)
-                node.nextSib = null
-                if (previous !== undefined) {
-                    previous.nextSib = node
-                }
+            const previous = reference === null ? this.lastChildPtr : reference.prevSib
+            node.prevSib = previous
+            node.nextSib = reference
+            if (previous !== null) {
+                previous.nextSib = node
             } else {
-                /* `node.remove()` above may have shifted the reference's index when both
-                   share this parent — recompute against the current array. */
-                const at = this.childNodes.indexOf(reference as MiniNode)
-                this.childNodes.splice(at, 0, node)
-                node.nextSib = reference
-                const previous = this.childNodes[at - 1]
-                if (previous !== undefined) {
-                    previous.nextSib = node
-                }
+                this.firstChildPtr = node
             }
+            if (reference !== null) {
+                reference.prevSib = node
+            } else {
+                this.lastChildPtr = node
+            }
+            this.childCache = null
         }
 
         appendChild(child: MiniNode): MiniNode {
@@ -127,19 +141,40 @@ export function installMiniDom(): () => void {
         }
 
         removeChild(child: MiniNode): MiniNode {
-            const index = this.childNodes.indexOf(child)
-            if (index !== -1) {
-                this.childNodes.splice(index, 1)
-                /* Relink the gap: the node now at `index-1` (unshifted by the splice)
-                   inherits the removed child's forward pointer. */
-                const previous = this.childNodes[index - 1]
-                if (previous !== undefined) {
-                    previous.nextSib = child.nextSib
-                }
-                child.nextSib = null
-                child.parentNode = undefined
+            /* Not a child → no-op, as the array `indexOf === -1` form was. */
+            if (child.parentNode !== this) {
+                return child
             }
+            const { prevSib, nextSib } = child
+            if (prevSib !== null) {
+                prevSib.nextSib = nextSib
+            } else {
+                this.firstChildPtr = nextSib
+            }
+            if (nextSib !== null) {
+                nextSib.prevSib = prevSib
+            } else {
+                this.lastChildPtr = prevSib
+            }
+            child.prevSib = null
+            child.nextSib = null
+            child.parentNode = undefined
+            this.childCache = null
             return child
+        }
+
+        /* Detach every child — the shared clear for the textContent/innerHTML setters. */
+        clearChildren(): void {
+            for (let node = this.firstChildPtr; node !== null; ) {
+                const next = node.nextSib
+                node.parentNode = undefined
+                node.prevSib = null
+                node.nextSib = null
+                node = next
+            }
+            this.firstChildPtr = null
+            this.lastChildPtr = null
+            this.childCache = null
         }
 
         remove(): void {
@@ -147,7 +182,7 @@ export function installMiniDom(): () => void {
         }
 
         get firstChild(): MiniNode | null {
-            return this.childNodes[0] ?? null
+            return this.firstChildPtr
         }
 
         get nextSibling(): MiniNode | null {
@@ -155,15 +190,18 @@ export function installMiniDom(): () => void {
         }
 
         get textContent(): string {
-            return this.childNodes.map((child) => child.textContent).join('')
+            let text = ''
+            for (let node = this.firstChildPtr; node !== null; node = node.nextSib) {
+                text += node.textContent
+            }
+            return text
         }
 
         set textContent(value: string) {
-            for (const child of this.childNodes) {
-                child.parentNode = undefined
-                child.nextSib = null
+            this.clearChildren()
+            if (value !== '') {
+                this.appendChild(new MiniText(value))
             }
-            this.childNodes = value === '' ? [] : [new MiniText(value)]
         }
 
         /* Deep/shallow clone, mirroring `Node.cloneNode` — what `cloneStatic` clones a
@@ -285,11 +323,7 @@ export function installMiniDom(): () => void {
             /* A template parses into its content holder, every other element into
                itself. */
             const target = this.content ?? this
-            for (const child of target.childNodes) {
-                child.parentNode = undefined
-                child.nextSib = null
-            }
-            target.childNodes = []
+            target.clearChildren()
             /* Parse in this element's child namespace so `svg.innerHTML = '<path/>'`
                namespaces the path — the property the foreign-content paths key off. A
                <template>'s content is an HTML context regardless of the template's own ns. */
