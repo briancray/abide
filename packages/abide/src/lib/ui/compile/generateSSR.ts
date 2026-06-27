@@ -470,15 +470,13 @@ export function generateSSR(
         anchor: string,
     ): string {
         const wrap = inSkeleton.get(node)
-        const fallback = generateInto(node.children, target)
         /* `$children` is an async builder the parent passes lazily; `await` it here so the
-           slot content's block ids allocate AT the `<slot>` position — the same order the
+           slot content's block ids allocate AT the slot position — the same order the
            client builds slot content — keeping hydration congruent. The `await` makes a
-           component with a `<slot>` an async render (its caller already `await`s `render()`). */
-        const body =
-            fallback.trim() === ''
-                ? `if ($props && $props.$children) { ${target}.push(await $props.$children()); }\n`
-                : `if ($props && $props.$children) { ${target}.push(await $props.$children()); } else {\n${fallback}}\n`
+           component with a slot an async render (its caller already `await`s `render()`).
+           A fallback is now an authored `{#if children}…{:else}…{/if}`, so the slot node
+           carries no children. */
+        const body = `if ($props && $props.$children) { ${target}.push(await $props.$children()); }\n`
         if (!wrap) {
             return body
         }

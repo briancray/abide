@@ -63,11 +63,11 @@ function component(
 const serialize = (host: unknown): string =>
     (globalThis as unknown as { serializeMiniDom: (h: unknown) => string }).serializeMiniDom(host)
 
-describe('snippets (<template name args> called like a function)', () => {
+describe('snippets ({#snippet name(args)} called like a function)', () => {
     /* A snippet that closes over the component scope (`prefix`) and takes an arg. */
     const source = `
         <script>let prefix = scope().state('#')</script>
-        <template name="item" args={label}><li>{prefix}{label}</li></template>
+        {#snippet item(label)}<li>{prefix}{label}</li>{/snippet}
         <ul>{item('a')}{item('b')}</ul>
     `
 
@@ -127,9 +127,9 @@ describe('snippets (<template name args> called like a function)', () => {
         expect(host.textContent).toBe('1,2,3') // re-read the arg, re-mounted
     })
 
-    test('an object arg destructures (args={{ a, b }})', async () => {
+    test('an object arg destructures ({#snippet pair({ a, b })})', async () => {
         const src = `
-            <template name="pair" args={{ a, b }}><span>{a}-{b}</span></template>
+            {#snippet pair({ a, b })}<span>{a}-{b}</span>{/snippet}
             <div>{pair({ a: 1, b: 2 })}</div>
         `
         const host = document.createElement('div')
@@ -141,6 +141,12 @@ describe('snippets (<template name args> called like a function)', () => {
             '<div><!--abide:snippet--><span>1-2</span><!--/abide:snippet--></div>',
         )
     })
+
+    test('the <template name> declaration is rejected with a migration error', () => {
+        expect(() => compileComponent(`<template name="row">x</template>`)).toThrow(
+            /<template name>.*\{#snippet/s,
+        )
+    })
 })
 
 describe('snippets passed across components', () => {
@@ -150,7 +156,7 @@ describe('snippets passed across components', () => {
     const List = `<script>const { item } = props()</script><ul>{item('x')}{item('y')}</ul>`
     const parent = `
         <script>let prefix = scope().state('•')</script>
-        <template name="row" args={label}><li>{prefix}{label}</li></template>
+        {#snippet row(label)}<li>{prefix}{label}</li>{/snippet}
         <List item={row} />
     `
 
