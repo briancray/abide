@@ -220,8 +220,32 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
             const children = readBlockChildren('try')
             return { kind: 'try', children }
         }
+        if (keyword === 'snippet') {
+            const head = open.body.slice(open.body.indexOf('snippet') + 'snippet'.length).trim()
+            const parenAt = head.indexOf('(')
+            const name = (parenAt === -1 ? head : head.slice(0, parenAt)).trim()
+            if (name === '') {
+                throw new Error('[abide] {#snippet} requires a name, e.g. {#snippet row(item)}')
+            }
+            /* Params ride the parens: `{#snippet row({ item })}` → `{ item }`. */
+            const params =
+                parenAt === -1
+                    ? undefined
+                    : head.slice(parenAt + 1, head.lastIndexOf(')')).trim() || undefined
+            const children = readBlockChildren('snippet')
+            return {
+                kind: 'snippet',
+                name,
+                params,
+                children,
+                loc:
+                    parenAt === -1
+                        ? undefined
+                        : exprLoc(open.loc, open.body, open.body.indexOf('(') + 1),
+            }
+        }
         throw new Error(
-            `[abide] unknown control block {#${keyword}} — expected if/for/await/switch/try`,
+            `[abide] unknown control block {#${keyword}} — expected if/for/await/switch/try/snippet`,
         )
     }
 
@@ -952,24 +976,6 @@ function toProps(
     })
 }
 
-/* The literal text of an attribute (a static value or an expression's code);
-   undefined for event/bind attributes, which a directive never is. */
-function attrText(attr: TemplateAttr): string | undefined {
-    if (attr.kind === 'static') {
-        return attr.value
-    }
-    if (attr.kind === 'expression') {
-        return attr.code
-    }
-    return undefined
-}
-
-/* The source offset of an attribute expression's code (see TextPart.loc); only
-   expression attributes carry one — a static value isn't a checkable expression. */
-function attrLoc(attr: TemplateAttr | undefined): number | undefined {
-    return attr !== undefined && attr.kind === 'expression' ? attr.loc : undefined
-}
-
 /* The attribute's source name (`on<event>`/`bind:<property>` reconstructed). */
 function attrName(attr: TemplateAttr): string {
     if (attr.kind === 'event') {
@@ -1029,22 +1035,12 @@ function toSnippetOrTemplate(attrs: TemplateAttr[], children: TemplateNode[]): T
             `[abide] <template ${name}> control flow was removed — use the {#${block}…} block instead`,
         )
     }
-    /* `<template name="row" args={item}>` declares a snippet — a named builder. `args`
-       (its parameter list) rides the `{…}` expression slot. */
-    const snippet = find('name')
-    if (snippet !== undefined) {
-        const name = attrText(snippet)
-        if (name === undefined || name === '') {
-            throw new Error('[abide] <template name> requires a snippet name')
-        }
-        const params = find('args')
-        return {
-            kind: 'snippet',
-            name,
-            params: params === undefined ? undefined : attrText(params),
-            children,
-            loc: attrLoc(params),
-        }
+    /* `<template name>` snippet declarations were retired for the `{#snippet name(args)}`
+       block — reject with a migration error. */
+    if (find('name') !== undefined) {
+        throw new Error(
+            '[abide] <template name> snippet declarations were removed — use a {#snippet name(args)}…{/snippet} block',
+        )
     }
     /* A plain inert `<template>` element (e.g. client-side cloning) — keep as an element. */
     return { kind: 'element', tag: 'template', attrs, children }
