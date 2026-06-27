@@ -16,6 +16,4 @@ import '../app.css'
         <a href="/about">About</a>
     </nav>
 </header>
-<main>
-    {children()}
-</main>
+<main>{children()}</main>

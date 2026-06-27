@@ -98,8 +98,6 @@ const groups = [
                 {/for}
             </nav>
         </aside>
-        <main class="min-w-0 flex-1 py-10">
-            {children()}
-        </main>
+        <main class="min-w-0 flex-1 py-10">{children()}</main>
     </div>
 </div>
