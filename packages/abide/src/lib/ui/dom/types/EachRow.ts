@@ -14,4 +14,8 @@ export type EachRow = {
     cell: State<unknown>
     indexCell: State<number>
     pending?: DocumentFragment
+    /* The id of the last reconcile pass that saw this row's key in the source. A row
+       whose `gen` lags the current pass departed and is pruned — an int compare that
+       replaces a per-reconcile `Set` of present keys. */
+    gen?: number
 }

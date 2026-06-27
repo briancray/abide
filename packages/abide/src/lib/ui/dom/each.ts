@@ -42,6 +42,10 @@ export function each<T>(
     before: Node | null = null,
 ): void {
     const rows = new Map<string, EachRow>()
+    /* Monotonic reconcile-pass id. Each reconcile stamps every surviving row with the
+       current pass, so prune is a `row.gen !== pass` int compare instead of building a
+       `Set` of present keys every reconcile. */
+    let generation = 0
     /* Each row's scope, registered with the owner so every live row disposes on owner
        teardown (the effect's own disposer only unsubscribes it from `items()`). */
     const group = scopeGroup()
@@ -136,11 +140,20 @@ export function each<T>(
         try {
             const list = Array.isArray(source) ? source : [...source]
             const keys = list.map(keyOf)
-            const present = new Set(keys)
-            /* Prune departed rows first so their ranges don't sit between survivors and
-               throw off the in-place sibling checks below. */
+            const pass = (generation += 1)
+            /* Stamp every surviving row with this pass so prune below is an int compare,
+               not a `Set` membership test — no per-reconcile Set allocation. */
+            for (const key of keys) {
+                const row = rows.get(key)
+                if (row !== undefined) {
+                    row.gen = pass
+                }
+            }
+            /* Prune departed rows first (those the stamp loop didn't reach this pass) so
+               their ranges don't sit between survivors and throw off the in-place sibling
+               checks below. */
             for (const [key, row] of rows) {
-                if (!present.has(key)) {
+                if (row.gen !== pass) {
                     row.dispose()
                     removeRange(row.start, row.end)
                     rows.delete(key)
@@ -155,6 +168,7 @@ export function each<T>(
                 let row = rows.get(key)
                 if (row === undefined) {
                     row = buildRow(list[index] as T, index)
+                    row.gen = pass
                     rows.set(key, row)
                 } else {
                     /* Surviving key: push the (possibly new) item and position into the row's
