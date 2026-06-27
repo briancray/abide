@@ -372,12 +372,15 @@ function emitNode(node: TemplateNode, builder: Builder): void {
         case 'component': {
             /* The imported tag resolves (via the shadow host) to the child's
                `(props: Props) => …` default, so `Parameters<typeof Child>[0]` is its prop
-               shape. `on*` / `bind:` / `attach` props are framework-handled passthrough
-               (not part of the declared shape), so they are checked leniently — each value
-               against its own declared key type — never flagged as excess. */
+               shape. `bind:` / `class:` / `style:` / `attach` and `{...spread}` are
+               framework directives (not part of the declared shape), so they are checked
+               leniently — each value against its own declared key type — never flagged as
+               excess. `on*` callbacks ARE ordinary declared props on a component (abide does
+               not auto-forward events to the DOM), so they go through the completeness check
+               with the rest — otherwise a required `onsave`/`oncancel` reads as missing even
+               when passed, and an undeclared handler slips by unflagged. */
             const handled = (prop: { name: string; spread?: boolean }): boolean =>
                 prop.spread === true ||
-                prop.name.startsWith('on') ||
                 prop.name.startsWith('bind:') ||
                 prop.name.startsWith('class:') ||
                 prop.name.startsWith('style:') ||
@@ -427,11 +430,22 @@ function emitNode(node: TemplateNode, builder: Builder): void {
                 builder.raw('\n')
                 for (const prop of dataProps) {
                     /* The key mapped to its source name (excess-prop errors land on the key);
-                       the value verbatim-mapped (wrong-type errors land on the value). */
+                       the value verbatim-mapped (wrong-type errors land on the value).
+                       Hyphenated names (`aria-label`, `data-*`) aren't valid identifiers, so
+                       they're wrapped in raw quotes — a string-literal key the parser accepts.
+                       The quotes are unmapped; an excess-prop error on the literal starts at the
+                       opening quote and overlaps the mapped name, clamping back onto it. */
+                    const needsQuoting = !/^[A-Za-z_$][\w$]*$/.test(prop.name)
+                    if (needsQuoting) {
+                        builder.raw('"')
+                    }
                     if (prop.nameLoc !== undefined) {
                         builder.mapped(prop.name, prop.nameLoc)
                     } else {
                         builder.raw(prop.name)
+                    }
+                    if (needsQuoting) {
+                        builder.raw('"')
                     }
                     builder.raw(': ')
                     builder.expr(prop.code, prop.loc)

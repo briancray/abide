@@ -305,6 +305,65 @@ describe('abide check', () => {
         expect(parent[0]!.message).toContain('bogusProp')
     })
 
+    /* A hyphenated prop name (`aria-label`, `data-*`) isn't a valid identifier, so its key
+       must be quoted in the emitted props literal — otherwise the parser reads `aria-label`
+       as `aria - label` and floods the file with spurious errors. A declared hyphenated prop
+       passed correctly produces no diagnostics. */
+    test('a declared hyphenated child prop type-checks cleanly', () => {
+        const dir = project({
+            'child.abide': `<script>\nconst { 'aria-label': ariaLabel } = props<{ 'aria-label': string }>()\n</script>\n<span aria-label={ariaLabel} />\n`,
+            'parent.abide': `<script>\nimport Child from './child.abide'\n</script>\n<Child aria-label="open" />\n`,
+        })
+        const parent = collectAbideDiagnostics(createShadowProgram(dir)).filter((diagnostic) =>
+            diagnostic.file.endsWith('parent.abide'),
+        )
+        expect(parent).toHaveLength(0)
+    })
+
+    /* The quoted key still anchors an excess-prop error onto the source name: an undeclared
+       hyphenated prop is caught and maps back to its `data-bogus` location. */
+    test('an excess hyphenated child prop is caught and mapped to its name', () => {
+        const source = `<script>\nimport Child from './child.abide'\n</script>\n<Child label="x" data-bogus="y" />\n`
+        const dir = project({
+            'child.abide': `<script>\nconst { label } = props<{ label: string }>()\n</script>\n<span>{label}</span>\n`,
+            'parent.abide': source,
+        })
+        const parent = collectAbideDiagnostics(createShadowProgram(dir)).filter((diagnostic) =>
+            diagnostic.file.endsWith('parent.abide'),
+        )
+        expect(parent).toHaveLength(1)
+        expect(parent[0]!.message).toContain('data-bogus')
+        const span = source.slice(parent[0]!.start, parent[0]!.start + parent[0]!.length)
+        expect('data-bogus').toContain(span)
+    })
+
+    /* A required `on*` callback prop is satisfied when passed — `on*` props on a component
+       are ordinary declared props, not DOM passthrough, so a passed `onsave` must not read
+       as a missing required prop. */
+    test('a passed required on* callback prop satisfies the child shape', () => {
+        const dir = project({
+            'child.abide': `<script>\nconst { label, onsave } = props<{ label: string; onsave: () => void }>()\n</script>\n<button onclick={onsave}>{label}</button>\n`,
+            'parent.abide': `<script>\nimport Child from './child.abide'\nfunction save() {}\n</script>\n<Child label="x" onsave={save} />\n`,
+        })
+        const parent = collectAbideDiagnostics(createShadowProgram(dir)).filter((diagnostic) =>
+            diagnostic.file.endsWith('parent.abide'),
+        )
+        expect(parent).toHaveLength(0)
+    })
+
+    /* A missing required `on*` callback prop is still caught — completeness is enforced. */
+    test('a missing required on* callback prop is caught in the parent', () => {
+        const dir = project({
+            'child.abide': `<script>\nconst { label, onsave } = props<{ label: string; onsave: () => void }>()\n</script>\n<button onclick={onsave}>{label}</button>\n`,
+            'parent.abide': `<script>\nimport Child from './child.abide'\n</script>\n<Child label="x" />\n`,
+        })
+        const parent = collectAbideDiagnostics(createShadowProgram(dir)).filter((diagnostic) =>
+            diagnostic.file.endsWith('parent.abide'),
+        )
+        expect(parent).toHaveLength(1)
+        expect(parent[0]!.message).toContain('onsave')
+    })
+
     /* A parent-directory relative `.abide` import resolves in the shadow, so a wrong prop
        on a component imported via `../` is still caught (not a phantom "Cannot find
        module"). */
