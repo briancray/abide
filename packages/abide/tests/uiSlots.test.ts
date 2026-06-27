@@ -61,7 +61,7 @@ function component(
 }
 
 describe('slots (component children)', () => {
-    const Card = `<div class="card"><slot></slot></div>`
+    const Card = `<div class="card">{children()}</div>`
     const parent = `
         <script>let name = scope().state('world')</script>
         <Card>Hello {name}!</Card>
@@ -84,5 +84,32 @@ describe('slots (component children)', () => {
         expect(server.html).toBe(
             '<!--[--><div class="card"><!--a--><!--[-->Hello world!<!--]--></div><!--]-->',
         )
+    })
+
+    test('the <slot> element is rejected with a migration error', () => {
+        expect(() => compileComponent(`<div><slot></slot></div>`)).toThrow(
+            /<slot>.*\{children\(\)\}/s,
+        )
+    })
+
+    test('{#if children} renders fallback via {:else} when no children passed', () => {
+        const Box = `<b>{#if children}{children()}{:else}empty{/if}</b>`
+        const host = document.createElement('div')
+        component(`<Box></Box>`, { Box: component(Box) })(host)
+        const html = (
+            globalThis as unknown as { serializeMiniDom: (h: unknown) => string }
+        ).serializeMiniDom(host)
+        expect(html).toContain('empty')
+    })
+
+    test('{#if children} renders the slot when children are passed', () => {
+        const Box = `<b>{#if children}{children()}{:else}empty{/if}</b>`
+        const host = document.createElement('div')
+        component(`<Box>hi</Box>`, { Box: component(Box) })(host)
+        const html = (
+            globalThis as unknown as { serializeMiniDom: (h: unknown) => string }
+        ).serializeMiniDom(host)
+        expect(html).toContain('hi')
+        expect(html).not.toContain('empty')
     })
 })

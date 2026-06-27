@@ -97,6 +97,19 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
         return source.charAt(cursor) === '{' && source.charAt(cursor + 1) === '#'
     }
 
+    /* `{children()}` is the slot fill point — the content a parent passed (a component)
+       or the route chain below (a layout). It parses to the SAME node the retired `<slot>`
+       element produced, so every downstream helper that branches on `tag === 'slot'` is
+       unchanged. */
+    const CHILDREN_CALL = /^\{\s*children\s*\(\s*\)\s*\}/
+    function atChildrenCall(): boolean {
+        return source.charAt(cursor) === '{' && CHILDREN_CALL.test(source.slice(cursor))
+    }
+    function readChildrenCall(): TemplateNode {
+        cursor = source.indexOf('}', cursor) + 1 // consume `{children()}`
+        return { kind: 'element', tag: 'slot', attrs: [], children: [] }
+    }
+
     /* Reads a `{#…}` / `{:…}` / `{/…}` token starting on `{`. Tracks string literals
        and nested braces (same scan as readBracedExpression) so a brace/quote inside an
        expression (`{#if obj.has('}')}`) doesn't end the token early. Returns the sigil,
@@ -227,6 +240,8 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
         }
         if (atBlock()) {
             nodes.push(readBlock())
+        } else if (atChildrenCall()) {
+            nodes.push(readChildrenCall())
         } else if (source.startsWith('<!--', cursor)) {
             skipComment()
         } else if (atStyleTag()) {
@@ -403,6 +418,9 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
         let literal = ''
         while (cursor < source.length && source.charAt(cursor) !== '<') {
             if (source.charAt(cursor) === '{') {
+                if (atChildrenCall()) {
+                    break // a slot fill point — handled by the enclosing scan loop
+                }
                 const next = source.charAt(cursor + 1)
                 if (next === '#' || next === ':' || next === '/') {
                     break // a block/continuation/close token — not interpolation
@@ -569,6 +587,11 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
             throw new Error('[abide] {...expr} spread is not supported on a <template> directive')
         }
         const children = selfClosing || VOID_TAGS.has(tag) ? [] : readChildren(tag)
+        if (tag === 'slot') {
+            throw new Error(
+                '[abide] the <slot> element was removed — render passed content with {children()} (with {#if children}{children()}{:else}…{/if} for a fallback)',
+            )
+        }
         if (tag === 'template') {
             return toSnippetOrTemplate(attrs, children)
         }
@@ -601,6 +624,8 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
                 nodes.push(readStyle())
             } else if (atBlock()) {
                 nodes.push(readBlock())
+            } else if (atChildrenCall()) {
+                nodes.push(readChildrenCall())
             } else if (source.charAt(cursor) === '<') {
                 nodes.push(readElement())
             } else {
@@ -619,6 +644,8 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
             roots.push(readStyle())
         } else if (atBlock()) {
             roots.push(readBlock())
+        } else if (atChildrenCall()) {
+            roots.push(readChildrenCall())
         } else if (source.charAt(cursor) === '<') {
             roots.push(readElement())
         } else {
