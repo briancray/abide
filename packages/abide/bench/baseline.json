@@ -11,6 +11,18 @@
         "value": 114.78149999999994,
         "unit": "ms"
     },
+    "shallowChain.depth2": {
+        "value": 64.856791,
+        "unit": "ms"
+    },
+    "shallowChain.depth3": {
+        "value": 88.097584,
+        "unit": "ms"
+    },
+    "shallowChain.depth4": {
+        "value": 112.40087500000001,
+        "unit": "ms"
+    },
     "coalesce.batchedHandler": {
         "value": 0.15,
         "unit": "us/handler"
