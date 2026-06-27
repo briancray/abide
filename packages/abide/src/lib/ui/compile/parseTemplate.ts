@@ -1,4 +1,5 @@
 import { decodeHtmlEntities } from './decodeHtmlEntities.ts'
+import { interpolatedTemplateLiteral } from './interpolatedTemplateLiteral.ts'
 import { isWhitespaceText } from './isWhitespaceText.ts'
 import type { TemplateAttr } from './types/TemplateAttr.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
@@ -529,13 +530,39 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
             } else if (source.charAt(cursor) === '"' || source.charAt(cursor) === "'") {
                 const quote = source.charAt(cursor)
                 cursor += 1
-                let value = ''
+                /* Scan the quoted span into static/`{expr}` parts (the text-node model),
+                   reusing the brace/quote-aware expression reader so a `}` inside an
+                   expression doesn't close the value early. */
+                const parts: TextPart[] = []
+                let literal = ''
                 while (cursor < source.length && source.charAt(cursor) !== quote) {
-                    value += source.charAt(cursor)
-                    cursor += 1
+                    if (source.charAt(cursor) === '{') {
+                        if (literal !== '') {
+                            parts.push({ kind: 'static', value: decodeHtmlEntities(literal) })
+                            literal = ''
+                        }
+                        const { code, loc } = readBracedExpression()
+                        parts.push({ kind: 'expression', code, loc })
+                    } else {
+                        literal += source.charAt(cursor)
+                        cursor += 1
+                    }
                 }
                 cursor += 1 // past closing quote
-                attrs.push({ kind: 'static', name, value, nameLoc })
+                if (literal !== '') {
+                    parts.push({ kind: 'static', value: decodeHtmlEntities(literal) })
+                }
+                /* No `{expr}` → a plain static attribute; its literal is entity-decoded
+                   like a text node (SSR/clone re-escape it), so a value such as `&amp;`
+                   round-trips instead of double-escaping. Otherwise an interpolated value. */
+                if (parts.every((part) => part.kind === 'static')) {
+                    const value = parts
+                        .map((part) => (part.kind === 'static' ? part.value : ''))
+                        .join('')
+                    attrs.push({ kind: 'static', name, value, nameLoc })
+                } else {
+                    attrs.push({ kind: 'interpolated', name, parts, nameLoc })
+                }
             } else {
                 /* Unquoted value (`<input type=text>`): runs to the next whitespace or
                    `>`, per the HTML unquoted-attribute rule. No delimiter to consume. */
@@ -951,6 +978,15 @@ function toProps(
             return {
                 name: attr.name,
                 code: attr.bare ? 'true' : JSON.stringify(attr.value),
+                nameLoc: attr.nameLoc,
+            }
+        }
+        /* `label="hi {name}"` — a string-valued prop, the template-literal concatenation
+           of its parts (lowered downstream like any other prop value). */
+        if (attr.kind === 'interpolated') {
+            return {
+                name: attr.name,
+                code: interpolatedTemplateLiteral(attr.parts),
                 nameLoc: attr.nameLoc,
             }
         }

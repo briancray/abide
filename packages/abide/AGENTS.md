@@ -87,6 +87,7 @@ A two-way binding over derived state is an accessor at the bind site (`bind:valu
 | --- | --- |
 | `{expr}` | reactive text / snippet / `html` interpolation (escaped unless `html`-branded) |
 | `name={expr}` | reactive attribute (`false`/`null`/`undefined` removes it) |
+| `name="literal {expr}"` | interpolated attribute / prop — string-valued, always present; a literal brace is `&lbrace;`/`&rbrace;`; an interpolated `class`/`style` merges with `class:`/`style:` directives |
 | `on<event>={fn}` | event listener (`onclick`, `onsubmit`, …) |
 | `bind:value={x}` / `bind:checked={x}` / `bind:group={x}` | two-way form binding |
 | `bind:value={{ get, set }}` | two-way binding over derived state |

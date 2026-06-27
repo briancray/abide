@@ -13,6 +13,7 @@ import { composeProps } from './composeProps.ts'
 import { destructureBindingNames } from './destructureBindingNames.ts'
 import { groupBindParts } from './groupBindParts.ts'
 import { ifPlan } from './ifPlan.ts'
+import { interpolatedTemplateLiteral } from './interpolatedTemplateLiteral.ts'
 import { isAnchorPositioned } from './isAnchorPositioned.ts'
 import { lowerContext } from './lowerContext.ts'
 import { makeVarNamer } from './makeVarNamer.ts'
@@ -412,6 +413,16 @@ export function generateSSR(
                 /* present/absent semantics matching the client `attr` binding:
                    false/null/undefined drops it, true emits the bare attribute. */
                 code += `${target}.push($attr(${JSON.stringify(attr.name)}, ${lowerExpression(attr.code)}));\n`
+            } else if (attr.kind === 'interpolated') {
+                /* An interpolated class/style is folded into the merge below (like a static
+                   one); otherwise it's a string-valued attribute, always present. */
+                if (
+                    (attr.name === 'class' && classDirectives.length > 0) ||
+                    (attr.name === 'style' && styleDirectives.length > 0)
+                ) {
+                    continue
+                }
+                code += `${target}.push($attr(${JSON.stringify(attr.name)}, ${lowerExpression(interpolatedTemplateLiteral(attr.parts))}));\n`
             } else if (attr.kind === 'spread') {
                 /* `{...expr}` element spread: each key as an attribute, functions (event
                    handlers) skipped — the client `spreadAttrs` wires those on hydrate. Keys
@@ -434,29 +445,38 @@ export function generateSSR(
                 code += `${target}.push(${JSON.stringify(` ${attr.property}="`)} + $esc(${bindRead(attr.code)}) + '"');\n`
             }
         }
-        /* Merged class: static value + each directive's name when its expression is truthy. */
-        if (classDirectives.length > 0) {
-            const staticClass = node.attrs.find(
-                (attr): attr is Extract<TemplateAttr, { kind: 'static' }> =>
-                    attr.kind === 'static' && attr.name === 'class',
+        /* The base class/style value expression an element's directives merge onto: a
+           static literal, an interpolated template-literal (lowered), or none. */
+        const mergeBase = (name: 'class' | 'style'): string | undefined => {
+            const base = node.attrs.find(
+                (attr) =>
+                    (attr.kind === 'static' || attr.kind === 'interpolated') && attr.name === name,
             )
+            if (base?.kind === 'static') {
+                return JSON.stringify(base.value)
+            }
+            if (base?.kind === 'interpolated') {
+                return lowerExpression(interpolatedTemplateLiteral(base.parts))
+            }
+            return undefined
+        }
+        /* Merged class: base value + each directive's name when its expression is truthy. */
+        if (classDirectives.length > 0) {
+            const base = mergeBase('class')
             const parts = [
-                ...(staticClass ? [JSON.stringify(staticClass.value)] : []),
+                ...(base ? [base] : []),
                 ...classDirectives.map(
                     (dir) => `((${lowerExpression(dir.code)}) ? ${JSON.stringify(dir.name)} : "")`,
                 ),
             ]
             code += `${target}.push(' class="' + $esc([${parts.join(', ')}].filter(Boolean).join(' ')) + '"');\n`
         }
-        /* Merged style: static value + each directive's `prop:value` (String()-coerced, matching
+        /* Merged style: base value + each directive's `prop:value` (String()-coerced, matching
            the client's style.setProperty). */
         if (styleDirectives.length > 0) {
-            const staticStyle = node.attrs.find(
-                (attr): attr is Extract<TemplateAttr, { kind: 'static' }> =>
-                    attr.kind === 'static' && attr.name === 'style',
-            )
+            const base = mergeBase('style')
             const parts = [
-                ...(staticStyle ? [JSON.stringify(staticStyle.value)] : []),
+                ...(base ? [base] : []),
                 ...styleDirectives.map(
                     (dir) =>
                         `(${JSON.stringify(`${dir.property}:`)} + String(${lowerExpression(dir.code)}))`,

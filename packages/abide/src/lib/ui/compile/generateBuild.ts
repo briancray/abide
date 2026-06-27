@@ -9,6 +9,7 @@ import { composeProps } from './composeProps.ts'
 import { destructureBindingNames } from './destructureBindingNames.ts'
 import { groupBindParts } from './groupBindParts.ts'
 import { ifPlan } from './ifPlan.ts'
+import { interpolatedTemplateLiteral } from './interpolatedTemplateLiteral.ts'
 import { isControlFlow } from './isControlFlow.ts'
 import { isWhitespaceText } from './isWhitespaceText.ts'
 import { lowerContext } from './lowerContext.ts'
@@ -148,12 +149,27 @@ export function generateBuild(
         node: Extract<TemplateNode, { kind: 'element' }>,
         attr: Extract<
             (typeof node.attrs)[number],
-            { kind: 'expression' | 'event' | 'attach' | 'bind' | 'class' | 'style' }
+            {
+                kind:
+                    | 'expression'
+                    | 'interpolated'
+                    | 'event'
+                    | 'attach'
+                    | 'bind'
+                    | 'class'
+                    | 'style'
+            }
         >,
         varName: string,
     ): string {
         if (attr.kind === 'expression') {
             return `attr(${varName}, ${JSON.stringify(attr.name)}, ${namedThunk(`attr_${attr.name}`, `return (${lowerExpression(attr.code)})`)});\n`
+        }
+        /* `name="literal {expr}"` — the template-literal concatenation bound as a reactive
+           string attribute (always present). A class/style with directives is merged
+           upstream of this dispatch, so it never reaches here. */
+        if (attr.kind === 'interpolated') {
+            return `attr(${varName}, ${JSON.stringify(attr.name)}, ${namedThunk(`attr_${attr.name}`, `return (${lowerExpression(interpolatedTemplateLiteral(attr.parts))})`)});\n`
         }
         if (attr.kind === 'event') {
             return `on(${varName}, ${JSON.stringify(attr.event)}, (${lowerExpression(attr.code)}));\n`
@@ -304,7 +320,51 @@ export function generateBuild(
             elVar = nextVar('el')
             binds.push(`const ${elVar} = ${skVar}.el[${holeIndex(elIndex, node)}];\n`)
             openTag += ` ${HOLE_ATTRIBUTE}`
+            /* An interpolated (reactive) class/style base can't layer additive directive
+               toggles on top — re-setting the base would wipe them. Base + its directives
+               collapse into ONE effect computing the whole value (mirrors the SSR merge);
+               both are then skipped in the per-attribute dispatch below. A STATIC base keeps
+               the surgical-toggle model (the base sits in the cloned skeleton). */
+            const interpolatedClass = node.attrs.find(
+                (attr) => attr.kind === 'interpolated' && attr.name === 'class',
+            )
+            const interpolatedStyle = node.attrs.find(
+                (attr) => attr.kind === 'interpolated' && attr.name === 'style',
+            )
+            const classDirectives = node.attrs.filter((attr) => attr.kind === 'class')
+            const styleDirectives = node.attrs.filter((attr) => attr.kind === 'style')
+            const mergeClass = interpolatedClass !== undefined && classDirectives.length > 0
+            const mergeStyle = interpolatedStyle !== undefined && styleDirectives.length > 0
+            if (mergeClass && interpolatedClass?.kind === 'interpolated') {
+                const base = lowerExpression(interpolatedTemplateLiteral(interpolatedClass.parts))
+                const toggles = classDirectives.map((dir) =>
+                    dir.kind === 'class'
+                        ? `((${lowerExpression(dir.code)}) ? ${JSON.stringify(dir.name)} : "")`
+                        : '',
+                )
+                binds.push(
+                    `effect(${namedThunk('class_merge', `${elVar}.setAttribute("class", [${base}, ${toggles.join(', ')}].filter(Boolean).join(' '));`)});\n`,
+                )
+            }
+            if (mergeStyle && interpolatedStyle?.kind === 'interpolated') {
+                const base = lowerExpression(interpolatedTemplateLiteral(interpolatedStyle.parts))
+                const decls = styleDirectives.map((dir) =>
+                    dir.kind === 'style'
+                        ? `(${JSON.stringify(`${dir.property}:`)} + String(${lowerExpression(dir.code)}))`
+                        : '',
+                )
+                binds.push(
+                    `effect(${namedThunk('style_merge', `${elVar}.setAttribute("style", [${base}, ${decls.join(', ')}].filter(Boolean).join(';'));`)});\n`,
+                )
+            }
             for (const attr of node.attrs) {
+                /* Skip the parts already folded into a merged class/style effect. */
+                const merged =
+                    (mergeClass && (attr === interpolatedClass || attr.kind === 'class')) ||
+                    (mergeStyle && (attr === interpolatedStyle || attr.kind === 'style'))
+                if (merged) {
+                    continue
+                }
                 if (attr.kind === 'spread') {
                     /* `{...expr}` onto the element: each key binds as a reactive attribute
                        (or an `on<event>` function as a listener) via `spreadAttrs`, skipping

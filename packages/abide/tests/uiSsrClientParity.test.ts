@@ -81,4 +81,61 @@ describe('SSR ↔ client parity', () => {
         expect(clientHtml).toBe(server.html) // server and client agree
         expect(server.state).toEqual({ count: 3, items: ['x', 'y', 'z'] })
     })
+
+    /* Server markup vs serialized client DOM for one component — the congruence the
+       client's adopt-the-server-HTML hydration rests on. */
+    function bothSides(source: string): { server: string; client: string } {
+        const server = (
+            new Function('doc', 'state', 'computed', 'effect', compileSSR(source))(
+                doc,
+                state,
+                computed,
+                effect,
+            ) as { html: string }
+        ).html
+        const host = document.createElement('div')
+        new Function(
+            'host',
+            'doc',
+            'state',
+            'computed',
+            'text',
+            'appendText',
+            'appendStatic',
+            'attr',
+            'on',
+            'each',
+            'when',
+            'effect',
+            compileComponent(source),
+        )(host, doc, state, computed, text, appendText, appendStatic, attr, on, each, when, effect)
+        const client = (
+            globalThis as unknown as { serializeMiniDom: (h: unknown) => string }
+        ).serializeMiniDom(host)
+        return { server, client }
+    }
+
+    test('interpolated attribute renders congruently on both sides', () => {
+        const { server, client } = bothSides(
+            `<script>let id = scope().state(7)</script><a href="/u/{id}/profile">x</a>`,
+        )
+        expect(server).toBe('<a href="/u/7/profile">x</a>')
+        expect(client).toBe(server)
+    })
+
+    test('interpolated class merged with a class: directive is congruent', () => {
+        const { server, client } = bothSides(
+            `<script>let v = scope().state('big')\nlet on = scope().state(true)</script><div class="card {v}" class:active={on}>x</div>`,
+        )
+        expect(server).toBe('<div class="card big active">x</div>')
+        expect(client).toBe(server)
+    })
+
+    test('interpolated style merged with a style: directive is congruent', () => {
+        const { server, client } = bothSides(
+            `<script>let w = scope().state('10px')\nlet c = scope().state('red')</script><div style="width: {w}" style:color={c}>x</div>`,
+        )
+        expect(server).toBe('<div style="width: 10px;color:red">x</div>')
+        expect(client).toBe(server)
+    })
 })

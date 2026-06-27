@@ -1,3 +1,5 @@
+import type { TextPart } from './TextPart.ts'
+
 /*
 An element attribute. `static` is a literal — `bare` marks a valueless attribute
 (`disabled`, not `disabled=""`), letting a component coerce it to `true` while a
@@ -15,6 +17,11 @@ optional, set only when the parser tracks positions for the type-checking shadow
 export type TemplateAttr =
     | { kind: 'static'; name: string; value: string; bare?: true; nameLoc?: number }
     | { kind: 'expression'; name: string; code: string; loc?: number; nameLoc?: number }
+    /* `name="literal {expr}"` — a quoted value mixing literal text with `{expr}`
+       interpolations (the text-node `parts` model on an attribute). Bound reactively
+       as the template-literal concatenation of its parts; always yields a string, so
+       the attribute is always present. */
+    | { kind: 'interpolated'; name: string; parts: TextPart[]; nameLoc?: number }
     | { kind: 'event'; event: string; code: string; loc?: number }
     | { kind: 'bind'; property: string; code: string; loc?: number }
     /* `class:<name>={code}` — toggles the class on/off by `code`'s truthiness, written

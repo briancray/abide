@@ -15,6 +15,10 @@ const NAMED_ENTITIES: Record<string, string> = {
     gt: '>',
     quot: '"',
     apos: "'",
+    /* A literal brace where `{` would otherwise open an interpolation (text or
+       attribute value); written `&lbrace;` / `&rbrace;`. */
+    lbrace: '{',
+    rbrace: '}',
     nbsp: ' ',
     copy: '©',
     reg: '®',

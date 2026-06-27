@@ -57,6 +57,13 @@ const FIXTURES: Fixture[] = [
         loweredBoth: 'model.read("count")',
     },
     {
+        name: 'interpolated attribute',
+        source: `<script>let id = scope().state(1)</script><a href="/u/{id}">x</a>`,
+        build: 'render',
+        ssr: 'render',
+        loweredBoth: 'model.read("id")',
+    },
+    {
         name: 'event handler (build-only lowering)',
         source: `<script>let count = scope().state(1)</script><button onclick={count = 2}>x</button>`,
         build: 'render',

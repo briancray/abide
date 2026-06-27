@@ -366,7 +366,15 @@ function emitNode(node: TemplateNode, builder: Builder): void {
             return
         case 'element':
             for (const attr of node.attrs) {
-                if (attr.kind !== 'static') {
+                /* An interpolated value checks each `{expr}` part on its own offset; every
+                   other dynamic attribute checks its single `code`. */
+                if (attr.kind === 'interpolated') {
+                    for (const part of attr.parts) {
+                        if (part.kind === 'expression') {
+                            builder.stmt(part.code, part.loc)
+                        }
+                    }
+                } else if (attr.kind !== 'static') {
                     builder.stmt(attr.code, attr.loc)
                 }
             }

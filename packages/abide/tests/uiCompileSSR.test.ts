@@ -99,7 +99,9 @@ describe('compileSSR — server render to string', () => {
     })
 
     test('static attribute values are HTML-escaped', () => {
-        const result = render(`<a data-json='{"x":1}' title="a & b">link</a>`)
+        /* A literal `{` in a value is written `&lbrace;` (a bare `{` opens an
+           interpolation); decode-then-reescape round-trips to the same markup. */
+        const result = render(`<a data-json='&lbrace;"x":1&rbrace;' title="a & b">link</a>`)
         expect(result.html).toBe('<a data-json="{&quot;x&quot;:1}" title="a &amp; b">link</a>')
     })
 })
