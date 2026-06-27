@@ -16,6 +16,8 @@ Run: `bun run scripts/readmeSurfaces.ts`. Exits non-zero if any export is
 untagged. Everything else is reported for the doc/example writer to account for.
 */
 
+import { bandFor, GRAMMAR_BUCKETS, SLUG_GRAMMAR } from './surfaceWeight.ts'
+
 const ROOT = new URL('../', import.meta.url).pathname
 const REPO = new URL('../../../', import.meta.url).pathname
 
@@ -122,6 +124,59 @@ for (const [key, relative] of Object.entries(exportsMap)) {
     }
 }
 
+/* 1c. surface weight per slug → page-tree band. exports + sub-methods +
+   grammar-bucket members (extracted from the parser's own sources), banded into
+   share / page / section. See scripts/surfaceWeight.ts for the model. */
+const COMPILE_DIR = `${ROOT}src/lib/ui/compile/`
+/* memoise each grammar bucket's member count (read its parser source once) */
+const bucketCount = new Map<string, number>()
+for (const [bucket, { file, extract }] of Object.entries(GRAMMAR_BUCKETS)) {
+    bucketCount.set(bucket, extract(await Bun.file(COMPILE_DIR + file).text()).length)
+}
+
+/* sub-methods per slug: reverse the key→slug map, tally `symbol.method =` hits */
+const slugOf = new Map<string, string>()
+for (const [slug, keys] of bySlug) {
+    for (const key of keys) {
+        slugOf.set(key, slug)
+    }
+}
+const subMethodsBySlug = new Map<string, number>()
+for (const [key, relative] of Object.entries(exportsMap)) {
+    const rel = (relative as string).replace(/^\.\//, '')
+    if (!rel.endsWith('.ts')) {
+        continue
+    }
+    const symbol = key.split('/').at(-1) as string
+    const source = await Bun.file(ROOT + rel).text()
+    const count = [...source.matchAll(new RegExp(`^${symbol}\\.([a-zA-Z]\\w*)\\s*=`, 'gm'))].length
+    const slug = slugOf.get(key)
+    if (slug !== undefined) {
+        subMethodsBySlug.set(slug, (subMethodsBySlug.get(slug) ?? 0) + count)
+    }
+}
+
+/* the page-tree shape annotation for one slug */
+const shapeFor = (slug: string): string => {
+    const exportCount = (bySlug.get(slug) ?? []).filter((key) => key !== '(no exports yet)').length
+    const grammarMembers = (SLUG_GRAMMAR[slug] ?? []).reduce(
+        (sum, bucket) => sum + (bucketCount.get(bucket) ?? 0),
+        0,
+    )
+    const weight = exportCount + (subMethodsBySlug.get(slug) ?? 0) + grammarMembers
+    const band = bandFor(weight)
+    const seams = SLUG_GRAMMAR[slug]
+    const shape =
+        band === 'light'
+            ? 'share'
+            : band === 'medium'
+              ? 'page'
+              : seams
+                ? `section: ${seams.join(', ')}`
+                : 'section'
+    return `weight ${weight} ${band.toUpperCase()} → ${shape}`
+}
+
 /* 2. env + routes from source */
 const grep = async (pattern: string) =>
     (await run(['grep', '-rhoE', pattern, 'packages/abide/src'])).split('\n').filter(Boolean)
@@ -158,7 +213,8 @@ section(
     Object.entries(SECTION_GROUPS)
         .map(([group, slugs]) => {
             const rows = slugs.map(
-                (slug) => `  ${slug}: ${(bySlug.get(slug) ?? ['(no exports yet)']).join(', ')}`,
+                (slug) =>
+                    `  ${slug}: ${(bySlug.get(slug) ?? ['(no exports yet)']).join(', ')}  [${shapeFor(slug)}]`,
             )
             return `${group}\n${rows.join('\n')}`
         })
