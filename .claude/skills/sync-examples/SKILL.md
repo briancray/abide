@@ -60,6 +60,19 @@ running code. Sync means this invariant holds:
   Terminology for the three primitives is the README's, verbatim (if the README
   says `tail`, no example says `subscribe`); terminology for every other
   surface is AGENTS.md's / the source's.
+- **Grammar coverage (constructs → examples).** The `.abide` *template grammar* —
+  the control-flow blocks (`{#if}`/`{:elseif}`/`{:else}`, `{#for}` + `{#for await}`,
+  `{#await}` incl. `{:finally}`, `{#switch}`, `{#try}`) and the binding/directive
+  attributes (`{expr}`, `html`-branded interpolation, `name=`, `on*`, all `bind:`
+  forms + `bind:value={{get,set}}`, `class:`, `style:`, `attach`, `{...spread}`) —
+  is part of the public surface (AGENTS.md tabulates it, CLAUDE.md mandates the
+  section) but it is **not an export**, so the slug→export checklist above cannot
+  catch a missing construct. Treat it as its own coverage axis: **every construct
+  in AGENTS.md's bindings + control-flow tables must appear in at least one
+  kitchen-sink `.abide` file** (those tables are themselves re-derived from
+  `parseTemplate.ts` `readAttributes` / `isControlFlow.ts` — the single source).
+  `components/page.abide` is the grammar showcase and the home for any construct
+  with no natural feature-page (e.g. `{:elseif}`, `class:`); demo it there.
 
 Example pages may use *more words* than the docs (they're teaching material),
 but they must never make a claim the source doesn't back, and every runtime
@@ -84,13 +97,24 @@ right just because it builds.
 ## Multi-page sections share one nested layout
 
 The kitchen-sink page tree maps to the `@documentation` slug groups, not to
-README headings (the README has only three) — it *groups* related slugs under
-one nav section. When such a section has
-subpages (today only `rpc/`: its index plus `consume` / `errors` / `respond`
-/ `streaming` / `request-scope`), the section title, intro paragraph, and the
-subpage pill-nav live in one nested `<section>/layout.abide`
-(e.g. `pages/rpc/layout.abide`), whose `<slot/>` renders the active subpage
-below a masthead that is byte-identical across the section.
+README headings. **How many pages a slug spreads across is decided by its band**
+— the `[weight N BAND → shape]` annotation `readmeSurfaces.ts` prints beside each
+slug (model in `scripts/surfaceWeight.ts`):
+
+- **LIGHT** (`→ share`) — the slug is a section on a shared group page, not its own folder.
+- **MEDIUM** (`→ page`) — its own single `<slug>/page.abide`.
+- **HEAVY** (`→ section: …`) — a multi-page section: a `<slug>/layout.abide` masthead
+  + pill-nav with one subpage per emitted seam. The seams are the buckets after
+  `section:` (e.g. `templating → control-flow, bindings, snippets`); a heavy slug
+  with no grammar buckets (e.g. `rpc`) uses author-chosen coherent sub-topics.
+
+The band sizes a slug; it does NOT re-home it across nav groups. A slug whose demos
+legitimately nest under a sibling section (e.g. `response` under `rpc/`) satisfies
+"multi-page" via that section's subpages. `rpc/` is the worked example of this
+general rule (its index plus `consume` / `errors` / `respond` / `streaming` /
+`request-scope`), whose section title, intro paragraph, and subpage pill-nav live in
+one nested `<section>/layout.abide` (e.g. `pages/rpc/layout.abide`), whose `<slot/>`
+renders the active subpage below a masthead byte-identical across the section.
 
 - **A nested layout, never a per-page component.** abide nests the full layout
   chain — every ancestor `layout.abide` wraps the page outermost-first
@@ -142,7 +166,12 @@ existing content.
    `layout.abide` nav, index cards, overview pages, and any nested
    `<section>/layout.abide` masthead/pill-nav (see *Multi-page sections share
    one nested layout*) match the `@documentation` slug grouping. Move or
-   delete folders whose slug no longer exists.
+   delete folders whose slug no longer exists. Read each slug's band from the
+   `readmeSurfaces.ts` annotation and make its folder shape match (LIGHT → shared
+   section, MEDIUM → `page.abide`, HEAVY → `layout.abide` + a subpage per emitted
+   seam). A slug that has crossed into a new band since the last sync is the
+   signal to split or merge — e.g. a page that now reads HEAVY must become a
+   section.
 4. **Rebuild each demo page from the live code, not from its own old text.**
    For every page (and template/scaffold doc-comments), open the
    implementation in `packages/abide/src` and write snippets and prose to
@@ -151,7 +180,8 @@ existing content.
 5. **Run the coverage checklist** from step 1: every non-`plumbing`
    `@documentation` slug has a kitchen-sink demo, and every README option row /
    warning (the three primitives) has one too; flag and delete every demo that
-   traces to no current `exports` key.
+   traces to no current `exports` key. **Then run the grammar-coverage check**
+   (below) — the slug checklist does not cover template constructs.
 6. **Propagate to all four trees** — imports, directory names, type
    signatures, tsconfig, `package.json` scripts.
 7. **Template ↔ scaffold parity** — `diff -ruN packages/abide/template/src
@@ -166,6 +196,57 @@ existing content.
 
      ```sh
      grep -rhoE "@abide/abide/[a-zA-Z/-]+" examples packages/abide/template --include="*.ts" --include="*.abide" | sort -u
+     ```
+
+   - **Grammar coverage**: every template construct appears in at least one
+     kitchen-sink `.abide` file (keep this token list in sync with AGENTS.md's
+     bindings + control-flow tables — the parser is the single source). Anything
+     `MISSING` is a gap; demo it (orphan constructs go in `components/page.abide`):
+
+     ```sh
+     for t in '{#if' '{:elseif' '{:else}' '{/if}' '{#for ' '{#for await' '{/for}' \
+       '{#await' '{:then' '{:catch' '{:finally' '{#switch' '{:case' '{:default' \
+       '{#try' '{/try}' 'bind:value' 'bind:checked' 'bind:group' 'get, set' \
+       'class:' 'style:' 'attach=' '{...' 'scope().state' 'scope().computed' \
+       'scope().linked' 'scope().effect' 'html`' '<template name' '<slot'; do
+       grep -rqF -- "$t" examples/kitchen-sink --include="*.abide" \
+         || echo "MISSING from kitchen-sink: $t"
+     done
+     ```
+
+     The `scope().*` tokens are also satisfied by the destructure idiom
+     (`const { state, computed } = scope()` + bare calls) — treat as covered if
+     that form is present.
+
+   - **Band conformance**: every HEAVY slug is a multi-page section (a
+     `layout.abide` with subpages), every MEDIUM slug a single `page.abide`. Drift
+     = a band that no longer matches the folder shape:
+
+     ```sh
+     bun run packages/abide/scripts/readmeSurfaces.ts 2>/dev/null \
+       | grep -oE "^  [a-z-]+:.*(MEDIUM|HEAVY) → [a-z]+" \
+       | while read -r line; do
+           slug=$(echo "$line" | sed -E 's/^ *([a-z-]+):.*/\1/')
+           band=$(echo "$line" | grep -oE "MEDIUM|HEAVY")
+           dir="examples/kitchen-sink/src/ui/pages/$slug"
+           if [ "$band" = "HEAVY" ] && [ ! -f "$dir/layout.abide" ]; then
+             echo "BAND DRIFT: $slug is HEAVY but has no $dir/layout.abide (should be a section)"
+           fi
+           if [ "$band" = "MEDIUM" ] && [ ! -f "$dir/page.abide" ]; then
+             echo "BAND DRIFT: $slug is MEDIUM but has no $dir/page.abide"
+           fi
+         done
+     ```
+
+     (A slug nested under a sibling section, e.g. `response` under `rpc/`, is
+     exempt — confirm those by eye against the nav grouping.)
+
+   - **Line backstop**: no `page.abide` exceeds 250 lines (`LINE_BACKSTOP`) unless
+     it is itself a heavy section's subpage; over-budget = split or trim:
+
+     ```sh
+     find examples/kitchen-sink -name "page.abide" -exec wc -l {} \; \
+       | awk '$1 > 250 { print "OVER 250 LINES:", $2, "("$1")" }'
      ```
 
    - Behavioural smoke where one exists (`bun test` in examples with a
