@@ -16,3 +16,4 @@ editors/zed/*/grammars/
 # local scratch + superpowers session artifacts (not for main)
 bench-vs-svelte/
 docs/superpowers/
+.claude/worktrees/
