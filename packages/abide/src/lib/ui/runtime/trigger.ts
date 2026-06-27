@@ -15,27 +15,41 @@ reaches). `nextSub` is read before recursing so the walk holds no edge a deeper
 pass could detach.
 */
 function mark(node: ReactiveNode, status: number): void {
-    if (node.status >= status) {
-        return
-    }
-    const wasClean = node.status === NODE_STATE.CLEAN
-    node.status = status
-    if (node.isEffect) {
-        if (wasClean) {
-            REACTIVE_CONTEXT.pendingEffects.add(node)
+    /* Tail-iterative down the subscriber cone: a node with a single subscriber (a
+       linear computed chain) advances by reassigning `node` instead of recursing, so a
+       deep chain costs a loop, not a 500-frame call stack. Only a true fan-out (>1
+       subscriber) recurses, and only for the extra branches. */
+    let nextStatus = status
+    for (;;) {
+        if (node.status >= nextStatus) {
+            return
         }
-        return
-    }
-    /* A computed propagates CHECK to its subscribers only on its first move out of
-       CLEAN — they are already CHECK on any later upgrade, so re-walking is wasted. */
-    if (!wasClean) {
-        return
-    }
-    let link = node.subsHead
-    while (link !== undefined) {
-        const next = link.nextSub
-        mark(link.sub, NODE_STATE.CHECK)
-        link = next
+        const wasClean = node.status === NODE_STATE.CLEAN
+        node.status = nextStatus
+        if (node.isEffect) {
+            if (wasClean) {
+                REACTIVE_CONTEXT.pendingEffects.add(node)
+            }
+            return
+        }
+        /* A computed propagates CHECK to its subscribers only on its first move out of
+           CLEAN — they are already CHECK on any later upgrade, so re-walking is wasted. */
+        if (!wasClean) {
+            return
+        }
+        const head = node.subsHead
+        if (head === undefined) {
+            return
+        }
+        /* Recurse into every branch but the last; continue the loop on the last, so the
+           common single-subscriber chain never recurses. */
+        let link = head
+        while (link.nextSub !== undefined) {
+            mark(link.sub, NODE_STATE.CHECK)
+            link = link.nextSub
+        }
+        node = link.sub
+        nextStatus = NODE_STATE.CHECK
     }
 }
 
