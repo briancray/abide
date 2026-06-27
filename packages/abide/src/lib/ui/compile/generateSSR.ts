@@ -543,11 +543,11 @@ export function generateSSR(
         code += `const ${resolved} = await (${lowerExpression(node.promise)});\n`
         code += `{\n`
         code += `const ${plan.resolvedAs} = ${resolved};\n`
-        code += withLocalPlain(bound, () => {
-            let branch = branchContent(plan.resolvedChildren, target)
-            branch += branchContent(plan.finallyChildren, target)
-            return branch
-        })
+        code += withLocalPlain(bound, () => branchContent(plan.resolvedChildren, target))
+        /* `finally` does not bind the resolved value, so it is lowered OUTSIDE the `then`
+           shadow — matching the catch branch below, so a finally expression naming the
+           same identifier as the `then` binding reads the component signal, not the local. */
+        code += branchContent(plan.finallyChildren, target)
         code += `$resume[${id}] = { ok: true, value: ${plan.resolvedAs} };\n`
         code += `}\n`
         if (plan.surfaceRejection) {
@@ -590,9 +590,8 @@ export function generateSSR(
         const settled = (binding: string, children: TemplateNode[]) =>
             `async (${binding}) => { const $o = []; ${withLocalPlain(
                 destructureBindingNames(binding),
-                () =>
-                    `${branchContent(children, '$o')}${branchContent(plan.finallyChildren, '$o')}`,
-            )}return $o.join(''); }`
+                () => branchContent(children, '$o'),
+            )}${branchContent(plan.finallyChildren, '$o')}return $o.join(''); }`
         const catchProp = plan.surfaceRejection
             ? ''
             : `catch: ${settled(plan.catchAs, plan.catchChildren)} `

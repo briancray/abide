@@ -237,6 +237,42 @@ describe('an await binding named like the awaited expression', () => {
         expect(html).toContain('<b>BOOM</b>')
         expect(html).not.toContain('STATE')
     })
+
+    /* `finally` does NOT bind the resolved value, so a `{:finally}` expression naming the
+       same identifier as the `then` binding must read the component signal, not the resolved
+       local. The pre-fix SSR rendered the blocking then-branch's finally INSIDE the `then`
+       shadow (unlike the catch branch), so `foo` read the resolved value instead of the signal. */
+    test('a blocking await finally reading a then-bound name reads the signal, not the value', async () => {
+        const render = component(
+            `
+            <script>
+                const foo = scope().state('STATE')
+            </script>
+            {#await make() then foo}<span>{foo.label}</span>{:finally}<i>{foo}</i>{/await}
+        `,
+            { make: () => Promise.resolve({ label: 'RESOLVED' }) },
+        ).render
+        const { html } = await render()
+        expect(html).toContain('<span>RESOLVED</span>')
+        expect(html).toContain('<i>STATE</i>')
+    })
+
+    /* Same for the streaming form's settled renderer: finally is lowered OUTSIDE the binding
+       shadow, so it reads the signal, not the renderer's arrow parameter. */
+    test('a streaming await finally reading a then-bound name reads the signal, not the value', async () => {
+        const render = component(
+            `
+            <script>
+                const foo = scope().state('STATE')
+            </script>
+            {#await make()}<p>load</p>{:then foo}<span>{foo.label}</span>{:finally}<i>{foo}</i>{/await}
+        `,
+            { make: () => Promise.resolve({ label: 'RESOLVED' }) },
+        ).render
+        const html = await streamToString(() => render())
+        expect(html).toContain('<span>RESOLVED</span>')
+        expect(html).toContain('<i>STATE</i>')
+    })
 })
 
 describe('a {#try} catch binding named like a component signal', () => {
