@@ -6,6 +6,6 @@ identically to the thunk map `mountChild` passes a nested child — so `props()`
 component passes (carrying the component's `{children()}` content), or `CHILD_PRESENT`
 the router/SSR set on a layout that has a child layer below it.
 */
-export type UiProps = Record<string, () => unknown> & {
+export type UiProps = Record<string, (() => unknown) | ((host: Element) => void)> & {
     $children?: (host: Element) => void
 }

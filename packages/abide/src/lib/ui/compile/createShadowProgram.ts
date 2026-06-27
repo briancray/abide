@@ -4,6 +4,7 @@ import { messageFromError } from '../../shared/messageFromError.ts'
 import { assetModulesFile } from './assetModulesFile.ts'
 import { compileShadow } from './compileShadow.ts'
 import { loadShadowTsConfig } from './loadShadowTsConfig.ts'
+import { pagePropsType } from './pagePropsType.ts'
 import { resolveAbideImports } from './resolveAbideImports.ts'
 import { shadowNaming } from './shadowNaming.ts'
 import type { CompiledShadow } from './types/CompiledShadow.ts'
@@ -46,7 +47,7 @@ export function createShadowProgram(cwd: string, abidePaths?: string[]): ShadowP
     const shadowText = (abidePath: string): string => {
         const source = ts.sys.readFile(abidePath) ?? ''
         try {
-            const compiled = compileShadow(source)
+            const compiled = compileShadow(source, pagePropsType(abidePath))
             shadows.set(abidePath, compiled)
             parseErrors.delete(abidePath)
             return compiled.code

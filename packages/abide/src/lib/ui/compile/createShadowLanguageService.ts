@@ -5,6 +5,7 @@ import { mapTsClassification } from './ABIDE_SEMANTIC_TOKENS_LEGEND.ts'
 import { assetModulesFile } from './assetModulesFile.ts'
 import { compileShadow } from './compileShadow.ts'
 import { loadShadowTsConfig } from './loadShadowTsConfig.ts'
+import { pagePropsType } from './pagePropsType.ts'
 import { remapShadowDiagnostic } from './remapShadowDiagnostic.ts'
 import { resolveAbideImports } from './resolveAbideImports.ts'
 import { shadowNaming } from './shadowNaming.ts'
@@ -58,7 +59,7 @@ export function createShadowLanguageService(cwd: string): ShadowLanguageService 
     const shadowText = (abidePath: string): string => {
         const source = overlays.get(abidePath) ?? ts.sys.readFile(abidePath) ?? ''
         try {
-            const compiled = compileShadow(source)
+            const compiled = compileShadow(source, pagePropsType(abidePath))
             shadows.set(abidePath, compiled)
             parseErrors.delete(abidePath)
             return compiled.code
