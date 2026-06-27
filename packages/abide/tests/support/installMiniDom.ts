@@ -63,6 +63,11 @@ export function installMiniDom(): () => void {
     class MiniNode {
         childNodes: MiniNode[] = []
         parentNode: MiniNode | undefined = undefined
+        /* Forward sibling pointer, maintained O(1) by `place`/`removeChild`, so
+           `nextSibling` is O(1) like a real DOM — not an `indexOf` scan of the parent's
+           children. The reconcile reads `nextSibling` once per row; the array scan made it
+           O(n²) per pass, swamping the benches with a harness artifact the browser never pays. */
+        nextSib: MiniNode | null = null
 
         /* The core single-node placement. Fragment spreads route here directly (not
            back through the public methods) so a `insertBefore(fragment)` is one public
@@ -79,11 +84,22 @@ export function installMiniDom(): () => void {
             node.remove()
             node.parentNode = this
             if (index === -1) {
+                const previous = this.childNodes[this.childNodes.length - 1]
                 this.childNodes.push(node)
+                node.nextSib = null
+                if (previous !== undefined) {
+                    previous.nextSib = node
+                }
             } else {
                 /* `node.remove()` above may have shifted the reference's index when both
                    share this parent — recompute against the current array. */
-                this.childNodes.splice(this.childNodes.indexOf(reference as MiniNode), 0, node)
+                const at = this.childNodes.indexOf(reference as MiniNode)
+                this.childNodes.splice(at, 0, node)
+                node.nextSib = reference
+                const previous = this.childNodes[at - 1]
+                if (previous !== undefined) {
+                    previous.nextSib = node
+                }
             }
         }
 
@@ -114,6 +130,13 @@ export function installMiniDom(): () => void {
             const index = this.childNodes.indexOf(child)
             if (index !== -1) {
                 this.childNodes.splice(index, 1)
+                /* Relink the gap: the node now at `index-1` (unshifted by the splice)
+                   inherits the removed child's forward pointer. */
+                const previous = this.childNodes[index - 1]
+                if (previous !== undefined) {
+                    previous.nextSib = child.nextSib
+                }
+                child.nextSib = null
                 child.parentNode = undefined
             }
             return child
@@ -128,11 +151,7 @@ export function installMiniDom(): () => void {
         }
 
         get nextSibling(): MiniNode | null {
-            const siblings = this.parentNode?.childNodes
-            if (siblings === undefined) {
-                return null
-            }
-            return siblings[siblings.indexOf(this) + 1] ?? null
+            return this.parentNode === undefined ? null : this.nextSib
         }
 
         get textContent(): string {
@@ -142,6 +161,7 @@ export function installMiniDom(): () => void {
         set textContent(value: string) {
             for (const child of this.childNodes) {
                 child.parentNode = undefined
+                child.nextSib = null
             }
             this.childNodes = value === '' ? [] : [new MiniText(value)]
         }
@@ -267,6 +287,7 @@ export function installMiniDom(): () => void {
             const target = this.content ?? this
             for (const child of target.childNodes) {
                 child.parentNode = undefined
+                child.nextSib = null
             }
             target.childNodes = []
             /* Parse in this element's child namespace so `svg.innerHTML = '<path/>'`
