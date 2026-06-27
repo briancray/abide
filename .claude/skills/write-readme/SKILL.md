@@ -43,7 +43,8 @@ either doc and the code disagree, change the doc, not the code.
 Exactly four sections, in this order. The first is the pitch; the next three
 are the foundational primitives, each a single artifact with the minimum prose
 to read it. The three artifacts form **one story**: §4's component imports the
-RPC from §2 and the socket from §3. Target ~150 lines, ceiling ~180.
+RPC from §2 and the socket from §3. Target ~190 lines, ceiling ~240 — §4
+carries the growth (it must exercise the whole template grammar); §§1–3 stay lean.
 
 ### 1. Intro
 
@@ -92,23 +93,40 @@ The artifacts argue; prose doesn't.
 ### 4. Components — the full template
 
 The payoff: **one `.abide` component that imports the §2 RPC and §3 socket**
-and exercises most of the template grammar in a single realistic page. Keep it
-to one snippet. It should show, in order:
+and exercises the **entire** template grammar in a single coherent page. This is
+the one place a reader sees every construct working together (AGENTS.md has the
+tables; the README has the live example), so **completeness wins over
+minimalism here** — keep it one component and as realistic as you can, but every
+construct in the lists below must appear at least once. The list is a drift trap:
+**re-derive the full set from the parser** (attribute directives from
+`parseTemplate.ts` `readAttributes`; control-flow blocks from `isControlFlow.ts`;
+the nesting rule from `readElement`) and read real `examples/**/*.abide` for
+idiom — never trust this prose as the complete set. It should show:
 
-* `<script>` — imports (`cache`, `tail`, the rpc + socket via `$server/…`,
-  a child component via `$ui/…`), `props()` destructure reads, reactive reads
-  through `scope().computed(...)`, local `scope().state(...)`, and an event
+* `<script>` — imports (`cache`, `tail`, the rpc + socket via `$server/…`, a
+  child component via `$ui/…`), `props()` destructure reads, and **every**
+  reactive primitive: `scope().state(...)`, `scope().computed(...)` (read-only),
+  `scope().linked(...)`, `scope().effect(...)` (client-only), plus an event
   handler that calls a mutating RPC.
-* a `<template name="…" args={…}>` snippet (reusable builder), called as
-  `{name(args)}`.
-* a `<form>` with `bind:value` / `bind:checked` / `bind:group` and a
-  `disabled={…}` button.
-* the mustache control-flow blocks: `{#if}`/`{:else}`,
-  `{#switch}`/`{:case}`/`{:default}`, `{#await}`/`{:then}`/`{:catch}` wrapping
-  `{#for item of list by key}` … `{/for}`.
-* a component-scoped `<style>`.
+* **every binding / directive**: `{expr}` text, an `html`-branded (unescaped)
+  interpolation, `name={expr}` attribute, `on<event>={fn}`, the form binds
+  `bind:value` / `bind:checked` / `bind:group`, the derived two-way
+  `bind:value={{ get, set }}`, `class:name={cond}`, `style:property={value}`,
+  `attach={fn}`, and `{...spread}` — on a component AND on an element.
+* **every control-flow block**: `{#if}`/`{:elseif}`/`{:else}`/`{/if}`,
+  `{#for item, i of list by key}`/`{/for}` AND a `{#for await … of …}` over an
+  AsyncIterable, `{#await p}`/`{:then v}`/`{:catch e}`/`{:finally}`/`{/await}`,
+  `{#switch}`/`{:case}`/`{:default}`/`{/switch}`,
+  `{#try}`/`{:catch}`/`{:finally}`/`{/try}`.
+* a `<template name="…" args={…}>` snippet (reusable builder) called `{name(args)}`.
+* a capitalised child component whose children fill its `<slot>`.
+* a root component-scoped `<style>`, AND a `<script>`/`<style>` **nested inside
+  one control-flow branch** (scoped to that branch) so the example shows scopes
+  nest — the feature AGENTS.md's grammar section describes.
 
-Close the file with a single `MIT` line.
+A single page covering all of this runs longer than a curated snippet; that is
+expected and allowed (the budget below accounts for it). Close the file with a
+single `MIT` line.
 
 ## AGENTS.md — the exhaustive surface map
 
@@ -146,16 +164,26 @@ is the editorial layer):
 * **.abide template grammar** — the component file anatomy + the ambient names
   (`scope`, `props`, `effect`, `html`, `snippet`), then tables for reactive state
   (`scope().state/.computed/.linked`, `effect`, `props()`), bindings (`{expr}`,
-  `name={expr}`, `on<event>`, `bind:value/checked/group`, `bind:value={{get,set}}`),
-  and control flow — the mustache blocks `{#if}`/`{:elseif}`/`{:else}`/`{/if}`,
+  `name={expr}`, `on<event>`, `bind:value/checked/group`, `bind:value={{get,set}}`,
+  `class:name`, `style:property`, `attach`, `{...spread}`), and control flow — the
+  mustache blocks `{#if}`/`{:elseif}`/`{:else}`/`{/if}`,
   `{#for item of list by key}`/`{/for}` (`item, i of list`; `{#for await x of …}`),
   `{#await}`/`{:then}`/`{:catch}`/`{:finally}`/`{/await}`,
   `{#switch}`/`{:case}`/`{:default}`/`{/switch}`, `{#try}`/`{:catch}`/`{/try}` —
   and the snippet `<template name args>` (called `{name(args)}`), plus
   components + slots. `<template>` is ONLY the snippet form; control flow is the
-  `{#…}` blocks, never a `<template if>` attribute. Re-derive the directive set
-  from `compile/parseTemplate.ts` / `isControlFlow.ts`; read real `.abide` files
-  for syntax, never write Svelte. (CLAUDE.md mandates this section.)
+  `{#…}` blocks, never a `<template if>` attribute. Note that `<script>` and
+  `<style>` are **not component-root-only**: either may sit inside a control-flow
+  branch, scoped to that branch's lexical scope (a nested `<script>` declares
+  branch-local `scope().state/linked/computed`, re-seeded per mount, no module
+  imports; a nested `<style>` scopes to its sibling subtree, not the whole
+  component) — so write "a root `<style>` is component-scoped", never a bare
+  "`<style>` is component-scoped". Re-derive the FULL set from the parser, not
+  from this prose, which drifts: the attribute-directive kinds (`event`/`bind`/
+  `class`/`style`/`attach`/spread) from `parseTemplate.ts` `readAttributes`, the
+  control-flow blocks from `isControlFlow.ts`, the nested-`<script>`/`<style>`
+  rule from `readElement` + `analyzeComponent.ts`. Read real `.abide` files for
+  syntax, never write Svelte. (CLAUDE.md mandates this section.)
 * **Surface sections, grouped by namespace** — `## Server surface —
   abide/server/*`, `## Isomorphic surface — abide/shared/*`, `## UI surface —
   abide/ui/* (client-only)`, then `## Build / tooling`, `## Desktop bundle`,
@@ -166,9 +194,16 @@ is the editorial layer):
   length ceiling); a condensed family paragraph is a fallback only when the
   per-export form adds nothing. Label them `@documentation plumbing`.
 * **Generated machine surfaces** — the runtime routes (`/openapi.json`,
-  `/__abide/mcp|health|sockets|cli|…`).
+  `/__abide/mcp|health|sockets|cli|…`): every `DOCUMENT` route from the
+  inventory, never the internal ones.
 * **Environment variables** — table (var → effect) for every `DOCUMENT` env var
   from the inventory.
+
+  > The inventory's `INTERNAL_ENV` / `INTERNAL_ROUTES` sets (in
+  > `readmeSurfaces.ts`) are **deliberate plumbing exclusions, not gaps** — do
+  > not hand-add them to AGENTS.md (the next regen drops them anyway). If one is
+  > genuinely user-facing, the durable fix is removing it from that set in
+  > `readmeSurfaces.ts`, not editing AGENTS.md.
 * **Maintenance footer** — the one-line "mirrors `exports`; run
   `readmeSurfaces.ts` after adding/renaming an export" note.
 
@@ -193,9 +228,12 @@ Read these from real `.abide` files in `examples/`; never write Svelte syntax.
   `{:catch e}`/`{:finally}`/`{/await}`, `{#switch}`/`{:case}`/`{:default}`/
   `{/switch}`, `{#try}`/`{:catch}`/`{/try}`. `<template name args>` is ONLY the
   snippet form (called `{name(args)}`) — there is no `<template if>`. `{expr}`
-  text, `name={expr}` attrs, `onclick={fn}`, `bind:value={x}`. Components are
-  capitalised tags filling a `<slot>`; `<style>` is component-scoped. Component
-  files end in `.abide`, never `.svelte`.
+  text, `name={expr}` attrs, `onclick={fn}`, `bind:value={x}`, plus the directive
+  attrs `class:name={cond}`, `style:property={value}`, `attach={fn}`, and
+  `{...spread}`. Components are capitalised tags filling a `<slot>`; a *root*
+  `<style>` is component-scoped, but a `<script>`/`<style>` nested in a
+  control-flow branch is scoped to that branch. Component files end in `.abide`,
+  never `.svelte`.
 
 ## Validation pass — run before finishing
 
@@ -221,9 +259,29 @@ Read these from real `.abide` files in `examples/`; never write Svelte syntax.
 
 3. **One story (README)**: the §4 component imports the §2 RPC and the §3
    socket — the three artifacts connect, not three disconnected snippets.
-4. **Budget**: README `wc -l` ≤ 180. AGENTS.md has no ceiling — length is
+4. **Template coverage (README §4)** — the §4 component must demonstrate every
+   grammar construct AGENTS.md tabulates (which is itself re-derived from the
+   parser). Grep the README for each; anything `MISSING` is a gap to fill (keep
+   this token list in sync with the AGENTS bindings + control-flow tables — the
+   parser is the single source for both):
+
+   ```sh
+   for t in '{#if' '{:elseif' '{:else}' '{/if}' '{#for ' '{#for await' '{/for}' \
+     '{#await' '{:then' '{:catch' '{:finally' '{#switch' '{:case' '{:default' \
+     '{#try' '{/try}' 'bind:value' 'bind:checked' 'bind:group' 'get, set' \
+     'class:' 'style:' 'attach=' '{...' 'scope().state' 'scope().computed' \
+     'scope().linked' 'scope().effect' 'html`' '<template name' '<slot'; do
+     grep -qF -- "$t" packages/abide/README.md || echo "MISSING from README §4: $t"
+   done
+   ```
+
+   The `scope().*` tokens are also satisfied by the destructure idiom
+   (`const { state, computed, linked, effect } = scope()` + bare calls) — treat
+   a flagged `scope().state` etc. as covered if that form is present and used.
+
+5. **Budget**: README `wc -l` ≤ 240. AGENTS.md has no ceiling — length is
    whatever completeness requires.
-5. **Tree / diagram width**: no line in a `text` block over ~76 columns (GitHub
+6. **Tree / diagram width**: no line in a `text` block over ~76 columns (GitHub
    clips them).
 
 ## Write to the right files
