@@ -1,5 +1,12 @@
 # abide
 
+## 0.43.1
+
+### Patch Changes
+
+- 943402b: restore reload scroll flash-free via native restoration ([`876b99c`](https://github.com/briancray/abide/commit/876b99cd6e285b6a41afe87ca053cf0631099c03))
+- ed96096: abide check: quote hyphenated component prop keys (`aria-label`, `data-*`) so the props shim parses, and treat `on*` callbacks as ordinary declared props (not DOM passthrough) so a passed required `onsave`/`oncancel` no longer reads as missing while an undeclared handler is still caught
+
 ## 0.43.0
 
 ### Minor Changes
