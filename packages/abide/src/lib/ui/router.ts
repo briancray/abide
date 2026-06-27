@@ -253,9 +253,16 @@ export function router(
     }
     const onPageHide = (): void => {
         /* Mirror the live scroll into the active entry's state before it unloads, so a
-           reload can recover it — the in-memory bucket is gone and `manual` keeps the
-           browser from restoring. */
+           non-hydratable reload (which tears the SSR DOM down) can recover it from the
+           manual bucket. */
         historyEntries.persist()
+        /* Re-enable native scroll restoration for the NEXT document load (a reload): the
+           browser restores the SSR DOM's offset before paint, flash-free — where the
+           manual bucket, gated behind the async chunk import, would re-apply post-paint
+           (a visible scroll). The first paint flips back to `manual` for in-session nav. */
+        if ('scrollRestoration' in history) {
+            history.scrollRestoration = 'auto'
+        }
     }
     const onClick = (event: MouseEvent): void => {
         /* Let the browser own anything that isn't a plain primary-button click:
@@ -297,12 +304,18 @@ export function router(
         navigatePath(destination.pathname + destination.search + destination.hash)
     }
     if (typeof window !== 'undefined') {
-        /* Own scroll restoration: the browser would restore against the pre-teardown
-           DOM. Adopt the initial entry's id (survives a reload) and stamp it onto the
-           landing entry — merging so any `scroll` a prior unload persisted into this
-           entry's state stays put for the first-paint `restore` to recover. */
+        /* Scroll restoration is the browser's job on a document load (reload / first
+           paint): native restoration runs BEFORE paint, so a hydrating in-place adopt
+           returns to the reload offset flash-free (`auto` here also self-heals an entry a
+           prior session left `manual`). The first paint then flips to `manual` (below) so
+           an in-session back/forward — which tears the page down and rebuilds — restores
+           against the new DOM instead of letting the browser restore against the
+           torn-down one; `onPageHide` flips back to `auto` for the next load. Still adopt
+           the initial entry's id (survives a reload) and stamp it onto the landing entry —
+           merging so any `scroll` a prior unload persisted stays put for a non-hydratable
+           first paint's manual `restore` to recover. */
         if ('scrollRestoration' in history) {
-            history.scrollRestoration = 'manual'
+            history.scrollRestoration = 'auto'
         }
         historyEntries.adopt(entryOf())
         const landingState = (history.state as AbideHistoryState | null) ?? {}
@@ -421,6 +434,7 @@ export function router(
                     ) {
                         divergence += 1
                     }
+                    const firstPaint = first
                     const hydrating = first && pageView?.hydratable === true
                     first = false
                     /* Same page, same layout chain — only params/url differ (e.g. stepping
@@ -483,11 +497,27 @@ export function router(
                         )
                         /* Reapply the destination entry's scroll once its DOM exists — a
                        back/forward restores its offset, a fresh nav scrolls to the `#hash`
-                       anchor (now built) or the top. Runs on the initial paint too: with
-                       `scrollRestoration='manual'` the browser does NOT restore a reload's
-                       offset, so first paint recovers it from the persisted `history.state`
-                       (a fresh load with no persisted offset falls through to hash/top). */
-                        historyEntries.restore(url.hash)
+                       anchor (now built) or the top. SKIPPED on a hydrating first paint:
+                       the SSR DOM is adopted in place, so the browser's native restoration
+                       already returned the entry to its reload offset before paint — the
+                       manual bucket, gated behind the async chunk import above, would only
+                       re-apply post-paint (a visible scroll = the flash). A non-hydratable
+                       first paint tore the SSR DOM down and rebuilt, so it still needs the
+                       manual restore (recovered from the persisted `history.state`). */
+                        if (!hydrating) {
+                            historyEntries.restore(url.hash)
+                        }
+                        /* Take over scroll restoration once abide owns the DOM: a later
+                       same-document back/forward must restore against the rebuilt page, so
+                       the browser must not. `onPageHide` flips back to `auto` so the next
+                       document load restores natively (flash-free) again. */
+                        if (
+                            firstPaint &&
+                            typeof history !== 'undefined' &&
+                            'scrollRestoration' in history
+                        ) {
+                            history.scrollRestoration = 'manual'
+                        }
                     }
                     /* Build / hydrate is the deterministic surface — a codegen defect or a
                        throw in user render code fails the SAME way every load, so reloading
