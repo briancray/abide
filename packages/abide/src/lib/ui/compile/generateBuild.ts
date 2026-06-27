@@ -98,6 +98,7 @@ export function generateBuild(
         statement: lowerStatement,
         withNestedScripts,
         withLocalDerived,
+        withLocalPlain,
         bindRead,
         bindWrite,
     } = lowerContext(stateNames, derivedNames, computedNames)
@@ -473,7 +474,12 @@ export function generateBuild(
        the component scope (its `model`/cells); `args` are plain parameters bound by
        the call. Appends nothing at the declaration site — `{name(args)}` mounts it. */
     function generateSnippet(node: Extract<TemplateNode, { kind: 'snippet' }>): string {
-        const body = node.children.map((child) => generateChild(child, '$host')).join('')
+        /* `args` are plain call parameters, not component cells — register them so the body
+           reads the bare local, shadowing a same-named component signal rather than reading it. */
+        const argNames = node.params === undefined ? [] : destructureBindingNames(node.params)
+        const body = withLocalPlain(argNames, () =>
+            node.children.map((child) => generateChild(child, '$host')).join(''),
+        )
         return `function ${node.name}(${node.params ?? ''}) {\nreturn snippet(($host) => {\n${body}});\n}\n`
     }
 
@@ -589,12 +595,24 @@ export function generateBuild(
         const param = binding?.param ?? valueParam
         const prefix = binding?.prefix ?? ''
         const localNames = binding?.localNames ?? []
+        /* A non-reactive value param (a `catch` error) arrives as a plain arrow parameter, not
+           a cell — register its names so the body reads the bare local, shadowing (not reading)
+           a same-named component signal. */
+        const plainNames =
+            binding === undefined && valueParam !== undefined
+                ? destructureBindingNames(valueParam)
+                : []
         const head = param === undefined ? `(${parentParam})` : `(${parentParam}, ${param})`
-        const body = withNestedScripts(children, () =>
-            localNames.length === 0
-                ? generateChildren(children, parentParam)
-                : withLocalDerived(localNames, () => generateChildren(children, parentParam)),
-        )
+        const body = withNestedScripts(children, () => {
+            const generate = () => generateChildren(children, parentParam)
+            if (localNames.length > 0) {
+                return withLocalDerived(localNames, generate)
+            }
+            if (plainNames.length > 0) {
+                return withLocalPlain(plainNames, generate)
+            }
+            return generate()
+        })
         const finallyBody =
             finallyChildren.length > 0
                 ? withNestedScripts(finallyChildren, () =>

@@ -30,6 +30,12 @@ export function lowerContext(
        subtree. */
     const localDerived = new Set<string>()
 
+    /* Branch-scoped PLAIN bindings — a block value param SSR binds as a real JS local
+       holding the plain resolved value (not a cell). Shadows a same-named component signal
+       like `localDerived`, but derefs as the bare identifier, not `.value` (see
+       `withLocalPlain`). Pushed only by the SSR back-end; the client uses `localDerived`. */
+    const localPlain = new Set<string>()
+
     /* Parse `code` once and chain the reference rename and doc-access lowering over the
        one tree — the two string passes would each parse + reprint. `localDerived` is
        snapshotted per call (as the transformer's block-local shadow set) so a binding
@@ -38,7 +44,13 @@ export function lowerContext(
         const source = ts.createSourceFile('expr.ts', code, ts.ScriptTarget.Latest, true)
         const result = ts.transform(source, [
             childrenRefTransformer(),
-            signalRefsTransformer(stateNames, derivedNames, computedNames, new Set(localDerived)),
+            signalRefsTransformer(
+                stateNames,
+                derivedNames,
+                computedNames,
+                new Set(localDerived),
+                new Set(localPlain),
+            ),
             docAccessTransformer('model'),
         ])
         const output = TS_PRINTER.printFile(result.transformed[0] as ts.SourceFile).trim()
@@ -135,5 +147,32 @@ export function lowerContext(
         return result
     }
 
-    return { expression, statement, withNestedScripts, withLocalDerived, bindRead, bindWrite }
+    /* Like `withLocalDerived` but for a binding SSR holds as a plain JS value (an `await`
+       `then` value awaited inline) rather than a reactive cell. Pushes the names so they
+       shadow a same-named component signal AND deref as the bare identifier (not `.value`),
+       since the emitted SSR code reads the local directly. Popped after `body`. */
+    function withLocalPlain<T>(names: string[], body: () => T): T {
+        const added: string[] = []
+        for (const name of names) {
+            if (!localPlain.has(name)) {
+                localPlain.add(name)
+                added.push(name)
+            }
+        }
+        const result = body()
+        for (const name of added) {
+            localPlain.delete(name)
+        }
+        return result
+    }
+
+    return {
+        expression,
+        statement,
+        withNestedScripts,
+        withLocalDerived,
+        withLocalPlain,
+        bindRead,
+        bindWrite,
+    }
 }

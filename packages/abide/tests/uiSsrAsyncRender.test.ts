@@ -172,6 +172,132 @@ describe('blocking await nested in a streaming branch seeds its resume', () => {
     })
 })
 
+describe('an await binding named like the awaited expression', () => {
+    /* `{#await foo then foo}` — the `then` value reuses the awaited expression's name.
+       The pre-fix SSR emitted `const foo = await (foo())` in ONE scope, so the awaited
+       `foo` read the `const foo` in its own temporal dead zone → ReferenceError. The fix
+       awaits into a synthetic var first, then declares the binding in a nested block. */
+    test('a blocking await reusing a prop name renders (no temporal-dead-zone crash)', async () => {
+        const render = component(`
+            <script>
+                const { foo } = props()
+            </script>
+            {#await foo then foo}<span>{foo.label}</span>{/await}
+        `).render
+        const { html } = await render({ foo: () => Promise.resolve({ label: 'RESOLVED' }) })
+        expect(html).toContain('<span>RESOLVED</span>')
+    })
+
+    /* The binding must SHADOW a same-named component signal — read the resolved value, not
+       the (unresolved) signal it shadows. The pre-fix SSR lowered the branch body's `foo`
+       to `model.read("foo/label")` (the pending promise) → `undefined`. */
+    test('a blocking await reusing a scope-state name reads the resolved value', async () => {
+        const render = component(
+            `
+            <script>
+                const foo = scope().state(make())
+            </script>
+            {#await foo then foo}<span>{foo.label}</span>{/await}
+        `,
+            { make: () => Promise.resolve({ label: 'RESOLVED' }) },
+        ).render
+        const { html } = await render()
+        expect(html).toContain('<span>RESOLVED</span>')
+    })
+
+    /* Same shadow rule for the streaming form (`{:then foo}`): the settled fragment binds
+       `foo` as the renderer's arrow parameter, so the body reads the value, not the signal. */
+    test('a streaming await reusing a scope-state name reads the resolved value', async () => {
+        const render = component(
+            `
+            <script>
+                const foo = scope().state(make())
+            </script>
+            {#await foo}<p>load</p>{:then foo}<span>{foo.label}</span>{/await}
+        `,
+            { make: () => Promise.resolve({ label: 'RESOLVED' }) },
+        ).render
+        const html = await streamToString(() => render())
+        expect(html).toContain('<span>RESOLVED</span>')
+    })
+
+    /* The catch binding shadows a same-named signal too — it reads the caught rejection,
+       not the signal. The pre-fix SSR lowered the catch body's `err` to `model.read("err")`. */
+    test('a streaming await catch binding reusing a scope-state name reads the error', async () => {
+        const render = component(
+            `
+            <script>
+                const err = scope().state('STATE')
+            </script>
+            {#await boom()}<p>load</p>{:then v}<span>{v}</span>{:catch err}<b>{err}</b>{/await}
+        `,
+            { boom: () => Promise.reject('BOOM') },
+        ).render
+        const html = await streamToString(() => render())
+        expect(html).toContain('<b>BOOM</b>')
+        expect(html).not.toContain('STATE')
+    })
+})
+
+describe('a {#try} catch binding named like a component signal', () => {
+    /* Same plain-shadow rule for a sync error boundary: the `catch (err)` binding shadows a
+       same-named signal and reads the caught error. The pre-fix SSR lowered the catch body to
+       `model.read("err")` (the signal), client and server agreeing but both wrong. */
+    test('the catch binding shadows a same-named state and reads the error', async () => {
+        const render = component(
+            `
+            <script>
+                const err = scope().state('STATE')
+            </script>
+            {#try}<p>{boom()}</p>{:catch err}<b>{err}</b>{/try}
+        `,
+            {
+                boom: () => {
+                    throw new Error('BOOM')
+                },
+            },
+        ).render
+        const { html } = await render()
+        expect(html).toContain('BOOM')
+        expect(html).not.toContain('STATE')
+    })
+})
+
+describe('a {#for} row binding named like a component signal', () => {
+    /* The same root cause as the `await` binding: SSR lowers the row body as a separate
+       parse, so a row item/index name that shadows a component signal was lowered to the
+       (whole-list) signal read — `model.read("row/label")` — instead of the loop variable.
+       The pre-fix SSR rendered the shadowed signal; the client read the loop item, so the
+       two DIVERGED. `withLocalPlain` registers the row locals so SSR reads the loop value. */
+    test('the row item shadows a same-named state and reads the loop value', async () => {
+        const render = component(`
+            <script>
+                const row = scope().state('STATE')
+                const rows = scope().state([{ label: 'A' }, { label: 'B' }])
+            </script>
+            <ul>{#for row of rows by row.label}<li>{row.label}</li>{/for}</ul>
+        `).render
+        const { html } = await render()
+        expect(html).toContain('<li>A</li>')
+        expect(html).toContain('<li>B</li>')
+        expect(html).not.toContain('STATE')
+    })
+
+    test('the row index shadows a same-named state and reads the loop position', async () => {
+        const render = component(`
+            <script>
+                const i = scope().state(99)
+                const rows = scope().state(['a', 'b'])
+            </script>
+            <ul>{#for r, i of rows}<li>{i}:{r}</li>{/for}</ul>
+        `).render
+        const { html } = await render()
+        expect(html).toContain('<li>0:a</li>')
+        expect(html).toContain('<li>1:b</li>')
+        expect(html).not.toContain('99')
+    })
+})
+
 describe('slot content shares the page block-id counter (depth-first)', () => {
     /* #1: a child with a blocking await BEFORE its `<slot>`, mounted with async slot content
        (its own blocking await). The client builds slot content lazily AT the `<slot>`, so it

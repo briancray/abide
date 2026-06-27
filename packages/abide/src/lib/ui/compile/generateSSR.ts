@@ -10,6 +10,7 @@ import {
 import { asOutlet } from './asOutlet.ts'
 import { awaitPlan } from './awaitPlan.ts'
 import { composeProps } from './composeProps.ts'
+import { destructureBindingNames } from './destructureBindingNames.ts'
 import { groupBindParts } from './groupBindParts.ts'
 import { ifPlan } from './ifPlan.ts'
 import { isAnchorPositioned } from './isAnchorPositioned.ts'
@@ -70,6 +71,7 @@ export function generateSSR(
         expression: lowerExpression,
         statement,
         withNestedScripts,
+        withLocalPlain,
         bindRead,
     } = lowerContext(stateNames, derivedNames, computedNames)
 
@@ -249,8 +251,11 @@ export function generateSSR(
         }
         if (node.kind === 'snippet') {
             /* A hoisted function returning the snippet's `$snip`-branded HTML string;
-               `{name(args)}` pushes it via `$text`, which wraps it in markers. */
-            const body = generateInto(node.children, '$o')
+               `{name(args)}` pushes it via `$text`, which wraps it in markers. `args` are plain
+               call parameters — register them so the body reads the bare local, shadowing a
+               same-named component signal rather than reading it. */
+            const argNames = node.params === undefined ? [] : destructureBindingNames(node.params)
+            const body = withLocalPlain(argNames, () => generateInto(node.children, '$o'))
             /* `async` only when the body produces an `await` (it inlines a child component) — then
                call sites `await` it (`$text(await frag())`). A sync snippet stays a plain function
                called inline, preserving the sync render contract. */
@@ -276,7 +281,21 @@ export function generateSSR(
             if (node.async) {
                 return anchor
             }
-            const rowBody = `${openRange(target)}${branchContent(node.children, target)}${closeRange(target)}`
+            /* The row item (and index) are real `for`-loop locals, so the body must lower
+               references to them as the bare identifier — `withLocalPlain` registers them so
+               a row binding that shadows a same-named component signal reads the loop value,
+               not the (whole-list) signal it shadows. The same set the client derives (item
+               leaves + index); the items expression stays outside the shadow (it cannot see
+               the row var). */
+            const rowLocals = [
+                ...destructureBindingNames(node.as),
+                ...(node.index === undefined ? [] : [node.index]),
+            ]
+            const rowBody = withLocalPlain(
+                rowLocals,
+                () =>
+                    `${openRange(target)}${branchContent(node.children, target)}${closeRange(target)}`,
+            )
             /* `index="i"` binds the row position. SSR reads it as a plain number from
                `entries()` over a materialized array; the client reads the same number from a
                cell, so first paint is congruent. No index → a plain `for…of` over the items. */
@@ -509,19 +528,36 @@ export function generateSSR(
     ): string {
         const plan = awaitPlan(node)
         const id = nextVar('$aid')
+        /* The resolved value lands in a synthetic var FIRST, then the author binding is
+           declared from it inside a nested block. Two reasons: the promise expression is
+           lowered in the outer scope where the binding name is not yet declared, so
+           `{#await foo then foo}` reads the outer `foo` (no temporal-dead-zone crash on a
+           same-named binding); and the nested block is the lexical scope the branch's
+           `withLocalPlain` shadow models, so a reference to the binding reads the plain
+           local rather than the (unresolved) component signal it shadows. */
+        const resolved = nextVar('$av')
+        const bound = destructureBindingNames(plan.resolvedAs)
         let code = `const ${id} = $ctx.next++;\n`
         code += `${target}.push("<!--abide:await:" + ${id} + "-->");\n`
         code += `try {\n`
-        code += `const ${plan.resolvedAs} = await (${lowerExpression(node.promise)});\n`
-        code += branchContent(plan.resolvedChildren, target)
-        code += branchContent(plan.finallyChildren, target)
+        code += `const ${resolved} = await (${lowerExpression(node.promise)});\n`
+        code += `{\n`
+        code += `const ${plan.resolvedAs} = ${resolved};\n`
+        code += withLocalPlain(bound, () => {
+            let branch = branchContent(plan.resolvedChildren, target)
+            branch += branchContent(plan.finallyChildren, target)
+            return branch
+        })
         code += `$resume[${id}] = { ok: true, value: ${plan.resolvedAs} };\n`
+        code += `}\n`
         if (plan.surfaceRejection) {
             /* No catch/finally → let the rejection surface instead of an empty branch. */
             code += `} catch (_error) { throw _error; }\n`
         } else {
             code += `} catch (${plan.catchAs}) {\n`
-            code += branchContent(plan.catchChildren, target)
+            code += withLocalPlain(destructureBindingNames(plan.catchAs), () =>
+                branchContent(plan.catchChildren, target),
+            )
             code += branchContent(plan.finallyChildren, target)
             code += `$resume[${id}] = { ok: false, error: String(${plan.catchAs}) };\n`
             code += `}\n`
@@ -547,8 +583,16 @@ export function generateSSR(
         code += `${target}.push("<!--abide:await:" + ${id} + "-->");\n`
         code += branchContent(plan.pending, target)
         code += `${target}.push("<!--/abide:await:" + ${id} + "-->");\n`
+        /* The settled renderer takes the resolved/error value as a real arrow parameter
+           (`async (foo) => …`), so its body must lower references to that name as the plain
+           local — `shadow` registers it via `withLocalPlain` so a binding that shadows a
+           same-named component signal reads the value, not the signal. */
         const settled = (binding: string, children: TemplateNode[]) =>
-            `async (${binding}) => { const $o = []; ${branchContent(children, '$o')}${branchContent(plan.finallyChildren, '$o')}return $o.join(''); }`
+            `async (${binding}) => { const $o = []; ${withLocalPlain(
+                destructureBindingNames(binding),
+                () =>
+                    `${branchContent(children, '$o')}${branchContent(plan.finallyChildren, '$o')}`,
+            )}return $o.join(''); }`
         const catchProp = plan.surfaceRejection
             ? ''
             : `catch: ${settled(plan.catchAs, plan.catchChildren)} `
@@ -578,7 +622,9 @@ export function generateSSR(
         code += branchContent(plan.finallyChildren, target)
         code += `} catch (${plan.catchAs}) {\n${target}.length = ${mark};\n`
         if (plan.hasCatch) {
-            code += branchContent(plan.catchChildren, target)
+            code += withLocalPlain(destructureBindingNames(plan.catchAs), () =>
+                branchContent(plan.catchChildren, target),
+            )
             code += branchContent(plan.finallyChildren, target)
         } else {
             code += `throw ${plan.catchAs};\n`

@@ -225,6 +225,28 @@ describe('await block', () => {
         await Promise.resolve()
         expect(find(host, 'span')?.textContent).toBe('RESOLVED')
     })
+
+    test('a catch-binding named like a component state SHADOWS the state, reading the error', async () => {
+        // `error` is BOTH a component state and the catch binding. Inside the catch branch
+        // `{error}` must read the caught rejection (the plain arrow parameter), not
+        // `model.error` — without the block-local plain shadow it would render 'STATE'.
+        const host = run(
+            `
+            <script>
+            const error = scope().state('STATE')
+            </script>
+            {#await make()}
+                {:then v}<span>{v}</span>
+                {:catch error}<b>{error}</b>
+            {/await}
+        `,
+            { make: () => Promise.reject('BOOM') },
+        )
+        await Promise.resolve()
+        await Promise.resolve()
+        await Promise.resolve()
+        expect(find(host, 'b')?.textContent).toBe('BOOM')
+    })
 })
 
 /* First descendant element with the given tag name (miniDom has no querySelector). */

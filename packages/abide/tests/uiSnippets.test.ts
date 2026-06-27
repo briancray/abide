@@ -142,6 +142,23 @@ describe('snippets ({#snippet name(args)} called like a function)', () => {
         )
     })
 
+    /* A snippet arg whose name matches a component signal must SHADOW it — read the passed
+       argument, not the signal. The arg is a plain call parameter on both sides; the body
+       lowered as a separate parse used to rewrite `item` to the signal read, rendering the
+       signal value on both sides (congruent but wrong). */
+    test('an arg named like a component state shadows the state', async () => {
+        const src = `
+            <script>let item = scope().state('STATE')</script>
+            {#snippet row(item)}<b>{item}</b>{/snippet}
+            <div>{row('ARG')}</div>
+        `
+        const expected = '<div><!--abide:snippet--><b>ARG</b><!--/abide:snippet--></div>'
+        const host = document.createElement('div')
+        component(src)(host)
+        expect(serialize(host)).toBe(expected)
+        expect((await component(src).render()).html).toBe(expected)
+    })
+
     test('the <template name> declaration is rejected with a migration error', () => {
         expect(() => compileComponent(`<template name="row">x</template>`)).toThrow(
             /<template name>.*\{#snippet/s,

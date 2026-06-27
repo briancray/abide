@@ -47,6 +47,12 @@ export function signalRefsTransformer(
        `<script>` declaration) — a nearer lexical scope than the component signals, so a
        name here shadows a same-named `state`/`computed`/`derived` and derefs as a cell. */
     blockLocal: ReadonlySet<string> = new Set(),
+    /* Block-local PLAIN bindings — an SSR `await` `then` value bound as a real JS local
+       holding the plain resolved value, not a reactive cell. Like `blockLocal` it shadows
+       a same-named component signal (it is a nearer lexical scope), but it derefs as the
+       bare identifier, not `.value`: SSR declares `const foo = <resolved>`, so a reference
+       reads the local directly. Seeded into the root shadow set so it is left untouched. */
+    blockLocalPlain: ReadonlySet<string> = new Set(),
 ): ts.TransformerFactory<ts.SourceFile> {
     /* The signal names that a nested binding can shadow — only these matter for
        scope tracking, so we ignore every other local binding. */
@@ -126,7 +132,7 @@ export function signalRefsTransformer(
             }
             return visit
         }
-        return ts.visitNode(root, makeVisitor(new Set())) as ts.SourceFile
+        return ts.visitNode(root, makeVisitor(new Set(blockLocalPlain))) as ts.SourceFile
     }
 }
 
