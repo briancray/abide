@@ -141,15 +141,20 @@ export function each<T>(
             const list = Array.isArray(source) ? source : [...source]
             const keys = list.map(keyOf)
             const pass = (generation += 1)
-            /* Stamp every surviving row with this pass so prune below is an int compare,
-               not a `Set` membership test — no per-reconcile Set allocation. */
-            for (const key of keys) {
-                const row = rows.get(key)
+            /* Resolve each desired key to its surviving row once, here, stamping it with
+               this pass — so prune below is an int compare (no `Set`) and the placement
+               walk reuses the resolved row instead of a second `rows.get`. Halving the map
+               lookups per reconcile is a real win once the harness's O(n) `nextSibling` no
+               longer swamps it. `undefined` marks a key with no surviving row — a build. */
+            const resolved: (EachRow | undefined)[] = new Array(keys.length)
+            for (let index = 0; index < keys.length; index += 1) {
+                const row = rows.get(keys[index] as string)
                 if (row !== undefined) {
                     row.gen = pass
                 }
+                resolved[index] = row
             }
-            /* Prune departed rows first (those the stamp loop didn't reach this pass) so
+            /* Prune departed rows first (those the resolve loop didn't reach this pass) so
                their ranges don't sit between survivors and throw off the in-place sibling
                checks below. */
             for (const [key, row] of rows) {
@@ -164,12 +169,11 @@ export function each<T>(
                freshly built) rows move. */
             let cursor: Node = anchor
             for (let index = list.length - 1; index >= 0; index -= 1) {
-                const key = keys[index] as string
-                let row = rows.get(key)
+                let row = resolved[index]
                 if (row === undefined) {
                     row = buildRow(list[index] as T, index)
                     row.gen = pass
-                    rows.set(key, row)
+                    rows.set(keys[index] as string, row)
                 } else {
                     /* Surviving key: push the (possibly new) item and position into the row's
                        cells. Both write through `Object.is`, so an unchanged item/position is a
