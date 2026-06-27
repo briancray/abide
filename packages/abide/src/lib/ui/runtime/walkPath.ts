@@ -17,13 +17,25 @@ export function walkPath(tree: unknown, path: string): PathWalk {
     if (path === '') {
         return { exists: tree !== undefined, value: tree }
     }
+    /* A path with no `~` carries no escape in any segment, so the per-segment
+       unescape is skipped wholesale — the case for every plain-identifier path. */
+    const escaped = path.includes('~')
     let current: unknown = tree
-    for (const rawSegment of path.split('/')) {
-        const segment = unescapeKey(rawSegment)
+    /* Scan `/`-separated segments by index, no `split` array allocated — this runs
+       once per candidate on the structural descend scan, the hot path's hot loop. */
+    let start = 0
+    for (;;) {
+        const slash = path.indexOf('/', start)
+        const end = slash === -1 ? path.length : slash
+        const raw = path.slice(start, end)
+        const segment = escaped ? unescapeKey(raw) : raw
         if (current === null || typeof current !== 'object' || !(segment in current)) {
             return { exists: false, value: undefined }
         }
         current = (current as Record<string, unknown>)[segment]
+        if (slash === -1) {
+            return { exists: true, value: current }
+        }
+        start = slash + 1
     }
-    return { exists: true, value: current }
 }

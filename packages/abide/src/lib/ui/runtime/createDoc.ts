@@ -118,7 +118,11 @@ export function createDoc(initial: unknown): Doc {
                    and this very descend scan degrades linearly with it. The woken
                    reader re-mints a fresh node on its flush if the path ever returns.
                    Deleting the current entry mid-iteration is safe on a Map. */
-                const walk = walkPath(tree, candidate)
+                /* Walk from the already-resolved container (`rootValue`) using only the
+                   path SUFFIX past the shared prefix, instead of re-walking every
+                   candidate's full path from the tree root — the prefix is walked once
+                   per wake, not once per descendant. */
+                const walk = walkPath(rootValue, candidate.slice(prefix.length))
                 if (walk.exists) {
                     writeNode(node, walk.value)
                 } else {
