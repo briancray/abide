@@ -130,13 +130,13 @@ const FIXTURES: Fixture[] = [
     },
     {
         name: 'snippet declaration + call',
-        source: `<template name="item" args={label}><li>{label}</li></template><ul>{item('a')}</ul>`,
+        source: `{#snippet item(label)}<li>{label}</li>{/snippet}<ul>{item('a')}</ul>`,
         build: 'render',
         ssr: 'render',
     },
     {
         name: 'slot',
-        source: `<slot />`,
+        source: `{children()}`,
         build: 'render',
         ssr: 'render',
     },

@@ -305,11 +305,11 @@ describe('spread props', () => {
     })
 
     /* A spread source that happens to carry the internal `$children` slot key must not
-       surface it as slot content — the child keeps rendering its `<slot>` fallback. */
+       surface it as slot content — the child keeps rendering its `{:else}` fallback. */
     test('a spread carrying $children does not leak as slot content', () => {
         const Card = component(`
             <script>const { title } = props()</script>
-            <article>{title} <slot>fallback</slot></article>
+            <article>{title} {#if children}{children()}{:else}fallback{/if}</article>
         `)
         const host = document.createElement('div')
         component(
