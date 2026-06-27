@@ -67,7 +67,7 @@ For tests, add `preload = ["@abide/abide/preload"]` under `[test]` in `bunfig.to
 
 ## .abide template grammar
 
-A component is one `.abide` file: valid HTML with an optional `<script lang="ts">`, `{expr}` bindings, `{#…}` control-flow blocks, `<template name>` snippets, capitalised component tags, and a component-scoped `<style>`. The browser's parser is the tree-builder, so SVG/MathML and foreign content work. Ambient in every component (no import): `scope`, `props`, `effect`; `html` and `snippet` are the templating brands.
+A component is one `.abide` file: valid HTML with an optional `<script lang="ts">`, `{expr}` bindings, `{#…}` control-flow blocks, `<template name>` snippets, capitalised component tags, and a component-scoped `<style>`. The browser's parser is the tree-builder, so SVG/MathML and foreign content work. Ambient in every component (no import): `scope` and `props`; `html` and `snippet` are the templating brands. `effect` is not ambient — it is a scope primitive, authored as `scope().effect(fn)` (a bare `effect(...)` is a compile error).
 
 **Reactive state** — reached through `scope()` (destructure `const { state, computed, linked } = scope()` once, or call `scope().state(…)` directly). A bare `state` / `computed` / `linked` with no `scope()` in view is a compile error.
 
