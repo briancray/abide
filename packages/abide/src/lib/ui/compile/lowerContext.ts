@@ -104,26 +104,31 @@ export function lowerContext(
         return statement(`${code} = ${valueExpr}`)
     }
 
-    /* Adds any `<script>` children's binding names to the deref scope (so the script
-       bodies and the branch's markup auto-deref them), runs `body` within that scope,
-       then pops the names it added. Returns whatever `body` produces. */
-    function withNestedScripts<T>(children: TemplateNode[], body: () => T): T {
+    /* Pushes the names not already in `scope` for the duration of `body`, then pops
+       exactly what it added — the shared push/run/pop the deref-scope helpers below use,
+       over whichever Set (`localDerived` / `localPlain`) a binding shadows through. */
+    function withScoped<T>(scope: Set<string>, names: Iterable<string>, body: () => T): T {
         const added: string[] = []
-        for (const child of children) {
-            if (child.kind === 'script') {
-                for (const name of nestedBindingNames(child.code)) {
-                    if (!localDerived.has(name)) {
-                        localDerived.add(name)
-                        added.push(name)
-                    }
-                }
+        for (const name of names) {
+            if (!scope.has(name)) {
+                scope.add(name)
+                added.push(name)
             }
         }
         const result = body()
         for (const name of added) {
-            localDerived.delete(name)
+            scope.delete(name)
         }
         return result
+    }
+
+    /* Adds any `<script>` children's binding names to the deref scope (so the script
+       bodies and the branch's markup auto-deref them) for the duration of `body`. */
+    function withNestedScripts<T>(children: TemplateNode[], body: () => T): T {
+        const names = children.flatMap((child) =>
+            child.kind === 'script' ? [...nestedBindingNames(child.code)] : [],
+        )
+        return withScoped(localDerived, names, body)
     }
 
     /* Pushes explicit names into the deref scope for `body` then pops them — the
@@ -131,37 +136,15 @@ export function lowerContext(
        (an `await` `then` value, a keyed `each` item) as a reactive `.value` cell so the
        branch reads it reactively and re-runs in place when the block sets the cell. */
     function withLocalDerived<T>(names: string[], body: () => T): T {
-        const added: string[] = []
-        for (const name of names) {
-            if (!localDerived.has(name)) {
-                localDerived.add(name)
-                added.push(name)
-            }
-        }
-        const result = body()
-        for (const name of added) {
-            localDerived.delete(name)
-        }
-        return result
+        return withScoped(localDerived, names, body)
     }
 
     /* Like `withLocalDerived` but for a binding SSR holds as a plain JS value (an `await`
        `then` value awaited inline) rather than a reactive cell. Pushes the names so they
        shadow a same-named component signal AND deref as the bare identifier (not `.value`),
-       since the emitted SSR code reads the local directly. Popped after `body`. */
+       since the emitted SSR code reads the local directly. */
     function withLocalPlain<T>(names: string[], body: () => T): T {
-        const added: string[] = []
-        for (const name of names) {
-            if (!localPlain.has(name)) {
-                localPlain.add(name)
-                added.push(name)
-            }
-        }
-        const result = body()
-        for (const name of added) {
-            localPlain.delete(name)
-        }
-        return result
+        return withScoped(localPlain, names, body)
     }
 
     return {
