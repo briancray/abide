@@ -34,7 +34,7 @@ The bundler reads these paths; the path is the identity.
 | `src/app.ts` | optional `AppModule` hooks (`init`, `handle`, `handleError`) |
 | `src/bundle/window.ts` | optional `BundleWindow` default export (desktop bundle) |
 | `src/ui/pages/**/page.abide` | a page; the directory is the route, `[id]` a dynamic segment, `[...rest]` a catch-all |
-| `src/ui/pages/**/layout.abide` | a layout wrapping every page below it via its `<slot/>` outlet |
+| `src/ui/pages/**/layout.abide` | a layout wrapping every page below it via its `{children()}` outlet |
 | `src/.abide/*.d.ts` | generated type surfaces (RPC routes, health fields, test client) |
 | `public/` | static assets served as-is |
 | `dist/_app/` | the built client bundle (`abide build`) |
@@ -61,13 +61,13 @@ For tests, add `preload = ["@abide/abide/preload"]` under `[test]` in `bunfig.to
 
 - **RPC** — `export const <name> = METHOD(handler, opts?)` in `src/server/rpc/<name>.ts`. The handler receives the parsed args (`InferOutput<inputSchema>`, or the raw `Args` when schemaless), reads request state via `request()` / `cookies()`, and returns `json` / `jsonl` / `sse` / `error` / `redirect` / a raw `Response`. `opts`: `inputSchema`, `outputSchema`, `filesSchema` (multipart upload), `errors`, `clients: { browser, mcp, cli }`, `crossOrigin` (CSRF exemption), `maxBodySize` (413 past it), `timeout` (504, every surface), `outbox` (durable mutating delivery). Query args (GET/DELETE/HEAD) arrive as strings — use `z.coerce.*`. Consume four ways: `cache(fn)()` in-process, the swapped `fetch` proxy in the browser, `fn.raw(args)` (untouched `Response`), `fn.stream(args)` (frame stream). A non-2xx throws `HttpError`; `fn.isError(err, name)` type-guards it against the rpc's own `errors` (plus `'validation'` / `'queued'`), narrowing `.kind` and the matching `.data`.
 - **Socket** — `export const <name> = socket(opts)` in `src/server/sockets/<name>.ts`. A `Socket<T>` is an `AsyncIterable<T>`: bare iteration is the live stream; `<name>.tail(count?)` seeds from the retained tail; `<name>.publish(m)` is isomorphic. `opts`: `schema` (validates publishes, infers `T`, flips MCP/CLI faces on), `tail` (retained frame count), `ttl` (lazy age eviction), `clientPublish` (allow browser publishes), `clients`.
-- **Page / layout** — `.abide` files under `src/ui/pages/`. A `[id]` segment lands on `page.params.id`; a layout's `<slot/>` is the outlet the child fills; read the route via `page`, navigate via `url` / `navigate`.
+- **Page / layout** — `.abide` files under `src/ui/pages/`. A `[id]` segment lands on `page.params.id` (or read it as a prop: `const { id } = props()`, typed from the route); a layout's `{children()}` is the outlet the child fills; read the route via `page`, navigate via `url` / `navigate`.
 - **app.ts / config.ts** — `app.ts` exports optional `AppModule` hooks (`init` → cleanup, `handle` middleware, `handleError`); `config.ts` exports `env(schema)`, validated synchronously at boot.
 - **Isomorphism move** — read through `cache()` during SSR so the value bakes into the HTML and the matching `{#await}` adopts the server DOM warm on hydration (no refetch).
 
 ## .abide template grammar
 
-A component is one `.abide` file: valid HTML with an optional `<script lang="ts">`, `{expr}` bindings, `{#…}` control-flow blocks, `<template name>` snippets, capitalised component tags, and a component-scoped `<style>`. The browser's parser is the tree-builder, so SVG/MathML and foreign content work. Ambient in every component (no import): `scope` and `props`; `html` and `snippet` are the templating brands. `effect` is not ambient — it is a scope primitive, authored as `scope().effect(fn)` (a bare `effect(...)` is a compile error).
+A component is one `.abide` file: valid HTML with an optional `<script lang="ts">`, `{expr}` bindings, `{#…}` control-flow blocks (including `{#snippet}` declarations), `{children()}` slots, capitalised component tags, and a component-scoped `<style>`. The browser's parser is the tree-builder, so SVG/MathML and foreign content work. Ambient in every component (no import): `scope` and `props`; `html` and `snippet` are the templating brands. `effect` is not ambient — it is a scope primitive, authored as `scope().effect(fn)` (a bare `effect(...)` is a compile error).
 
 **Reactive state** — reached through `scope()` (destructure `const { state, computed, linked } = scope()` once, or call `scope().state(…)` directly). A bare `state` / `computed` / `linked` with no `scope()` in view is a compile error.
 
@@ -77,7 +77,7 @@ A component is one `.abide` file: valid HTML with an optional `<script lang="ts"
 | `scope().linked(fn, transform?)` | a writable local draft seeded from upstream — reseeds when the source changes, edits stay local |
 | `scope().computed(fn)` | a read-only derived value — re-runs when a cell it reads changes |
 | `scope().effect(fn)` | a client-only side effect (stripped from SSR); return a function to clean up |
-| `props()` | destructure component props (`const { name = fallback, ...rest } = props()`), each a reactive read |
+| `props()` | destructure component props (`const { name = fallback, ...rest } = props()`), each a reactive read; a page/layout reads its route params here too (typed from the route's `[id]` segments) |
 
 A two-way binding over derived state is an accessor at the bind site (`bind:value={{ get, set }}`), not a writable primitive.
 
@@ -101,9 +101,9 @@ A two-way binding over derived state is an accessor at the bind site (`bind:valu
 | await | `{#await promise}` pending `{:then value}` … `{:catch error}` … `{/await}` (inline `{#await p then v}`) |
 | switch | `{#switch subject}` `{:case value}` … `{:default}` … `{/switch}` |
 | try | `{#try}` … `{:catch error}` … `{:finally}` … `{/try}` |
-| snippet | `<template name="row" args={{ msg }}>…</template>`, called as `{row({ msg })}` |
+| snippet | `{#snippet row({ msg })}…{/snippet}`, called as `{row({ msg })}` |
 
-**Components & slots** — a capitalised tag (`<Avatar name={…} />`) mounts a child `.abide` component as a marker-bounded range (no wrapper element); its children fill the child's `<slot>`. `<style>` is component-scoped.
+**Components & slots** — a capitalised tag (`<Avatar name={…} />`) mounts a child `.abide` component as a marker-bounded range (no wrapper element); its children render where the child calls `{children()}` (guard/fallback with `{#if children}…{:else}…{/if}`). `<style>` is component-scoped.
 
 ## Server surface — abide/server/*
 
@@ -173,7 +173,7 @@ A two-way binding over derived state is an accessor at the bind site (`bind:valu
 ### Templating — @documentation templating
 
 - `abide/shared/html` — a `` html`…` `` tag marking trusted raw markup that a `{expr}` inserts verbatim (registered-Symbol brand, survives bundle copies).
-- `abide/shared/snippet` — the `Snippet<Payload>` brand a `<template name>` carries: a DOM builder on the client, pre-rendered HTML on the server.
+- `abide/shared/snippet` — the `Snippet<Payload>` brand a `{#snippet}` carries: a DOM builder on the client, pre-rendered HTML on the server.
 
 ### Cache — @documentation cache
 
@@ -229,7 +229,7 @@ A two-way binding over derived state is an accessor at the bind site (`bind:valu
 - `abide/ui/remoteProxy` — the client-side RPC substitute the bundler emits per export: fetches, decodes by Content-Type, throws `HttpError`; a durable (`outbox`) RPC parks an unreachable request for replay as a side-effect. Exports `DurableOptions`.
 - `abide/ui/socketProxy` — the client-side socket substitute: subscribe/publish over the multiplexed ws channel, same `Socket` shape as the server.
 - `abide/ui/startClient` — the official client entry: read `__SSR__`, seed the warm cache store, install the mount base, start the router.
-- `abide/ui/router` — the History-API client router: match the path, import the page chunk + its layout chain, mount the chain into nested `<slot/>` outlets.
+- `abide/ui/router` — the History-API client router: match the path, import the page chunk + its layout chain, mount the chain into nested `{children()}` outlets.
 - `abide/ui/renderToStream` — out-of-order SSR streaming: shell first, then one `<abide-resolve>` fragment per streaming `{#await}` as it settles.
 - `abide/ui/runtime/escapeKey` — escape one object key into a JSON-Pointer token (`~0`/`~1`) so a key with `/` or `~` survives a `/`-joined path.
 - `abide/ui/runtime/nextBlockId` — the next block id in the current render pass (document order), so page and child ids don't collide.
@@ -237,11 +237,11 @@ A two-way binding over derived state is an accessor at the bind site (`bind:valu
 - `abide/ui/runtime/exitRenderPass` — mark exit from a render/mount, unwinding the depth.
 - `abide/ui/dom/mount` — mount a top-level page/layout into a host element under an ownership scope; returns a disposer.
 - `abide/ui/dom/mountChild` — mount a child component as a marker-bounded range (no wrapper); hot path keeps the range for in-place HMR re-fill.
-- `abide/ui/dom/mountSlot` — mount a component's `<slot>` content as a marker range (parent `$children` or fallback); renders once.
-- `abide/ui/dom/outlet` — a layout's `<slot/>` outlet as an empty comment boundary the router fills with the next chain layer.
+- `abide/ui/dom/mountSlot` — mount a component's `{children()}` content as a marker range (the parent's `$children`); renders once.
+- `abide/ui/dom/outlet` — a layout's `{children()}` outlet as an empty comment boundary the router fills with the next chain layer.
 - `abide/ui/dom/mergeProps` — compose a child's props from ordered layers (explicit thunks, spreads, the `$children` slot), last layer wins per key.
 - `abide/ui/dom/spreadProps` — wrap a `{...source}` props layer so each key resolves to a live value thunk; the source thunk re-reads reactively.
-- `abide/ui/dom/restProps` — the unconsumed props of a `const { a, ...rest } = props()` as a live object (thunks unwrapped; plain page params returned as-is).
+- `abide/ui/dom/restProps` — the unconsumed props of a `const { a, ...rest } = props()` as a live object (each thunk unwrapped on read; page/layout route params arrive as thunks too).
 - `abide/ui/dom/spreadAttrs` — spread an object's keys onto a native element (`<div {...rest}>`): keys enumerated once, each value live; `on*` keys attach as listeners.
 - `abide/ui/dom/attr` — bind one element attribute to `read()` (boolean present/absent, else stringified); one effect per attribute.
 - `abide/ui/dom/on` — attach an event listener scoped to the owning component (the `onclick={…}` runtime target), pinned to its `scope()`.
