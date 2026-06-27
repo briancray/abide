@@ -47,10 +47,15 @@ function mountList(rows: number) {
             list,
             () => model.read<string[]>('order'),
             (key) => key,
-            (key) => {
+            /* `render` builds INTO `parent` (its return is ignored), and the row's key is
+               `item.value` — read it so each row reads a DISTINCT doc path (`byId/<key>/n`),
+               minting N nodes the way a real app does. Reading the parent node by mistake
+               collapsed every row to one shared path, hiding both the per-row content cost
+               and the createDoc descend scan over the minted-node registry. */
+            (parent, item) => {
                 const li = document.createElement('li')
-                li.appendChild(text(() => model.read(`byId/${key}/n`)))
-                return li
+                li.appendChild(text(() => model.read(`byId/${item.value}/n`)))
+                parent.appendChild(li)
             },
         )
         root.appendChild(list)
