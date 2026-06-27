@@ -42,3 +42,28 @@ describe('renameSignalRefs — only value-position reads rewrite', () => {
         expect(out).toContain('model.count')
     })
 })
+
+/* The reserved slot reader `children` rewrites through the same scope-aware machinery
+   as a signal: a bare read becomes `$props?.$children`, but a nearer lexical binding
+   (a param, a local) re-binds it and is left untouched — so a `{#snippet row(children)}`
+   arg or a script callback param named `children` reads its own value, not the slot. */
+describe('renameSignalRefs — children slot reader is lexically scoped', () => {
+    const none = new Set<string>()
+
+    test('a bare read rewrites to the slot reader', () => {
+        const out = renameSignalRefs('if (children) render()', none, none)
+        expect(out).toContain('$props?.$children')
+    })
+
+    test('a callback param shadowing the name reads the local', () => {
+        const out = renameSignalRefs('list.map((children) => children.length)', none, none)
+        expect(out).not.toContain('$props?.$children')
+        expect(out).toMatch(/\(children\)\s*=>\s*children\.length/)
+    })
+
+    test('a property access is left untouched', () => {
+        const out = renameSignalRefs('log(node.children)', none, none)
+        expect(out).toContain('node.children')
+        expect(out).not.toContain('$props?.$children')
+    })
+})

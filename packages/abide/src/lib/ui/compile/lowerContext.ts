@@ -1,5 +1,4 @@
 import ts from 'typescript'
-import { childrenRefTransformer } from './childrenRefTransformer.ts'
 import { docAccessTransformer } from './lowerDocAccess.ts'
 import { nestedBindingNames } from './prepareNestedScript.ts'
 import { signalRefsTransformer } from './renameSignalRefs.ts'
@@ -43,7 +42,6 @@ export function lowerContext(
     function lowerOnce(code: string): string {
         const source = ts.createSourceFile('expr.ts', code, ts.ScriptTarget.Latest, true)
         const result = ts.transform(source, [
-            childrenRefTransformer(),
             signalRefsTransformer(
                 stateNames,
                 derivedNames,

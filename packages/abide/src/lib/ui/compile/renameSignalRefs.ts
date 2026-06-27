@@ -61,6 +61,11 @@ export function signalRefsTransformer(
         ...derivedNames,
         ...computedNames,
         ...blockLocal,
+        /* The reserved slot reader (`{#if children}` → `$props?.$children`) is rewritten
+           through `referenceFor` like a signal, so it inherits the same lexical-scope
+           tracking: a `{#snippet row(children)}` arg, a `{#for children of …}` item, a
+           script param named `children` re-binds it for that subtree and is left untouched. */
+        'children',
     ])
     return (context) => (root) => {
         /* The identifier nodes that are names, not value reads — collected by walking
@@ -322,9 +327,10 @@ function functionParameters(node: ts.Node): ts.NodeArray<ts.ParameterDeclaration
 
 /* `model.<name>` for a state binding, `<name>()` for a computed doc-slot (the
    string-free reader `scope().derive` returns), `<name>.value` for a runtime cell
-   (linked / lens / transform-state), else undefined. A `blockLocal` binding shadows
-   any same-named component signal — it is a nearer lexical scope — so it derefs as a
-   cell (`<name>.value`) regardless of a colliding `state`/`computed`/`derived`. */
+   (linked / lens / transform-state), `$props?.$children` for the reserved slot reader,
+   else undefined. A `blockLocal` binding shadows any same-named component signal — it is
+   a nearer lexical scope — so it derefs as a cell (`<name>.value`) regardless of a
+   colliding `state`/`computed`/`derived`, and ahead of the `children` slot reader. */
 function referenceFor(
     name: string,
     stateNames: ReadonlySet<string>,
@@ -334,6 +340,15 @@ function referenceFor(
 ): ts.Expression | undefined {
     if (blockLocal.has(name)) {
         return ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier(name), 'value')
+    }
+    /* `{children()}` is a slot NODE the parser handles; any other bare `children` read
+       (notably `{#if children}`) is the reserved reader. `?.` guards a propless mount. */
+    if (name === 'children') {
+        return ts.factory.createPropertyAccessChain(
+            ts.factory.createIdentifier('$props'),
+            ts.factory.createToken(ts.SyntaxKind.QuestionDotToken),
+            ts.factory.createIdentifier('$children'),
+        )
     }
     if (stateNames.has(name)) {
         return ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier('model'), name)
