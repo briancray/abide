@@ -1,14 +1,11 @@
 /*
-What a component is invoked with. Two real shapes flow through the one parameter.
-A top-level page/layout is called by the router (client) and `renderChain` (SSR)
-with its decoded route params — a plain string map. A nested child is called by
-the compiler-emitted `mountChild` with a map of reactive thunks (each authored
-prop, read in the body as `$props[name]?.()`) plus an optional `$children` slot
-builder carrying the component's `<slot>` markup, mounting into the host element
-it is handed.
+What a component is invoked with. A top-level page/layout is called by the router
+(client) and `renderChain` (SSR) with its route params as reactive thunks, shaped
+identically to the thunk map `mountChild` passes a nested child — so `props()` reads
+(`$props[name]?.()`) work uniformly on both. `$children` is the slot builder a parent
+component passes (carrying the component's `{children()}` content), or `CHILD_PRESENT`
+the router/SSR set on a layout that has a child layer below it.
 */
-export type UiProps =
-    | Record<string, string>
-    | (Record<string, () => unknown> & {
-          $children?: (host: Element) => void
-      })
+export type UiProps = Record<string, (() => unknown) | ((host: Element) => void)> & {
+    $children?: (host: Element) => void
+}

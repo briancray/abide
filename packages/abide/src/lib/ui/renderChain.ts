@@ -1,7 +1,9 @@
+import { CHILD_PRESENT } from './runtime/CHILD_PRESENT.ts'
 import { OUTLET_CLOSE, OUTLET_OPEN } from './runtime/OUTLET_MARKER.ts'
 import type { RenderContext } from './runtime/types/RenderContext.ts'
 import type { SsrRender } from './runtime/types/SsrRender.ts'
 import type { UiComponent } from './runtime/types/UiComponent.ts'
+import type { UiProps } from './runtime/types/UiProps.ts'
 
 const OPEN = `<!--${OUTLET_OPEN}-->`
 const CLOSE = `<!--${OUTLET_CLOSE}-->`
@@ -31,8 +33,19 @@ export async function renderChain(
 ): Promise<SsrRender> {
     const ctx: RenderContext = { next: 0 }
     const renders: SsrRender[] = []
-    for (const view of views) {
-        renders.push(await view.render(params, ctx))
+    /* Route params as thunks (static server-side — only shape parity with the client so
+       `props()` reads `$props["id"]?.()` resolve). A layout (every view but the last) also
+       gets `$children` set to `CHILD_PRESENT` so SSR renders `{#if children}` the same way
+       the client does, keeping hydration congruent. */
+    const paramThunks: UiProps = {}
+    for (const key of Object.keys(params)) {
+        paramThunks[key] = () => params[key]
+    }
+    for (let index = 0; index < views.length; index += 1) {
+        const view = views[index] as UiComponent
+        const hasChild = index < views.length - 1
+        const props: UiProps = hasChild ? { ...paramThunks, $children: CHILD_PRESENT } : paramThunks
+        renders.push(await view.render(props, ctx))
     }
     let html = renders[renders.length - 1]?.html ?? ''
     for (let index = renders.length - 2; index >= 0; index -= 1) {
@@ -42,7 +55,7 @@ export async function renderChain(
            so a second outlet would mount the SSR child and the hydrated child into
            DIFFERENT slots — a silent desync. Throw at build instead. */
         if (parent.html.split(OUTLET_PLACEHOLDER).length - 1 !== 1) {
-            throw new Error('[abide] a layout.abide must contain exactly one <slot/> outlet')
+            throw new Error('[abide] a layout.abide must contain exactly one {children()} outlet')
         }
         /* Fold the child between the outlet markers (function replacement so `$&`/`$\``
            in the child html insert literally). */

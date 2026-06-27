@@ -99,8 +99,8 @@ describe('layoutChainForRoute', () => {
 })
 
 describe('layout compiler outlet', () => {
-    test('a layout <slot/> lowers to an outlet boundary in both back-ends', () => {
-        const module = compileModule('<div class="shell"><slot /></div>', { isLayout: true })
+    test('a layout {children()} lowers to an outlet boundary in both back-ends', () => {
+        const module = compileModule('<div class="shell">{children()}</div>', { isLayout: true })
         /* The client build emits the `outlet` boundary call; the SSR markup carries the
            empty boundary the chain composer folds the child into — no `<abide-outlet>`. */
         expect(module).toContain('outlet(')
@@ -110,20 +110,20 @@ describe('layout compiler outlet', () => {
         expect(module).not.toContain('$props.$children')
     })
 
-    test('a non-layout component keeps <slot/> as a passed-children slot', () => {
-        const module = compileModule('<div><slot /></div>', { isLayout: false })
+    test('a non-layout component keeps {children()} as a passed-children slot', () => {
+        const module = compileModule('<div>{children()}</div>', { isLayout: false })
         expect(module).toContain('$props.$children')
         expect(module).not.toContain('abide:outlet')
     })
 
-    test('a layout with reactive holes around its <slot/> compiles', () => {
-        /* `asOutlet` CLONES every element it descends through (rewriting the `<slot/>` to the
+    test('a layout with reactive holes around its {children()} compiles', () => {
+        /* `asOutlet` CLONES every element it descends through (rewriting the slot node to the
            outlet sentinel), so the shared skeleton context must walk that same rewritten tree
            — feeding it the originals leaves a reactive hole's node-keyed index missing and the
            build throws "skeleton hole not numbered". Regression for the kitchen-sink
            `layout.abide`, whose `<a href={url('/')}>` is such a hole. */
         const source =
-            '<div class={shell}><nav><a href={href}>{label}</a></nav><main><slot /></main></div>'
+            '<div class={shell}><nav><a href={href}>{label}</a></nav><main>{children()}</main></div>'
         expect(() => compileComponent(source, true)).not.toThrow()
         expect(compileModule(source, { isLayout: true })).toContain('outlet(')
     })
@@ -212,7 +212,7 @@ describe('renderChain', () => {
                 ],
                 {},
             ),
-        ).rejects.toThrow('<slot/> outlet')
+        ).rejects.toThrow('{children()} outlet')
     })
 })
 
@@ -245,7 +245,7 @@ describe('compiled layout round-trip', () => {
         /* The outlet was once an `<abide-outlet>` element that the client clone stamped the
            slot's style scope onto while SSR emitted it bare — a hydration mismatch. Now it is
            a bare comment boundary on both sides, so the child folds in with no scoped wrapper. */
-        const source = '<style>.shell { color: red }</style><div class="shell"><slot /></div>'
+        const source = '<style>.shell { color: red }</style><div class="shell">{children()}</div>'
         const client = compileComponent(source, true)
         expect(client).toContain('outlet(')
         const ssr = await renderChain(
@@ -256,7 +256,7 @@ describe('compiled layout round-trip', () => {
     })
 
     test('the SSR chain and the client-nested chain produce identical markup', async () => {
-        const layout = compiled('<div class="shell">[shell]<slot /></div>', true)
+        const layout = compiled('<div class="shell">[shell]{children()}</div>', true)
         const page = compiled('<main>page</main>', false)
 
         const ssr = await renderChain([layout, page], {})
@@ -272,7 +272,7 @@ describe('compiled layout round-trip', () => {
     })
 
     test('hydration claims the outlet boundary in place, leaving the page nodes for the page', async () => {
-        const layout = compiled('<div class="shell">[shell]<slot /></div>', true)
+        const layout = compiled('<div class="shell">[shell]{children()}</div>', true)
         const page = compiled('<main>page</main>', false)
         const ssr = await renderChain([layout, page], {})
 

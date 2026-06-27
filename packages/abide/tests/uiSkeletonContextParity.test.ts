@@ -84,7 +84,7 @@ skeletonable parent (a reactive-attr element) â€” the only place a leak shows â€
 server markup equals serialized client DOM. A regression on any back-end fails here.
 */
 describe('skeleton-context parity across fresh-context boundaries', () => {
-    const Box = `<div class="box"><slot></slot></div>`
+    const Box = `<div class="box">{children()}</div>`
 
     const cases: Array<{ name: string; source: string }> = [
         {
@@ -133,7 +133,7 @@ describe('skeleton-context parity across fresh-context boundaries', () => {
         const source = `
             <script>let active = scope().state(true)</script>
             <section class={active ? 'on' : 'off'}>
-                <template name="row">{#if active}<span>x</span>{/if}</template>
+                {#snippet row}{#if active}<span>x</span>{/if}{/snippet}
                 {row()}
             </section>`
         const built = component(source)
@@ -156,12 +156,12 @@ describe('skeleton-context parity across fresh-context boundaries', () => {
     })
 
     test('slot fallback content with a control-flow block', async () => {
-        /* The fallback (used when the parent passes no slot content) is its own fresh context
-           inside the child's skeletonable `<aside>`. */
+        /* The fallback (the `{:else}` taken when the parent passes no children) is its own
+           fresh context inside the child's skeletonable `<aside>`. */
         const Panel = `
             <script>let open = scope().state(true)</script>
             <aside class={open ? 'open' : 'shut'}>
-                <slot>{#if open}<span>fallback</span>{/if}</slot>
+                {#if children}{children()}{:else}{#if open}<span>fallback</span>{/if}{/if}
             </aside>`
         const server = (await component(Panel).render()) as SsrRender
         const client = clientHtml((host) => component(Panel)(host))

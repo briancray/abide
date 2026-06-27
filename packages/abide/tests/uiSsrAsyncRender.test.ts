@@ -85,8 +85,8 @@ describe('async-snippet detection (fixpoint + escaped regex)', () => {
     test('a snippet that text-calls an async snippet compiles and renders', async () => {
         const render = component(
             `
-            <template name="a"><span>{b()}</span></template>
-            <template name="b"><Kid /></template>
+            {#snippet a}<span>{b()}</span>{/snippet}
+            {#snippet b}<Kid />{/snippet}
             <div>{a()}</div>
         `,
             { Kid },
@@ -102,7 +102,7 @@ describe('async-snippet detection (fixpoint + escaped regex)', () => {
     test('an async snippet whose name contains `$` is awaited at its call site', async () => {
         const render = component(
             `
-            <template name="row$"><Kid /></template>
+            {#snippet row$}<Kid />{/snippet}
             <div>{row$()}</div>
         `,
             { Kid },
@@ -183,7 +183,7 @@ describe('slot content shares the page block-id counter (depth-first)', () => {
             <script>let load = () => Promise.resolve('CV')</script>
             <div>
                 {#await load() then v}<b>{v}</b>{/await}
-                <slot></slot>
+                {children()}
             </div>
         `)
         const render = component(

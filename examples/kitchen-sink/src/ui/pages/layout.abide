@@ -99,7 +99,7 @@ const groups = [
             </nav>
         </aside>
         <main class="min-w-0 flex-1 py-10">
-            <slot></slot>
+            {children()}
         </main>
     </div>
 </div>

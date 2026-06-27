@@ -126,10 +126,10 @@ const promise = (async () => ({ status: 'ok' }))()
         expect(service.quickInfo(path, declaration)).toBeDefined()
     })
 
-    test('maps the <template args> snippet parameter binding', () => {
-        const source = `<template name="row" args={item}>\n  <li>{item}</li>\n</template>\n`
+    test('maps the {#snippet name(args)} parameter binding', () => {
+        const source = `{#snippet row(item)}\n  <li>{item}</li>\n{/snippet}\n`
         const { service, path } = open(source)
-        const declaration = source.indexOf('args={') + 'args={'.length
+        const declaration = source.indexOf('row(') + 'row('.length
         const tokens = service.semanticClassifications(path)
         expect(
             tokens.some(

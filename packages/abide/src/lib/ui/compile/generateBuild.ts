@@ -496,18 +496,14 @@ export function generateBuild(
         return `switchBlock(${parentVar}, () => (${lowerExpression(node.subject)}), [${cases}], ${before});\n`
     }
 
-    /* A `<slot>` outlet: render the parent-provided content (`$children`), falling
-       back to the slot's own children when the parent supplied none. */
+    /* A `{children()}` slot fill point: render the parent-provided content (`$children`).
+       A fallback is now an authored `{#if children}…{:else}…{/if}`, so the slot node never
+       carries children — the invoke is unconditional but guarded against a propless mount. */
     function generateSlot(
-        node: Extract<TemplateNode, { kind: 'element' }>,
+        _node: Extract<TemplateNode, { kind: 'element' }>,
         parentVar: string,
     ): string {
-        const fallback = generateChildren(node.children, parentVar)
-        const invoke = `$props.$children(${parentVar})`
-        if (fallback.trim() === '') {
-            return `if ($props && $props.$children) { ${invoke}; }\n`
-        }
-        return `if ($props && $props.$children) { ${invoke}; } else {\n${fallback}}\n`
+        return `if ($props && $props.$children) { $props.$children(${parentVar}); }\n`
     }
 
     /* The child's slot content as a host-taking builder (`$children`), or undefined when

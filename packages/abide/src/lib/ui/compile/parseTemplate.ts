@@ -97,6 +97,19 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
         return source.charAt(cursor) === '{' && source.charAt(cursor + 1) === '#'
     }
 
+    /* `{children()}` is the slot fill point — the content a parent passed (a component)
+       or the route chain below (a layout). It parses to the SAME node the retired `<slot>`
+       element produced, so every downstream helper that branches on `tag === 'slot'` is
+       unchanged. */
+    const CHILDREN_CALL = /^\{\s*children\s*\(\s*\)\s*\}/
+    function atChildrenCall(): boolean {
+        return source.charAt(cursor) === '{' && CHILDREN_CALL.test(source.slice(cursor))
+    }
+    function readChildrenCall(): TemplateNode {
+        cursor = source.indexOf('}', cursor) + 1 // consume `{children()}`
+        return { kind: 'element', tag: 'slot', attrs: [], children: [] }
+    }
+
     /* Reads a `{#…}` / `{:…}` / `{/…}` token starting on `{`. Tracks string literals
        and nested braces (same scan as readBracedExpression) so a brace/quote inside an
        expression (`{#if obj.has('}')}`) doesn't end the token early. Returns the sigil,
@@ -207,8 +220,32 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
             const children = readBlockChildren('try')
             return { kind: 'try', children }
         }
+        if (keyword === 'snippet') {
+            const head = open.body.slice(open.body.indexOf('snippet') + 'snippet'.length).trim()
+            const parenAt = head.indexOf('(')
+            const name = (parenAt === -1 ? head : head.slice(0, parenAt)).trim()
+            if (name === '') {
+                throw new Error('[abide] {#snippet} requires a name, e.g. {#snippet row(item)}')
+            }
+            /* Params ride the parens: `{#snippet row({ item })}` → `{ item }`. */
+            const params =
+                parenAt === -1
+                    ? undefined
+                    : head.slice(parenAt + 1, head.lastIndexOf(')')).trim() || undefined
+            const children = readBlockChildren('snippet')
+            return {
+                kind: 'snippet',
+                name,
+                params,
+                children,
+                loc:
+                    parenAt === -1
+                        ? undefined
+                        : exprLoc(open.loc, open.body, open.body.indexOf('(') + 1),
+            }
+        }
         throw new Error(
-            `[abide] unknown control block {#${keyword}} — expected if/for/await/switch/try`,
+            `[abide] unknown control block {#${keyword}} — expected if/for/await/switch/try/snippet`,
         )
     }
 
@@ -227,6 +264,8 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
         }
         if (atBlock()) {
             nodes.push(readBlock())
+        } else if (atChildrenCall()) {
+            nodes.push(readChildrenCall())
         } else if (source.startsWith('<!--', cursor)) {
             skipComment()
         } else if (atStyleTag()) {
@@ -403,6 +442,9 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
         let literal = ''
         while (cursor < source.length && source.charAt(cursor) !== '<') {
             if (source.charAt(cursor) === '{') {
+                if (atChildrenCall()) {
+                    break // a slot fill point — handled by the enclosing scan loop
+                }
                 const next = source.charAt(cursor + 1)
                 if (next === '#' || next === ':' || next === '/') {
                     break // a block/continuation/close token — not interpolation
@@ -569,6 +611,11 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
             throw new Error('[abide] {...expr} spread is not supported on a <template> directive')
         }
         const children = selfClosing || VOID_TAGS.has(tag) ? [] : readChildren(tag)
+        if (tag === 'slot') {
+            throw new Error(
+                '[abide] the <slot> element was removed — render passed content with {children()} (with {#if children}{children()}{:else}…{/if} for a fallback)',
+            )
+        }
         if (tag === 'template') {
             return toSnippetOrTemplate(attrs, children)
         }
@@ -601,6 +648,8 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
                 nodes.push(readStyle())
             } else if (atBlock()) {
                 nodes.push(readBlock())
+            } else if (atChildrenCall()) {
+                nodes.push(readChildrenCall())
             } else if (source.charAt(cursor) === '<') {
                 nodes.push(readElement())
             } else {
@@ -619,6 +668,8 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
             roots.push(readStyle())
         } else if (atBlock()) {
             roots.push(readBlock())
+        } else if (atChildrenCall()) {
+            roots.push(readChildrenCall())
         } else if (source.charAt(cursor) === '<') {
             roots.push(readElement())
         } else {
@@ -925,24 +976,6 @@ function toProps(
     })
 }
 
-/* The literal text of an attribute (a static value or an expression's code);
-   undefined for event/bind attributes, which a directive never is. */
-function attrText(attr: TemplateAttr): string | undefined {
-    if (attr.kind === 'static') {
-        return attr.value
-    }
-    if (attr.kind === 'expression') {
-        return attr.code
-    }
-    return undefined
-}
-
-/* The source offset of an attribute expression's code (see TextPart.loc); only
-   expression attributes carry one — a static value isn't a checkable expression. */
-function attrLoc(attr: TemplateAttr | undefined): number | undefined {
-    return attr !== undefined && attr.kind === 'expression' ? attr.loc : undefined
-}
-
 /* The attribute's source name (`on<event>`/`bind:<property>` reconstructed). */
 function attrName(attr: TemplateAttr): string {
     if (attr.kind === 'event') {
@@ -1002,22 +1035,12 @@ function toSnippetOrTemplate(attrs: TemplateAttr[], children: TemplateNode[]): T
             `[abide] <template ${name}> control flow was removed — use the {#${block}…} block instead`,
         )
     }
-    /* `<template name="row" args={item}>` declares a snippet — a named builder. `args`
-       (its parameter list) rides the `{…}` expression slot. */
-    const snippet = find('name')
-    if (snippet !== undefined) {
-        const name = attrText(snippet)
-        if (name === undefined || name === '') {
-            throw new Error('[abide] <template name> requires a snippet name')
-        }
-        const params = find('args')
-        return {
-            kind: 'snippet',
-            name,
-            params: params === undefined ? undefined : attrText(params),
-            children,
-            loc: attrLoc(params),
-        }
+    /* `<template name>` snippet declarations were retired for the `{#snippet name(args)}`
+       block — reject with a migration error. */
+    if (find('name') !== undefined) {
+        throw new Error(
+            '[abide] <template name> snippet declarations were removed — use a {#snippet name(args)}…{/snippet} block',
+        )
     }
     /* A plain inert `<template>` element (e.g. client-side cloning) — keep as an element. */
     return { kind: 'element', tag: 'template', attrs, children }

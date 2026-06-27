@@ -218,11 +218,15 @@ describe('block grammar — guards & integration', () => {
 })
 
 describe('<template> after control-flow directive removal', () => {
-    test('<template name> snippet still parses', () => {
-        const { nodes } = parseTemplate(
-            `<template name="row" args={item}><td>{item}</td></template>`,
-        )
+    test('{#snippet name(args)} parses to a snippet node', () => {
+        const { nodes } = parseTemplate(`{#snippet row(item)}<td>{item}</td>{/snippet}`)
         expect(nodes[0]).toMatchObject({ kind: 'snippet', name: 'row', params: 'item' })
+    })
+
+    test('<template name> declaration is a migration error pointing at {#snippet}', () => {
+        expect(() => parseTemplate(`<template name="row"><td>x</td></template>`)).toThrow(
+            /\{#snippet/,
+        )
     })
 
     test('<template if=…> directive is now a migration error pointing at {#if}', () => {

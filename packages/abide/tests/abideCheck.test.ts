@@ -378,4 +378,25 @@ describe('abide check', () => {
         expect(diagnostics).toHaveLength(1)
         expect(diagnostics[0]!.message).toContain('not assignable')
     })
+
+    test('a page infers its route params via props() — string ops clean', () => {
+        const dir = project({
+            'src/ui/pages/[id]/page.abide': `<script>\nconst { id } = props()\n</script>\n<p>{id.toUpperCase()}</p>\n`,
+        })
+        const diagnostics = collectAbideDiagnostics(createShadowProgram(dir)).filter((diagnostic) =>
+            diagnostic.file.endsWith('page.abide'),
+        )
+        expect(diagnostics).toHaveLength(0)
+    })
+
+    test('a page route param is typed string — a number op is caught', () => {
+        const dir = project({
+            'src/ui/pages/[id]/page.abide': `<script>\nconst { id } = props()\n</script>\n<p>{id.toFixed(2)}</p>\n`,
+        })
+        const diagnostics = collectAbideDiagnostics(createShadowProgram(dir)).filter((diagnostic) =>
+            diagnostic.file.endsWith('page.abide'),
+        )
+        expect(diagnostics).toHaveLength(1)
+        expect(diagnostics[0]!.message).toContain('toFixed')
+    })
 })

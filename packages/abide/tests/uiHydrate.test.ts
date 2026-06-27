@@ -718,7 +718,7 @@ describe('hydrate — adopt server DOM', () => {
            slot. If SSR and client disagree on the row's wrapper contents, the row's inner
            skeleton claims an empty run → `resolveElementHole` throws → the enclosing await
            cold-rebuilds the whole subtree (the blink). */
-        const childSource = `<script>const { value } = props<{ value: unknown }>()</script><div data-value={value}><slot></slot></div>`
+        const childSource = `<script>const { value } = props<{ value: unknown }>()</script><div data-value={value}>{children()}</div>`
         const childClient = compileComponent(childSource)
         const childSsr = compileSSR(childSource)
         const baseRuntime = {

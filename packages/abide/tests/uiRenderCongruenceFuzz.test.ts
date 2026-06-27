@@ -65,7 +65,7 @@ function component(
     return Object.assign(fn, { render: fn.render, build: fn })
 }
 
-const Box = `<div class="box"><slot></slot></div>`
+const Box = `<div class="box">{children()}</div>`
 
 const serialize = (host: unknown): string =>
     (globalThis as unknown as { serializeMiniDom: (h: unknown) => string }).serializeMiniDom(host)
@@ -148,7 +148,7 @@ const boundaries: Array<{ name: string; wrap: (inner: Fragment) => Fragment }> =
     {
         name: 'snippet-body',
         wrap: (inner) => ({
-            html: `<template name="frag">${inner.html}</template>{frag()}`,
+            html: `{#snippet frag}${inner.html}{/snippet}{frag()}`,
             text: inner.text,
         }),
     },

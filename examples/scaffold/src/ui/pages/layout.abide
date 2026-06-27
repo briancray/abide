@@ -17,5 +17,5 @@ import '../app.css'
     </nav>
 </header>
 <main>
-    <slot></slot>
+    {children()}
 </main>

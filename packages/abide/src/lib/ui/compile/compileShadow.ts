@@ -24,7 +24,7 @@ import { scope } from '${ABIDE_PACKAGE_NAME}/ui/scope'
 declare function state<T>(initial?: T, transform?: (next: T, previous: T) => T): { value: T }
 declare function linked<T>(seed: () => T, transform?: (next: T, previous: T) => T): { value: T }
 declare function computed<T>(compute: () => T): { readonly value: T }
-declare function props<T = Record<string, any>>(): T
+declare const children: () => void
 void [effect, html, snippet, scope]
 `
 
@@ -43,7 +43,7 @@ The script's signal surface is rewritten to value types:
 Everything else (functions, plain consts, imports) is emitted verbatim, so
 expressions inside it (e.g. a computed's compute body) are checked and mapped too.
 */
-export function compileShadow(source: string): CompiledShadow {
+export function compileShadow(source: string, propsType = 'Record<string, any>'): CompiledShadow {
     const builder = createBuilder()
     const leadingScript = source.match(/^\s*<script[^>]*>([\s\S]*?)<\/script>/)
     const scriptBody = leadingScript?.[1] ?? ''
@@ -53,6 +53,9 @@ export function compileShadow(source: string): CompiledShadow {
 
     const { imports, types, scope, propsShapes } = analyzeScript(scriptBody, scriptStart)
     builder.raw(SHADOW_PREAMBLE)
+    /* `props()` defaults to the file's type — a page/layout's route param shape, else
+       `Record<string, any>` — so `const { id } = props()` infers from the route. */
+    builder.raw(`declare function props<T = ${propsType}>(): T\n`)
     for (const line of imports) {
         builder.flush(line)
     }

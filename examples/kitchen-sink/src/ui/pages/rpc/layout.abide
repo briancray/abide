@@ -39,4 +39,4 @@ const pillClass = (href: string) =>
     {/for}
 </nav>
 
-<slot></slot>
+{children()}
