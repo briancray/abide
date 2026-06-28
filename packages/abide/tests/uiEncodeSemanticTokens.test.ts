@@ -39,6 +39,28 @@ describe('encodeSemanticTokens', () => {
         expect(data).toEqual([0, 0, 3, KEYWORD, 0])
     })
 
+    test('splits a token spanning newlines into one segment per line', () => {
+        const STRING = ABIDE_SEMANTIC_TOKENS_LEGEND.tokenTypes.indexOf('string')
+        /* A multiline template literal is one token in source coords; the LSP forbids
+           a token crossing a line, so it must encode as a per-line segment stream. */
+        const text = `ab\ncd`
+        const data = encodeSemanticTokens(text, [
+            { start: 0, length: 5, type: 'string', modifiers: [] },
+        ])
+        /* line 0 char 0 len 2 (`ab`); line 1 char 0 len 2 (`cd`). */
+        expect(data).toEqual([0, 0, 2, STRING, 0, 1, 0, 2, STRING, 0])
+    })
+
+    test('drops the blank-line segment of a multiline token', () => {
+        const STRING = ABIDE_SEMANTIC_TOKENS_LEGEND.tokenTypes.indexOf('string')
+        const text = `a\n\nb`
+        const data = encodeSemanticTokens(text, [
+            { start: 0, length: 4, type: 'string', modifiers: [] },
+        ])
+        /* line 0 (`a`) and line 2 (`b`); the empty line 1 emits nothing. */
+        expect(data).toEqual([0, 0, 1, STRING, 0, 2, 0, 1, STRING, 0])
+    })
+
     test('sets the modifier bitset from legend modifier order', () => {
         const text = `x`
         const readonlyBit = 1 << ABIDE_SEMANTIC_TOKENS_LEGEND.tokenModifiers.indexOf('readonly')

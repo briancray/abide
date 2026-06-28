@@ -10,8 +10,31 @@ by start; tokens with an unknown legend type, and any token overlapping the one
 before it, are dropped — the protocol requires a strictly non-overlapping,
 positionally-ordered stream.
 */
+/*
+A token may span newlines (a multiline template-literal string), but the protocol
+forbids a token crossing a line — so split it into one segment per covered line,
+dropping empty lines. A single-line token returns unchanged.
+*/
+function splitByLine(text: string, token: SemanticToken): SemanticToken[] {
+    const raw = text.slice(token.start, token.start + token.length)
+    if (!raw.includes('\n')) {
+        return [token]
+    }
+    const segments: SemanticToken[] = []
+    let offset = token.start
+    for (const line of raw.split('\n')) {
+        if (line.length > 0) {
+            segments.push({ ...token, start: offset, length: line.length })
+        }
+        offset += line.length + 1
+    }
+    return segments
+}
+
 export function encodeSemanticTokens(text: string, tokens: SemanticToken[]): number[] {
-    const sorted = [...tokens].sort((a, b) => a.start - b.start || a.length - b.length)
+    const sorted = tokens
+        .flatMap((token) => splitByLine(text, token))
+        .sort((a, b) => a.start - b.start || a.length - b.length)
     const data: number[] = []
     let previousLine = 0
     let previousCharacter = 0

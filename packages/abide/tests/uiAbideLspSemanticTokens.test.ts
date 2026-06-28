@@ -56,8 +56,32 @@ describe('componentSemanticTokens', () => {
         expect(tokens.some((t) => t.type !== 'keyword' && t.type !== 'operator')).toBe(true)
     })
 
-    test('returns an empty array for a non-abide / empty document', () => {
-        const { service, path } = open(`<h1>Hello</h1>\n`)
-        expect(componentSemanticTokens(service, path, `<h1>Hello</h1>\n`)).toEqual([])
+    test('returns an empty array for an empty document', () => {
+        const { service, path } = open(``)
+        expect(componentSemanticTokens(service, path, ``)).toEqual([])
+    })
+
+    test('colors plain markup structure (tag names) with no expressions', () => {
+        const SRC = `<h1>Hello</h1>\n`
+        const { service, path } = open(SRC)
+        const tokens = decode(componentSemanticTokens(service, path, SRC))
+        expect(tokens.filter((t) => t.type === 'tag').map((t) => t.length)).toEqual([2, 2])
+    })
+
+    test('colors a string literal inside an interpolation', () => {
+        const SRC = '<div>{`hello world`}</div>\n'
+        const { service, path } = open(SRC)
+        const tokens = decode(componentSemanticTokens(service, path, SRC))
+        expect(tokens.some((t) => t.type === 'string' && t.line === 0)).toBe(true)
+    })
+
+    test('colors every line of a multiline template-literal string', () => {
+        const SRC = '<div>{`hello\nworld`}</div>\n'
+        const { service, path } = open(SRC)
+        const tokens = decode(componentSemanticTokens(service, path, SRC))
+        const stringLines = tokens.filter((t) => t.type === 'string').map((t) => t.line)
+        /* Both the line the template opens on and the line it closes on are colored. */
+        expect(stringLines).toContain(0)
+        expect(stringLines).toContain(1)
     })
 })

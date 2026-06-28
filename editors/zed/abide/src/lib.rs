@@ -2,10 +2,10 @@ use zed_extension_api::{self as zed, LanguageServerId, Result};
 
 /*
 The Abide Zed extension. Registers the `.abide` language (tree-sitter-html for
-element/attribute structure + `<script>`→TS / `<style>`→CSS injections; all
-abide-specific syntax highlighted by `abide lsp` via LSP semantic tokens) and
-spawns `abide lsp` as its language server, which publishes the template + prop
-type-check diagnostics produced by the shadow type-checker.
+`<script>`→TS / `<style>`→CSS injections and as the no-LSP fallback; the markup
+structure and all abide-specific syntax highlighted by `abide lsp` via LSP semantic
+tokens) and spawns `abide lsp` as its language server, which publishes the template
++ prop type-check diagnostics produced by the shadow type-checker.
 */
 struct AbideExtension;
 

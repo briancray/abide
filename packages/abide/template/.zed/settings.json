@@ -1,4 +1,10 @@
 {
   "auto_install_extensions": { "abide": true },
-  "semantic_tokens": "combined"
+  "semantic_tokens": "combined",
+  "global_lsp_settings": {
+    "semantic_token_rules": [
+      { "token_type": "tag", "style": ["tag"] },
+      { "token_type": "attribute", "style": ["attribute"] }
+    ]
+  }
 }

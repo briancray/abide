@@ -6,11 +6,15 @@ authors = ["Brian Cray"]
 description = "Syntax highlighting and type-check diagnostics for .abide components"
 repository = "https://github.com/briancray/abide"
 
-# .abide is HTML-shaped; reuse tree-sitter-html for element/attribute/script/style
-# structure and embedded-language injections. Everything abide-specific — the
-# `{#…}` control-flow blocks and `{expr}` interiors — is highlighted by `abide lsp`
-# via LSP semantic tokens (requires `"semantic_tokens": "combined"`), so no
-# bespoke grammar is maintained.
+# .abide is HTML-shaped; reuse tree-sitter-html for `<script>`→TS / `<style>`→CSS
+# embedded-language injections (and as the fallback when the LSP isn't running).
+# Everything else — element/attribute/comment markup structure, the `{#…}`
+# control-flow blocks, and `{expr}` interiors — is highlighted by `abide lsp` via
+# LSP semantic tokens (requires `"semantic_tokens": "combined"`), so no bespoke
+# grammar is maintained. The LSP owns markup structure (not just `{expr}`) because
+# tree-sitter-html can't parse abide's `attr={expr}` values: a multiline
+# template-literal attribute desyncs its parse and miscolors every element below,
+# which the LSP's raw-source markup tokens override in `combined` mode.
 [grammars.html]
 repository = "https://github.com/tree-sitter/tree-sitter-html"
 commit = "bfa075d83c6b97cd48440b3829ab8d24a2319809"
