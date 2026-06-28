@@ -55,6 +55,7 @@ export async function formatAbideSource(source: string, options: Options): Promi
     } catch {
         return source
     }
+    output = rejoinWrappedPlaceholderTags(output)
     output = restoreComponentTags(output, componentNames)
     output = await restoreControlFlow(output, markers, options)
     output = await restoreExpressions(output, expressions, options)
@@ -163,6 +164,17 @@ function restoreComponentTags(output: string, componentNames: string[]): string 
         restored = restored.replace(new RegExp(`(</?)${placeholder}(?=[\\s/>])`, 'g'), `$1${name}`)
     })
     return restored
+}
+
+/* Re-joins any `<abide-…>` placeholder tag whose closing `>`/`/>` the markup pass
+   dangled onto the next line. When inline block content overflows printWidth, the
+   HTML engine wraps the tag (`<abide-block data-i="0"\n    >…`); the line-based
+   control-flow and block restores match each placeholder tag as one contiguous
+   span, so a wrapped tag would survive unrestored. Collapsing the break before any
+   restore makes the open/close tags whole again — the only attribute these
+   placeholders carry is `data-i`, so the match is unambiguous. */
+function rejoinWrappedPlaceholderTags(output: string): string {
+    return output.replace(/(<\/?abide-[a-z-]+(?:\s+data-i="\d+")?)\s*\n\s*(\/?>)/g, '$1$2')
 }
 
 /* A unique, regex-safe placeholder for the expression at `index`. The trailing `X`

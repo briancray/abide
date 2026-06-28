@@ -174,6 +174,20 @@ describe('prettier-plugin-abide', () => {
         expect(out).toContain('{/if}')
     })
 
+    test('restores an inline block whose tag the markup pass wraps over a line', async () => {
+        // When inline block content overflows printWidth, the HTML pass dangles the
+        // placeholder tag's `>` onto the next line; the brace form must still restore
+        // (no raw <abide-block> placeholder may survive).
+        const out = await format(
+            `<div class="mt-1 text-sm text-slate-600">\n{#if children}{children()}{:else}<p class="text-slate-400">empty</p>{/if}\n</div>\n`,
+        )
+        expect(out).not.toContain('abide-block')
+        expect(out).toContain('{#if children}')
+        expect(out).toContain('{:else}')
+        expect(out).toContain('{/if}')
+        expect(await format(out)).toBe(out)
+    })
+
     test('is idempotent for control-flow blocks', async () => {
         const source = `<section>\n{#await p}\n<p>loading</p>\n{:then v}\n<p>{v}</p>\n{:catch e}\n<p>{e.message}</p>\n{/await}\n</section>\n`
         const once = await format(source)
