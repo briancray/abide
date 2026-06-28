@@ -1,4 +1,3 @@
-import { html } from '../shared/html.ts'
 import { snippet } from '../shared/snippet.ts'
 import { anchorCursor } from './dom/anchorCursor.ts'
 import { appendSnippet } from './dom/appendSnippet.ts'
@@ -49,7 +48,6 @@ dev (the live-reload script sets `window.__abideDev`).
 */
 export function installHotBridge(): void {
     ;(globalThis as { __abide?: Record<string, unknown> }).__abide = {
-        html,
         snippet,
         scope,
         enterScope,

@@ -1,4 +1,5 @@
 import { abideUiPlugin } from '../../src/lib/ui/compile/abideUiPlugin.ts'
+import { UI_RUNTIME_IMPORTS } from '../../src/lib/ui/compile/UI_RUNTIME_IMPORTS.ts'
 import { anchorCursor } from '../../src/lib/ui/dom/anchorCursor.ts'
 import { appendTextAt } from '../../src/lib/ui/dom/appendTextAt.ts'
 import { cloneStatic } from '../../src/lib/ui/dom/cloneStatic.ts'
@@ -69,3 +70,49 @@ globals.outlet = outlet
 globals.scope = scope
 globals.enterScope = enterScope
 globals.exitScope = exitScope
+
+/*
+The compiler emits every injected runtime name in `$$`-prefixed form (reserved so a
+user variable can never collide). Mirror each global helper to its `$$` alias so the
+`new Function` harness bodies — which now call `$$mountChild`, `$$skeleton`, … —
+resolve to the same real runtime singleton. Per-harness-injected names (the reactive
+primitives + simple bindings) get their `$$` alias via `withReserved` in each harness.
+*/
+for (const name of [
+    'nextBlockId',
+    'enterRenderPass',
+    'exitRenderPass',
+    'mountChild',
+    'mergeProps',
+    'spreadProps',
+    'restProps',
+    'spreadAttrs',
+    'cloneStatic',
+    'skeleton',
+    'appendTextAt',
+    'anchorCursor',
+    'mountSlot',
+    'outlet',
+    'scope',
+    'enterScope',
+    'exitScope',
+]) {
+    globals[`$$${name}`] = globals[name]
+}
+
+/*
+Comprehensive `$$` aliasing: every `UI_RUNTIME_IMPORTS` helper is published under its
+`$$` global from its real module, so flipping ANY helper's emit sites to `$$name`
+resolves with no per-harness change (the harnesses that inject the bare name as a
+`new Function` param simply leave that param unused). Loaded dynamically off the one
+import metadata list so a new helper is covered automatically.
+*/
+await Promise.all(
+    UI_RUNTIME_IMPORTS.map(async (entry) => {
+        const module = (await import(`../../src/lib/${entry.specifier}.ts`)) as Record<
+            string,
+            unknown
+        >
+        globals[`$$${entry.name}`] = module[entry.name]
+    }),
+)

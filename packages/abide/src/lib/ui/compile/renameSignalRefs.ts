@@ -66,6 +66,11 @@ export function signalRefsTransformer(
            tracking: a `{#snippet row(children)}` arg, a `{#for children of …}` item, a
            script param named `children` re-binds it for that subtree and is left untouched. */
         'children',
+        /* `scope` is the author-facing reactive entry (`scope().state(...)`), lowered to the
+           reserved `$$scope` import so a user variable named `scope` can never collide — but
+           shadowably: a `const scope`/param `scope` re-binds it for that subtree and is left
+           untouched, exactly like a signal name. */
+        'scope',
     ])
     return (context) => (root) => {
         /* The identifier nodes that are names, not value reads — collected by walking
@@ -350,8 +355,16 @@ function referenceFor(
             ts.factory.createIdentifier('$children'),
         )
     }
+    /* The author-facing reactive entry `scope` lowers to its reserved `$$scope` import (the
+       value read only — a `.scope` member or a shadowing local is never reached here). */
+    if (name === 'scope') {
+        return ts.factory.createIdentifier('$$scope')
+    }
     if (stateNames.has(name)) {
-        return ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier('model'), name)
+        return ts.factory.createPropertyAccessExpression(
+            ts.factory.createIdentifier('$$model'),
+            name,
+        )
     }
     if (computedNames.has(name)) {
         return ts.factory.createCallExpression(ts.factory.createIdentifier(name), undefined, [])

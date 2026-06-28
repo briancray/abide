@@ -44,7 +44,13 @@ export function compileModule(
        leaf components today; one importing children falls back to a reload (the dev
        layer decides what to hot-swap). */
     if (options.hot) {
-        const names = UI_RUNTIME_IMPORTS.map((entry) => entry.name).join(', ')
+        /* Bridge keys are the bare source names; bind each to its emitted local (`$$`
+           alias when set), so the hot body's `$$mountChild(...)` resolves. */
+        const names = UI_RUNTIME_IMPORTS.map((entry) =>
+            entry.alias === undefined || entry.alias === entry.name
+                ? entry.name
+                : `${entry.name}: ${entry.alias}`,
+        ).join(', ')
         const id = JSON.stringify(options.moduleId)
         return `const { ${names}, hotReplace } = window.__abide
 ${userImports}
@@ -52,7 +58,7 @@ function build(host, $props) {
 ${body}
 }
 function component(host, $props) {
-    return mount(host, build, $props)
+    return $$mount(host, build, $props)
 }
 component.build = build
 component.__abideId = ${id}
@@ -66,12 +72,12 @@ ${body}
 }
 
 export default function component(host, $props) {
-    return mount(host, build, $props)
+    return $$mount(host, build, $props)
 }
 
 /* Adopt the server-rendered DOM in place instead of rebuilding it. */
 export function hydrateInto(host, $props) {
-    return hydrate(host, build, $props)
+    return $$hydrate(host, build, $props)
 }
 
 export function render($props, $ctx) {
@@ -96,8 +102,16 @@ ${options.moduleId === undefined ? '' : `component.__abideId = ${JSON.stringify(
        forces a spurious import, so no per-surface scoping is needed: a client-only helper
        simply doesn't appear as an identifier in the SSR body. */
     const referenced = collectIdentifiers(`${userImports}\n${body}\n${ssrBody}\n${moduleBody}`)
-    const importBlock = UI_RUNTIME_IMPORTS.filter((entry) => referenced.has(entry.name))
-        .map((entry) => `import { ${entry.name} } from '${ABIDE_PACKAGE_NAME}/${entry.specifier}'`)
+    const importBlock = UI_RUNTIME_IMPORTS.filter((entry) =>
+        referenced.has(entry.alias ?? entry.name),
+    )
+        .map((entry) => {
+            const local =
+                entry.alias === undefined || entry.alias === entry.name
+                    ? entry.name
+                    : `${entry.name} as ${entry.alias}`
+            return `import { ${local} } from '${ABIDE_PACKAGE_NAME}/${entry.specifier}'`
+        })
         .join('\n')
     const module = `${importBlock}
 ${userImports}

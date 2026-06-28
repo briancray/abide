@@ -29,21 +29,21 @@ const RUNTIME = {
 }
 
 /* Mount a component on the client and return its host. */
-function mount(source: string, model: unknown): HTMLElement {
+function mount(source: string, $$model: unknown): HTMLElement {
     const host = document.createElement('div')
-    new Function('host', ...Object.keys(RUNTIME), 'model', compileComponent(source))(
+    new Function('host', ...Object.keys(RUNTIME), '$$model', compileComponent(source))(
         host,
         ...Object.values(RUNTIME),
-        model,
+        $$model,
     )
     return host
 }
 
 /* Run the component's SSR render to one HTML string. */
-async function ssrStream(source: string, model: unknown): Promise<string> {
-    const render = new Function(...Object.keys(RUNTIME), 'model', compileSSR(source))(
+async function ssrStream(source: string, $$model: unknown): Promise<string> {
+    const render = new Function(...Object.keys(RUNTIME), '$$model', compileSSR(source))(
         ...Object.values(RUNTIME),
-        model,
+        $$model,
     ) as SsrRender
     let html = ''
     for await (const chunk of renderToStream(() => render)) {
@@ -70,11 +70,11 @@ async function* failingFeed<T>(rows: T[], error: unknown): AsyncGenerator<T> {
     throw error
 }
 
-const SOURCE = `<ul>{#for await row of model.source by row.id}
+const SOURCE = `<ul>{#for await row of $$model.source by row.id}
     <li data-id={row.id}>{row.text}</li>
 {/for}</ul>`
 
-const SOURCE_CATCH = `<ul>{#for await row of model.source by row.id}
+const SOURCE_CATCH = `<ul>{#for await row of $$model.source by row.id}
     <li data-id={row.id}>{row.text}</li>
     {:catch err}<li>{err}</li>
 {/for}</ul>`

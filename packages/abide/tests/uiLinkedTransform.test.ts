@@ -17,11 +17,11 @@ beforeAll(() => {
     installMiniDom()
 })
 
-/* Mounts a compiled client body, returning the host and the component's `model`
+/* Mounts a compiled client body, returning the host and the component's `$$model`
    doc (declared from the plain `state(...)` slots). */
-function mountClient(source: string): { host: HTMLElement; model: ReturnType<typeof doc> } {
+function mountClient(source: string): { host: HTMLElement; $$model: ReturnType<typeof doc> } {
     const host = document.createElement('div')
-    const model = new Function(
+    const $$model = new Function(
         'host',
         'doc',
         'state',
@@ -33,7 +33,7 @@ function mountClient(source: string): { host: HTMLElement; model: ReturnType<typ
         'attr',
         'on',
         'effect',
-        `${compileComponent(source)}\nreturn typeof model !== 'undefined' ? model : undefined;`,
+        `${compileComponent(source)}\nreturn typeof $$model !== 'undefined' ? $$model : undefined;`,
     )(
         host,
         doc,
@@ -47,7 +47,7 @@ function mountClient(source: string): { host: HTMLElement; model: ReturnType<typ
         on,
         effect,
     ) as ReturnType<typeof doc>
-    return { host, model }
+    return { host, $$model }
 }
 
 /* The mini-DOM has no querySelector; find the first <input> by walking. */
@@ -77,16 +77,16 @@ describe('desugar — state(transform) / linked cells; computed doc slot', () =>
             <p>{count}{qty}{draft}{doubled}</p>
         `)
         // plain state → serializable doc slot, no runtime state() call survives for it
-        expect(body).toContain('model.replace("count", 0)')
+        expect(body).toContain('$$model.replace("count", 0)')
         // transform state → scope cell, referenced as .value
-        expect(body).toContain('const qty = scope().state(1, (n) => Math.max(1, n))')
+        expect(body).toContain('const qty = $$scope().state(1, (n) => Math.max(1, n))')
         expect(body).toContain('qty.value')
         // linked → scope cell, seed thunk derefs the upstream slot, ref as .value
-        expect(body).toContain('const draft = scope().linked(() => model.read("source"))')
+        expect(body).toContain('const draft = $$scope().linked(() => $$model.read("source"))')
         expect(body).toContain('draft.value')
         // computed (read-only) → computed doc slot via derive, referenced as its reader call
         expect(body).toContain(
-            'const doubled = scope().derive("doubled", () => model.read("source") * 2)',
+            'const doubled = $$scope().derive("doubled", () => $$model.read("source") * 2)',
         )
         expect(body).toContain('doubled()')
     })
@@ -100,17 +100,17 @@ describe('desugar — state(transform) / linked cells; computed doc slot', () =>
             </script>
             <p>{qty}{draft}{source}</p>
         `)
-        // the snapshot is the doc model — transform/linked are re-computed on resume
-        expect(ssr).toContain('model.snapshot()')
-        expect(ssr).toContain('model.replace("source", 10)')
-        expect(ssr).toContain('const qty = scope().state(1,')
-        expect(ssr).toContain('const draft = scope().linked(')
+        // the snapshot is the doc $$model — transform/linked are re-computed on resume
+        expect(ssr).toContain('$$model.snapshot()')
+        expect(ssr).toContain('$$model.replace("source", 10)')
+        expect(ssr).toContain('const qty = $$scope().state(1,')
+        expect(ssr).toContain('const draft = $$scope().linked(')
     })
 })
 
 describe('runtime behavior in a compiled component', () => {
     test('linked reflects upstream changes through the doc', () => {
-        const { host, model } = mountClient(`
+        const { host, $$model } = mountClient(`
             <script>
                 let source = scope().state('a')
                 const draft = scope().linked(() => source)
@@ -118,7 +118,7 @@ describe('runtime behavior in a compiled component', () => {
             <p>{draft}</p>
         `)
         expect(host.textContent).toContain('a') // seeded from upstream
-        model.replace('source', 'b') // upstream change reseeds the draft
+        $$model.replace('source', 'b') // upstream change reseeds the draft
         expect(host.textContent).toContain('b')
     })
 
@@ -154,8 +154,8 @@ describe('explicit scope().X authoring surface', () => {
             </script>
             <p>{count}{doubled}</p>
         `)
-        expect(body).toContain('model.replace("count", 0)') // plain state → doc slot
-        expect(body).toContain('scope().derive("doubled"') // computed → read-only derive slot
+        expect(body).toContain('$$model.replace("count", 0)') // plain state → doc slot
+        expect(body).toContain('$$scope().derive("doubled"') // computed → read-only derive slot
         expect(body).toContain('doubled()') // computed referenced as its reader
     })
 
@@ -170,11 +170,11 @@ describe('explicit scope().X authoring surface', () => {
             </script>
             <p>{count}{qty}{draft}{total}</p>
         `)
-        expect(body).toContain('model.replace("count", 0)') // plain state → doc slot
-        expect(body).toContain('const qty = scope().state(1, (n) => Math.max(1, n))')
+        expect(body).toContain('$$model.replace("count", 0)') // plain state → doc slot
+        expect(body).toContain('const qty = $$scope().state(1, (n) => Math.max(1, n))')
         expect(body).toContain('qty.value')
-        expect(body).toContain('const draft = scope().linked(() => model.read("count"))')
-        expect(body).toContain('scope().derive("total"')
+        expect(body).toContain('const draft = $$scope().linked(() => $$model.read("count"))')
+        expect(body).toContain('$$scope().derive("total"')
         expect(body).toContain('total()')
     })
 
@@ -189,11 +189,11 @@ describe('explicit scope().X authoring surface', () => {
             </script>
             <p>{count}{qty}{draft}{total}</p>
         `)
-        expect(body).toContain('model.replace("count", 0)') // plain state → doc slot
-        expect(body).toContain('const qty = scope().state(1, (n) => Math.max(1, n))')
+        expect(body).toContain('$$model.replace("count", 0)') // plain state → doc slot
+        expect(body).toContain('const qty = $$scope().state(1, (n) => Math.max(1, n))')
         expect(body).toContain('qty.value')
-        expect(body).toContain('const draft = scope().linked(() => model.read("count"))')
-        expect(body).toContain('scope().derive("total"')
+        expect(body).toContain('const draft = $$scope().linked(() => $$model.read("count"))')
+        expect(body).toContain('$$scope().derive("total"')
         expect(body).toContain('total()')
     })
 
@@ -216,8 +216,8 @@ describe('explicit scope().X authoring surface', () => {
             </script>
             <p>{count}</p>
         `)
-        expect(body).toContain('scope().effect(') // the reaction stays a runtime call
-        expect(body).toContain('model.read("count")') // its reads lower like any other
+        expect(body).toContain('$$scope().effect(') // the reaction stays a runtime call
+        expect(body).toContain('$$model.read("count")') // its reads lower like any other
     })
 
     test('a destructured effect used bare does not trip the scope() guard', () => {

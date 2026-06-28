@@ -16,7 +16,9 @@ comment is not a `CallExpression` callee, so a docs component quoting framework 
 (`mount(...)` in a snippet) never false-positives. Compile-time only; never on the hot path.
 */
 export function assertRuntimeHelpersBound(module: string, context: string): void {
-    const helperNames = new Set(UI_RUNTIME_IMPORTS.map((entry) => entry.name))
+    /* The EMITTED local names (the `$$` alias when set) — codegen calls those, and the
+       aliased import binds them, so the bound/called check must use the same form. */
+    const helperNames = new Set(UI_RUNTIME_IMPORTS.map((entry) => entry.alias ?? entry.name))
     const source = ts.createSourceFile(
         'module.ts',
         module,

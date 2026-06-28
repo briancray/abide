@@ -2,12 +2,24 @@ import ts from 'typescript'
 import { ABIDE_PACKAGE_NAME } from '../../shared/ABIDE_PACKAGE_NAME.ts'
 import { parseTemplate } from './parseTemplate.ts'
 import { REACTIVE_CALLEES } from './REACTIVE_CALLEES.ts'
-import type { CompiledShadow, ShadowMapping } from './types/CompiledShadow.ts'
+import type { CompiledShadow, ShadowDiagnostic, ShadowMapping } from './types/CompiledShadow.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
 
 /*
+Runtime helpers published as package subpaths solely so generated component code
+can import them; an author must reach them through their namespaced surface
+instead. The module resolver can't tell codegen from user source (same specifier),
+so the ban can only live in the check — map each forbidden specifier to the
+guidance shown when an author imports it.
+*/
+const INTERNAL_ONLY_IMPORTS: Record<string, string> = {
+    [`${ABIDE_PACKAGE_NAME}/ui/effect`]:
+        '`effect` is compiler-internal — author it as `scope().effect(...)`',
+}
+
+/*
 Framework callables the `.abide` loader injects into a component's scope. `effect`,
-`html`, `snippet`, and `scope` keep their real published types via imports so author
+`snippet`, and `scope` keep their real published types via imports so author
 calls type-check — `scope()` is the authored reactive surface (`scope().state(...)` /
 `.computed(...)` / `.undo()` …), so it must resolve like any import. `state`/`linked`/
 `computed` are ALSO declared ambiently as a fallback for the rare bare/nested use the
@@ -18,14 +30,13 @@ argument (default `Record<string, any>`) so each binding inherits its prop type 
 `= default` narrows.
 */
 const SHADOW_PREAMBLE = `import { effect } from '${ABIDE_PACKAGE_NAME}/ui/effect'
-import { html } from '${ABIDE_PACKAGE_NAME}/shared/html'
 import { snippet } from '${ABIDE_PACKAGE_NAME}/shared/snippet'
 import { scope } from '${ABIDE_PACKAGE_NAME}/ui/scope'
 declare function state<T>(initial?: T, transform?: (next: T, previous: T) => T): { value: T }
 declare function linked<T>(seed: () => T, transform?: (next: T, previous: T) => T): { value: T }
 declare function computed<T>(compute: () => T): { readonly value: T }
-declare const children: () => void
-void [effect, html, snippet, scope]
+declare const children: (() => void) | undefined
+void [effect, snippet, scope]
 `
 
 /*
@@ -51,7 +62,10 @@ export function compileShadow(source: string, propsType = 'Record<string, any>')
     const scriptStart = leadingScript ? source.indexOf('>', leadingScript.index) + 1 : 0
     const templateStart = leadingScript ? (leadingScript.index ?? 0) + leadingScript[0].length : 0
 
-    const { imports, types, scope, propsShapes } = analyzeScript(scriptBody, scriptStart)
+    const { imports, types, scope, propsShapes, diagnostics } = analyzeScript(
+        scriptBody,
+        scriptStart,
+    )
     builder.raw(SHADOW_PREAMBLE)
     /* `props()` defaults to the file's type — a page/layout's route param shape, else
        `Record<string, any>` — so `const { id } = props()` infers from the route. */
@@ -85,7 +99,7 @@ export function compileShadow(source: string, propsType = 'Record<string, any>')
     }
     emitNodes(parseTemplate(source.slice(templateStart), templateStart).nodes, builder)
     builder.raw('}\n')
-    return builder.result()
+    return { ...builder.result(), diagnostics }
 }
 
 /* The shadow text builder: `raw` appends synthesised scaffolding (no mapping),
@@ -165,21 +179,59 @@ type ScriptAnalysis = {
     types: ScopeLine[]
     scope: ScopeLine[]
     propsShapes: string[]
+    diagnostics: ShadowDiagnostic[]
 }
 
 /* Walks the leading `<script>` and produces the shadow's module imports, the
    module-scope type declarations, the value-typed scope lines, and the `props<Shape>()`
    prop shapes. `scriptStart` is the body's absolute offset in the source, so verbatim
    spans map back exactly. */
+/* Pushes a diagnostic for every author binding whose name starts with the reserved `$$`
+   prefix — variable/function/class declarations, parameters, and destructuring leaves.
+   Read structurally off the parsed script; the message points at the offending name. */
+function collectReservedNameDiagnostics(
+    file: ts.SourceFile,
+    scriptStart: number,
+    diagnostics: ShadowDiagnostic[],
+): void {
+    const flag = (name: ts.Node | undefined): void => {
+        if (name !== undefined && ts.isIdentifier(name) && name.text.startsWith('$$')) {
+            diagnostics.push({
+                start: scriptStart + name.getStart(file),
+                length: name.getEnd() - name.getStart(file),
+                message: `\`${name.text}\` is reserved — the \`$$\` prefix is the compiler's injected runtime namespace; rename this binding.`,
+            })
+        }
+    }
+    const visit = (node: ts.Node): void => {
+        if (
+            ts.isVariableDeclaration(node) ||
+            ts.isFunctionDeclaration(node) ||
+            ts.isClassDeclaration(node) ||
+            ts.isParameter(node) ||
+            ts.isBindingElement(node)
+        ) {
+            flag(node.name)
+        }
+        ts.forEachChild(node, visit)
+    }
+    visit(file)
+}
+
 function analyzeScript(scriptBody: string, scriptStart: number): ScriptAnalysis {
     const imports: ScopeLine[] = []
     const types: ScopeLine[] = []
     const scope: ScopeLine[] = []
     const propsShapes: string[] = []
+    const diagnostics: ShadowDiagnostic[] = []
     if (scriptBody.trim() === '') {
-        return { imports, types, scope, propsShapes }
+        return { imports, types, scope, propsShapes, diagnostics }
     }
     const file = ts.createSourceFile('script.ts', scriptBody, ts.ScriptTarget.Latest, true)
+    /* The `$$` prefix is reserved for the compiler's injected runtime (`$$each`, `$$model`,
+       `$$scope`, …), so an author binding may not start with it — that's the contract that
+       lets a user freely name a variable after any helper. Flag every such declaration. */
+    collectReservedNameDiagnostics(file, scriptStart, diagnostics)
     /* A verbatim span: original text + the segment mapping it back, relative to the
        line start (the caller rebases shadowStart onto the running shadow length). */
     const span = (node: ts.Node, prefixLength: number): ScopeLine['segments'][number] => ({
@@ -191,6 +243,20 @@ function analyzeScript(scriptBody: string, scriptStart: number): ScriptAnalysis 
 
     for (const statement of file.statements) {
         if (ts.isImportDeclaration(statement)) {
+            const specifier = ts.isStringLiteral(statement.moduleSpecifier)
+                ? statement.moduleSpecifier.text
+                : undefined
+            const banned = specifier !== undefined ? INTERNAL_ONLY_IMPORTS[specifier] : undefined
+            if (banned !== undefined) {
+                /* Flag and drop it — leaving it out keeps `effect` resolving via the
+                   preamble (no duplicate-identifier noise on top of our message). */
+                diagnostics.push({
+                    start: scriptStart + statement.getStart(file),
+                    length: statement.getEnd() - statement.getStart(file),
+                    message: banned,
+                })
+                continue
+            }
             /* Emit verbatim with a span so hover/go-to resolve on the imported names. */
             imports.push({ text: verbatim(statement), segments: [span(statement, 0)] })
             continue
@@ -210,7 +276,7 @@ function analyzeScript(scriptBody: string, scriptStart: number): ScriptAnalysis 
             scope.push(scopeLineFor(declaration, propsShapes, verbatim, span))
         }
     }
-    return { imports, types, scope, propsShapes }
+    return { imports, types, scope, propsShapes, diagnostics }
 }
 
 /* Value-projects a nested control-flow `<script>` body the way `analyzeScript`

@@ -27,14 +27,21 @@ const id = scope().state('1')
 
     test('helpers used after a `${}` template literal stay imported', () => {
         const output = compileModule(source, { moduleId: 'page.abide' })
+        /* The LOCAL name each specifier binds — the part after `as` for an aliased
+           import (`mountChild as $$mountChild` → `$$mountChild`), else the bare name. */
         const importedNames = new Set(
             [...output.matchAll(/import\s*\{([^}]*)\}/g)].flatMap((match) =>
-                match[1].split(',').map((name) => name.trim()),
+                match[1].split(',').map((specifier) => {
+                    const [source, local] = specifier.split(/\s+as\s+/)
+                    return (local ?? source).trim()
+                }),
             ),
         )
-        const usedHelpers = UI_RUNTIME_IMPORTS.filter((entry) =>
-            new RegExp(`(^|[^.\\w])${entry.name}\\s*\\(`).test(output),
-        ).map((entry) => entry.name)
+        /* Codegen calls each helper by its emitted local (the `$$` alias when set). */
+        const usedHelpers = UI_RUNTIME_IMPORTS.map((entry) => entry.alias ?? entry.name).filter(
+            (emitted) =>
+                new RegExp(`(^|[^.\\w$])${emitted.replace(/[$]/g, '\\$&')}\\s*\\(`).test(output),
+        )
         const usedButUnimported = usedHelpers.filter((name) => !importedNames.has(name))
         expect(usedButUnimported).toEqual([])
     })

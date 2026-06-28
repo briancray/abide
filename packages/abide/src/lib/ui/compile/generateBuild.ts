@@ -163,28 +163,28 @@ export function generateBuild(
         varName: string,
     ): string {
         if (attr.kind === 'expression') {
-            return `attr(${varName}, ${JSON.stringify(attr.name)}, ${namedThunk(`attr_${attr.name}`, `return (${lowerExpression(attr.code)})`)});\n`
+            return `$$attr(${varName}, ${JSON.stringify(attr.name)}, ${namedThunk(`attr_${attr.name}`, `return (${lowerExpression(attr.code)})`)});\n`
         }
         /* `name="literal {expr}"` — the template-literal concatenation bound as a reactive
            string attribute (always present). A class/style with directives is merged
            upstream of this dispatch, so it never reaches here. */
         if (attr.kind === 'interpolated') {
-            return `attr(${varName}, ${JSON.stringify(attr.name)}, ${namedThunk(`attr_${attr.name}`, `return (${lowerExpression(interpolatedTemplateLiteral(attr.parts))})`)});\n`
+            return `$$attr(${varName}, ${JSON.stringify(attr.name)}, ${namedThunk(`attr_${attr.name}`, `return (${lowerExpression(interpolatedTemplateLiteral(attr.parts))})`)});\n`
         }
         if (attr.kind === 'event') {
-            return `on(${varName}, ${JSON.stringify(attr.event)}, (${lowerExpression(attr.code)}));\n`
+            return `$$on(${varName}, ${JSON.stringify(attr.event)}, (${lowerExpression(attr.code)}));\n`
         }
         if (attr.kind === 'attach') {
-            return `attach(${varName}, (${lowerExpression(attr.code)}));\n`
+            return `$$attach(${varName}, (${lowerExpression(attr.code)}));\n`
         }
         /* `class:<name>` — toggle the class by truthiness; surgical, no element re-render.
            Layers on top of any static `class="…"` in the skeleton (classList is additive). */
         if (attr.kind === 'class') {
-            return `effect(${namedThunk(`class_${attr.name}`, `${varName}.classList.toggle(${JSON.stringify(attr.name)}, !!(${lowerExpression(attr.code)}));`)});\n`
+            return `$$effect(${namedThunk(`class_${attr.name}`, `${varName}.classList.toggle(${JSON.stringify(attr.name)}, !!(${lowerExpression(attr.code)}));`)});\n`
         }
         /* `style:<property>` — write one inline style / custom property reactively. */
         if (attr.kind === 'style') {
-            return `effect(${namedThunk(`style_${attr.property}`, `${varName}.style.setProperty(${JSON.stringify(attr.property)}, String(${lowerExpression(attr.code)}));`)});\n`
+            return `$$effect(${namedThunk(`style_${attr.property}`, `${varName}.style.setProperty(${JSON.stringify(attr.property)}, String(${lowerExpression(attr.code)}));`)});\n`
         }
         if (attr.property === 'group') {
             /* Grouped two-way: radio binds the path to the single checked `value`;
@@ -197,13 +197,13 @@ export function generateBuild(
             const value = lowerExpression(valueCode)
             if (isRadio) {
                 return (
-                    `effect(${namedThunk('bind_group', `${varName}.checked = (${lowerExpression(attr.code)}) === (${value});`)});\n` +
-                    `on(${varName}, "change", () => { if (${varName}.checked) { ${lowerStatement(`${attr.code} = ${valueCode}`)} } });\n`
+                    `$$effect(${namedThunk('bind_group', `${varName}.checked = (${lowerExpression(attr.code)}) === (${value});`)});\n` +
+                    `$$on(${varName}, "change", () => { if (${varName}.checked) { ${lowerStatement(`${attr.code} = ${valueCode}`)} } });\n`
                 )
             }
             return (
-                `effect(${namedThunk('bind_group', `${varName}.checked = (${lowerExpression(attr.code)}).includes(${value});`)});\n` +
-                `on(${varName}, "change", () => { const $groupValue = ${value}; if (${varName}.checked) { if (!(${lowerExpression(attr.code)}).includes($groupValue)) { ${lowerStatement(`${attr.code}.push($groupValue)`)} } } else { const $groupIndex = (${lowerExpression(attr.code)}).indexOf($groupValue); if ($groupIndex !== -1) { ${lowerStatement(`delete ${attr.code}[$groupIndex]`)} } } });\n`
+                `$$effect(${namedThunk('bind_group', `${varName}.checked = (${lowerExpression(attr.code)}).includes(${value});`)});\n` +
+                `$$on(${varName}, "change", () => { const $groupValue = ${value}; if (${varName}.checked) { if (!(${lowerExpression(attr.code)}).includes($groupValue)) { ${lowerStatement(`${attr.code}.push($groupValue)`)} } } else { const $groupIndex = (${lowerExpression(attr.code)}).indexOf($groupValue); if ($groupIndex !== -1) { ${lowerStatement(`delete ${attr.code}[$groupIndex]`)} } } });\n`
             )
         }
         /* Two-way: drive the property from the bind target, and write it back on the
@@ -213,8 +213,8 @@ export function generateBuild(
            `.get()` and writes via `.set(v)` — see `bindRead`/`bindWrite`. */
         const event = bindListenEvent(attr.property, node.tag)
         return (
-            `effect(${namedThunk(`bind_${attr.property}`, `${varName}.${attr.property} = ${bindRead(attr.code)};`)});\n` +
-            `on(${varName}, ${JSON.stringify(event)}, () => { ${bindWrite(attr.code, `${varName}.${attr.property}`)} });\n`
+            `$$effect(${namedThunk(`bind_${attr.property}`, `${varName}.${attr.property} = ${bindRead(attr.code)};`)});\n` +
+            `$$on(${varName}, ${JSON.stringify(event)}, () => { ${bindWrite(attr.code, `${varName}.${attr.property}`)} });\n`
         )
     }
 
@@ -248,7 +248,7 @@ export function generateBuild(
                         return staticTextPart(part.value)
                     }
                     binds.push(
-                        `appendTextAt(${skVar}.an[${holeIndex(anIndex, part)}], ${namedThunk('text', `return (${lowerExpression(part.code)})`)});\n`,
+                        `$$appendTextAt(${skVar}.an[${holeIndex(anIndex, part)}], ${namedThunk('text', `return (${lowerExpression(part.code)})`)});\n`,
                     )
                     return ANCHOR_COMMENT
                 })
@@ -262,7 +262,9 @@ export function generateBuild(
                (`anchor.parentNode`). A component takes an anchor like a block — no wrapper
                element — so its root lays out as a true direct child of `anchor.parentNode`. */
             const anchorVar = anchorVarAt(node, skVar, binds)
-            binds.push(generateChild(node, `${anchorVar}.parentNode`, `anchorCursor(${anchorVar})`))
+            binds.push(
+                generateChild(node, `${anchorVar}.parentNode`, `$$anchorCursor(${anchorVar})`),
+            )
             return ANCHOR_COMMENT
         }
         if (node.kind === 'script') {
@@ -287,7 +289,7 @@ export function generateBuild(
                `outlet` boundary the router fills with the next chain layer (`fillBoundary`).
                No wrapper element — the filled child lays out as a direct child of the parent. */
             const anchorVar = anchorVarAt(node, skVar, binds)
-            binds.push(`outlet(${anchorVar}.parentNode, anchorCursor(${anchorVar}));\n`)
+            binds.push(`$$outlet(${anchorVar}.parentNode, $$anchorCursor(${anchorVar}));\n`)
             return ANCHOR_COMMENT
         }
         if (node.tag === 'slot') {
@@ -296,7 +298,7 @@ export function generateBuild(
             const anchorVar = anchorVarAt(node, skVar, binds)
             const hostVar = nextVar('host')
             binds.push(
-                `mountSlot(${anchorVar}.parentNode, (${hostVar}) => {\n${generateSlot(node, hostVar)}}, anchorCursor(${anchorVar}));\n`,
+                `$$mountSlot(${anchorVar}.parentNode, (${hostVar}) => {\n${generateSlot(node, hostVar)}}, $$anchorCursor(${anchorVar}));\n`,
             )
             return ANCHOR_COMMENT
         }
@@ -343,7 +345,7 @@ export function generateBuild(
                         : '',
                 )
                 binds.push(
-                    `effect(${namedThunk('class_merge', `${elVar}.setAttribute("class", [${base}, ${toggles.join(', ')}].filter(Boolean).join(' '));`)});\n`,
+                    `$$effect(${namedThunk('class_merge', `${elVar}.setAttribute("class", [${base}, ${toggles.join(', ')}].filter(Boolean).join(' '));`)});\n`,
                 )
             }
             if (mergeStyle && interpolatedStyle?.kind === 'interpolated') {
@@ -354,7 +356,7 @@ export function generateBuild(
                         : '',
                 )
                 binds.push(
-                    `effect(${namedThunk('style_merge', `${elVar}.setAttribute("style", [${base}, ${decls.join(', ')}].filter(Boolean).join(';'));`)});\n`,
+                    `$$effect(${namedThunk('style_merge', `${elVar}.setAttribute("style", [${base}, ${decls.join(', ')}].filter(Boolean).join(';'));`)});\n`,
                 )
             }
             for (const attr of node.attrs) {
@@ -370,7 +372,7 @@ export function generateBuild(
                        (or an `on<event>` function as a listener) via `spreadAttrs`, skipping
                        any key explicitly named on the element (the explicit attr wins). */
                     binds.push(
-                        `spreadAttrs(${elVar}, ${namedThunk('spread', `return (${lowerExpression(attr.code)})`)}, ${JSON.stringify(spreadExcludedNames(node.attrs))});\n`,
+                        `$$spreadAttrs(${elVar}, ${namedThunk('spread', `return (${lowerExpression(attr.code)})`)}, ${JSON.stringify(spreadExcludedNames(node.attrs))});\n`,
                     )
                 } else if (attr.kind !== 'static') {
                     binds.push(dynamicAttr(node, attr, elVar))
@@ -413,7 +415,7 @@ export function generateBuild(
         const skVar = nextVar('sk')
         const binds: string[] = []
         const html = skeletonMarkup(node, skVar, binds)
-        return `const ${skVar} = skeleton(${parentVar}, ${JSON.stringify(html)});\n${binds.join('')}`
+        return `const ${skVar} = $$skeleton(${parentVar}, ${JSON.stringify(html)});\n${binds.join('')}`
     }
 
     /* Emits code appending `node` to `parentVar`. */
@@ -439,8 +441,8 @@ export function generateBuild(
                 .map((part, index) => {
                     const splitAlways = index < consumers.length - 1 ? ', true' : ''
                     return part.kind === 'static'
-                        ? `appendStatic(${parentVar}, ${JSON.stringify(part.value)}${splitAlways});\n`
-                        : `appendText(${parentVar}, ${namedThunk('text', `return (${lowerExpression(part.code)})`)}${splitAlways});\n`
+                        ? `$$appendStatic(${parentVar}, ${JSON.stringify(part.value)}${splitAlways});\n`
+                        : `$$appendText(${parentVar}, ${namedThunk('text', `return (${lowerExpression(part.code)})`)}${splitAlways});\n`
                 })
                 .join('')
         }
@@ -448,7 +450,7 @@ export function generateBuild(
             /* A standalone layout outlet (a top-level/element-nested `<slot/>` rewritten by
                `asOutlet`, reached outside any skeleton): an empty `outlet` boundary at
                `before`, no anchor — the router fills it with the next chain layer. */
-            return `outlet(${parentVar}, ${before});\n`
+            return `$$outlet(${parentVar}, ${before});\n`
         }
         if (node.kind === 'element' && node.tag === 'slot') {
             /* In a layout, `<slot/>` is the router's page outlet (`outlet` boundary the
@@ -456,7 +458,7 @@ export function generateBuild(
                are rewritten to `OUTLET_TAG` up front by `asOutlet` and handled above; this
                covers a layout slot reached inside a control-flow branch. */
             if (isLayout) {
-                return `outlet(${parentVar}, ${before});\n`
+                return `$$outlet(${parentVar}, ${before});\n`
             }
             return generateSlot(node, parentVar)
         }
@@ -513,7 +515,7 @@ export function generateBuild(
         let runHtml = ''
         const flush = (): void => {
             if (runHtml !== '') {
-                code += `cloneStatic(${parentVar}, ${JSON.stringify(runHtml)});\n`
+                code += `$$cloneStatic(${parentVar}, ${JSON.stringify(runHtml)});\n`
                 runHtml = ''
             }
         }
@@ -540,7 +542,7 @@ export function generateBuild(
         const body = withLocalPlain(argNames, () =>
             node.children.map((child) => generateChild(child, '$host')).join(''),
         )
-        return `function ${node.name}(${node.params ?? ''}) {\nreturn snippet(($host) => {\n${body}});\n}\n`
+        return `function ${node.name}(${node.params ?? ''}) {\nreturn $$snippet(($host) => {\n${body}});\n}\n`
     }
 
     /* A switch: each `case` is `{ match: () => value, render }`, the default is
@@ -559,7 +561,7 @@ export function generateBuild(
                 return `{ match: ${match}, render: ${branchThunk(branch.children)} }`
             })
             .join(', ')
-        return `switchBlock(${parentVar}, () => (${lowerExpression(node.subject)}), [${cases}], ${before});\n`
+        return `$$switchBlock(${parentVar}, () => (${lowerExpression(node.subject)}), [${cases}], ${before});\n`
     }
 
     /* A `{children()}` slot fill point: render the parent-provided content (`$children`).
@@ -596,7 +598,7 @@ export function generateBuild(
         parentVar: string,
         before: string,
     ): string {
-        return `mountChild(${parentVar}, ${node.name}, ${propsArg(node)}, ${before}, ${JSON.stringify(node.name)});\n`
+        return `$$mountChild(${parentVar}, ${node.name}, ${propsArg(node)}, ${before}, ${JSON.stringify(node.name)});\n`
     }
 
     /* An await block: pending → resolved(value) / error branches. Each branch is a
@@ -627,7 +629,7 @@ export function generateBuild(
             ? branchThunk(plan.pending)
             : 'undefined'
         return (
-            `awaitBlock(${parentVar}, nextBlockId(), () => (${lowerExpression(node.promise)}), ` +
+            `$$awaitBlock(${parentVar}, $$nextBlockId(), () => (${lowerExpression(node.promise)}), ` +
             `${pendingThunk}, ` +
             `${thenThunk}, ` +
             `${catchThunk}, ${before});\n`
@@ -708,7 +710,7 @@ export function generateBuild(
         const catchThunk = plan.hasCatch
             ? branchThunk(plan.catchChildren, plan.catchAs, plan.finallyChildren)
             : 'undefined'
-        return `tryBlock(${parentVar}, nextBlockId(), ${tryThunk}, ${catchThunk}, ${before});\n`
+        return `$$tryBlock(${parentVar}, $$nextBlockId(), ${tryThunk}, ${catchThunk}, ${before});\n`
     }
 
     /* A conditional with an optional nested `<template else>` (a `case` child). Each
@@ -726,7 +728,7 @@ export function generateBuild(
             const thenThunk = branchThunk(plan.thenChildren)
             const elseThunk =
                 plan.elseBranch === undefined ? 'undefined' : branchThunk(plan.elseBranch.children)
-            return `when(${parentVar}, () => (${lowerExpression(node.condition)}), ${thenThunk}, ${elseThunk}, ${before});\n`
+            return `$$when(${parentVar}, () => (${lowerExpression(node.condition)}), ${thenThunk}, ${elseThunk}, ${before});\n`
         }
         /* if/elseif/else is a cond-chain — reuse `switchBlock` over a constant `true`
            subject with `Boolean`-coerced match thunks, so the first truthy branch wins
@@ -739,7 +741,7 @@ export function generateBuild(
                     : `{ match: undefined, render: ${branchThunk(branch.children)} }`,
             ),
         ]
-        return `switchBlock(${parentVar}, () => true, [${entries.join(', ')}], ${before});\n`
+        return `$$switchBlock(${parentVar}, () => true, [${entries.join(', ')}], ${before});\n`
     }
 
     /* A keyed each. Each row is a content RANGE (any content, tracked between the
@@ -777,7 +779,7 @@ export function generateBuild(
         /* `await` → the AsyncIterable runtime, drained row-by-row on the client, with an
            optional `<template catch>` branch rendered (after the streamed rows) when the
            iterator rejects. Absent → `undefined`, so the rejection surfaces instead. */
-        const fn = node.async ? 'eachAsync' : 'each'
+        const fn = node.async ? '$$eachAsync' : '$$each'
         const [catchBranch] = resolveBranches(node, 'catch')
         const catchArg = node.async
             ? `, ${catchBranch === undefined ? 'undefined' : branchThunk(catchBranch.children, catchBranch.as ?? '_error')}`

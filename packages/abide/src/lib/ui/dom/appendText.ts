@@ -16,7 +16,7 @@ node: created and appended (create), or the server-rendered text node claimed
 claimed node is split at the current value's length — deterministic, because
 `read()` returns the same value the server rendered.
 
-A value branded by `html\`…\`` (see abide/shared/html) inserts raw markup instead:
+A value branded by `html\`…\`` (see abide/ui/html) inserts raw markup instead:
 its parsed nodes go between an anchor (create), or the server-rendered nodes
 between `<!--abide:html-->`/`<!--/abide:html-->` markers are adopted (hydrate), and
 a change re-parses and swaps. A binding is text or raw for its lifetime (decided by

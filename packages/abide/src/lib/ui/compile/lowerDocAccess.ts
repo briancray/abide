@@ -191,7 +191,7 @@ export function docAccessTransformer(docName: string): ts.TransformerFactory<ts.
                        naming the authored scope path and member — the key and member are both
                        in hand here, the `.abide` location comes free off the mapped stack. */
                     return ts.factory.createCallExpression(
-                        ts.factory.createIdentifier('readCall'),
+                        ts.factory.createIdentifier('$$readCall'),
                         undefined,
                         [
                             read,
@@ -268,7 +268,7 @@ function buildPath(segments: Segment[]): ts.Expression {
                key holding `/`|`~` (a date, a composite id) addresses one segment, not many. */
             fragments.push(
                 ts.factory.createCallExpression(
-                    ts.factory.createIdentifier('escapeKey'),
+                    ts.factory.createIdentifier('$$escapeKey'),
                     undefined,
                     [segment.node],
                 ),

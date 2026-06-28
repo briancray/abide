@@ -32,20 +32,20 @@ const RUNTIME = {
     boom,
 }
 
-function ssr(source: string, model: unknown): SsrRender {
-    return new Function(...Object.keys(RUNTIME), 'model', compileSSR(source))(
+function ssr(source: string, $$model: unknown): SsrRender {
+    return new Function(...Object.keys(RUNTIME), '$$model', compileSSR(source))(
         ...Object.values(RUNTIME),
-        model,
+        $$model,
     ) as SsrRender
 }
 
-function run(source: string, host: Element, model: unknown, mode: 'mount' | 'hydrate'): void {
+function run(source: string, host: Element, $$model: unknown, mode: 'mount' | 'hydrate'): void {
     const body = compileComponent(source)
     const fn = (target: Element) => {
-        new Function('host', ...Object.keys(RUNTIME), 'model', body)(
+        new Function('host', ...Object.keys(RUNTIME), '$$model', body)(
             target,
             ...Object.values(RUNTIME),
-            model,
+            $$model,
         )
     }
     if (mode === 'hydrate') {
@@ -55,7 +55,7 @@ function run(source: string, host: Element, model: unknown, mode: 'mount' | 'hyd
     }
 }
 
-const SUCCESS = `<main>{#try}<p>{model.label}</p>{:catch error}<b>{error}</b>{/try}</main>`
+const SUCCESS = `<main>{#try}<p>{$$model.label}</p>{:catch error}<b>{error}</b>{/try}</main>`
 const THROW = `<main>{#try}<p>{boom()}</p>{:catch error}<b>caught:{error}</b>{/try}</main>`
 const NO_CATCH = `<main>{#try}<p>{boom()}</p>{/try}</main>`
 
@@ -92,12 +92,12 @@ describe('<template try> (sync error boundary)', () => {
     })
 
     test('client: finally renders on both success and catch', () => {
-        const FIN = `<main>{#try}<p>{model.label}</p>{:catch e}<b>{e}</b>{:finally}<i>fin</i>{/try}</main>`
+        const FIN = `<main>{#try}<p>{$$model.label}</p>{:catch e}<b>{e}</b>{:finally}<i>fin</i>{/try}</main>`
         const ok = document.createElement('div')
         run(FIN, ok, doc({ label: 'hi' }), 'mount')
         expect(ok.textContent).toBe('hifin')
         const bad = document.createElement('div')
-        run(FIN.replace('{model.label}', '{boom()}'), bad, doc({}), 'mount')
+        run(FIN.replace('{$$model.label}', '{boom()}'), bad, doc({}), 'mount')
         expect(bad.textContent).toBe('kaboomfin')
     })
 
@@ -118,19 +118,19 @@ describe('<template try> (sync error boundary)', () => {
     })
 
     test('hydrate: success adopts the guarded node in place', () => {
-        const model = doc({ label: 'hi' })
+        const $$model = doc({ label: 'hi' })
         const host = document.createElement('div')
-        host.innerHTML = ssr(SUCCESS, model).html
+        host.innerHTML = ssr(SUCCESS, $$model).html
         const main = host.childNodes[0] as unknown as { childNodes: unknown[]; textContent: string }
-        run(SUCCESS, host, model, 'hydrate')
+        run(SUCCESS, host, $$model, 'hydrate')
         expect(main.textContent).toBe('hi')
     })
 
     test('hydrate: a server-caught boundary rebuilds the catch fresh', () => {
-        const model = doc({})
+        const $$model = doc({})
         const host = document.createElement('div')
-        host.innerHTML = ssr(THROW, model).html // server already rendered the catch branch
-        run(THROW, host, model, 'hydrate') // client guard throws too → discard + rebuild
+        host.innerHTML = ssr(THROW, $$model).html // server already rendered the catch branch
+        run(THROW, host, $$model, 'hydrate') // client guard throws too → discard + rebuild
         expect(host.textContent).toBe('caught:kaboom')
     })
 })

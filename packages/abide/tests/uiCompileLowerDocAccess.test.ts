@@ -34,7 +34,7 @@ describe('lowerDocAccess — emitted shape', () => {
 
     test('a dynamic index becomes a concatenated path, escaped at runtime', () => {
         expect(lower('model.lines[i].sku')).toContain(
-            'model.read("lines/" + escapeKey(i) + "/sku")',
+            'model.read("lines/" + $$escapeKey(i) + "/sku")',
         )
     })
 
@@ -70,17 +70,17 @@ describe('lowerDocAccess — emitted shape', () => {
         // a method call is not a deeper path: `draft.trim()` ≠ read("draft/trim"). It routes
         // through `readCall`, carrying the path + member so a nullish read throws naming them.
         expect(lower('model.draft.trim()')).toContain(
-            'readCall(model.read("draft"), "draft", "trim", [])',
+            '$$readCall(model.read("draft"), "draft", "trim", [])',
         )
         expect(lower('model.name.toUpperCase()')).toContain(
-            'readCall(model.read("name"), "name", "toUpperCase", [])',
+            '$$readCall(model.read("name"), "name", "toUpperCase", [])',
         )
     })
 
     test('a method on a nested path reads up to the method, then guards the call', () => {
         // only the first call is on the doc read; the chained `.map` runs on its result.
         expect(lower('model.items.filter(a => a).map(b => b)')).toContain(
-            'readCall(model.read("items"), "items", "filter", [a => a]).map(b => b)',
+            '$$readCall(model.read("items"), "items", "filter", [a => a]).map(b => b)',
         )
     })
 
@@ -94,12 +94,14 @@ describe('lowerDocAccess — emitted shape', () => {
     })
 
     test('delete becomes a remove patch', () => {
-        expect(lower('delete model.byId[key]')).toContain('model.remove("byId/" + escapeKey(key))')
+        expect(lower('delete model.byId[key]')).toContain(
+            'model.remove("byId/" + $$escapeKey(key))',
+        )
     })
 
     test('a read used as an index lowers too', () => {
         expect(lower('model.lines[model.cursor].sku')).toContain(
-            'model.read("lines/" + escapeKey(model.read("cursor")) + "/sku")',
+            'model.read("lines/" + $$escapeKey(model.read("cursor")) + "/sku")',
         )
     })
 

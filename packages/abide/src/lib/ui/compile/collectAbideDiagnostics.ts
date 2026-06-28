@@ -25,6 +25,17 @@ export function collectAbideDiagnostics(shadow: ShadowProgram): AbideDiagnostic[
             })
             continue
         }
+        /* Shadow-raised author rules (e.g. importing a compiler-internal helper) are
+           already in source coordinates — emit them directly, no segment remap. */
+        for (const diagnostic of shadows.get(abidePath)?.diagnostics ?? []) {
+            diagnostics.push({
+                file: abidePath,
+                start: diagnostic.start,
+                length: diagnostic.length,
+                message: diagnostic.message,
+                category: ts.DiagnosticCategory.Error,
+            })
+        }
         const sourceFile = program.getSourceFile(`${abidePath}.ts`)
         const mappings = shadows.get(abidePath)?.mappings
         if (sourceFile === undefined || mappings === undefined) {

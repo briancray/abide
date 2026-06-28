@@ -49,7 +49,7 @@ export function lowerContext(
                 new Set(localDerived),
                 new Set(localPlain),
             ),
-            docAccessTransformer('model'),
+            docAccessTransformer('$$model'),
         ])
         const output = TS_PRINTER.printFile(result.transformed[0] as ts.SourceFile).trim()
         result.dispose()

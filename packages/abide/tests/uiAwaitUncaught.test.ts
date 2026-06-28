@@ -27,10 +27,10 @@ const RUNTIME = {
 }
 
 /* Run the component's SSR render and stream it to one HTML string. */
-async function ssrStream(source: string, model: unknown): Promise<string> {
-    const render = new Function(...Object.keys(RUNTIME), 'model', compileSSR(source))(
+async function ssrStream(source: string, $$model: unknown): Promise<string> {
+    const render = new Function(...Object.keys(RUNTIME), '$$model', compileSSR(source))(
         ...Object.values(RUNTIME),
-        model,
+        $$model,
     ) as SsrRender
     let html = ''
     for await (const chunk of renderToStream(() => render)) {
@@ -40,20 +40,20 @@ async function ssrStream(source: string, model: unknown): Promise<string> {
 }
 
 /* Streaming await, no catch / no finally → a rejection has nowhere to render. */
-const STREAMING = `<main>{#await model.load}
+const STREAMING = `<main>{#await $$model.load}
     <p>loading</p>
     {:then v}<span>{v}</span>
 {/await}</main>`
 
 /* Blocking await (then on the tag), no catch → settles before the first flush. */
-const BLOCKING = `<main>{#await model.load then v}<span>{v}</span>{/await}</main>`
+const BLOCKING = `<main>{#await $$model.load then v}<span>{v}</span>{/await}</main>`
 
 describe('catch-less <template await> surfaces a rejection', () => {
     test('compiles renderCatch as undefined (no catch branch)', () => {
         // renderCatch is `undefined` (no catch branch); the trailing arg is the block's
         // skeleton insertion reference.
         expect(compileComponent(STREAMING)).toMatch(
-            /awaitBlock\([\s\S]*, undefined, anchorCursor\(\w+\)\);/,
+            /\$\$awaitBlock\([\s\S]*, undefined, \$\$anchorCursor\(\w+\)\);/,
         )
     })
 

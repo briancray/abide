@@ -27,21 +27,21 @@ const RUNTIME = {
 }
 
 /* Mount a component on the client and return its host. */
-function mount(source: string, model: unknown): HTMLElement {
+function mount(source: string, $$model: unknown): HTMLElement {
     const host = document.createElement('div')
-    new Function('host', ...Object.keys(RUNTIME), 'model', compileComponent(source))(
+    new Function('host', ...Object.keys(RUNTIME), '$$model', compileComponent(source))(
         host,
         ...Object.values(RUNTIME),
-        model,
+        $$model,
     )
     return host
 }
 
 /* Run the component's SSR render and stream it to one HTML string. */
-async function ssrStream(source: string, model: unknown): Promise<string> {
-    const render = new Function(...Object.keys(RUNTIME), 'model', compileSSR(source))(
+async function ssrStream(source: string, $$model: unknown): Promise<string> {
+    const render = new Function(...Object.keys(RUNTIME), '$$model', compileSSR(source))(
         ...Object.values(RUNTIME),
-        model,
+        $$model,
     ) as SsrRender
     let html = ''
     for await (const chunk of renderToStream(() => render)) {
@@ -50,7 +50,7 @@ async function ssrStream(source: string, model: unknown): Promise<string> {
     return html
 }
 
-const FULL = `<main>{#await model.load}
+const FULL = `<main>{#await $$model.load}
     <p>loading</p>
     {:then v}<span>{v}</span>
     {:catch e}<b>{e}</b>
@@ -78,7 +78,7 @@ describe('<template finally>', () => {
     })
 
     test('finally-only (no then/catch) renders on both outcomes', async () => {
-        const ONLY = `<main>{#await model.load}<p>loading</p>{:finally}<i>done</i>{/await}</main>`
+        const ONLY = `<main>{#await $$model.load}<p>loading</p>{:finally}<i>done</i>{/await}</main>`
         const ok = mount(ONLY, doc({ load: Promise.resolve('x') }))
         const bad = mount(ONLY, doc({ load: Promise.reject('y') }))
         await Promise.resolve()
@@ -93,8 +93,8 @@ describe('<template finally>', () => {
     })
 
     test('hydration adopts then ++ finally in place', async () => {
-        const model = doc({ load: Promise.resolve('ok') })
-        const streamed = await ssrStream(FULL, model)
+        const $$model = doc({ load: Promise.resolve('ok') })
+        const streamed = await ssrStream(FULL, $$model)
         // the resolved fragment the swap script would inline into the boundary
         const resolved = streamed.match(
             /<abide-resolve[^>]*><script[^>]*>[\s\S]*?<\/script>([\s\S]*?)<\/abide-resolve>/,

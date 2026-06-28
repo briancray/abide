@@ -44,17 +44,17 @@ const RUNTIME = {
     record,
 }
 
-function ssr(source: string, model: unknown): SsrRender {
-    const names = [...Object.keys(RUNTIME), 'model']
-    const values = [...Object.values(RUNTIME), model]
+function ssr(source: string, $$model: unknown): SsrRender {
+    const names = [...Object.keys(RUNTIME), '$$model']
+    const values = [...Object.values(RUNTIME), $$model]
     return new Function(...names, compileSSR(source))(...values) as SsrRender
 }
 
-function run(source: string, host: Element, model: unknown, mode: 'mount' | 'hydrate'): void {
-    const names = ['host', ...Object.keys(RUNTIME), 'model']
+function run(source: string, host: Element, $$model: unknown, mode: 'mount' | 'hydrate'): void {
+    const names = ['host', ...Object.keys(RUNTIME), '$$model']
     const body = compileComponent(source)
     const fn = (target: Element) => {
-        new Function(...names, body)(target, ...Object.values(RUNTIME), model)
+        new Function(...names, body)(target, ...Object.values(RUNTIME), $$model)
     }
     if (mode === 'hydrate') {
         hydrate(host, fn)
@@ -66,7 +66,7 @@ function run(source: string, host: Element, model: unknown, mode: 'mount' | 'hyd
 describe('scoped <script> in a control-flow branch', () => {
     /* An `if` branch declares a PLAIN local signal seeded from in-scope doc data;
        its markup auto-derefs the binding, like a `computed`. */
-    const IF = `<main>{#if model.on}<script>let n = scope().state(model.base)</script><p>{n}</p><button onclick={() => (n = n + 1)}>+</button>{/if}</main>`
+    const IF = `<main>{#if $$model.on}<script>let n = scope().state($$model.base)</script><p>{n}</p><button onclick={() => (n = n + 1)}>+</button>{/if}</main>`
 
     test('SSR renders the branch-local signal seeded from doc data', () => {
         expect(ssr(IF, doc({ on: true, base: 5 })).html).toBe(
@@ -78,9 +78,9 @@ describe('scoped <script> in a control-flow branch', () => {
     })
 
     test('client mount: the local signal is reactive, and re-seeds on re-entry', () => {
-        const model = doc({ on: true, base: 5 })
+        const $$model = doc({ on: true, base: 5 })
         const host = document.createElement('div')
-        run(IF, host, model, 'mount')
+        run(IF, host, $$model, 'mount')
         const main = host.childNodes[0] as unknown as {
             textContent: string
             children: { dispatchEvent: (e: Event) => void }[]
@@ -92,23 +92,23 @@ describe('scoped <script> in a control-flow branch', () => {
         expect(main.textContent).toBe('6+') // local signal mutated
 
         // leaving and re-entering the branch drops the old signal, re-seeds from doc
-        model.replace('on', false)
+        $$model.replace('on', false)
         expect(main.textContent).toBe('')
-        model.replace('on', true)
+        $$model.replace('on', true)
         expect(main.textContent).toBe('5+') // fresh signal, increment gone
     })
 
     test('hydration adopts the branch in place, then stays reactive', () => {
-        const model = doc({ on: true, base: 5 })
+        const $$model = doc({ on: true, base: 5 })
         const host = document.createElement('div')
-        host.innerHTML = ssr(IF, model).html
+        host.innerHTML = ssr(IF, $$model).html
         const main = host.childNodes[0] as unknown as {
             textContent: string
             children: { dispatchEvent: (e: Event) => void }[]
         }
         const pBefore = main.children[0]
 
-        run(IF, host, model, 'hydrate')
+        run(IF, host, $$model, 'hydrate')
         expect(main.children[0]).toBe(pBefore) // adopted, not recreated
         expect(main.textContent).toBe('5+')
 
@@ -118,22 +118,22 @@ describe('scoped <script> in a control-flow branch', () => {
     })
 
     test('a switch case carries its own scoped signal', () => {
-        const SWITCH = `<main>{#switch model.k}{:case 'a'}<script>let label = scope().state(model.base + '!')</script><span>{label}</span>{:default}<b>?</b>{/switch}</main>`
+        const SWITCH = `<main>{#switch $$model.k}{:case 'a'}<script>let label = scope().state($$model.base + '!')</script><span>{label}</span>{:default}<b>?</b>{/switch}</main>`
         expect(ssr(SWITCH, doc({ k: 'a', base: 'hi' })).html).toBe(
             '<main><!--a--><!--[--><span>hi!</span><!--]--></main>',
         )
 
-        const model = doc({ k: 'a', base: 'hi' })
+        const $$model = doc({ k: 'a', base: 'hi' })
         const host = document.createElement('div')
-        run(SWITCH, host, model, 'mount')
+        run(SWITCH, host, $$model, 'mount')
         expect(host.textContent).toBe('hi!')
-        model.replace('k', 'z')
+        $$model.replace('k', 'z')
         expect(host.textContent).toBe('?')
     })
 
     /* Each row gets its OWN scoped signal, seeded from that row's item — per-row
        local state, isolated row to row. */
-    const EACH = `<ul>{#for item of model.items by item.id}<script>let n = scope().state(item.base * 10)</script><li><button onclick={() => (n = n + 1)}>{n}</button></li>{/for}</ul>`
+    const EACH = `<ul>{#for item of $$model.items by item.id}<script>let n = scope().state(item.base * 10)</script><li><button onclick={() => (n = n + 1)}>{n}</button></li>{/for}</ul>`
 
     test('SSR seeds each row independently', () => {
         expect(
@@ -152,14 +152,14 @@ describe('scoped <script> in a control-flow branch', () => {
     })
 
     test('client mount: rows hold isolated, reactive per-row state', () => {
-        const model = doc({
+        const $$model = doc({
             items: [
                 { id: 'a', base: 1 },
                 { id: 'b', base: 2 },
             ],
         })
         const host = document.createElement('div')
-        run(EACH, host, model, 'mount')
+        run(EACH, host, $$model, 'mount')
         const ul = host.childNodes[0] as unknown as {
             children: {
                 children: { dispatchEvent: (e: Event) => void; textContent: string }[]
@@ -177,24 +177,24 @@ describe('scoped <script> in a control-flow branch', () => {
 
     /* A branch-scoped `effect` is owned by the branch's render scope: it runs on
        mount, re-runs on its deps, and disposes when the branch leaves. */
-    const FX = `<main>{#if model.on}<script>let n = scope().state(model.base)
-effect(() => record(n + ':' + model.base))</script><button onclick={() => (n = n + 1)}>{n}</button>{/if}</main>`
+    const FX = `<main>{#if $$model.on}<script>let n = scope().state($$model.base)
+effect(() => record(n + ':' + $$model.base))</script><button onclick={() => (n = n + 1)}>{n}</button>{/if}</main>`
 
     test('client: branch effect runs, is reactive, disposes on leave, re-seeds', () => {
         effectLog = []
-        const model = doc({ on: true, base: 5 })
+        const $$model = doc({ on: true, base: 5 })
         const host = document.createElement('div')
-        run(FX, host, model, 'mount')
+        run(FX, host, $$model, 'mount')
         expect(effectLog).toEqual(['5:5']) // ran on mount
 
-        model.replace('base', 9)
+        $$model.replace('base', 9)
         expect(effectLog).toEqual(['5:5', '5:9']) // re-ran on its doc dep
 
-        model.replace('on', false) // branch leaves → effect disposed
-        model.replace('base', 100) // a disposed effect must NOT re-run
+        $$model.replace('on', false) // branch leaves → effect disposed
+        $$model.replace('base', 100) // a disposed effect must NOT re-run
         expect(effectLog).toEqual(['5:5', '5:9'])
 
-        model.replace('on', true) // re-enter → a fresh effect, n re-seeded from base
+        $$model.replace('on', true) // re-enter → a fresh effect, n re-seeded from base
         expect(effectLog).toEqual(['5:5', '5:9', '100:100'])
     })
 
@@ -208,7 +208,7 @@ effect(() => record(n + ':' + model.base))</script><button onclick={() => (n = n
     /* The headline case: a `then` branch declares state computed from the resolved
        value — the ergonomic that top-level await gave, without async ownership. */
     test('await then: scoped state seeded from the resolved value', async () => {
-        const AWAIT = `<main>{#await model.load}<p>loading</p>{:then foo}<script>let a = scope().state(foo.bar)</script><span>{a}</span>{/await}</main>`
+        const AWAIT = `<main>{#await $$model.load}<p>loading</p>{:then foo}<script>let a = scope().state(foo.bar)</script><span>{a}</span>{/await}</main>`
         const host = document.createElement('div')
         run(AWAIT, host, doc({ load: Promise.resolve({ bar: 'ready' }) }), 'mount')
         expect(host.textContent).toBe('loading')

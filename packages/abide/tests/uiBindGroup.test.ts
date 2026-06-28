@@ -33,10 +33,10 @@ function renderSSR(source: string): string {
 }
 
 /* Mounts a compiled client body into a fresh mini-DOM host, returning the host and
-   the component's own reactive document (the body declares `model` from `state`). */
-function mountClient(source: string): { host: HTMLElement; model: ReturnType<typeof doc> } {
+   the component's own reactive document (the body declares `$$model` from `state`). */
+function mountClient(source: string): { host: HTMLElement; $$model: ReturnType<typeof doc> } {
     const host = document.createElement('div')
-    const model = new Function(
+    const $$model = new Function(
         'host',
         'doc',
         'state',
@@ -50,7 +50,7 @@ function mountClient(source: string): { host: HTMLElement; model: ReturnType<typ
         'when',
         'effect',
         'escapeKey',
-        `${compileComponent(source)}\nreturn typeof model !== 'undefined' ? model : undefined;`,
+        `${compileComponent(source)}\nreturn typeof $$model !== 'undefined' ? $$model : undefined;`,
     )(
         host,
         doc,
@@ -66,7 +66,7 @@ function mountClient(source: string): { host: HTMLElement; model: ReturnType<typ
         effect,
         escapeKey,
     ) as ReturnType<typeof doc>
-    return { host, model }
+    return { host, $$model }
 }
 
 const CHECKBOXES = `
@@ -124,7 +124,7 @@ describe('bind:group SSR', () => {
 
 describe('bind:group client', () => {
     test('checkbox toggle adds and removes the value from the array', () => {
-        const { host, model } = mountClient(CHECKBOXES) // initial: ['cheese', 'olive']
+        const { host, $$model } = mountClient(CHECKBOXES) // initial: ['cheese', 'olive']
         const [cheese, mushroom] = inputs(host)
 
         // initial checked state mirrors membership
@@ -134,16 +134,16 @@ describe('bind:group client', () => {
         // check mushroom → appended to the array
         mushroom.checked = true
         mushroom.dispatchEvent(new (globalThis as { Event: typeof Event }).Event('change'))
-        expect(model.read<string[]>('toppings')).toEqual(['cheese', 'olive', 'mushroom'])
+        expect($$model.read<string[]>('toppings')).toEqual(['cheese', 'olive', 'mushroom'])
 
         // uncheck cheese → removed (the array reindexes via splice)
         cheese.checked = false
         cheese.dispatchEvent(new (globalThis as { Event: typeof Event }).Event('change'))
-        expect(model.read<string[]>('toppings')).toEqual(['olive', 'mushroom'])
+        expect($$model.read<string[]>('toppings')).toEqual(['olive', 'mushroom'])
     })
 
     test('radio change replaces the single bound value', () => {
-        const { host, model } = mountClient(RADIOS) // initial: 'medium'
+        const { host, $$model } = mountClient(RADIOS) // initial: 'medium'
         const [small, medium, large] = inputs(host)
 
         expect(medium.checked).toBe(true)
@@ -151,7 +151,7 @@ describe('bind:group client', () => {
 
         large.checked = true
         large.dispatchEvent(new (globalThis as { Event: typeof Event }).Event('change'))
-        expect(model.read<string>('size')).toBe('large')
+        expect($$model.read<string>('size')).toBe('large')
     })
 })
 
@@ -177,7 +177,7 @@ describe('bind:value accessor {get,set}', () => {
         const body = compileComponent(ACCESSOR)
         expect(body).toContain('}).get();') // driving effect reads the accessor
         expect(body).toContain('}).set(') // listener writes through the accessor
-        expect(body).toContain('model.cell("celsius")') // celsius lowered to the doc API
+        expect(body).toContain('$$model.cell("celsius")') // celsius lowered to the doc API
     })
 
     test('SSR renders the initial value through the accessor get()', () => {

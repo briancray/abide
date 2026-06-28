@@ -1,7 +1,7 @@
 import { resolve } from 'node:path'
 import ts from 'typescript'
 import { messageFromError } from '../../shared/messageFromError.ts'
-import { mapTsClassification } from './ABIDE_SEMANTIC_TOKENS_LEGEND.ts'
+import { mapSyntacticClassification, mapTsClassification } from './ABIDE_SEMANTIC_TOKENS_LEGEND.ts'
 import { assetModulesFile } from './assetModulesFile.ts'
 import { compileShadow } from './compileShadow.ts'
 import { loadShadowTsConfig } from './loadShadowTsConfig.ts'
@@ -240,6 +240,33 @@ export function createShadowLanguageService(cwd: string): ShadowLanguageService 
                     type: mapped.type,
                     modifiers: mapped.modifiers,
                 })
+            }
+            /* Literal syntactic tokens (string/number/regex) the semantic classifier
+               never emits — so a template-literal string inside `{…}` gets colored. */
+            const syntactic = service.getEncodedSyntacticClassifications(fileName, {
+                start: 0,
+                length: shadow.code.length,
+            })
+            for (let index = 0; index + 2 < syntactic.spans.length; index += 3) {
+                const spanStart = syntactic.spans[index]
+                const spanLength = syntactic.spans[index + 1]
+                const classification = syntactic.spans[index + 2]
+                if (
+                    spanStart === undefined ||
+                    spanLength === undefined ||
+                    classification === undefined
+                ) {
+                    continue
+                }
+                const type = mapSyntacticClassification(classification)
+                if (type === undefined) {
+                    continue
+                }
+                const located = remapShadowDiagnostic(shadow.mappings, spanStart, spanLength)
+                if (located === undefined) {
+                    continue
+                }
+                tokens.push({ start: located.start, length: located.length, type, modifiers: [] })
             }
             return tokens
         },

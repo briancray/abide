@@ -12,4 +12,16 @@ an offset in no mapping is synthesised scaffolding and its diagnostic is dropped
 */
 export type ShadowMapping = { shadowStart: number; sourceStart: number; length: number }
 
-export type CompiledShadow = { code: string; mappings: ShadowMapping[] }
+/*
+A diagnostic the shadow compiler raises itself (not from `tsc`), already located
+in `.abide` source coordinates — `start`/`length` are an offset range in the
+original file, so it needs no segment remap. Used for author rules the type
+system can't express, e.g. importing a compiler-internal runtime helper.
+*/
+export type ShadowDiagnostic = { start: number; length: number; message: string }
+
+export type CompiledShadow = {
+    code: string
+    mappings: ShadowMapping[]
+    diagnostics?: ShadowDiagnostic[]
+}

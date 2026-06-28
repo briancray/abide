@@ -51,9 +51,9 @@ export function compileSSR(
     /* `typeof model` guards a component with no reactive state (a pure-async or
        static component declares no `model`); its snapshot is then empty. */
     const body =
-        `const $scope = enterScope();\ntry {\n${lowered}\n${SSR_ESCAPE}\nconst $out = [];\nconst $awaits = [];\nconst $resume = {};\n${ssr}` +
-        `return { html: $out.join(''), state: (typeof model !== 'undefined' ? model.snapshot() : {}), awaits: $awaits, resume: $resume };\n` +
-        `} finally { exitScope($scope); }`
+        `const $scope = $$enterScope();\ntry {\n${lowered}\n${SSR_ESCAPE}\nconst $out = [];\nconst $awaits = [];\nconst $resume = {};\n${ssr}` +
+        `return { html: $out.join(''), state: (typeof $$model !== 'undefined' ? $$model.snapshot() : {}), awaits: $awaits, resume: $resume };\n` +
+        `} finally { $$exitScope($scope); }`
     /* An inline `await` — a blocking await block, a child render, a slot read, or a
        top-level `await` in the author script — forces an async wrapper. Match `await` as a
        standalone token (operator), so a no-space form (`await(x)`, `await[i]`, `` await`t` ``)

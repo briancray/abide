@@ -34,6 +34,8 @@ export async function bootTestServer(manifests: {
     app?: AppModule
     mcp?: McpServer
     shell?: string
+    /* Mounts the dev-only surface (live-reload SSE, hot-module endpoint). */
+    dev?: boolean
 }): Promise<{ origin: string; server: Server<unknown>; stop: () => void }> {
     const previous = {
         cacheResolver: cacheStoreSlot.resolver,
@@ -63,6 +65,7 @@ export async function bootTestServer(manifests: {
         publicAssets: {},
         mcpResources: {},
         port: 0,
+        dev: manifests.dev,
     })
 
     function stop(): void {

@@ -481,6 +481,27 @@ export async function createServer({
                 /* Component hot module — the browser imports one edited `.abide`'s
                    hot build here instead of reloading (dev component HMR). */
                 if (clientFingerprint !== undefined && url.pathname.startsWith(DEV_HOT_PREFIX)) {
+                    /* This endpoint serves `application/javascript` for the browser's
+                       `import()`. A TOP-LEVEL NAVIGATION to it — clicking the module link in a
+                       stack trace, or opening the URL — would DOWNLOAD the file, since browsers
+                       can't render JS as a document. A navigation sends `Accept: text/html`;
+                       `import()` sends a wildcard Accept. Redirect a navigation back to a real
+                       page (the referring page when same-origin, else the mount root) so the
+                       error surfaces in context as a normal render instead of saving a file. */
+                    if ((req.headers.get('accept') ?? '').includes('text/html')) {
+                        const referer = req.headers.get('referer')
+                        const page =
+                            referer !== null &&
+                            URL.canParse(referer) &&
+                            new URL(referer).origin === url.origin &&
+                            !new URL(referer).pathname.startsWith(DEV_HOT_PREFIX)
+                                ? referer
+                                : base || '/'
+                        return new Response(null, {
+                            status: 302,
+                            headers: { Location: page, 'Cache-Control': NO_STORE },
+                        })
+                    }
                     return devHotModuleResponse(
                         decodeURIComponent(url.pathname.slice(DEV_HOT_PREFIX.length)),
                     )

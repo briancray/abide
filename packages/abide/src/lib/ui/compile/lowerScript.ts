@@ -34,7 +34,7 @@ export function lowerScript(scriptBody: string): {
     const result = ts.transform(source, [
         transformer,
         signalRefsTransformer(stateNames, derivedNames, computedNames),
-        docAccessTransformer('model'),
+        docAccessTransformer('$$model'),
     ])
     const transformed = result.transformed[0] as ts.SourceFile
     /* Top-level imports must live at module scope, not inside the mount/render

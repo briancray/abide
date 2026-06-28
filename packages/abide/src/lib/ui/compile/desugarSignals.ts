@@ -152,11 +152,12 @@ export function desugarSignals(source: ts.SourceFile): {
             return root
         }
         const statements: ts.Statement[] = []
-        /* A shared `model = scope()` host for the state slots, prepended once. */
+        /* A shared `$$model = scope()` host for the state slots, prepended once. The doc
+           base is `$$`-reserved so a user variable named `model` can never collide. */
         if (stateNames.size > 0) {
             statements.push(
                 constDeclaration(
-                    'model',
+                    '$$model',
                     factory.createCallExpression(factory.createIdentifier('scope'), undefined, []),
                 ),
             )
@@ -425,10 +426,14 @@ function propsStatements(statement: ts.Statement): ts.Statement[] | undefined {
             statements.push(
                 constDeclaration(
                     rest,
-                    factory.createCallExpression(factory.createIdentifier('restProps'), undefined, [
-                        factory.createIdentifier('$props'),
-                        factory.createArrayLiteralExpression(consumed),
-                    ]),
+                    factory.createCallExpression(
+                        factory.createIdentifier('$$restProps'),
+                        undefined,
+                        [
+                            factory.createIdentifier('$props'),
+                            factory.createArrayLiteralExpression(consumed),
+                        ],
+                    ),
                 ),
             )
         }
@@ -457,7 +462,7 @@ function stateAssignmentStatements(statement: ts.Statement): ts.Statement[] | un
             factory.createExpressionStatement(
                 factory.createAssignment(
                     factory.createPropertyAccessExpression(
-                        factory.createIdentifier('model'),
+                        factory.createIdentifier('$$model'),
                         declaration.name.text,
                     ),
                     initial,

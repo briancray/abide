@@ -32,7 +32,7 @@ describe('compileModule — normal mode unchanged', () => {
     const normal = compileModule(LEAF, { moduleId: 'Counter.abide' })
 
     test('still emits static imports, the default export, and render', () => {
-        expect(normal).toContain("import { mount } from '@abide/abide/ui/dom/mount'")
+        expect(normal).toContain("import { mount as $$mount } from '@abide/abide/ui/dom/mount'")
         expect(normal).toContain('export default function component(host, $props)')
         expect(normal).toContain('export function render($props, $ctx)')
         expect(normal).toContain('component.__abideId = "Counter.abide"')

@@ -9,7 +9,7 @@ The props-bag source expression a child mount/render receives, shared by the bui
 and SSR back-ends so their last-wins layering stays byte-identical — the invariant
 SSR/client prop congruence rests on. No spread → the plain object literal of named
 value thunks (+ the trailing slot). With a `{...expr}` spread → a `mergeProps` of
-ordered layers — explicit-prop runs, `spreadProps(expr)` spreads, the slot —
+ordered layers — explicit-prop runs, `$$spreadProps(expr)` spreads, the slot —
 resolved last-wins per key, so source order decides overrides (like JSX).
 `lowerExpression` is the caller's expression lowering; `slotPart` is its `$children`
 layer (a host-taking builder for the client, a string-returning thunk for SSR) or
@@ -40,7 +40,7 @@ export function composeProps(
     for (const prop of props) {
         if (prop.spread) {
             flushRun()
-            layers.push(`spreadProps(() => (${lowerExpression(prop.code)}))`)
+            layers.push(`$$spreadProps(() => (${lowerExpression(prop.code)}))`)
         } else {
             run.push(propThunk(prop))
         }
@@ -49,5 +49,5 @@ export function composeProps(
     if (slotPart !== undefined) {
         layers.push(`{ ${slotPart} }`)
     }
-    return `mergeProps([${layers.join(', ')}])`
+    return `$$mergeProps([${layers.join(', ')}])`
 }

@@ -26,5 +26,5 @@ export function compileComponent(
     /* The scoped CSS is bundled into the entry stylesheet (see `abideUiPlugin`), not
        injected at runtime; the build only needs the `data-a-…` scope attributes on
        elements, which `generateBuild` reads from each node's annotated `scopes`. */
-    return `${script}\n${hoistCells(build, 'model')}`
+    return `${script}\n${hoistCells(build, '$$model')}`
 }

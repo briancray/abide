@@ -21,7 +21,7 @@ beforeAll(() => {
 })
 
 /* Runs a compiled component body against a fresh host, under `mount` so the body's
-   `const model = scope()` resolves to its own per-mount scope (isolated per render). */
+   `const $$model = scope()` resolves to its own per-mount scope (isolated per render). */
 function render(source: string): HTMLElement {
     const body = compileComponent(source)
     const host = document.createElement('div')
@@ -43,12 +43,12 @@ function render(source: string): HTMLElement {
     return host
 }
 
-/* Mounts a body that reads an externally-driven `model` (a scope, which mirrors the
+/* Mounts a body that reads an externally-driven `$$model` (a scope, which mirrors the
    document data interface), returning the scope so the test can mutate it. */
-function renderWithModel(source: string, initial: unknown): { host: HTMLElement; model: Scope } {
+function renderWithModel(source: string, initial: unknown): { host: HTMLElement; $$model: Scope } {
     const body = compileComponent(source)
     const host = document.createElement('div')
-    const model = createScope(initial)
+    const $$model = createScope(initial)
     new Function(
         'host',
         'text',
@@ -60,10 +60,10 @@ function renderWithModel(source: string, initial: unknown): { host: HTMLElement;
         'when',
         'effect',
         'escapeKey',
-        'model',
+        '$$model',
         body,
-    )(host, text, appendText, appendStatic, attr, on, each, when, effect, escapeKey, model)
-    return { host, model }
+    )(host, text, appendText, appendStatic, attr, on, each, when, effect, escapeKey, $$model)
+    return { host, $$model }
 }
 
 describe('compileComponent — end to end', () => {
@@ -112,16 +112,16 @@ describe('compileComponent — end to end', () => {
             <script>let count = scope().state(0)</script>
             <p>{count}</p>
         `)
-        expect(body).toContain('model.cell("count")')
+        expect(body).toContain('$$model.cell("count")')
         expect(body).toContain('.get()')
     })
 
     test('if control flow toggles a branch and stays field-reactive', () => {
-        const { host, model } = renderWithModel(
+        const { host, $$model } = renderWithModel(
             `
             <div>
-                {#if model.show}
-                    <span>{model.label}</span>
+                {#if $$model.show}
+                    <span>{$$model.label}</span>
                 {/if}
             </div>
         `,
@@ -129,11 +129,11 @@ describe('compileComponent — end to end', () => {
         )
         const div = host.childNodes[0] as unknown as { textContent: string }
         expect(div.textContent).toBe('hi')
-        model.replace('label', 'yo') // field-reactive while shown
+        $$model.replace('label', 'yo') // field-reactive while shown
         expect(div.textContent).toBe('yo')
-        model.replace('show', false) // falsy edge → branch removed
+        $$model.replace('show', false) // falsy edge → branch removed
         expect(div.textContent).toBe('')
-        model.replace('show', true) // truthy edge → branch re-rendered
+        $$model.replace('show', true) // truthy edge → branch re-rendered
         expect(div.textContent).toBe('yo')
     })
 
@@ -142,20 +142,20 @@ describe('compileComponent — end to end', () => {
             <script>let count = scope().state(0)</script>
             <p>{count}</p>
         `)
-        expect(module).toContain("import { mount } from '@abide/abide/ui/dom/mount'")
-        expect(module).toContain("import { scope } from '@abide/abide/ui/scope'")
+        expect(module).toContain("import { mount as $$mount } from '@abide/abide/ui/dom/mount'")
+        expect(module).toContain("import { scope as $$scope } from '@abide/abide/ui/scope'")
         expect(module).toContain('export default function component(host, $props)')
-        expect(module).toContain('mount(host, build, $props)')
+        expect(module).toContain('$$mount(host, build, $props)')
         expect(module).toContain('component.build = build')
-        expect(module).toContain('model.cell("count")')
+        expect(module).toContain('$$model.cell("count")')
     })
 
     test('keyed each renders a list and stays field-reactive', () => {
-        const { host, model } = renderWithModel(
+        const { host, $$model } = renderWithModel(
             `
             <ul>
-                {#for key of model.order by key}
-                    <li>{model.byId[key].n}</li>
+                {#for key of $$model.order by key}
+                    <li>{$$model.byId[key].n}</li>
                 {/for}
             </ul>
         `,
@@ -163,10 +163,10 @@ describe('compileComponent — end to end', () => {
         )
         const list = host.childNodes[0] as unknown as { children: Element[] }
         expect(list.children.map((child) => child.textContent)).toEqual(['1', '2'])
-        model.replace('byId/a/n', 9)
+        $$model.replace('byId/a/n', 9)
         expect(list.children[0].textContent).toBe('9')
-        model.add('order/-', 'c')
-        model.replace('byId/c', { n: 3 })
+        $$model.add('order/-', 'c')
+        $$model.replace('byId/c', { n: 3 })
         expect(list.children.map((child) => child.textContent)).toEqual(['9', '2', '3'])
     })
 
@@ -226,8 +226,8 @@ describe('compileComponent — end to end', () => {
         const body = compileComponent(
             `<script>const { foo, ...rest } = props()</script><i>{foo}</i>`,
         )
-        expect(body).toContain('const rest = restProps($props, ["foo"])')
-        expect(body).toContain('const foo = scope().derive("foo", () => $props["foo"]?.())')
+        expect(body).toContain('const rest = $$restProps($props, ["foo"])')
+        expect(body).toContain('const foo = $$scope().derive("foo", () => $props["foo"]?.())')
     })
 
     /* A named prop type whose members share the destructured signal names must NOT be
@@ -401,13 +401,13 @@ const label = 'hi'</script><i>{label}</i>`,
             `<script>\nlet draft = scope().state("")\nfunction go() {\n  draft.trim()\n  draft.items.map(x => x)\n  draft?.toUpperCase()\n}\n</script>\n<p>{draft}</p>`,
         )
         // Non-optional calls carry the path and member into the guard…
-        expect(body).toContain('readCall(model.read("draft"), "draft", "trim", [])')
+        expect(body).toContain('readCall($$model.read("draft"), "draft", "trim", [])')
         expect(body).toContain(
-            'readCall(model.read("draft/items"), "draft/items", "map", [x => x])',
+            'readCall($$model.read("draft/items"), "draft/items", "map", [x => x])',
         )
         // …while an optional-chained call keeps short-circuiting and is never guarded.
-        expect(body).toContain('model.read("draft")?.toUpperCase()')
-        expect(body).not.toContain('readCall(model.read("draft"), "draft", "toUpperCase"')
+        expect(body).toContain('$$model.read("draft")?.toUpperCase()')
+        expect(body).not.toContain('readCall($$model.read("draft"), "draft", "toUpperCase"')
     })
 
     test('the removed `prop()` reader throws a migration error pointing at props()', () => {
@@ -422,7 +422,7 @@ const label = 'hi'</script><i>{label}</i>`,
         )
         // The param `count` shadows the state; only the un-shadowed `total` lowers.
         expect(body).toContain('items.map(count => count + total())')
-        expect(body).not.toContain('model.read("count") + total')
+        expect(body).not.toContain('$$model.read("count") + total')
         // A nested local `count` shadows the state too — left as a plain reference.
         expect(body).toContain('const count = 5')
         expect(body).toMatch(/const count = 5;?\s*\n\s*return count;?/)

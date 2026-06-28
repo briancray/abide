@@ -83,8 +83,8 @@ describe('hydrate — adopt server DOM', () => {
         /* `{a}{b}` with b='' server-renders a single merged text node 'Item' — b emits
            no node. Each binding must still claim its own node on hydrate, or b grabs the
            wrong sibling (or null → crash) and a later b update is lost. */
-        const model = doc({ a: 'Item', b: '' })
-        const source = `<main>{model.a}{model.b}</main>`
+        const $$model = doc({ a: 'Item', b: '' })
+        const source = `<main>{$$model.a}{$$model.b}</main>`
         const runtime = {
             doc,
             state,
@@ -93,7 +93,7 @@ describe('hydrate — adopt server DOM', () => {
             appendText,
             appendStatic,
             on,
-            model,
+            $$model,
         }
         const names = Object.keys(runtime)
         const values = names.map((n) => runtime[n as keyof typeof runtime])
@@ -103,9 +103,9 @@ describe('hydrate — adopt server DOM', () => {
             'state',
             'computed',
             'effect',
-            'model',
+            '$$model',
             compileSSR(source),
-        )(doc, state, computed, effect, model) as SsrRender
+        )(doc, state, computed, effect, $$model) as SsrRender
         expect(server.html).toBe('<main>Item</main>')
 
         const host = document.createElement('div')
@@ -117,19 +117,19 @@ describe('hydrate — adopt server DOM', () => {
         expect(host.textContent).toBe('Item')
 
         // the empty `b` binding owns its own node, so a later update lands (no crash, no clobber)
-        model.replace('b', 'NEW')
+        $$model.replace('b', 'NEW')
         expect(host.textContent).toBe('ItemNEW')
-        model.replace('a', 'Row')
+        $$model.replace('a', 'Row')
         expect(host.textContent).toBe('RowNEW')
     })
 
     test('adopts an if/else branch in place, then toggles', () => {
         // template-only component with an external doc, so the test can drive it
-        const model = doc({ on: true, label: 'hi' })
+        const $$model = doc({ on: true, label: 'hi' })
         const source = `
             <main>
-                {#if model.on}
-                    <span>{model.label}</span>
+                {#if $$model.on}
+                    <span>{$$model.label}</span>
                     {:else}<b>off</b>
                 {/if}
             </main>
@@ -143,7 +143,7 @@ describe('hydrate — adopt server DOM', () => {
             appendStatic,
             on,
             when,
-            model,
+            $$model,
         }
         const names = Object.keys(runtime)
         const values = names.map((n) => runtime[n as keyof typeof runtime])
@@ -154,9 +154,9 @@ describe('hydrate — adopt server DOM', () => {
             'state',
             'computed',
             'effect',
-            'model',
+            '$$model',
             compileSSR(source),
-        )(doc, state, computed, effect, model) as SsrRender
+        )(doc, state, computed, effect, $$model) as SsrRender
         expect(server.html).toBe('<main><!--a--><!--[--><span>hi</span><!--]--></main>')
 
         // parse + hydrate
@@ -175,22 +175,22 @@ describe('hydrate — adopt server DOM', () => {
         expect(host.textContent).toBe('hi')
 
         // reactive on the adopted node
-        model.replace('label', 'yo')
+        $$model.replace('label', 'yo')
         expect(host.textContent).toBe('yo')
 
         // toggle to the else branch (built fresh, post-hydration), and back
-        model.replace('on', false)
+        $$model.replace('on', false)
         expect(host.textContent).toBe('off')
-        model.replace('on', true)
+        $$model.replace('on', true)
         expect(host.textContent).toBe('yo')
     })
 
     test('adopts a keyed each list in place, then stays reactive', () => {
-        const model = doc({ order: ['a', 'b'], byId: { a: { n: 1 }, b: { n: 2 }, c: { n: 3 } } })
+        const $$model = doc({ order: ['a', 'b'], byId: { a: { n: 1 }, b: { n: 2 }, c: { n: 3 } } })
         const source = `
             <main>
                 <ul>
-                    {#for k of model.order by k}<li>{model.byId[k].n}</li>{/for}
+                    {#for k of $$model.order by k}<li>{$$model.byId[k].n}</li>{/for}
                 </ul>
             </main>
         `
@@ -205,7 +205,7 @@ describe('hydrate — adopt server DOM', () => {
             when,
             each,
             escapeKey,
-            model,
+            $$model,
         }
         const names = Object.keys(runtime)
         const values = names.map((n) => runtime[n as keyof typeof runtime])
@@ -216,9 +216,9 @@ describe('hydrate — adopt server DOM', () => {
             'computed',
             'effect',
             'escapeKey',
-            'model',
+            '$$model',
             compileSSR(source),
-        )(doc, state, computed, effect, escapeKey, model) as SsrRender
+        )(doc, state, computed, effect, escapeKey, $$model) as SsrRender
         expect(server.html).toBe(
             '<main><ul><!--a--><!--[--><li>1</li><!--]--><!--[--><li>2</li><!--]--></ul></main>',
         )
@@ -241,9 +241,9 @@ describe('hydrate — adopt server DOM', () => {
         expect(ul.childNodes.map((c) => c.textContent).filter(Boolean)).toEqual(['1', '2'])
 
         // a row field updates in place; appending a row works post-hydration
-        model.replace('byId/a/n', 9)
+        $$model.replace('byId/a/n', 9)
         expect(ul.children[0].textContent).toBe('9')
-        model.add('order/-', 'c')
+        $$model.add('order/-', 'c')
         expect(ul.childNodes.map((c) => c.textContent).filter(Boolean)).toEqual(['9', '2', '3'])
     })
 
@@ -356,10 +356,10 @@ describe('hydrate — adopt server DOM', () => {
     })
 
     test('adopts the matching switch case in place, then switches', () => {
-        const model = doc({ status: 'b' })
+        const $$model = doc({ status: 'b' })
         const source = `
             <main>
-                {#switch model.status}
+                {#switch $$model.status}
                     {:case 'a'}<span>A</span>
                     {:case 'b'}<span>B</span>
                     {:default}<span>?</span>
@@ -377,7 +377,7 @@ describe('hydrate — adopt server DOM', () => {
             when,
             each,
             switchBlock,
-            model,
+            $$model,
         }
         const names = Object.keys(runtime)
         const values = names.map((n) => runtime[n as keyof typeof runtime])
@@ -387,9 +387,9 @@ describe('hydrate — adopt server DOM', () => {
             'state',
             'computed',
             'effect',
-            'model',
+            '$$model',
             compileSSR(source),
-        )(doc, state, computed, effect, model) as SsrRender
+        )(doc, state, computed, effect, $$model) as SsrRender
         expect(server.html).toBe('<main><!--a--><!--[--><span>B</span><!--]--></main>')
 
         const host = document.createElement('div')
@@ -406,19 +406,19 @@ describe('hydrate — adopt server DOM', () => {
         )
         expect(host.textContent).toBe('B')
 
-        model.replace('status', 'a')
+        $$model.replace('status', 'a')
         expect(host.textContent).toBe('A')
-        model.replace('status', 'zzz')
+        $$model.replace('status', 'zzz')
         expect(host.textContent).toBe('?') // default
     })
 
     test('adopts the matching if/elseif/else branch in place, then flips', () => {
-        const model = doc({ n: 2 })
+        const $$model = doc({ n: 2 })
         const source = `
             <main>
-                {#if model.n === 1}
+                {#if $$model.n === 1}
                     <span>one</span>
-                    {:else if model.n === 2}<span>two</span>
+                    {:else if $$model.n === 2}<span>two</span>
                     {:else}<span>other</span>
                 {/if}
             </main>
@@ -434,7 +434,7 @@ describe('hydrate — adopt server DOM', () => {
             when,
             each,
             switchBlock,
-            model,
+            $$model,
         }
         const names = Object.keys(runtime)
         const values = names.map((n) => runtime[n as keyof typeof runtime])
@@ -444,9 +444,9 @@ describe('hydrate — adopt server DOM', () => {
             'state',
             'computed',
             'effect',
-            'model',
+            '$$model',
             compileSSR(source),
-        )(doc, state, computed, effect, model) as SsrRender
+        )(doc, state, computed, effect, $$model) as SsrRender
         expect(server.html).toBe('<main><!--a--><!--[--><span>two</span><!--]--></main>')
 
         const host = document.createElement('div')
@@ -464,9 +464,9 @@ describe('hydrate — adopt server DOM', () => {
         )
         expect(host.textContent).toBe('two')
 
-        model.replace('n', 1)
+        $$model.replace('n', 1)
         expect(host.textContent).toBe('one') // if
-        model.replace('n', 3)
+        $$model.replace('n', 3)
         expect(host.textContent).toBe('other') // else
     })
 
@@ -655,12 +655,12 @@ describe('hydrate — adopt server DOM', () => {
     test('adopts a multi-root if/else branch in place', () => {
         // The body roots must line up with the SSR nodes during adoption; with no
         // per-component <style> emitted, the else <p> is claimed where it stands.
-        const model = doc({ total: 0 })
+        const $$model = doc({ total: 0 })
         const source = `
             <section>
                 <button>a</button>
                 <button>b</button>
-                {#if model.total}<ul></ul>{:else}<p class="empty">empty</p>{/if}
+                {#if $$model.total}<ul></ul>{:else}<p class="empty">empty</p>{/if}
             </section>
         `
         const runtime = {
@@ -674,7 +674,7 @@ describe('hydrate — adopt server DOM', () => {
             when,
             each,
             switchBlock,
-            model,
+            $$model,
         }
         const names = Object.keys(runtime)
         const values = names.map((n) => runtime[n as keyof typeof runtime])
@@ -683,9 +683,9 @@ describe('hydrate — adopt server DOM', () => {
             'state',
             'computed',
             'effect',
-            'model',
+            '$$model',
             compileSSR(source),
-        )(doc, state, computed, effect, model) as SsrRender
+        )(doc, state, computed, effect, $$model) as SsrRender
         // No <style> in the SSR markup — the scoped sheet is linked by the shell.
         expect(server.html).not.toContain('<style>')
 
@@ -706,7 +706,7 @@ describe('hydrate — adopt server DOM', () => {
         expect((pBefore as { textContent: string }).textContent).toBe('empty')
 
         // reactive after hydrate: showing the list swaps the empty branch for the ul
-        model.replace('total', 1)
+        $$model.replace('total', 1)
         const tags = section.childNodes.map((node) => node.tagName).filter(Boolean)
         expect(tags).toContain('ul') // then-branch now shown
         expect(tags).not.toContain('p') // empty branch removed
@@ -747,11 +747,11 @@ describe('hydrate — adopt server DOM', () => {
             build: selBuild,
         })
 
-        const model = doc({ types: ['movie', 'series'] })
+        const $$model = doc({ types: ['movie', 'series'] })
         const parentSource = `
             <div class="types">
                 <Sel value={undefined}><button>All</button></Sel>
-                {#for t of model.types by t}<Sel value={t}><button>{t}</button></Sel>{/for}
+                {#for t of $$model.types by t}<Sel value={t}><button>{t}</button></Sel>{/for}
             </div>
         `
 
@@ -762,9 +762,9 @@ describe('hydrate — adopt server DOM', () => {
             'effect',
             'escapeKey',
             'Sel',
-            'model',
+            '$$model',
             compileSSR(parentSource),
-        )(doc, state, computed, effect, escapeKey, Sel, model)) as SsrRender
+        )(doc, state, computed, effect, escapeKey, Sel, $$model)) as SsrRender
 
         const host = document.createElement('div')
         host.innerHTML = server.html
@@ -774,11 +774,11 @@ describe('hydrate — adopt server DOM', () => {
         let threw: unknown
         try {
             hydrate(host, (target) => {
-                new Function('host', ...baseNames, 'Sel', 'model', parentBody)(
+                new Function('host', ...baseNames, 'Sel', '$$model', parentBody)(
                     target,
                     ...baseValues,
                     Sel,
-                    model,
+                    $$model,
                 )
             })
         } catch (error) {
@@ -792,7 +792,7 @@ describe('hydrate — adopt server DOM', () => {
         expect(host.textContent).toContain('series')
 
         // reactive after hydrate: appending a row works
-        model.add('types/-', 'season')
+        $$model.add('types/-', 'season')
         expect(host.textContent).toContain('season')
     })
 
@@ -802,7 +802,7 @@ describe('hydrate — adopt server DOM', () => {
            resolved by element-only path). On hydrate the conditional's inline content must
            NOT shift the element-hole index — `elementChildAt` skips block-range content at
            depth 0 — or the bound card's binding lands on the conditional's card. */
-        const model = doc({
+        const $$model = doc({
             showWatching: true,
             watchingTitle: 'Watching',
             newTitle: "What's New",
@@ -810,9 +810,9 @@ describe('hydrate — adopt server DOM', () => {
         })
         const source = `
             <div class="cards">
-                {#if model.showWatching}<card title={model.watchingTitle}>w</card>{/if}
-                <card title={model.newTitle}>n</card>
-                {#if model.showPlaylists}<card>p</card>{/if}
+                {#if $$model.showWatching}<card title={$$model.watchingTitle}>w</card>{/if}
+                <card title={$$model.newTitle}>n</card>
+                {#if $$model.showPlaylists}<card>p</card>{/if}
             </div>
         `
         const runtime = {
@@ -825,7 +825,7 @@ describe('hydrate — adopt server DOM', () => {
             on,
             attr,
             when,
-            model,
+            $$model,
         }
         const names = Object.keys(runtime)
         const values = names.map((n) => runtime[n as keyof typeof runtime])
@@ -835,9 +835,9 @@ describe('hydrate — adopt server DOM', () => {
             'state',
             'computed',
             'effect',
-            'model',
+            '$$model',
             compileSSR(source),
-        )(doc, state, computed, effect, model) as SsrRender
+        )(doc, state, computed, effect, $$model) as SsrRender
 
         const host = document.createElement('div')
         host.innerHTML = server.html
@@ -867,7 +867,7 @@ describe('hydrate — adopt server DOM', () => {
         expect(cards.children[0].getAttribute('title')).toBe('Watching')
 
         // reactive after hydrate: the binding updates the correct card
-        model.replace('newTitle', 'Fresh')
+        $$model.replace('newTitle', 'Fresh')
         expect(cards.children[1].getAttribute('title')).toBe('Fresh')
         expect(cards.children[0].getAttribute('title')).toBe('Watching')
     })

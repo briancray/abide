@@ -36,6 +36,15 @@ describe('abide check', () => {
         expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
     })
 
+    test('{#if children} is a valid presence test, not an always-true condition', () => {
+        /* `children` is optional (undefined when nothing is slotted / no child layer), so
+           the fallback form must type-check without a 2774 "always true" false positive. */
+        const dir = project({
+            'card.abide': `<section>{#if children}{children()}{:else}<p>empty</p>{/if}</section>\n`,
+        })
+        expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
+    })
+
     test('a wrong member on a typed prop is caught and mapped to the expression', () => {
         const source = `<script>\nconst { count } = props<{ count: number }>()\n</script>\n<h1>{count.toUpperCase()}</h1>\n`
         const dir = project({ 'broken.abide': source })
@@ -90,6 +99,55 @@ describe('abide check', () => {
         )
         expect(diagnostics).toHaveLength(1)
         expect(diagnostics[0]!.message).toContain('not assignable')
+    })
+
+    test('html() without an import is an unresolved-name diagnostic', () => {
+        /* `html` is no longer auto-injected into the shadow preamble — it is author-imported
+           from `abide/ui/html`. A template that calls it without the import must fail to
+           type-check rather than silently resolve. */
+        const source = `<div>{html('<b>x</b>')}</div>\n`
+        const dir = project({ 'raw.abide': source })
+        const diagnostics = collectAbideDiagnostics(createShadowProgram(dir))
+        expect(
+            diagnostics.some((diagnostic) =>
+                diagnostic.message.includes("Cannot find name 'html'"),
+            ),
+        ).toBe(true)
+    })
+
+    test('html() with the ui/html import resolves the name', () => {
+        /* The import satisfies `html` — no unresolved-name diagnostic. (The tmp project has
+           no installed `@abide/abide`, so the import line itself raises a module-resolution
+           error that a real consuming project would not; that is orthogonal to name binding,
+           so assert specifically that the name resolves.) */
+        const dir = project({
+            'raw.abide': `<script>\nimport { html } from '@abide/abide/ui/html'\n</script>\n<div>{html('<b>x</b>')}</div>\n`,
+        })
+        const diagnostics = collectAbideDiagnostics(createShadowProgram(dir))
+        expect(
+            diagnostics.some((diagnostic) =>
+                diagnostic.message.includes("Cannot find name 'html'"),
+            ),
+        ).toBe(false)
+    })
+
+    test('an author binding using the reserved $$ prefix is a diagnostic', () => {
+        const dir = project({
+            'reserved.abide': `<script>const $$each = 1</script>\n<p>{$$each}</p>\n`,
+        })
+        const diagnostics = collectAbideDiagnostics(createShadowProgram(dir))
+        expect(diagnostics.some((diagnostic) => diagnostic.message.includes('reserved'))).toBe(true)
+    })
+
+    test('a normal binding named after a helper (no $$) is allowed', () => {
+        /* The whole point of the reserved namespace: `each`/`on`/`model` are free for users. */
+        const dir = project({
+            'ok.abide': `<script>const each = [1]\nconst model = 2\nconst on = 3</script>\n<p>{each.length}-{model}-{on}</p>\n`,
+        })
+        const diagnostics = collectAbideDiagnostics(createShadowProgram(dir))
+        expect(diagnostics.some((diagnostic) => diagnostic.message.includes('reserved'))).toBe(
+            false,
+        )
     })
 
     /* The `<template else>` is a CHILD of the `<template if>` (the canonical syntax the
@@ -398,5 +456,31 @@ describe('abide check', () => {
         )
         expect(diagnostics).toHaveLength(1)
         expect(diagnostics[0]!.message).toContain('toFixed')
+    })
+
+    /* `effect` is published only so generated component code can import it; the module
+       resolver can't tell codegen from author source, so the check is the gate: a direct
+       import is rejected and points at the import statement, steering to `scope().effect`. */
+    test('a direct import of the compiler-internal effect is rejected', () => {
+        const source = `<script>\nimport { effect } from '@abide/abide/ui/effect'\nconst s = scope()\n</script>\n<p>hi</p>\n`
+        const dir = project({ 'bad.abide': source })
+        const diagnostics = collectAbideDiagnostics(createShadowProgram(dir))
+        expect(diagnostics).toHaveLength(1)
+        expect(diagnostics[0]!.message).toContain('scope().effect')
+        /* Located on the import statement in the original `.abide`, not the shadow. */
+        expect(diagnostics[0]!.start).toBe(source.indexOf('import'))
+        const span = source.slice(
+            diagnostics[0]!.start,
+            diagnostics[0]!.start + diagnostics[0]!.length,
+        )
+        expect(span).toContain('ui/effect')
+    })
+
+    /* The supported form is clean — no false positive on `scope().effect`. */
+    test('scope().effect is not flagged', () => {
+        const dir = project({
+            'good.abide': `<script>\nconst stop = scope().effect(() => {})\n</script>\n<p>hi</p>\n`,
+        })
+        expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
     })
 })
