@@ -173,6 +173,23 @@ async function safeCall(rpc: string, fn: () => Promise<unknown>) {
             {/for}
         </ul>
     {/if}
+
+    <CodeBlock title="src/server/rpc/*.ts — one rpc per file" code={`// getEcho.ts — inputSchema validates args and exposes the rpc to MCP + CLI
+import { GET } from '@abide/abide/server/GET'
+import { json } from '@abide/abide/server/json'
+import { z } from 'zod'
+const inputSchema = z.object({ message: z.string() })
+export const getEcho = GET(({ message }) =>
+    json({ method: 'GET' as const, message }), { inputSchema })
+
+// headEcho.ts — HEAD: response carries headers, no body
+export const headEcho = HEAD(() =>
+    new Response(undefined, { status: 204, headers: { 'x-echo': 'HEAD' } }),
+)`} />
+
+    <CodeBlock title="client — same call shape per rpc" code={`await getEcho({ message: 'hello' })       // typed { method: 'GET'; message: string }
+await createEcho({ message: 'hello' })    // typed { method: 'POST'; message: string }
+// headEcho and deleteEcho resolve to undefined (204); the rest resolve to the decoded body`} />
 </section>
 
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
@@ -237,9 +254,7 @@ async function safeCall(rpc: string, fn: () => Promise<unknown>) {
         </button>
         <span class="font-mono text-xs text-slate-700">{converted}</span>
     </div>
-</section>
 
-<section class="mt-6 space-y-3">
     <CodeBlock
         title="src/server/rpc/convertTemp.ts — wrap a schema that has no toJSONSchema()"
         code={`import { withJsonSchema } from '@abide/abide/shared/withJsonSchema'
@@ -251,23 +266,4 @@ const inputSchema = withJsonSchema(celsiusSchema, () => ({
 }))
 export const convertTemp = GET(({ celsius }) =>
     json({ celsius, fahrenheit: celsius * 1.8 + 32 }), { inputSchema })`} />
-</section>
-
-<section class="mt-6 space-y-3">
-    <CodeBlock title="src/server/rpc/*.ts — one rpc per file" code={`// getEcho.ts — inputSchema validates args and exposes the rpc to MCP + CLI
-import { GET } from '@abide/abide/server/GET'
-import { json } from '@abide/abide/server/json'
-import { z } from 'zod'
-const inputSchema = z.object({ message: z.string() })
-export const getEcho = GET(({ message }) =>
-    json({ method: 'GET' as const, message }), { inputSchema })
-
-// headEcho.ts — HEAD: response carries headers, no body
-export const headEcho = HEAD(() =>
-    new Response(undefined, { status: 204, headers: { 'x-echo': 'HEAD' } }),
-)`} />
-
-    <CodeBlock title="client — same call shape per rpc" code={`await getEcho({ message: 'hello' })       // typed { method: 'GET'; message: string }
-await createEcho({ message: 'hello' })    // typed { method: 'POST'; message: string }
-// headEcho and deleteEcho resolve to undefined (204); the rest resolve to the decoded body`} />
 </section>

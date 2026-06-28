@@ -7,11 +7,11 @@ import { navigate } from '@abide/abide/ui/navigate'
 
 /*
 First-party root layout. A `layout.abide` wraps every page at or below its
-folder — here src/ui/pages/, so it wraps the whole app. The page lands in the
-<slot/> outlet; the resolver finds it by filename (no per-page import), and the
-client router keeps it mounted across navigation, so the sidebar never re-mounts.
-A nested layout.abide wraps inside this one — the chain applies every ancestor's
-layout, outermost-first.
+folder — here src/ui/pages/, so it wraps the whole app. The page lands where this
+layout calls {children()}; the resolver finds it by filename (no per-page import),
+and the client router keeps it mounted across navigation, so the sidebar never
+re-mounts. A nested layout.abide wraps inside this one — the chain applies every
+ancestor's layout, outermost-first.
 
 Custom bundle menu items are inert during SSR and in a plain browser tab. effects
 are client-only (stripped from SSR), so each registers its onMenu handler once on
@@ -46,11 +46,11 @@ const groups = [
         title: 'build the ui',
         links: [
             { href: '/pages', label: 'pages' },
-            { href: '/components', label: 'components' },
+            { href: '/templating', label: 'templating' },
+            { href: '/reactive-state', label: 'reactive state' },
             { href: '/cache', label: 'cache' },
             { href: '/tail', label: 'tail' },
             { href: '/probes', label: 'pending / refreshing' },
-            { href: '/health', label: 'online / health' },
             { href: '/outbox', label: 'outbox' },
         ],
     },
@@ -64,14 +64,22 @@ const groups = [
         ],
     },
     {
-        title: 'build test deploy',
-        links: [{ href: '/build', label: 'build · test · deploy' }],
+        title: 'deploy',
+        links: [
+            { href: '/build', label: 'build' },
+            { href: '/build#testing', label: 'test' },
+            { href: '/build#deploy', label: 'deploy' },
+            { href: '/observability', label: 'online' },
+            { href: '/observability#health', label: 'health' },
+            { href: '/observability#logging', label: 'logging' },
+        ],
     },
     {
         title: 'reference',
         links: [
-            { href: '/reference', label: 'types, env, routes' },
-            { href: '/logging', label: 'logging & tracing' },
+            { href: '/reference', label: 'types' },
+            { href: '/reference#routes', label: 'routes' },
+            { href: '/reference#env', label: 'env' },
         ],
     },
 ]

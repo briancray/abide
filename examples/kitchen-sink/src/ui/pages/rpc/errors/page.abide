@@ -181,9 +181,7 @@ async function trigger500() {
         <li>409:{outcomeTyped}</li>
         <li>422:{outcomeValidation}</li>
     </ul>
-</section>
 
-<section class="mt-6 space-y-3">
     <CodeBlock title="src/server/rpc/getProduct.ts — explicit 404" code={`import { GET } from '@abide/abide/server/GET'
 import { json } from '@abide/abide/server/json'
 import { error } from '@abide/abide/server/error'

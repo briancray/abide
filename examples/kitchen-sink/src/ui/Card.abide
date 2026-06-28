@@ -1,0 +1,20 @@
+<script>
+/*
+A child component. A capitalised tag (<Card>) mounts it; attributes are props,
+and the content nested inside the tag renders where this component calls
+{children()}. {#if children}…{:else}…{/if} is the fallback form when nothing
+is passed — children render at {children()}, with no slot element or named slots.
+*/
+const { title = 'Card' } = props<{ title?: string }>()
+</script>
+
+<section class="rounded-lg border border-slate-200 bg-white p-4">
+    <h3 class="text-sm font-semibold">{title}</h3>
+    <div class="mt-1 text-sm text-slate-600">
+        {#if children}
+            {children()}
+        {:else}
+            <p class="text-slate-400">empty</p>
+        {/if}
+    </div>
+</section>

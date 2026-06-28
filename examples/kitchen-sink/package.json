@@ -20,6 +20,7 @@
     },
     "devDependencies": {
         "@abide/inspector": "workspace:*",
+        "@types/bun": "^1.3.14",
         "bun-plugin-tailwind": "latest",
         "tailwindcss": "^4.0.0"
     }

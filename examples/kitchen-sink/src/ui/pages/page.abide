@@ -34,9 +34,14 @@ const groups = [
                 body: 'Folders under src/ui/pages/ are routes — [id] params, nested layout.abide chains, try/catch failure boundaries — plus the reactive page state, navigate(), and the typed base-correct url() builder.',
             },
             {
-                href: '/components',
-                title: 'components',
-                body: 'The .abide grammar — reactive primitives (state / computed / effect / prop), {expr} and bind: bindings, every {#…} control-flow block, snippets, components & slots, and scoped <style>.',
+                href: '/templating',
+                title: 'templating',
+                body: 'The .abide grammar — every {#…} control-flow block, {expr} / interpolated / bind: / class: / style: / attach / spread bindings, html raw markup, snippets, components & {children()}, and scoped <style>.',
+            },
+            {
+                href: '/reactive-state',
+                title: 'reactive state',
+                body: 'scope() is the sole reactive surface — destructure state / computed / linked / effect once and call them bare; transforms coerce writes, linked seeds a draft from upstream.',
             },
             {
                 href: '/cache',
@@ -54,9 +59,9 @@ const groups = [
                 body: 'Standalone reactive probes spanning calls and streams. pending = no value yet; refreshing = value held, fresher source in flight. They report, never act.',
             },
             {
-                href: '/health',
-                title: 'online / health',
-                body: 'Reactive connectivity reads: online() rides the browser online/offline events; health() polls /__abide/health while read and reports reachable plus whatever the app health() hook contributes.',
+                href: '/outbox',
+                title: 'outbox',
+                body: 'Local-first durability per rpc — a call that parks on an unreachable server, persists, and drains when health() recovers; retry() and pending() span the queue.',
             },
         ],
     },
@@ -86,12 +91,17 @@ const groups = [
         ],
     },
     {
-        title: 'build test deploy',
+        title: 'deploy',
         cards: [
             {
                 href: '/build',
                 title: 'build · test · deploy',
                 body: 'The dev-to-prod seams — the abide commands, env() config validation and app.ts boot hooks, in-process testing with createTestApp(), and the compiled-binary Dockerfile.',
+            },
+            {
+                href: '/observability',
+                title: 'observability',
+                body: "Connectivity + logging on both sides — online() / health() reachability reads, the one logger with DEBUG-gated channels and timed log.trace spans, and trace() returning the request's W3C traceparent.",
             },
         ],
     },
@@ -102,11 +112,6 @@ const groups = [
                 href: '/reference',
                 title: 'reference',
                 body: 'The cross-cutting reference — project layout, framework routes, every environment variable, and the import namespaces that mark which side a name runs on.',
-            },
-            {
-                href: '/logging',
-                title: 'logging & tracing',
-                body: "One logger, both sides — always-on app channel, DEBUG-gated diagnostic channels, timed log.trace spans, and trace() returning the request's W3C traceparent.",
             },
         ],
     },

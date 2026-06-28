@@ -12,14 +12,14 @@ import CodeBlock from '$ui/CodeBlock.abide'
     Chromium is bundled.
 </p>
 
-<section class="mt-6">
+<section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
     <h2 class="text-sm font-semibold">Launch</h2>
     <p class="mt-1 text-xs text-slate-500">
         The launcher records the last connection in a per-user data dir and, on relaunch, boots or
         probes it <em>before</em> opening the window — so a configured app opens straight at the
         live server, no connect-screen flash.
     </p>
-    <div class="mt-2 overflow-x-auto rounded-lg border border-slate-200 bg-white">
+    <div class="mt-2 overflow-x-auto rounded-md border border-slate-200">
         <table class="w-full text-sm">
             <thead class="border-b border-slate-200 bg-slate-50 text-left">
                 <tr>
@@ -55,6 +55,28 @@ import CodeBlock from '$ui/CodeBlock.abide'
         Override the screen itself with
         <code class="font-mono">src/bundle/disconnected.abide</code>.
     </p>
+
+    <CodeBlock title="src/bundle/window.ts — this app's window config" code={`import type { BundleWindow } from '@abide/abide/bundle/BundleWindow'
+import { z } from 'zod'
+
+export default {
+    title: 'abide kitchen-sink',
+    width: 1280,
+    height: 880,
+    menu: [
+        {
+            label: 'Demo',
+            items: [
+                { label: 'Reload session', shortcut: 'r', emit: 'reload-session' },
+                { separator: true },
+                { label: 'Open MCP panel', emit: 'open-mcp' },
+            ],
+        },
+    ],
+} satisfies BundleWindow`} />
+
+    <CodeBlock title="build the bundle (host platform)" lang="sh" code={`abide bundle           # → dist/<program>.app (macOS) or dist/<program>/
+abide compile          # just the embedded server binary the bundle spawns`} />
 </section>
 
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5 text-sm text-slate-600">
@@ -84,6 +106,15 @@ import CodeBlock from '$ui/CodeBlock.abide'
         <code class="font-mono">abide/bundle/onMenu</code>; it returns an unsubscribe, so it drops
         straight into an <code class="font-mono">effect</code>.
     </p>
+
+    <CodeBlock
+        title="src/ui/pages/layout.abide — the app side of the menu contract"
+        code={`import { onMenu } from '@abide/abide/bundle/onMenu'
+import { navigate } from '@abide/abide/ui/navigate'
+
+const { effect } = scope()
+effect(() => onMenu('reload-session', () => location.reload()))
+effect(() => onMenu('open-mcp', () => void navigate('/mcp')))`} />
 </section>
 
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5 text-sm text-slate-600">
@@ -108,37 +139,4 @@ import CodeBlock from '$ui/CodeBlock.abide'
             — open this page from <code class="font-mono">abide bundle</code> to flip it.
         {/if}
     </p>
-</section>
-
-<section class="mt-6 space-y-3">
-    <CodeBlock title="src/bundle/window.ts — this app's window config" code={`import type { BundleWindow } from '@abide/abide/bundle/BundleWindow'
-import { z } from 'zod'
-
-export default {
-    title: 'abide kitchen-sink',
-    width: 1280,
-    height: 880,
-    menu: [
-        {
-            label: 'Demo',
-            items: [
-                { label: 'Reload session', shortcut: 'r', emit: 'reload-session' },
-                { separator: true },
-                { label: 'Open MCP panel', emit: 'open-mcp' },
-            ],
-        },
-    ],
-} satisfies BundleWindow`} />
-
-    <CodeBlock
-        title="src/ui/pages/layout.abide — the app side of the menu contract"
-        code={`import { onMenu } from '@abide/abide/bundle/onMenu'
-import { navigate } from '@abide/abide/ui/navigate'
-
-const { effect } = scope()
-effect(() => onMenu('reload-session', () => location.reload()))
-effect(() => onMenu('open-mcp', () => void navigate('/mcp')))`} />
-
-    <CodeBlock title="build the bundle (host platform)" lang="sh" code={`abide bundle           # → dist/<program>.app (macOS) or dist/<program>/
-abide compile          # just the embedded server binary the bundle spawns`} />
 </section>

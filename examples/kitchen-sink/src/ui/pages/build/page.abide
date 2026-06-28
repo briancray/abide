@@ -16,7 +16,7 @@ import CodeBlock from '$ui/CodeBlock.abide'
 </p>
 
 <!-- Commands -->
-<section class="mt-8">
+<section class="mt-6">
     <h2 class="text-sm font-semibold">Commands</h2>
     <div class="mt-2 overflow-x-auto rounded-lg border border-slate-200 bg-white">
         <table class="w-full text-sm">
@@ -77,7 +77,7 @@ import CodeBlock from '$ui/CodeBlock.abide'
 </section>
 
 <!-- Configuration -->
-<section class="mt-8 space-y-3">
+<section class="mt-6 space-y-3 rounded-lg border border-slate-200 bg-white p-5">
     <h2 class="text-sm font-semibold">Configuration</h2>
     <p class="text-sm text-slate-600">
         <code class="font-mono">env()</code> validates the process environment against a Standard
@@ -100,7 +100,9 @@ export function health() { return { db: 'ok' } }          // merged into /__abid
 </section>
 
 <!-- Testing -->
-<section class="mt-8 space-y-3">
+<section
+    id="testing"
+    class="scroll-mt-4 mt-6 space-y-3 rounded-lg border border-slate-200 bg-white p-5">
     <h2 class="text-sm font-semibold">Testing</h2>
     <p class="text-sm text-slate-600">
         <code class="font-mono">createTestApp()</code> boots the real app in-process on an ephemeral
@@ -118,7 +120,9 @@ const product = await app.rpc.searchProducts({ q: 'shoes' })
 </section>
 
 <!-- Deploy -->
-<section class="mt-8 space-y-3">
+<section
+    id="deploy"
+    class="scroll-mt-4 mt-6 space-y-3 rounded-lg border border-slate-200 bg-white p-5">
     <h2 class="text-sm font-semibold">Deploy</h2>
     <p class="text-sm text-slate-600">
         abide is single-process: the <code class="font-mono">global</code> cache, socket

@@ -122,9 +122,7 @@ async function submit(event: SubmitEvent) {
             {/for}
         </ul>
     {/if}
-</section>
 
-<section class="mt-6 space-y-3">
     <CodeBlock
         title="this page — RPC-native durable queue, optimistic UI, reconcile"
         code={`// src/server/rpc/saveMessage.ts

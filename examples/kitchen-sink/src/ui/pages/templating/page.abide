@@ -1,0 +1,63 @@
+<script>
+import CodeBlock from '$ui/CodeBlock.abide'
+
+/*
+Templating overview — the anatomy of an .abide file and a map into the three
+grammar subpages. Live demos live on those subpages; this is the at-a-glance.
+*/
+const areas = [
+    {
+        href: '/templating/control-flow',
+        title: 'control flow',
+        body: '{#if} · {#for} (+ {#for await}) · {#await} · {#switch} · {#try} — every {#…} block, with branches and keyed lists.',
+    },
+    {
+        href: '/templating/bindings',
+        title: 'bindings & directives',
+        body: '{expr} text, name="lit {expr}" attributes, on* handlers, every bind: form, class: / style: / attach / {...spread}, and html for raw markup.',
+    },
+    {
+        href: '/templating/snippets',
+        title: 'snippets & components',
+        body: '{#snippet} reusable builders, {children()} child content, capitalised component tags, and a component-scoped <style>.',
+    },
+]
+</script>
+
+<section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
+    <h2 class="text-sm font-semibold">Anatomy</h2>
+    <p class="mt-1 text-sm text-slate-600">
+        One <code class="font-mono">&lt;script&gt;</code> (module scope; re-runs per render), markup
+        with <code class="font-mono">{'{#…}'}</code> blocks and
+        <code class="font-mono">{'{expr}'}</code> bindings, and an optional scoped
+        <code class="font-mono">&lt;style&gt;</code>. <code class="font-mono">props()</code> and
+        <code class="font-mono">scope()</code> are in scope without import.
+    </p>
+    <div class="mt-3">
+        <CodeBlock title="Greeting.abide — the whole shape" code={`<script>
+    const { name = 'world' } = props()
+    const { state } = scope()
+    let count = state(0)
+</script>
+
+<button onclick={() => (count = count + 1)}>hi {name} — {count}</button>
+
+<style>
+    button { font: inherit; }
+</style>`} />
+    </div>
+</section>
+
+<section class="mt-6">
+    <h2 class="text-sm font-semibold">The grammar, three ways</h2>
+    <div class="mt-3 grid gap-4 sm:grid-cols-3">
+        {#for area of areas by area.href}
+            <a
+                href={area.href}
+                class="rounded-lg border border-slate-200 bg-white p-5 hover:border-slate-400">
+                <h3 class="font-mono text-sm font-semibold">{area.title}</h3>
+                <p class="mt-1 text-xs text-slate-600">{area.body}</p>
+            </a>
+        {/for}
+    </div>
+</section>

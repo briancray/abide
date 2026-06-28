@@ -56,9 +56,7 @@ async function loadProduct(productId: string) {
             </button>
         {/for}
     </div>
-</section>
 
-<section class="mt-6 space-y-3">
     <CodeBlock title="this page — [id] segment + per-id cache" code={`import { cache } from '@abide/abide/shared/cache'
 import { getProduct } from '$server/rpc/getProduct.ts'
 import { page } from '@abide/abide/shared/page'

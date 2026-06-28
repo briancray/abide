@@ -59,27 +59,6 @@ async function sendBeacon() {
         {'trackPageview({ pageUrl: location.href })'}
     </button>
     <p class="mt-2 font-mono text-xs text-slate-700">{beacon}</p>
-</section>
-
-<section class="mt-6">
-    <h2 class="text-sm font-semibold">Guarding the MCP endpoint</h2>
-    <p class="mt-2 text-sm text-slate-600">
-        The Origin check stops hostile pages, not hostile machines — auth for machine clients is
-        <code class="font-mono">app.handle</code> middleware. Boot warns when MCP tools are exposed
-        with no <code class="font-mono">app.handle</code> in
-        <code class="font-mono">src/app.ts</code>.
-    </p>
-</section>
-
-<section class="mt-4 space-y-3">
-    <CodeBlock title="src/app.ts — the auth seam for machine clients" code={`export function handle(request: Request, next: (req: Request) => Promise<Response>) {
-    if (new URL(request.url).pathname === '/__abide/mcp') {
-        if (request.headers.get('authorization') !== \`Bearer \${config.MCP_TOKEN}\`) {
-            return error(401)
-        }
-    }
-    return next(request)
-}`} />
 
     <CodeBlock
         title="src/server/rpc/trackPageview.ts — the opt-out, declared per rpc"
@@ -91,4 +70,23 @@ async function sendBeacon() {
     },
     { inputSchema, crossOrigin: true },
 )`} />
+</section>
+
+<section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
+    <h2 class="text-sm font-semibold">Guarding the MCP endpoint</h2>
+    <p class="mt-2 text-sm text-slate-600">
+        The Origin check stops hostile pages, not hostile machines — auth for machine clients is
+        <code class="font-mono">app.handle</code> middleware. Boot warns when MCP tools are exposed
+        with no <code class="font-mono">app.handle</code> in
+        <code class="font-mono">src/app.ts</code>.
+    </p>
+
+    <CodeBlock title="src/app.ts — the auth seam for machine clients" code={`export function handle(request: Request, next: (req: Request) => Promise<Response>) {
+    if (new URL(request.url).pathname === '/__abide/mcp') {
+        if (request.headers.get('authorization') !== \`Bearer \${config.MCP_TOKEN}\`) {
+            return error(401)
+        }
+    }
+    return next(request)
+}`} />
 </section>

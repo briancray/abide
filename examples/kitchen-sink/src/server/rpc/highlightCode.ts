@@ -3,7 +3,7 @@ import { POST } from '@abide/abide/server/POST'
 import { createHighlighter, type HighlighterGeneric } from 'shiki/bundle/web'
 
 export type Lang = 'ts' | 'sh' | 'toml' | 'dockerfile' | 'text'
-type Theme = 'github-dark'
+type Theme = 'github-light'
 
 let cached: Promise<HighlighterGeneric<Lang, Theme>> | undefined
 
@@ -16,7 +16,7 @@ highlighter resolves synchronously after the first await.
 function getHighlighter(): Promise<HighlighterGeneric<Lang, Theme>> {
     if (!cached) {
         cached = createHighlighter({
-            themes: ['github-dark'],
+            themes: ['github-light'],
             langs: ['typescript', 'bash'],
         }) as Promise<HighlighterGeneric<Lang, Theme>>
     }
@@ -49,7 +49,7 @@ export const highlightCode = POST<{ code: string; lang: Lang }, { html: string }
         const highlighter = await getHighlighter()
         const html = highlighter.codeToHtml(code, {
             lang: resolveLang(lang),
-            theme: 'github-dark',
+            theme: 'github-light',
         })
         return json({ html })
     },

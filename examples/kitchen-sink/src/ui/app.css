@@ -1,7 +1,15 @@
 @import "tailwindcss";
 
-/* CodeBlock: shiki output is injected as raw markup (global, unscoped). */
+/* CodeBlock: shiki output is injected as raw markup (global, unscoped). The
+   github-light theme paints a white background that would vanish on the white
+   cards, so the container carries a tinted, bordered surface and the shiki pre
+   stays transparent to show it through. */
+.codeblock {
+    border: 1px solid var(--color-slate-200);
+    background: var(--color-slate-50);
+}
 .codeblock pre.shiki {
     padding: 1rem;
     margin: 0;
+    background: transparent !important;
 }

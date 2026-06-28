@@ -61,18 +61,25 @@ running code. Sync means this invariant holds:
   says `tail`, no example says `subscribe`); terminology for every other
   surface is AGENTS.md's / the source's.
 - **Grammar coverage (constructs → examples).** The `.abide` *template grammar* —
-  the control-flow blocks (`{#if}`/`{:elseif}`/`{:else}`, `{#for}` + `{#for await}`,
-  `{#await}` incl. `{:finally}`, `{#switch}`, `{#try}`) and the binding/directive
-  attributes (`{expr}`, `html`-branded interpolation, `name=`, `on*`, all `bind:`
-  forms + `bind:value={{get,set}}`, `class:`, `style:`, `attach`, `{...spread}`) —
-  is part of the public surface (AGENTS.md tabulates it, CLAUDE.md mandates the
-  section) but it is **not an export**, so the slug→export checklist above cannot
-  catch a missing construct. Treat it as its own coverage axis: **every construct
-  in AGENTS.md's bindings + control-flow tables must appear in at least one
-  kitchen-sink `.abide` file** (those tables are themselves re-derived from
-  `parseTemplate.ts` `readAttributes` / `isControlFlow.ts` — the single source).
-  `components/page.abide` is the grammar showcase and the home for any construct
-  with no natural feature-page (e.g. `{:elseif}`, `class:`); demo it there.
+  the control-flow blocks (`{#if}`/`{:else if}`/`{:else}`, `{#for}` + `{#for await}`,
+  `{#await}` incl. `{:finally}`, `{#switch}`, `{#try}`, `{#snippet}`, `{children()}`)
+  and the binding/directive attributes (`{expr}`, `html`-branded interpolation,
+  `name=`, interpolated `name="lit {expr}"`, `on*`, all `bind:` forms +
+  `bind:value={{get,set}}`, `class:`, `style:`, `attach`, `{...spread}`) — is part of
+  the public surface (AGENTS.md tabulates it, CLAUDE.md mandates the section) but it
+  is **not an export**, so the slug→export checklist above cannot catch a missing
+  construct. Treat it as its own coverage axis: **every construct the parser accepts
+  must appear in at least one kitchen-sink `.abide` file, and no construct the parser
+  has *removed* may appear in any of them** (a `<slot>` or `<template name>` left in
+  an escaped code-sample teaches retired syntax even though it still builds). Do not
+  hand-maintain this list — it drifts silently (it once tested removed `<slot>` /
+  `<template name>` and the wrong `{:elseif}` spelling). `bun run packages/abide/
+  scripts/grammarTokens.ts` **derives** both lists from the parser every run
+  (block/branch keywords from `readBlock`/`readBranch`, directive markers from
+  `readAttributes`, removed constructs from the parser's `'… was removed …'` guards);
+  the verify step below drives the check off its output. `components/page.abide` is
+  the grammar showcase and the home for any construct with no natural feature-page
+  (e.g. `{:else if}`, `class:`); demo it there.
 
 Example pages may use *more words* than the docs (they're teaching material),
 but they must never make a claim the source doesn't back, and every runtime
@@ -113,8 +120,9 @@ legitimately nest under a sibling section (e.g. `response` under `rpc/`) satisfi
 "multi-page" via that section's subpages. `rpc/` is the worked example of this
 general rule (its index plus `consume` / `errors` / `respond` / `streaming` /
 `request-scope`), whose section title, intro paragraph, and subpage pill-nav live in
-one nested `<section>/layout.abide` (e.g. `pages/rpc/layout.abide`), whose `<slot/>`
-renders the active subpage below a masthead byte-identical across the section.
+one nested `<section>/layout.abide` (e.g. `pages/rpc/layout.abide`), whose
+`{children()}` renders the active subpage below a masthead byte-identical across the
+section.
 
 - **A nested layout, never a per-page component.** abide nests the full layout
   chain — every ancestor `layout.abide` wraps the page outermost-first
@@ -198,25 +206,33 @@ existing content.
      grep -rhoE "@abide/abide/[a-zA-Z/-]+" examples packages/abide/template --include="*.ts" --include="*.abide" | sort -u
      ```
 
-   - **Grammar coverage**: every template construct appears in at least one
-     kitchen-sink `.abide` file (keep this token list in sync with AGENTS.md's
-     bindings + control-flow tables — the parser is the single source). Anything
-     `MISSING` is a gap; demo it (orphan constructs go in `components/page.abide`):
+   - **Grammar coverage**: drive the check off the parser-derived token lists —
+     never a hand-typed list (it drifts silently). `grammarTokens.ts` emits a
+     `coverage` section (each token must appear ≥1×) and a `forbidden` section
+     (removed constructs that must appear 0×); each line is `F<TAB>token` (fixed
+     string) or `R<TAB>token` (regex). A `MISSING COVERAGE` is a gap — demo it
+     (orphan constructs go in `components/page.abide`); a `FORBIDDEN PRESENT` is
+     retired syntax (e.g. `<slot>`, `<template name>`) lingering in a code-sample —
+     rewrite it to the current form. (Note the `find -type f`: the generated
+     `src/.abide` *directory* matches `*.abide` and breaks a naive glob.)
 
      ```sh
-     for t in '{#if' '{:elseif' '{:else}' '{/if}' '{#for ' '{#for await' '{/for}' \
-       '{#await' '{:then' '{:catch' '{:finally' '{#switch' '{:case' '{:default' \
-       '{#try' '{/try}' 'bind:value' 'bind:checked' 'bind:group' 'get, set' \
-       'class:' 'style:' 'attach=' '{...' 'scope().state' 'scope().computed' \
-       'scope().linked' 'scope().effect' 'html`' '<template name' '<slot'; do
-       grep -rqF -- "$t" examples/kitchen-sink --include="*.abide" \
-         || echo "MISSING from kitchen-sink: $t"
-     done
+     FILES=$(find examples/kitchen-sink/src -type f -name '*.abide')
+     bun run packages/abide/scripts/grammarTokens.ts 2>/dev/null | awk -F'\t' '
+       /^### coverage/{s="cov";next} /^### forbidden/{s="forb";next}
+       /^[FR]\t/{print s"\t"$1"\t"$2}' \
+     | while IFS=$'\t' read -r sec kind tok; do
+         [ "$kind" = F ] && flag=-lF || flag=-lE
+         hit=$(printf '%s\n' "$FILES" | tr '\n' '\0' | xargs -0 grep $flag -- "$tok" 2>/dev/null)
+         if [ "$sec" = cov ]; then [ -z "$hit" ] && echo "MISSING COVERAGE: $tok"
+         else [ -n "$hit" ] && echo "FORBIDDEN PRESENT: $tok in $hit"; fi
+       done
      ```
 
-     The `scope().*` tokens are also satisfied by the destructure idiom
-     (`const { state, computed } = scope()` + bare calls) — treat as covered if
-     that form is present.
+     The reactive surface (`scope().state`/`.computed`/`.linked`/`.effect`) is the
+     `reactive-state` *export* slug, covered by the slug→export checklist above (and
+     satisfied by the destructure idiom `const { state } = scope()` + bare calls), so
+     it is not in the grammar token list.
 
    - **Band conformance**: every HEAVY slug is a multi-page section (a
      `layout.abide` with subpages), every MEDIUM slug a single `page.abide`. Drift

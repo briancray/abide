@@ -148,9 +148,7 @@ function apply(frame: AgentFrame | { $error: string }) {
     {#if error}
         <p class="mt-3 text-sm text-red-600">{error}</p>
     {/if}
-</section>
 
-<section class="mt-6 space-y-3">
     <CodeBlock title="src/server/rpc/chat.ts" code={`import { agent } from '@abide/abide/server/agent'
 import { jsonl } from '@abide/abide/server/jsonl'
 import { POST } from '@abide/abide/server/POST'

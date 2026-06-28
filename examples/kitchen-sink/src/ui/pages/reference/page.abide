@@ -16,7 +16,7 @@ import CodeBlock from '$ui/CodeBlock.abide'
 </p>
 
 <!-- Project structure -->
-<section class="mt-8 space-y-3">
+<section class="mt-6 space-y-3 rounded-lg border border-slate-200 bg-white p-5">
     <h2 class="text-sm font-semibold">Project structure</h2>
     <CodeBlock title="a project" lang="text" code={`src/
   app.ts                  # optional: init, handle, handleError, forwardHeaders, health
@@ -37,7 +37,7 @@ bunfig.toml               # preload = ["@abide/abide/preload"]`} />
 </section>
 
 <!-- Routes -->
-<section class="mt-8">
+<section id="routes" class="scroll-mt-4 mt-6">
     <h2 class="text-sm font-semibold">Framework routes</h2>
     <div class="mt-2 overflow-x-auto rounded-lg border border-slate-200 bg-white">
         <table class="w-full text-sm">
@@ -82,7 +82,7 @@ bunfig.toml               # preload = ["@abide/abide/preload"]`} />
 </section>
 
 <!-- Env vars -->
-<section class="mt-8">
+<section id="env" class="scroll-mt-4 mt-6">
     <h2 class="text-sm font-semibold">Environment variables</h2>
     <div class="mt-2 overflow-x-auto rounded-lg border border-slate-200 bg-white">
         <table class="w-full text-sm">

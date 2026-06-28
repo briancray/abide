@@ -31,8 +31,18 @@ either doc and the code disagree, change the doc, not the code.
 * **`packages/abide/package.json` backs the import paths** — pin every
   `@abide/abide/...` to a real `exports` key — and the footprint claims
   (`dependencies` / `peerDependencies`, `engines`).
-* Do **not** mine `examples/`, the current docs, CHANGELOG, or other docs for
-  facts. The current README and AGENTS.md are not sources — rebuild each
+* **Never use `examples/` as a source — not for facts, not for syntax, not for
+  idiom.** Examples lag the codebase: they are only re-synced by a separate pass
+  (`sync-examples`), so after any grammar change they routinely contain syntax
+  the parser has already removed (e.g. a stale `<slot>` / `<template name>`).
+  Copying an example is how dead syntax gets laundered into the README and passes
+  a token grep. Derive every `.abide` form from the parser/compiler
+  (`packages/abide/src/lib/ui/compile`) and prove it by running the README's own
+  fences through `compileModule` (the compile gate in the validation pass). The
+  ONE permitted touch of `examples/` is reading
+  `examples/kitchen-sink/package.json` to confirm the quick-start clone commands —
+  a command sanity check, never an API/idiom source. The current README and
+  AGENTS.md, the CHANGELOG, and other docs are likewise not sources — rebuild each
   completely. (The CHANGELOG may be consulted only to date a rename if one must
   be mentioned.)
 * If a claim below no longer matches the code, **change the claim, not the
@@ -43,7 +53,7 @@ either doc and the code disagree, change the doc, not the code.
 Exactly four sections, in this order. The first is the pitch; the next three
 are the foundational primitives, each a single artifact with the minimum prose
 to read it. The three artifacts form **one story**: §4's component imports the
-RPC from §2 and the socket from §3. Target ~190 lines, ceiling ~240 — §4
+RPC from §2 and the socket from §3. Ceiling ~300 lines — §4
 carries the growth (it must exercise the whole template grammar); §§1–3 stay lean.
 
 ### 1. Intro
@@ -90,7 +100,7 @@ The artifacts argue; prose doesn't.
 * The HTTP face: `/__abide/sockets/<name>` — `GET` returns the retained tail,
   `POST` publishes (gated by `clientPublish`).
 
-### 4. Components — the full template
+### 4. Components
 
 The payoff: **one `.abide` component that imports the §2 RPC and §3 socket**
 and exercises the **entire** template grammar in a single coherent page. This is
@@ -99,27 +109,40 @@ tables; the README has the live example), so **completeness wins over
 minimalism here** — keep it one component and as realistic as you can, but every
 construct in the lists below must appear at least once. The list is a drift trap:
 **re-derive the full set from the parser** (attribute directives from
-`parseTemplate.ts` `readAttributes`; control-flow blocks from `isControlFlow.ts`;
-the nesting rule from `readElement`) and read real `examples/**/*.abide` for
-idiom — never trust this prose as the complete set. It should show:
+`parseTemplate.ts` `readAttributes`; the `{#…}` block keywords — `if`/`for`/
+`await`/`switch`/`try`/`snippet` — from `parseTemplate.ts`'s block-keyword switch,
+of which `isControlFlow.ts` lists the five *rendered* ones and `snippet` is the
+declaration block; the nesting rule from `readElement`), and read the parser's
+**removal guards** (`throw new Error('… was removed …')` in `parseTemplate.ts` —
+e.g. `<slot>` at the `{children()}` site, `<template name>` / `<template if>` at
+`toSnippetOrTemplate`) so you write the current form, not a retired one. Do NOT
+copy idiom from `examples/` (they drift). Never trust this prose as the complete
+set. It should show:
 
 * `<script>` — imports (`cache`, `tail`, the rpc + socket via `$server/…`, a
   child component via `$ui/…`), `props()` destructure reads, and **every**
-  reactive primitive: `scope().state(...)`, `scope().computed(...)` (read-only),
-  `scope().linked(...)`, `scope().effect(...)` (client-only), plus an event
-  handler that calls a mutating RPC.
+  reactive primitive reached through the **destructure-once idiom** — abide's
+  documented authoring default: write `const { state,
+  computed, linked, effect } = scope()` once at the top of the `<script>`, then
+  call them **bare** (`let count = state(0)`, `const doubled = computed(() =>
+  …)`, `linked(...)`, `effect(...)` (client-only)) — NOT the repeated
+  `scope().state(...)` longhand at each call site. A nested branch `<script>`
+  destructures off its own `scope()` the same way (`const { computed } =
+  scope()`). Also show an event handler that calls a mutating RPC.
 * **every binding / directive**: `{expr}` text, an `html`-branded (unescaped)
   interpolation, `name={expr}` attribute, `on<event>={fn}`, the form binds
   `bind:value` / `bind:checked` / `bind:group`, the derived two-way
   `bind:value={{ get, set }}`, `class:name={cond}`, `style:property={value}`,
   `attach={fn}`, and `{...spread}` — on a component AND on an element.
-* **every control-flow block**: `{#if}`/`{:elseif}`/`{:else}`/`{/if}`,
+* **every control-flow block**: `{#if}`/`{:else if}`/`{:else}`/`{/if}`,
   `{#for item, i of list by key}`/`{/for}` AND a `{#for await … of …}` over an
   AsyncIterable, `{#await p}`/`{:then v}`/`{:catch e}`/`{:finally}`/`{/await}`,
   `{#switch}`/`{:case}`/`{:default}`/`{/switch}`,
   `{#try}`/`{:catch}`/`{:finally}`/`{/try}`.
-* a `<template name="…" args={…}>` snippet (reusable builder) called `{name(args)}`.
-* a capitalised child component whose children fill its `<slot>`.
+* a `{#snippet name(args)}…{/snippet}` block (reusable builder) called `{name(args)}` — NOT the removed `<template name>` form.
+* a capitalised child component that renders its passed content with
+  `{children()}` (the `<slot>` element was removed; `{#if children}{children()}
+  {:else}…{/if}` is the fallback form — no named slots).
 * a root component-scoped `<style>`, AND a `<script>`/`<style>` **nested inside
   one control-flow branch** (scoped to that branch) so the example shows scopes
   nest — the feature AGENTS.md's grammar section describes.
@@ -166,13 +189,17 @@ is the editorial layer):
   (`scope().state/.computed/.linked`, `effect`, `props()`), bindings (`{expr}`,
   `name={expr}`, `on<event>`, `bind:value/checked/group`, `bind:value={{get,set}}`,
   `class:name`, `style:property`, `attach`, `{...spread}`), and control flow — the
-  mustache blocks `{#if}`/`{:elseif}`/`{:else}`/`{/if}`,
+  mustache blocks `{#if}`/`{:else if}`/`{:else}`/`{/if}`,
   `{#for item of list by key}`/`{/for}` (`item, i of list`; `{#for await x of …}`),
   `{#await}`/`{:then}`/`{:catch}`/`{:finally}`/`{/await}`,
   `{#switch}`/`{:case}`/`{:default}`/`{/switch}`, `{#try}`/`{:catch}`/`{/try}` —
-  and the snippet `<template name args>` (called `{name(args)}`), plus
-  components + slots. `<template>` is ONLY the snippet form; control flow is the
-  `{#…}` blocks, never a `<template if>` attribute. Note that `<script>` and
+  and the snippet block `{#snippet name(args)}…{/snippet}` (called `{name(args)}`),
+  plus components + the `{children()}` fill point (the `<slot>` element was
+  removed — `{children()}` is the single slot, `{#if children}…{/if}` its
+  fallback, no named slots). Snippets are a `{#…}` block, NOT `<template>`: the
+  `<template name>` snippet form and `<template if>`/`<template each>`/… control
+  flow were removed (a bare `<template>` is now just an inert element; using a
+  removed form throws a migration error). Note that `<script>` and
   `<style>` are **not component-root-only**: either may sit inside a control-flow
   branch, scoped to that branch's lexical scope (a nested `<script>` declares
   branch-local `scope().state/linked/computed`, re-seeded per mount, no module
@@ -210,27 +237,41 @@ is the editorial layer):
 The accountability gate (below) is what keeps this map honest — every export,
 env var, and route the inventory reports must land somewhere here.
 
-## abide-ui idioms — read from `.abide` files, never invent
+## abide-ui idioms — derive from the parser/compiler, never invent, never copy examples
 
-Read these from real `.abide` files in `examples/`; never write Svelte syntax.
+Derive every `.abide` form from `packages/abide/src/lib/ui/compile` (the parser
+and its removal guards) and prove it with the compile gate; never copy from
+`examples/` (they drift) and never write Svelte syntax.
 
-* **Reactive state is reached only through `scope()`**: `scope().state(v)`,
-  `scope().computed(fn)` (read-only), `scope().linked(...)`, `scope().effect(fn)`
-  (client-only, stripped from SSR). Bare `state`/`computed`/`linked`/`effect`/
-  `derived` are a compile error (a writable computed is expressed at the binding,
-  `bind:value={{ get, set }}`) — though a top-level `const { state, computed } =
-  scope()` destructure lets you then call them bare. `props()` is the ambient
-  prop reader (`const { name = fallback, ...rest } = props()`, no import, no
-  `scope()`). These are functions, **not** `$state`/`$derived`.
-* Control flow is **mustache blocks**, not `<template>`: `{#if}`/`{:elseif}`/
+* **Reactive state is reached only through `scope()`**, and the documented
+  default is the **destructure-once idiom** —
+  `const { state, computed, linked, effect } = scope()` at the top of the
+  `<script>`, then **bare** calls (`let count = state(0)`, `const doubled =
+  computed(() => …)`). Always WRITE THE DESTRUCTURE FORM in docs/snippets, not
+  the repeated `scope().state(...)` longhand at each call site (the longhand is
+  the equivalent reference form, not the form to teach). `computed` is read-only,
+  `effect` is client-only (stripped from SSR), `state(v, transform?)` and
+  `linked(fn, transform?)` are writable. Bare `state`/`computed`/`linked`/
+  `effect`/`derived` with NO `scope()` destructure in scope are a compile error
+  (a writable computed is expressed at the binding, `bind:value={{ get, set }}`).
+  A nested branch `<script>` destructures off its own `scope()` the same way
+  (`const { computed } = scope()`). `props()` is the ambient prop reader
+  (`const { name = fallback, ...rest } = props()`, no import, no `scope()`).
+  These are functions, **not** `$state`/`$derived`.
+* Control flow is **mustache blocks**, not `<template>`: `{#if}`/`{:else if}`/
   `{:else}`/`{/if}`, `{#for item of list by key}`/`{/for}` (with `item, i of list`,
   and `{#for await x of source}` over an AsyncIterable), `{#await p}`/`{:then v}`/
   `{:catch e}`/`{:finally}`/`{/await}`, `{#switch}`/`{:case}`/`{:default}`/
-  `{/switch}`, `{#try}`/`{:catch}`/`{/try}`. `<template name args>` is ONLY the
-  snippet form (called `{name(args)}`) — there is no `<template if>`. `{expr}`
+  `{/switch}`, `{#try}`/`{:catch}`/`{/try}`. A snippet is its own `{#…}` block,
+  `{#snippet name(args)}…{/snippet}` (called `{name(args)}`) — the `<template name>`
+  snippet form and all `<template …>` control flow were removed (a bare
+  `<template>` is now an inert element). The branch keyword is `{:else if}` (a
+  space), not `{:elseif}`. `{expr}`
   text, `name={expr}` attrs, `onclick={fn}`, `bind:value={x}`, plus the directive
   attrs `class:name={cond}`, `style:property={value}`, `attach={fn}`, and
-  `{...spread}`. Components are capitalised tags filling a `<slot>`; a *root*
+  `{...spread}`. Components are capitalised tags; the content nested in them
+  renders where the component calls `{children()}` (no `<slot>` element, no
+  named slots). A *root*
   `<style>` is component-scoped, but a `<script>`/`<style>` nested in a
   control-flow branch is scoped to that branch. Component files end in `.abide`,
   never `.svelte`.
@@ -266,22 +307,54 @@ Read these from real `.abide` files in `examples/`; never write Svelte syntax.
    parser is the single source for both):
 
    ```sh
-   for t in '{#if' '{:elseif' '{:else}' '{/if}' '{#for ' '{#for await' '{/for}' \
+   for t in '{#if' '{:else if' '{:else}' '{/if}' '{#for ' '{#for await' '{/for}' \
      '{#await' '{:then' '{:catch' '{:finally' '{#switch' '{:case' '{:default' \
      '{#try' '{/try}' 'bind:value' 'bind:checked' 'bind:group' 'get, set' \
-     'class:' 'style:' 'attach=' '{...' 'scope().state' 'scope().computed' \
-     'scope().linked' 'scope().effect' 'html`' '<template name' '<slot'; do
+     'class:' 'style:' 'attach=' '{...' '} = scope()' '= state(' 'computed(' \
+     'linked(' 'effect(' 'html`' '{#snippet ' '{/snippet}' 'children()'; do
      grep -qF -- "$t" packages/abide/README.md || echo "MISSING from README §4: $t"
    done
    ```
 
-   The `scope().*` tokens are also satisfied by the destructure idiom
-   (`const { state, computed, linked, effect } = scope()` + bare calls) — treat
-   a flagged `scope().state` etc. as covered if that form is present and used.
+   The reactive-primitive tokens enforce the **destructure form**: `} = scope()`
+   (the destructure is present) plus the bare callables (`= state(`, `computed(`,
+   `linked(`, `effect(`). A README that used the longhand `scope().state(...)`
+   at each call site would now flag `} = scope()` MISSING — that is the point:
+   teach the destructure idiom, not the longhand. The branch keyword is
+   `{:else if}` (a space), not `{:elseif}` — re-confirm against
+   `parseTemplate.ts` if the parser changes.
 
-5. **Budget**: README `wc -l` ≤ 240. AGENTS.md has no ceiling — length is
-   whatever completeness requires.
-6. **Tree / diagram width**: no line in a `text` block over ~76 columns (GitHub
+5. **Compile gate (authoritative — run this, do not skip)** — extract every
+   `html` fence from the README and run each through the REAL `.abide` compiler.
+   This is the check the token grep can't be: the grep only confirms a substring
+   is *present*, so a fence using REMOVED syntax (`<slot>`, `<template name>`,
+   `<template if>`) or a structural mistake (imports after a leading HTML comment,
+   a stray nested-script import) passes the grep while throwing here. The compiler
+   is the same authority as `packages/abide/src` — if a fence throws, the example
+   is teaching syntax that does not exist. Treat a token-grep pass as meaningless
+   until this is green.
+
+   ```sh
+   bun -e '
+   const fs=require("fs");
+   const fences=[...fs.readFileSync("packages/abide/README.md","utf8")
+     .matchAll(/\x60\x60\x60html\n([\s\S]*?)\x60\x60\x60/g)].map(m=>m[1]);
+   const { compileModule }=await import("./packages/abide/src/lib/ui/compile/compileModule.ts");
+   let bad=0,i=0;
+   for(const s of fences){i++;try{compileModule(s,{filename:`f${i}.abide`})}
+     catch(e){bad++;console.log(`fence #${i} THROW →`,String(e.message).split("\n")[0])}}
+   console.log(bad?`${bad} fence(s) failed`:`all ${fences.length} .abide fences compile`);
+   process.exit(bad?1:0)'
+   ```
+
+   (`\x60` is a backtick — written that way so the regex does not close this
+   markdown fence.) Every grammar token in step 4 must appear inside a fence that
+   ALSO compiles here; a removed-syntax example can satisfy the grep but never the
+   compiler. When they disagree, the compiler wins — fix the example.
+
+6. **Budget**: README `wc -l` ≤ ~300 (see the README-sections ceiling above).
+   AGENTS.md has no ceiling — length is whatever completeness requires.
+7. **Tree / diagram width**: no line in a `text` block over ~76 columns (GitHub
    clips them).
 
 ## Write to the right files

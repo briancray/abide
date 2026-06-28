@@ -111,9 +111,7 @@ async function callRedirectFetch() {
         <li>error:{errorOutcome}</li>
         <li>redirect:{redirectOutcome}</li>
     </ul>
-</section>
 
-<section class="mt-6 space-y-3">
     <CodeBlock title="src/server/rpc/*.ts — three handlers, three helpers" code={`import { GET } from '@abide/abide/server/GET'
 import { json } from '@abide/abide/server/json'
 import { error } from '@abide/abide/server/error'

@@ -4,8 +4,9 @@ import { page } from '@abide/abide/shared/page'
 /*
 Nested section layout for /rpc/*. A layout.abide wraps every page at or below
 its folder, so this masthead renders once and the chain nests it inside the
-root layout (outermost-first) — the subpage lands in this layout's <slot/>.
-Active pill state reads page.url.pathname, so it re-highlights on every SPA nav.
+root layout (outermost-first) — the subpage lands where this layout calls
+{children()}. Active pill state reads page.url.pathname, re-highlighting on every
+SPA nav.
 */
 const subpages = [
     { href: '/rpc', label: 'overview' },

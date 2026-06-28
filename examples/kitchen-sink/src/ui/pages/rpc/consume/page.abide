@@ -129,6 +129,10 @@ const cachedRaw = computed(() => cache(getReport.raw)({ id: 'r-1' }))
             <li>stream[{frame.n}]:{frame.text}</li>
         {/for}
     </ul>
+
+    <CodeBlock code={`const body = await getEcho({ message: 'hello' })       // decoded body, HttpError on non-2xx
+const response = await getReport.raw({ id: 'r-1' })    // full Response — headers, status
+for await (const frame of tickFeed.stream()) { /* iterate jsonl/sse frames */ }`} />
 </section>
 
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
@@ -140,6 +144,8 @@ const cachedRaw = computed(() => cache(getReport.raw)({ id: 'r-1' }))
             cached raw → status={response.status}, x-report-version={response.headers.get('x-report-version')}
         </p>
     {/await}
+
+    <CodeBlock code={`const cachedRaw = computed(() => cache(getReport.raw)({ id: 'r-1' }))  // shared cache key`} />
 </section>
 
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
@@ -163,12 +169,4 @@ const cachedRaw = computed(() => cache(getReport.raw)({ id: 'r-1' }))
             <code class="font-mono">{createEcho.method} {createEcho.url}</code>
         </button>
     </form>
-</section>
-
-<section class="mt-6 space-y-3">
-    <CodeBlock title="client — all three forms, same rpc import" code={`const { computed } = scope()
-const body = await getReport({ id: 'r-1' })            // decoded body, HttpError on non-2xx
-const response = await getReport.raw({ id: 'r-1' })    // full Response
-for await (const frame of tickFeed.stream()) { /* iterate jsonl/sse frames */ }
-const cachedRaw = computed(() => cache(getReport.raw)({ id: 'r-1' }))  // shared cache key`} />
 </section>

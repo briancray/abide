@@ -93,6 +93,18 @@ async function runJsonl() {
             {/for}
         </ul>
     {/if}
+
+    <CodeBlock title="src/server/rpc/tickFeed.ts — SSE" code={`import { GET } from '@abide/abide/server/GET'
+import { sse } from '@abide/abide/server/sse'
+
+export const tickFeed = GET(() =>
+    sse((async function* () {
+        for (let tick = 1; ; tick += 1) {
+            yield { tick, at: new Date().toISOString() }
+            await Bun.sleep(1000)
+        }
+    })()),
+)`} />
 </section>
 
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
@@ -110,20 +122,6 @@ async function runJsonl() {
             {/for}
         </ul>
     {/if}
-</section>
-
-<section class="mt-6 space-y-3">
-    <CodeBlock title="src/server/rpc/tickFeed.ts — SSE" code={`import { GET } from '@abide/abide/server/GET'
-import { sse } from '@abide/abide/server/sse'
-
-export const tickFeed = GET(() =>
-    sse((async function* () {
-        for (let tick = 1; ; tick += 1) {
-            yield { tick, at: new Date().toISOString() }
-            await Bun.sleep(1000)
-        }
-    })()),
-)`} />
 
     <CodeBlock title="src/server/rpc/countLog.ts — JSONL" code={`import { GET } from '@abide/abide/server/GET'
 import { jsonl } from '@abide/abide/server/jsonl'
