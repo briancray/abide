@@ -9,7 +9,9 @@ import { replaceRange } from './replaceRange.ts'
 import type { SwitchCase } from './types/SwitchCase.ts'
 
 /*
-Multi-branch binding — the runtime for `<template switch>`. An effect evaluates the
+Multi-branch binding — the runtime for `{#switch}` blocks and for `{#if}` chains that
+include `{:elseif}` branches (compiled as a switch over `true` with Boolean-coerced
+match thunks so the first truthy branch wins). An effect evaluates the
 subject, picks the first case whose `match` equals it (strict `===`), falling back
 to the default (`match` undefined); the chosen case's content lives in a RANGE
 bounded by two comment markers, so a case holds any content. Staying on the same

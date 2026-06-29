@@ -18,8 +18,8 @@ sources, picked at construction:
 
 Returns a server fn that resolves to `undefined` when no public file
 matches the request path, so the caller falls through to its own 404 /
-middleware path. The path-traversal guard mirrors serveStaticAsset's
-defence against encoded `..` segments in the raw URL.
+middleware path. The path-traversal guard uses the same `containsTraversal`
+check against encoded `..` segments in the raw URL.
 
 Async because disk mode globs `publicDir` once at construction to build a
 Set of the available paths: every page nav and RPC falls through here, so

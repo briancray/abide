@@ -220,7 +220,7 @@ export function createSocketDispatcher(sockets: SocketRoutes): SocketDispatcher 
         }
         /*
         publish() runs the topic's optional Standard Schema synchronously
-        and throws on failure (see defineSocket.validateSync). The
+        and throws on failure (see validateSync in defineSocket.ts). The
         dispatcher invokes us via `void handlePub(...)`, so an unhandled
         throw would surface as an unhandled promise rejection on every
         malformed client frame. Catch + log so a buggy client can't take
@@ -317,7 +317,7 @@ export function createSocketDispatcher(sockets: SocketRoutes): SocketDispatcher 
             try {
                 /* ref-json from abide's own client; a non-abide client sends a plain-JSON
                    frame, which decodeRefJson rejects (a frame is always an object, never the
-                   `[root, slots]` envelope) — fall back to JSON.parse so raw WS clients work. */
+                   `[rootValue, slots]` envelope) — fall back to JSON.parse so raw WS clients work. */
                 try {
                     frame = decodeRefJson(text) as SocketClientFrame
                 } catch {

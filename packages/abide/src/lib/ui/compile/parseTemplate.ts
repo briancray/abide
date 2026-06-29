@@ -9,7 +9,7 @@ import { VOID_TAGS } from './VOID_TAGS.ts'
 /*
 A minimal compile-time parser for the abide template subset: elements, text with
 `{expr}` interpolation, static/`{expr}`/`on<event>={expr}` attributes, and
-`<template each as key>` control flow. Not a full HTML parser — it covers what
+`{#if}/{#for}/{#await}/{#switch}/{#try}` block control flow. Not a full HTML parser — it covers what
 components need and reads brace expressions with quote/nesting awareness so an
 expression containing `<`, `>`, or `}` parses intact. Void elements self-close.
 `<!-- … -->` comments are dropped (no node emitted) so they leave no trace in the
@@ -151,8 +151,9 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
     }
 
     /* Reads a `{#…}` control block: the open token, its children up to a continuation
-       `{:…}` (a branch) or close `{/…}`, recursing. Emits the same nodes toControlFlow
-       does today (if/each/await/switch/try + case/branch children). */
+       `{:…}` (a branch) or close `{/…}`, recursing. Emits `if`/`each`/`await`/`switch`/`try`
+       nodes with their `case`/`branch` children — the same TemplateNode kinds the back-ends
+       and `skeletonContext` consume. */
     function readBlock(): TemplateNode {
         const open = readBlockToken() // sigil is '#'
         const keyword = headKeyword(open.body)
@@ -283,7 +284,7 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
        `{:…}` ends the current branch's children and starts a new `case`/`branch` node
        (per construct). The leading children (before the first `{:…}`) are the block's
        own children (the `if`/`await`/`try` then-content). Returns the full children list
-       INCLUDING the case/branch nodes, matching toControlFlow's output. */
+       INCLUDING the case/branch nodes, producing the same TemplateNode tree the back-ends consume. */
     function readBlockChildren(keyword: string): TemplateNode[] {
         const nodes: TemplateNode[] = []
         while (cursor < source.length) {
@@ -1039,7 +1040,6 @@ function attrName(attr: TemplateAttr): string {
     return attr.name
 }
 
-/* Turns a `<template>` directive into a control node (if/each/await + then/catch). */
 /* The control-flow attribute names that used to drive `<template>` directives — now
    moved to `{#…}` blocks. A `<template>` carrying one is a migration error. */
 const CONTROL_DIRECTIVES = new Set([
@@ -1057,10 +1057,9 @@ const CONTROL_DIRECTIVES = new Set([
     'try',
 ])
 
-/* A `<template>` is now ONLY a snippet declaration (`name`) or a plain inert
-   `<template>` element. Control flow moved to `{#…}` blocks; a directive attribute
-   (`if`/`each`/`await`/…) is a migration error pointing at the block form. `name`
-   makes the element callable; without it, it stays an inert reusable fragment. */
+/* A `<template>` is now ONLY a plain inert element (e.g. client-side cloning).
+   Snippet declarations moved to `{#snippet name(args)}…{/snippet}` blocks; control
+   flow moved to `{#…}` blocks — both throw migration errors here. */
 function toSnippetOrTemplate(attrs: TemplateAttr[], children: TemplateNode[]): TemplateNode {
     const find = (name: string) => attrs.find((attr) => attrName(attr) === name)
     const directive = attrs.find((attr) => CONTROL_DIRECTIVES.has(attrName(attr)))

@@ -15,7 +15,7 @@ only UI loader in the dev/build/preload pipeline; the emitted module's
 `abide/ui/*` imports resolve through the package exports.
 
 A `layout.abide` compiles as a layout: its `<slot/>` lowers to the router's page
-outlet (`<abide-outlet>`) rather than a passed-children slot — the file's role is
+outlet (a `<!--abide:outlet-->…<!--/abide:outlet-->` comment boundary the router fills) rather than a passed-children slot — the file's role is
 its name, so the loader flags it from the path stem.
 
 The emitted module embeds the component's `<script>` and `{expr}` bodies verbatim,

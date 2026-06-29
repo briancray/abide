@@ -6,9 +6,10 @@ import { enterNamespace } from './enterNamespace.ts'
 Builds a `[ … ]`-bounded content range into a DETACHED fragment under a fresh reactive
 scope, then returns the markers, the fragment, and the scope disposer — leaving
 INSERTION to the caller. The create-path range builder for the keyed list runtimes
-(`each` / `eachAsync`): `each` holds the fragment in `pending` for deferred placement
-(its reconcile reorders rows), `eachAsync` inserts it immediately at the stream anchor
-(arrival order). Both need the same bracketed-fragment build, so it lives here once.
+(`each` / `eachAsync`) and `awaitBlock` (branch swaps): `each` holds the fragment in
+`pending` for deferred placement (its reconcile reorders rows), `eachAsync` inserts it
+immediately at the stream anchor (arrival order). All need the same bracketed-fragment
+build, so it lives here once.
 
 Unlike `openMarker`, this never touches a live parent or the hydrate claim cursor — the
 markers are created fresh and parked in a fragment — so it is a pure CREATE primitive;

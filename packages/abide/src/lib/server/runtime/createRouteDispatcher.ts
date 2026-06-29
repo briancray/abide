@@ -36,7 +36,7 @@ function methodNotAllowed(allow: string): Response {
 
 /*
 Owns route dispatch: deciding, per registered URL, whether a request hits an
-rpc rpc, a page render, or nothing — and the method-matching that picks the
+an rpc, a page render, or nothing — and the method-matching that picks the
 status. Page URLs (under src/ui/pages/) serve GET/HEAD by rendering; rpc
 URLs (under src/server/rpc/, `/rpc/...`) dispatch to the single declared rpc,
 405 on method mismatch; an unregistered URL is 404. Page and rpc URLs are

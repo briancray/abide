@@ -7,7 +7,7 @@ import { httpErrorFor } from './httpErrorFor.ts'
 Decodes a Response into the natural body value based on Content-Type:
   application/json (or `*\/+json`) → parsed JSON
   text/*                           → string
-  204 No Content / empty body      → undefined
+  204 No Content                   → undefined
   everything else                  → Blob
 
 Non-2xx responses throw HttpError so the happy path never has to check

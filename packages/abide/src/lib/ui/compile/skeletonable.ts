@@ -4,11 +4,11 @@ import type { TemplateNode } from './types/TemplateNode.ts'
 
 /* Whether a subtree is skeleton STRUCTURE — anything the parser-backed clone can carry with
    its holes mounted in place: elements, `<style>`, text (static OR reactive), child
-   components (their wrapper element is positioned in the skeleton), control-flow blocks and
-   `<slot>` outlets (each anchor-mounted at its position), and emit-nothing nodes — a nested
-   `<script>` (a scoped reactive block) and a `<template name>` snippet (a hoisted builder),
-   both of which the skeleton's bind list runs in document order, scoped like
-   `generateElement` does. Only a standalone `branch`/`case` (consumed by its block, never a
+   components (anchor-positioned via an `<!--a-->` marker in the skeleton), control-flow
+   blocks and `<slot>` outlets (each anchor-mounted at its position), and emit-nothing nodes
+   — a nested `<script>` (a scoped reactive block) and a `{#snippet}` block (a hoisted
+   builder), both of which the skeleton's bind list runs in document order, scoped like
+   `generateChild` does. Only a standalone `branch`/`case` (consumed by its block, never a
    loose child) disqualifies. */
 function skeletonStructure(node: TemplateNode): boolean {
     if (isControlFlow(node) || node.kind === 'component') {

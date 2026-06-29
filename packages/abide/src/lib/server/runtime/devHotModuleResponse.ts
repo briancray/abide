@@ -11,8 +11,8 @@ mode — runtime sourced from `window.__abide`, self-invoking `hotReplace` — a
 transpiles the embedded author TypeScript to plain JS the browser can import
 directly (the normal pipeline relies on the bundler's `ts` loader for this). The
 browser imports this in place of a reload; on load it swaps the component's live
-instances. The id is guarded as a project-relative `.abide` under cwd; a bad or
-missing file 404s so the client falls back to a reload.
+instances. The id is guarded as a project-relative `.abide` under cwd; a bad
+module ID returns 400; a missing file 404s so the client falls back to a reload.
 */
 export async function devHotModuleResponse(moduleId: string): Promise<Response> {
     const root = process.cwd()

@@ -7,9 +7,9 @@ import { writeNode } from './runtime/writeNode.ts'
 A writable reactive cell — abide's from-scratch reactive primitive, with no
 compiler sigil and no external reactivity-library import. `.value` is a
 plain getter/setter over a signal node, so a read/write shows up as exactly that
-in a stack trace. The compiler's job (later) is only to auto-deref `{cell}` in
-templates and tag this declaration as a serializable manifest slot; the runtime
-needs no magic.
+in a stack trace. The compiler enforces scope attachment (bare `state()` is a compile
+error — use `scope().state()`), desugars plain `state(initial)` to a serializable `model`
+doc slot, and keeps `state(initial, transform)` as a `.value` cell; the runtime needs no magic.
 
 `transform` is an optional coercion gate on the write path: every `.value =`
 runs it and stores what it returns, with `previous` for clamp-relative writes or

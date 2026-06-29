@@ -1,6 +1,6 @@
 /* The comment-marker "wire alphabet" — the single source of truth for the sentinel
    strings the SSR emit (`generateSSR`) writes into HTML comments and the hydrate scan
-   (`skeleton`) + every range-mount runtime (`when`/`switch`/`each`/`mountRange`/
+   (`skeleton`) + every range-mount runtime (`when`/`switchBlock`/`each`/`mountRange`/
    `mountSlot`/`appendSnippet`) creates as `document.createComment` nodes. Both sides
    reference THESE constants, so a marker the server writes and the marker the client
    looks for can never drift on a literal.

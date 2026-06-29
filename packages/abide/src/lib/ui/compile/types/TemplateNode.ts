@@ -3,8 +3,8 @@ import type { TextPart } from './TextPart.ts'
 
 /*
 A parsed template node. `text` carries interpolation parts; `element` carries
-attributes and children; `each` is the `<template each as key>` control flow over
-a list; `if`/`await`/`switch`/`try` are its control-flow siblings.
+attributes and children; `each` is the `{#for items as item}` control flow over a
+list; `if`/`await`/`switch`/`try` are its control-flow siblings.
 
 `loc` (where present) is the absolute offset of the node's primary expression in
 the original `.abide` source — additive, set only when the parser tracks
@@ -50,9 +50,9 @@ export type TemplateNode =
     | {
           kind: 'await'
           promise: string
-          /* `then` riding the `await` tag (`<template await={p} then={v}>`) makes the
-             block BLOCKING: no pending branch, children are the resolved content bound
-             to `as`, SSR settles before the first flush. Absent → streaming. */
+          /* `then` in the await head (`{#await p then v}`) makes the block BLOCKING:
+             no pending branch, children are the resolved content bound to `as`, SSR
+             settles before the first flush. Absent → streaming. */
           blocking: boolean
           as: string | undefined
           children: TemplateNode[]
@@ -93,9 +93,9 @@ export type TemplateNode =
           children: TemplateNode[]
           loc?: number
       }
-    /* A `<template name="row" args={item}>` snippet: a named, scope-capturing
-       builder declared once and called like a function (`{row(item)}`). `params`
-       is the raw `args` source spliced into the builder's parameter list. */
+    /* A `{#snippet row(item)}` snippet: a named, scope-capturing builder declared
+       once and called like a function (`{row(item)}`). `params` is the raw
+       parameter list from the parens (absent when there are no parameters). */
     | {
           kind: 'snippet'
           name: string

@@ -13,7 +13,7 @@ import type { PersistHandle } from './types/PersistHandle.ts'
 import type { Scope } from './types/Scope.ts'
 
 /* A process-stable counter id. The serialization-stable LEXICAL id (route +
-   component + tree position) that `persistent`/`sync` want across reloads/peers
+   component + tree position) that `persist`/`broadcast` want across reloads/peers
    is stamped by the compiler later; until then a scope's id is unique within a
    run — enough for in-session undo and the bus, and as an explicit key's fallback. */
 let nextId = 0
@@ -23,7 +23,7 @@ Builds a lexical scope. Its data is a document — created eagerly from `initial
 or (when `awaiting`) ADOPTED from the first `doc()` a component body creates under
 it, so a scope can wrap the component's own model without changing the data
 lowering. Data methods mirror `Doc` and delegate to that document; capabilities
-are lazy (`undoable`/`persistent` attach `history`/`persist` to it on first call);
+are lazy (`record`/`persist` attach `history`/`persist` to it on first call);
 `child` nests; `dispose` tears the subtree down children-first.
 */
 export function createScope(

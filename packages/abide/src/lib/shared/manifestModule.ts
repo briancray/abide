@@ -16,8 +16,8 @@ export function manifestModule(options: {
     manifests whose contents are enumerated once at boot as an aligned table (see
     logExposedSurfaces) — rpc/sockets/pages/layouts — which both avoids the
     redundant list and the double-log of manifests (pages/layouts) loaded by both
-    the server and client bundles. prompts/errors have no table, so they pass a
-    label to keep their build-time line.
+    the server and client bundles. prompts has no table, so it passes a label to
+    keep its build-time line.
     */
     label?: string
 }): { contents: string; loader: 'js' } {

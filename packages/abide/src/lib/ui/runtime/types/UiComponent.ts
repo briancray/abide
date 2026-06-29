@@ -10,8 +10,9 @@ page/route registries carry — abide-ui's compiled-component shape.
 export type UiComponent = ((host: Element, props?: UiProps) => () => void) & {
     /* `ctx` is the request-local block-id counter, threaded so a child's ids share the
        page's depth-first numbering; omitted at the top level (a fresh counter defaults
-       in). Returns a Promise when the component has an inline `await` (a blocking `{#await
-       … then}` block or a child render); otherwise renders synchronously. Callers `await`
+       in). Returns a Promise when the component contains an inline `await` — a blocking
+       `{#await … then}` block, a child-component render, a `<slot>` read, or a
+       top-level `await` in the author script; otherwise renders synchronously. Callers `await`
        it either way (awaiting a sync value just returns it). */
     render: (props?: UiProps, ctx?: RenderContext) => SsrRender | Promise<SsrRender>
     hydrate?: (host: Element, props?: UiProps) => () => void

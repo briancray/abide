@@ -4,7 +4,7 @@ folder-based: every leaf is `page.abide` or `layout.abide`, and the URL
 is the directory path. Pages mount at the directory path; layouts mount at
 the directory prefix. Dynamic segments keep their `[name]` / `[...rest]`
 shape — translation to Bun's `:name` / `*` happens at server registration
-via toBunRoutePattern; consumers see the readable form in `nav.route`.
+via toBunRoutePattern; consumers see the readable form in `page.route`.
 */
 export function pageUrlForFile(relPath: string): string {
     const segments = relPath.split('/')

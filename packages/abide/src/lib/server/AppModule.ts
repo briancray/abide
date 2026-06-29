@@ -10,7 +10,7 @@ WebSockets are not exposed here — abide's only native WebSocket
 surface is the sockets hub (see `abide/server/socket`), multiplexed onto a
 single framework-owned connection per client at `/__abide/sockets`.
 Inside request scopes, the live Bun.Server is reachable via the
-exported `server()` function from `abide/server`; `init` receives it
+exported `server()` function from `abide/server/server`; `init` receives it
 explicitly because it runs outside a request.
 */
 // @documentation plumbing

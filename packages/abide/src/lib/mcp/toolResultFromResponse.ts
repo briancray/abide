@@ -15,7 +15,7 @@ function asText(value: unknown): string {
 }
 
 /*
-Turns an rpc/socket Response into an MCP `tools/call` result. Always
+Turns an RPC Response into an MCP `tools/call` result. Always
 carries a `text` content block for backward compatibility; adds
 `structuredContent` (an object, per the MCP spec) so models that
 understand structured output get the typed value instead of a stringified

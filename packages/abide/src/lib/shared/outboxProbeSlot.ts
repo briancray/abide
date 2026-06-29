@@ -2,7 +2,7 @@
 Internal slot the browser outbox registry registers its prober into, so the
 shared pending() probe can count parked durable-rpc writes without shared/
 importing browser/. Mirrors tailProbeSlot. The prober reads the doc-backed
-queue entries (reactive inside $derived / $effect) and reports whether any
+queue entries (reactive inside scope().computed() / scope().effect()) and reports whether any
 undelivered entry matches the selector: a durable rpc selector (carries a
 `url`) narrows to its own queue, the bare form spans every registered queue,
 optional args narrow to one parked call by structural compare. Outbox state is

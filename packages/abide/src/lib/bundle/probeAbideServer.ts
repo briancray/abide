@@ -10,7 +10,7 @@ Confirms a URL points at a abide server before the launcher navigates the app
 window there, by fetching its unauthenticated health endpoint. Returns the
 server's identity on success, or undefined when nothing abide answers — a network
 error, the wrong port, or a non-abide page (a bare 403/404, a different app, a
-captive portal's 200 — hence the `abide: true` body check, never response.ok
+captive portal's 200 — hence the `abide: true` (or version string) body check, never response.ok
 alone). The endpoint bypasses the app's own middleware, so an auth-guarded abide
 app still verifies here even though its pages would later redirect to a login.
 Probes HEALTH_PATH first, falling back to the IDENTITY_PATH alias so a newer

@@ -14,9 +14,9 @@ machinery — a test owns the connection lifecycle through `close()`, so a drop
 is teardown, not something to recover from. Frames sent before the ws opens
 queue and flush on open, the one piece of timing a test can't sidestep.
 
-Implements SocketChannel (subscribe/unsubscribe/publish), so `socket(name)`
-hands its sockets to the same buildSocketOverChannel the browser socketProxy
-uses — the Socket<T> surface can't drift between the test path and production.
+Uses the same createSocketSubRegistry-backed SocketChannel the browser channel
+uses, so `socket(name)` passes it to the same buildSocketOverChannel the browser
+socketProxy uses — the Socket<T> surface can't drift between the test path and production.
 */
 export function createTestSocketChannel(wsUrl: string): {
     socket: <T>(name: string) => Socket<T>

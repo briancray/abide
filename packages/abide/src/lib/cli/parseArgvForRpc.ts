@@ -9,8 +9,10 @@ on the manifest entry (when present) drives flag typing:
 
 For complex shapes (nested objects, unions, anyOf) the CLI exposes
 `--json <stringified-args>` as an escape hatch that supplies the whole
-args bag verbatim. Stdin: if a JSON object arrives piped in, it's used
-as the full args bag (flags layer on top).
+args bag verbatim. Stdin: if a JSON object arrives piped in with no argv flags, it is used
+as the full args bag. Stdin and flags are mutually exclusive — stdin is
+skipped when argv is non-empty to avoid hanging on a pipe that never
+sends EOF.
 
 Unrecognised flags throw — early loud feedback is more useful than
 silent drops.

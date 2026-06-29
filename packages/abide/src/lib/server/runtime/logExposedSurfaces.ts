@@ -83,7 +83,7 @@ exposed on, so abide's routing and multimodal-by-default exposure are auditable
 rather than implicit. Three aligned tables — scan a column to spot a missing
 surface, a row to see one declaration's reach:
 
-  - pages: each route with the nearest layout and error boundary wrapping it.
+  - pages: each route key.
   - sockets: name + client surfaces (schema/browser/mcp/cli) and whether clients
     may publish.
   - rpcs: method+path (headed `http` since http/openapi are unconditional) +
@@ -95,9 +95,8 @@ then the surface columns, so the glyphs line up vertically across the tables.
 rpc folds its method into a left-aligned prefix of the identifier cell, so paths
 still start at a shared column. For sockets and rpcs the `schema`
 column leads: it's what unlocks the non-browser surfaces, so a missing schema
-reddens to flag the gated declaration. Loads the full registry, so it runs once
-at boot and only under `abide` debug logging (DEBUG=abide) to avoid forcing
-eager imports in production. Best-effort: enumeration failures are swallowed,
+reddens to flag the gated declaration. Loads the full registry. Runs once at boot; suppressed only via DEBUG=-abide
+(the always-on logging opt-out). Best-effort: enumeration failures are swallowed,
 this is diagnostic only.
 */
 export async function logExposedSurfaces(routing: { pages: Pages }): Promise<void> {

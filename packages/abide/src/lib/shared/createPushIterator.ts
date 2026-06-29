@@ -1,5 +1,5 @@
 /*
-Single-slot-mailbox AsyncIterator factory shared by the in-process
+Bounded-queue AsyncIterator factory shared by the in-process
 socket fan-out (defineSocket) and the client-side ws proxy
 (socketProxy). Callers push values, signal end, signal an error, or
 signal a transport disconnect; the iterator drains a queue then awaits

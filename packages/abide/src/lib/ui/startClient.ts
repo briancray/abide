@@ -1,4 +1,7 @@
 import { createCacheStore } from '../shared/createCacheStore.ts'
+import { healthSeedSlot } from '../shared/healthSeedSlot.ts'
+import { rpcTimeoutSlot } from '../shared/rpcTimeoutSlot.ts'
+import { setAppName } from '../shared/setAppName.ts'
 import { setBaseResolver } from '../shared/setBaseResolver.ts'
 import { setCacheStoreResolver } from '../shared/setCacheStoreResolver.ts'
 import { setGlobalCacheStoreResolver } from '../shared/setGlobalCacheStoreResolver.ts'
@@ -14,13 +17,20 @@ import type { RouteLoader } from './runtime/types/RouteLoader.ts'
 import { seedResolved } from './seedResolved.ts'
 
 /* The server's __SSR__ payload this entry consumes. */
-type SsrPayload = { cache?: CacheSnapshotEntry[]; base?: string }
+type SsrPayload = {
+    cache?: CacheSnapshotEntry[]
+    base?: string
+    app?: string
+    health?: Record<string, unknown>
+    clientTimeout?: number
+}
 
 /*
 The official abide-ui client entry. Reads the server's `window.__SSR__` payload,
 seeds a tab-scoped cache store from the inline snapshot (so a warm `cache()` read
-resolves synchronously and the matching `<template await>` adopts the SSR DOM with
-no re-fetch), installs the mount base, and starts the router — which imports the
+resolves synchronously and the matching `{#await}` adopts the SSR DOM with
+no re-fetch), installs the mount base, seeds the per-page __SSR__ stamps (app
+name, health, RPC timeout), and starts the router — which imports the
 current route's chunk, adopts the server-rendered `#app`, then drives SPA
 navigation — importing each further page's chunk on first visit and probing the
 destination through the server's app.handle so auth/redirect gating still applies.
@@ -50,6 +60,14 @@ export function startClient(
     }
     const ssr = (globalThis as { __SSR__?: SsrPayload }).__SSR__ ?? {}
     setBaseResolver(() => ssr.base ?? '')
+    /* Seed the per-page __SSR__ stamps into their shared slots before mount: the app
+       name (default log channel), the health payload (so health()'s first probe is warm),
+       and the env-configured RPC timeout (ABIDE_CLIENT_TIMEOUT, shipped per request).
+       Without this the browser falls back to channel 'app', a cold first health probe,
+       and unbounded RPC fetches. */
+    setAppName(ssr.app)
+    healthSeedSlot.payload = ssr.health
+    rpcTimeoutSlot.ms = ssr.clientTimeout
     /* The `page` proxy reads route/params/url off the router-updated snapshot. */
     setPageResolver(() => clientPage.value)
 
@@ -61,7 +79,7 @@ export function startClient(
        (inline — reads settled at render-return, in __SSR__) and `__abideResumeCache` (pending
        {#await} reads whose `__abideResolve(...)` chunks the stream pushed during parse, before
        this deferred bundle ran). A warm entry lets a `cache()` read resolve synchronously so
-       `<template await>` adopts without a refetch; a miss marker re-fetches live. */
+       `{#await}` adopts without a refetch; a miss marker re-fetches live. */
     const streamed =
         (globalThis as { __abideResumeCache?: StreamedResolution[] }).__abideResumeCache ?? []
     for (const resolution of [...(ssr.cache ?? []), ...streamed]) {

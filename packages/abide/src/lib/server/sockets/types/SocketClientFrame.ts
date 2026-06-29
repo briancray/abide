@@ -9,9 +9,9 @@ the dispatcher checks the topic's `clientPublish` flag before fanning
 out.
 
 `sub` is the per-subscription id minted client-side; the server treats
-it as opaque and routes inbound `msg|err|end` frames back to the same
-id so one ws can multiplex many subscriptions to the same or different
-sockets.
+it as opaque and routes inbound `replay|err|end` frames back to the same
+id — `msg` frames are broadcast keyed by socket name; the client
+demuxes them against every local sub for that socket.
 */
 export type SocketClientFrame =
     | { type: 'sub'; sub: string; socket: string; replay?: number }

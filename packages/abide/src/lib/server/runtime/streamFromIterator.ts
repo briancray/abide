@@ -4,7 +4,7 @@ import { messageFromError } from '../../shared/messageFromError.ts'
 Shared body builder for the streaming respond helpers (`jsonl`, `sse`).
 Both flow the same shape — pull from an AsyncIterator, encode each frame
 to bytes, emit a sentinel `error` frame on a generator throw, and route
-ReadableStream's `cancel` into `iter.return()` so the handler's
+ReadableStream's `cancel` into `iterator.return()` so the handler's
 `for await` exits via its normal control path. Only the per-frame
 encoding and the optional keepalive payload differ between the two.
 
@@ -85,7 +85,7 @@ export function streamFromIterator<T>(
             rejection from its cleanup: a `finally` that throws on `.return()`
             would otherwise surface as an unhandled rejection (process-fatal
             under Bun's default) on a client disconnect — a path every
-            sse/jsonl/resolve stream hits routinely.
+            sse/jsonl stream hits routinely.
             */
             return iterator.return?.(reason)?.then(
                 () => undefined,

@@ -41,7 +41,7 @@ const keyFor = (url: string): string => `abide:outbox:${url}`
 /*
 A durable, app-owned FIFO retry queue for one RPC. A call fetches directly and throws as
 before while the queue is empty; when the server can't be reached — a transport failure or
-a 502/503/504/52x — the caller `park`s the request here (a side-effect; the call still
+a 502/503/504/520–527/530 — the caller `park`s the request here (a side-effect; the call still
 throws), and once a backlog exists the caller parks every later call at the tail too, so
 FIFO order is preserved on replay. Built on `doc` + `persist`, so the queue IS a persisted
 document that survives a reload. Draining is manual — the app calls `retry()` (per-entry or

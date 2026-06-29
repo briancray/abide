@@ -142,7 +142,7 @@ const SVG_REACTIVE_TEXT = `
 <svg viewBox="0 0 24 24"><text x="0">{label}</text></svg>
 `
 
-/* A foreign parent built imperatively (it has a control-flow child) with a static
+/* A foreign parent built dynamically (it has a control-flow child) with a static
    foreign sibling that coalesces into a cloneStatic run — the wrapper-less run must
    still parse into the foreign namespace. */
 const SVG_MIXED_STATIC = `
@@ -170,7 +170,7 @@ const SVG_AWAIT = `
 <svg viewBox="0 0 24 24">{#await load()}<circle cx="1"/>{:then v}<circle r={v}/>{/await}</svg>
 `
 
-describe('foreign content — imperative path with dynamic children', () => {
+describe('foreign content — dynamically-built parents with dynamic children', () => {
     test('CREATE: reactive text under <svg> keeps elements in the SVG namespace', () => {
         const host = document.createElement('div')
         runBuild(SVG_REACTIVE_TEXT, host, false)
@@ -179,7 +179,7 @@ describe('foreign content — imperative path with dynamic children', () => {
         expect((host.querySelector('text') as Element).textContent).toBe('hi')
     })
 
-    test('CREATE: a static cloneStatic run under an imperative <svg> stays SVG', () => {
+    test('CREATE: a static cloneStatic run under a dynamically-built <svg> stays SVG', () => {
         const host = document.createElement('div')
         runBuild(SVG_MIXED_STATIC, host, false)
         expect((host.querySelector('path') as Element).namespaceURI).toBe(SVG_NS)

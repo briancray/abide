@@ -25,7 +25,7 @@ export type AnalyzedComponent = {
        CSS to bundle. A top-level `<style>` covers the whole component; a nested one
        covers only its sibling subtree. Empty for a component with no style. */
     styles: { attribute: string; css: string }[]
-    /* False when the template contains an `await` block (not adoptable yet) — the
-       router mounts (re-renders) rather than hydrates such a page. */
+    /* Always `true` — hydration adopts every block in place, including `await`
+       (streamed value seeded through the resume manifest). */
     hydratable: boolean
 }

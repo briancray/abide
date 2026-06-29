@@ -92,12 +92,14 @@ async function computeBinary(
 }
 
 /*
-Handles GET /__abide/cli/<platform> — streams a gzipped tarball
-containing the platform-specific thin binary + a `.env` carrying
-ABIDE_APP_URL (and ABIDE_APP_TOKEN if the inbound request was authenticated).
+Handles GET /__abide/cli/<platform> — streams a gzipped tarball containing
+the platform-specific thin binary, the sibling server binary, and a `.env`
+carrying ABIDE_APP_URL (and ABIDE_APP_TOKEN if the inbound request was
+authenticated).
 
-Thin binaries live at `dist/cli-thin/<platform>/<programName>`
-(produced by `abide cli` with ABIDE_APP_URL set). Missing platforms produce
+Thin binaries live at `dist/cli-thin/<platform>/<programName>` (produced
+lazily by `buildCli` on first request). The `.env` baking `ABIDE_APP_URL`
+is generated at download time, not build time. Missing platforms produce
 404 — the install script reports it, doesn't try to fall back.
 */
 export async function handleCliDownload(

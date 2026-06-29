@@ -3,12 +3,12 @@ import { TS_PRINTER } from './TS_PRINTER.ts'
 
 /*
 Rewrites references to a component's signal bindings into the document form the
-rest of the pipeline understands: a `state` binding `count` becomes `model.count`
+rest of the pipeline understands: a `state` binding `count` becomes `$$model.count`
 (data access `lowerDocAccess` then lowers to a patch/read), and a `computed`
 binding `total` becomes `total.value`. Only value-position identifiers are
 touched — declaration names, parameter names, and property names are collected
 into a skip set first, and object shorthand (`{ count }`) is expanded to
-`{ count: model.count }`. This is the bridge from the signal surface the author
+`{ count: $$model.count }`. This is the bridge from the signal surface the author
 writes to the patch substrate underneath.
 
 The rewrite is lexically scope-aware: a reference whose name is re-bound by an
@@ -37,7 +37,7 @@ export function renameSignalRefs(
 The signal-rewrite as a `ts.TransformerFactory`, so the script pipeline can chain it
 with `docAccessTransformer` over a SINGLE parsed tree (see `lowerScript`) instead of
 print-then-reparse between passes. `renameSignalRefs` is the standalone string wrapper
-kept for per-expression callers (`lowerContext`).
+kept for test and one-off callers.
 */
 export function signalRefsTransformer(
     stateNames: ReadonlySet<string>,
@@ -105,7 +105,7 @@ export function signalRefsTransformer(
                 if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
                     return node
                 }
-                /* Shorthand `{ count }` → `{ count: model.count }` / `{ total: total.value }`,
+                /* Shorthand `{ count }` → `{ count: $$model.count }` / `{ total: total.value }`,
                    unless a nearer scope shadows the name. */
                 if (ts.isShorthandPropertyAssignment(node) && !shadowed.has(node.name.text)) {
                     const replacement = referenceFor(
@@ -330,7 +330,7 @@ function functionParameters(node: ts.Node): ts.NodeArray<ts.ParameterDeclaration
     return undefined
 }
 
-/* `model.<name>` for a state binding, `<name>()` for a computed doc-slot (the
+/* `$$model.<name>` for a state binding, `<name>()` for a computed doc-slot (the
    string-free reader `scope().derive` returns), `<name>.value` for a runtime cell
    (linked / lens / transform-state), `$props?.$children` for the reserved slot reader,
    else undefined. A `blockLocal` binding shadows any same-named component signal — it is

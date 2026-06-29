@@ -7,9 +7,9 @@ platform-specific tarball and extracts it into `$ABIDE_INSTALL_DIR`
 (default `~/.local/bin`). The tarball already contains the `.env` next
 to the binary — no separate config write step in the script.
 
-The script is rendered server-side so `<ABIDE_APP_URL>` is the request's own
-origin and the embedded curl URL needs no escaping or quoting beyond
-basic shell hygiene.
+The script is rendered server-side so the request origin is baked into the
+`URL` variable at generation time and the embedded curl URL needs no escaping
+or quoting beyond basic shell hygiene.
 */
 export function installScript(appUrl: string, programName: string): string {
     return `#!/usr/bin/env sh

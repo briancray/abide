@@ -6,7 +6,7 @@ Runs a component `build` and returns its result (the mount handle / disposer)
 alongside the component's own `model` document — the serializable `state` doc,
 needed so a hot swap can carry its value across (see `hotReplace`). The model is
 found, not threaded: a component seeds its `model` first (the desugared
-`const model = doc({})` + its init patches run before any child mounts or
+`const $$model = scope()` + its init `replace` patches (state slots lowered by `lowerDocAccess`) run before any child mounts or
 control-flow blocks), so the FIRST patch announced on the bus during the build names
 it. A component with no `state` mints no model and emits nothing first — `model` is
 then `undefined` and there is nothing to preserve. Used only on the hot path; the

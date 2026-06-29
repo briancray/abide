@@ -7,8 +7,8 @@ import { runWithRequestScope } from '../runtime/runWithRequestScope.ts'
 Runs a rpc in-process: synthesizes the rpc Request from the remote's own
 method + url and pipes it through remote.fetch — the same handler/validation/
 error path the HTTP router uses, no network hop. The single in-process
-dispatch every consumer surface (the CLI client, the MCP tool dispatcher, and
-the test client) routes through, so they can't drift on how a rpc is invoked.
+dispatch every consumer surface (the CLI client and the MCP tool dispatcher)
+routes through, so they can't drift on how a rpc is invoked.
 Takes the RemoteFunction directly — invocation never reads the registry
 entry's schemas/clients (validation is closed over inside the remote), so the
 entry is not a dependency here. `baseUrl` gives the synthetic Request its
