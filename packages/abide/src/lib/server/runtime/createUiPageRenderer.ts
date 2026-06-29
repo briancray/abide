@@ -1,10 +1,9 @@
 import { appNameSlot } from '../../shared/appNameSlot.ts'
 import { SSR_CACHE_CONTROL } from '../../shared/CACHE_CONTROL_VALUES.ts'
 import { formatTraceparent } from '../../shared/formatTraceparent.ts'
-import { isReplayableMethod } from '../../shared/isReplayableMethod.ts'
 import { layoutChainForRoute } from '../../shared/layoutChainForRoute.ts'
 import { safeJsonForScript } from '../../shared/safeJsonForScript.ts'
-import type { CacheEntry } from '../../shared/types/CacheEntry.ts'
+import { snapshotShippable } from '../../shared/snapshotShippable.ts'
 import type { CacheSnapshotEntry } from '../../shared/types/CacheSnapshotEntry.ts'
 import type { StreamedResolution } from '../../shared/types/StreamedResolution.ts'
 import { renderChain } from '../../ui/renderChain.ts'
@@ -245,11 +244,7 @@ export function createUiPageRenderer({
                            bundle, so startClient seeds the store and the block's subscription read
                            is warm. Skip keys already shipped inline in __SSR__. */
                         const streamedEntries = Array.from(store.cache.entries.values()).filter(
-                            (entry: CacheEntry) =>
-                                entry.settled === true &&
-                                entry.request !== undefined &&
-                                isReplayableMethod(entry.request.method.toUpperCase()) &&
-                                !inlinedKeys.has(entry.key),
+                            (entry) => snapshotShippable(entry) && !inlinedKeys.has(entry.key),
                         )
                         for await (const resolution of streamCacheResolutions(
                             store.cache,

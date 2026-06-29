@@ -1,3 +1,4 @@
+import { bodyValueForKind, DEFER } from './bodyValueForKind.ts'
 import { contentBodyKind } from './contentBodyKind.ts'
 import { contentTypeOf } from './contentTypeOf.ts'
 import { httpErrorFor } from './httpErrorFor.ts'
@@ -39,11 +40,13 @@ export async function decodeResponse(response: Response): Promise<unknown> {
             `[abide] response at ${response.url} is a stream (${contentType}) — use tail(fn.stream(args)) for a reactive view, or fn.stream(args) for per-call iteration, instead of awaiting the bare call or cache()`,
         )
     }
-    if (kind === 'json') {
-        return response.json()
-    }
-    if (kind === 'text') {
-        return response.text()
-    }
-    return response.blob()
+    /* json/text go through the shared mapping warmValueFromSnapshot also uses, so a warm
+       seed reads byte-identically to this live read; binary (the only DEFER kind left,
+       streaming already threw above) blobs. */
+    const value = bodyValueForKind(
+        kind,
+        () => response.json(),
+        () => response.text(),
+    )
+    return value === DEFER ? response.blob() : value
 }

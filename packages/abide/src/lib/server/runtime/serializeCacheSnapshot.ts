@@ -1,4 +1,4 @@
-import { isReplayableMethod } from '../../shared/isReplayableMethod.ts'
+import { snapshotShippable } from '../../shared/snapshotShippable.ts'
 import type { CacheSnapshotEntry } from '../../shared/types/CacheSnapshotEntry.ts'
 import type { CacheStore } from '../../shared/types/CacheStore.ts'
 import { snapshotEntryFromCache } from './snapshotEntryFromCache.ts'
@@ -21,12 +21,7 @@ over the wire — see its post-stream `__abideResolve` pass. So for a streaming 
 render-return snapshot is typically empty; the warm cache arrives over the stream.
 */
 export async function serializeCacheSnapshot(store: CacheStore): Promise<CacheSnapshotEntry[]> {
-    const settled = Array.from(store.entries.values()).filter(
-        (entry) =>
-            entry.settled === true &&
-            entry.request !== undefined &&
-            isReplayableMethod(entry.request.method.toUpperCase()),
-    )
+    const settled = Array.from(store.entries.values()).filter(snapshotShippable)
     const snapshots = await Promise.all(
         settled.map((entry) => snapshotEntryFromCache(store, entry)),
     )

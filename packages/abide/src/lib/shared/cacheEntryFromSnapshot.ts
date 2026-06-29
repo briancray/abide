@@ -1,3 +1,4 @@
+import { bodyValueForKind, DEFER } from './bodyValueForKind.ts'
 import { contentBodyKind } from './contentBodyKind.ts'
 import { contentTypeOf } from './contentTypeOf.ts'
 import type { CacheEntry } from './types/CacheEntry.ts'
@@ -32,31 +33,35 @@ export function cacheEntryFromSnapshot(entry: CacheSnapshotEntry): CacheEntry {
 
 /*
 Synchronously decodes a snapshot body so the warm entry reads without a
-microtask hop on first render. A strict subset of `decodeResponse`: it warms
-only the `json`/`text` kinds (the same `contentBodyKind` the live read switches
-on, so the two cannot disagree about a body), returning a value identical to
-what awaiting the Response would yield. Every other kind — non-2xx, 204,
-streaming, binary — yields no warm value and defers to the async path, which
-throws HttpError / returns the streaming error / blobs exactly as a live call
-would.
+microtask hop on first render. The json/text branches go through the shared
+`bodyValueForKind` — the same mapping the live read (`decodeResponse`) uses — so
+the two cannot disagree about how a body becomes a value, returning a value
+identical to what awaiting the Response would yield. Every non-warmable case —
+non-2xx, 204 (the status gate below), streaming, binary (the DEFER sentinel) —
+yields no warm value and defers to the async path, which throws HttpError /
+returns the streaming error / blobs exactly as a live call would.
 */
 function warmValueFromSnapshot(status: number, headers: Headers, body: string): unknown {
+    /* Status gate is side-specific: an error/204 has no warm value here, but the live
+       read throws HttpError / returns undefined for the same status — so it stays out of
+       the shared kind mapping. */
     if (status === 204 || status < 200 || status >= 300) {
         return undefined
     }
     const kind = contentBodyKind(contentTypeOf(headers))
-    if (kind === 'json') {
+    const value = bodyValueForKind(
+        kind,
         /* The body may still be malformed JSON; fall back to the async path rather than
            throwing a SyntaxError synchronously during hydration. */
-        try {
-            return JSON.parse(body)
-        } catch {
-            return undefined
-        }
-    }
-    if (kind === 'text') {
-        return body
-    }
+        () => {
+            try {
+                return JSON.parse(body)
+            } catch {
+                return undefined
+            }
+        },
+        () => body,
+    )
     /* streaming and binary defer to the async path (the live decode throws / blobs). */
-    return undefined
+    return value === DEFER ? undefined : value
 }

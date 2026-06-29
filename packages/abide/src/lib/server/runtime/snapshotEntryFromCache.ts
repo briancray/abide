@@ -1,4 +1,5 @@
 import { contentTypeOf } from '../../shared/contentTypeOf.ts'
+import { hasReplayableRequest } from '../../shared/hasReplayableRequest.ts'
 import { isReplayableMethod } from '../../shared/isReplayableMethod.ts'
 import { isStreamingResponse } from '../../shared/isStreamingResponse.ts'
 import type { CacheEntry } from '../../shared/types/CacheEntry.ts'
@@ -25,10 +26,15 @@ export async function snapshotEntryFromCache(
     store: CacheStore,
     entry: CacheEntry,
 ): Promise<CacheSnapshotEntry | undefined> {
-    /* Producer entries have no wire request to replay — they never snapshot. */
-    if (!entry.request) {
+    /* The request half of the shared shippability gate: a replayable wire request.
+       Producer entries (no request) and non-replayable methods never snapshot — the
+       streaming-drain caller hands still-pending entries here, so `settled` is NOT gated
+       (the caller's snapshotShippable filter already required it for the entries it picks). */
+    if (!hasReplayableRequest(entry) || !entry.request) {
         return undefined
     }
+    /* Re-narrow the uppercased method to ReplayableMethod for the snapshot's typed
+       `method` field — hasReplayableRequest gates the entry but can't narrow this local. */
     const method = entry.request.method.toUpperCase()
     if (!isReplayableMethod(method)) {
         return undefined
