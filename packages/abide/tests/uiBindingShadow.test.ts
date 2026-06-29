@@ -124,6 +124,45 @@ describe('binding shadow sentinel — block value params shadow an enclosing sig
         expect(client).toBe(server)
     })
 
+    /* Block-shadows-block (not block-shadows-signal): a nested `each` whose item reuses the
+       OUTER loop's binding name. The inner row must read the INNER item; the outer row content
+       outside the inner loop must read the OUTER item; neither reads the component signal. A
+       shadow that leaked past the inner loop would corrupt the rest of the outer row; one that
+       never registered would read the outer item (or the signal) inside the inner loop. */
+    test('nested each: inner item shadows the outer item of the same name, both read locals', () => {
+        const source = `
+            <script>
+                let row = scope().state('OUTER')
+                let outer = scope().state(['A', 'B'])
+                let inner = scope().state(['1', '2'])
+            </script>
+            <ul>{#for row of outer by row}<li>{row}{#for row of inner by row}<i>{row}</i>{/for}</li>{/for}</ul>
+        `
+        const { server, client } = bothSides(source)
+        // outer row 'A' then its inner rows '12', outer row 'B' then '12' — no whitespace,
+        // no 'OUTER' (the shadowed component signal never leaks into either loop).
+        expect(visibleText(server)).toBe('A12B12')
+        expect(visibleText(server)).not.toContain('OUTER')
+        expect(client).toBe(server)
+    })
+
+    /* Cross-construct collision: an `each` row item and a `snippet` arg share a name, and a
+       component `scope().state` of the same name encloses both. The snippet body must read its
+       call argument; the loop must read its item; the outer signal must surface nowhere — the
+       row passes its item INTO the snippet, so a leaked shadow would cross the call boundary. */
+    test('each item and snippet arg collide on one name; each reads its own local', () => {
+        const source = `
+            <script>let item = scope().state('OUTER')</script>
+            {#snippet tag(item)}<b>{item}</b>{/snippet}
+            <ul>{#for item of ['x', 'y'] by item}<li>{tag(item)}</li>{/for}</ul>
+        `
+        const { server, client } = bothSides(source)
+        // the loop hands each item to the snippet, which renders it — 'xy', never 'OUTER'.
+        expect(visibleText(server)).toBe('xy')
+        expect(visibleText(server)).not.toContain('OUTER')
+        expect(client).toBe(server)
+    })
+
     /* A blocking `await … then v` whose `v` collides with a component `scope().state` named
        `v`. SSR awaits inline and renders the resolved value; the resolved branch must read the
        local, not the outer signal. (Blocking SSR render is async — await the render.) */
