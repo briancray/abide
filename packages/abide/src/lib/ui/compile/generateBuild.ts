@@ -5,6 +5,7 @@ import { ANCHOR } from '../runtime/RANGE_MARKER.ts'
 import { asOutlet } from './asOutlet.ts'
 import { awaitPlan } from './awaitPlan.ts'
 import { bindListenEvent } from './bindListenEvent.ts'
+import { classStyleMergePlan } from './classStyleMergePlan.ts'
 import { composeProps } from './composeProps.ts'
 import { destructureBindingNames } from './destructureBindingNames.ts'
 import { groupBindParts } from './groupBindParts.ts'
@@ -322,48 +323,31 @@ export function generateBuild(
             elVar = nextVar('el')
             binds.push(`const ${elVar} = ${skVar}.el[${holeIndex(elIndex, node)}];\n`)
             openTag += ` ${HOLE_ATTRIBUTE}`
-            /* An interpolated (reactive) class/style base can't layer additive directive
-               toggles on top — re-setting the base would wipe them. Base + its directives
-               collapse into ONE effect computing the whole value (mirrors the SSR merge);
-               both are then skipped in the per-attribute dispatch below. A STATIC base keeps
-               the surgical-toggle model (the base sits in the cloned skeleton). */
-            const interpolatedClass = node.attrs.find(
-                (attr) => attr.kind === 'interpolated' && attr.name === 'class',
-            )
-            const interpolatedStyle = node.attrs.find(
-                (attr) => attr.kind === 'interpolated' && attr.name === 'style',
-            )
-            const classDirectives = node.attrs.filter((attr) => attr.kind === 'class')
-            const styleDirectives = node.attrs.filter((attr) => attr.kind === 'style')
-            const mergeClass = interpolatedClass !== undefined && classDirectives.length > 0
-            const mergeStyle = interpolatedStyle !== undefined && styleDirectives.length > 0
-            if (mergeClass && interpolatedClass?.kind === 'interpolated') {
-                const base = lowerExpression(interpolatedTemplateLiteral(interpolatedClass.parts))
-                const toggles = classDirectives.map((dir) =>
-                    dir.kind === 'class'
-                        ? `((${lowerExpression(dir.code)}) ? ${JSON.stringify(dir.name)} : "")`
-                        : '',
-                )
+            /* The shared class/style/directive merge DECISION (one site, consulted by both
+               back-ends). An interpolated (reactive) class/style base can't layer additive
+               directive toggles on top — re-setting the base would wipe them — so base + its
+               directives collapse into ONE effect computing the whole value (`mergeClassBuild`
+               /`mergeStyleBuild`, the build trigger); both are then skipped in the
+               per-attribute dispatch below. A STATIC base keeps the surgical-toggle model (the
+               base sits in the cloned skeleton). The composed `classParts`/`styleParts` come
+               from the same plan SSR renders, so the merged value can't drift. */
+            const merge = classStyleMergePlan(node.attrs, lowerExpression)
+            if (merge.mergeClassBuild) {
                 binds.push(
-                    `$$effect(${namedThunk('class_merge', `${elVar}.setAttribute("class", [${base}, ${toggles.join(', ')}].filter(Boolean).join(' '));`)});\n`,
+                    `$$effect(${namedThunk('class_merge', `${elVar}.setAttribute("class", [${merge.classParts.join(', ')}].filter(Boolean).join(' '));`)});\n`,
                 )
             }
-            if (mergeStyle && interpolatedStyle?.kind === 'interpolated') {
-                const base = lowerExpression(interpolatedTemplateLiteral(interpolatedStyle.parts))
-                const decls = styleDirectives.map((dir) =>
-                    dir.kind === 'style'
-                        ? `(${JSON.stringify(`${dir.property}:`)} + String(${lowerExpression(dir.code)}))`
-                        : '',
-                )
+            if (merge.mergeStyleBuild) {
                 binds.push(
-                    `$$effect(${namedThunk('style_merge', `${elVar}.setAttribute("style", [${base}, ${decls.join(', ')}].filter(Boolean).join(';'));`)});\n`,
+                    `$$effect(${namedThunk('style_merge', `${elVar}.setAttribute("style", [${merge.styleParts.join(', ')}].filter(Boolean).join(';'));`)});\n`,
                 )
             }
             for (const attr of node.attrs) {
                 /* Skip the parts already folded into a merged class/style effect. */
                 const merged =
-                    (mergeClass && (attr === interpolatedClass || attr.kind === 'class')) ||
-                    (mergeStyle && (attr === interpolatedStyle || attr.kind === 'style'))
+                    (merge.mergeClassBuild &&
+                        (attr === merge.classBase || attr.kind === 'class')) ||
+                    (merge.mergeStyleBuild && (attr === merge.styleBase || attr.kind === 'style'))
                 if (merged) {
                     continue
                 }
