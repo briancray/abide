@@ -1,4 +1,5 @@
 import ts from 'typescript'
+import { createShadowScope } from './createShadowScope.ts'
 import { docAccessTransformer } from './lowerDocAccess.ts'
 import { nestedBindingNames } from './prepareNestedScript.ts'
 import { signalRefsTransformer } from './renameSignalRefs.ts'
@@ -22,18 +23,14 @@ export function lowerContext(
     derivedNames: ReadonlySet<string>,
     computedNames: ReadonlySet<string> = new Set(),
 ) {
-    /* Branch-scoped signal bindings (from nested `<script>`s, and the block value params
-       pushed by `withLocalDerived`) — they deref to `.value` like a `computed`, and as a
-       nearer lexical scope they SHADOW a same-named component signal. Pushed while a
-       branch's script + markup compile, popped after, so they shadow only within that
-       subtree. */
-    const localDerived = new Set<string>()
-
-    /* Branch-scoped PLAIN bindings — a block value param SSR binds as a real JS local
-       holding the plain resolved value (not a cell). Shadows a same-named component signal
-       like `localDerived`, but derefs as the bare identifier, not `.value` (see
-       `withLocalPlain`). Pushed only by the SSR back-end; the client uses `localDerived`. */
-    const localPlain = new Set<string>()
+    /* The typed branch-local shadow stack: one auto-popping value owning both kinds.
+       `derived` names deref to `.value` like a `computed` (block value params the client
+       binds as a reactive cell, and nested-`<script>` bindings); `plain` names deref as
+       the bare identifier (block value params SSR binds as a real JS local). Both, as a
+       nearer lexical scope, SHADOW a same-named component signal. `withShadow` pushes on
+       entry and pops in a `finally`, so a branch's shadows cannot outlive the branch even
+       if its body throws — the leak the old hand-written pop allowed. */
+    const scope = createShadowScope()
 
     /* Parse `code` once and chain the reference rename and doc-access lowering over the
        one tree — the two string passes would each parse + reprint. `localDerived` is
@@ -46,8 +43,8 @@ export function lowerContext(
                 stateNames,
                 derivedNames,
                 computedNames,
-                new Set(localDerived),
-                new Set(localPlain),
+                new Set(scope.names('derived')),
+                new Set(scope.names('plain')),
             ),
             docAccessTransformer('$$model'),
         ])
@@ -104,31 +101,13 @@ export function lowerContext(
         return statement(`${code} = ${valueExpr}`)
     }
 
-    /* Pushes the names not already in `scope` for the duration of `body`, then pops
-       exactly what it added — the shared push/run/pop the deref-scope helpers below use,
-       over whichever Set (`localDerived` / `localPlain`) a binding shadows through. */
-    function withScoped<T>(scope: Set<string>, names: Iterable<string>, body: () => T): T {
-        const added: string[] = []
-        for (const name of names) {
-            if (!scope.has(name)) {
-                scope.add(name)
-                added.push(name)
-            }
-        }
-        const result = body()
-        for (const name of added) {
-            scope.delete(name)
-        }
-        return result
-    }
-
     /* Adds any `<script>` children's binding names to the deref scope (so the script
        bodies and the branch's markup auto-deref them) for the duration of `body`. */
     function withNestedScripts<T>(children: TemplateNode[], body: () => T): T {
         const names = children.flatMap((child) =>
             child.kind === 'script' ? [...nestedBindingNames(child.code)] : [],
         )
-        return withScoped(localDerived, names, body)
+        return scope.withShadow(names, 'derived', body)
     }
 
     /* Pushes explicit names into the deref scope for `body` then pops them — the
@@ -136,7 +115,7 @@ export function lowerContext(
        (an `await` `then` value, a keyed `each` item) as a reactive `.value` cell so the
        branch reads it reactively and re-runs in place when the block sets the cell. */
     function withLocalDerived<T>(names: string[], body: () => T): T {
-        return withScoped(localDerived, names, body)
+        return scope.withShadow(names, 'derived', body)
     }
 
     /* Like `withLocalDerived` but for a binding SSR holds as a plain JS value (an `await`
@@ -144,7 +123,7 @@ export function lowerContext(
        shadow a same-named component signal AND deref as the bare identifier (not `.value`),
        since the emitted SSR code reads the local directly. */
     function withLocalPlain<T>(names: string[], body: () => T): T {
-        return withScoped(localPlain, names, body)
+        return scope.withShadow(names, 'plain', body)
     }
 
     return {
