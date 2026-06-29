@@ -360,3 +360,181 @@ describe('reactive document', () => {
         dispose()
     })
 })
+
+/* The structural descend reaches readers via the prefix index (a trie over minted
+   paths' ancestor chains), not a scan of every live node. These pin its distinctive
+   behaviours: descend through INTERMEDIATE paths that hold no node of their own,
+   index-shift on a list remove, eviction of paths the mutation dropped, and re-mint
+   of an evicted path the same effects keep observing. */
+describe('structural descend via the prefix index', () => {
+    test('a list remove shifts every index-bound reader and wakes it', () => {
+        const d = doc({ order: ['a', 'b', 'c'] })
+        const seen: string[][] = []
+        const dispose = effect(() => {
+            seen.push([d.read<string>('order/0'), d.read<string>('order/1')])
+        })
+        expect(seen.at(-1)).toEqual(['a', 'b'])
+        d.remove('order/0') // shifts: 0←b, 1←c
+        expect(seen.at(-1)).toEqual(['b', 'c'])
+        expect(d.read<string | undefined>('order/2')).toBeUndefined()
+        dispose()
+    })
+
+    test('descend reaches a deep reader through intermediate node-less paths', () => {
+        /* Only `byId/<key>/n` is ever read, so `byId` and `byId/<key>` carry no node —
+           they exist only as trie links. A structural change at the root must still
+           wake the deep reader through those links. */
+        const d = doc({ byId: { x: { n: 1 } } })
+        let observed: number | undefined
+        const dispose = effect(() => {
+            observed = d.read<number>('byId/x/n')
+        })
+        expect(observed).toBe(1)
+        d.replace('', { byId: { x: { n: 9 } }, extra: true }) // root structural replace
+        expect(observed).toBe(9)
+        dispose()
+    })
+
+    test('a dropped path is evicted and a returning path re-mints, still observed', () => {
+        const d = doc({ items: ['a', 'b'] })
+        let runs = 0
+        let tail: string | undefined
+        const dispose = effect(() => {
+            runs += 1
+            tail = d.read<string | undefined>('items/1')
+        })
+        expect(tail).toBe('b')
+        const baseline = runs
+        d.remove('items/1') // drops items/1 → reader woken to undefined, node evicted
+        expect(tail).toBeUndefined()
+        expect(runs).toBe(baseline + 1)
+        d.add('items/-', 'c') // items/1 returns → re-mint, reader picks it up
+        expect(tail).toBe('c')
+        dispose()
+    })
+
+    test('removing a container wakes and evicts its descendants', () => {
+        const d = doc({ a: { deep: { v: 1 } }, b: 2 })
+        let deep: number | undefined
+        let other: number | undefined
+        const dispose = effect(() => {
+            deep = d.read<number | undefined>('a/deep/v')
+        })
+        const disposeOther = effect(() => {
+            other = d.read<number>('b')
+        })
+        expect(deep).toBe(1)
+        d.remove('a') // a and all of a's descendants drop
+        expect(deep).toBeUndefined()
+        expect(other).toBe(2) // a sibling subtree is untouched
+        dispose()
+        disposeOther()
+    })
+
+    test('churn that fully empties then refills a container stays consistent', () => {
+        const d = doc({ list: ['0', '1', '2', '3'] })
+        const readAll = () =>
+            [0, 1, 2, 3].map((index) => d.read<string | undefined>(`list/${index}`))
+        const dispose = effect(() => {
+            readAll() // subscribe every index slot
+        })
+        d.remove('list/0')
+        d.remove('list/0')
+        d.remove('list/0')
+        d.remove('list/0') // emptied
+        expect(d.snapshot()).toEqual({ list: [] })
+        d.add('list/-', 'x')
+        d.add('list/-', 'y')
+        expect(readAll()).toEqual(['x', 'y', undefined, undefined])
+        dispose()
+    })
+})
+
+/* The structural descend reaches readers via the prefix index (a trie over minted
+   paths' ancestor chains), not a scan of every live node. These pin its distinctive
+   behaviours: descend through INTERMEDIATE paths that hold no node of their own,
+   index-shift on a list remove, eviction of paths the mutation dropped, and re-mint
+   of an evicted path the same effects keep observing. */
+describe('structural descend via the prefix index', () => {
+    test('a list remove shifts every index-bound reader and wakes it', () => {
+        const d = doc({ order: ['a', 'b', 'c'] })
+        const seen: string[][] = []
+        const dispose = effect(() => {
+            seen.push([d.read<string>('order/0'), d.read<string>('order/1')])
+        })
+        expect(seen.at(-1)).toEqual(['a', 'b'])
+        d.remove('order/0') // shifts: 0←b, 1←c
+        expect(seen.at(-1)).toEqual(['b', 'c'])
+        expect(d.read<string | undefined>('order/2')).toBeUndefined()
+        dispose()
+    })
+
+    test('descend reaches a deep reader through intermediate node-less paths', () => {
+        /* Only `byId/<key>/n` is ever read, so `byId` and `byId/<key>` carry no node —
+           they exist only as trie links. A structural change at the root must still
+           wake the deep reader through those links. */
+        const d = doc({ byId: { x: { n: 1 } } })
+        let observed: number | undefined
+        const dispose = effect(() => {
+            observed = d.read<number>('byId/x/n')
+        })
+        expect(observed).toBe(1)
+        d.replace('', { byId: { x: { n: 9 } }, extra: true }) // root structural replace
+        expect(observed).toBe(9)
+        dispose()
+    })
+
+    test('a dropped path is evicted and a returning path re-mints, still observed', () => {
+        const d = doc({ items: ['a', 'b'] })
+        let runs = 0
+        let tail: string | undefined
+        const dispose = effect(() => {
+            runs += 1
+            tail = d.read<string | undefined>('items/1')
+        })
+        expect(tail).toBe('b')
+        const baseline = runs
+        d.remove('items/1') // drops items/1 → reader woken to undefined, node evicted
+        expect(tail).toBeUndefined()
+        expect(runs).toBe(baseline + 1)
+        d.add('items/-', 'c') // items/1 returns → re-mint, reader picks it up
+        expect(tail).toBe('c')
+        dispose()
+    })
+
+    test('removing a container wakes and evicts its descendants', () => {
+        const d = doc({ a: { deep: { v: 1 } }, b: 2 })
+        let deep: number | undefined
+        let other: number | undefined
+        const dispose = effect(() => {
+            deep = d.read<number | undefined>('a/deep/v')
+        })
+        const disposeOther = effect(() => {
+            other = d.read<number>('b')
+        })
+        expect(deep).toBe(1)
+        d.remove('a') // a and all of a's descendants drop
+        expect(deep).toBeUndefined()
+        expect(other).toBe(2) // a sibling subtree is untouched
+        dispose()
+        disposeOther()
+    })
+
+    test('churn that fully empties then refills a container stays consistent', () => {
+        const d = doc({ list: ['0', '1', '2', '3'] })
+        const readAll = () =>
+            [0, 1, 2, 3].map((index) => d.read<string | undefined>(`list/${index}`))
+        const dispose = effect(() => {
+            readAll() // subscribe every index slot
+        })
+        d.remove('list/0')
+        d.remove('list/0')
+        d.remove('list/0')
+        d.remove('list/0') // emptied
+        expect(d.snapshot()).toEqual({ list: [] })
+        d.add('list/-', 'x')
+        d.add('list/-', 'y')
+        expect(readAll()).toEqual(['x', 'y', undefined, undefined])
+        dispose()
+    })
+})
