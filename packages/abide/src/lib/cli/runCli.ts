@@ -9,6 +9,7 @@ import { printTrimmed } from './printTrimmed.ts'
 import { resolveCliTarget } from './resolveCliTarget.ts'
 import { runSession } from './runSession.ts'
 import { startLocalInstance } from './startLocalInstance.ts'
+import { tokenizeArgvFlags } from './tokenizeArgvFlags.ts'
 import type { CliManifest } from './types/CliManifest.ts'
 import type { CliTarget } from './types/CliTarget.ts'
 
@@ -16,36 +17,20 @@ const isHelpFlag = (arg: string): boolean => arg === '--help' || arg === '-h'
 
 /*
 Whether a command's argv tail genuinely requests help, i.e. a help flag appears
-at a flag position rather than as the value of a value-expecting flag. Mirrors
-parseArgvForRpc's flag rule: boolean props (and `--name=…`) consume no following
-token, everything else consumes the next token as its value — so `--title --help`
-passes `--help` as the title value, not a help request.
+at a flag position rather than as the value of a value-expecting flag. Shares
+tokenizeArgvFlags' grammar with parseArgvForRpc so the two can't drift: the
+tokenizer applies the flag-consumption rule (boolean / `--name=…` / `--json`
+consume their value), so a `--help` that was a flag's value is already swallowed
+and never surfaces as a help token — `--title --help` passes `--help` as the
+title value, not a help request.
 */
 function commandArgvRequestsHelp(
     argvTail: string[],
     jsonSchema: Record<string, unknown> | undefined,
 ): boolean {
-    const properties =
-        (jsonSchema?.properties as Record<string, { type?: string }> | undefined) ?? {}
-    for (let index = 0; index < argvTail.length; index += 1) {
-        const token = argvTail[index] as string
-        if (isHelpFlag(token)) {
+    for (const token of tokenizeArgvFlags(argvTail, jsonSchema)) {
+        if (token.isHelp) {
             return true
-        }
-        if (!token.startsWith('--')) {
-            continue
-        }
-        if (token === '--json') {
-            index += 1 // consumes its value
-            continue
-        }
-        const rawName = token.slice('--'.length)
-        if (rawName.includes('=')) {
-            continue // inline value, consumes no following token
-        }
-        const name = rawName.startsWith('no-') ? rawName.slice('no-'.length) : rawName
-        if (properties[name]?.type !== 'boolean') {
-            index += 1 // a value-expecting flag consumes the next token
         }
     }
     return false
