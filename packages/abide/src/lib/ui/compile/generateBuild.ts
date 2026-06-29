@@ -5,9 +5,9 @@ import { ANCHOR } from '../runtime/RANGE_MARKER.ts'
 import { asOutlet } from './asOutlet.ts'
 import { awaitPlan } from './awaitPlan.ts'
 import { bindListenEvent } from './bindListenEvent.ts'
-import { classStyleMergePlan } from './classStyleMergePlan.ts'
 import { composeProps } from './composeProps.ts'
 import { eachPlan } from './eachPlan.ts'
+import { elementPlan } from './elementPlan.ts'
 import { groupBindParts } from './groupBindParts.ts'
 import { ifPlan } from './ifPlan.ts'
 import { interpolatedTemplateLiteral } from './interpolatedTemplateLiteral.ts'
@@ -289,6 +289,12 @@ export function generateBuild(
            SSR back-end also reads, rather than re-deriving leaf-ness via `isTextLeaf` here. */
         const textLeafBind =
             reactiveTextChild !== undefined && markText.get(reactiveTextChild) === false
+        /* The shared per-element emission DECISION (one site both back-ends consult): each
+           attribute classified + tagged with its merge status, the class/style/directive merge
+           folded in, and void-tag status. The composed `classParts`/`styleParts` and the
+           merge triggers come from the same plan SSR renders, so neither the attribute set nor
+           the merged value can drift. Build still RENDERS each kind below as live wiring. */
+        const plan = elementPlan(node, lowerExpression)
         let openTag = `<${node.tag}`
         let elVar = ''
         if (hasReactiveAttr || textLeafBind) {
@@ -298,32 +304,25 @@ export function generateBuild(
             elVar = nextVar('el')
             binds.push(`const ${elVar} = ${skVar}.el[${holeIndex(elIndex, node)}];\n`)
             openTag += ` ${HOLE_ATTRIBUTE}`
-            /* The shared class/style/directive merge DECISION (one site, consulted by both
-               back-ends). An interpolated (reactive) class/style base can't layer additive
-               directive toggles on top — re-setting the base would wipe them — so base + its
-               directives collapse into ONE effect computing the whole value (`mergeClassBuild`
-               /`mergeStyleBuild`, the build trigger); both are then skipped in the
-               per-attribute dispatch below. A STATIC base keeps the surgical-toggle model (the
-               base sits in the cloned skeleton). The composed `classParts`/`styleParts` come
-               from the same plan SSR renders, so the merged value can't drift. */
-            const merge = classStyleMergePlan(node.attrs, lowerExpression)
-            if (merge.mergeClassBuild) {
+            /* An interpolated (reactive) class/style base can't layer additive directive toggles
+               on top — re-setting the base would wipe them — so base + its directives collapse
+               into ONE effect computing the whole value (`mergeClassBuild`/`mergeStyleBuild`,
+               the build trigger); their attrs are then skipped (`mergedBuild`) in the dispatch
+               below. A STATIC base keeps the surgical-toggle model (the base sits in the cloned
+               skeleton). */
+            if (plan.merge.mergeClassBuild) {
                 binds.push(
-                    `$$effect(${namedThunk('class_merge', `${elVar}.setAttribute("class", [${merge.classParts.join(', ')}].filter(Boolean).join(' '));`)});\n`,
+                    `$$effect(${namedThunk('class_merge', `${elVar}.setAttribute("class", [${plan.merge.classParts.join(', ')}].filter(Boolean).join(' '));`)});\n`,
                 )
             }
-            if (merge.mergeStyleBuild) {
+            if (plan.merge.mergeStyleBuild) {
                 binds.push(
-                    `$$effect(${namedThunk('style_merge', `${elVar}.setAttribute("style", [${merge.styleParts.join(', ')}].filter(Boolean).join(';'));`)});\n`,
+                    `$$effect(${namedThunk('style_merge', `${elVar}.setAttribute("style", [${plan.merge.styleParts.join(', ')}].filter(Boolean).join(';'));`)});\n`,
                 )
             }
-            for (const attr of node.attrs) {
-                /* Skip the parts already folded into a merged class/style effect. */
-                const merged =
-                    (merge.mergeClassBuild &&
-                        (attr === merge.classBase || attr.kind === 'class')) ||
-                    (merge.mergeStyleBuild && (attr === merge.styleBase || attr.kind === 'style'))
-                if (merged) {
+            for (const { attr, mergedBuild } of plan.attrs) {
+                /* Skip the attrs already folded into a merged class/style effect. */
+                if (mergedBuild) {
                     continue
                 }
                 if (attr.kind === 'spread') {
@@ -341,13 +340,16 @@ export function generateBuild(
         for (const scope of node.scopes ?? []) {
             openTag += scopeAttr(scope)
         }
-        for (const attr of node.attrs) {
-            if (attr.kind === 'static') {
+        /* Static attrs sit in the cloned skeleton markup — emitted here regardless of whether
+           the element is a hole. A static class/style folded into a merged attribute (build
+           trigger) is skipped, since the merge effect re-sets the whole value. */
+        for (const { attr, mergedBuild } of plan.attrs) {
+            if (attr.kind === 'static' && !mergedBuild) {
                 openTag += staticAttr(attr.name, attr.value)
             }
         }
         openTag += '>'
-        if (VOID_TAGS.has(node.tag)) {
+        if (plan.isVoid) {
             return openTag
         }
         if (textLeafBind) {

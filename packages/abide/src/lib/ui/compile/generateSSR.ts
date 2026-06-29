@@ -9,9 +9,9 @@ import {
 } from '../runtime/RANGE_MARKER.ts'
 import { asOutlet } from './asOutlet.ts'
 import { awaitPlan } from './awaitPlan.ts'
-import { classStyleMergePlan } from './classStyleMergePlan.ts'
 import { composeProps } from './composeProps.ts'
 import { eachPlan } from './eachPlan.ts'
+import { elementPlan } from './elementPlan.ts'
 import { groupBindParts } from './groupBindParts.ts'
 import { ifPlan } from './ifPlan.ts'
 import { interpolatedTemplateLiteral } from './interpolatedTemplateLiteral.ts'
@@ -30,7 +30,6 @@ import { tryPlan } from './tryPlan.ts'
 import type { Binding } from './types/Binding.ts'
 import type { ShadowKind } from './types/ShadowKind.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
-import { VOID_TAGS } from './VOID_TAGS.ts'
 import { withBindings } from './withBindings.ts'
 
 /* The range boundary comments a control-flow block emits around its content. Sourced
@@ -399,37 +398,32 @@ export function generateSSR(
         for (const scope of node.scopes ?? []) {
             code += push(target, scopeAttr(scope))
         }
-        /* The shared class/style/directive merge DECISION (one site, mirrored by the build
-           back-end). `class:`/`style:` directives collapse with any static/interpolated
-           `class`/`style` base into a SINGLE merged attribute (a duplicate attribute would be
-           invalid and ignored). SSR must always emit one attribute string, so it merges
-           whenever a directive exists (`mergeClass`/`mergeStyle`). The client's
-           classList.toggle / style.setProperty effects re-apply the same values on hydrate, so
-           the merged SSR value already matches the post-mount DOM — no flash, no desync. */
-        const merge = classStyleMergePlan(node.attrs, lowerExpression)
-        for (const attr of node.attrs) {
+        /* The shared per-element emission DECISION (one site, consulted by the build back-end
+           too): each attribute classified + tagged with its merge status, the class/style/
+           directive merge folded in, and void-tag status. `class:`/`style:` directives collapse
+           with any static/interpolated `class`/`style` base into a SINGLE merged attribute (a
+           duplicate attribute would be invalid and ignored). SSR must always emit one attribute
+           string, so it merges whenever a directive exists (`mergeClass`/`mergeStyle`); those
+           attrs are tagged `mergedSSR` and skipped below. The client's classList.toggle /
+           style.setProperty effects re-apply the same values on hydrate, so the merged SSR value
+           already matches the post-mount DOM — no flash, no desync. SSR RENDERS each kind below
+           as an escaped string. */
+        const plan = elementPlan(node, lowerExpression)
+        const merge = plan.merge
+        for (const { attr, mergedSSR } of plan.attrs) {
+            /* Skip attrs folded into the merged class/style string below. */
+            if (mergedSSR) {
+                continue
+            }
             if (attr.kind === 'static') {
-                /* A static class/style is folded into the merge below when directives exist. */
-                if (
-                    (attr.name === 'class' && merge.mergeClass) ||
-                    (attr.name === 'style' && merge.mergeStyle)
-                ) {
-                    continue
-                }
                 code += push(target, staticAttr(attr.name, attr.value))
             } else if (attr.kind === 'expression') {
                 /* present/absent semantics matching the client `attr` binding:
                    false/null/undefined drops it, true emits the bare attribute. */
                 code += `${target}.push($attr(${JSON.stringify(attr.name)}, ${lowerExpression(attr.code)}));\n`
             } else if (attr.kind === 'interpolated') {
-                /* An interpolated class/style is folded into the merge below (like a static
-                   one); otherwise it's a string-valued attribute, always present. */
-                if (
-                    (attr.name === 'class' && merge.mergeClass) ||
-                    (attr.name === 'style' && merge.mergeStyle)
-                ) {
-                    continue
-                }
+                /* A string-valued attribute, always present (a merged class/style was skipped
+                   above). */
                 code += `${target}.push($attr(${JSON.stringify(attr.name)}, ${lowerExpression(interpolatedTemplateLiteral(attr.parts))}));\n`
             } else if (attr.kind === 'spread') {
                 /* `{...expr}` element spread: each key as an attribute, functions (event
@@ -462,7 +456,7 @@ export function generateSSR(
             code += `${target}.push(' style="' + $esc([${merge.styleParts.join(', ')}].filter(Boolean).join(';')) + '"');\n`
         }
         code += push(target, '>')
-        if (!VOID_TAGS.has(node.tag)) {
+        if (!plan.isVoid) {
             /* Each child's skeleton position (whether its reactive text interleaves into an
                anchor, whether a nested block anchors) is already recorded by `skeletonContext`
                — read per node, not tracked here. A `<script>` child scopes its bindings to
