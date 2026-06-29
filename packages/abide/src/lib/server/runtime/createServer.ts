@@ -245,7 +245,8 @@ export async function createServer({
     const inspectorHandler = await maybeMountInspector({ name: appName, version: appVersion })
     /* Built on first request, then reused — the rpc registry is frozen after load.
        Memoised as a promise so two concurrent cold requests share one build instead
-       of both building (the second otherwise clobbering the first). */
+       of both building (the second otherwise clobbering the first). A rejected build
+       clears the memo so the next request retries rather than caching the failure. */
     let openApiSpec: Promise<ReturnType<typeof buildOpenApiSpec>> | undefined
     const cliCwd = process.cwd()
 
@@ -593,12 +594,19 @@ export async function createServer({
                         req,
                         {},
                         async () => {
-                            openApiSpec ??= ensureRegistriesLoaded().then(() =>
-                                buildOpenApiSpec({
-                                    title: appName,
-                                    version: appVersion,
-                                }),
-                            )
+                            openApiSpec ??= ensureRegistriesLoaded()
+                                .then(() =>
+                                    buildOpenApiSpec({
+                                        title: appName,
+                                        version: appVersion,
+                                    }),
+                                )
+                                .catch((error) => {
+                                    // Don't cache a failed build — clear the memo so a
+                                    // later request retries instead of 500-ing forever.
+                                    openApiSpec = undefined
+                                    throw error
+                                })
                             return Response.json(await openApiSpec, {
                                 headers: { 'Cache-Control': NO_STORE },
                             })
