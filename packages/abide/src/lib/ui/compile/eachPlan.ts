@@ -1,12 +1,13 @@
 import { resolveBranches } from './resolveBranches.ts'
+import type { Binding } from './types/Binding.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
 
 /* The structural shape of an `each`/`for` loop, resolved once so the build and SSR back-ends
    share one reading of it and only own emission. Both previously read the item/index/key
    names, the `async` split, and the row children straight off the node; build additionally
-   resolved the async-each `catch` branch. The binding-name DERIVATION (which names the row
-   introduces and under which kind) stays in each back-end this phase — this plan carries only
-   the raw structural fields, the same single-source model the positional walks already use. */
+   resolved the async-each `catch` branch. The names the row introduces are now classified
+   ONCE here as `bindings` (item + index, both `reactive`) and `catchBindings` (the async-each
+   `catch` error, `plain`) — the single source both back-ends register through `withBindings`. */
 export type EachPlan = {
     /* The list expression — an Array (sync) or AsyncIterable (`async`). */
     items: string
@@ -27,11 +28,17 @@ export type EachPlan = {
     catchAs: string
     /* No catch → the rejection surfaces instead of rendering an empty branch. */
     hasCatch: boolean
+    /* The row body's bindings, classified once: the item (`as`) and, when present, the
+       `index`, both `reactive` (a `.value` cell on the client). */
+    bindings: Binding[]
+    /* The async-each `catch` branch's binding (`catchAs`, `plain`); empty when no catch. */
+    catchBindings: Binding[]
 }
 
 /* Resolves an `each` node's structure into the shared structural plan. */
 export function eachPlan(node: Extract<TemplateNode, { kind: 'each' }>): EachPlan {
     const [catchBranch] = resolveBranches(node, 'catch')
+    const catchAs = catchBranch?.as ?? '_error'
     return {
         items: node.items,
         as: node.as,
@@ -40,7 +47,15 @@ export function eachPlan(node: Extract<TemplateNode, { kind: 'each' }>): EachPla
         async: node.async,
         children: node.children,
         catchChildren: catchBranch?.children ?? [],
-        catchAs: catchBranch?.as ?? '_error',
+        catchAs,
         hasCatch: catchBranch !== undefined,
+        bindings: [
+            { name: node.as, classification: 'reactive' },
+            ...(node.index === undefined
+                ? []
+                : [{ name: node.index, classification: 'reactive' } as const]),
+        ],
+        catchBindings:
+            catchBranch === undefined ? [] : [{ name: catchAs, classification: 'plain' }],
     }
 }

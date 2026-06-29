@@ -1,15 +1,20 @@
+import type { Binding } from './types/Binding.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
 
 type Case = Extract<TemplateNode, { kind: 'case' }>
 
 /* The structural shape of a `switch`, resolved once so the build and SSR back-ends share one
    reading of its cases and only own emission. Both previously recomputed the `case` filter;
-   SSR additionally located the match-less default. */
+   SSR additionally located the match-less default. A `switch` introduces no names, so
+   `bindings` is empty — present so every block plan answers the single binding source
+   uniformly. */
 export type SwitchPlan = {
     /* The `case` branches in source order (`match` set; the default leaves it unset). */
     cases: Case[]
     /* The match-less default branch, if present. */
     fallback: Case | undefined
+    /* A `switch` binds no names. */
+    bindings: Binding[]
 }
 
 /* Resolves a `switch` node's cases into the shared structural plan. */
@@ -18,5 +23,6 @@ export function switchPlan(node: Extract<TemplateNode, { kind: 'switch' }>): Swi
     return {
         cases,
         fallback: cases.find((branch) => branch.match === undefined),
+        bindings: [],
     }
 }

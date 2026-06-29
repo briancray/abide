@@ -110,28 +110,14 @@ export function lowerContext(
         return scope.withShadow(names, 'derived', body)
     }
 
-    /* Pushes explicit names into the deref scope for `body` then pops them — the
-       programmatic counterpart to `withNestedScripts`, used to bind a block's value param
-       (an `await` `then` value, a keyed `each` item) as a reactive `.value` cell so the
-       branch reads it reactively and re-runs in place when the block sets the cell. */
-    function withLocalDerived<T>(names: string[], body: () => T): T {
-        return scope.withShadow(names, 'derived', body)
-    }
-
-    /* Like `withLocalDerived` but for a binding SSR holds as a plain JS value (an `await`
-       `then` value awaited inline) rather than a reactive cell. Pushes the names so they
-       shadow a same-named component signal AND deref as the bare identifier (not `.value`),
-       since the emitted SSR code reads the local directly. */
-    function withLocalPlain<T>(names: string[], body: () => T): T {
-        return scope.withShadow(names, 'plain', body)
-    }
-
     return {
         expression,
         statement,
         withNestedScripts,
-        withLocalDerived,
-        withLocalPlain,
+        /* The raw branch-local shadow registration both back-ends drive `withBindings`
+           through: a block's bindings flow to a `ShadowKind` only via that one shared loop,
+           never through a per-block `scope.withShadow` call here. */
+        withShadow: scope.withShadow,
         bindRead,
         bindWrite,
     }

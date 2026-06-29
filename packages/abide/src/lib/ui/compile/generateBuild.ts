@@ -7,7 +7,6 @@ import { awaitPlan } from './awaitPlan.ts'
 import { bindListenEvent } from './bindListenEvent.ts'
 import { classStyleMergePlan } from './classStyleMergePlan.ts'
 import { composeProps } from './composeProps.ts'
-import { destructureBindingNames } from './destructureBindingNames.ts'
 import { eachPlan } from './eachPlan.ts'
 import { groupBindParts } from './groupBindParts.ts'
 import { ifPlan } from './ifPlan.ts'
@@ -16,6 +15,7 @@ import { isControlFlow } from './isControlFlow.ts'
 import { isWhitespaceText } from './isWhitespaceText.ts'
 import { lowerContext } from './lowerContext.ts'
 import { makeVarNamer } from './makeVarNamer.ts'
+import { reactiveBinding } from './reactiveBinding.ts'
 import { scopeAttr } from './scopeAttr.ts'
 import { skeletonContext } from './skeletonContext.ts'
 import { snippetPlan } from './snippetPlan.ts'
@@ -24,8 +24,11 @@ import { staticAttr } from './staticAttr.ts'
 import { staticTextPart } from './staticTextPart.ts'
 import { switchPlan } from './switchPlan.ts'
 import { tryPlan } from './tryPlan.ts'
+import type { Binding } from './types/Binding.ts'
+import type { ShadowKind } from './types/ShadowKind.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
 import { VOID_TAGS } from './VOID_TAGS.ts'
+import { withBindings } from './withBindings.ts'
 
 /* The skeleton positioning anchor a control-flow block / component / slot / outlet
    stamps into its skeleton markup, sourced from the same `ANCHOR` wire-alphabet constant
@@ -100,50 +103,21 @@ export function generateBuild(
         expression: lowerExpression,
         statement: lowerStatement,
         withNestedScripts,
-        withLocalDerived,
-        withLocalPlain,
+        withShadow,
         bindRead,
         bindWrite,
     } = lowerContext(stateNames, derivedNames, computedNames)
 
-    /* A value binding the runtime can update in place (an `await` `then` value, a keyed `each`
-       item) is passed as a reactive `.value` cell; the consuming branch/row reads its NAME(s)
-       as a deref so it re-runs in place when a re-settle/re-key sets the cell. */
-    const isPlainIdentifier = (name: string | undefined): name is string =>
-        name !== undefined && /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name)
+    /* Matches a JS identifier — a keyed `each` whose item `as` is a plain name keys on it
+       directly, vs a destructuring `as` that binds a fresh key param. */
+    const isPlainIdentifier = (name: string): boolean => /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name)
 
-    /* How a reactive value param binds: `param` is the thunk's value parameter (the cell),
-       `prefix` declares any per-leaf readers, `localNames` enter the deref scope for the body.
-       A plain identifier reads the cell directly (`item` → `item.value`); a destructure
-       re-applies over the cell per read so each leaf stays reactive (JS handles
-       defaults/rest/rename/nesting). The caller lowers the body with `localNames` derived. */
-    function reactiveBinding(authorParam: string): {
-        param: string
-        prefix: string
-        localNames: string[]
-    } {
-        if (isPlainIdentifier(authorParam)) {
-            return { param: authorParam, prefix: '', localNames: [authorParam] }
-        }
-        const cellParam = nextVar('aw')
-        const deriveVar = nextVar('ad')
-        const leaves = destructureBindingNames(authorParam)
-        /* Lower the destructure declaration so a default/computed-key initializer that
-           references a component signal (`{ label = fallback }`, `{ [key]: v }`) is rewritten
-           to its `model`/cell form — the bound leaf names are name-slots and stay untouched.
-           A pattern with no such initializer lowers to itself, so the common case is unchanged
-           and SSR (which lowers the same declaration) stays congruent. */
-        const declaration = lowerStatement(`const ${authorParam} = ${cellParam}.value`)
-        const prefix =
-            `const ${deriveVar} = { get value() { ${declaration} return { ${leaves.join(', ')} }; } };\n` +
-            leaves
-                .map(
-                    (leaf) =>
-                        `const ${leaf} = { get value() { return ${deriveVar}.value.${leaf}; } };\n`,
-                )
-                .join('')
-        return { param: cellParam, prefix, localNames: leaves }
-    }
+    /* Maps a plan `Binding`'s classification to the client `ShadowKind`: a `reactive` value
+       derefs as a `.value` cell (`derived`), a `plain` value as the bare local (`plain`). The
+       injected mapping `withBindings` registers every binding through — the one place a name's
+       kind is chosen on this back-end. */
+    const buildBindingKind = (binding: Binding): ShadowKind =>
+        binding.classification === 'reactive' ? 'derived' : 'plain'
 
     /* Emits the wiring for one non-static attribute against an already-obtained skeleton
        element var — reactive `attr`, `on` listener, `attach`, or a two-way `bind`. */
@@ -522,10 +496,10 @@ export function generateBuild(
        the call. Appends nothing at the declaration site — `{name(args)}` mounts it. */
     function generateSnippet(node: Extract<TemplateNode, { kind: 'snippet' }>): string {
         const plan = snippetPlan(node)
-        /* `args` are plain call parameters, not component cells — register them so the body
-           reads the bare local, shadowing a same-named component signal rather than reading it. */
-        const argNames = plan.params === undefined ? [] : destructureBindingNames(plan.params)
-        const body = withLocalPlain(argNames, () =>
+        /* `args` are plain call parameters, not component cells — `withBindings` registers the
+           plan's `plain` bindings so the body reads the bare local, shadowing a same-named
+           component signal rather than reading it. */
+        const body = withBindings(withShadow, plan.bindings, buildBindingKind, () =>
             plan.children.map((child) => generateChild(child, '$host')).join(''),
         )
         return `function ${plan.name}(${plan.params ?? ''}) {\nreturn $$snippet(($host) => {\n${body}});\n}\n`
@@ -601,16 +575,15 @@ export function generateBuild(
            resolved content/binding feeds one thunk regardless of mode. */
         const thenThunk = branchThunk(
             plan.resolvedChildren,
-            plan.resolvedAs,
+            plan.resolvedBindings,
             plan.finallyChildren,
-            true,
         )
         /* Neither catch nor finally → pass `undefined` so awaitBlock re-throws the
            rejection (surfacing it) instead of rendering an empty branch. A finally-only
            block keeps a catch thunk that renders just finally. */
         const catchThunk = plan.surfaceRejection
             ? 'undefined'
-            : branchThunk(plan.catchChildren, plan.catchAs, plan.finallyChildren)
+            : branchThunk(plan.catchChildren, plan.catchBindings, plan.finallyChildren)
         const pendingThunk = hasRenderableContent(plan.pending)
             ? branchThunk(plan.pending)
             : 'undefined'
@@ -626,41 +599,34 @@ export function generateBuild(
        builds its children — and an optional trailing `finally` branch — into
        `parent`. The full-range model tracks the built content between markers, so a
        branch holds ANY content (components, text, nested control-flow, snippets) and
-       is generated exactly like a normal child list. `valueParam` binds a resolved /
-       error / item value into scope. Nested `<script>`s are emitted in document order
-       by `generateChildren`; `withNestedScripts` puts their bindings in deref scope. */
+       is generated exactly like a normal child list. `bindings` are the value param(s)
+       the plan declared (an `await` `then` value → `reactive`; a `catch` error → `plain`)
+       — at most one. Names flow to the deref scope ONLY through `withBindings` over the
+       plan's bindings; the cell wiring of a `reactive` binding is arranged by
+       `reactiveBinding`. Nested `<script>`s are emitted in document order by
+       `generateChildren`; `withNestedScripts` puts their bindings in deref scope. */
     function branchThunk(
         children: TemplateNode[],
-        valueParam?: string,
+        bindings: Binding[] = [],
         finallyChildren: TemplateNode[] = [],
-        reactiveValue = false,
     ): string {
         const parentParam = nextVar('p')
-        /* A reactive value (an `await` `then`) arrives as a `.value` cell the runtime can set
-           in place, so the branch re-runs in place on a re-settle instead of being rebuilt. */
-        const binding =
-            reactiveValue && valueParam !== undefined ? reactiveBinding(valueParam) : undefined
-        const param = binding?.param ?? valueParam
-        const prefix = binding?.prefix ?? ''
-        const localNames = binding?.localNames ?? []
-        /* A non-reactive value param (a `catch` error) arrives as a plain arrow parameter, not
-           a cell — register its names so the body reads the bare local, shadowing (not reading)
-           a same-named component signal. */
-        const plainNames =
-            binding === undefined && valueParam !== undefined
-                ? destructureBindingNames(valueParam)
-                : []
+        /* A `reactive` binding arrives as a `.value` cell the runtime can set in place (the
+           branch re-runs in place on a re-settle); `reactiveBinding` renders its cell param +
+           per-leaf reader prefix. A `plain` binding is the author param verbatim — a real arrow
+           parameter `withBindings` registers under `plain`, read as the bare local. */
+        const reactive = bindings.find((binding) => binding.classification === 'reactive')
+        const wiring =
+            reactive === undefined ? undefined : reactiveBinding(reactive, nextVar, lowerStatement)
+        const plainBinding = bindings.find((binding) => binding.classification === 'plain')
+        const param = wiring?.param ?? plainBinding?.name
+        const prefix = wiring?.prefix ?? ''
         const head = param === undefined ? `(${parentParam})` : `(${parentParam}, ${param})`
-        const body = withNestedScripts(children, () => {
-            const generate = () => generateChildren(children, parentParam)
-            if (localNames.length > 0) {
-                return withLocalDerived(localNames, generate)
-            }
-            if (plainNames.length > 0) {
-                return withLocalPlain(plainNames, generate)
-            }
-            return generate()
-        })
+        const body = withNestedScripts(children, () =>
+            withBindings(withShadow, bindings, buildBindingKind, () =>
+                generateChildren(children, parentParam),
+            ),
+        )
         const finallyBody =
             finallyChildren.length > 0
                 ? withNestedScripts(finallyChildren, () =>
@@ -692,9 +658,9 @@ export function generateBuild(
         before: string,
     ): string {
         const plan = tryPlan(node)
-        const tryThunk = branchThunk(plan.guarded, undefined, plan.finallyChildren)
+        const tryThunk = branchThunk(plan.guarded, [], plan.finallyChildren)
         const catchThunk = plan.hasCatch
-            ? branchThunk(plan.catchChildren, plan.catchAs, plan.finallyChildren)
+            ? branchThunk(plan.catchChildren, plan.catchBindings, plan.finallyChildren)
             : 'undefined'
         return `$$tryBlock(${parentVar}, $$nextBlockId(), ${tryThunk}, ${catchThunk}, ${before});\n`
     }
@@ -750,29 +716,30 @@ export function generateBuild(
         const rawItemParam = isPlainIdentifier(plan.as) ? plan.as : nextVar('k')
         const keyParam = plan.key === undefined ? rawItemParam : plan.as
         const keyExpression = plan.key === undefined ? rawItemParam : lowerExpression(plan.key)
-        const binding = reactiveBinding(plan.as)
-        /* `index="i"` binds the row's position as a third reactive cell param (the runtime
-           always passes it). It is a plain identifier — read as `i.value` — so it enters the
-           body's deref scope alongside the item's leaf names; an unnamed param when absent. */
+        /* The item is the row's `reactive` binding (its `.value` cell + per-leaf reader prefix
+           rendered by `reactiveBinding`); `index="i"` is a second reactive cell param, a plain
+           identifier read as `i.value` (no prefix). The names of BOTH enter the deref scope via
+           `withBindings` over `plan.bindings`, not a hand-built list. */
+        const itemWiring = reactiveBinding(plan.bindings[0], nextVar, lowerStatement)
         const indexParam = plan.index === undefined ? '' : `, ${plan.index}`
-        const bodyLocalNames =
-            plan.index === undefined ? binding.localNames : [...binding.localNames, plan.index]
         /* The row body builds its children (a `<script>` declares per-row local signals,
            emitted in document order) into the row parent. A `<template catch>` child is
            consumed by the async-each, not the row — `generateChildren` skips it. */
         const rowBody = withNestedScripts(plan.children, () =>
-            withLocalDerived(bodyLocalNames, () => generateChildren(plan.children, rowParam)),
+            withBindings(withShadow, plan.bindings, buildBindingKind, () =>
+                generateChildren(plan.children, rowParam),
+            ),
         )
         /* `await` → the AsyncIterable runtime, drained row-by-row on the client, with an
            optional `<template catch>` branch rendered (after the streamed rows) when the
            iterator rejects. Absent → `undefined`, so the rejection surfaces instead. */
         const fn = plan.async ? '$$eachAsync' : '$$each'
         const catchArg = plan.async
-            ? `, ${plan.hasCatch ? branchThunk(plan.catchChildren, plan.catchAs) : 'undefined'}`
+            ? `, ${plan.hasCatch ? branchThunk(plan.catchChildren, plan.catchBindings) : 'undefined'}`
             : ''
         return (
             `${fn}(${parentVar}, () => (${lowerExpression(plan.items)}), ` +
-            `(${keyParam}) => (${keyExpression}), (${rowParam}, ${binding.param}${indexParam}) => {\n${binding.prefix}${rowBody}}${catchArg}, ${before});\n`
+            `(${keyParam}) => (${keyExpression}), (${rowParam}, ${itemWiring.param}${indexParam}) => {\n${itemWiring.prefix}${rowBody}}${catchArg}, ${before});\n`
         )
     }
 

@@ -11,7 +11,6 @@ import { asOutlet } from './asOutlet.ts'
 import { awaitPlan } from './awaitPlan.ts'
 import { classStyleMergePlan } from './classStyleMergePlan.ts'
 import { composeProps } from './composeProps.ts'
-import { destructureBindingNames } from './destructureBindingNames.ts'
 import { eachPlan } from './eachPlan.ts'
 import { groupBindParts } from './groupBindParts.ts'
 import { ifPlan } from './ifPlan.ts'
@@ -28,8 +27,11 @@ import { staticTextPart } from './staticTextPart.ts'
 import { stripEffects } from './stripEffects.ts'
 import { switchPlan } from './switchPlan.ts'
 import { tryPlan } from './tryPlan.ts'
+import type { Binding } from './types/Binding.ts'
+import type { ShadowKind } from './types/ShadowKind.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
 import { VOID_TAGS } from './VOID_TAGS.ts'
+import { withBindings } from './withBindings.ts'
 
 /* The range boundary comments a control-flow block emits around its content. Sourced
    from the SAME wire-alphabet constants the client's `document.createComment` markers
@@ -74,9 +76,14 @@ export function generateSSR(
         expression: lowerExpression,
         statement,
         withNestedScripts,
-        withLocalPlain,
+        withShadow,
         bindRead,
     } = lowerContext(stateNames, derivedNames, computedNames)
+
+    /* SSR has no cells, so every plan `Binding` — `reactive` or `plain` — renders as a `plain`
+       shadow (a real JS local / loop var / arrow param, read as the bare identifier). The one
+       mapping `withBindings` registers every binding through on this back-end. */
+    const ssrBindingKind = (_binding: Binding): ShadowKind => 'plain'
 
     /* A scoped-script body for SSR: the shared lowering, then strip effects
        (client-only lifecycle that emits no HTML) — the one SSR-side asymmetry. */
@@ -256,10 +263,11 @@ export function generateSSR(
             const plan = snippetPlan(node)
             /* A hoisted function returning the snippet's `$snip`-branded HTML string;
                `{name(args)}` pushes it via `$text`, which wraps it in markers. `args` are plain
-               call parameters — register them so the body reads the bare local, shadowing a
-               same-named component signal rather than reading it. */
-            const argNames = plan.params === undefined ? [] : destructureBindingNames(plan.params)
-            const body = withLocalPlain(argNames, () => generateInto(plan.children, '$o'))
+               call parameters — `withBindings` registers the plan's `plain` bindings so the body
+               reads the bare local, shadowing a same-named component signal rather than reading it. */
+            const body = withBindings(withShadow, plan.bindings, ssrBindingKind, () =>
+                generateInto(plan.children, '$o'),
+            )
             /* `async` only when the body produces an `await` (it inlines a child component) — then
                call sites `await` it (`$text(await frag())`). A sync snippet stays a plain function
                called inline, preserving the sync render contract. */
@@ -287,17 +295,15 @@ export function generateSSR(
                 return anchor
             }
             /* The row item (and index) are real `for`-loop locals, so the body must lower
-               references to them as the bare identifier — `withLocalPlain` registers them so
-               a row binding that shadows a same-named component signal reads the loop value,
-               not the (whole-list) signal it shadows. The same set the client derives (item
-               leaves + index); the items expression stays outside the shadow (it cannot see
-               the row var). */
-            const rowLocals = [
-                ...destructureBindingNames(plan.as),
-                ...(plan.index === undefined ? [] : [plan.index]),
-            ]
-            const rowBody = withLocalPlain(
-                rowLocals,
+               references to them as the bare identifier — `withBindings` registers the plan's
+               row bindings (under `plain`, SSR's only kind) so a row binding that shadows a
+               same-named component signal reads the loop value, not the (whole-list) signal it
+               shadows. The names come straight from `plan.bindings` (the single source the
+               client also reads); the items expression stays outside the shadow. */
+            const rowBody = withBindings(
+                withShadow,
+                plan.bindings,
+                ssrBindingKind,
                 () =>
                     `${openRange(target)}${branchContent(plan.children, target)}${closeRange(target)}`,
             )
@@ -524,17 +530,18 @@ export function generateSSR(
            lowered in the outer scope where the binding name is not yet declared, so
            `{#await foo then foo}` reads the outer `foo` (no temporal-dead-zone crash on a
            same-named binding); and the nested block is the lexical scope the branch's
-           `withLocalPlain` shadow models, so a reference to the binding reads the plain
+           `withBindings` shadow models, so a reference to the binding reads the plain
            local rather than the (unresolved) component signal it shadows. */
         const resolved = nextVar('$av')
-        const bound = destructureBindingNames(plan.resolvedAs)
         let code = `const ${id} = $ctx.next++;\n`
         code += `${target}.push("<!--abide:await:" + ${id} + "-->");\n`
         code += `try {\n`
         code += `const ${resolved} = await (${lowerExpression(node.promise)});\n`
         code += `{\n`
         code += `const ${plan.resolvedAs} = ${resolved};\n`
-        code += withLocalPlain(bound, () => branchContent(plan.resolvedChildren, target))
+        code += withBindings(withShadow, plan.resolvedBindings, ssrBindingKind, () =>
+            branchContent(plan.resolvedChildren, target),
+        )
         /* `finally` does not bind the resolved value, so it is lowered OUTSIDE the `then`
            shadow — matching the catch branch below, so a finally expression naming the
            same identifier as the `then` binding reads the component signal, not the local. */
@@ -546,7 +553,7 @@ export function generateSSR(
             code += `} catch (_error) { throw _error; }\n`
         } else {
             code += `} catch (${plan.catchAs}) {\n`
-            code += withLocalPlain(destructureBindingNames(plan.catchAs), () =>
+            code += withBindings(withShadow, plan.catchBindings, ssrBindingKind, () =>
                 branchContent(plan.catchChildren, target),
             )
             code += branchContent(plan.finallyChildren, target)
@@ -576,20 +583,24 @@ export function generateSSR(
         code += `${target}.push("<!--/abide:await:" + ${id} + "-->");\n`
         /* The settled renderer takes the resolved/error value as a real arrow parameter
            (`async (foo) => …`), so its body must lower references to that name as the plain
-           local — `shadow` registers it via `withLocalPlain` so a binding that shadows a
-           same-named component signal reads the value, not the signal. */
-        const settled = (binding: string, children: TemplateNode[]) =>
-            `async (${binding}) => { const $o = []; ${withLocalPlain(
-                destructureBindingNames(binding),
+           local — `withBindings` registers the plan's bindings (under `plain`, SSR's only kind)
+           so a binding that shadows a same-named component signal reads the value, not the
+           signal. The arrow param is the binding's author name; the names enter scope from the
+           same `plan.*Bindings` the client reads. */
+        const settled = (param: string, bindings: Binding[], children: TemplateNode[]) =>
+            `async (${param}) => { const $o = []; ${withBindings(
+                withShadow,
+                bindings,
+                ssrBindingKind,
                 () => branchContent(children, '$o'),
             )}${branchContent(plan.finallyChildren, '$o')}return $o.join(''); }`
         const catchProp = plan.surfaceRejection
             ? ''
-            : `catch: ${settled(plan.catchAs, plan.catchChildren)} `
+            : `catch: ${settled(plan.catchAs, plan.catchBindings, plan.catchChildren)} `
         code +=
             `$awaits.push({ id: ${id}, ` +
             `promise: () => (${lowerExpression(node.promise)}), ` +
-            `then: ${settled(plan.resolvedAs, plan.resolvedChildren)}, ` +
+            `then: ${settled(plan.resolvedAs, plan.resolvedBindings, plan.resolvedChildren)}, ` +
             `${catchProp}});\n`
         return code
     }
@@ -612,7 +623,7 @@ export function generateSSR(
         code += branchContent(plan.finallyChildren, target)
         code += `} catch (${plan.catchAs}) {\n${target}.length = ${mark};\n`
         if (plan.hasCatch) {
-            code += withLocalPlain(destructureBindingNames(plan.catchAs), () =>
+            code += withBindings(withShadow, plan.catchBindings, ssrBindingKind, () =>
                 branchContent(plan.catchChildren, target),
             )
             code += branchContent(plan.finallyChildren, target)
