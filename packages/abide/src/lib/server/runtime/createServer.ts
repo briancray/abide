@@ -242,8 +242,10 @@ export async function createServer({
     isn't installed. Resolved at boot so the fetch route below can branch on it.
     */
     const inspectorHandler = await maybeMountInspector({ name: appName, version: appVersion })
-    /* Built on first request, then reused — the rpc registry is frozen after load. */
-    let openApiSpec: ReturnType<typeof buildOpenApiSpec> | undefined
+    /* Built on first request, then reused — the rpc registry is frozen after load.
+       Memoised as a promise so two concurrent cold requests share one build instead
+       of both building (the second otherwise clobbering the first). */
+    let openApiSpec: Promise<ReturnType<typeof buildOpenApiSpec>> | undefined
     const cliCwd = process.cwd()
 
     /* Request closing records are on by default — DEBUG=-abide is the off switch (negation, like the abide channel itself). */
@@ -583,14 +585,13 @@ export async function createServer({
                         req,
                         {},
                         async () => {
-                            if (!openApiSpec) {
-                                await ensureRegistriesLoaded()
-                                openApiSpec = buildOpenApiSpec({
+                            openApiSpec ??= ensureRegistriesLoaded().then(() =>
+                                buildOpenApiSpec({
                                     title: appName,
                                     version: appVersion,
-                                })
-                            }
-                            return Response.json(openApiSpec, {
+                                }),
+                            )
+                            return Response.json(await openApiSpec, {
                                 headers: { 'Cache-Control': NO_STORE },
                             })
                         },
