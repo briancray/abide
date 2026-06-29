@@ -1,3 +1,5 @@
+import { tokenizeArgvFlags } from './tokenizeArgvFlags.ts'
+
 /*
 Parses an argv tail into the JSON args bag for an RPC. The JSON Schema
 on the manifest entry (when present) drives flag typing:
@@ -47,44 +49,39 @@ export async function parseArgvForRpc(
         }
     }
 
-    for (let index = 0; index < argv.length; index++) {
-        const token = argv[index] as string
-        if (token === '--json') {
-            const next = argv[++index]
-            if (!next) {
+    /* The shared tokenizer owns the flag-consumption grammar (boolean / inline /
+       `--json` / `--no-` negation). This loop layers RPC value semantics on each
+       yielded token: JSON-blob merge, Number coercion, array accumulation. */
+    for (const token of tokenizeArgvFlags(argv, jsonSchema)) {
+        if (token.positional !== undefined) {
+            throw new Error(`unexpected positional argument: ${token.positional}`)
+        }
+        if (token.isJson) {
+            if (token.missingValue || token.value === undefined) {
                 throw new Error('--json requires a value')
             }
-            const parsed = JSON.parse(next)
+            const parsed = JSON.parse(token.value)
             if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
                 throw new Error('--json value must be a JSON object')
             }
             Object.assign(args, parsed)
             continue
         }
-        if (!token.startsWith('--')) {
-            throw new Error(`unexpected positional argument: ${token}`)
+        // The tokenizer treats `--help` / `-h` as a help token; in RPC parsing
+        // they are an unrecognised flag, surfaced loudly like any other.
+        if (token.isHelp || token.name === undefined) {
+            throw new Error('unexpected --help flag')
         }
-        const stripped = token.slice('--'.length)
-        const [literalName, eqValue] = stripped.includes('=')
-            ? [stripped.slice(0, stripped.indexOf('=')), stripped.slice(stripped.indexOf('=') + 1)]
-            : [stripped, undefined]
-        /* `--no-x` negates only a known boolean property x; otherwise the literal
-           name wins, so a property legitimately named `no-…` stays reachable. */
-        const negatedName = literalName.startsWith('no-')
-            ? literalName.slice('no-'.length)
-            : undefined
-        const isNegated = negatedName !== undefined && properties[negatedName]?.type === 'boolean'
-        const name = isNegated ? (negatedName as string) : literalName
-        const prop = properties[name]
-        const propType = prop?.type
+        const name = token.name
+        const propType = properties[name]?.type
         if (propType === 'boolean') {
-            args[name] = !isNegated
+            args[name] = !token.negated
             continue
         }
-        const value = eqValue ?? argv[++index]
-        if (value === undefined) {
+        if (token.missingValue || token.value === undefined) {
             throw new Error(`--${name} requires a value`)
         }
+        const value = token.value
         if (propType === 'number' || propType === 'integer') {
             // Reject a blank value explicitly — `Number('')` / `Number('  ')` is 0,
             // not NaN, so the NaN guard alone would silently coerce it to zero.

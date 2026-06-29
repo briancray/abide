@@ -43,6 +43,18 @@ the change.
 export function createDoc(initial: unknown): Doc {
     let tree = initial
     const nodes = new Map<string, ReactiveNode>()
+    /* Prefix index: every path → the set of its DIRECT children that lie on a route
+       to some minted node (a trie over the minted paths' ancestor chains). A
+       structural descend walks this from the change root through actual descendants
+       only, replacing the old O(all live cells) `startsWith` scan over the whole
+       `nodes` map. The links span INTERMEDIATE paths that have no node of their own
+       (e.g. `byId` and `byId/<key>` exist as links even when only `byId/<key>/n` was
+       read), so a descend from any ancestor reaches the leaf. Maintained in lockstep
+       with `nodes`: a node's whole ancestor chain is linked when `nodeFor` mints it,
+       unlinked from the leaf up when `wakeSubtree` evicts it. Membership of a path in
+       `nodes` (does it carry a signal?) is independent of its membership here (is it
+       on a route to one?). */
+    const childKeys = new Map<string, Set<string>>()
     /* Computed slots: a path whose value is a function of other paths, not stored
        truth. Held apart from `nodes` so the structural wake/eviction never touches
        them; their dirtiness is driven entirely by the deps they read (the signal
@@ -54,13 +66,63 @@ export function createDoc(initial: unknown): Doc {
        name the document it came from (reference identity, the undo/persistence key). */
     let self: Doc
 
+    /* Links `path` into the trie under its parent and continues up the ancestor chain.
+       Stops at the first ancestor whose parent set already lists it — that link, and
+       everything above it, is already present (some sibling minted the upper chain). */
+    function linkPath(path: string): void {
+        let child = path
+        for (;;) {
+            const parentPath = parentPathOf(child)
+            const siblings = childKeys.get(parentPath)
+            if (siblings === undefined) {
+                childKeys.set(parentPath, new Set([child]))
+            } else if (siblings.has(child)) {
+                return
+            } else {
+                siblings.add(child)
+            }
+            if (parentPath === '') {
+                return
+            }
+            child = parentPath
+        }
+    }
+
     function nodeFor(path: string): ReactiveNode {
         let node = nodes.get(path)
         if (node === undefined) {
             node = createSignalNode(walkPath(tree, path).value)
             nodes.set(path, node)
+            linkPath(path)
         }
         return node
+    }
+
+    /* Drops a node and unlinks it from the trie, pruning each emptied ancestor link up
+       the chain — the eviction half of the lockstep with `nodeFor`. A link is removed
+       only once its child set empties, so an intermediate path with other live
+       descendants keeps its place. */
+    function evict(path: string): void {
+        nodes.delete(path)
+        let child = path
+        for (;;) {
+            const parentPath = parentPathOf(child)
+            const siblings = childKeys.get(parentPath)
+            if (siblings === undefined) {
+                return
+            }
+            siblings.delete(child)
+            /* A parent still listing other children, or still carrying its own node,
+               stays — only a fully empty, node-less link is pruned and walked past. */
+            if (siblings.size > 0) {
+                return
+            }
+            childKeys.delete(parentPath)
+            if (parentPath === '' || nodes.has(parentPath)) {
+                return
+            }
+            child = parentPath
+        }
     }
 
     function read<T>(path: string): T {
@@ -109,25 +171,53 @@ export function createDoc(initial: unknown): Doc {
             return
         }
         const prefix = rootPath === '' ? '' : `${rootPath}/`
-        for (const [candidate, node] of nodes) {
-            if (candidate !== rootPath && candidate.startsWith(prefix)) {
-                /* A descendant whose path the mutation removed — a deleted key, an
-                   out-of-range index after a shrink — is woken to undefined, then
-                   dropped from the registry. Without eviction `nodes` grows for the
-                   life of the session over churning keys (items/<uuid>, message ids),
-                   and this very descend scan degrades linearly with it. The woken
-                   reader re-mints a fresh node on its flush if the path ever returns.
-                   Deleting the current entry mid-iteration is safe on a Map. */
+        /* Walk the prefix index from `rootPath` over its real descendants only — a
+           BFS over the parent→children adjacency map — instead of scanning every live
+           node. `pending` holds parent-paths whose direct children are yet to visit;
+           each visited child that is itself a container is enqueued. The total work is
+           the size of the changed subtree, not the whole doc. */
+        const pending: string[] = [rootPath]
+        while (pending.length > 0) {
+            const parentPath = pending.pop() as string
+            const siblings = childKeys.get(parentPath)
+            if (siblings === undefined) {
+                continue
+            }
+            /* Snapshot the set before iterating: eviction below mutates it, and a
+               deleted child must not skip its successor (Set iteration is order-
+               sensitive to in-place deletes). */
+            for (const candidate of [...siblings]) {
                 /* Walk from the already-resolved container (`rootValue`) using only the
                    path SUFFIX past the shared prefix, instead of re-walking every
                    candidate's full path from the tree root — the prefix is walked once
                    per wake, not once per descendant. */
                 const walk = walkPath(rootValue, candidate.slice(prefix.length))
+                /* An INTERMEDIATE link (a path on a route to a node but carrying none of
+                   its own — e.g. `byId/<key>` when only `byId/<key>/n` was read) has no
+                   signal to wake; it exists only to be descended through. So the
+                   wake/evict touches a node only when one is present, while the descend
+                   decision below is independent of node existence. */
+                const node = nodes.get(candidate)
                 if (walk.exists) {
-                    writeNode(node, walk.value)
+                    if (node !== undefined) {
+                        writeNode(node, walk.value)
+                    }
+                    /* Descend into a container child to reach its own descendants. */
+                    if (walk.value !== null && typeof walk.value === 'object') {
+                        pending.push(candidate)
+                    }
                 } else {
-                    writeNode(node, undefined)
-                    nodes.delete(candidate)
+                    /* A descendant whose path the mutation removed — a deleted key, an
+                       out-of-range index after a shrink — is woken to undefined, then
+                       dropped from the registry. The woken reader re-mints a fresh node
+                       on its flush if the path ever returns. A removed container's own
+                       descendants are still enqueued (whether or not THIS path held a
+                       node) so they too are woken/evicted. */
+                    if (node !== undefined) {
+                        writeNode(node, undefined)
+                        evict(candidate)
+                    }
+                    pending.push(candidate)
                 }
             }
         }

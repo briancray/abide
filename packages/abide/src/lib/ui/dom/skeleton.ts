@@ -129,11 +129,16 @@ export function skeleton(parent: Node, html: string): SkeletonHoles {
         hydration.next.set(parent, node)
     } else {
         const children = source.childNodes
+        /* Stage clones in a fragment, then attach in one append — a live parent
+           reflows once instead of per clone. `topLevel` still collects each clone
+           for anchor/element-hole resolution. */
+        const fragment = document.createDocumentFragment()
         for (let index = 0; index < children.length; index += 1) {
             const clone = (children[index] as Node).cloneNode(true)
             topLevel.push(clone)
-            parent.appendChild(clone)
+            fragment.appendChild(clone)
         }
+        parent.appendChild(fragment)
     }
     /* Anchor holes via the ONE shared ordering rule (`walkAnchorOrder`) — the same traversal
        the compiler numbers `anIndex` with. The top-level list is depth-0-filtered up front (a

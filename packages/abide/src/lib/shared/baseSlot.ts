@@ -1,14 +1,8 @@
+import { baseResolver } from './baseResolver.ts'
+
 /*
-Internal slot the runtime entries register their mount-base resolver into.
-The server entry installs an APP_URL-derived resolver at boot; the client
-entry installs one reading window.__SSR__.base. `fallback` is a single value
-used only when no resolver is registered — lets isolated tests set a base
-without spinning up the runtime. Mirrors pageSlot / cacheStoreSlot.
+Internal slot the runtime entries register their mount-base resolver into (see
+baseResolver). Exposed so test helpers snapshot/poke `.resolver` and `.fallback`
+directly.
 */
-export const baseSlot: {
-    resolver: (() => string) | undefined
-    fallback: string | undefined
-} = {
-    resolver: undefined,
-    fallback: undefined,
-}
+export const baseSlot = baseResolver.slot

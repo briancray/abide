@@ -52,4 +52,20 @@ export type RequestStore = {
     carried no file parts.
     */
     files?: Record<string, File[]>
+    /*
+    The allowlisted headers forwarded onto in-process rpc Requests during this
+    request's SSR pass — derived once from the inbound headers (which don't change
+    within the scope) and reused by every defineRpc call. Each call clones it,
+    since buildRpcRequest mutates the Headers (content-type/ref-json) before
+    constructing the Request. Undefined until the first in-process rpc.
+    */
+    forwardedHeaders?: Headers
+    /*
+    The body class of the response the dispatch pipeline produced, stashed so
+    runWithRequestScope's closing-record stream monitor reuses the single S2
+    classification instead of re-deriving from the Content-Type. Undefined for
+    callers that don't classify (mcp, the fetch fallback, tests) — those fall
+    back to classifying the response themselves.
+    */
+    responseStreaming?: boolean
 }

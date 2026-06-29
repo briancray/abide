@@ -1,16 +1,8 @@
-import { contentTypeOf } from '../../shared/contentTypeOf.ts'
-import { isStreamingResponse } from '../../shared/isStreamingResponse.ts'
+import type { ResponseBodyKind } from '../../shared/responseBodyKind.ts'
+import { responseBodyKind } from '../../shared/responseBodyKind.ts'
 import { acceptsGzip } from './acceptsGzip.ts'
 import { flushingGzipStream } from './flushingGzipStream.ts'
 import { STREAMED_HTML_HEADER } from './STREAMED_HTML_HEADER.ts'
-
-/*
-Compressible Content-Types — text and structured-text payloads. Binary or
-already-compressed bodies (images, fonts, archives, zstd/gzip blobs) gain
-nothing from a second pass and only burn CPU.
-*/
-const COMPRESSIBLE_TYPE =
-    /^(?:text\/|application\/(?:json|javascript|xml|[\w.-]+\+(?:json|xml))|image\/svg)/
 
 /*
 Gzips a dynamic response (SSR HTML, rpc/json replies, the plain 404) when the
@@ -23,6 +15,12 @@ expose a string body's length before send, and measuring would mean buffering th
 body — the framing overhead on the rare tiny body is negligible against
 compressing every page and rpc payload.
 
+`kind` is the body class the dispatch pipeline already computed (S2: classify
+once, thread it in) — only `compressible` bodies gzip; `streaming` and `opaque`
+pass through. Standalone callers (the health probe) omit it and it's derived
+here. The streamed-HTML marker is handled independent of `kind` since it's
+stripped even on a skip path.
+
 Buffered bodies take the web CompressionStream (best ratio, one flush at close).
 The streamed SSR document self-marks (STREAMED_HTML_HEADER) and takes a
 per-chunk-flushing gzip instead: the plain CompressionStream buffers the head
@@ -30,7 +28,7 @@ until its deflate window fills, which defeats streaming (the browser can't
 preload-scan the head or paint the pending shell until the stream nearly closes).
 The marker is stripped so it never reaches the client.
 */
-export function gzipResponse(req: Request, response: Response): Response {
+export function gzipResponse(req: Request, response: Response, kind?: ResponseBodyKind): Response {
     const streamedHtml = response.headers.has(STREAMED_HTML_HEADER)
     if (streamedHtml) {
         response.headers.delete(STREAMED_HTML_HEADER)
@@ -38,11 +36,11 @@ export function gzipResponse(req: Request, response: Response): Response {
     if (!response.body || response.headers.has('Content-Encoding')) {
         return response
     }
-    if (!acceptsGzip(req) || isStreamingResponse(response)) {
-        return response
-    }
-    const contentType = contentTypeOf(response.headers)
-    if (!COMPRESSIBLE_TYPE.test(contentType)) {
+    /* A streamed-HTML document classifies as `compressible` (text/html) but the
+       marker was already stripped above, so re-derive after the strip when the
+       pipeline didn't hand a kind in. */
+    const bodyKind = kind ?? responseBodyKind(response)
+    if (!acceptsGzip(req) || bodyKind !== 'compressible') {
         return response
     }
     const headers = new Headers(response.headers)

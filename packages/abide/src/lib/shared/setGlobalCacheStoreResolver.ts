@@ -1,6 +1,4 @@
-import { globalCacheStoreSlot } from './globalCacheStoreSlot.ts'
-import type { CacheStore } from './types/CacheStore.ts'
+import { globalCacheStoreResolver } from './globalCacheStoreResolver.ts'
 
-export function setGlobalCacheStoreResolver(fn: () => CacheStore | undefined): void {
-    globalCacheStoreSlot.resolver = fn
-}
+// Registers the process-level cache store resolver. Called once per side at boot.
+export const setGlobalCacheStoreResolver = globalCacheStoreResolver.set

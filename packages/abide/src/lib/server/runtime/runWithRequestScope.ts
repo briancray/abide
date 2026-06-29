@@ -120,7 +120,10 @@ export function runWithRequestScope(
                 })
             })
         }
-        if (response.body && isStreamingResponse(response)) {
+        /* Reuse the dispatch pipeline's single S2 classification when it stashed
+           one; callers that don't (mcp, the fetch fallback, tests) classify here. */
+        const streaming = store.responseStreaming ?? isStreamingResponse(response)
+        if (response.body && streaming) {
             /*
             A hand-pumped wrap rather than a TransformStream: streams typically
             end by client disconnect (an SSE tab closing), which cancels the

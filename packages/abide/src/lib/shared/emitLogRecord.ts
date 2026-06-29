@@ -8,12 +8,21 @@ const useColor = hasBun && Bun.enableANSIColors
 const RESET = '\x1b[0m'
 const DIM = '\x1b[2m'
 
-// Wraps `text` in a Bun-resolved ANSI color escape; no-op when colors are disabled or unavailable (browser).
+/* The finite color set the log fragments paint with. Resolve each ANSI-256
+   escape once at module load — `Bun.color` was otherwise called per colored
+   fragment per line. Empty when colors are off so `paint` short-circuits. */
+const COLOR_NAMES = ['red', 'yellow', 'cyan', 'green', 'blue', 'white'] as const
+const COLOR_ESCAPES: Record<string, string> = useColor
+    ? Object.fromEntries(COLOR_NAMES.map((name) => [name, Bun.color(name, 'ansi-256') ?? '']))
+    : {}
+
+// Wraps `text` in a precomputed ANSI color escape; no-op when colors are disabled or unavailable (browser).
 function paint(color: string, text: string): string {
-    if (!useColor) {
+    const escape = COLOR_ESCAPES[color]
+    if (escape === undefined) {
         return text
     }
-    return `${Bun.color(color, 'ansi-256')}${text}${RESET}`
+    return `${escape}${text}${RESET}`
 }
 
 // Applies the ANSI dim attribute; no-op when colors are disabled.
@@ -66,12 +75,17 @@ function formatElapsed(ms: number): string {
     return `+${ms.toFixed(2)}ms`
 }
 
+/* Left-pads a clock component to a fixed width. Module-scoped so it isn't
+   re-allocated per log line. */
+function pad(value: number, width = 2): string {
+    return String(value).padStart(width, '0')
+}
+
 /* `14:23:01.072` — local wall-clock to the ms. Every record carries `ts`, so the
    tsv line always leads with one; `+elapsedMs` still trails as the request-relative
    timing — the two are different axes (when it happened vs how long it took). */
 function formatClock(ts: number): string {
     const date = new Date(ts)
-    const pad = (value: number, width = 2): string => String(value).padStart(width, '0')
     return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}.${pad(date.getMilliseconds(), 3)}`
 }
 

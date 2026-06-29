@@ -16,7 +16,7 @@ function build(host) {
     $$effect(() => host.textContent = 'x')
 }
 export default function component(host) { return $$mount(host, build) }`
-        expect(() => assertRuntimeHelpersBound(broken, 'test')).toThrow(/\$\$effect\b/)
+        expect(() => assertRuntimeHelpersBound(broken, new Set(), 'test')).toThrow(/\$\$effect\b/)
     })
 
     test('passes when every called helper is imported', () => {
@@ -26,7 +26,7 @@ function build(host) {
     $$effect(() => host.textContent = 'x')
 }
 export default function component(host) { return $$mount(host, build) }`
-        expect(() => assertRuntimeHelpersBound(ok, 'test')).not.toThrow()
+        expect(() => assertRuntimeHelpersBound(ok, new Set(), 'test')).not.toThrow()
     })
 
     test('a helper name quoted inside a string snippet is not a call — no false alarm', () => {
@@ -36,7 +36,7 @@ export default function component(host) { return $$mount(host, build) }`
 function build(host) {
     $$appendText(host, () => \`call $$mount(host, build) to start\`)
 }`
-        expect(() => assertRuntimeHelpersBound(docs, 'test')).not.toThrow()
+        expect(() => assertRuntimeHelpersBound(docs, new Set(), 'test')).not.toThrow()
     })
 
     test('a locally declared name shadowing a helper satisfies its call', () => {
@@ -44,6 +44,6 @@ function build(host) {
     const $$effect = (fn) => fn()
     $$effect(() => host.textContent = 'x')
 }`
-        expect(() => assertRuntimeHelpersBound(shadowed, 'test')).not.toThrow()
+        expect(() => assertRuntimeHelpersBound(shadowed, new Set(), 'test')).not.toThrow()
     })
 })

@@ -15,20 +15,32 @@ and require that name to be imported or locally bound. A helper name inside a st
 comment is not a `CallExpression` callee, so a docs component quoting framework code
 (`mount(...)` in a snippet) never false-positives. Compile-time only; never on the hot path.
 */
-export function assertRuntimeHelpersBound(module: string, context: string): void {
+/* `module` is either the source string (standalone use — parsed here) or the already-parsed
+   tree of the bodies WITHOUT the prepended import block (compile pipeline — shares the one
+   parse the dead-import filter made). In the latter case the import block's bindings aren't in
+   the tree, so `importedHelpers` supplies the helper names that block will bind. */
+export function assertRuntimeHelpersBound(
+    module: string | ts.SourceFile,
+    importedHelpers: Set<string>,
+    context: string,
+): void {
     /* The EMITTED local names (the `$$` alias when set) — codegen calls those, and the
        aliased import binds them, so the bound/called check must use the same form. */
     const helperNames = new Set(UI_RUNTIME_IMPORTS.map((entry) => entry.alias ?? entry.name))
-    const source = ts.createSourceFile(
-        'module.ts',
-        module,
-        ts.ScriptTarget.Latest,
-        /* setParentNodes */ true,
-    )
-    /* Names a bare call can resolve to: every import binding plus every declared name.
-       Collected generously (any identifier in a binding position) — over-approximating the
-       bound set only risks missing a defect, never raising a false alarm on valid output. */
-    const bound = new Set<string>()
+    const source =
+        typeof module === 'string'
+            ? ts.createSourceFile(
+                  'module.ts',
+                  module,
+                  ts.ScriptTarget.Latest,
+                  /* setParentNodes */ true,
+              )
+            : module
+    /* Names a bare call can resolve to: the import block's helper bindings (supplied when the
+       tree omits them) plus every import binding and declared name in the tree. Collected
+       generously (any identifier in a binding position) — over-approximating the bound set only
+       risks missing a defect, never raising a false alarm on valid output. */
+    const bound = new Set<string>(importedHelpers)
     const calledHelpers: { name: string; position: number }[] = []
     const visit = (node: ts.Node): void => {
         if (
@@ -62,7 +74,7 @@ export function assertRuntimeHelpersBound(module: string, context: string): void
     if (unbound !== undefined) {
         const { line, character } = source.getLineAndCharacterOfPosition(unbound.position)
         throw new Error(
-            `[abide] ${context} calls runtime helper \`${unbound.name}\` at line ${line + 1}:${character + 1} but never imports it — the dead-import filter dropped it. Please report this with the component source.\nOutput:\n${module}`,
+            `[abide] ${context} calls runtime helper \`${unbound.name}\` at line ${line + 1}:${character + 1} but never imports it — the dead-import filter dropped it. Please report this with the component source.\nOutput:\n${source.text}`,
         )
     }
 }

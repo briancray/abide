@@ -20,6 +20,14 @@ the bug while keeping zod v4. Server-only: the client bundle strips zod from rpc
 modules (they become remote proxies), and dev never bundles.
 */
 export function zodCjsPlugin(cwd: string): BunPlugin {
+    /*
+    The (specifier, importer-dir) → cjs path mapping is deterministic per build —
+    zod's location doesn't move mid-build, and the filter fires for every zod
+    import in every module. Memoise on a `${path}\0${from}` key (mirrors the
+    resolver's resolveExtension cache) so the fs round-trips (resolveSync +
+    existsSync) run once per unique pair instead of once per import.
+    */
+    const cjsPathCache = new Map<string, string>()
     return {
         name: 'abide-zod-cjs',
         setup(build) {
@@ -27,9 +35,16 @@ export function zodCjsPlugin(cwd: string): BunPlugin {
                 /* Resolve from the importer (or cwd for the entry) to zod's ESM
                    target, then swap to its `.cjs` sibling when one exists. */
                 const from = args.importer ? dirname(args.importer) : cwd
+                const key = `${args.path}\0${from}`
+                const cached = cjsPathCache.get(key)
+                if (cached !== undefined) {
+                    return { path: cached }
+                }
                 const resolved = Bun.resolveSync(args.path, from)
                 const cjs = resolved.replace(/\.js$/, '.cjs')
-                return { path: existsSync(cjs) ? cjs : resolved }
+                const path = existsSync(cjs) ? cjs : resolved
+                cjsPathCache.set(key, path)
+                return { path }
             })
         },
     }

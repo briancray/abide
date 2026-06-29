@@ -3,7 +3,6 @@ import type { BunPlugin } from 'bun'
 import { fileName } from '../../shared/fileName.ts'
 import { messageFromError } from '../../shared/messageFromError.ts'
 import { AbideCompileError } from './AbideCompileError.ts'
-import { analyzeComponent } from './analyzeComponent.ts'
 import { compileModule } from './compileModule.ts'
 import { nearestProjectRoot } from './nearestProjectRoot.ts'
 import { offsetToLineColumn } from './offsetToLineColumn.ts'
@@ -63,14 +62,17 @@ export const abideUiPlugin: BunPlugin = {
                     throw new Error(`${message.replace(/^\[abide\]\s*/, `[abide] ${at} — `)}`)
                 }
             }
-            const code = compileAbide(() => compileModule(source, { isLayout, moduleId }))
+            /* One compile pass yields both the module code and its scoped `<style>` blocks —
+               the styles come from the analysis `compileModule` already ran, so the loader no
+               longer re-analyzes the source just to recover them. */
+            const { code, styles } = compileAbide(() =>
+                compileModule(source, { isLayout, moduleId }),
+            )
             /* Browser build with `<style>`(s): concatenate every scoped block's CSS and
                pull it into the bundle via one virtual import, keyed by `moduleId` so the
-               registry id and the CSS id agree. */
-            const styles = compileAbide(() =>
-                toBrowser ? analyzeComponent(source, moduleId).styles : [],
-            )
-            if (styles.length === 0) {
+               registry id and the CSS id agree. Server builds skip the import (SSR styling
+               comes from the already-linked sheet). */
+            if (!toBrowser || styles.length === 0) {
                 return { contents: code, loader: 'ts' }
             }
             const virtual = `abide-style:${moduleId}`

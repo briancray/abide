@@ -1,6 +1,8 @@
+import { augmentModule } from './augmentModule.ts'
 import { carriesBodyArgs } from './carriesBodyArgs.ts'
 import { detectRpcMethod } from './detectRpcMethod.ts'
 import { fileStem } from './fileStem.ts'
+import { RPC_ARGS_TYPE } from './RPC_ARGS_TYPE.ts'
 import { rpcUrlForFile } from './rpcUrlForFile.ts'
 import { writeDts } from './writeDts.ts'
 
@@ -26,24 +28,23 @@ export async function writeRpcDts({
     rpcFiles: string[]
     importName: string
 }): Promise<void> {
-    const lines = await Promise.all(
-        rpcFiles.map(async (file) => {
+    const pairs = await Promise.all(
+        rpcFiles.map(async (file): Promise<[string, string] | undefined> => {
             const method = detectRpcMethod(await Bun.file(`${rpcDir}/${file}`).text())
             // A body rpc's args can't ride a URL — leave it out of the url() rpc map.
             if (!method || carriesBodyArgs(method)) {
                 return undefined
             }
             const importPath = `../server/rpc/${file}`
-            return `        ${JSON.stringify(rpcUrlForFile(file))}: RpcArgs<typeof import(${JSON.stringify(importPath)}).${fileStem(file)}>`
+            return [
+                rpcUrlForFile(file),
+                `RpcArgs<typeof import(${JSON.stringify(importPath)}).${fileStem(file)}>`,
+            ]
         }),
     )
-    const entries = lines.filter((line) => line !== undefined).toSorted()
-    const body = `type RpcArgs<Fn> = Fn extends (args: infer Args) => unknown ? Exclude<Args, FormData> : never
-
-declare module '${importName}/shared/url' {
-    interface RpcRoutes {
-${entries.join('\n')}
-    }
-}`
-    await writeDts(cwd, 'rpc', body)
+    const entries = pairs
+        .filter((pair) => pair !== undefined)
+        .toSorted(([a], [b]) => (JSON.stringify(a) < JSON.stringify(b) ? -1 : 1))
+    const module = augmentModule(`${importName}/shared/url`, 'RpcRoutes', entries)
+    await writeDts(cwd, 'rpc', `${RPC_ARGS_TYPE}\n\n${module}`)
 }

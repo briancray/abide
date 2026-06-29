@@ -1,6 +1,4 @@
-import { cacheStoreSlot } from './cacheStoreSlot.ts'
-import type { CacheStore } from './types/CacheStore.ts'
+import { cacheStoreResolver } from './cacheStoreResolver.ts'
 
-export function setCacheStoreResolver(fn: () => CacheStore | undefined): void {
-    cacheStoreSlot.resolver = fn
-}
+// Registers the runtime's active-CacheStore resolver. Called once per side at boot.
+export const setCacheStoreResolver = cacheStoreResolver.set

@@ -17,8 +17,13 @@ export function withResponseDefaults(
     status?: number,
 ): ResponseInit {
     const headers = new Headers(defaultHeaders)
-    new Headers(init?.headers).forEach((value, key) => {
-        headers.set(key, value)
-    })
+    /* The dominant case carries no overrides — skip the second Headers
+       allocation + per-key copy and ship the defaults alone. Only merge when
+       the caller actually supplied headers. */
+    if (init?.headers !== undefined) {
+        new Headers(init.headers).forEach((value, key) => {
+            headers.set(key, value)
+        })
+    }
     return { ...init, headers, ...(status !== undefined && { status }) }
 }

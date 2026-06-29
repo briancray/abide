@@ -1,3 +1,4 @@
+import { augmentModule } from './augmentModule.ts'
 import { fileStem } from './fileStem.ts'
 import { socketNameForFile } from './socketNameForFile.ts'
 import { writeDts } from './writeDts.ts'
@@ -20,15 +21,14 @@ export async function writeTestSocketsDts({
     importName: string
 }): Promise<void> {
     const entries = socketFiles
-        .map((file) => {
+        .map((file): [string, string] => {
             const importPath = `../server/sockets/${file}`
-            return `        ${JSON.stringify(socketNameForFile(file))}: typeof import(${JSON.stringify(importPath)}).${fileStem(file)}`
+            return [
+                socketNameForFile(file),
+                `typeof import(${JSON.stringify(importPath)}).${fileStem(file)}`,
+            ]
         })
-        .toSorted()
-    const body = `declare module '${importName}/test/createTestApp' {
-    interface SocketClient {
-${entries.join('\n')}
-    }
-}`
-    await writeDts(cwd, 'testSockets', body)
+        .toSorted(([a], [b]) => (JSON.stringify(a) < JSON.stringify(b) ? -1 : 1))
+    const module = augmentModule(`${importName}/test/createTestApp`, 'SocketClient', entries)
+    await writeDts(cwd, 'testSockets', module)
 }

@@ -96,7 +96,7 @@ const total = computed(() => count + 1)</script><p>{count}{draft}{total}</p>`,
     }
     for (const [label, source] of Object.entries(componentCorpus)) {
         test(label, () => {
-            assertValid(compileModule(source, { isLayout: false }), label)
+            assertValid(compileModule(source, { isLayout: false }).code, label)
         })
     }
 })

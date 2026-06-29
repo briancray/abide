@@ -119,7 +119,11 @@ export function defineSocket<T>(name: string, opts: SocketOptions = {}): Socket<
             cachedServer = getActiveServer()
         }
         const server = cachedServer
-        if (server) {
+        /* Remote fan-out is the only consumer of the encoded frame: in-process iterators
+           already received the live object via notify() above. Skip the full message-graph
+           walk (encodeRefJson) + native publish when zero ws clients are subscribed to the
+           topic — subscriberCount is a cheap C-side check, encodeRefJson is not. */
+        if (server && server.subscriberCount(topic) > 0) {
             /* Typed against the shared wire contract so a `SocketServerFrame` change can't
                silently drift from this construction site (the dispatcher's `send` is already
                typed; this was the last `msg` frame built through an unchecked JSON.stringify). */

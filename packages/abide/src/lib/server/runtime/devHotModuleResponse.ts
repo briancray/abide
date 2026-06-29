@@ -26,7 +26,7 @@ export async function devHotModuleResponse(moduleId: string): Promise<Response> 
     if (source === undefined) {
         return new Response('not found', { status: 404 })
     }
-    const code = compileModule(source, {
+    const { code } = compileModule(source, {
         isLayout: moduleId.endsWith('layout.abide'),
         moduleId,
         hot: true,

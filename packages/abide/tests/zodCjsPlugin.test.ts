@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, spyOn, test } from 'bun:test'
 import type { OnResolveArgs, PluginBuilder } from 'bun'
 import { zodCjsPlugin } from '../src/zodCjsPlugin.ts'
 
@@ -38,5 +38,30 @@ describe('zodCjsPlugin', () => {
         const result = callback({ path: 'zod', importer: '' } as OnResolveArgs)
         expect(result?.path.endsWith('.cjs')).toBe(true)
         expect(result?.path).toContain('zod')
+    })
+
+    /* The fs resolution is deterministic per (specifier, importer-dir), so the
+       plugin memoises it. Same input → same output, and resolveSync runs once
+       per unique key regardless of how many imports hit the filter. */
+    test('memoises: resolveSync runs once per unique key, same output on hits', () => {
+        const { callback } = capture()
+        const resolveSpy = spyOn(Bun, 'resolveSync')
+        try {
+            const first = callback({ path: 'zod', importer: '' } as OnResolveArgs)
+            const repeats = Array.from(
+                { length: 5 },
+                () => callback({ path: 'zod', importer: '' } as OnResolveArgs)?.path,
+            )
+            /* identical path returned on every cache hit */
+            expect(new Set([first?.path, ...repeats]).size).toBe(1)
+            /* one fs round-trip for the one unique (path, from) pair */
+            expect(resolveSpy).toHaveBeenCalledTimes(1)
+
+            /* a distinct importer dir is a distinct key — one more resolveSync */
+            callback({ path: 'zod', importer: `${repoRoot}/sub/mod.ts` } as OnResolveArgs)
+            expect(resolveSpy).toHaveBeenCalledTimes(2)
+        } finally {
+            resolveSpy.mockRestore()
+        }
     })
 })

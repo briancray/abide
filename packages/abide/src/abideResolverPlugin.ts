@@ -257,10 +257,15 @@ export function abideResolverPlugin({
     return {
         name: 'abide-resolver',
         setup(build) {
-            /* Fresh edge graph each build (dev watch reuses the plugin instance).
+            /* Fresh edge graph + resolution cache each build (dev watch reuses the
+               plugin instance). The resolution cache memoises (path → resolved file)
+               within a build; clearing it per build keeps the memo but stops a stale
+               miss — a path resolved before its file existed — surviving into the next
+               build, so a freshly-created file resolves instead of staying "not found".
                onStart is build-time only — absent in the runtime/preload plugin context. */
             build.onStart?.(() => {
                 importerOf.clear()
+                resolveExtensionCache.clear()
             })
 
             /*

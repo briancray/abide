@@ -47,6 +47,21 @@ export function createShadowLanguageService(cwd: string): ShadowLanguageService 
     const versions = new Map<string, number>()
     const shadows = new Map<string, CompiledShadow>()
     const parseErrors = new Map<string, string>()
+    /* Memo of `shadowText` output keyed by source path, tagged with the shadow
+       version it was compiled at; a stale tag forces recompilation. `update`/`close`
+       bump that version, so the next read recompiles. */
+    const compiledAt = new Map<string, { version: number; code: string }>()
+    /* Memo of `pagePropsType` (route re-parse) per source path; the path → props
+       type mapping is immutable, so no version tag is needed. */
+    const propsTypes = new Map<string, string | undefined>()
+
+    /* The route props type for a component, parsed once and reused. */
+    const propsTypeOf = (abidePath: string): string | undefined => {
+        if (!propsTypes.has(abidePath)) {
+            propsTypes.set(abidePath, pagePropsType(abidePath))
+        }
+        return propsTypes.get(abidePath)
+    }
 
     /* Ambient declarations for bundler-handled asset imports (`*.css`, …). */
     const assets = assetModulesFile(cwd)
@@ -55,18 +70,29 @@ export function createShadowLanguageService(cwd: string): ShadowLanguageService 
         overlays.has(abidePath) || ts.sys.fileExists(abidePath)
 
     /* Compiles (and caches) a component's shadow from its overlay or disk text; a
-       template parse error yields a minimal valid module + a recorded message. */
+       template parse error yields a minimal valid module + a recorded message.
+       Memoised against the shadow's version (bumped by `update`/`close`), so
+       repeated reads at the same version skip the ~700-line compile and the
+       `shadows`/`parseErrors` caches stay current. */
     const shadowText = (abidePath: string): string => {
+        const version = versions.get(suffixed(abidePath)) ?? 0
+        const memo = compiledAt.get(abidePath)
+        if (memo !== undefined && memo.version === version) {
+            return memo.code
+        }
         const source = overlays.get(abidePath) ?? ts.sys.readFile(abidePath) ?? ''
         try {
-            const compiled = compileShadow(source, pagePropsType(abidePath))
+            const compiled = compileShadow(source, propsTypeOf(abidePath))
             shadows.set(abidePath, compiled)
             parseErrors.delete(abidePath)
+            compiledAt.set(abidePath, { version, code: compiled.code })
             return compiled.code
         } catch (error) {
             shadows.set(abidePath, { code: '', mappings: [] })
             parseErrors.set(abidePath, messageFromError(error))
-            return 'export default function (): void {}\n'
+            const code = 'export default function (): void {}\n'
+            compiledAt.set(abidePath, { version, code })
+            return code
         }
     }
 

@@ -1,5 +1,4 @@
-import { matchesDebugPattern } from './matchesDebugPattern.ts'
-import { parseDebugPatterns } from './parseDebugPatterns.ts'
+import { debugGate } from './debugGate.ts'
 
 /*
 Whether a `-` pattern in DEBUG explicitly shuts a channel off — the off
@@ -7,13 +6,12 @@ switch for the always-on channels (the app's name, 'abide'): DEBUG="-abide"
 silences framework lines including the per-request closing records,
 DEBUG="-myapp" the app's own. Silencing a channel silences all its levels —
 levels never gate, in either direction. The default is guarded: this runs in
-the browser bundle, where `process` doesn't exist.
+the browser bundle, where `process` doesn't exist. Decision routed through
+debugGate, memoized per DEBUG value.
 */
 export function isDebugNegated(
     name: string,
     env: string | undefined = typeof process === 'undefined' ? undefined : process.env.DEBUG,
 ): boolean {
-    return parseDebugPatterns(env)
-        .filter((pattern) => pattern.startsWith('-'))
-        .some((pattern) => matchesDebugPattern(name, pattern.slice(1)))
+    return debugGate(env).negated(name)
 }

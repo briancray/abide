@@ -100,7 +100,15 @@ export function defineRpc<Args, Return>(
     function buildRequest(args: Args | undefined): Request {
         const store = requestContext.getStore()
         const baseUrl = store ? store.url.href : 'http://localhost/'
-        const headers = store ? forwardHeaders(store.req.headers) : new Headers()
+        /* The forwarded allowlist is request-invariant — derive it once per scope
+           and clone per call (buildRpcRequest mutates the Headers). */
+        let headers: Headers
+        if (store) {
+            store.forwardedHeaders ??= forwardHeaders(store.req.headers)
+            headers = new Headers(store.forwardedHeaders)
+        } else {
+            headers = new Headers()
+        }
         return buildRpcRequest({ method, url, args, baseUrl, headers })
     }
 
