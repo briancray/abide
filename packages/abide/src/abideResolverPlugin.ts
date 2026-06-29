@@ -84,12 +84,22 @@ Bun plugin that wires every virtual import abide produces at build time:
 - `abide:rpc`     — { rpcUrl: () => import(rpc-module) } HTTP-method manifest
 - `abide:sockets` — { socketName: () => import(socket-module) } socket manifest
 - `abide:pages`   — { pageUrl: () => import(page.abide) } manifest
+- `abide:layouts` — { layoutUrl: () => import(layout.abide) } layout manifest
 - `abide:prompts` — { promptName: () => import(prompt-module) } manifest
-- `abide:app`     — { init?, handle?, handleError? } from src/app.ts
+- `abide:app`     — { init?, handle?, handleError?, health?, forwardHeaders? } from src/app.ts
+- `abide:config`  — re-exports src/server/config.ts for boot-time env validation
 - `abide:assets`  — gzip-compressed chunk bytes embedded for standalone compile
 - `abide:public-assets`  — gzip-embedded src/ui/public files
 - `abide:mcp-resources`  — gzip-embedded src/mcp/resources files
+- `abide:mcp`     — generated MCP server (createMcpServer)
 - `abide:shell`   — app.html content (custom or default)
+- `abide:app-info`    — { name, version } from package.json for OpenAPI info
+- `abide:cli-manifest` — baked per-rpc manifest for the CLI binary
+- `abide:cli-name`     — program name from package.json
+- `abide:cli-chrome`   — banner/footer text from src/cli/
+- `abide:bundle-window`               — optional bundle window config
+- `abide:bundle-disconnected`         — baked connect-screen HTML
+- `abide:bundle-disconnected-component` — connect-screen abide-ui component
 
 Also rewrites modules under src/server/rpc and src/server/sockets:
 - src/server/rpc/<file>.ts: each HTTP-method export is bound to a runtime

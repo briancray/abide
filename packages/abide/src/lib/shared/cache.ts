@@ -92,7 +92,7 @@ request-scoped on the server, which keeps per-user data from leaking across
 requests; on the client there is one tab store either way, so it is a no-op.
 
 Reactivity is implicit: the invoker calls `store.subscribe(key)`, which
-registers the surrounding $derived / $effect scope. Invalidating the key
+registers the surrounding scope().computed() / scope().effect() scope. Invalidating the key
 then re-runs that scope, which calls cache() again and gets a fresh entry.
 Outside a tracking scope subscribe() is a no-op, so cache() works the same
 in server code and plain client code.

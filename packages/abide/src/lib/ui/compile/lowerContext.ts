@@ -29,10 +29,10 @@ export function lowerContext(
        subtree. */
     const localDerived = new Set<string>()
 
-    /* Branch-scoped PLAIN bindings — a block value param SSR binds as a real JS local
-       holding the plain resolved value (not a cell). Shadows a same-named component signal
-       like `localDerived`, but derefs as the bare identifier, not `.value` (see
-       `withLocalPlain`). Pushed only by the SSR back-end; the client uses `localDerived`. */
+    /* Branch-scoped PLAIN bindings — a block value param held as a real JS local (not a
+       cell). Shadows a same-named component signal like `localDerived`, but derefs as the
+       bare identifier, not `.value` (see `withLocalPlain`). Used by both back-ends: SSR for
+       inline-awaited values, the client for snippet args and non-reactive catch/plain params. */
     const localPlain = new Set<string>()
 
     /* Parse `code` once and chain the reference rename and doc-access lowering over the

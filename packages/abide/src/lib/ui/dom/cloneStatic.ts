@@ -19,8 +19,9 @@ the same top-level node count as the server markup.
 */
 // @documentation plumbing
 export function cloneStatic(parent: Node, html: string): void {
-    /* When `parent` is a foreign element built imperatively, the run's markup has no
-       foreign ancestor of its own, so a bare `<path>` would parse into the HTML
+    /* When `parent` is a foreign element built dynamically (not part of this static
+       run's own parser-built subtree), the run's markup has no foreign ancestor of
+       its own, so a bare `<path>` would parse into the HTML
        namespace. Parse it inside a matching `<svg>`/`<math>` wrapper and clone the
        wrapper's children — the parser namespaces them correctly. */
     const wrapper = foreignWrapperTag(parent)

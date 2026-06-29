@@ -37,8 +37,9 @@ attributes, reactive `attr`/`text` bindings, `on` listeners, keyed `each`, and
 conditional `when`. Every embedded expression is first rewritten from the signal
 surface (`count` → `model.count`) and then lowered to the doc patch/read API
 (cell-hoisting runs over the whole result afterwards). The output operates on
-`hostVar` and expects the dom bindings, `doc`, `effect`, and the component's
-`model` in scope — the body the component compiler wraps and hoists cells into.
+`hostVar` and expects the `$$`-aliased dom bindings (`$$effect`, `$$each`, …)
+and the component's `$$model` (emitted by `desugarSignals`) in scope — the body
+the component compiler wraps and hoists cells into.
 */
 
 /* A JS-identifier-safe frame name from an authored construct label (an attribute name
@@ -602,7 +603,7 @@ export function generateBuild(
     }
 
     /* An await block: pending → resolved(value) / error branches. Each branch is a
-       single-element root; a render thunk returns its node. */
+       void render thunk `(parent[, value]) => void` that builds its content into `parent`. */
     function generateAwait(
         node: Extract<TemplateNode, { kind: 'await' }>,
         parentVar: string,

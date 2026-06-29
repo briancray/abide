@@ -3,8 +3,8 @@ import { TEXT_PLAIN } from '../../shared/TEXT_PLAIN.ts'
 
 /*
 The framework's CSRF refusal, shared by every same-origin gate — the socket
-upgrade, the socket REST publish face, the MCP endpoint, and mutating rpc
-rpcs — so the 403 body can't drift between surfaces. `hint` appends a
+upgrade, the socket REST publish face, the MCP endpoint, and mutating rpcs
+— so the 403 body can't drift between surfaces. `hint` appends a
 surface-specific remedy; rpc names its `crossOrigin: true` opt-out so the
 first developer this 403s can self-serve.
 */

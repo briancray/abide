@@ -6,9 +6,9 @@ import type { AnalyzedComponent } from './types/AnalyzedComponent.ts'
 /*
 Compiles a single-file abide component into the body of a client build function.
 Runs the shared front-end (`analyzeComponent`), generates the DOM build from the
-template, and hoists static paths to cells. The returned body runs against a
-`host` element with `doc`/`state`/`computed`/`effect` and the dom bindings in
-scope and defines `model` itself. `compileModule` wraps it (and the SSR body) into
+template, and hoists static paths to cells. The returned body operates on `host`
+with the `$$`-prefixed dom bindings and `$$model` in scope (the latter emitted by
+`desugarSignals`). `compileModule` wraps it (and the SSR body) into
 a real module; tests wrap it with `new Function`.
 
 `analyzed` is a lazy default: a direct caller (tests) omits it and the front-end

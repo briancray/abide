@@ -3,7 +3,7 @@ import { requestScopeSlot } from './requestScopeSlot.ts'
 
 /*
 Reactive network-connectivity probe in the pending()/refreshing() family:
-reading it from a $derived/$effect re-runs that scope when the browser's
+reading it from a scope().computed() / scope().effect() re-runs that scope when the browser's
 online/offline events fire. navigator.onLine's *offline* signal is reliable
 (a true network loss always reports); its online value can false-positive
 behind captive portals — verified backend reachability is a separate,

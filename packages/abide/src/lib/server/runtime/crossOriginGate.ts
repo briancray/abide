@@ -6,7 +6,7 @@ import { isCrossOriginRequest } from './isCrossOriginRequest.ts'
 /*
 The framework's CSRF/CSWSH posture in one place: a cross-origin browser
 request to a mutating framework endpoint is refused. Every endpoint that
-parses bodies ignoring Content-Type (rpc rpcs, socket publish, MCP JSON-RPC)
+parses bodies ignoring Content-Type (rpcs, socket publish, MCP JSON-RPC)
 must gate here — a hostile page's text/plain form trick could otherwise
 smuggle a payload in with the visitor's ambient cookies; non-browser clients
 send no Origin and pass. Returns the 403 to send, or undefined to proceed.

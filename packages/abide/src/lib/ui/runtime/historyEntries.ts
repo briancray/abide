@@ -2,7 +2,7 @@ import type { AbideHistoryState } from './types/AbideHistoryState.ts'
 
 /*
 Per-history-entry scroll buckets for manual scroll restoration. The browser's own
-restoration is disabled (`history.scrollRestoration = 'manual'` at router boot)
+restoration is disabled (`history.scrollRestoration = 'manual'` after the first build/hydration)
 because the router tears the page down and rebuilds it AFTER the browser would have
 restored scroll — so the offset is lost against a node that no longer exists. Instead
 each history entry carries a monotonic id (stamped into `history.state.abideEntry` by

@@ -34,7 +34,7 @@ type MutatingRpcOpts = RpcBaseOpts & {
 }
 
 /*
-Shared signature for every rpc helper (GET / POST / …). Three overloads:
+Shared signature for every rpc helper (GET / POST / …). Four overloads:
 
   - `Rpc(fn, { inputSchema, outputSchema?, clients? })` — `Args` infers
     from `InferInput<InputSchema>`, the handler receives

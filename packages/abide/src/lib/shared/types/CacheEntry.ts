@@ -75,7 +75,7 @@ type InvalidationState = {
     timer?: ReturnType<typeof setTimeout>
     /*
     An invalidation that arrived while a refetch was already in flight: fireRefetch
-    can't run concurrently, so it records the request here and re-schedules once the
+    can't run concurrently, so it sets this flag and re-schedules once the
     in-flight refetch settles, rather than dropping the newer invalidation.
     */
     pending?: boolean

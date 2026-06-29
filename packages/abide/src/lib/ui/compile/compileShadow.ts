@@ -182,10 +182,6 @@ type ScriptAnalysis = {
     diagnostics: ShadowDiagnostic[]
 }
 
-/* Walks the leading `<script>` and produces the shadow's module imports, the
-   module-scope type declarations, the value-typed scope lines, and the `props<Shape>()`
-   prop shapes. `scriptStart` is the body's absolute offset in the source, so verbatim
-   spans map back exactly. */
 /* Pushes a diagnostic for every author binding whose name starts with the reserved `$$`
    prefix — variable/function/class declarations, parameters, and destructuring leaves.
    Read structurally off the parsed script; the message points at the offending name. */
@@ -218,6 +214,10 @@ function collectReservedNameDiagnostics(
     visit(file)
 }
 
+/* Walks the leading `<script>` and produces the shadow's module imports, the
+   module-scope type declarations, the value-typed scope lines, and the `props<Shape>()`
+   prop shapes. `scriptStart` is the body's absolute offset in the source, so verbatim
+   spans map back exactly. */
 function analyzeScript(scriptBody: string, scriptStart: number): ScriptAnalysis {
     const imports: ScopeLine[] = []
     const types: ScopeLine[] = []

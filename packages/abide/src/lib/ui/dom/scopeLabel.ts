@@ -4,9 +4,9 @@ establishes, derived from its host element's tag. The router instead fills layer
 marker boundaries with no host element, so it passes each layer's route key as an
 explicit label (`fillBoundary`); a nested child likewise passes its component name (see
 `mountRange`). The `abide-` prefix strip turns a framework host tag like `abide-resolve`
-into `resolve`; any other host yields its lowercased tag. Dev-only — feeds the
-inspector's Reactive tab a readable scope name. Returns undefined when there's no element
-to name from.
+into `resolve`; any other host yields its lowercased tag. Feeds the inspector's
+Reactive tab a readable scope name; computed and stored in all builds (only the
+inspector surface is dev-only). Returns undefined when there's no element to name from.
 */
 import { COMPONENT_WRAPPER_PREFIX } from '../COMPONENT_WRAPPER_PREFIX.ts'
 

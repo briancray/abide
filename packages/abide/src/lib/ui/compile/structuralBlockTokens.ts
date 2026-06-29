@@ -6,10 +6,9 @@ HTML grammar sees only as text and the shadow program lowers away. A pure scan o
 raw source (independent of a successful parse, so it survives mid-edit), it emits
 an `operator` token for the `{`+sigil opener and a `keyword` token for the block
 word, plus the `of`/`by` connectors inside a `{#for …}` head. Expression interiors
-(and the `{@const}`/`{@html}` tags and bare `{expr}` interpolations) are NOT touched
-here — those are the shadow's job. A keyword allowlist after the sigil prevents
-matching arbitrary `{:foo}` text. Longest phrases first so `for await` beats `for`
-and `else if` beats `else`.
+and bare `{expr}` interpolations are NOT touched here — those are the shadow's job.
+A keyword allowlist after the sigil prevents matching arbitrary `{:foo}` text.
+Longest phrases first so `for await` beats `for` and `else if` beats `else`.
 */
 const BLOCK_KEYWORDS = [
     'for await',

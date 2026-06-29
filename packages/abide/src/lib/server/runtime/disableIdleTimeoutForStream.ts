@@ -13,7 +13,7 @@ than `body instanceof ReadableStream`, since every bodied Response exposes one.
 A streamed SSR page (`text/html`) is deliberately not opted out: it inherits the
 configured `idleTimeout` as a bounded cap on how long it can hold the connection,
 and the client re-fetches any placeholder left unresolved by a cut stream (see
-flushUnresolvedPlaceholders). Non-stream responses pass through.
+streamCacheResolutions, which yields { key, miss } markers the client re-fetches). Non-stream responses pass through.
 */
 export function disableIdleTimeoutForStream(
     server: Server<unknown>,

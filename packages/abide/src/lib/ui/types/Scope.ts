@@ -17,9 +17,9 @@ methods so a scope is a passable value: `<Child parentScope={scope} />`.
 Capabilities route where the scope's changes go: `record()` to an undo journal,
 `persist()` to durable storage, `broadcast()` to peers — declared once, then
 `undo`/`redo` act on a recorded scope. `id` is the scope's identity for the
-boundary-crossing capabilities — `persist()` defaults its key to it. `scope()` is
-the ONLY public entry; everything else is a method reached through it (the
-`history`/`persist`/`sync` helpers it composes are internal).
+boundary-crossing capabilities — `persist()` defaults its key to it. `scope()` is the only user-facing public entry; `effect` is also exported
+but only for generated binding code and the SSR strip (tagged plumbing). The
+`history`/`persist`/`sync` helpers it composes are internal.
 */
 export type Scope = {
     readonly id: string

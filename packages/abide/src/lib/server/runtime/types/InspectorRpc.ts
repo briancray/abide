@@ -1,6 +1,6 @@
 /*
-One RPC rpc projected for the inspector: the registry entry reduced to the
-serializable facts the UI renders — where it mounts, its method, which
+One declared RPC projected for the inspector: the registry entry reduced to
+the serializable facts the UI renders — where it mounts, its method, which
 non-browser surfaces advertise it, and its argument/result shapes as JSON
 Schema. Schemas project through jsonSchemaForSchema (same as MCP/OpenAPI), so
 a rpc whose library can't render a schema still lists with an opaque shape.

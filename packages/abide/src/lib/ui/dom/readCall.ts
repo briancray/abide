@@ -1,9 +1,11 @@
 /*
 Guarded method call on a reactive-document read. The doc-access lowering rewrites
-`model.draft.trim()` into `model.read("draft").trim()`; when that read is nullish
-the bare form throws the engine's opaque `undefined is not an object (evaluating
-'…read("draft").trim()')`, naming only the desugared call. This wraps the
-non-optional call so the throw names the authored scope path and member instead —
+a non-optional method call on a reactive-document read — e.g. `model.draft.trim()` —
+directly to `$$readCall(model.read("draft"), "draft", "trim", [...])` rather than
+the naive `model.read("draft").trim()`, which would throw the engine's opaque
+`undefined is not an object (evaluating '…read("draft").trim()')`, naming only the
+desugared call. This wraps the non-optional call so the throw names the authored
+scope path and member instead —
 the source-mapped stack frame still resolves to the `.abide` line, so message and
 location together read in authored terms. Both opaque engine errors are covered: a
 nullish receiver (`undefined is not an object`) AND a present receiver whose member

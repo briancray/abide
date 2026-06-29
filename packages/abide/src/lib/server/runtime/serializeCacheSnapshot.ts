@@ -5,7 +5,7 @@ import { snapshotEntryFromCache } from './snapshotEntryFromCache.ts'
 
 /*
 Snapshots the request-scoped cache for SSR at a single instant: every replayable
-(GET/DELETE) entry settled by now, serialized to a wire-safe CacheSnapshotEntry the
+(GET-only) entry settled by now, serialized to a wire-safe CacheSnapshotEntry the
 client seeds its store from. Unsettled and non-replayable entries are skipped; a body
 that can't ship (binary / streaming / rejected) drops out via snapshotEntryFromCache.
 

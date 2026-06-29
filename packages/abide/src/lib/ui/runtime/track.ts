@@ -15,8 +15,10 @@ observer is reading the same source in the same order as before — advance the
 cursor and reuse the edge, allocating nothing. Otherwise splice a fresh edge in at
 the cursor; `runNode` trims whatever stale edges trail the cursor when compute ends.
 
-A consecutive re-read of the same source (`dep` already the edge at the cursor) is
-absorbed by the reuse check, so `{x} … {x}` in one computation links `x` once.
+On re-runs, an edge whose `dep` matches the next slot in the established list is
+reused in-place (cursor advances, no allocation). New edges are still appended for
+reads that extend the list or find a mismatched slot — including a second consecutive
+read of the same source when no matching edge yet follows the cursor.
 */
 export function track(dep: ReactiveNode): void {
     const sub = REACTIVE_CONTEXT.observer

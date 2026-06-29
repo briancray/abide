@@ -3,7 +3,7 @@ import { isComment } from './isComment.ts'
 
 /*
 Bundle-side consumer of an SSR stream chunk, the counterpart of the doc stream's inline
-vanilla scripts (SSR_SWAP_SCRIPT's `__abideSwap` + `__abideResolve`) for a stream the
+vanilla scripts (`SSR_SWAP_SCRIPT`'s `__abideSwap` and `CACHE_RESOLVE_SCRIPT`'s `__abideResolve`) for a stream the
 running bundle consumes itself — streaming SPA navigation, socket-delivered SSR. It routes
 the two chunk kinds the stream interleaves:
 

@@ -6,7 +6,6 @@ import type { SocketOptions } from './sockets/types/SocketOptions.ts'
 Declares a Socket inside a file under `src/server/sockets/`. Each file contains
 exactly one export, named after the file (e.g. `chat.ts` →
 `export const chat = socket<ChatMessage>(...)`). The bundler reads the
-// @documentation sockets
 export name from the filename and the socket name from the file path
 under `src/server/sockets/`, then rewrites this call to bind the name into the
 runtime implementation (defineSocket on the server, socketProxy on the
@@ -21,6 +20,7 @@ to browser-only when schemaless, all surfaces when a schema is present.
 This function exists only for the type signature; calling it directly
 means the bundler plugin didn't process the file, which throws.
 */
+// @documentation sockets
 export function socket<Schema extends StandardSchemaV1>(
     opts: SocketOptions<Schema> & { schema: Schema },
 ): Socket<StandardSchemaV1.InferOutput<Schema>>

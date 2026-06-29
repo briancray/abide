@@ -21,8 +21,7 @@ export function history(doc: Doc, { limit = 100 }: { limit?: number } = {}): His
        — held by an in-progress transaction and by an undo/redo replay. */
     let sink: Patch[] | undefined
 
-    /* Push one finished entry, evicting the oldest past `limit`; a fresh edit (no
-       sink) also invalidates the redo stack. */
+    /* Push one finished entry, evicting the oldest past `limit`. */
     const push = (stack: Patch[][], entry: Patch[]): void => {
         stack.push(entry)
         if (stack.length > limit) {
