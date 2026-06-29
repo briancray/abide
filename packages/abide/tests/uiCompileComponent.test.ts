@@ -138,7 +138,7 @@ describe('compileComponent — end to end', () => {
     })
 
     test('compileModule emits a mountable ES module with abide/ui imports', () => {
-        const module = compileModule(`
+        const { code: module } = compileModule(`
             <script>let count = scope().state(0)</script>
             <p>{count}</p>
         `)
@@ -247,7 +247,7 @@ const { option, ...rest } = props<Props>()</script><i {...rest}>{option}</i>`,
        (`import { pending as p }` alongside a `pending` prop) must survive the
        signal rewrite — the specifier is a binding name, not a value read. */
     test('an aliased import surviving a colliding signal binding', () => {
-        const module = compileModule(
+        const { code: module } = compileModule(
             `<script>import { pending as pendingProbe } from '@abide/abide/shared/pending'
 const { query, pending = false } = props()
 const busy = scope().computed(() => pending && pendingProbe(query))</script><i>{busy}</i>`,
@@ -263,7 +263,7 @@ const busy = scope().computed(() => pending && pendingProbe(query))</script><i>{
        drops a needed one) and excludes a helper NAME that only appears inside a string
        literal (the substring regex used to over-include those). */
     test('runtime imports cover what the body uses, and exclude string-literal matches', () => {
-        const module = compileModule(
+        const { code: module } = compileModule(
             `<script>const rows = scope().state([1, 2])</script><ul>{#for r of rows by r}<li>{r}</li>{/for}</ul>`,
         )
         // the each block needs its helper imported
@@ -273,14 +273,14 @@ const busy = scope().computed(() => pending && pendingProbe(query))</script><i>{
 
         /* `on` appears only inside static text — not as a real reference — so the event
            helper must NOT be imported (a substring match would have pulled it in). */
-        const staticText = compileModule(`<i>turn it on and off</i>`)
+        const { code: staticText } = compileModule(`<i>turn it on and off</i>`)
         expect(staticText).not.toContain("from '@abide/abide/ui/dom/on'")
     })
 
     /* Imports hoist off the parsed tree structurally (not by a single-line regex), so a
        multi-line import lands at module scope regardless of formatting. */
     test('a multi-line import hoists to module scope', () => {
-        const module = compileModule(
+        const { code: module } = compileModule(
             `<script>import {
   Foo,
   Bar,
@@ -367,7 +367,7 @@ const label = 'hi'</script><i>{label}</i>`,
        believed to leak (it does not; moving it to a module is hygiene, not a fix). */
     test('an inline object-type alias is stripped by the build, not leaked', () => {
         const source = `<script>\ntype AppHealth = { status: 'ok' | 'down'; uptime: number }\nconst { health } = props<{ health: AppHealth }>()\n</script>\n<p>{health.status}</p>\n`
-        const module = compileModule(source, { moduleId: 'x' })
+        const { code: module } = compileModule(source, { moduleId: 'x' })
         // The emitted module is TypeScript and carries the alias verbatim…
         expect(module).toContain('type AppHealth')
         // …which the bundler's `ts` loader erases, leaving valid JS with no type.

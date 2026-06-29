@@ -5,6 +5,7 @@ import { assertRuntimeHelpersBound } from './assertRuntimeHelpersBound.ts'
 import { assertTranspiles } from './assertTranspiles.ts'
 import { compileComponent } from './compileComponent.ts'
 import { compileSSR } from './compileSSR.ts'
+import type { AnalyzedComponent } from './types/AnalyzedComponent.ts'
 import { UI_RUNTIME_IMPORTS } from './UI_RUNTIME_IMPORTS.ts'
 
 /*
@@ -26,7 +27,7 @@ what the `.abide` bundler loader emits.
 export function compileModule(
     source: string,
     options: { isLayout?: boolean; moduleId?: string; hot?: boolean } = {},
-): string {
+): { code: string; styles: AnalyzedComponent['styles'] } {
     const isLayout = options.isLayout ?? false
     /* Run the shared front-end once and feed it to both back-ends — the analysis is
        pure over (source, moduleId), so the client and SSR builds reuse one parse
@@ -52,7 +53,10 @@ export function compileModule(
                 : `${entry.name}: ${entry.alias}`,
         ).join(', ')
         const id = JSON.stringify(options.moduleId)
-        return `const { ${names}, hotReplace } = window.__abide
+        /* Hot mode never imports the scoped CSS (it reuses the live bundle's sheet), so
+           styles are empty here regardless of the analyzed blocks. */
+        return {
+            code: `const { ${names}, hotReplace } = window.__abide
 ${userImports}
 function build(host, $props) {
 ${body}
@@ -63,7 +67,9 @@ function component(host, $props) {
 component.build = build
 component.__abideId = ${id}
 if (!hotReplace(${id}, component)) location.reload()
-`
+`,
+            styles: [],
+        }
     }
 
     const ssrBody = indent(compileSSR(source, isLayout, options.moduleId, analyzed))
@@ -101,10 +107,24 @@ ${options.moduleId === undefined ? '' : `component.__abideId = ${JSON.stringify(
        string/comment/HTML literal (e.g. an `on`-attribute in static markup) no longer
        forces a spurious import, so no per-surface scoping is needed: a client-only helper
        simply doesn't appear as an identifier in the SSR body. */
-    const referenced = collectIdentifiers(`${userImports}\n${body}\n${ssrBody}\n${moduleBody}`)
-    const importBlock = UI_RUNTIME_IMPORTS.filter((entry) =>
+    /* Parse the generated bodies ONCE and feed the single tree to both AST passes: the
+       dead-import filter (`collectIdentifiers`) and the binding backstop
+       (`assertRuntimeHelpersBound`). The import block isn't in this tree yet — it is derived
+       from the filter's result — so the backstop is told the names that block will bind
+       (`importedHelpers`), which is exactly what it would have read from the prepended imports
+       had it re-parsed the whole module. `setParentNodes` is required by the backstop's
+       `getStart`/line lookups. */
+    const bodySource = ts.createSourceFile(
+        'module.ts',
+        `${userImports}\n${moduleBody}`,
+        ts.ScriptTarget.Latest,
+        /* setParentNodes */ true,
+    )
+    const referenced = collectIdentifiers(bodySource)
+    const keptImports = UI_RUNTIME_IMPORTS.filter((entry) =>
         referenced.has(entry.alias ?? entry.name),
     )
+    const importBlock = keptImports
         .map((entry) => {
             const local =
                 entry.alias === undefined || entry.alias === entry.name
@@ -126,9 +146,15 @@ ${moduleBody}`
     /* `assertTranspiles` only proves the output PARSES — a call to an un-imported helper is
        valid syntax, so it slips through. This second guard proves the output is BOUND: every
        runtime helper it calls is actually imported (an independent check of the dead-import
-       filter above), turning a runtime `ReferenceError` into a located compile error. */
-    assertRuntimeHelpersBound(module, 'component module generation')
-    return module
+       filter above), turning a runtime `ReferenceError` into a located compile error. It walks
+       the SAME tree the filter just parsed, with the kept helper imports supplied as the bound
+       set the prepended import block provides. */
+    assertRuntimeHelpersBound(
+        bodySource,
+        new Set(keptImports.map((entry) => entry.alias ?? entry.name)),
+        'component module generation',
+    )
+    return { code: module, styles: analyzed.styles }
 }
 
 /* Indents a body block for embedding inside a wrapper function. Lines whose start
@@ -170,14 +196,9 @@ function unescapedBacktickCount(line: string): number {
    in a handler — leaves the scanner unable to find the substitution's closing `}` without
    the parser's re-scan, so a token-only pass mis-reads the rest of the module as template
    text and drops every helper referenced after it (an `import`-less `effect`/`mountChild`
-   → a `ReferenceError` at mount → the router's reload fallback → a refresh loop). */
-function collectIdentifiers(code: string): Set<string> {
-    const source = ts.createSourceFile(
-        'module.ts',
-        code,
-        ts.ScriptTarget.Latest,
-        /* setParentNodes */ false,
-    )
+   → a `ReferenceError` at mount → the router's reload fallback → a refresh loop). Takes the
+   already-parsed source so the one tree feeds this pass and the binding backstop both. */
+function collectIdentifiers(source: ts.SourceFile): Set<string> {
     const names = new Set<string>()
     const visit = (node: ts.Node): void => {
         if (ts.isIdentifier(node)) {

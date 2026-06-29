@@ -26,7 +26,7 @@ const id = scope().state('1')
 <Child />`
 
     test('helpers used after a `${}` template literal stay imported', () => {
-        const output = compileModule(source, { moduleId: 'page.abide' })
+        const { code: output } = compileModule(source, { moduleId: 'page.abide' })
         /* The LOCAL name each specifier binds — the part after `as` for an aliased
            import (`mountChild as $$mountChild` → `$$mountChild`), else the bare name. */
         const importedNames = new Set(

@@ -100,7 +100,9 @@ describe('layoutChainForRoute', () => {
 
 describe('layout compiler outlet', () => {
     test('a layout {children()} lowers to an outlet boundary in both back-ends', () => {
-        const module = compileModule('<div class="shell">{children()}</div>', { isLayout: true })
+        const { code: module } = compileModule('<div class="shell">{children()}</div>', {
+            isLayout: true,
+        })
         /* The client build emits the `outlet` boundary call; the SSR markup carries the
            empty boundary the chain composer folds the child into — no `<abide-outlet>`. */
         expect(module).toContain('outlet(')
@@ -111,7 +113,7 @@ describe('layout compiler outlet', () => {
     })
 
     test('a non-layout component keeps {children()} as a passed-children slot', () => {
-        const module = compileModule('<div>{children()}</div>', { isLayout: false })
+        const { code: module } = compileModule('<div>{children()}</div>', { isLayout: false })
         expect(module).toContain('$props.$children')
         expect(module).not.toContain('abide:outlet')
     })
@@ -125,7 +127,7 @@ describe('layout compiler outlet', () => {
         const source =
             '<div class={shell}><nav><a href={href}>{label}</a></nav><main>{children()}</main></div>'
         expect(() => compileComponent(source, true)).not.toThrow()
-        expect(compileModule(source, { isLayout: true })).toContain('outlet(')
+        expect(compileModule(source, { isLayout: true }).code).toContain('outlet(')
     })
 })
 

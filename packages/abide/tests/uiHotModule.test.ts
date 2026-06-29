@@ -6,7 +6,7 @@ const LEAF = `<script>let n = scope().state(0)</script>
 <button on:click={n++}>count {n}</button>`
 
 describe('compileModule — hot mode', () => {
-    const hot = compileModule(LEAF, { moduleId: 'Counter.abide', hot: true })
+    const { code: hot } = compileModule(LEAF, { moduleId: 'Counter.abide', hot: true })
 
     test('sources the runtime from the live bundle via window.__abide', () => {
         expect(hot).toContain('= window.__abide')
@@ -29,7 +29,7 @@ describe('compileModule — hot mode', () => {
 })
 
 describe('compileModule — normal mode unchanged', () => {
-    const normal = compileModule(LEAF, { moduleId: 'Counter.abide' })
+    const { code: normal } = compileModule(LEAF, { moduleId: 'Counter.abide' })
 
     test('still emits static imports, the default export, and render', () => {
         expect(normal).toContain("import { mount as $$mount } from '@abide/abide/ui/dom/mount'")
