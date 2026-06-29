@@ -38,6 +38,16 @@ async function safeCall(rpc: string, fn: () => Promise<unknown>) {
         record(rpc, `error: ${status}`)
     }
 }
+
+// one trigger per method — same call shape, the verb is the only difference
+const calls = [
+    { label: 'GET', run: () => getEcho({ message }) },
+    { label: 'POST', run: () => createEcho({ message }) },
+    { label: 'PUT', run: () => replaceEcho({ message }) },
+    { label: 'PATCH', run: () => patchEcho({ message }) },
+    { label: 'DELETE', run: () => deleteEcho({ message }) },
+    { label: 'HEAD', run: () => headEcho() },
+]
 </script>
 
 <section class="mt-6">
@@ -129,42 +139,14 @@ async function safeCall(rpc: string, fn: () => Promise<unknown>) {
             class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
     </label>
     <div class="mt-3 flex flex-wrap gap-2 text-sm">
-        <button
-            type="button"
-            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
-            onclick={() => safeCall('GET', () => getEcho({ message }))}>
-            GET
-        </button>
-        <button
-            type="button"
-            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
-            onclick={() => safeCall('POST', () => createEcho({ message }))}>
-            POST
-        </button>
-        <button
-            type="button"
-            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
-            onclick={() => safeCall('PUT', () => replaceEcho({ message }))}>
-            PUT
-        </button>
-        <button
-            type="button"
-            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
-            onclick={() => safeCall('PATCH', () => patchEcho({ message }))}>
-            PATCH
-        </button>
-        <button
-            type="button"
-            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
-            onclick={() => safeCall('DELETE', () => deleteEcho({ message }))}>
-            DELETE
-        </button>
-        <button
-            type="button"
-            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
-            onclick={() => safeCall('HEAD', () => headEcho())}>
-            HEAD
-        </button>
+        {#for call of calls by call.label}
+            <button
+                type="button"
+                class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+                onclick={() => safeCall(call.label, call.run)}>
+                {call.label}
+            </button>
+        {/for}
     </div>
     {#if log.length > 0}
         <ul class="mt-3 space-y-1 font-mono text-xs text-slate-700">
@@ -188,7 +170,6 @@ export const headEcho = HEAD(() =>
 )`} />
 
     <CodeBlock title="client — same call shape per rpc" code={`await getEcho({ message: 'hello' })       // typed { method: 'GET'; message: string }
-await createEcho({ message: 'hello' })    // typed { method: 'POST'; message: string }
 // headEcho and deleteEcho resolve to undefined (204); the rest resolve to the decoded body`} />
 </section>
 
