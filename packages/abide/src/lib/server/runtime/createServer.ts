@@ -17,6 +17,7 @@ import { isDebugNegated } from '../../shared/isDebugNegated.ts'
 import { logClosingRecord } from '../../shared/logClosingRecord.ts'
 import { OFFLINE_HEADER } from '../../shared/OFFLINE_HEADER.ts'
 import { parseBoundedEnvInt } from '../../shared/parseBoundedEnvInt.ts'
+import { responseBodyKind } from '../../shared/responseBodyKind.ts'
 import { SOCKETS_PATH } from '../../shared/SOCKETS_PATH.ts'
 import { setAppName } from '../../shared/setAppName.ts'
 import { setBaseResolver } from '../../shared/setBaseResolver.ts'
@@ -364,12 +365,19 @@ export async function createServer({
             const response = app?.handle
                 ? await app.handle(req, (next) => handler(next, pathParams, store))
                 : await handler(req, pathParams, store)
+            /* Classify the body once (S2) and thread it into both downstream
+               steps — gzip + the closing-record stream monitor — instead of
+               each re-deriving from the Content-Type. */
+            const kind = responseBodyKind(response)
+            store.responseStreaming = kind === 'streaming'
+            // Streaming bodies (sse/jsonl, socket tail) opt out of the idle timeout.
+            if (kind === 'streaming') {
+                server.timeout(req, 0)
+            }
             /* Gzip compressible dynamic bodies (SSR HTML, rpc/json, 404) when the
                client accepts it; streaming frame protocols and static assets are
                passed through untouched (see gzipResponse). */
-            const encoded = gzipResponse(req, response)
-            // Streaming bodies (sse/jsonl, socket tail) opt out of the idle timeout.
-            return disableIdleTimeoutForStream(server, req, encoded)
+            return gzipResponse(req, response, kind)
         })
     }
 
