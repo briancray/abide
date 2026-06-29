@@ -1,5 +1,44 @@
 # abide
 
+## 0.44.0
+
+### Minor Changes
+
+- 24444a8: add zod→CommonJS shim plugin for bun ESM-cycle bug ([`0424b20`](https://github.com/briancray/abide/commit/0424b20151f4d1a98d7b022bbacbbb974d469b47))
+- 24444a8: {children()} replaces the <slot> element ([`0bdfbe5`](https://github.com/briancray/abide/commit/0bdfbe5c3efd621492cdef09b745f9262c5be937))
+- 24444a8: type page params via props(); declare children in the shadow ([`2e58768`](https://github.com/briancray/abide/commit/2e58768cfbfb5a2be2aec48c77482e7bf5ee1b8d))
+- 24444a8: syntactic markup token classifier and zed grammar tokens ([`5cdef1f`](https://github.com/briancray/abide/commit/5cdef1f81762d9c1b8c63a418499335c6524b0a5))
+- 24444a8: {#snippet} block replaces <template name> declarations ([`620c2c3`](https://github.com/briancray/abide/commit/620c2c3ba7d8b797ccb770664db47468e4265131))
+- 24444a8: wire {#if children} lowering; migrate snippet/slot test fixtures ([`861b30b`](https://github.com/briancray/abide/commit/861b30be19deb83b5749b8bb2ca8dd526b29b1b3))
+- 24444a8: page/layout params as reactive props() thunks; layout {#if children} ([`991cea7`](https://github.com/briancray/abide/commit/991cea79a08b09508285769a35494b03111b5113))
+- 24444a8: attribute and prop value interpolation ([`ae0a3da`](https://github.com/briancray/abide/commit/ae0a3daa13411d6de71917efde4cb76c57c855c7))
+- 24444a8: {#if children} lowers children to $props.$children ([`f749f47`](https://github.com/briancray/abide/commit/f749f47836cdf69ccbc51d7b7fb9fafa7d7189a4))
+
+### Patch Changes
+
+- 24444a8: effect queue Set -> double-buffered array ([`03c6d09`](https://github.com/briancray/abide/commit/03c6d09334559a2a24c3c953cbf57e5f231ea9c6))
+- 24444a8: prune each reconcile by generation stamp, not a per-pass Set ([`1b48eed`](https://github.com/briancray/abide/commit/1b48eedc9b1657946321cad8c9843930b0bec5d0))
+- 24444a8: accumulated working-tree changes ([`1df2999`](https://github.com/briancray/abide/commit/1df2999b3f4b381334d365b1ff2df53711ad6b50))
+- 24444a8: Breaking: reserve $$ injected namespace, relocate html to abide/ui/html ([`1ef8c2a`](https://github.com/briancray/abide/commit/1ef8c2a047cfaf086df1676d498cdcd2bcbe45d0))
+- 24444a8: shadow block value-params on both back-ends ([`25f719a`](https://github.com/briancray/abide/commit/25f719a17c69aee71e2bc7884080231c35ef6578))
+- 24444a8: shared element-emission plan across build/SSR backends ([`2a6cec5`](https://github.com/briancray/abide/commit/2a6cec5361051c1da021dba50ce40a656106e5a7))
+- 24444a8: typed auto-popping shadow scope for compile lowering ([`2fd04a0`](https://github.com/briancray/abide/commit/2fd04a0ed8dc5453461efa0af920d046549a8877))
+- 24444a8: dedup deref-scope push/pop into withScoped ([`3552fff`](https://github.com/briancray/abide/commit/3552fffd2dc2e69708b8268b42609c4e971eb932))
+- 24444a8: lower await {:finally} outside the then/catch value-param shadow ([`4b33813`](https://github.com/briancray/abide/commit/4b33813433fc42455c6b069da1eb118d71b9af1b))
+- 24444a8: iterate mark down single-subscriber chains ([`4ca3fd4`](https://github.com/briancray/abide/commit/4ca3fd419d58667eb074dd033afc2e29b10f56cd))
+- 24444a8: unify warm-seed shippability + decode symmetry ([`5675e37`](https://github.com/briancray/abide/commit/5675e37ec240ab785e3e83eed7b2723f6dcce090))
+- 24444a8: accumulated feat/arch-deepening working-tree changes ([`60cef30`](https://github.com/briancray/abide/commit/60cef30c2405db94ded7e708abddf2c18b4db555))
+- 24444a8: clear typecheck and lint errors in the arch-deepening compile/dom backlog ([`782fb42`](https://github.com/briancray/abide/commit/782fb42769e495addd57904ccd1fb0148f81f9bb))
+- 24444a8: add eachPlan + snippetPlan, route structure through plans (phase 1) ([`8cfffcc`](https://github.com/briancray/abide/commit/8cfffcc958b63b62da51e670f8f8f4c64a3ca5e5))
+- 24444a8: {children()}/{#snippet}/props() route params ([`8f1dc89`](https://github.com/briancray/abide/commit/8f1dc89bfbf052c07082b939e893c9aee65aeea9))
+- 24444a8: single-source bindings via plans + withBindings, exhaustive dispatch (phase 2) ([`9228e30`](https://github.com/briancray/abide/commit/9228e30d4ba16c3ef1bc14b7d243b9628bde1b59))
+- 24444a8: resolve each key to its row once per reconcile ([`ce3e160`](https://github.com/briancray/abide/commit/ce3e160c8837ec5df4cf5cf625c1db50402defde))
+- 24444a8: reorganize kitchen-sink nav and refresh README/scaffold ([`e31ba15`](https://github.com/briancray/abide/commit/e31ba159d9cc1db88cdebb96f40ff8d5c89b7e0f))
+- 24444a8: scope the children slot reader through the signal transformer ([`e4a901d`](https://github.com/briancray/abide/commit/e4a901da9858f3b307363f98c97c3e72c3569640))
+- 24444a8: faster structural descend via no-alloc walkPath + suffix walk ([`ef14dac`](https://github.com/briancray/abide/commit/ef14dace7c4eb870fe9b0487d4111ecfe635831c))
+- 24444a8: elementPlan over skeletonContext, share emission decisions (phase 3) ([`f75703e`](https://github.com/briancray/abide/commit/f75703e0a276c37ce1fbbfde6b4c4b6064d551b8))
+- 24444a8: effect is not ambient — it is a scope primitive ([`f8942ed`](https://github.com/briancray/abide/commit/f8942ed675d6d6493b3d53bd1cc4e991d1d1b7dd))
+
 ## 0.43.1
 
 ### Patch Changes
