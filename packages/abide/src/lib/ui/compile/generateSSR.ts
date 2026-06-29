@@ -9,6 +9,7 @@ import {
 } from '../runtime/RANGE_MARKER.ts'
 import { asOutlet } from './asOutlet.ts'
 import { awaitPlan } from './awaitPlan.ts'
+import { classStyleMergePlan } from './classStyleMergePlan.ts'
 import { composeProps } from './composeProps.ts'
 import { destructureBindingNames } from './destructureBindingNames.ts'
 import { groupBindParts } from './groupBindParts.ts'
@@ -25,7 +26,6 @@ import { staticTextPart } from './staticTextPart.ts'
 import { stripEffects } from './stripEffects.ts'
 import { switchPlan } from './switchPlan.ts'
 import { tryPlan } from './tryPlan.ts'
-import type { TemplateAttr } from './types/TemplateAttr.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
 import { VOID_TAGS } from './VOID_TAGS.ts'
 
@@ -389,22 +389,20 @@ export function generateSSR(
         for (const scope of node.scopes ?? []) {
             code += push(target, scopeAttr(scope))
         }
-        /* `class:`/`style:` directives collapse with any static `class`/`style` into a SINGLE
-           merged attribute (a duplicate attribute would be invalid and ignored). The client's
+        /* The shared class/style/directive merge DECISION (one site, mirrored by the build
+           back-end). `class:`/`style:` directives collapse with any static/interpolated
+           `class`/`style` base into a SINGLE merged attribute (a duplicate attribute would be
+           invalid and ignored). SSR must always emit one attribute string, so it merges
+           whenever a directive exists (`mergeClass`/`mergeStyle`). The client's
            classList.toggle / style.setProperty effects re-apply the same values on hydrate, so
            the merged SSR value already matches the post-mount DOM — no flash, no desync. */
-        const classDirectives = node.attrs.filter(
-            (attr): attr is Extract<TemplateAttr, { kind: 'class' }> => attr.kind === 'class',
-        )
-        const styleDirectives = node.attrs.filter(
-            (attr): attr is Extract<TemplateAttr, { kind: 'style' }> => attr.kind === 'style',
-        )
+        const merge = classStyleMergePlan(node.attrs, lowerExpression)
         for (const attr of node.attrs) {
             if (attr.kind === 'static') {
                 /* A static class/style is folded into the merge below when directives exist. */
                 if (
-                    (attr.name === 'class' && classDirectives.length > 0) ||
-                    (attr.name === 'style' && styleDirectives.length > 0)
+                    (attr.name === 'class' && merge.mergeClass) ||
+                    (attr.name === 'style' && merge.mergeStyle)
                 ) {
                     continue
                 }
@@ -417,8 +415,8 @@ export function generateSSR(
                 /* An interpolated class/style is folded into the merge below (like a static
                    one); otherwise it's a string-valued attribute, always present. */
                 if (
-                    (attr.name === 'class' && classDirectives.length > 0) ||
-                    (attr.name === 'style' && styleDirectives.length > 0)
+                    (attr.name === 'class' && merge.mergeClass) ||
+                    (attr.name === 'style' && merge.mergeStyle)
                 ) {
                     continue
                 }
@@ -445,44 +443,13 @@ export function generateSSR(
                 code += `${target}.push(${JSON.stringify(` ${attr.property}="`)} + $esc(${bindRead(attr.code)}) + '"');\n`
             }
         }
-        /* The base class/style value expression an element's directives merge onto: a
-           static literal, an interpolated template-literal (lowered), or none. */
-        const mergeBase = (name: 'class' | 'style'): string | undefined => {
-            const base = node.attrs.find(
-                (attr) =>
-                    (attr.kind === 'static' || attr.kind === 'interpolated') && attr.name === name,
-            )
-            if (base?.kind === 'static') {
-                return JSON.stringify(base.value)
-            }
-            if (base?.kind === 'interpolated') {
-                return lowerExpression(interpolatedTemplateLiteral(base.parts))
-            }
-            return undefined
+        /* Merged class/style: the same composed parts the build effect uses (from the plan),
+           joined and escaped into one attribute string. */
+        if (merge.mergeClass) {
+            code += `${target}.push(' class="' + $esc([${merge.classParts.join(', ')}].filter(Boolean).join(' ')) + '"');\n`
         }
-        /* Merged class: base value + each directive's name when its expression is truthy. */
-        if (classDirectives.length > 0) {
-            const base = mergeBase('class')
-            const parts = [
-                ...(base ? [base] : []),
-                ...classDirectives.map(
-                    (dir) => `((${lowerExpression(dir.code)}) ? ${JSON.stringify(dir.name)} : "")`,
-                ),
-            ]
-            code += `${target}.push(' class="' + $esc([${parts.join(', ')}].filter(Boolean).join(' ')) + '"');\n`
-        }
-        /* Merged style: base value + each directive's `prop:value` (String()-coerced, matching
-           the client's style.setProperty). */
-        if (styleDirectives.length > 0) {
-            const base = mergeBase('style')
-            const parts = [
-                ...(base ? [base] : []),
-                ...styleDirectives.map(
-                    (dir) =>
-                        `(${JSON.stringify(`${dir.property}:`)} + String(${lowerExpression(dir.code)}))`,
-                ),
-            ]
-            code += `${target}.push(' style="' + $esc([${parts.join(', ')}].filter(Boolean).join(';')) + '"');\n`
+        if (merge.mergeStyle) {
+            code += `${target}.push(' style="' + $esc([${merge.styleParts.join(', ')}].filter(Boolean).join(';')) + '"');\n`
         }
         code += push(target, '>')
         if (!VOID_TAGS.has(node.tag)) {
