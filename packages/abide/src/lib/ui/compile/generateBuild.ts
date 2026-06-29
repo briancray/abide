@@ -8,6 +8,7 @@ import { bindListenEvent } from './bindListenEvent.ts'
 import { classStyleMergePlan } from './classStyleMergePlan.ts'
 import { composeProps } from './composeProps.ts'
 import { destructureBindingNames } from './destructureBindingNames.ts'
+import { eachPlan } from './eachPlan.ts'
 import { groupBindParts } from './groupBindParts.ts'
 import { ifPlan } from './ifPlan.ts'
 import { interpolatedTemplateLiteral } from './interpolatedTemplateLiteral.ts'
@@ -15,9 +16,9 @@ import { isControlFlow } from './isControlFlow.ts'
 import { isWhitespaceText } from './isWhitespaceText.ts'
 import { lowerContext } from './lowerContext.ts'
 import { makeVarNamer } from './makeVarNamer.ts'
-import { resolveBranches } from './resolveBranches.ts'
 import { scopeAttr } from './scopeAttr.ts'
 import { skeletonContext } from './skeletonContext.ts'
+import { snippetPlan } from './snippetPlan.ts'
 import { spreadExcludedNames } from './spreadExcludedNames.ts'
 import { staticAttr } from './staticAttr.ts'
 import { staticTextPart } from './staticTextPart.ts'
@@ -520,13 +521,14 @@ export function generateBuild(
        the component scope (its `model`/cells); `args` are plain parameters bound by
        the call. Appends nothing at the declaration site — `{name(args)}` mounts it. */
     function generateSnippet(node: Extract<TemplateNode, { kind: 'snippet' }>): string {
+        const plan = snippetPlan(node)
         /* `args` are plain call parameters, not component cells — register them so the body
            reads the bare local, shadowing a same-named component signal rather than reading it. */
-        const argNames = node.params === undefined ? [] : destructureBindingNames(node.params)
+        const argNames = plan.params === undefined ? [] : destructureBindingNames(plan.params)
         const body = withLocalPlain(argNames, () =>
-            node.children.map((child) => generateChild(child, '$host')).join(''),
+            plan.children.map((child) => generateChild(child, '$host')).join(''),
         )
-        return `function ${node.name}(${node.params ?? ''}) {\nreturn $$snippet(($host) => {\n${body}});\n}\n`
+        return `function ${plan.name}(${plan.params ?? ''}) {\nreturn $$snippet(($host) => {\n${body}});\n}\n`
     }
 
     /* A switch: each `case` is `{ match: () => value, render }`, the default is
@@ -735,6 +737,7 @@ export function generateBuild(
         parentVar: string,
         before: string,
     ): string {
+        const plan = eachPlan(node)
         const rowParam = nextVar('p')
         /* The item is a reactive `.value` cell so a re-key with a changed value updates the row
            in place (no rebuild). `keyOf` receives the RAW item; the key expression is lowered
@@ -743,33 +746,32 @@ export function generateBuild(
            plain `as` returns its name; a destructuring `as` binds a fresh param and returns
            THAT, not the pattern re-wrapped (`[i,crumb]` → `[i,crumb]` would allocate a fresh
            array per reconcile, so keys never match and every row rebuilds). An explicit `key`
-           destructures the item via `node.as` to read its leaves. */
-        const rawItemParam = isPlainIdentifier(node.as) ? node.as : nextVar('k')
-        const keyParam = node.key === undefined ? rawItemParam : node.as
-        const keyExpression = node.key === undefined ? rawItemParam : lowerExpression(node.key)
-        const binding = reactiveBinding(node.as)
+           destructures the item via `plan.as` to read its leaves. */
+        const rawItemParam = isPlainIdentifier(plan.as) ? plan.as : nextVar('k')
+        const keyParam = plan.key === undefined ? rawItemParam : plan.as
+        const keyExpression = plan.key === undefined ? rawItemParam : lowerExpression(plan.key)
+        const binding = reactiveBinding(plan.as)
         /* `index="i"` binds the row's position as a third reactive cell param (the runtime
            always passes it). It is a plain identifier — read as `i.value` — so it enters the
            body's deref scope alongside the item's leaf names; an unnamed param when absent. */
-        const indexParam = node.index === undefined ? '' : `, ${node.index}`
+        const indexParam = plan.index === undefined ? '' : `, ${plan.index}`
         const bodyLocalNames =
-            node.index === undefined ? binding.localNames : [...binding.localNames, node.index]
+            plan.index === undefined ? binding.localNames : [...binding.localNames, plan.index]
         /* The row body builds its children (a `<script>` declares per-row local signals,
            emitted in document order) into the row parent. A `<template catch>` child is
            consumed by the async-each, not the row — `generateChildren` skips it. */
-        const rowBody = withNestedScripts(node.children, () =>
-            withLocalDerived(bodyLocalNames, () => generateChildren(node.children, rowParam)),
+        const rowBody = withNestedScripts(plan.children, () =>
+            withLocalDerived(bodyLocalNames, () => generateChildren(plan.children, rowParam)),
         )
         /* `await` → the AsyncIterable runtime, drained row-by-row on the client, with an
            optional `<template catch>` branch rendered (after the streamed rows) when the
            iterator rejects. Absent → `undefined`, so the rejection surfaces instead. */
-        const fn = node.async ? '$$eachAsync' : '$$each'
-        const [catchBranch] = resolveBranches(node, 'catch')
-        const catchArg = node.async
-            ? `, ${catchBranch === undefined ? 'undefined' : branchThunk(catchBranch.children, catchBranch.as ?? '_error')}`
+        const fn = plan.async ? '$$eachAsync' : '$$each'
+        const catchArg = plan.async
+            ? `, ${plan.hasCatch ? branchThunk(plan.catchChildren, plan.catchAs) : 'undefined'}`
             : ''
         return (
-            `${fn}(${parentVar}, () => (${lowerExpression(node.items)}), ` +
+            `${fn}(${parentVar}, () => (${lowerExpression(plan.items)}), ` +
             `(${keyParam}) => (${keyExpression}), (${rowParam}, ${binding.param}${indexParam}) => {\n${binding.prefix}${rowBody}}${catchArg}, ${before});\n`
         )
     }

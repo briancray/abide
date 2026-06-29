@@ -12,6 +12,7 @@ import { awaitPlan } from './awaitPlan.ts'
 import { classStyleMergePlan } from './classStyleMergePlan.ts'
 import { composeProps } from './composeProps.ts'
 import { destructureBindingNames } from './destructureBindingNames.ts'
+import { eachPlan } from './eachPlan.ts'
 import { groupBindParts } from './groupBindParts.ts'
 import { ifPlan } from './ifPlan.ts'
 import { interpolatedTemplateLiteral } from './interpolatedTemplateLiteral.ts'
@@ -20,6 +21,7 @@ import { lowerContext } from './lowerContext.ts'
 import { makeVarNamer } from './makeVarNamer.ts'
 import { scopeAttr } from './scopeAttr.ts'
 import { skeletonContext } from './skeletonContext.ts'
+import { snippetPlan } from './snippetPlan.ts'
 import { spreadExcludedNames } from './spreadExcludedNames.ts'
 import { staticAttr } from './staticAttr.ts'
 import { staticTextPart } from './staticTextPart.ts'
@@ -251,17 +253,18 @@ export function generateSSR(
             return ''
         }
         if (node.kind === 'snippet') {
+            const plan = snippetPlan(node)
             /* A hoisted function returning the snippet's `$snip`-branded HTML string;
                `{name(args)}` pushes it via `$text`, which wraps it in markers. `args` are plain
                call parameters — register them so the body reads the bare local, shadowing a
                same-named component signal rather than reading it. */
-            const argNames = node.params === undefined ? [] : destructureBindingNames(node.params)
-            const body = withLocalPlain(argNames, () => generateInto(node.children, '$o'))
+            const argNames = plan.params === undefined ? [] : destructureBindingNames(plan.params)
+            const body = withLocalPlain(argNames, () => generateInto(plan.children, '$o'))
             /* `async` only when the body produces an `await` (it inlines a child component) — then
                call sites `await` it (`$text(await frag())`). A sync snippet stays a plain function
                called inline, preserving the sync render contract. */
-            const keyword = asyncSnippets.has(node.name) ? 'async function' : 'function'
-            return `${keyword} ${node.name}(${node.params ?? ''}) {\nconst $o = [];\n${body}return $snip($o.join(''));\n}\n`
+            const keyword = asyncSnippets.has(plan.name) ? 'async function' : 'function'
+            return `${keyword} ${plan.name}(${plan.params ?? ''}) {\nconst $o = [];\n${body}return $snip($o.join(''));\n}\n`
         }
         if (node.kind === 'script') {
             /* A scoped reactive block: re-seed its local signals (lowered, in scope)
@@ -274,12 +277,13 @@ export function generateSSR(
             return ''
         }
         if (node.kind === 'each') {
+            const plan = eachPlan(node)
             /* Async each (`await`) is drained on the client — render no rows on the
                server (an infinite stream would hang SSR); the client inserts its anchor
                before the next sibling during hydration, like an empty sync each. In a
                skeleton the `<!--a-->` anchor still marks its position (the client mounts
                there); no range markers, since there are no server rows to claim. */
-            if (node.async) {
+            if (plan.async) {
                 return anchor
             }
             /* The row item (and index) are real `for`-loop locals, so the body must lower
@@ -289,21 +293,21 @@ export function generateSSR(
                leaves + index); the items expression stays outside the shadow (it cannot see
                the row var). */
             const rowLocals = [
-                ...destructureBindingNames(node.as),
-                ...(node.index === undefined ? [] : [node.index]),
+                ...destructureBindingNames(plan.as),
+                ...(plan.index === undefined ? [] : [plan.index]),
             ]
             const rowBody = withLocalPlain(
                 rowLocals,
                 () =>
-                    `${openRange(target)}${branchContent(node.children, target)}${closeRange(target)}`,
+                    `${openRange(target)}${branchContent(plan.children, target)}${closeRange(target)}`,
             )
             /* `index="i"` binds the row position. SSR reads it as a plain number from
                `entries()` over a materialized array; the client reads the same number from a
                cell, so first paint is congruent. No index → a plain `for…of` over the items. */
             const header =
-                node.index === undefined
-                    ? `for (const ${node.as} of (${lowerExpression(node.items)}))`
-                    : `for (const [${node.index}, ${node.as}] of [...(${lowerExpression(node.items)})].entries())`
+                plan.index === undefined
+                    ? `for (const ${plan.as} of (${lowerExpression(plan.items)}))`
+                    : `for (const [${plan.index}, ${plan.as}] of [...(${lowerExpression(plan.items)})].entries())`
             return `${anchor}${header} {\n${rowBody}}\n`
         }
         if (node.kind === 'await') {
