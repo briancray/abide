@@ -1,6 +1,5 @@
 import { NODE_STATE } from './NODE_STATE.ts'
 import { OWNER } from './OWNER.ts'
-import { REACTIVE_CONTEXT } from './REACTIVE_CONTEXT.ts'
 import { runNode } from './runNode.ts'
 import { toTeardown } from './toTeardown.ts'
 import type { EffectResult } from './types/EffectResult.ts'
@@ -52,11 +51,12 @@ export function createEffectNode(fn: () => EffectResult): () => void {
         runCleanup()
         unlinkDeps(node)
         /* Clearing compute makes runNode a no-op: an effect disposed mid-flush (by an
-           earlier effect in the same batch) is still in flushEffects' snapshot array
-           after pendingEffects.delete, so it would otherwise re-run its body and
-           re-link into the graph — a disposed effect resurrected. */
+           earlier effect in the same batch) is still in the queue flushEffects is
+           draining, so without this it would re-run its body and re-link into the graph
+           — a disposed effect resurrected. This alone neutralizes it; the queue is a
+           plain array (no O(1) delete) and a settled no-op iteration is cheaper than an
+           O(n) splice, so the stale entry is left to be skipped on its flush. */
         node.compute = undefined
-        REACTIVE_CONTEXT.pendingEffects.delete(node)
     }
     if (OWNER.current !== undefined) {
         OWNER.current.push(dispose)

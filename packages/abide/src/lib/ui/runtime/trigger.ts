@@ -28,7 +28,7 @@ function mark(node: ReactiveNode, status: number): void {
         node.status = nextStatus
         if (node.isEffect) {
             if (wasClean) {
-                REACTIVE_CONTEXT.pendingEffects.add(node)
+                REACTIVE_CONTEXT.pendingEffects.push(node)
             }
             return
         }
