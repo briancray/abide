@@ -1,5 +1,7 @@
+import { augmentModule } from './augmentModule.ts'
 import { commandNameForUrl } from './commandNameForUrl.ts'
 import { fileStem } from './fileStem.ts'
+import { RPC_ARGS_TYPE } from './RPC_ARGS_TYPE.ts'
 import { rpcUrlForFile } from './rpcUrlForFile.ts'
 import { writeDts } from './writeDts.ts'
 
@@ -24,22 +26,20 @@ export async function writeTestRpcDts({
     importName: string
 }): Promise<void> {
     const entries = rpcFiles
-        .map((file) => {
+        .map((file): [string, string] => {
             const name = commandNameForUrl(rpcUrlForFile(file))
             const importPath = `../server/rpc/${file}`
-            return `        ${JSON.stringify(name)}: RpcInvoker<typeof import(${JSON.stringify(importPath)}).${fileStem(file)}>`
+            return [
+                name,
+                `RpcInvoker<typeof import(${JSON.stringify(importPath)}).${fileStem(file)}>`,
+            ]
         })
-        .toSorted()
-    const body = `type RpcArgs<Fn> = Fn extends (args: infer Args) => unknown ? Exclude<Args, FormData> : never
+        .toSorted(([a], [b]) => (JSON.stringify(a) < JSON.stringify(b) ? -1 : 1))
+    const helperTypes = `${RPC_ARGS_TYPE}
 type RpcReturn<Fn> = Fn extends (...args: never[]) => Promise<infer Return> ? Return : never
 type RpcInvoker<Fn> = ((args?: RpcArgs<Fn>) => Promise<RpcReturn<Fn>>) & {
     raw: (args?: RpcArgs<Fn>) => Promise<Response>
-}
-
-declare module '${importName}/test/createTestApp' {
-    interface RpcClient {
-${entries.join('\n')}
-    }
 }`
-    await writeDts(cwd, 'testRpc', body)
+    const module = augmentModule(`${importName}/test/createTestApp`, 'RpcClient', entries)
+    await writeDts(cwd, 'testRpc', `${helperTypes}\n\n${module}`)
 }

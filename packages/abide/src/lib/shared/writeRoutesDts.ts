@@ -1,3 +1,4 @@
+import { augmentModule } from './augmentModule.ts'
 import { pageUrlForFile } from './pageUrlForFile.ts'
 import { routeParamsShape } from './routeParamsShape.ts'
 import { writeDts } from './writeDts.ts'
@@ -25,21 +26,16 @@ export async function writeRoutesDts({
     const routes = pageFiles
         .map((file) => ({ route: pageUrlForFile(file) }))
         .toSorted((a, b) => a.route.localeCompare(b.route))
-    const entries = routes
-        .map(({ route }) => `        ${JSON.stringify(route)}: ${routeParamsShape(route)}`)
-        .join('\n')
+    const routesModule = augmentModule(
+        `${importName}/shared/page`,
+        'Routes',
+        routes.map(({ route }): [string, string] => [route, routeParamsShape(route)]),
+    )
     /* Keys-only mirror for url()'s autocomplete (values unused — PathParams derives the shape). */
-    const urlKeys = routes.map(({ route }) => `        ${JSON.stringify(route)}: true`).join('\n')
-    const body = `declare module '${importName}/shared/page' {
-    interface Routes {
-${entries}
-    }
-}
-
-declare module '${importName}/shared/url' {
-    interface PageRoutes {
-${urlKeys}
-    }
-}`
-    await writeDts(cwd, 'routes', body)
+    const urlModule = augmentModule(
+        `${importName}/shared/url`,
+        'PageRoutes',
+        routes.map(({ route }): [string, string] => [route, 'true']),
+    )
+    await writeDts(cwd, 'routes', `${routesModule}\n\n${urlModule}`)
 }

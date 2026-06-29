@@ -1,3 +1,4 @@
+import { augmentModule } from './augmentModule.ts'
 import { writeDts } from './writeDts.ts'
 
 /*
@@ -19,13 +20,8 @@ export async function writePublicAssetsDts({
     importName: string
 }): Promise<void> {
     const entries = publicFiles
-        .map((file) => `        ${JSON.stringify(`/${file}`)}: true`)
-        .toSorted()
-        .join('\n')
-    const body = `declare module '${importName}/shared/url' {
-    interface PublicAssets {
-${entries}
-    }
-}`
-    await writeDts(cwd, 'publicAssets', body)
+        .map((file): [string, string] => [`/${file}`, 'true'])
+        .toSorted(([a], [b]) => (JSON.stringify(a) < JSON.stringify(b) ? -1 : 1))
+    const module = augmentModule(`${importName}/shared/url`, 'PublicAssets', entries)
+    await writeDts(cwd, 'publicAssets', module)
 }

@@ -8,5 +8,12 @@ src tsconfig include picks up), wrapping `body` in the shared banner + the
 differ only in `body`, so the envelope lives here.
 */
 export async function writeDts(cwd: string, name: string, body: string): Promise<void> {
-    await Bun.write(`${cwd}/src/.abide/${name}.d.ts`, `${DTS_BANNER}\n${body}\n\nexport {}\n`)
+    const next = `${DTS_BANNER}\n${body}\n\nexport {}\n`
+    const file = Bun.file(`${cwd}/src/.abide/${name}.d.ts`)
+    // Skip the write when byte-identical — an unchanged rebuild (the common case)
+    // otherwise bumps mtime every save, forcing the editor's TS server to re-typecheck.
+    if ((await file.exists()) && (await file.text()) === next) {
+        return
+    }
+    await Bun.write(file, next)
 }
