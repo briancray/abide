@@ -5,14 +5,17 @@ import { exitRenderPass } from '../src/lib/ui/runtime/exitRenderPass.ts'
 import { nextBlockId } from '../src/lib/ui/runtime/nextBlockId.ts'
 import { scope } from '../src/lib/ui/scope.ts'
 
-/* The compiled SSR body references render-pass + scope helpers as bare globals. */
+/* The compiled SSR body references render-pass + scope helpers as globals under the
+   compiler's reserved `$$` injected namespace (see UI_RUNTIME_IMPORTS aliases), so
+   install them under those exact names — a bare `scope`/`enterScope` would leave the
+   body's `$$scope`/`$$enterScope` undefined. */
 const globals = globalThis as Record<string, unknown>
-globals.enterRenderPass = enterRenderPass
-globals.exitRenderPass = exitRenderPass
-globals.nextBlockId = nextBlockId
-globals.scope = scope
-globals.enterScope = enterScope
-globals.exitScope = exitScope
+globals.$$enterRenderPass = enterRenderPass
+globals.$$exitRenderPass = exitRenderPass
+globals.$$nextBlockId = nextBlockId
+globals.$$scope = scope
+globals.$$enterScope = enterScope
+globals.$$exitScope = exitScope
 
 const { compileSSR } = await import('../src/lib/ui/compile/compileSSR.ts')
 const { createDoc: doc } = await import('../src/lib/ui/runtime/createDoc.ts')
