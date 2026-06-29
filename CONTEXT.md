@@ -105,6 +105,26 @@ its component body creates, rather than minting one eagerly — so the compiler
 emits one data-lowering whether or not a component owns a scope. A body that never
 creates a `doc()` mints an empty one lazily on first data access.
 
+## Compilation
+
+**Plan**
+A block's shared compile model — its branch structure and its `bindings` — that
+both code-generation backends render from (`generateBuild` → client wiring,
+`generateSSR` → HTML string). One module per binding-introducing block
+(`awaitPlan`/`ifPlan`/`switchPlan`/`tryPlan`/`eachPlan`/`snippetPlan`). The
+per-block sibling of `skeletonContext`'s element-level positional model: the
+single source of truth that keeps the two backends congruent for hydration.
+
+**Binding**
+A name a block introduces into its body's scope, carried on its `Plan` and
+classified once as `reactive` (an `await` `then` value, an `each` item / index —
+a `.value` cell on the client) or `plain` (a `catch` error, `snippet` args). The
+name set and classification are the single source of truth both backends read;
+they differ only in how they render it — build wires a cell for `reactive` and a
+bare local for `plain`, SSR renders both as a plain shadow (it has no cells). A
+binding that mis-lowers to the enclosing component signal is the
+`block-binding-shadow` bug this model designs out.
+
 ## Agents
 
 **Engine**
