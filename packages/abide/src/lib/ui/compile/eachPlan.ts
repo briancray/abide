@@ -1,3 +1,4 @@
+import { catchBinding } from './catchBinding.ts'
 import { resolveBranches } from './resolveBranches.ts'
 import type { Binding } from './types/Binding.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
@@ -55,7 +56,6 @@ export function eachPlan(node: Extract<TemplateNode, { kind: 'each' }>): EachPla
                 ? []
                 : [{ name: node.index, classification: 'reactive' } as const]),
         ],
-        catchBindings:
-            catchBranch === undefined ? [] : [{ name: catchAs, classification: 'plain' }],
+        catchBindings: catchBinding(catchAs, catchBranch !== undefined),
     }
 }

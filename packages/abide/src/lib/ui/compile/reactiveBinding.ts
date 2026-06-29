@@ -1,4 +1,5 @@
 import { destructureBindingNames } from './destructureBindingNames.ts'
+import { isPlainIdentifier } from './isPlainIdentifier.ts'
 import type { Binding } from './types/Binding.ts'
 
 /* How the client back-end binds a `reactive` Binding (an `await` `then` value, a keyed
@@ -16,10 +17,6 @@ export type ReactiveBindingWiring = {
     prefix: string
     localNames: string[]
 }
-
-/* Matches a JS identifier — a plain `as`/index that reads the cell directly, vs a
-   destructuring pattern that re-applies per read. */
-const isPlainIdentifier = (name: string): boolean => /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name)
 
 /* Renders a `reactive` Binding's cell wiring for the client back-end. `nextVar` mints the
    synthetic cell/derive vars; `lowerStatement` lowers the destructure declaration so a

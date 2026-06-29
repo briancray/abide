@@ -22,6 +22,9 @@ type LoadPage = () => Promise<{ default: UiComponent }>
 
 const SSR_MARKER = /<!--ssr:(head|body|state)-->/g
 const BODY_MARKER = '<!--ssr:body-->'
+/* Compiled once — both fill the shell per page render. */
+const HEAD_STATE_MARKER = /<!--ssr:(head|state)-->/g
+const HEAD_CLOSE_TAG = /<\/head>/i
 
 function wantsJson(request: Request): boolean {
     return (request.headers.get('accept') ?? '').includes('application/json')
@@ -139,7 +142,7 @@ export function createUiPageRenderer({
        build-time injector). A no-op when there are none or the shell carries no </head>. */
     function injectRoutePreloads(html: string, routeUrl: string): string {
         const links = routePreloadLinks(routeUrl)
-        return links === '' ? html : html.replace(/<\/head>/i, `${links}</head>`)
+        return links === '' ? html : html.replace(HEAD_CLOSE_TAG, `${links}</head>`)
     }
 
     async function renderPage(
@@ -211,9 +214,7 @@ export function createUiPageRenderer({
             `<script>${SSR_SWAP_SCRIPT}${CACHE_RESOLVE_SCRIPT}</script>` +
             `${await stateTag(routeUrl, params, store, inline)}`
         const filled = injectRoutePreloads(
-            shell.replace(/<!--ssr:(head|state)-->/g, (_match, key: string) =>
-                key === 'head' ? head : '',
-            ),
+            shell.replace(HEAD_STATE_MARKER, (_match, key: string) => (key === 'head' ? head : '')),
             routeUrl,
         )
         const [before, after] = filled.split(BODY_MARKER)

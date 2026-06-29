@@ -1,3 +1,4 @@
+import { catchBinding } from './catchBinding.ts'
 import { resolveBranches } from './resolveBranches.ts'
 import type { Binding } from './types/Binding.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
@@ -54,7 +55,6 @@ export function awaitPlan(node: Extract<TemplateNode, { kind: 'await' }>): Await
         finallyChildren,
         surfaceRejection: catchBranch === undefined && finallyChildren.length === 0,
         resolvedBindings: [{ name: resolvedAs, classification: 'reactive' }],
-        catchBindings:
-            catchBranch === undefined ? [] : [{ name: catchAs, classification: 'plain' }],
+        catchBindings: catchBinding(catchAs, catchBranch !== undefined),
     }
 }

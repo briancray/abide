@@ -6,6 +6,16 @@ import type { TemplateNode } from './types/TemplateNode.ts'
 import type { TextPart } from './types/TextPart.ts'
 import { VOID_TAGS } from './VOID_TAGS.ts'
 
+/* Compiled once — the parser tests these per source character, so a per-call literal
+   would recompile them across the whole template scan. */
+const WHITESPACE = /\s/
+const WHITESPACE_OR_GT = /[\s>]/
+const ATTR_NAME_END = /[\s=>/]/
+const TAG_NAME_END = /[\s>/]/
+const UPPERCASE_START = /^[A-Z]/
+const AWAIT_PREFIX = /^await\b/
+const LEADING_KEYWORD = /^\s*(\S+)/
+
 /*
 A minimal compile-time parser for the abide template subset: elements, text with
 `{expr}` interpolation, static/`{expr}`/`on<event>={expr}` attributes, and
@@ -74,7 +84,9 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
     /* True when `cursor` is on a `<style>` open tag — read raw (`readStyle`) so its
        CSS braces never misparse as `{expr}` interpolations. */
     function atStyleTag(): boolean {
-        return source.startsWith('<style', cursor) && /[\s>]/.test(source.charAt(cursor + 6))
+        return (
+            source.startsWith('<style', cursor) && WHITESPACE_OR_GT.test(source.charAt(cursor + 6))
+        )
     }
 
     /* Reads a `<style>…</style>` block into a `style` node carrying its CSS body; an
@@ -146,7 +158,7 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
     /* The leading keyword of a directive body (`if`, `for`, `await`, `switch`, `try`,
        `else`, `then`, `catch`, `finally`, `case`, `default`). */
     function headKeyword(body: string): string {
-        const match = body.match(/^\s*(\S+)/)
+        const match = body.match(LEADING_KEYWORD)
         return match?.[1] ?? ''
     }
 
@@ -471,7 +483,7 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
     function readAttributes(): TemplateAttr[] {
         const attrs: TemplateAttr[] = []
         while (cursor < source.length) {
-            while (/\s/.test(source.charAt(cursor))) {
+            while (WHITESPACE.test(source.charAt(cursor))) {
                 cursor += 1
             }
             const char = source.charAt(cursor)
@@ -498,11 +510,11 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
             }
             let name = ''
             const nameLoc = baseOffset + cursor // absolute offset of the attribute name
-            while (cursor < source.length && !/[\s=>/]/.test(source.charAt(cursor))) {
+            while (cursor < source.length && !ATTR_NAME_END.test(source.charAt(cursor))) {
                 name += source.charAt(cursor)
                 cursor += 1
             }
-            while (/\s/.test(source.charAt(cursor))) {
+            while (WHITESPACE.test(source.charAt(cursor))) {
                 cursor += 1
             }
             if (source.charAt(cursor) !== '=') {
@@ -510,7 +522,7 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
                 continue
             }
             cursor += 1 // past '='
-            while (/\s/.test(source.charAt(cursor))) {
+            while (WHITESPACE.test(source.charAt(cursor))) {
                 cursor += 1
             }
             if (source.charAt(cursor) === '{') {
@@ -568,7 +580,7 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
                 /* Unquoted value (`<input type=text>`): runs to the next whitespace or
                    `>`, per the HTML unquoted-attribute rule. No delimiter to consume. */
                 let value = ''
-                while (cursor < source.length && !/[\s>]/.test(source.charAt(cursor))) {
+                while (cursor < source.length && !WHITESPACE_OR_GT.test(source.charAt(cursor))) {
                     /* Stop before a `/` that closes the tag (`<Comp x=y/>`) so the value
                        doesn't swallow the self-closing slash and defeat detection; a `/`
                        elsewhere (e.g. a URL `href=/a/b`) stays part of the value. */
@@ -588,7 +600,7 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
         cursor += 1 // past '<'
         let tag = ''
         const tagStart = cursor // absolute (baseOffset-relative) offset of the tag name
-        while (cursor < source.length && !/[\s>/]/.test(source.charAt(cursor))) {
+        while (cursor < source.length && !TAG_NAME_END.test(source.charAt(cursor))) {
             tag += source.charAt(cursor)
             cursor += 1
         }
@@ -623,7 +635,7 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
         }
         /* A capitalised tag is a child component; its attributes become props and
            its children become slot content (rendered where the child puts <slot>). */
-        if (/^[A-Z]/.test(tag)) {
+        if (UPPERCASE_START.test(tag)) {
             const slotted = selfClosing ? [] : readChildren(tag)
             return {
                 kind: 'component',
@@ -761,8 +773,8 @@ function keywordAtDepthZero(text: string, word: string): number {
             depth === 0 &&
             text.startsWith(word, i) &&
             i > 0 &&
-            /\s/.test(text.charAt(i - 1)) &&
-            (i + word.length === text.length || /\s/.test(text.charAt(i + word.length)))
+            WHITESPACE.test(text.charAt(i - 1)) &&
+            (i + word.length === text.length || WHITESPACE.test(text.charAt(i + word.length)))
         ) {
             return i
         }
@@ -819,13 +831,13 @@ function parseForHead(
     const leadingSpace = (text: string): number => text.length - text.trimStart().length
     const skipSpace = (i: number): number => {
         let at = i
-        while (at < body.length && /\s/.test(body.charAt(at))) {
+        while (at < body.length && WHITESPACE.test(body.charAt(at))) {
             at += 1
         }
         return at
     }
     let bindingStart = skipSpace(body.indexOf('for') + 3)
-    const isAsync = /^await\b/.test(body.slice(bindingStart))
+    const isAsync = AWAIT_PREFIX.test(body.slice(bindingStart))
     if (isAsync) {
         bindingStart = skipSpace(bindingStart + 'await'.length)
     }

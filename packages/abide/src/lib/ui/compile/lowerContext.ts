@@ -7,6 +7,9 @@ import { TS_PRINTER } from './TS_PRINTER.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
 import { unwrapParens } from './unwrapParens.ts'
 
+/* Compiled once — strips the trailing `;` off every lowered expression. */
+const TRAILING_SEMICOLON = /;$/
+
 /*
 The shared expression-lowering context both back-ends build on: the signal→`model`
 rewrite and doc-access lowering that turns the signal surface the author writes
@@ -57,7 +60,7 @@ export function lowerContext(
        literal (`{ a: 1 }`) parses as an expression, not a block of labeled statements,
        through the rewrite; the wrapper is then peeled back off. */
     function expression(code: string): string {
-        return unwrapParens(lowerOnce(`(${code})`).replace(/;$/, ''))
+        return unwrapParens(lowerOnce(`(${code})`).replace(TRAILING_SEMICOLON, ''))
     }
 
     /* As above but keeps the trailing `;` for a statement/handler body. */

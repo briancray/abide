@@ -5,6 +5,13 @@ import { registerHotInstance } from '../runtime/registerHotInstance.ts'
 import type { UiComponent } from '../runtime/types/UiComponent.ts'
 import { mountRange } from './mountRange.ts'
 
+/* Build-time flag the production client defines false (see build.ts `define`) so the hot
+   path below — and its captureModelDoc/registerHotInstance imports — dead-code-eliminate
+   (`!false` folds to a constant the minifier can prove) instead of shipping behind a runtime
+   flag it can't. Dev defines it true; the test preload sets it on globalThis so the bare
+   reference resolves to true there, leaving `hotReloadEnabled` alone in charge as before. */
+declare const __ABIDE_DEV__: boolean
+
 /*
 Mounts a child component as a marker-bounded range at `before` in `parent` — no
 wrapper element, so the child's root is a true direct child of the parent (see
@@ -24,7 +31,7 @@ export function mountChild(
     label?: string,
 ): void {
     const moduleId = factory.__abideId
-    if (!hotReloadEnabled.current || moduleId === undefined) {
+    if (!__ABIDE_DEV__ || !hotReloadEnabled.current || moduleId === undefined) {
         mountRange(parent, factory.build, props, before, label)
         return
     }

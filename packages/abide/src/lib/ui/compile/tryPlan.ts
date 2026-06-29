@@ -1,3 +1,4 @@
+import { catchBinding } from './catchBinding.ts'
 import { resolveBranches } from './resolveBranches.ts'
 import type { Binding } from './types/Binding.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
@@ -30,7 +31,6 @@ export function tryPlan(node: Extract<TemplateNode, { kind: 'try' }>): TryPlan {
         catchAs,
         finallyChildren: finallyBranch?.children ?? [],
         hasCatch: catchBranch !== undefined,
-        catchBindings:
-            catchBranch === undefined ? [] : [{ name: catchAs, classification: 'plain' }],
+        catchBindings: catchBinding(catchAs, catchBranch !== undefined),
     }
 }

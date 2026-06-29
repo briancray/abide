@@ -63,6 +63,7 @@ const buildOptions = {
     compress: false,
     clean: false,
     exitOnFailure: false,
+    dev: true,
 } as const
 
 // The worker currently meant to be serving; undefined while crashed or replaced.

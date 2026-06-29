@@ -33,6 +33,11 @@ globally so those bodies resolve to the real runtime singleton — keeping the
 block-id counter shared between a harness's server render and client mount.
 */
 const globals = globalThis as Record<string, unknown>
+/* The client gates its dev-only hot-reload machinery on the bare `__ABIDE_DEV__` flag,
+   which the production/dev bundles set via Bun.build's `define` (absent under `bun test`).
+   Set it true here so the bare reference resolves and the hot-replace path stays reachable —
+   `hotReloadEnabled` alone then governs, as the HMR suites expect. */
+globals.__ABIDE_DEV__ = true
 globals.nextBlockId = nextBlockId
 globals.enterRenderPass = enterRenderPass
 globals.exitRenderPass = exitRenderPass

@@ -51,6 +51,8 @@ export async function buildDisconnected({
         entrypoints: [ENTRY, CSS_ENTRY],
         target: 'browser',
         minify: true,
+        // Connect screen ships in production bundles only — fold dev-only machinery out.
+        define: { __ABIDE_DEV__: 'false' },
         plugins,
     })
     exitOnBuildFailure(result)

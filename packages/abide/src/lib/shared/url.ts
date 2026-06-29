@@ -8,6 +8,9 @@ import { queryStringFromArgs } from './queryStringFromArgs.ts'
 type QueryValue = string | number | boolean | undefined
 type Query = Record<string, QueryValue>
 
+/* Compiled once — a scheme-qualified URL (`http:`, `mailto:`). */
+const SCHEME_QUALIFIED = /^[a-z][a-z0-9+.-]*:/i
+
 /*
 Augmentable rpc map. Codegen emits a `declare module '<importName>/shared/url'`
 block filling this with `'/rpc/<file>': args` for each query-carrying (GET)
@@ -77,7 +80,7 @@ export function url<P extends KnownPath | (string & {})>(
 ): string
 export function url(path: string, first?: Query, second?: Query): string {
     // Scheme-qualified (http:, mailto:) or protocol-relative URLs are external — leave them whole.
-    if (/^[a-z][a-z0-9+.-]*:/i.test(path) || path.startsWith('//')) {
+    if (SCHEME_QUALIFIED.test(path) || path.startsWith('//')) {
         return appendQuery(path, first)
     }
     const segments = parseRouteSegments(path)

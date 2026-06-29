@@ -8,9 +8,14 @@ import { setGlobalCacheStoreResolver } from '../shared/setGlobalCacheStoreResolv
 import { setPageResolver } from '../shared/setPageResolver.ts'
 import type { CacheSnapshotEntry } from '../shared/types/CacheSnapshotEntry.ts'
 import type { StreamedResolution } from '../shared/types/StreamedResolution.ts'
-import { installHotBridge } from './installHotBridge.ts'
-import { installInspectorBridge } from './installInspectorBridge.ts'
 import { probeNavigation } from './probeNavigation.ts'
+
+/* Build-time flag the production client defines false (see build.ts `define`) so the dev-only
+   hot bridge — and the entire DOM runtime it statically pulls in for re-builds — is dead-code-
+   eliminated, not even emitted as a chunk. Dev defines it true; the test preload sets it on
+   globalThis so the bare reference resolves there. */
+declare const __ABIDE_DEV__: boolean
+
 import { router } from './router.ts'
 import { clientPage } from './runtime/clientPage.ts'
 import type { RouteLoader } from './runtime/types/RouteLoader.ts'
@@ -47,16 +52,20 @@ export function startClient(
     if (target === null) {
         throw new Error('[abide] startClient: missing #app target')
     }
-    /* Dev only: the live-reload script sets `__abideDev` before this module runs,
-       so the runtime bridge is in place before any component mounts and records
-       its instances (mountChild) for hot replacement. */
-    if ((globalThis as { __abideDev?: boolean }).__abideDev) {
-        installHotBridge()
+    /* Dev only: the live-reload script sets `__abideDev` before this module runs, so the
+       runtime bridge is in place before any component mounts and records its instances
+       (mountChild) for hot replacement. Lazy-imported and `__ABIDE_DEV__`-gated so the
+       bridge (and the DOM runtime it drags in) is fully dead-code-eliminated in production
+       rather than shipped behind a runtime flag the minifier can't prove false. */
+    if (__ABIDE_DEV__ && (globalThis as { __abideDev?: boolean }).__abideDev) {
+        import('./installHotBridge.ts').then((module) => module.installHotBridge())
     }
-    /* Inspector only: the server injects `__abideInspect` when ABIDE_ENABLE_INSPECTOR
-       is on, so the scope/router bridge arms before the router builds any scope. */
+    /* Inspector only: the server injects `__abideInspect` when ABIDE_ENABLE_INSPECTOR is on,
+       so the scope/router bridge arms before the router builds any scope. Inspector can be
+       enabled in production, so this stays a lazy chunk (not `__ABIDE_DEV__`-gated) — emitted
+       but fetched only when the flag is set, never weighing down the default client load. */
     if ((globalThis as { __abideInspect?: boolean }).__abideInspect) {
-        installInspectorBridge()
+        import('./installInspectorBridge.ts').then((module) => module.installInspectorBridge())
     }
     const ssr = (globalThis as { __SSR__?: SsrPayload }).__SSR__ ?? {}
     setBaseResolver(() => ssr.base ?? '')

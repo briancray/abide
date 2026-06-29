@@ -1,10 +1,10 @@
 import { contentTypeOf } from '../../shared/contentTypeOf.ts'
 import { hasReplayableRequest } from '../../shared/hasReplayableRequest.ts'
-import { isReplayableMethod } from '../../shared/isReplayableMethod.ts'
 import { isStreamingResponse } from '../../shared/isStreamingResponse.ts'
 import type { CacheEntry } from '../../shared/types/CacheEntry.ts'
 import type { CacheSnapshotEntry } from '../../shared/types/CacheSnapshotEntry.ts'
 import type { CacheStore } from '../../shared/types/CacheStore.ts'
+import type { ReplayableMethod } from '../../shared/types/ReplayableMethod.ts'
 
 /*
 Awaits one cache entry and turns it into a wire-safe snapshot, or undefined
@@ -33,12 +33,9 @@ export async function snapshotEntryFromCache(
     if (!hasReplayableRequest(entry) || !entry.request) {
         return undefined
     }
-    /* Re-narrow the uppercased method to ReplayableMethod for the snapshot's typed
-       `method` field — hasReplayableRequest gates the entry but can't narrow this local. */
-    const method = entry.request.method.toUpperCase()
-    if (!isReplayableMethod(method)) {
-        return undefined
-    }
+    /* `hasReplayableRequest` already verified the uppercased method is replayable; assert it
+       for the snapshot's typed `method` field rather than re-running the same Set check. */
+    const method = entry.request.method.toUpperCase() as ReplayableMethod
     const response = await readSettled(entry.promise as Promise<Response>)
     if (!response) {
         return undefined

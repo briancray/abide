@@ -12,6 +12,7 @@ import { groupBindParts } from './groupBindParts.ts'
 import { ifPlan } from './ifPlan.ts'
 import { interpolatedTemplateLiteral } from './interpolatedTemplateLiteral.ts'
 import { isControlFlow } from './isControlFlow.ts'
+import { isPlainIdentifier } from './isPlainIdentifier.ts'
 import { isWhitespaceText } from './isWhitespaceText.ts'
 import { lowerContext } from './lowerContext.ts'
 import { makeVarNamer } from './makeVarNamer.ts'
@@ -108,10 +109,6 @@ export function generateBuild(
         bindRead,
         bindWrite,
     } = lowerContext(stateNames, derivedNames, computedNames)
-
-    /* Matches a JS identifier — a keyed `each` whose item `as` is a plain name keys on it
-       directly, vs a destructuring `as` that binds a fresh key param. */
-    const isPlainIdentifier = (name: string): boolean => /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name)
 
     /* Maps a plan `Binding`'s classification to the client `ShadowKind`: a `reactive` value
        derefs as a `.value` cell (`derived`), a `plain` value as the bare local (`plain`). The
