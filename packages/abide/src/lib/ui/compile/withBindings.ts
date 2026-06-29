@@ -34,10 +34,11 @@ export function withBindings<T>(
        and pops them in a `finally`, so no branch's shadows outlive the branch. */
     const entries = [...byKind]
     const run = (index: number): T => {
-        if (index >= entries.length) {
+        const entry = entries[index]
+        if (entry === undefined) {
             return body()
         }
-        const [kind, names] = entries[index]
+        const [kind, names] = entry
         return withShadow(names, kind, () => run(index + 1))
     }
     return run(0)

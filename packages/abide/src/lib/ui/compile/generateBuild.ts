@@ -125,13 +125,7 @@ export function generateBuild(
             (typeof node.attrs)[number],
             {
                 kind:
-                    | 'expression'
-                    | 'interpolated'
-                    | 'event'
-                    | 'attach'
-                    | 'bind'
-                    | 'class'
-                    | 'style'
+                    'expression' | 'interpolated' | 'event' | 'attach' | 'bind' | 'class' | 'style'
             }
         >,
         varName: string,
@@ -720,7 +714,7 @@ export function generateBuild(
            rendered by `reactiveBinding`); `index="i"` is a second reactive cell param, a plain
            identifier read as `i.value` (no prefix). The names of BOTH enter the deref scope via
            `withBindings` over `plan.bindings`, not a hand-built list. */
-        const itemWiring = reactiveBinding(plan.bindings[0], nextVar, lowerStatement)
+        const itemWiring = reactiveBinding(plan.bindings[0] as Binding, nextVar, lowerStatement)
         const indexParam = plan.index === undefined ? '' : `, ${plan.index}`
         /* The row body builds its children (a `<script>` declares per-row local signals,
            emitted in document order) into the row parent. A `<template catch>` child is

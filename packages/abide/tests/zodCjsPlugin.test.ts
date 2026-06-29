@@ -10,9 +10,9 @@ function capture() {
     let filter: RegExp | undefined
     let callback: ((args: OnResolveArgs) => { path: string } | undefined) | undefined
     zodCjsPlugin(repoRoot).setup({
-        onResolve: (options, cb) => {
+        onResolve: (options: { filter: RegExp }, cb: typeof callback) => {
             filter = options.filter
-            callback = cb as typeof callback
+            callback = cb
         },
     } as unknown as PluginBuilder)
     if (!filter || !callback) {

@@ -140,7 +140,8 @@ export function each<T>(
         try {
             const list = Array.isArray(source) ? source : [...source]
             const keys = list.map(keyOf)
-            const pass = (generation += 1)
+            generation += 1
+            const pass = generation
             /* Resolve each desired key to its surviving row once, here, stamping it with
                this pass — so prune below is an int compare (no `Set`) and the placement
                walk reuses the resolved row instead of a second `rows.get`. Halving the map
