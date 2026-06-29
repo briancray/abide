@@ -1,5 +1,11 @@
 # @abide/prettier-plugin-abide
 
+## 0.2.1
+
+### Patch Changes
+
+- 24444a8: rejoin placeholder tags wrapped past printWidth ([`ff2193a`](https://github.com/briancray/abide/commit/ff2193a73829ea97564f10e1d0bee4fa94b49c8d))
+
 ## 0.2.0
 
 ### Minor Changes
