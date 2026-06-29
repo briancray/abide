@@ -1,15 +1,10 @@
-import type { RequestScopeInfo } from './types/RequestScopeInfo.ts'
+import { requestScopeResolver } from './requestScopeResolver.ts'
 
 /*
-Internal slot the runtime entries register their request-scope resolver into.
-The server installs an ALS-backed resolver (createServer, reading the
-RequestStore); the client installs a module-singleton resolver seeded from
-__SSR__ (startClient). Undefined resolver — or a resolver returning undefined
-outside any request — means "no scope": trace() returns undefined and log
-lines print without the context prefix. Mirrors pageSlot / cacheStoreSlot.
+Internal slot the runtime entries register their request-scope resolver into (see
+requestScopeResolver). Exposed so callers read `.resolver?.()` and test helpers
+snapshot/poke `.resolver` directly. Undefined resolver — or one returning
+undefined outside any request — means "no scope": trace() returns undefined and
+log lines print without the context prefix.
 */
-export const requestScopeSlot: {
-    resolver: (() => RequestScopeInfo | undefined) | undefined
-} = {
-    resolver: undefined,
-}
+export const requestScopeSlot = requestScopeResolver.slot

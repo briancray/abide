@@ -1,16 +1,8 @@
-import type { CacheStore } from './types/CacheStore.ts'
+import { cacheStoreResolver } from './cacheStoreResolver.ts'
 
 /*
-Internal slot the runtime entries register their resolver into. The
-server entry installs an ALS-backed resolver (request-scoped); the
-client entry installs a module-singleton resolver. `fallback` is a
-single lazy store used only when no resolver is registered — keeps
-isolated tests working without forcing them to spin up the runtime.
+Internal slot the runtime entries register their resolver into (see
+cacheStoreResolver). Exposed so test helpers snapshot/poke `.resolver` and
+`.fallback` directly.
 */
-export const cacheStoreSlot: {
-    resolver: (() => CacheStore | undefined) | undefined
-    fallback: CacheStore | undefined
-} = {
-    resolver: undefined,
-    fallback: undefined,
-}
+export const cacheStoreSlot = cacheStoreResolver.slot

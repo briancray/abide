@@ -1,6 +1,4 @@
-import { requestScopeSlot } from './requestScopeSlot.ts'
-import type { RequestScopeInfo } from './types/RequestScopeInfo.ts'
+import { requestScopeResolver } from './requestScopeResolver.ts'
 
-export function setRequestScopeResolver(fn: () => RequestScopeInfo | undefined): void {
-    requestScopeSlot.resolver = fn
-}
+// Registers the runtime's request-scope resolver. Called once per side at boot.
+export const setRequestScopeResolver = requestScopeResolver.set

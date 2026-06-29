@@ -1,20 +1,11 @@
-import { cacheStoreSlot } from './cacheStoreSlot.ts'
-import { createCacheStore } from './createCacheStore.ts'
+import { cacheStoreResolver } from './cacheStoreResolver.ts'
 import type { CacheStore } from './types/CacheStore.ts'
 
 /*
-Resolves the active CacheStore. The runtime is registered via
-`setCacheStoreResolver` from the server entry (request-scoped via ALS)
-or the client entry (module-level singleton). If no resolver is registered,
-a single fallback store is created lazily so isolated tests still work.
+Resolves the active CacheStore: the registered resolver's store, or a single
+lazily-created fallback when none is registered (so isolated tests work). The
+fallback creator guarantees a value, hence the non-null assertion.
 */
 export function activeCacheStore(): CacheStore {
-    const fromResolver = cacheStoreSlot.resolver?.()
-    if (fromResolver) {
-        return fromResolver
-    }
-    if (!cacheStoreSlot.fallback) {
-        cacheStoreSlot.fallback = createCacheStore()
-    }
-    return cacheStoreSlot.fallback
+    return cacheStoreResolver.get()!
 }
