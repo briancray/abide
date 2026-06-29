@@ -6,6 +6,7 @@ import { DEV_READY_MESSAGE } from './lib/server/runtime/DEV_READY_MESSAGE.ts'
 import { DEV_REBUILD_MESSAGE } from './lib/server/runtime/DEV_REBUILD_MESSAGE.ts'
 import { findOpenPort } from './lib/server/runtime/findOpenPort.ts'
 import { abideLog } from './lib/shared/abideLog.ts'
+import { changeAffectsClient } from './lib/shared/changeAffectsClient.ts'
 
 /*
 Dev orchestrator. Replaces `bun --watch` (which only watches the import graph,
@@ -174,22 +175,32 @@ async function replaceServer(port: number): Promise<void> {
 
 let building = false
 let queued = false
+// True once any change collapsed into the queued run needs the client rebuilt;
+// a client-affecting change can never be downgraded to a server-only restart.
+let queuedNeedsClient = false
 
 /*
-Rebuild the client, then (on success) swap in a fresh server child. Serialized:
-a change arriving mid-build sets `queued` so exactly one more rebuild runs
-after, collapsing any further changes in between. A failed build leaves the
-current child untouched — the error is logged and the last-good server keeps
-serving.
+Apply a change: rebuild the client (unless `skipClientBuild` — a server/MCP-only
+change leaves the client bundle byte-identical), then on success swap in a fresh
+server child. The worker restart always runs: SSR renders through Bun's module
+cache, so a new process is the only reliable way to reflect any source edit,
+client-affecting or not.
+
+Serialized: a change arriving mid-build sets `queued` so exactly one more run
+follows, collapsing further changes in between; `queuedNeedsClient` records
+whether any of them needs the client, so the collapsed run never skips a client
+rebuild a queued change required. A failed build leaves the current child
+untouched — the error is logged and the last-good server keeps serving.
 */
-async function rebuild(port: number): Promise<void> {
+async function rebuild(port: number, skipClientBuild = false): Promise<void> {
     if (building) {
         queued = true
+        queuedNeedsClient ||= !skipClientBuild
         return
     }
     building = true
     try {
-        const succeeded = await build(buildOptions)
+        const succeeded = skipClientBuild ? true : await build(buildOptions)
         if (succeeded) {
             await replaceServer(port)
         }
@@ -197,7 +208,9 @@ async function rebuild(port: number): Promise<void> {
         building = false
         if (queued) {
             queued = false
-            void rebuild(port)
+            const needsClient = queuedNeedsClient
+            queuedNeedsClient = false
+            void rebuild(port, !needsClient)
         }
     }
 }
@@ -223,14 +236,26 @@ an agent editing the app's own source — isn't yanked mid-run by a save.
 const manualRebuild = Bun.env.ABIDE_DEV_NO_WATCH === '1'
 
 let debounce: ReturnType<typeof setTimeout> | undefined
+/*
+True only while every change collapsed into the pending debounce is server/MCP-
+only; one client-affecting change in the burst flips it false (latches until the
+debounce fires), so a multi-file save that touches the client never skips the
+client rebuild.
+*/
+let pendingSkipClientBuild = true
 const watcher = manualRebuild
     ? undefined
     : watch(SOURCE_DIR, { recursive: true }, (_event, filename) => {
           if (!filename || isGenerated(filename)) {
               return
           }
+          pendingSkipClientBuild &&= !changeAffectsClient(filename)
           clearTimeout(debounce)
-          debounce = setTimeout(() => void rebuild(port), REBUILD_DEBOUNCE_MS)
+          debounce = setTimeout(() => {
+              const skipClientBuild = pendingSkipClientBuild
+              pendingSkipClientBuild = true
+              void rebuild(port, skipClientBuild)
+          }, REBUILD_DEBOUNCE_MS)
       })
 if (manualRebuild) {
     abideLog.info(
