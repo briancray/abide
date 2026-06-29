@@ -615,6 +615,9 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
            verbatim to its `</script>` (not parsed as markup), scoped by the
            containing branch when compiled. */
         if (tag === 'script' && !selfClosing) {
+            /* Body starts at the current cursor; its absolute source offset lets the shadow
+               map a diagnostic raised inside it (e.g. a top-level await) back to source. */
+            const bodyLoc = baseOffset + cursor
             const close = source.indexOf('</script>', cursor)
             const end = close === -1 ? source.length : close
             const code = source.slice(cursor, end)
@@ -631,7 +634,7 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
                     "import statements must live in the component's leading <script>, not a nested <template> script — they hoist to module scope for the whole template. For lazy loading, use a dynamic import() inside an effect.",
                 )
             }
-            return { kind: 'script', code }
+            return { kind: 'script', code, loc: bodyLoc }
         }
         /* A capitalised tag is a child component; its attributes become props and
            its children become slot content (rendered where the child puts <slot>). */

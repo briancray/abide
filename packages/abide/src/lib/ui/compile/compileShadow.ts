@@ -97,7 +97,11 @@ export function compileShadow(source: string, propsType = 'Record<string, any>')
     for (const line of scope) {
         builder.flush(line)
     }
-    emitNodes(parseTemplate(source.slice(templateStart), templateStart).nodes, builder)
+    const templateNodes = parseTemplate(source.slice(templateStart), templateStart).nodes
+    /* Nested `<script>` blocks inline into the synchronous `build()` too, so a top-level
+       await in one is the same build-breaker — flag it, mapped via the node's body offset. */
+    collectNestedScriptAwaitDiagnostics(templateNodes, diagnostics)
+    emitNodes(templateNodes, builder)
     builder.raw('}\n')
     return { ...builder.result(), diagnostics }
 }
@@ -214,6 +218,73 @@ function collectReservedNameDiagnostics(
     visit(file)
 }
 
+/* Pushes a diagnostic for every `await` sitting at the script's top level — outside any
+   nested function. The generated `build()` runs the leading script synchronously, so a
+   top-level await transpiles to `await` in a non-async function and breaks the bundle; the
+   shadow's render fn is async, so `tsc` alone never flags it (a check/runtime parity gap).
+   Stops descending at function boundaries — their own async-ness is the author's concern —
+   and catches both `await expr` and `for await (… of …)`, flagging the `await` keyword. */
+function collectTopLevelAwaitDiagnostics(
+    file: ts.SourceFile,
+    scriptStart: number,
+    diagnostics: ShadowDiagnostic[],
+): void {
+    const message =
+        'top-level `await` is not allowed in a `<script>` — the component build runs synchronously. Use `{#await expr}…{:then value}…{/await}` markup for blocking data, or `await` inside an async event handler.'
+    const visit = (node: ts.Node): void => {
+        /* A nested function introduces its own (possibly async) scope; its awaits are legal. */
+        if (
+            ts.isFunctionDeclaration(node) ||
+            ts.isFunctionExpression(node) ||
+            ts.isArrowFunction(node) ||
+            ts.isMethodDeclaration(node) ||
+            ts.isGetAccessorDeclaration(node) ||
+            ts.isSetAccessorDeclaration(node) ||
+            ts.isConstructorDeclaration(node)
+        ) {
+            return
+        }
+        /* The `await` keyword token: the AwaitExpression's first child, or a `for await`'s
+           await modifier. */
+        const keyword = ts.isAwaitExpression(node)
+            ? node.getChildAt(0, file)
+            : ts.isForOfStatement(node)
+              ? node.awaitModifier
+              : undefined
+        if (keyword !== undefined) {
+            diagnostics.push({
+                start: scriptStart + keyword.getStart(file),
+                length: keyword.getEnd() - keyword.getStart(file),
+                message,
+            })
+        }
+        ts.forEachChild(node, visit)
+    }
+    visit(file)
+}
+
+/* Recursively visits every nested `<script>` in the template and flags a top-level await in
+   its body — the same trap as the leading script (it inlines into the sync `build()`), mapped
+   through the node's body offset (`loc`). Walks `children` on every node kind that carries
+   them, so a script buried in an `{#if}`/`{#for}`/`{#await}` branch is still reached. */
+function collectNestedScriptAwaitDiagnostics(
+    nodes: TemplateNode[],
+    diagnostics: ShadowDiagnostic[],
+): void {
+    for (const node of nodes) {
+        if (node === undefined) {
+            continue
+        }
+        if (node.kind === 'script' && node.loc !== undefined) {
+            const file = ts.createSourceFile('nested.ts', node.code, ts.ScriptTarget.Latest, true)
+            collectTopLevelAwaitDiagnostics(file, node.loc, diagnostics)
+        }
+        if ('children' in node) {
+            collectNestedScriptAwaitDiagnostics(node.children, diagnostics)
+        }
+    }
+}
+
 /* Walks the leading `<script>` and produces the shadow's module imports, the
    module-scope type declarations, the value-typed scope lines, and the `props<Shape>()`
    prop shapes. `scriptStart` is the body's absolute offset in the source, so verbatim
@@ -232,6 +303,9 @@ function analyzeScript(scriptBody: string, scriptStart: number): ScriptAnalysis 
        `$$scope`, …), so an author binding may not start with it — that's the contract that
        lets a user freely name a variable after any helper. Flag every such declaration. */
     collectReservedNameDiagnostics(file, scriptStart, diagnostics)
+    /* The leading script runs in the synchronous `build()`, so a top-level await breaks the
+       bundle — catch it here with a legible message instead of an opaque transpile error. */
+    collectTopLevelAwaitDiagnostics(file, scriptStart, diagnostics)
     /* A verbatim span: original text + the segment mapping it back, relative to the
        line start (the caller rebases shadowStart onto the running shadow length). */
     const span = (node: ts.Node, prefixLength: number): ScopeLine['segments'][number] => ({

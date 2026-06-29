@@ -273,6 +273,68 @@ describe('abide check', () => {
         expect(diagnostics[0]!.message).toContain('leading <script>')
     })
 
+    /* Top-level `await` in the leading `<script>` runs in the synchronous `build()`, so it
+       breaks the bundle. Check must catch it (the shadow's render fn is async, so `tsc` alone
+       lets it pass) and point at the `{#await}` markup alternative. */
+    test('top-level await in the leading <script> is rejected with a clear diagnostic', () => {
+        const source = `<script>\nconst session = await fetch('/api/session')\n</script>\n<p>{session.url}</p>\n`
+        const dir = project({ 'topawait.abide': source })
+        const diagnostics = collectAbideDiagnostics(createShadowProgram(dir)).filter((diagnostic) =>
+            diagnostic.file.endsWith('topawait.abide'),
+        )
+        expect(diagnostics.some((diagnostic) => diagnostic.message.includes('{#await'))).toBe(true)
+        /* The flagged span lands on the offending `await` keyword. */
+        const awaitDiagnostic = diagnostics.find((diagnostic) =>
+            diagnostic.message.includes('{#await'),
+        )!
+        const span = source.slice(
+            awaitDiagnostic.start,
+            awaitDiagnostic.start + awaitDiagnostic.length,
+        )
+        expect(span).toBe('await')
+    })
+
+    /* `for await` over an async iterable at the top level is the same trap. */
+    test('top-level for-await in the leading <script> is rejected', () => {
+        const source = `<script>\nlet last = scope().state(0)\nfor await (const n of stream()) { last = n }\ndeclare function stream(): AsyncIterable<number>\n</script>\n<p>{last}</p>\n`
+        const dir = project({ 'forawait.abide': source })
+        const diagnostics = collectAbideDiagnostics(createShadowProgram(dir)).filter((diagnostic) =>
+            diagnostic.file.endsWith('forawait.abide'),
+        )
+        expect(diagnostics.some((diagnostic) => diagnostic.message.includes('{#await'))).toBe(true)
+    })
+
+    /* A nested `<script>` (scoped reactive block) inlines into `build()` too, so a top-level
+       await in one is the same trap — flagged and mapped through the nested body's offset. */
+    test('top-level await in a nested <script> is rejected with a clear diagnostic', () => {
+        const source = `<script>\nlet on = scope().state(true)\n</script>\n{#if on}\n<script>const data = await fetch('/y')</script>\n<p>{data.url}</p>\n{/if}\n`
+        const dir = project({ 'nestedawait.abide': source })
+        const diagnostics = collectAbideDiagnostics(createShadowProgram(dir)).filter((diagnostic) =>
+            diagnostic.file.endsWith('nestedawait.abide'),
+        )
+        const awaitDiagnostic = diagnostics.find((diagnostic) =>
+            diagnostic.message.includes('{#await'),
+        )
+        expect(awaitDiagnostic).toBeDefined()
+        /* The flagged span maps through the nested body's offset onto the `await` keyword. */
+        const span = source.slice(
+            awaitDiagnostic!.start,
+            awaitDiagnostic!.start + awaitDiagnostic!.length,
+        )
+        expect(span).toBe('await')
+    })
+
+    /* `await` inside an async function (e.g. an event handler) is legitimate — the function
+       carries its own async scope and is never inlined into `build()`. Not flagged. */
+    test('await inside an async function in the leading <script> is allowed', () => {
+        const source = `<script>\nasync function load() { return await fetch('/x') }\n</script>\n<button on:click={() => load()}>go</button>\n`
+        const dir = project({ 'okawait.abide': source })
+        const diagnostics = collectAbideDiagnostics(createShadowProgram(dir)).filter((diagnostic) =>
+            diagnostic.file.endsWith('okawait.abide'),
+        )
+        expect(diagnostics).toEqual([])
+    })
+
     /* A dynamic `import()` in a nested script is the legitimate lazy path — not flagged. */
     test('a dynamic import in a nested script is allowed', () => {
         const dir = project({

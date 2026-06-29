@@ -12,7 +12,7 @@ positions for the type-checking shadow, ignored by the runtime back-ends.
 */
 export type TemplateNode =
     | { kind: 'text'; parts: TextPart[] }
-    | { kind: 'script'; code: string }
+    | { kind: 'script'; code: string; loc?: number }
     /* A `<style>` declared in the template. `css` is its raw body, read structurally
        so a `<style>` inside an expression isn't mistaken for one. The node stays in
        place: it scopes its sibling subtree, so the front-end derives each scope
