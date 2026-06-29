@@ -87,9 +87,12 @@ rustup target add wasm32-wasip1   # (older Zed: wasm32-wasi)
 
 The server command resolves in this order (see `src/lib.rs`):
 
-1. a `abide` binary on the worktree PATH (global install or `node_modules/.bin/abide`);
-2. otherwise `bun packages/abide/bin/abide.ts lsp` — so it works while developing
-   abide itself, with the worktree root as the project.
+1. a `abide` binary on the worktree PATH (a global install);
+2. otherwise, if the in-repo CLI is present (`packages/abide/bin/abide.ts`, the abide
+   monorepo itself), `bun packages/abide/bin/abide.ts lsp` — so it works while
+   developing abide, with the worktree root as the project, and live source edits
+   apply on language-server restart;
+3. otherwise a consumer project's local `node_modules/.bin/abide lsp`.
 
 It's a TypeScript server, so after editing abide's source you pick up changes by
 restarting the language server (`editor: restart language server`) — no extension
