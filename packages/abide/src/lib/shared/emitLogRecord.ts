@@ -18,11 +18,11 @@ const COLOR_ESCAPES: Record<string, string> = useColor
 
 // Wraps `text` in a precomputed ANSI color escape; no-op when colors are disabled or unavailable (browser).
 function paint(color: string, text: string): string {
-    const escape = COLOR_ESCAPES[color]
-    if (escape === undefined) {
+    const ansiEscape = COLOR_ESCAPES[color]
+    if (ansiEscape === undefined) {
         return text
     }
-    return `${escape}${text}${RESET}`
+    return `${ansiEscape}${text}${RESET}`
 }
 
 // Applies the ANSI dim attribute; no-op when colors are disabled.
