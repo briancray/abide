@@ -1,5 +1,29 @@
 # abide
 
+## 0.44.1
+
+### Patch Changes
+
+- 767b415: 02-zod-plugin-memo ([`0e00b21`](https://github.com/briancray/abide/commit/0e00b217f99352a7d3def4841172c5bff287bc5c))
+- 767b415: 06-wakeSubtree-prefix-index ([`23ab920`](https://github.com/briancray/abide/commit/23ab9202fd0cb41e01811e78b76eac2843c9cf8f))
+- 767b415: 09-when-via-switch ([`48f8d50`](https://github.com/briancray/abide/commit/48f8d5063cf74060004ad38691f584abcff0cab2))
+- 767b415: 08-dts-codegen ([`5170542`](https://github.com/briancray/abide/commit/51705426e55a700140cc7bc38f7e21f30759fce3))
+- 767b415: 03-socket-publish-gate ([`56fae49`](https://github.com/briancray/abide/commit/56fae49bf393fdfb3aa35cecc618a39443354ce4))
+- 767b415: 10-cli-tokenizer ([`5e305c1`](https://github.com/briancray/abide/commit/5e305c154efd5f77d0a57e78831b72a30b4d9155))
+- 767b415: 14-resolver-slot-factory-JUDGMENT ([`6e00809`](https://github.com/briancray/abide/commit/6e00809c343e24599d54b2304a50a9cecd90619f))
+- 767b415: catch top-level await in a .abide <script> during abide check ([`76ff64e`](https://github.com/briancray/abide/commit/76ff64e9fb9ffed108ae2fde53f2ded2bf3a0abe))
+- 767b415: 12-warm-clone-PARTIAL ([`8e58e0b`](https://github.com/briancray/abide/commit/8e58e0b2c1891174cc809797f949f01619529b89))
+- 767b415: 05-compiler-double-pass ([`9216dae`](https://github.com/briancray/abide/commit/9216dae4c26e27fce49f39b116bd8b1dcf1dd226))
+- 767b415: 04-lsp-shadow-cache ([`9f9f5fc`](https://github.com/briancray/abide/commit/9f9f5fc84792204259d591fa4aff261b2a19c46d))
+- 767b415: 13-dev-rebuild-scoping-JUDGMENT ([`b5a1d49`](https://github.com/briancray/abide/commit/b5a1d49e6607a8fcf37efe03e9fe6f6b2c31ea45))
+- 767b415: gate skeleton fragment-staging on a connected parent ([`c9380ee`](https://github.com/briancray/abide/commit/c9380eebdd9f6773ccffd446665b1acbc78b1123))
+- 767b415: 07-debug-gate ([`c96466e`](https://github.com/briancray/abide/commit/c96466e73ea1f521d728b11aac44262530c3b09c))
+- 767b415: rename paint's escape var to avoid shadowing the global ([`caf1322`](https://github.com/briancray/abide/commit/caf1322adc6598bc6ea32e0ba9047ba768b6f5e1))
+- 767b415: reflow generateBuild attr-kind union to biome's multiline form ([`f9b3669`](https://github.com/briancray/abide/commit/f9b36690e4add2c955abb8f0127a9af9d513be53))
+- 767b415: 01-bugs-B1-B2 ([`fa8659d`](https://github.com/briancray/abide/commit/fa8659d276265c0fbb4f7ca0740fc74702f00168))
+- 767b415: address code-review findings ([`fb02df5`](https://github.com/briancray/abide/commit/fb02df58c924d7206fce35874cc80309949c9e59))
+- 767b415: 11-server-log-micro ([`fb689bc`](https://github.com/briancray/abide/commit/fb689bc05bee9ba127ddf206e925e3a9e04841fd))
+
 ## 0.44.0
 
 ### Minor Changes
