@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import type { Server } from 'bun'
-import { defineSocket } from '../src/lib/server/sockets/defineSocket.ts'
 import { serverSlot } from '../src/lib/server/runtime/serverSlot.ts'
+import { defineSocket } from '../src/lib/server/sockets/defineSocket.ts'
 import { settle } from './support/settle.ts'
 
 /*
