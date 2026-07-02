@@ -53,8 +53,13 @@ The kitchen-sink demonstrates every abide surface.`} note={'Files under `src/mcp
 }`}
     note={"Register the endpoint in an MCP client's config (Claude Desktop, an IDE) and your rpcs show up as tools — no adapter, the surface is generated from the rpc registry."} />
 
-<Recipe task="Authenticate MCP clients" live="/security" code={`// same-origin gate applies to /__abide/mcp; add auth middleware for real gating
-export default { middleware: [requireApiKey] }`} note={'`/__abide/mcp` gets the same origin check as mutating rpcs. For real authz, add auth middleware — boot warns when mcp tools ship with no auth middleware at all.'} />
+<Recipe task="Authenticate MCP clients" live="/security" code={`// src/app.ts — the handle hook wraps the whole pipeline
+export const handle = async (request, next) => {
+    if (request.url.includes('/__abide/mcp') && !authorised(request)) {
+        return new Response('unauthorized', { status: 401 })
+    }
+    return next(request)
+}`} note={'`/__abide/mcp` gets the same origin check as mutating rpcs. For real authz, gate it in the `handle` middleware hook in app.ts — boot warns when mcp tools ship with no auth middleware at all.'} />
 
 <Recipe
     task="Understand the tool name prefix"

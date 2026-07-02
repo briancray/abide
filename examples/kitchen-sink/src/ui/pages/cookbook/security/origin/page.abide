@@ -1,0 +1,109 @@
+<script>
+import Recipe from '$ui/Recipe.abide'
+
+/* Cookbook · auth & security · the origin gate. */
+const LIVE = '/security'
+</script>
+
+<h1 class="text-3xl font-bold">the origin gate</h1>
+<p class="mt-2 text-slate-600">
+    Mutating rpcs 403 a cross-origin browser <code class="font-mono">Origin</code> before the
+    handler runs — the no-preflight CSRF shape. Reads, curl, the CLI, and MCP clients send no
+    <code class="font-mono">Origin</code> and pass.
+</p>
+
+<Recipe
+    task="Get CSRF protection by default"
+    live={LIVE}
+    code={`// nothing to configure — POST/PUT/PATCH/DELETE are gated
+export const transfer = POST(handler, { inputSchema })`}
+    note={"Every mutating rpc rejects a cross-origin browser `Origin` with a 403 before the handler runs. There's no token to mint or verify — the gate is the default CSRF defence."} />
+
+<Recipe
+    task="Understand what passes the gate"
+    live={LIVE}
+    code={`// reads, curl, CLI, MCP send no Origin → allowed
+await getProduct({ id })   // GET — never gated`}
+    note={'GET/HEAD reads are never gated. Non-browser callers (curl, the CLI, MCP clients) send no `Origin` header, so they pass — the gate targets the specific cross-site-browser CSRF shape.'} />
+
+<Recipe
+    task="Opt one rpc out of the gate"
+    live={LIVE}
+    code={`export const trackPageview = POST(handler, { inputSchema, crossOrigin: true })`}
+    note={'`crossOrigin: true` lets a mutating rpc accept cross-origin browsers — for a public analytics beacon or a webhook receiver that legitimately posts from elsewhere.'} />
+
+<Recipe
+    task="Gate the MCP endpoint the same way"
+    live={LIVE}
+    code={`// /__abide/mcp gets the same Origin check as mutating rpcs`}
+    note={"The MCP endpoint and socket publishes ride the same gate — a forged-Origin browser can't drive them either. No extra configuration."} />
+
+<Recipe
+    task="Observe the gate with a forged Origin"
+    live={LIVE}
+    code={`// a GET handler plays the hostile page, firing forged-Origin POSTs
+export const probeOriginGate = GET(async () => {
+    const res = await fetch(createEcho.url, {
+        method: 'POST',
+        headers: { origin: 'https://evil.example' },
+        body: '{}',
+    })
+    return json({ status: res.status })   // 403
+})`}
+    note={"A browser can't forge its own `Origin`, so to see the 403 you drive it server-side. This is exactly how the security page's live probe demonstrates the gate."} />
+
+<Recipe
+    task="Allow a public GET to be read cross-origin"
+    live={LIVE}
+    code={`// GET is not origin-gated; add CORS headers if a browser on another site reads it
+return json(data, { headers: { 'Access-Control-Allow-Origin': '*' } })`}
+    note={"Reads aren't gated, but a browser on another origin still needs CORS headers to read the response. Add them in the handler for a genuinely public read API."} />
+
+<Recipe
+    task="Verify the request's origin yourself"
+    live={LIVE}
+    code={`import { request } from '@abide/abide/server/request'
+
+const origin = request().headers.get('origin')
+if (origin && !ALLOWED.has(origin)) throw new HttpError(403, 'origin not allowed')`}
+    note={'For an allowlist finer than the built-in gate, read `Origin` off `request()` and enforce your own policy — layer it on top of, not instead of, the default.'} />
+
+<Recipe
+    task="Keep the health payload public-safe"
+    live="/observability"
+    code={`export const health = () => ({ uptimeSeconds })   // no secrets`}
+    note={"`/__abide/health` is public and ungated — the client's `health()` polls it. Never put secrets in the health hook's payload."} />
+
+<Recipe
+    task="Forward an auth header to in-process calls"
+    live={LIVE}
+    code={`// src/app.ts
+export const forwardHeaders = ['authorization']`}
+    note={'In-process rpc calls (SSR, MCP) forward only cookie/authorization/traceparent/x-forwarded-* by default. Add header names to `forwardHeaders` so a downstream read sees them.'} />
+
+<Recipe
+    task="Stamp every response in middleware"
+    live={LIVE}
+    code={`// src/app.ts
+export const handle = async (request, next) => {
+    const response = await next(request)
+    response.headers.set('x-frame-options', 'DENY')
+    return response
+}`}
+    note={'The `handle` hook wraps the whole pipeline — the place to add security headers (CSP, HSTS, X-Frame-Options) to every response at once.'} />
+
+<Recipe
+    task="Reject a bad request before the handler"
+    live={LIVE}
+    code={`export const handle = async (request, next) => {
+    if (isBanned(request)) return new Response('forbidden', { status: 403 })
+    return next(request)
+}`}
+    note={'Return a `Response` from `handle` without calling `next` to short-circuit — rate-limit blocks, IP bans, maintenance mode all live here, ahead of every handler.'} />
+
+<Recipe
+    task="Sanitise before rendering untrusted markup"
+    live="/templating/bindings"
+    code={`<p>{comment.text}</p>            <!-- escaped: safe -->
+<p>{html(sanitize(comment.html))}</p>  <!-- sanitise first -->`}
+    note={'Plain `{expr}` escapes, so user text is safe by default. Only `html()` bypasses escaping — never hand it untrusted input without sanitising.'} />

@@ -114,6 +114,9 @@ describe('createTestApp', () => {
         ['/cookbook/beyond/mcp', 'Expose a read rpc as a tool'],
         ['/cookbook/beyond/cli', 'Build the CLI binary'],
         ['/cookbook/beyond/bundle', 'Build a desktop bundle'],
+        ['/cookbook/security/origin', 'Opt one rpc out of the gate'],
+        ['/cookbook/security/auth', 'Set a session cookie'],
+        ['/cookbook/security/mcp-auth', 'Gate the MCP endpoint'],
     ]
     for (const [route, marker] of cookbookPages) {
         test(`cookbook ${route} SSRs`, async () => {

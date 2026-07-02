@@ -1,0 +1,84 @@
+<script>
+import Recipe from '$ui/Recipe.abide'
+
+/* Cookbook · auth & security · gating MCP, sockets & agents. */
+const LIVE = '/security'
+const MCP = '/mcp'
+</script>
+
+<h1 class="text-3xl font-bold">gating MCP, sockets & agents</h1>
+<p class="mt-2 text-slate-600">
+    The non-browser surfaces need their own posture: what a model may call, who may publish, and how
+    the MCP endpoint is authorised.
+</p>
+
+<Recipe
+    task="Keep mutating rpcs off MCP by default"
+    live={MCP}
+    code={`export const deleteUser = DELETE(handler)   // not an MCP tool`}
+    note={"Only GET/HEAD auto-expose to MCP. A mutating rpc is invisible to models unless it opts in with `clients: { mcp: true }` — so a model can't delete by default."} />
+
+<Recipe task="Gate the MCP endpoint" live={LIVE} code={`// src/app.ts
+export const handle = async (request, next) => {
+    if (request.url.includes('/__abide/mcp') && !authorised(request)) {
+        return new Response('unauthorized', { status: 401 })
+    }
+    return next(request)
+}`} note={'`/__abide/mcp` gets the same origin gate as mutating rpcs; for real authz add a check in the `handle` hook. Boot warns when MCP tools ship with no auth middleware at all.'} />
+
+<Recipe task="Bound what an agent can call" live="/agent" code={`const chatEngine = engine({
+    tools: [],
+    permissions: { defaultMode: 'dontAsk', allow: ['mcp__app__getProduct'] },
+})`} note={"The agent's capability surface is server-fixed: `tools: []` drops host built-ins, `dontAsk` denies the unlisted, and `allow` is the whole permitted set — the client can't widen it."} />
+
+<Recipe task="Deny agent tools at call time" live="/agent" code={`// the model sees every mcp tool but only allowed ones succeed`} note={"Listing is not permission — denial happens when the tool is called. Don't rely on hiding a tool; rely on the allowlist enforced at invocation."} />
+
+<Recipe
+    task="Keep browsers from publishing to a socket"
+    live="/sockets"
+    code={`export const feed = socket({ schema })   // clientPublish defaults false`}
+    note={'By default only the server can publish; browsers read. Writes flow through a publish rpc where you validate and authorise — the safe default for a broadcast topic.'} />
+
+<Recipe task="Authorise socket publishes" live="/sockets" code={`export const publishFeed = POST(async ({ text }) => {
+    const user = await currentUser()
+    if (!user) throw new HttpError(401, 'sign in')
+    feed.publish({ text, by: user.id })
+    return json({ ok: true })
+}, { inputSchema })`} note={"Put the authorization in the publish rpc. It runs server-side under the origin gate, so it's the right place to check identity before fanning a frame out."} />
+
+<Recipe
+    task="Validate every publish against the schema"
+    live="/sockets"
+    code={`export const feed = socket({ schema })   // frames are shape-checked at publish()`}
+    note={'The socket schema rejects malformed frames synchronously — a defence-in-depth layer under your rpc-level authorization.'} />
+
+<Recipe
+    task="Restrict which rpcs a model may read"
+    live={MCP}
+    code={`export const getSecret = GET(handler)                       // exposed to MCP — careful
+export const getSecret2 = GET(handler, { clients: { mcp: false } })  // hidden`}
+    note={"Any schema-bearing GET is an MCP tool by default. Set `clients: { mcp: false }` on reads a model shouldn't see — the MCP surface is opt-out for reads, opt-in for writes."} />
+
+<Recipe
+    task="Heed the no-auth boot warning"
+    live={LIVE}
+    code={`// boot log: '[abide] MCP tools exposed with no auth middleware'`}
+    note={'If you expose MCP tools without a `handle` auth check, boot warns you. Treat it as a prompt to add gating before shipping, especially for tools that touch data.'} />
+
+<Recipe
+    task="Keep the agent rpc off its own surface"
+    live="/agent"
+    code={`export const chat = POST(agentHandler, { inputSchema })   // no clients.mcp`}
+    note={'Never expose the agent rpc as an MCP tool — a model handed a tool that re-enters the agent can loop. Leaving `clients.mcp` off (the mutating default) prevents it.'} />
+
+<Recipe
+    task="Provide token-scoped MCP permissions"
+    gap={true}
+    code={`// no per-token/per-tool MCP scoping — gate coarsely in handle, or per rpc
+export const handle = async (request, next) => {
+    if (isMcp(request) && tokenScope(request) !== 'admin') {
+        return new Response('forbidden', { status: 403 })
+    }
+    return next(request)
+}`}
+    note={"There's no built-in per-token, per-tool MCP permission model (scopes mapping callers to allowed tools). Gate the whole endpoint in `handle`, or check identity inside each exposed rpc — fine-grained scoping you build yourself."} />
