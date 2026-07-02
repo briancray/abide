@@ -90,6 +90,10 @@ describe('createTestApp', () => {
         ['/cookbook/templating/bindings', 'Two-way bind a text input'],
         ['/cookbook/templating/components', 'Send data up from a child to its parent'],
         ['/cookbook/templating/markup', 'Render trusted raw HTML'],
+        ['/cookbook/state/scope', 'Create a local reactive cell'],
+        ['/cookbook/state/derived', 'Derive a read-only value'],
+        ['/cookbook/state/effects', 'Clean up an effect'],
+        ['/cookbook/state/bindings', 'Enable undo and redo'],
     ]
     for (const [route, marker] of cookbookPages) {
         test(`cookbook ${route} SSRs`, async () => {

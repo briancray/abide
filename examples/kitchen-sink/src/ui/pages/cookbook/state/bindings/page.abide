@@ -1,0 +1,65 @@
+<script>
+import Recipe from '$ui/Recipe.abide'
+
+/* Cookbook · reactive state · bindings, capabilities & persistence. */
+const LIVE = '/reactive-state'
+</script>
+
+<h1 class="text-3xl font-bold">bindings, capabilities & persistence</h1>
+<p class="mt-2 text-slate-600">
+    Beyond plain cells, a scope carries a serialisable data surface and capabilities that route
+    where its changes go — <code class="font-mono">record()</code> to an undo journal,
+    <code class="font-mono">persist()</code> to storage,
+    <code class="font-mono">broadcast()</code> to peers — plus
+    <code class="font-mono">share</code> context down the tree.
+</p>
+
+<Recipe task="Persist a scope's data across reloads" code={`const shape = scope()
+shape.persist() // durable, keyed by scope id (or persist('cart'))`} note={"`persist()` routes the scope's data to durable storage (localStorage by default) and restores it on next mount. Pass a stable key to survive across sessions; the default key is the scope id."} />
+
+<Recipe task="Hold data in the scope's document" code={`const s = scope()
+s.replace('title', 'Untitled')
+const title = s.read('title')     // reactive read`} note={'The scope mirrors a Doc: `read` / `replace` / `add` / `remove` / `cell` / `derive` address data by path. This serialisable layer is what the capabilities below journal, persist, and sync.'} />
+
+<Recipe task="Enable undo and redo" code={`const s = scope()
+s.record()          // declare the journal once
+s.replace('n', 1)
+s.replace('n', 2)
+s.undo()            // back to 1
+s.redo()            // forward to 2`} note={"`record()` journals mutations to the scope's data. Without it, `undo()` is a no-op — no journal, no cost. Undo/redo act on the doc data, not on ephemeral `state()` cells."} />
+
+<Recipe task="Gate undo/redo buttons" code={`<button disabled={!scope().canUndo()} onclick={() => scope().undo()}>undo</button>
+<button disabled={!scope().canRedo()} onclick={() => scope().redo()}>redo</button>`} note={'`canUndo()` / `canRedo()` report journal state. A handler calling ambient `scope().undo()` acts on the component it fired in.'} />
+
+<Recipe task="Cap the undo history" code={`scope().record({ limit: 50 })`} note={'`record({ limit })` bounds the journal — the oldest entry is evicted past the limit, so a long editing session stays bounded in memory.'} />
+
+<Recipe task="Share context down the tree" code={`// in a layout / ancestor
+scope().share('theme', 'dark')
+
+// in any descendant
+const theme = scope().shared('theme')`} note={"`share(key, value)` puts a value on this scope; `shared(key)` reads the closest ancestor that has it. Context flows down only — it is not the reactive doc, which doesn't inherit."} />
+
+<Recipe task="Share reactive context" code={`const root = scope()
+root.share('cart', root.cell('cart'))
+
+// descendants see live updates
+const cart = scope().shared('cart')
+// cart.get() tracks root.replace('cart', …)`} note={'Context holds by reference, so for reactivity share a `cell` (or a scope), not a plain object — updates ride the shared cell, not the share itself.'} />
+
+<Recipe task="Reach the root scope for app-wide state" code={`const appScope = scope().root()
+appScope.share('user', appScope.cell('user'))`} note={"`root()` walks to the top of the tree — the root layout's scope. Sharing a cell there makes it readable from every route below."} />
+
+<Recipe task="Sync a scope to peers (multiplayer)" code={`const s = scope()
+s.broadcast(transport)  // e.g. a BroadcastChannel-backed transport`} note={"`broadcast(transport)` mirrors the scope's changes to peers over a `SyncTransport`; `dispose()` stops syncing. The live edge of the local-first surface."} />
+
+<Recipe task="Snapshot scope data" code={`const saved = scope().snapshot()   // plain, serialisable data`} note={"`snapshot()` returns the scope's stored data (computed slots excluded) — hand it to an rpc to save, or diff it against a later snapshot for a dirty check."} />
+
+<Recipe
+    task="Share one global store across every route"
+    gap={true}
+    code={`// no dedicated global-store primitive — use the root scope
+// root layout:
+scope().share('store', scope().cell('store'))
+// anywhere:
+const store = scope().shared('store')`}
+    note={"There's no standalone global-store export. The idiom is a cell shared from the root scope (above) — app-wide and reactive, but you wire it in the root layout yourself rather than importing a ready-made store."} />

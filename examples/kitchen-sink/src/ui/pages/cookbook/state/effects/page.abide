@@ -1,0 +1,95 @@
+<script>
+import Recipe from '$ui/Recipe.abide'
+
+/* Cookbook · reactive state · effects. */
+const LIVE = '/reactive-state'
+</script>
+
+<h1 class="text-3xl font-bold">effects</h1>
+<p class="mt-2 text-slate-600">
+    <code class="font-mono">effect(fn)</code> runs a side effect when its dependencies change.
+    Effects are client-only — the SSR back-end strips them — and return a cleanup function.
+</p>
+
+<Recipe
+    task="Run a side effect when state changes"
+    live={LIVE}
+    code={`const { effect } = scope()
+effect(() => {
+    document.title = \`\${unread} unread\`
+})`}
+    note={'The effect re-runs whenever a cell it reads changes. It runs on the client only — SSR strips it, so `document` is always defined inside.'} />
+
+<Recipe task="Clean up an effect" live={LIVE} code={`effect(() => {
+    const handler = () => (width = window.innerWidth)
+    window.addEventListener('resize', handler)
+    return () => window.removeEventListener('resize', handler)
+})`} note={'Return a function and it runs before the next re-run and on unmount — the place to remove listeners, clear timers, close sockets.'} />
+
+<Recipe
+    task="Run an interval and clear it"
+    live={LIVE}
+    code={`let ticks = state(0)
+effect(() => {
+    const id = setInterval(() => (ticks += 1), 1000)
+    return () => clearInterval(id)
+})`}
+    note={'Set the timer inside the effect, clear it in the returned cleanup — the interval lives exactly as long as the component.'} />
+
+<Recipe
+    task="Subscribe to an external event source"
+    live={LIVE}
+    code={`effect(() => {
+    const bc = new BroadcastChannel('prefs')
+    bc.onmessage = (e) => (theme = e.data)
+    return () => bc.close()
+})`}
+    note={'Any imperative subscription (BroadcastChannel, EventSource, a third-party client) belongs in an effect with a matching teardown.'} />
+
+<Recipe
+    task="Keep an effect from running during SSR"
+    live={LIVE}
+    code={`effect(() => {
+    localStorage.setItem('draft', draft)
+})`}
+    note={'Nothing to do — effects never run on the server. Browser-only APIs (`localStorage`, `window`, `document`) are safe to touch directly inside one.'} />
+
+<Recipe
+    task="Debounce state from an input"
+    live={LIVE}
+    code={`let query = state('')
+let debounced = state('')
+effect(() => {
+    const q = query
+    const id = setTimeout(() => (debounced = q), 300)
+    return () => clearTimeout(id)
+})`}
+    note={'Read the fast cell, schedule a write to the slow cell, and cancel the pending timer on each change — the classic debounce, cleanup-driven.'} />
+
+<Recipe task="React to a prop change" live={LIVE} code={`const { userId } = props()
+effect(() => {
+    void userId // read to depend on it
+    loadProfile(userId)
+})`} note={'Props are reactive reads, so an effect that reads a prop re-runs when the parent passes a new value — refetch on an id change this way.'} />
+
+<Recipe
+    task="Send analytics on a change"
+    live={LIVE}
+    code={`effect(() => {
+    trackPageview({ path: page.url.pathname })
+})`}
+    note={"An effect reading `page.url` fires on every SPA navigation. Keep effects pure of render output — they act, they don't return markup."} />
+
+<Recipe
+    task="Avoid an effect feedback loop"
+    live={LIVE}
+    code={`// loops forever: writes a cell it also reads
+effect(() => (count = count + 1))`}
+    note={"Don't write a cell the same effect reads — it re-triggers itself. Derive with `computed` instead, or read one cell and write a different one."} />
+
+<Recipe
+    task="Prefer attach over effect for a node ref"
+    live="/templating/bindings"
+    code={`// reach a specific element: use attach, not effect
+<input attach={(node) => node.focus()} />`}
+    note={'`attach={fn}` hands you the real element at mount and is the right tool for focus/measure/wire-a-library. Reserve `effect` for reacting to state.'} />
