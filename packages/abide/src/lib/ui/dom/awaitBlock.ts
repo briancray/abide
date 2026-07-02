@@ -1,6 +1,7 @@
 import { decodeRefJson } from '../../shared/decodeRefJson.ts'
 import { effect } from '../effect.ts'
 import { claimChild } from '../runtime/claimChild.ts'
+import { OWNER } from '../runtime/OWNER.ts'
 import { RANGE_CLOSE, RANGE_OPEN } from '../runtime/RANGE_MARKER.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import type { ResumeEntry } from '../runtime/RESUME.ts'
@@ -56,7 +57,11 @@ export function awaitBlock(
     let active: { start: Comment; end: Comment; dispose: () => void } | undefined
     let anchor: Node | undefined
     let first = true
-    /* Bumped each run so a prior run's in-flight promise can't clobber a newer one. */
+    /* Bumped each run so a prior run's in-flight promise can't clobber a newer one, AND on
+       owner teardown so an in-flight promise that settles AFTER the enclosing `{#if}`/
+       `{#for}`/component tears this block out is abandoned — otherwise its settle runs
+       `place` on the block's now-detached anchor and `insertBefore` throws NotFoundError.
+       (Matches eachAsync's drain guard: one generation covers both re-run and teardown.) */
     let generation = 0
     /* The resolved value, held as a reactive cell so the then-branch reads it through its
        own effects. A re-run that resolves to a NEW value SETS this cell instead of rebuilding
@@ -303,6 +308,16 @@ export function awaitBlock(
         }
         render(result)
     })
+
+    /* Bump the generation when the enclosing scope tears this block down, so an in-flight
+       promise that settles after teardown is dropped by the `gen === generation` guard
+       rather than running `place` on the detached anchor. The mounted branch's own scope is
+       disposed by the `group` (its dispose is tracked). */
+    if (OWNER.current !== undefined) {
+        OWNER.current.push(() => {
+            generation += 1
+        })
+    }
 }
 
 /* Whether a value is Promise-like (the cold path); a non-thenable is warm-sync. */
