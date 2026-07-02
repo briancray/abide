@@ -74,8 +74,8 @@ describe('cache() producer', () => {
 
     test('invalidate by tag drops tagged producer entries', async () => {
         const fetchValue = counter()
-        await cache(fetchValue, { tags: 'external' })()
-        cache.invalidate({ tags: 'external' })
+        await cache(fetchValue, { tags: ['external'] })()
+        cache.invalidate({ tags: ['external'] })
         expect(cacheStoreSlot.fallback!.entries.size).toBe(0)
     })
 

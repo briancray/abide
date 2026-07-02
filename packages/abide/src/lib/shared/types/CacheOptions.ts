@@ -6,10 +6,10 @@ milliseconds-past-resolve that the entry stays live: omitted = forever, 0 =
 dedupe only (entry dropped once the promise settles — the mutation idiom:
 in-flight coalescing and pending() visibility, nothing retained), any other
 number = TTL.
-`tags` is one or more free-form labels grouping unrelated calls so one
-`cache.invalidate({ tags })` drops every entry sharing any of them — pass an
-array when a call belongs to multiple invalidation groups. A unique tag (e.g. a
-uuid) shared by a set of calls gives them their own private invalidation group.
+`tags` is an array of free-form labels grouping unrelated calls so one
+`cache.invalidate({ tags })` drops every entry sharing any of them — list
+multiple when a call belongs to multiple invalidation groups. A unique tag (e.g.
+a uuid) shared by a set of calls gives them their own private invalidation group.
 
 `global` opts the entry into the process-level store instead of the default
 request-scoped one (server) — so a value computed in one request is reused by
@@ -37,7 +37,7 @@ uncheckable — set `swr` only on a producer that is a pure read.
 */
 export type CacheOptions = {
     ttl?: number
-    tags?: string | string[]
+    tags?: string[]
     global?: boolean
     swr?: boolean | { throttle?: number; debounce?: number }
 }

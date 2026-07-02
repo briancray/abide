@@ -812,7 +812,7 @@ function settleRefetchFailure(store: CacheStore, entry: CacheEntry, status?: num
 }
 
 /* Folds new tags into an entry's existing set without duplicating them. */
-function mergeTags(existing: Set<string> | undefined, incoming: string | string[]): Set<string> {
+function mergeTags(existing: Set<string> | undefined, incoming: string[]): Set<string> {
     return new Set([...(existing ?? []), ...toTagSet(incoming)])
 }
 
