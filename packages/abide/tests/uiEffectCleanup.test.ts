@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import { effect } from '../src/lib/ui/effect.ts'
+import { CURRENT_SCOPE } from '../src/lib/ui/runtime/CURRENT_SCOPE.ts'
+import { inScope } from '../src/lib/ui/runtime/inScope.ts'
 import { state } from '../src/lib/ui/state.ts'
+import type { Scope } from '../src/lib/ui/types/Scope.ts'
 
 const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0))
 
@@ -43,6 +46,30 @@ describe('effect cleanup', () => {
         expect(maxLive).toBe(1)
         dispose()
         expect(live).toBe(0) // final teardown ran
+    })
+
+    /* A teardown fires deferred — on dispose or before a re-run — when the ambient
+       scope has moved on. It must run under the scope the effect was CREATED in (like
+       `attach` pins its teardown), so an ambient `scope()` inside it resolves the owning
+       component, not whatever is current at teardown time. */
+    test('teardown runs under the scope the effect was created in — on dispose and on re-run', () => {
+        const owner = { id: 'owner' } as unknown as Scope
+        const trigger = state(0)
+        const seen: (Scope | undefined)[] = []
+        let dispose = () => {}
+        inScope(owner, () => {
+            dispose = effect(() => {
+                trigger.value
+                return () => seen.push(CURRENT_SCOPE.current)
+            })
+        })
+        /* Ambient has left `owner` after the build — so a teardown seeing `owner` below
+           proves it was PINNED, not reading the current ambient. (Asserting `!== owner`,
+           not a bare undefined, keeps this robust to any ambient a prior test leaked.) */
+        expect(CURRENT_SCOPE.current).not.toBe(owner)
+        trigger.value = 1 // re-run: prior teardown fires here
+        dispose() // final teardown fires here
+        expect(seen).toEqual([owner, owner])
     })
 
     test('an async body runs its async teardown without the flush awaiting it', async () => {

@@ -11,6 +11,12 @@ drains the captured one — so an effect that dirties further effects re-queues 
 for the next pass rather than mutating the array mid-iteration; loops until the
 graph settles. The swap reuses the drained array as the next spare, so a steady
 flush allocates nothing.
+
+Raises `batchDepth` for the whole drain so a write inside an effect body queues
+rather than re-entering the flush: `trigger` gates its flush on `batchDepth === 0`,
+and re-entry would run a just-dirtied effect nested — ahead of effects already in
+this pass and on a JS stack that grows with the write chain. Suppressed, the
+newly-dirtied effect falls to the `do…while` and runs in queue (creation) order.
 */
 export function flushEffects(): void {
     /* Empty-queue fast path allocates nothing — only the length check, matching the
@@ -20,6 +26,18 @@ export function flushEffects(): void {
     if (REACTIVE_CONTEXT.pendingEffects.length === 0) {
         return
     }
+    /* Always entered at depth 0 (trigger/batch-exit gate on it); the bump makes the
+       drain non-reentrant, restored in `finally` so a throwing effect body can't strand
+       the graph batched. */
+    REACTIVE_CONTEXT.batchDepth += 1
+    try {
+        drain()
+    } finally {
+        REACTIVE_CONTEXT.batchDepth -= 1
+    }
+}
+
+function drain(): void {
     let spare: ReactiveNode[] = []
     do {
         const batch = REACTIVE_CONTEXT.pendingEffects

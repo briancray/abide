@@ -1,3 +1,5 @@
+import { CURRENT_SCOPE } from './CURRENT_SCOPE.ts'
+import { inScope } from './inScope.ts'
 import { NODE_STATE } from './NODE_STATE.ts'
 import { OWNER } from './OWNER.ts'
 import { runNode } from './runNode.ts'
@@ -23,13 +25,17 @@ export function createEffectNode(fn: () => EffectResult): () => void {
        ReactiveNode so signals and computeds — which share the node shape and the
        read/write hot path — pay nothing for a feature only effects use. */
     let cleanup: Teardown | undefined
+    /* The teardown fires deferred (before a re-run, on dispose) when the ambient scope
+       has moved on; pin the one current at creation so an ambient `scope()` inside it
+       resolves the owning component, matching how `attach` pins its teardown. */
+    const captured = CURRENT_SCOPE.current
     /* Runs the previous run's teardown before re-running and on dispose, exactly
        once each. */
     const runCleanup = (): void => {
         if (cleanup !== undefined) {
             const teardown = cleanup
             cleanup = undefined
-            teardown()
+            inScope(captured, teardown)
         }
     }
     const node: ReactiveNode = {

@@ -39,6 +39,34 @@ describe('write coalescing', () => {
         expect(runs).toBe(2) // coalesced into a single flush
     })
 
+    /* An effect that writes a signal a LATER-created effect reads must not jump that
+       effect ahead of the ones already queued: the flush drains in queue order (which
+       follows creation order), re-queuing anything an effect dirties for a later pass
+       rather than re-entering the flush mid-drain. Regression for re-entrant flush. */
+    test("effects flush in creation order even when one writes another effect's dependency", () => {
+        const s = state(0)
+        const q = state(0)
+        const order: string[] = []
+        effect(() => {
+            const value = s.value
+            order.push('A')
+            if (value > 0) {
+                q.value = value // dirties C, created after B
+            }
+        })
+        effect(() => {
+            s.value
+            order.push('B')
+        })
+        effect(() => {
+            q.value
+            order.push('C')
+        })
+        order.length = 0 // drop the initial runs
+        s.value = 1 // wakes A and B; A then wakes C
+        expect(order).toEqual(['A', 'B', 'C'])
+    })
+
     test('batch() nests: inner batch defers to the outermost exit', () => {
         const a = state(0)
         const b = state(0)

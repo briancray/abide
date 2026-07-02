@@ -34,7 +34,15 @@ export function runNode(node: ReactiveNode): unknown {
            on read without re-running, never waking downstream. An effect has no value
            worth comparing and no subscribers, so this is a no-op for it (its body ran
            inside compute above). The subscriber list isn't re-linked here — only its
-           members' `status` is bumped — so walking it live is safe. */
+           members' `status` is bumped — so walking it live is safe.
+
+           This bumps status directly, bypassing `mark` — it neither enqueues effects nor
+           propagates CHECK onward, yet nothing is missed: this recompute only happens
+           while settling a subscriber that was itself reached from the originating
+           write's `mark` propagation, which already CHECK-marked (and so enqueued) every
+           effect in this cone on their CLEAN→CHECK edge. So every subscriber here is
+           already CHECK/queued; the direct write only UPGRADES it CHECK→DIRTY so its own
+           settle recomputes instead of memoising back to CLEAN. */
         if (!Object.is(node.value, next)) {
             node.value = next
             let link = node.subsHead
