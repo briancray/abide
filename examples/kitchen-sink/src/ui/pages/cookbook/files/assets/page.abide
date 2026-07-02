@@ -1,0 +1,61 @@
+<script>
+import Recipe from '$ui/Recipe.abide'
+
+/* Cookbook · files & media · static assets & the data dir. */
+const BUNDLE = '/bundle'
+</script>
+
+<h1 class="text-3xl font-bold">static assets & the data dir</h1>
+<p class="mt-2 text-slate-600">
+    Files under <code class="font-mono">public/</code> are served at the root and resolved
+    base-correctly by <code class="font-mono">url()</code>. Runtime files live under
+    <code class="font-mono">appDataDir()</code>, the per-user data dir.
+</p>
+
+<Recipe task="Serve a static asset" code={`// src/ui/public/logo.svg  →  served at /logo.svg
+<img src={url('/logo.svg')} alt="logo" />`} note={"Drop a file in `src/ui/public/` and it's served at the root. Reference it through `url()` so it survives a subpath deploy."} />
+
+<Recipe task="Add a well-known file" code={`// src/ui/public/robots.txt  →  /robots.txt
+User-agent: *
+Allow: /`} note={'`robots.txt`, `favicon.ico`, `.well-known/` files all live in `public/` — served verbatim at their path, no route needed.'} />
+
+<Recipe task="Reference a bundled asset base-correctly" code={`// with APP_URL=/app, url('/logo.svg') === '/app/logo.svg'
+<img src={url('/logo.svg')} />`} note={'Never hard-code `/logo.svg` — `url()` prefixes the mount base so assets resolve whether the app is at `/` or a subpath, in a browser or a bundle.'} />
+
+<Recipe
+    task="Find the per-user data directory"
+    live={BUNDLE}
+    code={`import { appDataDir } from '@abide/abide/server/appDataDir'
+
+const dbPath = \`\${appDataDir()}/app.sqlite\``}
+    note={'`appDataDir()` is keyed by program name and cwd-independent — the right home for a database, cache, or uploaded files, especially in a desktop bundle.'} />
+
+<Recipe
+    task="Report the data dir to the client"
+    live={BUNDLE}
+    code={`export const getDataDir = GET<undefined, { dir: string }>(() => json({ dir: appDataDir() }))`}
+    note={'`appDataDir()` is pure — it computes the path without touching the filesystem, so a read rpc can safely surface where state lives.'} />
+
+<Recipe task="List files in the data dir" code={`import { readdir } from 'node:fs/promises'
+
+const names = await readdir(\`\${appDataDir()}/uploads\`)`} note={"Use Bun's filesystem APIs against `appDataDir()` paths — list, stat, and read stored files with the standard library."} />
+
+<Recipe task="Delete a stored file" code={`await Bun.file(\`\${appDataDir()}/uploads/\${name}\`).delete()`} note={'`Bun.file(path).delete()` removes a stored file. Validate the name first — never interpolate untrusted input into a path without checking for traversal.'} />
+
+<Recipe task="Guard against path traversal" code={`import { basename } from 'node:path'
+
+const safe = basename(userProvidedName)   // strips any ../ segments
+const path = \`\${appDataDir()}/uploads/\${safe}\``} note={'Always normalise a user-supplied filename with `basename` (or an allowlist) before joining it to a directory — the classic file-serving vulnerability.'} />
+
+<Recipe task="Serve user-generated media" code={`export const media = GET(({ name }) =>
+    new Response(Bun.file(\`\${appDataDir()}/uploads/\${basename(name)}\`)))`} note={'Serve stored uploads through a `Bun.file` response — range support and content-type come free. Gate it if the media is private.'} />
+
+<Recipe
+    task="Transform or resize an image"
+    gap={true}
+    code={`// no built-in image pipeline — call an image library in an rpc
+export const thumbnail = GET(async ({ id }) => {
+    const buf = await sharp(pathFor(id)).resize(200).toBuffer()
+    return new Response(buf, { headers: { 'Content-Type': 'image/webp' } })
+})`}
+    note={"There's no built-in image transformation, resizing, or thumbnail pipeline. Call an image library (sharp, etc.) inside an rpc and cache the result yourself — abide serves the bytes, it doesn't process them."} />

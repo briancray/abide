@@ -120,6 +120,9 @@ describe('createTestApp', () => {
         ['/cookbook/ops/config', 'Validate environment config'],
         ['/cookbook/ops/testing', 'Boot an app in a test'],
         ['/cookbook/ops/deploy', 'Compile a standalone server binary'],
+        ['/cookbook/files/uploads', 'Accept a file upload'],
+        ['/cookbook/files/downloads', 'Return a file from an rpc'],
+        ['/cookbook/files/assets', 'Serve a static asset'],
     ]
     for (const [route, marker] of cookbookPages) {
         test(`cookbook ${route} SSRs`, async () => {
