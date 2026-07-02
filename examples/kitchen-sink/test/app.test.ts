@@ -82,4 +82,20 @@ describe('createTestApp', () => {
         expect(response.status).toBe(200)
         expect(await response.text()).toContain('cookbook')
     })
+
+    // One render assertion per cookbook category — a broken recipe page fails CI,
+    // not only the browser. Each checks the route SSRs 200 with a known recipe title.
+    const cookbookPages: [string, string][] = [
+        ['/cookbook/templating/control-flow', 'Key a list so edits patch in place'],
+        ['/cookbook/templating/bindings', 'Two-way bind a text input'],
+        ['/cookbook/templating/components', 'Send data up from a child to its parent'],
+        ['/cookbook/templating/markup', 'Render trusted raw HTML'],
+    ]
+    for (const [route, marker] of cookbookPages) {
+        test(`cookbook ${route} SSRs`, async () => {
+            const response = await app.fetch(route)
+            expect(response.status).toBe(200)
+            expect(await response.text()).toContain(marker)
+        })
+    }
 })

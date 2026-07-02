@@ -1,0 +1,42 @@
+<script>
+import { url } from '@abide/abide/shared/url'
+import CodeBlock from '$ui/CodeBlock.abide'
+import { type Lang } from '$server/rpc/highlightCode.ts'
+
+/*
+One cookbook recipe: an imperative task statement, the accurate snippet, the
+one-line nuance people get wrong, and a "see it live →" link into the surface
+page that already demos it. `gap` badges an honest "no first-class answer yet"
+recipe — the workaround plus why — and such recipes carry no live link. `lang`
+defaults to ts via CodeBlock; pass 'sh' for shell snippets.
+*/
+const { task, code, note, live, gap, lang } = props<{
+    task: string
+    code: string
+    note: string
+    live?: string
+    gap?: boolean
+    lang?: Lang
+}>()
+</script>
+
+<article class="mt-4 rounded-lg border border-slate-200 bg-white p-5">
+    <h3 class="text-sm font-semibold text-slate-900">
+        {task}
+        {#if gap}
+            <span
+                class="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-normal text-amber-700">
+                no first-class answer yet
+            </span>
+        {/if}
+    </h3>
+    <CodeBlock code={code} lang={lang} />
+    <p class="mt-2 text-xs leading-relaxed text-slate-500">{note}</p>
+    {#if live}
+        <a
+            href={url(live)}
+            class="mt-2 inline-block text-xs font-medium text-slate-600 hover:text-slate-900">
+            see it live →
+        </a>
+    {/if}
+</article>

@@ -1,0 +1,129 @@
+<script>
+import Recipe from '$ui/Recipe.abide'
+
+/* Cookbook · templating · bindings & interpolation. */
+const LIVE = '/templating/bindings'
+</script>
+
+<h1 class="text-3xl font-bold">bindings & interpolation</h1>
+<p class="mt-2 text-slate-600">
+    Reactive attributes and two-way binds. <code class="font-mono">{'{expr}'}</code> reads a cell
+    into text or an attribute; <code class="font-mono">bind:</code> is two-way;
+    <code class="font-mono">class:</code> / <code class="font-mono">style:</code> /
+    <code class="font-mono">attach</code> / <code class="font-mono">{'{...spread}'}</code> are the
+    directives.
+</p>
+
+<Recipe
+    task="Interpolate an expression in text"
+    live={LIVE}
+    code={`<p>hello {name}</p>`}
+    note={'`{expr}` is HTML-escaped by default — safe for user data. It re-renders when the cells it reads change.'} />
+
+<Recipe
+    task="Interpolate inside an attribute value"
+    live={LIVE}
+    code={`<p class="badge tone-{tone}">…</p>
+<a href="/users/{user.id}">profile</a>`}
+    note={'A literal with `{expr}` interpolates live on both server and client. The whole attribute updates via setAttribute, not by clobbering className.'} />
+
+<Recipe task="Render a literal brace" live={LIVE} code={`<p>use &lbrace;expr&rbrace; to interpolate</p>
+<p>{'{'} also works via an expression {'}'}</p>`} note={'A bare `{` always interpolates. Emit a literal with the `&lbrace;` / `&rbrace;` entities, or an expression that returns the string.'} />
+
+<Recipe
+    task="Set a dynamic attribute"
+    live={LIVE}
+    code={`<img src={photo.url} alt={photo.caption} />
+<input value={draft} />`}
+    note={'`name={expr}` binds the attribute to the expression. Distinct from `name="a {b}"`, which interpolates into a literal.'} />
+
+<Recipe
+    task="Set a boolean attribute"
+    live={LIVE}
+    code={`<button disabled={saving}>save</button>
+<input required />`}
+    note={'A bare attribute name is boolean-true; `name={cond}` toggles it — the attribute is present when truthy, absent otherwise.'} />
+
+<Recipe task="Handle an event" live={LIVE} code={`<button onclick={() => (count += 1)}>+1</button>
+<form onsubmit={save}>…</form>`} note={'Any `on<event>` attaches a listener. It receives the DOM event — call `event.preventDefault()` inside for forms.'} />
+
+<Recipe
+    task="Pass an argument to a handler"
+    live={LIVE}
+    code={`{#for todo of todos by todo.id}
+    <button onclick={() => remove(todo.id)}>×</button>
+{/for}`}
+    note={'Wrap in an arrow to close over per-row data. The handler still gets the event as its own parameter if you declare one.'} />
+
+<Recipe
+    task="Two-way bind a text input"
+    live={LIVE}
+    code={`let name = state('ada')
+
+<input bind:value={name} />`}
+    note={'`bind:value` writes the cell on input and reflects cell changes back to the field — no onchange handler needed.'} />
+
+<Recipe task="Bind a checkbox" live={LIVE} code={`let agreed = state(false)
+
+<input type="checkbox" bind:checked={agreed} />`} note={'Use `bind:checked` (not `bind:value`) for checkboxes — it binds the boolean checked state.'} />
+
+<Recipe task="Bind a radio group" live={LIVE} code={`let topic = state('all')
+
+<input type="radio" bind:group={topic} value="all" />
+<input type="radio" bind:group={topic} value="mine" />`} note={'`bind:group` ties several radios (or checkboxes) to one cell — the cell holds the selected `value`.'} />
+
+<Recipe task="Bind a select" live={LIVE} code={`let sort = state('newest')
+
+<select bind:value={sort}>
+    <option value="newest">Newest</option>
+    <option value="oldest">Oldest</option>
+</select>`} note={"`bind:value` on a `<select>` binds the chosen option's value. For `multiple`, the cell holds an array."} />
+
+<Recipe
+    task="Coerce an input's value on write"
+    live={LIVE}
+    code={`let celsius = state(20, (v) => Number(v) || 0)
+
+<input type="number" bind:value={celsius} />`}
+    note={"`state`'s second argument transforms every write, so the cell stays a number even though the input hands back a string."} />
+
+<Recipe
+    task="Two-way bind through a getter/setter lens"
+    live={LIVE}
+    code={`<input
+    type="number"
+    bind:value={{
+        get: () => Math.round((celsius * 9) / 5 + 32),
+        set: (f) => (celsius = ((Number(f) || 0) - 32) * 5 / 9),
+    }} />`}
+    note={'`bind:value={{ get, set }}` is the writable-computed form — derive a view of a cell and write edits back through the setter.'} />
+
+<Recipe
+    task="Toggle a class reactively"
+    live={LIVE}
+    code={`<p class:line-through={done} class:font-bold={urgent}>…</p>`}
+    note={'`class:name={cond}` adds the class when the condition is truthy — compose several, and mix with a static `class` on the same element.'} />
+
+<Recipe
+    task="Merge a static and a reactive class"
+    live={LIVE}
+    code={`<p class="badge" class:tone-rose={danger}>…</p>`}
+    note={'A static `class` and `class:` directives on the same element merge into one setAttribute effect — no clobbering, congruent across SSR and client.'} />
+
+<Recipe task="Set one style property" live={LIVE} code={`<div style:opacity={muted ? 0.5 : 1} style:width="{pct}%">…</div>`} note={'`style:property={value}` sets a single inline style property reactively — cleaner than templating a whole `style` string.'} />
+
+<Recipe
+    task="Spread an object as attributes"
+    live={LIVE}
+    code={`const extra = { 'data-role': 'demo', title: 'hi' }
+
+<span {...extra}>…</span>`}
+    note={'`{...obj}` spreads each key as an attribute on an element (or as props on a component). Bare `{obj}` shorthand is rejected — always spread.'} />
+
+<Recipe
+    task="Run imperative code against a node at mount"
+    live={LIVE}
+    code={`const focus = (node) => node.focus()
+
+<input attach={focus} />`}
+    note={'`attach={fn}` runs `fn(element)` at mount (client-only) and may return a teardown. Use it for focus, measuring, or wiring a non-abide library.'} />
