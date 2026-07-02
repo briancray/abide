@@ -1,0 +1,158 @@
+<script>
+import { url } from '@abide/abide/shared/url'
+
+/*
+Cookbook — the task-first index into the framework. The rest of kitchen-sink is
+organised by surface (one page per primitive); this is organised by the JOB you
+came to do ("stream data to the UI", "block a cross-origin mutation") and points
+at the recipe that answers it.
+
+Categories are ordered by how often the job comes up building a web app —
+templating and reactive state first, the beyond-the-browser surfaces last. Each
+recipe is task statement → accurate snippet → the nuance people get wrong → a
+"see it live →" link into the surface page that already demos it. A recipe badged
+"no first-class answer yet" is an honest gap: the pragmatic workaround plus why.
+*/
+const categories = [
+    {
+        title: 'templating',
+        blurb: 'Render the DOM — control flow, bindings, interpolation, components, snippets, raw markup, scoped style.',
+        pages: [
+            { href: '/cookbook/templating/control-flow', label: 'control flow' },
+            { href: '/cookbook/templating/bindings', label: 'bindings & interpolation' },
+            { href: '/cookbook/templating/components', label: 'components & snippets' },
+            { href: '/cookbook/templating/markup', label: 'raw html & scoped style' },
+        ],
+    },
+    {
+        title: 'reactive state',
+        blurb: 'Local reactivity — scope(), state / computed / linked, effects, transforms, two-way bindings.',
+        pages: [
+            { href: '/cookbook/state/scope', label: 'scope basics' },
+            { href: '/cookbook/state/derived', label: 'computed, linked, transforms' },
+            { href: '/cookbook/state/effects', label: 'effects' },
+            { href: '/cookbook/state/bindings', label: 'bindings & persistence' },
+        ],
+    },
+    {
+        title: 'data & SSR',
+        blurb: 'Get data to the page — await on the server, stream to the client, cache, coalesce, hydrate warm.',
+        pages: [
+            { href: '/cookbook/data/await-ssr', label: 'await during SSR' },
+            { href: '/cookbook/data/stream', label: 'stream to the UI' },
+            { href: '/cookbook/data/cache', label: 'cache & invalidate' },
+            { href: '/cookbook/data/hydrate', label: 'hydrate & fetch patterns' },
+        ],
+    },
+    {
+        title: 'routing & navigation',
+        blurb: 'Move between pages — folder routes, [id] params, layout chains, navigate(), typed url(), redirects.',
+        pages: [
+            { href: '/cookbook/routing/routes', label: 'routes & params' },
+            { href: '/cookbook/routing/layouts', label: 'layout chains' },
+            { href: '/cookbook/routing/navigate', label: 'navigate, url & redirects' },
+        ],
+    },
+    {
+        title: 'forms & mutations',
+        blurb: 'Send data back — POST / PUT / PATCH / DELETE rpcs, schema validation, optimistic updates, invalidate-after-write.',
+        pages: [
+            { href: '/cookbook/forms/rpc-methods', label: 'rpc methods' },
+            { href: '/cookbook/forms/validation', label: 'validation' },
+            { href: '/cookbook/forms/optimistic', label: 'optimistic & flows' },
+        ],
+    },
+    {
+        title: 'errors & resilience',
+        blurb: 'Fail gracefully — typed HttpError, try/catch boundaries, pending / refreshing probes.',
+        pages: [
+            { href: '/cookbook/errors/throwing', label: 'throwing & catching' },
+            { href: '/cookbook/errors/boundaries', label: 'failure boundaries' },
+            { href: '/cookbook/errors/probes', label: 'pending & refreshing' },
+        ],
+    },
+    {
+        title: 'realtime',
+        blurb: 'Push live — broadcast sockets, publish(), tail(), retention, presence, self-healing reconnects.',
+        pages: [
+            { href: '/cookbook/realtime/sockets', label: 'sockets & publish' },
+            { href: '/cookbook/realtime/tail', label: 'tail & retention' },
+            { href: '/cookbook/realtime/patterns', label: 'presence & patterns' },
+        ],
+    },
+    {
+        title: 'beyond the browser',
+        blurb: 'Reach past the tab — run a model over the MCP surface, expose MCP tools, ship a CLI and a desktop bundle.',
+        pages: [
+            { href: '/cookbook/beyond/agent', label: 'agent' },
+            { href: '/cookbook/beyond/mcp', label: 'mcp' },
+            { href: '/cookbook/beyond/cli', label: 'cli' },
+            { href: '/cookbook/beyond/bundle', label: 'desktop bundle' },
+        ],
+    },
+    {
+        title: 'auth & security',
+        blurb: 'Lock it down — the cross-origin gate, crossOrigin opt-out, auth middleware, whoAmI, gated MCP.',
+        pages: [
+            { href: '/cookbook/security/origin', label: 'origin gate' },
+            { href: '/cookbook/security/auth', label: 'auth & identity' },
+            { href: '/cookbook/security/mcp-auth', label: 'gating MCP' },
+        ],
+    },
+    {
+        title: 'build, test & deploy',
+        blurb: 'Ship it — env() config, boot hooks, createTestApp, the compiled binary + Dockerfile, observability.',
+        pages: [
+            { href: '/cookbook/ops/config', label: 'config & boot' },
+            { href: '/cookbook/ops/testing', label: 'testing' },
+            { href: '/cookbook/ops/deploy', label: 'build & deploy' },
+        ],
+    },
+    {
+        title: 'files & media',
+        blurb: 'Move bytes — multipart uploads, downloads with content-type, byte ranges, bundled + public assets.',
+        pages: [
+            { href: '/cookbook/files/uploads', label: 'uploads' },
+            { href: '/cookbook/files/downloads', label: 'downloads & ranges' },
+            { href: '/cookbook/files/assets', label: 'static assets' },
+        ],
+    },
+    {
+        title: 'offline & local-first',
+        blurb: 'Survive the network — the durable outbox, retry(), health-driven drain, local persistence.',
+        pages: [
+            { href: '/cookbook/offline/outbox', label: 'outbox' },
+            { href: '/cookbook/offline/resilience', label: 'offline resilience' },
+        ],
+    },
+]
+</script>
+
+<h1 class="text-3xl font-bold">cookbook</h1>
+<p class="mt-2 text-slate-600">
+    Task-first recipes — start from the job you came to do, not the primitive. Every recipe is a
+    statement, an accurate snippet, the nuance people get wrong, and a
+    <span class="font-mono">see it live →</span> link into the surface page that demos it. A
+    <span class="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700"
+        >no first-class answer yet</span
+    >
+    badge marks an honest gap — the pragmatic workaround, and why.
+</p>
+
+<div class="mt-8 grid gap-4 sm:grid-cols-2">
+    {#for category of categories by category.title}
+        <section class="rounded-lg border border-slate-200 bg-white p-5">
+            <h2 class="text-lg font-semibold">{category.title}</h2>
+            <p class="mt-1 text-sm text-slate-600">{category.blurb}</p>
+            <ul class="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-sm">
+                {#for page of category.pages by page.href}
+                    <li>
+                        <a href={url(page.href)} class="text-slate-600 hover:text-slate-900">
+                            {page.label}
+                        </a>
+                    </li>
+                {/for}
+            </ul>
+        </section>
+    {/for}
+</div>

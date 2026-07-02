@@ -76,4 +76,10 @@ describe('createTestApp', () => {
         expect(dir.length).toBeGreaterThan(0)
         expect(dir.startsWith('/')).toBe(true)
     })
+
+    test('cookbook landing SSRs the task index', async () => {
+        const response = await app.fetch('/cookbook')
+        expect(response.status).toBe(200)
+        expect(await response.text()).toContain('cookbook')
+    })
 })

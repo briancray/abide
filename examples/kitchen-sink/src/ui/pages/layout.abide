@@ -35,6 +35,10 @@ const linkClass = (prefix: string) =>
    look it up. One destination page per link. */
 const groups = [
     {
+        title: 'recipes',
+        links: [{ href: '/cookbook', label: 'cookbook' }],
+    },
+    {
         title: 'build the server',
         links: [
             { href: '/rpc', label: 'rpc' },
