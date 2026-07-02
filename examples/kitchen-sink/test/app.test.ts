@@ -98,6 +98,9 @@ describe('createTestApp', () => {
         ['/cookbook/data/stream', 'Consume a stream reactively'],
         ['/cookbook/data/cache', 'Cache a read across SSR and client'],
         ['/cookbook/data/hydrate', 'Show stale data while revalidating'],
+        ['/cookbook/routing/routes', 'Read a route param'],
+        ['/cookbook/routing/layouts', 'Nest layouts'],
+        ['/cookbook/routing/navigate', 'Navigate programmatically'],
     ]
     for (const [route, marker] of cookbookPages) {
         test(`cookbook ${route} SSRs`, async () => {

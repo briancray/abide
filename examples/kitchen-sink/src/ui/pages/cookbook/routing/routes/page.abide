@@ -1,0 +1,89 @@
+<script>
+import Recipe from '$ui/Recipe.abide'
+
+/* Cookbook · routing · routes & params. */
+const LIVE = '/pages'
+</script>
+
+<h1 class="text-3xl font-bold">routes & params</h1>
+<p class="mt-2 text-slate-600">
+    Every folder under <code class="font-mono">src/ui/pages/</code> with a
+    <code class="font-mono">page.abide</code> is a route. Params come off the reactive
+    <code class="font-mono">page</code> proxy; <code class="font-mono">url()</code> builds typed,
+    base-correct links.
+</p>
+
+<Recipe task="Add a page route" live={LIVE} code={`src/ui/pages/about/page.abide      →  /about
+src/ui/pages/settings/page.abide   →  /settings`} note={'The folder path is the route; no route table, no registration. `src/ui/pages/page.abide` is the index at `/`.'} />
+
+<Recipe task="Add a dynamic segment" live={LIVE} code={`src/ui/pages/product/[id]/page.abide   →  /product/:id`} note={'A `[name]` folder is a dynamic segment. The router percent-decodes it to match SSR, so `page.params.name` is the decoded value.'} />
+
+<Recipe task="Read a route param" live="/pages/product/1" code={`import { page } from '@abide/abide/shared/page'
+const { computed } = scope()
+
+const id = computed(() => page.params.id)`} note={'Params arrive as plain values on `page.params`, reactive across navigation — read them in a computed so the page updates when the segment changes without remounting.'} />
+
+<Recipe task="Read several params" live={LIVE} code={`// pages/org/[org]/repo/[repo]/page.abide
+const org = computed(() => page.params.org)
+const repo = computed(() => page.params.repo)`} note={'Every dynamic segment in the path contributes a key to `page.params`, named after its folder.'} />
+
+<Recipe task="Add a catch-all route" live={LIVE} code={`src/ui/pages/docs/[...rest]/page.abide   →  /docs/*
+// page.params.rest === 'a/b/c'`} note={'A `[...name]` segment matches the rest of the path — for docs trees, file browsers, or a custom 404. It captures everything below its folder.'} />
+
+<Recipe
+    task="Read a query-string parameter"
+    live={LIVE}
+    code={`const query = computed(() => page.url.searchParams.get('q') ?? '')`}
+    note={'`page.url` is a real `URL`, reassigned on every navigation — read `searchParams` in a computed and it tracks query changes too.'} />
+
+<Recipe
+    task="React when a param changes"
+    live="/pages/product/1"
+    code={`const product = computed(() => cache(getProduct)({ id: page.params.id }))`}
+    note={'Put the param in a cache key and the read refetches when the segment changes — the client router keeps the page mounted and re-derives just the cell.'} />
+
+<Recipe task="Get the current path" live={LIVE} code={`const path = computed(() => page.url.pathname)`} note={"`page.url.pathname` is browser-space on both sides. Compare it against `url('/x')` output so it stays correct under an `APP_URL` subpath."} />
+
+<Recipe
+    task="Know when a navigation is in flight"
+    live={LIVE}
+    code={`const busy = computed(() => page.navigating)
+
+{#if busy}<TopProgressBar />{/if}`}
+    note={'`page.navigating` is true while an SPA navigation resolves — drive a top progress bar or disable the nav during the transition.'} />
+
+<Recipe
+    task="Render a not-found state"
+    live="/pages/product/1"
+    code={`{#await load(page.params.id) then product}
+    {#if product}
+        <Product product={product} />
+    {:else}
+        <p>Not found</p>
+    {/if}
+{/await}`}
+    note={'An rpc that 404s throws `HttpError` — catch it and resolve to `undefined`, then branch in the template. There is no separate not-found file; a catch-all route handles unmatched paths.'} />
+
+<Recipe task="Link to another page" live={LIVE} code={`import { url } from '@abide/abide/shared/url'
+
+<a href={url('/settings')}>Settings</a>`} note={'Wrap in-app hrefs in `url()` so they stay correct under a base path. A plain `<a>` triggers the client router — no special link component.'} />
+
+<Recipe
+    task="Build a URL to a dynamic page"
+    live={LIVE}
+    code={`<a href={url('/product/[id]', { id: product.id })}>{product.name}</a>`}
+    note={'`url()` is typed off the generated route map — it interpolates `[id]` and errors at build time if you pass the wrong params.'} />
+
+<Recipe
+    task="Build a URL with query args"
+    live={LIVE}
+    code={`url('/search', { q: term, page: 2 })   //  /search?q=…&page=2`}
+    note={'Extra keys not in the path become query parameters, encoded for you.'} />
+
+<Recipe task="Link to a static asset" live={LIVE} code={`<img src={url('/logo.svg')} alt="logo" />`} note={'`url()` also resolves `public/` assets base-correctly, so images and downloads survive a subpath deploy.'} />
+
+<Recipe
+    task="Link to an external URL"
+    live={LIVE}
+    code={`<a href={url('https://bun.sh', { utm: 'abide' })}>Bun</a>`}
+    note={'An absolute URL passes through untouched except for appended query args — handy for adding tracking params to outbound links.'} />

@@ -1,0 +1,112 @@
+<script>
+import Recipe from '$ui/Recipe.abide'
+
+/* Cookbook · routing · navigate, url & redirects. */
+const LIVE = '/pages'
+const REDIR = '/rpc/respond'
+</script>
+
+<h1 class="text-3xl font-bold">navigate, url & redirects</h1>
+<p class="mt-2 text-slate-600">
+    <code class="font-mono">navigate()</code> moves the client router;
+    <code class="font-mono">url()</code> builds the href;
+    <code class="font-mono">redirect()</code> sends one from the server. All typed off the generated
+    route map.
+</p>
+
+<Recipe task="Navigate programmatically" live={LIVE} code={`import { navigate } from '@abide/abide/ui/navigate'
+
+<button onclick={() => navigate('/checkout')}>Checkout</button>`} note={"`navigate(path)` does a client-side transition — no full reload. It returns a promise; `void navigate(...)` in a handler if you don't await it."} />
+
+<Recipe
+    task="Navigate to a dynamic route"
+    live={LIVE}
+    code={`navigate('/product/[id]', { id: product.id })`}
+    note={'The params argument is typed against the path — `navigate` delegates URL building to `url()`, so `[id]` is interpolated and checked at build time.'} />
+
+<Recipe
+    task="Replace the current history entry"
+    live={LIVE}
+    code={`navigate('/step-2', {}, { replace: true })`}
+    note={'`{ replace: true }` swaps the entry instead of pushing — the back button skips it. Right for wizard steps and post-submit redirects.'} />
+
+<Recipe
+    task="Keep scroll position on navigate"
+    live={LIVE}
+    code={`navigate('/inbox/42', {}, { keepScroll: true })`}
+    note={"Navigation scrolls to top by default; `{ keepScroll: true }` preserves the offset — for master/detail panes where the list shouldn't jump."} />
+
+<Recipe
+    task="Navigate an already-resolved path"
+    live={LIVE}
+    code={`import { navigatePath } from '@abide/abide/ui/navigate'
+
+navigatePath(someHref)   // no re-prefixing`}
+    note={"Use `navigatePath` when you already hold a resolved URL (e.g. from `url()`), so it isn't base-prefixed twice."} />
+
+<Recipe
+    task="Redirect after a mutation"
+    live={LIVE}
+    code={`async function save() {
+    const order = await placeOrder(cart)
+    void navigate('/orders/[id]', { id: order.id }, { replace: true })
+}`}
+    note={"Await the rpc, then navigate — `replace` so the back button doesn't resubmit. This is the client-side post-action redirect."} />
+
+<Recipe
+    task="Redirect from the server"
+    live={REDIR}
+    code={`import { redirect } from '@abide/abide/server/redirect'
+
+export const oldPath = GET(() => redirect('/new-path'))`}
+    note={'`redirect()` returns a redirect Response, accepts relative URLs (unlike `Response.redirect`), and defaults to 302 — pass a status for 301/307.'} />
+
+<Recipe
+    task="Guard a route by redirecting"
+    live={LIVE}
+    code={`const { effect } = scope()
+effect(() => {
+    if (!session) void navigate('/login', {}, { replace: true })
+})`}
+    note={'Redirect from an effect in the page (or its layout) when access checks fail. For a server-enforced gate, throw `HttpError` in the rpc the page reads.'} />
+
+<Recipe task="Go back" live={LIVE} code={`<button onclick={() => history.back()}>Back</button>`} note={'Use the native `history.back()` / `history.forward()` — the client router listens to `popstate` and renders the target route.'} />
+
+<Recipe task="Link to a hash anchor" live={LIVE} code={`<a href={url('/docs') + '#install'}>Install</a>`} note={'Append the fragment to the built URL. Same-page hashes scroll to the `id`; cross-page ones navigate then jump.'} />
+
+<Recipe
+    task="Build the current URL under a subpath"
+    live={LIVE}
+    code={`// with APP_URL=/app, url('/x') === '/app/x'
+const href = url('/settings')`}
+    note={'`url()` reads the deploy base, so links stay correct whether the app is mounted at `/` or `/app`. Never hand-concatenate in-app paths.'} />
+
+<Recipe
+    task="Highlight a link for its sub-paths too"
+    live={LIVE}
+    code={`const active = page.url.pathname.startsWith(url('/orders'))`}
+    note={"`startsWith` on the resolved prefix keeps a section link lit while you're anywhere inside it — `/orders`, `/orders/42`, `/orders/42/edit`."} />
+
+<Recipe
+    task="Open a route from a bundle menu"
+    live="/bundle"
+    code={`const { effect } = scope()
+effect(() => onMenu('open-settings', () => void navigate('/settings')))`}
+    note={'In a desktop bundle, wire a native menu item to `navigate` — same routing, driven from the OS menu bar.'} />
+
+<Recipe
+    task="Prefetch a route on hover"
+    gap={true}
+    code={`// no prefetch API — warm the data cache yourself
+<a href={url('/product/[id]', { id })}
+   onmouseenter={() => cache(getProduct)({ id })}>
+    {name}
+</a>`}
+    note={"There's no link-prefetch primitive. You can warm the destination's `cache()` reads on hover/focus so the data is ready, but the route code itself isn't code-split-prefetched."} />
+
+<Recipe
+    task="Animate a route transition"
+    gap={true}
+    code={`// no transition hook — cross-fade via CSS on the page root
+<main class="route-fade">{children()}</main>`}
+    note={"There's no route-transition API (enter/leave hooks tied to navigation). CSS can fade a page on mount; a coordinated leave animation across a route change has no first-class hook yet."} />
