@@ -94,6 +94,10 @@ describe('createTestApp', () => {
         ['/cookbook/state/derived', 'Derive a read-only value'],
         ['/cookbook/state/effects', 'Clean up an effect'],
         ['/cookbook/state/bindings', 'Enable undo and redo'],
+        ['/cookbook/data/await-ssr', 'Warm-hydrate an awaited read'],
+        ['/cookbook/data/stream', 'Consume a stream reactively'],
+        ['/cookbook/data/cache', 'Cache a read across SSR and client'],
+        ['/cookbook/data/hydrate', 'Show stale data while revalidating'],
     ]
     for (const [route, marker] of cookbookPages) {
         test(`cookbook ${route} SSRs`, async () => {
