@@ -123,6 +123,79 @@ describe('hydrate — adopt server DOM', () => {
         expect(host.textContent).toBe('RowNEW')
     })
 
+    test('hydrates a text-leaf whose only binding first renders empty (no server text node)', () => {
+        /* `<main>{x}</main>` with x='' server-renders `<main></main>` — no text node. On
+           hydrate the claim cursor points past the end (null), so the bind must synthesize
+           its own node rather than deref null; a later update then lands. */
+        const $$model = doc({ x: '' })
+        const source = `<main>{$$model.x}</main>`
+        const runtime = { doc, state, computed, effect, appendText, appendStatic, on, $$model }
+        const names = Object.keys(runtime)
+        const values = names.map((n) => runtime[n as keyof typeof runtime])
+
+        const server = new Function(
+            'doc',
+            'state',
+            'computed',
+            'effect',
+            '$$model',
+            compileSSR(source),
+        )(doc, state, computed, effect, $$model) as SsrRender
+        expect(server.html).toBe('<main></main>')
+
+        const host = document.createElement('div')
+        host.innerHTML = server.html
+        const body = compileComponent(source)
+        let threw: unknown
+        try {
+            hydrate(host, (target) => {
+                new Function('host', ...names, body)(target, ...values)
+            })
+        } catch (error) {
+            threw = error
+        }
+        expect(threw).toBeUndefined() // no null deref in the bind effect
+        expect(host.textContent).toBe('')
+
+        // the synthesized node is this binding's own, so a later update renders
+        $$model.replace('x', 'now here')
+        expect(host.textContent).toBe('now here')
+    })
+
+    test('hydrates adjacent interpolations that BOTH first render empty', () => {
+        /* `{a}{b}` with a='' and b='' server-renders `<main></main>` — neither emits a node.
+           Each binding must still get its own node on hydrate (no null crash, no shared node),
+           so later updates land independently. */
+        const $$model = doc({ a: '', b: '' })
+        const source = `<main>{$$model.a}{$$model.b}</main>`
+        const runtime = { doc, state, computed, effect, appendText, appendStatic, on, $$model }
+        const names = Object.keys(runtime)
+        const values = names.map((n) => runtime[n as keyof typeof runtime])
+
+        const server = new Function(
+            'doc',
+            'state',
+            'computed',
+            'effect',
+            '$$model',
+            compileSSR(source),
+        )(doc, state, computed, effect, $$model) as SsrRender
+        expect(server.html).toBe('<main></main>')
+
+        const host = document.createElement('div')
+        host.innerHTML = server.html
+        const body = compileComponent(source)
+        hydrate(host, (target) => {
+            new Function('host', ...names, body)(target, ...values)
+        })
+        expect(host.textContent).toBe('')
+
+        $$model.replace('a', 'A')
+        expect(host.textContent).toBe('A')
+        $$model.replace('b', 'B')
+        expect(host.textContent).toBe('AB') // b owns its own node — a's value is not clobbered
+    })
+
     test('adopts an if/else branch in place, then toggles', () => {
         // template-only component with an external doc, so the test can drive it
         const $$model = doc({ on: true, label: 'hi' })

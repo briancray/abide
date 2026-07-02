@@ -36,21 +36,36 @@ export function appendText(parent: Node, read: () => unknown, splitAlways = fals
     }
     const hydration = RENDER.hydration
     if (hydration !== undefined) {
-        const node = claimChild(hydration, parent) as unknown as Text
+        const claimed = claimChild(hydration, parent)
         const value = String(read())
+        /* A value that first rendered empty produced NO server text node, so the cursor
+           points at the following node (an element/comment) or past the end (null) — not a
+           text node to claim. Bind to a Text node either way: claim the merged SSR node when
+           one is here, else synthesize an empty one at the cursor and leave the claimed node
+           for the next consumer (a following element hole, a sibling binding, or nothing).
+           Without this the bind effect below derefs a null/element `node`. A text node is
+           detected by `splitText` (not `nodeType`), so the test mini-dom is covered too. */
+        const isText = claimed !== null && typeof (claimed as Text).splitText === 'function'
+        const node = (
+            isText ? claimed : parent.insertBefore(document.createTextNode(''), claimed)
+        ) as Text
         /* Peel this binding's text off the merged SSR node. A non-final binding in a
            run (`splitAlways`) splits even when it consumes the whole node, leaving an
            empty node for the next binding — otherwise an interpolation that renders to
            empty string (or whose followers do) has no node and the next claim grabs the
            wrong sibling. The final binding keeps `<` so it doesn't leave a stray node a
-           following element would claim. */
+           following element would claim. A synthesized node is already this binding's own,
+           so it never splits. */
         if (
-            node !== null &&
+            isText &&
             (splitAlways ? value.length <= node.data.length : value.length < node.data.length)
         ) {
             node.splitText(value.length)
         }
-        hydration.next.set(parent, node === null ? null : node.nextSibling)
+        /* Advance past the claimed text node; for a synthesized node leave the cursor on the
+           still-unclaimed `claimed` node it was inserted before (an element/comment, or null
+           at the end). */
+        hydration.next.set(parent, isText ? node.nextSibling : claimed)
         effect(() => {
             node.data = String(read())
         })
