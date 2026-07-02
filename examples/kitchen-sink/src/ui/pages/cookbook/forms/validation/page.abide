@@ -1,0 +1,136 @@
+<script>
+import Recipe from '$ui/Recipe.abide'
+
+/* Cookbook · forms & mutations · validation. */
+const LIVE = '/rpc/errors'
+</script>
+
+<h1 class="text-3xl font-bold">validation</h1>
+<p class="mt-2 text-slate-600">
+    An <code class="font-mono">inputSchema</code> validates args before the handler runs and types
+    them for you. A failure is a <code class="font-mono">422</code> the client narrows as
+    <code class="font-mono">kind: 'validation'</code>; declared errors add typed domain failures.
+</p>
+
+<Recipe
+    task="Validate args with a schema"
+    live={LIVE}
+    code={`import { z } from 'zod'
+
+const inputSchema = z.object({ sku: z.string(), quantity: z.number().int().min(1) })
+export const checkout = POST(handler, { inputSchema })`}
+    note={'Any Standard Schema (zod, valibot, …) works. Invalid input is rejected with a 422 before the handler runs — the handler only ever sees valid, typed args.'} />
+
+<Recipe
+    task="Infer arg and return types from the schema"
+    live={LIVE}
+    code={`const inputSchema = z.object({ celsius: z.coerce.number() })
+export const convert = GET(({ celsius }) => json({ f: celsius * 9 / 5 + 32 }), { inputSchema })`}
+    note={"With `inputSchema` set, the handler's args infer from it — no explicit generics. The return type flows from what `json()` carries."} />
+
+<Recipe
+    task="Coerce query-string args to numbers"
+    live={LIVE}
+    code={`const inputSchema = z.object({ page: z.coerce.number().int().min(1) })`}
+    note={"GET args arrive as strings; `z.coerce.number()` (the validate step) parses them so the handler gets a real number. The coercion is the schema's job."} />
+
+<Recipe
+    task="Validate with a hand-rolled schema"
+    live={LIVE}
+    code={`const schema = {
+    '~standard': {
+        version: 1,
+        vendor: 'app',
+        validate: (v) => isValid(v) ? { value: v } : { issues: [{ message: '…', path: ['x'] }] },
+        types: undefined,
+    },
+}`}
+    note={"You don't need a schema library — implement the `~standard` contract directly. `validate` returns `{ value }` or `{ issues }`, and is also where you coerce."} />
+
+<Recipe
+    task="Keep a hand-rolled schema in OpenAPI/MCP/CLI"
+    live={LIVE}
+    code={`import { withJsonSchema } from '@abide/abide/shared/withJsonSchema'
+
+const inputSchema = withJsonSchema(schema, () => ({ type: 'object', properties: { … } }))`}
+    note={'A schema without a native `toJSONSchema()` still validates, but vanishes from `/openapi.json`, the MCP tool list, and CLI help. `withJsonSchema` attaches the projection so every surface sees it.'} />
+
+<Recipe
+    task="Handle a validation failure on the client"
+    live={LIVE}
+    code={`try {
+    await checkout({ sku, quantity: 0 })
+} catch (err) {
+    if (checkout.isError(err, 'validation')) {
+        // err.data is ValidationErrorData
+    }
+}`}
+    note={"`rpc.isError(err, 'validation')` narrows the caught error and types `err.data` as `ValidationErrorData` — no cast, no string-matching on messages."} />
+
+<Recipe
+    task="Show a validation message under its field"
+    live={LIVE}
+    code={`if (checkout.isError(err, 'validation')) {
+    quantityError = err.data.fields.quantity
+}`}
+    note={"`err.data.fields` maps each failing field to its message, keyed by the schema's path — render it beside the input to build server-authoritative field errors."} />
+
+<Recipe
+    task="Declare a typed error set"
+    live={LIVE}
+    code={`const errors = {
+    outOfStock: { status: 409, data: z.object({ sku: z.string(), available: z.number() }) },
+} as const
+export const checkout = POST(handler, { inputSchema, errors })`}
+    note={"Each named error declares its HTTP status and an optional data schema. The client derives a typed Result union from this spec — domain failures become part of the rpc's type."} />
+
+<Recipe
+    task="Return a typed domain error"
+    live={LIVE}
+    code={`import { error } from '@abide/abide/server/error'
+
+export const checkout = POST(({ sku, quantity }, { errors }) => {
+    if (quantity > stock(sku)) return error(errors.outOfStock({ sku, available: stock(sku) }))
+    return json({ ok: true })
+}, { inputSchema, errors })`}
+    note={"The handler's second argument carries the error constructors. `error(errors.outOfStock(data))` sends the declared status with the typed data payload."} />
+
+<Recipe
+    task="Narrow a typed error on the client"
+    live={LIVE}
+    code={`if (checkout.isError(err, 'outOfStock')) {
+    show(\`\${err.data.sku}: \${err.data.available} left\`)  // typed, no cast
+}`}
+    note={"`isError(err, 'outOfStock')` narrows both `err.kind` and `err.data` from the rpc's own `errors` spec — the compiler knows the shape."} />
+
+<Recipe
+    task="Throw a plain HTTP error"
+    live={LIVE}
+    code={`import { HttpError } from '@abide/abide/shared/HttpError'
+
+if (!found) throw new HttpError(404, 'not found')`}
+    note={'For one-off failures without a declared spec, throw `HttpError(status, message)` — the client catches it as an `HttpError` instance with `.status` and `.response`.'} />
+
+<Recipe
+    task="Gate submit on client-side validity"
+    live={LIVE}
+    code={`const canSubmit = computed(() => quantity >= 1 && sku !== '')
+
+<button disabled={!canSubmit}>checkout</button>`}
+    note={'Mirror the rules in a computed for instant feedback — but the schema is the source of truth. Client checks are UX; the server still validates.'} />
+
+<Recipe
+    task="Handle a wrong-method request"
+    live={LIVE}
+    code={`const response = await fetch(getEcho.url, { method: 'POST' })
+// response.status === 405, response.headers.get('allow') lists the verbs`}
+    note={'Hitting an rpc with the wrong method returns 405 with an `Allow` header. The typed callable always uses the right verb; this only shows up with hand-rolled fetches.'} />
+
+<Recipe
+    task="Require fields and apply defaults"
+    live={LIVE}
+    code={`const inputSchema = z.object({
+    title: z.string().min(1),
+    priority: z.number().default(3),
+})`}
+    note={'Schema constraints (`min`, `default`, `optional`) are enforced server-side and reflected in the generated OpenAPI/CLI — one declaration, every surface.'} />

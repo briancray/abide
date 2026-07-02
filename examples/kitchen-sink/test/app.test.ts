@@ -101,6 +101,9 @@ describe('createTestApp', () => {
         ['/cookbook/routing/routes', 'Read a route param'],
         ['/cookbook/routing/layouts', 'Nest layouts'],
         ['/cookbook/routing/navigate', 'Navigate programmatically'],
+        ['/cookbook/forms/rpc-methods', 'Define a create'],
+        ['/cookbook/forms/validation', 'Declare a typed error set'],
+        ['/cookbook/forms/optimistic', 'Cancel an in-flight request'],
     ]
     for (const [route, marker] of cookbookPages) {
         test(`cookbook ${route} SSRs`, async () => {
