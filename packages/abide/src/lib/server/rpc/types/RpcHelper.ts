@@ -109,10 +109,51 @@ type RpcHelperOf<Opts> = {
 export type RpcHelper = RpcHelperOf<RpcBaseOpts>
 
 /*
+Durable-call overloads: an `outbox: true` opt returns a RemoteFunction whose `Durable` bit
+is set, so `rpc.outbox` is the queue face rather than optionally-undefined. Mirrors the
+opts-bearing base overloads (multipart-upload, schema'd, schemaless); the bare `Rpc(fn)`
+form has no opts to carry `outbox`, so it stays non-durable. Intersected AHEAD of the base
+set in MutatingRpcHelper so an `outbox: true` literal resolves here first.
+*/
+type DurableMutatingRpcHelper = {
+    <
+        Return = unknown,
+        InputSchema extends StandardSchemaV1 = StandardSchemaV1,
+        FilesSchema extends StandardSchemaV1 = StandardSchemaV1,
+        Errors extends ErrorSpec = Record<string, never>,
+    >(
+        fn: RemoteHandler<
+            StandardSchemaV1.InferOutput<InputSchema> & StandardSchemaV1.InferOutput<FilesSchema>,
+            Return,
+            Errors
+        >,
+        opts: MutatingRpcOpts & {
+            inputSchema: InputSchema
+            filesSchema: FilesSchema
+            errors?: Errors
+            outbox: true
+        },
+    ): RemoteFunction<StandardSchemaV1.InferInput<InputSchema>, Return, Errors, true>
+    <
+        Return = unknown,
+        InputSchema extends StandardSchemaV1 = StandardSchemaV1,
+        Errors extends ErrorSpec = Record<string, never>,
+    >(
+        fn: RemoteHandler<StandardSchemaV1.InferOutput<InputSchema>, Return, Errors>,
+        opts: MutatingRpcOpts & { inputSchema: InputSchema; errors?: Errors; outbox: true },
+    ): RemoteFunction<StandardSchemaV1.InferInput<InputSchema>, Return, Errors, true>
+    <Args = undefined, Return = unknown, Errors extends ErrorSpec = Record<never, never>>(
+        fn: RemoteHandler<Args, Return, Errors>,
+        opts: MutatingRpcOpts & { errors?: Errors; outbox: true },
+    ): RemoteFunction<Args, Return, Errors, true>
+}
+
+/*
 The mutating helpers (POST/PUT/PATCH/DELETE). A durable (`outbox`) call is a normal
 RemoteFunction — it throws exactly like a non-durable one and only parks the request as a
 side-effect on an unreachable server — so there is no separate return shape; `outbox` rides
 MutatingRpcOpts and `rpc.outbox` exposes the queue. The distinct opts base is what makes
-`outbox` legal here and a compile error on the read helpers.
+`outbox` legal here and a compile error on the read helpers; the durable overloads then set
+the return type's `Durable` bit so `rpc.outbox` is present without an optional chain.
 */
-export type MutatingRpcHelper = RpcHelperOf<MutatingRpcOpts>
+export type MutatingRpcHelper = DurableMutatingRpcHelper & RpcHelperOf<MutatingRpcOpts>

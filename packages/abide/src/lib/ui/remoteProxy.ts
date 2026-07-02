@@ -56,8 +56,18 @@ the app owns when to replay. `rpc.outbox()` exposes the queue.
 export function remoteProxy<Args, Return>(
     method: HttpMethod,
     url: string,
+    durable: DurableOptions & { outbox: true },
+): RemoteFunction<Args, Return, Record<never, never>, true>
+export function remoteProxy<Args, Return>(
+    method: HttpMethod,
+    url: string,
     durable?: DurableOptions,
-): RemoteFunction<Args, Return> {
+): RemoteFunction<Args, Return>
+export function remoteProxy<Args, Return>(
+    method: HttpMethod,
+    url: string,
+    durable?: DurableOptions,
+): RemoteFunction<Args, Return, Record<never, never>, boolean> {
     /* Assigned after `createRemoteFunction` so the invoke closure (which runs later, per
        call) parks through the shared queue; undefined leaves the plain fetch path. */
     let queue: OutboxQueue<Args> | undefined

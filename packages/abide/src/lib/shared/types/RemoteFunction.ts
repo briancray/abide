@@ -43,6 +43,7 @@ export type RemoteFunction<
     Args,
     Return,
     Errors extends ErrorSpec = Record<never, never>,
+    Durable extends boolean = false,
 > = RemoteCallable<Args, Return> & {
     readonly method: HttpMethod
     readonly url: string
@@ -56,7 +57,10 @@ export type RemoteFunction<
        per-rpc replacement for a global guard, since the error name → data type mapping
        lives in the rpc's own spec. */
     readonly isError: RpcErrorGuard<Errors>
-    /* Present only on a durable (`outbox`) RPC's client proxy: callable for the reactive
-       list of undelivered entries, with `retry()` to drain the queue. Undefined otherwise. */
-    readonly outbox?: Outbox<Args>
-}
+} /* `outbox` presence follows the `outbox: true` opt: the mutating helper threads `Durable`
+     into the return type so a DURABLE rpc's `.outbox` is the required queue face (no optional
+     chain). A non-durable rpc keeps it optional — assignable to a durable one everywhere a
+     bare `RemoteFunction<Args, Return>` slot (cache selectors, registries) is expected, since
+     required→optional widens cleanly and no call site had to learn the `Durable` bit. */ & (Durable extends true
+        ? { readonly outbox: Outbox<Args> }
+        : { readonly outbox?: Outbox<Args> })
