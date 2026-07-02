@@ -1,0 +1,92 @@
+<script>
+import Recipe from '$ui/Recipe.abide'
+
+/* Cookbook · realtime · tail & retention. */
+const LIVE = '/tail'
+</script>
+
+<h1 class="text-3xl font-bold">tail & retention</h1>
+<p class="mt-2 text-slate-600">
+    <code class="font-mono">tail()</code> is the reactive consumer for a socket. First read in a
+    tracking scope opens the subscription; last reader closes it. Transport drops self-heal.
+</p>
+
+<Recipe
+    task="Subscribe to a socket in the UI"
+    live={LIVE}
+    code={`import { tail } from '@abide/abide/ui/tail'
+const { computed } = scope()
+
+const latest = computed(() => tail(chat))`}
+    note={'`tail(socket)` reads the latest frame reactively. The subscription opens on first read and closes when the last reader goes away — no manual lifecycle.'} />
+
+<Recipe task="Render the latest frame" live={LIVE} code={`{#if latest}
+    <p><strong>{latest.from}</strong>: {latest.text}</p>
+{/if}`} note={"Latest-wins is right for a status line, a live gauge, or a 'currently playing' — one value that keeps updating in place."} />
+
+<Recipe task="Keep a rolling window" live={LIVE} code={`const recent = computed(() => tail(chat, { last: 20 }))`} note={"`{ last: n }` holds the last ≤ n frames — seeded from the socket's retention if it has `tail: n` on the server. The feed/log shape."} />
+
+<Recipe
+    task="Render a live keyed list"
+    live={LIVE}
+    code={`{#for message of tail(chat, { last: 50 }) by message.id}
+    <li><strong>{message.from}</strong>: {message.text}</li>
+{/for}`}
+    note={'Read the window straight into a keyed `{#for}` — arriving frames append and the list patches the new node in, no full re-render.'} />
+
+<Recipe task="Show connection status" live={LIVE} code={`const status = computed(() => tail.status(chat))
+
+<span class="text-xs text-slate-500">{status}</span>`} note={"`tail.status(socket)` reports the transport state. A disconnect self-heals under backoff — status never flips to 'error' for a mere drop."} />
+
+<Recipe
+    task="Surface a terminal application error"
+    live={LIVE}
+    code={`const failure = computed(() => tail.error(chat))
+
+{#if failure}<p class="text-rose-700">{failure.message}</p>{/if}`}
+    note={'Application errors are terminal and land on `tail.error`; a transport disconnect does not — it retains the last value and reopens.'} />
+
+<Recipe
+    task="Ride out a dropped connection"
+    live={LIVE}
+    code={`// nothing to write — tail retains the value/window across the gap
+const recent = computed(() => tail(chat, { last: 20 }))`}
+    note={"On a drop, the held value or window is retained, the stream reopens under the channel's backoff, and reads keep returning the last data — self-healing by default."} />
+
+<Recipe task="Badge a reconnecting stream" live="/probes" code={`import { refreshing } from '@abide/abide/shared/refreshing'
+const reconnecting = computed(() => refreshing(chat))`} note={"`refreshing(socket)` is true while a held value is being revalidated across a reconnect gap — badge 'reconnecting…' without dropping the last frame."} />
+
+<Recipe
+    task="Invalidate a cached read on a frame"
+    live="/cache"
+    code={`const { effect } = scope()
+effect(() => cache.on(chat, (_frame, { invalidate }) => invalidate(getChatCount)))`}
+    note={"`cache.on(socket, handler)` runs once per frame; call `invalidate` inside to refetch a related read. Use this when the frame is a signal ('something changed'), not the data itself."} />
+
+<Recipe
+    task="Replay attribution after a reconnect gap"
+    live="/cache"
+    code={`effect(() => cache.on(chat, (_frame, { invalidate }) => invalidate(getChatLog)))`}
+    note={"The handler's `invalidate` is binding-scoped, so calls made through it are re-attributed after a reconnect — you don't lose invalidations that happened during the gap."} />
+
+<Recipe
+    task="Subscribe to several sockets at once"
+    live={LIVE}
+    code={`const messages = computed(() => tail(chat, { last: 30 }))
+const typing = computed(() => tail(typingSock))`}
+    note={"Each `tail()` is independent but they share one multiplexed WebSocket — subscribe freely; you're not opening a connection per topic."} />
+
+<Recipe
+    task="Understand tail on the server"
+    live={LIVE}
+    code={`// tail() is a no-op during SSR — it returns nothing and opens nothing
+const latest = computed(() => tail(chat))`}
+    note={'`tail` is client-only: SSR renders the surrounding markup but the live subscription starts after hydration. Guard the markup with `{#if latest}` so the server renders an empty state.'} />
+
+<Recipe
+    task="Drive a live progress bar"
+    live={LIVE}
+    code={`const progress = computed(() => tail(jobProgress)?.pct ?? 0)
+
+<progress value={progress} max={100} />`}
+    note={'Publish `{ pct }` frames from a long-running server job and tail the latest — a real-time progress bar with the server as the single source of truth.'} />

@@ -107,6 +107,9 @@ describe('createTestApp', () => {
         ['/cookbook/errors/throwing', 'Throw a typed HTTP error'],
         ['/cookbook/errors/boundaries', 'Add a synchronous error boundary'],
         ['/cookbook/errors/probes', 'Detect that the browser is offline'],
+        ['/cookbook/realtime/sockets', 'Declare a broadcast topic'],
+        ['/cookbook/realtime/tail', 'Subscribe to a socket in the UI'],
+        ['/cookbook/realtime/patterns', 'Build a chat room'],
     ]
     for (const [route, marker] of cookbookPages) {
         test(`cookbook ${route} SSRs`, async () => {
