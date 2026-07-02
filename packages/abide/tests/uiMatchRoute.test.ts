@@ -37,4 +37,27 @@ describe('matchRoute', () => {
             params: { rest: 'a/b/c' },
         })
     })
+
+    test('a [name] param is percent-decoded to match Bun-decoded server params', () => {
+        // `The Daily Show` arrives as `The%20Daily%20Show`; the page must see spaces.
+        expect(matchRoute(routes, `/users/${encodeURIComponent('The Daily Show')}`)).toEqual({
+            route: '/users/[id]',
+            params: { id: 'The Daily Show' },
+        })
+    })
+
+    test('a malformed percent sequence falls back to the raw value (no crash)', () => {
+        // `decodeURIComponent` throws on `%E0%A4%A`; Bun keeps it, so we must not crash.
+        expect(matchRoute(routes, '/users/%E0%A4%A')).toEqual({
+            route: '/users/[id]',
+            params: { id: '%E0%A4%A' },
+        })
+    })
+
+    test('a catch-all stays raw (server reconstructs it from the raw pathname)', () => {
+        expect(matchRoute(routes, `/files/a/${encodeURIComponent('b c')}`)).toEqual({
+            route: '/files/[...rest]',
+            params: { rest: 'a/b%20c' },
+        })
+    })
 })

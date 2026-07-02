@@ -52,6 +52,18 @@ export function matchRoute(
     return best === undefined ? undefined : { route: best.route, params: best.params }
 }
 
+/* Percent-decodes a captured `[name]` value. Bun's `req.params` decoding is
+   lenient (malformed sequences pass through), so mirror that by falling back to
+   the raw value rather than throwing on a malformed `%` a page navigation would
+   otherwise crash on. */
+function decodeParam(value: string): string {
+    try {
+        return decodeURIComponent(value)
+    } catch {
+        return value
+    }
+}
+
 /* Matches one parsed pattern against the path's segments, capturing params;
    undefined on mismatch. A catch-all consumes every remaining segment. */
 function matchSegments(
@@ -81,7 +93,12 @@ function matchSegments(
             if (value === '') {
                 return undefined
             }
-            params[segment.name] = value
+            /* `url()` encodes a `[name]` value whole, and Bun decodes `req.params`
+               server-side, so decode here to hand the page the same value SSR does
+               (e.g. `The%20Daily%20Show` → `The Daily Show`). The catch-all above
+               stays raw to match the server, which reconstructs it from the raw
+               pathname. */
+            params[segment.name] = decodeParam(value)
         }
     }
     /* No catch-all consumed the tail, so the path must have no extra segments. */
