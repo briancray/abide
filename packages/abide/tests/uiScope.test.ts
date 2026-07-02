@@ -125,15 +125,15 @@ describe('scope — the lexical data + capability seam', () => {
         expect(grandchild.shared('flag')).toBeUndefined() // stops at child, not root
     })
 
-    test('reactive context: share a cell, descendants see updates', () => {
+    test('reactive context: share a scope, descendants read live updates', () => {
         const root = createScope({ count: 0 })
         const child = root.child({})
-        root.share('count', root.cell<number>('count'))
+        root.share('app', root) // share the scope; its doc is reactive
 
-        const cell = child.shared<ReturnType<typeof root.cell<number>>>('count')
-        expect(cell?.get()).toBe(0)
+        const app = child.shared<typeof root>('app')
+        expect(app?.read<number>('count')).toBe(0)
         root.replace('count', 3)
-        expect(cell?.get()).toBe(3) // reactivity rides the shared cell, not share itself
+        expect(app?.read<number>('count')).toBe(3) // reactivity rides the shared scope's doc, not share itself
     })
 
     test('scope() outside any scope mints a detached root once', () => {

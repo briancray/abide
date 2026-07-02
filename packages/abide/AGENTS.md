@@ -130,7 +130,7 @@ at the top, then bare calls.
 
 | Form | Meaning |
 | --- | --- |
-| `let x = state(v, transform?)` | Writable cell; assign `x = …` to update |
+| `let x = state(v, transform?)` | Writable state; assign `x = …` to update |
 | `const d = computed(() => …)` | Read-only derived |
 | `const l = linked(fn, transform?)` | Writable, re-seeds when `fn`'s deps change |
 | `effect(() => { … })` | Reaction re-run on dep change; client-only (SSR strips it) |

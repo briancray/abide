@@ -5,6 +5,7 @@ import { linked } from './linked.ts'
 import { persist as persistDoc } from './persist.ts'
 import { createDoc } from './runtime/createDoc.ts'
 import { liveScopes } from './runtime/liveScopes.ts'
+import type { Cell } from './runtime/types/Cell.ts'
 import type { Doc } from './runtime/types/Doc.ts'
 import { state } from './state.ts'
 import { sync } from './sync.ts'
@@ -49,7 +50,11 @@ export function createScope(
     let persistence: PersistHandle | undefined
     let unsync: (() => void) | undefined
 
-    const self: Scope = {
+    /* `cell` is not on the public `Scope` type — it is the compiler-only leaf the
+       cell-hoisting lowering targets (`const _cell0 = $$scope().cell("path")`, see
+       `hoistCells`). It stays on the runtime object but off the documented surface,
+       so authors reach data through `read`/`replace`/`derive`, not a raw cell handle. */
+    const self: Scope & { cell: <T>(path: string) => Cell<T> } = {
         id,
         label,
         parent,
@@ -79,7 +84,7 @@ export function createScope(
         },
         root: () => (parent === undefined ? self : parent.root()),
         /* Reference store — no tracking, so a lookup never subscribes; reactivity comes
-           from what is shared (a cell/scope), not from the share. */
+           from what is shared (a scope, whose doc is reactive), not from the share. */
         share: (key, value) => {
             shared.set(key, value)
         },

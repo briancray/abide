@@ -1,7 +1,6 @@
 import type { computed } from '../computed.ts'
 import type { effect } from '../effect.ts'
 import type { linked } from '../linked.ts'
-import type { Cell } from '../runtime/types/Cell.ts'
 import type { Patch } from '../runtime/types/Patch.ts'
 import type { state } from '../state.ts'
 import type { SyncTransport } from './SyncTransport.ts'
@@ -9,7 +8,7 @@ import type { SyncTransport } from './SyncTransport.ts'
 /*
 A lexical scope: the unit that owns a region's reactive data, its lifetime, and
 the capabilities applied to it. Its data surface MIRRORS `Doc` (read/replace/add/
-remove/cell/derive/apply/snapshot) so the compiler can target a scope as a
+remove/derive/apply/snapshot) so the compiler can target a scope as a
 component's data binding directly. It nests (`child`/`root`), passes values
 down the tree as context (`share`/`shared`), and carries the capability surface as
 methods so a scope is a passable value: `<Child parentScope={scope} />`.
@@ -33,7 +32,6 @@ export type Scope = {
     add: (path: string, value: unknown) => void
     remove: (path: string) => void
     apply: (patch: Patch) => void
-    cell: <T>(path: string) => Cell<T>
     derive: <T>(path: string, compute: () => T) => () => T
     snapshot: () => unknown
     /* The reactive primitives — namespaced under the scope, but AMBIENT-bound, not
@@ -64,7 +62,8 @@ export type Scope = {
     /* context — values shared DOWN the tree (not in the reactive doc, which doesn't
        inherit): `share` puts a named value on this scope; `shared` reads the closest
        ancestor (self included) that has the key, undefined if none. The value is held
-       by reference, so reactive context = share a `cell`/scope, not a plain object. */
+       by reference, so reactive context = share a scope (its doc is reactive), not a
+       plain object snapshot. */
     share: (key: string, value: unknown) => void
     shared: <T>(key: string) => T | undefined
     /* capabilities — enable where the scope's changes go */

@@ -65,10 +65,11 @@ effect(() => onMenu('reload', () => location.reload()))`}
     task="Share data from a layout to its pages"
     live={LIVE}
     code={`// layout
-scope().share('org', scope().cell('org'))
+const layout = scope()
+layout.share('layout', layout)
 // any page below
-const org = scope().shared('org')`}
-    note={"Share a cell from the layout's scope; every page beneath reads it via `shared`. Reactive context flows down the chain — load org/user/theme once at the top."} />
+const org = scope().shared('layout').read('org')`}
+    note={"Share the layout's scope; every page beneath reads its data via `shared(key).read(path)`. Reactive context flows down the chain — load org/user/theme once at the top."} />
 
 <Recipe
     task="Load shared data once per section"
