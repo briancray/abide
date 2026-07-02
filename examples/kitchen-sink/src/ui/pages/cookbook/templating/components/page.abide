@@ -114,10 +114,10 @@ const LIVE = '/templating/snippets'
 
 <Recipe
     task="Two-way bind a component prop"
-    gap={true}
-    code={`// there is no  <Field bind:value={name} />
+    live={LIVE}
+    code={`// not <Field bind:value={name} /> — instead:
 <Field value={name} onChange={(v) => (name = v)} />`}
-    note={'Components have no two-way `bind:prop`. Pass the value down and a callback up (recipe above) — it is fully type-checked and keeps the child a pure function of its props. `bind:` stays for DOM elements.'} />
+    note={'Value down, callback up is the two-way story for components — by design, not a gap. It is fully type-checked and keeps the child a pure function of its props, so there is no component `bind:prop`. `bind:` stays for DOM elements.'} />
 
 <Recipe
     task="Forward attributes and events to the child root"

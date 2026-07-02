@@ -1,5 +1,3 @@
-import type { ErrorConstructors } from '../../../shared/types/ErrorConstructors.ts'
-import type { ErrorSpec } from '../../../shared/types/ErrorSpec.ts'
 import type { TypedResponse } from './TypedResponse.ts'
 
 /*
@@ -23,11 +21,11 @@ untagged Responses fall back to `Return = unknown`.
 Handlers that need the inbound Request (headers, `request.signal`, …) read
 it via `request()` from `abide/server` rather than a handler parameter, so
 the signature stays a single parsed-`args` bag.
+
+A typed error is raised by returning an `error.typed(name, status, schema?)`
+constructor (`return outOfStock({…})`) — there is no `ctx` param; the rpc reads
+the error surface off the returned constructors' brands.
 */
-export type RemoteHandler<Args, Return, Errors extends ErrorSpec = Record<never, never>> = (
+export type RemoteHandler<Args, Return> = (
     args: Args,
-    /* The rpc's declared error constructors (`error(errors.invalidCoupon({…}))`), typed
-       from its `errors` opt; an empty object when none declared. A handler that takes only
-       `args` is still assignable here (fewer params is assignable to more). */
-    ctx: { errors: ErrorConstructors<Errors> },
 ) => TypedResponse<Return> | Promise<TypedResponse<Return>>

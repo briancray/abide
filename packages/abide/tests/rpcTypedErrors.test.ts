@@ -1,15 +1,15 @@
-/* Name-keyed typed errors: a handler returns `error(errors.<name>(data))`, the wire
-   carries `{ $abideError, data }` at the declared status, and the client decode parses
+/* Named typed errors: a handler returns an `error.typed(name, status, schema?)` constructor,
+   the wire carries `{ $abideError, data }` at the declared status, and the client decode parses
    it back onto the thrown HttpError's `.kind` / `.data`. Validation 422 rides the same
    shape with a field-keyed message map. */
 import { expect, test } from 'bun:test'
 import { error } from '../src/lib/server/error.ts'
+import { POST } from '../src/lib/server/POST.ts'
 import { defineRpc } from '../src/lib/server/rpc/defineRpc.ts'
 import { runWithRequestScope } from '../src/lib/server/runtime/runWithRequestScope.ts'
 import { decodeResponse } from '../src/lib/shared/decodeResponse.ts'
 import { HttpError } from '../src/lib/shared/HttpError.ts'
 import { streamResponse } from '../src/lib/shared/streamResponse.ts'
-import type { ErrorConstructors } from '../src/lib/shared/types/ErrorConstructors.ts'
 import type { OutboxEntry } from '../src/lib/shared/types/OutboxEntry.ts'
 import type { RemoteFunction } from '../src/lib/shared/types/RemoteFunction.ts'
 import type { StandardSchemaV1 } from '../src/lib/shared/types/StandardSchemaV1.ts'
@@ -33,17 +33,11 @@ const requireEmail: StandardSchemaV1 = {
     },
 }
 
-const couponSpec = { invalidCoupon: { status: 400, data: passthrough } } as const
+const invalidCoupon = error.typed('invalidCoupon', 400, passthrough)
 
-const buy = defineRpc(
-    'POST',
-    '/rpc/buy',
-    (_args, ctx) => {
-        const errors = ctx.errors as ErrorConstructors<typeof couponSpec>
-        return error(errors.invalidCoupon({ code: 'EXPIRED' }))
-    },
-    { inputSchema: passthrough, errors: couponSpec },
-)
+const buy = defineRpc('POST', '/rpc/buy', () => invalidCoupon({ code: 'EXPIRED' }), {
+    inputSchema: passthrough,
+})
 
 function post(url: string, body: unknown): Request {
     return new Request(`https://test.local${url}`, {
@@ -219,3 +213,20 @@ test('rpc.isError types declared-error data from the rpc spec', () => {
     /* The guarantee is the compile of `_narrows` above; this just keeps it referenced. */
     expect(typeof _narrows).toBe('function')
 })
+
+/* Type-only: `Errors` infers off the constructor the handler RETURNS (no `errors:` opt, no
+   cast), flows to the returned fn's `isError`, narrowing both `.kind` and `.data`. The schema
+   carries real `~standard` types (like `_narrows` above) so `InferInput` is `{ available }`,
+   not `unknown` — a validate-only literal would collapse `.data` back to `unknown`. */
+const stockDataSchema = undefined as unknown as StandardSchemaV1<{ available: number }>
+function _inferenceCheck(caught: unknown): number | undefined {
+    const outOfStock = error.typed('outOfStock', 409, stockDataSchema)
+    const sell = POST((_args: { available: number }) => outOfStock({ available: 0 }), {
+        inputSchema: stockDataSchema,
+    })
+    if (sell.isError(caught, 'outOfStock')) {
+        return caught.data.available
+    }
+    return undefined
+}
+void _inferenceCheck

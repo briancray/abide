@@ -81,10 +81,12 @@ For `bun test`, add `preload = ["@abide/abide/preload"]` under `[test]` in
 The handler receives `InferOutput<inputSchema>` (or the bare arg type when
 schemaless), reads `request()` / `cookies()` for request scope, and returns a
 `json` / `jsonl` / `sse` / `error` / `redirect` helper Response or a raw
-`Response`. `opts`: `inputSchema`, `outputSchema` (OpenAPI 200 + MCP
+`Response`. A named, client-branchable error is raised by RETURNING an
+`error.typed(name, status, schema?)` constructor — the RPC infers its typed-error
+surface from whichever constructors the handler returns, so there is no `errors:`
+option. `opts`: `inputSchema`, `outputSchema` (OpenAPI 200 + MCP
 `outputSchema`), `filesSchema` (multipart File parts; send a `FormData`),
-`errors` (declared error constructors handed to the handler), `clients`
-(`{ browser, mcp, cli }`), `crossOrigin` (exempt a mutating RPC from the
+`clients` (`{ browser, mcp, cli }`), `crossOrigin` (exempt a mutating RPC from the
 same-origin CSRF gate), `timeout` (ms handler deadline → 504 every surface),
 `maxBodySize` (received-byte ceiling → 413), and — mutating helpers only —
 `outbox` (durable replay; `GET(fn, { outbox })` is a compile error). Query args
@@ -196,7 +198,7 @@ the fallback form. No named slots.
 - `abide/server/json` — JSON `Response` with `Cache-Control: no-store` default; same shape as `Response.json`.
 - `abide/server/jsonl` — wraps an `AsyncIterable<Frame>` as a JSON Lines (`application/jsonl`) streaming Response.
 - `abide/server/sse` — wraps an `AsyncIterable<Frame>` as Server-Sent Events (`text/event-stream`).
-- `abide/server/error` — plain-text error Response; `error(status, message?)`, message defaults to the status reason phrase.
+- `abide/server/error` — error Responses. `error(status, message?)` = plain-text (message defaults to the status reason phrase). `error.typed(name, status, schema?)` = a reusable named typed-error constructor; returning it from a handler IS the error (serializes `{ $abideError, data }` at `status`), and the RPC infers `rpc.isError(e, name)` narrowing (`.kind` + typed `.data`) from the returned constructors — no `errors:` option.
 - `abide/server/redirect` — redirect Response; accepts relative URLs, defaults to 302.
 
 ### Request scope — @documentation request-scope

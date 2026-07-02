@@ -1,7 +1,10 @@
 import { NO_STORE } from '../shared/CACHE_CONTROL_VALUES.ts'
 import { TEXT_PLAIN } from '../shared/TEXT_PLAIN.ts'
-import type { ErrorDescriptor } from '../shared/types/ErrorDescriptor.ts'
+import type { StandardSchemaV1 } from '../shared/types/StandardSchemaV1.ts'
+import type { TypedError } from './rpc/types/TypedError.ts'
 import type { TypedResponse } from './rpc/types/TypedResponse.ts'
+import { STATUS_TEXT } from './runtime/STATUS_TEXT.ts'
+import { typedErrorResponse } from './runtime/typedErrorResponse.ts'
 import { withResponseDefaults } from './runtime/withResponseDefaults.ts'
 
 /*
@@ -18,36 +21,14 @@ text/plain so intermediaries don't try to render or sniff it. A final
 `ResponseInit` adds headers (e.g. `Retry-After` on a 429); the positional
 `status` always wins over any `init.status`.
 
-To short-circuit a handler instead of returning, `throw new Error(...)`
-or `throw new HttpError(error(...))` — the framework's `app.handleError`
-hook catches thrown errors. This helper deliberately returns a Response
-rather than throwing one so a single `return error(...)` is the
-expected pattern, with the same control flow as `return json(...)`.
+For a NAMED, typed error the client can branch on, declare a constructor with
+`error.typed(name, status, schema?)` and return it (see below). To short-circuit
+a handler instead of returning, `throw new Error(...)` or
+`throw new HttpError(error(...))` — the framework's `app.handleError` hook
+catches thrown errors. This helper deliberately returns a Response rather than
+throwing one so a single `return error(...)` is the expected pattern, with the
+same control flow as `return json(...)`.
 */
-
-/*
-Standard reason phrases for the statuses error() is realistically called
-with. Maintained explicitly because Bun's `Response` does not populate
-`statusText` from the status code, so there's no platform table to read.
-Unlisted codes fall back to `HTTP <status>`.
-*/
-const STATUS_TEXT: Record<number, string> = {
-    400: 'Bad Request',
-    401: 'Unauthorized',
-    403: 'Forbidden',
-    404: 'Not Found',
-    405: 'Method Not Allowed',
-    409: 'Conflict',
-    410: 'Gone',
-    413: 'Content Too Large',
-    422: 'Unprocessable Content',
-    429: 'Too Many Requests',
-    500: 'Internal Server Error',
-    501: 'Not Implemented',
-    502: 'Bad Gateway',
-    503: 'Service Unavailable',
-    504: 'Gateway Timeout',
-}
 
 /*
 Body type is `never` because `error()` only travels the non-2xx path on
@@ -57,32 +38,11 @@ the union of branches in a handler narrow to whatever the success
 branch carries (`TypedResponse<{user}> | TypedResponse<never>` → Return
 = {user}).
 */
-// @documentation response
-export function error(descriptor: ErrorDescriptor): TypedResponse<never>
-export function error(status: number, message?: string, init?: ResponseInit): TypedResponse<never>
-export function error(
-    statusOrDescriptor: number | ErrorDescriptor,
+function errorResponse(
+    status: number,
     message?: string,
     init?: ResponseInit,
 ): TypedResponse<never> {
-    /* A typed-error descriptor (`error(errors.invalidCoupon({…}))`) serializes as a
-       JSON `{ $abideError, data }` body at the descriptor's status — the client
-       parses it back onto the thrown HttpError's `.kind` / `.data`. */
-    if (typeof statusOrDescriptor === 'object') {
-        const descriptor = statusOrDescriptor
-        return new Response(
-            JSON.stringify({ $abideError: descriptor.$abideError, data: descriptor.data }),
-            withStatusText(
-                withResponseDefaults(
-                    undefined,
-                    { 'Content-Type': 'application/json', 'Cache-Control': NO_STORE },
-                    descriptor.status,
-                ),
-                descriptor.status,
-            ),
-        ) as TypedResponse<never>
-    }
-    const status = statusOrDescriptor
     const body = message ?? STATUS_TEXT[status] ?? `HTTP ${status}`
     return new Response(
         body,
@@ -113,3 +73,38 @@ function withStatusText(init: ResponseInit, status: number): ResponseInit {
     }
     return init
 }
+
+/*
+Declares a reusable, typed error as a single constructor. With a `data` schema
+the constructor requires that input; without one it's nullary. Returning the
+constructor from a handler IS the error — it serializes a `{ $abideError, data }`
+body at `status`, and the rpc reads the constructor's branded return type to
+expose the error on `rpc.isError(e, 'name')` (`.kind` and typed `.data`). No
+`errors:` option, no set to register — compose by returning whichever you want:
+
+  const duplicateSlug = error.typed('duplicateSlug', 409, z.object({ slug: z.string() }))
+  const rateLimited = error.typed('rateLimited', 429)               // nullary
+
+  export const createPost = POST(({ slug }) =>
+      taken(slug) ? duplicateSlug({ slug }) : json(save(slug)),
+  )
+
+`name` is the wire identity and the `isError` key, so it's an explicit string
+(a const can't read its own variable name); `schema` types `.data` and is never
+validated at runtime here.
+*/
+function typed<Name extends string, Schema extends StandardSchemaV1>(
+    name: Name,
+    status: number,
+    schema: Schema,
+): (data: StandardSchemaV1.InferInput<Schema>) => TypedError<Name, { status: number; data: Schema }>
+function typed<Name extends string>(
+    name: Name,
+    status: number,
+): () => TypedError<Name, { status: number; data?: undefined }>
+function typed(name: string, status: number, _schema?: StandardSchemaV1) {
+    return (data?: unknown) => typedErrorResponse(name, status, data)
+}
+
+// @documentation response
+export const error = Object.assign(errorResponse, { typed })

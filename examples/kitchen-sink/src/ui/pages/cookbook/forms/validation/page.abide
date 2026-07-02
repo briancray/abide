@@ -76,24 +76,23 @@ const inputSchema = withJsonSchema(schema, () => ({ type: 'object', properties: 
     note={"`err.data.fields` maps each failing field to its message, keyed by the schema's path — render it beside the input to build server-authoritative field errors."} />
 
 <Recipe
-    task="Declare a typed error set"
+    task="Declare a typed error"
     live={LIVE}
-    code={`const errors = {
-    outOfStock: { status: 409, data: z.object({ sku: z.string(), available: z.number() }) },
-} as const
-export const checkout = POST(handler, { inputSchema, errors })`}
-    note={"Each named error declares its HTTP status and an optional data schema. The client derives a typed Result union from this spec — domain failures become part of the rpc's type."} />
+    code={`const outOfStock = error.typed('outOfStock', 409, z.object({ sku: z.string(), available: z.number() }))
+export const checkout = POST(handler, { inputSchema })`}
+    note={"`error.typed(name, status, schema?)` declares one reusable typed-error constructor at module scope. There's no `errors:` option — the rpc infers its error surface from whichever constructors the handler returns."} />
 
 <Recipe
     task="Return a typed domain error"
     live={LIVE}
     code={`import { error } from '@abide/abide/server/error'
 
-export const checkout = POST(({ sku, quantity }, { errors }) => {
-    if (quantity > stock(sku)) return error(errors.outOfStock({ sku, available: stock(sku) }))
+const outOfStock = error.typed('outOfStock', 409, z.object({ sku: z.string(), available: z.number() }))
+export const checkout = POST(({ sku, quantity }) => {
+    if (quantity > stock(sku)) return outOfStock({ sku, available: stock(sku) })
     return json({ ok: true })
-}, { inputSchema, errors })`}
-    note={"The handler's second argument carries the error constructors. `error(errors.outOfStock(data))` sends the declared status with the typed data payload."} />
+}, { inputSchema })`}
+    note={"Returning the constructor IS the error — it sends the declared status with the typed data payload. No `ctx` param, no `errors:` option; the constructors the handler returns ARE the rpc's error surface."} />
 
 <Recipe
     task="Narrow a typed error on the client"
@@ -101,7 +100,7 @@ export const checkout = POST(({ sku, quantity }, { errors }) => {
     code={`if (checkout.isError(err, 'outOfStock')) {
     show(\`\${err.data.sku}: \${err.data.available} left\`)  // typed, no cast
 }`}
-    note={"`isError(err, 'outOfStock')` narrows both `err.kind` and `err.data` from the rpc's own `errors` spec — the compiler knows the shape."} />
+    note={"`isError(err, 'outOfStock')` narrows both `err.kind` and `err.data` — inferred from the `error.typed` constructor the handler returns, so the compiler knows the shape."} />
 
 <Recipe
     task="Throw a plain HTTP error"

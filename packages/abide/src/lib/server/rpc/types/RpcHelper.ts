@@ -2,7 +2,31 @@ import type { ClientFlags } from '../../../shared/types/ClientFlags.ts'
 import type { ErrorSpec } from '../../../shared/types/ErrorSpec.ts'
 import type { RemoteFunction } from '../../../shared/types/RemoteFunction.ts'
 import type { StandardSchemaV1 } from '../../../shared/types/StandardSchemaV1.ts'
-import type { RemoteHandler } from './RemoteHandler.ts'
+import type { TypedError } from './TypedError.ts'
+import type { TypedResponse } from './TypedResponse.ts'
+
+/*
+The success body carried by a handler's return type `R`. Error branches
+(`TypedError`, checked first since they're also Responses) drop to `never` and
+union away, so `Return` is the body of the success `TypedResponse` members alone
+— an untagged `Response` falls back to `unknown`, matching hand-built responses.
+*/
+type SuccessBody<R> =
+    R extends TypedError<string, ErrorSpec[string]>
+        ? never
+        : R extends TypedResponse<infer Body>
+          ? Body
+          : unknown
+
+/*
+The error spec a handler's return type `R` declares — rebuilt name→entry from the
+`TypedError` brands among its branches (distributes over the union; no error
+branches → `{}`). This is what gives `rpc.isError` its typed surface with no
+`errors:` option: the errors a handler RETURNS are the errors it can raise.
+*/
+type ErrorBrand<R> =
+    R extends TypedError<infer Name, infer Entry> ? { name: Name; entry: Entry } : never
+type InferredErrors<R> = { [Brand in ErrorBrand<R> as Brand['name']]: Brand['entry'] }
 
 /*
 Options every rpc overload accepts: the OpenAPI 200 `outputSchema`, the
@@ -34,14 +58,17 @@ type MutatingRpcOpts = RpcBaseOpts & {
 }
 
 /*
-Shared signature for every rpc helper (GET / POST / …). Four overloads:
+Shared signature for every rpc helper (GET / POST / …). The handler's return
+type is inferred whole (`R extends Response`), then split: `SuccessBody<R>`
+becomes the caller's `Return`, `InferredErrors<R>` becomes the rpc's `Errors`
+(driving `isError`). Typed errors are raised by returning an
+`error.typed(name, status, schema?)` constructor — there is no `errors:` opt.
+Four overloads by argument source:
 
   - `Rpc(fn, { inputSchema, outputSchema?, clients? })` — `Args` infers
     from `InferInput<InputSchema>`, the handler receives
-    `InferOutput<InputSchema>`. Generic order is `<Return, InputSchema>` so
-    users can override `Return` while letting `InputSchema` infer from
-    `opts.inputSchema`. `outputSchema` is an optional Standard Schema for
-    the success body — it feeds the OpenAPI 200 response and the MCP tool
+    `InferOutput<InputSchema>`. `outputSchema` is an optional Standard Schema
+    for the success body — it feeds the OpenAPI 200 response and the MCP tool
     `outputSchema`. JSON Schema is projected from each schema's own
     `toJSONSchema()` (wrap with withJsonSchema if the library lacks one).
     `clients` controls which surfaces (browser / mcp / cli) expose this rpc.
@@ -57,8 +84,8 @@ Shared signature for every rpc helper (GET / POST / …). Four overloads:
     just abandoned.
   - `Rpc(fn, { clients })` — schemaless but with explicit client
     targeting (e.g. server-internal RPC with `clients: { browser: false }`).
-  - `Rpc(fn)` — bare handler. `Args` and `Return` come from the handler
-    type; `Return` is usually inferred via the `TypedResponse<T>` brand on
+  - `Rpc(fn)` — bare handler. `Args` comes from the handler param; `Return`
+    is inferred via the `TypedResponse<T>` brand on
     `json`/`error`/`redirect`/`jsonl`/`sse`.
 */
 type RpcHelperOf<Opts> = {
@@ -72,37 +99,30 @@ type RpcHelperOf<Opts> = {
     jsonSchemaForSchema) — so only inputSchema feeds MCP/CLI/OpenAPI.
     */
     <
-        Return = unknown,
+        R extends Response,
         InputSchema extends StandardSchemaV1 = StandardSchemaV1,
         FilesSchema extends StandardSchemaV1 = StandardSchemaV1,
-        Errors extends ErrorSpec = Record<string, never>,
     >(
-        fn: RemoteHandler<
-            StandardSchemaV1.InferOutput<InputSchema> & StandardSchemaV1.InferOutput<FilesSchema>,
-            Return,
-            Errors
-        >,
+        fn: (
+            args: StandardSchemaV1.InferOutput<InputSchema> &
+                StandardSchemaV1.InferOutput<FilesSchema>,
+        ) => R | Promise<R>,
         opts: Opts & {
             inputSchema: InputSchema
             filesSchema: FilesSchema
-            errors?: Errors
         },
-    ): RemoteFunction<StandardSchemaV1.InferInput<InputSchema>, Return, Errors>
-    <
-        Return = unknown,
-        InputSchema extends StandardSchemaV1 = StandardSchemaV1,
-        Errors extends ErrorSpec = Record<string, never>,
-    >(
-        fn: RemoteHandler<StandardSchemaV1.InferOutput<InputSchema>, Return, Errors>,
-        opts: Opts & { inputSchema: InputSchema; errors?: Errors },
-    ): RemoteFunction<StandardSchemaV1.InferInput<InputSchema>, Return, Errors>
-    <Args = undefined, Return = unknown, Errors extends ErrorSpec = Record<never, never>>(
-        fn: RemoteHandler<Args, Return, Errors>,
-        opts: Opts & { errors?: Errors },
-    ): RemoteFunction<Args, Return, Errors>
-    <Args = undefined, Return = unknown>(
-        fn: RemoteHandler<Args, Return>,
-    ): RemoteFunction<Args, Return>
+    ): RemoteFunction<StandardSchemaV1.InferInput<InputSchema>, SuccessBody<R>, InferredErrors<R>>
+    <R extends Response, InputSchema extends StandardSchemaV1 = StandardSchemaV1>(
+        fn: (args: StandardSchemaV1.InferOutput<InputSchema>) => R | Promise<R>,
+        opts: Opts & { inputSchema: InputSchema },
+    ): RemoteFunction<StandardSchemaV1.InferInput<InputSchema>, SuccessBody<R>, InferredErrors<R>>
+    <Args = undefined, R extends Response = Response>(
+        fn: (args: Args) => R | Promise<R>,
+        opts: Opts,
+    ): RemoteFunction<Args, SuccessBody<R>, InferredErrors<R>>
+    <Args = undefined, R extends Response = Response>(
+        fn: (args: Args) => R | Promise<R>,
+    ): RemoteFunction<Args, SuccessBody<R>, InferredErrors<R>>
 }
 
 /* The read helpers (GET/HEAD): no `outbox` — a read has nothing to durably deliver. */
@@ -117,35 +137,38 @@ set in MutatingRpcHelper so an `outbox: true` literal resolves here first.
 */
 type DurableMutatingRpcHelper = {
     <
-        Return = unknown,
+        R extends Response,
         InputSchema extends StandardSchemaV1 = StandardSchemaV1,
         FilesSchema extends StandardSchemaV1 = StandardSchemaV1,
-        Errors extends ErrorSpec = Record<string, never>,
     >(
-        fn: RemoteHandler<
-            StandardSchemaV1.InferOutput<InputSchema> & StandardSchemaV1.InferOutput<FilesSchema>,
-            Return,
-            Errors
-        >,
+        fn: (
+            args: StandardSchemaV1.InferOutput<InputSchema> &
+                StandardSchemaV1.InferOutput<FilesSchema>,
+        ) => R | Promise<R>,
         opts: MutatingRpcOpts & {
             inputSchema: InputSchema
             filesSchema: FilesSchema
-            errors?: Errors
             outbox: true
         },
-    ): RemoteFunction<StandardSchemaV1.InferInput<InputSchema>, Return, Errors, true>
-    <
-        Return = unknown,
-        InputSchema extends StandardSchemaV1 = StandardSchemaV1,
-        Errors extends ErrorSpec = Record<string, never>,
-    >(
-        fn: RemoteHandler<StandardSchemaV1.InferOutput<InputSchema>, Return, Errors>,
-        opts: MutatingRpcOpts & { inputSchema: InputSchema; errors?: Errors; outbox: true },
-    ): RemoteFunction<StandardSchemaV1.InferInput<InputSchema>, Return, Errors, true>
-    <Args = undefined, Return = unknown, Errors extends ErrorSpec = Record<never, never>>(
-        fn: RemoteHandler<Args, Return, Errors>,
-        opts: MutatingRpcOpts & { errors?: Errors; outbox: true },
-    ): RemoteFunction<Args, Return, Errors, true>
+    ): RemoteFunction<
+        StandardSchemaV1.InferInput<InputSchema>,
+        SuccessBody<R>,
+        InferredErrors<R>,
+        true
+    >
+    <R extends Response, InputSchema extends StandardSchemaV1 = StandardSchemaV1>(
+        fn: (args: StandardSchemaV1.InferOutput<InputSchema>) => R | Promise<R>,
+        opts: MutatingRpcOpts & { inputSchema: InputSchema; outbox: true },
+    ): RemoteFunction<
+        StandardSchemaV1.InferInput<InputSchema>,
+        SuccessBody<R>,
+        InferredErrors<R>,
+        true
+    >
+    <Args = undefined, R extends Response = Response>(
+        fn: (args: Args) => R | Promise<R>,
+        opts: MutatingRpcOpts & { outbox: true },
+    ): RemoteFunction<Args, SuccessBody<R>, InferredErrors<R>, true>
 }
 
 /*

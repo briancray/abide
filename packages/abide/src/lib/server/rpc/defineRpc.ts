@@ -5,12 +5,10 @@ import { forwardHeaders } from '../../shared/forwardHeaders.ts'
 import { isReadOnlyMethod } from '../../shared/isReadOnlyMethod.ts'
 import { resolveClientFlags } from '../../shared/resolveClientFlags.ts'
 import type { ClientFlags } from '../../shared/types/ClientFlags.ts'
-import type { ErrorSpec } from '../../shared/types/ErrorSpec.ts'
 import type { HttpMethod } from '../../shared/types/HttpMethod.ts'
 import type { RemoteFunction } from '../../shared/types/RemoteFunction.ts'
 import type { StandardSchemaV1 } from '../../shared/types/StandardSchemaV1.ts'
 import { requestContext } from '../runtime/requestContext.ts'
-import { buildErrorConstructors } from './buildErrorConstructors.ts'
 import { parseArgs } from './parseArgs.ts'
 import { registerRpc } from './registerRpc.ts'
 import { runWithRpcTimeout } from './runWithRpcTimeout.ts'
@@ -55,7 +53,6 @@ export function defineRpc<Args, Return>(
         inputSchema?: StandardSchemaV1
         outputSchema?: StandardSchemaV1
         filesSchema?: StandardSchemaV1
-        errors?: ErrorSpec
         clients?: Partial<ClientFlags>
         crossOrigin?: boolean
         /* Per-rpc cap on actual received body bytes (413 past it); omitted = Bun's server-wide maxRequestBodySize. */
@@ -81,8 +78,6 @@ export function defineRpc<Args, Return>(
     const inputSchema = opts?.inputSchema
     const outputSchema = opts?.outputSchema
     const filesSchema = opts?.filesSchema
-    /* The declared error constructors handed to the handler as its `{ errors }` ctx. */
-    const errors = buildErrorConstructors(opts?.errors ?? {})
     /*
     An input schema makes the handler safe to advertise to non-browser
     surfaces. CLI flips on for any rpc with one (a human/script invokes it
@@ -123,7 +118,7 @@ export function defineRpc<Args, Return>(
     async function runHandler(args: Args | undefined): Promise<Response> {
         return rpcLog.trace(
             `rpc ${method} ${url}`,
-            () => handler(args as Args, { errors }) as unknown as Response,
+            () => handler(args as Args) as unknown as Response,
         )
     }
 
@@ -166,8 +161,7 @@ export function defineRpc<Args, Return>(
     /* Abort the controller parseArgsForFetch stashed on store.req; a no-op when none was stashed (SSR cache reads). */
     function abortRpcTimeout(): void {
         const req = requestContext.getStore()?.req as
-            | (Request & { [RPC_TIMEOUT_ABORT]?: AbortController })
-            | undefined
+            (Request & { [RPC_TIMEOUT_ABORT]?: AbortController }) | undefined
         req?.[RPC_TIMEOUT_ABORT]?.abort(new DOMException('handler timeout', 'TimeoutError'))
     }
 

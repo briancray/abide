@@ -10,13 +10,17 @@ const inputSchema = z.object({
 })
 
 /*
-A declared error set: each named error names its HTTP status + an optional data
-schema the constructor requires. The client derives a typed Result union from
-this, and the handler receives matching constructors via its second arg.
+A reusable typed error declared at module scope. `error.typed(name, status, schema?)`
+names its HTTP status + an optional data schema the constructor requires. Returning it
+from the handler IS the error — the rpc infers its whole error surface from the
+constructors the handler returns, so there's no `errors:` option and the client derives a
+typed `.kind` / `.data` for `checkout.isError(err, 'outOfStock')`.
 */
-const errors = {
-    outOfStock: { status: 409, data: z.object({ sku: z.string(), available: z.number() }) },
-} as const
+const outOfStock = error.typed(
+    'outOfStock',
+    409,
+    z.object({ sku: z.string(), available: z.number() }),
+)
 
 const STOCK: Record<string, number> = { 'abide-tee': 2, 'abide-mug': 0 }
 
@@ -24,16 +28,16 @@ const STOCK: Record<string, number> = { 'abide-tee': 2, 'abide-mug': 0 }
 Two typed failure modes on one rpc, both surfacing as an HttpError with
 `.kind` / `.data` on the client:
 - a bad quantity fails inputSchema → `kind: 'validation'` (422), data is ValidationErrorData
-- an over-order returns `error(errors.outOfStock(...))` → `kind: 'outOfStock'` (409),
-  data is the `{ sku, available }` the constructor carried
+- an over-order returns `outOfStock({...})` → `kind: 'outOfStock'` (409), data is the
+  `{ sku, available }` the constructor carried
 */
 export const checkout = POST(
-    ({ sku, quantity }, { errors }) => {
+    ({ sku, quantity }) => {
         const available = STOCK[sku] ?? 0
         if (quantity > available) {
-            return error(errors.outOfStock({ sku, available }))
+            return outOfStock({ sku, available })
         }
         return json({ ok: true as const, sku, quantity })
     },
-    { inputSchema, errors },
+    { inputSchema },
 )

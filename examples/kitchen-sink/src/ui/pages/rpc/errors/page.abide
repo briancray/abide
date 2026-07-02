@@ -111,7 +111,7 @@ async function trigger500() {
                 <tr>
                     <td class="px-4 py-2 font-mono">409</td>
                     <td class="px-4 py-2 text-slate-600">
-                        handler returns <code class="font-mono">error(errors.outOfStock(…))</code>
+                        handler returns <code class="font-mono">outOfStock(…)</code>
                     </td>
                     <td class="px-4 py-2 text-slate-600">
                         typed: <code class="font-mono">.kind</code> +
@@ -214,15 +214,13 @@ import { POST } from '@abide/abide/server/POST'
 import { z } from 'zod'
 
 const inputSchema = z.object({ sku: z.string(), quantity: z.coerce.number().int().min(1) })
-const errors = {
-    outOfStock: { status: 409, data: z.object({ sku: z.string(), available: z.number() }) },
-} as const
+const outOfStock = error.typed('outOfStock', 409, z.object({ sku: z.string(), available: z.number() }))
 
-export const checkout = POST(({ sku, quantity }, { errors }) => {
+export const checkout = POST(({ sku, quantity }) => {
     const available = stock[sku] ?? 0
-    if (quantity > available) return error(errors.outOfStock({ sku, available }))
+    if (quantity > available) return outOfStock({ sku, available })
     return json({ ok: true, sku, quantity })
-}, { inputSchema, errors })`} />
+}, { inputSchema })`} />
 
     <CodeBlock title="client — checkout.isError narrows kind + data" code={`try {
     await checkout({ sku: 'abide-mug', quantity: 3 })

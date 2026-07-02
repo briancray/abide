@@ -4,7 +4,7 @@ import { HttpError } from './HttpError.ts'
 
 /*
 Builds the HttpError for a non-2xx response, parsing a typed-error body
-(`{ $abideError, data }`, emitted by `error(errors.x(...))` and validation 422)
+(`{ $abideError, data }`, emitted by an `error.typed(...)` constructor and validation 422)
 onto `.kind` / `.data`. Reads a clone so the original `response.body` stays
 unread for callers that inspect it. A non-JSON or malformed body leaves
 `.kind` / `.data` undefined (a plain `error(status, text)`). Shared by the

@@ -9,7 +9,7 @@ export class HttpError extends Error {
     readonly status: number
     readonly statusText: string
     readonly response: Response
-    /* Set when the handler returned a typed error (`error(errors.x(...))`) or a
+    /* Set when the handler returned a typed error (`error.typed(...)` constructor) or a
        validation 422: `kind` is the declared error name (or 'validation'), `data` the
        payload it carried — parsed off the `{ $abideError, data }` body by decodeResponse.
        `data` is typed `unknown` (a throw can't carry the rpc's per-kind type to the

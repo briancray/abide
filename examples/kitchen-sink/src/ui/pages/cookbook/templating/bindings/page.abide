@@ -72,6 +72,15 @@ const LIVE = '/templating/bindings'
 <input type="radio" bind:group={topic} value="all" />
 <input type="radio" bind:group={topic} value="mine" />`} note={'`bind:group` ties several radios (or checkboxes) to one cell — the cell holds the selected `value`.'} />
 
+<Recipe
+    task="Bind a checkbox group to an array"
+    live={LIVE}
+    code={`let toppings = state<string[]>([])
+
+<input type="checkbox" bind:group={toppings} value="cheese" />
+<input type="checkbox" bind:group={toppings} value="olives" />`}
+    note={'A `type="checkbox"` `bind:group` holds an array — checking pushes that input `value`, unchecking removes it. Seed the cell with an array, not a scalar.'} />
+
 <Recipe task="Bind a select" live={LIVE} code={`let sort = state('newest')
 
 <select bind:value={sort}>

@@ -102,7 +102,7 @@ describe('createTestApp', () => {
         ['/cookbook/routing/layouts', 'Nest layouts'],
         ['/cookbook/routing/navigate', 'Navigate programmatically'],
         ['/cookbook/forms/rpc-methods', 'Define a create'],
-        ['/cookbook/forms/validation', 'Declare a typed error set'],
+        ['/cookbook/forms/validation', 'Declare a typed error'],
         ['/cookbook/forms/optimistic', 'Cancel an in-flight request'],
         ['/cookbook/errors/throwing', 'Throw a typed HTTP error'],
         ['/cookbook/errors/boundaries', 'Add a synchronous error boundary'],
