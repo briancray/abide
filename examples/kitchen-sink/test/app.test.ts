@@ -117,6 +117,9 @@ describe('createTestApp', () => {
         ['/cookbook/security/origin', 'Opt one rpc out of the gate'],
         ['/cookbook/security/auth', 'Set a session cookie'],
         ['/cookbook/security/mcp-auth', 'Gate the MCP endpoint'],
+        ['/cookbook/ops/config', 'Validate environment config'],
+        ['/cookbook/ops/testing', 'Boot an app in a test'],
+        ['/cookbook/ops/deploy', 'Compile a standalone server binary'],
     ]
     for (const [route, marker] of cookbookPages) {
         test(`cookbook ${route} SSRs`, async () => {
