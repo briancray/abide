@@ -86,13 +86,13 @@ describe('scope — the lexical data + capability seam', () => {
         expect(child.canUndo()).toBe(false) // child history dropped
     })
 
-    test('scope() resolves the ambient current scope; scope("/") is the root', () => {
+    test('scope() resolves the ambient current scope', () => {
         const root = createScope({})
         const child = root.child({})
         CURRENT_SCOPE.current = child
 
         expect(scope()).toBe(child) // current
-        expect(scope('/')).toBe(root) // root of the tree
+        expect(child.root()).toBe(root) // root reached via the handle, not scope()
     })
 
     test('share/shared passes context down the tree to the closest ancestor', () => {

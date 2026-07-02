@@ -273,7 +273,7 @@ the fallback form. No named slots.
 
 ### Reactive state — @documentation reactive-state
 
-- `abide/ui/scope` — `scope(address?)` resolves the current lexical scope (or `scope('/')` the tree root); the sole reactive entry, carrying `state`/`computed`/`linked`/`effect` + data/context/capability methods.
+- `abide/ui/scope` — `scope()` resolves the current lexical scope; the sole reactive entry, carrying `state`/`computed`/`linked`/`effect` + data/context/capability methods (walk to the tree root via the handle's `.root()`).
 
 ### Templating — @documentation templating
 
