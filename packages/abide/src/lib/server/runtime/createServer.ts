@@ -50,6 +50,7 @@ import { devHotModuleResponse } from './devHotModuleResponse.ts'
 import { devReloadResponse } from './devReloadResponse.ts'
 import { disableIdleTimeoutForStream } from './disableIdleTimeoutForStream.ts'
 import { gzipResponse } from './gzipResponse.ts'
+import { installAmbientScopeStore } from './installAmbientScopeStore.ts'
 import { internalErrorResponse } from './internalErrorResponse.ts'
 import { listenOnOpenPort } from './listenOnOpenPort.ts'
 import { logExposedSurfaces } from './logExposedSurfaces.ts'
@@ -159,6 +160,12 @@ export async function createServer({
     HTTP test harness gets the same behaviour as a real boot. elapsedMs is
     computed at read time so every log line carries a current value.
     */
+    /*
+    Key the ambient lexical scope off the per-request ALS store, so concurrent
+    async SSR renders don't clobber one shared module global across the inline
+    `await`s they suspend on (see installAmbientScopeStore / CURRENT_SCOPE).
+    */
+    installAmbientScopeStore()
     setRequestScopeResolver(() => {
         const store = requestContext.getStore()
         if (!store) {

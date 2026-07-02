@@ -1,5 +1,6 @@
 import type { CacheStore } from '../../../shared/types/CacheStore.ts'
 import type { TraceContext } from '../../../shared/types/TraceContext.ts'
+import type { Scope } from '../../../ui/types/Scope.ts'
 
 /*
 Per-request state propagated through AsyncLocalStorage. Every field is
@@ -68,4 +69,12 @@ export type RequestStore = {
     back to classifying the response themselves.
     */
     responseStreaming?: boolean
+    /*
+    The request's ambient lexical scope during its SSR pass — the backing for
+    `CURRENT_SCOPE.current` under the server's ALS-backed holder
+    (installAmbientScopeStore). Keeping it per-request isolates the ambient across
+    the inline `await`s a render suspends on, so concurrent renders don't clobber
+    one shared module global. Undefined until the render enters its first scope.
+    */
+    currentScope?: Scope
 }
