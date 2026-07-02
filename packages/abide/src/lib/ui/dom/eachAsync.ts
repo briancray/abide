@@ -1,6 +1,6 @@
 import { effect } from '../effect.ts'
 import { claimChild } from '../runtime/claimChild.ts'
-import { OWNER } from '../runtime/OWNER.ts'
+import { generationGuard } from '../runtime/generationGuard.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { scopeGroup } from '../runtime/scopeGroup.ts'
 import type { State } from '../runtime/types/State.ts'
@@ -74,12 +74,16 @@ export function eachAsync<T>(
         }
     }
 
-    /* Bumped each run so a superseded drain stops appending and pruning. */
-    let generation = 0
     let iterator: AsyncIterator<T> | undefined
+    /* Bumped each run so a superseded drain stops appending and pruning, and on owner teardown
+       — which also `return()`s the live iterator to release the source (rows and the error
+       branch are disposed by the group, whose scopes were tracked). */
+    const guard = generationGuard(() => {
+        iterator?.return?.(undefined)?.catch(() => undefined)
+        iterator = undefined
+    })
     effect(() => {
-        generation += 1
-        const generationAtStart = generation
+        const generationAtStart = guard.renew()
         iterator?.return?.(undefined)?.catch(() => undefined) // close the superseded run's iterator before re-streaming
         iterator = undefined
         clearError() // a fresh run drops a prior error branch
@@ -92,7 +96,7 @@ export function eachAsync<T>(
             while (true) {
                 const result = await active.next()
                 /* A re-run or teardown bumped the generation while we awaited. */
-                if (generationAtStart !== generation) {
+                if (!guard.live(generationAtStart)) {
                     return
                 }
                 if (result.done === true) {
@@ -126,7 +130,7 @@ export function eachAsync<T>(
             }
         }
         drain().catch((error: unknown) => {
-            if (generationAtStart !== generation) {
+            if (!guard.live(generationAtStart)) {
                 return
             }
             /* No catch branch → surface the rejection (mirrors `<template await>`). */
@@ -137,15 +141,4 @@ export function eachAsync<T>(
             errorRange = insertRange((host) => renderCatch(host, error))
         })
     })
-
-    /* Stop the live stream when the enclosing scope tears down: bump the generation so
-       the drain abandons its loop and `return()` the iterator to release the source. The
-       rows and error branch are disposed by the group (their scopes were tracked). */
-    if (OWNER.current !== undefined) {
-        OWNER.current.push(() => {
-            generation += 1
-            iterator?.return?.(undefined)?.catch(() => undefined)
-            iterator = undefined
-        })
-    }
 }
