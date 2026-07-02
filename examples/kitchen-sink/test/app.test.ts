@@ -110,6 +110,10 @@ describe('createTestApp', () => {
         ['/cookbook/realtime/sockets', 'Declare a broadcast topic'],
         ['/cookbook/realtime/tail', 'Subscribe to a socket in the UI'],
         ['/cookbook/realtime/patterns', 'Build a chat room'],
+        ['/cookbook/beyond/agent', 'Run a model over the app'],
+        ['/cookbook/beyond/mcp', 'Expose a read rpc as a tool'],
+        ['/cookbook/beyond/cli', 'Build the CLI binary'],
+        ['/cookbook/beyond/bundle', 'Build a desktop bundle'],
     ]
     for (const [route, marker] of cookbookPages) {
         test(`cookbook ${route} SSRs`, async () => {
