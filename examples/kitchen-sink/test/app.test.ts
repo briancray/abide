@@ -123,6 +123,8 @@ describe('createTestApp', () => {
         ['/cookbook/files/uploads', 'Accept a file upload'],
         ['/cookbook/files/downloads', 'Return a file from an rpc'],
         ['/cookbook/files/assets', 'Serve a static asset'],
+        ['/cookbook/offline/outbox', 'Make a write durable'],
+        ['/cookbook/offline/resilience', 'Persist a form draft locally'],
     ]
     for (const [route, marker] of cookbookPages) {
         test(`cookbook ${route} SSRs`, async () => {

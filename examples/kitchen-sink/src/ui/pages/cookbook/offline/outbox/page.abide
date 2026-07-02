@@ -1,0 +1,104 @@
+<script>
+import Recipe from '$ui/Recipe.abide'
+
+/* Cookbook · offline & local-first · the outbox. */
+const LIVE = '/outbox'
+</script>
+
+<h1 class="text-3xl font-bold">the outbox</h1>
+<p class="mt-2 text-slate-600">
+    Local-first durability is declared on the rpc. A mutating rpc marked
+    <code class="font-mono">{'{ outbox: true }'}</code> queues every call durably — persisted, so it survives
+    a reload — and drains on reconnect.
+</p>
+
+<Recipe task="Make a write durable" live={LIVE} code={`export const saveMessage = POST(handler, { inputSchema, outbox: true })`} note={"`outbox: true` on a mutating rpc makes each call durable. It's a per-rpc declaration, not a wrapper at the call site — `GET(fn, { outbox })` is a compile error."} />
+
+<Recipe task="Enqueue a write" live={LIVE} code={`await saveMessage({ id, text })   // delivers now, or parks durably if unreachable`} note={"Call it like any rpc. If the server is reachable it delivers; if not, the call parks in the durable queue and drains later — the call site doesn't change."} />
+
+<Recipe task="Handle the parked call" live={LIVE} code={`try {
+    await saveMessage({ id, text })
+} catch (error) {
+    if (error instanceof HttpError && error.kind === 'queued') return  // still optimistic
+    rollBack(id)   // a real rejection
+}`} note={"A parked call throws `kind: 'queued'` — not a failure, it drains on reconnect, so keep the optimistic UI. Any other rejection is permanent; roll back."} />
+
+<Recipe
+    task="Render optimistically before it syncs"
+    live={LIVE}
+    code={`submitted = [...submitted, { id, text }]   // show it the instant it's enqueued
+await saveMessage({ id, text })`}
+    note={'Add to local state before (or right after) the call so the UI updates immediately. The queue guarantees the write eventually lands or surfaces a permanent error.'} />
+
+<Recipe task="Read this rpc's queue" live={LIVE} code={`const queue = computed(() => saveMessage.outbox?.() ?? [])`} note={'`rpc.outbox()` is the reactive parked-writes list for that rpc. It exists only on a durable rpc, so guard with `?.` if the rpc might not be declared with outbox.'} />
+
+<Recipe
+    task="Read the app-wide queue"
+    live={LIVE}
+    code={`import { outbox } from '@abide/abide/ui/outbox'
+const unsynced = computed(() => outbox().length)`}
+    note={"The bare `outbox()` is the aggregate across every durable rpc — one reactive view for a global 'N unsynced' badge."} />
+
+<Recipe
+    task="Show each entry's status"
+    live={LIVE}
+    code={`{#for entry of queue by entry.id}
+    <li>{entry.args.text} · {entry.status}</li>
+{/for}`}
+    note={"Each entry carries its `args` and `status` — render the pending writes with what they'll send, so the user sees exactly what's waiting."} />
+
+<Recipe task="Cancel a queued write" live={LIVE} code={`<button onclick={() => entry.controller.abort()}>cancel</button>`} note={'Every entry has an `AbortController` — `entry.controller.abort()` removes it before it sends. The way to let a user undo a not-yet-synced action.'} />
+
+<Recipe
+    task="Drain the queue on demand"
+    live={LIVE}
+    code={`import { outbox } from '@abide/abide/ui/outbox'
+outbox.retry()`}
+    note={"The queue drains automatically when the server becomes reachable again; `outbox.retry()` forces a drain now — wire it to a 'Retry sync' button."} />
+
+<Recipe
+    task="Probe queued and in-flight writes"
+    live="/probes"
+    code={`import { pending } from '@abide/abide/shared/pending'
+const syncing = computed(() => pending(saveMessage))`}
+    note={"`pending(rpc)` is true while anything is in flight *or* queued — one probe for a 'syncing…' indicator that covers both states."} />
+
+<Recipe
+    task="Keep the handler idempotent"
+    live={LIVE}
+    code={`export const saveMessage = POST(({ id, text }) => {
+    saved.set(id, text)   // keyed by client id — a replay is a no-op
+    return json({ id }, { status: 201 })
+}, { inputSchema, outbox: true })`}
+    note={'Delivery is at-least-once: a crash between send and dequeue replays the call. Key writes on a client-supplied id so a replay overwrites rather than duplicates.'} />
+
+<Recipe
+    task="Roll back a permanently rejected write"
+    live={LIVE}
+    code={`catch (error) {
+    if (error instanceof HttpError && error.kind === 'queued') return
+    dropped = [...dropped, { id, text }]
+    submitted = submitted.filter((m) => m.id !== id)
+}`}
+    note={'A 422 (or other non-park rejection) while online is thrown at the call site and never enters the queue — reconcile by removing the optimistic entry.'} />
+
+<Recipe
+    task="Survive a reload with pending writes"
+    live={LIVE}
+    code={`// nothing to do — the queue is persisted
+await saveMessage({ id, text })   // parked writes are restored on next load`}
+    note={'The outbox is durable storage, not in-memory — enqueue offline, close the tab, reopen, and the parked writes are still there waiting to drain.'} />
+
+<Recipe
+    task="Understand what counts as parkable"
+    live={LIVE}
+    code={`// parks: fetch reject (offline) OR 502/503/504/52x
+// does NOT park: a 400/422 — that's a real, permanent rejection`}
+    note={'The classifier parks on unreachability (a fetch reject or a gateway/5xx), not on a client error. A 400/422 means the request was wrong, so it fails loudly instead of queuing forever.'} />
+
+<Recipe
+    task="Choose when the queue is durable"
+    live={LIVE}
+    code={`export const track = POST(handler, { inputSchema, outbox: true })   // durable
+export const ping = POST(handler, { inputSchema })                    // no queue — fails fast`}
+    note={'Only opt writes into the outbox when replay-later is the right behaviour. A non-durable rpc simply rejects when unreachable — right for actions that are meaningless once stale.'} />
