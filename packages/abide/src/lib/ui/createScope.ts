@@ -109,8 +109,10 @@ export function createScope(
                 owned[index]?.()
             }
             owned.length = 0
-            for (const created of children) {
-                created.dispose()
+            /* Children reverse too (last created first), so a later child that captured an
+               earlier sibling tears down before the sibling it depends on — LIFO like `owned`. */
+            for (let index = children.length - 1; index >= 0; index -= 1) {
+                children[index]?.dispose()
             }
             children.length = 0
             shared.clear()
