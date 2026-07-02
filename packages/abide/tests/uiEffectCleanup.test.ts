@@ -60,7 +60,9 @@ describe('effect cleanup', () => {
         inScope(owner, () => {
             dispose = effect(() => {
                 trigger.value
-                return () => seen.push(CURRENT_SCOPE.current)
+                return () => {
+                    seen.push(CURRENT_SCOPE.current)
+                }
             })
         })
         /* Ambient has left `owner` after the build — so a teardown seeing `owner` below
