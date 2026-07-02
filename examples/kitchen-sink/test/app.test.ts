@@ -104,6 +104,9 @@ describe('createTestApp', () => {
         ['/cookbook/forms/rpc-methods', 'Define a create'],
         ['/cookbook/forms/validation', 'Declare a typed error set'],
         ['/cookbook/forms/optimistic', 'Cancel an in-flight request'],
+        ['/cookbook/errors/throwing', 'Throw a typed HTTP error'],
+        ['/cookbook/errors/boundaries', 'Add a synchronous error boundary'],
+        ['/cookbook/errors/probes', 'Detect that the browser is offline'],
     ]
     for (const [route, marker] of cookbookPages) {
         test(`cookbook ${route} SSRs`, async () => {

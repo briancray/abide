@@ -1,0 +1,104 @@
+<script>
+import Recipe from '$ui/Recipe.abide'
+
+/* Cookbook · errors & resilience · pending & refreshing. */
+const LIVE = '/probes'
+const OBS = '/observability'
+</script>
+
+<h1 class="text-3xl font-bold">pending & refreshing</h1>
+<p class="mt-2 text-slate-600">
+    Standalone reactive probes spanning cache calls and tail streams.
+    <code class="font-mono">pending</code> = no value yet;
+    <code class="font-mono">refreshing</code> = value held, a fresher source in flight. They report,
+    never act.
+</p>
+
+<Recipe
+    task="Show that anything is loading"
+    live={LIVE}
+    code={`import { pending } from '@abide/abide/shared/pending'
+const busy = computed(() => pending())`}
+    note={'Bare `pending()` is true while any cache call or tail stream is in flight — a global activity indicator with no wiring.'} />
+
+<Recipe
+    task="Show a specific read is loading"
+    live={LIVE}
+    code={`const loadingUser = computed(() => pending(getUser))`}
+    note={"`pending(fn)` scopes the probe to one function's calls — no loading flag threaded through the call site."} />
+
+<Recipe
+    task="Probe a specific call by args"
+    live={LIVE}
+    code={`const loadingThis = computed(() => pending(getUser, { id }))`}
+    note={'`pending(fn, args)` narrows to one keyed entry — useful when the same rpc is in flight for several ids at once.'} />
+
+<Recipe task="Probe a group by tag" live={LIVE} code={`const savingOrders = computed(() => pending({ tags: 'orders' }))`} note={"`pending({ tags })` covers every entry sharing the tag — one probe for a whole feature's in-flight work."} />
+
+<Recipe
+    task="Show a background refresh"
+    live={LIVE}
+    code={`import { refreshing } from '@abide/abide/shared/refreshing'
+const updating = computed(() => refreshing(getRates, { base: 'USD' }))`}
+    note={'`refreshing` is true when a value is held and a fresher one is loading — the stale-while-revalidate signal, same selector grammar as `pending`.'} />
+
+<Recipe
+    task="Separate first-load from refresh"
+    live={LIVE}
+    code={`const skeleton = computed(() => pending(getRates))
+const dim = computed(() => refreshing(getRates))`}
+    note={'Show a skeleton on `pending` (nothing to show yet) and dim on `refreshing` (old value present). Together they cover both loading modes cleanly.'} />
+
+<Recipe
+    task="Disable a control while pending"
+    live={LIVE}
+    code={`<button disabled={pending(submitOrder)}>place order</button>`}
+    note={'Read the probe straight into `disabled`. Pair with the `cache(fn, { ttl: 0 })` mutation idiom so the submit is coalesced and probe-visible.'} />
+
+<Recipe
+    task="Show a skeleton while pending"
+    live={LIVE}
+    code={`{#if pending(getFeed)}
+    <FeedSkeleton />
+{:else}
+    <Feed items={feed} />
+{/if}`}
+    note={'Branch the whole subtree on the probe — a placeholder while the first value loads, the real content once it lands.'} />
+
+<Recipe
+    task="Badge stale-but-present data"
+    live={LIVE}
+    code={`<span class:opacity-50={refreshing(getRates, { base: 'USD' })}>
+    {rates.usd}
+</span>`}
+    note={'Keep rendering the held value and dim it while `refreshing` — no flash of empty during a revalidation.'} />
+
+<Recipe
+    task="Enable stale-while-revalidate"
+    live={LIVE}
+    code={`const rates = computed(() => cache(getRates, { swr: { debounce: 300 } })({ base: 'USD' }))`}
+    note={'An `swr` policy keeps the entry and coalesces the refetch, so the stale value stays on screen while `refreshing()` is true. The retention that makes the badge above meaningful.'} />
+
+<Recipe
+    task="Detect that the browser is offline"
+    live={OBS}
+    code={`import { online } from '@abide/abide/shared/online'
+const connected = computed(() => online())
+
+{#if !connected}<Banner>You're offline</Banner>{/if}`}
+    note={'`online()` is a reactive probe over `navigator.onLine` — offline-reliable, isomorphic (always true on the server). Drives an offline banner or a disabled state.'} />
+
+<Recipe
+    task="Read server health / reachability"
+    live={OBS}
+    code={`import { health } from '@abide/abide/shared/health'
+const status = await health()   // typed, augmented from the app's health() hook`}
+    note={"`health()` probes `/__abide/health`. Its fields include whatever your app's `health()` boot hook returns — the signal a durable `outbox` drains on when the server recovers."} />
+
+<Recipe
+    task="Block an action while offline"
+    live={OBS}
+    code={`<button disabled={!online()} onclick={submit}>
+    {online() ? 'Save' : 'Offline'}
+</button>`}
+    note={'Gate a network action on `online()`. For work that should survive going offline and send later, declare the rpc `outbox: true` instead of blocking.'} />
