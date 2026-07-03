@@ -29,16 +29,19 @@ export function mountChild(
     props: Parameters<UiComponent>[1],
     before: Node | null = null,
     label?: string,
+    /* `client:idle` / `client:visible` on the tag → hydrate this child as an island (server
+       markup kept, build deferred to the trigger). Undefined = hydrate eagerly, as before. */
+    clientTrigger?: 'idle' | 'visible',
 ): void {
     const moduleId = factory.__abideId
     if (!__ABIDE_DEV__ || !hotReloadEnabled.current || moduleId === undefined) {
-        mountRange(parent, factory.build, props, before, label)
+        mountRange(parent, factory.build, props, before, label, clientTrigger)
         return
     }
     /* Capture the component's model alongside its mount handle, so a later swap can
        carry its state across (see `hotReplace`). */
     const { value: handle, model } = captureModelDoc(() =>
-        mountRange(parent, factory.build, props, before, label),
+        mountRange(parent, factory.build, props, before, label, clientTrigger),
     )
     const instance = {
         factory,

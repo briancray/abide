@@ -7,15 +7,14 @@ import { RANGE_CLOSE, RANGE_OPEN } from '../runtime/RANGE_MARKER.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import type { DeferMarker, ResumeEntry } from '../runtime/RESUME.ts'
 import { RESUME } from '../runtime/RESUME.ts'
+import { scheduleWake } from '../runtime/scheduleWake.ts'
 import { scope } from '../runtime/scope.ts'
 import { scopeGroup } from '../runtime/scopeGroup.ts'
 import type { State } from '../runtime/types/State.ts'
-import { whenIdle } from '../runtime/whenIdle.ts'
-import { whenVisible } from '../runtime/whenVisible.ts'
 import { state } from '../state.ts'
 import { buildDetachedRange } from './buildDetachedRange.ts'
 import { discardBoundary } from './discardBoundary.ts'
-import { isElement } from './isElement.ts'
+import { firstElementBetween } from './firstElementBetween.ts'
 import { removeRange } from './removeRange.ts'
 
 /*
@@ -232,19 +231,12 @@ export function awaitBlock(
            lazily-seeded cache reads warm, so the branch materializes live and interactive with
            no fetch. Closes the "deferred grid stays inert until invalidate" gap.
 
-           Trigger by position, when the DOM can be measured (a real IntersectionObserver): a
-           branch with an element wakes on VISIBLE — a below-the-fold grid decodes only when
-           scrolled to, one never reached costs nothing (rootMargin wakes it just before). With
-           no observer (SSR/test) or no element, wake on IDLE — off the critical boot path but
-           soon, so an above-the-fold or empty branch never lingers inert. */
-        const wake = (): void => {
+           Position picks the trigger ('auto'): a branch with an element wakes on VISIBLE (a
+           below-the-fold grid decodes only when scrolled to, one never reached costs nothing);
+           an empty branch or a DOM with no observer wakes on IDLE — never lingering inert. */
+        cancelWake = scheduleWake('auto', firstElementBetween(firstKept, close), () => {
             woken.value = true
-        }
-        const hasObserver =
-            typeof (globalThis as { IntersectionObserver?: unknown }).IntersectionObserver ===
-            'function'
-        const firstElement = hasObserver ? firstElementBetween(firstKept, close) : undefined
-        cancelWake = firstElement !== undefined ? whenVisible(firstElement, wake) : whenIdle(wake)
+        })
     }
 
     /* Discard the SSR boundary and (re)build the block from the live promise, fresh
@@ -389,17 +381,4 @@ export function awaitBlock(
 /* Whether a value is Promise-like (the cold path); a non-thenable is warm-sync. */
 function isThenable(value: unknown): value is Promise<unknown> {
     return value !== null && typeof (value as { then?: unknown })?.then === 'function'
-}
-
-/* The first Element in the sibling run `[start, end)` — the node a visible-wake observes for a
-   deferred branch. Undefined when the kept range holds no element (text/comment only), so the
-   caller falls back to an idle wake. Element detection is method-based (`isElement`), not
-   `nodeType`, so the walk runs under the test mini-dom too. */
-function firstElementBetween(start: Node | null, end: Node | null): Element | undefined {
-    for (let node = start; node !== null && node !== end; node = node.nextSibling) {
-        if (isElement(node)) {
-            return node
-        }
-    }
-    return undefined
 }
