@@ -75,6 +75,7 @@
         "./ui/html": "./src/lib/ui/html.ts",
         "./ui/effect": "./src/lib/ui/effect.ts",
         "./ui/scope": "./src/lib/ui/scope.ts",
+        "./ui/deferResume": "./src/lib/ui/deferResume.ts",
         "./ui/enterScope": "./src/lib/ui/enterScope.ts",
         "./ui/exitScope": "./src/lib/ui/exitScope.ts",
         "./ui/outbox": "./src/lib/ui/outbox.ts",

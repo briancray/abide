@@ -74,6 +74,8 @@ export async function snapshotEntryFromCache(
         statusText: response.statusText,
         headers: Array.from(response.headers.entries()),
         body,
+        /* Deferred by the SSR resume path → seed the shipped body lazily (no hydration decode). */
+        lazy: entry.deferred === true ? true : undefined,
     }
 }
 

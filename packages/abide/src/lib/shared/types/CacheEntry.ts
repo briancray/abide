@@ -59,9 +59,24 @@ export type CacheEntry = {
     ttl: number | undefined
     expiresAt: number | undefined
     value?: unknown
+    /*
+    Lazy warm materializer (Tier 2 deferred seed): a memoized thunk that decodes the
+    shipped body into the warm value on first call, so a deferred snapshot pays no decode
+    at hydration — only when a read actually needs the value. `value` stays undefined until
+    then; the read gate treats an entry with `warm` set as warm without invoking it. Eager
+    snapshots set `value` and leave this undefined.
+    */
+    warm?: () => unknown
     tags?: Set<string>
     settled?: boolean
     hydrated?: boolean
+    /*
+    Marks that the SSR resume path deferred this entry's `{#await cache()}` value — shipped a
+    `{ defer, key }` marker instead of inlining it. The post-stream snapshot drain reads it to
+    ship the body as a LAZY seed (decoded on first read, not at hydration). Set server-side
+    only, on the request-scoped entry, during the stream.
+    */
+    deferred?: boolean
     refreshing?: boolean
     invalidation?: InvalidationState
 }

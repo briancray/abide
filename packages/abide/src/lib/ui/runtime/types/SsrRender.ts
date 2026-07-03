@@ -1,4 +1,4 @@
-import type { ResumeEntry } from '../RESUME.ts'
+import type { DeferMarker, ResumeEntry } from '../RESUME.ts'
 
 /* One STREAMING await block captured during SSR (no `then` on the `await` tag): its
    boundary id, the promise to await, and the async string-renderers for the resolved
@@ -18,10 +18,11 @@ export type SsrAwait = {
 /* The result of a component's server `render()`: the pending-shell HTML, the
    serializable document snapshot for client resume, the STREAMING await blocks to
    flush out of order, and `resume` — the inline-rendered BLOCKING await values keyed
-   by boundary id, seeded into the manifest so hydration adopts them without a refetch. */
+   by boundary id, seeded into the manifest so hydration adopts them without a refetch. A
+   deferred (cache-backed) blocking value is a `DeferMarker` in place of the value. */
 export type SsrRender = {
     html: string
     state: unknown
     awaits: SsrAwait[]
-    resume: Record<number, ResumeEntry>
+    resume: Record<number, ResumeEntry | DeferMarker>
 }

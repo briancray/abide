@@ -1,10 +1,11 @@
+import { activeCacheStore } from '../../shared/activeCacheStore.ts'
 import { decodeRefJson } from '../../shared/decodeRefJson.ts'
 import { effect } from '../effect.ts'
 import { claimChild } from '../runtime/claimChild.ts'
 import { generationGuard } from '../runtime/generationGuard.ts'
 import { RANGE_CLOSE, RANGE_OPEN } from '../runtime/RANGE_MARKER.ts'
 import { RENDER } from '../runtime/RENDER.ts'
-import type { ResumeEntry } from '../runtime/RESUME.ts'
+import type { DeferMarker, ResumeEntry } from '../runtime/RESUME.ts'
 import { RESUME } from '../runtime/RESUME.ts'
 import { scope } from '../runtime/scope.ts'
 import { scopeGroup } from '../runtime/scopeGroup.ts'
@@ -180,6 +181,42 @@ export function awaitBlock(
         active = { start, end, dispose }
     }
 
+    /* Inert adoption — a deferred `{#await cache()}` (large payload, shipped as a `{defer,key}`
+       resume marker). Adopt the SSR then-branch WITHOUT building its bindings or materializing
+       the awaited value: the server markup is already correct, so keep it verbatim and skip the
+       payload decode entirely (the boot-path cost deferral targets). Only subscribe THIS block's
+       effect to the cache key — reads, decodes and fetches all wait. A later cache.invalidate
+       re-runs the effect, which then reads the value for real and builds a fresh branch. Sound
+       because a display-first read replaces the whole branch on re-read anyway, so there is no
+       extra flash beyond the swap the re-read already performs. */
+    const adoptInert = (open: Node | null, key: string): void => {
+        const cursor = hydration as NonNullable<typeof hydration>
+        const firstKept = open?.nextSibling ?? null
+        /* Scan to THIS block's close marker, leaving every server node in place. Nested
+           blocks carry different ids, so the first data match is our own close. */
+        let node: Node | null = firstKept
+        while (node !== null && (node as { data?: string }).data !== `/abide:await:${id}`) {
+            node = node.nextSibling
+        }
+        const close = node
+        cursor.next.set(parent, close?.nextSibling ?? null)
+        /* Bracket the kept nodes as a `[`…`]` range + park an anchor, identical to `adopt`,
+           so the first re-run's `place`/`detach` evicts them like any other branch. */
+        const start = document.createComment(RANGE_OPEN)
+        parent.insertBefore(start, firstKept ?? close)
+        const end = document.createComment(RANGE_CLOSE)
+        parent.insertBefore(end, close)
+        anchor = document.createTextNode('')
+        parent.insertBefore(anchor, close)
+        /* No scope/effects were built for the kept nodes, so disposal only evicts the range. */
+        active = { start, end, dispose: () => undefined }
+        /* Not 'then' — the first re-run rebuilds the branch fresh via `place`. */
+        activeKind = 'pending'
+        /* Subscribe without a value read: no clone, no decode, no fetch — just the key, so
+           cache.invalidate re-runs this effect (createSubscriber ties it to the running scope). */
+        activeCacheStore().subscribe(key)
+    }
+
     /* Discard the SSR boundary and (re)build the block from the live promise, fresh
        (hydration off) — the recovery path when adoption can't use the server markup. */
     const rebuildCold = (open: Node | null): void => {
@@ -209,21 +246,34 @@ export function awaitBlock(
        didn't round-trip (e.g. a non-serializable Response) throws while building the
        branch — fall back to the live promise, which reads the properly-reconstructed
        warm cache (or re-fetches) instead of crashing hydration. */
-    const firstHydrate = (result: unknown): void => {
+    const firstHydrate = (): void => {
         const cursor = hydration as NonNullable<typeof hydration>
         const open = claimChild(cursor, parent)
         /* RESUME holds the ref-json-encoded entry STRING; decode here, where the codec
            lives. A decode failure (malformed/absent payload) reads as "no resume" — fall
            through to the live promise rather than crash hydration. */
         const raw = RESUME[id]
-        let entry: ResumeEntry | undefined
+        let decoded: ResumeEntry | DeferMarker | undefined
         if (raw !== undefined) {
             try {
-                entry = decodeRefJson(raw) as ResumeEntry
+                decoded = decodeRefJson(raw) as ResumeEntry | DeferMarker
             } catch {
-                entry = undefined
+                decoded = undefined
             }
         }
+        /* A deferred marker ships the cache key, not the value — adopt the server branch inert
+           and skip the decode. Intercept before the ok/catch logic. Object-guard the `in`: a
+           corrupt manifest decoding to a primitive/null must read as "no resume" (fall through),
+           not throw past the decode try/catch and crash hydration. */
+        if (typeof decoded === 'object' && decoded !== null && 'defer' in decoded) {
+            adoptInert(open, decoded.key)
+            return
+        }
+        /* Non-deferred: read the promise now so the block subscribes to its reactive source
+           (a cache key) — warm on resume, so no round-trip — then adopt the resume value /
+           warm-sync result below, or discard and build the pending branch fresh. */
+        const result = promiseThunk()
+        const entry = decoded as ResumeEntry | undefined
         if (entry !== undefined) {
             /* Build the adopted branch around a value CELL (then) so a later re-run updates
                it in place, exactly like a fresh mount. The `throw` for a catch-less rejection
@@ -283,29 +333,23 @@ export function awaitBlock(
 
     effect(() => {
         guard.renew()
-        /* Read the promise EVERY run, including the first hydrate run, so the block
-           subscribes to its reactive source (a cache key). A cache-remote read is warm
-           on resume — it serves the snapshot without a network round-trip, so adoption
-           stays no-flash AND a later cache.invalidate re-runs the block. Without this
-           read a resume-adopted block has no deps and invalidate is a no-op.
-
-           ONLY the promise read is tracked. The warm-sync resolve, the hydration adopt,
-           and the pending render all BUILD the branch through `scope`, which builds
-           untracked — so the branch's own reactive reads don't subscribe THIS effect
-           (otherwise the whole block re-runs and re-suspends on any branch-state change,
-           e.g. a sibling route param updating in place). The branch's own child effects
-           still track normally; the block re-runs only when the promise source does. */
-        const result = promiseThunk()
         if (first) {
             first = false
             if (hydration !== undefined) {
-                firstHydrate(result)
+                /* firstHydrate reads the promise ITSELF, after checking the resume marker: a
+                   deferred block must not invoke promiseThunk (it would materialize/fetch the
+                   value we're deferring) and subscribes by key instead; every other path reads
+                   it so the block subscribes to its reactive source (a cache key). */
+                firstHydrate()
                 return
             }
             anchor = document.createTextNode('')
             parent.insertBefore(anchor, before)
         }
-        render(result)
+        /* Read the promise every subsequent run so an invalidate re-runs the block. ONLY this
+           read is tracked (the branch builds untracked via `scope`), so the block re-runs only
+           when its promise source does, not on any branch-state change. */
+        render(promiseThunk())
     })
 }
 

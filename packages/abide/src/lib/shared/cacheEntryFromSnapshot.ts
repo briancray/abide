@@ -19,15 +19,35 @@ export function cacheEntryFromSnapshot(entry: CacheSnapshotEntry): CacheEntry {
         statusText: entry.statusText,
         headers,
     })
+    /* Deferred seed: decode nothing now — hand back a memoized materializer the first read
+       invokes, so hydration pays no payload decode. Eager seed: decode up front as before. */
+    const warm = entry.lazy
+        ? memoizeWarm(() => warmValueFromSnapshot(entry.status, headers, entry.body))
+        : undefined
     return {
         key: entry.key,
         promise: Promise.resolve(response),
         request: new Request(entry.url, { method: entry.method }),
         ttl: undefined,
         expiresAt: undefined,
-        value: warmValueFromSnapshot(entry.status, headers, entry.body),
+        value: entry.lazy ? undefined : warmValueFromSnapshot(entry.status, headers, entry.body),
+        warm,
         settled: true,
         hydrated: true,
+    }
+}
+
+/* Wraps a warm decode so it runs at most once — the materialized value (including a
+   legitimate undefined for a non-warmable status) is cached after the first call. */
+function memoizeWarm(decode: () => unknown): () => unknown {
+    let materialized = false
+    let value: unknown
+    return () => {
+        if (!materialized) {
+            value = decode()
+            materialized = true
+        }
+        return value
     }
 }
 

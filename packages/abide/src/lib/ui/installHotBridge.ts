@@ -25,6 +25,7 @@ import { spreadProps } from './dom/spreadProps.ts'
 import { switchBlock } from './dom/switchBlock.ts'
 import { tryBlock } from './dom/tryBlock.ts'
 import { when } from './dom/when.ts'
+import { deferResume } from './deferResume.ts'
 import { effect } from './effect.ts'
 import { enterScope } from './enterScope.ts'
 import { exitScope } from './exitScope.ts'
@@ -68,6 +69,7 @@ export function installHotBridge(): void {
         eachAsync,
         when,
         awaitBlock,
+        deferResume,
         tryBlock,
         switchBlock,
         mountSlot,
