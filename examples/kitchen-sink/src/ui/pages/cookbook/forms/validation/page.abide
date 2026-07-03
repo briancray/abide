@@ -75,12 +75,8 @@ const inputSchema = withJsonSchema(schema, () => ({ type: 'object', properties: 
 }`}
     note={"`err.data.fields` maps each failing field to its message, keyed by the schema's path — render it beside the input to build server-authoritative field errors."} />
 
-<Recipe
-    task="Declare a typed error"
-    live={LIVE}
-    code={`const outOfStock = error.typed('outOfStock', 409, z.object({ sku: z.string(), available: z.number() }))
-export const checkout = POST(handler, { inputSchema })`}
-    note={"`error.typed(name, status, schema?)` declares one reusable typed-error constructor at module scope. There's no `errors:` option — the rpc infers its error surface from whichever constructors the handler returns."} />
+<Recipe task="Declare a typed error" live={LIVE} code={`const outOfStock = error.typed('outOfStock', 409, z.object({ sku: z.string(), available: z.number() }))
+export const checkout = POST(handler, { inputSchema })`} note={"`error.typed(name, status, schema?)` declares one reusable typed-error constructor at module scope. There's no `errors:` option — the rpc infers its error surface from whichever constructors the handler returns."} />
 
 <Recipe
     task="Return a typed domain error"

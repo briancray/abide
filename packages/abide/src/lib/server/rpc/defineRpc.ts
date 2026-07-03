@@ -161,7 +161,8 @@ export function defineRpc<Args, Return>(
     /* Abort the controller parseArgsForFetch stashed on store.req; a no-op when none was stashed (SSR cache reads). */
     function abortRpcTimeout(): void {
         const req = requestContext.getStore()?.req as
-            (Request & { [RPC_TIMEOUT_ABORT]?: AbortController }) | undefined
+            | (Request & { [RPC_TIMEOUT_ABORT]?: AbortController })
+            | undefined
         req?.[RPC_TIMEOUT_ABORT]?.abort(new DOMException('handler timeout', 'TimeoutError'))
     }
 
