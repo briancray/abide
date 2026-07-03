@@ -29,6 +29,36 @@ type ErrorBrand<R> =
 type InferredErrors<R> = { [Brand in ErrorBrand<R> as Brand['name']]: Brand['entry'] }
 
 /*
+The handler every bare (schemaless) overload accepts: any args in, a Response (or a
+Promise of one) out. Collapsing the old `<Args, R>` pair into this single inferred
+function type is deliberate. TypeScript has no partial type-argument inference, so
+`GET<Args>(fn)` used to drop `R` to its `Response` default and silently erase the body
+to `unknown`. With one generic constrained to `RpcFn`, that same call is instead a loud
+`does not satisfy the constraint 'RpcFn'`, and `Args`/`Return`/`Errors` all read
+structurally off the handler — args from its parameter, body + errors from its return —
+which is where a normal TS function declares them anyway (no mainstream rpc framework
+parameterises the call with generics). `any` is load-bearing: `never`/`unknown` in the
+parameter position break return inference by contextually widening the handler's body.
+*/
+type RpcFn = (args: any) => Response | Promise<Response>
+
+/* The handler's declared args: its first parameter, or `undefined` for a nullary handler. */
+type RpcArgs<F extends RpcFn> = Parameters<F> extends [infer Args, ...unknown[]] ? Args : undefined
+
+/*
+The RemoteFunction a bare overload produces from handler `F`. `SuccessBody`/`InferredErrors`
+run over `Awaited<ReturnType<F>>` INLINE (not via an intermediate `extends RpcFn`-constrained
+alias) — such an alias resolves `ReturnType` against the constraint bound and degrades the
+body to `any`. `Durable` threads the outbox bit through for the durable overloads.
+*/
+type RpcOf<F extends RpcFn, Durable extends boolean = false> = RemoteFunction<
+    RpcArgs<F>,
+    SuccessBody<Awaited<ReturnType<F>>>,
+    InferredErrors<Awaited<ReturnType<F>>>,
+    Durable
+>
+
+/*
 Options every rpc overload accepts: the OpenAPI 200 `outputSchema`, the
 `clients` surface flags, the same-origin CSRF exemption (`crossOrigin`), the
 pre-parse body-byte ceiling (`maxBodySize`), and the per-surface handler
@@ -59,8 +89,8 @@ type MutatingRpcOpts = RpcBaseOpts & {
 
 /*
 Shared signature for every rpc helper (GET / POST / …). The handler's return
-type is inferred whole (`R extends Response`), then split: `SuccessBody<R>`
-becomes the caller's `Return`, `InferredErrors<R>` becomes the rpc's `Errors`
+type is inferred whole (`Awaited<ReturnType<F>>`), then split: `SuccessBody`
+becomes the caller's `Return`, `InferredErrors` becomes the rpc's `Errors`
 (driving `isError`). Typed errors are raised by returning an
 `error.typed(name, status, schema?)` constructor — there is no `errors:` opt.
 Four overloads by argument source:
@@ -84,9 +114,13 @@ Four overloads by argument source:
     just abandoned.
   - `Rpc(fn, { clients })` — schemaless but with explicit client
     targeting (e.g. server-internal RPC with `clients: { browser: false }`).
-  - `Rpc(fn)` — bare handler. `Args` comes from the handler param; `Return`
-    is inferred via the `TypedResponse<T>` brand on
-    `json`/`error`/`redirect`/`jsonl`/`sse`.
+  - `Rpc(fn)` — bare handler, a single `F extends RpcFn` generic. Everything
+    is read off the handler: `Args` from its parameter (annotate it —
+    `POST((a: { id: string }) => …)` — or leave it nullary for `undefined`),
+    `Return` from the `TypedResponse<T>` brand on
+    `json`/`error`/`redirect`/`jsonl`/`sse`, `Errors` from any
+    `error.typed(...)` branches. You never pass `<Args, Return>` generics; a
+    stray one is a loud constraint error, not a silent `unknown` body.
 */
 type RpcHelperOf<Opts> = {
     /*
@@ -116,13 +150,8 @@ type RpcHelperOf<Opts> = {
         fn: (args: StandardSchemaV1.InferOutput<InputSchema>) => R | Promise<R>,
         opts: Opts & { inputSchema: InputSchema },
     ): RemoteFunction<StandardSchemaV1.InferInput<InputSchema>, SuccessBody<R>, InferredErrors<R>>
-    <Args = undefined, R extends Response = Response>(
-        fn: (args: Args) => R | Promise<R>,
-        opts: Opts,
-    ): RemoteFunction<Args, SuccessBody<R>, InferredErrors<R>>
-    <Args = undefined, R extends Response = Response>(
-        fn: (args: Args) => R | Promise<R>,
-    ): RemoteFunction<Args, SuccessBody<R>, InferredErrors<R>>
+    <F extends RpcFn>(fn: F, opts: Opts): RpcOf<F>
+    <F extends RpcFn>(fn: F): RpcOf<F>
 }
 
 /* The read helpers (GET/HEAD): no `outbox` — a read has nothing to durably deliver. */
@@ -165,10 +194,7 @@ type DurableMutatingRpcHelper = {
         InferredErrors<R>,
         true
     >
-    <Args = undefined, R extends Response = Response>(
-        fn: (args: Args) => R | Promise<R>,
-        opts: MutatingRpcOpts & { outbox: true },
-    ): RemoteFunction<Args, SuccessBody<R>, InferredErrors<R>, true>
+    <F extends RpcFn>(fn: F, opts: MutatingRpcOpts & { outbox: true }): RpcOf<F, true>
 }
 
 /*

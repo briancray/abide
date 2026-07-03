@@ -9,13 +9,14 @@ unless the caller overrides it. Intermediary caches (browsers, CDNs,
 shared proxies) shouldn't cache rpc replies by default; the framework's
 own per-request cache handles in-process dedupe.
 
-  export const getOrder = GET<{ id: string }>(async ({ id }) =>
+  export const getOrder = GET(async ({ id }: { id: string }) =>
       json(await db.getOrder(id)),
   )
 
 The return type carries `T` as a phantom brand so the rpc helper can
-infer the caller-facing `Return` from the handler body — no need to
-annotate `GET<Args, Return>` just to type the response shape.
+infer the caller-facing `Return` from the handler body — you type the
+handler's parameter and let the body infer; there are no `<Args, Return>`
+call generics (a stray one is a compile error).
 
 For non-default cache policy pass `init.headers`; explicit
 `cache-control` wins over the default.

@@ -5,7 +5,7 @@ Server-Sent Events (text/event-stream) — each frame becomes one
 generator over plain HTTP so EventSource (or `tail(fn.stream(args))`
 on the client) can consume it frame-by-frame.
 
-  export const orderFeed = GET<Args>((args) =>
+  export const orderFeed = GET((args: Args) =>
       sse(async function* () {
           for await (const order of db.watchOrders(args)) yield order
       }())

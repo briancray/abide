@@ -4,7 +4,7 @@ Wraps an AsyncIterable<Frame> in a Response whose body is JSON Lines
 inside an rpc handler to turn a generator into a streaming HTTP response
 that `tail(fn.stream(args))` consumes frame-by-frame on the client.
 
-  export const orderFeed = GET<Args>((args) =>
+  export const orderFeed = GET((args: Args) =>
       jsonl(async function* () {
           for await (const order of db.watchOrders(args)) yield order
       }())
