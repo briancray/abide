@@ -24,6 +24,7 @@ import { hydrate } from '../src/lib/ui/dom/hydrate.ts'
 import { on } from '../src/lib/ui/dom/on.ts'
 import { effect } from '../src/lib/ui/effect.ts'
 import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
+import type { DeferMarker, ResumeEntry } from '../src/lib/ui/runtime/RESUME.ts'
 import { RESUME } from '../src/lib/ui/runtime/RESUME.ts'
 import type { SsrRender } from '../src/lib/ui/runtime/types/SsrRender.ts'
 import { state } from '../src/lib/ui/state.ts'
@@ -207,7 +208,11 @@ describe('blocking {#await … then} — full server→client loop, deferred', (
    the source rather than only papered over by idle-wake). */
 describe('deferResume size gate', () => {
     test('a small array inlines eagerly; a large one defers', async () => {
-        const resumes = await runWithRequestScope(
+        /* runWithRequestScope's callback must return a Response, so capture the resume values
+           through outer bindings and return json(null) — same shape as the loop test above. */
+        let small!: ResumeEntry | DeferMarker
+        let large!: ResumeEntry | DeferMarker
+        await runWithRequestScope(
             new Request('https://test.local/sized'),
             { logRequests: false },
             async () => {
@@ -215,23 +220,23 @@ describe('deferResume size gate', () => {
 
                 sizedLength = DEFER_MIN_ARRAY_LENGTH - 1
                 const smallPromise = load()
-                const small = deferResume(smallPromise, await smallPromise)
+                small = deferResume(smallPromise, await smallPromise)
 
                 /* Same key would dedupe onto the small entry — invalidate so the large read
                    dispatches fresh and lands its own settled entry. */
                 cache.invalidate(getSized)
                 sizedLength = DEFER_MIN_ARRAY_LENGTH + 1
                 const largePromise = load()
-                const large = deferResume(largePromise, await largePromise)
+                large = deferResume(largePromise, await largePromise)
 
-                return { small, large }
+                return json(null)
             },
         )
 
         // Below the threshold: the value ships inline, no defer marker, no inert phase.
-        expect(resumes.small).toMatchObject({ ok: true })
-        expect('defer' in resumes.small).toBe(false)
+        expect(small).toMatchObject({ ok: true })
+        expect('defer' in small).toBe(false)
         // Above it: only the key ships; the block hydrates inert and wakes on idle.
-        expect(resumes.large).toMatchObject({ defer: true })
+        expect(large).toMatchObject({ defer: true })
     })
 })
