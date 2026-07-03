@@ -63,7 +63,8 @@ describe('deferred await adopts inert', () => {
         /* The server shipped a DEFER marker in place of the value (ref-json string, as RESUME holds). */
         RESUME[0] = encodeRefJson({ defer: true, key })
 
-        const renderThen = (parent: Node, cell: State<unknown>): void => {
+        const renderThen = (parent: Node, value: unknown): void => {
+            const cell = value as State<unknown>
             appendText(parent, () => String((cell.value as string[])?.[0] ?? ''))
         }
 
