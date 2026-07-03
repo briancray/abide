@@ -1,5 +1,6 @@
 import { activeCacheStore } from '../shared/activeCacheStore.ts'
 import { cacheKeyOf } from '../shared/cacheKeyOf.ts'
+import { DEFER_MIN_ARRAY_LENGTH } from '../shared/DEFER_MIN_ARRAY_LENGTH.ts'
 import { snapshotShippable } from '../shared/snapshotShippable.ts'
 import type { DeferMarker, ResumeEntry } from './runtime/RESUME.ts'
 
@@ -22,6 +23,12 @@ export function deferResume(promise: unknown, value: unknown): ResumeEntry | Def
     }
     const entry = activeCacheStore().entries.get(key)
     if (entry === undefined || !snapshotShippable(entry)) {
+        return { ok: true, value }
+    }
+    /* Only defer a genuinely large grid: below the threshold, inline the value and hydrate
+       eagerly — the block is interactive from the first frame, no inert phase, no wake. This is
+       what keeps a modest searchable list live instead of frozen-until-idle (the reported gap). */
+    if (!Array.isArray(value) || value.length < DEFER_MIN_ARRAY_LENGTH) {
         return { ok: true, value }
     }
     entry.deferred = true

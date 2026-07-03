@@ -10,6 +10,7 @@ import { RESUME } from '../runtime/RESUME.ts'
 import { scope } from '../runtime/scope.ts'
 import { scopeGroup } from '../runtime/scopeGroup.ts'
 import type { State } from '../runtime/types/State.ts'
+import { whenIdle } from '../runtime/whenIdle.ts'
 import { state } from '../state.ts'
 import { buildDetachedRange } from './buildDetachedRange.ts'
 import { discardBoundary } from './discardBoundary.ts'
@@ -62,7 +63,15 @@ export function awaitBlock(
        owner teardown so an in-flight promise that settles AFTER the enclosing `{#if}`/
        `{#for}`/component tears this block out is abandoned — otherwise its settle runs
        `place` on the block's now-detached anchor and `insertBefore` throws NotFoundError. */
-    const guard = generationGuard()
+    /* A deferred (inert-adopted) block schedules an idle wake; cancel it if the owner tears
+       the block out before idle fires, so no late re-run touches a detached anchor. */
+    let cancelWake: (() => void) | undefined
+    const guard = generationGuard(() => cancelWake?.())
+    /* Flipped by the idle wake of a deferred block. Read at the top of the effect so the
+       block subscribes to it and re-runs when it flips — the same re-run path an
+       invalidate takes, so wake needs no bespoke build logic. Never flips for a
+       non-deferred block, so it costs one inert read per run there. */
+    const woken = state(false)
     /* The resolved value, held as a reactive cell so the then-branch reads it through its
        own effects. A re-run that resolves to a NEW value SETS this cell instead of rebuilding
        the branch — the branch (and any keyed `each` inside it) survives and updates in place,
@@ -215,6 +224,14 @@ export function awaitBlock(
         /* Subscribe without a value read: no clone, no decode, no fetch — just the key, so
            cache.invalidate re-runs this effect (createSubscriber ties it to the running scope). */
         activeCacheStore().subscribe(key)
+        /* Wake on idle: the inert branch is a boot-frame optimization, never a lasting mode.
+           In the first idle gap — off the critical boot path, before a human reaches the
+           region — flip `woken`, which re-runs the effect through its normal `render` path:
+           the lazily-seeded cache reads warm, so the branch materializes live and interactive
+           with no fetch. Closes the "deferred grid stays inert until invalidate" gap. */
+        cancelWake = whenIdle(() => {
+            woken.value = true
+        })
     }
 
     /* Discard the SSR boundary and (re)build the block from the live promise, fresh
@@ -332,6 +349,9 @@ export function awaitBlock(
     }
 
     effect(() => {
+        /* Subscribe to the wake cell every run (including the first, before it can flip) so a
+           deferred block's idle wake re-runs this effect. Inert for non-deferred blocks. */
+        woken.value
         guard.renew()
         if (first) {
             first = false
