@@ -80,6 +80,11 @@ export type TemplateNode =
              the prop name's source offset — the anchor for an excess-prop diagnostic. */
           props: { name: string; code: string; loc?: number; nameLoc?: number; spread?: boolean }[]
           children: TemplateNode[]
+          /* `client:idle` / `client:visible` on the tag → hydrate this child as an island
+             (server markup kept, build deferred to the trigger). Extracted from the attributes
+             so it never becomes a prop; the build back-end passes it to `mountChild`, SSR and
+             the prop check ignore it (an island renders fully on the server). */
+          clientTrigger?: 'idle' | 'visible'
       }
     | { kind: 'switch'; subject: string; children: TemplateNode[]; loc?: number }
     /* A branch of a `<template switch>` (`match` set) or `<template if>` chain. Inside an

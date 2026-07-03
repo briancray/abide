@@ -1,4 +1,6 @@
 import { afterEach, beforeAll, expect, test } from 'bun:test'
+import { compileComponent } from '../src/lib/ui/compile/compileComponent.ts'
+import { compileSSR } from '../src/lib/ui/compile/compileSSR.ts'
 import { hydrate } from '../src/lib/ui/dom/hydrate.ts'
 import { mountChild } from '../src/lib/ui/dom/mountChild.ts'
 import type { UiComponent } from '../src/lib/ui/runtime/types/UiComponent.ts'
@@ -78,4 +80,23 @@ test('no clientTrigger → eager hydrate (build runs at boot, as before)', () =>
 
     /* The eager path builds during hydration — the island's opt-out. */
     expect(builds()).toBe(1)
+})
+
+test('compile: client:visible → mountChild trigger arg, kept out of props', () => {
+    const build = compileComponent('<main><Card client:visible title="hi" /></main>')
+    const mount = build.split('\n').find((line) => line.includes('mountChild')) ?? ''
+    /* The trigger is the 6th arg; `client:` never becomes a prop (only `title` does). */
+    expect(mount).toContain('"Card", "visible"')
+    expect(build).not.toContain('client:')
+
+    /* SSR renders the component fully — an island is server-rendered, the directive is a
+       client-only hydration hint. */
+    const ssr = compileSSR('<main><Card client:visible title="hi" /></main>')
+    expect(ssr).not.toContain('client:')
+})
+
+test('compile: client:idle → idle trigger arg', () => {
+    const build = compileComponent('<main><Chart client:idle /></main>')
+    const mount = build.split('\n').find((line) => line.includes('mountChild')) ?? ''
+    expect(mount).toContain('"Chart", "idle"')
 })
