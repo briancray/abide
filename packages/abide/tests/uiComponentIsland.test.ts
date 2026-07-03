@@ -14,19 +14,34 @@ afterEach(() => {
     delete globalWithObserver.IntersectionObserver
 })
 
-/* A controllable IntersectionObserver so an island takes the visible path and the test decides
-   when it scrolls into view. */
+/* Lets the batched wake flush run. */
+const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0))
+
+/* A controllable shared IntersectionObserver so an island takes the visible path and the test
+   decides when its range scrolls into view (fires every observed target). */
 function installFakeObserver(): { fire: () => void } {
-    let callback: (entries: { isIntersecting: boolean }[]) => void = () => undefined
+    let callback: (entries: { isIntersecting: boolean; target: Element }[]) => void = () =>
+        undefined
+    const observed: Element[] = []
     class FakeObserver {
-        constructor(cb: (entries: { isIntersecting: boolean }[]) => void) {
+        constructor(cb: (entries: { isIntersecting: boolean; target: Element }[]) => void) {
             callback = cb
         }
-        observe(): void {}
+        observe(element: Element): void {
+            observed.push(element)
+        }
+        unobserve(element: Element): void {
+            const index = observed.indexOf(element)
+            if (index >= 0) {
+                observed.splice(index, 1)
+            }
+        }
         disconnect(): void {}
     }
     globalWithObserver.IntersectionObserver = FakeObserver
-    return { fire: () => callback([{ isIntersecting: true }]) }
+    return {
+        fire: () => callback(observed.map((target) => ({ isIntersecting: true, target }))),
+    }
 }
 
 /* A bare component factory whose build records how many times it ran and appends a marker span,
@@ -46,7 +61,7 @@ function countingFactory(): { factory: UiComponent; builds: () => number } {
     }
 }
 
-test('client:visible island — server markup kept, build skipped at boot, run on visible', () => {
+test('client:visible island — server markup kept, build skipped at boot, run on visible', async () => {
     const observer = installFakeObserver()
     const { factory, builds } = countingFactory()
 
@@ -62,8 +77,9 @@ test('client:visible island — server markup kept, build skipped at boot, run o
     expect(builds()).toBe(0)
     expect(host.textContent).toContain('SERVER')
 
-    /* Scrolled into view → the island builds fresh, replacing the kept server markup. */
+    /* Scrolled into view → queued, then built on the next frame, replacing the server markup. */
     observer.fire()
+    await flush()
     expect(builds()).toBe(1)
     expect(host.textContent).toContain('BUILT')
     expect(host.textContent).not.toContain('SERVER')

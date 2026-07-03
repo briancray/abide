@@ -28,16 +28,28 @@ const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 
 /* A controllable IntersectionObserver so a deferred block takes the visible-wake path and a
    test can decide WHEN the branch scrolls into view. */
 function installFakeObserver(): { fire: () => void } {
-    let callback: (entries: { isIntersecting: boolean }[]) => void = () => undefined
+    let callback: (entries: { isIntersecting: boolean; target: Element }[]) => void = () =>
+        undefined
+    const observed: Element[] = []
     class FakeObserver {
-        constructor(cb: (entries: { isIntersecting: boolean }[]) => void) {
+        constructor(cb: (entries: { isIntersecting: boolean; target: Element }[]) => void) {
             callback = cb
         }
-        observe(): void {}
+        observe(element: Element): void {
+            observed.push(element)
+        }
+        unobserve(element: Element): void {
+            const index = observed.indexOf(element)
+            if (index >= 0) {
+                observed.splice(index, 1)
+            }
+        }
         disconnect(): void {}
     }
     globalWithObserver.IntersectionObserver = FakeObserver
-    return { fire: () => callback([{ isIntersecting: true }]) }
+    return {
+        fire: () => callback(observed.map((target) => ({ isIntersecting: true, target }))),
+    }
 }
 
 /*

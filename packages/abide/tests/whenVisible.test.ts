@@ -6,43 +6,47 @@ beforeAll(() => {
     installMiniDom()
 })
 
-const globalWithObserver = globalThis as {
-    IntersectionObserver?: unknown
-}
+const globalWithObserver = globalThis as { IntersectionObserver?: unknown }
 afterEach(() => {
     delete globalWithObserver.IntersectionObserver
 })
 
-/* A controllable IntersectionObserver: capture the callback so a test can fire intersection on
-   demand, and record disconnect so the once-then-disconnect contract can be asserted. */
+/* Lets the batched wake flush (rAF → setTimeout fallback in this env) run. */
+const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0))
+
+/* A controllable shared IntersectionObserver: records observed/unobserved elements and fires
+   intersection for a chosen target on demand — mirroring the one-observer-many-targets shape
+   whenVisible now uses. */
 function installFakeObserver(): {
-    fire: (isIntersecting: boolean) => void
+    fire: (element: Element) => void
     observed: Element[]
-    disconnected: () => boolean
+    unobserved: Element[]
 } {
-    let callback: (entries: { isIntersecting: boolean }[]) => void = () => undefined
+    let callback: (entries: { isIntersecting: boolean; target: Element }[]) => void = () =>
+        undefined
     const observed: Element[] = []
-    let disconnectedFlag = false
+    const unobserved: Element[] = []
     class FakeObserver {
-        constructor(cb: (entries: { isIntersecting: boolean }[]) => void) {
+        constructor(cb: (entries: { isIntersecting: boolean; target: Element }[]) => void) {
             callback = cb
         }
         observe(element: Element): void {
             observed.push(element)
         }
-        disconnect(): void {
-            disconnectedFlag = true
+        unobserve(element: Element): void {
+            unobserved.push(element)
         }
+        disconnect(): void {}
     }
     globalWithObserver.IntersectionObserver = FakeObserver
     return {
-        fire: (isIntersecting) => callback([{ isIntersecting }]),
+        fire: (element) => callback([{ isIntersecting: true, target: element }]),
         observed,
-        disconnected: () => disconnectedFlag,
+        unobserved,
     }
 }
 
-test('fires once when the element intersects, then disconnects', () => {
+test('fires once when the element intersects, then unobserves', async () => {
     const observer = installFakeObserver()
     const element = document.createElement('div')
     let fired = 0
@@ -50,25 +54,29 @@ test('fires once when the element intersects, then disconnects', () => {
         fired += 1
     })
 
-    expect(observer.observed).toEqual([element]) // observing the element, not yet fired
+    expect(observer.observed).toContain(element) // observing, not yet fired
     expect(fired).toBe(0)
 
-    observer.fire(false) // a non-intersecting entry does nothing
+    observer.fire(element) // intersecting → queue + unobserve; wake runs on the next frame
     expect(fired).toBe(0)
-
-    observer.fire(true) // intersecting → fire + disconnect
+    await flush()
     expect(fired).toBe(1)
-    expect(observer.disconnected()).toBe(true)
+    expect(observer.unobserved).toContain(element)
 })
 
-test('cancel disconnects a pending watch without firing', () => {
+test('cancel unobserves a pending watch without firing', async () => {
     const observer = installFakeObserver()
     let fired = 0
-    const cancel = whenVisible(document.createElement('div'), () => {
+    const element = document.createElement('div')
+    const cancel = whenVisible(element, () => {
         fired += 1
     })
     cancel()
-    expect(observer.disconnected()).toBe(true)
+    expect(observer.unobserved).toContain(element)
+
+    /* A late intersection after cancel does nothing — the element was dropped from the map. */
+    observer.fire(element)
+    await flush()
     expect(fired).toBe(0)
 })
 
@@ -78,4 +86,27 @@ test('no observer available: fires synchronously so the region never stays inert
         fired += 1
     })
     expect(fired).toBe(1)
+})
+
+test('one shared observer backs many watchers; each wakes only its own target', async () => {
+    const observer = installFakeObserver()
+    const a = document.createElement('div')
+    const b = document.createElement('div')
+    let firedA = 0
+    let firedB = 0
+    whenVisible(a, () => {
+        firedA += 1
+    })
+    whenVisible(b, () => {
+        firedB += 1
+    })
+
+    observer.fire(a) // only a's target intersects
+    await flush()
+    expect(firedA).toBe(1)
+    expect(firedB).toBe(0)
+
+    observer.fire(b)
+    await flush()
+    expect(firedB).toBe(1)
 })
