@@ -30,7 +30,7 @@ across the whole process. Same coalesce/ttl/invalidate/probe machinery the rpc
 rpcs get — only the Response-based SSR streaming snapshot is unavailable,
 since an external fetch carries no wire metadata to snapshot.
 */
-export const getRates = GET<{ base?: string }, Rates>(async ({ base = 'USD' }) => {
+export const getRates = GET(async ({ base = 'USD' }: { base?: string }) => {
     /* Fail a doomed outbound call fast: reachable() HEADs the upstream origin
        (warm after the first probe, fresh within one TTL), so a down host returns
        503 here instead of every caller eating the full fetch timeout. */

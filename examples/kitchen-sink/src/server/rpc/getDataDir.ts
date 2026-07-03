@@ -9,4 +9,4 @@ abide's own .env and last-connection.json instead of a drifted sibling. Pure —
 it computes the path, never touches the filesystem; the bundle page reads it
 to show where state would live.
 */
-export const getDataDir = GET<undefined, { dir: string }>(() => json({ dir: appDataDir() }))
+export const getDataDir = GET(() => json({ dir: appDataDir() }))

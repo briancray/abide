@@ -33,7 +33,7 @@ const dbPath = \`\${appDataDir()}/app.sqlite\``}
 <Recipe
     task="Report the data dir to the client"
     live={BUNDLE}
-    code={`export const getDataDir = GET<undefined, { dir: string }>(() => json({ dir: appDataDir() }))`}
+    code={`export const getDataDir = GET(() => json({ dir: appDataDir() }))`}
     note={'`appDataDir()` is pure — it computes the path without touching the filesystem, so a read rpc can safely surface where state lives.'} />
 
 <Recipe task="List files in the data dir" code={`import { readdir } from 'node:fs/promises'

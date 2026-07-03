@@ -16,7 +16,7 @@ const LIVE = '/mcp'
 <Recipe
     task="Expose a read rpc as a tool"
     live={LIVE}
-    code={`export const getProduct = GET<{ id: string }, Product>(handler)
+    code={`export const getProduct = GET(handler, { inputSchema })
 // GET/HEAD with a schema auto-expose to MCP`}
     note={"A schema-bearing GET/HEAD becomes an MCP tool automatically. The schema is the tool's input contract — one declaration drives the tool, the OpenAPI op, and the CLI flags."} />
 

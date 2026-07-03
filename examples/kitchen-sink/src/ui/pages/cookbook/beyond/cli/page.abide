@@ -22,7 +22,7 @@ const LIVE = '/cli'
 <Recipe
     task="Get a subcommand from an rpc"
     live={LIVE}
-    code={`export const getEcho = GET<{ message: string }>(handler, { inputSchema })
+    code={`export const getEcho = GET(handler, { inputSchema })
 // → \`cli getEcho --message=hello\``}
     note={'An `inputSchema` auto-exposes the rpc to the CLI — the subcommand is the rpc name, no separate command definition.'} />
 

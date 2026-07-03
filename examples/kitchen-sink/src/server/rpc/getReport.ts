@@ -14,7 +14,7 @@ Traces tab as a waterfall: the request bar plus `load-rows` then `summarize`.
 log.trace runs the work, logs the name + duration at settle, and rethrows
 failures — instrumentation never changes the result or swallows errors.
 */
-export const getReport = GET<{ id: string }, { id: string; rows: number[] }>(async ({ id }) => {
+export const getReport = GET(async ({ id }: { id: string }) => {
     const rows = await log.trace('load-rows', async () => {
         await Bun.sleep(15)
         return [1, 2, 3]
@@ -37,6 +37,6 @@ export const getReport = GET<{ id: string }, { id: string; rows: number[] }>(asy
 /*
 This route deliberately returns a bare `Response.json(...)` (not the
 `json()` helper) to show the raw-escape-hatch path, so it doesn't carry
-the TypedResponse<T> brand. The `<Args, Return>` generics stay so the
-caller still sees the typed body shape.
+the TypedResponse<T> brand — its body type is `unknown`, which is why it's
+consumed only via `getReport.raw` (the full Response), never a decoded body.
 */

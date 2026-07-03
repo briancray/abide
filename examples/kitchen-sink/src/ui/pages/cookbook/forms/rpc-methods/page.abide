@@ -20,7 +20,7 @@ const LIVE = '/rpc'
 <Recipe task="Define a read" live={LIVE} code={`import { GET } from '@abide/abide/server/GET'
 import { json } from '@abide/abide/server/json'
 
-export const getProduct = GET<{ id: string }, Product>(({ id }) => json(lookup(id)))`} note={'`GET` args arrive from the query string. The export name is the rpc name; the file lives at `src/server/rpc/getProduct.ts` and the bundler binds it.'} />
+export const getProduct = GET(({ id }: { id: string }) => json(lookup(id)))`} note={'`GET` args arrive from the query string. The export name is the rpc name; the file lives at `src/server/rpc/getProduct.ts` and the bundler binds it.'} />
 
 <Recipe task="Define a create" live={LIVE} code={`import { POST } from '@abide/abide/server/POST'
 

@@ -117,9 +117,9 @@ import { json } from '@abide/abide/server/json'
 import { error } from '@abide/abide/server/error'
 import { redirect } from '@abide/abide/server/redirect'
 
-export const getEcho = GET<{ message: string }>(({ message }) => json({ method: 'GET' as const, message }))
+export const getEcho = GET(({ message }: { message: string }) => json({ method: 'GET' as const, message }))
 
-export const getProduct = GET<{ id: string }>(({ id }) => {
+export const getProduct = GET(({ id }: { id: string }) => {
     const product = products[id]
     if (!product) return error(404, \`no product with id \${id}\`)
     return json(product)

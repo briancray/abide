@@ -7,7 +7,7 @@ json(undefined) emits 204 No Content (JSON has no encoding for undefined),
 and the caller's `await deleteEcho({ message })` decodes it back to
 undefined — the idiomatic "deleted, nothing to say" response.
 */
-export const deleteEcho = DELETE<{ message: string }>(({ message }) => {
+export const deleteEcho = DELETE(({ message }: { message: string }) => {
     void message
     return json(undefined)
 })

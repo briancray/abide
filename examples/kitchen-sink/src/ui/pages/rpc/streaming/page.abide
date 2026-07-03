@@ -126,7 +126,7 @@ export const tickFeed = GET(() =>
     <CodeBlock title="src/server/rpc/countLog.ts — JSONL" code={`import { GET } from '@abide/abide/server/GET'
 import { jsonl } from '@abide/abide/server/jsonl'
 
-export const countLog = GET<{ to: number }>(({ to }) =>
+export const countLog = GET(({ to }: { to: number }) =>
     jsonl((async function* () {
         for (let n = 1; n <= to; n += 1) {
             yield { n }

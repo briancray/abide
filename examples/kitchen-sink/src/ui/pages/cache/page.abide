@@ -13,8 +13,8 @@ import CodeBlock from '$ui/CodeBlock.abide'
 /* Two reads against the same cache key + scope share one entry, so any invalidation
    re-runs both. `counter` streams; `mirror` is a second read of the same entry. */
 const { computed, effect } = scope()
-const counter = computed(() => cache(getCounter, { tags: 'counter' })())
-const mirror = computed(() => cache(getCounter, { tags: 'counter' })())
+const counter = computed(() => cache(getCounter, { tags: ['counter'] })())
+const mirror = computed(() => cache(getCounter, { tags: ['counter'] })())
 const loading = computed(() => pending(getCounter))
 
 async function increment() {
@@ -75,7 +75,7 @@ const chatLog = computed(() => cache(getChatLog)())
 
     <CodeBlock title="option grammar" code={`cache(fn)()                             // cached until invalidated
 cache(fn, { ttl: 0 })()                 // coalesce only — the mutation idiom
-cache(fn, { tags: 'orders' })()        // tag for grouped invalidation/probing
+cache(fn, { tags: ['orders'] })()        // tag for grouped invalidation/probing
 cache(fn, { global: true })()           // process-level store (server reuse)`} />
 </section>
 
@@ -104,13 +104,13 @@ cache(fn, { global: true })()           // process-level store (server reuse)`} 
         <button
             type="button"
             class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
-            onclick={() => cache.invalidate({ tags: 'counter' })}>
+            onclick={() => cache.invalidate({ tags: ['counter'] })}>
             invalidate scope
         </button>
     </div>
 
     <CodeBlock title="cache.invalidate" code={`cache.invalidate(fn)                    // drop one function's calls
-cache.invalidate({ tags: 'orders' })   // drop every entry sharing the tag`} />
+cache.invalidate({ tags: ['orders'] })   // drop every entry sharing the tag`} />
 </section>
 
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">

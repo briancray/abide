@@ -44,13 +44,11 @@ wraps every call in `cache()`, so the SSR pass writes the highlighted
 HTML into the cache snapshot and the client hydrates without a second
 fetch. Same code+lang across pages share one cache entry.
 */
-export const highlightCode = POST<{ code: string; lang: Lang }, { html: string }>(
-    async ({ code, lang }) => {
-        const highlighter = await getHighlighter()
-        const html = highlighter.codeToHtml(code, {
-            lang: resolveLang(lang),
-            theme: 'github-light',
-        })
-        return json({ html })
-    },
-)
+export const highlightCode = POST(async ({ code, lang }: { code: string; lang: Lang }) => {
+    const highlighter = await getHighlighter()
+    const html = highlighter.codeToHtml(code, {
+        lang: resolveLang(lang),
+        theme: 'github-light',
+    })
+    return json({ html })
+})

@@ -33,7 +33,7 @@ const busy = computed(() => pending())`}
     code={`const loadingThis = computed(() => pending(getUser, { id }))`}
     note={'`pending(fn, args)` narrows to one keyed entry — useful when the same rpc is in flight for several ids at once.'} />
 
-<Recipe task="Probe a group by tag" live={LIVE} code={`const savingOrders = computed(() => pending({ tags: 'orders' }))`} note={"`pending({ tags })` covers every entry sharing the tag — one probe for a whole feature's in-flight work."} />
+<Recipe task="Probe a group by tag" live={LIVE} code={`const savingOrders = computed(() => pending({ tags: ['orders'] }))`} note={"`pending({ tags })` covers every entry sharing the tag — one probe for a whole feature's in-flight work."} />
 
 <Recipe
     task="Show a background refresh"

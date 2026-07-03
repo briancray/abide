@@ -43,7 +43,7 @@ async function bump() {
     task="Refresh reads after a write"
     live={LIVE}
     code={`await placeOrder(cart)
-cache.invalidate({ tags: 'orders' })`}
+cache.invalidate({ tags: ['orders'] })`}
     note={'Tag the reads a mutation affects, then invalidate the tag after it succeeds — every reactive read of that tag refetches. The canonical write-then-refresh.'} />
 
 <Recipe
@@ -97,7 +97,7 @@ async function run() {
     code={`async function remove(id) {
     if (!confirm('Delete this item?')) return
     await deleteItem({ id })
-    cache.invalidate({ tags: 'items' })
+    cache.invalidate({ tags: ['items'] })
 }`}
     note={'Gate the mutation behind a confirmation, then invalidate. Swap `confirm()` for your own modal cell when you want a styled dialog.'} />
 
@@ -107,7 +107,7 @@ async function run() {
     code={`async function archiveSelected() {
     await Promise.all([...selected].map((id) => archive({ id })))
     selected = new Set()
-    cache.invalidate({ tags: 'inbox' })
+    cache.invalidate({ tags: ['inbox'] })
 }`}
     note={'Fan the selection set out over `Promise.all`, clear the selection, and invalidate once. For very large sets, prefer a single batch rpc over N calls.'} />
 

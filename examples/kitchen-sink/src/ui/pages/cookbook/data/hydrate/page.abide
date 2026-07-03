@@ -55,14 +55,14 @@ const stale = computed(() => refreshing(getRates))
     task="Refetch after a mutation"
     live={LIVE}
     code={`await placeOrder(cart)
-cache.invalidate({ tags: 'orders' })`}
+cache.invalidate({ tags: ['orders'] })`}
     note={'Mutate, then invalidate the tag the reads share — the reactive reads refetch on their next access. No manual re-assignment of the list.'} />
 
 <Recipe
     task="Deduplicate a read used across components"
     live={LIVE}
     code={`// unrelated components, one request per render
-const me = () => cache(getCurrentUser, { tags: 'session' })()`}
+const me = () => cache(getCurrentUser, { tags: ['session'] })()`}
     note={'Export a shared cache wrapper and call it wherever you need the value — coalescing collapses the concurrent reads into one, and the tag lets you drop them all on sign-out.'} />
 
 <Recipe
@@ -102,7 +102,7 @@ async function bump() {
     gap={true}
     code={`const { effect } = scope()
 effect(() => {
-    const onFocus = () => cache.invalidate({ tags: 'session' })
+    const onFocus = () => cache.invalidate({ tags: ['session'] })
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
 })`}

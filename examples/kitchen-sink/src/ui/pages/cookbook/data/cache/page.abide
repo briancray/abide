@@ -43,8 +43,8 @@ cache(getUser)()`}
 <Recipe
     task="Tag entries for grouped invalidation"
     live={LIVE}
-    code={`cache(getOrder, { tags: 'orders' })({ id })
-cache(getOrderList, { tags: 'orders' })()`}
+    code={`cache(getOrder, { tags: ['orders'] })({ id })
+cache(getOrderList, { tags: ['orders'] })()`}
     note={"A shared tag groups unrelated entries so one call can drop them together — the whole 'orders' surface at once."} />
 
 <Recipe
@@ -57,7 +57,7 @@ cache.invalidate(getCounter)   // next read refetches`}
 <Recipe
     task="Invalidate a whole tag group"
     live={LIVE}
-    code={`cache.invalidate({ tags: 'orders' })`}
+    code={`cache.invalidate({ tags: ['orders'] })`}
     note={'Drop every entry sharing the tag — after a mutation that touches several reads, invalidate the group instead of naming each function.'} />
 
 <Recipe
