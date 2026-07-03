@@ -11,9 +11,11 @@ import { scope } from '../runtime/scope.ts'
 import { scopeGroup } from '../runtime/scopeGroup.ts'
 import type { State } from '../runtime/types/State.ts'
 import { whenIdle } from '../runtime/whenIdle.ts'
+import { whenVisible } from '../runtime/whenVisible.ts'
 import { state } from '../state.ts'
 import { buildDetachedRange } from './buildDetachedRange.ts'
 import { discardBoundary } from './discardBoundary.ts'
+import { isElement } from './isElement.ts'
 import { removeRange } from './removeRange.ts'
 
 /*
@@ -59,18 +61,19 @@ export function awaitBlock(
     let active: { start: Comment; end: Comment; dispose: () => void } | undefined
     let anchor: Node | undefined
     let first = true
+    /* A deferred (inert-adopted) block schedules a wake (idle or visible); cancel it if the
+       owner tears the block out before it fires, so no late re-run touches a detached anchor. */
+    let cancelWake: (() => void) | undefined
     /* Bumped each run so a prior run's in-flight promise can't clobber a newer one, AND on
        owner teardown so an in-flight promise that settles AFTER the enclosing `{#if}`/
        `{#for}`/component tears this block out is abandoned — otherwise its settle runs
-       `place` on the block's now-detached anchor and `insertBefore` throws NotFoundError. */
-    /* A deferred (inert-adopted) block schedules an idle wake; cancel it if the owner tears
-       the block out before idle fires, so no late re-run touches a detached anchor. */
-    let cancelWake: (() => void) | undefined
+       `place` on the block's now-detached anchor and `insertBefore` throws NotFoundError.
+       The teardown also cancels a pending wake (above). */
     const guard = generationGuard(() => cancelWake?.())
-    /* Flipped by the idle wake of a deferred block. Read at the top of the effect so the
-       block subscribes to it and re-runs when it flips — the same re-run path an
-       invalidate takes, so wake needs no bespoke build logic. Never flips for a
-       non-deferred block, so it costs one inert read per run there. */
+    /* Flipped by a deferred block's wake. Read at the top of the effect so the block subscribes
+       to it and re-runs when it flips — the same re-run path an invalidate takes, so wake needs
+       no bespoke build logic. Never flips for a non-deferred block, so it costs one inert read
+       per run there. */
     const woken = state(false)
     /* The resolved value, held as a reactive cell so the then-branch reads it through its
        own effects. A re-run that resolves to a NEW value SETS this cell instead of rebuilding
@@ -224,14 +227,24 @@ export function awaitBlock(
         /* Subscribe without a value read: no clone, no decode, no fetch — just the key, so
            cache.invalidate re-runs this effect (createSubscriber ties it to the running scope). */
         activeCacheStore().subscribe(key)
-        /* Wake on idle: the inert branch is a boot-frame optimization, never a lasting mode.
-           In the first idle gap — off the critical boot path, before a human reaches the
-           region — flip `woken`, which re-runs the effect through its normal `render` path:
-           the lazily-seeded cache reads warm, so the branch materializes live and interactive
-           with no fetch. Closes the "deferred grid stays inert until invalidate" gap. */
-        cancelWake = whenIdle(() => {
+        /* Wake the inert branch — it's a boot-frame optimization, never a lasting mode. The
+           wake flips `woken`, re-running the effect through its normal `render` path: the
+           lazily-seeded cache reads warm, so the branch materializes live and interactive with
+           no fetch. Closes the "deferred grid stays inert until invalidate" gap.
+
+           Trigger by position, when the DOM can be measured (a real IntersectionObserver): a
+           branch with an element wakes on VISIBLE — a below-the-fold grid decodes only when
+           scrolled to, one never reached costs nothing (rootMargin wakes it just before). With
+           no observer (SSR/test) or no element, wake on IDLE — off the critical boot path but
+           soon, so an above-the-fold or empty branch never lingers inert. */
+        const wake = (): void => {
             woken.value = true
-        })
+        }
+        const hasObserver =
+            typeof (globalThis as { IntersectionObserver?: unknown }).IntersectionObserver ===
+            'function'
+        const firstElement = hasObserver ? firstElementBetween(firstKept, close) : undefined
+        cancelWake = firstElement !== undefined ? whenVisible(firstElement, wake) : whenIdle(wake)
     }
 
     /* Discard the SSR boundary and (re)build the block from the live promise, fresh
@@ -376,4 +389,17 @@ export function awaitBlock(
 /* Whether a value is Promise-like (the cold path); a non-thenable is warm-sync. */
 function isThenable(value: unknown): value is Promise<unknown> {
     return value !== null && typeof (value as { then?: unknown })?.then === 'function'
+}
+
+/* The first Element in the sibling run `[start, end)` — the node a visible-wake observes for a
+   deferred branch. Undefined when the kept range holds no element (text/comment only), so the
+   caller falls back to an idle wake. Element detection is method-based (`isElement`), not
+   `nodeType`, so the walk runs under the test mini-dom too. */
+function firstElementBetween(start: Node | null, end: Node | null): Element | undefined {
+    for (let node = start; node !== null && node !== end; node = node.nextSibling) {
+        if (isElement(node)) {
+            return node
+        }
+    }
+    return undefined
 }

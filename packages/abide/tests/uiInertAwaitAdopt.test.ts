@@ -14,14 +14,31 @@ import { installMiniDom } from './support/installMiniDom.ts'
 beforeAll(() => {
     installMiniDom()
 })
+const globalWithObserver = globalThis as { IntersectionObserver?: unknown }
 afterEach(() => {
     cacheStoreSlot.resolver = undefined
     cacheStoreSlot.fallback = undefined
     delete RESUME[0]
+    delete globalWithObserver.IntersectionObserver
 })
 
 /* Lets pending cache promises + their swaps settle. */
 const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0))
+
+/* A controllable IntersectionObserver so a deferred block takes the visible-wake path and a
+   test can decide WHEN the branch scrolls into view. */
+function installFakeObserver(): { fire: () => void } {
+    let callback: (entries: { isIntersecting: boolean }[]) => void = () => undefined
+    class FakeObserver {
+        constructor(cb: (entries: { isIntersecting: boolean }[]) => void) {
+            callback = cb
+        }
+        observe(): void {}
+        disconnect(): void {}
+    }
+    globalWithObserver.IntersectionObserver = FakeObserver
+    return { fire: () => callback([{ isIntersecting: true }]) }
+}
 
 /*
 Inert await adoption, unit-level. A `{#await cache()}` whose resume ships a `{ defer, key }`
@@ -82,5 +99,49 @@ describe('deferred await adopts inert', () => {
         expect(calls).toBe(1)
         expect(host.textContent).toContain('user1')
         expect(host.textContent).not.toContain('user0')
+    })
+
+    /* Below-the-fold: with an observer present and an element in the branch, the block wakes on
+       VISIBLE, not idle — it stays inert through an idle gap and only materializes when its
+       range scrolls into view. So a deferred grid the user never reaches decodes nothing. */
+    test('a branch with an element wakes on visible, not on idle', async () => {
+        const observer = installFakeObserver()
+        async function loadSeed(): Promise<string[]> {
+            return ['warm']
+        }
+        const store = createCacheStore()
+        cacheStoreSlot.resolver = () => store
+        const load = cache(loadSeed)
+        const key = producerKey(loadSeed, undefined)
+        /* Lazy stub (warm read returns undefined) so the woken branch is empty, distinguishable
+           from the 'SERVER' server DOM — the assertion keys on the swap, not a refetched value. */
+        store.entries.set(key, {
+            key,
+            promise: Promise.resolve(undefined),
+            ttl: undefined,
+            expiresAt: undefined,
+            settled: true,
+        })
+
+        const host = document.createElement('div')
+        host.innerHTML = '<!--abide:await:0--><span>SERVER</span><!--/abide:await:0-->'
+        RESUME[0] = encodeRefJson({ defer: true, key })
+        const renderThen = (parent: Node, value: unknown): void => {
+            const cell = value as State<unknown>
+            appendText(parent, () => String((cell.value as string[])?.[0] ?? ''))
+        }
+
+        hydrate(host, () => {
+            awaitBlock(host, 0, () => load(), undefined, renderThen, undefined)
+        })
+
+        /* An idle gap passes with no intersection: still inert, server DOM intact. */
+        await flush()
+        expect(host.textContent).toContain('SERVER')
+
+        /* Scrolled into view → the branch re-runs and swaps out the inert server DOM. */
+        observer.fire()
+        await flush()
+        expect(host.textContent).not.toContain('SERVER')
     })
 })
