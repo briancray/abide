@@ -1,5 +1,45 @@
 # abide
 
+## 0.45.0
+
+### Minor Changes
+
+- 3fadd43: defer large {#await cache()} with inert hydration + lazy seed ([`2b87f5d`](https://github.com/briancray/abide/commit/2b87f5de270d91c9ffc9f5467051a221e6f9c204))
+- 7aa4032: thread durable outbox bit into RemoteFunction return type ([`4fa34b4`](https://github.com/briancray/abide/commit/4fa34b43fdac7a0aaa91a965f1aca488e1378a27))
+- 3fadd43: Breaking: collapse rpc handler generics into one inferred function type ([`f22bfd3`](https://github.com/briancray/abide/commit/f22bfd3f189214209ff3debb2b4916bd3b3680c7))
+- 6d82974: BREAKING: `CacheOptions.tags` (and the `cache.invalidate` / `pending` `{ tags }` selector) now accepts only a `string[]`, not `string | string[]`. Wrap a single tag in an array:
+
+    ```ts
+    cache(getOrder, { tags: ['orders'] })({ id })
+    cache.invalidate({ tags: ['orders'] })
+    ```
+
+    A bare-string tag previously auto-wrapped; the array-only form removes the `typeof` branch and the silent-splat foot-gun (a JS caller passing a multi-char string got it iterated into per-character tags).
+
+- ce61cd0: Add `error.typed(name, status, schema?)` — declare a single, reusable typed-error constructor. Returning it from a handler IS the error (it serializes a `{ $abideError, data }` body at `status`), and the rpc reads the constructor's branded return type to expose the error on the client's `rpc.isError(caught, 'name')` (narrowing `.kind` and typed `.data`). Compose by returning whichever constructors you want — no set, no registration:
+
+    ```ts
+    const outOfStock = error.typed('outOfStock', 409, z.object({ sku: z.string() }))
+    export const buy = POST(({ sku }) => (inStock(sku) ? json(place(sku)) : outOfStock({ sku })))
+    // buy.isError(e, 'outOfStock') → e.data: { sku: string }, inferred from the body
+    ```
+
+    The rpc's typed-error surface is now **inferred from the handler's return type** — the errors a handler returns are the errors it can raise — so there is no `errors:` rpc option and no `ctx.errors` handler param. A typed error you only ever `throw` (rather than `return`) narrows kind-only, like a plain `error()`.
+
+    BREAKING: removes the rpc `errors:` option and the handler's `{ errors }` second argument. Replace `POST((args, { errors }) => error(errors.x(data)), { inputSchema, errors: { x: { status, data } } })` with a module-scope `const x = error.typed('x', status, schema)` constructor returned from the handler: `POST((args) => x(data), { inputSchema })`.
+
+### Patch Changes
+
+- 7aa4032: percent-decode client route params to match SSR ([`1034dfb`](https://github.com/briancray/abide/commit/1034dfb3d451be117da7416f5f0bae611f82e3df))
+- 7aa4032: drop in-flight await settle after owner teardown ([`109e56e`](https://github.com/briancray/abide/commit/109e56e52851382a53a259d614671d0fb0e1fd08))
+- 7aa4032: make effect flush non-reentrant and pin effect teardown scope ([`28c9e79`](https://github.com/briancray/abide/commit/28c9e79b4e7a1905483c469182a58d7df8388c0e))
+- 7aa4032: drop scope('/') address param ([`3b3400d`](https://github.com/briancray/abide/commit/3b3400d5c87f151701da927d66912c2715e511fe))
+- 3fadd43: remove cell from the public Scope surface ([`408bd25`](https://github.com/briancray/abide/commit/408bd25864f67fc88da531793b6233806f7ab3a4))
+- 7aa4032: isolate SSR ambient scope per request ([`52d3e1c`](https://github.com/briancray/abide/commit/52d3e1cfc941df5d044fb2e6e6477bbf85c96ed4))
+- 7aa4032: extract shared generationGuard for async teardown invalidation ([`5775422`](https://github.com/briancray/abide/commit/5775422acb2625cb4bb864c0b9f77611e1a530a2))
+- 7aa4032: dispose scope children in reverse (LIFO) ([`9f56ea2`](https://github.com/briancray/abide/commit/9f56ea20dacb6ae28161b3a604dbc94d2f69ca98))
+- 18d9eb1: fix hydration null-deref when a reactive text binding first renders an empty string — the server emits no text node, so the client now synthesizes its own node at the claim cursor instead of dereferencing null in the bind effect
+
 ## 0.44.1
 
 ### Patch Changes
