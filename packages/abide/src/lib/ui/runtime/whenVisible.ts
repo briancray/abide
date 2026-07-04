@@ -76,24 +76,25 @@ function onIntersections(entries: IntersectionObserverEntry[]): void {
     scheduleFlush()
 }
 
-function observerFor(constructor: typeof IntersectionObserver): IntersectionObserver {
-    if (sharedObserver === undefined || sharedObserverCtor !== constructor) {
+function observerFor(observerConstructor: typeof IntersectionObserver): IntersectionObserver {
+    if (sharedObserver === undefined || sharedObserverCtor !== observerConstructor) {
         wakeByElement.clear()
         readyWakes.clear()
-        sharedObserver = new constructor(onIntersections, { rootMargin: ROOT_MARGIN })
-        sharedObserverCtor = constructor
+        sharedObserver = new observerConstructor(onIntersections, { rootMargin: ROOT_MARGIN })
+        sharedObserverCtor = observerConstructor
     }
     return sharedObserver
 }
 
 export function whenVisible(element: Element, callback: () => void): () => void {
-    const constructor = (globalThis as { IntersectionObserver?: typeof IntersectionObserver })
-        .IntersectionObserver
-    if (typeof constructor !== 'function') {
+    const observerConstructor = (
+        globalThis as { IntersectionObserver?: typeof IntersectionObserver }
+    ).IntersectionObserver
+    if (typeof observerConstructor !== 'function') {
         callback()
         return () => undefined
     }
-    const observer = observerFor(constructor)
+    const observer = observerFor(observerConstructor)
     wakeByElement.set(element, callback)
     observer.observe(element)
     return () => {
