@@ -1,5 +1,21 @@
 # abide
 
+## 0.46.0
+
+### Minor Changes
+
+- 162296f: wake a below-the-fold deferred {#await cache()} on visible, not idle ([`193ff2f`](https://github.com/briancray/abide/commit/193ff2f7ad4a40f3dde39537260d76e7317a6013))
+- 162296f: client:idle / client:visible island directive on components ([`a50f0bc`](https://github.com/briancray/abide/commit/a50f0bce451f00f292eea90419feaa6ff1a708bd))
+- 162296f: wake deferred {#await cache()} on idle + size-gate the defer decision ([`a5a1a7f`](https://github.com/briancray/abide/commit/a5a1a7fea3dfe35cad08ea17fad7016fb8cca6cb))
+- 162296f: component-island hydration boundary (mountRange) + shared wake helpers ([`e0ed9ba`](https://github.com/briancray/abide/commit/e0ed9ba58d41ad7d1605717b1f4ec9207d2454a5))
+
+### Patch Changes
+
+- 162296f: rename shadowed `constructor` local in whenVisible ([`2f25fdf`](https://github.com/briancray/abide/commit/2f25fdfcb21e05807dd26c876acd8cd9f49d3004))
+- 162296f: shared observer + frame-budgeted wake flush for islands at scale ([`3c2db3b`](https://github.com/briancray/abide/commit/3c2db3bce43ad8cc30b6cab279246a033db4bd61))
+- 162296f: apply formatter to drifted files ([`5960d3c`](https://github.com/briancray/abide/commit/5960d3c5db44c925cf3c1fc9566156a8886db195))
+- 162296f: restore multi-line union wrapping in generateBuild ([`92ce908`](https://github.com/briancray/abide/commit/92ce908c3369759d8b55c695ed2deed410be1ef5))
+
 ## 0.45.0
 
 ### Minor Changes
