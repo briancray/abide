@@ -125,7 +125,13 @@ export function generateBuild(
             (typeof node.attrs)[number],
             {
                 kind:
-                    'expression' | 'interpolated' | 'event' | 'attach' | 'bind' | 'class' | 'style'
+                    | 'expression'
+                    | 'interpolated'
+                    | 'event'
+                    | 'attach'
+                    | 'bind'
+                    | 'class'
+                    | 'style'
             }
         >,
         varName: string,
