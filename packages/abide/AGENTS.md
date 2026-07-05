@@ -82,10 +82,10 @@ For tests, add the preload so the `.abide` loader + virtual resolver are active:
   cli }`, `crossOrigin` (exempt a mutating rpc from the same-origin CSRF gate),
   `timeout` (a 504 on every surface), `maxBodySize` (413 past it), `outbox: true`
   (durable delivery on a mutating rpc). GET/DELETE/HEAD args travel as query
-  strings — use `z.coerce.*`. Consume forms: `cache(fn, args?, options?)` (SSR /
-  in-process read-through), `fn(args)` (browser fetch, throws `HttpError`),
-  `fn.raw(args)` (raw `Response`), and the bound selectors
-  `fn.cache/pending/refreshing/invalidate/error`. A streaming handler
+  strings — use `z.coerce.*`. Consume forms: `fn(args, opts?)` (the smart call —
+  cached, coalesced, reactive, SWR; throws `HttpError`), `fn.raw(args, init?)`
+  (raw `Response`, uncached), and the bound selectors/mutators
+  `fn.refresh/patch/peek/pending/refreshing/error`. A streaming handler
   (`jsonl`/`sse`) makes the bare call return a `Subscribable` — `for await` or
   `state(fn(args))`; `await fn(args)` is a compile error.
 - **Socket** (`socket(opts)` in `src/server/sockets/<name>.ts`): options

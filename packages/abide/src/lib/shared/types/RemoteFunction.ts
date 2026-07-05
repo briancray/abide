@@ -1,4 +1,3 @@
-import type { CacheOptions } from './CacheOptions.ts'
 import type { ClientFlags } from './ClientFlags.ts'
 import type { ErrorSpec } from './ErrorSpec.ts'
 import type { HttpMethod } from './HttpMethod.ts'
@@ -59,17 +58,15 @@ export type RemoteFunction<
        lives in the rpc's own spec. */
     readonly isError: RpcErrorGuard<Errors>
     /* Pre-bound selector sugar: `fn.pending(args?)` ≡ `pending(fn, args?)`, and likewise for
-       refreshing / invalidate / refresh / peek — the rpc is the leading selector, bound in. The
-       argument is this rpc's typed `Args` (the by-args refinement); tags / cross-cutting selection
-       stay on the globals. `cache(args?, options?)` is the direct read-through call for those args
-       (≡ `cache(fn, args, options)`) — returns the cached promise. */
+       refreshing / refresh / peek — the rpc is the leading selector, bound in. The argument is
+       this rpc's typed `Args` (the by-args refinement); tags / cross-cutting selection stay on
+       the globals. The bare call `fn(args, opts)` IS the cached read (was `fn.cache`), and
+       `refresh(args?)` refetches keeping the stale value visible (was `invalidate`, which
+       dropped). `peek(args?)` reads the retained value synchronously (a streaming rpc peeks its
+       latest frame). `patch` is fetch-only, so it is omitted for a streaming rpc (a stream isn't
+       a memoized value) via the intersection below. */
     pending(args?: Args): boolean
     refreshing(args?: Args): boolean
-    invalidate(args?: Args): void
-    cache(args?: Args, options?: CacheOptions): Promise<Return>
-    /* `refresh(args?)` refetches (stale stays visible); `peek(args?)` reads the retained value
-       synchronously (a streaming rpc peeks its latest frame). `patch` is fetch-only, so it is
-       omitted for a streaming rpc (a stream isn't a memoized value) via the intersection below. */
     refresh(args?: Args): void
     peek(args?: Args): ([Return] extends [AsyncIterable<infer Frame>] ? Frame : Return) | undefined
     /* This rpc's last error, typed off `Errors` (a discriminated union already narrowed on

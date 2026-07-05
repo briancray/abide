@@ -23,20 +23,20 @@ describe('fn.error() probe', () => {
         delete (globalThis as { window?: unknown }).window
     })
 
-    test('undefined before a call, the error after, cleared by invalidate', async () => {
+    test('undefined before a call, the error after, cleared by refresh', async () => {
         let before: unknown
         let afterError: unknown
-        let afterInvalidate: unknown
+        let afterRefresh: unknown
         await runWithRequestScope(new Request('https://test.local/'), options, async () => {
             before = boom.error()
             await boom().catch(() => undefined)
             afterError = boom.error()
-            boom.invalidate()
-            afterInvalidate = boom.error()
+            boom.refresh()
+            afterRefresh = boom.error()
             return json(null)
         })
         expect(before).toBeUndefined()
         expect(afterError).toBeInstanceOf(Error)
-        expect(afterInvalidate).toBeUndefined()
+        expect(afterRefresh).toBeUndefined()
     })
 })

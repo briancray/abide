@@ -60,28 +60,14 @@ describe('rpc instance selector methods', () => {
         expect(r.mirror).toBe(true)
     })
 
-    test('fn.cache(args?) is a direct read-through call returning the value', async () => {
+    test('the bare call is the direct read-through, returning the value', async () => {
         const r: Record<string, unknown> = {}
         await runWithRequestScope(new Request('https://test.local/'), options, async () => {
-            r.value = await getPost.cache()
+            /* The smart bare call replaced fn.cache() as the read-through. */
+            r.value = await getPost()
             return json(null)
         })
         expect(r.value).toEqual({ ok: true })
-    })
-
-    test('fn.invalidate() drops this rpc entries so the next read re-enters flight', async () => {
-        const r: Record<string, unknown> = {}
-        await runWithRequestScope(new Request('https://test.local/'), options, async () => {
-            await cache(getPost)
-            r.settledBefore = getPost.pending()
-            getPost.invalidate()
-            const promise = cache(getPost)
-            r.pendingAfterInvalidate = getPost.pending()
-            await promise
-            return json(null)
-        })
-        expect(r.settledBefore).toBe(false)
-        expect(r.pendingAfterInvalidate).toBe(true)
     })
 })
 
