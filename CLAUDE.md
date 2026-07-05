@@ -19,11 +19,15 @@
 * only one export per file named after the export
 * every name in package.json's `exports` map carries a `// @documentation <slug>` comment directly above its export — the slug is its documentation section, which groups into the AGENTS.md surface map and the kitchen-sink example nav (or `plumbing` if it carries no user-facing demo). Run `bun run packages/abide/scripts/readmeSurfaces.ts` to list slugs and catch any untagged export; pick a new slug only when no existing one fits.
 * write pure functions and use functional style programming
+* favor imperative/procedural over heavy functional abstractions
+* use simple loops (for, for of) and straightforward cpontrol flow instead of deep iterator chains or high generic combinators in tight loops
+* keep objects and arrays monomorphic so the JIT can optimize them agressively
 * use the minimal amount of code to achieve a goal
-* use descriptive variable names instead of abbrevations
+* minimize dynamic features and complex closures in performance critical sections
+* use descriptive variable and function names instead of abbrevations
 * write short descriptive comments above each function and above code blocks that need explanation
-* use /* and */ for multiline comments and // for single line comments
-* comment as if every word costs money but losing a technical detail or its nuance costs more. no filler words
+* do not manually wrap comments, editor wrap will do it
+* write terse comments focusing on why when needed
 * always use full known types where possible instead of creating adhoc one-use types
 * if a function is shared, add it to the proper  folder and check library folders for existing functionality before writing one
 * run bun format on a file after all changes complete
