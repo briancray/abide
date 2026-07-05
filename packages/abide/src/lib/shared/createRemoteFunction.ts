@@ -4,6 +4,7 @@ import { HttpError } from './HttpError.ts'
 import { keyForRemoteCall } from './keyForRemoteCall.ts'
 import { REMOTE_FUNCTION } from './REMOTE_FUNCTION.ts'
 import { recordRemoteMeta } from './recordRemoteMeta.ts'
+import { rpcErrorRegistry } from './rpcErrorRegistry.ts'
 import { subscribableFromResponse } from './subscribableFromResponse.ts'
 import type { ClientFlags } from './types/ClientFlags.ts'
 import type { HttpMethod } from './types/HttpMethod.ts'
@@ -92,7 +93,22 @@ export function createRemoteFunction<Args, Return>(opts: {
     const raw = rawCall as RawRemoteFunction<Args>
 
     function callable(args: Args | FormData, opts?: RpcOptions): Promise<Return> {
-        return raw(args, opts).then(decodeResponse) as Promise<Return>
+        /* Capture the rejection into the rpc error registry (design Part 4) keyed by call
+           identity, and clear it on success — the reactive `fn.error()` probe reads it. This
+           does not touch the cache: the cache still evicts on error exactly as before. */
+        const key = keyForRemoteCall(method, url, args)
+        return raw(args, opts)
+            .then(decodeResponse)
+            .then(
+                (value) => {
+                    rpcErrorRegistry.clear(key)
+                    return value as Return
+                },
+                (error: unknown) => {
+                    rpcErrorRegistry.record(key, error)
+                    throw error
+                },
+            )
     }
     callable.method = method
     callable.url = url

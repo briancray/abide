@@ -11,6 +11,7 @@ import { keyForRemoteCall } from './keyForRemoteCall.ts'
 import { producerKey } from './producerKey.ts'
 import { REMOTE_FUNCTION } from './REMOTE_FUNCTION.ts'
 import { REPLAYABLE_METHODS } from './REPLAYABLE_METHODS.ts'
+import { rpcErrorRegistry } from './rpcErrorRegistry.ts'
 import { SocketDisconnectedError } from './SocketDisconnectedError.ts'
 import { selectorMatcher } from './selectorMatcher.ts'
 import { selectorPrefix } from './selectorPrefix.ts'
@@ -522,6 +523,11 @@ function invalidate<Args, Return>(arg?: CacheSelector<Args, Return>, args?: Args
     const prefix = selectorPrefix(arg, args)
     const matches = selectorMatcher(arg, args, prefix)
     invalidateTripwire(selectorLabel(arg, args, prefix))
+    /* Reset any recorded rpc errors for this selector too (independent of cache entries — a
+       bare call that errored never became one). Only fn selectors resolve a prefix. */
+    if (prefix !== undefined) {
+        rpcErrorRegistry.clearMatching(prefix)
+    }
     for (const store of cacheStores()) {
         const matched: string[] = []
         const affected: string[] = []

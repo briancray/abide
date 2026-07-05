@@ -29,6 +29,21 @@ export const rpcErrorRegistry = {
             trigger(node)
         }
     },
+    /* Clears every error whose key is, or is prefixed by, the selector's `method url` —
+       so `invalidate(fn)` resets a whole rpc's errors, and `invalidate(fn, args)` (an exact
+       key prefix) resets just that call. Covers bare-call errors that never became entries. */
+    clearMatching(prefix: string): void {
+        let changed = false
+        for (const key of errors.keys()) {
+            if (key === prefix || key.startsWith(`${prefix} `)) {
+                errors.delete(key)
+                changed = true
+            }
+        }
+        if (changed) {
+            trigger(node)
+        }
+    },
     read(key: string): unknown {
         track(node)
         return errors.get(key)
