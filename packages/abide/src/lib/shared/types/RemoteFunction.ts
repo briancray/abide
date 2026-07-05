@@ -59,24 +59,38 @@ export type RemoteFunction<
        lives in the rpc's own spec. */
     readonly isError: RpcErrorGuard<Errors>
     /* Pre-bound selector sugar: `fn.pending(args?)` ≡ `pending(fn, args?)`, and likewise for
-       refreshing / invalidate — the rpc is the leading selector, bound in. The argument is this
-       rpc's typed `Args` (the by-args refinement); tags / cross-cutting selection stay on the
-       globals. `cache(args?, options?)` is the direct read-through call for those args
+       refreshing / invalidate / refresh / peek — the rpc is the leading selector, bound in. The
+       argument is this rpc's typed `Args` (the by-args refinement); tags / cross-cutting selection
+       stay on the globals. `cache(args?, options?)` is the direct read-through call for those args
        (≡ `cache(fn, args, options)`) — returns the cached promise. */
     pending(args?: Args): boolean
     refreshing(args?: Args): boolean
     invalidate(args?: Args): void
     cache(args?: Args, options?: CacheOptions): Promise<Return>
+    /* `refresh(args?)` refetches (stale stays visible); `peek(args?)` reads the retained value
+       synchronously (a streaming rpc peeks its latest frame). `patch` is fetch-only, so it is
+       omitted for a streaming rpc (a stream isn't a memoized value) via the intersection below. */
+    refresh(args?: Args): void
+    peek(args?: Args): ([Return] extends [AsyncIterable<infer Frame>] ? Frame : Return) | undefined
     /* This rpc's last error, typed off `Errors` (a discriminated union already narrowed on
        `.kind`/`.data`). `args` scopes to one call; omitted aggregates the most-recent across
        this rpc. Truthiness is the "isError" check. Instance-only — no bare global (it would
        shadow the server `error()` thrower). Reads the rpc error registry captured at the call
        boundary; the cache is untouched. */
     error(args?: Args): RpcError<Errors> | undefined
-} /* `outbox` presence follows the `outbox: true` opt: the mutating helper threads `Durable`
+} /* `patch` is fetch-only: a streaming rpc has no single memoized value to mutate, so the
+     method is present only when `Return` is not an AsyncIterable. Two signatures: with args
+     (`patch(args, updater)`) and without (`patch(updater)` — every args-variant). Tuple-wrapped
+     so the conditional doesn't distribute over a `never` Return (an error-only rpc). */ & ([
+        Return,
+    ] extends [AsyncIterable<unknown>]
+        ? Record<never, never>
+        : {
+              patch(args: Args | undefined, updater: (current: Return) => Return): void
+              patch(updater: (current: Return) => Return): void
+          }) /* `outbox` presence follows the `outbox: true` opt: the mutating helper threads `Durable`
      into the return type so a DURABLE rpc's `.outbox` is the required queue face (no optional
      chain). A non-durable rpc keeps it optional — assignable to a durable one everywhere a
      bare `RemoteFunction<Args, Return>` slot (cache selectors, registries) is expected, since
-     required→optional widens cleanly and no call site had to learn the `Durable` bit. */ & (Durable extends true
-        ? { readonly outbox: Outbox<Args> }
-        : { readonly outbox?: Outbox<Args> })
+     required→optional widens cleanly and no call site had to learn the `Durable` bit. */ &
+    (Durable extends true ? { readonly outbox: Outbox<Args> } : { readonly outbox?: Outbox<Args> })
