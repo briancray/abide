@@ -25,9 +25,9 @@ dedupe). Other helpers are siblings, one per file: `abide/server/error`,
 `abide/server/redirect`, `abide/server/sse`, `abide/server/jsonl`.
 
 Every rpc value also exposes `.raw(args?)` (returns the underlying
-`Response`) and `.stream(args?)` (returns a `Subscribable` over the frames —
-feed it to `tail()`) for callers that need headers/status or want to iterate
-jsonl/sse frames.
+`Response`) for callers that need headers or status. A streaming rpc — a
+jsonl/sse handler — returns a `Subscribable` over the frames from its bare
+call (`fn(args)`); feed it to `tail()` or iterate it with `for await`.
 */
 
 import { GET } from '@abide/abide/server/GET'

@@ -13,7 +13,7 @@ import { cache } from '@abide/abide/shared/cache'
 import { getHello } from '$server/rpc/getHello.ts'
 </script>
 
-{#await cache(getHello)() then hello}
+{#await cache(getHello) then hello}
     <h1>{hello.message}</h1>
 {/await}
 <p>Edit <code>src/ui/pages/page.abide</code> and the page hot-reloads.</p>
