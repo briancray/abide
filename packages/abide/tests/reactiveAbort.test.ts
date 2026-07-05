@@ -84,8 +84,11 @@ describe('scope-bound RPC abort', () => {
     })
 })
 
-/* The remoteProxy fetch path: the bound signal reaches fetch, and our cancellation
-   is swallowed into a never-settling promise rather than surfacing as a rejection. */
+/* The remoteProxy fetch path via `.raw`: the bound signal reaches fetch, and our
+   cancellation is swallowed into a never-settling promise rather than surfacing as a
+   rejection. Transport concerns (the abort signal here) live on `.raw` — the bare
+   smart call is coalesced/cache-managed and deliberately drops per-reader transport
+   so one reader leaving can't abort a shared flight. */
 describe('remoteProxy scope abort', () => {
     const globals = globalThis as Record<string, unknown>
     let restore: (() => void) | undefined
@@ -118,7 +121,7 @@ describe('remoteProxy scope abort', () => {
         let settled = false
         const stop = effect(() => {
             dep.value
-            void getThing({ id: 1 }).then(
+            void getThing.raw({ id: 1 }).then(
                 () => {
                     settled = true
                 },
@@ -145,8 +148,9 @@ describe('remoteProxy scope abort', () => {
 })
 
 /* RpcOptions: the curated per-call transport bag (signal/keepalive/priority/cache/
-   headers) reaches the Request and the fetch init, framework headers win on conflict,
-   the caller signal merges with the scope signal, and cache management gates it. */
+   headers) lives on `.raw` now — it reaches the Request and the fetch init, framework
+   headers win on conflict, the caller signal merges with the scope signal, and cache
+   management gates it. (The bare smart call's second arg is cache options, not transport.) */
 describe('remoteProxy RpcOptions', () => {
     const globals = globalThis as Record<string, unknown>
     let restore: (() => void) | undefined
@@ -180,7 +184,7 @@ describe('remoteProxy RpcOptions', () => {
     test('merges caller headers onto the request; framework owns content-type', async () => {
         stubFetch()
         const postThing = remoteProxy<{ x: number }, unknown>('POST', '/rpc/thing')
-        await postThing(
+        await postThing.raw(
             { x: 1 },
             { headers: { 'x-idempotency-key': 'abc', 'content-type': 'text/plain' } },
         )
@@ -192,7 +196,7 @@ describe('remoteProxy RpcOptions', () => {
     test('passes keepalive/priority/cache through to fetch', async () => {
         stubFetch()
         const postThing = remoteProxy<{ x: number }, unknown>('POST', '/rpc/thing')
-        await postThing({ x: 1 }, { keepalive: true, priority: 'low', cache: 'no-store' })
+        await postThing.raw({ x: 1 }, { keepalive: true, priority: 'low', cache: 'no-store' })
         expect(captured.init?.keepalive).toBe(true)
         expect(captured.init?.priority).toBe('low')
         expect(captured.init?.cache).toBe('no-store')
@@ -202,7 +206,7 @@ describe('remoteProxy RpcOptions', () => {
         stubFetch()
         const controller = new AbortController()
         const postThing = remoteProxy<{ x: number }, unknown>('POST', '/rpc/thing')
-        void postThing({ x: 1 }, { signal: controller.signal })
+        void postThing.raw({ x: 1 }, { signal: controller.signal })
         expect(captured.init?.signal?.aborted).toBe(false)
         controller.abort()
         expect(captured.init?.signal?.aborted).toBe(true)
@@ -213,7 +217,7 @@ describe('remoteProxy RpcOptions', () => {
         const controller = new AbortController()
         const postThing = remoteProxy<{ x: number }, unknown>('POST', '/rpc/thing')
         const stop = effect(() => {
-            void postThing({ x: 1 }, { signal: controller.signal })
+            void postThing.raw({ x: 1 }, { signal: controller.signal })
         })
         const merged = captured.init?.signal
         expect(merged?.aborted).toBe(false)
