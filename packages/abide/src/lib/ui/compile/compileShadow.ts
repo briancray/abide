@@ -2,42 +2,52 @@ import ts from 'typescript'
 import { ABIDE_PACKAGE_NAME } from '../../shared/ABIDE_PACKAGE_NAME.ts'
 import { parseTemplate } from './parseTemplate.ts'
 import { REACTIVE_CALLEES } from './REACTIVE_CALLEES.ts'
+import {
+    type ReactiveImportBindings,
+    reactiveImportBindings,
+    resolveReactiveExport,
+} from './resolveReactiveExport.ts'
 import type { CompiledShadow, ShadowDiagnostic, ShadowMapping } from './types/CompiledShadow.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
 
 /*
-Runtime helpers published as package subpaths solely so generated component code
-can import them; an author must reach them through their namespaced surface
-instead. The module resolver can't tell codegen from user source (same specifier),
-so the ban can only live in the check — map each forbidden specifier to the
-guidance shown when an author imports it.
+Framework callables the `.abide` loader injects into a component's scope. `snippet`
+and `scope` keep their real published types via imports so author calls type-check —
+`scope()` is the internal lowering host (`scope().state(...)` still resolves for the
+legacy authoring form and generated code). `state`/`linked`/`computed`/`effect` are the
+imported reactive surface; when the author imports one its own binding provides the
+type, so the ambient fallback for that name is OMITTED (see `shadowPreamble`) to avoid a
+duplicate identifier. Otherwise `state`/`linked`/`computed` are declared ambiently and
+`effect` is imported as a fallback for the legacy `scope().state(...)` / bare/nested use
+the top-level rewrite doesn't project (unused when projected — fine, the shadow disables
+noUnusedLocals). `props` is the prop reader — destructured (`const { a = 1 } =
+props<Shape>()`); declared returning its type argument (default `Record<string, any>`)
+so each binding inherits its prop type and its `= default` narrows.
 */
-const INTERNAL_ONLY_IMPORTS: Record<string, string> = {
-    [`${ABIDE_PACKAGE_NAME}/ui/effect`]:
-        '`effect` is compiler-internal — author it as `scope().effect(...)`',
+function shadowPreamble(importedReactives: ReadonlySet<string>): string {
+    /* Omit the ambient fallback for a primitive the author imports — its own binding is
+       the type, and a second declaration would be a duplicate-identifier error. */
+    const lines = [
+        importedReactives.has('effect')
+            ? undefined
+            : `import { effect } from '${ABIDE_PACKAGE_NAME}/ui/effect'`,
+        `import { snippet } from '${ABIDE_PACKAGE_NAME}/shared/snippet'`,
+        `import { scope } from '${ABIDE_PACKAGE_NAME}/ui/scope'`,
+        importedReactives.has('state')
+            ? undefined
+            : 'declare function state<T>(initial?: T, transform?: (next: T, previous: T) => T): { value: T }',
+        importedReactives.has('linked')
+            ? undefined
+            : 'declare function linked<T>(seed: () => T, transform?: (next: T, previous: T) => T): { value: T }',
+        importedReactives.has('computed')
+            ? undefined
+            : 'declare function computed<T>(compute: () => T): { readonly value: T }',
+        'declare const children: (() => void) | undefined',
+        /* `effect` is defined either way — the preamble import or the author's own import. */
+        'void [effect, snippet, scope]',
+    ]
+    return `${lines.filter((line) => line !== undefined).join('\n')}\n`
 }
-
-/*
-Framework callables the `.abide` loader injects into a component's scope. `effect`,
-`snippet`, and `scope` keep their real published types via imports so author
-calls type-check — `scope()` is the authored reactive surface (`scope().state(...)` /
-`.computed(...)` / `.undo()` …), so it must resolve like any import. `state`/`linked`/
-`computed` are ALSO declared ambiently as a fallback for the rare bare/nested use the
-top-level rewrite doesn't project (their top-level declarations become value types, so
-these are normally unused — fine, the shadow disables noUnusedLocals). `props` is the prop
-reader — destructured (`const { a = 1 } = props<Shape>()`); declared returning its type
-argument (default `Record<string, any>`) so each binding inherits its prop type and its
-`= default` narrows.
-*/
-const SHADOW_PREAMBLE = `import { effect } from '${ABIDE_PACKAGE_NAME}/ui/effect'
-import { snippet } from '${ABIDE_PACKAGE_NAME}/shared/snippet'
-import { scope } from '${ABIDE_PACKAGE_NAME}/ui/scope'
-declare function state<T>(initial?: T, transform?: (next: T, previous: T) => T): { value: T }
-declare function linked<T>(seed: () => T, transform?: (next: T, previous: T) => T): { value: T }
-declare function computed<T>(compute: () => T): { readonly value: T }
-declare const children: (() => void) | undefined
-void [effect, snippet, scope]
-`
 
 /*
 Compiles a `.abide` component into its type-checking shadow — a synthetic TS
@@ -62,11 +72,11 @@ export function compileShadow(source: string, propsType = 'Record<string, any>')
     const scriptStart = leadingScript ? source.indexOf('>', leadingScript.index) + 1 : 0
     const templateStart = leadingScript ? (leadingScript.index ?? 0) + leadingScript[0].length : 0
 
-    const { imports, types, scope, propsShapes, diagnostics } = analyzeScript(
+    const { imports, types, scope, propsShapes, diagnostics, importedReactives } = analyzeScript(
         scriptBody,
         scriptStart,
     )
-    builder.raw(SHADOW_PREAMBLE)
+    builder.raw(shadowPreamble(importedReactives))
     /* `props()` defaults to the file's type — a page/layout's route param shape, else
        `Record<string, any>` — so `const { id } = props()` infers from the route. */
     builder.raw(`declare function props<T = ${propsType}>(): T\n`)
@@ -192,6 +202,9 @@ type ScriptAnalysis = {
     scope: ScopeLine[]
     propsShapes: string[]
     diagnostics: ShadowDiagnostic[]
+    /* The reactive primitives the author imports (`state`/`effect`), so the preamble
+       omits the ambient fallback for each and avoids a duplicate-identifier error. */
+    importedReactives: Set<string>
 }
 
 /* Pushes a diagnostic for every author binding whose name starts with the reserved `$$`
@@ -304,9 +317,14 @@ function analyzeScript(scriptBody: string, scriptStart: number): ScriptAnalysis 
     const propsShapes: string[] = []
     const diagnostics: ShadowDiagnostic[] = []
     if (scriptBody.trim() === '') {
-        return { imports, types, scope, propsShapes, diagnostics }
+        return { imports, types, scope, propsShapes, diagnostics, importedReactives: new Set() }
     }
     const file = ts.createSourceFile('script.ts', scriptBody, ts.ScriptTarget.Latest, true)
+    /* The author's reactive import bindings (alias-safe) — recognition source for
+       `state`/`state.linked`/`state.computed`/`effect`, and the set of imported primitives
+       the preamble omits its ambient fallback for. */
+    const bindings = reactiveImportBindings(file)
+    const importedReactives = new Set(bindings.direct.values())
     /* The `$$` prefix is reserved for the compiler's injected runtime (`$$each`, `$$model`,
        `$$scope`, …), so an author binding may not start with it — that's the contract that
        lets a user freely name a variable after any helper. Flag every such declaration. */
@@ -325,21 +343,9 @@ function analyzeScript(scriptBody: string, scriptStart: number): ScriptAnalysis 
 
     for (const statement of file.statements) {
         if (ts.isImportDeclaration(statement)) {
-            const specifier = ts.isStringLiteral(statement.moduleSpecifier)
-                ? statement.moduleSpecifier.text
-                : undefined
-            const banned = specifier !== undefined ? INTERNAL_ONLY_IMPORTS[specifier] : undefined
-            if (banned !== undefined) {
-                /* Flag and drop it — leaving it out keeps `effect` resolving via the
-                   preamble (no duplicate-identifier noise on top of our message). */
-                diagnostics.push({
-                    start: scriptStart + statement.getStart(file),
-                    length: statement.getEnd() - statement.getStart(file),
-                    message: banned,
-                })
-                continue
-            }
-            /* Emit verbatim with a span so hover/go-to resolve on the imported names. */
+            /* Emit verbatim with a span so hover/go-to resolve on the imported names.
+               `abide/ui/state` / `abide/ui/effect` are ordinary author imports now — the
+               preamble drops its ambient fallback for whichever names are imported. */
             imports.push({ text: verbatim(statement), segments: [span(statement, 0)] })
             continue
         }
@@ -348,17 +354,17 @@ function analyzeScript(scriptBody: string, scriptStart: number): ScriptAnalysis 
             types.push({ text: verbatim(statement), segments: [span(statement, 0)] })
             continue
         }
-        const reactive = reactiveDeclarations(statement)
+        const reactive = reactiveDeclarations(statement, bindings)
         if (reactive === undefined) {
             /* Plain statement (function, const, expression) — emit verbatim, mapped. */
             scope.push({ text: verbatim(statement), segments: [span(statement, 0)] })
             continue
         }
         for (const declaration of reactive) {
-            scope.push(scopeLineFor(declaration, propsShapes, verbatim, span))
+            scope.push(scopeLineFor(declaration, propsShapes, verbatim, span, bindings))
         }
     }
-    return { imports, types, scope, propsShapes, diagnostics }
+    return { imports, types, scope, propsShapes, diagnostics, importedReactives }
 }
 
 /* Value-projects a nested control-flow `<script>` body the way `analyzeScript`
@@ -368,16 +374,20 @@ function analyzeScript(scriptBody: string, scriptStart: number): ScriptAnalysis 
    reads a nested signal as its value type instead of the raw `State`/`Computed`. */
 function projectNestedScript(code: string): string {
     const file = ts.createSourceFile('nested.ts', code, ts.ScriptTarget.Latest, true)
+    /* A nested script's own reactive imports (rare, but alias-safe if present). */
+    const bindings = reactiveImportBindings(file)
     const verbatim = (node: ts.Node): string => code.slice(node.getStart(file), node.getEnd())
     /* No mapping: a zero-length segment the caller drops. */
     const span = (): ShadowMapping => ({ shadowStart: 0, sourceStart: 0, length: 0 })
     return file.statements
         .flatMap((statement) => {
-            const reactive = reactiveDeclarations(statement)
+            const reactive = reactiveDeclarations(statement, bindings)
             if (reactive === undefined) {
                 return [verbatim(statement)]
             }
-            return reactive.map((declaration) => scopeLineFor(declaration, [], verbatim, span).text)
+            return reactive.map(
+                (declaration) => scopeLineFor(declaration, [], verbatim, span, bindings).text,
+            )
         })
         .join('\n')
 }
@@ -385,22 +395,35 @@ function projectNestedScript(code: string): string {
 /* The `state`/`computed`/`linked`/`props()` declarations in a variable statement, or
    undefined if it isn't one declaring them (so the caller emits it verbatim). A statement
    mixing reactive and plain declarations is rare; treated as all-verbatim. */
-function reactiveDeclarations(statement: ts.Statement): ts.VariableDeclaration[] | undefined {
+function reactiveDeclarations(
+    statement: ts.Statement,
+    bindings: ReactiveImportBindings,
+): ts.VariableDeclaration[] | undefined {
     if (!ts.isVariableStatement(statement)) {
         return undefined
     }
     const declarations = statement.declarationList.declarations
-    const reactive = declarations.filter((declaration) => signalCallee(declaration) !== undefined)
+    const reactive = declarations.filter(
+        (declaration) => signalCallee(declaration, bindings) !== undefined,
+    )
     return reactive.length === declarations.length && reactive.length > 0 ? reactive : undefined
 }
 
-/* The callee name of a `NAME = state(...)` / `linked(...)` / `computed(...)` /
-   `props()` decl — bare or the explicit scope form (`scope().state(...)` / `c.state(...)`),
-   receiver-agnostic (the method name marks it reactive). */
-function signalCallee(declaration: ts.VariableDeclaration): string | undefined {
+/* The canonical reactive primitive a `NAME = state(...)` / `state.linked(...)` /
+   `props()` decl resolves to — import-resolution first (alias-safe), then the legacy
+   receiver-agnostic member form (`scope().state(...)` / `c.state(...)`) and bare canonical
+   names by the method name; else undefined (a plain declaration). */
+function signalCallee(
+    declaration: ts.VariableDeclaration,
+    bindings: ReactiveImportBindings,
+): string | undefined {
     const initializer = declaration.initializer
     if (initializer === undefined || !ts.isCallExpression(initializer)) {
         return undefined
+    }
+    const resolved = resolveReactiveExport(initializer.expression, bindings)
+    if (resolved !== undefined) {
+        return resolved
     }
     const callee = initializer.expression
     const name = ts.isIdentifier(callee)
@@ -418,13 +441,19 @@ function scopeLineFor(
     propsShapes: string[],
     verbatim: (node: ts.Node) => string,
     span: (node: ts.Node, prefixLength: number) => ShadowMapping,
+    bindings: ReactiveImportBindings,
 ): ScopeLine {
     const name = ts.isIdentifier(declaration.name) ? declaration.name.text : '_'
     const call = declaration.initializer as ts.CallExpression
-    /* Bare callee (`state`) or member callee (`scope().state` / `c.state`). */
-    const callee = ts.isPropertyAccessExpression(call.expression)
-        ? call.expression.name.text
-        : (call.expression as ts.Identifier).text
+    /* The CANONICAL primitive drives value-projection — import-resolution first (so an
+       aliased `s(0)` / `state.computed(...)` projects correctly), then the legacy member/
+       bare callee name. `verbatim(call.expression)` below keeps the AUTHOR's text for the
+       trailing hover ref. */
+    const callee =
+        resolveReactiveExport(call.expression, bindings) ??
+        (ts.isPropertyAccessExpression(call.expression)
+            ? call.expression.name.text
+            : (call.expression as ts.Identifier).text)
     if (callee === 'props') {
         /* `const {…} = props<Shape>()`: the type arg (default `Record<string, any>`)
            IS the parent-facing prop shape, and the destructure projects verbatim against

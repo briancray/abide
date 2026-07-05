@@ -520,22 +520,20 @@ describe('abide check', () => {
         expect(diagnostics[0]!.message).toContain('toFixed')
     })
 
-    /* `effect` is published only so generated component code can import it; the module
-       resolver can't tell codegen from author source, so the check is the gate: a direct
-       import is rejected and points at the import statement, steering to `scope().effect`. */
-    test('a direct import of the compiler-internal effect is rejected', () => {
-        const source = `<script>\nimport { effect } from '@abide/abide/ui/effect'\nconst s = scope()\n</script>\n<p>hi</p>\n`
-        const dir = project({ 'bad.abide': source })
+    /* `effect` is now an ordinary author import (`import { effect } from
+       '@abide/abide/ui/effect'`) — the imported reactive surface. The old ban is lifted:
+       no "compiler-internal" rejection. (The throwaway project doesn't install the package,
+       so module resolution is the only remaining noise — a real consumer resolves it.) */
+    test('a direct import of effect is no longer rejected as compiler-internal', () => {
+        const source = `<script>\nimport { effect } from '@abide/abide/ui/effect'\neffect(() => {})\n</script>\n<p>hi</p>\n`
+        const dir = project({ 'good.abide': source })
         const diagnostics = collectAbideDiagnostics(createShadowProgram(dir))
-        expect(diagnostics).toHaveLength(1)
-        expect(diagnostics[0]!.message).toContain('scope().effect')
-        /* Located on the import statement in the original `.abide`, not the shadow. */
-        expect(diagnostics[0]!.start).toBe(source.indexOf('import'))
-        const span = source.slice(
-            diagnostics[0]!.start,
-            diagnostics[0]!.start + diagnostics[0]!.length,
-        )
-        expect(span).toContain('ui/effect')
+        expect(
+            diagnostics.some((diagnostic) => diagnostic.message.includes('compiler-internal')),
+        ).toBe(false)
+        expect(
+            diagnostics.some((diagnostic) => diagnostic.message.includes('scope().effect')),
+        ).toBe(false)
     })
 
     /* The supported form is clean — no false positive on `scope().effect`. */

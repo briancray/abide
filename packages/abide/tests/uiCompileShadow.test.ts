@@ -195,4 +195,34 @@ let ready = scope().state(false)
         /* No raw `computed(` call survives into the nested branch body. */
         expect(code).not.toContain("let label = computed(() => layout + '!')")
     })
+
+    test('an imported state omits the ambient fallback and value-projects the import', () => {
+        const { code } = compileShadow(
+            `<script>\nimport { state } from '@abide/abide/ui/state'\nlet count = state(0)\nconst doubled = state.computed(() => count * 2)</script><p>{doubled}</p>`,
+        )
+        /* The author's import is emitted; the ambient `declare function state` is omitted so
+           the two don't collide as a duplicate identifier. */
+        expect(code).toContain("import { state } from '@abide/abide/ui/state'")
+        expect(code).not.toContain('declare function state<T>')
+        /* Reactive decls still value-project (syntactic, import-resolution-aware). */
+        expect(code).toContain('let count')
+        expect(code).toContain('const doubled')
+    })
+
+    test('an aliased imported state value-projects via import resolution', () => {
+        const { code } = compileShadow(
+            `<script>\nimport { state as s } from '@abide/abide/ui/state'\nlet count = s(0)</script><p>{count.toFixed(2)}</p>`,
+        )
+        expect(code).toContain("import { state as s } from '@abide/abide/ui/state'")
+        /* `s(0)` projects to the value `(0)` (number), so `.toFixed` checks — not a State cell. */
+        expect(code).toContain('let count = (0);')
+    })
+
+    test('an imported effect omits the preamble effect import (no duplicate)', () => {
+        const { code } = compileShadow(
+            `<script>\nimport { effect } from '@abide/abide/ui/effect'\neffect(() => {})</script><p>x</p>`,
+        )
+        /* Exactly one `import { effect }` — the author's; the preamble drops its own. */
+        expect(code.match(/import \{ effect \} from/g)).toHaveLength(1)
+    })
 })
