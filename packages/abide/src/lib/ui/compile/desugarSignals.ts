@@ -1,66 +1,27 @@
 import ts from 'typescript'
 import { REACTIVE_CALLEES } from './REACTIVE_CALLEES.ts'
+import {
+    type ReactiveImportBindings,
+    reactiveImportBindings,
+    resolveReactiveExport,
+} from './resolveReactiveExport.ts'
 
 const factory = ts.factory
 
-/* The reactive primitives that must be reached through a scope. A bare call to one of
-   these is a compile error: a reactive primitive is owned by a scope and the surface must
-   show it (`scope().state(...)`), so a reader always sees the scope interaction. `effect`
-   is here too — a reaction is scope-owned (it tears down with the scope), so it joins the
-   one surface; unlike the cells it stays a runtime call (`scope().effect(...)` passes
-   through to the `effect` helper), not a doc slot. */
-const SCOPE_PRIMITIVES: ReadonlySet<string> = new Set(['state', 'linked', 'computed', 'effect'])
-
-/* The primitive names a top-level `const { state, computed } = scope()` destructure binds.
-   Such a name is scope-bound — its bare call below is the destructured method, not a stray
-   global — so it is exempt from the bare-primitive error. Only a destructure of a `scope()`
-   call counts (receiver-agnostic on the callee name, matching signalCallee); an aliased
-   binding (`{ state: s }`) is not recognised, so the canonical name must be kept. */
-function scopeDestructuredPrimitives(source: ts.SourceFile): Set<string> {
-    const bound = new Set<string>()
-    for (const statement of source.statements) {
-        if (!ts.isVariableStatement(statement)) {
-            continue
-        }
-        for (const declaration of statement.declarationList.declarations) {
-            if (
-                signalCallee(declaration) === 'scope' &&
-                ts.isObjectBindingPattern(declaration.name)
-            ) {
-                for (const element of declaration.name.elements) {
-                    if (
-                        element.propertyName === undefined &&
-                        ts.isIdentifier(element.name) &&
-                        SCOPE_PRIMITIVES.has(element.name.text)
-                    ) {
-                        bound.add(element.name.text)
-                    }
-                }
-            }
-        }
-    }
-    return bound
-}
-
-/* Throws on a bare scope primitive (`state(0)` instead of `scope().state(0)`) or on the
-   removed `prop(...)` reader — props are now read by destructuring `props()`. Walks all
-   calls, so a stray one nested in a function is caught too, not just top-level declarations.
-   A primitive destructured from `scope()` at the top is scope-bound and exempt. */
-function assertScopedPrimitives(source: ts.SourceFile): void {
-    const scopeBound = scopeDestructuredPrimitives(source)
+/* Throws on the removed `prop(...)` reader — props are now read by destructuring `props()`.
+   Walks all calls, so a stray one nested in a function is caught too. Bare reactive
+   primitives (`state(0)`) are the SURFACE now (recognised by import binding + lowered), so
+   they no longer throw — only the withdrawn `prop` reader does. */
+function assertNoRemovedReaders(source: ts.SourceFile): void {
     const visit = (node: ts.Node): void => {
-        if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
-            const name = node.expression.text
-            if (SCOPE_PRIMITIVES.has(name) && !scopeBound.has(name)) {
-                throw new Error(
-                    `abide: bare \`${name}(...)\` is not allowed — a reactive primitive lives on a scope. Use \`scope().${name}(...)\` (or a captured handle: \`const s = scope(); s.${name}(...)\`).`,
-                )
-            }
-            if (name === 'prop') {
-                throw new Error(
-                    'abide: `prop(...)` has been removed — read props by destructuring `props()`, e.g. `const { name } = props()` (with a default: `const { name = fallback } = props()`).',
-                )
-            }
+        if (
+            ts.isCallExpression(node) &&
+            ts.isIdentifier(node.expression) &&
+            node.expression.text === 'prop'
+        ) {
+            throw new Error(
+                'abide: `prop(...)` has been removed — read props by destructuring `props()`, e.g. `const { name } = props()` (with a default: `const { name = fallback } = props()`).',
+            )
         }
         ts.forEachChild(node, visit)
     }
@@ -93,7 +54,11 @@ export function desugarSignals(source: ts.SourceFile): {
     derivedNames: Set<string>
     computedNames: Set<string>
 } {
-    assertScopedPrimitives(source)
+    assertNoRemovedReaders(source)
+    /* The file's reactive import bindings — each local (alias-safe) mapped to its
+       canonical primitive. The single recognition authority: every callee below resolves
+       against these (plus the legacy receiver-agnostic `scope().state(...)` member form). */
+    const bindings = reactiveImportBindings(source)
     const stateNames = new Set<string>()
     const derivedNames = new Set<string>()
     const computedNames = new Set<string>()
@@ -105,7 +70,7 @@ export function desugarSignals(source: ts.SourceFile): {
             continue
         }
         for (const declaration of statement.declarationList.declarations) {
-            const callee = signalCallee(declaration)
+            const callee = signalCallee(declaration, bindings)
             if (callee === 'props') {
                 /* `const {…, ...rest} = props()` — each named binding is a read-only computed
                    over the parent thunk (read as `name()`); a `...rest` binding stays a plain
@@ -124,10 +89,10 @@ export function desugarSignals(source: ts.SourceFile): {
             if (!ts.isIdentifier(declaration.name)) {
                 continue
             }
-            if (isPlainStateSlot(declaration)) {
+            if (isPlainStateSlot(declaration, bindings)) {
                 /* Plain `state(initial)` → a serializable `model` doc slot. */
                 stateNames.add(declaration.name.text)
-            } else if (isComputedSlot(declaration)) {
+            } else if (isComputedSlot(declaration, bindings)) {
                 /* Read-only `computed(compute)` → a computed `scope().derive` doc slot,
                    referenced as `name()` (its string-free reader): a function of other
                    paths, recomputed via the graph, never stored/serialized. */
@@ -163,7 +128,7 @@ export function desugarSignals(source: ts.SourceFile): {
             )
         }
         for (const statement of root.statements) {
-            statements.push(...loweredStatement(statement))
+            statements.push(...loweredStatement(statement, bindings))
         }
         return factory.updateSourceFile(root, statements)
     }
@@ -175,12 +140,15 @@ export function desugarSignals(source: ts.SourceFile): {
    assignments, computed → `scope().derive` consts, props → derive consts (+ restProps),
    cells → `scope().<callee>(...)` consts; anything else passes through verbatim. The
    per-statement dispatch mirrors the name-collection pass. */
-function loweredStatement(statement: ts.Statement): ts.Statement[] {
+function loweredStatement(
+    statement: ts.Statement,
+    bindings: ReactiveImportBindings,
+): ts.Statement[] {
     return (
-        stateAssignmentStatements(statement) ??
-        computedStatements(statement) ??
-        propsStatements(statement) ??
-        cellStatements(statement) ?? [statement]
+        stateAssignmentStatements(statement, bindings) ??
+        computedStatements(statement, bindings) ??
+        propsStatements(statement, bindings) ??
+        cellStatements(statement, bindings) ?? [statement]
     )
 }
 
@@ -210,10 +178,13 @@ function scopeMethodCall(method: string, args: readonly ts.Expression[]): ts.Cal
 /* True for a read-only computed slot — `computed(compute)` with no write-through
    `set`. The writable `computed(compute, set)` lens keeps a `.value` cell (handled by
    the caller). */
-function isComputedSlot(declaration: ts.VariableDeclaration): boolean {
+function isComputedSlot(
+    declaration: ts.VariableDeclaration,
+    bindings: ReactiveImportBindings,
+): boolean {
     const initializer = declaration.initializer
     return (
-        signalCallee(declaration) === 'computed' &&
+        signalCallee(declaration, bindings) === 'computed' &&
         initializer !== undefined &&
         ts.isCallExpression(initializer) &&
         initializer.arguments.length === 1
@@ -224,17 +195,20 @@ function isComputedSlot(declaration: ts.VariableDeclaration): boolean {
    routed onto the scope: `linked(seed)` → `const x = scope().linked(seed)`. The cell
    stays a standalone non-serializing cell (its refs stay `name.value`); the rewrite only
    removes the bare runtime import so the sole reactive surface is `scope()`. */
-function cellStatements(statement: ts.Statement): ts.Statement[] | undefined {
+function cellStatements(
+    statement: ts.Statement,
+    bindings: ReactiveImportBindings,
+): ts.Statement[] | undefined {
     if (!ts.isVariableStatement(statement)) {
         return undefined
     }
     const statements: ts.Statement[] = []
     for (const declaration of statement.declarationList.declarations) {
-        const callee = signalCallee(declaration)
+        const callee = signalCallee(declaration, bindings)
         if (
             !ts.isIdentifier(declaration.name) ||
             (callee !== 'linked' && callee !== 'state') ||
-            isPlainStateSlot(declaration)
+            isPlainStateSlot(declaration, bindings)
         ) {
             return undefined
         }
@@ -246,7 +220,10 @@ function cellStatements(statement: ts.Statement): ts.Statement[] | undefined {
 
 /* `let total = computed(compute)` → `const total = scope().derive("total", compute)`
    — a computed doc slot whose reader the references lower to `total()`. */
-function computedStatements(statement: ts.Statement): ts.Statement[] | undefined {
+function computedStatements(
+    statement: ts.Statement,
+    bindings: ReactiveImportBindings,
+): ts.Statement[] | undefined {
     if (!ts.isVariableStatement(statement)) {
         return undefined
     }
@@ -254,8 +231,8 @@ function computedStatements(statement: ts.Statement): ts.Statement[] | undefined
     for (const declaration of statement.declarationList.declarations) {
         if (
             !ts.isIdentifier(declaration.name) ||
-            signalCallee(declaration) !== 'computed' ||
-            !isComputedSlot(declaration)
+            signalCallee(declaration, bindings) !== 'computed' ||
+            !isComputedSlot(declaration, bindings)
         ) {
             return undefined
         }
@@ -294,20 +271,30 @@ function hasTransform(declaration: ts.VariableDeclaration): boolean {
 /* A plain `state(initial)` with no transform → a serializable `model` doc slot;
    every other reactive declaration is a `.value` cell. The one rule shared by the
    name-collection pass and the slot lowering. */
-function isPlainStateSlot(declaration: ts.VariableDeclaration): boolean {
-    return signalCallee(declaration) === 'state' && !hasTransform(declaration)
+function isPlainStateSlot(
+    declaration: ts.VariableDeclaration,
+    bindings: ReactiveImportBindings,
+): boolean {
+    return signalCallee(declaration, bindings) === 'state' && !hasTransform(declaration)
 }
 
-/* The callee name of a reactive declaration, else undefined. Recognises both the bare
-   form (`NAME = state(...)`) and the explicit scope form (`NAME = scope().state(...)` or
-   `NAME = c.state(...)` for any scope handle `c`) — receiver-agnostic: the METHOD name is
-   what marks the binding reactive. Since `scope()` is the ambient scope (one object per
-   level), the receiver is irrelevant to lowering — the slot keys off the binding name and
-   lands on the same `model`, so the explicit form lowers exactly like the bare one. */
-function signalCallee(declaration: ts.VariableDeclaration): string | undefined {
+/* The canonical reactive primitive a declaration's callee resolves to, else undefined.
+   Import-resolution first (alias-safe: `import { state as s }; s(0)` → `state`, and
+   `state.linked` / `state.computed` off an imported `state` root); then the legacy
+   receiver-agnostic member form (`scope().state(...)` / `c.state(...)`) and bare canonical
+   names by the METHOD name. Since `scope()` is the ambient scope, the receiver is
+   irrelevant — the slot keys off the binding name and lands on the same `model`. */
+function signalCallee(
+    declaration: ts.VariableDeclaration,
+    bindings: ReactiveImportBindings,
+): string | undefined {
     const initializer = declaration.initializer
     if (initializer === undefined || !ts.isCallExpression(initializer)) {
         return undefined
+    }
+    const resolved = resolveReactiveExport(initializer.expression, bindings)
+    if (resolved !== undefined) {
+        return resolved
     }
     const callee = initializer.expression
     if (ts.isIdentifier(callee)) {
@@ -375,17 +362,23 @@ function propsBindingKey(element: ts.BindingElement): string {
    read as `name()` — plus a `const rest = restProps($props, [consumed])` for a rest
    binding; otherwise undefined. The `?? default` applies the binding's `= default`
    fallback when the prop is absent. */
-function propsStatements(statement: ts.Statement): ts.Statement[] | undefined {
+function propsStatements(
+    statement: ts.Statement,
+    bindings: ReactiveImportBindings,
+): ts.Statement[] | undefined {
     if (!ts.isVariableStatement(statement)) {
         return undefined
     }
     const statements: ts.Statement[] = []
     for (const declaration of statement.declarationList.declarations) {
-        if (signalCallee(declaration) !== 'props' || !ts.isObjectBindingPattern(declaration.name)) {
+        if (
+            signalCallee(declaration, bindings) !== 'props' ||
+            !ts.isObjectBindingPattern(declaration.name)
+        ) {
             return undefined
         }
-        const { bindings, rest } = propsDestructure(declaration)
-        for (const { local, key, initializer } of bindings) {
+        const { bindings: propBindings, rest } = propsDestructure(declaration)
+        for (const { local, key, initializer } of propBindings) {
             /* `$props["key"]?.()` — the parent thunk, optionally called. */
             const read = factory.createCallChain(
                 factory.createElementAccessExpression(
@@ -422,7 +415,7 @@ function propsStatements(statement: ts.Statement): ts.Statement[] | undefined {
         }
         /* The rest bag gathers every prop not named above (and not `$children`). */
         if (rest !== undefined) {
-            const consumed = bindings.map((binding) => factory.createStringLiteral(binding.key))
+            const consumed = propBindings.map((binding) => factory.createStringLiteral(binding.key))
             statements.push(
                 constDeclaration(
                     rest,
@@ -443,13 +436,16 @@ function propsStatements(statement: ts.Statement): ts.Statement[] | undefined {
 
 /* If `statement` declares `state(...)` bindings, returns `model.<name> = <init>`
    assignment statements (one per declaration); otherwise undefined. */
-function stateAssignmentStatements(statement: ts.Statement): ts.Statement[] | undefined {
+function stateAssignmentStatements(
+    statement: ts.Statement,
+    bindings: ReactiveImportBindings,
+): ts.Statement[] | undefined {
     if (!ts.isVariableStatement(statement)) {
         return undefined
     }
     const statements: ts.Statement[] = []
     for (const declaration of statement.declarationList.declarations) {
-        if (!ts.isIdentifier(declaration.name) || !isPlainStateSlot(declaration)) {
+        if (!ts.isIdentifier(declaration.name) || !isPlainStateSlot(declaration, bindings)) {
             /* Only a plain `state(initial)` becomes a slot; `state(initial, transform)`
                (and everything else) is a `.value` cell — pass it through so the
                runtime call (and its transform) survives. */

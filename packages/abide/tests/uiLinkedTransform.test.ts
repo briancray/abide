@@ -197,12 +197,16 @@ describe('explicit scope().X authoring surface', () => {
         expect(body).toContain('total()')
     })
 
-    test('a bare reactive call is a compile error pointing at scope()', () => {
-        for (const primitive of ['state', 'linked', 'computed', 'effect']) {
-            const source = `<script>const x = ${primitive}(0)</script><p>{x}</p>`
-            expect(() => compileComponent(source)).toThrow(/lives on a scope/)
-        }
-        // `prop` stays bare — it reads parent props, not scope data
+    test('a bare reactive call is the surface now — it lowers, not throws', () => {
+        // bare `state(0)` is the imported surface; it lowers to a serializable slot
+        expect(() =>
+            compileComponent(`<script>const x = state(0)</script><p>{x}</p>`),
+        ).not.toThrow()
+        // the withdrawn `prop(...)` reader still throws with migration guidance
+        expect(() => compileComponent(`<script>const id = prop('id')</script><p>{id}</p>`)).toThrow(
+            /`prop\(\.\.\.\)` has been removed/,
+        )
+        // `props()` destructure stays the prop-reading surface
         expect(() =>
             compileComponent(`<script>const { id } = props()</script><p>{id}</p>`),
         ).not.toThrow()
@@ -228,16 +232,14 @@ describe('explicit scope().X authoring surface', () => {
         ).not.toThrow()
     })
 
-    /* A primitive destructured from scope() at the top is scope-bound — calling it bare
-       below is allowed; an undestructured bare call is still the genuine mistake. */
-    test('a destructured primitive used bare does not trip the scope() guard', () => {
-        expect(() =>
-            compileComponent(
-                `<script>const { state } = scope()\nconst x = state(0)</script><p>{x}</p>`,
-            ),
-        ).not.toThrow()
-        expect(() => compileComponent(`<script>const x = state(0)</script><p>{x}</p>`)).toThrow(
-            /lives on a scope/,
+    /* A primitive destructured from scope() at the top still lowers (legacy compat); a
+       bare `state(0)` now lowers too (the imported surface), both to the same slot. */
+    test('a destructured primitive used bare lowers like the bare surface', () => {
+        const destructured = compileComponent(
+            `<script>const { state } = scope()\nconst x = state(0)</script><p>{x}</p>`,
         )
+        const bare = compileComponent(`<script>const x = state(0)</script><p>{x}</p>`)
+        expect(destructured).toContain('$$model.replace("x", 0)')
+        expect(bare).toContain('$$model.replace("x", 0)')
     })
 })
