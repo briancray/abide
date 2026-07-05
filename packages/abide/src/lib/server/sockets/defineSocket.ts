@@ -180,6 +180,13 @@ export function defineSocket<T>(name: string, opts: SocketOptions = {}): Socket<
            stays as an alias through the migration. Same isomorphic fan-out. */
         broadcast: publish,
         tail: (count?: number, hooks?: TailHooks) => iterate(count ?? 'all', hooks),
+        /* The latest retained frame (after ttl pruning), or undefined when none is held. */
+        peek: () => {
+            pruneExpired(Date.now())
+            return buffer.length > 0 ? (buffer[buffer.length - 1] as BufferEntry).value : undefined
+        },
+        /* No-op on the server: it is the source of truth, so there is nothing to re-pull. */
+        refresh: () => undefined,
         [Symbol.asyncIterator]: () => iterate(0)[Symbol.asyncIterator](),
     }
     registerSocket({

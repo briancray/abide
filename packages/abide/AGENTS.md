@@ -92,8 +92,10 @@ For tests, add the preload so the `.abide` loader + virtual resolver are active:
   `schema`, `tail` (retained-frame count, default `1`; `0` opts out), `ttl` (lazy
   eviction of retained frames), `clients`, `clientPublish`. `Socket<T>` is an
   isomorphic `AsyncIterable<T>`; `.broadcast(m)` fans out to every subscriber
-  (`.publish` is its retained alias), `.tail(n)` replays. Bare iteration is
-  live-only. Consume live frames with `tail(chat)` / `tail(chat, { last })` in the UI.
+  (`.publish` is its retained alias), `.tail(n)` replays, `.peek()` reads the latest
+  retained frame synchronously (`peek(socket)` routes here), `.refresh()` re-pulls the
+  server tail (client) / no-op (server). Bare iteration is live-only. Consume live
+  frames with `tail(chat)` / `tail(chat, { last })` in the UI.
 - **Page / layout**: a `page.abide` under `src/ui/pages/`; `[id]` dynamic
   segments surface on `page.params`; `layout.abide` wraps nested routes with
   `{children()}` as its outlet. Read the active route reactively via `page`;

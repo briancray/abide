@@ -24,4 +24,11 @@ export interface Socket<T> extends AsyncIterable<T> {
     broadcast(message: T): void
     publish(message: T): void
     tail(count?: number, hooks?: TailHooks): AsyncIterable<T>
+    /* The latest retained frame, synchronously — `T | undefined` when none. The value
+       member of the probe family for a stream; `peek(socket)` routes here. */
+    peek(): T | undefined
+    /* Drop local frames and re-pull the server's retained tail — the socket analog of
+       getFoo.refresh(), for a ttl-expired frame or a reconnect resync. Server-side it is a
+       no-op (the server IS the source). */
+    refresh(): void
 }

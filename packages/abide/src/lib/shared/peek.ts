@@ -1,20 +1,35 @@
+import type { Socket } from '../server/sockets/types/Socket.ts'
 import { cache } from './cache.ts'
 import type { RemoteFunction } from './types/RemoteFunction.ts'
 
 /*
-The value member of the probe family: the currently-retained value of a cached
-read, synchronously and without triggering a fetch — `Return | undefined`
-(undefined when nothing is retained yet). Reactive in a tracking scope
-(state.computed / on / template): re-runs when the value changes (a refresh lands,
-a patch mutates it); a one-shot snapshot outside a scope. Instance sugar
-`getFoo.peek(args?)` ≡ `peek(getFoo, args?)`.
+The value member of the probe family: the currently-retained value, synchronously,
+without triggering anything — `T | undefined` (undefined when nothing is retained
+yet). For a cached read it is the retained cache value (reactive in a tracking
+scope — re-runs when a refresh lands or a patch mutates it; a one-shot snapshot
+otherwise). For a subscribable (socket / stream) it is the latest frame, read off
+the source's own `.peek()`. Instance sugar `getFoo.peek(args?)` ≡ `peek(getFoo,
+args?)`, `socket.peek()` ≡ `peek(socket)`.
 
   peek(getFoo, args?)   → the retained value for that call
+  peek(socket)          → the latest frame
 */
 // @documentation probes
 export function peek<Args, Return>(
     fn: RemoteFunction<Args, Return>,
     args?: Args,
-): Return | undefined {
-    return cache.peek(fn, args)
+): Return | undefined
+export function peek<T>(source: Socket<T>): T | undefined
+export function peek(source: unknown, args?: unknown): unknown {
+    /* A subscribable (socket/stream) carries its own latest-frame probe; an rpc does not
+       have Symbol.asyncIterator, so this cleanly splits the two even though both expose a
+       `.peek` method. */
+    if (
+        source !== null &&
+        typeof source === 'object' &&
+        typeof (source as { [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator] === 'function'
+    ) {
+        return (source as { peek: () => unknown }).peek()
+    }
+    return cache.peek(source as RemoteFunction<unknown, unknown>, args as never)
 }
