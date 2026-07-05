@@ -21,6 +21,13 @@ function bump(key: string, error: unknown): void {
 
 export const rpcErrorRegistry = {
     record(key: string, error: unknown): void {
+        /* Client-only: on the server the boundary runs per request, and this Map is a single
+           module global — recording would leak errors across requests/users and grow unbounded.
+           SSR errors surface through `{:catch}`; the reactive probe is a client feature, so the
+           server keeps the Map empty (reads return undefined there). */
+        if (typeof window === 'undefined') {
+            return
+        }
         bump(key, error)
         trigger(node)
     },

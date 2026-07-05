@@ -15,9 +15,12 @@ describe('fn.error() probe', () => {
 
     beforeAll(() => {
         cacheStoreSlot.resolver = () => requestContext.getStore()?.cache
+        /* The rpc error registry is client-only (no server leak); simulate a client. */
+        ;(globalThis as { window?: unknown }).window = { location: { href: 'http://localhost/' } }
     })
     afterAll(() => {
         cacheStoreSlot.resolver = undefined
+        delete (globalThis as { window?: unknown }).window
     })
 
     test('undefined before a call, the error after, cleared by invalidate', async () => {
