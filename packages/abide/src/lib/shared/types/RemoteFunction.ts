@@ -1,3 +1,4 @@
+import type { CacheOptions } from './CacheOptions.ts'
 import type { ClientFlags } from './ClientFlags.ts'
 import type { ErrorSpec } from './ErrorSpec.ts'
 import type { HttpMethod } from './HttpMethod.ts'
@@ -57,6 +58,15 @@ export type RemoteFunction<
        per-rpc replacement for a global guard, since the error name → data type mapping
        lives in the rpc's own spec. */
     readonly isError: RpcErrorGuard<Errors>
+    /* Pre-bound selector sugar: `fn.pending(args?)` ≡ `pending(fn, args?)`, and likewise for
+       refreshing / invalidate — the rpc is the leading selector, bound in. The argument is this
+       rpc's typed `Args` (the by-args refinement); tags / cross-cutting selection stay on the
+       globals. `cache(args?, options?)` is the direct read-through call for those args
+       (≡ `cache(fn, options)(args)`) — returns the cached promise, not a wrapper. */
+    pending(args?: Args): boolean
+    refreshing(args?: Args): boolean
+    invalidate(args?: Args): void
+    cache(args?: Args, options?: CacheOptions): Promise<Return>
 } /* `outbox` presence follows the `outbox: true` opt: the mutating helper threads `Durable`
      into the return type so a DURABLE rpc's `.outbox` is the required queue face (no optional
      chain). A non-durable rpc keeps it optional — assignable to a durable one everywhere a
