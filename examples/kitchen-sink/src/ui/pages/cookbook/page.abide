@@ -26,12 +26,12 @@ const categories = [
     },
     {
         title: 'reactive state',
-        blurb: 'Local reactivity — scope(), state / computed / linked, effects, transforms, two-way bindings.',
+        blurb: 'Local reactivity — imported state / state.computed / state.linked, effects, transforms, two-way bindings.',
         pages: [
-            { href: '/cookbook/state/scope', label: 'scope basics' },
+            { href: '/cookbook/state/scope', label: 'state basics' },
             { href: '/cookbook/state/derived', label: 'computed, linked, transforms' },
             { href: '/cookbook/state/effects', label: 'effects' },
-            { href: '/cookbook/state/bindings', label: 'bindings & persistence' },
+            { href: '/cookbook/state/bindings', label: 'shared context' },
         ],
     },
     {

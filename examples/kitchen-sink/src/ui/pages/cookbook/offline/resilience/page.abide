@@ -9,15 +9,15 @@ const OUTBOX = '/outbox'
 
 <h1 class="text-3xl font-bold">offline resilience</h1>
 <p class="mt-2 text-slate-600">
-    Surviving a flaky network — reading connectivity, persisting local state, and the local-first
-    edge where abide's reactive scope syncs to peers, plus the gaps beyond it.
+    Surviving a flaky network — reading connectivity, persisting local state, and the durable outbox
+    that queues writes offline and drains on reconnect, plus the gaps beyond it.
 </p>
 
 <Recipe
     task="Detect that the browser went offline"
     live={OBS}
     code={`import { online } from '@abide/abide/shared/online'
-const connected = computed(() => online())
+const connected = state.computed(() => online())
 
 {#if !connected}<Banner>Offline — changes will sync when you reconnect</Banner>{/if}`}
     note={'`online()` reactively reflects `navigator.onLine`. Pair it with durable rpcs so writes queue instead of failing while the banner shows.'} />
@@ -32,31 +32,11 @@ const up = await health()`}
 <Recipe
     task="Persist a form draft locally"
     live={STATE}
-    code={`const { effect } = scope()
+    code={`import { state } from '@abide/abide/ui/state'
+import { effect } from '@abide/abide/ui/effect'
 let draft = state(localStorage.getItem('draft') ?? '')
 effect(() => localStorage.setItem('draft', draft))`}
     note={'Seed the cell from `localStorage` and mirror writes back in an effect — the draft survives a reload or an accidental close, no server involved.'} />
-
-<Recipe
-    task="Persist the scope's data across reloads"
-    live={STATE}
-    code={`scope().persist('editor')   // durable, restored on next mount`}
-    note={"`persist()` routes the whole scope's data to durable storage keyed by the name you give it — a heavier-duty alternative to hand-rolled localStorage for structured state."} />
-
-<Recipe
-    task="Undo local edits offline"
-    live={STATE}
-    code={`const s = scope()
-s.record()
-// … edits via s.replace(…) …
-s.undo()`}
-    note={'`record()` journals scope mutations locally — undo/redo work entirely client-side, no round-trip, so they keep working offline.'} />
-
-<Recipe
-    task="Sync local edits to peers"
-    live={STATE}
-    code={`scope().broadcast(transport)   // mirror this scope's changes to peers`}
-    note={"`broadcast(transport)` mirrors a scope's changes over a `SyncTransport` — the live, multiplayer edge of the local-first surface. `dispose()` stops syncing."} />
 
 <Recipe
     task="Queue mutations while offline"
@@ -88,7 +68,9 @@ await saveMessage({ id, text })   // handler keys on id — replay is a no-op`}
 <Recipe
     task="Restore local-first list edits"
     live={STATE}
-    code={`let items = state(JSON.parse(localStorage.getItem('items') ?? '[]'))
+    code={`import { state } from '@abide/abide/ui/state'
+import { effect } from '@abide/abide/ui/effect'
+let items = state(JSON.parse(localStorage.getItem('items') ?? '[]'))
 effect(() => localStorage.setItem('items', JSON.stringify(items)))
 // mutate items locally; sync each change through a durable rpc`}
     note={'Keep the working list in local state mirrored to storage, and push each change through an `outbox: true` rpc — edits are instant offline and sync when the network returns.'} />
@@ -97,8 +79,8 @@ effect(() => localStorage.setItem('items', JSON.stringify(items)))
     task="Merge concurrent multiplayer edits"
     gap={true}
     code={`// no built-in CRDT / conflict-free merge yet
-// broadcast() shares changes; last-write-wins on a conflict during drain`}
-    note={"There's no CRDT or automatic conflict resolution. `broadcast()` shares scope changes and the outbox is last-write-wins on drain — true multiplayer merge (the createDoc patch-bus arc) is on the roadmap, not shipped."} />
+// the outbox is last-write-wins on a conflict during drain`}
+    note={"There's no CRDT or automatic conflict resolution. The outbox is last-write-wins on drain — true multiplayer merge (the createDoc patch-bus arc) is on the roadmap, not shipped."} />
 
 <Recipe
     task="Sync in the background with a service worker"
@@ -111,5 +93,5 @@ effect(() => localStorage.setItem('items', JSON.stringify(items)))
     task="Resolve per-field conflicts"
     gap={true}
     code={`// no field-level merge — reconcile in the handler or on read
-// e.g. server returns the authoritative record; client re-seeds a linked() draft`}
-    note={"There's no per-field conflict resolution. Reconcile server-side (the handler decides) or on the client by re-seeding a `linked()` draft from the authoritative record after a sync."} />
+// e.g. server returns the authoritative record; client re-seeds a state.linked() draft`}
+    note={"There's no per-field conflict resolution. Reconcile server-side (the handler decides) or on the client by re-seeding a `state.linked()` draft from the authoritative record after a sync."} />

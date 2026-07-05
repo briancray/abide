@@ -18,35 +18,46 @@ const OBS = '/observability'
     task="Show that anything is loading"
     live={LIVE}
     code={`import { pending } from '@abide/abide/shared/pending'
-const busy = computed(() => pending())`}
+const busy = state.computed(() => pending())`}
     note={'Bare `pending()` is true while any cache call or tail stream is in flight — a global activity indicator with no wiring.'} />
 
 <Recipe
     task="Show a specific read is loading"
     live={LIVE}
-    code={`const loadingUser = computed(() => pending(getUser))`}
+    code={`const loadingUser = state.computed(() => pending(getUser))`}
     note={"`pending(fn)` scopes the probe to one function's calls — no loading flag threaded through the call site."} />
 
 <Recipe
     task="Probe a specific call by args"
     live={LIVE}
-    code={`const loadingThis = computed(() => pending(getUser, { id }))`}
+    code={`const loadingThis = state.computed(() => pending(getUser, { id }))`}
     note={'`pending(fn, args)` narrows to one keyed entry — useful when the same rpc is in flight for several ids at once.'} />
 
-<Recipe task="Probe a group by tag" live={LIVE} code={`const savingOrders = computed(() => pending({ tags: ['orders'] }))`} note={"`pending({ tags })` covers every entry sharing the tag — one probe for a whole feature's in-flight work."} />
+<Recipe
+    task="Use the probe attached to the rpc"
+    live={LIVE}
+    code={`// fn.X(args?) ≡ X(fn, args?) — read straight off the rpc value
+const loading = state.computed(() => getUser.pending({ id }))
+const stale = state.computed(() => getUser.refreshing({ id }))
+const failure = state.computed(() => getUser.error({ id }))
+const warm = await getUser.cache({ id })   // read-through, returns the value
+getUser.invalidate({ id })                 // drop the entry; next read re-enters flight`}
+    note={'Every rpc carries its own `.pending` / `.refreshing` / `.error` / `.cache` / `.invalidate` — the same selector grammar as the standalone probes, scoped to that rpc with no import.'} />
+
+<Recipe task="Probe a group by tag" live={LIVE} code={`const savingOrders = state.computed(() => pending({ tags: ['orders'] }))`} note={"`pending({ tags })` covers every entry sharing the tag — one probe for a whole feature's in-flight work."} />
 
 <Recipe
     task="Show a background refresh"
     live={LIVE}
     code={`import { refreshing } from '@abide/abide/shared/refreshing'
-const updating = computed(() => refreshing(getRates, { base: 'USD' }))`}
+const updating = state.computed(() => refreshing(getRates, { base: 'USD' }))`}
     note={'`refreshing` is true when a value is held and a fresher one is loading — the stale-while-revalidate signal, same selector grammar as `pending`.'} />
 
 <Recipe
     task="Separate first-load from refresh"
     live={LIVE}
-    code={`const skeleton = computed(() => pending(getRates))
-const dim = computed(() => refreshing(getRates))`}
+    code={`const skeleton = state.computed(() => pending(getRates))
+const dim = state.computed(() => refreshing(getRates))`}
     note={'Show a skeleton on `pending` (nothing to show yet) and dim on `refreshing` (old value present). Together they cover both loading modes cleanly.'} />
 
 <Recipe
@@ -76,14 +87,14 @@ const dim = computed(() => refreshing(getRates))`}
 <Recipe
     task="Enable stale-while-revalidate"
     live={LIVE}
-    code={`const rates = computed(() => cache(getRates, { swr: { debounce: 300 } })({ base: 'USD' }))`}
+    code={`const rates = state.computed(() => cache(getRates, { base: 'USD' }, { swr: { debounce: 300 } }))`}
     note={'An `swr` policy keeps the entry and coalesces the refetch, so the stale value stays on screen while `refreshing()` is true. The retention that makes the badge above meaningful.'} />
 
 <Recipe
     task="Detect that the browser is offline"
     live={OBS}
     code={`import { online } from '@abide/abide/shared/online'
-const connected = computed(() => online())
+const connected = state.computed(() => online())
 
 {#if !connected}<Banner>You're offline</Banner>{/if}`}
     note={'`online()` is a reactive probe over `navigator.onLine` — offline-reliable, isomorphic (always true on the server). Drives an offline banner or a disabled state.'} />

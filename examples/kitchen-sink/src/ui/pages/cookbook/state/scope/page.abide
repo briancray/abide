@@ -5,19 +5,19 @@ import Recipe from '$ui/Recipe.abide'
 const LIVE = '/reactive-state'
 </script>
 
-<h1 class="text-3xl font-bold">scope basics</h1>
+<h1 class="text-3xl font-bold">state basics</h1>
 <p class="mt-2 text-slate-600">
-    <code class="font-mono">scope()</code> is the sole reactive surface. Destructure
-    <code class="font-mono">{'{ state, computed, linked, effect }'}</code> off it once, then call them bare. A cell reads and
-    writes like a plain variable.
+    <code class="font-mono">state</code> is the reactive cell — imported from
+    <code class="font-mono">abide/ui/state</code> and called bare. A cell reads and writes like a
+    plain variable.
 </p>
 
 <Recipe
     task="Create a local reactive cell"
     live={LIVE}
-    code={`const { state } = scope()
+    code={`import { state } from '@abide/abide/ui/state'
 let count = state(0)`}
-    note={'`state(initial)` returns a writable cell you read and reassign as an ordinary variable. Destructure `state` from `scope()` first.'} />
+    note={'`state(initial)` returns a writable cell you read and reassign as an ordinary variable. Import `state` from `abide/ui/state` first.'} />
 
 <Recipe
     task="Read a cell in the template"
@@ -89,20 +89,12 @@ function reset() {
     note={'Keep the initial in a constant and reassign it. For a draft that tracks a moving source, reach for `linked` instead (see derived).'} />
 
 <Recipe
-    task="Understand why bare state() is a compile error"
+    task="Import before you use a primitive"
     live={LIVE}
     code={`// error: state is not defined
 let count = state(0)
 
-// correct: reach it through scope()
-const { state } = scope()
+// correct: import it
+import { state } from '@abide/abide/ui/state'
 let count = state(0)`}
-    note={'`state`/`computed`/`linked`/`effect` only exist through `scope()`. This keeps every cell owned by a lexical scope with a known lifetime — the destructure-once idiom is the documented default.'} />
-
-<Recipe
-    task="Pass a scope to a child or a helper"
-    live={LIVE}
-    code={`const here = scope()
-
-<Child parentScope={here} />`}
-    note={'A scope is a passable value — hand it to a child or a helper and it can read, extend, or undo that scope. Walk to the top with `here.root()`.'} />
+    note={'`state` (with `state.computed` / `state.linked`) comes from `abide/ui/state`; `effect` from `abide/ui/effect`. Import the primitive you use — the compiler resolves the binding and owns each cell to the enclosing component lifetime.'} />
