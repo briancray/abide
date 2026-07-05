@@ -1,6 +1,13 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { cacheStoreSlot } from '../src/lib/shared/cacheStoreSlot.ts'
+import { createCacheStore } from '../src/lib/shared/createCacheStore.ts'
+import { createRemoteFunction } from '../src/lib/shared/createRemoteFunction.ts'
+import { peek } from '../src/lib/shared/peek.ts'
 import { state } from '../src/lib/ui/state.ts'
 import { watch } from '../src/lib/ui/watch.ts'
+import { settle } from './support/settle.ts'
+
+const BROWSER_ONLY = { browser: true, mcp: false, cli: false }
 
 /* watch() is client lifecycle. The cell/rpc branches wrap `effect` (no window guard);
    only the subscribable branch self-guards on the server (via cache.on). `window` is set
@@ -84,6 +91,55 @@ describe('watch()', () => {
         })
         await new Promise((resolve) => setTimeout(resolve, 10))
         expect(seen).toEqual([])
+        stop()
+    })
+})
+
+/* The design's real-time pattern: watch(socket, frame => rpc.patch(...)) folds live frames
+   into a cached read with no refetch — the unification of socket.on + cache.on under watch. */
+describe('watch — real-time socket → patch', () => {
+    const globals = globalThis as Record<string, unknown>
+    let realWindow: unknown
+
+    beforeEach(() => {
+        cacheStoreSlot.resolver = () => cacheStoreSlot.fallback
+        cacheStoreSlot.fallback = createCacheStore()
+        realWindow = globals.window
+        globals.window = { location: { href: 'http://x/' } }
+    })
+    afterEach(() => {
+        cacheStoreSlot.resolver = undefined
+        cacheStoreSlot.fallback = undefined
+        globals.window = realWindow
+    })
+
+    test('folds socket frames into a cached list via patch', async () => {
+        const getList = createRemoteFunction<undefined, string[]>({
+            method: 'GET',
+            url: '/rpc/watchList',
+            clients: BROWSER_ONLY,
+            buildRequest: () => new Request('http://x/rpc/watchList'),
+            invoke: async () =>
+                new Response(JSON.stringify(['a']), {
+                    headers: { 'content-type': 'application/json' },
+                }),
+        })
+        await getList()
+        await settle()
+        expect(peek(getList)).toEqual(['a'])
+
+        const chat = {
+            async *[Symbol.asyncIterator]() {
+                yield 'b'
+                yield 'c'
+            },
+        }
+        const stop = watch(chat as never, (message) => {
+            getList.patch((list) => [...list, message as string])
+        })
+        await new Promise((resolve) => setTimeout(resolve, 10))
+        await settle()
+        expect(peek(getList)).toEqual(['a', 'b', 'c'])
         stop()
     })
 })
