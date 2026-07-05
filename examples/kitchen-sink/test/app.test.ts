@@ -93,7 +93,7 @@ describe('createTestApp', () => {
         ['/cookbook/state/scope', 'Create a local reactive cell'],
         ['/cookbook/state/derived', 'Derive a read-only value'],
         ['/cookbook/state/effects', 'Clean up an effect'],
-        ['/cookbook/state/bindings', 'Enable undo and redo'],
+        ['/cookbook/state/bindings', 'Share a value down the tree'],
         ['/cookbook/data/await-ssr', 'Warm-hydrate an awaited read'],
         ['/cookbook/data/stream', 'Consume a stream reactively'],
         ['/cookbook/data/cache', 'Cache a read across SSR and client'],
