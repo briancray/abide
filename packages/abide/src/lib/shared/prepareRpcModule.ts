@@ -87,18 +87,12 @@ export function prepareRpcModule(
                 return head + stripped.slice(site.parenStart + 1)
             }
             /* Inject the build-time streaming flag into the handler's opts, preserving any author
-               opts by spread. `head` already ends after the METHOD( paren, so we splice the
-               transformed args and keep everything from `)` onward (rest of the module). */
-            const args = stripped.slice(site.parenStart + 1, site.parenEnd)
-            const opts = lastArgText(stripped, site.parenStart, site.parenEnd)
-            const handler =
-                opts === undefined
-                    ? args
-                    : args.slice(0, args.length - opts.length).replace(/,\s*$/, '')
-            const injected =
-                opts === undefined
-                    ? '{ streaming: true }'
-                    : `{ streaming: true, ...(${opts.trim()}) }`
+               opts by spread. Split the call's top-level args (handler + optional opts) — dropping
+               a trailing-comma empty part — so a trailing comma or absent opts can't produce
+               `...()`. `head` ends after the METHOD( paren; keep everything from `)` onward. */
+            const parts = splitTopLevelArgs(stripped, site.parenStart, site.parenEnd)
+            const [handler, opts] = parts
+            const injected = opts ? `{ streaming: true, ...(${opts}) }` : '{ streaming: true }'
             return `${head}${handler}, ${injected}${stripped.slice(site.parenEnd)}`
         },
     }
@@ -172,6 +166,35 @@ function detectStreaming(source: string, parenStart: number, parenEnd: number): 
         i += 1
     }
     return false
+}
+
+/* The call's top-level arguments, trimmed, with empty parts (a trailing comma) dropped —
+   `[handler]` or `[handler, opts]`. Depth-aware and skips strings/comments/regex so commas
+   inside the handler body or opts don't miscount. */
+function splitTopLevelArgs(source: string, parenStart: number, parenEnd: number): string[] {
+    const parts: string[] = []
+    let depth = 0
+    let start = parenStart + 1
+    let i = parenStart + 1
+    while (i < parenEnd) {
+        const skipped = skipNonCode(source, i)
+        if (skipped !== undefined) {
+            i = skipped
+            continue
+        }
+        const c = source[i]
+        if (c === '(' || c === '{' || c === '[') {
+            depth += 1
+        } else if (c === ')' || c === '}' || c === ']') {
+            depth -= 1
+        } else if (c === ',' && depth === 0) {
+            parts.push(source.slice(start, i).trim())
+            start = i + 1
+        }
+        i += 1
+    }
+    parts.push(source.slice(start, parenEnd).trim())
+    return parts.filter((part) => part.length > 0)
 }
 
 /*

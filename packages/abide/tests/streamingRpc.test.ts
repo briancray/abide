@@ -43,6 +43,17 @@ describe('streaming detection (codegen)', () => {
         expect(server).toContain('timeout: 5')
     })
 
+    test('server rewrite handles a trailing comma after opts — no empty `...()` spread', () => {
+        /* Regression: a trailing comma made lastArgText read '' as opts → `...()` (syntax error). */
+        const server = prepareRpcModule(
+            mod('GET(({ to }) => jsonl(source()), { inputSchema },)'),
+            '@abide/abide',
+        )?.rewriteForServer('/rpc/feed')
+        expect(server).toContain('streaming: true')
+        expect(server).toContain('...({ inputSchema })')
+        expect(server).not.toContain('...()')
+    })
+
     test('non-streaming server rewrite carries no streaming flag', () => {
         const server = prepareRpcModule(
             `import { GET } from '@abide/abide/server/GET'\nexport const feed = GET((a) => ({ ok: true }))`,
