@@ -80,6 +80,17 @@ export function compileShadow(source: string, propsType = 'Record<string, any>')
     for (const line of types) {
         builder.flush(line)
     }
+    /* The author's scope (value consts, functions, reactive projections, the `props()`
+       destructure) is hoisted to module scope — above `__Props` — for the same reason the
+       types are: a prop annotation can then reference a value const by `typeof`
+       (`size: keyof typeof sizes`), which fails when the const sits in the function body and
+       `__Props` at module scope can't see it. Narrowing is unaffected: a template's guard and
+       read are both in the render function below, so control-flow narrowing flows regardless
+       of where the binding is declared, and reactive projections are never rebound (writes go
+       through `.value`), so they narrow like consts even into nested handlers. */
+    for (const line of scope) {
+        builder.flush(line)
+    }
     /* `__Props` is the parent-facing prop shape: each `props<Shape>()` destructure
        contributes its whole `Shape` (intersected if there's more than one), or an empty
        object for a component that reads no props. */
@@ -94,9 +105,6 @@ export function compileShadow(source: string, propsType = 'Record<string, any>')
     builder.raw('export default async function (__props: __Props): Promise<void> {\n')
     /* Reference props so an all-optional bag with no reads doesn't read as unused. */
     builder.raw('void __props;\n')
-    for (const line of scope) {
-        builder.flush(line)
-    }
     const templateNodes = parseTemplate(source.slice(templateStart), templateStart).nodes
     /* Nested `<script>` blocks inline into the synchronous `build()` too, so a top-level
        await in one is the same build-breaker — flag it, mapped via the node's body offset. */

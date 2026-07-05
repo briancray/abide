@@ -157,6 +157,23 @@ const { property } = props<{ property: FilePropertyName }>()
         expect(code).toContain('type __Props = { property: FilePropertyName }')
     })
 
+    test('hoists value consts above __Props so `keyof typeof` prop annotations resolve', () => {
+        const { code } = compileShadow(`<script>
+const sizes = { sm: 'text-xs', md: 'text-sm' } as const
+const { size } = props<{ size: keyof typeof sizes }>()
+</script>
+<span class={sizes[size]}>badge</span>`)
+        /* The value const must precede __Props; emitting it as an in-function scope line
+           (below __Props) leaves `keyof typeof sizes` unable to see `sizes`. */
+        const constAt = code.indexOf('const sizes = {')
+        const propsAt = code.indexOf('type __Props')
+        const fnAt = code.indexOf('export default async function')
+        expect(constAt).toBeGreaterThan(-1)
+        expect(constAt).toBeLessThan(propsAt)
+        expect(propsAt).toBeLessThan(fnAt)
+        expect(code).toContain('type __Props = { size: keyof typeof sizes }')
+    })
+
     test('value-projects a nested control-flow <script> like the leading one', () => {
         /* A nested signal read in the branch's markup must type-check as its value,
            not the raw `Derived`/`State` — matching the runtime deref. */
