@@ -230,7 +230,7 @@ describe('remoteProxy RpcOptions', () => {
         stubFetch()
         const controller = new AbortController()
         const postThing = remoteProxy<{ x: number }, unknown>('POST', '/rpc/thing')
-        await withCacheManaged(() => postThing({ x: 1 }, { signal: controller.signal }))
+        await withCacheManaged(() => postThing.raw({ x: 1 }, { signal: controller.signal }))
         /* No scope + caller signal gated → no signal reaches fetch (unbounded). */
         expect(captured.init?.signal).toBeUndefined()
     })

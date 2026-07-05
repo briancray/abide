@@ -148,6 +148,37 @@ export function cache<Args, Return>(
     args?: Args,
     options?: CacheOptions,
 ): Promise<Return | Response> {
+    return readThrough(fn, args, options, false)
+}
+
+/*
+The smart bare rpc call routes here (createRemoteFunction.callable → cache.read):
+identical to cache() except a replayable read gets unconditional SWR retention —
+its value is kept for display regardless of ttl, and ttl drives a background
+revalidation clock instead of eviction. Always a decoded RemoteFunction read (the
+callable carries .raw), so it returns Promise<Return>.
+*/
+function smartRead<Args, Return>(
+    fn: RemoteFunction<Args, Return>,
+    args?: Args,
+    options?: CacheOptions,
+): Promise<Return> {
+    return readThrough(fn, args, options, true) as Promise<Return>
+}
+cache.read = smartRead
+
+/*
+The shared read-through core. `smart` marks the smart bare call, which enables
+unconditional SWR retention for replayable reads (see smartRead / entry.retain);
+the public cache() passes false, keeping its explicit drop-on-ttl /
+drop-on-invalidate old surface.
+*/
+function readThrough<Args, Return>(
+    fn: AnyRemote<Args, Return> | Producer<Args, Return>,
+    args: Args | undefined,
+    options: CacheOptions | undefined,
+    smart: boolean,
+): Promise<Return | Response> {
     /*
     A remote function carries the REMOTE_FUNCTION brand (set by
     createRemoteFunction on both variants); a plain producer never does — exact,
@@ -163,23 +194,37 @@ export function cache<Args, Return>(
         : isRaw
           ? (fn as RawRemoteFunction<Args>)
           : (fn as RemoteFunction<Args, Return>).raw
-    validatePolicy(options, isRemote ? (rawFn as RawRemoteFunction<Args>).method : undefined)
+    const method = isRemote ? (rawFn as RawRemoteFunction<Args>).method : undefined
+    const replayable = method !== undefined && REPLAYABLE_METHODS.has(method.toUpperCase())
+    validatePolicy(options, method, smart)
+    /* Unconditional SWR retention for a smart replayable read (unless opted out). */
+    const retain = smart && replayable && options?.swr !== false
+    /*
+    A smart write is coalesce-only, not retained (design: same as cache(fn, body,
+    { ttl: 0 })) — a second identical submit must re-fire, never replay the first
+    result. Default a smart write's ttl to 0 when the caller left it open. Reads and
+    explicit cache() keep the caller's ttl (undefined = forever).
+    */
+    const effectiveOptions =
+        smart && isRemote && !replayable && options?.ttl === undefined
+            ? { ...options, ttl: 0 }
+            : options
     if (!isRemote) {
         warnAnonymousProducer(fn as Producer<Args, Return>)
     }
-    const store = options?.global ? globalCacheStore() : activeCacheStore()
+    const store = effectiveOptions?.global ? globalCacheStore() : activeCacheStore()
     if (!isRemote) {
-        return invokeProducer(store, fn as Producer<Args, Return>, args, options)
+        return invokeProducer(store, fn as Producer<Args, Return>, args, effectiveOptions)
     }
     const remote = rawFn as RawRemoteFunction<Args>
     const key = keyForRemoteCall(remote.method, remote.url, args)
     store.subscribe(key)
     const existing = store.entries.get(key)
-    recordRead(options?.global ? activeCacheStore() : store, key, existing)
+    recordRead(effectiveOptions?.global ? activeCacheStore() : store, key, existing)
     if (existing) {
-        tagEntry(existing, options?.tags)
-        attachPolicy(existing, options, () => remote(args as Args))
-        adoptTtl(store, existing, options)
+        tagEntry(existing, effectiveOptions?.tags)
+        attachPolicy(existing, effectiveOptions, () => remote(args as Args), retain)
+        adoptTtl(store, existing, effectiveOptions, retain)
     }
     /*
         Warm path: a value pre-decoded onto the entry — by the SSR cache
@@ -210,7 +255,8 @@ export function cache<Args, Return>(
         existing,
         rawFn as RawRemoteFunction<Args>,
         args,
-        options,
+        effectiveOptions,
+        retain,
     )
     if (isRaw) {
         return responsePromise
@@ -239,20 +285,34 @@ function cloneWarmValue(value: unknown): unknown {
 }
 
 /*
-Normalises the `swr` option to its window, or undefined when off. `true` (or
-`{}`) is stale-while-revalidate with no window — refetch immediately on every
-invalidate; an object carries the throttle/debounce window. `false`/omitted is
-off. Collapsing the boolean here lets every downstream site treat "is SWR on"
-as a single defined/undefined check.
+Normalises the refetch window, or undefined when off. Precedence: an explicit
+`swr` object carries its own throttle/debounce; `swr: true` (or `defaultOn`) uses
+the root `throttle`/`debounce` window if present, else `{}` (fire immediately).
+`swr: false` is an explicit opt-out and wins over `defaultOn`. `defaultOn` is the
+smart bare call's unconditional SWR for replayable reads — it turns the window on
+without an `swr` toggle. Collapsing all of this here lets every downstream site
+treat "is SWR on" as a single defined/undefined check.
 */
 function swrWindow(
     options: CacheOptions | undefined,
+    defaultOn: boolean,
 ): { throttle?: number; debounce?: number } | undefined {
     const swr = options?.swr
-    if (swr === undefined || swr === false) {
+    if (swr === false) {
         return undefined
     }
-    return swr === true ? {} : swr
+    const root =
+        options?.throttle !== undefined || options?.debounce !== undefined
+            ? { throttle: options?.throttle, debounce: options?.debounce }
+            : undefined
+    /* Explicit window object (swr: { throttle | debounce }). */
+    if (swr !== undefined && swr !== true) {
+        return swr
+    }
+    if (swr === true || defaultOn) {
+        return root ?? {}
+    }
+    return undefined
 }
 
 /*
@@ -264,20 +324,29 @@ refresh. Producers are opaque (no method to check); the same contract is on
 the caller there. ttl: 0 retains nothing, so there is nothing to revalidate;
 and the two coalescing windows are exclusive by construction.
 */
-function validatePolicy(options: CacheOptions | undefined, method: string | undefined): void {
-    const policy = swrWindow(options)
+function validatePolicy(
+    options: CacheOptions | undefined,
+    method: string | undefined,
+    smart: boolean,
+): void {
+    const replayable = method !== undefined && REPLAYABLE_METHODS.has(method.toUpperCase())
+    const policy = swrWindow(options, smart && replayable)
     if (!policy) {
         return
     }
     if (policy.throttle !== undefined && policy.debounce !== undefined) {
-        throw new Error('[abide] cache(): set swr.throttle or swr.debounce, not both')
+        throw new Error('[abide] cache(): set throttle or debounce, not both')
     }
-    if (options?.ttl === 0) {
+    /* An EXPLICIT swr with ttl: 0 is the old error — nothing retained to revalidate.
+       The smart read's implicit SWR retains unconditionally, so ttl: 0 is fine there. */
+    const explicitSwr =
+        options?.swr === true || (typeof options?.swr === 'object' && options?.swr !== null)
+    if (explicitSwr && options?.ttl === 0) {
         throw new Error(
             '[abide] cache(): swr requires retention — ttl: 0 keeps nothing to revalidate',
         )
     }
-    if (method !== undefined && !REPLAYABLE_METHODS.has(method.toUpperCase())) {
+    if (method !== undefined && !replayable) {
         throw new Error(
             `[abide] cache(): swr re-runs the call unprompted — ${method.toUpperCase()} is a write and must not be replayed`,
         )
@@ -322,7 +391,7 @@ function invokeProducer<Args, Return>(
     recordRead(options?.global ? activeCacheStore() : store, key, existing)
     if (existing) {
         tagEntry(existing, options?.tags)
-        attachPolicy(existing, options, () => producer(args))
+        attachPolicy(existing, options, () => producer(args), false)
         const shared = existing.promise as Promise<Return>
         /* A coalesced join waits on the in-flight producer — time the block so the
            waterfall shows it; a settled hit returns immediately, so no span. */
@@ -338,7 +407,7 @@ function invokeProducer<Args, Return>(
     const promise = cacheLog.trace<Return>(`cache ${key}`, () =>
         withCacheManaged(() => producer(args)),
     )
-    registerEntry(store, key, promise, options, undefined, () => producer(args))
+    registerEntry(store, key, promise, options, undefined, () => producer(args), false)
     return promise
 }
 
@@ -349,6 +418,7 @@ function invokeRemote<Args>(
     rawFn: RawRemoteFunction<Args>,
     args: Args | undefined,
     options: CacheOptions | undefined,
+    retain: boolean,
 ): Promise<Response> {
     if (existing) {
         return shareable(existing.promise as Promise<Response>)
@@ -362,7 +432,7 @@ function invokeRemote<Args>(
             '[abide] cache() received a function whose call did not record metadata — was it produced by a rpc helper?',
         )
     }
-    registerEntry(store, key, promise, options, request, () => rawFn(args as Args))
+    registerEntry(store, key, promise, options, request, () => rawFn(args as Args), retain)
     return shareable(promise)
 }
 
@@ -378,10 +448,12 @@ function registerEntry(
     options: CacheOptions | undefined,
     request: Request | undefined,
     refetch: () => Promise<unknown>,
+    retain: boolean,
 ): CacheEntry {
     const ttl = options?.ttl
-    /* Capture the refetch thunk + window only when swr was asked for. */
-    const policy = swrWindow(options)
+    /* Capture the refetch thunk + window when swr was asked for OR this is a smart
+       retained read (SWR unconditional). */
+    const policy = swrWindow(options, retain)
     const invalidation = policy
         ? { refetch, throttle: policy.throttle, debounce: policy.debounce }
         : undefined
@@ -400,6 +472,7 @@ function registerEntry(
         tags: options?.tags === undefined ? undefined : toTagSet(options.tags),
         refreshing,
         invalidation,
+        retain: retain || undefined,
     }
     store.entries.set(key, entry)
     store.markLifecycle(key)
@@ -443,6 +516,18 @@ function registerEntry(
             deleteIfCurrent()
             return
         }
+        /*
+        Smart retained read: the display value is kept unconditionally — never
+        hard-evicted on settle. ttl drives a background revalidation clock (stale
+        stays visible, refreshing() true) instead of eviction; ttl 0/undefined
+        retain with no auto-refetch.
+        */
+        if (entry.retain) {
+            if (ttl !== undefined && ttl > 0) {
+                armStaleRefetch(store, entry, ttl)
+            }
+            return
+        }
         if (ttl === 0) {
             if (!keepZeroTtlForRequest) {
                 deleteIfCurrent()
@@ -480,6 +565,23 @@ function armTtlExpiry(store: CacheStore, entry: CacheEntry, ttl: number): void {
 }
 
 /*
+The smart-read staleness clock: at the ttl deadline the retained value has gone
+stale, so schedule a background revalidation (fireRefetch keeps the stale value
+visible and flips refreshing() true) instead of evicting. Honours the entry's
+throttle/debounce window via scheduleInvalidationRefetch; on success fireRefetch
+re-arms this clock so a live read stays fresh. `expiresAt` re-checks at fire time
+so a refreshed deadline survives.
+*/
+function armStaleRefetch(store: CacheStore, entry: CacheEntry, ttl: number): void {
+    entry.expiresAt = Date.now() + ttl
+    setTimeout(() => {
+        if ((entry.expiresAt ?? 0) <= Date.now() && store.entries.get(entry.key) === entry) {
+            scheduleInvalidationRefetch(store, entry)
+        }
+    }, ttl).unref?.()
+}
+
+/*
 Mirrors tagEntry/attachPolicy for retention: a hydrated snapshot entry ships
 without its wrap options (they live at call sites, not on the wire), so the
 first read adopts its call site's ttl declaration. Omitted = forever, exactly
@@ -491,11 +593,27 @@ the already-painted DOM stays put) and the next read fetches live. The first
 reader consumes the flag, so its declaration wins; live entries never carry
 the flag and keep the ttl they registered with.
 */
-function adoptTtl(store: CacheStore, entry: CacheEntry, options: CacheOptions | undefined): void {
+function adoptTtl(
+    store: CacheStore,
+    entry: CacheEntry,
+    options: CacheOptions | undefined,
+    retain: boolean,
+): void {
     if (entry.hydrated !== true) {
         return
     }
     entry.hydrated = false
+    /* A smart read adopting a hydrated entry retains it and uses the staleness
+       clock, mirroring registerEntry's retain branch — never the hard-evict path. */
+    if (retain) {
+        entry.retain = true
+        const ttl = options?.ttl
+        entry.ttl = ttl
+        if (ttl !== undefined && ttl > 0) {
+            armStaleRefetch(store, entry, ttl)
+        }
+        return
+    }
     const ttl = options?.ttl
     if (ttl === undefined) {
         return
@@ -753,9 +871,15 @@ function fireRefetch(store: CacheStore, entry: CacheEntry): void {
             entry.settled = true
             /* Restart the freshness clock from the revalidation — without this the
                entry keeps its original expiresAt and is evicted at the old deadline
-               despite holding fresh data. Mirrors registerEntry's settle path. */
+               despite holding fresh data. Mirrors registerEntry's settle path: a
+               retained smart read re-arms the staleness clock (background revalidate),
+               an explicit-swr entry re-arms the eviction clock. */
             if (entry.ttl !== undefined && entry.ttl !== 0) {
-                armTtlExpiry(store, entry, entry.ttl)
+                if (entry.retain) {
+                    armStaleRefetch(store, entry, entry.ttl)
+                } else {
+                    armTtlExpiry(store, entry, entry.ttl)
+                }
             }
             /* Fresh value landed — mark and emit so readers re-read. */
             notify(store, [entry.key], [entry.key])
@@ -848,8 +972,14 @@ function attachPolicy(
     entry: CacheEntry,
     options: CacheOptions | undefined,
     refetch: () => Promise<unknown>,
+    defaultOn: boolean,
 ): void {
-    const policy = swrWindow(options)
+    /* A smart read hitting a bare existing entry (e.g. one an explicit cache()
+       created first) adopts unconditional retention too. */
+    if (defaultOn) {
+        entry.retain = true
+    }
+    const policy = swrWindow(options, defaultOn)
     if (entry.invalidation || !policy) {
         return
     }

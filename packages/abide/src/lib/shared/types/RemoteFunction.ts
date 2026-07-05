@@ -7,6 +7,7 @@ import type { RawRemoteFunction } from './RawRemoteFunction.ts'
 import type { RemoteCallable } from './RemoteCallable.ts'
 import type { RpcError } from './RpcError.ts'
 import type { RpcErrorGuard } from './RpcErrorGuard.ts'
+import type { SmartReadOptions } from './SmartReadOptions.ts'
 
 /*
 Remote function reference produced by GET/POST/... inside an `$rpc/**`
@@ -45,7 +46,7 @@ export type RemoteFunction<
     Return,
     Errors extends ErrorSpec = Record<never, never>,
     Durable extends boolean = false,
-> = RemoteCallable<Args, Return> & {
+> = RemoteCallable<Args, Return, SmartReadOptions> & {
     readonly method: HttpMethod
     readonly url: string
     readonly clients: ClientFlags

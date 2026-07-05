@@ -9,9 +9,11 @@ optional-arg signature lets call sites write `fn()` instead of
 `fn(undefined)`. Intersection rather than a bare conditional so the type
 stays callable while `Args` is still generic (cache() invokes producers
 before `Args` resolves). FormData is the multipart upload escape hatch —
-see RemoteFunction. The optional trailing `opts` carries per-call transport
-options (signal/keepalive/priority/cache/headers); the server ignores them,
-so the callable stays isomorphic.
+see RemoteFunction. The trailing `Opts` differs by variant: the smart bare
+call (RemoteFunction) carries cache/stream options (SmartReadOptions), while
+`.raw` (RawRemoteFunction) carries per-call transport options (RpcOptions:
+signal/keepalive/priority/cache/headers). The server ignores either, so the
+callable stays isomorphic.
 
 A streaming `Resolved` (an `AsyncIterable<Frame>`, branded by jsonl()/sse()) makes
 the bare call return a `Subscribable<Frame>` synchronously — the iterable IS the
@@ -28,10 +30,10 @@ type CallResult<Resolved> = [Resolved] extends [never]
       ? Subscribable<Frame>
       : Promise<Resolved>
 
-export type RemoteCallable<Args, Resolved> = ((
+export type RemoteCallable<Args, Resolved, Opts = RpcOptions> = ((
     args: Args | FormData,
-    opts?: RpcOptions,
+    opts?: Opts,
 ) => CallResult<Resolved>) &
     (undefined extends Args
-        ? (args?: Args | FormData, opts?: RpcOptions) => CallResult<Resolved>
+        ? (args?: Args | FormData, opts?: Opts) => CallResult<Resolved>
         : unknown)

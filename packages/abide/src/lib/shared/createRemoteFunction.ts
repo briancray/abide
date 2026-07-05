@@ -118,35 +118,33 @@ export function createRemoteFunction<Args, Return>(opts: {
                 raw(args as Args, opts),
             )
         }
-        /* The bare call IS the smart read: route through the cache store so identical
-           concurrent calls coalesce to one flight, reads retain their value for display,
-           and a tracking scope re-runs on invalidate — the raw fetch moves to `.raw`.
-           `cache(callable, …)` brand-reads `callable.raw` for the undecoded variant and
-           decodes on the way out, so pass the callable (which carries `.raw`), not `raw`.
-           `opts` supplies cache options (ttl/tags/…); per-call transport options live on
-           `.raw` now. */
+        /* The bare call IS the smart read: route through the cache store's smart-read
+           path so a replayable read is coalesced, retained (SWR unconditional), and
+           reactive, while a write is coalesce-only — the raw fetch moves to `.raw`.
+           `cache.read(callable, …)` brand-reads `callable.raw` for the undecoded variant
+           and decodes on the way out, so pass the callable (which carries `.raw`), not
+           `raw`. `opts` supplies cache options (ttl/tags/throttle/debounce); per-call
+           transport options live on `.raw` now. */
         const key = keyForRemoteCall(method, url, args)
-        return cache(
-            callable as RemoteFunction<Args, Return>,
-            args as Args,
-            opts as CacheOptions,
-        ).then(
-            /* Capture the rejection into the rpc error registry (design Part 4) keyed by call
+        return cache
+            .read(callable as RemoteFunction<Args, Return>, args as Args, opts as CacheOptions)
+            .then(
+                /* Capture the rejection into the rpc error registry (design Part 4) keyed by call
                identity, and clear it on success — the reactive `fn.error()` probe reads it. */
-            (value) => {
-                rpcErrorRegistry.clear(key)
-                return value as Return
-            },
-            (error: unknown) => {
-                /* A parked durable write throws a `kind: 'queued'` sentinel — it's pending
+                (value) => {
+                    rpcErrorRegistry.clear(key)
+                    return value as Return
+                },
+                (error: unknown) => {
+                    /* A parked durable write throws a `kind: 'queued'` sentinel — it's pending
                    retry, not a failure. Don't record it, so fn.error() stays undefined for a
                    merely-parked write (pending() already reflects it via the outbox). */
-                if (!(error instanceof HttpError && error.kind === 'queued')) {
-                    rpcErrorRegistry.record(key, error)
-                }
-                throw error
-            },
-        )
+                    if (!(error instanceof HttpError && error.kind === 'queued')) {
+                        rpcErrorRegistry.record(key, error)
+                    }
+                    throw error
+                },
+            )
     }
     callable.method = method
     callable.url = url

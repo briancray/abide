@@ -34,10 +34,18 @@ cache() throws at wrap time on throttle+debounce set at once, on ttl: 0 (nothing
 retained, nothing to revalidate), and on a non-replayable remote method
 (replaying a write is a state change disguised as a refresh). Producers are
 uncheckable — set `swr` only on a producer that is a pure read.
+
+`throttle`/`debounce` are root rate-limit windows for the refetch clock. For the
+smart bare call — where SWR is unconditional for replayable reads, so there is no
+`swr` toggle to hang a window off — they cap how often a background revalidation
+fires (leading-edge-then-coalesce, or fire-after-quiet respectively). They pair
+with the same wrap-time guard as the `swr` window: set one, not both.
 */
 export type CacheOptions = {
     ttl?: number
     tags?: string[]
     global?: boolean
     swr?: boolean | { throttle?: number; debounce?: number }
+    throttle?: number
+    debounce?: number
 }
