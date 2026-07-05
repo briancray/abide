@@ -118,6 +118,16 @@ await-everything mode is per component instance, so a child's await blocks only
 the child.
 */
 // @documentation cache
+/**
+ * @deprecated Streaming rpcs (jsonl/sse) aren't cacheable — a stream has no single
+ * value to retain. Consume it with `state(fn(args))` (reactive) or `for await (… of
+ * fn(args))` (imperative). This overload is selected first for a streaming rpc so the
+ * mistake is a red squiggle at the keyboard; the `decodeResponse` guard also throws.
+ */
+export function cache<Args>(
+    fn: RemoteFunction<Args, AsyncIterable<unknown>>,
+    ...rest: never[]
+): never
 export function cache<Args, Return>(
     fn: RemoteFunction<Args, Return>,
     args?: Args,
