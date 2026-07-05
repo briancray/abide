@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { done } from '../src/lib/shared/done.ts'
 import type { Subscribable } from '../src/lib/shared/types/Subscribable.ts'
 import type { TailHooks } from '../src/lib/shared/types/TailHooks.ts'
 import { tail } from '../src/lib/ui/tail.ts'
@@ -67,6 +68,7 @@ describe('tail() reactive consumer', () => {
         await settle()
         expect(tracked.current()).toBe('c')
         expect(tail.status(subscribable)).toBe('done')
+        expect(done(subscribable)).toBe(true)
 
         // Last reader stops → the underlying iterator is closed.
         tracked.stop()
@@ -89,6 +91,7 @@ describe('tail() reactive consumer', () => {
         expect(tracked.current()).toBe(1)
         expect(tail.status(subscribable)).toBe('error')
         expect(tail.error(subscribable)?.message).toBe('stream boom')
+        expect(done(subscribable)).toBe(false)
         tracked.stop()
     })
 

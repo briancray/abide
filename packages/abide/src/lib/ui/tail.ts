@@ -54,6 +54,9 @@ tailProbeSlot.probe = (name) => {
             (name !== undefined && entries.length === 0) ||
             entries.some((entry) => entry.status === 'pending'),
         refreshing: entries.some((entry) => entry.refreshing),
+        /* Terminal only when there is at least one entry and all of them have closed. */
+        done: entries.length > 0 && entries.every((entry) => entry.status === 'done'),
+        error: entries.find((entry) => entry.error !== undefined)?.error,
     }
 }
 

@@ -10,7 +10,14 @@ itself gives on the server: a named stream has no value yet (pending true),
 and nothing is reconnecting (refreshing false).
 */
 export const tailProbeSlot: {
-    probe: ((name?: string) => { pending: boolean; refreshing: boolean }) | undefined
+    probe:
+        | ((name?: string) => {
+              pending: boolean
+              refreshing: boolean
+              done: boolean
+              error: Error | undefined
+          })
+        | undefined
 } = {
     probe: undefined,
 }
