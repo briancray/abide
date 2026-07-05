@@ -51,6 +51,15 @@ describe('resolveReactiveExport — import-binding resolution, checker-free', ()
         )
     })
 
+    test('a watch import resolves (bare and aliased)', () => {
+        expect(resolve(`import { watch } from '@abide/abide/ui/watch'\nwatch(x, () => {})`)).toBe(
+            'watch',
+        )
+        expect(resolve(`import { watch as w } from '@abide/abide/ui/watch'\nw(x, () => {})`)).toBe(
+            'watch',
+        )
+    })
+
     test("a user's own `state` function (no matching import) does not resolve", () => {
         expect(resolve(`const state = () => 0\nstate()`)).toBeUndefined()
     })

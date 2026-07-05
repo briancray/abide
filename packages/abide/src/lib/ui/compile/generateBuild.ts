@@ -43,7 +43,7 @@ attributes, reactive `attr`/`text` bindings, `on` listeners, keyed `each`, and
 conditional `when`. Every embedded expression is first rewritten from the signal
 surface (`count` → `model.count`) and then lowered to the doc patch/read API
 (cell-hoisting runs over the whole result afterwards). The output operates on
-`hostVar` and expects the `$$`-aliased dom bindings (`$$effect`, `$$each`, …)
+`hostVar` and expects the `$$`-aliased dom bindings (`$$watch`, `$$each`, …)
 and the component's `$$model` (emitted by `desugarSignals`) in scope — the body
 the component compiler wraps and hoists cells into.
 */
@@ -154,11 +154,11 @@ export function generateBuild(
         /* `class:<name>` — toggle the class by truthiness; surgical, no element re-render.
            Layers on top of any static `class="…"` in the skeleton (classList is additive). */
         if (attr.kind === 'class') {
-            return `$$effect(${namedThunk(`class_${attr.name}`, `${varName}.classList.toggle(${JSON.stringify(attr.name)}, !!(${lowerExpression(attr.code)}));`)});\n`
+            return `$$watch(${namedThunk(`class_${attr.name}`, `${varName}.classList.toggle(${JSON.stringify(attr.name)}, !!(${lowerExpression(attr.code)}));`)});\n`
         }
         /* `style:<property>` — write one inline style / custom property reactively. */
         if (attr.kind === 'style') {
-            return `$$effect(${namedThunk(`style_${attr.property}`, `${varName}.style.setProperty(${JSON.stringify(attr.property)}, String(${lowerExpression(attr.code)}));`)});\n`
+            return `$$watch(${namedThunk(`style_${attr.property}`, `${varName}.style.setProperty(${JSON.stringify(attr.property)}, String(${lowerExpression(attr.code)}));`)});\n`
         }
         if (attr.property === 'group') {
             /* Grouped two-way: radio binds the path to the single checked `value`;
@@ -171,12 +171,12 @@ export function generateBuild(
             const value = lowerExpression(valueCode)
             if (isRadio) {
                 return (
-                    `$$effect(${namedThunk('bind_group', `${varName}.checked = (${lowerExpression(attr.code)}) === (${value});`)});\n` +
+                    `$$watch(${namedThunk('bind_group', `${varName}.checked = (${lowerExpression(attr.code)}) === (${value});`)});\n` +
                     `$$on(${varName}, "change", () => { if (${varName}.checked) { ${lowerStatement(`${attr.code} = ${valueCode}`)} } });\n`
                 )
             }
             return (
-                `$$effect(${namedThunk('bind_group', `${varName}.checked = (${lowerExpression(attr.code)}).includes(${value});`)});\n` +
+                `$$watch(${namedThunk('bind_group', `${varName}.checked = (${lowerExpression(attr.code)}).includes(${value});`)});\n` +
                 `$$on(${varName}, "change", () => { const $groupValue = ${value}; if (${varName}.checked) { if (!(${lowerExpression(attr.code)}).includes($groupValue)) { ${lowerStatement(`${attr.code}.push($groupValue)`)} } } else { const $groupIndex = (${lowerExpression(attr.code)}).indexOf($groupValue); if ($groupIndex !== -1) { ${lowerStatement(`delete ${attr.code}[$groupIndex]`)} } } });\n`
             )
         }
@@ -187,7 +187,7 @@ export function generateBuild(
            `.get()` and writes via `.set(v)` — see `bindRead`/`bindWrite`. */
         const event = bindListenEvent(attr.property, node.tag)
         return (
-            `$$effect(${namedThunk(`bind_${attr.property}`, `${varName}.${attr.property} = ${bindRead(attr.code)};`)});\n` +
+            `$$watch(${namedThunk(`bind_${attr.property}`, `${varName}.${attr.property} = ${bindRead(attr.code)};`)});\n` +
             `$$on(${varName}, ${JSON.stringify(event)}, () => { ${bindWrite(attr.code, `${varName}.${attr.property}`)} });\n`
         )
     }
@@ -310,12 +310,12 @@ export function generateBuild(
                skeleton). */
             if (plan.merge.mergeClassBuild) {
                 binds.push(
-                    `$$effect(${namedThunk('class_merge', `${elVar}.setAttribute("class", [${plan.merge.classParts.join(', ')}].filter(Boolean).join(' '));`)});\n`,
+                    `$$watch(${namedThunk('class_merge', `${elVar}.setAttribute("class", [${plan.merge.classParts.join(', ')}].filter(Boolean).join(' '));`)});\n`,
                 )
             }
             if (plan.merge.mergeStyleBuild) {
                 binds.push(
-                    `$$effect(${namedThunk('style_merge', `${elVar}.setAttribute("style", [${plan.merge.styleParts.join(', ')}].filter(Boolean).join(';'));`)});\n`,
+                    `$$watch(${namedThunk('style_merge', `${elVar}.setAttribute("style", [${plan.merge.styleParts.join(', ')}].filter(Boolean).join(';'));`)});\n`,
                 )
             }
             for (const { attr, mergedBuild } of plan.attrs) {

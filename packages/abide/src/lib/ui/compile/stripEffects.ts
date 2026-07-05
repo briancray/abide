@@ -2,14 +2,16 @@ import ts from 'typescript'
 import { TS_PRINTER } from './TS_PRINTER.ts'
 
 /*
-Removes effect calls from a script for the SSR back-end. Effects are client
-lifecycle — they touch the DOM / run side effects and emit no HTML, so the server
+Removes effect/watch reaction calls from a script for the SSR back-end. Reactions are
+client lifecycle — they touch the DOM / run side effects and emit no HTML, so the server
 render (a snapshot of the pre-effect markup, like every framework) must not run
-them. Both surfaces are stripped: the generated/runtime bare `effect(<args>)` and
-the authored scope form `scope().effect(<args>)` (and a captured/destructured handle
-`c.effect(<args>)`), each replaced by `undefined` — an `effect(() => …)` statement
-becomes a no-op, and a `const stop = effect(…)` binding keeps a defined (unused) name.
-Client compilation keeps effects untouched.
+them. Stripped: the bare `effect(<args>)` and its authored scope form
+`scope().effect(<args>)` / `c.effect(<args>)`, and the bare reaction `watch(<args>)`
+(its replacement) — each replaced by `undefined`, so an `effect(() => …)` /
+`watch(src, …)` statement becomes a no-op and a `const stop = watch(…)` binding keeps a
+defined (unused) name. `watch` matches bare only (never a member — unlike the legacy
+`.effect` scope method — so an unrelated `x.watch(...)` is untouched). Client
+compilation keeps reactions untouched.
 */
 export function stripEffects(code: string): string {
     const source = ts.createSourceFile('script.ts', code, ts.ScriptTarget.Latest, true)
@@ -34,12 +36,13 @@ export function stripEffectsTransformer(): ts.TransformerFactory<ts.SourceFile> 
     }
 }
 
-/* An effect callee: the bare runtime helper (`effect`) or the scope-method form
-   (`scope().effect`, `c.effect`) the author writes. Receiver-agnostic on the `.effect`
-   member name, matching `effect` being reserved as a scope primitive. */
+/* A reaction callee to strip: the bare runtime helpers (`effect` / `watch`) or the
+   scope-method form (`scope().effect`, `c.effect`). Receiver-agnostic on the `.effect`
+   member name (effect was a scope primitive); `watch` matches bare only, so an unrelated
+   `x.watch(...)` member call is left intact. */
 function isEffectCallee(expression: ts.Expression): boolean {
     if (ts.isIdentifier(expression)) {
-        return expression.text === 'effect'
+        return expression.text === 'effect' || expression.text === 'watch'
     }
     return ts.isPropertyAccessExpression(expression) && expression.name.text === 'effect'
 }

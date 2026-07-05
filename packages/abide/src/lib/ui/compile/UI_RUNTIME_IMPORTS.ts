@@ -22,6 +22,7 @@ export const UI_RUNTIME_IMPORTS: { name: string; specifier: string; alias?: stri
     { name: 'enterScope', specifier: 'ui/enterRenderScope', alias: '$$enterScope' },
     { name: 'exitScope', specifier: 'ui/exitRenderScope', alias: '$$exitScope' },
     { name: 'effect', specifier: 'ui/effect', alias: '$$effect' },
+    { name: 'watch', specifier: 'ui/watch', alias: '$$watch' },
     { name: 'mount', specifier: 'ui/dom/mount', alias: '$$mount' },
     { name: 'appendText', specifier: 'ui/dom/appendText', alias: '$$appendText' },
     { name: 'appendTextAt', specifier: 'ui/dom/appendTextAt', alias: '$$appendTextAt' },

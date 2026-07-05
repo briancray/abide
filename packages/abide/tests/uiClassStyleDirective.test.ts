@@ -24,12 +24,12 @@ test('parses into dedicated class/style attr kinds (incl. custom property)', () 
     expect(shape).toEqual(['class:active', 'style:--pct', 'style:color'])
 })
 
-test('build emits surgical classList.toggle / setProperty inside an effect (no re-render)', () => {
+test('build emits surgical classList.toggle / setProperty inside a watch (no re-render)', () => {
     const { nodes } = parseTemplate(`<div class:active={open} style:--pct={ratio}></div>`)
     const build = generateBuild(nodes, 'host', STATE, EMPTY, EMPTY)
     expect(build).toContain('classList.toggle("active"')
     expect(build).toContain('.style.setProperty("--pct", String(')
-    expect(build).toContain('effect(')
+    expect(build).toContain('$$watch(')
     // not an attribute re-render path
     expect(build).not.toContain('attr(host, "class:active"')
 })

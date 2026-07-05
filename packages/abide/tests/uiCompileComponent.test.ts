@@ -363,7 +363,7 @@ const label = 'hi'</script><i>{label}</i>`,
         )
         expect(body).toContain('attr(el1, "title", function attr_title() {')
         expect(body).toContain('appendText(el2, function text() {')
-        expect(body).toContain('effect(function bind_value() {')
+        expect(body).toContain('$$watch(function bind_value() {')
         // never the old anonymous-arrow form for these bindings
         expect(body).not.toContain('attr(el1, "title", () =>')
     })

@@ -23,9 +23,15 @@ export function nestedBindingNames(code: string): Set<string> {
         }
         for (const declaration of statement.declarationList.declarations) {
             const callee = signalCallee(declaration, NESTED_REACTIVE_BINDINGS)
-            /* `effect` binds no readable value (returns void), so it never joins the deref
-               scope; every other recognised primitive (state/linked/computed/props) does. */
-            if (callee !== undefined && callee !== 'effect' && ts.isIdentifier(declaration.name)) {
+            /* `effect`/`watch` bind no readable value (they return a disposer, not a cell), so
+               they never join the deref scope; every other recognised primitive
+               (state/linked/computed/props) does. */
+            if (
+                callee !== undefined &&
+                callee !== 'effect' &&
+                callee !== 'watch' &&
+                ts.isIdentifier(declaration.name)
+            ) {
                 names.add(declaration.name.text)
             }
         }

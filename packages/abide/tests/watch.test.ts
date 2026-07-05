@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { on } from '../src/lib/ui/on.ts'
 import { state } from '../src/lib/ui/state.ts'
+import { watch } from '../src/lib/ui/watch.ts'
 
-/* on() is client lifecycle — inert unless window is defined. */
-describe('on()', () => {
+/* watch() is client lifecycle. The cell/rpc branches wrap `effect` (no window guard);
+   only the subscribable branch self-guards on the server (via cache.on). `window` is set
+   so the subscribable test's cache.on runs client-side. */
+describe('watch()', () => {
     const globals = globalThis as Record<string, unknown>
     let realWindow: unknown
 
@@ -15,10 +17,10 @@ describe('on()', () => {
         globals.window = realWindow
     })
 
-    test('on(cell, handler) runs now and on every change; disposer stops it', () => {
+    test('watch(cell, handler) runs now and on every change; disposer stops it', () => {
         const count = state(0)
         const seen: number[] = []
-        const stop = on(count, (n) => seen.push(n as number))
+        const stop = watch(count, (n) => seen.push(n as number))
         expect(seen).toEqual([0])
         count.value = 1
         expect(seen).toEqual([0, 1])
@@ -27,11 +29,11 @@ describe('on()', () => {
         expect(seen).toEqual([0, 1])
     })
 
-    test('on([a, b], handler) fires on any source change', () => {
+    test('watch([a, b], handler) fires on any source change', () => {
         const a = state(1)
         const b = state(2)
         const runs: unknown[][] = []
-        const stop = on([a, b], (values) => runs.push(values))
+        const stop = watch([a, b], (values) => runs.push(values))
         expect(runs).toEqual([[1, 2]])
         a.value = 10
         expect(runs).toEqual([
@@ -47,7 +49,7 @@ describe('on()', () => {
         stop()
     })
 
-    test('on(subscribable, handler) runs per frame until done', async () => {
+    test('watch(subscribable, handler) runs per frame until done', async () => {
         const frames = [1, 2, 3]
         const sub = {
             async *[Symbol.asyncIterator]() {
@@ -57,7 +59,7 @@ describe('on()', () => {
             },
         }
         const seen: number[] = []
-        const stop = on(sub as never, (frame) => {
+        const stop = watch(sub as never, (frame) => {
             seen.push(frame as number)
         })
         await new Promise((resolve) => setTimeout(resolve, 10))
@@ -65,13 +67,22 @@ describe('on()', () => {
         stop()
     })
 
-    test('inert without window (SSR)', () => {
+    test('subscribable reactions are inert on the server (no window)', async () => {
+        /* The cell/rpc branches wrap `effect` (no runtime window guard — author `watch` is
+           SSR-stripped by the compiler instead). The subscribable branch self-guards at
+           runtime via cache.on, so a socket reaction never opens on the server. */
         globals.window = undefined
-        const count = state(0)
+        const sub = {
+            async *[Symbol.asyncIterator]() {
+                yield 1
+                yield 2
+            },
+        }
         const seen: number[] = []
-        const stop = on(count, (n) => seen.push(n as number))
-        expect(seen).toEqual([])
-        count.value = 1
+        const stop = watch(sub as never, (frame) => {
+            seen.push(frame as number)
+        })
+        await new Promise((resolve) => setTimeout(resolve, 10))
         expect(seen).toEqual([])
         stop()
     })

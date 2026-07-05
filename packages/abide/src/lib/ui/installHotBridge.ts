@@ -35,6 +35,7 @@ import { hotReloadEnabled } from './runtime/hotReloadEnabled.ts'
 import { hotReplace } from './runtime/hotReplace.ts'
 import { nextBlockId } from './runtime/nextBlockId.ts'
 import { scope } from './scope.ts'
+import { watch } from './watch.ts'
 
 /*
 Dev-only: exposes the abide-ui runtime plus `hotReplace` on `window.__abide`, and
@@ -53,6 +54,7 @@ export function installHotBridge(): void {
         enterScope,
         exitScope,
         effect,
+        watch,
         mount,
         appendText,
         appendTextAt,

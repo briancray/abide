@@ -32,6 +32,9 @@ function shadowPreamble(importedReactives: ReadonlySet<string>): string {
         importedReactives.has('effect')
             ? undefined
             : `import { effect } from '${ABIDE_PACKAGE_NAME}/ui/effect'`,
+        importedReactives.has('watch')
+            ? undefined
+            : `import { watch } from '${ABIDE_PACKAGE_NAME}/ui/watch'`,
         `import { snippet } from '${ABIDE_PACKAGE_NAME}/shared/snippet'`,
         `import { scope } from '${ABIDE_PACKAGE_NAME}/ui/currentScope'`,
         importedReactives.has('state')

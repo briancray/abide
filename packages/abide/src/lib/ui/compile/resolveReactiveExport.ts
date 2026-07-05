@@ -5,7 +5,7 @@ import { ABIDE_PACKAGE_NAME } from '../../shared/ABIDE_PACKAGE_NAME.ts'
    vocabulary the desugarer, the nested-script scoper, and the shadow consume.
    `linked`/`computed` are reached as members of a `state` import (`state.linked`),
    so they are resolution results but carry no import specifier of their own. */
-export type ReactivePrimitive = 'state' | 'linked' | 'computed' | 'effect' | 'props'
+export type ReactivePrimitive = 'state' | 'linked' | 'computed' | 'effect' | 'watch' | 'props'
 
 /* The `abide/ui/*` specifier each importable reactive primitive is published at,
    mapped to its canonical name. Built from the package name so a rename is one edit.
@@ -15,6 +15,7 @@ export type ReactivePrimitive = 'state' | 'linked' | 'computed' | 'effect' | 'pr
 const REACTIVE_SPECIFIERS: Record<string, ReactivePrimitive> = {
     [`${ABIDE_PACKAGE_NAME}/ui/state`]: 'state',
     [`${ABIDE_PACKAGE_NAME}/ui/effect`]: 'effect',
+    [`${ABIDE_PACKAGE_NAME}/ui/watch`]: 'watch',
     [`${ABIDE_PACKAGE_NAME}/ui/props`]: 'props',
 }
 
@@ -37,6 +38,7 @@ export const NESTED_REACTIVE_BINDINGS: ReactiveImportBindings = {
     direct: new Map<string, ReactivePrimitive>([
         ['state', 'state'],
         ['effect', 'effect'],
+        ['watch', 'watch'],
     ]),
     stateRoots: new Set(['state']),
 }
