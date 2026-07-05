@@ -523,6 +523,7 @@ function registerEntry(
         retain with no auto-refetch.
         */
         if (entry.retain) {
+            materializeRetained(store, entry, result)
             if (ttl !== undefined && ttl > 0) {
                 armStaleRefetch(store, entry, ttl)
             }
@@ -579,6 +580,36 @@ function armStaleRefetch(store: CacheStore, entry: CacheEntry, ttl: number): voi
             scheduleInvalidationRefetch(store, entry)
         }
     }, ttl).unref?.()
+}
+
+/*
+Decodes a retained read's Response onto entry.value so peek() can read the current
+value synchronously, and reads take the warm (cloned) path. Client-only: on the
+server the SSR snapshot serializer owns value materialization (from the response
+body it inlines), so leaving entry.value untouched there keeps the snapshot path
+unchanged. Async decode (a microtask); markLifecycle re-runs a peek() scope once
+the value lands. A non-Response (a producer retain — not currently reachable) is
+stored as-is.
+*/
+function materializeRetained(store: CacheStore, entry: CacheEntry, result: unknown): void {
+    if (typeof window === 'undefined') {
+        return
+    }
+    if (result instanceof Response) {
+        decodeResponse(result.clone()).then(
+            (value) => {
+                /* Only if this entry still owns the key and hasn't been re-mutated meanwhile. */
+                if (store.entries.get(entry.key) === entry) {
+                    entry.value = value
+                    store.markLifecycle(entry.key)
+                }
+            },
+            () => undefined,
+        )
+        return
+    }
+    entry.value = result
+    store.markLifecycle(entry.key)
 }
 
 /*
@@ -790,6 +821,44 @@ function patch<Args, Return>(
 cache.patch = patch
 
 /*
+Synchronous, non-triggering value probe: returns the currently-retained value for
+a call, or undefined when nothing is retained (no entry, or not yet settled). Never
+invokes — reading it opens no fetch. Reactive: it subscribes the key so a
+state.computed / on / template scope re-runs when the value changes (a refresh
+lands, a patch mutates it); outside a tracking scope it is a one-shot snapshot.
+Returns a clone (like the warm read path) so a caller mutating it can't corrupt the
+retained value. `peek(sub)` for a subscribable is wired on the socket side.
+*/
+function peek<Args, Return>(
+    fn: RemoteFunction<Args, Return> | RawRemoteFunction<Args> | Producer<Args, Return>,
+    args?: Args,
+): Return | undefined {
+    const isRemote = REMOTE_FUNCTION in fn
+    const rawFn = !isRemote
+        ? undefined
+        : 'raw' in fn
+          ? (fn as RemoteFunction<Args, Return>).raw
+          : (fn as RawRemoteFunction<Args>)
+    const key = isRemote
+        ? keyForRemoteCall(rawFn!.method, rawFn!.url, args)
+        : producerKey(fn as Producer<Args, Return>, args)
+    const active = activeCacheStore()
+    active.subscribe(key)
+    let entry = active.entries.get(key)
+    if (entry === undefined) {
+        const global = globalCacheStore()
+        global.subscribe(key)
+        entry = global.entries.get(key)
+    }
+    if (entry === undefined || entry.settled !== true || entry.value === undefined) {
+        return undefined
+    }
+    return cloneWarmValue(entry.value) as Return
+}
+
+cache.peek = peek
+
+/*
 Applies one entry's patch: materialize the current decoded value (warm value if
 present, else decode the promise — a Response for a remote entry, cloned so the
 readers' own clones still succeed), run the updater, store it warm, and emit so
@@ -980,6 +1049,11 @@ function fireRefetch(store: CacheStore, entry: CacheEntry): void {
             entry.promise = inflight
             entry.value = undefined
             entry.settled = true
+            /* Re-materialize the retained value from the fresh Response so peek() stays
+               current after a background revalidation. */
+            if (entry.retain) {
+                materializeRetained(store, entry, result)
+            }
             /* Restart the freshness clock from the revalidation — without this the
                entry keeps its original expiresAt and is evicted at the old deadline
                despite holding fresh data. Mirrors registerEntry's settle path: a

@@ -61,6 +61,7 @@
         "./shared/cache": "./src/lib/shared/cache.ts",
         "./shared/pending": "./src/lib/shared/pending.ts",
         "./shared/patch": "./src/lib/shared/patch.ts",
+        "./shared/peek": "./src/lib/shared/peek.ts",
         "./shared/refresh": "./src/lib/shared/refresh.ts",
         "./shared/refreshing": "./src/lib/shared/refreshing.ts",
         "./shared/done": "./src/lib/shared/done.ts",
