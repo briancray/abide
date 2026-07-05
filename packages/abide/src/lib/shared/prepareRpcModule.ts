@@ -82,7 +82,24 @@ export function prepareRpcModule(
         exportName: site.exportName,
         rewriteForServer(url: string): string {
             const binding = `__abideDefineRpc__(${JSON.stringify(method)}, ${JSON.stringify(url)}, `
-            return stripped.slice(0, site.callStart) + binding + stripped.slice(site.parenStart + 1)
+            const head = stripped.slice(0, site.callStart) + binding
+            if (!streaming) {
+                return head + stripped.slice(site.parenStart + 1)
+            }
+            /* Inject the build-time streaming flag into the handler's opts, preserving any author
+               opts by spread. `head` already ends after the METHOD( paren, so we splice the
+               transformed args and keep everything from `)` onward (rest of the module). */
+            const args = stripped.slice(site.parenStart + 1, site.parenEnd)
+            const opts = lastArgText(stripped, site.parenStart, site.parenEnd)
+            const handler =
+                opts === undefined
+                    ? args
+                    : args.slice(0, args.length - opts.length).replace(/,\s*$/, '')
+            const injected =
+                opts === undefined
+                    ? '{ streaming: true }'
+                    : `{ streaming: true, ...(${opts.trim()}) }`
+            return `${head}${handler}, ${injected}${stripped.slice(site.parenEnd)}`
         },
     }
 }

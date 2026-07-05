@@ -64,6 +64,10 @@ export function defineRpc<Args, Return>(
            parked write drains on `rpc.outbox.retry()` (no auto-drain). Mutating methods
            only. */
         outbox?: boolean
+        /* Handler returns jsonl()/sse(): the bare call returns the Subscribable directly (for
+           isomorphic `for await (… of fn(args))` in server code). Bundler-stamped; the router's
+           wire path (.fetch) is unaffected. */
+        streaming?: boolean
     },
 ): RemoteFunction<Args, Return> {
     /* `outbox: true` is a mutation contract — a read RPC has nothing to durably deliver,
@@ -183,6 +187,7 @@ export function defineRpc<Args, Return>(
         method,
         url,
         clients,
+        streaming: opts?.streaming ?? false,
         crossOrigin: opts?.crossOrigin,
         buildRequest,
         invoke,

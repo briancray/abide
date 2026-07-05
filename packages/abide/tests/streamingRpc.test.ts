@@ -33,6 +33,23 @@ describe('streaming detection (codegen)', () => {
             )?.streaming,
         ).toBe(false)
     })
+
+    test('server rewrite injects the streaming flag into opts, preserving author opts', () => {
+        const server = prepareRpcModule(
+            mod('GET((a) => jsonl(source()), { timeout: 5 })'),
+            '@abide/abide',
+        )?.rewriteForServer('/rpc/feed')
+        expect(server).toContain('streaming: true')
+        expect(server).toContain('timeout: 5')
+    })
+
+    test('non-streaming server rewrite carries no streaming flag', () => {
+        const server = prepareRpcModule(
+            `import { GET } from '@abide/abide/server/GET'\nexport const feed = GET((a) => ({ ok: true }))`,
+            '@abide/abide',
+        )?.rewriteForServer('/rpc/feed')
+        expect(server).not.toContain('streaming: true')
+    })
 })
 
 describe('streaming rpc — bare call returns a Subscribable', () => {
