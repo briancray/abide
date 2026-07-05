@@ -761,6 +761,63 @@ function refresh<Args, Return>(arg?: CacheSelector<Args, Return>, args?: Args): 
 cache.refresh = refresh
 
 /*
+Local value mutation: replaces the retained value of every entry matching the
+selector via `updater(current)`, re-renders readers, and fires NO network — the
+optimistic-update / real-time primitive (feed a socket frame straight into a
+cached list). The next value is stored onto `entry.value`, which the read path
+serves warm (cloned per read), so it persists across reads until a refresh /
+invalidate replaces the entry. `current` comes from `entry.value` when already
+materialized, else decoded from the settled/in-flight promise (async — readers
+re-render when the patch lands). Follows the selector grammar, but only fn / args
+/ tags select a value to mutate; a not-yet-read key has nothing to patch.
+*/
+function patch<Args, Return>(
+    arg: CacheSelector<Args, Return>,
+    args: Args | undefined,
+    updater: (current: Return) => Return,
+): void {
+    const prefix = selectorPrefix(arg, args)
+    const matches = selectorMatcher(arg, args, prefix)
+    for (const store of cacheStores()) {
+        for (const entry of store.entries.values()) {
+            if (matches(entry)) {
+                applyPatch(store, entry, updater as (current: unknown) => unknown)
+            }
+        }
+    }
+}
+
+cache.patch = patch
+
+/*
+Applies one entry's patch: materialize the current decoded value (warm value if
+present, else decode the promise — a Response for a remote entry, cloned so the
+readers' own clones still succeed), run the updater, store it warm, and emit so
+readers re-read. Fire-and-forget on the async branch: patch() stays sync-return.
+*/
+function applyPatch(
+    store: CacheStore,
+    entry: CacheEntry,
+    updater: (current: unknown) => unknown,
+): void {
+    function apply(current: unknown): void {
+        entry.value = updater(current)
+        notify(store, [entry.key], [entry.key])
+    }
+    if (entry.value !== undefined) {
+        apply(entry.value)
+        return
+    }
+    const currentValue =
+        entry.request !== undefined
+            ? (entry.promise as Promise<Response>).then((response) =>
+                  decodeResponse(response.clone()),
+              )
+            : (entry.promise as Promise<unknown>)
+    currentValue.then(apply, () => undefined)
+}
+
+/*
 Event-driven cache maintenance: subscribes to a Subscribable (socket or rpc
 stream) and runs `handler` once per frame — the declarative home for "this
 socket event stales that cached data", replacing the hand-rolled $effect +
