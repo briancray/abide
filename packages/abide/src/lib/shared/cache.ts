@@ -707,6 +707,60 @@ function selectorLabel<Args, Return>(
 cache.invalidate = invalidate
 
 /*
+The smart-call refetch: refetches every entry matching the selector, keeping the
+stale value visible (refreshing() true) until the fresh value swaps in — never
+blanks. This is the old invalidate reborn as *refetch*: because SWR retains the
+value, there is no "invalidate that drops to pending" for the smart call. Follows
+invalidate's exact selector grammar (fn / fn+args / { tags } / bare = all).
+
+A smart-read match already carries an invalidation policy, so it routes straight
+through scheduleInvalidationRefetch (throttle/debounce-honouring). A policy-less
+remote match (an explicit cache() entry, or a hydrated one) gets a refetch armed
+on the fly by replaying its stored Request. A policy-less producer match has no
+way to re-run, so it drops (the next read reloads) — the invalidate fallback.
+*/
+function refresh<Args, Return>(arg?: CacheSelector<Args, Return>, args?: Args): void {
+    const prefix = selectorPrefix(arg, args)
+    const matches = selectorMatcher(arg, args, prefix)
+    invalidateTripwire(selectorLabel(arg, args, prefix))
+    if (prefix !== undefined) {
+        rpcErrorRegistry.clearMatching(prefix)
+    }
+    for (const store of cacheStores()) {
+        const matched: string[] = []
+        const affected: string[] = []
+        for (const entry of store.entries.values()) {
+            if (!matches(entry)) {
+                continue
+            }
+            matched.push(entry.key)
+            /* Arm a refetch on the fly for a policy-less remote entry by replaying its
+               stored Request — so a refresh always refetches-and-swaps, never blanks. */
+            if (entry.invalidation === undefined && entry.request !== undefined) {
+                const request = entry.request
+                entry.invalidation = { refetch: () => fetch(request.clone()) }
+            }
+            if (entry.invalidation !== undefined) {
+                scheduleInvalidationRefetch(store, entry)
+            } else {
+                /* No policy, no request (a producer never cached with swr): drop so the
+                   next read reloads, flagged a reload if a reader is holding it. */
+                store.entries.delete(entry.key)
+                if (store.hasReader(entry.key)) {
+                    store.pendingRefresh.add(entry.key)
+                }
+                affected.push(entry.key)
+            }
+        }
+        /* Mark the whole match set (probes re-derive); emit only the dropped subset — the
+           refetched entries emit when their fresh value lands (fireRefetch). */
+        notify(store, matched, affected)
+    }
+}
+
+cache.refresh = refresh
+
+/*
 Event-driven cache maintenance: subscribes to a Subscribable (socket or rpc
 stream) and runs `handler` once per frame — the declarative home for "this
 socket event stales that cached data", replacing the hand-rolled $effect +

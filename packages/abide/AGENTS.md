@@ -221,7 +221,7 @@ the leading `<script>`), and a nested `<style>` scopes to its sibling subtree.
 
 ### Cache — @documentation cache
 
-- `@abide/abide/shared/cache` — read-through cache: `cache(fn, args?, options?)` returns a shared promise, coalescing identical in-flight calls. Options: `ttl` (undefined = forever, 0 = dedupe-only, N ms = expiry), `global` (process store), `tags`, `swr`, `throttle`/`debounce` (refetch rate-limit). `cache.invalidate(selector?, args?)` drops matching entries; `cache.on(source, handler)` invalidates off a stream. `cache.read(fn, args?, options?)` is the smart bare-call read-through (internal wiring for `getFoo(args)`): a replayable read is coalesced + retained (SWR unconditional, `ttl` drives background revalidation not eviction), a write is coalesce-only. Streaming rpcs are not cacheable (compile error).
+- `@abide/abide/shared/cache` — read-through cache: `cache(fn, args?, options?)` returns a shared promise, coalescing identical in-flight calls. Options: `ttl` (undefined = forever, 0 = dedupe-only, N ms = expiry), `global` (process store), `tags`, `swr`, `throttle`/`debounce` (refetch rate-limit). `cache.invalidate(selector?, args?)` drops matching entries; `cache.refresh(selector?, args?)` refetches matching entries keeping the stale value visible (the smart-call refetch; see `./shared/refresh`); `cache.on(source, handler)` invalidates off a stream. `cache.read(fn, args?, options?)` is the smart bare-call read-through (internal wiring for `getFoo(args)`): a replayable read is coalesced + retained (SWR unconditional, `ttl` drives background revalidation not eviction), a write is coalesce-only. Streaming rpcs are not cacheable (compile error).
 
 ### Probes — @documentation probes
 
