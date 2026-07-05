@@ -23,10 +23,13 @@ import type { PersistenceStore } from './types/PersistenceStore.ts'
    branch with `error instanceof HttpError && error.kind === 'queued'`. */
 const QUEUED = 'queued'
 
-/* A durable RPC's per-call options. `outbox: true` parks an unreachable call for replay;
-   `store` exists for testing — production uses the default persistence store. */
+/* Build-time options the bundler stamps onto the client proxy stub. `outbox: true` parks an
+   unreachable call for replay; `streaming: true` (handler returns jsonl()/sse()) makes the bare
+   call return the Subscribable directly; `store` exists for testing (production uses the default
+   persistence store). */
 export type DurableOptions = {
     outbox?: boolean
+    streaming?: boolean
     store?: PersistenceStore
 }
 
@@ -75,6 +78,7 @@ export function remoteProxy<Args, Return>(
         method,
         url,
         clients: browserClientFlags,
+        streaming: durable?.streaming ?? false,
         /*
         The Request URL carries the mount base so the fetch routes through the
         proxy (/v2/rpc/…); the cache key keeps the bare `url` (keyForRemoteCall

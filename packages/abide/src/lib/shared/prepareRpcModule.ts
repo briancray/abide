@@ -15,6 +15,9 @@ export type PreparedRpcModule = {
     method: HttpMethod
     /* `outbox: true` in the opts — the client proxy is emitted durable. */
     durable: boolean
+    /* The handler calls jsonl()/sse() — the client proxy is emitted streaming (bare call
+       returns the Subscribable). Congruent with the RemoteCallable conditional by construction. */
+    streaming: boolean
     exportName: string
     rewriteForServer: (url: string) => string
 }
@@ -71,9 +74,11 @@ export function prepareRpcModule(
     }
     const method = site.ident as HttpMethod
     const durable = detectDurable(stripped, site.parenStart, site.parenEnd, method)
+    const streaming = detectStreaming(stripped, site.parenStart, site.parenEnd)
     return {
         method,
         durable,
+        streaming,
         exportName: site.exportName,
         rewriteForServer(url: string): string {
             const binding = `__abideDefineRpc__(${JSON.stringify(method)}, ${JSON.stringify(url)}, `
@@ -109,6 +114,47 @@ function detectDurable(
         )
     }
     return durable
+}
+
+const STREAM_HELPERS = new Set(['jsonl', 'sse'])
+const IDENT_START = /[A-Za-z_$]/
+const IDENT_PART = /[A-Za-z0-9_$]/
+
+/* True when the handler returns a streaming body — it calls abide's jsonl()/sse(), the only
+   constructors of a `TypedResponse<AsyncIterable<Frame>>`. Congruent by construction with the
+   RemoteCallable conditional (Return is an AsyncIterable iff the handler calls jsonl/sse). Scans
+   the whole call-arg region depth-blind (the opts never mention jsonl/sse), skipping
+   strings/comments/regex via skipNonCode so a mention in a literal can't misfire. Same
+   literal-only limit as `outbox`: an indirection through a wrapper function isn't seen. */
+function detectStreaming(source: string, parenStart: number, parenEnd: number): boolean {
+    let i = parenStart + 1
+    while (i < parenEnd) {
+        const skipped = skipNonCode(source, i)
+        if (skipped !== undefined) {
+            i = skipped
+            continue
+        }
+        if (IDENT_START.test(source[i]) && !IDENT_PART.test(source[i - 1] ?? '')) {
+            let j = i + 1
+            while (j < parenEnd && IDENT_PART.test(source[j])) {
+                j += 1
+            }
+            if (STREAM_HELPERS.has(source.slice(i, j))) {
+                let k = j
+                while (k < parenEnd && /\s/.test(source[k])) {
+                    k += 1
+                }
+                /* `jsonl(` a call, `jsonl<` a generic call — either is the streaming constructor. */
+                if (source[k] === '(' || source[k] === '<') {
+                    return true
+                }
+            }
+            i = j
+            continue
+        }
+        i += 1
+    }
+    return false
 }
 
 /*

@@ -381,11 +381,16 @@ export function abideResolverPlugin({
                 so page imports resolve identically on both sides.
                 */
                 if (target === 'client') {
-                    /* A durable rpc (`outbox: true`) gets the third arg so its client proxy
-                       parks unreachable calls onto the outbox. */
-                    const durableArg = prepared.durable ? ', { outbox: true }' : ''
+                    /* Build-time flags on the client proxy stub: `outbox: true` parks
+                       unreachable calls; `streaming: true` (handler returns jsonl()/sse())
+                       makes the bare call return the Subscribable directly. */
+                    const flags = [
+                        prepared.durable ? 'outbox: true' : undefined,
+                        prepared.streaming ? 'streaming: true' : undefined,
+                    ].filter(Boolean)
+                    const optsArg = flags.length > 0 ? `, { ${flags.join(', ')} }` : ''
                     const contents = `import { remoteProxy as __abideRemoteProxy__ } from '${importName}/ui/remoteProxy';
-export const ${prepared.exportName} = __abideRemoteProxy__(${JSON.stringify(prepared.method)}, ${JSON.stringify(url)}${durableArg});
+export const ${prepared.exportName} = __abideRemoteProxy__(${JSON.stringify(prepared.method)}, ${JSON.stringify(url)}${optsArg});
 `
                     return { contents, loader: 'ts' }
                 }
