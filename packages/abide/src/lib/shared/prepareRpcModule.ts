@@ -145,14 +145,14 @@ function detectStreaming(source: string, parenStart: number, parenEnd: number): 
             i = skipped
             continue
         }
-        if (IDENT_START.test(source[i]) && !IDENT_PART.test(source[i - 1] ?? '')) {
+        if (IDENT_START.test(source[i] ?? '') && !IDENT_PART.test(source[i - 1] ?? '')) {
             let j = i + 1
-            while (j < parenEnd && IDENT_PART.test(source[j])) {
+            while (j < parenEnd && IDENT_PART.test(source[j] ?? '')) {
                 j += 1
             }
             if (STREAM_HELPERS.has(source.slice(i, j))) {
                 let k = j
-                while (k < parenEnd && /\s/.test(source[k])) {
+                while (k < parenEnd && /\s/.test(source[k] ?? '')) {
                     k += 1
                 }
                 /* `jsonl(` a call, `jsonl<` a generic call — either is the streaming constructor. */
