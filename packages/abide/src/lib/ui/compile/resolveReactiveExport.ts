@@ -29,6 +29,18 @@ export type ReactiveImportBindings = {
     stateRoots: Set<string>
 }
 
+/* The reactive bindings a nested `<template>` <script> resolves against. A nested script
+   cannot carry its own import (imports are module-scoped, hoisted off the leading script or
+   absent entirely), so it inherits the surface by the canonical names — the one recognition
+   site that is name-based because imports structurally cannot reach it. */
+export const NESTED_REACTIVE_BINDINGS: ReactiveImportBindings = {
+    direct: new Map<string, ReactivePrimitive>([
+        ['state', 'state'],
+        ['effect', 'effect'],
+    ]),
+    stateRoots: new Set(['state']),
+}
+
 export function reactiveImportBindings(source: ts.SourceFile): ReactiveImportBindings {
     const direct = new Map<string, ReactivePrimitive>()
     const stateRoots = new Set<string>()
@@ -56,16 +68,18 @@ export function reactiveImportBindings(source: ts.SourceFile): ReactiveImportBin
     return { direct, stateRoots }
 }
 
-/* The reactive primitive a call's callee resolves to, or undefined. A bare identifier
-   resolves through the direct bindings (alias-safe); a `stateRoot.linked` / `.computed`
-   member call resolves off a local bound to `state`. Every other callee is undefined
-   (a user's own function, an unrelated member access). */
+/* The reactive primitive a call's callee resolves to, or undefined. A bare `props`
+   identifier is always the ambient prop reader — the one primitive with no runtime module
+   (pure compiler sugar), so it resolves with no import. Every other bare identifier
+   resolves through the direct import bindings (alias-safe); a `stateRoot.linked` /
+   `.computed` member call resolves off a local bound to `state`. Every other callee is
+   undefined (a user's own function, an unrelated member access). */
 export function resolveReactiveExport(
     callee: ts.Expression,
     bindings: ReactiveImportBindings,
 ): ReactivePrimitive | undefined {
     if (ts.isIdentifier(callee)) {
-        return bindings.direct.get(callee.text)
+        return callee.text === 'props' ? 'props' : bindings.direct.get(callee.text)
     }
     if (
         ts.isPropertyAccessExpression(callee) &&

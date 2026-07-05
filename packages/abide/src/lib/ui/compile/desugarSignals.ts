@@ -1,7 +1,7 @@
 import ts from 'typescript'
-import { REACTIVE_CALLEES } from './REACTIVE_CALLEES.ts'
 import {
     type ReactiveImportBindings,
+    type ReactivePrimitive,
     reactiveImportBindings,
     resolveReactiveExport,
 } from './resolveReactiveExport.ts'
@@ -57,7 +57,7 @@ export function desugarSignals(source: ts.SourceFile): {
     assertNoRemovedReaders(source)
     /* The file's reactive import bindings — each local (alias-safe) mapped to its
        canonical primitive. The single recognition authority: every callee below resolves
-       against these (plus the legacy receiver-agnostic `scope().state(...)` member form). */
+       against these import bindings and nothing else. */
     const bindings = reactiveImportBindings(source)
     const stateNames = new Set<string>()
     const derivedNames = new Set<string>()
@@ -97,7 +97,7 @@ export function desugarSignals(source: ts.SourceFile): {
                    referenced as `name()` (its string-free reader): a function of other
                    paths, recomputed via the graph, never stored/serialized. */
                 computedNames.add(declaration.name.text)
-            } else if (callee !== undefined && REACTIVE_CALLEES.has(callee)) {
+            } else if (callee === 'linked' || callee === 'state') {
                 /* `.value` cells: `linked` and `state(initial, transform)` — they own
                    a local store, so they stay cells (`computed` is always the read-only
                    slot above; there is no writable-computed cell). */
@@ -279,31 +279,19 @@ function isPlainStateSlot(
 }
 
 /* The canonical reactive primitive a declaration's callee resolves to, else undefined.
-   Import-resolution first (alias-safe: `import { state as s }; s(0)` → `state`, and
-   `state.linked` / `state.computed` off an imported `state` root); then the legacy
-   receiver-agnostic member form (`scope().state(...)` / `c.state(...)`) and bare canonical
-   names by the METHOD name. Since `scope()` is the ambient scope, the receiver is
-   irrelevant — the slot keys off the binding name and lands on the same `model`. */
+   Import-resolution is the SOLE recognition path (alias-safe: `import { state as s };
+   s(0)` → `state`, and `state.linked` / `state.computed` off an imported `state` root).
+   The legacy `scope().state(...)` / captured-handle member form is no longer recognised —
+   the imported bare surface is the only author entry. */
 function signalCallee(
     declaration: ts.VariableDeclaration,
     bindings: ReactiveImportBindings,
-): string | undefined {
+): ReactivePrimitive | undefined {
     const initializer = declaration.initializer
     if (initializer === undefined || !ts.isCallExpression(initializer)) {
         return undefined
     }
-    const resolved = resolveReactiveExport(initializer.expression, bindings)
-    if (resolved !== undefined) {
-        return resolved
-    }
-    const callee = initializer.expression
-    if (ts.isIdentifier(callee)) {
-        return callee.text
-    }
-    if (ts.isPropertyAccessExpression(callee)) {
-        return callee.name.text
-    }
-    return undefined
+    return resolveReactiveExport(initializer.expression, bindings)
 }
 
 /* One destructured prop: the local binding name, the parent prop key it reads, and

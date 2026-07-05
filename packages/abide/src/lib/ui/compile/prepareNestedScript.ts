@@ -1,8 +1,8 @@
 import ts from 'typescript'
-import { REACTIVE_CALLEES } from './REACTIVE_CALLEES.ts'
 import {
+    NESTED_REACTIVE_BINDINGS,
     type ReactiveImportBindings,
-    reactiveImportBindings,
+    type ReactivePrimitive,
     resolveReactiveExport,
 } from './resolveReactiveExport.ts'
 
@@ -16,20 +16,16 @@ the serializable `doc`.
 */
 export function nestedBindingNames(code: string): Set<string> {
     const source = ts.createSourceFile('nested.ts', code, ts.ScriptTarget.Latest, true)
-    /* The nested script's own reactive import bindings (alias-safe). */
-    const bindings = reactiveImportBindings(source)
     const names = new Set<string>()
     for (const statement of source.statements) {
         if (!ts.isVariableStatement(statement)) {
             continue
         }
         for (const declaration of statement.declarationList.declarations) {
-            const callee = signalCallee(declaration, bindings)
-            if (
-                callee !== undefined &&
-                REACTIVE_CALLEES.has(callee) &&
-                ts.isIdentifier(declaration.name)
-            ) {
+            const callee = signalCallee(declaration, NESTED_REACTIVE_BINDINGS)
+            /* `effect` binds no readable value (returns void), so it never joins the deref
+               scope; every other recognised primitive (state/linked/computed/props) does. */
+            if (callee !== undefined && callee !== 'effect' && ts.isIdentifier(declaration.name)) {
                 names.add(declaration.name.text)
             }
         }
@@ -38,26 +34,15 @@ export function nestedBindingNames(code: string): Set<string> {
 }
 
 /* The canonical primitive a `NAME = state(...)` / `state.linked(...)` declaration resolves
-   to — import-resolution first (alias-safe), then the legacy receiver-agnostic member form
-   (`scope().state(...)` / `c.state(...)`) and bare canonical names by the method name. */
+   to — import-resolution is the sole recognition path (alias-safe). The legacy
+   `scope().state(...)` / captured-handle member form is no longer recognised. */
 function signalCallee(
     declaration: ts.VariableDeclaration,
     bindings: ReactiveImportBindings,
-): string | undefined {
+): ReactivePrimitive | undefined {
     const initializer = declaration.initializer
     if (initializer === undefined || !ts.isCallExpression(initializer)) {
         return undefined
     }
-    const resolved = resolveReactiveExport(initializer.expression, bindings)
-    if (resolved !== undefined) {
-        return resolved
-    }
-    const callee = initializer.expression
-    if (ts.isIdentifier(callee)) {
-        return callee.text
-    }
-    if (ts.isPropertyAccessExpression(callee)) {
-        return callee.name.text
-    }
-    return undefined
+    return resolveReactiveExport(initializer.expression, bindings)
 }

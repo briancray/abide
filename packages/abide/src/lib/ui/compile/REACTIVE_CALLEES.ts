@@ -1,9 +1,8 @@
-/* The callee names the `.abide` compiler recognises as reactive declarations
-   (`scope().state(...)`, `scope().linked(...)`, `scope().computed(...)`, and the destructuring
-   `const {…} = props()`): the shared "is this a reactive binding" allowlist read by
-   the desugarer, the nested-script scoper, and the type-checking shadow. How each
-   lowers — a serializable doc slot vs a `.value` cell — is decided per-site; this is
-   only the membership set, so a new primitive is a single edit here. */
+/* The author-facing reactive primitive names (`state`, `state.linked`, `state.computed`,
+   and the destructuring `const {…} = props()`). The compiler no longer reads this —
+   recognition is import-resolved (see `resolveReactiveExport.ts`). It remains the canonical
+   inventory the docs surface-weighting tool enumerates (`scripts/surfaceWeight.ts`), so the
+   grammar's "primitives" bucket stays in sync with the language without hardcoding a list. */
 export const REACTIVE_CALLEES: ReadonlySet<string> = new Set([
     'state',
     'linked',

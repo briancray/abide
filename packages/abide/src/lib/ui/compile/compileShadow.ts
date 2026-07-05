@@ -1,9 +1,10 @@
 import ts from 'typescript'
 import { ABIDE_PACKAGE_NAME } from '../../shared/ABIDE_PACKAGE_NAME.ts'
 import { parseTemplate } from './parseTemplate.ts'
-import { REACTIVE_CALLEES } from './REACTIVE_CALLEES.ts'
 import {
+    NESTED_REACTIVE_BINDINGS,
     type ReactiveImportBindings,
+    type ReactivePrimitive,
     reactiveImportBindings,
     resolveReactiveExport,
 } from './resolveReactiveExport.ts'
@@ -13,16 +14,16 @@ import type { TemplateNode } from './types/TemplateNode.ts'
 /*
 Framework callables the `.abide` loader injects into a component's scope. `snippet`
 and `scope` keep their real published types via imports so author calls type-check —
-`scope()` is the internal lowering host (`scope().state(...)` still resolves for the
-legacy authoring form and generated code). `state`/`linked`/`computed`/`effect` are the
-imported reactive surface; when the author imports one its own binding provides the
-type, so the ambient fallback for that name is OMITTED (see `shadowPreamble`) to avoid a
-duplicate identifier. Otherwise `state`/`linked`/`computed` are declared ambiently and
-`effect` is imported as a fallback for the legacy `scope().state(...)` / bare/nested use
-the top-level rewrite doesn't project (unused when projected — fine, the shadow disables
-noUnusedLocals). `props` is the prop reader — destructured (`const { a = 1 } =
-props<Shape>()`); declared returning its type argument (default `Record<string, any>`)
-so each binding inherits its prop type and its `= default` narrows.
+`scope()` is the internal lowering host (a captured handle `const s = scope()` + its
+capability calls type-check against the real `Scope`; generated code targets it too).
+`state`/`linked`/`computed`/`effect` are the imported reactive surface; when the author
+imports one its own binding provides the type, so the ambient fallback for that name is
+OMITTED (see `shadowPreamble`) to avoid a duplicate identifier. Otherwise
+`state`/`linked`/`computed` are declared ambiently and `effect` is imported as a fallback
+for a bare/nested use the top-level rewrite doesn't project (unused when projected — fine,
+the shadow disables noUnusedLocals). `props` is the prop reader — destructured
+(`const { a = 1 } = props<Shape>()`); declared returning its type argument (default
+`Record<string, any>`) so each binding inherits its prop type and its `= default` narrows.
 */
 function shadowPreamble(importedReactives: ReadonlySet<string>): string {
     /* Omit the ambient fallback for a primitive the author imports — its own binding is
@@ -32,7 +33,7 @@ function shadowPreamble(importedReactives: ReadonlySet<string>): string {
             ? undefined
             : `import { effect } from '${ABIDE_PACKAGE_NAME}/ui/effect'`,
         `import { snippet } from '${ABIDE_PACKAGE_NAME}/shared/snippet'`,
-        `import { scope } from '${ABIDE_PACKAGE_NAME}/ui/scope'`,
+        `import { scope } from '${ABIDE_PACKAGE_NAME}/ui/currentScope'`,
         importedReactives.has('state')
             ? undefined
             : 'declare function state<T>(initial?: T, transform?: (next: T, previous: T) => T): { value: T }',
@@ -374,8 +375,8 @@ function analyzeScript(scriptBody: string, scriptStart: number): ScriptAnalysis 
    reads a nested signal as its value type instead of the raw `State`/`Computed`. */
 function projectNestedScript(code: string): string {
     const file = ts.createSourceFile('nested.ts', code, ts.ScriptTarget.Latest, true)
-    /* A nested script's own reactive imports (rare, but alias-safe if present). */
-    const bindings = reactiveImportBindings(file)
+    /* A nested script can't import — it inherits the module-scope surface by canonical name. */
+    const bindings = NESTED_REACTIVE_BINDINGS
     const verbatim = (node: ts.Node): string => code.slice(node.getStart(file), node.getEnd())
     /* No mapping: a zero-length segment the caller drops. */
     const span = (): ShadowMapping => ({ shadowStart: 0, sourceStart: 0, length: 0 })
@@ -410,28 +411,18 @@ function reactiveDeclarations(
 }
 
 /* The canonical reactive primitive a `NAME = state(...)` / `state.linked(...)` /
-   `props()` decl resolves to — import-resolution first (alias-safe), then the legacy
-   receiver-agnostic member form (`scope().state(...)` / `c.state(...)`) and bare canonical
-   names by the method name; else undefined (a plain declaration). */
+   `props()` decl resolves to — import-resolution is the sole recognition path (alias-safe);
+   else undefined (a plain declaration). The legacy `scope().state(...)` / captured-handle
+   member form is no longer recognised. */
 function signalCallee(
     declaration: ts.VariableDeclaration,
     bindings: ReactiveImportBindings,
-): string | undefined {
+): ReactivePrimitive | undefined {
     const initializer = declaration.initializer
     if (initializer === undefined || !ts.isCallExpression(initializer)) {
         return undefined
     }
-    const resolved = resolveReactiveExport(initializer.expression, bindings)
-    if (resolved !== undefined) {
-        return resolved
-    }
-    const callee = initializer.expression
-    const name = ts.isIdentifier(callee)
-        ? callee.text
-        : ts.isPropertyAccessExpression(callee)
-          ? callee.name.text
-          : undefined
-    return name !== undefined && REACTIVE_CALLEES.has(name) ? name : undefined
+    return resolveReactiveExport(initializer.expression, bindings)
 }
 
 /* Builds one scope line for a reactive declaration, projecting it to its value
@@ -445,15 +436,10 @@ function scopeLineFor(
 ): ScopeLine {
     const name = ts.isIdentifier(declaration.name) ? declaration.name.text : '_'
     const call = declaration.initializer as ts.CallExpression
-    /* The CANONICAL primitive drives value-projection — import-resolution first (so an
-       aliased `s(0)` / `state.computed(...)` projects correctly), then the legacy member/
-       bare callee name. `verbatim(call.expression)` below keeps the AUTHOR's text for the
-       trailing hover ref. */
-    const callee =
-        resolveReactiveExport(call.expression, bindings) ??
-        (ts.isPropertyAccessExpression(call.expression)
-            ? call.expression.name.text
-            : (call.expression as ts.Identifier).text)
+    /* The CANONICAL primitive drives value-projection — resolved purely from the import
+       binding (so an aliased `s(0)` / `state.computed(...)` projects correctly).
+       `verbatim(call.expression)` below keeps the AUTHOR's text for the trailing hover ref. */
+    const callee = resolveReactiveExport(call.expression, bindings)
     if (callee === 'props') {
         /* `const {…} = props<Shape>()`: the type arg (default `Record<string, any>`)
            IS the parent-facing prop shape, and the destructure projects verbatim against
