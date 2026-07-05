@@ -18,11 +18,10 @@ socket.
 export interface Socket<T> extends AsyncIterable<T> {
     readonly name: string
     readonly clients: ClientFlags
-    /* `broadcast` is the taught name — send a frame to every subscriber (server always;
-       client only when `clientPublish` is set). `publish` is its retained alias through the
-       migration. */
+    /* Send a frame to every subscriber (server always; client only when `clientPublish` is
+       set). Isomorphic: server code fans out in-process + to remote subscribers; client code
+       sends a validated `pub` frame. */
     broadcast(message: T): void
-    publish(message: T): void
     tail(count?: number, hooks?: TailHooks): AsyncIterable<T>
     /* The latest retained frame, synchronously — `T | undefined` when none. The value
        member of the probe family for a stream; `peek(socket)` routes here. */

@@ -39,7 +39,7 @@ const typers = state.computed(() => tail(typing, { last: 10 }))`} note={"Ephemer
     code={`// server job
 for (const step of steps) {
     await run(step)
-    jobProgress.publish({ jobId, pct: done / total * 100 })
+    jobProgress.broadcast({ jobId, pct: done / total * 100 })
 }`}
     note={'Publish progress frames from the job and tail them keyed by job id — a live progress bar or step list driven entirely by the server.'} />
 
@@ -47,7 +47,7 @@ for (const step of steps) {
     task="Push server notifications"
     live={LIVE}
     code={`export const alerts = socket({ schema, tail: 20 })
-// anywhere on the server: alerts.publish({ level, text })`}
+// anywhere on the server: alerts.broadcast({ level, text })`}
     note={'A retained `alerts` socket is a notification bus — publish from any handler or job, tail the latest in a toast area, seed the last few on load.'} />
 
 <Recipe
@@ -68,7 +68,7 @@ let last = 0
 export const ping = POST(() => {
     if (Date.now() - last < 1000) return error(429, 'slow down')
     last = Date.now()
-    pings.publish({ at: Date.now() })
+    pings.broadcast({ at: Date.now() })
     return json({ ok: true })
 })`} note={"There's no per-topic rate limit. Throttle in the publish rpc yourself (a timestamp guard, a token bucket) — the socket fans out whatever you hand it."} />
 
@@ -85,7 +85,7 @@ const mine = state.computed(() => tail(dm, { last: 50 }).filter((m) => m.toUserI
     gap={true}
     code={`// no ack/at-least-once — persist, then reconcile with a read
 recordMessage(m)      // durable source of truth
-chat.publish(m)       // best-effort live delivery
+chat.broadcast(m)       // best-effort live delivery
 // clients refetch from the store on reconnect to fill gaps`}
     note={'Publish is best-effort fan-out with no per-frame acknowledgement or replay guarantee. For at-least-once, persist to a store and have clients reconcile from a read on reconnect — the socket is the fast path, the store is the truth.'} />
 

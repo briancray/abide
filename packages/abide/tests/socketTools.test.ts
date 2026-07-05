@@ -14,8 +14,8 @@ describe('socket REST happy path', () => {
     const dispatcher = createSocketDispatcher(routesFor('rest-chat'))
 
     beforeAll(() => {
-        chat.publish({ text: 'one' })
-        chat.publish({ text: 'two' })
+        chat.broadcast({ text: 'one' })
+        chat.broadcast({ text: 'two' })
     })
 
     test('GET returns the retained tail snapshot as JSON', async () => {
@@ -97,7 +97,7 @@ describe('socket MCP tools happy path', () => {
             tail: 10,
             clientPublish: true,
         })
-        room.publish({ text: 'seeded' })
+        room.broadcast({ text: 'seeded' })
     })
 
     test('tools/list exposes a read-only tail tool and a publish tool', async () => {

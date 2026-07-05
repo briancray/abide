@@ -42,7 +42,7 @@ export const handle = async (request, next) => {
 <Recipe task="Authorise socket publishes" live="/sockets" code={`export const publishFeed = POST(async ({ text }) => {
     const user = await currentUser()
     if (!user) throw new HttpError(401, 'sign in')
-    feed.publish({ text, by: user.id })
+    feed.broadcast({ text, by: user.id })
     return json({ ok: true })
 }, { inputSchema })`} note={"Put the authorization in the publish rpc. It runs server-side under the origin gate, so it's the right place to check identity before fanning a frame out."} />
 

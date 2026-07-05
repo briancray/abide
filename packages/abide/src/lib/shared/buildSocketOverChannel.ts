@@ -62,9 +62,8 @@ export function buildSocketOverChannel<T>(
     return {
         name,
         clients: browserClientFlags,
-        publish,
-        /* `broadcast` is the taught name — sends the same server-validated `pub` frame as
-           publish (the dispatcher gates it on the topic's `clientPublish`). */
+        /* `broadcast` sends a server-validated `pub` frame (the dispatcher gates it on the
+           topic's `clientPublish`); `publish` is the internal channel-send function name. */
         broadcast: publish,
         tail: (count?: number, hooks?: TailHooks) => iterate(count, hooks),
         /* The latest frame this client has seen, synchronously. */

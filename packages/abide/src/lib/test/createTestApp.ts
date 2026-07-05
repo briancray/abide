@@ -72,7 +72,7 @@ export type TestApp = {
     /* Rpc calls over HTTP, keyed by command name: `app.rpc.getProduct({ id })`. */
     rpc: RpcClient
     /* Sockets keyed by name: `app.sockets.ticker` is the Socket — iterate it for
-       the live stream, `.tail(n)` to seed, `.publish(m)` to send. */
+       the live stream, `.tail(n)` to seed, `.broadcast(m)` to send. */
     sockets: SocketClient
     /* The /__abide/health payload, decoded. */
     health: () => Promise<unknown>

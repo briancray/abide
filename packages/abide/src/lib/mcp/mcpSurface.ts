@@ -192,7 +192,7 @@ function callSocketTool(
         }
         try {
             // publish() validates the payload against the socket schema and throws on failure.
-            entry.socket.publish(args)
+            entry.socket.broadcast(args)
         } catch (error) {
             return textResult(messageFromError(error), true)
         }
