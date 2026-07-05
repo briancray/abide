@@ -61,6 +61,7 @@
         "./shared/cache": "./src/lib/shared/cache.ts",
         "./shared/pending": "./src/lib/shared/pending.ts",
         "./shared/refreshing": "./src/lib/shared/refreshing.ts",
+        "./shared/done": "./src/lib/shared/done.ts",
         "./shared/HttpError": "./src/lib/shared/HttpError.ts",
         "./shared/ValidationErrorData": "./src/lib/shared/types/ValidationErrorData.ts",
         "./shared/snippet": "./src/lib/shared/snippet.ts",
