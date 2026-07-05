@@ -5,6 +5,7 @@ import type { HttpMethod } from './HttpMethod.ts'
 import type { Outbox } from './Outbox.ts'
 import type { RawRemoteFunction } from './RawRemoteFunction.ts'
 import type { RemoteCallable } from './RemoteCallable.ts'
+import type { RpcError } from './RpcError.ts'
 import type { RpcErrorGuard } from './RpcErrorGuard.ts'
 import type { Subscribable } from './Subscribable.ts'
 
@@ -67,6 +68,12 @@ export type RemoteFunction<
     refreshing(args?: Args): boolean
     invalidate(args?: Args): void
     cache(args?: Args, options?: CacheOptions): Promise<Return>
+    /* This rpc's last error, typed off `Errors` (a discriminated union already narrowed on
+       `.kind`/`.data`). `args` scopes to one call; omitted aggregates the most-recent across
+       this rpc. Truthiness is the "isError" check. Instance-only — no bare global (it would
+       shadow the server `error()` thrower). Reads the rpc error registry captured at the call
+       boundary; the cache is untouched. */
+    error(args?: Args): RpcError<Errors> | undefined
 } /* `outbox` presence follows the `outbox: true` opt: the mutating helper threads `Durable`
      into the return type so a DURABLE rpc's `.outbox` is the required queue face (no optional
      chain). A non-durable rpc keeps it optional — assignable to a durable one everywhere a
