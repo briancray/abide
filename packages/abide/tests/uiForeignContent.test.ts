@@ -25,8 +25,9 @@ const SVG_NS = 'http://www.w3.org/2000/svg'
    (`foreignWrapperTag`) so `<circle>`/`<path>` land in the SVG namespace — the bug the
    imperative path used to hit. A fully-static sibling svg proves the clone path too. */
 const BOUND_SVG = `
-<script>
-  let size = scope().state(24)
+<script>import { state } from '@abide/abide/ui/state'
+
+  let size = state(24)
 </script>
 <svg width={size} viewBox="0 0 24 24"><path d="M0 0"/><circle cx="12"/></svg>
 `
@@ -102,16 +103,18 @@ describe('foreign content (real parser) — SVG namespace', () => {
    `<path>` carries a binding. The whole foreign subtree must still route through the
    parser, or the static `<svg>` builds in the HTML namespace. */
 const STATIC_SVG_DYNAMIC_CHILD = `
-<script>
-  let color = scope().state('red')
+<script>import { state } from '@abide/abide/ui/state'
+
+  let color = state('red')
 </script>
 <svg viewBox="0 0 24 24"><path fill={color} d="M0 0"/></svg>
 `
 
 /* A foreign subtree nested under a static HTML element with a hole deeper still. */
 const NESTED_SVG = `
-<script>
-  let r = scope().state(6)
+<script>import { state } from '@abide/abide/ui/state'
+
+  let r = state(6)
 </script>
 <div class="icon"><svg viewBox="0 0 24 24"><circle r={r} cx="12"/></svg></div>
 `
@@ -136,8 +139,9 @@ describe('foreign content — holes on descendants', () => {
    builds through `skeleton`, which must namespace the foreign elements off their parent
    (parsed inside the SVG wrapper) while binding the text on the located `<text>` node. */
 const SVG_REACTIVE_TEXT = `
-<script>
-  let label = scope().state('hi')
+<script>import { state } from '@abide/abide/ui/state'
+
+  let label = state('hi')
 </script>
 <svg viewBox="0 0 24 24"><text x="0">{label}</text></svg>
 `
@@ -146,8 +150,9 @@ const SVG_REACTIVE_TEXT = `
    foreign sibling that coalesces into a cloneStatic run — the wrapper-less run must
    still parse into the foreign namespace. */
 const SVG_MIXED_STATIC = `
-<script>
-  let show = scope().state(true)
+<script>import { state } from '@abide/abide/ui/state'
+
+  let show = state(true)
 </script>
 <svg viewBox="0 0 24 24"><path d="M0 0"/>{#if show}<circle cx="12"/>{/if}</svg>
 `
@@ -155,8 +160,9 @@ const SVG_MIXED_STATIC = `
 /* An each that generates foreign elements: each row's `<circle>` is built into a
    detached fragment before insertion, so the each must carry the ambient namespace. */
 const SVG_EACH = `
-<script>
-  let rs = scope().state([2, 4, 6])
+<script>import { state } from '@abide/abide/ui/state'
+
+  let rs = state([2, 4, 6])
 </script>
 <svg viewBox="0 0 24 24">{#for r of rs by r}<circle r={r}/>{/for}</svg>
 `
@@ -215,8 +221,9 @@ describe('foreign content — dynamically-built parents with dynamic children', 
    before the suffix (not append at the parent's end); on hydrate it claims its range and
    the suffix is claimed structure. */
 const SUFFIX_IF = `
-<script>
-  let on = scope().state(true)
+<script>import { state } from '@abide/abide/ui/state'
+
+  let on = state(true)
 </script>
 <p>{#if on}<b>shown</b>{/if} the tail</p>
 `
@@ -251,8 +258,9 @@ describe('control flow with a static suffix', () => {
    clone; on hydrate `cursorAfterElements` must skip the <h2>/<p> prefix so the if claims
    its server range, not the prefix. */
 const PREFIXED_IF = `
-<script>
-  let on = scope().state(true)
+<script>import { state } from '@abide/abide/ui/state'
+
+  let on = state(true)
 </script>
 <div class="card"><h2>Title</h2><p>Body</p>{#if on}<span>shown</span>{/if}</div>
 `

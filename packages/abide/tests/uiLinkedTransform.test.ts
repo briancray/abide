@@ -68,11 +68,12 @@ describe('desugar — state(transform) / linked cells; computed doc slot', () =>
     test('plain state + computed are doc slots; transform/linked stay runtime .value cells', () => {
         const body = compileComponent(`
             <script>
-                let count = scope().state(0)
-                let qty = scope().state(1, (n) => Math.max(1, n))
-                let source = scope().state(10)
-                const draft = scope().linked(() => source)
-                const doubled = scope().computed(() => source * 2)
+                import { state } from '@abide/abide/ui/state'
+                let count = state(0)
+                let qty = state(1, (n) => Math.max(1, n))
+                let source = state(10)
+                const draft = state.linked(() => source)
+                const doubled = state.computed(() => source * 2)
             </script>
             <p>{count}{qty}{draft}{doubled}</p>
         `)
@@ -94,9 +95,10 @@ describe('desugar — state(transform) / linked cells; computed doc slot', () =>
     test('SSR serializes only doc slots, not transform/linked cells', () => {
         const ssr = compileSSR(`
             <script>
-                let source = scope().state(10)
-                let qty = scope().state(1, (n) => Math.max(1, n))
-                const draft = scope().linked(() => source)
+                import { state } from '@abide/abide/ui/state'
+                let source = state(10)
+                let qty = state(1, (n) => Math.max(1, n))
+                const draft = state.linked(() => source)
             </script>
             <p>{qty}{draft}{source}</p>
         `)
@@ -112,8 +114,9 @@ describe('runtime behavior in a compiled component', () => {
     test('linked reflects upstream changes through the doc', () => {
         const { host, $$model } = mountClient(`
             <script>
-                let source = scope().state('a')
-                const draft = scope().linked(() => source)
+                import { state } from '@abide/abide/ui/state'
+                let source = state('a')
+                const draft = state.linked(() => source)
             </script>
             <p>{draft}</p>
         `)
@@ -125,7 +128,8 @@ describe('runtime behavior in a compiled component', () => {
     test('a bound input writes through state(transform), clamping the value', () => {
         const { host } = mountClient(`
             <script>
-                let qty = scope().state(5, (n) => Math.max(1, Math.min(99, n)))
+                import { state } from '@abide/abide/ui/state'
+                let qty = state(5, (n) => Math.max(1, Math.min(99, n)))
             </script>
             <input bind:value={qty} />
             <p>{qty}</p>
@@ -140,17 +144,20 @@ describe('runtime behavior in a compiled component', () => {
 })
 
 /*
-The explicit scope authoring surface: `scope().state(...)` inline, or a captured handle
-`const c = scope(); c.state(...)`. Receiver-agnostic — the method name marks the binding
-reactive, and since `scope()` is the ambient scope (one object per level) the explicit
-form lowers exactly like the bare form. A bare call is a compile error.
+The imported reactive surface: `import { state } from '@abide/abide/ui/state'` + bare
+`state(...)` / `state.computed(...)` / `state.linked(...)`, plus `effect` imported from
+`ui/effect`. Recognised by import-binding resolution and lowered onto the ambient scope
+exactly as before. `scope()` is no longer an author reactive entry — the legacy
+`scope().state(...)`, captured-handle `c.state(...)`, and `const {…} = scope()` destructure
+forms are withdrawn (see `importedReactiveSurface.test.ts` for the full surface).
 */
-describe('explicit scope().X authoring surface', () => {
-    test('inline scope().state/.computed lower to the doc forms', () => {
+describe('imported reactive surface — inline lowering', () => {
+    test('inline state/state.computed lower to the doc forms', () => {
         const body = compileComponent(`
             <script>
-                const count = scope().state(0)
-                const doubled = scope().computed(() => count * 2)
+                import { state } from '@abide/abide/ui/state'
+                const count = state(0)
+                const doubled = state.computed(() => count * 2)
             </script>
             <p>{count}{doubled}</p>
         `)
@@ -159,48 +166,12 @@ describe('explicit scope().X authoring surface', () => {
         expect(body).toContain('doubled()') // computed referenced as its reader
     })
 
-    test('a captured handle (const c = scope(); c.state(...)) lowers identically', () => {
-        const body = compileComponent(`
-            <script>
-                const c = scope()
-                const count = c.state(0)
-                const qty = c.state(1, (n) => Math.max(1, n))
-                const draft = c.linked(() => count)
-                const total = c.computed(() => count + 1)
-            </script>
-            <p>{count}{qty}{draft}{total}</p>
-        `)
-        expect(body).toContain('$$model.replace("count", 0)') // plain state → doc slot
-        expect(body).toContain('const qty = $$scope().state(1, (n) => Math.max(1, n))')
-        expect(body).toContain('qty.value')
-        expect(body).toContain('const draft = $$scope().linked(() => $$model.read("count"))')
-        expect(body).toContain('$$scope().derive("total"')
-        expect(body).toContain('total()')
-    })
-
-    test('destructured scope primitives lower identically to the call form', () => {
-        const body = compileComponent(`
-            <script>
-                const { state, computed, linked } = scope()
-                const count = state(0)
-                const qty = state(1, (n) => Math.max(1, n))
-                const draft = linked(() => count)
-                const total = computed(() => count + 1)
-            </script>
-            <p>{count}{qty}{draft}{total}</p>
-        `)
-        expect(body).toContain('$$model.replace("count", 0)') // plain state → doc slot
-        expect(body).toContain('const qty = $$scope().state(1, (n) => Math.max(1, n))')
-        expect(body).toContain('qty.value')
-        expect(body).toContain('const draft = $$scope().linked(() => $$model.read("count"))')
-        expect(body).toContain('$$scope().derive("total"')
-        expect(body).toContain('total()')
-    })
-
     test('a bare reactive call is the surface now — it lowers, not throws', () => {
         // bare `state(0)` is the imported surface; it lowers to a serializable slot
         expect(() =>
-            compileComponent(`<script>const x = state(0)</script><p>{x}</p>`),
+            compileComponent(
+                `<script>import { state } from '@abide/abide/ui/state'\nconst x = state(0)</script><p>{x}</p>`,
+            ),
         ).not.toThrow()
         // the withdrawn `prop(...)` reader still throws with migration guidance
         expect(() => compileComponent(`<script>const id = prop('id')</script><p>{id}</p>`)).toThrow(
@@ -212,34 +183,17 @@ describe('explicit scope().X authoring surface', () => {
         ).not.toThrow()
     })
 
-    test('scope().effect passes through to the runtime effect and lowers its reads', () => {
+    test('an imported effect passes through to the runtime effect and lowers its reads', () => {
         const body = compileComponent(`
             <script>
-                const count = scope().state(0)
-                scope().effect(() => console.log(count))
+                import { state } from '@abide/abide/ui/state'
+                import { effect } from '@abide/abide/ui/effect'
+                const count = state(0)
+                effect(() => console.log(count))
             </script>
             <p>{count}</p>
         `)
-        expect(body).toContain('$$scope().effect(') // the reaction stays a runtime call
+        expect(body).toContain('effect(') // the reaction stays a runtime call
         expect(body).toContain('$$model.read("count")') // its reads lower like any other
-    })
-
-    test('a destructured effect used bare does not trip the scope() guard', () => {
-        expect(() =>
-            compileComponent(
-                `<script>const { effect } = scope()\neffect(() => {})</script><p>x</p>`,
-            ),
-        ).not.toThrow()
-    })
-
-    /* A primitive destructured from scope() at the top still lowers (legacy compat); a
-       bare `state(0)` now lowers too (the imported surface), both to the same slot. */
-    test('a destructured primitive used bare lowers like the bare surface', () => {
-        const destructured = compileComponent(
-            `<script>const { state } = scope()\nconst x = state(0)</script><p>{x}</p>`,
-        )
-        const bare = compileComponent(`<script>const x = state(0)</script><p>{x}</p>`)
-        expect(destructured).toContain('$$model.replace("x", 0)')
-        expect(bare).toContain('$$model.replace("x", 0)')
     })
 })

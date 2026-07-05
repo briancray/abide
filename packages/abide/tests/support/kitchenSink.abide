@@ -1,10 +1,12 @@
 <script>
-let draft = scope().state('')
-let order = scope().state(['1'])
-let byId = scope().state({ '1': { text: 'first' } })
-let nextId = scope().state(2)
+import { state } from '@abide/abide/ui/state'
 
-let count = scope().computed(() => order.length)
+let draft = state('')
+let order = state(['1'])
+let byId = state({ '1': { text: 'first' } })
+let nextId = state(2)
+
+let count = state.computed(() => order.length)
 
 function add() {
     const id = String(nextId)

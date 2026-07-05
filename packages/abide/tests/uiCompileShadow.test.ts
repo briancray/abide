@@ -1,16 +1,17 @@
 import { describe, expect, test } from 'bun:test'
 import { compileShadow } from '../src/lib/ui/compile/compileShadow.ts'
 
-const SOURCE = `<script>
+const SOURCE = `<script>import { state } from '@abide/abide/ui/state'
+
 import Child from './Child.abide'
-let count = scope().state(0)
+let count = state(0)
 let todos = state<string[]>([])
 const { title } = props<{ title: string }>()
 const { lang } = props<{ lang?: string }>()
-const doubled = scope().computed(() => count * 2)
-const label = computed<string>(() => String(count))
-let start = scope().linked(() => title)
-let offset = linked<number>(() => count)
+const doubled = state.computed(() => count * 2)
+const label = state.computed<string>(() => String(count))
+let start = state.linked(() => title)
+let offset = state.linked<number>(() => count)
 function bump() { count += 1; start = 'reset'; offset = 0 }
 </script>
 
@@ -132,7 +133,8 @@ const extra = { name: 'x' }
         /* `index="i"` is a row-local number (build/SSR bind it); the shadow must declare
            it too, else `{i}` in the body false-positives "Cannot find name 'i'". */
         const { code } = compileShadow(`<script>
-let rows = scope().state<string[]>([])
+import { state } from '@abide/abide/ui/state'
+let rows = state<string[]>([])
 </script>
 {#for row, i of rows}
   <span>{i === rows.length - 1 ? row : ''}</span>
@@ -178,13 +180,14 @@ const { size } = props<{ size: keyof typeof sizes }>()
         /* A nested signal read in the branch's markup must type-check as its value,
            not the raw `Derived`/`State` — matching the runtime deref. */
         const { code } = compileShadow(`<script>
-let ready = scope().state(false)
+import { state } from '@abide/abide/ui/state'
+let ready = state(false)
 </script>
 {#await Promise.resolve('x') then loaded}
   <script>
   const upper = loaded.toUpperCase()
-  let layout = scope().state(upper)
-  let label = scope().computed(() => layout + '!')
+  let layout = state(upper)
+  let label = state.computed(() => layout + '!')
   </script>
   <p>{label === 'A!' ? layout : upper}</p>
 {/await}`)

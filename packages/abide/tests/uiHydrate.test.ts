@@ -29,8 +29,9 @@ beforeAll(() => {
 })
 
 const COUNTER = `
-    <script>
-        let count = scope().state(0)
+    <script>import { state } from '@abide/abide/ui/state'
+
+        let count = state(0)
         function inc() { count += 1 }
     </script>
     <main>
@@ -575,7 +576,8 @@ describe('hydrate — adopt server DOM', () => {
             build: greetingBuild,
         })
 
-        const parentSource = `<script>let name = scope().state('world')</script><div><Greeting label={name} /></div>`
+        const parentSource = `<script>import { state } from '@abide/abide/ui/state'
+let name = state('world')</script><div><Greeting label={name} /></div>`
 
         // SSR the parent (server-renders the child)
         const server = (await new Function(

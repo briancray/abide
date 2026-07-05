@@ -2,7 +2,8 @@ import { describe, expect, test } from 'bun:test'
 import { compileModule } from '../src/lib/ui/compile/compileModule.ts'
 import { UI_RUNTIME_IMPORTS } from '../src/lib/ui/compile/UI_RUNTIME_IMPORTS.ts'
 
-const LEAF = `<script>let n = scope().state(0)</script>
+const LEAF = `<script>import { state } from '@abide/abide/ui/state'
+let n = state(0)</script>
 <button on:click={n++}>count {n}</button>`
 
 describe('compileModule — hot mode', () => {

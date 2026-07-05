@@ -194,8 +194,9 @@ describe('an await binding named like the awaited expression', () => {
     test('a blocking await reusing a scope-state name reads the resolved value', async () => {
         const render = component(
             `
-            <script>
-                const foo = scope().state(make())
+            <script>import { state } from '@abide/abide/ui/state'
+
+                const foo = state(make())
             </script>
             {#await foo then foo}<span>{foo.label}</span>{/await}
         `,
@@ -210,8 +211,9 @@ describe('an await binding named like the awaited expression', () => {
     test('a streaming await reusing a scope-state name reads the resolved value', async () => {
         const render = component(
             `
-            <script>
-                const foo = scope().state(make())
+            <script>import { state } from '@abide/abide/ui/state'
+
+                const foo = state(make())
             </script>
             {#await foo}<p>load</p>{:then foo}<span>{foo.label}</span>{/await}
         `,
@@ -226,8 +228,9 @@ describe('an await binding named like the awaited expression', () => {
     test('a streaming await catch binding reusing a scope-state name reads the error', async () => {
         const render = component(
             `
-            <script>
-                const err = scope().state('STATE')
+            <script>import { state } from '@abide/abide/ui/state'
+
+                const err = state('STATE')
             </script>
             {#await boom()}<p>load</p>{:then v}<span>{v}</span>{:catch err}<b>{err}</b>{/await}
         `,
@@ -245,8 +248,9 @@ describe('an await binding named like the awaited expression', () => {
     test('a blocking await finally reading a then-bound name reads the signal, not the value', async () => {
         const render = component(
             `
-            <script>
-                const foo = scope().state('STATE')
+            <script>import { state } from '@abide/abide/ui/state'
+
+                const foo = state('STATE')
             </script>
             {#await make() then foo}<span>{foo.label}</span>{:finally}<i>{foo}</i>{/await}
         `,
@@ -262,8 +266,9 @@ describe('an await binding named like the awaited expression', () => {
     test('a streaming await finally reading a then-bound name reads the signal, not the value', async () => {
         const render = component(
             `
-            <script>
-                const foo = scope().state('STATE')
+            <script>import { state } from '@abide/abide/ui/state'
+
+                const foo = state('STATE')
             </script>
             {#await make()}<p>load</p>{:then foo}<span>{foo.label}</span>{:finally}<i>{foo}</i>{/await}
         `,
@@ -282,8 +287,9 @@ describe('a {#try} catch binding named like a component signal', () => {
     test('the catch binding shadows a same-named state and reads the error', async () => {
         const render = component(
             `
-            <script>
-                const err = scope().state('STATE')
+            <script>import { state } from '@abide/abide/ui/state'
+
+                const err = state('STATE')
             </script>
             {#try}<p>{boom()}</p>{:catch err}<b>{err}</b>{/try}
         `,
@@ -307,9 +313,10 @@ describe('a {#for} row binding named like a component signal', () => {
        two DIVERGED. `withLocalPlain` registers the row locals so SSR reads the loop value. */
     test('the row item shadows a same-named state and reads the loop value', async () => {
         const render = component(`
-            <script>
-                const row = scope().state('STATE')
-                const rows = scope().state([{ label: 'A' }, { label: 'B' }])
+            <script>import { state } from '@abide/abide/ui/state'
+
+                const row = state('STATE')
+                const rows = state([{ label: 'A' }, { label: 'B' }])
             </script>
             <ul>{#for row of rows by row.label}<li>{row.label}</li>{/for}</ul>
         `).render
@@ -321,9 +328,10 @@ describe('a {#for} row binding named like a component signal', () => {
 
     test('the row index shadows a same-named state and reads the loop position', async () => {
         const render = component(`
-            <script>
-                const i = scope().state(99)
-                const rows = scope().state(['a', 'b'])
+            <script>import { state } from '@abide/abide/ui/state'
+
+                const i = state(99)
+                const rows = state(['a', 'b'])
             </script>
             <ul>{#for r, i of rows}<li>{i}:{r}</li>{/for}</ul>
         `).render

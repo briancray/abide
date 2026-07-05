@@ -211,8 +211,9 @@ describe('await block', () => {
         // would lower to the component state and render 'STATE'.
         const host = run(
             `
-            <script>
-            const value = scope().state({ label: 'STATE' })
+            <script>import { state } from '@abide/abide/ui/state'
+
+            const value = state({ label: 'STATE' })
             </script>
             {#await make()}
                 {:then value}
@@ -232,8 +233,9 @@ describe('await block', () => {
         // `model.error` — without the block-local plain shadow it would render 'STATE'.
         const host = run(
             `
-            <script>
-            const error = scope().state('STATE')
+            <script>import { state } from '@abide/abide/ui/state'
+
+            const error = state('STATE')
             </script>
             {#await make()}
                 {:then v}<span>{v}</span>

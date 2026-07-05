@@ -61,7 +61,8 @@ function run(source: string, extra: Record<string, unknown> = {}): HTMLElement {
 }
 
 /*
-A raw reactive read inside a control-flow branch (a nested `<script>` body, which the
+A raw reactive read inside a control-flow branch (a nested `<script>import { state } from '@abide/abide/ui/state'
+` body, which the
 compiler does NOT wrap in its own effect) must not subscribe the builder's reconcile
 effect — otherwise an unrelated change to that value re-runs the whole builder (each:
 re-reconciles the list; when/switch: re-evaluates the condition). The branch build runs

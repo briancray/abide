@@ -1,12 +1,18 @@
 import { describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { collectAbideDiagnostics } from '../src/lib/ui/compile/collectAbideDiagnostics.ts'
 import { createShadowProgram } from '../src/lib/ui/compile/createShadowProgram.ts'
 
+/* The real package root, so the throwaway tsconfig resolves `@abide/abide/*` author imports
+   (`ui/state`, `ui/effect`, …) to the actual sources — a consuming project resolves them
+   through the installed package, so the check must too (else the imported reactive surface
+   raises spurious module-resolution noise). */
+const PACKAGE_ROOT = resolve(import.meta.dir, '..')
+
 /* A throwaway project with the given `.abide` files (paths may be nested) and a strict
-   tsconfig. */
+   tsconfig that resolves the `@abide/abide` public surface to the real sources. */
 function project(files: Record<string, string>): string {
     const dir = mkdtempSync(join(tmpdir(), 'abide-check-'))
     writeFileSync(
@@ -17,6 +23,8 @@ function project(files: Record<string, string>): string {
                 module: 'esnext',
                 moduleResolution: 'bundler',
                 target: 'esnext',
+                baseUrl: PACKAGE_ROOT,
+                paths: { '@abide/abide/*': ['src/lib/*'] },
             },
         }),
     )
@@ -79,7 +87,7 @@ describe('abide check', () => {
            bug; expect none. */
         const dir = project({
             'child.abide': `<script>\nconst { open } = props<{ open: boolean }>()\n</script>\n<span>{open}</span>\n`,
-            'host.abide': `<script>\nimport Child from './child.abide'\nlet shown = scope().state(true)\neffect(() => { console.log(shown) })\n</script>\n<Child open={shown} />\n`,
+            'host.abide': `<script>\nimport { state } from '@abide/abide/ui/state'\nimport Child from './child.abide'\nlet shown = state(true)\neffect(() => { console.log(shown) })\n</script>\n<Child open={shown} />\n`,
         })
         const diagnostics = collectAbideDiagnostics(createShadowProgram(dir))
         expect(diagnostics.filter((diagnostic) => diagnostic.file.endsWith('host.abide'))).toEqual(
@@ -92,7 +100,7 @@ describe('abide check', () => {
            unterminated call still surfaces. */
         const dir = project({
             'child.abide': `<script>\nconst { open } = props<{ open: boolean }>()\n</script>\n<span>{open}</span>\n`,
-            'host.abide': `<script>\nimport Child from './child.abide'\nlet shown = scope().state(0)\neffect(() => { console.log(shown) })\n</script>\n<Child open={shown} />\n`,
+            'host.abide': `<script>\nimport { state } from '@abide/abide/ui/state'\nimport Child from './child.abide'\nlet shown = state(0)\neffect(() => { console.log(shown) })\n</script>\n<Child open={shown} />\n`,
         })
         const diagnostics = collectAbideDiagnostics(createShadowProgram(dir)).filter((diagnostic) =>
             diagnostic.file.endsWith('host.abide'),
@@ -232,12 +240,12 @@ describe('abide check', () => {
        declaration is not a use-before-assign false-positive. */
     test('a no-arg state is a defined T | undefined that narrows', () => {
         const guarded = project({
-            'g.abide': `<script>\nlet x = state<string>()\n</script>\n{#if x !== undefined}<span>{x.toUpperCase()}</span>{/if}\n`,
+            'g.abide': `<script>\nimport { state } from '@abide/abide/ui/state'\nlet x = state<string>()\n</script>\n{#if x !== undefined}<span>{x.toUpperCase()}</span>{/if}\n`,
         })
         expect(collectAbideDiagnostics(createShadowProgram(guarded))).toHaveLength(0)
 
         const unguarded = project({
-            'u.abide': `<script>\nlet x = state<string>()\n</script>\n<span>{x.toUpperCase()}</span>\n`,
+            'u.abide': `<script>\nimport { state } from '@abide/abide/ui/state'\nlet x = state<string>()\n</script>\n<span>{x.toUpperCase()}</span>\n`,
         })
         const diagnostics = collectAbideDiagnostics(createShadowProgram(unguarded))
         expect(diagnostics).toHaveLength(1)
@@ -249,7 +257,7 @@ describe('abide check', () => {
     test('check accepts a component and text directly in a control-flow branch', () => {
         const dir = project({
             'child.abide': `<script>\nconst { label } = props<{ label: string }>()\n</script>\n<span>{label}</span>\n`,
-            'ok.abide': `<script>\nimport Child from './child.abide'\nlet on = scope().state(true)\n</script>\n{#if on}<Child label="x"/>plain{/if}\n`,
+            'ok.abide': `<script>\nimport { state } from '@abide/abide/ui/state'\nimport Child from './child.abide'\nlet on = state(true)\n</script>\n{#if on}<Child label="x"/>plain{/if}\n`,
         })
         expect(
             collectAbideDiagnostics(createShadowProgram(dir)).filter((diagnostic) =>
@@ -263,7 +271,7 @@ describe('abide check', () => {
        illegal inside the branch's render body) and would falsely imply lazy loading. */
     test('a static import in a nested script is rejected with a clear diagnostic', () => {
         const dir = project({
-            'badimport.abide': `<script>\nlet on = scope().state(true)\n</script>\n{#if on}\n<script>import Heavy from './child.abide'</script>\n{/if}\n`,
+            'badimport.abide': `<script>\nimport { state } from '@abide/abide/ui/state'\nlet on = state(true)\n</script>\n{#if on}\n<script>import Heavy from './child.abide'</script>\n{/if}\n`,
             'child.abide': `<script>\nconst { label } = props<{ label: string }>()\n</script>\n<span>{label}</span>\n`,
         })
         const diagnostics = collectAbideDiagnostics(createShadowProgram(dir)).filter((diagnostic) =>
@@ -296,7 +304,7 @@ describe('abide check', () => {
 
     /* `for await` over an async iterable at the top level is the same trap. */
     test('top-level for-await in the leading <script> is rejected', () => {
-        const source = `<script>\nlet last = scope().state(0)\nfor await (const n of stream()) { last = n }\ndeclare function stream(): AsyncIterable<number>\n</script>\n<p>{last}</p>\n`
+        const source = `<script>\nimport { state } from '@abide/abide/ui/state'\nlet last = state(0)\nfor await (const n of stream()) { last = n }\ndeclare function stream(): AsyncIterable<number>\n</script>\n<p>{last}</p>\n`
         const dir = project({ 'forawait.abide': source })
         const diagnostics = collectAbideDiagnostics(createShadowProgram(dir)).filter((diagnostic) =>
             diagnostic.file.endsWith('forawait.abide'),
@@ -307,7 +315,7 @@ describe('abide check', () => {
     /* A nested `<script>` (scoped reactive block) inlines into `build()` too, so a top-level
        await in one is the same trap — flagged and mapped through the nested body's offset. */
     test('top-level await in a nested <script> is rejected with a clear diagnostic', () => {
-        const source = `<script>\nlet on = scope().state(true)\n</script>\n{#if on}\n<script>const data = await fetch('/y')</script>\n<p>{data.url}</p>\n{/if}\n`
+        const source = `<script>\nimport { state } from '@abide/abide/ui/state'\nlet on = state(true)\n</script>\n{#if on}\n<script>const data = await fetch('/y')</script>\n<p>{data.url}</p>\n{/if}\n`
         const dir = project({ 'nestedawait.abide': source })
         const diagnostics = collectAbideDiagnostics(createShadowProgram(dir)).filter((diagnostic) =>
             diagnostic.file.endsWith('nestedawait.abide'),
@@ -338,7 +346,7 @@ describe('abide check', () => {
     /* A dynamic `import()` in a nested script is the legitimate lazy path — not flagged. */
     test('a dynamic import in a nested script is allowed', () => {
         const dir = project({
-            'lazy.abide': `<script>\nlet p = scope().state(Promise.resolve(1))\n</script>\n{#await p then v}\n<script>effect(() => { void import('./child.abide') })</script>\n<span>{v}</span>\n{/await}\n`,
+            'lazy.abide': `<script>\nimport { state } from '@abide/abide/ui/state'\nlet p = state(Promise.resolve(1))\n</script>\n{#await p then v}\n<script>effect(() => { void import('./child.abide') })</script>\n<span>{v}</span>\n{/await}\n`,
             'child.abide': `<script>\nconst { label } = props<{ label: string }>()\n</script>\n<span>{label}</span>\n`,
         })
         expect(
@@ -348,14 +356,14 @@ describe('abide check', () => {
         ).toEqual([])
     })
 
-    /* `scope()` is the authored reactive surface, so it must resolve in the shadow:
-       a captured handle (`const s = scope()`) and capability calls (`s.undo()`) are
-       emitted verbatim and need the real `Scope` type; reactive declarations
-       (`scope().state/.computed`) are projected to their value type. Regression for the
-       shadow preamble missing the `scope` import after the doc→scope migration. */
-    test('scope() resolves — handle, capability calls, and reactive declarations type-check', () => {
+    /* `scope()` is the internal lowering host — no longer an author reactive entry, but a
+       captured handle (`const s = scope()`) and its capability calls (`s.undo()`) are
+       emitted verbatim and must still resolve in the shadow. The imported reactive surface
+       (`state`/`state.computed`) is projected to its value type. Regression for the shadow
+       preamble missing the `scope` import after the doc→scope migration. */
+    test('scope() handle + capability calls and the imported reactive surface type-check', () => {
         const dir = project({
-            'scoped.abide': `<script>\nconst s = scope()\nconst count = scope().state(0)\nconst doubled = scope().computed(() => count * 2)\nfunction undo() { s.undo() }\n</script>\n<button onclick={undo}>{count} {doubled}</button>\n`,
+            'scoped.abide': `<script>\nimport { state } from '@abide/abide/ui/state'\nconst s = scope()\nconst count = state(0)\nconst doubled = state.computed(() => count * 2)\nfunction undo() { s.undo() }\n</script>\n<button onclick={undo}>{count} {doubled}</button>\n`,
         })
         expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
     })
@@ -392,7 +400,7 @@ describe('abide check', () => {
        trapping block that left them "Cannot find name"). */
     test('a nested-script binding reaches a deeply nested block in the branch', () => {
         const dir = project({
-            'nested.abide': `<script>\nlet p = scope().state(Promise.resolve(1))\n</script>\n{#await p then v}\n<script>const label = String(v)</script>\n<div>{#if v > 0}<span>{label}</span>{/if}</div>\n{/await}\n`,
+            'nested.abide': `<script>\nimport { state } from '@abide/abide/ui/state'\nlet p = state(Promise.resolve(1))\n</script>\n{#await p then v}\n<script>const label = String(v)</script>\n<div>{#if v > 0}<span>{label}</span>{/if}</div>\n{/await}\n`,
         })
         expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
     })

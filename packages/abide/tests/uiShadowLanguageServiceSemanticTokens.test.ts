@@ -51,7 +51,8 @@ describe('shadow language service semanticClassifications', () => {
        and the `by` key were emitted as unmapped scaffolding, so neither hover nor
        semantic tokens landed on them — only their body uses worked. */
     const BINDINGS = `<script>
-const frames = scope().state<{ n: number; text: string }[]>([])
+import { state } from '@abide/abide/ui/state'
+const frames = state<{ n: number; text: string }[]>([])
 const promise = (async () => ({ status: 'ok' }))()
 </script>
 {#for frame of frames by frame.n}
@@ -100,7 +101,7 @@ const promise = (async () => ({ status: 'ok' }))()
     })
 
     test('maps the {#for} index binding', () => {
-        const source = `<script>\nconst items = scope().state<string[]>([])\n</script>\n{#for item, i of items}<li>{i}:{item}</li>{/for}\n`
+        const source = `<script>\nimport { state } from '@abide/abide/ui/state'\nconst items = state<string[]>([])\n</script>\n{#for item, i of items}<li>{i}:{item}</li>{/for}\n`
         const { service, path } = open(source)
         const declaration = source.indexOf('item, i') + 'item, '.length
         const tokens = service.semanticClassifications(path)

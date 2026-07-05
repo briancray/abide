@@ -22,7 +22,7 @@ beforeAll(() => {
 /*
 The same-name-shadow sentinel for the single-source binding model (ADR-0013, phase 2):
 every block value param — a keyed `each` item, an `await` `then` value, a `snippet` arg —
-is bound under a COLLIDING name with an enclosing `scope().state` of the SAME name. The
+is bound under a COLLIDING name with an enclosing `state` of the SAME name. The
 binding must read the LOCAL value (the loop item / resolved value / call argument), NOT the
 shadowed component signal, on BOTH back-ends — and the server markup must equal the
 serialized client DOM (the congruence hydration rests on). If a back-end ever registered the
@@ -72,13 +72,14 @@ const visibleText = (markup: string): string =>
         .trim()
 
 describe('binding shadow sentinel — block value params shadow an enclosing signal', () => {
-    /* A keyed `each` whose item `as={row}` collides with a component `scope().state` named
+    /* A keyed `each` whose item `as={row}` collides with a component `state` named
        `row`. The row must read the loop item; the outer `row` signal ('OUTER') must not leak. */
     test('keyed each item reads the loop value, not the shadowed component signal', () => {
         const source = `
-            <script>
-                let row = scope().state('OUTER')
-                let rows = scope().state(['a', 'b', 'c'])
+            <script>import { state } from '@abide/abide/ui/state'
+
+                let row = state('OUTER')
+                let rows = state(['a', 'b', 'c'])
             </script>
             <ul>{#for row of rows by row}<li>{row}</li>{/for}</ul>
         `
@@ -95,9 +96,10 @@ describe('binding shadow sentinel — block value params shadow an enclosing sig
        sibling; one that never registered would corrupt the loop. */
     test('sibling-adjacent: the loop shadows its name, the sibling keeps the outer signal', () => {
         const source = `
-            <script>
-                let row = scope().state('OUTER')
-                let rows = scope().state(['a', 'b'])
+            <script>import { state } from '@abide/abide/ui/state'
+
+                let row = state('OUTER')
+                let rows = state(['a', 'b'])
             </script>
             <main><ul>{#for row of rows by row}<li>{row}</li>{/for}</ul><footer>{row}</footer></main>
         `
@@ -108,12 +110,13 @@ describe('binding shadow sentinel — block value params shadow an enclosing sig
         expect(client).toBe(server)
     })
 
-    /* A `snippet` arg `args={label}` collides with a component `scope().state` named `label`.
+    /* A `snippet` arg `args={label}` collides with a component `state` named `label`.
        The body must read the call argument, not the outer signal. */
     test('snippet arg reads the call argument, not the shadowed component signal', () => {
         const source = `
-            <script>
-                let label = scope().state('OUTER')
+            <script>import { state } from '@abide/abide/ui/state'
+
+                let label = state('OUTER')
             </script>
             {#snippet tag(label)}<span>{label}</span>{/snippet}
             <div>{tag('LOCAL')}</div>
@@ -131,10 +134,11 @@ describe('binding shadow sentinel — block value params shadow an enclosing sig
        never registered would read the outer item (or the signal) inside the inner loop. */
     test('nested each: inner item shadows the outer item of the same name, both read locals', () => {
         const source = `
-            <script>
-                let row = scope().state('OUTER')
-                let outer = scope().state(['A', 'B'])
-                let inner = scope().state(['1', '2'])
+            <script>import { state } from '@abide/abide/ui/state'
+
+                let row = state('OUTER')
+                let outer = state(['A', 'B'])
+                let inner = state(['1', '2'])
             </script>
             <ul>{#for row of outer by row}<li>{row}{#for row of inner by row}<i>{row}</i>{/for}</li>{/for}</ul>
         `
@@ -147,12 +151,13 @@ describe('binding shadow sentinel — block value params shadow an enclosing sig
     })
 
     /* Cross-construct collision: an `each` row item and a `snippet` arg share a name, and a
-       component `scope().state` of the same name encloses both. The snippet body must read its
+       component `state` of the same name encloses both. The snippet body must read its
        call argument; the loop must read its item; the outer signal must surface nowhere — the
        row passes its item INTO the snippet, so a leaked shadow would cross the call boundary. */
     test('each item and snippet arg collide on one name; each reads its own local', () => {
         const source = `
-            <script>let item = scope().state('OUTER')</script>
+            <script>import { state } from '@abide/abide/ui/state'
+let item = state('OUTER')</script>
             {#snippet tag(item)}<b>{item}</b>{/snippet}
             <ul>{#for item of ['x', 'y'] by item}<li>{tag(item)}</li>{/for}</ul>
         `
@@ -163,13 +168,14 @@ describe('binding shadow sentinel — block value params shadow an enclosing sig
         expect(client).toBe(server)
     })
 
-    /* A blocking `await … then v` whose `v` collides with a component `scope().state` named
+    /* A blocking `await … then v` whose `v` collides with a component `state` named
        `v`. SSR awaits inline and renders the resolved value; the resolved branch must read the
        local, not the outer signal. (Blocking SSR render is async — await the render.) */
     test('await then value reads the resolved value, not the shadowed component signal', async () => {
         const source = `
-            <script>
-                let v = scope().state('OUTER')
+            <script>import { state } from '@abide/abide/ui/state'
+
+                let v = state('OUTER')
             </script>
             <div>{#await Promise.resolve('LOCAL') then v}<span>{v}</span>{/await}</div>
         `
@@ -192,7 +198,8 @@ describe('binding shadow sentinel — block value params shadow an enclosing sig
        direct codegen assertion — the seam where a wrong-kind registration would surface. */
     test('both back-ends lower a shadowed binding to the local, never the component signal', () => {
         const each = `
-            <script>let row = scope().state('OUTER')\nlet rows = scope().state(['a'])</script>
+            <script>import { state } from '@abide/abide/ui/state'
+let row = state('OUTER')\nlet rows = state(['a'])</script>
             <ul>{#for row of rows by row}<li>{row}</li>{/for}</ul>
         `
         const eachBuild = compileComponent(each)
@@ -205,7 +212,8 @@ describe('binding shadow sentinel — block value params shadow an enclosing sig
         expect(eachSsr).not.toContain('$$model.read("row")')
 
         const snippet = `
-            <script>let label = scope().state('OUTER')</script>
+            <script>import { state } from '@abide/abide/ui/state'
+let label = state('OUTER')</script>
             {#snippet tag(label)}<span>{label}</span>{/snippet}<div>{tag('x')}</div>
         `
         // a snippet arg is a plain local on both sides — read bare, not via the signal.

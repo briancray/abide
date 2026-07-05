@@ -94,8 +94,9 @@ describe('component composition', () => {
         const host = document.createElement('div')
         component(
             `
-            <script>
-                let name = scope().state('world')
+            <script>import { state } from '@abide/abide/ui/state'
+
+                let name = state('world')
                 function change() { name = 'abide' }
             </script>
             <div>
@@ -166,8 +167,9 @@ describe('component composition', () => {
         const host = document.createElement('div')
         component(
             `
-            <script>
-                let name = scope().state('world')
+            <script>import { state } from '@abide/abide/ui/state'
+
+                let name = state('world')
                 function change() { name = 'abide' }
             </script>
             <div>
@@ -251,8 +253,9 @@ describe('spread props', () => {
         `)
         const host = document.createElement('div')
         component(
-            `<script>
-                const props = scope().state({ name: 'world' })
+            `<script>import { state } from '@abide/abide/ui/state'
+
+                const props = state({ name: 'world' })
                 function change() { props = { name: 'abide' } }
              </script>
              <div>

@@ -13,8 +13,8 @@ afterEach(() => {
 })
 
 const SHELL = '<html><head><link rel="stylesheet" href="/_app/client-v1.css" /></head></html>'
-const LEAF =
-    '<script>let n = scope().state(0)</script>\n<button on:click={n++}>{n}</button><style>button{color:red}</style>'
+const LEAF = `<script>import { state } from '@abide/abide/ui/state'
+let n = state(0)</script>\n<button on:click={n++}>{n}</button><style>button{color:red}</style>`
 
 /* A throwaway project tree the stamp can scan: a leaf component (hot-swappable), a
    page (router-mounted → folds into structure), and a plain source file. tsconfig

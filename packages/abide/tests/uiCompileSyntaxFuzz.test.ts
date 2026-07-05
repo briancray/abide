@@ -78,21 +78,28 @@ describe('compileModule — whole components with tricky syntax stay valid', () 
     /* End-to-end: corruption anywhere in the pipeline (desugar, lowerScript, the
        per-expression lowerOnce, the generators) shows up as an unparseable module. */
     const componentCorpus: Record<string, string> = {
-        'aliased import colliding with a prop, used in template': `<script>import { pending as pendingProbe } from 'm'
+        'aliased import colliding with a prop, used in template': `<script>import { state } from '@abide/abide/ui/state'
+import { pending as pendingProbe } from 'm'
 const { query, pending = false } = props()
-const busy = scope().computed(() => pending && pendingProbe(query))</script><i>{busy}</i>`,
-        'optional chaining in an interpolation': `<script>const user = scope().state({})</script><i>{user?.name?.first}</i>`,
-        'optional-chain items in an each': `<script>const data = scope().state({})</script><ul>{#for row of data?.rows ?? [] by row}<li>{row.id}</li>{/for}</ul>`,
-        'destructure with colliding source key in a handler': `<script>const count = scope().state(0)
-const onClick = () => { const { count: c } = window; count(c) }</script><button on:click={onClick}>x</button>`,
-        'computed key referencing a signal': `<script>const k = scope().state('a')
-const obj = scope().computed(() => ({ [k]: 1 }))</script><i>{obj[k]}</i>`,
-        'nullish-coalescing in a binding': `<script>const name = scope().state('')</script><i>{name ?? 'anon'}</i>`,
-        'increment in an event handler': `<script>const n = scope().state(0)</script><button on:click={n++}>count {n}</button>`,
-        'destructured scope primitives used bare': `<script>const { state, computed, linked } = scope()
+const busy = state.computed(() => pending && pendingProbe(query))</script><i>{busy}</i>`,
+        'optional chaining in an interpolation': `<script>import { state } from '@abide/abide/ui/state'
+const user = state({})</script><i>{user?.name?.first}</i>`,
+        'optional-chain items in an each': `<script>import { state } from '@abide/abide/ui/state'
+const data = state({})</script><ul>{#for row of data?.rows ?? [] by row}<li>{row.id}</li>{/for}</ul>`,
+        'destructure with colliding source key in a handler': `<script>import { state } from '@abide/abide/ui/state'
 const count = state(0)
-const draft = linked(() => count)
-const total = computed(() => count + 1)</script><p>{count}{draft}{total}</p>`,
+const onClick = () => { const { count: c } = window; count(c) }</script><button on:click={onClick}>x</button>`,
+        'computed key referencing a signal': `<script>import { state } from '@abide/abide/ui/state'
+const k = state('a')
+const obj = state.computed(() => ({ [k]: 1 }))</script><i>{obj[k]}</i>`,
+        'nullish-coalescing in a binding': `<script>import { state } from '@abide/abide/ui/state'
+const name = state('')</script><i>{name ?? 'anon'}</i>`,
+        'increment in an event handler': `<script>import { state } from '@abide/abide/ui/state'
+const n = state(0)</script><button on:click={n++}>count {n}</button>`,
+        'imported reactive primitives used bare': `<script>import { state } from '@abide/abide/ui/state'
+const count = state(0)
+const draft = state.linked(() => count)
+const total = state.computed(() => count + 1)</script><p>{count}{draft}{total}</p>`,
     }
     for (const [label, source] of Object.entries(componentCorpus)) {
         test(label, () => {

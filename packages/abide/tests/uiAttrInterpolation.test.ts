@@ -96,7 +96,8 @@ describe('attribute interpolation — client merge with directives', () => {
        mirroring the SSR merge. */
     test('interpolated class + class: directive → one merged className effect, no clobbering attr', () => {
         const build = buildOf(
-            `<script>let v = scope().state('big')\nlet on = scope().state(true)</script><div class="card {v}" class:active={on}>x</div>`,
+            `<script>import { state } from '@abide/abide/ui/state'
+let v = state('big')\nlet on = state(true)</script><div class="card {v}" class:active={on}>x</div>`,
         )
         expect(build).toContain('setAttribute("class", [')
         expect(build).toContain(`? "active" : ""`)
@@ -107,7 +108,8 @@ describe('attribute interpolation — client merge with directives', () => {
 
     test('interpolated style + style: directive → one merged style-attribute effect', () => {
         const build = buildOf(
-            `<script>let w = scope().state('10px')\nlet c = scope().state('red')</script><div style="width: {w}" style:color={c}>x</div>`,
+            `<script>import { state } from '@abide/abide/ui/state'
+let w = state('10px')\nlet c = state('red')</script><div style="width: {w}" style:color={c}>x</div>`,
         )
         expect(build).toContain('setAttribute("style", [')
         expect(build).toContain(`"color:" + String(`)
@@ -116,7 +118,8 @@ describe('attribute interpolation — client merge with directives', () => {
 
     test('interpolated class with NO directive stays a plain reactive attr', () => {
         const build = buildOf(
-            `<script>let v = scope().state('big')</script><div class="card {v}">x</div>`,
+            `<script>import { state } from '@abide/abide/ui/state'
+let v = state('big')</script><div class="card {v}">x</div>`,
         )
         expect(build).toContain('attr(')
         expect(build).not.toContain('setAttribute("class", [')
@@ -126,7 +129,8 @@ describe('attribute interpolation — client merge with directives', () => {
 describe('attribute interpolation — type-check shadow', () => {
     test('each interpolated expression is emitted as a checkable statement', () => {
         const { code } = compileShadow(
-            `<script>let id = scope().state(1)</script><a href="/u/{id}/{id.toFixed(0)}">x</a>`,
+            `<script>import { state } from '@abide/abide/ui/state'
+let id = state(1)</script><a href="/u/{id}/{id.toFixed(0)}">x</a>`,
         )
         expect(code).toContain('(id)')
         expect(code).toContain('(id.toFixed(0))')
@@ -136,7 +140,8 @@ describe('attribute interpolation — type-check shadow', () => {
 describe('attribute interpolation — SSR', () => {
     test('renders the resolved interpolated value into the attribute', () => {
         const html = renderSSR(`
-            <script>let id = scope().state(7)</script>
+            <script>import { state } from '@abide/abide/ui/state'
+let id = state(7)</script>
             <a href="/u/{id}/profile">x</a>
         `)
         expect(html).toBe('<a href="/u/7/profile">x</a>')
@@ -144,9 +149,10 @@ describe('attribute interpolation — SSR', () => {
 
     test('an interpolated class merges with class: directives into one attribute', () => {
         const html = renderSSR(`
-            <script>
-                let variant = scope().state('big')
-                let on = scope().state(true)
+            <script>import { state } from '@abide/abide/ui/state'
+
+                let variant = state('big')
+                let on = state(true)
             </script>
             <div class="card {variant}" class:active={on}>x</div>
         `)
@@ -155,9 +161,10 @@ describe('attribute interpolation — SSR', () => {
 
     test('an interpolated style merges with style: directives into one attribute', () => {
         const html = renderSSR(`
-            <script>
-                let w = scope().state('10px')
-                let c = scope().state('red')
+            <script>import { state } from '@abide/abide/ui/state'
+
+                let w = state('10px')
+                let c = state('red')
             </script>
             <div style="width: {w}" style:color={c}>x</div>
         `)

@@ -182,11 +182,12 @@ const contexts: Array<{ name: string; wrap: (inner: Fragment) => Fragment }> = [
 ]
 
 const SCRIPT = `
-    <script>
-        let active = scope().state(true)
-        let inactive = scope().state(false)
-        let label = scope().state('hi')
-        let items = scope().state(['m', 'n'])
+    <script>import { state } from '@abide/abide/ui/state'
+
+        let active = state(true)
+        let inactive = state(false)
+        let label = state('hi')
+        let items = state(['m', 'n'])
     </script>
 `
 

@@ -69,8 +69,9 @@ function renderWithModel(source: string, initial: unknown): { host: HTMLElement;
 describe('compileComponent — end to end', () => {
     test('renders interpolated text from state', () => {
         const host = render(`
-            <script>
-                let name = scope().state('ada')
+            <script>import { state } from '@abide/abide/ui/state'
+
+                let name = state('ada')
             </script>
             <p>Hello {name}</p>
         `)
@@ -91,8 +92,9 @@ describe('compileComponent — end to end', () => {
 
     test('a counter button updates reactively through the lowered patch', () => {
         const host = render(`
-            <script>
-                let count = scope().state(0)
+            <script>import { state } from '@abide/abide/ui/state'
+
+                let count = state(0)
                 function increment() { count += 1 }
             </script>
             <button onclick={increment}>+</button>
@@ -109,7 +111,8 @@ describe('compileComponent — end to end', () => {
 
     test('compiled output uses hoisted cells for the template read', () => {
         const body = compileComponent(`
-            <script>let count = scope().state(0)</script>
+            <script>import { state } from '@abide/abide/ui/state'
+let count = state(0)</script>
             <p>{count}</p>
         `)
         expect(body).toContain('$$model.cell("count")')
@@ -139,11 +142,12 @@ describe('compileComponent — end to end', () => {
 
     test('compileModule emits a mountable ES module with abide/ui imports', () => {
         const { code: module } = compileModule(`
-            <script>let count = scope().state(0)</script>
+            <script>import { state } from '@abide/abide/ui/state'
+let count = state(0)</script>
             <p>{count}</p>
         `)
         expect(module).toContain("import { mount as $$mount } from '@abide/abide/ui/dom/mount'")
-        expect(module).toContain("import { scope as $$scope } from '@abide/abide/ui/scope'")
+        expect(module).toContain("import { scope as $$scope } from '@abide/abide/ui/currentScope'")
         expect(module).toContain('export default function component(host, $props)')
         expect(module).toContain('$$mount(host, build, $props)')
         expect(module).toContain('component.build = build')
@@ -248,9 +252,10 @@ const { option, ...rest } = props<Props>()</script><i {...rest}>{option}</i>`,
        signal rewrite — the specifier is a binding name, not a value read. */
     test('an aliased import surviving a colliding signal binding', () => {
         const { code: module } = compileModule(
-            `<script>import { pending as pendingProbe } from '@abide/abide/shared/pending'
+            `<script>import { state } from '@abide/abide/ui/state'
+import { pending as pendingProbe } from '@abide/abide/shared/pending'
 const { query, pending = false } = props()
-const busy = scope().computed(() => pending && pendingProbe(query))</script><i>{busy}</i>`,
+const busy = state.computed(() => pending && pendingProbe(query))</script><i>{busy}</i>`,
         )
         expect(module).toContain(
             "import { pending as pendingProbe } from '@abide/abide/shared/pending'",
@@ -264,7 +269,8 @@ const busy = scope().computed(() => pending && pendingProbe(query))</script><i>{
        literal (the substring regex used to over-include those). */
     test('runtime imports cover what the body uses, and exclude string-literal matches', () => {
         const { code: module } = compileModule(
-            `<script>const rows = scope().state([1, 2])</script><ul>{#for r of rows by r}<li>{r}</li>{/for}</ul>`,
+            `<script>import { state } from '@abide/abide/ui/state'
+const rows = state([1, 2])</script><ul>{#for r of rows by r}<li>{r}</li>{/for}</ul>`,
         )
         // the each block needs its helper imported
         expect(module).toContain("from '@abide/abide/ui/dom/each'")
@@ -352,7 +358,8 @@ const label = 'hi'</script><i>{label}</i>`,
        a sanitized authored label (`data-x` → `attr_data_x`); minify strips it in production. */
     test('reactive bindings emit named thunks for legible stack frames', () => {
         const body = compileComponent(
-            `<script>\nlet name = scope().state('')\n</script>\n<div title={name}><span>{name}</span><input bind:value={name}/></div>`,
+            `<script>import { state } from '@abide/abide/ui/state'
+\nlet name = state('')\n</script>\n<div title={name}><span>{name}</span><input bind:value={name}/></div>`,
         )
         expect(body).toContain('attr(el1, "title", function attr_title() {')
         expect(body).toContain('appendText(el2, function text() {')
@@ -398,7 +405,8 @@ const label = 'hi'</script><i>{label}</i>`,
        bare — never wrapped. */
     test('a method call on a doc read lowers to the guarded `readCall`', () => {
         const body = compileComponent(
-            `<script>\nlet draft = scope().state("")\nfunction go() {\n  draft.trim()\n  draft.items.map(x => x)\n  draft?.toUpperCase()\n}\n</script>\n<p>{draft}</p>`,
+            `<script>import { state } from '@abide/abide/ui/state'
+\nlet draft = state("")\nfunction go() {\n  draft.trim()\n  draft.items.map(x => x)\n  draft?.toUpperCase()\n}\n</script>\n<p>{draft}</p>`,
         )
         // Non-optional calls carry the path and member into the guard…
         expect(body).toContain('readCall($$model.read("draft"), "draft", "trim", [])')
@@ -418,7 +426,8 @@ const label = 'hi'</script><i>{label}</i>`,
 
     test('a nested local and a function param shadow state/computed signals', () => {
         const body = compileComponent(
-            `<script>\nlet count = scope().state(0)\nconst total = scope().computed(() => count + 1)\nfunction reset(items) {\n  return items.map(count => count + total)\n}\nfunction nested() {\n  const count = 5\n  return count\n}\n</script>\n<div>{count}</div>`,
+            `<script>import { state } from '@abide/abide/ui/state'
+\nlet count = state(0)\nconst total = state.computed(() => count + 1)\nfunction reset(items) {\n  return items.map(count => count + total)\n}\nfunction nested() {\n  const count = 5\n  return count\n}\n</script>\n<div>{count}</div>`,
         )
         // The param `count` shadows the state; only the un-shadowed `total` lowers.
         expect(body).toContain('items.map(count => count + total())')

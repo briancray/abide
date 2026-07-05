@@ -55,12 +55,14 @@ async function streamToString(render: () => SsrRender | Promise<SsrRender>): Pro
 
 describe('child-component await blocks join the page SSR stream', () => {
     const Child = component(`
-        <script>let inner = scope().state(Promise.resolve('C'))</script>
+        <script>import { state } from '@abide/abide/ui/state'
+let inner = state(Promise.resolve('C'))</script>
         {#await inner}<p>child-pending</p>{:then c}<span>child:{c}</span>{/await}
     `)
     const Parent = component(
         `
-        <script>let top = scope().state(Promise.resolve('T'))</script>
+        <script>import { state } from '@abide/abide/ui/state'
+let top = state(Promise.resolve('T'))</script>
         <div>
             {#await top}<p>top-pending</p>{:then t}<b>top:{t}</b>{/await}
             <Child />

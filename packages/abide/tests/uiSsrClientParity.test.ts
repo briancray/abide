@@ -27,10 +27,11 @@ that lets the client adopt the server's HTML.
 describe('SSR ↔ client parity', () => {
     test('server HTML equals serialized client DOM for the same component', () => {
         const source = `
-            <script>
-                let count = scope().state(3)
-                let items = scope().state(['x', 'y', 'z'])
-                let label = scope().computed(() => 'count ' + count)
+            <script>import { state } from '@abide/abide/ui/state'
+
+                let count = state(3)
+                let items = state(['x', 'y', 'z'])
+                let label = state.computed(() => 'count ' + count)
             </script>
             <div class="box">
                 <h1>{label}</h1>
@@ -117,7 +118,8 @@ describe('SSR ↔ client parity', () => {
 
     test('interpolated attribute renders congruently on both sides', () => {
         const { server, client } = bothSides(
-            `<script>let id = scope().state(7)</script><a href="/u/{id}/profile">x</a>`,
+            `<script>import { state } from '@abide/abide/ui/state'
+let id = state(7)</script><a href="/u/{id}/profile">x</a>`,
         )
         expect(server).toBe('<a href="/u/7/profile">x</a>')
         expect(client).toBe(server)
@@ -125,7 +127,8 @@ describe('SSR ↔ client parity', () => {
 
     test('interpolated class merged with a class: directive is congruent', () => {
         const { server, client } = bothSides(
-            `<script>let v = scope().state('big')\nlet on = scope().state(true)</script><div class="card {v}" class:active={on}>x</div>`,
+            `<script>import { state } from '@abide/abide/ui/state'
+let v = state('big')\nlet on = state(true)</script><div class="card {v}" class:active={on}>x</div>`,
         )
         expect(server).toBe('<div class="card big active">x</div>')
         expect(client).toBe(server)
@@ -133,7 +136,8 @@ describe('SSR ↔ client parity', () => {
 
     test('interpolated style merged with a style: directive is congruent', () => {
         const { server, client } = bothSides(
-            `<script>let w = scope().state('10px')\nlet c = scope().state('red')</script><div style="width: {w}" style:color={c}>x</div>`,
+            `<script>import { state } from '@abide/abide/ui/state'
+let w = state('10px')\nlet c = state('red')</script><div style="width: {w}" style:color={c}>x</div>`,
         )
         expect(server).toBe('<div style="width: 10px;color:red">x</div>')
         expect(client).toBe(server)

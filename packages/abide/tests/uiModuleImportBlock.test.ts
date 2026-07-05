@@ -17,9 +17,10 @@ describe('compileModule emits every runtime helper it references', () => {
     /* A `${…}` substitution in an attr handler precedes a `bind:value` (emits `effect`),
        which precedes a child mount (emits `mountChild`) — the exact ordering that lost
        the trailing imports. */
-    const source = `<script>
+    const source = `<script>import { state } from '@abide/abide/ui/state'
+
 import Child from './Child.abide'
-const id = scope().state('1')
+const id = state('1')
 </script>
 <a href={\`/p?ts=\${Date.now()}\`}>link</a>
 <input bind:value={id} />

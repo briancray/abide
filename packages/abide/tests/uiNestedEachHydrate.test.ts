@@ -28,12 +28,13 @@ beforeAll(() => {
    content. The skeleton owns two nav-level anchors (the outer each, the `if`); the
    inner each's anchors belong to the per-row div skeletons. */
 const SRC = `
-<script>
+<script>import { state } from '@abide/abide/ui/state'
+
 const groups = [
   { title: 'A', links: ['a1','a2'] },
   { title: 'B', links: ['b1','b2'] },
 ]
-let flag = scope().state(true)
+let flag = state(true)
 </script>
 <nav>
   {#for group of groups by group.title}
@@ -111,8 +112,9 @@ describe('nested each hydrate', () => {
        inline block content or `class` binds to the first row's <i> instead of the button. */
     test('resolves an element hole positioned after a block (skips inline block elements)', () => {
         const src = `
-            <script>
-            let label = scope().state('go')
+            <script>import { state } from '@abide/abide/ui/state'
+
+            let label = state('go')
             </script>
             <section>
               {#for n of [1,2] by n}<i>{n}</i>{/for}

@@ -67,7 +67,8 @@ describe('SSR component composition', () => {
             <span>Hi {label}</span>
         `)
         const parentSource = `
-            <script>let name = scope().state('world')</script>
+            <script>import { state } from '@abide/abide/ui/state'
+let name = state('world')</script>
             <div><Greeting label={name} /></div>
         `
 
@@ -96,7 +97,8 @@ describe('SSR component composition', () => {
            control-flow block, the exact shape that leaked. */
         const Box = component(`<div class="box">{children()}</div>`)
         const parentSource = `
-            <script>let active = scope().state(true)</script>
+            <script>import { state } from '@abide/abide/ui/state'
+let active = state(true)</script>
             <section class={active ? 'on' : 'off'}>
                 <Box>
                     {#if active}<span>shown</span>{/if}
@@ -124,7 +126,8 @@ describe('SSR component composition', () => {
             <input value={value} />
         `)
         const parentSource = `
-            <script>let q = scope().state('hi')</script>
+            <script>import { state } from '@abide/abide/ui/state'
+let q = state('hi')</script>
             <div><Input value={q} /></div>
         `
 

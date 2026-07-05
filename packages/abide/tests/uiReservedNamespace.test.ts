@@ -35,7 +35,8 @@ describe('reserved $$ namespace frees helper names for user variables', () => {
 
     test('user vars named `on` and `attr` coexist with on:click and attr bindings', () => {
         const host = mount(
-            `<script>const on = 'ON'; const attr = 'A'; let hits = scope().state(0)</script>` +
+            `<script>import { state } from '@abide/abide/ui/state'
+const on = 'ON'; const attr = 'A'; let hits = state(0)</script>` +
                 `<button on:click={hits++} title={attr}>{on}-{hits}</button>`,
         )
         const button = host.childNodes[0] as {
@@ -49,14 +50,17 @@ describe('reserved $$ namespace frees helper names for user variables', () => {
 
     test('a user function named `effect` does not shadow the reactive effect helper', () => {
         const host = mount(
-            `<script>function effect() { return 'fn' }\nlet c = scope().state(2)</script><p>{effect()}-{c}</p>`,
+            `<script>import { state } from '@abide/abide/ui/state'
+import { effect } from '@abide/abide/ui/effect'
+function effect() { return 'fn' }\nlet c = state(2)</script><p>{effect()}-{c}</p>`,
         )
         expect(host.textContent).toContain('fn-2')
     })
 
     test('a user var named `model` coexists with reactive state (the doc base is $$model)', () => {
         const host = mount(
-            `<script>const model = 'mine'\nlet n = scope().state(7)</script><p>{model}-{n}</p>`,
+            `<script>import { state } from '@abide/abide/ui/state'
+const model = 'mine'\nlet n = state(7)</script><p>{model}-{n}</p>`,
         )
         expect(host.textContent).toContain('mine-7')
     })

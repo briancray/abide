@@ -70,14 +70,16 @@ function mountClient(source: string): { host: HTMLElement; $$model: ReturnType<t
 }
 
 const CHECKBOXES = `
-    <script>let toppings = scope().state(['cheese', 'olive'])</script>
+    <script>import { state } from '@abide/abide/ui/state'
+let toppings = state(['cheese', 'olive'])</script>
     {#for t of ['cheese', 'mushroom', 'olive'] by t}
         <input type="checkbox" value={t} bind:group={toppings}>
     {/for}
 `
 
 const RADIOS = `
-    <script>let size = scope().state('medium')</script>
+    <script>import { state } from '@abide/abide/ui/state'
+let size = state('medium')</script>
     {#for s of ['small', 'medium', 'large'] by s}
         <input type="radio" value={s} bind:group={size}>
     {/for}
@@ -115,7 +117,8 @@ describe('bind:group SSR', () => {
 
     test('bind:checked renders as a boolean attribute, absent when false', () => {
         const html = renderSSR(`
-            <script>let on = scope().state(false)</script>
+            <script>import { state } from '@abide/abide/ui/state'
+let on = state(false)</script>
             <input type="checkbox" bind:checked={on}>
         `)
         expect(html).toBe('<input type="checkbox">')
@@ -162,7 +165,8 @@ write goes somewhere other than the read target (the replacement for the removed
 bodies lower like any expression. Binding a read-only `computed` bare is a compile error.
 */
 const ACCESSOR = `
-    <script>let celsius = scope().state(0)</script>
+    <script>import { state } from '@abide/abide/ui/state'
+let celsius = state(0)</script>
     <input
         type="number"
         bind:value={{
@@ -186,9 +190,10 @@ describe('bind:value accessor {get,set}', () => {
 
     test('binding a read-only computed is a compile error pointing at the accessor', () => {
         const source = `
-            <script>
-                let celsius = scope().state(0)
-                const fahrenheit = scope().computed(() => (celsius * 9) / 5 + 32)
+            <script>import { state } from '@abide/abide/ui/state'
+
+                let celsius = state(0)
+                const fahrenheit = state.computed(() => (celsius * 9) / 5 + 32)
             </script>
             <input bind:value={fahrenheit}>
         `

@@ -44,7 +44,8 @@ function decode(data: number[]) {
 }
 
 describe('componentSemanticTokens', () => {
-    const SOURCE = `<script>\nconst show = scope().state(true)\n</script>\n{#if show}<p>hi</p>{/if}\n`
+    const SOURCE = `<script>import { state } from '@abide/abide/ui/state'
+\nconst show = state(true)\n</script>\n{#if show}<p>hi</p>{/if}\n`
 
     test('emits a keyword token for the block and a token for the expression', () => {
         const { service, path } = open(SOURCE)

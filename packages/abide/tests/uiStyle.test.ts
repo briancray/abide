@@ -53,7 +53,8 @@ const RUNTIME = {
 }
 
 const STYLED = `
-    <script>let n = scope().state(7)</script>
+    <script>import { state } from '@abide/abide/ui/state'
+let n = state(7)</script>
     <main>
         <h1>title</h1>
         <p class="muted">{n}</p>

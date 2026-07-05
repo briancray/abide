@@ -51,28 +51,31 @@ describe('shadow language service quickInfo', () => {
        hovering a reactive var shows its projected value type. Regression: only the
        initializer span was mapped, so `count` at its declaration had no hover. */
     test('reports the value type when hovering a reactive binding at its declaration', () => {
-        const source = `<script>\nconst count = scope().state(0)\nconst doubled = scope().computed(() => count * 2)\n</script>\n<p>{count}{doubled}</p>\n`
+        const source = `<script>\nimport { state } from '@abide/abide/ui/state'\nconst count = state(0)\nconst doubled = state.computed(() => count * 2)\n</script>\n<p>{count}{doubled}</p>\n`
         const { service, path } = open(source)
 
-        const countInfo = service.quickInfo(path, source.indexOf('count = scope'))
+        const countInfo = service.quickInfo(path, source.indexOf('count = state'))
         expect(countInfo).toBeDefined()
         expect(countInfo!.text).toContain('number')
         expect(source.slice(countInfo!.start, countInfo!.start + countInfo!.length)).toBe('count')
 
-        const doubledInfo = service.quickInfo(path, source.indexOf('doubled = scope'))
+        const doubledInfo = service.quickInfo(path, source.indexOf('doubled = state'))
         expect(doubledInfo).toBeDefined()
         expect(doubledInfo!.text).toContain('number')
     })
 
     /* The reactive callee at its CALL site is dropped from the shadow (the rewrite
-       keeps only the binding name + initializer), so hovering `state` in
-       `state(0)` previously had no quick-info — only the destructured `state` did.
-       The callee identifier is now mapped to its shadow reference. */
+       keeps only the binding name + initializer), so hovering `state` in `state(0)`
+       previously had no quick-info. The callee identifier is now mapped to its shadow
+       reference, so the imported `state` / `state.computed` callees resolve. */
     test('reports the primitive signature when hovering the callee at a call site', () => {
-        const source = `<script>\nconst { state, computed } = scope()\nlet count = state(0)\nconst doubled = computed(() => count * 2)\n</script>\n<p>{count}{doubled}</p>\n`
+        const source = `<script>\nimport { state } from '@abide/abide/ui/state'\nlet count = state(0)\nconst doubled = state.computed(() => count * 2)\n</script>\n<p>{count}{doubled}</p>\n`
         const { service, path } = open(source)
 
-        const stateInfo = service.quickInfo(path, source.indexOf('state(0)'))
+        const stateInfo = service.quickInfo(
+            path,
+            source.indexOf('count = state') + 'count = '.length,
+        )
         expect(stateInfo).toBeDefined()
         expect(source.slice(stateInfo!.start, stateInfo!.start + stateInfo!.length)).toBe('state')
 

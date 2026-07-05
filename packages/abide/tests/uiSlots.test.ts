@@ -64,7 +64,8 @@ function component(
 describe('slots (component children)', () => {
     const Card = `<div class="card">{children()}</div>`
     const parent = `
-        <script>let name = scope().state('world')</script>
+        <script>import { state } from '@abide/abide/ui/state'
+let name = state('world')</script>
         <Card>Hello {name}!</Card>
     `
 

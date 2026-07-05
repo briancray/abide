@@ -38,7 +38,8 @@ type Fixture = {
 const FIXTURES: Fixture[] = [
     {
         name: 'text interpolation',
-        source: `<script>let count = scope().state(1)</script><p>{count}</p>`,
+        source: `<script>import { state } from '@abide/abide/ui/state'
+let count = state(1)</script><p>{count}</p>`,
         build: 'render',
         ssr: 'render',
         loweredBoth: 'model.read("count")',
@@ -51,74 +52,85 @@ const FIXTURES: Fixture[] = [
     },
     {
         name: 'expression attribute',
-        source: `<script>let count = scope().state(1)</script><div title={count}></div>`,
+        source: `<script>import { state } from '@abide/abide/ui/state'
+let count = state(1)</script><div title={count}></div>`,
         build: 'render',
         ssr: 'render',
         loweredBoth: 'model.read("count")',
     },
     {
         name: 'interpolated attribute',
-        source: `<script>let id = scope().state(1)</script><a href="/u/{id}">x</a>`,
+        source: `<script>import { state } from '@abide/abide/ui/state'
+let id = state(1)</script><a href="/u/{id}">x</a>`,
         build: 'render',
         ssr: 'render',
         loweredBoth: 'model.read("id")',
     },
     {
         name: 'event handler (build-only lowering)',
-        source: `<script>let count = scope().state(1)</script><button onclick={count = 2}>x</button>`,
+        source: `<script>import { state } from '@abide/abide/ui/state'
+let count = state(1)</script><button onclick={count = 2}>x</button>`,
         build: 'render',
         ssr: 'render',
         loweredBuildOnly: 'model.replace("count"',
     },
     {
         name: 'two-way bind',
-        source: `<script>let v = scope().state('')</script><input bind:value={v} />`,
+        source: `<script>import { state } from '@abide/abide/ui/state'
+let v = state('')</script><input bind:value={v} />`,
         build: 'render',
         ssr: 'render',
     },
     {
         name: 'group bind',
-        source: `<script>let choice = scope().state('a')</script><input type="radio" bind:group={choice} value="a" />`,
+        source: `<script>import { state } from '@abide/abide/ui/state'
+let choice = state('a')</script><input type="radio" bind:group={choice} value="a" />`,
         build: 'render',
         ssr: 'render',
     },
     {
         name: 'if',
-        source: `<script>let count = scope().state(1)</script>{#if count}<p>x</p>{/if}`,
+        source: `<script>import { state } from '@abide/abide/ui/state'
+let count = state(1)</script>{#if count}<p>x</p>{/if}`,
         build: 'render',
         ssr: 'render',
         loweredBoth: 'model.read("count")',
     },
     {
         name: 'switch / case',
-        source: `<script>let k = scope().state('a')</script>{#switch k}{:case 'a'}<p>A</p>{/switch}`,
+        source: `<script>import { state } from '@abide/abide/ui/state'
+let k = state('a')</script>{#switch k}{:case 'a'}<p>A</p>{/switch}`,
         build: 'render',
         ssr: 'render',
         loweredBoth: 'model.read("k")',
     },
     {
         name: 'each (sync)',
-        source: `<script>let items = scope().state([1, 2])</script>{#for it of items by it}<li>{it}</li>{/for}`,
+        source: `<script>import { state } from '@abide/abide/ui/state'
+let items = state([1, 2])</script>{#for it of items by it}<li>{it}</li>{/for}`,
         build: 'render',
         ssr: 'render',
         loweredBoth: 'model.read("items")',
     },
     {
         name: 'each (async) — SSR drops the rows',
-        source: `<script>let stream = scope().state([])</script>{#for await n of stream by n}<li>{n}</li>{/for}`,
+        source: `<script>import { state } from '@abide/abide/ui/state'
+let stream = state([])</script>{#for await n of stream by n}<li>{n}</li>{/for}`,
         build: 'render',
         ssr: 'empty',
     },
     {
         name: 'await (streaming)',
-        source: `<script>let p = scope().state(Promise.resolve(1))</script>{#await p}<span>loading</span>{:then v}<b>{v}</b>{/await}`,
+        source: `<script>import { state } from '@abide/abide/ui/state'
+let p = state(Promise.resolve(1))</script>{#await p}<span>loading</span>{:then v}<b>{v}</b>{/await}`,
         build: 'render',
         ssr: 'render',
         loweredBoth: 'model.read("p")',
     },
     {
         name: 'await (blocking)',
-        source: `<script>let p = scope().state(Promise.resolve(1))</script>{#await p then v}<b>{v}</b>{/await}`,
+        source: `<script>import { state } from '@abide/abide/ui/state'
+let p = state(Promise.resolve(1))</script>{#await p then v}<b>{v}</b>{/await}`,
         build: 'render',
         ssr: 'render',
         loweredBoth: 'model.read("p")',
@@ -149,7 +161,7 @@ const FIXTURES: Fixture[] = [
     },
     {
         name: 'nested script in element subtree',
-        source: `<div><script>let local = scope().state(1)</script><p>{local}</p></div>`,
+        source: `<div><script>let local = state(1)</script><p>{local}</p></div>`,
         build: 'render',
         ssr: 'render',
     },

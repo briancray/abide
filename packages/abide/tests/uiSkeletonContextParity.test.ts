@@ -90,7 +90,8 @@ describe('skeleton-context parity across fresh-context boundaries', () => {
         {
             name: 'component slot content with a control-flow block',
             source: `
-                <script>let active = scope().state(true)</script>
+                <script>import { state } from '@abide/abide/ui/state'
+let active = state(true)</script>
                 <section class={active ? 'on' : 'off'}>
                     <Box>{#if active}<span>shown</span>{/if}</Box>
                 </section>`,
@@ -98,7 +99,8 @@ describe('skeleton-context parity across fresh-context boundaries', () => {
         {
             name: 'component slot content with interleaved reactive text',
             source: `
-                <script>let active = scope().state(true)</script>
+                <script>import { state } from '@abide/abide/ui/state'
+let active = state(true)</script>
                 <section class={active ? 'on' : 'off'}>
                     <Box><b>x</b>{active}<b>y</b></Box>
                 </section>`,
@@ -106,7 +108,8 @@ describe('skeleton-context parity across fresh-context boundaries', () => {
         {
             name: 'nested: control-flow branch holding a component whose slot has a block',
             source: `
-                <script>let active = scope().state(true)</script>
+                <script>import { state } from '@abide/abide/ui/state'
+let active = state(true)</script>
                 <section class={active ? 'on' : 'off'}>
                     {#if active}
                         <Box>{#if active}<span>deep</span>{/if}</Box>
@@ -131,7 +134,8 @@ describe('skeleton-context parity across fresh-context boundaries', () => {
            it: the desync guard throws on any anchor mismatch, so a clean adopt proves the
            snippet body's anchors agree. */
         const source = `
-            <script>let active = scope().state(true)</script>
+            <script>import { state } from '@abide/abide/ui/state'
+let active = state(true)</script>
             <section class={active ? 'on' : 'off'}>
                 {#snippet row}{#if active}<span>x</span>{/if}{/snippet}
                 {row()}
@@ -159,7 +163,8 @@ describe('skeleton-context parity across fresh-context boundaries', () => {
         /* The fallback (the `{:else}` taken when the parent passes no children) is its own
            fresh context inside the child's skeletonable `<aside>`. */
         const Panel = `
-            <script>let open = scope().state(true)</script>
+            <script>import { state } from '@abide/abide/ui/state'
+let open = state(true)</script>
             <aside class={open ? 'open' : 'shut'}>
                 {#if children}{children()}{:else}{#if open}<span>fallback</span>{/if}{/if}
             </aside>`

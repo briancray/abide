@@ -22,10 +22,11 @@ function render(source: string): { html: string; state: unknown } {
 describe('compileSSR — server render to string', () => {
     test('renders interpolation, list, and conditional to HTML; serializes state', () => {
         const result = render(`
-            <script>
-                let count = scope().state(2)
-                let items = scope().state(['a', 'b'])
-                let label = scope().computed(() => 'n=' + count)
+            <script>import { state } from '@abide/abide/ui/state'
+
+                let count = state(2)
+                let items = state(['a', 'b'])
+                let label = state.computed(() => 'n=' + count)
             </script>
             <button onclick={() => count += 1}>+</button>
             <p>{label}</p>
@@ -46,9 +47,11 @@ describe('compileSSR — server render to string', () => {
 
     test('scope().effect is stripped from the SSR body (effects are client-only)', () => {
         const source = `
-            <script>
-                let count = scope().state(0)
-                scope().effect(() => {
+            <script>import { state } from '@abide/abide/ui/state'
+import { effect } from '@abide/abide/ui/effect'
+
+                let count = state(0)
+                effect(() => {
                     throw new Error('effects must not run during SSR')
                 })
             </script>
@@ -62,7 +65,8 @@ describe('compileSSR — server render to string', () => {
 
     test('a falsy if renders an empty range', () => {
         const result = render(`
-            <script>let show = scope().state(false)</script>
+            <script>import { state } from '@abide/abide/ui/state'
+let show = state(false)</script>
             {#if show}<span>hi</span>{/if}
         `)
         // the `when` range markers are always present; the false branch is empty
@@ -71,7 +75,8 @@ describe('compileSSR — server render to string', () => {
 
     test('dynamic values are HTML-escaped', () => {
         const result = render(`
-            <script>let name = scope().state('<b>&"')</script>
+            <script>import { state } from '@abide/abide/ui/state'
+let name = state('<b>&"')</script>
             <p>{name}</p>
         `)
         expect(result.html).toBe('<p>&lt;b&gt;&amp;&quot;</p>')
@@ -79,7 +84,8 @@ describe('compileSSR — server render to string', () => {
 
     test('bind:value renders the current value as an attribute', () => {
         const result = render(`
-            <script>let draft = scope().state('hello')</script>
+            <script>import { state } from '@abide/abide/ui/state'
+let draft = state('hello')</script>
             <input bind:value={draft}>
         `)
         expect(result.html).toBe('<input value="hello">')
@@ -87,12 +93,14 @@ describe('compileSSR — server render to string', () => {
 
     test('a dynamic attribute follows present/absent boolean semantics', () => {
         const off = render(`
-            <script>let busy = scope().state(false)</script>
+            <script>import { state } from '@abide/abide/ui/state'
+let busy = state(false)</script>
             <button disabled={busy}>go</button>
         `)
         expect(off.html).toBe('<button>go</button>') // false → attribute omitted, not disabled="false"
         const on = render(`
-            <script>let busy = scope().state(true)</script>
+            <script>import { state } from '@abide/abide/ui/state'
+let busy = state(true)</script>
             <button disabled={busy}>go</button>
         `)
         expect(on.html).toBe('<button disabled>go</button>') // true → bare attribute

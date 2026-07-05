@@ -69,7 +69,8 @@ describe('await block: disposed-while-in-flight settle', () => {
         const slow = () => new Promise<string>((resolve) => (resolveIt = resolve))
         const Comp = component(
             `
-            <script>let show = scope().state(true)</script>
+            <script>import { state } from '@abide/abide/ui/state'
+let show = state(true)</script>
             {#if show}{#await slow() then value}<span>{value}</span>{/await}{/if}
             <button onclick={() => { show = false }}>toggle</button>
         `,
@@ -97,7 +98,8 @@ describe('await block: disposed-while-in-flight settle', () => {
         const inner = () => new Promise<string>((resolve) => (resolveInner = resolve))
         const Comp = component(
             `
-            <script>let show = scope().state(true)</script>
+            <script>import { state } from '@abide/abide/ui/state'
+let show = state(true)</script>
             {#if show}
                 {#await outer() then o}<b>{o}</b>{#await inner() then i}<span>{i}</span>{/await}{/await}
             {/if}

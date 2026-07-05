@@ -22,9 +22,10 @@ beforeAll(() => {
 /* A page with deep fully-static subtrees (the nav, the feature list, the footer)
    plus a couple of dynamic holes — the shape static-template cloning targets. */
 const PAGE = `
-    <script>
-        let title = scope().state('Reference')
-        let count = scope().state(3)
+    <script>import { state } from '@abide/abide/ui/state'
+
+        let title = state('Reference')
+        let count = state(3)
     </script>
     <main class="page">
         <header>

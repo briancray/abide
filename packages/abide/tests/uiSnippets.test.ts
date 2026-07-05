@@ -66,7 +66,8 @@ const serialize = (host: unknown): string =>
 describe('snippets ({#snippet name(args)} called like a function)', () => {
     /* A snippet that closes over the component scope (`prefix`) and takes an arg. */
     const source = `
-        <script>let prefix = scope().state('#')</script>
+        <script>import { state } from '@abide/abide/ui/state'
+let prefix = state('#')</script>
         {#snippet item(label)}<li>{prefix}{label}</li>{/snippet}
         <ul>{item('a')}{item('b')}</ul>
     `
@@ -148,7 +149,8 @@ describe('snippets ({#snippet name(args)} called like a function)', () => {
        signal value on both sides (congruent but wrong). */
     test('an arg named like a component state shadows the state', async () => {
         const src = `
-            <script>let item = scope().state('STATE')</script>
+            <script>import { state } from '@abide/abide/ui/state'
+let item = state('STATE')</script>
             {#snippet row(item)}<b>{item}</b>{/snippet}
             <div>{row('ARG')}</div>
         `
@@ -172,7 +174,8 @@ describe('snippets passed across components', () => {
        PARENT's scope. */
     const List = `<script>const { item } = props()</script><ul>{item('x')}{item('y')}</ul>`
     const parent = `
-        <script>let prefix = scope().state('•')</script>
+        <script>import { state } from '@abide/abide/ui/state'
+let prefix = state('•')</script>
         {#snippet row(label)}<li>{prefix}{label}</li>{/snippet}
         <List item={row} />
     `

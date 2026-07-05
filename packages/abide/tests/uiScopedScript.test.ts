@@ -66,7 +66,7 @@ function run(source: string, host: Element, $$model: unknown, mode: 'mount' | 'h
 describe('scoped <script> in a control-flow branch', () => {
     /* An `if` branch declares a PLAIN local signal seeded from in-scope doc data;
        its markup auto-derefs the binding, like a `computed`. */
-    const IF = `<main>{#if $$model.on}<script>let n = scope().state($$model.base)</script><p>{n}</p><button onclick={() => (n = n + 1)}>+</button>{/if}</main>`
+    const IF = `<main>{#if $$model.on}<script>let n = state($$model.base)</script><p>{n}</p><button onclick={() => (n = n + 1)}>+</button>{/if}</main>`
 
     test('SSR renders the branch-local signal seeded from doc data', () => {
         expect(ssr(IF, doc({ on: true, base: 5 })).html).toBe(
@@ -118,7 +118,7 @@ describe('scoped <script> in a control-flow branch', () => {
     })
 
     test('a switch case carries its own scoped signal', () => {
-        const SWITCH = `<main>{#switch $$model.k}{:case 'a'}<script>let label = scope().state($$model.base + '!')</script><span>{label}</span>{:default}<b>?</b>{/switch}</main>`
+        const SWITCH = `<main>{#switch $$model.k}{:case 'a'}<script>let label = state($$model.base + '!')</script><span>{label}</span>{:default}<b>?</b>{/switch}</main>`
         expect(ssr(SWITCH, doc({ k: 'a', base: 'hi' })).html).toBe(
             '<main><!--a--><!--[--><span>hi!</span><!--]--></main>',
         )
@@ -133,7 +133,7 @@ describe('scoped <script> in a control-flow branch', () => {
 
     /* Each row gets its OWN scoped signal, seeded from that row's item — per-row
        local state, isolated row to row. */
-    const EACH = `<ul>{#for item of $$model.items by item.id}<script>let n = scope().state(item.base * 10)</script><li><button onclick={() => (n = n + 1)}>{n}</button></li>{/for}</ul>`
+    const EACH = `<ul>{#for item of $$model.items by item.id}<script>let n = state(item.base * 10)</script><li><button onclick={() => (n = n + 1)}>{n}</button></li>{/for}</ul>`
 
     test('SSR seeds each row independently', () => {
         expect(
@@ -177,7 +177,7 @@ describe('scoped <script> in a control-flow branch', () => {
 
     /* A branch-scoped `effect` is owned by the branch's render scope: it runs on
        mount, re-runs on its deps, and disposes when the branch leaves. */
-    const FX = `<main>{#if $$model.on}<script>let n = scope().state($$model.base)
+    const FX = `<main>{#if $$model.on}<script>let n = state($$model.base)
 effect(() => record(n + ':' + $$model.base))</script><button onclick={() => (n = n + 1)}>{n}</button>{/if}</main>`
 
     test('client: branch effect runs, is reactive, disposes on leave, re-seeds', () => {
@@ -208,7 +208,7 @@ effect(() => record(n + ':' + $$model.base))</script><button onclick={() => (n =
     /* The headline case: a `then` branch declares state computed from the resolved
        value — the ergonomic that top-level await gave, without async ownership. */
     test('await then: scoped state seeded from the resolved value', async () => {
-        const AWAIT = `<main>{#await $$model.load}<p>loading</p>{:then foo}<script>let a = scope().state(foo.bar)</script><span>{a}</span>{/await}</main>`
+        const AWAIT = `<main>{#await $$model.load}<p>loading</p>{:then foo}<script>let a = state(foo.bar)</script><span>{a}</span>{/await}</main>`
         const host = document.createElement('div')
         run(AWAIT, host, doc({ load: Promise.resolve({ bar: 'ready' }) }), 'mount')
         expect(host.textContent).toBe('loading')
@@ -225,7 +225,7 @@ describe('scoped <script> directly under a bound element (skeleton path)', () =>
        located nodes. The imperative `openChild` path no longer exists, so this exercises the
        unified backend. (The signal is read by a LATER sibling, never the parent's own
        attribute — that would read it before the script's `let` runs, in either backend.) */
-    const SRC = `<div><script>let open = scope().state(false)</script><p class={open ? 'on' : 'off'}>{open}</p><button onclick={() => (open = !open)}>x</button></div>`
+    const SRC = `<div><script>let open = state(false)</script><p class={open ? 'on' : 'off'}>{open}</p><button onclick={() => (open = !open)}>x</button></div>`
 
     test('SSR === client mount for a script under a bound element', () => {
         const server = ssr(SRC, doc({})).html

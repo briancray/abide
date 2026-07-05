@@ -59,7 +59,8 @@ describe('bare component as control-flow branch root hydrates (no flip)', () => 
     test('skeleton context: <if> inside an element', async () => {
         const parent = component(
             `
-            <script>let busy = scope().state(false)</script>
+            <script>import { state } from '@abide/abide/ui/state'
+let busy = state(false)</script>
             <div>{#if busy}<Loading/>{:else}<HardDrive/>{/if}</div>`,
             { Loading, HardDrive },
         )
@@ -73,7 +74,8 @@ describe('bare component as control-flow branch root hydrates (no flip)', () => 
     test('non-skeleton context: <if> at component top level', async () => {
         const parent = component(
             `
-            <script>let busy = scope().state(false)</script>
+            <script>import { state } from '@abide/abide/ui/state'
+let busy = state(false)</script>
             {#if busy}<Loading/>{:else}<HardDrive/>{/if}`,
             { Loading, HardDrive },
         )
@@ -89,7 +91,8 @@ describe('hydration desync surfaces as a named error, not a downstream null-dere
     test('a missing range marker throws an [abide] hydration desync, not a TypeError', () => {
         const parent = component(
             `
-            <script>let busy = scope().state(false)</script>
+            <script>import { state } from '@abide/abide/ui/state'
+let busy = state(false)</script>
             <div>{#if busy}<Loading/>{:else}<HardDrive/>{/if}</div>`,
             { Loading, HardDrive },
         )

@@ -207,7 +207,8 @@ describe('block grammar — guards & integration', () => {
 
     test('a block compiles end-to-end through compileComponent', () => {
         const body = compileComponent(`
-            <script>let on = scope().state(true)</script>
+            <script>import { state } from '@abide/abide/ui/state'
+let on = state(true)</script>
             {#if on}<span>ON</span>{:else}<span>OFF</span>{/if}
         `)
         expect(typeof body).toBe('string')

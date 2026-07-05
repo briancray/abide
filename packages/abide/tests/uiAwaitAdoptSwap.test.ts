@@ -173,7 +173,8 @@ describe('await block: hydrate-adopt then first swap', () => {
         const make = (value: number) => (value === 0 ? 'A' : Promise.reject('boom'))
         const Comp = component(
             `
-            <script>let on = scope().state(true)</script>
+            <script>import { state } from '@abide/abide/ui/state'
+let on = state(true)</script>
             {#await make(n.value)}
                 <p>pending</p>
                 {:then value}{#if on}<span>{value}</span>{/if}

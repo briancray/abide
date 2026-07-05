@@ -60,7 +60,8 @@ function ssr(source: string): string {
 describe('if / else', () => {
     test('renders then or else and flips reactively', () => {
         const host = render(`
-            <script>let on = scope().state(true)</script>
+            <script>import { state } from '@abide/abide/ui/state'
+let on = state(true)</script>
             {#if on}
                 <span>ON</span>
                 {:else}<span>OFF</span>
@@ -72,7 +73,8 @@ describe('if / else', () => {
 
     test('SSR renders the else branch when falsy', () => {
         const source = `
-            <script>let on = scope().state(false)</script>
+            <script>import { state } from '@abide/abide/ui/state'
+let on = state(false)</script>
             {#if on}
                 <span>ON</span>
                 {:else}<span>OFF</span>
@@ -92,9 +94,10 @@ describe('if / else', () => {
 
 describe('if / elseif / else', () => {
     const chain = (a: string, b: string) => `
-        <script>
-            let a = scope().state(${a})
-            let b = scope().state(${b})
+        <script>import { state } from '@abide/abide/ui/state'
+
+            let a = state(${a})
+            let b = state(${b})
         </script>
         {#if a}
             <span>A</span>
@@ -121,7 +124,8 @@ describe('if / elseif / else', () => {
 
     test('client flips across if / elseif / else reactively', () => {
         const host = render(`
-            <script>let n = scope().state(0)</script>
+            <script>import { state } from '@abide/abide/ui/state'
+let n = state(0)</script>
             <button onclick={() => n += 1}>+</button>
             {#if n === 1}
                 <span>one</span>
@@ -143,9 +147,10 @@ describe('if / elseif / else', () => {
 
     test('a non-boolean elseif condition coerces truthily', () => {
         const source = `
-            <script>
-                let a = scope().state(0)
-                let items = scope().state(['x'])
+            <script>import { state } from '@abide/abide/ui/state'
+
+                let a = state(0)
+                let items = state(['x'])
             </script>
             {#if a}
                 <span>A</span>
@@ -172,7 +177,8 @@ describe('if / elseif / else', () => {
        reject). The "else must be last" guard is covered in uiParseBlockGrammar. */
     test('content after a branch is part of that branch (renders), not stray', () => {
         const host = render(`
-            <script>let a = scope().state(false)</script>
+            <script>import { state } from '@abide/abide/ui/state'
+let a = state(false)</script>
             {#if a}
                 <span>A</span>
                 {:else}<span>C</span>extra
@@ -183,7 +189,8 @@ describe('if / elseif / else', () => {
 
     test('the then-content before the first branch and whitespace around branches compile', () => {
         const ok = `
-            <script>let a = scope().state(true)</script>
+            <script>import { state } from '@abide/abide/ui/state'
+let a = state(true)</script>
             {#if a}
                 <span>then</span>
                 {:else if a}<span>B</span>
@@ -196,7 +203,8 @@ describe('if / elseif / else', () => {
 
 describe('switch / case / default', () => {
     const source = `
-        <script>let status = scope().state('shipped')</script>
+        <script>import { state } from '@abide/abide/ui/state'
+let status = state('shipped')</script>
         {#switch status}
             {:case 'pending'}<span>⏳</span>
             {:case 'shipped'}<span>🚚</span>
@@ -227,7 +235,8 @@ describe('switch / case / default', () => {
 
     test('SSR falls back to default for an unmatched subject', () => {
         const unmatched = `
-            <script>let status = scope().state('lost')</script>
+            <script>import { state } from '@abide/abide/ui/state'
+let status = state('lost')</script>
             {#switch status}
                 {:case 'pending'}<span>⏳</span>
                 {:default}<span>?</span>

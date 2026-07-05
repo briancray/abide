@@ -95,7 +95,8 @@ describe('renderToStream — out-of-order SSR streaming', () => {
 
     test('a fully synchronous component streams just the shell', async () => {
         const chunks = await collect(`
-            <script>let name = scope().state('ada')</script>
+            <script>import { state } from '@abide/abide/ui/state'
+let name = state('ada')</script>
             <p>{name}</p>
         `)
         expect(chunks).toEqual(['<p>ada</p>'])
