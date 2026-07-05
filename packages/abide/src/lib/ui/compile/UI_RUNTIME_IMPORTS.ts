@@ -13,12 +13,14 @@ flip to its `$$` alias, set `alias` here in lockstep.
 */
 export const UI_RUNTIME_IMPORTS: { name: string; specifier: string; alias?: string }[] = [
     { name: 'snippet', specifier: 'shared/snippet', alias: '$$snippet' },
-    /* `scope` is author-facing (`scope().state(...)`) but lowers to `$$scope` shadowably:
-       `referenceFor` rewrites a bare `scope` read to `$$scope` only when not lexically
-       shadowed, so the aliased import is the binding that emitted code resolves to. */
-    { name: 'scope', specifier: 'ui/scope', alias: '$$scope' },
-    { name: 'enterScope', specifier: 'ui/enterScope', alias: '$$enterScope' },
-    { name: 'exitScope', specifier: 'ui/exitScope', alias: '$$exitScope' },
+    /* `scope` is the internal lowering host (no longer author-facing), imported from the
+       plumbing `ui/currentScope` path and lowered to the reserved `$$scope` alias:
+       `referenceFor` rewrites a bare `scope` read (compiler-generated) to `$$scope` only
+       when not lexically shadowed, so the aliased import is the binding emitted code
+       resolves to. `enterScope`/`exitScope` bracket an SSR render's scope (plumbing paths). */
+    { name: 'scope', specifier: 'ui/currentScope', alias: '$$scope' },
+    { name: 'enterScope', specifier: 'ui/enterRenderScope', alias: '$$enterScope' },
+    { name: 'exitScope', specifier: 'ui/exitRenderScope', alias: '$$exitScope' },
     { name: 'effect', specifier: 'ui/effect', alias: '$$effect' },
     { name: 'mount', specifier: 'ui/dom/mount', alias: '$$mount' },
     { name: 'appendText', specifier: 'ui/dom/appendText', alias: '$$appendText' },

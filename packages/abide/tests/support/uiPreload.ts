@@ -110,10 +110,14 @@ Comprehensive `$$` aliasing: every `UI_RUNTIME_IMPORTS` helper is published unde
 `$$` global from its real module, so flipping ANY helper's emit sites to `$$name`
 resolves with no per-harness change (the harnesses that inject the bare name as a
 `new Function` param simply leave that param unused). Loaded dynamically off the one
-import metadata list so a new helper is covered automatically.
+import metadata list so a new helper is covered automatically. `scope`/`enterScope`/
+`exitScope` are skipped — their published subpath (`ui/currentScope`, `ui/enterRenderScope`,
+`ui/exitRenderScope`) no longer matches their file path, and they are already aliased above
+from their real modules.
 */
+const MANUALLY_ALIASED = new Set(['scope', 'enterScope', 'exitScope'])
 await Promise.all(
-    UI_RUNTIME_IMPORTS.map(async (entry) => {
+    UI_RUNTIME_IMPORTS.filter((entry) => !MANUALLY_ALIASED.has(entry.name)).map(async (entry) => {
         const module = (await import(`../../src/lib/${entry.specifier}.ts`)) as Record<
             string,
             unknown
