@@ -112,7 +112,7 @@ abide compile          # just the embedded server binary the bundle spawns`} />
         code={`import { onMenu } from '@abide/abide/bundle/onMenu'
 import { navigate } from '@abide/abide/ui/navigate'
 
-const { effect } = scope()
+import { effect } from '@abide/abide/ui/effect'
 effect(() => onMenu('reload-session', () => location.reload()))
 effect(() => onMenu('open-mcp', () => void navigate('/mcp')))`} />
 </section>

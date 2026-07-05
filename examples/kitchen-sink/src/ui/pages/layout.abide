@@ -17,7 +17,7 @@ Custom bundle menu items are inert during SSR and in a plain browser tab. effect
 are client-only (stripped from SSR), so each registers its onMenu handler once on
 mount; returning the unsubscribe is harmless here (the root layout never unmounts).
 */
-const { effect } = scope()
+import { effect } from '@abide/abide/ui/effect'
 effect(() => onMenu('reload-session', () => location.reload()))
 effect(() => onMenu('open-mcp', () => void navigate('/mcp')))
 

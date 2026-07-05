@@ -102,7 +102,7 @@ const STYLE_LIVE = '/templating/snippets'
     task="Render into <head> or a detached DOM node (portal)"
     gap={true}
     code={`// no portal primitive — reach the node imperatively in an effect
-const { effect } = scope()
+import { effect } from '@abide/abide/ui/effect'
 effect(() => {
     const el = document.createElement('div')
     document.body.append(el)

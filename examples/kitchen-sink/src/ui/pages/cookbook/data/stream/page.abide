@@ -9,7 +9,7 @@ const HTTP = '/rpc/streaming'
 <h1 class="text-3xl font-bold">stream to the UI</h1>
 <p class="mt-2 text-slate-600">
     <code class="font-mono">tail()</code> is the reactive consumer for anything streaming — a socket
-    or an rpc's <code class="font-mono">.stream(args)</code>. For plain HTTP, a handler returns
+    or a streaming rpc's bare call. For plain HTTP, a handler returns
     <code class="font-mono">sse()</code> or <code class="font-mono">jsonl()</code> and the client
     reads it with native APIs.
 </p>
@@ -18,21 +18,21 @@ const HTTP = '/rpc/streaming'
     task="Consume a stream reactively"
     live={LIVE}
     code={`import { tail } from '@abide/abide/ui/tail'
-const { computed } = scope()
+import { state } from '@abide/abide/ui/state'
 
-const latest = computed(() => tail(feed.stream()))`}
+const latest = state.computed(() => tail(feed()))`}
     note={'`tail(source)` reads the latest frame. The first read in a tracking scope opens the stream; the last reader closing drops it — no manual subscribe/unsubscribe.'} />
 
 <Recipe
     task="Keep a rolling window of recent frames"
     live={LIVE}
-    code={`const recent = computed(() => tail(chat, { last: 5 }))`}
+    code={`const recent = state.computed(() => tail(chat, { last: 5 }))`}
     note={'`{ last: n }` holds a live window of the last ≤ n frames instead of latest-wins — the feed/activity-list shape.'} />
 
 <Recipe
     task="Show a stream's connection status"
     live={LIVE}
-    code={`const status = computed(() => tail.status(chat))
+    code={`const status = state.computed(() => tail.status(chat))
 
 <p>status: {status}</p>`}
     note={"`tail.status(source)` reports the transport state. A dropped socket self-heals under backoff — status never degrades to 'error' for a mere disconnect."} />
@@ -40,7 +40,7 @@ const latest = computed(() => tail(feed.stream()))`}
 <Recipe
     task="Surface a stream's terminal error"
     live={LIVE}
-    code={`const failure = computed(() => tail.error(chat))
+    code={`const failure = state.computed(() => tail.error(chat))
 
 {#if failure}<p class="text-rose-700">{failure.message}</p>{/if}`}
     note={'Application errors are terminal and surface through `tail.error`; a transport disconnect does not — it retains the held value and reopens.'} />
@@ -106,13 +106,13 @@ while (true) {
     task="Combine a stream with a loading probe"
     live="/probes"
     code={`import { refreshing } from '@abide/abide/shared/refreshing'
-const reconnecting = computed(() => refreshing(chat))`}
+const reconnecting = state.computed(() => refreshing(chat))`}
     note={"`refreshing(source)` is true while a held value is being revalidated — e.g. across a socket reconnect gap — so you can badge 'reconnecting…' without losing the last frame."} />
 
 <Recipe
     task="Drain a stream imperatively with for-await"
     live={HTTP}
-    code={`for await (const frame of feed.stream()) {
+    code={`for await (const frame of feed()) {
     handle(frame)
 }`}
-    note={"An rpc's `.stream()` is an `AsyncIterable` — drive it with `{#for await}` in markup, or `for await` in script when you need imperative control."} />
+    note={'A streaming rpc call returns an `AsyncIterable` — drive it with `{#for await}` in markup, or `for await` in script when you need imperative control.'} />

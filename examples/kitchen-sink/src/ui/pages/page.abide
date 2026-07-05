@@ -41,7 +41,7 @@ const groups = [
             {
                 href: '/reactive-state',
                 title: 'reactive state',
-                body: 'scope() is the sole reactive surface — destructure state / computed / linked / effect once and call them bare; transforms coerce writes, linked seeds a draft from upstream.',
+                body: 'state / state.computed / state.linked are imported from abide/ui/state and called bare; transforms coerce writes, state.linked seeds a draft from upstream.',
             },
             {
                 href: '/cache',
@@ -51,7 +51,7 @@ const groups = [
             {
                 href: '/tail',
                 title: 'tail',
-                body: 'The reactive consumer for anything streaming — a socket or fn.stream(args). First computed read opens the stream, last reader closes it; transport drops self-heal.',
+                body: 'The reactive consumer for anything streaming — a socket or a streaming rpc called bare. First computed read opens the stream, last reader closes it; transport drops self-heal.',
             },
             {
                 href: '/probes',

@@ -8,12 +8,12 @@ type ChatMessage = { id: string; role: 'user' | 'assistant'; text: string }
 // A tool call surfaced from the stream; `ok` lands later from its tool_result frame.
 type ToolCall = { id: string; name: string; input: unknown; ok?: boolean }
 
-const { state } = scope()
+import { state } from '@abide/abide/ui/state'
 let messages = state<ChatMessage[]>([])
 let toolCalls = state<ToolCall[]>([])
 let draft = state('Which tools can you call? Use one and show me the result.')
 let streaming = state(false)
-let error = state(undefined)
+let error = state<string>()
 
 /* POST the running transcript, then read the JSONL response frame-by-frame,
    folding each AgentFrame into the live assistant turn. */

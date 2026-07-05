@@ -3,8 +3,8 @@ import { tail } from '@abide/abide/ui/tail'
 import { publishChat } from '$server/rpc/publishChat.ts'
 import { chat } from '$server/sockets/chat.ts'
 import CodeBlock from '$ui/CodeBlock.abide'
-const { state, computed } = scope()
-const latest = computed(() => tail(chat))
+import { state } from '@abide/abide/ui/state'
+const latest = state.computed(() => tail(chat))
 
 let from = state('alice')
 let text = state('hello socket!')
@@ -84,8 +84,8 @@ export type ChatMessage = z.infer<typeof schema>`} />
     <CodeBlock title="this page — reactive read" code={`import { tail } from '@abide/abide/ui/tail'
 import { chat } from '$server/sockets/chat.ts'
 
-const { computed } = scope()
-const latest = computed(() => tail(chat))     // re-renders on every new frame`} />
+import { state } from '@abide/abide/ui/state'
+const latest = state.computed(() => tail(chat))     // re-renders on every new frame`} />
 </section>
 
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">

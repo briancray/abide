@@ -7,7 +7,7 @@ Bindings & directives — every reactive attribute form, live. {expr} reads a ce
 into text/attributes; bind: is two-way; class:/style:/attach/{...spread} are the
 directives. html marks a string as trusted raw markup (plain {value} stays escaped).
 */
-const { state } = scope()
+import { state } from '@abide/abide/ui/state'
 
 let name = state('ada')
 let tone = state('sky')
@@ -186,7 +186,7 @@ const focusOnMount = (node: HTMLInputElement) => node.focus()
 <section class="mt-6 space-y-3 rounded-lg border border-slate-200 bg-white p-5">
     <CodeBlock title="interpolation, directives & raw markup" code={`<script>
     import { html } from '@abide/abide/ui/html'
-    const { state } = scope()
+    import { state } from '@abide/abide/ui/state'
     let name = state('ada')
     let muted = state(false)
     const extra = { 'data-role': 'demo', title: 'spread' }

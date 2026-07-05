@@ -5,7 +5,7 @@ import CodeBlock from '$ui/CodeBlock.abide'
 Control-flow showcase — every {#…} block live. Each block is a lexical scope:
 value-params ({:then v}, {#for x of …}) and nested <script>/<style> bind inside it.
 */
-const { state } = scope()
+import { state } from '@abide/abide/ui/state'
 
 let open = state(true)
 let level = state(1)
@@ -198,9 +198,9 @@ function guarded(): string {
         <p class="mt-2 text-sm text-slate-500">loading…</p>
     {:then names}
         <script>
-        // `names` (the resolved value) is in lexical scope here; branch-local, re-seeded each reload
-        const { computed } = scope()
-        let total = computed(() => names.length)
+        // `names` (the resolved value) is in lexical scope here; branch-local, re-seeded each reload.
+        // `state` is imported in the leading <script>; nested scripts share module scope.
+        let total = state.computed(() => names.length)
         </script>
         <p class="resolved mt-2 text-sm">{total} names: {names.join(', ')}</p>
         <style>
@@ -221,8 +221,8 @@ function guarded(): string {
     <p>loading…</p>
 {:then names}
     <script>
-        const { computed } = scope()       // \`names\` is in scope; branch-local, re-seeded each mount
-        let total = computed(() => names.length)
+        // \`names\` is in scope; branch-local, re-seeded each mount. \`state\` is imported up top.
+        let total = state.computed(() => names.length)
     </script>
     <p class="resolved">{total} names: {names.join(', ')}</p>
     <style>.resolved { font-weight: 600 }</style>   <!-- scoped to this branch alone -->

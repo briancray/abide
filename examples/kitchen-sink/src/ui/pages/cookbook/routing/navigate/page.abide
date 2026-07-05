@@ -64,7 +64,7 @@ export const oldPath = GET(() => redirect('/new-path'))`}
 <Recipe
     task="Guard a route by redirecting"
     live={LIVE}
-    code={`const { effect } = scope()
+    code={`import { effect } from '@abide/abide/ui/effect'
 effect(() => {
     if (!session) void navigate('/login', {}, { replace: true })
 })`}
@@ -90,7 +90,7 @@ const href = url('/settings')`}
 <Recipe
     task="Open a route from a bundle menu"
     live="/bundle"
-    code={`const { effect } = scope()
+    code={`import { effect } from '@abide/abide/ui/effect'
 effect(() => onMenu('open-settings', () => void navigate('/settings')))`}
     note={'In a desktop bundle, wire a native menu item to `navigate` — same routing, driven from the OS menu bar.'} />
 
@@ -99,7 +99,7 @@ effect(() => onMenu('open-settings', () => void navigate('/settings')))`}
     gap={true}
     code={`// no prefetch API — warm the data cache yourself
 <a href={url('/product/[id]', { id })}
-   onmouseenter={() => cache(getProduct)({ id })}>
+   onmouseenter={() => cache(getProduct, { id })}>
     {name}
 </a>`}
     note={"There's no link-prefetch primitive. You can warm the destination's `cache()` reads on hover/focus so the data is ready, but the route code itself isn't code-split-prefetched."} />

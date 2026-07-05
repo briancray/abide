@@ -90,8 +90,8 @@ chat.publish({ from, text })   // missing id/at → throws`}
 <Recipe
     task="Multiplex many topics over one connection"
     live="/tail"
-    code={`const messages = computed(() => tail(chat))
-const presence = computed(() => tail(online))`}
+    code={`const messages = state.computed(() => tail(chat))
+const presence = state.computed(() => tail(online))`}
     note={'Every browser subscription rides one shared WebSocket — subscribe to as many sockets as you need without opening more connections.'} />
 
 <Recipe

@@ -3,10 +3,10 @@ import { tail } from '@abide/abide/ui/tail'
 import { publishChat } from '$server/rpc/publishChat.ts'
 import { chat } from '$server/sockets/chat.ts'
 import CodeBlock from '$ui/CodeBlock.abide'
-const { state, computed } = scope()
-const latest = computed(() => tail(chat))
-const recent = computed(() => tail(chat, { last: 5 }))
-const status = computed(() => tail.status(chat))
+import { state } from '@abide/abide/ui/state'
+const latest = state.computed(() => tail(chat))
+const recent = state.computed(() => tail(chat, { last: 5 }))
+const status = state.computed(() => tail.status(chat))
 
 let from = state('alice')
 let text = state('hello from tail')
@@ -18,10 +18,9 @@ async function send() {
 <h1 class="text-3xl font-bold"><code class="font-mono">tail()</code></h1>
 <p class="mt-2 text-slate-600">
     The reactive consumer for anything streaming — a
-    <a class="underline" href="/sockets">socket</a> or
-    <code class="font-mono">fn.stream(args)</code>. Bare, it is the latest-wins read; with
-    {'{ last: n }'}, a live window of the last ≤ n frames. First read in a tracking scope opens the
-    iterator; last reader closes it.
+    <a class="underline" href="/sockets">socket</a> or <code class="font-mono">fn(args)</code> on a
+    streaming rpc. Bare, it is the latest-wins read; with {'{ last: n }'}, a live window of the last ≤ n
+    frames. First read in a tracking scope opens the iterator; last reader closes it.
 </p>
 
 <section class="mt-6">
@@ -80,8 +79,8 @@ async function send() {
     <CodeBlock title="this page — latest + window + publish-through-rpc" code={`import { tail } from '@abide/abide/ui/tail'
 import { chat } from '$server/sockets/chat.ts'
 
-const { computed } = scope()
-const latest = computed(() => tail(chat))              // newest frame
-const recent = computed(() => tail(chat, { last: 5 })) // last ≤5 frames
-const status = computed(() => tail.status(chat))       // 'pending' | 'open' | 'done' | 'error'`} />
+import { state } from '@abide/abide/ui/state'
+const latest = state.computed(() => tail(chat))              // newest frame
+const recent = state.computed(() => tail(chat, { last: 5 })) // last ≤5 frames
+const status = state.computed(() => tail.status(chat))       // 'pending' | 'open' | 'done' | 'error'`} />
 </section>

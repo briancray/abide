@@ -1,16 +1,17 @@
 <script>
+import { state } from '@abide/abide/ui/state'
+import { effect } from '@abide/abide/ui/effect'
 import CodeBlock from '$ui/CodeBlock.abide'
 
 /*
-Reactive state — scope() is the sole reactive surface. Destructure the primitives
-off it once (the default form), then call them bare; a bare state(v) with no
-scope() destructure in scope is a compile error. props is the one reactive name
-available without import.
+Reactive state — the primitives are imported. `state` carries `state.computed`
+and `state.linked`; `effect` is its own import. Call them bare; a cell reads and
+writes like a plain variable. props is the one reactive name in scope without an
+import.
 */
-const { state, computed, linked, effect } = scope()
 
 let count = state(0)
-const doubled = computed(() => count * 2)
+const doubled = state.computed(() => count * 2)
 
 let ticks = state(0)
 effect(() => {
@@ -23,15 +24,18 @@ let qty = state(1, (n) => Math.max(1, Math.min(99, Math.round(Number(n) || 0))))
 
 // linked: a local draft seeded from upstream; reseeds when the source changes
 let serverName = state('ada')
-let nameDraft = linked(() => serverName)
+let nameDraft = state.linked(() => serverName)
 </script>
 
 <h1 class="text-3xl font-bold">reactive state</h1>
 <p class="mt-2 text-slate-600">
-    Reactive cells are reached through <code class="font-mono">scope()</code> — destructure
-    <code class="font-mono">{'{ state, computed, linked, effect }'}</code> off it once, then call them bare.
-    <code class="font-mono">props</code> is the one reactive name in scope without import. A
-    writable computed lives at the bind site as an accessor (<a
+    Reactive cells are imported — <code class="font-mono">state</code> from
+    <code class="font-mono">abide/ui/state</code> (with
+    <code class="font-mono">state.computed</code> and
+    <code class="font-mono">state.linked</code> attached) and
+    <code class="font-mono">effect</code> from <code class="font-mono">abide/ui/effect</code> — then
+    called bare. <code class="font-mono">props</code> is the one reactive name in scope without an
+    import. A writable computed lives at the bind site as an accessor (<a
         class="underline"
         href="/templating/bindings"
         ><code class="font-mono">{'bind:value={{ get, set }}'}</code></a
@@ -55,14 +59,14 @@ let nameDraft = linked(() => serverName)
                 </td>
             </tr>
             <tr>
-                <td class="px-4 py-2 font-mono">linked(fn, transform?)</td>
+                <td class="px-4 py-2 font-mono">state.linked(fn, transform?)</td>
                 <td class="px-4 py-2 text-slate-600">
                     a writable local draft seeded from upstream — reseeds when the source changes,
                     edits stay local
                 </td>
             </tr>
             <tr>
-                <td class="px-4 py-2 font-mono">computed(fn)</td>
+                <td class="px-4 py-2 font-mono">state.computed(fn)</td>
                 <td class="px-4 py-2 text-slate-600">
                     a read-only value — re-runs when a cell it reads changes
                 </td>
@@ -116,7 +120,7 @@ let nameDraft = linked(() => serverName)
     </div>
 
     <div class="rounded-lg border border-slate-200 bg-white p-5">
-        <h3 class="text-xs font-semibold text-slate-500">linked(fn) — draft</h3>
+        <h3 class="text-xs font-semibold text-slate-500">state.linked(fn) — draft</h3>
         <p class="mt-1 text-xs text-slate-500">
             Edit the draft; "pull" reseeds it from the source.
         </p>
@@ -137,9 +141,10 @@ let nameDraft = linked(() => serverName)
 
 <section class="mt-6 space-y-3 rounded-lg border border-slate-200 bg-white p-5">
     <CodeBlock title="reactive primitives — exactly what this demo runs" code={`<script>
-    const { state, computed, linked, effect } = scope()    // destructure once
+    import { state } from '@abide/abide/ui/state'   // state.computed / state.linked attached
+    import { effect } from '@abide/abide/ui/effect'
     let count = state(0)                            // writable cell — the +/− buttons
-    const doubled = computed(() => count * 2)       // recomputes when count changes
+    const doubled = state.computed(() => count * 2)       // recomputes when count changes
     let ticks = state(0)
     effect(() => {                                  // client-only; cleanup on unmount
         const id = setInterval(() => (ticks = ticks + 1), 1000)
@@ -149,6 +154,6 @@ let nameDraft = linked(() => serverName)
     // transform coerces every write; linked seeds a draft from upstream
     let qty = state(1, (n) => Math.max(1, Math.min(99, Math.round(Number(n) || 0))))
     let serverName = state('ada')
-    let nameDraft = linked(() => serverName)
+    let nameDraft = state.linked(() => serverName)
 </script>`} />
 </section>

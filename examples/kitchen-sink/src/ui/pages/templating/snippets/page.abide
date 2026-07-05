@@ -7,7 +7,7 @@ Snippets, components & scoped style. A {#snippet} is a named builder rendered
 like a function and closing over component scope. A capitalised tag mounts a
 child component; nested content lands where the child calls {children()}.
 */
-const { state } = scope()
+import { state } from '@abide/abide/ui/state'
 let people = state(['ada', 'grace', 'linus'])
 const prefix = '• '
 </script>
@@ -30,7 +30,7 @@ const prefix = '• '
     </ul>
 
     <CodeBlock code={`<script>
-const { state } = scope()
+import { state } from '@abide/abide/ui/state'
 let people = state(['ada', 'grace', 'linus'])
 const prefix = '• '                       // closed over by the snippet below
 </script>

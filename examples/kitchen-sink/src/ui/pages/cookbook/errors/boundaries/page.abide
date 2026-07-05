@@ -128,7 +128,7 @@ const CTRL = '/templating/control-flow'
     live="/observability"
     code={`{:catch error}
     <script>
-        const { effect } = scope()
+        import { effect } from '@abide/abide/ui/effect'
         effect(() => log.error('boundary caught', error))
     </script>
     <Fallback />
@@ -146,7 +146,7 @@ const CTRL = '/templating/control-flow'
     task="Report errors to an external service"
     gap={true}
     code={`// no built-in error-reporting hook — do it yourself
-const { effect } = scope()
+import { effect } from '@abide/abide/ui/effect'
 effect(() => {
     window.addEventListener('error', (e) => sendToSentry(e.error))
     window.addEventListener('unhandledrejection', (e) => sendToSentry(e.reason))

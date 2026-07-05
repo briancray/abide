@@ -151,8 +151,8 @@ const LIVE = '/templating/control-flow'
     live={LIVE}
     code={`{#await loadNames() then names}
     <script>
-        const { computed } = scope()
-        let total = computed(() => names.length)
+        import { state } from '@abide/abide/ui/state'
+        let total = state.computed(() => names.length)
     </script>
     <p>{total} names</p>
 {/await}`}

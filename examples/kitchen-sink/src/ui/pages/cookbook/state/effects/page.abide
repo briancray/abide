@@ -14,7 +14,7 @@ const LIVE = '/reactive-state'
 <Recipe
     task="Run a side effect when state changes"
     live={LIVE}
-    code={`const { effect } = scope()
+    code={`import { effect } from '@abide/abide/ui/effect'
 effect(() => {
     document.title = \`\${unread} unread\`
 })`}

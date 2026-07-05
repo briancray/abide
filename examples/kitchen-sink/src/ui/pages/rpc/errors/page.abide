@@ -5,7 +5,7 @@ import { checkout } from '$server/rpc/checkout.ts'
 import { getEcho } from '$server/rpc/getEcho.ts'
 import { getProduct } from '$server/rpc/getProduct.ts'
 import CodeBlock from '$ui/CodeBlock.abide'
-const { state } = scope()
+import { state } from '@abide/abide/ui/state'
 let outcome404 = state('(not triggered)')
 let outcome405 = state('(not triggered)')
 let outcome500 = state('(not triggered)')

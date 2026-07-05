@@ -16,7 +16,7 @@ const TAIL = '/tail'
 // publish via a POST rpc; read with tail(chat, { last: 50 })`} note={'A retained socket plus a publish rpc is the whole chat primitive — history for late joiners, live delivery, validated writes.'} />
 
 <Recipe task="Show a live counter" live={TAIL} code={`export const votes = socket({ schema })
-const count = computed(() => tail(votes)?.total ?? 0)`} note={'Publish the new total on each change and tail the latest — a live vote count, viewer count, or gauge with no polling.'} />
+const count = state.computed(() => tail(votes)?.total ?? 0)`} note={'Publish the new total on each change and tail the latest — a live vote count, viewer count, or gauge with no polling.'} />
 
 <Recipe task="Render an activity feed" live={TAIL} code={`{#for event of tail(activity, { last: 30 }) by event.id}
     <li>{event.actor} {event.verb} {event.target}</li>
@@ -27,11 +27,11 @@ const count = computed(() => tail(votes)?.total ?? 0)`} note={'Publish the new t
     live={LIVE}
     code={`// publish a heartbeat every few seconds; window it and dedupe by user
 export const presence = socket({ schema, tail: 200, ttl: 15_000 })
-const online = computed(() => dedupeByUser(tail(presence, { last: 200 })))`}
+const online = state.computed(() => dedupeByUser(tail(presence, { last: 200 })))`}
     note={"Presence is a heartbeat pattern: clients publish periodically, a short `ttl` ages stragglers out, and you dedupe the window by user id on read. There's no dedicated presence primitive — this is the idiom."} />
 
 <Recipe task="Show typing indicators" live={LIVE} code={`export const typing = socket({ schema, ttl: 4_000, clientPublish: true })
-const typers = computed(() => tail(typing, { last: 10 }))`} note={"Ephemeral, high-frequency, low-stakes — enable `clientPublish` and a short `ttl` so 'X is typing…' frames expire on their own without a stop event."} />
+const typers = state.computed(() => tail(typing, { last: 10 }))`} note={"Ephemeral, high-frequency, low-stakes — enable `clientPublish` and a short `ttl` so 'X is typing…' frames expire on their own without a stop event."} />
 
 <Recipe
     task="Stream progress from a long job"
@@ -54,7 +54,7 @@ for (const step of steps) {
     task="Scope frames to a room or user"
     live={LIVE}
     code={`// carry the room on the frame; filter on read
-const roomMessages = computed(() =>
+const roomMessages = state.computed(() =>
     tail(chat, { last: 100 }).filter((m) => m.room === roomId),
 )`}
     note={"Sockets are whole topics, not per-key channels — include a `room`/`userId` field on the frame and filter client-side. Every subscriber receives every frame, so don't put secrets on a shared topic; use separate socket files for hard isolation."} />
@@ -77,7 +77,7 @@ export const ping = POST(() => {
     gap={true}
     code={`// no per-connection channel — model it as a filtered broadcast
 export const dm = socket({ schema })   // frame carries { toUserId }
-const mine = computed(() => tail(dm, { last: 50 }).filter((m) => m.toUserId === me))`}
+const mine = state.computed(() => tail(dm, { last: 50 }).filter((m) => m.toUserId === me))`}
     note={"Sockets are broadcast-only — there's no addressed, per-connection delivery. Simulate DMs with a `toUserId` field and client-side filtering, but every subscriber still receives every frame, so it's not private. True 1:1 delivery isn't a first-class feature."} />
 
 <Recipe

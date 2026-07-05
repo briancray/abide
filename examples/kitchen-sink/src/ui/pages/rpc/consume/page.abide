@@ -5,7 +5,7 @@ import { getEcho } from '$server/rpc/getEcho.ts'
 import { getReport } from '$server/rpc/getReport.ts'
 import { tickFeed } from '$server/rpc/tickFeed.ts'
 import CodeBlock from '$ui/CodeBlock.abide'
-const { state, computed } = scope()
+import { state } from '@abide/abide/ui/state'
 let decoded = state('(not called)')
 let raw = state('(not called)')
 let plainBody = state('(not called)')
@@ -28,7 +28,7 @@ async function readRaw() {
 async function readStream() {
     streamFrames = []
     let count = 0
-    for await (const frame of tickFeed.stream()) {
+    for await (const frame of tickFeed()) {
         streamFrames = [...streamFrames, { n: count, text: JSON.stringify(frame) }]
         if (++count >= 3) break
     }
@@ -40,7 +40,7 @@ async function callPlainFetch() {
     plainBody = `status=${response.status} body=${await response.text()}`
 }
 
-const cachedRaw = computed(() => cache(getReport.raw)({ id: 'r-1' }))
+const cachedRaw = state.computed(() => cache(getReport.raw, { id: 'r-1' }))
 </script>
 
 <h1 class="mt-8 text-3xl font-bold">Consume — same import everywhere</h1>
@@ -81,7 +81,7 @@ const cachedRaw = computed(() => cache(getReport.raw)({ id: 'r-1' }))
                     </td>
                 </tr>
                 <tr>
-                    <td class="px-4 py-2 font-mono">fn.stream(args)</td>
+                    <td class="px-4 py-2 font-mono">fn(args)</td>
                     <td class="px-4 py-2 text-slate-600">
                         a <code class="font-mono">Subscribable</code> over the frames — feed to
                         <a class="underline" href="/tail"><code class="font-mono">tail()</code></a>
@@ -112,7 +112,7 @@ const cachedRaw = computed(() => cache(getReport.raw)({ id: 'r-1' }))
             type="button"
             class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
             onclick={readStream}>
-            for await tickFeed.stream() (3 frames)
+            for await tickFeed() (3 frames)
         </button>
         <button
             type="button"
@@ -132,7 +132,7 @@ const cachedRaw = computed(() => cache(getReport.raw)({ id: 'r-1' }))
 
     <CodeBlock code={`const body = await getEcho({ message: 'hello' })       // decoded body, HttpError on non-2xx
 const response = await getReport.raw({ id: 'r-1' })    // full Response — headers, status
-for await (const frame of tickFeed.stream()) { /* iterate jsonl/sse frames */ }`} />
+for await (const frame of tickFeed()) { /* iterate jsonl/sse frames */ }`} />
 </section>
 
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
@@ -145,7 +145,7 @@ for await (const frame of tickFeed.stream()) { /* iterate jsonl/sse frames */ }`
         </p>
     {/await}
 
-    <CodeBlock code={`const cachedRaw = computed(() => cache(getReport.raw)({ id: 'r-1' }))  // shared cache key`} />
+    <CodeBlock code={`const cachedRaw = state.computed(() => cache(getReport.raw, { id: 'r-1' }))  // shared cache key`} />
 </section>
 
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">

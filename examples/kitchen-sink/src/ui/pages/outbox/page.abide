@@ -13,14 +13,14 @@ rpc. The drain runs on reconnect — drive it with the browser's offline toggle 
 Network → Offline) to watch entries hold and then flush.
 */
 
-const { state, computed } = scope()
+import { state } from '@abide/abide/ui/state'
 
 type Message = { id: string; text: string }
 let submitted = state<Message[]>([])
 let dropped = state<Message[]>([])
 
 // This rpc's reactive queue. `.outbox` is present only on a durable rpc, hence the guard.
-const queue = computed(() => saveMessage.outbox?.() ?? [])
+const queue = state.computed(() => saveMessage.outbox?.() ?? [])
 
 let draft = state('type a message — include "fail" to force a drop')
 async function submit(event: SubmitEvent) {

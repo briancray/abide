@@ -12,7 +12,7 @@ import CodeBlock from '$ui/CodeBlock.abide'
 
 type LogEntry = { id: number; rpc: string; outcome: string }
 
-const { state } = scope()
+import { state } from '@abide/abide/ui/state'
 let log = state<LogEntry[]>([])
 let message = state('hello')
 let celsius = state(100)

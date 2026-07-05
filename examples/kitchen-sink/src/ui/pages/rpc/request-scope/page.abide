@@ -56,7 +56,7 @@ import CodeBlock from '$ui/CodeBlock.abide'
         carries your user-agent because <code class="font-mono">src/app.ts</code> declares
         <code class="font-mono">forwardHeaders = ['user-agent']</code>.
     </p>
-    {#await cache(whoAmI)()}
+    {#await cache(whoAmI)}
     {:then me}
         <pre
             class="mt-3 overflow-x-auto rounded-md bg-slate-900 p-4 text-xs leading-relaxed text-slate-100"><code>{JSON.stringify(me, undefined, 2)}</code></pre>

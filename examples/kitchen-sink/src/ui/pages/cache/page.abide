@@ -12,10 +12,11 @@ import CodeBlock from '$ui/CodeBlock.abide'
 
 /* Two reads against the same cache key + scope share one entry, so any invalidation
    re-runs both. `counter` streams; `mirror` is a second read of the same entry. */
-const { computed, effect } = scope()
-const counter = computed(() => cache(getCounter, { tags: ['counter'] })())
-const mirror = computed(() => cache(getCounter, { tags: ['counter'] })())
-const loading = computed(() => pending(getCounter))
+import { state } from '@abide/abide/ui/state'
+import { effect } from '@abide/abide/ui/effect'
+const counter = state.computed(() => cache(getCounter, undefined, { tags: ['counter'] }))
+const mirror = state.computed(() => cache(getCounter, undefined, { tags: ['counter'] }))
+const loading = state.computed(() => pending(getCounter))
 
 async function increment() {
     await incrementCounter()
@@ -29,12 +30,12 @@ async function reset() {
 /* Event-driven invalidation: a chat frame stales the chat count. cache.on returns
    a dispose; effect runs it client-side (no-op during SSR). */
 effect(() => cache.on(chat, (_message, { invalidate }) => invalidate(getChatCount)))
-const chatCount = computed(() => cache(getChatCount)())
+const chatCount = state.computed(() => cache(getChatCount))
 
 /* The same frame stales the recent-messages list too — invalidate drops it and the
    next read refetches. */
 effect(() => cache.on(chat, (_message, { invalidate }) => invalidate(getChatLog)))
-const chatLog = computed(() => cache(getChatLog)())
+const chatLog = state.computed(() => cache(getChatLog))
 </script>
 
 <h1 class="text-3xl font-bold"><code class="font-mono">cache()</code></h1>
@@ -73,10 +74,10 @@ const chatLog = computed(() => cache(getChatLog)())
         </div>
     </div>
 
-    <CodeBlock title="option grammar" code={`cache(fn)()                             // cached until invalidated
-cache(fn, { ttl: 0 })()                 // coalesce only — the mutation idiom
-cache(fn, { tags: ['orders'] })()        // tag for grouped invalidation/probing
-cache(fn, { global: true })()           // process-level store (server reuse)`} />
+    <CodeBlock title="option grammar" code={`cache(fn)                             // cached until invalidated
+cache(fn, undefined, { ttl: 0 })                 // coalesce only — the mutation idiom
+cache(fn, undefined, { tags: ['orders'] })        // tag for grouped invalidation/probing
+cache(fn, undefined, { global: true })           // process-level store (server reuse)`} />
 </section>
 
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
@@ -158,7 +159,7 @@ cache.invalidate({ tags: ['orders'] })   // drop every entry sharing the tag`} /
         {'publishChat({ from, text })'}
     </button>
 
-    <CodeBlock title="cache.on — event-driven invalidation" code={`const { effect } = scope()
+    <CodeBlock title="cache.on — event-driven invalidation" code={`import { effect } from '@abide/abide/ui/effect'
 // a frame stales a computed read — drop it, let the next read refetch
 effect(() => cache.on(chat, (_m, { invalidate }) => invalidate(getChatCount)))
 

@@ -2,7 +2,7 @@
 import { probeOriginGate } from '$server/rpc/probeOriginGate.ts'
 import { trackPageview } from '$server/rpc/trackPageview.ts'
 import CodeBlock from '$ui/CodeBlock.abide'
-const { state } = scope()
+import { state } from '@abide/abide/ui/state'
 let probe = state('(not probed)')
 let beacon = state('(not sent)')
 

@@ -19,13 +19,13 @@ src/ui/pages/settings/page.abide   →  /settings`} note={'The folder path is th
 <Recipe task="Add a dynamic segment" live={LIVE} code={`src/ui/pages/product/[id]/page.abide   →  /product/:id`} note={'A `[name]` folder is a dynamic segment. The router percent-decodes it to match SSR, so `page.params.name` is the decoded value.'} />
 
 <Recipe task="Read a route param" live="/pages/product/1" code={`import { page } from '@abide/abide/shared/page'
-const { computed } = scope()
+import { state } from '@abide/abide/ui/state'
 
-const id = computed(() => page.params.id)`} note={'Params arrive as plain values on `page.params`, reactive across navigation — read them in a computed so the page updates when the segment changes without remounting.'} />
+const id = state.computed(() => page.params.id)`} note={'Params arrive as plain values on `page.params`, reactive across navigation — read them in a computed so the page updates when the segment changes without remounting.'} />
 
 <Recipe task="Read several params" live={LIVE} code={`// pages/org/[org]/repo/[repo]/page.abide
-const org = computed(() => page.params.org)
-const repo = computed(() => page.params.repo)`} note={'Every dynamic segment in the path contributes a key to `page.params`, named after its folder.'} />
+const org = state.computed(() => page.params.org)
+const repo = state.computed(() => page.params.repo)`} note={'Every dynamic segment in the path contributes a key to `page.params`, named after its folder.'} />
 
 <Recipe task="Add a catch-all route" live={LIVE} code={`src/ui/pages/docs/[...rest]/page.abide   →  /docs/*
 // page.params.rest === 'a/b/c'`} note={'A `[...name]` segment matches the rest of the path — for docs trees, file browsers, or a custom 404. It captures everything below its folder.'} />
@@ -33,21 +33,21 @@ const repo = computed(() => page.params.repo)`} note={'Every dynamic segment in 
 <Recipe
     task="Read a query-string parameter"
     live={LIVE}
-    code={`const query = computed(() => page.url.searchParams.get('q') ?? '')`}
+    code={`const query = state.computed(() => page.url.searchParams.get('q') ?? '')`}
     note={'`page.url` is a real `URL`, reassigned on every navigation — read `searchParams` in a computed and it tracks query changes too.'} />
 
 <Recipe
     task="React when a param changes"
     live="/pages/product/1"
-    code={`const product = computed(() => cache(getProduct)({ id: page.params.id }))`}
+    code={`const product = state.computed(() => cache(getProduct, { id: page.params.id }))`}
     note={'Put the param in a cache key and the read refetches when the segment changes — the client router keeps the page mounted and re-derives just the cell.'} />
 
-<Recipe task="Get the current path" live={LIVE} code={`const path = computed(() => page.url.pathname)`} note={"`page.url.pathname` is browser-space on both sides. Compare it against `url('/x')` output so it stays correct under an `APP_URL` subpath."} />
+<Recipe task="Get the current path" live={LIVE} code={`const path = state.computed(() => page.url.pathname)`} note={"`page.url.pathname` is browser-space on both sides. Compare it against `url('/x')` output so it stays correct under an `APP_URL` subpath."} />
 
 <Recipe
     task="Know when a navigation is in flight"
     live={LIVE}
-    code={`const busy = computed(() => page.navigating)
+    code={`const busy = state.computed(() => page.navigating)
 
 {#if busy}<TopProgressBar />{/if}`}
     note={'`page.navigating` is true while an SPA navigation resolves — drive a top progress bar or disable the nav during the transition.'} />

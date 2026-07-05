@@ -11,9 +11,9 @@ import CodeBlock from '$ui/CodeBlock.abide'
    rode the document and hydration seeds from __SSR__. trace() is isomorphic too:
    server-side from the request scope, browser-side from the trace stamped into the
    page. log is one logger on both sides. */
-const { state, computed } = scope()
-const connected = computed(() => online())
-const backend = computed(() => health())
+import { state } from '@abide/abide/ui/state'
+const connected = state.computed(() => online())
+const backend = state.computed(() => health())
 
 const pageTrace = trace()
 const demoChannel = log.channel('kitchen-sink:demo')
@@ -82,8 +82,8 @@ async function runTraced() {
         <pre
             class="mt-3 overflow-x-auto rounded-md bg-slate-900 p-3 text-xs leading-relaxed text-slate-100"><code>{JSON.stringify(backend, undefined, 2)}</code></pre>
 
-        <CodeBlock code={`const connected = computed(() => online())   // browser online/offline events
-const backend = computed(() => health())      // { reachable, ...AppHealth }, polled every 10s`} />
+        <CodeBlock code={`const connected = state.computed(() => online())   // browser online/offline events
+const backend = state.computed(() => health())      // { reachable, ...AppHealth }, polled every 10s`} />
 
         <CodeBlock title="the wire — public, app fields included" lang="sh" code={`curl -s http://localhost:3000/__abide/health
 # { "uptimeSeconds": 42, "abide": "<version>", "name": "kitchen-sink", "version": "0.0.0" }`} />

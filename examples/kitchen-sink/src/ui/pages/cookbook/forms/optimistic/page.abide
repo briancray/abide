@@ -15,7 +15,7 @@ const LIVE = '/cache'
     task="Apply an optimistic update, then confirm"
     live={LIVE}
     code={`let overlay = state(undefined)
-const count = computed(() => overlay ?? cache(getCount)())
+const count = state.computed(() => overlay ?? cache(getCount))
 
 async function bump() {
     overlay = count + 1
@@ -148,7 +148,7 @@ const back = () => (step -= 1)`}
     task="Load dependent select options"
     live={LIVE}
     code={`let country = state('')
-const cities = computed(() => country ? cache(getCities)({ country })() : [])`}
+const cities = state.computed(() => country ? cache(getCities, { country }) : [])`}
     note={'Derive the dependent options from the parent cell with a guarded `cache()` read — pick a country and the city list refetches, keyed on it.'} />
 
 <Recipe

@@ -45,7 +45,7 @@ pages/docs/layout.abide       // docs sidebar, inside the shell`} note={"Layouts
 <Recipe
     task="Register a menu handler once from a layout"
     live={LIVE}
-    code={`const { effect } = scope()
+    code={`import { effect } from '@abide/abide/ui/effect'
 effect(() => onMenu('reload', () => location.reload()))`}
     note={'Effects run client-only and once on mount. The root layout is the place for app-wide, one-time wiring (bundle menus, global listeners) since it never unmounts.'} />
 
@@ -65,21 +65,21 @@ effect(() => onMenu('reload', () => location.reload()))`}
     task="Share data from a layout to its pages"
     live={LIVE}
     code={`// layout
-const layout = scope()
-layout.share('layout', layout)
+import { state } from '@abide/abide/ui/state'
+state.share('org', org)
 // any page below
-const org = scope().shared('layout').read('org')`}
-    note={"Share the layout's scope; every page beneath reads its data via `shared(key).read(path)`. Reactive context flows down the chain — load org/user/theme once at the top."} />
+const org = state.shared('org')`}
+    note={"`state.share(key, value)` puts a value on the layout's scope; `state.shared(key)` reads it from any page beneath. Context flows down the chain — load org/user/theme once at the top."} />
 
 <Recipe
     task="Load shared data once per section"
     live={LIVE}
     code={`// in the layout — children reuse the same entry
-const org = computed(() => cache(getOrg)({ id: page.params.org }))`}
+const org = state.computed(() => cache(getOrg, { id: page.params.org }))`}
     note={'A `cache()` read in the layout is shared by every page under it (same key, one flight) — the layout is the natural home for section-wide data.'} />
 
 <Recipe task="Guard a whole section" live={LIVE} code={`// in admin/layout.abide
-const { effect } = scope()
+import { effect } from '@abide/abide/ui/effect'
 effect(() => {
     if (!isAdmin()) void navigate('/login')
 })`} note={"An effect in the section's layout runs for every page beneath it — redirect unauthorised users once, at the boundary, instead of in each page."} />
@@ -105,7 +105,7 @@ src/ui/pages/app/layout.abide         // sidebar + topbar`}
     task="Load route data with a loader convention"
     gap={true}
     code={`// no loader/getServerSideProps file — fetch in the page or layout
-{#await cache(getData)() then data}
+{#await cache(getData) then data}
     <View data={data} />
 {/await}`}
     note={"There's no separate data-loader module per route. Data-fetching lives in the page/layout itself via `cache()` + `{#await}` — colocated, isomorphic, and warm-hydrated, but not a distinct loader lifecycle."} />

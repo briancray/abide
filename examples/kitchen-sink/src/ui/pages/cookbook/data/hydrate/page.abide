@@ -13,7 +13,7 @@ const PROBES = '/probes'
 </p>
 
 <Recipe task="Fetch on navigation" live={LIVE} code={`const { params } = page
-const user = computed(() => cache(getUser)({ id: params.id }))`} note={'Read `page.params` in the cache key and the read refetches when the route param changes on SPA navigation — the client router keeps the layout mounted, the cell re-derives.'} />
+const user = state.computed(() => cache(getUser, { id: params.id }))`} note={'Read `page.params` in the cache key and the read refetches when the route param changes on SPA navigation — the client router keeps the layout mounted, the cell re-derives.'} />
 
 <Recipe
     task="Fetch on demand from an event"
@@ -40,7 +40,7 @@ async function search() {
     task="Show stale data while revalidating"
     live={PROBES}
     code={`import { refreshing } from '@abide/abide/shared/refreshing'
-const stale = computed(() => refreshing(getRates))
+const stale = state.computed(() => refreshing(getRates))
 
 <span class:opacity-50={stale}>{rates.usd}</span>`}
     note={'`refreshing(fn)` is true when a value is held but a fresher one is loading. Keep rendering the old value and dim it — the stale-while-revalidate UX, no flash of empty.'} />
@@ -48,7 +48,7 @@ const stale = computed(() => refreshing(getRates))
 <Recipe
     task="Distinguish first-load from a refresh"
     live={PROBES}
-    code={`const firstLoad = computed(() => pending(getRates) && !refreshing(getRates))`}
+    code={`const firstLoad = state.computed(() => pending(getRates) && !refreshing(getRates))`}
     note={'`pending` = no value yet (show a skeleton); `refreshing` = value held, refetching (dim it). Together they separate the empty state from the background update.'} />
 
 <Recipe
@@ -62,7 +62,7 @@ cache.invalidate({ tags: ['orders'] })`}
     task="Deduplicate a read used across components"
     live={LIVE}
     code={`// unrelated components, one request per render
-const me = () => cache(getCurrentUser, { tags: ['session'] })()`}
+const me = () => cache(getCurrentUser, undefined, { tags: ['session'] })`}
     note={'Export a shared cache wrapper and call it wherever you need the value — coalescing collapses the concurrent reads into one, and the tag lets you drop them all on sign-out.'} />
 
 <Recipe
@@ -78,7 +78,7 @@ const me = () => cache(getCurrentUser, { tags: ['session'] })()`}
 
 <Recipe task="Paginate a list" gap={true} code={`// no cursor/pagination helper — page it yourself
 let pageNum = state(1)
-const rows = computed(() => cache(listRows)({ page: pageNum, size: 20 }))
+const rows = state.computed(() => cache(listRows, { page: pageNum, size: 20 }))
 
 <button onclick={() => (pageNum += 1)}>next</button>`} note={"There's no built-in cursor or infinite-scroll primitive. Take page/cursor as an rpc arg, key the cache on it, and drive the offset with a cell — for infinite scroll, append results into a state array yourself."} />
 
@@ -87,7 +87,7 @@ const rows = computed(() => cache(listRows)({ page: pageNum, size: 20 }))
     gap={true}
     code={`// no optimistic-cache API — hold a local overlay
 let optimistic = state(undefined)
-const shown = computed(() => optimistic ?? cache(getCount)())
+const shown = state.computed(() => optimistic ?? cache(getCount))
 
 async function bump() {
     optimistic = shown + 1
@@ -100,7 +100,7 @@ async function bump() {
 <Recipe
     task="Refetch when the tab regains focus"
     gap={true}
-    code={`const { effect } = scope()
+    code={`import { effect } from '@abide/abide/ui/effect'
 effect(() => {
     const onFocus = () => cache.invalidate({ tags: ['session'] })
     window.addEventListener('focus', onFocus)

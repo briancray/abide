@@ -5,7 +5,7 @@ import CodeBlock from '$ui/CodeBlock.abide'
 
 type StreamFrame = { n: number; text: string }
 
-const { state } = scope()
+import { state } from '@abide/abide/ui/state'
 let sseFrames = state<StreamFrame[]>([])
 let jsonlFrames = state<StreamFrame[]>([])
 

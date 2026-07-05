@@ -17,7 +17,7 @@ const { title, code, lang = 'ts' } = props<{ title?: string; code: string; lang?
 {/if}
 <!-- hug the title label (mt-1) when present; otherwise keep the section's mt-3 rhythm -->
 <div class="codeblock {title ? 'mt-1' : 'mt-3'} overflow-x-auto rounded-md text-xs leading-relaxed">
-    {#await cache(highlightCode)({ code, lang }) then result}
+    {#await cache(highlightCode, { code, lang }) then result}
         <div class="contents">{html(result.html)}</div>
     {/await}
 </div>

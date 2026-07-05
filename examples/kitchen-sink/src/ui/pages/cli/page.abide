@@ -1,6 +1,6 @@
 <script>
 import CodeBlock from '$ui/CodeBlock.abide'
-const { state } = scope()
+import { state } from '@abide/abide/ui/state'
 let installer = state('(not fetched)')
 async function fetchInstaller() {
     const response = await fetch('/__abide/cli')

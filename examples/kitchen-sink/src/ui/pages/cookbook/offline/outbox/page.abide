@@ -30,13 +30,13 @@ const LIVE = '/outbox'
 await saveMessage({ id, text })`}
     note={'Add to local state before (or right after) the call so the UI updates immediately. The queue guarantees the write eventually lands or surfaces a permanent error.'} />
 
-<Recipe task="Read this rpc's queue" live={LIVE} code={`const queue = computed(() => saveMessage.outbox?.() ?? [])`} note={'`rpc.outbox()` is the reactive parked-writes list for that rpc. It exists only on a durable rpc, so guard with `?.` if the rpc might not be declared with outbox.'} />
+<Recipe task="Read this rpc's queue" live={LIVE} code={`const queue = state.computed(() => saveMessage.outbox?.() ?? [])`} note={'`rpc.outbox()` is the reactive parked-writes list for that rpc. It exists only on a durable rpc, so guard with `?.` if the rpc might not be declared with outbox.'} />
 
 <Recipe
     task="Read the app-wide queue"
     live={LIVE}
     code={`import { outbox } from '@abide/abide/ui/outbox'
-const unsynced = computed(() => outbox().length)`}
+const unsynced = state.computed(() => outbox().length)`}
     note={"The bare `outbox()` is the aggregate across every durable rpc — one reactive view for a global 'N unsynced' badge."} />
 
 <Recipe
@@ -60,7 +60,7 @@ outbox.retry()`}
     task="Probe queued and in-flight writes"
     live="/probes"
     code={`import { pending } from '@abide/abide/shared/pending'
-const syncing = computed(() => pending(saveMessage))`}
+const syncing = state.computed(() => pending(saveMessage))`}
     note={"`pending(rpc)` is true while anything is in flight *or* queued — one probe for a 'syncing…' indicator that covers both states."} />
 
 <Recipe

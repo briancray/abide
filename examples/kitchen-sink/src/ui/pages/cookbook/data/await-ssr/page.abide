@@ -33,7 +33,7 @@ const LIVE = '/cache'
 <Recipe
     task="Warm-hydrate an awaited read"
     live={LIVE}
-    code={`{#await cache(getUser)() then user}
+    code={`{#await cache(getUser) then user}
     <h1>{user.name}</h1>
 {/await}`}
     note={'Wrap the call in `cache()` and the SSR pass writes the result into the page snapshot — the client hydrates from it and skips the refetch. Bare `getUser()` would re-run on the client.'} />
@@ -107,7 +107,7 @@ const LIVE = '/cache'
     code={`const user = cache(getUser)   // one entry, one flight
 
 {#await user() then u}<Header user={u} />{/await}
-<Sidebar />  <!-- reads cache(getUser)() again — same entry -->`}
+<Sidebar />  <!-- reads cache(getUser) again — same entry -->`}
     note={"Two reads of the same cache key share one in-flight request and one snapshot. A child component's `{#await}` joins the page's SSR stream rather than starting a second fetch."} />
 
 <Recipe
@@ -124,7 +124,7 @@ const LIVE = '/cache'
 <Recipe
     task="Seed a streamed cache read into the snapshot"
     live={LIVE}
-    code={`{#await cache(getFeed)() then feed}
+    code={`{#await cache(getFeed) then feed}
     <Feed items={feed} />
 {/await}`}
     note={'A streaming `{#await cache()}` creates its entry mid-stream, so it is seeded into the page after the stream via resolve chunks — the client still hydrates warm without a second fetch.'} />

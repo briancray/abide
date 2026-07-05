@@ -16,35 +16,35 @@ const LIVE = '/cache'
     task="Cache a read across SSR and client"
     live={LIVE}
     code={`import { cache } from '@abide/abide/shared/cache'
-const { computed } = scope()
+import { state } from '@abide/abide/ui/state'
 
-const user = computed(() => cache(getUser)())`}
-    note={'`cache(fn)(args)` memoises by function + args, captures the SSR result into the page snapshot, and is reactive — one line, both sides, warm hydration for free.'} />
+const user = state.computed(() => cache(getUser))`}
+    note={'`cache(fn, args)` memoises by function + args, captures the SSR result into the page snapshot, and is reactive — one line, both sides, warm hydration for free.'} />
 
 <Recipe
     task="Coalesce identical in-flight calls"
     live={LIVE}
     code={`// three components, one request
-cache(getUser)()`}
+cache(getUser)`}
     note={'Coalescing is always on: identical calls in flight at the same time share one request and one result. This holds even with `ttl: 0` — coalescing is not retention.'} />
 
 <Recipe
     task="Retain a result for a while"
     live={LIVE}
-    code={`cache(getRates, { ttl: 60_000 })()`}
+    code={`cache(getRates, undefined, { ttl: 60_000 })`}
     note={'`ttl` (ms) keeps the entry warm after it resolves, so later reads skip the network until it expires. Retention is the only thing `ttl` controls.'} />
 
 <Recipe
     task="Coalesce only, never retain (the mutation idiom)"
     live={LIVE}
-    code={`cache(getCounter, { ttl: 0 })()`}
+    code={`cache(getCounter, undefined, { ttl: 0 })`}
     note={'`ttl: 0` shares concurrent flights but keeps nothing — the right default for data you invalidate yourself after every write.'} />
 
 <Recipe
     task="Tag entries for grouped invalidation"
     live={LIVE}
-    code={`cache(getOrder, { tags: ['orders'] })({ id })
-cache(getOrderList, { tags: ['orders'] })()`}
+    code={`cache(getOrder, { id }, { tags: ['orders'] })
+cache(getOrderList, undefined, { tags: ['orders'] })`}
     note={"A shared tag groups unrelated entries so one call can drop them together — the whole 'orders' surface at once."} />
 
 <Recipe
@@ -63,30 +63,30 @@ cache.invalidate(getCounter)   // next read refetches`}
 <Recipe
     task="Refetch when a socket frame arrives"
     live={LIVE}
-    code={`const { effect } = scope()
+    code={`import { effect } from '@abide/abide/ui/effect'
 effect(() => cache.on(chat, (_frame, { invalidate }) => invalidate(getChatCount)))`}
     note={"`cache.on(source, handler)` runs once per socket/stream frame; call `invalidate` inside to stale a read. The handler's invalidate is binding-scoped, so attribution replays after a reconnect gap."} />
 
 <Recipe
     task="Use a process-wide cache on the server"
     live={LIVE}
-    code={`cache(getRates, { global: true })()`}
+    code={`cache(getRates, undefined, { global: true })`}
     note={'`global: true` stores at the process level, so the entry is reused across requests on the server (per-request otherwise) — good for slow, shared, rarely-changing reads.'} />
 
 <Recipe
     task="Cache any async function, not just an rpc"
     live={LIVE}
-    code={`cache(async () => (await fetch(FEED)).json(), { ttl: 30_000 })()`}
+    code={`cache(async () => (await fetch(FEED)).json(), undefined, { ttl: 30_000 })`}
     note={"`cache` wraps any async function — a third-party fetch, a file read, an expensive compute. It's the coalesce+snapshot+reactivity primitive, not rpc-specific."} />
 
 <Recipe
     task="Show a cached read is fetching"
     live="/probes"
     code={`import { pending } from '@abide/abide/shared/pending'
-const loading = computed(() => pending(getCounter))`}
+const loading = state.computed(() => pending(getCounter))`}
     note={'`pending(fn)` is a standalone reactive probe of the cache/tail registries — true while the read is in flight, without threading a loading flag through the call.'} />
 
-<Recipe task="Refetch on an interval" live={LIVE} code={`const { effect } = scope()
+<Recipe task="Refetch on an interval" live={LIVE} code={`import { effect } from '@abide/abide/ui/effect'
 effect(() => {
     const id = setInterval(() => cache.invalidate(getRates), 15_000)
     return () => clearInterval(id)

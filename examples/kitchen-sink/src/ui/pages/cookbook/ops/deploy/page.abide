@@ -54,14 +54,14 @@ CMD ["server"]`}
     task="Scale within one process"
     live={LIVE}
     code={`// global cache, socket fan-out, subscriptions = process memory
-cache(getRates, { global: true })()`}
+cache(getRates, undefined, { global: true })`}
     note={'abide is single-process: the global cache, socket subscriptions, and fan-out live in process memory, not shared across instances. Scale vertically, or move shared state behind an rpc/store.'} />
 
 <Recipe
     task="Check connectivity from the client"
     live={OBS}
     code={`import { online } from '@abide/abide/shared/online'
-const connected = computed(() => online())`}
+const connected = state.computed(() => online())`}
     note={"`online()` reflects `navigator.onLine` reactively. Pair with `health()` for actual server reachability — the browser being online doesn't mean your server is up."} />
 
 <Recipe task="Probe server health" live={OBS} code={`import { health } from '@abide/abide/shared/health'
