@@ -37,7 +37,7 @@ export const getRates = GET(async ({ base = 'USD' }: { base?: string }) => {
     if (!(await reachable('api.frankfurter.app'))) {
         return error(503, 'rates upstream unreachable')
     }
-    const rates = await cache(fetchRates, { global: true, ttl: 60_000 })(base)
+    const rates = await cache(fetchRates, base, { global: true, ttl: 60_000 })
     return json(rates)
 })
 
