@@ -49,8 +49,21 @@ export function createRemoteFunction<Args, Return>(opts: {
         opts?: RpcOptions,
     ) => Promise<Response>
     parseArgsForFetch?: (request: Request) => Promise<Args | undefined>
+    /* A streaming rpc (handler returns jsonl()/sse()): the bare call returns the Subscribable
+       directly (the iterable IS the value) rather than decoding one Response body. Emitted by
+       the bundler's syntactic scan; false/undefined keeps the decode-a-Response path. */
+    streaming?: boolean
 }): RemoteFunction<Args, Return> {
-    const { method, url, clients, crossOrigin, buildRequest, invoke, parseArgsForFetch } = opts
+    const {
+        method,
+        url,
+        clients,
+        crossOrigin,
+        buildRequest,
+        invoke,
+        parseArgsForFetch,
+        streaming,
+    } = opts
 
     /*
     Dispatch is the one-stop entry for both the plain call (no prebuilt
@@ -92,9 +105,20 @@ export function createRemoteFunction<Args, Return>(opts: {
     Object.defineProperty(rawCall, REMOTE_FUNCTION, { value: true })
     const raw = rawCall as RawRemoteFunction<Args>
 
-    function callable(args: Args | FormData, opts?: RpcOptions): Promise<Return> {
-        /* Capture the rejection into the rpc error registry (design Part 4) keyed by call
-           identity, and clear it on success — the reactive `fn.error()` probe reads it. This
+    function callable(
+        args: Args | FormData,
+        opts?: RpcOptions,
+    ): Promise<Return> | Subscribable<Return> {
+        /* A streaming rpc (jsonl/sse) returns the Subscribable directly — the iterable IS the
+           value (for await / state(fn(args))). Deferred fetch, keyForRemoteCall-keyed so tail()
+           dedupes readers; no decode, so the error-capture path below doesn't apply. */
+        if (streaming) {
+            return subscribableFromResponse(keyForRemoteCall(method, url, args), () =>
+                raw(args as Args, opts),
+            )
+        }
+        /* Otherwise capture the rejection into the rpc error registry (design Part 4) keyed by
+           call identity, and clear it on success — the reactive `fn.error()` probe reads it. This
            does not touch the cache: the cache still evicts on error exactly as before. */
         const key = keyForRemoteCall(method, url, args)
         return raw(args, opts)
@@ -120,11 +144,6 @@ export function createRemoteFunction<Args, Return>(opts: {
     callable.clients = clients
     callable.crossOrigin = crossOrigin
     callable.raw = raw
-    callable.stream = (args?: Args | FormData): Subscribable<Return> => {
-        return subscribableFromResponse(keyForRemoteCall(method, url, args), () =>
-            raw(args as Args),
-        )
-    }
     /* Uniform runtime guard for every rpc — the per-rpc data typing lives entirely in the
        RpcErrorGuard<Errors> signature RemoteFunction projects onto it (Errors flows from the
        rpc helper's declared type, not from here). */

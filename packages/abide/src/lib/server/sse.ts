@@ -35,7 +35,7 @@ const KEEPALIVE_INTERVAL_MS = 15000
 export function sse<Frame>(
     iterable: AsyncIterable<Frame>,
     init?: ResponseInit,
-): TypedResponse<Frame> {
+): TypedResponse<AsyncIterable<Frame>> {
     const body = streamFromIterator(iterable, {
         encodeFrame: (value) => `data: ${JSON.stringify(value)}\n\n`,
         encodeError: (message) => sseErrorFrame.encode(message),
@@ -50,5 +50,5 @@ export function sse<Frame>(
             'X-Content-Type-Options': 'nosniff',
             Connection: 'keep-alive',
         }),
-    ) as TypedResponse<Frame>
+    ) as TypedResponse<AsyncIterable<Frame>>
 }

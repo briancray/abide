@@ -31,7 +31,7 @@ import { withResponseDefaults } from './runtime/withResponseDefaults.ts'
 export function jsonl<Frame>(
     iterable: AsyncIterable<Frame>,
     init?: ResponseInit,
-): TypedResponse<Frame> {
+): TypedResponse<AsyncIterable<Frame>> {
     const body = streamFromIterator(iterable, {
         encodeFrame: (value) => `${JSON.stringify(value)}\n`,
         encodeError: (message) => jsonlErrorFrame.encode(message),
@@ -43,5 +43,5 @@ export function jsonl<Frame>(
             'Cache-Control': NO_STORE,
             'X-Content-Type-Options': 'nosniff',
         }),
-    ) as TypedResponse<Frame>
+    ) as TypedResponse<AsyncIterable<Frame>>
 }

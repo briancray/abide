@@ -7,7 +7,6 @@ import type { RawRemoteFunction } from './RawRemoteFunction.ts'
 import type { RemoteCallable } from './RemoteCallable.ts'
 import type { RpcError } from './RpcError.ts'
 import type { RpcErrorGuard } from './RpcErrorGuard.ts'
-import type { Subscribable } from './Subscribable.ts'
 
 /*
 Remote function reference produced by GET/POST/... inside an `$rpc/**`
@@ -21,12 +20,12 @@ RemoteFunction whose call resolves to the underlying Response — same
 method, same url, same args, no decode. Pass `fn.raw` to cache() to
 memoise raw Responses against the same cache key as `fn` (both share one
 stored entry — the decode just happens on the way out for callers of
-`fn`). `.stream(args)` returns an iterable view of the Response body:
-SSE / JSONL handlers yield each frame; non-streaming handlers yield the
-decoded body once then complete. The result is a Subscribable, so it
-can be passed to tail() and shared across reactive consumers.
-For sustained broadcast / pub-sub use the `abide/server/socket` primitive —
-HTTP rpc isn't the place for long-lived multi-publisher subscriptions.
+`fn`). A streaming handler (jsonl()/sse()) makes the bare call return a
+`Subscribable<Frame>` directly (the iterable IS the value) — consume it with
+`for await (… of fn(args))` or `state(fn(args))`; there is no `.stream()`, and
+`await`-ing a streaming call is a compile error. For sustained broadcast /
+pub-sub use the `abide/server/socket` primitive — HTTP rpc isn't the place for
+long-lived multi-publisher subscriptions.
 `.fetch(req)` is the framework's request-dispatch entry point — used by
 the router to invoke the handler from an incoming HTTP request, not
 for user code.
@@ -52,7 +51,6 @@ export type RemoteFunction<
     readonly clients: ClientFlags
     readonly crossOrigin?: boolean
     readonly raw: RawRemoteFunction<Args>
-    stream(args?: Args | FormData): Subscribable<Return>
     fetch(request: Request): Promise<Response>
     /* Type-guard a caught error against this rpc's declared `errors` (plus the framework
        `'validation'` / `'queued'`): narrows `.kind` and, for a known kind, `.data` — the
