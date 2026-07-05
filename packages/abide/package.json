@@ -57,6 +57,7 @@
         "./server/rpc/defineRpc": "./src/lib/server/rpc/defineRpc.ts",
         "./server/sockets/defineSocket": "./src/lib/server/sockets/defineSocket.ts",
         "./server/prompts/definePrompt": "./src/lib/server/prompts/definePrompt.ts",
+        "./ui/on": "./src/lib/ui/on.ts",
         "./ui/tail": "./src/lib/ui/tail.ts",
         "./shared/cache": "./src/lib/shared/cache.ts",
         "./shared/pending": "./src/lib/shared/pending.ts",
