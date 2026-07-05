@@ -12,7 +12,6 @@ import { keyForRemoteCall } from './keyForRemoteCall.ts'
 import { producerKey } from './producerKey.ts'
 import { REMOTE_FUNCTION } from './REMOTE_FUNCTION.ts'
 import { REPLAYABLE_METHODS } from './REPLAYABLE_METHODS.ts'
-import { recordCacheKey } from './recordCacheKey.ts'
 import { SocketDisconnectedError } from './SocketDisconnectedError.ts'
 import { selectorMatcher } from './selectorMatcher.ts'
 import { selectorPrefix } from './selectorPrefix.ts'
@@ -199,22 +198,8 @@ export function cache<Args, Return>(
         reader of the key, so one mutating it would corrupt the others. A live
         fetch hands each reader a fresh object; cloning keeps warm reads the same.
         */
-        if (
-            !isRaw &&
-            existing !== undefined &&
-            (existing.value !== undefined || existing.warm !== undefined)
-        ) {
-            /* A deferred seed carries a lazy materializer instead of a decoded value: decode
-               it here, on the first read that needs it (off the hydration path), and cache the
-               result onto the entry so later reads skip the decode. Drop the materializer once
-               used — its closure pins the raw body string, so keeping it alongside the decoded
-               value would double memory for exactly the large payloads deferral targets. */
-            const warmValue = existing.value !== undefined ? existing.value : existing.warm?.()
-            existing.value = warmValue
-            existing.warm = undefined
-            const warmed = Promise.resolve(cloneWarmValue(warmValue)) as Promise<Return>
-            recordCacheKey(warmed, key)
-            return warmed
+        if (!isRaw && existing !== undefined && existing.value !== undefined) {
+            return Promise.resolve(cloneWarmValue(existing.value)) as Promise<Return>
         }
         const responsePromise = invokeRemote(
             store,
@@ -227,11 +212,7 @@ export function cache<Args, Return>(
         if (isRaw) {
             return responsePromise
         }
-        /* Tag the decoded value promise with its key so the SSR resume path can recognise a
-           cache-backed await value and defer a large one to a `{ defer, key }` marker. */
-        const decoded = responsePromise.then(decodeResponse) as Promise<Return>
-        recordCacheKey(decoded, key)
-        return decoded
+        return responsePromise.then(decodeResponse) as Promise<Return>
     }
     /* Non-enumerable brand; selectorMatcher and the re-wrap guard read it. */
     Object.defineProperty(read, CACHE_WRAPPED, { value: fn })

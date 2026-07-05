@@ -640,25 +640,12 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
            its children become slot content (rendered where the child puts <slot>). */
         if (UPPERCASE_START.test(tag)) {
             const slotted = selfClosing ? [] : readChildren(tag)
-            /* `client:idle` / `client:visible` are island directives (bare) — pull them out of
-               the attributes so they never round-trip as props; only the build back-end reads
-               the trigger. Any other `client:*` falls through as a prop (a prop-check error). */
-            const clientAttr = attrs.find(
-                (attr) =>
-                    attr.kind === 'static' &&
-                    (attr.name === 'client:idle' || attr.name === 'client:visible'),
-            )
-            const clientTrigger =
-                clientAttr?.kind === 'static'
-                    ? (clientAttr.name.slice('client:'.length) as 'idle' | 'visible')
-                    : undefined
             return {
                 kind: 'component',
                 name: tag,
                 loc: baseOffset + tagStart,
-                props: toProps(attrs.filter((attr) => attr !== clientAttr)),
+                props: toProps(attrs),
                 children: slotted,
-                clientTrigger,
             }
         }
         /* `{...expr}` spreads onto a component (its props) or a native element (its

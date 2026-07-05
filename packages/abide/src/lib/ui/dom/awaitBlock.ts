@@ -1,20 +1,17 @@
-import { activeCacheStore } from '../../shared/activeCacheStore.ts'
 import { decodeRefJson } from '../../shared/decodeRefJson.ts'
 import { effect } from '../effect.ts'
 import { claimChild } from '../runtime/claimChild.ts'
 import { generationGuard } from '../runtime/generationGuard.ts'
 import { RANGE_CLOSE, RANGE_OPEN } from '../runtime/RANGE_MARKER.ts'
 import { RENDER } from '../runtime/RENDER.ts'
-import type { DeferMarker, ResumeEntry } from '../runtime/RESUME.ts'
+import type { ResumeEntry } from '../runtime/RESUME.ts'
 import { RESUME } from '../runtime/RESUME.ts'
-import { scheduleWake } from '../runtime/scheduleWake.ts'
 import { scope } from '../runtime/scope.ts'
 import { scopeGroup } from '../runtime/scopeGroup.ts'
 import type { State } from '../runtime/types/State.ts'
 import { state } from '../state.ts'
 import { buildDetachedRange } from './buildDetachedRange.ts'
 import { discardBoundary } from './discardBoundary.ts'
-import { firstElementBetween } from './firstElementBetween.ts'
 import { removeRange } from './removeRange.ts'
 
 /*
@@ -60,20 +57,11 @@ export function awaitBlock(
     let active: { start: Comment; end: Comment; dispose: () => void } | undefined
     let anchor: Node | undefined
     let first = true
-    /* A deferred (inert-adopted) block schedules a wake (idle or visible); cancel it if the
-       owner tears the block out before it fires, so no late re-run touches a detached anchor. */
-    let cancelWake: (() => void) | undefined
     /* Bumped each run so a prior run's in-flight promise can't clobber a newer one, AND on
        owner teardown so an in-flight promise that settles AFTER the enclosing `{#if}`/
        `{#for}`/component tears this block out is abandoned — otherwise its settle runs
-       `place` on the block's now-detached anchor and `insertBefore` throws NotFoundError.
-       The teardown also cancels a pending wake (above). */
-    const guard = generationGuard(() => cancelWake?.())
-    /* Flipped by a deferred block's wake. Read at the top of the effect so the block subscribes
-       to it and re-runs when it flips — the same re-run path an invalidate takes, so wake needs
-       no bespoke build logic. Never flips for a non-deferred block, so it costs one inert read
-       per run there. */
-    const woken = state(false)
+       `place` on the block's now-detached anchor and `insertBefore` throws NotFoundError. */
+    const guard = generationGuard()
     /* The resolved value, held as a reactive cell so the then-branch reads it through its
        own effects. A re-run that resolves to a NEW value SETS this cell instead of rebuilding
        the branch — the branch (and any keyed `each` inside it) survives and updates in place,
@@ -192,53 +180,6 @@ export function awaitBlock(
         active = { start, end, dispose }
     }
 
-    /* Inert adoption — a deferred `{#await cache()}` (large payload, shipped as a `{defer,key}`
-       resume marker). Adopt the SSR then-branch WITHOUT building its bindings or materializing
-       the awaited value: the server markup is already correct, so keep it verbatim and skip the
-       payload decode entirely (the boot-path cost deferral targets). Only subscribe THIS block's
-       effect to the cache key — reads, decodes and fetches all wait. A later cache.invalidate
-       re-runs the effect, which then reads the value for real and builds a fresh branch. Sound
-       because a display-first read replaces the whole branch on re-read anyway, so there is no
-       extra flash beyond the swap the re-read already performs. */
-    const adoptInert = (open: Node | null, key: string): void => {
-        const cursor = hydration as NonNullable<typeof hydration>
-        const firstKept = open?.nextSibling ?? null
-        /* Scan to THIS block's close marker, leaving every server node in place. Nested
-           blocks carry different ids, so the first data match is our own close. */
-        let node: Node | null = firstKept
-        while (node !== null && (node as { data?: string }).data !== `/abide:await:${id}`) {
-            node = node.nextSibling
-        }
-        const close = node
-        cursor.next.set(parent, close?.nextSibling ?? null)
-        /* Bracket the kept nodes as a `[`…`]` range + park an anchor, identical to `adopt`,
-           so the first re-run's `place`/`detach` evicts them like any other branch. */
-        const start = document.createComment(RANGE_OPEN)
-        parent.insertBefore(start, firstKept ?? close)
-        const end = document.createComment(RANGE_CLOSE)
-        parent.insertBefore(end, close)
-        anchor = document.createTextNode('')
-        parent.insertBefore(anchor, close)
-        /* No scope/effects were built for the kept nodes, so disposal only evicts the range. */
-        active = { start, end, dispose: () => undefined }
-        /* Not 'then' — the first re-run rebuilds the branch fresh via `place`. */
-        activeKind = 'pending'
-        /* Subscribe without a value read: no clone, no decode, no fetch — just the key, so
-           cache.invalidate re-runs this effect (createSubscriber ties it to the running scope). */
-        activeCacheStore().subscribe(key)
-        /* Wake the inert branch — it's a boot-frame optimization, never a lasting mode. The
-           wake flips `woken`, re-running the effect through its normal `render` path: the
-           lazily-seeded cache reads warm, so the branch materializes live and interactive with
-           no fetch. Closes the "deferred grid stays inert until invalidate" gap.
-
-           Position picks the trigger ('auto'): a branch with an element wakes on VISIBLE (a
-           below-the-fold grid decodes only when scrolled to, one never reached costs nothing);
-           an empty branch or a DOM with no observer wakes on IDLE — never lingering inert. */
-        cancelWake = scheduleWake('auto', firstElementBetween(firstKept, close), () => {
-            woken.value = true
-        })
-    }
-
     /* Discard the SSR boundary and (re)build the block from the live promise, fresh
        (hydration off) — the recovery path when adoption can't use the server markup. */
     const rebuildCold = (open: Node | null): void => {
@@ -275,27 +216,19 @@ export function awaitBlock(
            lives. A decode failure (malformed/absent payload) reads as "no resume" — fall
            through to the live promise rather than crash hydration. */
         const raw = RESUME[id]
-        let decoded: ResumeEntry | DeferMarker | undefined
+        let decoded: ResumeEntry | undefined
         if (raw !== undefined) {
             try {
-                decoded = decodeRefJson(raw) as ResumeEntry | DeferMarker
+                decoded = decodeRefJson(raw) as ResumeEntry
             } catch {
                 decoded = undefined
             }
         }
-        /* A deferred marker ships the cache key, not the value — adopt the server branch inert
-           and skip the decode. Intercept before the ok/catch logic. Object-guard the `in`: a
-           corrupt manifest decoding to a primitive/null must read as "no resume" (fall through),
-           not throw past the decode try/catch and crash hydration. */
-        if (typeof decoded === 'object' && decoded !== null && 'defer' in decoded) {
-            adoptInert(open, decoded.key)
-            return
-        }
-        /* Non-deferred: read the promise now so the block subscribes to its reactive source
-           (a cache key) — warm on resume, so no round-trip — then adopt the resume value /
-           warm-sync result below, or discard and build the pending branch fresh. */
+        /* Read the promise now so the block subscribes to its reactive source (a cache key) —
+           warm on resume, so no round-trip — then adopt the resume value / warm-sync result
+           below, or discard and build the pending branch fresh. */
         const result = promiseThunk()
-        const entry = decoded as ResumeEntry | undefined
+        const entry = decoded
         if (entry !== undefined) {
             /* Build the adopted branch around a value CELL (then) so a later re-run updates
                it in place, exactly like a fresh mount. The `throw` for a catch-less rejection
@@ -354,17 +287,12 @@ export function awaitBlock(
     }
 
     effect(() => {
-        /* Subscribe to the wake cell every run (including the first, before it can flip) so a
-           deferred block's idle wake re-runs this effect. Inert for non-deferred blocks. */
-        woken.value
         guard.renew()
         if (first) {
             first = false
             if (hydration !== undefined) {
-                /* firstHydrate reads the promise ITSELF, after checking the resume marker: a
-                   deferred block must not invoke promiseThunk (it would materialize/fetch the
-                   value we're deferring) and subscribes by key instead; every other path reads
-                   it so the block subscribes to its reactive source (a cache key). */
+                /* firstHydrate reads the promise ITSELF so the block subscribes to its reactive
+                   source (a cache key), then adopts the resume value / warm-sync result. */
                 firstHydrate()
                 return
             }

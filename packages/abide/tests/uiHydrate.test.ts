@@ -21,6 +21,7 @@ import { escapeKey } from '../src/lib/ui/runtime/escapeKey.ts'
 import { RESUME } from '../src/lib/ui/runtime/RESUME.ts'
 import type { SsrRender } from '../src/lib/ui/runtime/types/SsrRender.ts'
 import { state } from '../src/lib/ui/state.ts'
+import { tryEncodeResume } from '../src/lib/ui/tryEncodeResume.ts'
 import { installMiniDom } from './support/installMiniDom.ts'
 
 beforeAll(() => {
@@ -680,6 +681,77 @@ describe('hydrate — adopt server DOM', () => {
             'ada',
             'margaret',
         ])
+
+        delete RESUME[0] // the manifest is process-global; don't leak into other tests
+    })
+
+    test('blocking {#await} with an interactive control hydrates live (no inert gap)', async () => {
+        /* The logout-gap regression: an interactive control inside a blocking await's
+           then-branch must wire its handler on hydrate. Later-hydration once adopted such a
+           branch INERT (markup kept, listener unwired) until a wake fired — a dead control on
+           arrival. Blocking awaits now hydrate eagerly, so the handler is always live. */
+        ;(globalThis as { __loadUser?: () => Promise<string> }).__loadUser = () =>
+            Promise.resolve('ada')
+        ;(globalThis as { __logoutCalls?: number }).__logoutCalls = 0
+        const source = `
+            <script>
+                function logout() { globalThis.__logoutCalls += 1 }
+            </script>
+            <main>
+                {#await __loadUser() then name}
+                    <button onclick={logout}>logout {name}</button>
+                {/await}
+            </main>
+        `
+
+        // 1) server render: a blocking await renders inline and seeds its value into resume
+        const server = (await new Function(
+            'doc',
+            'state',
+            'computed',
+            'effect',
+            compileSSR(source),
+        )(doc, state, computed, effect)) as SsrRender
+        expect(server.html).toContain('logout ada')
+
+        // 2) seed the resume manifest as the stream's seed script would (ref-json string)
+        RESUME[0] = tryEncodeResume(server.resume[0], 0) as string
+        expect(decodeRefJson(RESUME[0])).toEqual({ ok: true, value: 'ada' })
+
+        // 3) hydrate the server HTML
+        const host = document.createElement('div')
+        host.innerHTML = server.html
+        const findButton = (node: {
+            tagName?: string
+            childNodes?: unknown[]
+        }): { dispatchEvent: (e: { type: string }) => void } | undefined => {
+            if (node.tagName?.toLowerCase() === 'button') {
+                return node as unknown as { dispatchEvent: (e: { type: string }) => void }
+            }
+            for (const child of node.childNodes ?? []) {
+                const found = findButton(child as { tagName?: string; childNodes?: unknown[] })
+                if (found !== undefined) {
+                    return found
+                }
+            }
+            return undefined
+        }
+        const button = findButton(host as unknown as { childNodes?: unknown[] })
+        expect(button).toBeDefined()
+
+        const runtime = { doc, state, computed, effect, appendText, appendStatic, on, awaitBlock }
+        const names = Object.keys(runtime)
+        const body = compileComponent(source)
+        hydrate(host, (target) => {
+            new Function('host', ...names, body)(
+                target,
+                ...names.map((n) => runtime[n as keyof typeof runtime]),
+            )
+        })
+
+        // 4) the handler is wired on the adopted node — a click fires it (dead before eager hydrate)
+        button?.dispatchEvent({ type: 'click' })
+        expect((globalThis as { __logoutCalls?: number }).__logoutCalls).toBe(1)
 
         delete RESUME[0] // the manifest is process-global; don't leak into other tests
     })

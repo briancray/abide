@@ -1,6 +1,5 @@
-import { deferResume } from './deferResume.ts'
 import { resumeSeedScript } from './resumeSeedScript.ts'
-import type { DeferMarker, ResumeEntry } from './runtime/RESUME.ts'
+import type { ResumeEntry } from './runtime/RESUME.ts'
 import type { SsrAwait, SsrRender } from './runtime/types/SsrRender.ts'
 import { tryEncodeResume } from './tryEncodeResume.ts'
 
@@ -40,8 +39,8 @@ export async function* renderToStream(
        instead of refetching. (`resume` is the render body's live object, so late writes
        appear here.) */
     const seededResume = new Set<number>(Object.keys(resume).map(Number))
-    const resumeDelta = (): Record<number, ResumeEntry | DeferMarker> => {
-        const delta: Record<number, ResumeEntry | DeferMarker> = {}
+    const resumeDelta = (): Record<number, ResumeEntry> => {
+        const delta: Record<number, ResumeEntry> = {}
         for (const [key, entry] of Object.entries(resume)) {
             const id = Number(key)
             if (!seededResume.has(id)) {
@@ -84,22 +83,19 @@ export async function* renderToStream(
     }
 }
 
-type Settled = { id: number; html: string; resume: ResumeEntry | DeferMarker }
+type Settled = { id: number; html: string; resume: ResumeEntry }
 
 /* Awaits one streaming block's promise and renders the resolved or error branch to
    HTML (the renderers are async so a nested `await` block composes), capturing the
    value (serializable) for the resume manifest. Errors serialize as their message —
-   enough for the catch branch, without leaking a stack. A cache-backed value defers via
-   `deferResume` (a `{defer,key}` marker + lazy body seed) — the client adopts the streamed
-   branch inert instead of decoding the value; a non-cache value ships inline as before. */
+   enough for the catch branch, without leaking a stack. The resolved value ships inline
+   so hydration adopts the streamed branch warm. */
 function settle(block: SsrAwait): Promise<Settled> {
-    /* Keep the promise: cache() tagged it with its key, which `deferResume` reads to defer. */
-    const pending = block.promise()
-    return Promise.resolve(pending).then(
+    return Promise.resolve(block.promise()).then(
         async (value) => ({
             id: block.id,
             html: await block.then(value),
-            resume: deferResume(pending, value),
+            resume: { ok: true, value },
         }),
         async (error) => {
             /* No catch branch → surface the rejection (500 before the first flush,
@@ -123,6 +119,6 @@ function settle(block: SsrAwait): Promise<Settled> {
    strings. `tryEncodeResume` handles the serialize-or-refetch policy (undefined → no
    script → the swap consumers skip registration → hydration re-runs that one promise).
    `applyResolved`/the inline swap script store it via `.textContent`; `awaitBlock` decodes it. */
-function encodeStreamResume(resume: ResumeEntry | DeferMarker, id: number): string | undefined {
+function encodeStreamResume(resume: ResumeEntry, id: number): string | undefined {
     return tryEncodeResume(resume, id)?.replace(/</g, '\\u003c')
 }

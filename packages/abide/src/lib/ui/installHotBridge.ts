@@ -1,5 +1,4 @@
 import { snippet } from '../shared/snippet.ts'
-import { deferResume } from './deferResume.ts'
 import { anchorCursor } from './dom/anchorCursor.ts'
 import { appendSnippet } from './dom/appendSnippet.ts'
 import { appendStatic } from './dom/appendStatic.ts'
@@ -69,7 +68,6 @@ export function installHotBridge(): void {
         eachAsync,
         when,
         awaitBlock,
-        deferResume,
         tryBlock,
         switchBlock,
         mountSlot,

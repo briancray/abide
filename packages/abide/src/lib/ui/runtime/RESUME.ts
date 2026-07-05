@@ -16,12 +16,6 @@
    same reference. */
 export type ResumeEntry = { ok: true; value: unknown } | { ok: false; error: unknown }
 
-/* Deferred-resume marker (Tier 2): a large cache-backed `{#await cache()}` ships this in
-   place of its value — just the cache key, so hydration adopts the server branch inert and
-   pays no value decode. The client seeds that key lazily and materializes it only on a later
-   re-read. Discriminated from a ResumeEntry by the `defer` field. */
-export type DeferMarker = { defer: true; key: string }
-
 const globalScope = globalThis as { __abideResume?: Record<number, string> }
 globalScope.__abideResume ??= {}
 

@@ -527,15 +527,10 @@ export function generateSSR(
            `withBindings` shadow models, so a reference to the binding reads the plain
            local rather than the (unresolved) component signal it shadows. */
         const resolved = nextVar('$av')
-        /* Keep the promise object: a cache() read tagged it with its store key, which
-           `$$deferResume` reads to defer a cache-backed value (ship a `{defer,key}` marker +
-           lazy seed) instead of inlining it — the blocking form's contract. */
-        const promiseVar = nextVar('$ap')
         let code = `const ${id} = $ctx.next++;\n`
         code += `${target}.push("<!--abide:await:" + ${id} + "-->");\n`
         code += `try {\n`
-        code += `const ${promiseVar} = (${lowerExpression(node.promise)});\n`
-        code += `const ${resolved} = await ${promiseVar};\n`
+        code += `const ${resolved} = await (${lowerExpression(node.promise)});\n`
         code += `{\n`
         code += `const ${plan.resolvedAs} = ${resolved};\n`
         code += withBindings(withShadow, plan.resolvedBindings, ssrBindingKind, () =>
@@ -545,7 +540,9 @@ export function generateSSR(
            shadow — matching the catch branch below, so a finally expression naming the
            same identifier as the `then` binding reads the component signal, not the local. */
         code += branchContent(plan.finallyChildren, target)
-        code += `$resume[${id}] = $$deferResume(${promiseVar}, ${plan.resolvedAs});\n`
+        /* Seed the resolved value into the resume manifest so hydration adopts the server
+           branch warm (no round-trip) and wires it live on the first frame. */
+        code += `$resume[${id}] = { ok: true, value: ${plan.resolvedAs} };\n`
         code += `}\n`
         if (plan.surfaceRejection) {
             /* No catch/finally → let the rejection surface instead of an empty branch. */
@@ -569,9 +566,7 @@ export function generateSSR(
        `await` block inside the branch composes. `finally` appends after the outcome,
        matching the client's concatenated node range. Neither catch nor finally → omit
        `catch` so a rejection surfaces (renderToStream re-throws); a finally-only block
-       keeps a catch renderer that renders just finally. A cache-backed streaming value is
-       DEFERRED at settle time (renderToStream ships a `{defer,key}` marker + lazy body, the
-       client adopts the streamed branch inert) — the machinery here is unchanged. */
+       keeps a catch renderer that renders just finally. */
     function generateStreamingAwait(
         node: Extract<TemplateNode, { kind: 'await' }>,
         target: string,

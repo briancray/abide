@@ -558,11 +558,7 @@ export function generateBuild(
         parentVar: string,
         before: string,
     ): string {
-        /* `client:idle`/`client:visible` → the island trigger, the 6th mountChild arg. Omitted
-           (the common case) leaves the call byte-identical to before — eager hydration. */
-        const trigger =
-            node.clientTrigger !== undefined ? `, ${JSON.stringify(node.clientTrigger)}` : ''
-        return `$$mountChild(${parentVar}, ${node.name}, ${propsArg(node)}, ${before}, ${JSON.stringify(node.name)}${trigger});\n`
+        return `$$mountChild(${parentVar}, ${node.name}, ${propsArg(node)}, ${before}, ${JSON.stringify(node.name)});\n`
     }
 
     /* An await block: pending → resolved(value) / error branches. Each branch is a

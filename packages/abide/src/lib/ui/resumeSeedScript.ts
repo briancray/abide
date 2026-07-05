@@ -1,5 +1,5 @@
 import { safeJsonForScript } from '../shared/safeJsonForScript.ts'
-import type { DeferMarker, ResumeEntry } from './runtime/RESUME.ts'
+import type { ResumeEntry } from './runtime/RESUME.ts'
 import { tryEncodeResume } from './tryEncodeResume.ts'
 
 /* A self-contained `<script>` seeding the await-resume manifest with the blocking
@@ -11,7 +11,7 @@ import { tryEncodeResume } from './tryEncodeResume.ts'
    early or parse as a line terminator. Shared by the buffered (`createUiPageRenderer`)
    and streaming (`renderToStream`) paths. */
 // @documentation plumbing
-export function resumeSeedScript(resume: Record<number, ResumeEntry | DeferMarker>): string {
+export function resumeSeedScript(resume: Record<number, ResumeEntry>): string {
     /* ref-json (not JSON) so a value carrying cycles or shared back-references — a
        media tree with parent↔child links — seeds instead of being dropped. `tryEncodeResume`
        drops just an unserializable entry (the client re-runs that one branch's promise),

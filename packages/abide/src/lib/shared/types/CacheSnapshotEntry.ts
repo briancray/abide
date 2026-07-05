@@ -14,9 +14,4 @@ export type CacheSnapshotEntry = {
     statusText: string
     headers: Array<[string, string]>
     body: string
-    /* Deferred seed (Tier 2): the client stores the body but does NOT decode it at boot —
-       the warm value is materialized lazily on the first read, off the hydration path. Set
-       by the server for a deferred `{#await cache()}` whose value ships via a `{defer,key}`
-       resume marker instead of inline, so hydration touches neither copy's decode. */
-    lazy?: boolean
 }
