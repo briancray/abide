@@ -89,10 +89,11 @@ For tests, add the preload so the `.abide` loader + virtual resolver are active:
   (`jsonl`/`sse`) makes the bare call return a `Subscribable` — `for await` or
   `state(fn(args))`; `await fn(args)` is a compile error.
 - **Socket** (`socket(opts)` in `src/server/sockets/<name>.ts`): options
-  `schema`, `tail` (retained-frame count), `ttl` (lazy eviction of retained
-  frames), `clients`, `clientPublish`. `Socket<T>` is an isomorphic
-  `AsyncIterable<T>`; `.publish(m)` fans out, `.tail(n)` replays. Consume live
-  frames with `tail(chat)` / `tail(chat, { last })` in the UI.
+  `schema`, `tail` (retained-frame count, default `1`; `0` opts out), `ttl` (lazy
+  eviction of retained frames), `clients`, `clientPublish`. `Socket<T>` is an
+  isomorphic `AsyncIterable<T>`; `.broadcast(m)` fans out to every subscriber
+  (`.publish` is its retained alias), `.tail(n)` replays. Bare iteration is
+  live-only. Consume live frames with `tail(chat)` / `tail(chat, { last })` in the UI.
 - **Page / layout**: a `page.abide` under `src/ui/pages/`; `[id]` dynamic
   segments surface on `page.params`; `layout.abide` wraps nested routes with
   `{children()}` as its outlet. Read the active route reactively via `page`;

@@ -30,7 +30,11 @@ to remote subscribers; called client-side (via socketProxy) it sends a
 */
 // @documentation plumbing
 export function defineSocket<T>(name: string, opts: SocketOptions = {}): Socket<T> {
-    const retention = opts.tail ?? 0
+    /* Retention defaults to 1: the socket keeps its last frame so a late joiner, a
+       reconnect, and `.peek()` all have the current value to seed from. Bare iteration
+       still replays nothing (iterate(0) below) — a real-time `watch(socket, …)` reaction
+       must see only live frames, never re-process the retained one. `tail: 0` opts out. */
+    const retention = opts.tail ?? 1
     const ttl = opts.ttl
     const schema = opts.schema
     /*
@@ -172,6 +176,9 @@ export function defineSocket<T>(name: string, opts: SocketOptions = {}): Socket<
         name,
         clients,
         publish,
+        /* `broadcast` is the taught name for `publish` (server → all subscribers); publish
+           stays as an alias through the migration. Same isomorphic fan-out. */
+        broadcast: publish,
         tail: (count?: number, hooks?: TailHooks) => iterate(count ?? 'all', hooks),
         [Symbol.asyncIterator]: () => iterate(0)[Symbol.asyncIterator](),
     }

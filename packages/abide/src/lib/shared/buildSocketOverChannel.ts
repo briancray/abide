@@ -48,10 +48,14 @@ export function buildSocketOverChannel<T>(
             },
         }
     }
+    const publish = (message: T) => resolveChannel().publish(name, message)
     return {
         name,
         clients: browserClientFlags,
-        publish: (message: T) => resolveChannel().publish(name, message),
+        publish,
+        /* `broadcast` is the taught name — sends the same server-validated `pub` frame as
+           publish (the dispatcher gates it on the topic's `clientPublish`). */
+        broadcast: publish,
         tail: (count?: number, hooks?: TailHooks) => iterate(count, hooks),
         [Symbol.asyncIterator]: () => iterate(0)[Symbol.asyncIterator](),
     }

@@ -18,6 +18,10 @@ socket.
 export interface Socket<T> extends AsyncIterable<T> {
     readonly name: string
     readonly clients: ClientFlags
+    /* `broadcast` is the taught name — send a frame to every subscriber (server always;
+       client only when `clientPublish` is set). `publish` is its retained alias through the
+       migration. */
+    broadcast(message: T): void
     publish(message: T): void
     tail(count?: number, hooks?: TailHooks): AsyncIterable<T>
 }
