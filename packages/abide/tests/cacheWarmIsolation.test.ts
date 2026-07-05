@@ -34,7 +34,7 @@ describe('warm cache reads are isolated per reader', () => {
             settled: true,
         })
 
-        const read = cache(getValue)
+        const read = () => cache(getValue)
         const first = (await read()) as { items: number[] }
         const second = (await read()) as { items: number[] }
 
@@ -73,7 +73,7 @@ describe('warm cache reads are isolated per reader', () => {
             settled: true,
         })
 
-        const read = cache(getValue)
+        const read = () => cache(getValue)
         const first = (await read()) as { page: { rows: Array<{ id: number }> } }
         const second = (await read()) as { page: { rows: Array<{ id: number }> } }
 
@@ -110,7 +110,7 @@ describe('warm cache reads are isolated per reader', () => {
             settled: true,
         })
 
-        const read = cache(getValue)
+        const read = () => cache(getValue)
         expect(await read()).toBe(7)
         expect(await read()).toBe(7)
     })

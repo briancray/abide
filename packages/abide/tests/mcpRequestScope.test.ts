@@ -45,7 +45,7 @@ describe('MCP tool dispatch request scope', () => {
     test('cache() is isolated per tool call — each call recomputes', async () => {
         let runs = 0
         const producer = defineRpc('GET', '/rpc/mcp-scope-inner', () => json({ runs: ++runs }))
-        defineRpc('GET', '/rpc/mcp-scope-cached', async () => json(await cache(producer)()), {
+        defineRpc('GET', '/rpc/mcp-scope-cached', async () => json(await cache(producer)), {
             inputSchema: testSchema(),
         })
 

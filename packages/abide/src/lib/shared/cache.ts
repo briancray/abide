@@ -1,6 +1,5 @@
 import { abideLog } from './abideLog.ts'
 import { activeCacheStore } from './activeCacheStore.ts'
-import { CACHE_WRAPPED } from './CACHE_WRAPPED.ts'
 import { cacheStores } from './cacheStores.ts'
 import { decodeResponse } from './decodeResponse.ts'
 import { getRemoteMeta } from './getRemoteMeta.ts'
@@ -56,16 +55,15 @@ function recordRead(sink: CacheStore, key: string, existing: CacheEntry | undefi
 }
 
 /*
-Curries a call against a cache store. `cache(fn, options?)` returns an invoker;
-calling that invoker with args checks the store for a prior entry and returns a
-shared promise on hit, or invokes `fn` once and stores its promise on miss.
-Splitting configuration (the outer call) from invocation (the inner call) keeps
-options anchored in a fixed position so they can't collide with arg shapes. TTL
-= undefined → forever; ttl = 0 → dedupe only; ttl > 0 → entry expires `ttl` ms
-after the promise resolves.
+Reads a call through a cache store. `cache(fn, args?, options?)` checks the store
+for a prior entry and returns a shared promise on hit, or invokes `fn` once and
+stores its promise on miss — a direct read-through call, not a curried invoker.
+Args lead (the common refinement); options trail in a fixed final position so
+they can't collide with arg shapes. TTL = undefined → forever; ttl = 0 → dedupe
+only; ttl > 0 → entry expires `ttl` ms after the promise resolves.
 
 Coalescing is always on: identical in-flight calls share one flight, so
-`cache(createPost, { ttl: 0 })` is the mutation idiom — double-submit
+`cache(createPost, args, { ttl: 0 })` is the mutation idiom — double-submit
 coalescing and pending() visibility with nothing retained beyond the store's
 atomic unit (the whole request on the server: one render, one effect; the
 in-flight window in the tab). Caching is the retention `ttl` adds on top.
@@ -73,9 +71,10 @@ in-flight window in the tab). Caching is the retention `ttl` adds on top.
 `fn` is either a remote function (a GET/POST/... helper) or a plain producer
 returning a Promise:
 
-  cache(getPost)({ id })       // → Promise<Post>      (decoded body)
-  cache(getPost.raw)({ id })   // → Promise<Response>  (raw escape hatch)
-  cache(fetchRates)()          // → Promise<Rates>     (plain producer)
+  cache(getPost, { id })          // → Promise<Post>      (decoded body)
+  cache(getPost.raw, { id })      // → Promise<Response>  (raw escape hatch)
+  cache(fetchRates)               // → Promise<Rates>     (plain producer, no args)
+  cache(createPost, body, { ttl: 0 })  // options trail; no-arg-with-options: cache(fn, undefined, opts)
 
 Remote calls key on fn.method + fn.url + args and store the underlying Response
 (the decoded view is derived on the way out for the non-raw variant; both share
@@ -91,18 +90,18 @@ requests — the memoise-an-external-endpoint case. Default (omitted) is
 request-scoped on the server, which keeps per-user data from leaking across
 requests; on the client there is one tab store either way, so it is a no-op.
 
-Reactivity is implicit: the invoker calls `store.subscribe(key)`, which
-registers the surrounding scope().computed() / scope().effect() scope. Invalidating the key
-then re-runs that scope, which calls cache() again and gets a fresh entry.
-Outside a tracking scope subscribe() is a no-op, so cache() works the same
-in server code and plain client code.
+Reactivity is implicit: the read calls `store.subscribe(key)`, which registers
+the surrounding state.computed() / effect() scope. Invalidating the key then
+re-runs that scope, which calls cache() again and gets a fresh entry. Outside a
+tracking scope subscribe() is a no-op, so cache() works the same in server code
+and plain client code.
 
 SSR: how you consume the call decides inline vs streaming (during SSR only the
 pending branch of a `<template await>` renders):
 
-  const post = await cache(getPost)({ id })   // blocks render → baked into
+  const post = await cache(getPost, { id })   // blocks render → baked into
                                               // the initial SSR HTML
-  <template await={cache(getPost)({ id })}>   // renders pending → shell flushes
+  <template await={cache(getPost, { id })}>   // renders pending → shell flushes
                                               // now, value streams in on the
                                               // same response when it resolves
 
@@ -120,30 +119,24 @@ the child.
 // @documentation cache
 export function cache<Args, Return>(
     fn: RemoteFunction<Args, Return>,
+    args?: Args,
     options?: CacheOptions,
-): (args?: Args) => Promise<Return>
+): Promise<Return>
 export function cache<Args>(
     fn: RawRemoteFunction<Args>,
+    args?: Args,
     options?: CacheOptions,
-): (args?: Args) => Promise<Response>
+): Promise<Response>
 export function cache<Args, Return>(
     fn: Producer<Args, Return>,
+    args?: Args,
     options?: CacheOptions,
-): (args?: Args) => Promise<Return>
+): Promise<Return>
 export function cache<Args, Return>(
     fn: AnyRemote<Args, Return> | Producer<Args, Return>,
+    args?: Args,
     options?: CacheOptions,
-): (args?: Args) => Promise<Return | Response> {
-    /*
-    Re-wrapping loses the remote's identity (no url/method on the wrapper), so
-    the inner remote would silently become an anonymous producer — no shared
-    key, no SSR snapshot, no write-method guards. Throw where the mistake is.
-    */
-    if (CACHE_WRAPPED in fn) {
-        throw new Error(
-            '[abide] cache(): fn is already a cache() wrapper — wrap the original function once',
-        )
-    }
+): Promise<Return | Response> {
     /*
     A remote function carries the REMOTE_FUNCTION brand (set by
     createRemoteFunction on both variants); a plain producer never does — exact,
@@ -163,22 +156,21 @@ export function cache<Args, Return>(
     if (!isRemote) {
         warnAnonymousProducer(fn as Producer<Args, Return>)
     }
-    const read = (args?: Args): Promise<Return | Response> => {
-        const store = options?.global ? globalCacheStore() : activeCacheStore()
-        if (!isRemote) {
-            return invokeProducer(store, fn as Producer<Args, Return>, args, options)
-        }
-        const remote = rawFn as RawRemoteFunction<Args>
-        const key = keyForRemoteCall(remote.method, remote.url, args)
-        store.subscribe(key)
-        const existing = store.entries.get(key)
-        recordRead(options?.global ? activeCacheStore() : store, key, existing)
-        if (existing) {
-            tagEntry(existing, options?.tags)
-            attachPolicy(existing, options, () => remote(args as Args))
-            adoptTtl(store, existing, options)
-        }
-        /*
+    const store = options?.global ? globalCacheStore() : activeCacheStore()
+    if (!isRemote) {
+        return invokeProducer(store, fn as Producer<Args, Return>, args, options)
+    }
+    const remote = rawFn as RawRemoteFunction<Args>
+    const key = keyForRemoteCall(remote.method, remote.url, args)
+    store.subscribe(key)
+    const existing = store.entries.get(key)
+    recordRead(options?.global ? activeCacheStore() : store, key, existing)
+    if (existing) {
+        tagEntry(existing, options?.tags)
+        attachPolicy(existing, options, () => remote(args as Args))
+        adoptTtl(store, existing, options)
+    }
+    /*
         Warm path: a value pre-decoded onto the entry — by the SSR cache
         snapshot the client seeds its store from — is served without a network
         round-trip. It resolves on a
@@ -198,25 +190,21 @@ export function cache<Args, Return>(
         reader of the key, so one mutating it would corrupt the others. A live
         fetch hands each reader a fresh object; cloning keeps warm reads the same.
         */
-        if (!isRaw && existing !== undefined && existing.value !== undefined) {
-            return Promise.resolve(cloneWarmValue(existing.value)) as Promise<Return>
-        }
-        const responsePromise = invokeRemote(
-            store,
-            key,
-            existing,
-            rawFn as RawRemoteFunction<Args>,
-            args,
-            options,
-        )
-        if (isRaw) {
-            return responsePromise
-        }
-        return responsePromise.then(decodeResponse) as Promise<Return>
+    if (!isRaw && existing !== undefined && existing.value !== undefined) {
+        return Promise.resolve(cloneWarmValue(existing.value)) as Promise<Return>
     }
-    /* Non-enumerable brand; selectorMatcher and the re-wrap guard read it. */
-    Object.defineProperty(read, CACHE_WRAPPED, { value: fn })
-    return read
+    const responsePromise = invokeRemote(
+        store,
+        key,
+        existing,
+        rawFn as RawRemoteFunction<Args>,
+        args,
+        options,
+    )
+    if (isRaw) {
+        return responsePromise
+    }
+    return responsePromise.then(decodeResponse) as Promise<Return>
 }
 
 /*

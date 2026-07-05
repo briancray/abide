@@ -46,8 +46,8 @@ describe('cache.on', () => {
     test('frames drive the handler; scoped invalidate drops the targeted entry', async () => {
         const { subscribable, connections } = reconnectable<{ id: number }>('on-basic')
         const get = getMedia('/rpc/on-basic')
-        await cache(get)({ id: 1 })
-        await cache(get)({ id: 2 })
+        await cache(get, { id: 1 })
+        await cache(get, { id: 2 })
 
         const dispose = cache.on(subscribable, (frame, { invalidate }) => {
             invalidate(get, { id: frame.id })
@@ -85,7 +85,7 @@ describe('cache.on', () => {
     test('a transport loss replays the coverage set and reopens the source', async () => {
         const { subscribable, connections } = reconnectable<{ id: number }>('on-replay')
         const get = getMedia('/rpc/on-replay')
-        await cache(get)({ id: 7 })
+        await cache(get, { id: 7 })
 
         const dispose = cache.on(subscribable, (frame, { invalidate }) => {
             invalidate(get, { id: frame.id })
@@ -95,7 +95,7 @@ describe('cache.on', () => {
         expect(store.entries.size).toBe(0)
 
         /* Re-warm, then drop the transport: no frame arrives, yet the gap must stale prior coverage. */
-        await cache(get)({ id: 7 })
+        await cache(get, { id: 7 })
         expect(store.entries.size).toBe(1)
         connections[0].disconnect()
         await settle()

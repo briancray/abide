@@ -26,7 +26,7 @@ describe('cache entry settled flag', () => {
 
     test('unsettled while in flight, settled after the promise resolves', async () => {
         await runWithRequestScope(new Request('https://test.local/'), options, async () => {
-            const read = cache(getValue)
+            const read = () => cache(getValue)
             const pending = read()
             const store = requestContext.getStore()!.cache
             const entry = Array.from(store.entries.values())[0]

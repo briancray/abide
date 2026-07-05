@@ -42,7 +42,7 @@ describe('cache.invalidate() re-runs an await block', () => {
         cacheStoreSlot.resolver = () => store
 
         const source = `
-            <script>let load = cache(loadUsers)</script>
+            <script>let load = () => cache(loadUsers)</script>
             <main>
                 {#await load()}
                     <p>loading…</p>

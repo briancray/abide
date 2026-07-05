@@ -62,7 +62,7 @@ export type RemoteFunction<
        refreshing / invalidate — the rpc is the leading selector, bound in. The argument is this
        rpc's typed `Args` (the by-args refinement); tags / cross-cutting selection stay on the
        globals. `cache(args?, options?)` is the direct read-through call for those args
-       (≡ `cache(fn, options)(args)`) — returns the cached promise, not a wrapper. */
+       (≡ `cache(fn, args, options)`) — returns the cached promise. */
     pending(args?: Args): boolean
     refreshing(args?: Args): boolean
     invalidate(args?: Args): void

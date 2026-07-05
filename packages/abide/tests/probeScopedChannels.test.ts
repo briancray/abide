@@ -75,7 +75,7 @@ describe('selector-scoped probe channels', () => {
         expect(runsA).toBe(1)
         const bareRunsBefore = runsBare
 
-        const flight = cache(b.fn)()
+        const flight = cache(b.fn)
         b.resolve()
         await flight
         await settle()
@@ -116,7 +116,7 @@ describe('selector-scoped probe channels', () => {
         expect(probeA.current()).toBe(false)
 
         /* Entry creation marks the prefix channel — the probe armed before any entry existed sees it. */
-        const flight = cache(a.fn)()
+        const flight = cache(a.fn)
         await settle()
         expect(probeA.current()).toBe(true)
 
@@ -144,13 +144,13 @@ describe('selector-scoped probe channels', () => {
         expect(probe.current()).toBe(false)
 
         /* No reference id yet → the probe sits on the store-wide channel, so the first cache wakes it. */
-        const flight = cache(loadThing)()
+        const flight = cache(loadThing)
         await settle()
         expect(probe.current()).toBe(true)
         const runsAfterOpen = runs
 
         /* Narrowed to the minted id's prefix channel: another fn's events no longer reach it. */
-        const otherFlight = cache(other.fn)()
+        const otherFlight = cache(other.fn)
         other.resolve()
         await otherFlight
         await settle()

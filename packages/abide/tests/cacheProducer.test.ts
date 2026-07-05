@@ -25,30 +25,30 @@ describe('cache() producer', () => {
 
     test('dedupes by producer reference', async () => {
         const fetchValue = counter()
-        const first = await cache(fetchValue)()
-        const second = await cache(fetchValue)()
+        const first = await cache(fetchValue)
+        const second = await cache(fetchValue)
         expect(first).toBe(1)
         expect(second).toBe(1)
         expect(cacheStoreSlot.fallback!.entries.size).toBe(1)
     })
 
     test('distinct references do not share an entry', async () => {
-        await cache(counter())()
-        await cache(counter())()
+        await cache(counter())
+        await cache(counter())
         expect(cacheStoreSlot.fallback!.entries.size).toBe(2)
     })
 
     test('args fold into the key so the same producer keys per-arg', async () => {
         const double = (n?: number) => Promise.resolve((n ?? 0) * 2)
-        expect(await cache(double)(2)).toBe(4)
-        expect(await cache(double)(3)).toBe(6)
+        expect(await cache(double, 2)).toBe(4)
+        expect(await cache(double, 3)).toBe(6)
         expect(cacheStoreSlot.fallback!.entries.size).toBe(2)
     })
 
     test('a producer with an incidental url prop stays a producer (brand, not shape, decides)', async () => {
         const fetchValue = Object.assign(counter(), { url: '/looks/remote', method: 'GET' })
-        const first = await cache(fetchValue)()
-        const second = await cache(fetchValue)()
+        const first = await cache(fetchValue)
+        const second = await cache(fetchValue)
         expect(first).toBe(1)
         expect(second).toBe(1)
         const entry = Array.from(cacheStoreSlot.fallback!.entries.values())[0]
@@ -57,7 +57,7 @@ describe('cache() producer', () => {
 
     test('stores the value promise directly — no Response, no request metadata', async () => {
         const fetchValue = counter()
-        await cache(fetchValue)()
+        await cache(fetchValue)
         const entry = Array.from(cacheStoreSlot.fallback!.entries.values())[0]
         expect(entry.request).toBeUndefined()
         expect(await entry.promise).toBe(1)
@@ -65,23 +65,23 @@ describe('cache() producer', () => {
 
     test('invalidate by producer reference drops its entries', async () => {
         const fetchValue = counter()
-        await cache(fetchValue)()
+        await cache(fetchValue)
         cache.invalidate(fetchValue)
         expect(cacheStoreSlot.fallback!.entries.size).toBe(0)
         /* Next read recomputes. */
-        expect(await cache(fetchValue)()).toBe(2)
+        expect(await cache(fetchValue)).toBe(2)
     })
 
     test('invalidate by tag drops tagged producer entries', async () => {
         const fetchValue = counter()
-        await cache(fetchValue, { tags: ['external'] })()
+        await cache(fetchValue, undefined, { tags: ['external'] })
         cache.invalidate({ tags: ['external'] })
         expect(cacheStoreSlot.fallback!.entries.size).toBe(0)
     })
 
     test('ttl=0 evicts the producer entry once it settles', async () => {
         const fetchValue = counter()
-        await cache(fetchValue, { ttl: 0 })()
+        await cache(fetchValue, undefined, { ttl: 0 })
         await settle()
         expect(cacheStoreSlot.fallback!.entries.size).toBe(0)
     })
@@ -103,24 +103,24 @@ describe('cache() producer with global: true', () => {
 
     test('lands in the process-level store, not the request store', async () => {
         const fetchValue = counter()
-        await cache(fetchValue, { global: true })()
+        await cache(fetchValue, undefined, { global: true })
         expect(globalStore.entries.size).toBe(1)
         expect(cacheStoreSlot.fallback!.entries.size).toBe(0)
     })
 
     test('memoised value survives a new request (swapped active store)', async () => {
         const fetchValue = counter()
-        const first = await cache(fetchValue, { global: true })()
+        const first = await cache(fetchValue, undefined, { global: true })
         /* Simulate the next request: fresh request-scoped store, same process store. */
         cacheStoreSlot.fallback = createCacheStore()
-        const second = await cache(fetchValue, { global: true })()
+        const second = await cache(fetchValue, undefined, { global: true })
         expect(first).toBe(1)
         expect(second).toBe(1)
     })
 
     test('invalidate reaches the process-level store', async () => {
         const fetchValue = counter()
-        await cache(fetchValue, { global: true })()
+        await cache(fetchValue, undefined, { global: true })
         cache.invalidate(fetchValue)
         expect(globalStore.entries.size).toBe(0)
     })

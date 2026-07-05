@@ -41,9 +41,9 @@ describe('cache.invalidate selector', () => {
         const getUser = fakeRemote<undefined>('GET', '/rpc/user')
         const store = cacheStoreSlot.fallback!
 
-        await cache(getPosts, { tags: ['dashboard'] })()
-        await cache(getTags, { tags: ['dashboard'] })()
-        await cache(getUser, { tags: ['profile'] })()
+        await cache(getPosts, undefined, { tags: ['dashboard'] })
+        await cache(getTags, undefined, { tags: ['dashboard'] })
+        await cache(getUser, undefined, { tags: ['profile'] })
         expect(store.entries.size).toBe(3)
 
         cache.invalidate({ tags: ['dashboard'] })
@@ -54,7 +54,7 @@ describe('cache.invalidate selector', () => {
     test('{ tags } notifies subscribers of every affected key', async () => {
         const getPosts = fakeRemote<undefined>('GET', '/rpc/posts')
         const store = cacheStoreSlot.fallback!
-        await cache(getPosts, { tags: ['dashboard'] })()
+        await cache(getPosts, undefined, { tags: ['dashboard'] })
 
         let notified: CacheInvalidation | undefined
         store.events.addEventListener('invalidate', (event) => {
@@ -68,7 +68,7 @@ describe('cache.invalidate selector', () => {
     test('an unknown tag is a no-op without dispatching an event', async () => {
         const getPosts = fakeRemote<undefined>('GET', '/rpc/posts')
         const store = cacheStoreSlot.fallback!
-        await cache(getPosts, { tags: ['dashboard'] })()
+        await cache(getPosts, undefined, { tags: ['dashboard'] })
 
         let dispatched = false
         store.events.addEventListener('invalidate', () => {
@@ -84,10 +84,10 @@ describe('cache.invalidate selector', () => {
         const getPosts = fakeRemote<undefined>('GET', '/rpc/posts')
         const store = cacheStoreSlot.fallback!
 
-        await cache(getPosts)()
+        await cache(getPosts)
         expect(store.entries.get('GET /rpc/posts')?.tags).toBeUndefined()
 
-        await cache(getPosts, { tags: ['dashboard'] })()
+        await cache(getPosts, undefined, { tags: ['dashboard'] })
         expect(store.entries.get('GET /rpc/posts')?.tags?.has('dashboard')).toBe(true)
 
         cache.invalidate({ tags: ['dashboard'] })
@@ -98,11 +98,11 @@ describe('cache.invalidate selector', () => {
         const getGrid = fakeRemote<undefined>('GET', '/rpc/grid')
         const store = cacheStoreSlot.fallback!
 
-        await cache(getGrid, { tags: ['media', 'sources'] })()
+        await cache(getGrid, undefined, { tags: ['media', 'sources'] })
         cache.invalidate({ tags: ['sources'] })
         expect(store.entries.size).toBe(0)
 
-        await cache(getGrid, { tags: ['media', 'sources'] })()
+        await cache(getGrid, undefined, { tags: ['media', 'sources'] })
         cache.invalidate({ tags: ['media'] })
         expect(store.entries.size).toBe(0)
     })
@@ -113,9 +113,9 @@ describe('cache.invalidate selector', () => {
         const getUser = fakeRemote<undefined>('GET', '/rpc/user')
         const store = cacheStoreSlot.fallback!
 
-        await cache(getPosts, { tags: ['media'] })()
-        await cache(getTags, { tags: ['sources'] })()
-        await cache(getUser, { tags: ['profile'] })()
+        await cache(getPosts, undefined, { tags: ['media'] })
+        await cache(getTags, undefined, { tags: ['sources'] })
+        await cache(getUser, undefined, { tags: ['profile'] })
 
         cache.invalidate({ tags: ['media', 'sources'] })
         expect(Array.from(store.entries.keys())).toEqual(['GET /rpc/user'])
@@ -125,8 +125,8 @@ describe('cache.invalidate selector', () => {
         const getGrid = fakeRemote<undefined>('GET', '/rpc/grid')
         const store = cacheStoreSlot.fallback!
 
-        await cache(getGrid, { tags: ['media'] })()
-        await cache(getGrid, { tags: ['sources'] })()
+        await cache(getGrid, undefined, { tags: ['media'] })
+        await cache(getGrid, undefined, { tags: ['sources'] })
         expect(store.entries.get('GET /rpc/grid')?.tags).toEqual(new Set(['media', 'sources']))
 
         cache.invalidate({ tags: ['media'] })

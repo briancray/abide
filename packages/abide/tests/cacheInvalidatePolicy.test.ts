@@ -32,49 +32,49 @@ describe('cache() swr (stale-while-revalidate)', () => {
 
     test('swr: true keeps the stale value and refetches immediately on every invalidate', async () => {
         const fetchValue = counter()
-        expect(await cache(fetchValue, { swr: true })()).toBe(1)
+        expect(await cache(fetchValue, undefined, { swr: true })).toBe(1)
 
         cache.invalidate(fetchValue)
         await settle()
         /* No window → the refetch fired now; the stale 1 was held until it landed. */
-        expect(await cache(fetchValue)()).toBe(2)
+        expect(await cache(fetchValue)).toBe(2)
         /* Entry kept (revalidated in place), never dropped to a pending flash. */
         expect(cacheStoreSlot.fallback!.entries.size).toBe(1)
 
         cache.invalidate(fetchValue)
         await settle()
-        expect(await cache(fetchValue)()).toBe(3)
+        expect(await cache(fetchValue)).toBe(3)
     })
 
     test('debounce collapses an invalidation burst into a single refetch', async () => {
         const fetchValue = counter()
-        expect(await cache(fetchValue, { swr: { debounce: 30 } })()).toBe(1)
+        expect(await cache(fetchValue, undefined, { swr: { debounce: 30 } })).toBe(1)
 
         cache.invalidate(fetchValue)
         cache.invalidate(fetchValue)
         cache.invalidate(fetchValue)
         /* Still serving the stale value while the debounce window is open. */
-        expect(await cache(fetchValue)()).toBe(1)
+        expect(await cache(fetchValue)).toBe(1)
 
         await wait(60)
         /* Exactly one refetch fired (2), not three. */
-        expect(await cache(fetchValue)()).toBe(2)
+        expect(await cache(fetchValue)).toBe(2)
     })
 
     test('throttle fires on the leading edge, then coalesces the window', async () => {
         const fetchValue = counter()
-        expect(await cache(fetchValue, { swr: { throttle: 40 } })()).toBe(1)
+        expect(await cache(fetchValue, undefined, { swr: { throttle: 40 } })).toBe(1)
 
         cache.invalidate(fetchValue) // leading edge → refetch now
         await settle()
-        expect(await cache(fetchValue)()).toBe(2)
+        expect(await cache(fetchValue)).toBe(2)
 
         cache.invalidate(fetchValue) // within window → trailing, coalesced
         cache.invalidate(fetchValue)
-        expect(await cache(fetchValue)()).toBe(2) // not yet
+        expect(await cache(fetchValue)).toBe(2) // not yet
 
         await wait(70)
-        expect(await cache(fetchValue)()).toBe(3) // one trailing refetch
+        expect(await cache(fetchValue)).toBe(3) // one trailing refetch
     })
 
     test('serves stale until the refetch resolves (stale-while-revalidate)', async () => {
@@ -86,14 +86,14 @@ describe('cache() swr (stale-while-revalidate)', () => {
         let index = 0
         const producer = () => values[index++]
 
-        expect(await cache(producer, { swr: { debounce: 10 } })()).toBe(1)
+        expect(await cache(producer, undefined, { swr: { debounce: 10 } })).toBe(1)
         cache.invalidate(producer)
         await wait(30) // debounce fired; the refetch is in flight (unresolved)
 
-        expect(await cache(producer)()).toBe(1) // stale held
+        expect(await cache(producer)).toBe(1) // stale held
         resolveSecond(2)
         await settle()
-        expect(await cache(producer)()).toBe(2) // fresh swapped in
+        expect(await cache(producer)).toBe(2) // fresh swapped in
     })
 
     test('refreshing is true only while a coalesced refetch is in flight', async () => {
@@ -105,7 +105,7 @@ describe('cache() swr (stale-while-revalidate)', () => {
         let index = 0
         const producer = () => values[index++]
 
-        expect(await cache(producer, { swr: { debounce: 10 } })()).toBe(1)
+        expect(await cache(producer, undefined, { swr: { debounce: 10 } })).toBe(1)
         /* Settled value present, nothing in flight → not refreshing, not pending. */
         expect(refreshing(producer)).toBe(false)
         expect(pending(producer)).toBe(false)
@@ -120,7 +120,7 @@ describe('cache() swr (stale-while-revalidate)', () => {
         resolveSecond(2)
         await settle()
         expect(refreshing(producer)).toBe(false)
-        expect(await cache(producer)()).toBe(2)
+        expect(await cache(producer)).toBe(2)
     })
 
     test('refreshing selector ignores other revalidating entries', async () => {
@@ -133,8 +133,8 @@ describe('cache() swr (stale-while-revalidate)', () => {
         const slowProducer = () => slow[slowIndex++]
         const fastProducer = counter()
 
-        await cache(slowProducer, { swr: { debounce: 10 } })()
-        await cache(fastProducer, { swr: { debounce: 10 } })()
+        await cache(slowProducer, undefined, { swr: { debounce: 10 } })
+        await cache(fastProducer, undefined, { swr: { debounce: 10 } })
 
         cache.invalidate(slowProducer)
         await wait(30)
@@ -151,11 +151,11 @@ describe('cache() swr (stale-while-revalidate)', () => {
             calls += 1
             return calls === 1 ? Promise.resolve('ok') : Promise.reject(new Error('boom'))
         }
-        expect(await cache(producer, { swr: { debounce: 10 } })()).toBe('ok')
+        expect(await cache(producer, undefined, { swr: { debounce: 10 } })).toBe('ok')
 
         cache.invalidate(producer)
         await wait(30)
-        expect(await cache(producer)()).toBe('ok')
+        expect(await cache(producer)).toBe('ok')
     })
 
     test('a refetch rejecting with HttpError 404 evicts the entry (resource gone)', async () => {
@@ -166,7 +166,7 @@ describe('cache() swr (stale-while-revalidate)', () => {
                 ? Promise.resolve('ok')
                 : Promise.reject(new HttpError(new Response(undefined, { status: 404 })))
         }
-        expect(await cache(producer, { swr: { debounce: 10 } })()).toBe('ok')
+        expect(await cache(producer, undefined, { swr: { debounce: 10 } })).toBe('ok')
 
         cache.invalidate(producer)
         await wait(30)
@@ -187,7 +187,7 @@ describe('cache() swr (stale-while-revalidate)', () => {
                 calls === 1 ? new Response('ok') : new Response(undefined, { status: 404 }),
             )
         }
-        await cache(producer, { swr: { debounce: 10 } })()
+        await cache(producer, undefined, { swr: { debounce: 10 } })
         expect(cacheStoreSlot.fallback!.entries.size).toBe(1)
 
         cache.invalidate(producer)
@@ -203,18 +203,18 @@ describe('cache() swr (stale-while-revalidate)', () => {
                 calls === 1 ? new Response('ok') : new Response(undefined, { status: 500 }),
             )
         }
-        const first = await cache(producer, { swr: { debounce: 10 } })()
+        const first = await cache(producer, undefined, { swr: { debounce: 10 } })
 
         cache.invalidate(producer)
         await wait(30)
         /* The 500 result was discarded — the entry still serves the original Response. */
         expect(cacheStoreSlot.fallback!.entries.size).toBe(1)
-        expect(await cache(producer)()).toBe(first)
+        expect(await cache(producer)).toBe(first)
     })
 
     test('without a policy, invalidate still drops the entry immediately', async () => {
         const fetchValue = counter()
-        await cache(fetchValue)()
+        await cache(fetchValue)
         cache.invalidate(fetchValue)
         expect(cacheStoreSlot.fallback!.entries.size).toBe(0)
     })
@@ -222,29 +222,29 @@ describe('cache() swr (stale-while-revalidate)', () => {
     test('a read declaring a policy arms an existing entry that lacks one', async () => {
         const fetchValue = counter()
         /* First read declares no policy — the entry starts bare. */
-        expect(await cache(fetchValue)()).toBe(1)
+        expect(await cache(fetchValue)).toBe(1)
         /* A later read (hit) declares one; it attaches like a tag would. */
-        expect(await cache(fetchValue, { swr: { debounce: 10 } })()).toBe(1)
+        expect(await cache(fetchValue, undefined, { swr: { debounce: 10 } })).toBe(1)
 
         cache.invalidate(fetchValue)
         /* Kept and revalidating in place, not hard-dropped to a pending flash. */
         expect(cacheStoreSlot.fallback!.entries.size).toBe(1)
-        expect(await cache(fetchValue)()).toBe(1) // stale served
+        expect(await cache(fetchValue)).toBe(1) // stale served
 
         await wait(30)
-        expect(await cache(fetchValue)()).toBe(2) // coalesced refetch landed
+        expect(await cache(fetchValue)).toBe(2) // coalesced refetch landed
     })
 
     test('eviction disarms an armed policy timer (no refetch of a dead key)', async () => {
         const fetchValue = counter()
-        expect(await cache(fetchValue, { ttl: 20, swr: { debounce: 30 } })()).toBe(1)
+        expect(await cache(fetchValue, undefined, { ttl: 20, swr: { debounce: 30 } })).toBe(1)
 
         cache.invalidate(fetchValue) // arms the 30ms debounce
         await wait(25) // ttl expiry evicts the entry first, clearing the timer
         expect(cacheStoreSlot.fallback!.entries.size).toBe(0)
 
         await wait(30) // past the debounce window — the refetch must not have fired
-        expect(await cache(fetchValue)()).toBe(2) // 2: this read, not a ghost refetch
+        expect(await cache(fetchValue)).toBe(2) // 2: this read, not a ghost refetch
     })
 
     test('without a policy, the next read after invalidate reports as a reload', async () => {
@@ -256,7 +256,7 @@ describe('cache() swr (stale-while-revalidate)', () => {
         let index = 0
         const producer = () => values[index++]
 
-        expect(await cache(producer)()).toBe(1)
+        expect(await cache(producer)).toBe(1)
         /* A settled cold load is not a reload. */
         expect(refreshing(producer)).toBe(false)
 
@@ -264,7 +264,7 @@ describe('cache() swr (stale-while-revalidate)', () => {
 
         /* The next read is a cold miss (no stale value → also pending), but flagged
            a reload because it follows an invalidate. */
-        const reload = cache(producer)()
+        const reload = cache(producer)
         expect(refreshing(producer)).toBe(true)
         expect(pending(producer)).toBe(true)
 
@@ -289,19 +289,23 @@ describe('cache() swr guards', () => {
 
     test('throttle and debounce together throw', () => {
         const fetchValue = () => Promise.resolve(1)
-        expect(() => cache(fetchValue, { swr: { throttle: 10, debounce: 10 } })).toThrow('not both')
+        expect(() => cache(fetchValue, undefined, { swr: { throttle: 10, debounce: 10 } })).toThrow(
+            'not both',
+        )
     })
 
     test('ttl: 0 with a policy throws — nothing retained, nothing to revalidate', () => {
         const fetchValue = () => Promise.resolve(1)
-        expect(() => cache(fetchValue, { ttl: 0, swr: { throttle: 10 } })).toThrow(
+        expect(() => cache(fetchValue, undefined, { ttl: 0, swr: { throttle: 10 } })).toThrow(
             'requires retention',
         )
     })
 
     test('a policy on a write method throws; on a read it wraps fine', () => {
-        expect(() => cache(writePost, { swr: { throttle: 10 } })).toThrow('must not be replayed')
-        expect(() => cache(readPost, { swr: { throttle: 10 } })).not.toThrow()
+        expect(() => cache(writePost, undefined, { swr: { throttle: 10 } })).toThrow(
+            'must not be replayed',
+        )
+        expect(() => cache(readPost, undefined, { swr: { throttle: 10 } })).not.toThrow()
     })
 
     test('an anonymous producer warns once per call site', () => {

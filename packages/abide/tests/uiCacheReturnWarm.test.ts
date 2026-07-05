@@ -41,7 +41,7 @@ describe('cache() return-warm across page teardown', () => {
            registers this reader). */
         let read: Promise<unknown> | undefined
         const disposePage1 = effect(() => {
-            read = cache(load)()
+            read = cache(load)
         })
         await settle()
         expect(runs).toBe(1) // cold miss fetched once
@@ -53,7 +53,7 @@ describe('cache() return-warm across page teardown', () => {
 
         /* Page 2 mounts on return: same producer, same key. */
         const disposePage2 = effect(() => {
-            read = cache(load)()
+            read = cache(load)
         })
         await settle()
         expect(runs).toBe(1) // WARM — served from the surviving entry, never refetched
@@ -70,7 +70,7 @@ describe('cache() return-warm across page teardown', () => {
 
         let read: Promise<unknown> | undefined
         const disposePage1 = effect(() => {
-            read = cache(load, { ttl: 0 })()
+            read = cache(load, undefined, { ttl: 0 })
         })
         await settle()
         expect(await read).toBe('v1')
@@ -78,7 +78,7 @@ describe('cache() return-warm across page teardown', () => {
         await settle()
 
         const disposePage2 = effect(() => {
-            read = cache(load, { ttl: 0 })()
+            read = cache(load, undefined, { ttl: 0 })
         })
         await settle()
         expect(runs).toBe(2) // cold — ttl: 0 retains nothing past settle

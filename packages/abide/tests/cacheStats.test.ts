@@ -20,16 +20,16 @@ describe('cache read stats', () => {
         const slow = () => new Promise<number>((resolve) => (release = resolve))
         const stats = () => cacheStoreSlot.fallback!.stats
 
-        const first = cache(slow)()
+        const first = cache(slow)
         expect(stats()).toEqual({ hits: 0, misses: 1, coalesced: 0 })
         // Same key while in flight — a coalesced join, not a hit.
-        const second = cache(slow)()
+        const second = cache(slow)
         expect(stats()).toEqual({ hits: 0, misses: 1, coalesced: 1 })
         release(7)
         expect(await first).toBe(7)
         expect(await second).toBe(7)
         // Settled and retained (no ttl) — the next read is a hit.
-        await cache(slow)()
+        await cache(slow)
         expect(stats()).toEqual({ hits: 1, misses: 1, coalesced: 1 })
     })
 
@@ -37,7 +37,7 @@ describe('cache read stats', () => {
         const globalStore = createCacheStore()
         globalCacheStoreSlot.resolver = () => globalStore
         const fetchRates = () => Promise.resolve(1.08)
-        await cache(fetchRates, { global: true })()
+        await cache(fetchRates, undefined, { global: true })
         // Data lands in the global store; the tally lands in the asker's store.
         expect(globalStore.entries.size).toBe(1)
         expect(globalStore.stats).toEqual({ hits: 0, misses: 0, coalesced: 0 })

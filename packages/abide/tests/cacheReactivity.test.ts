@@ -52,7 +52,7 @@ describe('cache() reactive refetch', () => {
 
     test('a tracked read invalidated by fn refetches and re-runs the scope', async () => {
         const get = countingRemote('GET', '/rpc/thing')
-        const tracked = track(() => cache(get)())
+        const tracked = track(() => cache(get))
 
         await settle()
         expect(await tracked.current()!.then((r) => r.json())).toEqual({ n: 1 })
@@ -67,7 +67,7 @@ describe('cache() reactive refetch', () => {
 
     test('without an invalidate the tracked read stays deduped', async () => {
         const get = countingRemote('GET', '/rpc/stable')
-        const tracked = track(() => cache(get)())
+        const tracked = track(() => cache(get))
 
         await settle()
         const first = tracked.current()
@@ -94,7 +94,7 @@ describe('cache() reactive refetch', () => {
         await settle()
         expect(probe.current()).toBe(false)
 
-        const tracked = trackDerived(() => cache(get)())
+        const tracked = trackDerived(() => cache(get))
         await settle()
 
         // The read survived computed evaluation and the probe saw the settle.

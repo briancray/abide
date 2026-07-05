@@ -27,7 +27,7 @@ describe('pending()', () => {
 
     test('true while a call is in flight, false once it settles', async () => {
         await runWithRequestScope(new Request('https://test.local/'), options, async () => {
-            const promise = cache(getPost)()
+            const promise = cache(getPost)
             expect(pending()).toBe(true)
             expect(pending(getPost)).toBe(true)
 
@@ -40,7 +40,7 @@ describe('pending()', () => {
 
     test('per-function selector ignores other in-flight calls', async () => {
         await runWithRequestScope(new Request('https://test.local/'), options, async () => {
-            const post = cache(getPost)()
+            const post = cache(getPost)
             expect(pending(getUser)).toBe(false)
             expect(pending(getPost)).toBe(true)
             await post
@@ -50,7 +50,7 @@ describe('pending()', () => {
 
     test('tags selector tracks only entries carrying the tag', async () => {
         await runWithRequestScope(new Request('https://test.local/'), options, async () => {
-            const post = cache(getPost, { tags: ['feed'] })()
+            const post = cache(getPost, undefined, { tags: ['feed'] })
             expect(pending({ tags: ['feed'] })).toBe(true)
             expect(pending({ tags: ['profile'] })).toBe(false)
             await post

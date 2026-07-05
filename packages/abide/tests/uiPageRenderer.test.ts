@@ -99,8 +99,8 @@ describe('createUiPageRenderer', () => {
            DURING the stream — after the render-return snapshot, which is therefore empty.
            Post-stream the renderer drains them: a textual body ships a warm snapshot, a
            binary body a `{ key, miss }` marker (→ client live refetch). */
-        const usersRead = cache(getUsers)
-        const avatarRead = cache(getAvatar)
+        const usersRead = () => cache(getUsers)
+        const avatarRead = () => cache(getAvatar)
         const pages = page(() => ({
             html:
                 '<main><!--abide:await:0-->loading<!--/abide:await:0-->' +

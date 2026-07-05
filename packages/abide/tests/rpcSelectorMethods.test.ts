@@ -31,7 +31,7 @@ describe('rpc instance selector methods', () => {
     test('fn.pending() mirrors pending(fn)', async () => {
         const r: Record<string, unknown> = {}
         await runWithRequestScope(new Request('https://test.local/'), options, async () => {
-            const promise = cache(getPost)()
+            const promise = cache(getPost)
             r.mirror = getPost.pending() === pending(getPost)
             r.postDuring = getPost.pending()
             r.userPending = getUser.pending()
@@ -48,7 +48,7 @@ describe('rpc instance selector methods', () => {
     test('fn.refreshing() mirrors refreshing(fn)', async () => {
         const r: Record<string, unknown> = {}
         await runWithRequestScope(new Request('https://test.local/'), options, async () => {
-            const promise = cache(getPost)()
+            const promise = cache(getPost)
             r.mirror = getPost.refreshing() === refreshing(getPost)
             await promise
             return json(null)
@@ -68,10 +68,10 @@ describe('rpc instance selector methods', () => {
     test('fn.invalidate() drops this rpc entries so the next read re-enters flight', async () => {
         const r: Record<string, unknown> = {}
         await runWithRequestScope(new Request('https://test.local/'), options, async () => {
-            await cache(getPost)()
+            await cache(getPost)
             r.settledBefore = getPost.pending()
             getPost.invalidate()
-            const promise = cache(getPost)()
+            const promise = cache(getPost)
             r.pendingAfterInvalidate = getPost.pending()
             await promise
             return json(null)

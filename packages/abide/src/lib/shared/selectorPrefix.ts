@@ -1,4 +1,3 @@
-import { CACHE_WRAPPED } from './CACHE_WRAPPED.ts'
 import { keyForRemoteCall } from './keyForRemoteCall.ts'
 import { producerKey } from './producerKey.ts'
 import { REMOTE_FUNCTION } from './REMOTE_FUNCTION.ts'
@@ -13,9 +12,7 @@ one call instead — derived through the same encoders the read path uses
 (keyForRemoteCall / producerKey format), so selector and entry can't
 disagree. Undefined when no prefix exists — bare and tag selectors (they
 scan, not prefix-match) and producers never cached (no id was minted;
-minting one here would leak identities for probe-only reads). The
-cache()-wrapper throw lives here so both consumers — the matcher and the
-probes' channel tap — reject it before subscribing to anything.
+minting one here would leak identities for probe-only reads).
 */
 export function selectorPrefix<Args, Return>(
     arg: CacheSelector<Args, Return> | undefined,
@@ -23,11 +20,6 @@ export function selectorPrefix<Args, Return>(
 ): string | undefined {
     if (typeof arg !== 'function') {
         return undefined
-    }
-    if (CACHE_WRAPPED in arg) {
-        throw new Error(
-            '[abide] a cache() wrapper is not a selector — pass the function it wraps, e.g. pending(getPost), not pending(cache(getPost))',
-        )
     }
     const remote = REMOTE_FUNCTION in arg ? (arg as RawRemoteFunction<Args>) : undefined
     if (remote) {

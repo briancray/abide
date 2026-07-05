@@ -73,7 +73,7 @@ async function inServerScope<T>(body: (store: CacheStore) => Promise<T>): Promis
 describe('ttl=0 (dedupe only)', () => {
     test('server keeps the settled remote entry for the SSR snapshot', async () => {
         await inServerScope(async (store) => {
-            await cache(countedRemote, { ttl: 0 })()
+            await cache(countedRemote, undefined, { ttl: 0 })
             /* Settled, but retained: the snapshot runs after render() returns. */
             expect(store.entries.size).toBe(1)
             const inline = await serializeCacheSnapshot(store)
@@ -86,7 +86,7 @@ describe('ttl=0 (dedupe only)', () => {
         ;(globalThis as Record<string, unknown>).window = {}
         try {
             await inServerScope(async (store) => {
-                await cache(countedRemote, { ttl: 0 })()
+                await cache(countedRemote, undefined, { ttl: 0 })
                 /* Settle handler ran in the await above; client path evicts immediately. */
                 expect(store.entries.size).toBe(0)
             })
@@ -102,13 +102,13 @@ describe('ttl=0 (dedupe only)', () => {
     test('the server coalesces a write for the whole request, but never snapshots it', async () => {
         writes = 0
         await inServerScope(async (store) => {
-            await cache(countedWrite, { ttl: 0 })()
+            await cache(countedWrite, undefined, { ttl: 0 })
             /*
             The request is the server's atomic unit: an identical call later in
             the same render coalesces deterministically, regardless of whether
             the first had already settled — one render, one effect.
             */
-            await cache(countedWrite, { ttl: 0 })()
+            await cache(countedWrite, undefined, { ttl: 0 })
             expect(writes).toBe(1)
             expect(store.entries.size).toBe(1)
             /* The kept entry serves the request only — a write never ships to the client. */
@@ -122,7 +122,7 @@ describe('ttl=0 (dedupe only)', () => {
         globalCacheStoreSlot.resolver = () => globalStore
         try {
             await inServerScope(async () => {
-                await cache(countedRemote, { ttl: 0, global: true })()
+                await cache(countedRemote, undefined, { ttl: 0, global: true })
             })
             expect(globalStore.entries.size).toBe(0)
         } finally {
@@ -139,10 +139,10 @@ describe('ttl>0 (expire after resolve)', () => {
         try {
             /* Global store so the entry outlives the request scope, like a real memo. */
             await inServerScope(async () => {
-                await cache(countedRemote, { ttl: 20, global: true })()
+                await cache(countedRemote, undefined, { ttl: 20, global: true })
             })
             await inServerScope(async () => {
-                expect(await cache(countedRemote, { ttl: 20, global: true })()).toEqual({
+                expect(await cache(countedRemote, undefined, { ttl: 20, global: true })).toEqual({
                     hit: 1,
                 })
             })
@@ -152,7 +152,7 @@ describe('ttl>0 (expire after resolve)', () => {
             await Bun.sleep(35)
             expect(globalStore.entries.size).toBe(0)
             await inServerScope(async () => {
-                expect(await cache(countedRemote, { ttl: 20, global: true })()).toEqual({
+                expect(await cache(countedRemote, undefined, { ttl: 20, global: true })).toEqual({
                     hit: 2,
                 })
             })
@@ -166,12 +166,12 @@ describe('rejection', () => {
     test('a rejected call evicts its entry so the next read retries', async () => {
         failures = 0
         await inServerScope(async (store) => {
-            await expect(cache(flakyRemote)()).rejects.toThrow()
+            await expect(cache(flakyRemote)).rejects.toThrow()
             /* Give the rejection's eviction handler a microtask to run. */
             await Bun.sleep(1)
             expect(store.entries.size).toBe(0)
             /* Same scope, same key: the failure was not cached. */
-            expect(await cache(flakyRemote)()).toEqual({ hit: 2 })
+            expect(await cache(flakyRemote)).toEqual({ hit: 2 })
         })
     })
 
@@ -179,11 +179,11 @@ describe('rejection', () => {
         errorStatusCalls = 0
         await inServerScope(async (store) => {
             /* fetch resolves a 500 (only a network fault rejects), so decodeResponse throws. */
-            await expect(cache(errorStatusRemote, { ttl: 60000 })()).rejects.toThrow()
+            await expect(cache(errorStatusRemote, undefined, { ttl: 60000 })).rejects.toThrow()
             await Bun.sleep(1) // let the settle handler's eviction run
             expect(store.entries.size).toBe(0)
             /* Within the ttl window, the next read retries rather than serving the cached 500. */
-            expect(await cache(errorStatusRemote, { ttl: 60000 })()).toEqual({ hit: 2 })
+            expect(await cache(errorStatusRemote, undefined, { ttl: 60000 })).toEqual({ hit: 2 })
         })
     })
 })
@@ -223,8 +223,8 @@ describe('hydrated entries adopt the reading call site ttl', () => {
         const key = hydrate(store, countedRemote.raw)
 
         /* Both same-pass readers warm-hit — eviction is deferred a macrotask. */
-        expect(await cache(countedRemote, { ttl: 0 })()).toEqual({ hit: 0 })
-        expect(await cache(countedRemote, { ttl: 0 })()).toEqual({ hit: 0 })
+        expect(await cache(countedRemote, undefined, { ttl: 0 })).toEqual({ hit: 0 })
+        expect(await cache(countedRemote, undefined, { ttl: 0 })).toEqual({ hit: 0 })
         await settle()
         expect(store.entries.has(key)).toBe(false)
     })
@@ -235,12 +235,12 @@ describe('hydrated entries adopt the reading call site ttl', () => {
         const key = hydrate(store, countedRemote.raw)
 
         /* First reader declares forever — it consumes the adoption. */
-        expect(await cache(countedRemote)()).toEqual({ hit: 0 })
+        expect(await cache(countedRemote)).toEqual({ hit: 0 })
         await settle()
         expect(store.entries.has(key)).toBe(true)
 
         /* The losing later declaration neither evicts nor re-arms. */
-        expect(await cache(countedRemote, { ttl: 0 })()).toEqual({ hit: 0 })
+        expect(await cache(countedRemote, undefined, { ttl: 0 })).toEqual({ hit: 0 })
         await settle()
         expect(store.entries.has(key)).toBe(true)
     })
@@ -250,7 +250,7 @@ describe('hydrated entries adopt the reading call site ttl', () => {
         cacheStoreSlot.resolver = () => store
         const key = hydrate(store, countedRemote.raw)
 
-        expect(await cache(countedRemote, { ttl: 20 })()).toEqual({ hit: 0 })
+        expect(await cache(countedRemote, undefined, { ttl: 20 })).toEqual({ hit: 0 })
         await settle()
         expect(store.entries.has(key)).toBe(true)
 

@@ -44,8 +44,8 @@ describe('per-call selectors (fn, args)', () => {
 
     test("invalidate(fn, args) drops only that call's entry", async () => {
         const get = argRemote('GET', '/rpc/per-call')
-        await cache(get)({ id: 1 })
-        await cache(get)({ id: 2 })
+        await cache(get, { id: 1 })
+        await cache(get, { id: 2 })
         expect(store.entries.size).toBe(2)
 
         cache.invalidate(get, { id: 1 })
@@ -54,8 +54,8 @@ describe('per-call selectors (fn, args)', () => {
 
     test('invalidate(fn) without args still drops every variant', async () => {
         const get = argRemote('GET', '/rpc/per-call-all')
-        await cache(get)({ id: 1 })
-        await cache(get)({ id: 2 })
+        await cache(get, { id: 1 })
+        await cache(get, { id: 2 })
 
         cache.invalidate(get)
         expect(store.entries.size).toBe(0)
@@ -78,7 +78,7 @@ describe('per-call selectors (fn, args)', () => {
             { method: get.method, url: get.url, [REMOTE_FUNCTION]: true },
         ) as RawRemoteFunction<{ id: number }>
 
-        cache(slow)({ id: 1 })
+        cache(slow, { id: 1 })
         expect(pending(slow, { id: 1 })).toBe(true)
         expect(pending(slow, { id: 2 })).toBe(false)
         expect(pending(slow)).toBe(true)
@@ -89,8 +89,8 @@ describe('per-call selectors (fn, args)', () => {
         function loadItem(args?: { id: number }): Promise<number> {
             return Promise.resolve(args?.id ?? 0)
         }
-        await cache(loadItem)({ id: 1 })
-        await cache(loadItem)({ id: 2 })
+        await cache(loadItem, { id: 1 })
+        await cache(loadItem, { id: 2 })
         expect(store.entries.size).toBe(2)
 
         cache.invalidate(loadItem, { id: 1 })

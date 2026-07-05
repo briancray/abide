@@ -56,7 +56,7 @@ describe('pendingRefresh garbage collection', () => {
 
     test('a ttl-retained entry invalidated with no live reader leaves no marker', async () => {
         const get = remote('GET', '/rpc/gc-no-reader')
-        const tracked = track(() => cache(get, { ttl: 60_000 })())
+        const tracked = track(() => cache(get, undefined, { ttl: 60_000 }))
         await settle()
         /* Reader unmounts; the ttl keeps the entry but the subscriber is gone. */
         tracked.stop()
@@ -73,7 +73,7 @@ describe('pendingRefresh garbage collection', () => {
     test('a marker minted for a live reader is pruned when that reader tears down without re-reading', async () => {
         const get = remote('GET', '/rpc/gc-teardown')
         let readsKey = true
-        const tracked = track(() => (readsKey ? cache(get)() : undefined))
+        const tracked = track(() => (readsKey ? cache(get) : undefined))
         await settle()
 
         /* Next re-run will not read the key — the marker has no consumer. */
@@ -93,7 +93,7 @@ describe('pendingRefresh garbage collection', () => {
     test('the normal invalidate→reread path still flags the reload (gc did not eat the live case)', async () => {
         const get = remote('GET', '/rpc/gc-live')
         /* A reader that always re-reads the key after an invalidate. */
-        const tracked = track(() => cache(get)())
+        const tracked = track(() => cache(get))
         await settle()
 
         /* emit() re-runs the tracking scope synchronously, so the reread consumes the

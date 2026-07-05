@@ -42,7 +42,7 @@ const getUsers = defineRpc('GET', '/rpc/ui-users', () => {
 })
 
 const SOURCE = `
-    <script>let load = cache(getUsers)</script>
+    <script>let load = () => cache(getUsers)</script>
     <main>
         {#await load()}
             <p>loading…</p>

@@ -33,7 +33,7 @@ describe('cache() over a real rpc in a request scope', () => {
             new Request('https://test.local/'),
             options,
             async () => {
-                const read = cache(getCount)
+                const read = () => cache(getCount)
                 const a = await read()
                 const b = await read()
                 return json([a, b])
@@ -49,7 +49,7 @@ describe('cache() over a real rpc in a request scope', () => {
     test('a second request gets a fresh store, so the handler runs again', async () => {
         calls = 0
         const readOnce = (req: Request) =>
-            runWithRequestScope(req, options, async () => json(await cache(getCount)())).then(
+            runWithRequestScope(req, options, async () => json(await cache(getCount))).then(
                 (response) => response.json(),
             )
 
@@ -65,7 +65,7 @@ describe('cache() over a real rpc in a request scope', () => {
             new Request('https://test.local/'),
             options,
             async () => {
-                const read = cache(getCount)
+                const read = () => cache(getCount)
                 const before = await read()
                 cache.invalidate(getCount)
                 const after = await read()
@@ -84,8 +84,8 @@ describe('cache() over a real rpc in a request scope', () => {
             new Request('https://test.local/'),
             options,
             async () => {
-                const decoded = await cache(getCount)()
-                const response = await cache(getCount.raw)()
+                const decoded = await cache(getCount)
+                const response = await cache(getCount.raw)
                 expect(decoded).toEqual({ hit: 1 })
                 // Raw variant reads the same cached entry — still one invocation.
                 expect(calls).toBe(1)

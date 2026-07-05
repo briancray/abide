@@ -84,7 +84,7 @@ describe('cache() + UI await-block hydration', () => {
         })
         cacheStoreSlot.resolver = () => warmStore()
 
-        const result = await cache(getUsers)()
+        const result = await cache(getUsers)
         expect(fetched).toBe(false) // served from the snapshot, the remote never fired
         expect(result).toEqual(['ada', 'margaret'])
     })
@@ -110,7 +110,7 @@ describe('cache() + UI await-block hydration', () => {
         const firstRowBefore = ul.children[0] // [.children] skips the per-row markers
 
         const source = `
-            <script>let load = cache(getUsers)</script>
+            <script>let load = () => cache(getUsers)</script>
             <main>
                 {#await load()}
                     <p>loading…</p>
@@ -165,7 +165,7 @@ describe('cache() + UI await-block hydration', () => {
         host.innerHTML =
             '<main><!--a--><!--abide:await:0--><span>resumed</span><!--/abide:await:0--></main>'
         const source = `
-            <script>let read = cache(loadData)</script>
+            <script>let read = () => cache(loadData)</script>
             <main>{#await read()}{:then v}<span>{v}</span>{/await}</main>
         `
         const runtime = {
