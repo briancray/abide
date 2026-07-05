@@ -1,3 +1,4 @@
+import { attachRpcSelectorMethods } from './attachRpcSelectorMethods.ts'
 import { decodeResponse } from './decodeResponse.ts'
 import { HttpError } from './HttpError.ts'
 import { keyForRemoteCall } from './keyForRemoteCall.ts'
@@ -132,5 +133,6 @@ export function createRemoteFunction<Args, Return>(opts: {
         : (request: Request): Promise<Response> => {
               return dispatch(undefined, undefined, request)
           }
+    attachRpcSelectorMethods(callable as RemoteFunction<Args, Return>)
     return callable as RemoteFunction<Args, Return>
 }
