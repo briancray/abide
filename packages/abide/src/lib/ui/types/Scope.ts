@@ -7,18 +7,22 @@ import type { SyncTransport } from './SyncTransport.ts'
 
 /*
 A lexical scope: the unit that owns a region's reactive data, its lifetime, and
-the capabilities applied to it. Its data surface MIRRORS `Doc` (read/replace/add/
-remove/derive/apply/snapshot) so the compiler can target a scope as a
-component's data binding directly. It nests (`child`/`root`), passes values
-down the tree as context (`share`/`shared`), and carries the capability surface as
-methods so a scope is a passable value: `<Child parentScope={scope} />`.
+the capabilities applied to it. This is the INTERNAL shape — the compiler's lowering
+host and the runtime object; it is no longer the author surface. The author reactive
+surface is the imported `state`/`state.linked`/`state.computed`/`effect` (see
+`state.ts`); the compiler resolves those import bindings and lowers each onto this
+scope (`$$scope().derive`/`.linked`/`.effect`, `state.share`/`.shared` → `share`/
+`shared`). The data surface MIRRORS `Doc` (read/replace/add/remove/derive/apply/
+snapshot) so the compiler can target a scope as a component's data binding directly;
+it nests (`child`/`root`) and passes values down the tree as context (`share`/`shared`).
 
+The reactive primitives and capabilities remain on this internal shape because the
+lowered runtime calls them (`$$scope().linked(...)`, generated undo/persist) — they are
+withdrawn from the AUTHOR-facing public surface (docs/examples), not the runtime object.
 Capabilities route where the scope's changes go: `record()` to an undo journal,
-`persist()` to durable storage, `broadcast()` to peers — declared once, then
-`undo`/`redo` act on a recorded scope. `id` is the scope's identity for the
-boundary-crossing capabilities — `persist()` defaults its key to it. `scope()` is the only user-facing public entry; `effect` is also exported
-but only for generated binding code and the SSR strip (tagged plumbing). The
-`history`/`persist`/`sync` helpers it composes are internal.
+`persist()` to durable storage, `broadcast()` to peers — declared once, then `undo`/
+`redo` act on a recorded scope. The `history`/`persist`/`sync` helpers it composes are
+internal.
 */
 export type Scope = {
     readonly id: string

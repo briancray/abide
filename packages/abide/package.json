@@ -73,6 +73,7 @@
         "./shared/url": "./src/lib/shared/url.ts",
         "./shared/createSubscriber": "./src/lib/shared/createSubscriber.ts",
         "./ui/html": "./src/lib/ui/html.ts",
+        "./ui/state": "./src/lib/ui/state.ts",
         "./ui/effect": "./src/lib/ui/effect.ts",
         "./ui/scope": "./src/lib/ui/scope.ts",
         "./ui/enterScope": "./src/lib/ui/enterScope.ts",

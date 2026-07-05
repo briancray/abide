@@ -10,11 +10,12 @@ dispose — and may be async (its teardown then runs once the promise settles, b
 only the reads before its first `await` are tracked). Returns a dispose that runs
 the final teardown and detaches it from the graph. This is abide's from-scratch
 effect primitive: the open-on-first-read / close-on-last-reader lifecycle,
-grounded in abide's own reactive core. Authored as `scope().effect(...)` (the bare
-name is reserved); this module export stays for the generated binding code that
-calls it directly (and for the SSR strip), so it carries no standalone demo.
+grounded in abide's own reactive core. Imported and called bare
+(`import { effect } from '@abide/abide/ui/effect'`); the compiler resolves the import
+binding (alias-safe) and the SSR back-end strips the call (effects are client
+lifecycle). Generated binding code also calls it directly.
 */
-// @documentation plumbing
+// @documentation effect
 export function effect(fn: () => EffectResult): () => void {
     /* Re-runs fire after the build, so pin the scope this effect was created under
        (the dep-tracking observer is managed separately, so this can't disturb it). */
