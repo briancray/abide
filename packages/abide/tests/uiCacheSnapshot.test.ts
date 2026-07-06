@@ -8,6 +8,7 @@ import { cache } from '../src/lib/shared/cache.ts'
 import { cacheEntryFromSnapshot } from '../src/lib/shared/cacheEntryFromSnapshot.ts'
 import { cacheStoreSlot } from '../src/lib/shared/cacheStoreSlot.ts'
 import { createCacheStore } from '../src/lib/shared/createCacheStore.ts'
+import { sharedCacheStoreSlot } from '../src/lib/shared/sharedCacheStoreSlot.ts'
 import type { CacheSnapshotEntry } from '../src/lib/shared/types/CacheSnapshotEntry.ts'
 import type { CacheStore } from '../src/lib/shared/types/CacheStore.ts'
 import { compileComponent } from '../src/lib/ui/compile/compileComponent.ts'
@@ -52,13 +53,20 @@ const SOURCE = `
     </main>
 `
 
+/* Distinct shared store, mirroring the server entry (activeCacheStore() !==
+   sharedCacheStore()); without it the mid-stream snapshot entry evicts on settle
+   because the request-scoped ttl:0 keep never fires. */
+const unusedSharedStore = createCacheStore()
+
 beforeAll(() => {
     installMiniDom()
     /* Server resolver: the request-scoped store, exactly as the server entry installs. */
     cacheStoreSlot.resolver = () => requestContext.getStore()?.cache
+    sharedCacheStoreSlot.resolver = () => unusedSharedStore
 })
 afterAll(() => {
     cacheStoreSlot.resolver = undefined
+    sharedCacheStoreSlot.resolver = undefined
 })
 afterEach(() => {
     delete RESUME[0]

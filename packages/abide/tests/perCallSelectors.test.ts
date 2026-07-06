@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { cache } from '../src/lib/shared/cache.ts'
 import { cacheStoreSlot } from '../src/lib/shared/cacheStoreSlot.ts'
 import { createCacheStore } from '../src/lib/shared/createCacheStore.ts'
+import { sharedCacheStoreSlot } from '../src/lib/shared/sharedCacheStoreSlot.ts'
 import { pending } from '../src/lib/shared/pending.ts'
 import { REMOTE_FUNCTION } from '../src/lib/shared/REMOTE_FUNCTION.ts'
 import { remoteMetaStore } from '../src/lib/shared/remoteMetaStore.ts'
@@ -32,14 +33,21 @@ through the same encoders the read path uses (keyForRemoteCall / producerKey),
 so invalidation and probes target one call's entry while sibling args
 variants stay warm.
 */
+/* Distinct shared store, mirroring the server entry (activeCacheStore() !==
+   sharedCacheStore()); without it the request-scoped ttl:0 keep never fires and
+   sibling entries evict before the selector assertions run. */
+const unusedSharedStore = createCacheStore()
+
 describe('per-call selectors (fn, args)', () => {
     let store = createCacheStore()
     beforeEach(() => {
         store = createCacheStore()
         cacheStoreSlot.resolver = () => store
+        sharedCacheStoreSlot.resolver = () => unusedSharedStore
     })
     afterEach(() => {
         cacheStoreSlot.resolver = undefined
+        sharedCacheStoreSlot.resolver = undefined
     })
 
     test("invalidate(fn, args) drops only that call's entry", async () => {

@@ -5,6 +5,8 @@ import { requestContext } from '../src/lib/server/runtime/requestContext.ts'
 import { runWithRequestScope } from '../src/lib/server/runtime/runWithRequestScope.ts'
 import { cache } from '../src/lib/shared/cache.ts'
 import { cacheStoreSlot } from '../src/lib/shared/cacheStoreSlot.ts'
+import { createCacheStore } from '../src/lib/shared/createCacheStore.ts'
+import { sharedCacheStoreSlot } from '../src/lib/shared/sharedCacheStoreSlot.ts'
 
 const options = { logRequests: false }
 
@@ -16,15 +18,22 @@ activeCacheStore() resolves the same store cache() sees in production —
 exercising dedupe and per-request isolation through the public surface rather
 than a fake remote.
 */
+/* Distinct shared store, mirroring the server entry (activeCacheStore() !==
+   sharedCacheStore()); without it sharedCacheStore() degrades to the request store
+   and the request-scoped ttl:0 keep never fires. */
+const unusedSharedStore = createCacheStore()
+
 describe('cache() over a real rpc in a request scope', () => {
     let calls = 0
     const getCount = defineRpc('GET', '/rpc/cache-count', () => json({ hit: ++calls }))
 
     beforeAll(() => {
         cacheStoreSlot.resolver = () => requestContext.getStore()?.cache
+        sharedCacheStoreSlot.resolver = () => unusedSharedStore
     })
     afterAll(() => {
         cacheStoreSlot.resolver = undefined
+        sharedCacheStoreSlot.resolver = undefined
     })
 
     test('two reads in one request share a single underlying invocation', async () => {

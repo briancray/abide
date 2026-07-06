@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { cacheStoreSlot } from '../src/lib/shared/cacheStoreSlot.ts'
 import { createCacheStore } from '../src/lib/shared/createCacheStore.ts'
+import { sharedCacheStoreSlot } from '../src/lib/shared/sharedCacheStoreSlot.ts'
 import { createRemoteFunction } from '../src/lib/shared/createRemoteFunction.ts'
 import { patch } from '../src/lib/shared/patch.ts'
 import { settle } from './support/settle.ts'
@@ -13,14 +14,22 @@ function jsonResponse(value: unknown): Response {
     })
 }
 
+/* A distinct shared store so activeCacheStore() !== sharedCacheStore(), exactly as
+   the server entry always wires it. Without it sharedCacheStore() degrades to the
+   active store, the request-scoped ttl:0 keep never fires, and retained-value reads
+   evict on settle. */
+const unusedSharedStore = createCacheStore()
+
 describe('patch()', () => {
     beforeEach(() => {
         cacheStoreSlot.resolver = () => cacheStoreSlot.fallback
         cacheStoreSlot.fallback = createCacheStore()
+        sharedCacheStoreSlot.resolver = () => unusedSharedStore
     })
     afterEach(() => {
         cacheStoreSlot.resolver = undefined
         cacheStoreSlot.fallback = undefined
+        sharedCacheStoreSlot.resolver = undefined
     })
 
     test('mutates the retained value locally with no refetch', async () => {
