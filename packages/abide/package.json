@@ -58,7 +58,6 @@
         "./server/sockets/defineSocket": "./src/lib/server/sockets/defineSocket.ts",
         "./server/prompts/definePrompt": "./src/lib/server/prompts/definePrompt.ts",
         "./ui/watch": "./src/lib/ui/watch.ts",
-        "./shared/cache": "./src/lib/shared/cache.ts",
         "./shared/pending": "./src/lib/shared/pending.ts",
         "./shared/patch": "./src/lib/shared/patch.ts",
         "./shared/peek": "./src/lib/shared/peek.ts",

@@ -15,7 +15,7 @@ grounded in abide's own reactive core. Imported and called bare
 binding (alias-safe) and the SSR back-end strips the call (effects are client
 lifecycle). Generated binding code also calls it directly.
 */
-// @documentation effect
+// @documentation plumbing
 export function effect(fn: () => EffectResult): () => void {
     /* Re-runs fire after the build, so pin the scope this effect was created under
        (the dep-tracking observer is managed separately, so this can't disturb it). */
