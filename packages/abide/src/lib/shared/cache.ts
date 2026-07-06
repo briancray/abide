@@ -533,11 +533,18 @@ function registerEntry(
     own method filter; writes never ship). The keep never applies on the
     client (the tab store outlives any unit — a kept write would block every
     future re-submit, so entries evict the moment they settle), to producer
-    entries (no request), or to the process-level `shared` store (not
-    request-scoped — keeping it would leak forever).
+    entries (no request), or when the resolved store is the process-level
+    `shared` store — including a non-shared read made outside an inbound
+    request, where the resolver falls back to `sharedCacheStore()` (Decision
+    1): that store is never request-scoped, so keeping it would leak forever.
+    The `store !== sharedCacheStore()` check is what tells a genuinely
+    request-scoped store apart from that fallback.
     */
     const keepZeroTtlForRequest =
-        request !== undefined && !options?.shared && typeof window === 'undefined'
+        request !== undefined &&
+        !options?.shared &&
+        typeof window === 'undefined' &&
+        store !== sharedCacheStore()
     function deleteIfCurrent() {
         evictIfCurrent(store, entry)
     }

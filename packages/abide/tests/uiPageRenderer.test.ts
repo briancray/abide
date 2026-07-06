@@ -7,6 +7,8 @@ import { runWithRequestScope } from '../src/lib/server/runtime/runWithRequestSco
 import type { RequestStore } from '../src/lib/server/runtime/types/RequestStore.ts'
 import { cache } from '../src/lib/shared/cache.ts'
 import { cacheStoreSlot } from '../src/lib/shared/cacheStoreSlot.ts'
+import { createCacheStore } from '../src/lib/shared/createCacheStore.ts'
+import { sharedCacheStoreSlot } from '../src/lib/shared/sharedCacheStoreSlot.ts'
 import type { SsrRender } from '../src/lib/ui/runtime/types/SsrRender.ts'
 import type { UiComponent } from '../src/lib/ui/runtime/types/UiComponent.ts'
 
@@ -48,12 +50,19 @@ function render(pages: Record<string, () => Promise<{ default: UiComponent }>>):
     }).then((response) => response.text())
 }
 
-/* cache() resolves against the request-scoped store, exactly as the server entry installs. */
+/* cache() resolves against the request-scoped store, exactly as the server entry installs.
+   A distinct shared-store resolver is required too: sharedCacheStore() degrades to
+   activeCacheStore() when unwired, which would otherwise alias the request store and
+   falsely trip cache.ts's `store !== sharedCacheStore()` request-scope guard, evicting
+   the ttl=0 entries this suite expects to survive for the post-render snapshot. */
+const unusedSharedStore = createCacheStore()
 beforeAll(() => {
     cacheStoreSlot.resolver = () => requestContext.getStore()?.cache
+    sharedCacheStoreSlot.resolver = () => unusedSharedStore
 })
 afterAll(() => {
     cacheStoreSlot.resolver = undefined
+    sharedCacheStoreSlot.resolver = undefined
 })
 
 describe('createUiPageRenderer', () => {

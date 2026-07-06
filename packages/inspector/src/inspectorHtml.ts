@@ -497,7 +497,7 @@ async function loadCache() {
       ' shared ' + (entries.length === 1 ? 'entry' : 'entries') + '</span><button id="cacheRefresh">refresh</button></div>'
     if (!entries.length) {
       el.className = ''
-      el.innerHTML = refresh + '<div class="empty">shared store empty — entries come from cache(fn, { shared: true }); request-scoped reads show as per-request tallies in Logs/Traces</div>'
+      el.innerHTML = refresh + '<div class="empty">shared store empty — entries come from cache(fn, { shared: true, ttl: Infinity }); request-scoped reads show as per-request tallies in Logs/Traces</div>'
     } else {
       const rows = entries.map((e) =>
         '<tr><td class="url">' + esc(e.key) + '</td>' +

@@ -4,6 +4,7 @@ import { cacheStoreSlot } from '../src/lib/shared/cacheStoreSlot.ts'
 import { createCacheStore } from '../src/lib/shared/createCacheStore.ts'
 import { REMOTE_FUNCTION } from '../src/lib/shared/REMOTE_FUNCTION.ts'
 import { remoteMetaStore } from '../src/lib/shared/remoteMetaStore.ts'
+import { sharedCacheStoreSlot } from '../src/lib/shared/sharedCacheStoreSlot.ts'
 import type { CacheInvalidation } from '../src/lib/shared/types/CacheInvalidation.ts'
 import type { HttpMethod } from '../src/lib/shared/types/HttpMethod.ts'
 import type { RawRemoteFunction } from '../src/lib/shared/types/RawRemoteFunction.ts'
@@ -29,10 +30,17 @@ describe('cache.invalidate selector', () => {
     beforeEach(() => {
         cacheStoreSlot.resolver = () => cacheStoreSlot.fallback
         cacheStoreSlot.fallback = createCacheStore()
+        /* A distinct shared-store resolver: sharedCacheStore() degrades to
+           activeCacheStore() when unwired, which would otherwise alias
+           cacheStoreSlot.fallback and falsely trip cache.ts's
+           `store !== sharedCacheStore()` request-scope guard, evicting these
+           ttl=0 entries before the test can inspect them. */
+        sharedCacheStoreSlot.resolver = () => createCacheStore()
     })
     afterEach(() => {
         cacheStoreSlot.resolver = undefined
         cacheStoreSlot.fallback = undefined
+        sharedCacheStoreSlot.resolver = undefined
     })
 
     test('{ tags } drops every entry carrying the tag, leaving others', async () => {

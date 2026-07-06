@@ -146,6 +146,23 @@ describe('smart bare rpc call — shared store', () => {
 })
 
 describe('smart bare rpc call', () => {
+    /* Mirror the server entry's resolver so the request-scoped store this test
+       exercises is the actual per-request ALS store. Also wire a shared-store
+       resolver to a distinct store — sharedCacheStore() degrades to
+       activeCacheStore() when no shared resolver is registered (a test-only
+       convenience), which would otherwise make it alias the request store and
+       falsely trip the `store !== sharedCacheStore()` request-scope guard. */
+    let sharedStore = createCacheStore()
+    beforeEach(() => {
+        sharedStore = createCacheStore()
+        sharedCacheStoreSlot.resolver = () => sharedStore
+        cacheStoreSlot.resolver = () => requestContext.getStore()?.cache
+    })
+    afterEach(() => {
+        sharedCacheStoreSlot.resolver = undefined
+        cacheStoreSlot.resolver = undefined
+    })
+
     test('two identical GET calls in one scope coalesce to a single invoke', async () => {
         let invokes = 0
         const getThing = createRemoteFunction<{ id: string }, { id: string }>({
@@ -272,6 +289,7 @@ describe('smart bare rpc call — outside a request', () => {
         sharedCacheStoreSlot.resolver = () => sharedStore
         /* Mirror the fixed server entry: no request scope → the shared store. */
         cacheStoreSlot.resolver = () => requestContext.getStore()?.cache ?? sharedStore
+        cacheStoreSlot.fallback = undefined
     })
     afterEach(() => {
         sharedCacheStoreSlot.resolver = undefined
@@ -293,5 +311,29 @@ describe('smart bare rpc call — outside a request', () => {
         expect(invokes).toBe(1)
         /* The `?? sharedStore` resolver means the lazy orphan fallback is never built. */
         expect(cacheStoreSlot.fallback).toBeUndefined()
+    })
+
+    test('a sequential non-shared read outside a request evicts on settle — coalesce only, no immortal entry', async () => {
+        let invokes = 0
+        const getThing = countingRemote('/rpc/getOutsideSequential', () => {
+            invokes += 1
+            return invokes
+        })
+        /* First read, outside any request scope: no `shared` option, so per
+           Decision 1 it still resolves to the shared store (the `?? sharedStore`
+           fallback), but must NOT be kept — this store is never request-scoped. */
+        const first = await getThing()
+        expect(first).toEqual({ n: 1 })
+        /* Let the settle handler run: a leaked immortal entry would still be
+           sitting in the shared store's `entries` map right here. */
+        await settle()
+        expect(sharedStore.entries.size).toBe(0)
+        /* A second, later read must invoke the producer again — proving the
+           first entry was truly evicted, not retained forever. */
+        const second = await getThing()
+        expect(second).toEqual({ n: 2 })
+        expect(invokes).toBe(2)
+        await settle()
+        expect(sharedStore.entries.size).toBe(0)
     })
 })

@@ -49,9 +49,9 @@ function projectEntry(entry: CacheEntry, now: number): InspectorCacheEntry {
 
 /*
 Snapshots the process-level cache store (the persistent one `cache(fn, { shared:
-true })` writes to) for the inspector. Read at call time, so it reflects the
-store as it stands; request-scoped stores are deliberately excluded — they're
-ephemeral and already visible as per-request cache tallies.
+true, ttl: Infinity })` writes to) for the inspector. Read at call time, so it
+reflects the store as it stands; request-scoped stores are deliberately
+excluded — they're ephemeral and already visible as per-request cache tallies.
 */
 export function buildCacheSnapshot(): InspectorCacheSnapshot {
     const now = Date.now()
