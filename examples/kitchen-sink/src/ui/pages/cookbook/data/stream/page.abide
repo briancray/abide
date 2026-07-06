@@ -2,56 +2,69 @@
 import Recipe from '$ui/Recipe.abide'
 
 /* Cookbook · data & SSR · streaming to the UI. */
-const LIVE = '/tail'
+const LIVE = '/sockets'
 const HTTP = '/rpc/streaming'
 </script>
 
 <h1 class="text-3xl font-bold">stream to the UI</h1>
 <p class="mt-2 text-slate-600">
-    <code class="font-mono">tail()</code> is the reactive consumer for anything streaming — a socket
-    or a streaming rpc's bare call. For plain HTTP, a handler returns
-    <code class="font-mono">sse()</code> or <code class="font-mono">jsonl()</code> and the client
-    reads it with native APIs.
+    Anything streaming — a socket or a streaming rpc's bare call — is a
+    <code class="font-mono">Subscribable</code>. Consume it with
+    <code class="font-mono">watch(source, frame =&gt; …)</code>,
+    <code class="font-mono">{'{#for await}'}</code>, or <code class="font-mono">for await</code>; seed
+    the latest retained frame with <code class="font-mono">peek(source)</code>. For plain HTTP, a
+    handler returns <code class="font-mono">sse()</code> or
+    <code class="font-mono">jsonl()</code> and the client reads it with native APIs.
 </p>
 
 <Recipe
     task="Consume a stream reactively"
     live={LIVE}
-    code={`import { tail } from '@abide/abide/ui/tail'
+    code={`import { peek } from '@abide/abide/shared/peek'
 import { state } from '@abide/abide/ui/state'
+import { watch } from '@abide/abide/ui/watch'
 
-const latest = state.computed(() => tail(feed()))`}
-    note={'`tail(source)` reads the latest frame. The first read in a tracking scope opens the stream; the last reader closing drops it — no manual subscribe/unsubscribe.'} />
+const stream = feed()
+let latest = state(peek(stream))        // seed from the retained frame
+watch(stream, (frame) => (latest = frame))`}
+    note={'`watch(source, handler)` fires per frame; seed with `peek(source)` for the last retained one. The watch is scope-tied — it opens on mount and disposes with the component, no manual unsubscribe.'} />
 
 <Recipe
     task="Keep a rolling window of recent frames"
     live={LIVE}
-    code={`const recent = state.computed(() => tail(chat, { last: 5 }))`}
-    note={'`{ last: n }` holds a live window of the last ≤ n frames instead of latest-wins — the feed/activity-list shape.'} />
+    code={`let recent = state([])
+watch(chat, (message) => (recent = [...recent, message].slice(-5)))`}
+    note={'Fold each frame into a windowed `state` array instead of latest-wins — the feed/activity-list shape. Slice to cap the window.'} />
 
 <Recipe
     task="Show a stream's connection status"
-    live={LIVE}
-    code={`const status = state.computed(() => tail.status(chat))
+    live="/probes"
+    code={`import { refreshing } from '@abide/abide/shared/refreshing'
+const reconnecting = state.computed(() => refreshing(chat))
 
-<p>status: {status}</p>`}
-    note={"`tail.status(source)` reports the transport state. A dropped socket self-heals under backoff — status never degrades to 'error' for a mere disconnect."} />
+<p>status: {reconnecting ? 'reconnecting…' : 'live'}</p>`}
+    note={'`refreshing(source)` reports a held value being revalidated — e.g. across a reconnect gap. A dropped socket self-heals under backoff, so it never degrades to a hard error for a mere disconnect.'} />
 
 <Recipe
     task="Surface a stream's terminal error"
-    live={LIVE}
-    code={`const failure = state.computed(() => tail.error(chat))
-
-{#if failure}<p class="text-rose-700">{failure.message}</p>{/if}`}
-    note={'Application errors are terminal and surface through `tail.error`; a transport disconnect does not — it retains the held value and reopens.'} />
+    live={HTTP}
+    code={`{#for await (const message of chat) by message.id}
+    <li><strong>{message.from}</strong>: {message.text}</li>
+{:catch err}
+    <p class="text-rose-700">{err.message}</p>
+{/for}`}
+    note={'Application errors are terminal and surface through the block’s `{:catch}`; a transport disconnect does not — it retains the held value and reopens.'} />
 
 <Recipe
     task="Render a live list from a stream"
     live={LIVE}
-    code={`{#for message of tail(chat, { last: 20 }) by message.id}
+    code={`let recent = state([])
+watch(chat, (message) => (recent = [...recent, message].slice(-20)))
+
+{#for message of recent by message.id}
     <li><strong>{message.from}</strong>: {message.text}</li>
 {/for}`}
-    note={'Read the window straight into a keyed `{#for}` — new frames append and the list patches in place. `tail` is a no-op on the server, so this is client-live.'} />
+    note={'Feed a keyed `{#for}` from a windowed cell — new frames append and the list patches in place. `watch` is a no-op on the server, so this is client-live.'} />
 
 <Recipe
     task="Stream server output over SSE"

@@ -104,7 +104,7 @@ abide compile          # just the embedded server binary the bundle spawns`} />
         <code class="font-mono">emit</code> name. Subscribe with
         <code class="font-mono">onMenu</code> from
         <code class="font-mono">abide/bundle/onMenu</code>; it returns an unsubscribe, so it drops
-        straight into an <code class="font-mono">effect</code>.
+        straight into a <code class="font-mono">watch</code> thunk.
     </p>
 
     <CodeBlock
@@ -112,9 +112,9 @@ abide compile          # just the embedded server binary the bundle spawns`} />
         code={`import { onMenu } from '@abide/abide/bundle/onMenu'
 import { navigate } from '@abide/abide/ui/navigate'
 
-import { effect } from '@abide/abide/ui/effect'
-effect(() => onMenu('reload-session', () => location.reload()))
-effect(() => onMenu('open-mcp', () => void navigate('/mcp')))`} />
+import { watch } from '@abide/abide/ui/watch'
+watch(() => onMenu('reload-session', () => location.reload()))
+watch(() => onMenu('open-mcp', () => void navigate('/mcp')))`} />
 </section>
 
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5 text-sm text-slate-600">

@@ -26,21 +26,21 @@ const categories = [
     },
     {
         title: 'reactive state',
-        blurb: 'Local reactivity — imported state / state.computed / state.linked, effects, transforms, two-way bindings.',
+        blurb: 'Local reactivity — imported state / state.computed / state.linked, watch, transforms, two-way bindings.',
         pages: [
             { href: '/cookbook/state/scope', label: 'state basics' },
             { href: '/cookbook/state/derived', label: 'computed, linked, transforms' },
-            { href: '/cookbook/state/effects', label: 'effects' },
+            { href: '/cookbook/state/effects', label: 'watch' },
             { href: '/cookbook/state/bindings', label: 'shared context' },
         ],
     },
     {
         title: 'data & SSR',
-        blurb: 'Get data to the page — await on the server, stream to the client, cache, coalesce, hydrate warm.',
+        blurb: 'Get data to the page — await on the server, stream to the client, smart calls, coalesce, refresh, hydrate warm.',
         pages: [
             { href: '/cookbook/data/await-ssr', label: 'await during SSR' },
             { href: '/cookbook/data/stream', label: 'stream to the UI' },
-            { href: '/cookbook/data/cache', label: 'cache & invalidate' },
+            { href: '/cookbook/data/cache', label: 'smart calls & refresh' },
             { href: '/cookbook/data/hydrate', label: 'hydrate & fetch patterns' },
         ],
     },
@@ -55,7 +55,7 @@ const categories = [
     },
     {
         title: 'forms & mutations',
-        blurb: 'Send data back — POST / PUT / PATCH / DELETE rpcs, schema validation, optimistic updates, invalidate-after-write.',
+        blurb: 'Send data back — POST / PUT / PATCH / DELETE rpcs, schema validation, optimistic updates, refresh-after-write.',
         pages: [
             { href: '/cookbook/forms/rpc-methods', label: 'rpc methods' },
             { href: '/cookbook/forms/validation', label: 'validation' },
@@ -73,10 +73,9 @@ const categories = [
     },
     {
         title: 'realtime',
-        blurb: 'Push live — broadcast sockets, publish(), tail(), retention, presence, self-healing reconnects.',
+        blurb: 'Push live — broadcast sockets, broadcast(), retention, presence, self-healing reconnects.',
         pages: [
-            { href: '/cookbook/realtime/sockets', label: 'sockets & publish' },
-            { href: '/cookbook/realtime/tail', label: 'tail & retention' },
+            { href: '/cookbook/realtime/sockets', label: 'sockets & broadcast' },
             { href: '/cookbook/realtime/patterns', label: 'presence & patterns' },
         ],
     },

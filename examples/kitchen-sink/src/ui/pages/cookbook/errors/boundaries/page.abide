@@ -128,8 +128,8 @@ const CTRL = '/templating/control-flow'
     live="/observability"
     code={`{:catch error}
     <script>
-        import { effect } from '@abide/abide/ui/effect'
-        effect(() => log.error('boundary caught', error))
+        import { watch } from '@abide/abide/ui/watch'
+        watch(() => log.error('boundary caught', error))
     </script>
     <Fallback />
 {/await}`}
@@ -146,9 +146,9 @@ const CTRL = '/templating/control-flow'
     task="Report errors to an external service"
     gap={true}
     code={`// no built-in error-reporting hook — do it yourself
-import { effect } from '@abide/abide/ui/effect'
-effect(() => {
+import { watch } from '@abide/abide/ui/watch'
+watch(() => {
     window.addEventListener('error', (e) => sendToSentry(e.error))
     window.addEventListener('unhandledrejection', (e) => sendToSentry(e.reason))
 })`}
-    note={"There's no built-in Sentry/error-tracking integration. Wire `window` error events in a root-layout effect, and use `log.error` + `trace()` server-side; forward both to your provider yourself."} />
+    note={"There's no built-in Sentry/error-tracking integration. Wire `window` error events in a root-layout watch, and use `log.error` + `trace()` server-side; forward both to your provider yourself."} />

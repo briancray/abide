@@ -1,10 +1,15 @@
 <script>
-import { tail } from '@abide/abide/ui/tail'
+import { peek } from '@abide/abide/shared/peek'
+import { state } from '@abide/abide/ui/state'
+import { watch } from '@abide/abide/ui/watch'
 import { publishChat } from '$server/rpc/publishChat.ts'
 import { chat } from '$server/sockets/chat.ts'
 import CodeBlock from '$ui/CodeBlock.abide'
-import { state } from '@abide/abide/ui/state'
-const latest = state.computed(() => tail(chat))
+
+/* Seed from the socket's retained frame (peek), then keep a cell current with a
+   watch — the socket is a subscribable, so watch fires the handler per frame. */
+let latest = state(peek(chat))
+watch(chat, (message) => (latest = message))
 
 let from = state('alice')
 let text = state('hello socket!')
@@ -81,11 +86,13 @@ const schema = z.object({ id: z.string(), from: z.string(), text: z.string(), at
 export const chat = socket({ schema, tail: 100, ttl: 3_600_000 })
 export type ChatMessage = z.infer<typeof schema>`} />
 
-    <CodeBlock title="this page — reactive read" code={`import { tail } from '@abide/abide/ui/tail'
+    <CodeBlock title="this page — reactive read" code={`import { peek } from '@abide/abide/shared/peek'
+import { state } from '@abide/abide/ui/state'
+import { watch } from '@abide/abide/ui/watch'
 import { chat } from '$server/sockets/chat.ts'
 
-import { state } from '@abide/abide/ui/state'
-const latest = state.computed(() => tail(chat))     // re-renders on every new frame`} />
+let latest = state(peek(chat))                      // seed from the retained frame
+watch(chat, (message) => (latest = message))        // then update per frame`} />
 </section>
 
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">

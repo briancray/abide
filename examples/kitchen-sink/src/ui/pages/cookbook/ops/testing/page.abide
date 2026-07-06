@@ -34,9 +34,7 @@ expect(created.status).toBe(201)`}
     note={'`.raw(args)` on the test client returns the `Response` — assert status codes and headers your handler set.'} />
 
 <Recipe task="Test a socket publish" live={LIVE} code={`await app.rpc.publishChat({ from: 'tester', text: 'hi' })
-const frames = app.sockets.chat.tail(1)[Symbol.asyncIterator]()
-expect((await frames.next()).value).toMatchObject({ text: 'hi' })
-frames.return?.()`} note={'`app.sockets.<name>` iterates a live socket — publish through an rpc, then assert the frame arrives. Close the iterator when done.'} />
+expect(app.sockets.chat.peek()).toMatchObject({ text: 'hi' })`} note={'`app.sockets.<name>` is the live socket — publish through an rpc, then `peek()` reads the retained frame. For a running stream, `for await` it instead.'} />
 
 <Recipe
     task="Assert the health payload"

@@ -1,20 +1,27 @@
 <script>
+import { patch } from '@abide/abide/shared/patch'
+import { refresh } from '@abide/abide/shared/refresh'
 import { state } from '@abide/abide/ui/state'
-import { effect } from '@abide/abide/ui/effect'
+import { watch } from '@abide/abide/ui/watch'
+import { getChatCount } from '$server/rpc/getChatCount.ts'
+import { getChatLog } from '$server/rpc/getChatLog.ts'
+import { publishChat } from '$server/rpc/publishChat.ts'
+import { chat } from '$server/sockets/chat.ts'
 import CodeBlock from '$ui/CodeBlock.abide'
 
 /*
-Reactive state — the primitives are imported. `state` carries `state.computed`
-and `state.linked`; `effect` is its own import. Call them bare; a cell reads and
-writes like a plain variable. props is the one reactive name in scope without an
-import.
+Reactive state — the two imported primitives. `state` carries `state.computed`
+and `state.linked`; `watch` is the single reaction. Call them bare; a cell reads
+and writes like a plain variable. props is the one reactive name in scope without
+an import.
 */
 
 let count = state(0)
 const doubled = state.computed(() => count * 2)
 
+// watch(thunk): a client-only reaction, stripped from SSR; return a cleanup.
 let ticks = state(0)
-effect(() => {
+watch(() => {
     const id = setInterval(() => (ticks = ticks + 1), 1000)
     return () => clearInterval(id)
 })
@@ -25,15 +32,25 @@ let qty = state(1, (n) => Math.max(1, Math.min(99, Math.round(Number(n) || 0))))
 // linked: a local draft seeded from upstream; reseeds when the source changes
 let serverName = state('ada')
 let nameDraft = state.linked(() => serverName)
+
+/* watch(source, handler): name the trigger. A chat frame refreshes the count
+   (stale total stays visible, revalidates) and patches the log in place (the
+   frame IS the new message — fold it in, no refetch). */
+watch(chat, (message) => {
+    refresh(getChatCount)
+    patch(getChatLog, (log) => ({ messages: [...log.messages, message].slice(-20) }))
+})
+const chatCount = state.computed(() => getChatCount())
+const chatLog = state.computed(() => getChatLog())
 </script>
 
 <h1 class="text-3xl font-bold">reactive state</h1>
 <p class="mt-2 text-slate-600">
-    Reactive cells are imported — <code class="font-mono">state</code> from
+    Two imported primitives — <code class="font-mono">state</code> from
     <code class="font-mono">abide/ui/state</code> (with
     <code class="font-mono">state.computed</code> and
     <code class="font-mono">state.linked</code> attached) and
-    <code class="font-mono">effect</code> from <code class="font-mono">abide/ui/effect</code> — then
+    <code class="font-mono">watch</code> from <code class="font-mono">abide/ui/watch</code> — then
     called bare. <code class="font-mono">props</code> is the one reactive name in scope without an
     import. A writable computed lives at the bind site as an accessor (<a
         class="underline"
@@ -72,9 +89,11 @@ let nameDraft = state.linked(() => serverName)
                 </td>
             </tr>
             <tr>
-                <td class="px-4 py-2 font-mono">effect(fn)</td>
+                <td class="px-4 py-2 font-mono">watch(source, handler?)</td>
                 <td class="px-4 py-2 text-slate-600">
-                    a client-only side effect (stripped from SSR); return a function to clean up
+                    the single reaction — a state cell, <code class="font-mono">[cells]</code>, a
+                    socket/stream, or an rpc; the 1-arg thunk form is the auto-tracked side effect
+                    (client-only, cleanup on unmount)
                 </td>
             </tr>
             <tr>
@@ -104,7 +123,7 @@ let nameDraft = state.linked(() => serverName)
             +
         </button>
         <span class="font-mono text-slate-500">computed doubled = {doubled}</span>
-        <span class="ml-auto font-mono text-slate-500">effect ticks = {ticks}s</span>
+        <span class="ml-auto font-mono text-slate-500">watch ticks = {ticks}s</span>
     </div>
 </div>
 
@@ -142,11 +161,11 @@ let nameDraft = state.linked(() => serverName)
 <section class="mt-6 space-y-3 rounded-lg border border-slate-200 bg-white p-5">
     <CodeBlock title="reactive primitives — exactly what this demo runs" code={`<script>
     import { state } from '@abide/abide/ui/state'   // state.computed / state.linked attached
-    import { effect } from '@abide/abide/ui/effect'
+    import { watch } from '@abide/abide/ui/watch'
     let count = state(0)                            // writable cell — the +/− buttons
     const doubled = state.computed(() => count * 2)       // recomputes when count changes
     let ticks = state(0)
-    effect(() => {                                  // client-only; cleanup on unmount
+    watch(() => {                                   // thunk form: client-only, cleanup on unmount
         const id = setInterval(() => (ticks = ticks + 1), 1000)
         return () => clearInterval(id)
     })
@@ -156,4 +175,59 @@ let nameDraft = state.linked(() => serverName)
     let serverName = state('ada')
     let nameDraft = state.linked(() => serverName)
 </script>`} />
+</section>
+
+<h2 class="mt-10 text-2xl font-bold">
+    <code class="font-mono">watch</code> a source · <code class="font-mono">refresh</code> /
+    <code class="font-mono">patch</code> a cached read
+</h2>
+<p class="mt-2 text-slate-600">
+    <code class="font-mono">watch(source, handler)</code> names its trigger. Here a chat frame
+    drives two reactions on cached reads: <code class="font-mono">refresh</code> revalidates a count
+    in the background (the stale value stays visible, never blanks) while
+    <code class="font-mono">patch</code> folds the frame's own payload into a cached list with no
+    refetch.
+</p>
+
+<section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
+    <div class="mt-1 grid gap-3 sm:grid-cols-2">
+        <div class="rounded-md border border-slate-200 p-3">
+            <p class="text-xs text-slate-500">published — <code class="font-mono">refresh</code></p>
+            {#await chatCount then data}
+                <p class="mt-1 font-mono text-3xl text-slate-900">{data.published}</p>
+            {/await}
+        </div>
+        <div class="rounded-md border border-slate-200 p-3">
+            <p class="text-xs text-slate-500">recent — <code class="font-mono">patch</code></p>
+            {#await chatLog then data}
+                {#if data.messages.length === 0}
+                    <p class="mt-1 text-sm text-slate-400">none yet</p>
+                {:else}
+                    <ul class="mt-1 space-y-0.5 text-sm text-slate-700">
+                        {#for message of data.messages.slice(-5) by message.id}
+                            <li><strong>{message.from}</strong>: {message.text}</li>
+                        {/for}
+                    </ul>
+                {/if}
+            {/await}
+        </div>
+    </div>
+    <button
+        type="button"
+        class="mt-3 rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100"
+        onclick={() => publishChat({ from: 'state page', text: 'ping' })}>
+        {'publishChat({ from, text })'}
+    </button>
+
+    <CodeBlock title="watch a socket, refresh + patch the reads" code={`import { patch } from '@abide/abide/shared/patch'
+import { refresh } from '@abide/abide/shared/refresh'
+import { watch } from '@abide/abide/ui/watch'
+
+// one reaction, named by its source — no hand-rolled subscribe/teardown
+watch(chat, (message) => {
+    refresh(getChatCount)                                          // revalidate; stale total stays visible
+    patch(getChatLog, (log) => ({ messages: [...log.messages, message].slice(-20) }))  // fold in, no refetch
+})
+const chatCount = state.computed(() => getChatCount())   // the bare call IS the smart cached read
+const chatLog = state.computed(() => getChatLog())`} />
 </section>

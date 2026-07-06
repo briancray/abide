@@ -97,4 +97,4 @@ let count = state(0)
 // correct: import it
 import { state } from '@abide/abide/ui/state'
 let count = state(0)`}
-    note={'`state` (with `state.computed` / `state.linked`) comes from `abide/ui/state`; `effect` from `abide/ui/effect`. Import the primitive you use — the compiler resolves the binding and owns each cell to the enclosing component lifetime.'} />
+    note={'`state` (with `state.computed` / `state.linked`) comes from `abide/ui/state`; `watch` from `abide/ui/watch`. Import the primitive you use — the compiler resolves the binding and owns each cell to the enclosing component lifetime.'} />

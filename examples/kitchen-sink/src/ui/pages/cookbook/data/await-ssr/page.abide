@@ -2,7 +2,7 @@
 import Recipe from '$ui/Recipe.abide'
 
 /* Cookbook · data & SSR · awaiting on the server. */
-const LIVE = '/cache'
+const LIVE = '/reactive-state'
 </script>
 
 <h1 class="text-3xl font-bold">await during SSR</h1>
@@ -33,10 +33,10 @@ const LIVE = '/cache'
 <Recipe
     task="Warm-hydrate an awaited read"
     live={LIVE}
-    code={`{#await cache(getUser) then user}
+    code={`{#await getUser() then user}
     <h1>{user.name}</h1>
 {/await}`}
-    note={'Wrap the call in `cache()` and the SSR pass writes the result into the page snapshot — the client hydrates from it and skips the refetch. Bare `getUser()` would re-run on the client.'} />
+    note={'The bare smart call writes the SSR result into the page snapshot — the client hydrates from it and skips the refetch. `getUser.raw()` (the uncached escape hatch) would re-run on the client.'} />
 
 <Recipe
     task="Await two independent reads in parallel"
@@ -104,11 +104,9 @@ const LIVE = '/cache'
 <Recipe
     task="Share one awaited read across the page and its children"
     live={LIVE}
-    code={`const user = cache(getUser)   // one entry, one flight
-
-{#await user() then u}<Header user={u} />{/await}
-<Sidebar />  <!-- reads cache(getUser) again — same entry -->`}
-    note={"Two reads of the same cache key share one in-flight request and one snapshot. A child component's `{#await}` joins the page's SSR stream rather than starting a second fetch."} />
+    code={`{#await getUser() then u}<Header user={u} />{/await}
+<Sidebar />  <!-- reads getUser() again — same entry -->`}
+    note={"Two reads of the same key (method + url + args) share one in-flight request and one snapshot. A child component's `{#await}` joins the page's SSR stream rather than starting a second fetch."} />
 
 <Recipe
     task="Block SSR only where you must"
@@ -124,7 +122,7 @@ const LIVE = '/cache'
 <Recipe
     task="Seed a streamed cache read into the snapshot"
     live={LIVE}
-    code={`{#await cache(getFeed) then feed}
+    code={`{#await getFeed() then feed}
     <Feed items={feed} />
 {/await}`}
-    note={'A streaming `{#await cache()}` creates its entry mid-stream, so it is seeded into the page after the stream via resolve chunks — the client still hydrates warm without a second fetch.'} />
+    note={'A streaming bare `{#await fn()}` creates its cache entry mid-stream, so it is seeded into the page after the stream via resolve chunks — the client still hydrates warm without a second fetch.'} />

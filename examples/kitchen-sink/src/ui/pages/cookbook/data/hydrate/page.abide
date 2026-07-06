@@ -2,7 +2,7 @@
 import Recipe from '$ui/Recipe.abide'
 
 /* Cookbook · data & SSR · hydrate & fetch patterns. */
-const LIVE = '/cache'
+const LIVE = '/reactive-state'
 const PROBES = '/probes'
 </script>
 
@@ -13,7 +13,7 @@ const PROBES = '/probes'
 </p>
 
 <Recipe task="Fetch on navigation" live={LIVE} code={`const { params } = page
-const user = state.computed(() => cache(getUser, { id: params.id }))`} note={'Read `page.params` in the cache key and the read refetches when the route param changes on SPA navigation — the client router keeps the layout mounted, the cell re-derives.'} />
+const user = state.computed(() => getUser({ id: params.id }))`} note={'Read `page.params` in the call args and the read refetches when the route param changes on SPA navigation — the client router keeps the layout mounted, the cell re-derives.'} />
 
 <Recipe
     task="Fetch on demand from an event"
@@ -22,9 +22,9 @@ const user = state.computed(() => cache(getUser, { id: params.id }))`} note={'Re
 let results = state([])
 
 async function search() {
-    results = await getResults({ query })
+    results = await getResults.raw({ query }).then((r) => r.json())
 }`}
-    note={"For imperative fetches (a search button, a 'load more'), call the rpc directly and write the result into a cell. Reach for `cache()` only when you want coalescing or a snapshot."} />
+    note={"For imperative fetches (a search button, a 'load more'), call `.raw` to bypass the cache and write the result into a cell. Use the bare smart call when you want coalescing or a snapshot instead."} />
 
 <Recipe
     task="Load several reads in parallel"
@@ -34,7 +34,7 @@ async function search() {
     getOrders(),
     getPrefs(),
 ])`}
-    note={'`Promise.all` fires the reads concurrently. Wrap each in `cache()` if children also read them, so the whole page shares one flight per key.'} />
+    note={'`Promise.all` fires the reads concurrently. Each bare call is the smart read, so if children also read them the whole page shares one flight per key.'} />
 
 <Recipe
     task="Show stale data while revalidating"
@@ -54,16 +54,17 @@ const stale = state.computed(() => refreshing(getRates))
 <Recipe
     task="Refetch after a mutation"
     live={LIVE}
-    code={`await placeOrder(cart)
-cache.invalidate({ tags: ['orders'] })`}
-    note={'Mutate, then invalidate the tag the reads share — the reactive reads refetch on their next access. No manual re-assignment of the list.'} />
+    code={`import { refresh } from '@abide/abide/shared/refresh'
+await placeOrder(cart)
+refresh({ tags: ['orders'] })`}
+    note={'Mutate, then refresh the tag the reads share — the reactive reads revalidate, keeping the stale list visible until the fresh one lands. No manual re-assignment.'} />
 
 <Recipe
     task="Deduplicate a read used across components"
     live={LIVE}
     code={`// unrelated components, one request per render
-const me = () => cache(getCurrentUser, undefined, { tags: ['session'] })`}
-    note={'Export a shared cache wrapper and call it wherever you need the value — coalescing collapses the concurrent reads into one, and the tag lets you drop them all on sign-out.'} />
+const me = () => getCurrentUser(undefined, { tags: ['session'] })`}
+    note={'Export a shared wrapper around the bare smart call and use it wherever you need the value — coalescing collapses the concurrent reads into one, and the tag lets you refresh them all on sign-out.'} />
 
 <Recipe
     task="Render a page shell before its data"
@@ -78,32 +79,31 @@ const me = () => cache(getCurrentUser, undefined, { tags: ['session'] })`}
 
 <Recipe task="Paginate a list" gap={true} code={`// no cursor/pagination helper — page it yourself
 let pageNum = state(1)
-const rows = state.computed(() => cache(listRows, { page: pageNum, size: 20 }))
+const rows = state.computed(() => listRows({ page: pageNum, size: 20 }))
 
-<button onclick={() => (pageNum += 1)}>next</button>`} note={"There's no built-in cursor or infinite-scroll primitive. Take page/cursor as an rpc arg, key the cache on it, and drive the offset with a cell — for infinite scroll, append results into a state array yourself."} />
+<button onclick={() => (pageNum += 1)}>next</button>`} note={"There's no built-in cursor or infinite-scroll primitive. Take page/cursor as an rpc arg, key the call on it, and drive the offset with a cell — for infinite scroll, append results into a state array yourself."} />
 
 <Recipe
     task="Optimistically update before the server confirms"
-    gap={true}
-    code={`// no optimistic-cache API — hold a local overlay
-let optimistic = state(undefined)
-const shown = state.computed(() => optimistic ?? cache(getCount))
+    live={LIVE}
+    code={`import { patch } from '@abide/abide/shared/patch'
+import { refresh } from '@abide/abide/shared/refresh'
 
 async function bump() {
-    optimistic = shown + 1
+    patch(getCount, (c) => ({ count: c.count + 1 }))   // apply the guess now
     await increment()
-    cache.invalidate(getCount)
-    optimistic = undefined
+    refresh(getCount)                                  // reconcile with the server
 }`}
-    note={'`cache` has no optimistic-write hook. Layer a local `state` overlay in front of the cached read, apply the guess immediately, then clear it and invalidate once the mutation lands (or on error, to roll back).'} />
+    note={'`patch(fn, updater)` mutates the retained value reactively with no network — the first-class optimistic write. Apply the guess immediately, then `refresh` to reconcile (or `patch` back on error to roll back).'} />
 
 <Recipe
     task="Refetch when the tab regains focus"
     gap={true}
-    code={`import { effect } from '@abide/abide/ui/effect'
-effect(() => {
-    const onFocus = () => cache.invalidate({ tags: ['session'] })
+    code={`import { refresh } from '@abide/abide/shared/refresh'
+import { watch } from '@abide/abide/ui/watch'
+watch(() => {
+    const onFocus = () => refresh({ tags: ['session'] })
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
 })`}
-    note={"There's no refetch-on-focus option. Wire the `focus` (or `visibilitychange`) event in an effect and invalidate the tags you want revalidated when the user comes back."} />
+    note={"There's no refetch-on-focus option. Wire the `focus` (or `visibilitychange`) event in a watch thunk and refresh the tags you want revalidated when the user comes back."} />

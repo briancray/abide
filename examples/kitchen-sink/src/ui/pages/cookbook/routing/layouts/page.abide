@@ -45,9 +45,9 @@ pages/docs/layout.abide       // docs sidebar, inside the shell`} note={"Layouts
 <Recipe
     task="Register a menu handler once from a layout"
     live={LIVE}
-    code={`import { effect } from '@abide/abide/ui/effect'
-effect(() => onMenu('reload', () => location.reload()))`}
-    note={'Effects run client-only and once on mount. The root layout is the place for app-wide, one-time wiring (bundle menus, global listeners) since it never unmounts.'} />
+    code={`import { watch } from '@abide/abide/ui/watch'
+watch(() => onMenu('reload', () => location.reload()))`}
+    note={'Watch thunks run client-only and once on mount. The root layout is the place for app-wide, one-time wiring (bundle menus, global listeners) since it never unmounts.'} />
 
 <Recipe
     task="Add a failure boundary around a section"
@@ -75,14 +75,14 @@ const org = state.shared('org')`}
     task="Load shared data once per section"
     live={LIVE}
     code={`// in the layout — children reuse the same entry
-const org = state.computed(() => cache(getOrg, { id: page.params.org }))`}
-    note={'A `cache()` read in the layout is shared by every page under it (same key, one flight) — the layout is the natural home for section-wide data.'} />
+const org = state.computed(() => getOrg({ id: page.params.org }))`}
+    note={'A smart read in the layout is shared by every page under it (same key, one flight) — the layout is the natural home for section-wide data.'} />
 
 <Recipe task="Guard a whole section" live={LIVE} code={`// in admin/layout.abide
-import { effect } from '@abide/abide/ui/effect'
-effect(() => {
+import { watch } from '@abide/abide/ui/watch'
+watch(() => {
     if (!isAdmin()) void navigate('/login')
-})`} note={"An effect in the section's layout runs for every page beneath it — redirect unauthorised users once, at the boundary, instead of in each page."} />
+})`} note={"A watch in the section's layout runs for every page beneath it — redirect unauthorised users once, at the boundary, instead of in each page."} />
 
 <Recipe
     task="Give a route group its own chrome"
@@ -105,7 +105,7 @@ src/ui/pages/app/layout.abide         // sidebar + topbar`}
     task="Load route data with a loader convention"
     gap={true}
     code={`// no loader/getServerSideProps file — fetch in the page or layout
-{#await cache(getData) then data}
+{#await getData() then data}
     <View data={data} />
 {/await}`}
-    note={"There's no separate data-loader module per route. Data-fetching lives in the page/layout itself via `cache()` + `{#await}` — colocated, isomorphic, and warm-hydrated, but not a distinct loader lifecycle."} />
+    note={"There's no separate data-loader module per route. Data-fetching lives in the page/layout itself via the bare smart call + `{#await}` — colocated, isomorphic, and warm-hydrated, but not a distinct loader lifecycle."} />

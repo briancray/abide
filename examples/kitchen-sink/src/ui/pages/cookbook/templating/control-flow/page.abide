@@ -132,7 +132,7 @@ const LIVE = '/templating/control-flow'
     code={`{#for await tick of ticker()}
     <li>tick {tick}</li>
 {/for}`}
-    note={'`{#for await}` appends each yielded value as it arrives; the source is any AsyncIterable (a generator, a socket tail, a stream).'} />
+    note={'`{#for await}` appends each yielded value as it arrives; the source is any AsyncIterable (a generator, a socket, a stream).'} />
 
 <Recipe
     task="Catch a render-time throw (sync error boundary)"

@@ -8,7 +8,7 @@ const OBS = '/observability'
 
 <h1 class="text-3xl font-bold">pending & refreshing</h1>
 <p class="mt-2 text-slate-600">
-    Standalone reactive probes spanning cache calls and tail streams.
+    Standalone reactive probes spanning smart calls and streams.
     <code class="font-mono">pending</code> = no value yet;
     <code class="font-mono">refreshing</code> = value held, a fresher source in flight. They report,
     never act.
@@ -19,7 +19,7 @@ const OBS = '/observability'
     live={LIVE}
     code={`import { pending } from '@abide/abide/shared/pending'
 const busy = state.computed(() => pending())`}
-    note={'Bare `pending()` is true while any cache call or tail stream is in flight — a global activity indicator with no wiring.'} />
+    note={'Bare `pending()` is true while any smart call or stream is in flight — a global activity indicator with no wiring.'} />
 
 <Recipe
     task="Show a specific read is loading"
@@ -40,9 +40,9 @@ const busy = state.computed(() => pending())`}
 const loading = state.computed(() => getUser.pending({ id }))
 const stale = state.computed(() => getUser.refreshing({ id }))
 const failure = state.computed(() => getUser.error({ id }))
-const warm = await getUser.cache({ id })   // read-through, returns the value
-getUser.invalidate({ id })                 // drop the entry; next read re-enters flight`}
-    note={'Every rpc carries its own `.pending` / `.refreshing` / `.error` / `.cache` / `.invalidate` — the same selector grammar as the standalone probes, scoped to that rpc with no import.'} />
+const warm = getUser.peek({ id })          // retained value, synchronous
+getUser.refresh({ id })                    // revalidate; stale value stays visible`}
+    note={'Every rpc carries its own `.pending` / `.refreshing` / `.error` / `.peek` / `.refresh` / `.patch` — the same selector grammar as the standalone probes, scoped to that rpc with no import.'} />
 
 <Recipe task="Probe a group by tag" live={LIVE} code={`const savingOrders = state.computed(() => pending({ tags: ['orders'] }))`} note={"`pending({ tags })` covers every entry sharing the tag — one probe for a whole feature's in-flight work."} />
 
@@ -64,7 +64,7 @@ const dim = state.computed(() => refreshing(getRates))`}
     task="Disable a control while pending"
     live={LIVE}
     code={`<button disabled={pending(submitOrder)}>place order</button>`}
-    note={'Read the probe straight into `disabled`. Pair with the `cache(fn, { ttl: 0 })` mutation idiom so the submit is coalesced and probe-visible.'} />
+    note={'Read the probe straight into `disabled`. Pair with the `fn(args, { ttl: 0 })` mutation idiom so the submit is coalesced and probe-visible.'} />
 
 <Recipe
     task="Show a skeleton while pending"
@@ -85,10 +85,10 @@ const dim = state.computed(() => refreshing(getRates))`}
     note={'Keep rendering the held value and dim it while `refreshing` — no flash of empty during a revalidation.'} />
 
 <Recipe
-    task="Enable stale-while-revalidate"
+    task="Coalesce background revalidations"
     live={LIVE}
-    code={`const rates = state.computed(() => cache(getRates, { base: 'USD' }, { swr: { debounce: 300 } }))`}
-    note={'An `swr` policy keeps the entry and coalesces the refetch, so the stale value stays on screen while `refreshing()` is true. The retention that makes the badge above meaningful.'} />
+    code={`const rates = state.computed(() => getRates({ base: 'USD' }, { debounce: 300 }))`}
+    note={'SWR is always on for a replayable read, so the stale value stays on screen while `refreshing()` is true. A `debounce` (or `throttle`) window coalesces a burst of refreshes into one background revalidation.'} />
 
 <Recipe
     task="Detect that the browser is offline"

@@ -1,5 +1,4 @@
 <script>
-import { cache } from '@abide/abide/shared/cache'
 import { HttpError } from '@abide/abide/shared/HttpError'
 import { page } from '@abide/abide/shared/page'
 import { navigate } from '@abide/abide/ui/navigate'
@@ -10,11 +9,11 @@ import CodeBlock from '$ui/CodeBlock.abide'
 import { state } from '@abide/abide/ui/state'
 const id = state.computed(() => page.params.id)
 
-/* cache() returns warm values synchronously, so handle errors with try/catch in
-   the await form (no .catch on a warm hit). */
+/* The bare smart call returns warm values synchronously, so handle errors with
+   try/catch in the await form (no .catch on a warm hit). */
 async function loadProduct(productId: string) {
     try {
-        return await cache(getProduct, { id: productId })
+        return await getProduct({ id: productId })
     } catch (err) {
         if (err instanceof HttpError && err.status === 404) {
             return undefined
@@ -57,8 +56,7 @@ async function loadProduct(productId: string) {
         {/for}
     </div>
 
-    <CodeBlock title="this page — [id] segment + per-id cache" code={`import { cache } from '@abide/abide/shared/cache'
-import { getProduct } from '$server/rpc/getProduct.ts'
+    <CodeBlock title="this page — [id] segment + per-id cache" code={`import { getProduct } from '$server/rpc/getProduct.ts'
 import { page } from '@abide/abide/shared/page'
 
 import { state } from '@abide/abide/ui/state'

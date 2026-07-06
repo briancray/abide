@@ -49,7 +49,7 @@ export const handle = async (request, next) => {
 <Recipe
     task="Validate every publish against the schema"
     live="/sockets"
-    code={`export const feed = socket({ schema })   // frames are shape-checked at publish()`}
+    code={`export const feed = socket({ schema })   // frames are shape-checked at broadcast()`}
     note={'The socket schema rejects malformed frames synchronously — a defence-in-depth layer under your rpc-level authorization.'} />
 
 <Recipe

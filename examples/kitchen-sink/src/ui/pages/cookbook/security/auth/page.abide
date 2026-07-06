@@ -67,8 +67,8 @@ export async function currentUser() {
     note={'For per-action authorization, resolve the user and throw `HttpError(403)` — the client catches it like any typed failure.'} />
 
 <Recipe task="Gate a route in its layout" live="/pages" code={`// admin/layout.abide
-import { effect } from '@abide/abide/ui/effect'
-effect(() => {
+import { watch } from '@abide/abide/ui/watch'
+watch(() => {
     if (!isAdmin) void navigate('/login', {}, { replace: true })
 })`} note={"Redirect from the section's layout for a client-side gate. It's UX, not security — the server must still authorise the rpcs the page calls."} />
 

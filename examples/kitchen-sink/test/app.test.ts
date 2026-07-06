@@ -39,12 +39,15 @@ describe('createTestApp', () => {
         expect(created.status).toBe(201)
     })
 
-    test('sockets.chat delivers a published frame', async () => {
+    test('sockets.chat retains a published frame', async () => {
         await app.rpc.publishChat({ from: 'tester', text: 'hello sockets' })
-        const frames = app.sockets.chat.tail(1)[Symbol.asyncIterator]()
-        const { value } = await frames.next()
-        expect(value).toMatchObject({ from: 'tester', text: 'hello sockets' })
-        frames.return?.()
+        // sockets retain their tail; the HTTP read face returns it (what the CLI/MCP read,
+        // and what a late browser subscriber replays on connect)
+        const retained = (await (await app.fetch('/__abide/sockets/chat?tail=1')).json()) as {
+            from: string
+            text: string
+        }[]
+        expect(retained.at(-1)).toMatchObject({ from: 'tester', text: 'hello sockets' })
     })
 
     test('health reports the abide identity', async () => {
@@ -92,11 +95,11 @@ describe('createTestApp', () => {
         ['/cookbook/templating/markup', 'Render trusted raw HTML'],
         ['/cookbook/state/scope', 'Create a local reactive cell'],
         ['/cookbook/state/derived', 'Derive a read-only value'],
-        ['/cookbook/state/effects', 'Clean up an effect'],
+        ['/cookbook/state/effects', 'Clean up a watch'],
         ['/cookbook/state/bindings', 'Share a value down the tree'],
         ['/cookbook/data/await-ssr', 'Warm-hydrate an awaited read'],
         ['/cookbook/data/stream', 'Consume a stream reactively'],
-        ['/cookbook/data/cache', 'Cache a read across SSR and client'],
+        ['/cookbook/data/cache', 'Read across SSR and client'],
         ['/cookbook/data/hydrate', 'Show stale data while revalidating'],
         ['/cookbook/routing/routes', 'Read a route param'],
         ['/cookbook/routing/layouts', 'Nest layouts'],
@@ -108,7 +111,6 @@ describe('createTestApp', () => {
         ['/cookbook/errors/boundaries', 'Add a synchronous error boundary'],
         ['/cookbook/errors/probes', 'Detect that the browser is offline'],
         ['/cookbook/realtime/sockets', 'Declare a broadcast topic'],
-        ['/cookbook/realtime/tail', 'Subscribe to a socket in the UI'],
         ['/cookbook/realtime/patterns', 'Build a chat room'],
         ['/cookbook/beyond/agent', 'Run a model over the app'],
         ['/cookbook/beyond/mcp', 'Expose a read rpc as a tool'],

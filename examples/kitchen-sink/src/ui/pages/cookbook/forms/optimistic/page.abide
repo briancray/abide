@@ -2,49 +2,48 @@
 import Recipe from '$ui/Recipe.abide'
 
 /* Cookbook · forms & mutations · optimistic updates & flows. */
-const LIVE = '/cache'
+const LIVE = '/reactive-state'
 </script>
 
 <h1 class="text-3xl font-bold">optimistic updates & flows</h1>
 <p class="mt-2 text-slate-600">
-    Mutation UX — apply the change before the server confirms, invalidate the reads it touches, and
-    the common submit patterns: debounce, cancel, confirm, bulk, and retry.
+    Mutation UX — apply the change before the server confirms, refresh the reads it touches, and the
+    common submit patterns: debounce, cancel, confirm, bulk, and retry.
 </p>
 
 <Recipe
     task="Apply an optimistic update, then confirm"
     live={LIVE}
-    code={`let overlay = state(undefined)
-const count = state.computed(() => overlay ?? cache(getCount))
+    code={`import { patch } from '@abide/abide/shared/patch'
+import { refresh } from '@abide/abide/shared/refresh'
 
 async function bump() {
-    overlay = count + 1
+    patch(getCount, (c) => ({ count: c.count + 1 }))   // apply the guess now
     await increment()
-    cache.invalidate(getCount)
-    overlay = undefined
+    refresh(getCount)                                  // reconcile with the server
 }`}
-    note={'Show a local guess immediately via an overlay cell, then clear it and invalidate once the server confirms — the real value takes over seamlessly.'} />
+    note={'`patch(fn, updater)` mutates the retained value reactively with no network — the first-class optimistic write. `refresh` then reconciles against the confirmed value.'} />
 
 <Recipe
     task="Roll back a failed optimistic update"
     live={LIVE}
     code={`async function bump() {
-    overlay = count + 1
+    patch(getCount, (c) => ({ count: c.count + 1 }))
     try {
         await increment()
-        cache.invalidate(getCount)
     } finally {
-        overlay = undefined  // drop the guess either way
+        refresh(getCount)  // re-pull the confirmed value either way
     }
 }`}
-    note={"Clear the overlay in `finally` so an error reverts to the last confirmed value. Surface the error separately (toast) so the user knows it didn't stick."} />
+    note={"Refresh in `finally` so an error re-pulls the last confirmed value, dropping the guess. Surface the error separately (toast) so the user knows it didn't stick."} />
 
 <Recipe
     task="Refresh reads after a write"
     live={LIVE}
-    code={`await placeOrder(cart)
-cache.invalidate({ tags: ['orders'] })`}
-    note={'Tag the reads a mutation affects, then invalidate the tag after it succeeds — every reactive read of that tag refetches. The canonical write-then-refresh.'} />
+    code={`import { refresh } from '@abide/abide/shared/refresh'
+await placeOrder(cart)
+refresh({ tags: ['orders'] })`}
+    note={'Tag the reads a mutation affects, then refresh the tag after it succeeds — every reactive read of that tag revalidates, keeping its stale value visible. The canonical write-then-refresh.'} />
 
 <Recipe
     task="Show a success confirmation"
@@ -62,12 +61,11 @@ async function submit() {
     live={LIVE}
     code={`let query = state('')
 let results = state([])
-effect(() => {
-    const q = query
+watch(query, (q) => {
     const id = setTimeout(async () => (results = await search({ q })), 250)
     return () => clearTimeout(id)
 })`}
-    note={'Schedule the rpc in an effect and cancel the pending timer on each keystroke — the search fires once the typing settles, not per character.'} />
+    note={'Schedule the rpc in a watch on the query cell and cancel the pending timer on each keystroke — the search fires once the typing settles, not per character.'} />
 
 <Recipe
     task="Cancel an in-flight request"
@@ -97,9 +95,9 @@ async function run() {
     code={`async function remove(id) {
     if (!confirm('Delete this item?')) return
     await deleteItem({ id })
-    cache.invalidate({ tags: ['items'] })
+    refresh({ tags: ['items'] })
 }`}
-    note={'Gate the mutation behind a confirmation, then invalidate. Swap `confirm()` for your own modal cell when you want a styled dialog.'} />
+    note={'Gate the mutation behind a confirmation, then refresh. Swap `confirm()` for your own modal cell when you want a styled dialog.'} />
 
 <Recipe
     task="Run a bulk action over a selection"
@@ -107,9 +105,9 @@ async function run() {
     code={`async function archiveSelected() {
     await Promise.all([...selected].map((id) => archive({ id })))
     selected = new Set()
-    cache.invalidate({ tags: ['inbox'] })
+    refresh({ tags: ['inbox'] })
 }`}
-    note={'Fan the selection set out over `Promise.all`, clear the selection, and invalidate once. For very large sets, prefer a single batch rpc over N calls.'} />
+    note={'Fan the selection set out over `Promise.all`, clear the selection, and refresh once. For very large sets, prefer a single batch rpc over N calls.'} />
 
 <Recipe
     task="Prevent a double submit"
@@ -148,8 +146,8 @@ const back = () => (step -= 1)`}
     task="Load dependent select options"
     live={LIVE}
     code={`let country = state('')
-const cities = state.computed(() => country ? cache(getCities, { country }) : [])`}
-    note={'Derive the dependent options from the parent cell with a guarded `cache()` read — pick a country and the city list refetches, keyed on it.'} />
+const cities = state.computed(() => country ? getCities({ country }) : [])`}
+    note={'Derive the dependent options from the parent cell with a guarded smart read — pick a country and the city list refetches, keyed on it.'} />
 
 <Recipe
     task="Send a CSRF token with a mutation"

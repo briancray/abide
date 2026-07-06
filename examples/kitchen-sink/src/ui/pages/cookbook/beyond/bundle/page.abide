@@ -29,13 +29,13 @@ const menus: BundleMenu[] = [
 ]`} note={'A `BundleMenu` is a top-level macOS menu of `BundleMenuItem`s — each item is a divider or a click that dispatches an `abide:menu` event carrying its id.'} />
 
 <Recipe task="Handle a menu click" live={LIVE} code={`import { onMenu } from '@abide/abide/bundle/onMenu'
-import { effect } from '@abide/abide/ui/effect'
-effect(() => onMenu('reload', () => location.reload()))`} note={'`onMenu(id, handler)` subscribes to menu clicks (or catch-all with no id) and returns an unsubscribe. Register it in a client-only effect — a root layout is the natural home.'} />
+import { watch } from '@abide/abide/ui/watch'
+watch(() => onMenu('reload', () => location.reload()))`} note={'`onMenu(id, handler)` subscribes to menu clicks (or catch-all with no id) and returns an unsubscribe. Register it in a client-only watch — a root layout is the natural home.'} />
 
 <Recipe
     task="Open a route from a menu"
     live={LIVE}
-    code={`effect(() => onMenu('settings', () => void navigate('/settings')))`}
+    code={`watch(() => onMenu('settings', () => void navigate('/settings')))`}
     note={'Wire a menu item to `navigate` — same client routing, driven from the OS menu bar.'} />
 
 <Recipe
@@ -50,7 +50,7 @@ effect(() => onMenu('reload', () => location.reload()))`} note={'`onMenu(id, han
     task="Keep menu handlers inert on the web"
     live={LIVE}
     code={`// onMenu is a no-op in a plain tab — safe to register unconditionally
-effect(() => onMenu('reload', () => location.reload()))`}
+watch(() => onMenu('reload', () => location.reload()))`}
     note={"Menu registration does nothing outside the bundle, so you don't need to guard it with `bundled()` — the same layout runs in the browser and the app."} />
 
 <Recipe

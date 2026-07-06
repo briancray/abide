@@ -64,11 +64,11 @@ export const oldPath = GET(() => redirect('/new-path'))`}
 <Recipe
     task="Guard a route by redirecting"
     live={LIVE}
-    code={`import { effect } from '@abide/abide/ui/effect'
-effect(() => {
+    code={`import { watch } from '@abide/abide/ui/watch'
+watch(() => {
     if (!session) void navigate('/login', {}, { replace: true })
 })`}
-    note={'Redirect from an effect in the page (or its layout) when access checks fail. For a server-enforced gate, throw `HttpError` in the rpc the page reads.'} />
+    note={'Redirect from a watch in the page (or its layout) when access checks fail. For a server-enforced gate, throw `HttpError` in the rpc the page reads.'} />
 
 <Recipe task="Go back" live={LIVE} code={`<button onclick={() => history.back()}>Back</button>`} note={'Use the native `history.back()` / `history.forward()` — the client router listens to `popstate` and renders the target route.'} />
 
@@ -90,8 +90,8 @@ const href = url('/settings')`}
 <Recipe
     task="Open a route from a bundle menu"
     live="/bundle"
-    code={`import { effect } from '@abide/abide/ui/effect'
-effect(() => onMenu('open-settings', () => void navigate('/settings')))`}
+    code={`import { watch } from '@abide/abide/ui/watch'
+watch(() => onMenu('open-settings', () => void navigate('/settings')))`}
     note={'In a desktop bundle, wire a native menu item to `navigate` — same routing, driven from the OS menu bar.'} />
 
 <Recipe
@@ -99,10 +99,10 @@ effect(() => onMenu('open-settings', () => void navigate('/settings')))`}
     gap={true}
     code={`// no prefetch API — warm the data cache yourself
 <a href={url('/product/[id]', { id })}
-   onmouseenter={() => cache(getProduct, { id })}>
+   onmouseenter={() => getProduct({ id })}>
     {name}
 </a>`}
-    note={"There's no link-prefetch primitive. You can warm the destination's `cache()` reads on hover/focus so the data is ready, but the route code itself isn't code-split-prefetched."} />
+    note={"There's no link-prefetch primitive. You can warm the destination's reads by smart-calling them on hover/focus so the data is ready, but the route code itself isn't code-split-prefetched."} />
 
 <Recipe
     task="Animate a route transition"

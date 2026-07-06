@@ -96,16 +96,16 @@ const STYLE_LIVE = '/templating/snippets'
     .fade-in { animation: fade 0.2s ease-out }
     @keyframes fade { from { opacity: 0 } to { opacity: 1 } }
 </style>`}
-    note={'There is no transition/animation directive. CSS animations cover enter and steady-state; a coordinated leave animation (delaying unmount) has no first-class hook yet — animate on enter, or manage a delay in an effect.'} />
+    note={'There is no transition/animation directive. CSS animations cover enter and steady-state; a coordinated leave animation (delaying unmount) has no first-class hook yet — animate on enter, or manage a delay in a watch.'} />
 
 <Recipe
     task="Render into <head> or a detached DOM node (portal)"
     gap={true}
-    code={`// no portal primitive — reach the node imperatively in an effect
-import { effect } from '@abide/abide/ui/effect'
-effect(() => {
+    code={`// no portal primitive — reach the node imperatively in a watch
+import { watch } from '@abide/abide/ui/watch'
+watch(() => {
     const el = document.createElement('div')
     document.body.append(el)
     return () => el.remove()
 })`}
-    note={'There is no portal directive to teleport markup elsewhere in the document. For a modal or a `<head>` tag, mount imperatively in a client-only effect and tear it down on cleanup.'} />
+    note={'There is no portal directive to teleport markup elsewhere in the document. For a modal or a `<head>` tag, mount imperatively in a client-only watch and tear it down on cleanup.'} />

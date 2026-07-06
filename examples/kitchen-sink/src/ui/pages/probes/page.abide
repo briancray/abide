@@ -1,15 +1,17 @@
 <script>
-import { cache } from '@abide/abide/shared/cache'
+import { peek } from '@abide/abide/shared/peek'
 import { pending } from '@abide/abide/shared/pending'
+import { refresh } from '@abide/abide/shared/refresh'
 import { refreshing } from '@abide/abide/shared/refreshing'
 import { state } from '@abide/abide/ui/state'
 import { createEcho } from '$server/rpc/createEcho.ts'
 import { getRates } from '$server/rpc/getRates.ts'
 import CodeBlock from '$ui/CodeBlock.abide'
 
-/* Mutation idiom: ttl 0 retains nothing, so the wrap buys double-submit coalescing
-   plus probe visibility — pending(createEcho) is true from anywhere while in flight. */
-const submit = (args: { message: string }) => cache(createEcho, args, { ttl: 0 })
+/* Mutation idiom: ttl 0 retains nothing, so the bare call buys double-submit
+   coalescing plus probe visibility — pending(createEcho) is true from anywhere
+   while in flight. */
+const submit = (args: { message: string }) => createEcho(args, { ttl: 0 })
 let message = state('hello probes')
 let echoed = state('')
 async function send() {
@@ -18,23 +20,28 @@ async function send() {
 }
 const submitting = state.computed(() => pending(createEcho))
 
-/* Stale-while-revalidate: the debounce policy keeps the entry and coalesces the
-   refetch — stale rates stay on screen while refreshing(...) is true. */
-const rates = state.computed(() => cache(getRates, { base: 'USD' }, { swr: { debounce: 300 } }))
+/* The bare call IS the smart read: cached, coalesced, SWR always on. A debounce
+   window coalesces a burst of background revalidations — the stale rates stay on
+   screen while refreshing(...) is true. */
+const rates = state.computed(() => getRates({ base: 'USD' }, { debounce: 300 }))
 const updating = state.computed(() => refreshing(getRates, { base: 'USD' }))
+/* peek reads the currently-retained value synchronously — no fetch, no await;
+   reactive here, so it re-renders when a refresh lands. */
+const snapshot = state.computed(() => peek(getRates, { base: 'USD' }))
 </script>
 
 <h1 class="text-3xl font-bold">
-    <code class="font-mono">pending()</code> / <code class="font-mono">refreshing()</code>
+    <code class="font-mono">pending()</code> / <code class="font-mono">refreshing()</code> /
+    <code class="font-mono">peek()</code>
 </h1>
 <p class="mt-2 text-slate-600">
-    Standalone reactive probes — their own modules, not properties of
-    <code class="font-mono">cache</code>. They span both registries:
-    <a class="underline" href="/cache"><code class="font-mono">cache()</code></a> calls and
-    <a class="underline" href="/tail"><code class="font-mono">tail()</code></a> streams.
+    Standalone reactive probes — their own modules, not properties of a cache object. They span both
+    registries: smart <a class="underline" href="/reactive-state">rpc calls</a> and
+    <a class="underline" href="/sockets">socket streams</a>.
     <code class="font-mono">pending</code> means "no value yet";
-    <code class="font-mono">refreshing</code>
-    means "value held, fresher source in flight".
+    <code class="font-mono">refreshing</code> means "value held, fresher source in flight";
+    <code class="font-mono">peek</code> hands back the retained value synchronously without
+    triggering anything.
 </p>
 
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
@@ -45,7 +52,7 @@ const updating = state.computed(() => refreshing(getRates, { base: 'USD' }))
         <span class={`rounded-full px-2 py-0.5 text-xs ${submitting ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-400'}`}>{submitting ? 'submitting…' : 'idle'}</span>
     </div>
     <p class="mt-1 text-xs text-slate-500">
-        {'cache(createEcho, { ttl: 0 })'} coalesces identical in-flight submits and retains nothing once settled. The
+        {'createEcho(args, { ttl: 0 })'} coalesces identical in-flight submits and retains nothing once settled. The
         button disables on <code class="font-mono">pending(createEcho)</code>.
     </p>
     <div class="mt-3 flex flex-wrap items-end gap-2">
@@ -67,18 +74,19 @@ const updating = state.computed(() => refreshing(getRates, { base: 'USD' }))
         <p class="mt-3 font-mono text-xs text-slate-500">echoed: {echoed}</p>
     {/if}
 
-    <CodeBlock code={`const submit = (args) => cache(createEcho, args, { ttl: 0 })   // retains nothing; coalesces double-submits
+    <CodeBlock code={`const submit = (args) => createEcho(args, { ttl: 0 })   // retains nothing; coalesces double-submits
 const submitting = state.computed(() => pending(createEcho))`} />
 </section>
 
 <section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
     <div class="flex items-center justify-between">
-        <h2 class="text-sm font-semibold">Stale-while-revalidate, observed</h2>
+        <h2 class="text-sm font-semibold">Refresh, observed</h2>
         <span class={`rounded-full px-2 py-0.5 text-xs ${updating ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-400'}`}>{updating ? 'updating…' : 'fresh'}</span>
     </div>
     <p class="mt-1 text-xs text-slate-500">
-        The read carries {'swr: { debounce: 300 }'}, so an invalidation keeps the entry and coalesces the refetch
-        — the stale rates stay visible while refreshing is true.
+        The read carries {'{ debounce: 300 }'}, so a burst of refreshes coalesces into one revalidation — the
+        stale rates stay visible while <code class="font-mono">refreshing</code>
+        is true.
     </p>
     <div class="mt-3">
         {#await rates}
@@ -92,13 +100,15 @@ const submitting = state.computed(() => pending(createEcho))`} />
             <p class="font-mono text-sm text-red-600">{err.message}</p>
         {/await}
     </div>
+    <p class="mt-2 font-mono text-xs text-slate-500">peek (no await): {snapshot ? `${snapshot.rates.EUR} EUR` : 'nothing retained yet'}</p>
     <button
         type="button"
         class="mt-3 rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100"
-        onclick={() => cache.invalidate(getRates)}>
-        invalidate (spam me)
+        onclick={() => refresh(getRates)}>
+        refresh (spam me)
     </button>
 
-    <CodeBlock code={`const rates = state.computed(() => cache(getRates, { base: 'USD' }, { swr: { debounce: 300 } }))
-const updating = state.computed(() => refreshing(getRates, { base: 'USD' }))`} />
+    <CodeBlock code={`const rates = state.computed(() => getRates({ base: 'USD' }, { debounce: 300 }))
+const updating = state.computed(() => refreshing(getRates, { base: 'USD' }))
+const snapshot = state.computed(() => peek(getRates, { base: 'USD' }))   // retained value, no fetch`} />
 </section>

@@ -16,7 +16,7 @@ const groups = [
             {
                 href: '/sockets',
                 title: 'sockets',
-                body: 'One broadcast topic per file under src/server/sockets/. publish() is isomorphic, retention is opt-in via tail: n, and every browser subscription multiplexes one WebSocket.',
+                body: 'One broadcast topic per file under src/server/sockets/. broadcast() is isomorphic, retention defaults to the last frame (tail: 1) and scales via tail: n, and every browser subscription multiplexes one WebSocket.',
             },
             {
                 href: '/security',
@@ -41,22 +41,12 @@ const groups = [
             {
                 href: '/reactive-state',
                 title: 'reactive state',
-                body: 'state / state.computed / state.linked are imported from abide/ui/state and called bare; transforms coerce writes, state.linked seeds a draft from upstream.',
-            },
-            {
-                href: '/cache',
-                title: 'cache',
-                body: 'Isomorphic memoise + coalesce — identical in-flight calls share one flight, ttl is only the retention dial, and cache.invalidate re-runs every computed that read a dropped entry.',
-            },
-            {
-                href: '/tail',
-                title: 'tail',
-                body: 'The reactive consumer for anything streaming — a socket or a streaming rpc called bare. First computed read opens the stream, last reader closes it; transport drops self-heal.',
+                body: 'state / state.computed / state.linked and watch are imported from abide/ui and called bare; transforms coerce writes, watch names a reaction, and refresh / patch drive cached reads.',
             },
             {
                 href: '/probes',
-                title: 'pending / refreshing',
-                body: 'Standalone reactive probes spanning calls and streams. pending = no value yet; refreshing = value held, fresher source in flight. They report, never act.',
+                title: 'probes',
+                body: 'Standalone reactive probes over smart calls and streams — pending (no value yet), refreshing (value held, fresher source in flight), and peek (the retained value, synchronously). They report, never act.',
             },
             {
                 href: '/outbox',

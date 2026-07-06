@@ -39,10 +39,10 @@ function resolveLang(lang: Lang): string {
 /*
 Highlights a source snippet via shiki and returns the rendered HTML.
 Server-only — the bundler swaps the import on the client to a remote
-proxy, so the shiki runtime never ships to the browser. CodeBlock
-wraps every call in `cache()`, so the SSR pass writes the highlighted
-HTML into the cache snapshot and the client hydrates without a second
-fetch. Same code+lang across pages share one cache entry.
+proxy, so the shiki runtime never ships to the browser. CodeBlock calls
+it as a bare smart read, so the SSR pass writes the highlighted HTML into
+the cache snapshot and the client hydrates without a second fetch. Same
+code+lang across pages share one cache entry.
 */
 export const highlightCode = POST(async ({ code, lang }: { code: string; lang: Lang }) => {
     const highlighter = await getHighlighter()

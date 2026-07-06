@@ -13,13 +13,14 @@ and the client router keeps it mounted across navigation, so the sidebar never
 re-mounts. A nested layout.abide wraps inside this one — the chain applies every
 ancestor's layout, outermost-first.
 
-Custom bundle menu items are inert during SSR and in a plain browser tab. effects
-are client-only (stripped from SSR), so each registers its onMenu handler once on
-mount; returning the unsubscribe is harmless here (the root layout never unmounts).
+Custom bundle menu items are inert during SSR and in a plain browser tab.
+`watch` thunks are client-only (stripped from SSR), so each registers its onMenu
+handler once on mount; returning the unsubscribe is harmless here (the root layout
+never unmounts).
 */
-import { effect } from '@abide/abide/ui/effect'
-effect(() => onMenu('reload-session', () => location.reload()))
-effect(() => onMenu('open-mcp', () => void navigate('/mcp')))
+import { watch } from '@abide/abide/ui/watch'
+watch(() => onMenu('reload-session', () => location.reload()))
+watch(() => onMenu('open-mcp', () => void navigate('/mcp')))
 
 /* Active-link styling reads page.url (reassigned on every SPA nav), so a class
    thunk re-runs without per-link plumbing. Compared against url() output so it
@@ -52,9 +53,7 @@ const groups = [
             { href: '/pages', label: 'pages' },
             { href: '/templating', label: 'templating' },
             { href: '/reactive-state', label: 'reactive state' },
-            { href: '/cache', label: 'cache' },
-            { href: '/tail', label: 'tail' },
-            { href: '/probes', label: 'pending / refreshing' },
+            { href: '/probes', label: 'probes' },
             { href: '/outbox', label: 'outbox' },
         ],
     },

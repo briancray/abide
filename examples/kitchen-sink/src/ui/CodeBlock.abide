@@ -1,13 +1,13 @@
 <script>
-import { cache } from '@abide/abide/shared/cache'
 import { html } from '@abide/abide/ui/html'
 import { highlightCode, type Lang } from '$server/rpc/highlightCode.ts'
 
 /*
 Reusable code-snippet card. Highlighting runs on the server via the highlightCode
-rpc (shiki never reaches the browser bundle); cache() captures the rendered HTML
-into the SSR snapshot, and the await block streams it — a child component's awaits
-join the page's SSR stream. `title` is optional; `lang` defaults to ts.
+rpc (shiki never reaches the browser bundle); the bare smart call captures the
+rendered HTML into the SSR snapshot, and the await block streams it — a child
+component's awaits join the page's SSR stream. `title` is optional; `lang`
+defaults to ts.
 */
 const { title, code, lang = 'ts' } = props<{ title?: string; code: string; lang?: Lang }>()
 </script>
@@ -17,7 +17,7 @@ const { title, code, lang = 'ts' } = props<{ title?: string; code: string; lang?
 {/if}
 <!-- hug the title label (mt-1) when present; otherwise keep the section's mt-3 rhythm -->
 <div class="codeblock {title ? 'mt-1' : 'mt-3'} overflow-x-auto rounded-md text-xs leading-relaxed">
-    {#await cache(highlightCode, { code, lang }) then result}
+    {#await highlightCode({ code, lang }) then result}
         <div class="contents">{html(result.html)}</div>
     {/await}
 </div>

@@ -51,7 +51,7 @@ const filesSchema = z.object({ attachments: z.array(z.instanceof(File)) })
 <Recipe task="Preview an image before uploading" code={`function onPick(event) {
     const file = event.target.files[0]
     previewUrl = URL.createObjectURL(file)   // revoke on unmount
-}`} note={'`URL.createObjectURL(file)` makes a local preview URL with no upload. Revoke it in an effect cleanup to avoid leaking object URLs.'} />
+}`} note={'`URL.createObjectURL(file)` makes a local preview URL with no upload. Revoke it in a watch cleanup to avoid leaking object URLs.'} />
 
 <Recipe
     task="Upload directly to object storage"

@@ -33,10 +33,10 @@ const up = await health()`}
     task="Persist a form draft locally"
     live={STATE}
     code={`import { state } from '@abide/abide/ui/state'
-import { effect } from '@abide/abide/ui/effect'
+import { watch } from '@abide/abide/ui/watch'
 let draft = state(localStorage.getItem('draft') ?? '')
-effect(() => localStorage.setItem('draft', draft))`}
-    note={'Seed the cell from `localStorage` and mirror writes back in an effect — the draft survives a reload or an accidental close, no server involved.'} />
+watch(() => localStorage.setItem('draft', draft))`}
+    note={'Seed the cell from `localStorage` and mirror writes back in a watch — the draft survives a reload or an accidental close, no server involved.'} />
 
 <Recipe
     task="Queue mutations while offline"
@@ -69,9 +69,9 @@ await saveMessage({ id, text })   // handler keys on id — replay is a no-op`}
     task="Restore local-first list edits"
     live={STATE}
     code={`import { state } from '@abide/abide/ui/state'
-import { effect } from '@abide/abide/ui/effect'
+import { watch } from '@abide/abide/ui/watch'
 let items = state(JSON.parse(localStorage.getItem('items') ?? '[]'))
-effect(() => localStorage.setItem('items', JSON.stringify(items)))
+watch(() => localStorage.setItem('items', JSON.stringify(items)))
 // mutate items locally; sync each change through a durable rpc`}
     note={'Keep the working list in local state mirrored to storage, and push each change through an `outbox: true` rpc — edits are instant offline and sync when the network returns.'} />
 

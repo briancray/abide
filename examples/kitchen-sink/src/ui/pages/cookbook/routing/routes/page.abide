@@ -39,8 +39,8 @@ const repo = state.computed(() => page.params.repo)`} note={'Every dynamic segme
 <Recipe
     task="React when a param changes"
     live="/pages/product/1"
-    code={`const product = state.computed(() => cache(getProduct, { id: page.params.id }))`}
-    note={'Put the param in a cache key and the read refetches when the segment changes — the client router keeps the page mounted and re-derives just the cell.'} />
+    code={`const product = state.computed(() => getProduct({ id: page.params.id }))`}
+    note={'Put the param in the call args and the read refetches when the segment changes — the client router keeps the page mounted and re-derives just the cell.'} />
 
 <Recipe task="Get the current path" live={LIVE} code={`const path = state.computed(() => page.url.pathname)`} note={"`page.url.pathname` is browser-space on both sides. Compare it against `url('/x')` output so it stays correct under an `APP_URL` subpath."} />
 
