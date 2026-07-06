@@ -15,6 +15,7 @@ import { rpcErrorRegistry } from './rpcErrorRegistry.ts'
 import { SocketDisconnectedError } from './SocketDisconnectedError.ts'
 import { selectorMatcher } from './selectorMatcher.ts'
 import { selectorPrefix } from './selectorPrefix.ts'
+import { openStreamProbe } from './subscribableProbes.ts'
 import { toTagSet } from './toTagSet.ts'
 import type { CacheEntry } from './types/CacheEntry.ts'
 import type { CacheOnContext } from './types/CacheOnContext.ts'
@@ -930,6 +931,11 @@ function on<T>(
         },
         signal: controller.signal,
     }
+    /* Register-on-consume: consuming a named subscribable populates the probe registry so
+       pending()/refreshing()/error()/done()(source) work — the stream-side analog of a call
+       populating the cache store. Driven by this one loop, so watch(socket) / for-await all
+       register through here. An unnamed source (rare) skips probe tracking. */
+    const probe = source.name ? openStreamProbe(source.name) : undefined
     /* `let`: the reconnect path swaps in a fresh iterator; dispose closes the current one. */
     let iterator = source[Symbol.asyncIterator]()
     ;(async () => {
@@ -942,18 +948,25 @@ function on<T>(
                     return
                 }
                 if (error instanceof SocketDisconnectedError) {
+                    probe?.reconnecting()
                     coverage.forEach((replay) => {
                         replay()
                     })
                     iterator = source[Symbol.asyncIterator]()
                     continue
                 }
+                probe?.errored(error instanceof Error ? error : new Error(String(error)))
                 abideLog.error(error)
                 return
             }
-            if (controller.signal.aborted || next.done === true) {
+            if (controller.signal.aborted) {
                 return
             }
+            if (next.done === true) {
+                probe?.done()
+                return
+            }
+            probe?.frame()
             try {
                 await handler(next.value, context)
             } catch (error) {
@@ -963,6 +976,7 @@ function on<T>(
     })()
     return () => {
         controller.abort()
+        probe?.close()
         iterator.return?.(undefined)?.catch(() => undefined)
     }
 }
