@@ -19,7 +19,6 @@ import { logClosingRecord } from '../../shared/logClosingRecord.ts'
 import { OFFLINE_HEADER } from '../../shared/OFFLINE_HEADER.ts'
 import { parseBoundedEnvInt } from '../../shared/parseBoundedEnvInt.ts'
 import { requestScopeSlot } from '../../shared/requestScopeSlot.ts'
-import { responseBodyKind } from '../../shared/responseBodyKind.ts'
 import { SOCKETS_PATH } from '../../shared/SOCKETS_PATH.ts'
 import { setAppName } from '../../shared/setAppName.ts'
 import { TEXT_PLAIN } from '../../shared/TEXT_PLAIN.ts'
@@ -49,6 +48,7 @@ import { devClientFingerprint } from './devClientFingerprint.ts'
 import { devHotModuleResponse } from './devHotModuleResponse.ts'
 import { devReloadResponse } from './devReloadResponse.ts'
 import { disableIdleTimeoutForStream } from './disableIdleTimeoutForStream.ts'
+import { finalizeResponse } from './finalizeResponse.ts'
 import { gzipResponse } from './gzipResponse.ts'
 import { installAmbientScopeStore } from './installAmbientScopeStore.ts'
 import { internalErrorResponse } from './internalErrorResponse.ts'
@@ -373,19 +373,9 @@ export async function createServer({
             const response = app?.handle
                 ? await app.handle(req, (next) => handler(next, pathParams, store))
                 : await handler(req, pathParams, store)
-            /* Classify the body once (S2) and thread it into both downstream
-               steps — gzip + the closing-record stream monitor — instead of
-               each re-deriving from the Content-Type. */
-            const kind = responseBodyKind(response)
-            store.responseStreaming = kind === 'streaming'
-            // Streaming bodies (sse/jsonl, socket tail) opt out of the idle timeout.
-            if (kind === 'streaming') {
-                server.timeout(req, 0)
-            }
-            /* Gzip compressible dynamic bodies (SSR HTML, rpc/json, 404) when the
-               client accepts it; streaming frame protocols and static assets are
-               passed through untouched (see gzipResponse). */
-            return gzipResponse(req, response, kind)
+            /* Wire handling — classify once, mark the stream monitor, exempt
+               streams from the idle timeout, gzip — lives in finalizeResponse. */
+            return finalizeResponse(req, response, store, () => server.timeout(req, 0))
         })
     }
 
