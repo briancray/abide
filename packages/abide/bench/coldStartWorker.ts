@@ -29,7 +29,8 @@ import type { SsrRender } from '../src/lib/ui/runtime/types/SsrRender.ts'
    first request pays. Kept off the parent's clock by running in its own process. */
 const PAGE = `
     <script>
-        let items = scope().state(
+        import { state } from '@abide/abide/ui/state'
+        let items = state(
             Array.from({ length: 200 }, (_, index) => ({ id: index, label: 'row-' + index })),
         )
     </script>

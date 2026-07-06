@@ -35,8 +35,9 @@ should win. This is the gate for that codegen change. Run:
 /* A docs-shaped page: deep static chrome + lists, a couple of dynamic holes. */
 const PAGE = `
     <script>
-        let title = scope().state('Reference')
-        let count = scope().state(3)
+        import { state } from '@abide/abide/ui/state'
+        let title = state('Reference')
+        let count = state(3)
     </script>
     <main class="page">
         <header class="masthead">

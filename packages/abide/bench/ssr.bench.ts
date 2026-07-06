@@ -23,7 +23,8 @@ coalescing in generateSSR earns its keep. Run:
 
 const LIST_PAGE = `
     <script>
-        let items = scope().state(
+        import { state } from '@abide/abide/ui/state'
+        let items = state(
             Array.from({ length: 1000 }, (_, index) => ({ id: index, label: 'row-' + index })),
         )
     </script>
