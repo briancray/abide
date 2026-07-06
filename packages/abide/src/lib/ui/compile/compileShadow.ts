@@ -772,9 +772,13 @@ function emitNode(node: TemplateNode, builder: Builder): void {
             if (node.params !== undefined) {
                 builder.mapped(node.params, node.loc)
             }
-            builder.raw(') => {\n')
+            /* Wrap the body in `snippet(() => …)` so the shadow types the snippet as
+               `(args) => Snippet<…>` — mirroring the runtime lowering (which returns
+               `$$snippet(($host) => …)`) so a snippet passed to a `Snippet`-typed prop
+               type-checks instead of reading as `() => void`. */
+            builder.raw(') => snippet(() => {\n')
             emitNodes(node.children, builder)
-            builder.raw('};\n')
+            builder.raw('});\n')
             return
         case 'script':
             /* A scoped reactive `<script>`: value-project its reactive declarations to
