@@ -164,6 +164,45 @@ describe('hydrate — adopt server DOM', () => {
         expect(host.textContent).toBe('now here')
     })
 
+    test('candidate D: a text binding that diverges from the server text throws a legible desync', () => {
+        /* The client build renders a DIFFERENT (non-prefix) value than the server did — the
+           class the peek bug fell into before candidate A (a client-only-materialized value
+           surfacing mid-hydration). The claim would split the merged SSR node at the client
+           value's length and orphan the tail; instead assertClaimedText throws AT the
+           divergence. Simulated by mutating the model between SSR render and hydrate. */
+        const $$model = doc({ x: 'nothing retained yet' })
+        const source = `<main>peek: {$$model.x}</main>`
+        const runtime = { doc, state, computed, effect, appendText, appendStatic, on, $$model }
+        const names = Object.keys(runtime)
+        const values = names.map((n) => runtime[n as keyof typeof runtime])
+
+        const server = new Function(
+            'doc',
+            'state',
+            'computed',
+            'effect',
+            '$$model',
+            compileSSR(source),
+        )(doc, state, computed, effect, $$model) as SsrRender
+        expect(server.html).toBe('<main>peek: nothing retained yet</main>')
+
+        const host = document.createElement('div')
+        host.innerHTML = server.html
+        /* The value only "materializes" on the client, diverging from the server text. */
+        $$model.replace('x', '0.87604 EUR')
+        const body = compileComponent(source)
+        let threw: unknown
+        try {
+            hydrate(host, (target) => {
+                new Function('host', ...names, body)(target, ...values)
+            })
+        } catch (error) {
+            threw = error
+        }
+        expect((threw as Error | undefined)?.message).toContain('hydration desync')
+        expect((threw as Error).message).toContain('0.87604 EUR')
+    })
+
     test('hydrates adjacent interpolations that BOTH first render empty', () => {
         /* `{a}{b}` with a='' and b='' server-renders `<main></main>` — neither emits a node.
            Each binding must still get its own node on hydrate (no null crash, no shared node),

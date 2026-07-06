@@ -5,6 +5,7 @@ import { decodeResponse } from './decodeResponse.ts'
 import { getRemoteMeta } from './getRemoteMeta.ts'
 import { globalCacheStore } from './globalCacheStore.ts'
 import { HttpError } from './HttpError.ts'
+import { hydratingSlot } from './hydratingSlot.ts'
 import { invalidateEvent } from './invalidateEvent.ts'
 import { invalidateTripwire } from './invalidateTripwire.ts'
 import { keyForRemoteCall } from './keyForRemoteCall.ts'
@@ -861,11 +862,15 @@ cache.patch = patch
 /*
 Synchronous, non-triggering value probe: returns the currently-retained value for
 a call, or undefined when nothing is retained (no entry, or not yet settled). Never
-invokes — reading it opens no fetch. Reactive: it subscribes the key so a
-state.computed / on / template scope re-runs when the value changes (a refresh
-lands, a patch mutates it); outside a tracking scope it is a one-shot snapshot.
-Returns a clone (like the warm read path) so a caller mutating it can't corrupt the
-retained value. `peek(sub)` for a subscribable is wired on the socket side.
+invokes — reading it opens no fetch. Reactive: it subscribes the key AND taps the
+key's lifecycle channel (the exact key is a one-entry prefix, same as
+pending(fn, args)) so a state.computed / on / template scope re-runs both when the
+value changes (invalidate, patch) and when a retained value lands —
+materializeRetained's async decode signals only markLifecycle, no invalidate event,
+so without the lifecycle tap a scope that read undefined would never see the value
+arrive. Outside a tracking scope it is a one-shot snapshot. Returns a clone (like
+the warm read path) so a caller mutating it can't corrupt the retained value.
+`peek(sub)` for a subscribable is wired on the socket side.
 */
 function peek<Args, Return>(
     fn: RemoteFunction<Args, Return> | RawRemoteFunction<Args> | Producer<Args, Return>,
@@ -882,13 +887,23 @@ function peek<Args, Return>(
         : producerKey(fn as Producer<Args, Return>, args)
     const active = activeCacheStore()
     active.subscribe(key)
+    active.trackLifecycle(key)
     let entry = active.entries.get(key)
     if (entry === undefined) {
         const global = globalCacheStore()
         global.subscribe(key)
+        global.trackLifecycle(key)
         entry = global.entries.get(key)
     }
     if (entry === undefined || entry.settled !== true || entry.value === undefined) {
+        return undefined
+    }
+    /* SSR congruence: the server materializes no cache value, so server-side peek is
+       uniformly undefined and the SSR render shows the fallback. Returning a snapshot-
+       seeded warm value here — mid-hydration — would diverge from that server text and
+       corrupt the claimed text node. Withhold it until the pass ends; the trackLifecycle
+       tap above lets wakeHydrationPeeks re-run this scope on the congruent value. */
+    if (hydratingSlot.active) {
         return undefined
     }
     return cloneWarmValue(entry.value) as Return

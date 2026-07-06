@@ -1,3 +1,5 @@
+import { hydratingSlot } from '../../shared/hydratingSlot.ts'
+import { wakeHydrationPeeks } from '../../shared/wakeHydrationPeeks.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { scope } from '../runtime/scope.ts'
 import { scopeLabel } from './scopeLabel.ts'
@@ -25,7 +27,9 @@ export function hydrate(
     props?: unknown,
 ): () => void {
     const previous = RENDER.hydration
+    const previousHydrating = hydratingSlot.active
     RENDER.hydration = { next: new Map() }
+    hydratingSlot.active = true
     try {
         /* Same shared mount core as `mount` (see `withScope`) — a hydrated component owns a
            scope too, adopting the model its build adopts — run with the claim cursor active. */
@@ -33,5 +37,11 @@ export function hydrate(
         return () => lexical.dispose()
     } finally {
         RENDER.hydration = previous
+        hydratingSlot.active = previousHydrating
+        /* Wake the peeks this pass withheld — only when unwinding the OUTERMOST pass, so a
+           nested child hydrate doesn't fire it early (save/restore, not a bare reset). */
+        if (!previousHydrating) {
+            wakeHydrationPeeks()
+        }
     }
 }

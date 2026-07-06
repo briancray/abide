@@ -4,6 +4,7 @@ import { effect } from '../effect.ts'
 import { claimChild } from '../runtime/claimChild.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { appendSnippet } from './appendSnippet.ts'
+import { assertClaimedText } from './assertClaimedText.ts'
 import { isComment } from './isComment.ts'
 import { parseRawNodes } from './parseRawNodes.ts'
 
@@ -49,6 +50,12 @@ export function appendText(parent: Node, read: () => unknown, splitAlways = fals
         const node = (
             isText ? claimed : parent.insertBefore(document.createTextNode(''), claimed)
         ) as Text
+        /* The claimed SSR node must begin with this binding's value, or the split below
+           lands mid-run and orphans the tail — throw legibly at the divergence instead. A
+           synthesized empty node is this binding's own, so there's nothing to disagree. */
+        if (isText) {
+            assertClaimedText(node, value)
+        }
         /* Peel this binding's text off the merged SSR node. A non-final binding in a
            run (`splitAlways`) splits even when it consumes the whole node, leaving an
            empty node for the next binding — otherwise an interpolation that renders to
