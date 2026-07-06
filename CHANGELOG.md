@@ -1,5 +1,19 @@
 # abide
 
+## 0.48.0
+
+### Minor Changes
+
+- 182cdf5: server reads coalesce-only by default, SWR retain client-only ([`98a3e84`](https://github.com/briancray/abide/commit/98a3e84b1e6bdb50b8950a4197ec4a255c560d2a))
+- 182cdf5: warn on a request-scoped ttl>0 read (add shared or drop ttl) ([`b55425c`](https://github.com/briancray/abide/commit/b55425c986fb4c7cebcb1e8c29d1c616466d7d63))
+
+### Patch Changes
+
+- 182cdf5: rename global option/exports/comments to shared ([`1256934`](https://github.com/briancray/abide/commit/125693481ba23152a44375bbe200d575b66fdf9a))
+- 182cdf5: evict outside-request coalesce-only entries; correct shared help copy ([`1b73e21`](https://github.com/briancray/abide/commit/1b73e21c33c8ee985f7109fdedcbe302322ce7d1))
+- 182cdf5: route outside-a-request server reads to the shared store ([`456cfa6`](https://github.com/briancray/abide/commit/456cfa662405714df99545e02ed6e3b851da84df))
+- 182cdf5: Breaking: the `global` cache option is renamed `shared`, and it no longer implies retention. `{ global: true }` (memoise across requests forever) becomes `{ shared: true, ttl: Infinity }` — `shared` now only selects the process store, while `ttl` alone controls retention (default `0` on the server = coalesce-only, `Infinity` on the client). Reads made with no request in flight resolve to the shared store instead of an orphan fallback. ([`d94f0f9`](https://github.com/briancray/abide/commit/d94f0f9cb15a5822b2d5824db7e32da27368fe04))
+
 ## 0.47.0
 
 ### Minor Changes

@@ -1,5 +1,11 @@
 # @abide/inspector
 
+## 0.3.4
+
+### Patch Changes
+
+- 182cdf5: evict outside-request coalesce-only entries; correct shared help copy ([`1b73e21`](https://github.com/briancray/abide/commit/1b73e21c33c8ee985f7109fdedcbe302322ce7d1))
+
 ## 0.3.3
 
 ### Patch Changes
