@@ -1,6 +1,4 @@
 <script>
-import { patch } from '@abide/abide/shared/patch'
-import { refresh } from '@abide/abide/shared/refresh'
 import { state } from '@abide/abide/ui/state'
 import { watch } from '@abide/abide/ui/watch'
 import { getChatCount } from '$server/rpc/getChatCount.ts'
@@ -37,8 +35,8 @@ let nameDraft = state.linked(() => serverName)
    (stale total stays visible, revalidates) and patches the log in place (the
    frame IS the new message — fold it in, no refetch). */
 watch(chat, (message) => {
-    refresh(getChatCount)
-    patch(getChatLog, (log) => ({ messages: [...log.messages, message].slice(-20) }))
+    getChatCount.refresh()
+    getChatLog.patch((log) => ({ messages: [...log.messages, message].slice(-20) }))
 })
 const chatCount = state.computed(() => getChatCount())
 const chatLog = state.computed(() => getChatLog())
@@ -219,14 +217,12 @@ const chatLog = state.computed(() => getChatLog())
         {'publishChat({ from, text })'}
     </button>
 
-    <CodeBlock title="watch a socket, refresh + patch the reads" code={`import { patch } from '@abide/abide/shared/patch'
-import { refresh } from '@abide/abide/shared/refresh'
-import { watch } from '@abide/abide/ui/watch'
+    <CodeBlock title="watch a socket, refresh + patch the reads" code={`import { watch } from '@abide/abide/ui/watch'
 
 // one reaction, named by its source — no hand-rolled subscribe/teardown
 watch(chat, (message) => {
-    refresh(getChatCount)                                          // revalidate; stale total stays visible
-    patch(getChatLog, (log) => ({ messages: [...log.messages, message].slice(-20) }))  // fold in, no refetch
+    getChatCount.refresh()                                         // revalidate; stale total stays visible
+    getChatLog.patch((log) => ({ messages: [...log.messages, message].slice(-20) }))  // fold in, no refetch
 })
 const chatCount = state.computed(() => getChatCount())   // the bare call IS the smart cached read
 const chatLog = state.computed(() => getChatLog())`} />

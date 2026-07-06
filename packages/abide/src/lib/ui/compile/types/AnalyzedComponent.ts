@@ -16,6 +16,11 @@ export type AnalyzedComponent = {
     /* Top-level import statements hoisted out of the script (e.g. child
        components), placed at module scope by the module wrapper. */
     imports: string
+    /* The local binding names of reactive-surface imports (`state`/`effect`) the dead-import
+       filter dropped as unused. The module wrapper's backstop asserts none of them still
+       appears in the generated output — an independent check that the drop didn't strand a
+       live reference (e.g. one a nested branch script keeps literal). */
+    droppedReactiveImports: Set<string>
     stateNames: Set<string>
     derivedNames: Set<string>
     computedNames: Set<string>

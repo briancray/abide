@@ -1,5 +1,5 @@
+import type { Socket } from '../shared/types/Socket.ts'
 import type { StandardSchemaV1 } from '../shared/types/StandardSchemaV1.ts'
-import type { Socket } from './sockets/types/Socket.ts'
 import type { SocketOptions } from './sockets/types/SocketOptions.ts'
 
 /*

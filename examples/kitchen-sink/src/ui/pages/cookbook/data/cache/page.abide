@@ -50,10 +50,9 @@ getOrderList(undefined, { tags: ['orders'] })`}
 <Recipe
     task="Refresh a cached read after a write"
     live={LIVE}
-    code={`import { refresh } from '@abide/abide/shared/refresh'
-await incrementCounter()
-refresh(getCounter)   // revalidate; stale value stays visible`}
-    note={"`refresh(fn)` refetches that function's entries; the stale value stays on screen and `refreshing()` reports the reload — the reader never blanks."} />
+    code={`await incrementCounter()
+getCounter.refresh()   // revalidate; stale value stays visible`}
+    note={"`getCounter.refresh()` refetches that function's entries; the stale value stays on screen and `getCounter.refreshing()` reports the reload — the reader never blanks."} />
 
 <Recipe
     task="Refresh a whole tag group"
@@ -64,18 +63,17 @@ refresh(getCounter)   // revalidate; stale value stays visible`}
 <Recipe
     task="Refresh when a socket frame arrives"
     live={LIVE}
-    code={`import { refresh } from '@abide/abide/shared/refresh'
-import { watch } from '@abide/abide/ui/watch'
-watch(chat, () => refresh(getChatCount))`}
-    note={'`watch(source, handler)` runs once per socket/stream frame; call `refresh` inside to revalidate a read. The watch is scope-tied, so it disposes with the component.'} />
+    code={`import { watch } from '@abide/abide/ui/watch'
+watch(chat, () => getChatCount.refresh())`}
+    note={'`watch(source, handler)` runs once per socket/stream frame; call `getChatCount.refresh()` inside to revalidate a read. The watch is scope-tied, so it disposes with the component.'} />
 
 <Recipe
     task="Patch a cached read in place, no refetch"
     live={LIVE}
-    code={`import { patch } from '@abide/abide/shared/patch'
+    code={`import { watch } from '@abide/abide/ui/watch'
 watch(chat, (message) =>
-    patch(getChatLog, (log) => ({ messages: [...log.messages, message] })))`}
-    note={'When the frame IS the new data, fold it into the retained value directly — `patch(fn, updater)` mutates the cache reactively with no network round-trip. The optimistic-update primitive.'} />
+    getChatLog.patch((log) => ({ messages: [...log.messages, message] })))`}
+    note={'When the frame IS the new data, fold it into the retained value directly — `getChatLog.patch(updater)` mutates the cache reactively with no network round-trip. The optimistic-update primitive.'} />
 
 <Recipe
     task="Front an external fetch as a GET rpc"
@@ -91,13 +89,11 @@ export const getRates = GET(async ({ base = 'USD' }) => {
 <Recipe
     task="Show a cached read is fetching"
     live="/probes"
-    code={`import { pending } from '@abide/abide/shared/pending'
-const loading = state.computed(() => pending(getCounter))`}
-    note={'`pending(fn)` is a standalone reactive probe of the smart-call/stream registries — true while the read is in flight, without threading a loading flag through the call.'} />
+    code={`const loading = state.computed(() => getCounter.pending())`}
+    note={'`getCounter.pending()` is a standalone reactive probe of the smart-call/stream registries — true while the read is in flight, without threading a loading flag through the call.'} />
 
-<Recipe task="Refetch on an interval" live={LIVE} code={`import { refresh } from '@abide/abide/shared/refresh'
-import { watch } from '@abide/abide/ui/watch'
+<Recipe task="Refetch on an interval" live={LIVE} code={`import { watch } from '@abide/abide/ui/watch'
 watch(() => {
-    const id = setInterval(() => refresh(getRates), 15_000)
+    const id = setInterval(() => getRates.refresh(), 15_000)
     return () => clearInterval(id)
 })`} note={"There's no built-in poll option — refresh on a timer in a client-only watch and the reactive read revalidates. Clear the timer in the cleanup."} />

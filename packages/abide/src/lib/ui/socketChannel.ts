@@ -1,10 +1,10 @@
-import type { SocketClientFrame } from '../server/sockets/types/SocketClientFrame.ts'
-import type { SocketServerFrame } from '../server/sockets/types/SocketServerFrame.ts'
 import { createSocketSubRegistry } from '../shared/createSocketSubRegistry.ts'
 import { decodeRefJson } from '../shared/decodeRefJson.ts'
 import { encodeRefJson } from '../shared/encodeRefJson.ts'
 import { SOCKETS_PATH } from '../shared/SOCKETS_PATH.ts'
 import type { SocketChannel } from '../shared/types/SocketChannel.ts'
+import type { SocketClientFrame } from '../shared/types/SocketClientFrame.ts'
+import type { SocketServerFrame } from '../shared/types/SocketServerFrame.ts'
 import { withBase } from '../shared/withBase.ts'
 
 let singleton: SocketChannel | undefined

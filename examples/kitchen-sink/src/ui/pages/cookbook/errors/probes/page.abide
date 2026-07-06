@@ -11,7 +11,11 @@ const OBS = '/observability'
     Standalone reactive probes spanning smart calls and streams.
     <code class="font-mono">pending</code> = no value yet;
     <code class="font-mono">refreshing</code> = value held, a fresher source in flight. They report,
-    never act.
+    never act. For a single rpc prefer the pre-bound instance form —
+    <code class="font-mono">getUser.pending()</code> ≡
+    <code class="font-mono">pending(getUser)</code>, better-typed on that rpc's args — and keep the
+    standalone modules for a bare all-activity probe or a
+    <code class="font-mono">{'{ tags }'}</code> group.
 </p>
 
 <Recipe
@@ -42,7 +46,7 @@ const stale = state.computed(() => getUser.refreshing({ id }))
 const failure = state.computed(() => getUser.error({ id }))
 const warm = getUser.peek({ id })          // retained value, synchronous
 getUser.refresh({ id })                    // revalidate; stale value stays visible`}
-    note={'Every rpc carries its own `.pending` / `.refreshing` / `.error` / `.peek` / `.refresh` / `.patch` — the same selector grammar as the standalone probes, scoped to that rpc with no import.'} />
+    note={'Every rpc carries its own `.pending` / `.refreshing` / `.error` / `.peek` / `.refresh` / `.patch` — the same selector grammar as the standalone probes, scoped to that rpc with no import. Prefer this instance form for a single rpc (better-typed on its args); the standalone probes earn their keep on bare all-activity and `{ tags }` selection.'} />
 
 <Recipe task="Probe a group by tag" live={LIVE} code={`const savingOrders = state.computed(() => pending({ tags: ['orders'] }))`} note={"`pending({ tags })` covers every entry sharing the tag — one probe for a whole feature's in-flight work."} />
 
@@ -56,20 +60,20 @@ const updating = state.computed(() => refreshing(getRates, { base: 'USD' }))`}
 <Recipe
     task="Separate first-load from refresh"
     live={LIVE}
-    code={`const skeleton = state.computed(() => pending(getRates))
-const dim = state.computed(() => refreshing(getRates))`}
+    code={`const skeleton = state.computed(() => getRates.pending())
+const dim = state.computed(() => getRates.refreshing())`}
     note={'Show a skeleton on `pending` (nothing to show yet) and dim on `refreshing` (old value present). Together they cover both loading modes cleanly.'} />
 
 <Recipe
     task="Disable a control while pending"
     live={LIVE}
-    code={`<button disabled={pending(submitOrder)}>place order</button>`}
+    code={`<button disabled={submitOrder.pending()}>place order</button>`}
     note={'Read the probe straight into `disabled`. Pair with the `fn(args, { ttl: 0 })` mutation idiom so the submit is coalesced and probe-visible.'} />
 
 <Recipe
     task="Show a skeleton while pending"
     live={LIVE}
-    code={`{#if pending(getFeed)}
+    code={`{#if getFeed.pending()}
     <FeedSkeleton />
 {:else}
     <Feed items={feed} />
@@ -79,7 +83,7 @@ const dim = state.computed(() => refreshing(getRates))`}
 <Recipe
     task="Badge stale-but-present data"
     live={LIVE}
-    code={`<span class:opacity-50={refreshing(getRates, { base: 'USD' })}>
+    code={`<span class:opacity-50={getRates.refreshing({ base: 'USD' })}>
     {rates.usd}
 </span>`}
     note={'Keep rendering the held value and dim it while `refreshing` — no flash of empty during a revalidation.'} />

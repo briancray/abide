@@ -4,14 +4,14 @@ import { decodeRefJson } from '../../shared/decodeRefJson.ts'
 import { encodeRefJson } from '../../shared/encodeRefJson.ts'
 import { memoizeByKey } from '../../shared/memoizeByKey.ts'
 import { messageFromError } from '../../shared/messageFromError.ts'
+import type { SocketClientFrame } from '../../shared/types/SocketClientFrame.ts'
+import type { SocketServerFrame } from '../../shared/types/SocketServerFrame.ts'
 import { error } from '../error.ts'
 import { json } from '../json.ts'
 import { sse } from '../sse.ts'
 import { lookupSocket } from './lookupSocket.ts'
-import type { SocketClientFrame } from './types/SocketClientFrame.ts'
 import type { SocketRegistryEntry } from './types/SocketRegistryEntry.ts'
 import type { SocketRoutes } from './types/SocketRoutes.ts'
-import type { SocketServerFrame } from './types/SocketServerFrame.ts'
 
 // Reused across every inbound binary frame rather than allocated per message.
 const textDecoder = new TextDecoder()

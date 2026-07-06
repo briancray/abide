@@ -1,4 +1,4 @@
-import type { ToolResult } from '../mcp/mcpSurface.ts'
+import type { ToolResult } from '../mcp/types/ToolResult.ts'
 import type { AgentSurface } from '../server/agent.ts'
 
 type ScriptedTool = {

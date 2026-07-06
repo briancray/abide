@@ -1,13 +1,14 @@
+import { attachSocketSelectorMethods } from '../../shared/attachSocketSelectorMethods.ts'
 import { createPushIterator } from '../../shared/createPushIterator.ts'
 import { encodeRefJson } from '../../shared/encodeRefJson.ts'
 import { resolveClientFlags } from '../../shared/resolveClientFlags.ts'
 import { socketTapSlot } from '../../shared/socketTapSlot.ts'
+import type { Socket } from '../../shared/types/Socket.ts'
+import type { SocketServerFrame } from '../../shared/types/SocketServerFrame.ts'
 import type { TailHooks } from '../../shared/types/TailHooks.ts'
 import { getActiveServer } from '../runtime/getActiveServer.ts'
 import { registerSocket } from './registerSocket.ts'
-import type { Socket } from './types/Socket.ts'
 import type { SocketOptions } from './types/SocketOptions.ts'
-import type { SocketServerFrame } from './types/SocketServerFrame.ts'
 
 /*
 Server-side construction of a Socket. The bundler rewrites every
@@ -172,7 +173,7 @@ export function defineSocket<T>(name: string, opts: SocketOptions = {}): Socket<
         }
     }
 
-    const self: Socket<T> = {
+    const self = {
         name,
         clients,
         /* `broadcast` is the public fan-out; `publish` remains the internal function name. */
@@ -185,8 +186,12 @@ export function defineSocket<T>(name: string, opts: SocketOptions = {}): Socket<
         },
         /* No-op on the server: it is the source of truth, so there is nothing to re-pull. */
         refresh: () => undefined,
+        /* Inert on the server: reaction is a client-only concern, and an author `socket.watch(…)`
+           that survives the SSR effect-strip must be a safe no-op here. Returns a disposer. */
+        watch: () => () => {},
         [Symbol.asyncIterator]: () => iterate(0)[Symbol.asyncIterator](),
     }
+    attachSocketSelectorMethods(self)
     registerSocket({
         socket: self as Socket<unknown>,
         allowClientPublish: opts.clientPublish ?? false,

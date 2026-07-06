@@ -39,17 +39,16 @@ async function search() {
 <Recipe
     task="Show stale data while revalidating"
     live={PROBES}
-    code={`import { refreshing } from '@abide/abide/shared/refreshing'
-const stale = state.computed(() => refreshing(getRates))
+    code={`const stale = state.computed(() => getRates.refreshing())
 
 <span class:opacity-50={stale}>{rates.usd}</span>`}
-    note={'`refreshing(fn)` is true when a value is held but a fresher one is loading. Keep rendering the old value and dim it — the stale-while-revalidate UX, no flash of empty.'} />
+    note={'`getRates.refreshing()` is true when a value is held but a fresher one is loading. Keep rendering the old value and dim it — the stale-while-revalidate UX, no flash of empty.'} />
 
 <Recipe
     task="Distinguish first-load from a refresh"
     live={PROBES}
-    code={`const firstLoad = state.computed(() => pending(getRates) && !refreshing(getRates))`}
-    note={'`pending` = no value yet (show a skeleton); `refreshing` = value held, refetching (dim it). Together they separate the empty state from the background update.'} />
+    code={`const firstLoad = state.computed(() => getRates.pending() && !getRates.refreshing())`}
+    note={'`getRates.pending()` = no value yet (show a skeleton); `getRates.refreshing()` = value held, refetching (dim it). Together they separate the empty state from the background update.'} />
 
 <Recipe
     task="Refetch after a mutation"
@@ -86,15 +85,12 @@ const rows = state.computed(() => listRows({ page: pageNum, size: 20 }))
 <Recipe
     task="Optimistically update before the server confirms"
     live={LIVE}
-    code={`import { patch } from '@abide/abide/shared/patch'
-import { refresh } from '@abide/abide/shared/refresh'
-
-async function bump() {
-    patch(getCount, (c) => ({ count: c.count + 1 }))   // apply the guess now
+    code={`async function bump() {
+    getCount.patch((c) => ({ count: c.count + 1 }))   // apply the guess now
     await increment()
-    refresh(getCount)                                  // reconcile with the server
+    getCount.refresh()                                // reconcile with the server
 }`}
-    note={'`patch(fn, updater)` mutates the retained value reactively with no network — the first-class optimistic write. Apply the guess immediately, then `refresh` to reconcile (or `patch` back on error to roll back).'} />
+    note={'`getCount.patch(updater)` mutates the retained value reactively with no network — the first-class optimistic write. Apply the guess immediately, then `getCount.refresh()` to reconcile (or `patch` back on error to roll back).'} />
 
 <Recipe
     task="Refetch when the tab regains focus"

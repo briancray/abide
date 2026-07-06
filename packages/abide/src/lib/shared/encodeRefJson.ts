@@ -11,7 +11,7 @@ symbols can't be serialised and encode as undefined, matching JSON.stringify. Ou
 shape is `[rootValue, slots]`. Decode with decodeRefJson. Not streaming — the whole
 graph is walked up front.
 */
-import { REF_JSON_TAGS } from './REF_JSON_TAGS'
+import { REF_JSON_TAGS } from './REF_JSON_TAGS.ts'
 
 export function encodeRefJson(value: unknown): string {
     // Hoisted containers only; slots[i] is addressed by ['~r', i]. Primitives stay inline.

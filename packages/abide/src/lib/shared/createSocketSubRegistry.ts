@@ -1,6 +1,6 @@
-import type { SocketClientFrame } from '../server/sockets/types/SocketClientFrame.ts'
-import type { SocketServerFrame } from '../server/sockets/types/SocketServerFrame.ts'
 import type { SocketChannel } from './types/SocketChannel.ts'
+import type { SocketClientFrame } from './types/SocketClientFrame.ts'
+import type { SocketServerFrame } from './types/SocketServerFrame.ts'
 import type { SocketSubCallbacks } from './types/SocketSubCallbacks.ts'
 
 /*

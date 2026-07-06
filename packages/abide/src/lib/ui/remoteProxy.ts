@@ -17,6 +17,7 @@ import { outboxRegistry } from './rpcOutbox/outboxRegistry.ts'
 import { currentAbortSignal } from './runtime/currentAbortSignal.ts'
 import { REQUEST_SUPERSEDED } from './runtime/REQUEST_SUPERSEDED.ts'
 import type { PersistenceStore } from './types/PersistenceStore.ts'
+import { watch } from './watch.ts'
 
 /* The framework-reserved `HttpError.kind` for a request the durable outbox parked because
    the server was unreachable — distinct from a handler-declared error name. Lets a caller
@@ -146,6 +147,17 @@ export function remoteProxy<Args, Return>(
                 },
             )
         },
+    })
+    /* Overwrite the inert `.watch` the shared attach bound: on the client the real reaction
+       sugar routes to the `watch` ui primitive (`fn.watch(handler)` / `fn.watch(args, handler)`).
+       Attached here — not in the shared attach — so `watch` never rides into a server bundle. */
+    Object.assign(fn, {
+        watch: (argsOrHandler: unknown, handler?: unknown) =>
+            (watch as (source: unknown, a?: unknown, b?: unknown) => () => void)(
+                fn,
+                argsOrHandler,
+                handler,
+            ),
     })
     if (durable?.outbox === true) {
         queue = getOrCreateOutboxQueue<Args, Return>(url, fn, durable)

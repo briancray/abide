@@ -6,7 +6,7 @@ them. The shell must exist before its contents are filled so a back-reference to
 ancestor resolves to the already-allocated object — which is what reconnects a cycle.
 Inline primitives need no shell; they decode directly where they sit.
 */
-import { REF_JSON_TAGS } from './REF_JSON_TAGS'
+import { REF_JSON_TAGS } from './REF_JSON_TAGS.ts'
 
 export function decodeRefJson(text: string): unknown {
     const parsed = JSON.parse(text)

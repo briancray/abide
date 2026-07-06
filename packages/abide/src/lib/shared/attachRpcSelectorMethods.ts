@@ -27,6 +27,12 @@ export function attachRpcSelectorMethods<Args, Return>(fn: RemoteFunction<Args, 
         peek: (args?: Args) => peek(fn, args),
         patch: (argsOrUpdater?: unknown, updater?: unknown) =>
             (patch as (fn: unknown, a?: unknown, b?: unknown) => void)(fn, argsOrUpdater, updater),
+        /* Reaction sugar is client-only (`watch` is a ui primitive that must not ride into a
+           server bundle), so the shared attach binds an inert no-op — the server (defineRpc)
+           shape carries `.watch` too, and an author `fn.watch(…)` surviving the SSR effect-strip
+           is a safe no-op. The client proxy (remoteProxy) overwrites this with the real
+           `watch(fn, …)`. */
+        watch: () => () => {},
         error: (args?: Args) =>
             args === undefined
                 ? rpcErrorRegistry.readAny(`${fn.method} ${fn.url}`)

@@ -59,9 +59,8 @@ outbox.retry()`}
 <Recipe
     task="Probe queued and in-flight writes"
     live="/probes"
-    code={`import { pending } from '@abide/abide/shared/pending'
-const syncing = state.computed(() => pending(saveMessage))`}
-    note={"`pending(rpc)` is true while anything is in flight *or* queued — one probe for a 'syncing…' indicator that covers both states."} />
+    code={`const syncing = state.computed(() => saveMessage.pending())`}
+    note={"`saveMessage.pending()` is true while anything is in flight *or* queued — one probe for a 'syncing…' indicator that covers both states."} />
 
 <Recipe
     task="Keep the handler idempotent"

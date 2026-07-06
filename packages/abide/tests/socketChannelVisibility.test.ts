@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, test } from 'bun:test'
-import type { SocketClientFrame } from '../src/lib/server/sockets/types/SocketClientFrame.ts'
 import { decodeRefJson } from '../src/lib/shared/decodeRefJson.ts'
+import type { SocketClientFrame } from '../src/lib/shared/types/SocketClientFrame.ts'
 import { getSocketChannel } from '../src/lib/ui/socketChannel.ts'
 
 /*

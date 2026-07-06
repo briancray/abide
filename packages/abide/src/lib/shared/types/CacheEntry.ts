@@ -66,11 +66,11 @@ export type CacheEntry = {
     invalidation?: InvalidationState
     /*
     Set by the smart bare call (a replayable read routed through cache.read): the
-    display value is retained unconditionally and `ttl` drives a background
-    revalidation clock (fireRefetch, stale stays visible) rather than the hard
-    eviction an explicit cache() ttl triggers. Distinguishes the smart-read
-    lifecycle from the explicit cache()/invalidate old surface, which keeps its
-    drop-on-ttl / drop-on-invalidate behaviour.
+    display value is retained unconditionally and `ttl` marks a staleness deadline
+    (the next read past it revalidates in the background, stale stays visible) rather
+    than driving the hard eviction an explicit cache() ttl triggers. Distinguishes the
+    smart-read lifecycle from the explicit cache()/invalidate old surface, which keeps
+    its drop-on-ttl / drop-on-invalidate behaviour.
     */
     retain?: boolean
 }

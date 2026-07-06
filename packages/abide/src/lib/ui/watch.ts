@@ -15,6 +15,14 @@ and it is also the compiler's binding primitive (emitted as `$$watch(thunk)` for
 `{expr}` / `class:` / `bind:*`). Client-only: SSR-inert here and stripped by the
 compiler. Returns a scope-tied disposer.
 
+Instance sugar mirrors the global for the two subscribable/rpc sources (the other
+sources have no instance home): `socket.watch(handler)` ≡ `watch(socket, handler)`, and
+`getUser.watch(handler)` / `getUser.watch(args, handler)` ≡ `watch(getUser, …)`. The
+method is client-attached (socketProxy / remoteProxy) so this ui primitive never rides
+into a server bundle; server-side it is an inert no-op. Unlike bare `watch(…)` — which
+the SSR back-end strips — a `.watch(…)` member call survives to the server and relies on
+that inert stub.
+
 Sources (discriminated at runtime, monomorphic per branch):
   watch(thunk)                       // compiler binding form — auto-tracked, == effect(thunk)
   watch(count, n => …)               // a state cell → handler(newValue)
@@ -69,8 +77,14 @@ export function watch(
             handler as (frame: unknown, context: CacheOnContext) => void | Promise<void>,
         )
     }
-    /* An rpc without args → run the smart read reactively, pipe its value to the handler. */
-    if (source !== null && typeof source === 'object' && REMOTE_FUNCTION in source) {
+    /* An rpc without args → run the smart read reactively, pipe its value to the handler. A
+       RemoteFunction is a callable, so accept `function` too — a state cell is a branded-free
+       object and never matches, and a streaming rpc was already caught by isSubscribable above. */
+    if (
+        source !== null &&
+        (typeof source === 'object' || typeof source === 'function') &&
+        REMOTE_FUNCTION in source
+    ) {
         return reactToRpc(source, undefined, handler)
     }
     /* Multiple cells → fire on any change; hand the handler the current values. */

@@ -1,8 +1,6 @@
-import { findExportCallSite } from './findExportCallSite.ts'
-import { importNamesToStrip } from './importNamesToStrip.ts'
 import { isReadOnlyMethod } from './isReadOnlyMethod.ts'
+import { prepareRemoteExport } from './prepareRemoteExport.ts'
 import { skipNonCode } from './skipNonCode.ts'
-import { stripImport } from './stripImport.ts'
 import type { HttpMethod } from './types/HttpMethod.ts'
 
 const RPC_NAMES = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'] as const
@@ -55,23 +53,21 @@ export function prepareRpcModule(
 ): PreparedRpcModule | undefined {
     /*
     The "no barrels" surface places each method at its own path
-    (`abide/server/GET`, `abide/server/POST`, …) — strip every one so
-    the user's method import doesn't linger and side-effect-load the
-    stub module into the server bundle. The user may import under the
-    project's chosen name or the canonical package name, so strip both.
+    (`abide/server/GET`, `abide/server/POST`, …), so the strip subpaths are
+    every method under each import name — the user's method import must not
+    linger and side-effect-load the stub module into the server bundle.
     */
-    const stripped = importNamesToStrip(importName).reduce(
-        (current, name) =>
-            RPC_NAMES.reduce(
-                (acc, method) => stripImport(acc, `${name}/server/${method}`),
-                current,
-            ),
+    const prepared = prepareRemoteExport(
         source,
+        importName,
+        (name) => RPC_NAMES.map((method) => `${name}/server/${method}`),
+        (ident) => RPC_SET.has(ident),
+        SINGLE_EXPORT_ERROR,
     )
-    const site = findExportCallSite(stripped, (ident) => RPC_SET.has(ident), SINGLE_EXPORT_ERROR)
-    if (!site) {
+    if (!prepared) {
         return undefined
     }
+    const { stripped, site } = prepared
     const method = site.ident as HttpMethod
     const durable = detectDurable(stripped, site.parenStart, site.parenEnd, method)
     const streaming = detectStreaming(stripped, site.parenStart, site.parenEnd)

@@ -23,10 +23,14 @@ function addItem(event: SubmitEvent) {
 }
 
 // await demo: `attempt` is read by the {#await} expression, so bumping it re-runs
-// the promise and re-seeds the branch.
+// the promise and re-seeds the branch. The roster rotates by `attempt` so each
+// reload resolves to a visibly different slice — proof the branch re-seeds.
 let attempt = state(0)
-function loadNames(_attempt: number): Promise<string[]> {
-    return new Promise((resolve) => setTimeout(() => resolve(['ada', 'grace', 'linus']), 400))
+const ROSTER = ['ada', 'grace', 'linus', 'edsger', 'barbara']
+function loadNames(attempt: number): Promise<string[]> {
+    const start = attempt % ROSTER.length
+    const names = [0, 1, 2].map((offset) => ROSTER[(start + offset) % ROSTER.length])
+    return new Promise((resolve) => setTimeout(() => resolve(names), 400))
 }
 
 // {#for await} drives a live AsyncIterable — here a generator yielding a few ticks.

@@ -1,7 +1,8 @@
-import type { Socket } from '../server/sockets/types/Socket.ts'
+import { attachSocketSelectorMethods } from './attachSocketSelectorMethods.ts'
 import { browserClientFlags } from './browserClientFlags.ts'
 import { createPushIterator } from './createPushIterator.ts'
 import { SOCKETS_PATH } from './SOCKETS_PATH.ts'
+import type { Socket } from './types/Socket.ts'
 import type { SocketChannel } from './types/SocketChannel.ts'
 import type { TailHooks } from './types/TailHooks.ts'
 import { withBase } from './withBase.ts'
@@ -59,7 +60,7 @@ export function buildSocketOverChannel<T>(
         }
     }
     const publish = (message: T) => resolveChannel().publish(name, message)
-    return {
+    const socket = {
         name,
         clients: browserClientFlags,
         /* `broadcast` sends a server-validated `pub` frame (the dispatcher gates it on the
@@ -82,6 +83,12 @@ export function buildSocketOverChannel<T>(
                 })
                 .catch(() => undefined)
         },
+        /* Inert default so the returned object satisfies Socket<T> without importing the ui-only
+           `watch` into this shared builder (which the test harness also uses). The client proxy
+           (socketProxy) overwrites it with the real `watch(socket, …)`. */
+        watch: () => () => {},
         [Symbol.asyncIterator]: () => iterate(0)[Symbol.asyncIterator](),
     }
+    attachSocketSelectorMethods(socket)
+    return socket
 }

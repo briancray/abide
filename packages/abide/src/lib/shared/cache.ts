@@ -155,9 +155,10 @@ export function cache<Args, Return>(
 /*
 The smart bare rpc call routes here (createRemoteFunction.callable → cache.read):
 identical to cache() except a replayable read gets unconditional SWR retention —
-its value is kept for display regardless of ttl, and ttl drives a background
-revalidation clock instead of eviction. Always a decoded RemoteFunction read (the
-callable carries .raw), so it returns Promise<Return>.
+its value is kept for display regardless of ttl, and ttl marks a staleness
+deadline (the next read past it revalidates in the background) instead of driving
+eviction. Always a decoded RemoteFunction read (the callable carries .raw), so it
+returns Promise<Return>.
 */
 function smartRead<Args, Return>(
     fn: RemoteFunction<Args, Return>,
@@ -226,6 +227,19 @@ function readThrough<Args, Return>(
         tagEntry(existing, effectiveOptions?.tags)
         attachPolicy(existing, effectiveOptions, () => remote(args as Args), retain)
         adoptTtl(store, existing, effectiveOptions, retain)
+        /* Access-triggered staleness: reading a retained entry past its ttl deadline
+           kicks a background revalidation now (stale value stays visible below,
+           refreshing() true). Guarded on `!refreshing` so a read while one is already
+           in flight doesn't queue a redundant refetch. This is the whole staleness
+           mechanism — no timer polls an untouched entry. */
+        if (
+            existing.retain === true &&
+            existing.refreshing !== true &&
+            existing.expiresAt !== undefined &&
+            existing.expiresAt <= Date.now()
+        ) {
+            scheduleInvalidationRefetch(store, existing)
+        }
     }
     /*
         Warm path: a value pre-decoded onto the entry — by the SSR cache
@@ -519,14 +533,14 @@ function registerEntry(
         }
         /*
         Smart retained read: the display value is kept unconditionally — never
-        hard-evicted on settle. ttl drives a background revalidation clock (stale
-        stays visible, refreshing() true) instead of eviction; ttl 0/undefined
-        retain with no auto-refetch.
+        hard-evicted on settle. ttl marks a staleness deadline (the next read past
+        it revalidates in the background, stale stays visible, refreshing() true)
+        instead of eviction; ttl 0/undefined retain with no staleness clock.
         */
         if (entry.retain) {
             materializeRetained(store, entry, result)
             if (ttl !== undefined && ttl > 0) {
-                armStaleRefetch(store, entry, ttl)
+                stampStaleDeadline(entry, ttl)
             }
             return
         }
@@ -567,20 +581,15 @@ function armTtlExpiry(store: CacheStore, entry: CacheEntry, ttl: number): void {
 }
 
 /*
-The smart-read staleness clock: at the ttl deadline the retained value has gone
-stale, so schedule a background revalidation (fireRefetch keeps the stale value
-visible and flips refreshing() true) instead of evicting. Honours the entry's
-throttle/debounce window via scheduleInvalidationRefetch; on success fireRefetch
-re-arms this clock so a live read stays fresh. `expiresAt` re-checks at fire time
-so a refreshed deadline survives.
+Stamps the smart-read staleness deadline. Revalidation is access-triggered, NOT
+timer-driven: once `expiresAt` has passed, the NEXT read of the entry (see the
+staleness branch in readThrough) schedules a background revalidation — the stale
+value stays visible, refreshing() flips true, and fireRefetch re-stamps a fresh
+deadline on success. No `setTimeout`, so an entry no reader touches never refetches
+on its own — no background polling accretes across a session.
 */
-function armStaleRefetch(store: CacheStore, entry: CacheEntry, ttl: number): void {
+function stampStaleDeadline(entry: CacheEntry, ttl: number): void {
     entry.expiresAt = Date.now() + ttl
-    setTimeout(() => {
-        if ((entry.expiresAt ?? 0) <= Date.now() && store.entries.get(entry.key) === entry) {
-            scheduleInvalidationRefetch(store, entry)
-        }
-    }, ttl).unref?.()
 }
 
 /*
@@ -635,14 +644,14 @@ function adoptTtl(
         return
     }
     entry.hydrated = false
-    /* A smart read adopting a hydrated entry retains it and uses the staleness
-       clock, mirroring registerEntry's retain branch — never the hard-evict path. */
+    /* A smart read adopting a hydrated entry retains it and stamps the staleness
+       deadline, mirroring registerEntry's retain branch — never the hard-evict path. */
     if (retain) {
         entry.retain = true
         const ttl = options?.ttl
         entry.ttl = ttl
         if (ttl !== undefined && ttl > 0) {
-            armStaleRefetch(store, entry, ttl)
+            stampStaleDeadline(entry, ttl)
         }
         return
     }
@@ -1069,13 +1078,14 @@ function fireRefetch(store: CacheStore, entry: CacheEntry): void {
                 materializeRetained(store, entry, result)
             }
             /* Restart the freshness clock from the revalidation — without this the
-               entry keeps its original expiresAt and is evicted at the old deadline
-               despite holding fresh data. Mirrors registerEntry's settle path: a
-               retained smart read re-arms the staleness clock (background revalidate),
-               an explicit-swr entry re-arms the eviction clock. */
+               entry keeps its original expiresAt and would read as stale (or be evicted
+               at the old deadline) despite holding fresh data. Mirrors registerEntry's
+               settle path: a retained smart read re-stamps the staleness deadline (the
+               next read past it revalidates), an explicit-swr entry re-arms the eviction
+               clock. */
             if (entry.ttl !== undefined && entry.ttl !== 0) {
                 if (entry.retain) {
-                    armStaleRefetch(store, entry, entry.ttl)
+                    stampStaleDeadline(entry, entry.ttl)
                 } else {
                     armTtlExpiry(store, entry, entry.ttl)
                 }

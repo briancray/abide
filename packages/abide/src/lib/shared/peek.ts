@@ -1,6 +1,6 @@
-import type { Socket } from '../server/sockets/types/Socket.ts'
 import { cache } from './cache.ts'
 import type { RemoteFunction } from './types/RemoteFunction.ts'
+import type { Socket } from './types/Socket.ts'
 
 /*
 The value member of the probe family: the currently-retained value, synchronously,

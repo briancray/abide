@@ -1,10 +1,10 @@
-import type { Socket } from '../server/sockets/types/Socket.ts'
-import type { SocketClientFrame } from '../server/sockets/types/SocketClientFrame.ts'
-import type { SocketServerFrame } from '../server/sockets/types/SocketServerFrame.ts'
 import { buildSocketOverChannel } from '../shared/buildSocketOverChannel.ts'
 import { createSocketSubRegistry } from '../shared/createSocketSubRegistry.ts'
 import { decodeRefJson } from '../shared/decodeRefJson.ts'
 import { encodeRefJson } from '../shared/encodeRefJson.ts'
+import type { Socket } from '../shared/types/Socket.ts'
+import type { SocketClientFrame } from '../shared/types/SocketClientFrame.ts'
+import type { SocketServerFrame } from '../shared/types/SocketServerFrame.ts'
 
 /*
 Test-side substitute for the browser socketChannel: one ws to the booted

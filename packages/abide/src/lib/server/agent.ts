@@ -1,5 +1,5 @@
-import type { McpSurface } from '../mcp/mcpSurface.ts'
 import { mcpSurface } from '../mcp/mcpSurface.ts'
+import type { McpSurface } from '../mcp/types/McpSurface.ts'
 import { request } from './request.ts'
 
 /*

@@ -75,6 +75,14 @@ export type RemoteFunction<
        shadow the server `error()` thrower). Reads the rpc error registry captured at the call
        boundary; the cache is untouched. */
     error(args?: Args): RpcError<Errors> | undefined
+    /* Client-only reaction sugar: `fn.watch(handler)` / `fn.watch(args, handler)` ≡
+       `watch(fn, …)` — runs the smart read reactively and pipes each resolved value to the
+       handler, returning a scope-tied disposer. Reaction is a client concern (`watch` is a ui
+       primitive), so this is an inert no-op server-side; an author `fn.watch(…)` surviving the
+       SSR effect-strip (which leaves member calls intact) is a safe no-op there. The real method
+       is attached client-side by remoteProxy. */
+    watch(handler: (value: Return) => void): () => void
+    watch(args: Args, handler: (value: Return) => void): () => void
 } /* `patch` is fetch-only: a streaming rpc has no single memoized value to mutate, so the
      method is present only when `Return` is not an AsyncIterable. Two signatures: with args
      (`patch(args, updater)`) and without (`patch(updater)` — every args-variant). Tuple-wrapped

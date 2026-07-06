@@ -121,6 +121,24 @@ ${options.moduleId === undefined ? '' : `component.__abideId = ${JSON.stringify(
         /* setParentNodes */ true,
     )
     const referenced = collectIdentifiers(bodySource)
+    /* Independent backstop on the reactive-import drop (`deadReactiveImport`): it decides an
+       import is dead from the leading script's own lowered body plus the nested scripts' raw
+       text. This re-checks the SAME question against the FINAL generated output — so a drop that
+       stranded a live reference (e.g. a nested branch's literal `state.computed`) surfaces as a
+       located compile error, not a runtime `ReferenceError: state is not defined`. Mirrors
+       `assertRuntimeHelpersBound`, which guards the parallel runtime-helper drop. Uses VALUE
+       references (not every identifier): the SSR return object `{ html, state, awaits, resume }`
+       names a property `state`, which is not a use of the reactive binding. */
+    if (analyzed.droppedReactiveImports.size > 0) {
+        const valueReferences = collectValueReferences(bodySource)
+        for (const name of analyzed.droppedReactiveImports) {
+            if (valueReferences.has(name)) {
+                throw new Error(
+                    `[abide] component module generation dropped the reactive import \`${name}\` as unused, but the generated output still references it — the dead-import filter undercounted. Please report this with the component source.`,
+                )
+            }
+        }
+    }
     const keptImports = UI_RUNTIME_IMPORTS.filter((entry) =>
         referenced.has(entry.alias ?? entry.name),
     )
@@ -208,4 +226,46 @@ function collectIdentifiers(source: ts.SourceFile): Set<string> {
     }
     visit(source)
     return names
+}
+
+/* The identifiers a module references AS VALUES — the subset of `collectIdentifiers` that
+   excludes name-only positions: a property name (`obj.state`), an object-literal key
+   (`{ state: v }`), and a declaration/import binding name (the definition, not a use). Used by
+   the reactive-import backstop, where a bare identifier presence over-counts: the synthesized
+   SSR return `{ html, state, awaits, resume }` names a property `state` that is not a use of the
+   reactive binding, so the raw-identifier set would false-positive. */
+function collectValueReferences(source: ts.SourceFile): Set<string> {
+    const names = new Set<string>()
+    const visit = (node: ts.Node): void => {
+        if (ts.isIdentifier(node) && isValuePosition(node)) {
+            names.add(node.text)
+        }
+        node.forEachChild(visit)
+    }
+    visit(source)
+    return names
+}
+
+/* True when `id` stands in a value position — i.e. a reference to a binding, not a name that
+   merely labels a property or declares a binding. */
+function isValuePosition(id: ts.Identifier): boolean {
+    const parent = id.parent
+    if (ts.isPropertyAccessExpression(parent) && parent.name === id) {
+        return false
+    }
+    if (ts.isPropertyAssignment(parent) && parent.name === id) {
+        return false
+    }
+    if (
+        (ts.isVariableDeclaration(parent) ||
+            ts.isParameter(parent) ||
+            ts.isFunctionDeclaration(parent) ||
+            ts.isBindingElement(parent) ||
+            ts.isImportSpecifier(parent) ||
+            ts.isImportClause(parent)) &&
+        parent.name === id
+    ) {
+        return false
+    }
+    return true
 }

@@ -29,6 +29,12 @@ export function analyzeComponent(source: string, scopeSeed?: string): AnalyzedCo
     const scriptBody = (scriptMatch?.[1] ?? '').trim()
     const template = source.replace(/^\s*<script[^>]*>[\s\S]*?<\/script>/, '').trim()
 
+    /* Parse the template first so the nested branch `<script>`s are in hand before the
+       leading script lowers: their raw code feeds the dead-import usage check, keeping a
+       reactive import (`state`) alive when only a nested branch uses it (its
+       `state.computed(...)` stays literal, unlike the desugared leading script). */
+    const { nodes } = parseTemplate(template)
+    const nestedScriptCode = collectNestedScriptCode(nodes)
     /* `lowerScript` parses the script ONCE and chains signal desugaring, reference
        renaming, and doc-access lowering over that single tree, then hoists top-level
        imports off the tree structurally — imports live at module scope, not inside the
@@ -40,17 +46,16 @@ export function analyzeComponent(source: string, scopeSeed?: string): AnalyzedCo
         stateNames,
         derivedNames,
         computedNames,
-    } = lowerScript(scriptBody)
-    /* The parser keeps each `<style>` as an in-place node (one inside an expression
-       is text, never a node). `annotateScopes` mutates the tree — assigning each
-       style its scope attribute and stamping covered elements — and returns the
-       scoped CSS per block for the bundler. */
-    const { nodes } = parseTemplate(template)
+        droppedReactiveImports,
+    } = lowerScript(scriptBody, nestedScriptCode)
+    /* `annotateScopes` mutates the tree — assigning each style its scope attribute and
+       stamping covered elements — and returns the scoped CSS per block for the bundler. */
     const styles = annotateScopes(nodes, [], scopeSeed, { count: 0 })
     return {
         script,
         ssrScript,
         imports,
+        droppedReactiveImports,
         stateNames,
         derivedNames,
         computedNames,
@@ -66,6 +71,23 @@ export function analyzeComponent(source: string, scopeSeed?: string): AnalyzedCo
    leaf (text/script/style). Every children-bearing kind carries `children`. */
 function childrenOf(node: TemplateNode): TemplateNode[] | undefined {
     return 'children' in node ? node.children : undefined
+}
+
+/* The concatenated source of every nested `<script>` anywhere in the tree — the branch-local
+   reactive blocks. Used only to keep the leading script's reactive imports alive when a nested
+   branch is their sole consumer; the raw text is enough to spot the identifier reference. */
+function collectNestedScriptCode(nodes: TemplateNode[]): string {
+    let code = ''
+    for (const node of nodes) {
+        if (node.kind === 'script') {
+            code += `\n${node.code}`
+        }
+        const children = childrenOf(node)
+        if (children !== undefined) {
+            code += collectNestedScriptCode(children)
+        }
+    }
+    return code
 }
 
 /*

@@ -95,7 +95,9 @@ For tests, add the preload so the `.abide` loader + virtual resolver are active:
   = `ttl`/`tags`/`throttle`/`debounce`/`n`), `fn.raw(args, init?)` (raw `Response`,
   uncached, where per-call transport options live), and the bound
   selectors/mutators `fn.refresh` / `fn.patch` / `fn.peek` / `fn.pending` /
-  `fn.refreshing` / `fn.error` (`./shared/*` for the free-function forms). A
+  `fn.refreshing` / `fn.error` (`./shared/*` for the free-function forms), plus
+  the client-only reaction sugar `fn.watch(handler)` / `fn.watch(args, handler)`
+  (≡ `watch(fn, …)`; SSR-inert no-op). A
   streaming handler (`jsonl`/`sse`) makes the bare call return a `Subscribable` —
   `for await` or `state(fn(args))`; `await fn(args)` is a compile error.
 - **Socket** (`socket(opts)` in `src/server/sockets/<name>.ts`): options
@@ -104,9 +106,14 @@ For tests, add the preload so the `.abide` loader + virtual resolver are active:
   isomorphic `AsyncIterable<T>`; `.broadcast(m)` fans out to every subscriber
   (server always; client only when `clientPublish` is set), `.peek()` reads the
   latest retained frame synchronously (`peek(socket)` routes here), `.refresh()`
-  drops local frames and re-pulls the server tail (client) / no-op (server).
-  Consume live frames directly — `for await (… of chat)`, a `{#for await}` block,
-  or `watch(chat, frame => …)` — and seed the first paint from `.peek()`.
+  drops local frames and re-pulls the server tail (client) / no-op (server),
+  `.watch(handler)` runs the handler per delivered frame (client-only reaction
+  sugar ≡ `watch(chat, …)`; SSR-inert no-op). The probe family rides the instance
+  too — `.pending()` / `.refreshing()` / `.done()` ≡ `pending(socket)` etc., and
+  `.error()` the terminal stream error (instance-only) — the socket as the
+  pre-bound stream selector. Consume live frames directly —
+  `for await (… of chat)`, a `{#for await}` block, or `watch(chat, frame => …)` —
+  and seed the first paint from `.peek()`.
 - **Page / layout**: a `page.abide` under `src/ui/pages/`; `[id]` dynamic
   segments surface on `page.params`; `layout.abide` wraps nested routes with
   `{children()}` as its outlet. Read the active route reactively via `page`;
@@ -208,7 +215,7 @@ the leading `<script>`), and a nested `<style>` scopes to its sibling subtree.
 
 ### Sockets — @documentation sockets
 
-- `@abide/abide/server/socket` — declare a broadcast `Socket<T>` (`{ schema, tail, ttl, clients, clientPublish }`); `.broadcast` / `.peek` / `.refresh`, `tail` default `1`.
+- `@abide/abide/server/socket` — declare a broadcast `Socket<T>` (`{ schema, tail, ttl, clients, clientPublish }`); `.broadcast` / `.peek` / `.refresh` / `.watch` (last is client-only reaction sugar) plus the probe family `.pending` / `.refreshing` / `.done` / `.error` (≡ `pending(socket)` etc.), `tail` default `1`.
 
 ### Configuration — @documentation configuration
 
@@ -244,10 +251,10 @@ the leading `<script>`), and a nested `<style>` scopes to its sibling subtree.
 
 ### Probes — @documentation probes
 
-- `@abide/abide/shared/pending` — reactive "no value yet" probe over cache calls + tail streams; `pending()` / `pending(fn)` / `pending(fn, args)` / `pending({ tags })` / `pending(subscribable)` (also counts a durable rpc's parked writes).
-- `@abide/abide/shared/refreshing` — reactive "holding a value while a fresher one is in flight" probe; same selector grammar as `pending`.
+- `@abide/abide/shared/pending` — reactive "no value yet" probe over cache calls + tail streams; `pending()` / `pending(fn)` / `pending(fn, args)` / `pending({ tags })` / `pending(subscribable)` (also counts a durable rpc's parked writes). Instance sugar `fn.pending(args?)` / `socket.pending()`.
+- `@abide/abide/shared/refreshing` — reactive "holding a value while a fresher one is in flight" probe; same selector grammar as `pending`. Instance sugar `fn.refreshing(args?)` / `socket.refreshing()`.
 - `@abide/abide/shared/peek` — the value member: `peek(fn, args?)` returns the retained cache value synchronously (reactive in a tracking scope, no fetch); `peek(socket)` returns the latest frame. `T | undefined`. Instance sugar `fn.peek(args?)` / `socket.peek()`.
-- `@abide/abide/shared/done` — reactive stream-terminal probe; true once a subscribable has closed (`tail` status `done`). Stream-only.
+- `@abide/abide/shared/done` — reactive stream-terminal probe; true once a subscribable has closed (`tail` status `done`). Stream-only. Instance sugar `socket.done()`.
 - `@abide/abide/shared/online` — reactive connectivity probe; the browser's `navigator.onLine` (client) or the calling client's reported offline header (server); always true during SSR.
 
 ### Page — @documentation page
@@ -286,7 +293,7 @@ the leading `<script>`), and a nested `<style>` scopes to its sibling subtree.
 ### Reactive state — @documentation reactive-state
 
 - `@abide/abide/ui/state` — the `state` callable + `.computed` / `.linked` / `.share` / `.shared` members (see the grammar tables). Imported and called bare in a `.abide` `<script>`.
-- `@abide/abide/ui/watch` — the single reaction primitive: `watch(source, handler)` runs `handler` with the source's new value on change; source is a state cell, a cell array, a socket/stream (per-frame, replacing `socket.on`/`cache.on`), or an rpc (runs the smart read). Bare `watch(thunk)` is an auto-tracked effect and the compiler's binding form. Client-only; returns a scope-tied disposer.
+- `@abide/abide/ui/watch` — the single reaction primitive: `watch(source, handler)` runs `handler` with the source's new value on change; source is a state cell, a cell array, a socket/stream (per-frame, replacing `socket.on`/`cache.on`), or an rpc (runs the smart read). Bare `watch(thunk)` is an auto-tracked effect and the compiler's binding form. Instance sugar mirrors the global for the two subscribable/rpc sources — `socket.watch(handler)` and `fn.watch(handler)` / `fn.watch(args, handler)`. Client-only; returns a scope-tied disposer.
 
 ### Templating — @documentation templating
 

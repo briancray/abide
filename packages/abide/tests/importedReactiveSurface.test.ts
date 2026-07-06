@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { compileComponent } from '../src/lib/ui/compile/compileComponent.ts'
+import { compileModule } from '../src/lib/ui/compile/compileModule.ts'
 
 const PKG = '@abide/abide'
 
@@ -38,6 +39,32 @@ describe('imported reactive surface — bare state()/state.computed/state.linked
         )
         expect(body).toContain('const draft = $$scope().linked(() => $$model.read("count"))')
         expect(body).toContain('draft.value')
+    })
+
+    /* A nested branch `<script>` keeps its reactive calls literal (`state.computed(...)`)
+       — it declares plain, branch-local signals and is not desugared to the doc. So it
+       still needs the module-level `state` import, even when the LEADING script's own
+       `state(...)` calls all desugared away. The dead-reactive-import filter must weigh
+       nested-script usage, not just the leading script's lowered body, or the import is
+       dropped and the branch throws `ReferenceError: state is not defined` at render. */
+    test('a state import used only by a nested branch script survives the dead-import filter', () => {
+        const { code } = compileModule(
+            `<script>import { state } from '${PKG}/ui/state'\nlet attempt = state(0)\nfunction load(_a: number): Promise<string[]> { return Promise.resolve([]) }</script>\n{#await load(attempt)}\n<p>loading</p>\n{:then names}\n<script>let total = state.computed(() => names.length)</script>\n<p>{total}</p>\n{/await}`,
+            { moduleId: 'page.abide' },
+        )
+        expect(code).toContain(`from '${PKG}/ui/state'`)
+    })
+
+    /* The flip side: a reactive import fully consumed by lowering (no nested use) is still
+       dropped — no spurious `@abide/ui` runtime dependency. The drop's independent backstop
+       must NOT false-positive here: the synthesized SSR return `{ html, state, awaits, resume }`
+       names a property `state`, which is not a use of the dropped `state` binding. */
+    test('a fully-consumed state import is dropped without the backstop false-positiving on the SSR state property', () => {
+        const { code } = compileModule(
+            `<script>import { state } from '${PKG}/ui/state'\nlet count = state(0)</script><p>{count}</p>`,
+            { moduleId: 'page.abide' },
+        )
+        expect(code).not.toContain(`from '${PKG}/ui/state'`)
     })
 
     test('an imported bare effect stays a runtime call and lowers its reads', () => {

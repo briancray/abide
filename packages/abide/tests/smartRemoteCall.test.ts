@@ -46,9 +46,10 @@ describe('smart bare rpc call', () => {
 })
 
 /* SWR retention (clarification #1/#2): a replayable read retains its value for
-   display unconditionally, ttl drives a background revalidation clock (not
-   eviction), and a write is coalesce-only (never retained/revalidated). Drive a
-   single persistent store (the client tab store) via cacheStoreSlot. */
+   display unconditionally, ttl marks a staleness deadline the next read past it
+   revalidates against (access-triggered, not a background timer), and a write is
+   coalesce-only (never retained/revalidated). Drive a single persistent store (the
+   client tab store) via cacheStoreSlot. */
 describe('smart bare rpc call — SWR retention', () => {
     beforeEach(() => {
         cacheStoreSlot.resolver = () => cacheStoreSlot.fallback
@@ -101,7 +102,7 @@ describe('smart bare rpc call — SWR retention', () => {
         }
     })
 
-    test('ttl expiry triggers a background revalidation that keeps the stale value visible', async () => {
+    test('a read past the ttl triggers a background revalidation that keeps the stale value visible', async () => {
         let n = 0
         let releaseSecond: () => void = () => {}
         const secondReady = new Promise<void>((resolve) => {
@@ -122,11 +123,14 @@ describe('smart bare rpc call — SWR retention', () => {
             },
         })
         expect(await getN(undefined, { ttl: 20 })).toEqual({ n: 1 })
-        /* Past the ttl → the staleness clock fired a background refetch (now parked). */
+        /* Let the ttl deadline pass. Revalidation is access-triggered, so merely
+           waiting fires nothing — an untouched entry never polls on its own. */
         await new Promise((resolve) => setTimeout(resolve, 40))
-        expect(refreshing(getN)).toBe(true)
-        /* Stale value still served while the revalidation is in flight — never blanks. */
+        expect(refreshing(getN)).toBe(false)
+        /* The next read sees the stale deadline: it serves the stale value now and
+           kicks a background revalidation (n === 2, parked) — never blanks. */
         expect(await getN(undefined, { ttl: 20 })).toEqual({ n: 1 })
+        expect(refreshing(getN)).toBe(true)
         releaseSecond()
         await settle()
         expect(refreshing(getN)).toBe(false)

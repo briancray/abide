@@ -1,4 +1,4 @@
-import type { Socket } from './Socket.ts'
+import type { Socket } from '../../../shared/types/Socket.ts'
 
 /*
 Manifest of socket-name → module loader. Produced by the resolver

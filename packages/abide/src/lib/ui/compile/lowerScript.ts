@@ -50,13 +50,22 @@ position corrupts the script (the failure mode the syntax fuzz corpus also guard
 surfaces here as a located compile error instead of shipping a broken bundle.
 */
 
-export function lowerScript(scriptBody: string): {
+export function lowerScript(
+    scriptBody: string,
+    /* Reactive-surface identifiers referenced OUTSIDE this script — the nested branch
+       `<script>`s, which keep their `state.computed(...)` calls literal and so still need
+       the module-level import even after the leading script's own `state(...)` all
+       desugared away. Folded into the dead-import usage check so a live import isn't dropped
+       (→ `ReferenceError: state is not defined` in the branch). Empty for a nested script. */
+    externalUsage = '',
+): {
     body: string
     imports: string
     ssrBody: string
     stateNames: Set<string>
     derivedNames: Set<string>
     computedNames: Set<string>
+    droppedReactiveImports: Set<string>
 } {
     const source = ts.createSourceFile('component.ts', scriptBody, ts.ScriptTarget.Latest, true)
     const { transformer, stateNames, derivedNames, computedNames } = desugarSignals(source)
@@ -83,9 +92,23 @@ export function lowerScript(scriptBody: string): {
     result.dispose()
     /* Drop reactive-surface imports fully consumed by lowering — keeping them would leave a
        dead, spurious `@abide/ui` runtime dependency (checked against both back-ends' output). */
-    const used = `${body}\n${ssrBody}`
+    const used = `${body}\n${ssrBody}\n${externalUsage}`
+    const droppedReactiveImports = new Set<string>()
     const imports = importStatements
-        .filter((statement) => !deadReactiveImport(statement, used))
+        .filter((statement) => {
+            if (!deadReactiveImport(statement, used)) {
+                return true
+            }
+            /* Record the local names of a dropped reactive import so the module wrapper can
+               independently confirm the drop stranded no live reference. */
+            const named = statement.importClause?.namedBindings
+            if (named !== undefined && ts.isNamedImports(named)) {
+                for (const element of named.elements) {
+                    droppedReactiveImports.add(element.name.text)
+                }
+            }
+            return false
+        })
         .map((statement) => TS_PRINTER.printNode(ts.EmitHint.Unspecified, statement, transformed))
         .join('\n')
 
@@ -93,5 +116,13 @@ export function lowerScript(scriptBody: string): {
         [imports, body].filter((part) => part !== '').join('\n'),
         'component script lowering',
     )
-    return { body, imports, ssrBody, stateNames, derivedNames, computedNames }
+    return {
+        body,
+        imports,
+        ssrBody,
+        stateNames,
+        derivedNames,
+        computedNames,
+        droppedReactiveImports,
+    }
 }
