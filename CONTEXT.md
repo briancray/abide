@@ -26,7 +26,7 @@ URL → route + decoded params. Server-side only: Bun's router matches, the catc
 
 **Registry**
 A store of registered async work with a lifecycle channel. There are two: the
-cache (calls — request/tab store + process-level global store, entries keyed by
+cache (calls — request/tab store + process-level shared store, entries keyed by
 wire or reference identity) and the tail registry (streams, keyed by
 `Subscribable.name`, with the window size `last` folded into the key).
 Registries act: they coalesce identical in-flight calls

@@ -56,12 +56,12 @@ const theme = state.shared('theme') ?? 'light'`}
     note={'`state.shared(key)` returns `undefined` when no ancestor provided the key — coalesce to a default so a component works standalone.'} />
 
 <Recipe
-    task="Share one global store across every route"
+    task="Share one store across every route"
     gap={true}
-    code={`// no dedicated global-store primitive — share from the root layout
+    code={`// no dedicated shared-store primitive — share from the root layout
 // root layout:
 import { state } from '@abide/abide/ui/state'
 state.share('app', appStore)
 // anywhere:
 const app = state.shared('app')`}
-    note={"There's no standalone global-store export. The idiom is a value shared from the root layout — app-wide and reactive when you share an accessor, but you wire it in the root layout yourself rather than importing a ready-made store."} />
+    note={"There's no standalone shared-store export. The idiom is a value shared from the root layout — app-wide and reactive when you share an accessor, but you wire it in the root layout yourself rather than importing a ready-made store."} />

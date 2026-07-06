@@ -92,12 +92,17 @@ validate as args, `File` parts validate against `filesSchema`.
 
 **Consuming an rpc** — the bare call `fn(args, opts?)` IS the smart read:
 cached, coalesced, reactive, stale-while-revalidate for replayable (GET/HEAD)
-reads; the second arg takes `{ ttl, tags, throttle, debounce, global, n }`
-(retention and the refetch clock — not transport). `global: true` stores the
-entry in the process-level store instead of the request-scoped default
-(server), so later requests reuse the value — for memoising an external
-endpoint, never per-user data; on the client it is a no-op (one tab store).
-During SSR the same call resolves
+reads; the second arg takes `{ ttl, tags, throttle, debounce, shared, n }`
+(retention and the refetch clock — not transport). `ttl` defaults to `0` on
+the server (coalesce-only — the request is the atomic unit, nothing is
+retained past it) and `Infinity` on the client (retain until invalidate/
+refresh). `shared: true` selects the process-level store instead of the
+request-scoped default (server) — it does not by itself retain, pair it with
+an explicit `ttl` (e.g. `{ shared: true, ttl: Infinity }`) to memoise across
+requests, for an external endpoint, never per-user data; on the client it is
+a no-op (one tab store). A read with no request in flight (e.g. a background
+job) also resolves against the process-level store. During SSR the same call
+resolves
 in-process and its value is baked into the HTML so hydration starts warm —
 there is no `cache()` wrapper; the bare call carries the caching. Around it:
 `fn.raw(args, init?)` returns the raw `Response` (per-call transport options —

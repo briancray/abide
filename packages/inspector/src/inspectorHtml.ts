@@ -7,7 +7,7 @@ page works under any mount and inherits any APP_URL base transparently.
 Tabs: Logs (the live tail, default), Traces (records grouped by trace id with a
 span waterfall), In-flight (handlers executing now, polled), Reactive + Router
 (the app tab's scope tree + routing, over a same-origin BroadcastChannel),
-Cache (the global store, polled), and Surface (the static catalog). The
+Cache (the shared store, polled), and Surface (the static catalog). The
 stream-fed tabs build client-side from the buffered records, so filters and the
 waterfall need no extra round-trips; the polled tabs snapshot on open and via a
 refresh button; the channel tabs render whatever the app side publishes. Log
@@ -484,7 +484,7 @@ async function loadSurface() {
 }
 
 // ---- cache ----
-// Snapshots the persistent (global) store; entries change over time, so it
+// Snapshots the persistent (shared) store; entries change over time, so it
 // refreshes on tab open and via the refresh button (not a live stream).
 const fmtTtl = (n) => n === undefined ? '∞' : n === 0 ? '0' : n + 'ms'
 const fmtExpiry = (n) => n === undefined || n === null ? '·' : Math.max(0, n / 1000).toFixed(1) + 's'
@@ -494,10 +494,10 @@ async function loadCache() {
     const { entries } = await (await fetch(root + '/cache')).json()
     document.getElementById('cacheCount').textContent = entries.length || ''
     const refresh = '<div class="filters"><span class="pill">' + entries.length +
-      ' global ' + (entries.length === 1 ? 'entry' : 'entries') + '</span><button id="cacheRefresh">refresh</button></div>'
+      ' shared ' + (entries.length === 1 ? 'entry' : 'entries') + '</span><button id="cacheRefresh">refresh</button></div>'
     if (!entries.length) {
       el.className = ''
-      el.innerHTML = refresh + '<div class="empty">global store empty — entries come from cache(fn, { global: true }); request-scoped reads show as per-request tallies in Logs/Traces</div>'
+      el.innerHTML = refresh + '<div class="empty">shared store empty — entries come from cache(fn, { shared: true }); request-scoped reads show as per-request tallies in Logs/Traces</div>'
     } else {
       const rows = entries.map((e) =>
         '<tr><td class="url">' + esc(e.key) + '</td>' +
