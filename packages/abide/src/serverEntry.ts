@@ -29,12 +29,12 @@ import { loadEnvFromBinaryDir } from './lib/cli/loadEnvFromBinaryDir.ts'
 import { createServer } from './lib/server/runtime/createServer.ts'
 import { requestContext } from './lib/server/runtime/requestContext.ts'
 import { resolvePageSnapshot } from './lib/server/runtime/resolvePageSnapshot.ts'
+import { cacheStoreSlot } from './lib/shared/cacheStoreSlot.ts'
 import { createCacheStore } from './lib/shared/createCacheStore.ts'
+import { globalCacheStoreSlot } from './lib/shared/globalCacheStoreSlot.ts'
 import { loadEnvFromDataDir } from './lib/shared/loadEnvFromDataDir.ts'
+import { pageSlot } from './lib/shared/pageSlot.ts'
 import { runningAsStandaloneBinary } from './lib/shared/runningAsStandaloneBinary.ts'
-import { setCacheStoreResolver } from './lib/shared/setCacheStoreResolver.ts'
-import { setGlobalCacheStoreResolver } from './lib/shared/setGlobalCacheStoreResolver.ts'
-import { setPageResolver } from './lib/shared/setPageResolver.ts'
 
 /*
 Resolve config into process.env before anything reads it (createServer reads
@@ -65,16 +65,16 @@ await import('./_virtual/config.ts')
 // In a bundle, tie this server's life to the launcher's (no-op standalone).
 exitWithParent()
 
-setCacheStoreResolver(() => requestContext.getStore()?.cache)
+cacheStoreSlot.resolver = () => requestContext.getStore()?.cache
 
-setPageResolver(resolvePageSnapshot)
+pageSlot.resolver = resolvePageSnapshot
 
 /*
 Process-level store for cache(fn, { global: true }) — one per server process,
 outlives every request so memoised external calls are shared across them.
 */
 const globalCacheStore = createCacheStore()
-setGlobalCacheStoreResolver(() => globalCacheStore)
+globalCacheStoreSlot.resolver = () => globalCacheStore
 
 await createServer({
     pages,

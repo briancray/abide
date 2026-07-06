@@ -1,7 +1,7 @@
+import { baseSlot } from '../shared/baseSlot.ts'
 import { healthSeedSlot } from '../shared/healthSeedSlot.ts'
 import { rpcTimeoutSlot } from '../shared/rpcTimeoutSlot.ts'
 import { setAppName } from '../shared/setAppName.ts'
-import { setBaseResolver } from '../shared/setBaseResolver.ts'
 import type { SsrBootState } from '../shared/types/SsrBootState.ts'
 
 /* Seeds every `__SSR__` boot-state field into its ambient slot. The map is typed
@@ -11,7 +11,9 @@ import type { SsrBootState } from '../shared/types/SsrBootState.ts'
    prior hand-written sequence required: the cache seed that follows keys call urls
    through the base resolver. */
 const SEED: { [K in keyof Required<SsrBootState>]: (value: SsrBootState[K]) => void } = {
-    base: (value) => setBaseResolver(() => value ?? ''),
+    base: (value) => {
+        baseSlot.resolver = () => value ?? ''
+    },
     app: (value) => setAppName(value),
     health: (value) => {
         healthSeedSlot.payload = value

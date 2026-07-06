@@ -4,6 +4,7 @@ import { setMcpResourceServer } from '../../mcp/mcpResourceServerSlot.ts'
 import type { McpServer } from '../../mcp/types/McpServer.ts'
 import { abideLog } from '../../shared/abideLog.ts'
 import { basePathFromAppUrl } from '../../shared/basePathFromAppUrl.ts'
+import { baseSlot } from '../../shared/baseSlot.ts'
 import { NO_STORE } from '../../shared/CACHE_CONTROL_VALUES.ts'
 import { CLI_PATH } from '../../shared/CLI_PATH.ts'
 import { DEV_HOT_PREFIX } from '../../shared/DEV_HOT_PREFIX.ts'
@@ -17,11 +18,10 @@ import { isDebugNegated } from '../../shared/isDebugNegated.ts'
 import { logClosingRecord } from '../../shared/logClosingRecord.ts'
 import { OFFLINE_HEADER } from '../../shared/OFFLINE_HEADER.ts'
 import { parseBoundedEnvInt } from '../../shared/parseBoundedEnvInt.ts'
+import { requestScopeSlot } from '../../shared/requestScopeSlot.ts'
 import { responseBodyKind } from '../../shared/responseBodyKind.ts'
 import { SOCKETS_PATH } from '../../shared/SOCKETS_PATH.ts'
 import { setAppName } from '../../shared/setAppName.ts'
-import { setBaseResolver } from '../../shared/setBaseResolver.ts'
-import { setRequestScopeResolver } from '../../shared/setRequestScopeResolver.ts'
 import { TEXT_PLAIN } from '../../shared/TEXT_PLAIN.ts'
 import { toBunRoutePattern } from '../../shared/toBunRoutePattern.ts'
 import type { Layouts } from '../../ui/types/Layouts.ts'
@@ -166,7 +166,7 @@ export async function createServer({
     `await`s they suspend on (see installAmbientScopeStore / CURRENT_SCOPE).
     */
     installAmbientScopeStore()
-    setRequestScopeResolver(() => {
+    requestScopeSlot.resolver = () => {
         const store = requestContext.getStore()
         if (!store) {
             return undefined
@@ -179,7 +179,7 @@ export async function createServer({
             /* The calling client's reported connectivity — drives server-side online(). Absent header = online. */
             online: !store.req.headers.has(OFFLINE_HEADER),
         }
-    })
+    }
     /*
     health() during an SSR render marks its request through this slot; the
     renderer stamps the health payload into __SSR__ only for marked requests,
@@ -206,10 +206,10 @@ export async function createServer({
     the server-side resolver so url() prefixes SSR-generated links, and rewrite
     the shell's framework `/_app` entry + css refs to carry the base — relative
     code-split chunks inherit it from the entry's own URL. '' (root mount) is a
-    no-op on both. See setBaseResolver / startClient for the client half.
+    no-op on both. See seedBootState / startClient for the client half.
     */
     const base = basePathFromAppUrl(process.env.APP_URL)
-    setBaseResolver(() => base)
+    baseSlot.resolver = () => base
     // Rebase the shell's rooted `/_app/` entry refs onto the mount base, matching
     // either quote style so a custom app.html using single quotes still rewrites.
     const activeShell = base

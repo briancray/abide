@@ -1,4 +1,4 @@
-import { cacheStoreResolver } from './cacheStoreResolver.ts'
+import { cacheStoreSlot } from './cacheStoreSlot.ts'
 import type { CacheStore } from './types/CacheStore.ts'
 
 /*
@@ -7,5 +7,5 @@ lazily-created fallback when none is registered (so isolated tests work). The
 fallback creator guarantees a value, hence the non-null assertion.
 */
 export function activeCacheStore(): CacheStore {
-    return cacheStoreResolver.get()!
+    return cacheStoreSlot.get()!
 }

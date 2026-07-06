@@ -9,7 +9,7 @@ with `enterScope`/`exitScope` and `await`s inline between them (blocking `{#awai
 child renders, slots, a top-level `await`). A module global held across those awaits
 interleaves across concurrent requests — one render resumes to read another's scope.
 Keying the ambient off the per-request store (which the async context propagates
-correctly) isolates it. Mirrors `requestScopeResolver`'s server-installed slot; the
+correctly) isolates it. Mirrors `requestScopeSlot`'s server-installed slot; the
 indirection cost lands at build/effect-creation time, never on the signal hot path.
 */
 type ScopeBacking = { get(): Scope | undefined; set(value: Scope | undefined): void }

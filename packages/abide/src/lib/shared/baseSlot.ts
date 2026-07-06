@@ -1,8 +1,9 @@
-import { baseResolver } from './baseResolver.ts'
+import { createResolverSlot } from './createResolverSlot.ts'
 
 /*
-Internal slot the runtime entries register their mount-base resolver into (see
-baseResolver). Exposed so test helpers snapshot/poke `.resolver` and `.fallback`
-directly.
+The mount-base slot. The server entry installs an APP_URL-derived resolver at
+boot; the client entry one reading window.__SSR__.base. No lazy fallback
+creator — `.fallback` is a plain string set directly by isolated tests, and
+basePath() (the public read) supplies the '' default.
 */
-export const baseSlot = baseResolver.slot
+export const baseSlot = createResolverSlot<string>()

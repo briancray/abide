@@ -1,7 +1,6 @@
 import { beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { page } from '../src/lib/shared/page.ts'
 import { pageSlot } from '../src/lib/shared/pageSlot.ts'
-import { setPageResolver } from '../src/lib/shared/setPageResolver.ts'
 import { appendText } from '../src/lib/ui/dom/appendText.ts'
 import { effect } from '../src/lib/ui/effect.ts'
 import { navigate } from '../src/lib/ui/navigate.ts'
@@ -174,7 +173,7 @@ describe('router', () => {
        → e.g. `Number(page.params.id)` → NaN → a bogus request) while still mounted.
        With the page disposed first, its effect never observes the new params. */
     test('disposes the outgoing [id] page before publishing the new route params', async () => {
-        setPageResolver(() => clientPage.value)
+        pageSlot.resolver = () => clientPage.value
         const host = document.createElement('div')
         const seen: (string | undefined)[] = []
         const itemPage = (target: Element) => {
@@ -218,7 +217,7 @@ describe('router', () => {
        its destination commits — the window where the chunk imports and the probe runs.
        First paint is exempt (no page to leave). */
     test('flags page.navigating during the resolve window and clears it on commit', async () => {
-        setPageResolver(() => clientPage.value)
+        pageSlot.resolver = () => clientPage.value
         const host = document.createElement('div')
         const view = (label: string) => (target: Element) => {
             target.appendChild(document.createTextNode(label))
@@ -286,7 +285,7 @@ describe('router', () => {
        between episodes on one detail page) — keeps the leaf page mounted and updates it
        through the reactive `page` proxy, no teardown. A differing query still rebuilds. */
     test('a same-route-key param change updates in place without re-mounting the page', async () => {
-        setPageResolver(() => clientPage.value)
+        pageSlot.resolver = () => clientPage.value
         const host = document.createElement('div')
         let mounts = 0
         const seen: string[] = []

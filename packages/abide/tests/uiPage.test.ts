@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { page } from '../src/lib/shared/page.ts'
 import { pageSlot } from '../src/lib/shared/pageSlot.ts'
-import { setPageResolver } from '../src/lib/shared/setPageResolver.ts'
 import { effect } from '../src/lib/ui/effect.ts'
 import { matchRoute } from '../src/lib/ui/matchRoute.ts'
 import { clientPage } from '../src/lib/ui/runtime/clientPage.ts'
@@ -43,12 +42,12 @@ describe('matchRoute', () => {
 
 describe('page proxy', () => {
     test('reads route/params/url off the active resolver', () => {
-        setPageResolver(() => ({
+        pageSlot.resolver = () => ({
             route: '/post/[id]',
             params: { id: '7' },
             url: new URL('https://app.test/post/7'),
             navigating: false,
-        }))
+        })
         expect(page.route).toBe('/post/[id]')
         expect(page.params.id).toBe('7')
         expect(page.url.pathname).toBe('/post/7')
@@ -56,7 +55,7 @@ describe('page proxy', () => {
     })
 
     test('params are granular: a reader of one param does not wake on another param change', () => {
-        setPageResolver(() => clientPage.value)
+        pageSlot.resolver = () => clientPage.value
         clientPage.value = {
             route: '/media/[id]/[...rest]',
             params: { id: '87755', rest: 's/1/e/1' },
@@ -98,7 +97,7 @@ describe('page proxy', () => {
     })
 
     test('a param the new route drops reads back undefined and wakes its reader', () => {
-        setPageResolver(() => clientPage.value)
+        pageSlot.resolver = () => clientPage.value
         clientPage.value = {
             route: '/media/[id]/[...rest]',
             params: { id: '1', rest: 'a' },
@@ -121,7 +120,7 @@ describe('page proxy', () => {
     })
 
     test('is reactive: reading page.url in an effect re-runs when clientPage updates', () => {
-        setPageResolver(() => clientPage.value)
+        pageSlot.resolver = () => clientPage.value
         clientPage.value = {
             route: '/',
             params: {},

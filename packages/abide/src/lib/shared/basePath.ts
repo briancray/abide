@@ -1,4 +1,4 @@
-import { baseResolver } from './baseResolver.ts'
+import { baseSlot } from './baseSlot.ts'
 
 /*
 The current mount base path ('' at root). Resolved per side: the server installs
@@ -7,5 +7,5 @@ url() reads this to prefix rooted internal paths. Defaults to '' when no resolve
 or fallback is set.
 */
 export function basePath(): string {
-    return baseResolver.get() ?? ''
+    return baseSlot.get() ?? ''
 }

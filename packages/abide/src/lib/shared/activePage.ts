@@ -1,4 +1,4 @@
-import { pageResolver } from './pageResolver.ts'
+import { pageSlot } from './pageSlot.ts'
 import type { PageSnapshot } from './types/PageSnapshot.ts'
 
 /*
@@ -7,5 +7,5 @@ single lazily-created empty snapshot when none is registered (so isolated tests
 work). The fallback creator guarantees a value, hence the non-null assertion.
 */
 export function activePage(): PageSnapshot {
-    return pageResolver.get()!
+    return pageSlot.get()!
 }
