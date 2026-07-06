@@ -36,6 +36,12 @@ so we only `ws.unsubscribe` when the last local sub drops.
 type ConnectionState = {
     subToSocket: Map<string, string>
     socketSubs: Map<string, Set<string>>
+    /* Latest claim token per `sub` id. handleSub awaits the module load before
+       registering, so an unsub (delete) or a newer sub (higher token) landing
+       during that await must win — the resumed handler re-checks its token and
+       bails instead of registering a zombie subscription. */
+    subEpochs: Map<string, number>
+    epoch: number
 }
 
 /*
@@ -150,8 +156,19 @@ export function createSocketDispatcher(sockets: SocketRoutes): SocketDispatcher 
             send(ws, { type: 'err', sub: frame.sub, message })
             send(ws, { type: 'end', sub: frame.sub })
         }
+        /* Claim the sub id synchronously — the await below yields to other
+           frames on this connection. */
+        const token = ++state.epoch
+        state.subEpochs.set(frame.sub, token)
         const resolution = await resolveEntry(frame.socket)
+        if (state.subEpochs.get(frame.sub) !== token) {
+            /* An unsub (already answered with `end`) or a newer sub for this id
+               won the race while the module loaded — registering now would leak
+               a subscription the client can never cancel. */
+            return
+        }
         if ('failure' in resolution) {
+            state.subEpochs.delete(frame.sub)
             return fail(resolution.message)
         }
         const { entry } = resolution
@@ -194,6 +211,7 @@ export function createSocketDispatcher(sockets: SocketRoutes): SocketDispatcher 
         state: ConnectionState,
         frame: Extract<SocketClientFrame, { type: 'unsub' }>,
     ): void {
+        state.subEpochs.delete(frame.sub)
         const emptied = removeSub(state, frame.sub)
         if (emptied) {
             ws.unsubscribe(`socket:${emptied}`)
@@ -304,7 +322,12 @@ export function createSocketDispatcher(sockets: SocketRoutes): SocketDispatcher 
         rest,
 
         open(ws) {
-            connections.set(ws, { subToSocket: new Map(), socketSubs: new Map() })
+            connections.set(ws, {
+                subToSocket: new Map(),
+                socketSubs: new Map(),
+                subEpochs: new Map(),
+                epoch: 0,
+            })
         },
 
         message(ws, data) {

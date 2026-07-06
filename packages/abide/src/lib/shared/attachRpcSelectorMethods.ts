@@ -1,4 +1,5 @@
 import { keyForRemoteCall } from './keyForRemoteCall.ts'
+import { keyPrefixForRemote } from './keyPrefixForRemote.ts'
 import { patch } from './patch.ts'
 import { peek } from './peek.ts'
 import { pending } from './pending.ts'
@@ -35,7 +36,7 @@ export function attachRpcSelectorMethods<Args, Return>(fn: RemoteFunction<Args, 
         watch: () => () => {},
         error: (args?: Args) =>
             args === undefined
-                ? rpcErrorRegistry.readAny(`${fn.method} ${fn.url}`)
+                ? rpcErrorRegistry.readAny(keyPrefixForRemote(fn.method, fn.url))
                 : rpcErrorRegistry.read(keyForRemoteCall(fn.method, fn.url, args)),
     })
 }

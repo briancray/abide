@@ -532,6 +532,16 @@ function registerEntry(
             return
         }
         /*
+        A post-invalidate reload registers with refreshing=true; an invalidation
+        firing while it was in flight parked its refetch on policy.pending
+        (fireRefetch bails when refreshing). This settle path — not fireRefetch —
+        cleared the flag, so drain the parked refetch here or it's lost and the
+        entry keeps data that predates the invalidation.
+        */
+        if (entry.invalidation?.pending) {
+            reschedulePendingRefetch(store, entry, entry.invalidation)
+        }
+        /*
         Smart retained read: the display value is kept unconditionally — never
         hard-evicted on settle. ttl marks a staleness deadline (the next read past
         it revalidates in the background, stale stays visible, refreshing() true)
@@ -573,11 +583,29 @@ function evictIfCurrent(store: CacheStore, entry: CacheEntry): void {
 /* Arms the ttl > 0 expiry sweep; `expiresAt` re-checks at fire time so a refreshed deadline survives. */
 function armTtlExpiry(store: CacheStore, entry: CacheEntry, ttl: number): void {
     entry.expiresAt = Date.now() + ttl
+    scheduleTtlSweep(store, entry)
+}
+
+/* setTimeout clamps a delay beyond 2^31-1 ms (~24.8 days) to ~1ms, which would
+   fire the sweep instantly, find the deadline unexpired, and never re-arm —
+   the entry would live forever. Chain capped hops until the deadline is in
+   reach; each hop bails once a newer entry owns the key. */
+const MAX_TIMEOUT_DELAY = 2147483647
+
+function scheduleTtlSweep(store: CacheStore, entry: CacheEntry): void {
+    if (store.entries.get(entry.key) !== entry) {
+        return
+    }
+    const remaining = (entry.expiresAt ?? 0) - Date.now()
+    if (remaining > MAX_TIMEOUT_DELAY) {
+        setTimeout(() => scheduleTtlSweep(store, entry), MAX_TIMEOUT_DELAY).unref?.()
+        return
+    }
     setTimeout(() => {
         if ((entry.expiresAt ?? 0) <= Date.now()) {
             evictIfCurrent(store, entry)
         }
-    }, ttl).unref?.()
+    }, remaining).unref?.()
 }
 
 /*

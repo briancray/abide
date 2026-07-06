@@ -1,10 +1,6 @@
 import ts from 'typescript'
-import {
-    type ReactiveImportBindings,
-    type ReactivePrimitive,
-    reactiveImportBindings,
-    resolveReactiveExport,
-} from './resolveReactiveExport.ts'
+import { type ReactiveImportBindings, reactiveImportBindings } from './resolveReactiveExport.ts'
+import { signalCallee } from './signalCallee.ts'
 
 const factory = ts.factory
 
@@ -144,12 +140,61 @@ function loweredStatement(
     statement: ts.Statement,
     bindings: ReactiveImportBindings,
 ): ts.Statement[] {
+    rejectMixedDeclaration(statement, bindings)
     return (
         stateAssignmentStatements(statement, bindings) ??
         computedStatements(statement, bindings) ??
         propsStatements(statement, bindings) ??
         cellStatements(statement, bindings) ?? [statement]
     )
+}
+
+/* Each lowering function above is all-or-nothing per VariableStatement: it returns
+   undefined the moment one declaration doesn't match its kind, so the whole statement
+   passes through verbatim. A statement mixing a reactive declaration with a differently-
+   lowered one (`let count = state(0), step = 5`) therefore ships literal — but the
+   collection pass already registered `count`, so references lower to `$$model.read("count")`
+   with no `$$model.count = 0` seed (silent undefined). Reject it with a legible error so
+   the author splits the declarations; a checker-free compiler must fail loud, not
+   mis-lower silently. Same-kind lists (`let a = state(0), b = state(1)`) are fine. */
+function rejectMixedDeclaration(statement: ts.Statement, bindings: ReactiveImportBindings): void {
+    if (!ts.isVariableStatement(statement)) {
+        return
+    }
+    const kinds = new Set(
+        statement.declarationList.declarations.map((declaration) =>
+            loweringKind(declaration, bindings),
+        ),
+    )
+    /* Any two distinct kinds break: each lowering function bails on the non-matching
+       declaration, so the statement ships verbatim. A uniform list (size 1) is fine. */
+    if (kinds.size > 1) {
+        throw new Error(
+            'abide: declare each reactive signal in its own statement — a `let`/`const` that mixes a reactive declaration (state/linked/computed/props) with another kind cannot be lowered as one statement.',
+        )
+    }
+}
+
+/* The lowering bucket a single declaration falls into — mirrors the name-collection
+   dispatch so `rejectMixedDeclaration` can detect a statement spanning more than one. */
+function loweringKind(
+    declaration: ts.VariableDeclaration,
+    bindings: ReactiveImportBindings,
+): 'state' | 'computed' | 'props' | 'cell' | 'plain' {
+    const callee = signalCallee(declaration, bindings)
+    if (callee === 'props') {
+        return 'props'
+    }
+    if (isPlainStateSlot(declaration, bindings)) {
+        return 'state'
+    }
+    if (isComputedSlot(declaration, bindings)) {
+        return 'computed'
+    }
+    if (callee === 'linked' || callee === 'state') {
+        return 'cell'
+    }
+    return 'plain'
 }
 
 /* `const NAME = <init>` — a fresh const declaration reusing the original initializer node. */
@@ -276,22 +321,6 @@ function isPlainStateSlot(
     bindings: ReactiveImportBindings,
 ): boolean {
     return signalCallee(declaration, bindings) === 'state' && !hasTransform(declaration)
-}
-
-/* The canonical reactive primitive a declaration's callee resolves to, else undefined.
-   Import-resolution is the SOLE recognition path (alias-safe: `import { state as s };
-   s(0)` → `state`, and `state.linked` / `state.computed` off an imported `state` root).
-   The legacy `scope().state(...)` / captured-handle member form is no longer recognised —
-   the imported bare surface is the only author entry. */
-function signalCallee(
-    declaration: ts.VariableDeclaration,
-    bindings: ReactiveImportBindings,
-): ReactivePrimitive | undefined {
-    const initializer = declaration.initializer
-    if (initializer === undefined || !ts.isCallExpression(initializer)) {
-        return undefined
-    }
-    return resolveReactiveExport(initializer.expression, bindings)
 }
 
 /* One destructured prop: the local binding name, the parent prop key it reads, and

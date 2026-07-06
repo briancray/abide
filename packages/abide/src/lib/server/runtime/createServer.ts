@@ -1,6 +1,6 @@
 import type { BunRequest, Server } from 'bun'
 import { createMcpResourceServer } from '../../mcp/createMcpResourceServer.ts'
-import { setMcpResourceServer } from '../../mcp/mcpResourceServerSlot.ts'
+import { mcpResourceServerSlot } from '../../mcp/mcpResourceServerSlot.ts'
 import type { McpServer } from '../../mcp/types/McpServer.ts'
 import { abideLog } from '../../shared/abideLog.ts'
 import { basePathFromAppUrl } from '../../shared/basePathFromAppUrl.ts'
@@ -237,7 +237,7 @@ export async function createServer({
         buildPreloadManifest({ distDir, assets }),
     ])
     setRegistryManifests({ rpc, sockets, prompts })
-    setMcpResourceServer(createMcpResourceServer({ resourcesDir, mcpResources }))
+    mcpResourceServerSlot.server = createMcpResourceServer({ resourcesDir, mcpResources })
     const cliName = cliProgramName ?? 'app'
     /* The app's public identity, shared by the identity probe and the OpenAPI spec. */
     const appName = appInfo?.name ?? cliName
@@ -340,9 +340,13 @@ export async function createServer({
                           ...((req.params as Record<string, string> | undefined) ?? {}),
                       }
                       const url = new URL(req.url)
+                      /* Bun percent-decodes named :params, so decode the reconstructed
+                         catch-all the same way — [name] and [...rest] must agree on
+                         `/files/my%20doc`. */
                       pathParams[catchAllName] = url.pathname
                           .split('/')
                           .slice(catchAllIndex)
+                          .map(decodePathSegment)
                           .join('/')
                       return dispatchRequest(req, pathParams, handler, url)
                   }
@@ -511,7 +515,7 @@ export async function createServer({
                         })
                     }
                     return devHotModuleResponse(
-                        decodeURIComponent(url.pathname.slice(DEV_HOT_PREFIX.length)),
+                        decodePathSegment(url.pathname.slice(DEV_HOT_PREFIX.length)),
                     )
                 }
                 /*
@@ -558,7 +562,7 @@ export async function createServer({
                     if (publishForbidden) {
                         return publishForbidden
                     }
-                    const name = decodeURIComponent(url.pathname.slice(SOCKETS_REST_PREFIX.length))
+                    const name = decodePathSegment(url.pathname.slice(SOCKETS_REST_PREFIX.length))
                     return dispatchRequest(
                         req,
                         {},
@@ -723,4 +727,16 @@ export async function createServer({
         process.send?.(DEV_READY_MESSAGE)
     }
     return server
+}
+
+/* Bun percent-decodes named :params, so catch-all reconstruction and the
+   internal-route name decodes must match it. A malformed escape (`/%`) keeps
+   the raw text — the downstream lookup misses naturally instead of a URIError
+   escaping the fetch handler as a 500. */
+function decodePathSegment(segment: string): string {
+    try {
+        return decodeURIComponent(segment)
+    } catch {
+        return segment
+    }
 }

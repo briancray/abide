@@ -1,5 +1,6 @@
 import { canonicalJson } from './canonicalJson.ts'
 import { carriesBodyArgs } from './carriesBodyArgs.ts'
+import { keyPrefixForRemote } from './keyPrefixForRemote.ts'
 import { queryStringFromArgs } from './queryStringFromArgs.ts'
 import type { HttpMethod } from './types/HttpMethod.ts'
 
@@ -12,7 +13,7 @@ synthesized Request can't disagree); POST/PUT/PATCH join args after a space as
 canonical JSON. The rpc split mirrors buildRpcRequest exactly.
 */
 export function keyForRemoteCall(method: HttpMethod, url: string, args: unknown): string {
-    const prefix = `${method} ${url}`
+    const prefix = keyPrefixForRemote(method, url)
     if (!carriesBodyArgs(method)) {
         if (args && typeof args === 'object' && !Array.isArray(args)) {
             const search = queryStringFromArgs(args as Record<string, unknown>, true)

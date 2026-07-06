@@ -1,4 +1,5 @@
 import { keyForRemoteCall } from './keyForRemoteCall.ts'
+import { keyPrefixForRemote } from './keyPrefixForRemote.ts'
 import { producerKey } from './producerKey.ts'
 import { REMOTE_FUNCTION } from './REMOTE_FUNCTION.ts'
 import type { CacheSelector } from './types/CacheSelector.ts'
@@ -24,7 +25,7 @@ export function selectorPrefix<Args, Return>(
     const remote = REMOTE_FUNCTION in arg ? (arg as RawRemoteFunction<Args>) : undefined
     if (remote) {
         return args === undefined
-            ? `${remote.method} ${remote.url}`
+            ? keyPrefixForRemote(remote.method, remote.url)
             : keyForRemoteCall(remote.method, remote.url, args)
     }
     return producerKey.existing(arg, args)

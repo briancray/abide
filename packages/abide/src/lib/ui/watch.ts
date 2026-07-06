@@ -4,6 +4,7 @@ import type { CacheOnContext } from '../shared/types/CacheOnContext.ts'
 import type { RemoteFunction } from '../shared/types/RemoteFunction.ts'
 import type { Subscribable } from '../shared/types/Subscribable.ts'
 import { effect } from './effect.ts'
+import { generationGuard } from './runtime/generationGuard.ts'
 import type { EffectResult } from './runtime/types/EffectResult.ts'
 import type { State } from './runtime/types/State.ts'
 
@@ -119,7 +120,21 @@ read, unlike peek: `watch` observes a live query, so it keeps it flowing.
 */
 function reactToRpc(fn: unknown, args: unknown, handler: (value: unknown) => void): () => void {
     const call = fn as (args: unknown) => Promise<unknown>
+    /* The bare call routes through cache.read (cache-managed flight, not scope-abortable), so
+       a slow flight can settle AFTER a faster re-run's flight OR after the owner tears down.
+       Guard the handler on the generation so only the current flight's value lands and a
+       post-teardown settle is dropped — a re-run renews, teardown bumps (both via the shared
+       generationGuard). */
+    const guard = generationGuard()
     return effect(() => {
-        void Promise.resolve(call(args)).then(handler, () => undefined)
+        const generation = guard.renew()
+        void Promise.resolve(call(args)).then(
+            (value) => {
+                if (guard.live(generation)) {
+                    handler(value)
+                }
+            },
+            () => undefined,
+        )
     })
 }

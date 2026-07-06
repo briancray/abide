@@ -107,7 +107,18 @@ export function each<T>(
     if (hydration !== undefined) {
         let position = 0
         for (const item of items()) {
-            rows.set(keyOf(item), buildRow(item, position)) // claims the SSR row where it sits
+            const key = keyOf(item)
+            const row = buildRow(item, position) // claims the SSR row where it sits
+            if (rows.has(key)) {
+                /* Duplicate key: this row already claimed its SSR markers, but the map holds
+                   one row per key (create mode keeps the FIRST built row too). Dispose+remove
+                   this later duplicate so it isn't orphaned on screen forever — the reconcile
+                   prune only reaches rows still in the map. */
+                row.dispose()
+                removeRange(row.start, row.end)
+            } else {
+                rows.set(key, row)
+            }
             position += 1
         }
         anchor = document.createTextNode('')

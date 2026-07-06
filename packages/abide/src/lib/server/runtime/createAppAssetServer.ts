@@ -48,12 +48,16 @@ export async function createAppAssetServer({
         [...diskPaths].filter((path) => path.endsWith('.gz')).map((path) => path.slice(0, -3)),
     )
 
+    // Fresh 404 per call — a Response body is single-use, so it can't be hoisted to a const.
+    const notFound = (): Response =>
+        new Response('Not Found', {
+            status: 404,
+            headers: { 'Content-Type': TEXT_PLAIN, 'Cache-Control': NO_STORE },
+        })
+
     return async function serveAppAsset(req, url) {
         if (containsTraversal(req.url)) {
-            return new Response('Not Found', {
-                status: 404,
-                headers: { 'Content-Type': TEXT_PLAIN, 'Cache-Control': NO_STORE },
-            })
+            return notFound()
         }
         /* Embed map and gzip Set hold decoded filesystem names; url.pathname stays
            percent-encoded — decode so a chunk/asset with a non-ASCII name matches and
@@ -62,10 +66,7 @@ export async function createAppAssetServer({
         try {
             assetPath = decodeURIComponent(url.pathname)
         } catch {
-            return new Response('Not Found', {
-                status: 404,
-                headers: { 'Content-Type': TEXT_PLAIN, 'Cache-Control': NO_STORE },
-            })
+            return notFound()
         }
         if (assets) {
             const compressed = assets[assetPath]
@@ -73,10 +74,7 @@ export async function createAppAssetServer({
                (request-controlled) pathnames, so building bundles for junk
                `/_app/*` probes would grow it without bound. */
             if (!compressed) {
-                return new Response('Not Found', {
-                    status: 404,
-                    headers: { 'Content-Type': TEXT_PLAIN, 'Cache-Control': NO_STORE },
-                })
+                return notFound()
             }
             return respondWithEmbeddedAsset(
                 compressed,
@@ -87,10 +85,7 @@ export async function createAppAssetServer({
         /* Miss-check before header work so probes for non-existent chunks can't grow the
            header cache (the embed branch above guards the same way). */
         if (!diskPaths.has(assetPath)) {
-            return new Response('Not Found', {
-                status: 404,
-                headers: { 'Content-Type': TEXT_PLAIN, 'Cache-Control': NO_STORE },
-            })
+            return notFound()
         }
         const { base: baseHeaders, gzip: gzipHeaders } = headersForAsset(assetPath)
         const diskPath = distDir + assetPath

@@ -1,6 +1,6 @@
 import { abideLog } from '../shared/abideLog.ts'
 import { buildPrompts } from './buildPrompts.ts'
-import { getMcpResourceServer } from './mcpResourceServerSlot.ts'
+import { mcpResourceServerSlot } from './mcpResourceServerSlot.ts'
 import { mcpTools } from './mcpTools.ts'
 import { renderPrompt } from './renderPrompt.ts'
 import type { McpSurface } from './types/McpSurface.ts'
@@ -46,11 +46,11 @@ export function mcpSurface(request: Request): McpSurface {
         /* The conversation-seeding messages, without the wire-shape wrapping. */
         getPrompt: (name, args) => renderPrompt(name, args).messages,
         async listResources() {
-            const server = getMcpResourceServer()
+            const server = mcpResourceServerSlot.server
             return server ? server.list() : []
         },
         async readResource(uri) {
-            const server = getMcpResourceServer()
+            const server = mcpResourceServerSlot.server
             return server ? server.read(uri) : undefined
         },
     }

@@ -155,8 +155,10 @@ export function defineSocket<T>(name: string, opts: SocketOptions = {}): Socket<
                     }
                 })
                 pruneExpired(Date.now())
+                /* Floor: a fractional count (`?tail=1.5` over REST) must not
+                   produce a fractional buffer index. */
                 const replayCount =
-                    replay === 'all' ? buffer.length : Math.min(replay, buffer.length)
+                    replay === 'all' ? buffer.length : Math.min(Math.floor(replay), buffer.length)
                 if (replayCount > 0) {
                     const start = buffer.length - replayCount
                     for (let index = start; index < buffer.length; index++) {

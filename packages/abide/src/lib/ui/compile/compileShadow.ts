@@ -4,10 +4,10 @@ import { parseTemplate } from './parseTemplate.ts'
 import {
     NESTED_REACTIVE_BINDINGS,
     type ReactiveImportBindings,
-    type ReactivePrimitive,
     reactiveImportBindings,
     resolveReactiveExport,
 } from './resolveReactiveExport.ts'
+import { signalCallee } from './signalCallee.ts'
 import type { CompiledShadow, ShadowDiagnostic, ShadowMapping } from './types/CompiledShadow.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
 
@@ -411,21 +411,6 @@ function reactiveDeclarations(
         (declaration) => signalCallee(declaration, bindings) !== undefined,
     )
     return reactive.length === declarations.length && reactive.length > 0 ? reactive : undefined
-}
-
-/* The canonical reactive primitive a `NAME = state(...)` / `state.linked(...)` /
-   `props()` decl resolves to — import-resolution is the sole recognition path (alias-safe);
-   else undefined (a plain declaration). The legacy `scope().state(...)` / captured-handle
-   member form is no longer recognised. */
-function signalCallee(
-    declaration: ts.VariableDeclaration,
-    bindings: ReactiveImportBindings,
-): ReactivePrimitive | undefined {
-    const initializer = declaration.initializer
-    if (initializer === undefined || !ts.isCallExpression(initializer)) {
-        return undefined
-    }
-    return resolveReactiveExport(initializer.expression, bindings)
 }
 
 /* Builds one scope line for a reactive declaration, projecting it to its value

@@ -12,6 +12,7 @@ shape is `[rootValue, slots]`. Decode with decodeRefJson. Not streaming — the 
 graph is walked up front.
 */
 import { REF_JSON_TAGS } from './REF_JSON_TAGS.ts'
+import { setOwnProperty } from './setOwnProperty.ts'
 
 export function encodeRefJson(value: unknown): string {
     // Hoisted containers only; slots[i] is addressed by ['~r', i]. Primitives stay inline.
@@ -86,7 +87,8 @@ export function encodeRefJson(value: unknown): string {
         // (no intermediate pairs array / closures) on this per-object always-hot path.
         const encoded: Record<string, unknown> = {}
         for (const key of Object.keys(record)) {
-            encoded[key] = encodeValue(record[key])
+            // setOwnProperty: an own `__proto__` key must reach the wire, not the accessor.
+            setOwnProperty(encoded, key, encodeValue(record[key]))
         }
         return encoded
     }

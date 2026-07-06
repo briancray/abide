@@ -1,10 +1,6 @@
 import ts from 'typescript'
-import {
-    NESTED_REACTIVE_BINDINGS,
-    type ReactiveImportBindings,
-    type ReactivePrimitive,
-    resolveReactiveExport,
-} from './resolveReactiveExport.ts'
+import { NESTED_REACTIVE_BINDINGS } from './resolveReactiveExport.ts'
+import { signalCallee } from './signalCallee.ts'
 
 /*
 The signal binding names a `<script>` nested in a control-flow branch declares
@@ -39,16 +35,28 @@ export function nestedBindingNames(code: string): Set<string> {
     return names
 }
 
-/* The canonical primitive a `NAME = state(...)` / `state.linked(...)` declaration resolves
-   to — import-resolution is the sole recognition path (alias-safe). The legacy
-   `scope().state(...)` / captured-handle member form is no longer recognised. */
-function signalCallee(
-    declaration: ts.VariableDeclaration,
-    bindings: ReactiveImportBindings,
-): ReactivePrimitive | undefined {
-    const initializer = declaration.initializer
-    if (initializer === undefined || !ts.isCallExpression(initializer)) {
-        return undefined
+/* The PLAIN (non-reactive) local names a nested branch `<script>` declares at its top
+   level — a `const title = deriveLocal()` that is neither a signal nor an effect/watch.
+   These must shadow a same-named component signal so a later reference in the script or
+   branch reads the nearer local, not `$$model.read("title")`; registered as `plain`
+   shadows (bare locals), the counterpart to `nestedBindingNames`' `derived` cells. */
+export function nestedPlainLocalNames(code: string): Set<string> {
+    const source = ts.createSourceFile('nested.ts', code, ts.ScriptTarget.Latest, true)
+    const names = new Set<string>()
+    for (const statement of source.statements) {
+        if (!ts.isVariableStatement(statement)) {
+            continue
+        }
+        for (const declaration of statement.declarationList.declarations) {
+            /* Reactive declarations are the `derived` cells `nestedBindingNames` owns; a
+               plain identifier declaration with a non-reactive callee (or no call) is a
+               local. Skip destructuring patterns — the reactive path does too. */
+            const callee = signalCallee(declaration, NESTED_REACTIVE_BINDINGS)
+            const isReactive = callee !== undefined && callee !== 'effect' && callee !== 'watch'
+            if (!isReactive && ts.isIdentifier(declaration.name)) {
+                names.add(declaration.name.text)
+            }
+        }
     }
-    return resolveReactiveExport(initializer.expression, bindings)
+    return names
 }

@@ -1,7 +1,7 @@
 import { ensureRegistriesLoaded } from '../server/runtime/registryManifests.ts'
 import { messageFromError } from '../shared/messageFromError.ts'
 import { buildPrompts } from './buildPrompts.ts'
-import { getMcpResourceServer } from './mcpResourceServerSlot.ts'
+import { mcpResourceServerSlot } from './mcpResourceServerSlot.ts'
 import { mcpTools } from './mcpTools.ts'
 import { renderPrompt } from './renderPrompt.ts'
 import type { JsonRpcRequest } from './types/JsonRpcRequest.ts'
@@ -121,7 +121,7 @@ async function dispatchMethod(
                 return jsonRpcOk(id, await mcpTools.call(params.name, params.arguments, request))
             }
             case 'resources/list': {
-                const resourceServer = getMcpResourceServer()
+                const resourceServer = mcpResourceServerSlot.server
                 return jsonRpcOk(id, {
                     resources: resourceServer ? await resourceServer.list() : [],
                 })
@@ -131,7 +131,7 @@ async function dispatchMethod(
                 if (!params?.uri) {
                     return jsonRpcError(id, -32602, 'Missing resource uri')
                 }
-                const resourceServer = getMcpResourceServer()
+                const resourceServer = mcpResourceServerSlot.server
                 const contents = resourceServer ? await resourceServer.read(params.uri) : undefined
                 if (!contents) {
                     return jsonRpcError(id, -32602, `unknown resource: ${params.uri}`)

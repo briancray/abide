@@ -456,4 +456,32 @@ const label = 'hi'</script><i>{label}</i>`,
         expect(body).toContain('const count = 5')
         expect(body).toMatch(/const count = 5;?\s*\n\s*return count;?/)
     })
+
+    test('a plain nested-<script> local shadows a same-named component signal', () => {
+        const body = compileComponent(
+            `<script>import { state } from '@abide/abide/ui/state'\nlet title = state('a')\n</script>\n<div>{#if title}<script>const title = 'local'\n</script><p>{title}</p>{/if}</div>`,
+        )
+        // The branch's plain local `title` shadows the state — its markup reads the bare
+        // local, NOT $$model.read("title").
+        expect(body).toContain("const title = 'local'")
+        expect(body).not.toContain('$$model.read("title")) ? true')
+    })
+
+    test('a state declaration mixed with a plain one in a single statement is rejected', () => {
+        expect(() =>
+            compileComponent(
+                `<script>import { state } from '@abide/abide/ui/state'\nlet count = state(0), step = 5\n</script>\n<p>{count}</p>`,
+            ),
+        ).toThrow(/declare each reactive signal in its own statement/)
+    })
+
+    test('an aliased reactive import whose alias contains `$` is not dropped as dead', () => {
+        // `effect as $e` — the dead-import regex must not read the trailing `$e` as an
+        // end-anchor and drop a live import (which the bound-helper backstop would then
+        // reject). Compiles cleanly = the import survived.
+        const body = compileComponent(
+            `<script>import { effect as $e } from '@abide/abide/ui/effect'\n$e(() => console.log('run'))\n</script>\n<p>hi</p>`,
+        )
+        expect(body).toContain('$e(')
+    })
 })

@@ -1,4 +1,3 @@
-import { fileURLToPath, pathToFileURL } from 'node:url'
 import ts from 'typescript'
 import { ABIDE_SEMANTIC_TOKENS_LEGEND } from './lib/ui/compile/ABIDE_SEMANTIC_TOKENS_LEGEND.ts'
 import type {
@@ -77,7 +76,7 @@ export async function abideLsp({ cwd }: { cwd: string }): Promise<void> {
             jsonrpc: '2.0',
             method: 'textDocument/publishDiagnostics',
             params: {
-                uri: pathToFileURL(path).href,
+                uri: Bun.pathToFileURL(path).href,
                 diagnostics: serviceFor(path)
                     .diagnostics(path)
                     .map((diagnostic) => toLspDiagnostic(text, diagnostic)),
@@ -109,7 +108,7 @@ export async function abideLsp({ cwd }: { cwd: string }): Promise<void> {
             case 'textDocument/didOpen': {
                 const { uri, text } = message.params.textDocument
                 if (isAbide(uri)) {
-                    const path = fileURLToPath(uri)
+                    const path = Bun.fileURLToPath(uri)
                     documentText.set(path, text)
                     serviceFor(path).update(path, text)
                     publish(path)
@@ -119,7 +118,7 @@ export async function abideLsp({ cwd }: { cwd: string }): Promise<void> {
             case 'textDocument/didChange': {
                 const { uri } = message.params.textDocument
                 if (isAbide(uri)) {
-                    const path = fileURLToPath(uri)
+                    const path = Bun.fileURLToPath(uri)
                     const text = message.params.contentChanges.at(-1)?.text ?? ''
                     documentText.set(path, text)
                     serviceFor(path).update(path, text)
@@ -130,7 +129,7 @@ export async function abideLsp({ cwd }: { cwd: string }): Promise<void> {
             case 'textDocument/didSave': {
                 const { uri } = message.params.textDocument
                 if (isAbide(uri)) {
-                    publish(fileURLToPath(uri))
+                    publish(Bun.fileURLToPath(uri))
                 }
                 return
             }
@@ -138,10 +137,10 @@ export async function abideLsp({ cwd }: { cwd: string }): Promise<void> {
                 /* A request: always answer (null when there's nothing to show) so
                    the editor isn't left waiting. */
                 const { uri } = message.params.textDocument
-                const text = isAbide(uri) ? (documentText.get(fileURLToPath(uri)) ?? '') : ''
+                const text = isAbide(uri) ? (documentText.get(Bun.fileURLToPath(uri)) ?? '') : ''
                 const info = isAbide(uri)
-                    ? serviceFor(fileURLToPath(uri)).quickInfo(
-                          fileURLToPath(uri),
+                    ? serviceFor(Bun.fileURLToPath(uri)).quickInfo(
+                          Bun.fileURLToPath(uri),
                           positionToOffset(text, message.params.position),
                       )
                     : undefined
@@ -156,9 +155,9 @@ export async function abideLsp({ cwd }: { cwd: string }): Promise<void> {
                 const { uri } = message.params.textDocument
                 const data = isAbide(uri)
                     ? componentSemanticTokens(
-                          serviceFor(fileURLToPath(uri)),
-                          fileURLToPath(uri),
-                          documentText.get(fileURLToPath(uri)) ?? '',
+                          serviceFor(Bun.fileURLToPath(uri)),
+                          Bun.fileURLToPath(uri),
+                          documentText.get(Bun.fileURLToPath(uri)) ?? '',
                       )
                     : []
                 send({ jsonrpc: '2.0', id: message.id, result: { data } })
@@ -167,7 +166,7 @@ export async function abideLsp({ cwd }: { cwd: string }): Promise<void> {
             case 'textDocument/didClose': {
                 const { uri } = message.params.textDocument
                 if (isAbide(uri)) {
-                    const path = fileURLToPath(uri)
+                    const path = Bun.fileURLToPath(uri)
                     serviceFor(path).close(path)
                     documentText.delete(path)
                     send({

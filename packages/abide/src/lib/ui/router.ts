@@ -428,6 +428,14 @@ export function router(
             ])
                 .then(([pageView, resolvedLayouts, decision]) => {
                     if (token !== sequence || disposed) {
+                        /* Consume the first-paint flag even when superseded: the boot SSR DOM
+                           is valid only for THIS boot navigation. Leaving `first` true would
+                           let a navigation that started before this settled (to a different
+                           page) skip its auth probe and hydrate the boot URL's SSR DOM as its
+                           own — claimExpected then throws and commit swallows it, stranding a
+                           broken page. Cleared here → the superseding nav builds create-mode
+                           (clearing the stale SSR DOM) and runs its probe. */
+                        first = false
                         return
                     }
                     /* handle() redirected: go where it pointed, replacing the blocked

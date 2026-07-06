@@ -1,4 +1,5 @@
 import type { ContentBodyKind } from './contentBodyKind.ts'
+import { DEFER } from './DEFER.ts'
 
 /*
 The single body-kind → value mapping shared by the live read (decodeResponse) and
@@ -18,8 +19,6 @@ Returns the DEFER sentinel for `streaming` and `binary`: kinds whose handling is
 side-specific (the live read throws on streaming and blobs on binary; the warm
 read has no synchronous equivalent for either), so the caller branches on it.
 */
-export const DEFER: unique symbol = Symbol('defer')
-
 export function bodyValueForKind<Value>(
     kind: ContentBodyKind,
     json: () => Value,

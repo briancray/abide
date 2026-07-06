@@ -230,6 +230,14 @@ export function awaitBlock(
         const result = promiseThunk()
         const entry = decoded
         if (entry !== undefined) {
+            /* The resume entry drives the adopted branch below; the live `result` read to
+               subscribe the reactive source is discarded here. Swallow its rejection — a
+               cold-cache warm-seed miss starts a real fetch, and if that fetch rejects it
+               would otherwise surface as an unhandledrejection at boot (process-fatal under
+               Bun) instead of being harmlessly dropped. */
+            if (isThenable(result)) {
+                void (result as PromiseLike<unknown>).then(undefined, () => undefined)
+            }
             /* Build the adopted branch around a value CELL (then) so a later re-run updates
                it in place, exactly like a fresh mount. The `throw` for a catch-less rejection
                stays OUTSIDE the adopt try/catch so it surfaces rather than triggering the

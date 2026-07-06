@@ -1,5 +1,6 @@
 import { resolve } from 'node:path'
 import { NO_STORE } from '../../shared/CACHE_CONTROL_VALUES.ts'
+import { isLayoutFile } from '../../shared/isLayoutFile.ts'
 import { compileModule } from '../../ui/compile/compileModule.ts'
 
 // Reused across requests — strips the embedded author TypeScript to browser JS.
@@ -27,7 +28,7 @@ export async function devHotModuleResponse(moduleId: string): Promise<Response> 
         return new Response('not found', { status: 404 })
     }
     const { code } = compileModule(source, {
-        isLayout: moduleId.endsWith('layout.abide'),
+        isLayout: isLayoutFile(moduleId),
         moduleId,
         hot: true,
     })

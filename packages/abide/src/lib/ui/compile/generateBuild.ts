@@ -738,7 +738,20 @@ export function generateBuild(
            destructures the item via `plan.as` to read its leaves. */
         const rawItemParam = isPlainIdentifier(plan.as) ? plan.as : nextVar('k')
         const keyParam = plan.key === undefined ? rawItemParam : plan.as
-        const keyExpression = plan.key === undefined ? rawItemParam : lowerExpression(plan.key)
+        /* The key callback binds the RAW item via `plan.as`, so lower the key expression with
+           the item's names shadowed as PLAIN locals — otherwise a `by item.id` whose `item`
+           collides with a component signal rewrites to `$$model.read("item/id")` (every row
+           keys off the same signal → keyed reconciliation degenerates). The plain kind (not
+           the row body's reactive `.value` kind) keeps it the bare param the callback binds. */
+        const keyExpression =
+            plan.key === undefined
+                ? rawItemParam
+                : withBindings(
+                      withShadow,
+                      [plan.bindings[0] as Binding],
+                      () => 'plain',
+                      () => lowerExpression(plan.key as string),
+                  )
         /* The item is the row's `reactive` binding (its `.value` cell + per-leaf reader prefix
            rendered by `reactiveBinding`); `index="i"` is a second reactive cell param, a plain
            identifier read as `i.value` (no prefix). The names of BOTH enter the deref scope via

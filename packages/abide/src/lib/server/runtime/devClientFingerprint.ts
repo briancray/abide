@@ -1,5 +1,6 @@
 import { relative } from 'node:path'
 import { fileName } from '../../shared/fileName.ts'
+import { isLayoutFile } from '../../shared/isLayoutFile.ts'
 import { analyzeComponent } from '../../ui/compile/analyzeComponent.ts'
 import { compileComponent } from '../../ui/compile/compileComponent.ts'
 import { nearestProjectRoot } from '../../ui/compile/nearestProjectRoot.ts'
@@ -20,8 +21,7 @@ const GENERATED = /(^|\/)\.abide\//
 // page.abide / layout.abide are router-mounted, not `mountChild`-tracked, so they
 // can't hot-swap — they fold into `structure` (a reload) instead.
 function isPageOrLayout(moduleId: string): boolean {
-    const file = fileName(moduleId)
-    return file === 'page.abide' || file === 'layout.abide'
+    return fileName(moduleId) === 'page.abide' || isLayoutFile(moduleId)
 }
 
 /*
@@ -81,7 +81,7 @@ export async function devClientFingerprint({
             let bodyHash: string
             let hot = false
             try {
-                const isLayout = moduleId.endsWith('layout.abide')
+                const isLayout = isLayoutFile(moduleId)
                 bodyHash = Bun.hash(compileComponent(source, isLayout, moduleId)).toString(36)
                 hot = analyzeComponent(source).imports === '' && !isPageOrLayout(moduleId)
             } catch {

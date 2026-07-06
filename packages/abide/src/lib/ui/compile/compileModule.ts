@@ -186,24 +186,90 @@ function indent(body: string): string {
         .split('\n')
         .map((line) => {
             const indented = insideTemplateLiteral || line === '' ? line : `    ${line}`
-            if (unescapedBacktickCount(line) % 2 === 1) {
-                insideTemplateLiteral = !insideTemplateLiteral
-            }
+            insideTemplateLiteral = templateLiteralStateAfter(line, insideTemplateLiteral)
             return indented
         })
         .join('\n')
 }
 
-/* Counts backticks not preceded by a backslash — the template-literal delimiters
-   on a line, ignoring escaped `\`` inside one. */
-function unescapedBacktickCount(line: string): number {
-    let count = 0
-    for (let index = 0; index < line.length; index += 1) {
-        if (line[index] === '`' && line[index - 1] !== '\\') {
-            count += 1
+/* Whether the line ENDS inside a multi-line template literal, given whether it
+   STARTED inside one. A plain backtick-parity count is wrong: a backtick inside a
+   double-quoted string literal (the JSON.stringify'd skeleton markup, e.g.
+   `$$skeleton(host, "<p>tick \`here</p>")`) is not a template delimiter, but counting
+   it would flip the in-literal state and mis-indent a later real template literal's
+   significant whitespace. So skip `'…'`/`"…"` strings when outside a template, and treat
+   a template's `${…}` interpolation as code (its own strings/backticks don't toggle the
+   outer literal). Escapes are honoured throughout. */
+function templateLiteralStateAfter(line: string, startInside: boolean): boolean {
+    let inside = startInside
+    let index = 0
+    while (index < line.length) {
+        const char = line[index]
+        if (char === '\\') {
+            index += 2
+            continue
         }
+        if (inside) {
+            if (char === '`') {
+                inside = false
+            } else if (char === '$' && line[index + 1] === '{') {
+                index = skipInterpolation(line, index + 2)
+                continue
+            }
+            index += 1
+            continue
+        }
+        if (char === '`') {
+            inside = true
+        } else if (char === '"' || char === "'") {
+            index = skipQuoted(line, index + 1, char)
+            continue
+        }
+        index += 1
     }
-    return count
+    return inside
+}
+
+/* Advances past a `'…'`/`"…"` string opened at `index` (the char after the quote),
+   returning the index after the closing quote (or end of line). Emitted JS string
+   literals never carry a raw newline, so they always close on their own line. */
+function skipQuoted(line: string, index: number, quote: string): number {
+    while (index < line.length) {
+        if (line[index] === '\\') {
+            index += 2
+            continue
+        }
+        if (line[index] === quote) {
+            return index + 1
+        }
+        index += 1
+    }
+    return index
+}
+
+/* Advances past a template `${…}` interpolation opened at `index` (the char after `{`),
+   returning the index after the matching `}` (or end of line). Balances nested braces and
+   skips nested strings/templates so their delimiters don't leak into the outer scan. */
+function skipInterpolation(line: string, index: number): number {
+    let depth = 1
+    while (index < line.length && depth > 0) {
+        const char = line[index]
+        if (char === '\\') {
+            index += 2
+            continue
+        }
+        if (char === '"' || char === "'" || char === '`') {
+            index = skipQuoted(line, index + 1, char)
+            continue
+        }
+        if (char === '{') {
+            depth += 1
+        } else if (char === '}') {
+            depth -= 1
+        }
+        index += 1
+    }
+    return index
 }
 
 /* The identifier names a generated module references — every Identifier node, walked

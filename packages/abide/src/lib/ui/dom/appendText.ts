@@ -87,12 +87,17 @@ function appendRawHtml(parent: Node, read: () => unknown): void {
     let nodes: Node[] = []
 
     const set = (value: string): void => {
+        /* Insert/remove via the anchor's LIVE parent, not the build-time `parent` — when
+           this interpolation is a bare child of a control-flow branch, `parent` is the
+           branch's build fragment, which the enclosing block has since emptied into the
+           document (same reason each/awaitBlock use the anchor's parentNode). */
+        const liveParent = anchor.parentNode ?? parent
         for (const node of nodes) {
-            parent.removeChild(node)
+            liveParent.removeChild(node)
         }
-        nodes = parseRawNodes(parent, value)
+        nodes = parseRawNodes(liveParent, value)
         for (const node of nodes) {
-            parent.insertBefore(node, anchor)
+            liveParent.insertBefore(node, anchor)
         }
     }
 

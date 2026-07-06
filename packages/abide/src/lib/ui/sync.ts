@@ -1,5 +1,6 @@
 import { PATCH_BUS } from './runtime/PATCH_BUS.ts'
 import type { Doc } from './runtime/types/Doc.ts'
+import type { Patch } from './runtime/types/Patch.ts'
 import type { SyncTransport } from './types/SyncTransport.ts'
 
 /*
@@ -17,20 +18,25 @@ this core). Returns a disposer.
 */
 // @documentation plumbing
 export function sync(doc: Doc, transport: SyncTransport): () => void {
-    /* True only while applying a received patch, so its bus echo isn't re-sent. */
-    let applying = false
+    /* The specific inbound patches currently being applied — their own bus echo must not be
+       re-sent. Tracked by IDENTITY (not a blanket `applying` flag): `doc.apply` emits the
+       patch on the bus inside its batch, then flushes effects on batch exit while still
+       synchronously inside this apply. A local effect that writes the doc in reaction emits
+       a DIFFERENT patch during that flush — a genuine new local change peers need — which a
+       blanket flag would wrongly suppress, diverging peers permanently. */
+    const applyingPatches = new Set<Patch>()
 
     const unsubscribeInbound = transport.subscribe((patch) => {
-        applying = true
+        applyingPatches.add(patch)
         try {
             doc.apply(patch)
         } finally {
-            applying = false
+            applyingPatches.delete(patch)
         }
     })
 
     const unsubscribeBus = PATCH_BUS.subscribe((event) => {
-        if (event.doc === doc && !applying) {
+        if (event.doc === doc && !applyingPatches.has(event.patch)) {
             transport.send(event.patch)
         }
     })

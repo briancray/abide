@@ -158,8 +158,18 @@ export function generateSSR(
        never matches (`$` is a non-word char, so there is no word boundary before it), which
        would silently miss every `$row(...)` call. A negative lookbehind for word-or-`$`
        matches the same call sites as `\b` for word-leading names while also catching them. */
-    const callPattern = (name: string): RegExp =>
-        new RegExp(`(?<![$\\w])${escapeRegex(name)}\\s*\\(`)
+    /* Memoised per name: the pattern is a pure function of the name but tested across the
+       fixpoint loop below (per snippet × per text part × per iteration), so recompiling the
+       RegExp each test — far costlier than the test itself — dominated the snippet scan. */
+    const callPatternCache = new Map<string, RegExp>()
+    const callPattern = (name: string): RegExp => {
+        let pattern = callPatternCache.get(name)
+        if (pattern === undefined) {
+            pattern = new RegExp(`(?<![$\\w])${escapeRegex(name)}\\s*\\(`)
+            callPatternCache.set(name, pattern)
+        }
+        return pattern
+    }
     /* A subtree call to any of `names` from a TEXT interpolation (`name()` / `name(args)`). */
     const subtreeCalls = (children: TemplateNode[], names: ReadonlySet<string>): boolean =>
         children.some((child) => {
@@ -215,8 +225,18 @@ export function generateSSR(
     }
     /* A text-part expression that calls an async snippet, so its value is `await`ed before
        `$text`. */
-    const callsAsyncSnippet = (code: string): boolean =>
-        [...asyncSnippets].some((name) => callPattern(name).test(code))
+    const callsAsyncSnippet = (code: string): boolean => {
+        // The common no-async-snippet component pays zero regex work per text part.
+        if (asyncSnippets.size === 0) {
+            return false
+        }
+        for (const name of asyncSnippets) {
+            if (callPattern(name).test(code)) {
+                return true
+            }
+        }
+        return false
+    }
 
     /* Per-node skeleton position, computed once. Both back-ends read this single source of
        truth so their `<!--a-->` anchor placement cannot drift — the fresh-context boundaries
@@ -626,8 +646,11 @@ export function generateSSR(
            same identifier as the `then` binding reads the component signal, not the local. */
         code += branchContent(plan.finallyChildren, target)
         /* Seed the resolved value into the resume manifest so hydration adopts the server
-           branch warm (no round-trip) and wires it live on the first frame. */
-        code += `$resume[${id}] = { ok: true, value: ${plan.resolvedAs} };\n`
+           branch warm (no round-trip) and wires it live on the first frame. Seed the
+           resolved temp, NOT `plan.resolvedAs` — the latter is the author's binding
+           PATTERN (e.g. `{name}` or `{name = 'anon'}`), which as an expression rebuilds a
+           partial object or is a CoverInitializedName syntax error. */
+        code += `$resume[${id}] = { ok: true, value: ${resolved} };\n`
         code += `}\n`
         if (plan.surfaceRejection) {
             /* No catch/finally → let the rejection surface instead of an empty branch. */

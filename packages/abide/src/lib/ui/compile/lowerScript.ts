@@ -2,6 +2,7 @@ import ts from 'typescript'
 import { ABIDE_PACKAGE_NAME } from '../../shared/ABIDE_PACKAGE_NAME.ts'
 import { assertTranspiles } from './assertTranspiles.ts'
 import { desugarSignals } from './desugarSignals.ts'
+import { identifierReferencePattern } from './identifierReferencePattern.ts'
 import { docAccessTransformer } from './lowerDocAccess.ts'
 import { signalRefsTransformer } from './renameSignalRefs.ts'
 import { stripEffectsTransformer } from './stripEffects.ts'
@@ -32,7 +33,9 @@ function deadReactiveImport(statement: ts.ImportDeclaration, used: string): bool
     if (named === undefined || !ts.isNamedImports(named)) {
         return false
     }
-    return named.elements.every((element) => !new RegExp(`\\b${element.name.text}\\b`).test(used))
+    return named.elements.every(
+        (element) => !identifierReferencePattern(element.name.text).test(used),
+    )
 }
 
 /*

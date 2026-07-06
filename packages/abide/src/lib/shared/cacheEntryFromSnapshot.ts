@@ -1,6 +1,7 @@
-import { bodyValueForKind, DEFER } from './bodyValueForKind.ts'
+import { bodyValueForKind } from './bodyValueForKind.ts'
 import { contentBodyKind } from './contentBodyKind.ts'
 import { contentTypeOf } from './contentTypeOf.ts'
+import { DEFER } from './DEFER.ts'
 import type { CacheEntry } from './types/CacheEntry.ts'
 import type { CacheSnapshotEntry } from './types/CacheSnapshotEntry.ts'
 

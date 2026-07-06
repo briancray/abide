@@ -1,7 +1,7 @@
 import ts from 'typescript'
 import { createShadowScope } from './createShadowScope.ts'
 import { docAccessTransformer } from './lowerDocAccess.ts'
-import { nestedBindingNames } from './prepareNestedScript.ts'
+import { nestedBindingNames, nestedPlainLocalNames } from './prepareNestedScript.ts'
 import { signalRefsTransformer } from './renameSignalRefs.ts'
 import { TS_PRINTER } from './TS_PRINTER.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
@@ -105,12 +105,18 @@ export function lowerContext(
     }
 
     /* Adds any `<script>` children's binding names to the deref scope (so the script
-       bodies and the branch's markup auto-deref them) for the duration of `body`. */
+       bodies and the branch's markup auto-deref them) for the duration of `body`. Reactive
+       bindings register as `derived` `.value` cells; the script's PLAIN top-level locals
+       register as `plain` bare locals so a local that shares a name with a component signal
+       shadows it (else the reference lowers to `$$model.read(...)`, ignoring the local). */
     function withNestedScripts<T>(children: TemplateNode[], body: () => T): T {
-        const names = children.flatMap((child) =>
+        const derived = children.flatMap((child) =>
             child.kind === 'script' ? [...nestedBindingNames(child.code)] : [],
         )
-        return scope.withShadow(names, 'derived', body)
+        const plain = children.flatMap((child) =>
+            child.kind === 'script' ? [...nestedPlainLocalNames(child.code)] : [],
+        )
+        return scope.withShadow(derived, 'derived', () => scope.withShadow(plain, 'plain', body))
     }
 
     return {

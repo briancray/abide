@@ -1,3 +1,4 @@
+import { contentBodyKind } from '../../shared/contentBodyKind.ts'
 import { contentTypeOf } from '../../shared/contentTypeOf.ts'
 import { hasReplayableRequest } from '../../shared/hasReplayableRequest.ts'
 import { isStreamingResponse } from '../../shared/isStreamingResponse.ts'
@@ -51,8 +52,13 @@ export async function snapshotEntryFromCache(
     if (isStreamingResponse(response)) {
         return undefined
     }
-    const contentType = contentTypeOf(response.headers)
-    if (!isTextual(contentType)) {
+    /* Ship only a body the client's WARM read can consume — `json`/`text` per the single
+       `contentBodyKind` classification the live decoder uses. Gating on the same table (not a
+       private textual list) keeps warm read ≡ live read (ADR-0011): the private list shipped
+       `application/xml`, which `contentBodyKind` buckets as `binary` and the warm read defers
+       on, so that snapshot could never be consumed warm — a silent divergence. */
+    const kind = contentBodyKind(contentTypeOf(response.headers))
+    if (kind !== 'json' && kind !== 'text') {
         return undefined
     }
     /* Read a CLONE, not the original: a reader that captured this same `entry.promise`
@@ -83,17 +89,4 @@ async function readSettled(promise: Promise<Response>): Promise<Response | undef
     } catch {
         return undefined
     }
-}
-
-function isTextual(contentType: string): boolean {
-    if (contentType.startsWith('text/')) {
-        return true
-    }
-    if (contentType.includes('json')) {
-        return true
-    }
-    if (contentType.includes('xml')) {
-        return true
-    }
-    return false
 }

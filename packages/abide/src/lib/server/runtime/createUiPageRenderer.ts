@@ -143,7 +143,22 @@ export function createUiPageRenderer({
        build-time injector). A no-op when there are none or the shell carries no </head>. */
     function injectRoutePreloads(html: string, routeUrl: string): string {
         const links = routePreloadLinks(routeUrl)
-        return links === '' ? html : html.replace(HEAD_CLOSE_TAG, `${links}</head>`)
+        return links === '' ? html : html.replace(HEAD_CLOSE_TAG, () => `${links}</head>`)
+    }
+
+    /* The layout chain for a route is a pure function of routeUrl and the fixed `layouts`
+       map, so memoise it per route (like `preloadLinkCache`) instead of re-scanning and
+       re-sorting every layout key on every request. */
+    const layoutKeys = Object.keys(layouts)
+    const chainKeyCache = new Map<string, string[]>()
+    function chainKeysForRoute(routeUrl: string): string[] {
+        const cached = chainKeyCache.get(routeUrl)
+        if (cached !== undefined) {
+            return cached
+        }
+        const chain = layoutChainForRoute(routeUrl, layoutKeys)
+        chainKeyCache.set(routeUrl, chain)
+        return chain
     }
 
     async function renderPage(
@@ -167,7 +182,7 @@ export function createUiPageRenderer({
         }
         /* Outermost layout → … → page: load every applicable layout chunk plus the
            page, then render the chain as one document (shared block-id pass). */
-        const chainKeys = layoutChainForRoute(routeUrl, Object.keys(layouts))
+        const chainKeys = chainKeysForRoute(routeUrl)
         const views = await Promise.all([
             ...chainKeys.map((key) => layouts[key]?.().then((module) => module.default)),
             loadPage().then((module) => module.default),
@@ -194,9 +209,12 @@ export function createUiPageRenderer({
                 ),
                 routeUrl,
             )
+            /* Function replacer: the state script carries user cache data, and a string
+               replacement would interpret `$&`/`$'`-style patterns inside it. */
+            const state = await stateTag(routeUrl, params, store, inline)
             const withState = html.replace(
                 '</body>',
-                `${resumeSeedScript(ssr.resume)}${await stateTag(routeUrl, params, store, inline)}</body>`,
+                () => `${resumeSeedScript(ssr.resume)}${state}</body>`,
             )
             return new Response(withState, {
                 headers: {

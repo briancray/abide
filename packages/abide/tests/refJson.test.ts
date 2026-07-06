@@ -113,4 +113,26 @@ describe('encodeRefJson / decodeRefJson', () => {
         expect(() => decodeRefJson('null')).toThrow()
         expect(() => decodeRefJson('[]')).toThrow()
     })
+
+    test('an own __proto__ key round-trips as a plain key without touching the prototype', () => {
+        const source = JSON.parse('{"__proto__": {"polluted": true}, "keep": 1}') as Record<
+            string,
+            unknown
+        >
+        const decoded = roundTrip(source) as Record<string, unknown>
+        expect(Object.getPrototypeOf(decoded)).toBe(Object.prototype)
+        expect(Object.getOwnPropertyDescriptor(decoded, '__proto__')?.value).toEqual({
+            polluted: true,
+        })
+        expect(decoded.keep).toBe(1)
+        expect(({} as Record<string, unknown>).polluted).toBeUndefined()
+    })
+
+    test('a crafted wire __proto__ reference cannot hijack the decoded prototype', () => {
+        const wire = '[["~r",0],[{"__proto__":["~r",1]},{"~a":1,"polluted":true}]]'
+        const decoded = decodeRefJson(wire) as Record<string, unknown>
+        expect(Object.getPrototypeOf(decoded)).toBe(Object.prototype)
+        expect(decoded.polluted).toBeUndefined()
+        expect(({} as Record<string, unknown>).polluted).toBeUndefined()
+    })
 })

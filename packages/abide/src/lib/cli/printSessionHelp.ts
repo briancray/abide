@@ -1,4 +1,5 @@
-import { printCommandHelp, printTopLevelHelp } from './printHelp.ts'
+import { printCommandHelp } from './printCommandHelp.ts'
+import { printTopLevelHelp } from './printTopLevelHelp.ts'
 import type { CliManifest } from './types/CliManifest.ts'
 
 /*

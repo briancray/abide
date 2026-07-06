@@ -7,6 +7,7 @@ ancestor resolves to the already-allocated object — which is what reconnects a
 Inline primitives need no shell; they decode directly where they sit.
 */
 import { REF_JSON_TAGS } from './REF_JSON_TAGS.ts'
+import { setOwnProperty } from './setOwnProperty.ts'
 
 export function decodeRefJson(text: string): unknown {
     const parsed = JSON.parse(text)
@@ -68,7 +69,8 @@ function fillShell(slot: unknown, shell: unknown, shells: unknown[]): void {
         const target = shell as Record<string, unknown>
         const record = slot as Record<string, unknown>
         for (const key of Object.keys(record)) {
-            target[key] = resolveValue(record[key], shells)
+            // setOwnProperty: a wire `__proto__` key must not hijack the shell's prototype.
+            setOwnProperty(target, key, resolveValue(record[key], shells))
         }
         return
     }
