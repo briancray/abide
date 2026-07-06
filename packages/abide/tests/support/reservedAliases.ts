@@ -14,49 +14,17 @@ This is the harness side of the runtime-injection coupling (cf. doc-key escaping
 production modules get `$$`-names from their aliased imports; tests get them here.
 */
 
+import { UI_RUNTIME_IMPORTS } from '../../src/lib/ui/compile/UI_RUNTIME_IMPORTS.ts'
+
 /* `$$` + the name without any leading `$` — `each`→`$$each`, `$props`→`$$props`. */
 export function reserved(name: string): string {
     return `$$${name.replace(/^\$+/, '')}`
 }
 
-/* Every bare name the compiler may emit in `$$` form: the `UI_RUNTIME_IMPORTS`
-   helpers, the doc/reactive substrate, and the structural locals/params. */
-const RESERVED_BARE_NAMES = [
-    'snippet',
-    'scope',
-    'enterScope',
-    'exitScope',
-    'effect',
-    'mount',
-    'appendText',
-    'appendTextAt',
-    'appendSnippet',
-    'appendStatic',
-    'cloneStatic',
-    'skeleton',
-    'anchorCursor',
-    'attr',
-    'on',
-    'attach',
-    'each',
-    'eachAsync',
-    'when',
-    'awaitBlock',
-    'tryBlock',
-    'switchBlock',
-    'mountSlot',
-    'outlet',
-    'mountChild',
-    'mergeProps',
-    'spreadProps',
-    'restProps',
-    'spreadAttrs',
-    'readCall',
-    'hydrate',
-    'escapeKey',
-    'nextBlockId',
-    'enterRenderPass',
-    'exitRenderPass',
+/* The doc/reactive substrate and structural locals/params the harnesses inject by bare
+   name — the `$$`-emitted names that are NOT `UI_RUNTIME_IMPORTS` helpers (the compiler
+   lowers them, it doesn't import them). */
+const SUBSTRATE_BARE_NAMES = [
     'doc',
     'state',
     'computed',
@@ -67,6 +35,15 @@ const RESERVED_BARE_NAMES = [
     '$children',
     'host',
     'build',
+]
+
+/* Every bare name the compiler may emit in `$$` form: the `UI_RUNTIME_IMPORTS` helpers
+   (derived from the one manifest so this can't drift from it — the hand-copied list had
+   already lost `watch`/`bindSelectValue`), plus the substrate names above. The prelude is
+   `typeof`-guarded, so a name a given harness doesn't inject is simply skipped. */
+const RESERVED_BARE_NAMES = [
+    ...UI_RUNTIME_IMPORTS.map((entry) => entry.name),
+    ...SUBSTRATE_BARE_NAMES,
 ]
 
 const PRELUDE = `${RESERVED_BARE_NAMES.map(
