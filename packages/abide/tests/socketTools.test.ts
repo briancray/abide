@@ -1,5 +1,7 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { dispatchMcpRequest } from '../src/lib/mcp/dispatchMcpRequest.ts'
+import { json } from '../src/lib/server/json.ts'
+import { defineRpc } from '../src/lib/server/rpc/defineRpc.ts'
 import { createSocketDispatcher } from '../src/lib/server/sockets/createSocketDispatcher.ts'
 import { defineSocket } from '../src/lib/server/sockets/defineSocket.ts'
 import { testSchema } from './standardSchema.ts'
@@ -130,5 +132,53 @@ describe('socket MCP tools happy path', () => {
             arguments: { count: 1 },
         })) as { structuredContent: { frames: Array<{ text: string }> } }
         expect(tailed.structuredContent.frames.at(-1)).toEqual({ text: 'from-mcp' })
+    })
+})
+
+// Raw dispatch returning the whole envelope, for asserting error replies.
+async function mcpEnvelope(
+    method: string,
+    params?: unknown,
+): Promise<{ result?: Record<string, unknown>; error?: { message: string } }> {
+    const request = new Request('http://localhost/__abide/mcp', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+    })
+    return (await dispatchMcpRequest(request, {}, serverInfo)) as {
+        result?: Record<string, unknown>
+        error?: { message: string }
+    }
+}
+
+describe('MCP tool exposure', () => {
+    beforeAll(() => {
+        // Exposed socket whose tail tool name an mcp-unexposed rpc also maps to
+        // (mutating rpcs default clients.mcp off).
+        defineSocket<{ text: string }>('collide', { schema: testSchema(), tail: 5 })
+        defineRpc('POST', '/collide-tail', () => json({ ok: true }), {
+            inputSchema: testSchema(),
+        })
+        defineRpc('POST', '/hidden-write', () => json({ ok: true }), {
+            inputSchema: testSchema(),
+        })
+    })
+
+    test('a name no declaration exposes is rejected', async () => {
+        const envelope = await mcpEnvelope('tools/call', { name: 'no-such-tool', arguments: {} })
+        expect(envelope.error?.message).toBe('unknown tool: no-such-tool')
+    })
+
+    test("an mcp-unexposed rpc's command name is not callable", async () => {
+        const envelope = await mcpEnvelope('tools/call', { name: 'hidden-write', arguments: {} })
+        expect(envelope.error?.message).toBe('unknown tool: hidden-write')
+    })
+
+    test('an advertised socket tool stays callable when an unexposed rpc shares its name', async () => {
+        const { tools } = (await mcpCall('tools/list')) as { tools: Array<{ name: string }> }
+        expect(tools.map((tool) => tool.name)).toContain('collide-tail')
+        const envelope = await mcpEnvelope('tools/call', { name: 'collide-tail', arguments: {} })
+        expect(envelope.error).toBeUndefined()
+        expect(envelope.result?.structuredContent).toEqual({ frames: [] })
     })
 })

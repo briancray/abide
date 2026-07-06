@@ -1,9 +1,8 @@
 import { ensureRegistriesLoaded } from '../server/runtime/registryManifests.ts'
 import { messageFromError } from '../shared/messageFromError.ts'
 import { buildPrompts } from './buildPrompts.ts'
-import { buildTools } from './buildTools.ts'
-import { callTool } from './callTool.ts'
 import { getMcpResourceServer } from './mcpResourceServerSlot.ts'
+import { mcpTools } from './mcpTools.ts'
 import { renderPrompt } from './renderPrompt.ts'
 import type { JsonRpcRequest } from './types/JsonRpcRequest.ts'
 import type { JsonRpcResponse } from './types/JsonRpcResponse.ts'
@@ -111,7 +110,7 @@ async function dispatchMethod(
             case 'ping':
                 return jsonRpcOk(id, {})
             case 'tools/list':
-                return jsonRpcOk(id, { tools: buildTools() })
+                return jsonRpcOk(id, { tools: mcpTools.list() })
             case 'tools/call': {
                 const params = envelope.params as
                     | { name?: string; arguments?: Record<string, unknown> }
@@ -119,7 +118,7 @@ async function dispatchMethod(
                 if (!params?.name) {
                     return jsonRpcError(id, -32602, 'Missing tool name')
                 }
-                return jsonRpcOk(id, await callTool(params.name, params.arguments, request))
+                return jsonRpcOk(id, await mcpTools.call(params.name, params.arguments, request))
             }
             case 'resources/list': {
                 const resourceServer = getMcpResourceServer()

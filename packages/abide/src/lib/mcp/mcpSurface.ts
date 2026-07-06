@@ -1,8 +1,7 @@
 import { abideLog } from '../shared/abideLog.ts'
 import { buildPrompts } from './buildPrompts.ts'
-import { buildTools } from './buildTools.ts'
-import { callTool } from './callTool.ts'
 import { getMcpResourceServer } from './mcpResourceServerSlot.ts'
+import { mcpTools } from './mcpTools.ts'
 import { renderPrompt } from './renderPrompt.ts'
 import type { McpSurface } from './types/McpSurface.ts'
 import type { PromptDescriptor } from './types/PromptDescriptor.ts'
@@ -14,7 +13,7 @@ source of truth dispatchMcpRequest (the JSON-RPC-over-HTTP transport) and the
 in-app agent loop (abide/server/agent) both build on — the same tool/prompt/
 resource derivation, so a model reaching the app over HTTP and a model driven
 in-process can't drift on what's exposed. The individual derivations live in
-sibling modules (buildTools / buildPrompts / callTool / renderPrompt).
+sibling modules (mcpTools / buildPrompts / renderPrompt).
 
 Internal: there is no package export. The public entry is `agent()`, which
 calls `mcpSurface(request)` to hand an engine the gated tool set.
@@ -36,14 +35,14 @@ export function mcpSurface(request: Request): McpSurface {
     let prompts: PromptDescriptor[] | undefined
     return {
         get tools() {
-            tools ??= buildTools()
+            tools ??= mcpTools.list()
             return tools
         },
         get prompts() {
             prompts ??= buildPrompts()
             return prompts
         },
-        call: (name, args) => mcpLog.trace(`mcp ${name}`, () => callTool(name, args, request)),
+        call: (name, args) => mcpLog.trace(`mcp ${name}`, () => mcpTools.call(name, args, request)),
         /* The conversation-seeding messages, without the wire-shape wrapping. */
         getPrompt: (name, args) => renderPrompt(name, args).messages,
         async listResources() {
