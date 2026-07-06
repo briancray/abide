@@ -5,7 +5,7 @@ same wiring as `abide start`, no fixtures) and hands back the whole surface:
   app.fetch(path)        — pages and raw HTTP, origin + mount base resolved
   app.rpc.<name>(args)   — RPCs over the real pipeline (CSRF, cookies, base),
                            typed and decoded; .raw(args) for the Response
-  app.sockets.<name>     — a live Socket: iterate it, .tail(n), .broadcast(m)
+  app.sockets.<name>     — a live Socket: iterate it (for await), .peek(), .broadcast(m)
   app.health()           — the /__abide/health payload
 
 `app.rpc` / `app.sockets` are typed from your own RPCs and sockets — generated
