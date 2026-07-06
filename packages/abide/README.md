@@ -5,7 +5,7 @@
 You declare a typed RPC once; abide fans it out to an HTTP endpoint, an MCP
 tool, a CLI subcommand, and an OpenAPI operation from that single declaration.
 The same named callable runs on both sides — the bundler swaps the runtime per
-side (in-process handler on the server, typed `fetch` in the browser), so a
+side (in-process handler on the server, typed `fetch` in the browser) — so a
 call reads the same in SSR, client code, and a script.
 
 - One direct dependency: TypeScript. One runtime: Bun (`>=1.3.0`).
@@ -63,8 +63,8 @@ export const postMessage = POST(({ room, body }) => json(save(room, body)), {
 One declaration, five faces:
 
 ```text
-                    ┌─ SSR call       cache(getMessages, { room })
-                    ├─ browser fetch  getMessages({ room }) (typed proxy)
+                    ┌─ SSR call       getMessages({ room })
+                    ├─ browser fetch  getMessages({ room }) (proxy)
   getMessages (GET) ┼─ MCP tool       read-only + schema (auto-exposed)
                     ├─ CLI subcommand the generated CLI binary
                     └─ OpenAPI op     /openapi.json
@@ -74,13 +74,19 @@ A schema unlocks the CLI (any rpc that has one) and, for a read-only method
 (`GET`/`HEAD`), the MCP tool. A mutating method (`POST`/`PUT`/`PATCH`/`DELETE`)
 never auto-exposes to MCP — it needs an explicit `clients: { mcp: true }`.
 
-Consume forms: `cache(fn, args?, options?)` reads through in-process during SSR;
-`fn(args)` is the swapped `fetch` in the browser (throws `HttpError` on non-2xx);
-`fn.raw(args)` returns the raw `Response`; and `fn.cache(args?)` / `fn.pending()`
-/ `fn.invalidate()` / `fn.error()` are the rpc's own bound selectors. A handler
-that returns `jsonl()`/`sse()` is a stream: the bare call returns a
-`Subscribable` directly (consume with `for await (… of fn(args))` or
-`state(fn(args))`) — `await fn(args)` is then a compile error.
+The bare call `getMessages({ room })` **is the smart read**: the same callable
+on both sides, cached/coalesced/reactive with stale-while-revalidate always on
+for replayable reads (it throws `HttpError` on non-2xx). Its second argument is
+`SmartReadOptions` — `ttl` (staleness clock, not eviction), `tags`,
+`throttle`/`debounce`, and `n` (frames to replay). Transport options
+(`signal`/`headers`/…) live on `fn.raw(args, init)`, which returns the raw
+`Response` uncached. Companions: `refresh(fn, args?)` refetches keeping the
+stale value visible, `patch(fn, args?, updater)` mutates the retained value with
+no network, `peek(fn, args?)` reads it synchronously; each is also a bound method
+(`getMessages.refresh()` / `.patch(...)` / `.peek()` / `.pending()` /
+`.refreshing()` / `.error()`). A handler that returns `jsonl()`/`sse()` is a
+stream: the bare call returns a `Subscribable` (consume with `for await (… of
+fn(args))`) and `await fn(args)` is a compile error.
 
 > GET/DELETE/HEAD args travel as query strings — use `z.coerce.*` in the schema.
 > The per-rpc `timeout` (a 504 on every surface — SSR, MCP, CLI, network) is
@@ -100,75 +106,82 @@ import { z } from 'zod'
 
 export const chat = socket({
     schema: z.object({ room: z.string(), body: z.string() }),
-    tail: 50, // retain the last 50 frames for replay
+    tail: 50, // retain the last 50 frames for replay (default 1; 0 opts out)
     ttl: 60_000, // drop retained frames older than 60s (lazy, no timer)
 })
 ```
 
-`chat.publish(m)` is isomorphic (server-side it fans out to in-process iterators
-and remote subscribers; client-side it sends a validated `pub` frame).
-`chat.tail(n)` opens a subscription seeded with the last `n` retained frames.
-The HTTP face is `/__abide/sockets/<name>`: `GET` returns the retained tail,
-`POST` publishes (only when the socket declares `clientPublish: true`).
+`chat.broadcast(m)` is isomorphic (server-side it fans out to in-process
+iterators and remote subscribers; client-side it sends a validated `pub` frame,
+gated by `clientPublish`). `chat.peek()` reads the latest retained frame
+synchronously; `chat.refresh()` re-pulls the server tail after a reconnect.
+Consume the socket directly — `for await`, a `{#for await}` block, or
+`watch(chat, frame => …)` — and seed the initial paint from `chat.peek()`. The
+HTTP face is `/__abide/sockets/<name>`: `GET` returns the retained tail, `POST`
+publishes.
 
 ## 3. Components
 
 The payoff: one `.abide` component that imports the RPC and the socket above and
 exercises the whole template grammar. Reactive primitives are ordinary imported
 names — `state` from `@abide/abide/ui/state` (with `state.computed` /
-`state.linked` members), `effect` from `@abide/abide/ui/effect` (client-only) —
-called bare after import; the compiler resolves the import binding (alias-safe)
-and lowers each onto the ambient scope. `props()` is the ambient prop reader (no
-import). Control flow is `{#…}` mustache blocks; `{children()}` is the single
-slot fill point.
+`state.linked` members) and `watch` from `@abide/abide/ui/watch`, the single
+reaction primitive — called bare after import; the compiler resolves the import
+binding (alias-safe) and lowers each onto the ambient scope. `props()` is the
+ambient prop reader (no import). Control flow is `{#…}` mustache blocks;
+`{children()}` is the single slot fill point.
 
 A capitalised child renders its passed content at `{children()}`:
 
 ```html
 <script>
+import { state } from '@abide/abide/ui/state'
 const { name = 'friend' } = props()
+let hovered = state(false)
 </script>
 
-<figure class="avatar">
+<figure class="avatar" class:hovered={hovered.value} onpointerenter={() => (hovered.value = true)}>
     {#if children}{children()}{:else}<figcaption>{name}</figcaption>{/if}
 </figure>
 ```
 
-The page — `state`/`state.computed`/`state.linked`/`effect`/`props()`, every
-binding and directive (on an element and on the child component), every
+The page — `state` / `state.computed` / `state.linked` / `watch` / `props()`,
+every binding and directive (on an element and on the child component), every
 control-flow block, a `{#snippet}`, a root `<style>`, and a nested
 `<script>`/`<style>` scoped to one branch:
 
 ```html
 <script>
-import { cache } from '@abide/abide/shared/cache'
-import { tail } from '@abide/abide/ui/tail'
 import { state } from '@abide/abide/ui/state'
-import { effect } from '@abide/abide/ui/effect'
+import { watch } from '@abide/abide/ui/watch'
 import { html } from '@abide/abide/ui/html'
 import { getMessages } from '$server/rpc/getMessages'
 import { postMessage } from '$server/rpc/postMessage'
 import { chat } from '$server/sockets/chat'
 import Avatar from '$ui/Avatar.abide'
 
-/* props(): ambient reader — a defaulted field plus the rest for spreading. */
+/* props(): ambient reader — a defaulted field plus the rest to spread onward. */
 const { room = 'lobby', ...rest } = props()
 
 let draft = state('')
-let filter = state('')
 let agree = state(false)
 let tab = state('feed')
 const trimmed = state.computed(() => draft.value.trim())
 const mirror = state.linked(() => room)
 
+/* watch(): the single reaction primitive (client-only). Here it windows the
+   live socket into a cell — replacing the old effect / socket.on / cache.on. */
+let recent = state([])
+watch(chat, (frame) => {
+    recent.value = [...recent.value, frame].slice(-5)
+})
+
 /* A derived two-way binding is an object of { get, set }. */
+const filter = state('')
 const get = () => filter.value
 const set = (next) => {
     filter.value = next
 }
-
-/* effect(): client-only, stripped from SSR. */
-effect(() => console.log('joined', mirror.value))
 
 /* An event handler that calls a mutating rpc. */
 async function send() {
@@ -181,19 +194,19 @@ async function send() {
 </script>
 
 <section class:active={tab.value === 'feed'} style:opacity={agree.value ? '1' : '0.6'} {...rest}>
-    <h1>{room}</h1>
+    <h1>{room} — {mirror.value}</h1>
     <p>{html`<em>live room</em>`}</p>
 
     <form onsubmit={send}>
         <input bind:value={draft} placeholder="message" />
         <input type="checkbox" bind:checked={agree} />
         <label><input type="radio" bind:group={tab} value="feed" /> feed</label>
-        <input bind:value={{ get, set }} />
+        <input bind:value={{ get, set }} placeholder="filter" />
         <button type="submit" disabled={trimmed.value === ''}>send</button>
     </form>
 
-    {#if tail(chat)}
-        <p>latest: {tail(chat).body}</p>
+    {#if chat.peek()}
+        <p>latest: {chat.peek().body}</p>
     {:else if tab.value === 'feed'}
         <p>waiting…</p>
     {:else}
@@ -204,7 +217,7 @@ async function send() {
         <li attach={(node) => node.scrollIntoView()}>{message.body}</li>
     {/snippet}
 
-    {#await cache(getMessages, { room })}
+    {#await getMessages({ room })}
         <p>loading…</p>
     {:then messages}
         <ul>
@@ -232,7 +245,7 @@ async function send() {
     {/switch}
 
     {#try}
-        <p>{tail(chat, { last: 5 })[0].body}</p>
+        <p>{recent.value[0].body}</p>
     {:catch failure}
         <p>{failure.message}</p>
     {:finally}
@@ -254,7 +267,7 @@ async function send() {
         <script>
             let ticks = state(0)
             const label = state.computed(() => `tick ${ticks.value}`)
-            effect(() => console.log(label.value))
+            watch(ticks, (n) => console.log('tick', n))
         </script>
         <p>{label.value}</p>
         <style>
