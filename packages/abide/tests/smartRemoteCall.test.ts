@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { requestContext } from '../src/lib/server/runtime/requestContext.ts'
 import { runWithRequestScope } from '../src/lib/server/runtime/runWithRequestScope.ts'
+import { abideLog } from '../src/lib/shared/abideLog.ts'
 import { cacheStoreSlot } from '../src/lib/shared/cacheStoreSlot.ts'
 import { createCacheStore } from '../src/lib/shared/createCacheStore.ts'
 import { createRemoteFunction } from '../src/lib/shared/createRemoteFunction.ts'
@@ -114,6 +115,33 @@ describe('smart bare rpc call — shared store', () => {
         })
         expect(invokes).toBe(2)
         expect(sharedStore.entries.size).toBe(0)
+    })
+
+    test('server: ttl > 0 without shared warns that a request-scoped ttl is dead', async () => {
+        const warnings: string[] = []
+        const realWarn = abideLog.warn
+        abideLog.warn = ((message: string) => {
+            warnings.push(message)
+        }) as typeof abideLog.warn
+        try {
+            const getWarn = countingRemote('/rpc/getWarn', () => 1)
+            const getFine = countingRemote('/rpc/getFine', () => 1)
+            await runWithRequestScope(
+                new Request('http://x/'),
+                { logRequests: false },
+                async () => {
+                    await getWarn(undefined, { ttl: 5000 })
+                    await getFine(undefined, { shared: true, ttl: 5000 })
+                    return new Response('ok')
+                },
+            )
+            expect(warnings.some((message) => message.includes('request-scoped ttl'))).toBe(true)
+            expect(
+                warnings.filter((message) => message.includes('request-scoped ttl')).length,
+            ).toBe(1)
+        } finally {
+            abideLog.warn = realWarn
+        }
     })
 })
 

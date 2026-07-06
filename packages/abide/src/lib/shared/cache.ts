@@ -230,6 +230,14 @@ function readThrough<Args, Return>(
     }
     const remote = rawFn as RawRemoteFunction<Args>
     const key = keyForRemoteCall(remote.method, remote.url, args)
+    if (
+        !effectiveOptions?.shared &&
+        effectiveOptions?.ttl !== undefined &&
+        effectiveOptions.ttl > 0 &&
+        store !== sharedCacheStore()
+    ) {
+        warnEphemeralTtl(key)
+    }
     store.subscribe(key)
     const existing = store.entries.get(key)
     recordRead(effectiveOptions?.shared ? activeCacheStore() : store, key, existing)
@@ -396,6 +404,20 @@ function warnAnonymousProducer(producer: (args?: never) => unknown): void {
     warnedAnonymousProducers.add(source)
     abideLog.warn(
         'cache() received an anonymous function — each call mints a fresh identity, so it never coalesces and pending()/refreshing() never match it. Hoist it to a named binding, or add a tag to probe it from elsewhere.',
+    )
+}
+
+/* Warn once per key when a ttl>0 read lands in an ephemeral (request-scoped)
+   store — the ttl expires with the request. `shared` (the process store) or a
+   client tab store are the retention homes; a request-scoped ttl is dead config. */
+const warnedEphemeralTtl = new Set<string>()
+function warnEphemeralTtl(key: string): void {
+    if (warnedEphemeralTtl.has(key)) {
+        return
+    }
+    warnedEphemeralTtl.add(key)
+    abideLog.warn(
+        `cache(): a request-scoped ttl expires with the request — add \`shared\` to cache "${key}" across requests, or drop the ttl.`,
     )
 }
 
