@@ -42,7 +42,7 @@ auto-exposes to MCP — it requires explicit `clients: { mcp: true }`.
 | `src/server/config.ts` | Boot-time `env()` validation; eager-imported so a bad environment fails the boot |
 | `src/app.ts` | Optional `AppModule` hooks: `init`, `handle`, `handleError`, `health`, `forwardHeaders` |
 | `src/bundle/window.ts` | Optional `BundleWindow` default export configuring the desktop bundle's window and menus |
-| `src/ui/pages/**/page.abide` | A routed page; the directory path is the route, a `[id]` folder is a path param |
+| `src/ui/pages/**/page.abide` | A routed page; the directory path is the route — a `[id]` folder is a path param, `[[id]]` an optional param, `[...rest]` a catch-all |
 | `src/ui/pages/**/layout.abide` | A layout wrapping the pages below it; its `{children()}` is the router outlet |
 | `src/ui/public/` | Static assets served as-is |
 | `src/.abide/*.d.ts` | Generated typing (rpc args for `url()`, page routes, health fields, test rpc/socket clients, public asset paths) |
@@ -92,8 +92,12 @@ validate as args, `File` parts validate against `filesSchema`.
 
 **Consuming an rpc** — the bare call `fn(args, opts?)` IS the smart read:
 cached, coalesced, reactive, stale-while-revalidate for replayable (GET/HEAD)
-reads; the second arg takes `{ ttl, tags, throttle, debounce, n }` (retention
-and the refetch clock — not transport). During SSR the same call resolves
+reads; the second arg takes `{ ttl, tags, throttle, debounce, global, n }`
+(retention and the refetch clock — not transport). `global: true` stores the
+entry in the process-level store instead of the request-scoped default
+(server), so later requests reuse the value — for memoising an external
+endpoint, never per-user data; on the client it is a no-op (one tab store).
+During SSR the same call resolves
 in-process and its value is baked into the HTML so hydration starts warm —
 there is no `cache()` wrapper; the bare call carries the caching. Around it:
 `fn.raw(args, init?)` returns the raw `Response` (per-call transport options —
@@ -138,8 +142,12 @@ no-op), `watch(handler)` ≡ `watch(socket, handler)` (client-only, SSR-inert),
 plus `name` and `clients`.
 
 **Pages and layouts** — `src/ui/pages/blog/[id]/page.abide` serves
-`/blog/:id`; the param arrives as a prop (`const { id } = props()`) and on the
-reactive `page.params`. A `layout.abide` wraps every page below its directory
+`/blog/<id>`; the param arrives as a prop (`const { id } = props()`) and on the
+reactive `page.params`. A `[[name]]` folder is an optional segment (the route
+matches with or without it; the param is absent when unmatched), `[...rest]`
+a catch-all capturing the remaining path (last segment only). One matcher
+resolves routes on both sides — at the first position where two matching
+patterns differ, literal beats `[name]` beats `[[name]]` beats `[...rest]`. A `layout.abide` wraps every page below its directory
 and renders the page at its `{children()}` outlet. Links are plain `<a href>`
 (the router intercepts in-app hrefs); build paths with `url()` and navigate
 programmatically with `navigate()`.
@@ -260,10 +268,6 @@ Removed forms throw migration errors at parse time: the `<slot>` element (use
 
 - `@abide/abide/server/agent` — `agent(engine, messages)`: runs a provider engine (an `@abide/<provider>` package) against the app's own MCP surface inside an rpc's request scope and returns its `AgentFrame` stream; the handler picks the transport (`jsonl(agent(…))` / `sse(agent(…))`). The module also exports the neutral contract types: `NeutralMessage` (user/assistant/tool turns), `AgentFrame` (`text` deltas, `tool_use`, `tool_result`, `done` with a stop reason), `AgentSurface` (the gated tool/prompt/resource surface), and `AgentEngine` (surface + messages + origin in, frames out).
 
-### Observability — `@documentation observability`
-
-- `@abide/abide/server/reachable` — `await reachable(host)`: server-only outbound reachability. The first call probes (HEAD) and starts a TTL background poll; later calls answer instantly off the warm value. Any completed HTTP response counts as reachable. Tuned by `ABIDE_REACHABLE_TTL` / `ABIDE_REACHABLE_TIMEOUT`.
-
 ### Server plumbing — `@documentation plumbing`
 
 - `@abide/abide/server/AppModule` — the type of `src/app.ts`'s optional hooks (`init`, `handle`, `handleError`, `health`, `forwardHeaders`).
@@ -302,6 +306,7 @@ Probes report, never act — reading one opens no fetch and no stream.
 ### Observability — `@documentation observability`
 
 - `@abide/abide/shared/health` — `health()`: reactive backend health — `{ reachable, abide, name, version, …app health-hook fields }`, polled from `/__abide/health` only while a tracking scope reads it; SSR-seeded so hydration starts warm; constant `{ reachable: true }` on the server. The `AppHealth`/`AppHealthMap` types augment from the generated `health.d.ts`.
+- `@abide/abide/shared/reachable` — `await reachable(host?)`: outbound reachability, same callable both sides. The first call probes (HEAD) and starts a TTL background poll; later calls answer instantly off the warm value. Any completed HTTP response counts as reachable. No host asks about the app's own backend: constant true on the server and on a loopback origin (dev, desktop bundle — works offline); a deployed origin probes like any host. The browser probes no-cors and composes `navigator.onLine` in at read time (loopback exempt). Tuned by `ABIDE_REACHABLE_TTL` / `ABIDE_REACHABLE_TIMEOUT` (server env; the browser runs the defaults).
 - `@abide/abide/shared/log` — the unified logger: `log(...)` / `.warn` / `.error` / `.trace` on the app's always-on channel, every record carrying request-scope context (short trace id, +elapsed, method+path); member `log.channel(name)` returns the same shape on a DEBUG-gated diagnostic channel. Renders tsv (default) or JSON per `ABIDE_LOG_FORMAT`.
 - `@abide/abide/shared/trace` — `trace()`: the current request's W3C `traceparent` (client-side: the trace of the request that rendered the page), or undefined outside any scope.
 
@@ -311,7 +316,7 @@ Probes report, never act — reading one opens no fetch and no stream.
 
 ### URL — `@documentation url`
 
-- `@abide/abide/shared/url` — `url(path, params?/args?)`: resolves any in-app URL to its base-correct form — a page route literal interpolates its `[name]` params (typed via `PathParams`), a GET rpc path serializes typed args to the query, anything else is base-prefixed. Also exports the augmentable `RpcRoutes` / `PageRoutes` / `PublicAssets` maps and the `PathParams<P>` type.
+- `@abide/abide/shared/url` — `url(path, params?/args?)`: resolves any in-app URL to its base-correct form — a page route literal interpolates its `[name]` / `[[name]]` / `[...rest]` params (typed via `PathParams`; an absent optional drops its segment), a GET rpc path serializes typed args to the query, anything else is base-prefixed. Also exports the augmentable `RpcRoutes` / `PageRoutes` / `PublicAssets` maps and the `PathParams<P>` type.
 
 ### Templating — `@documentation templating`
 

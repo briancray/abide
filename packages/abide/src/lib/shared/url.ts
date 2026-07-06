@@ -50,12 +50,17 @@ no bracket segments yields {}, which collapses the params slot away. The
 catch-all branch recurses on its head too, so `[name]` segments before a
 `[...rest]` are kept.
 */
-export type PathParams<P extends string> = P extends `${infer Head}[...${infer Rest}]${infer Tail}`
-    ? PathParams<Head> & { [K in Rest]: string | number } & PathParams<Tail>
-    : P extends `${string}[${infer Name}]${infer Tail}`
-      ? { [K in Name]: string | number } & PathParams<Tail>
-      : // biome-ignore lint/complexity/noBannedTypes: {} is the "no params" base case — keyof {} is never, which collapses the params slot; Record<string, never> would not (keyof is string)
-        {}
+export type PathParams<P extends string> = P extends `${infer Head}[[${infer Name}]]${infer Tail}`
+    ? Name extends `...${infer Rest}`
+        ? // `[[...rest]]` normalizes to a plain catch-all (see parseRouteSegments)
+          PathParams<Head> & { [K in Rest]: string | number } & PathParams<Tail>
+        : PathParams<Head> & { [K in Name]?: string | number } & PathParams<Tail>
+    : P extends `${infer Head}[...${infer Rest}]${infer Tail}`
+      ? PathParams<Head> & { [K in Rest]: string | number } & PathParams<Tail>
+      : P extends `${string}[${infer Name}]${infer Tail}`
+        ? { [K in Name]: string | number } & PathParams<Tail>
+        : // biome-ignore lint/complexity/noBannedTypes: {} is the "no params" base case — keyof {} is never, which collapses the params slot; Record<string, never> would not (keyof is string)
+          {}
 
 /*
 Resolves any in-app URL to its base-correct, typed form — the single chokepoint
@@ -93,22 +98,32 @@ export function url(path: string, first?: Query, second?: Query): string {
     return appendQuery(prefixed, query)
 }
 
-/* Substitutes `[name]` / `[...rest]` segments with their stringified, URL-encoded
-   param values (matching the query side, which encodes too). A `[name]` value is
-   encoded whole so `/`, `?`, `#`, and spaces can't alter the path structure; a
-   `[...rest]` catch-all keeps its `/` separators and encodes each sub-segment. */
+/* Substitutes `[name]` / `[[name]]` / `[...rest]` segments with their stringified,
+   URL-encoded param values (matching the query side, which encodes too). A `[name]`
+   value is encoded whole so `/`, `?`, `#`, and spaces can't alter the path structure;
+   a `[...rest]` catch-all keeps its `/` separators and encodes each sub-segment. An
+   absent `[[optional]]` — undefined OR empty string, since the matcher never captures
+   an empty optional segment — drops its segment (and slash) entirely; a path that
+   empties out (`/[[lang]]` with no lang) resolves to the root. Dropping empty here
+   also avoids emitting a `//about` that a browser reads as a protocol-relative URL. */
 function interpolate(segments: RouteSegment[], params: Query): string {
-    return segments
+    const resolved = segments
         .map((segment) => {
             if (segment.kind === 'literal') {
                 return segment.value
             }
-            const value = String(params[segment.name])
+            const value = params[segment.name]
+            if (segment.optional && (value === undefined || value === '')) {
+                return undefined
+            }
+            const text = String(value)
             return segment.catchAll
-                ? value.split('/').map(encodeURIComponent).join('/')
-                : encodeURIComponent(value)
+                ? text.split('/').map(encodeURIComponent).join('/')
+                : encodeURIComponent(text)
         })
+        .filter((part) => part !== undefined)
         .join('/')
+    return resolved === '' ? '/' : resolved
 }
 
 /* Appends a `?`-query built from the same encoder buildRpcRequest uses, or nothing. */

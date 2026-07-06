@@ -20,4 +20,8 @@ export type SsrBootState = {
     /* The env-configured RPC client timeout (`ABIDE_CLIENT_TIMEOUT`), shipped per request;
        absent → unbounded client fetches. */
     clientTimeout?: number
+    /* The SSR request's W3C traceparent; seeds the browser request scope so trace(), log
+       prefixes, and RPC traceparent headers continue the document's trace. Absent → a
+       fresh sampled trace is minted at boot. */
+    trace?: string
 }

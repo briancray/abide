@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { createReachable } from '../src/lib/server/runtime/createReachable.ts'
+import { createReachable } from '../src/lib/shared/createReachable.ts'
+import { reachable } from '../src/lib/shared/reachable.ts'
 
 /* A scripted probe whose outcome is flippable, counting how often it actually ran. */
 function scriptedProbe(up = true) {
@@ -94,5 +95,25 @@ describe('reachable (createReachable)', () => {
         await ms(90) // quiet — a live poll would keep incrementing
         expect(state.calls).toBe(callsAfterReap)
         stop()
+    })
+})
+
+describe('reachable() — the app-backend form', () => {
+    test('no host is constant true on the server — the server is its own backend', async () => {
+        expect(await reachable()).toBe(true)
+    })
+
+    test('no host short-circuits true on a loopback origin, no probe spent', async () => {
+        /* Nothing listens on this origin, so a probe would answer false — true proves
+           the loopback short-circuit, not a lucky fetch. */
+        const globals = globalThis as { window?: unknown; location?: unknown }
+        globals.window = {}
+        globals.location = new URL('http://localhost:59999/')
+        try {
+            expect(await reachable()).toBe(true)
+        } finally {
+            delete globals.window
+            delete globals.location
+        }
     })
 })

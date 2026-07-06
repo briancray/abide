@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, test } from 'bun:test'
+import { matchRoute } from '../src/lib/shared/matchRoute.ts'
 import { page } from '../src/lib/shared/page.ts'
 import { pageSlot } from '../src/lib/shared/pageSlot.ts'
 import { effect } from '../src/lib/ui/effect.ts'
-import { matchRoute } from '../src/lib/ui/matchRoute.ts'
 import { clientPage } from '../src/lib/ui/runtime/clientPage.ts'
 
 afterEach(() => {

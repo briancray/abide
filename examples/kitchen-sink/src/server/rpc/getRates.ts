@@ -1,7 +1,7 @@
 import { error } from '@abide/abide/server/error'
 import { GET } from '@abide/abide/server/GET'
 import { json } from '@abide/abide/server/json'
-import { reachable } from '@abide/abide/server/reachable'
+import { reachable } from '@abide/abide/shared/reachable'
 
 type Rates = { base: string; date: string; rates: Record<string, number> }
 

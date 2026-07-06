@@ -1,7 +1,7 @@
-import { createLivenessWatch } from '../../shared/createLivenessWatch.ts'
+import { createLivenessWatch } from './createLivenessWatch.ts'
 
 /*
-The reachability registry behind `abide/server/reachable`. A probe transport
+The reachability registry behind `abide/shared/reachable`. A probe transport
 and the timings are injected so the public name wires them from env + a real
 HEAD while tests drive scripted outcomes on tiny intervals.
 

@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { requestContext } from '../src/lib/server/runtime/requestContext.ts'
 import { runWithRequestScope } from '../src/lib/server/runtime/runWithRequestScope.ts'
 import { cacheStoreSlot } from '../src/lib/shared/cacheStoreSlot.ts'
 import { createCacheStore } from '../src/lib/shared/createCacheStore.ts'
 import { createRemoteFunction } from '../src/lib/shared/createRemoteFunction.ts'
+import { globalCacheStoreSlot } from '../src/lib/shared/globalCacheStoreSlot.ts'
 import { refreshing } from '../src/lib/shared/refreshing.ts'
 import { settle } from './support/settle.ts'
 
@@ -14,6 +16,86 @@ function jsonResponse(value: unknown): Response {
         headers: { 'content-type': 'application/json' },
     })
 }
+
+/* Type-level coverage (tsgo validates the body, never executed): the smart bare
+   call's second arg accepts `global` alongside the retention/refetch options. */
+function assertGlobalOptionTypechecks(): void {
+    const getThing = createRemoteFunction<undefined, { id: string }>({
+        method: 'GET',
+        url: '/rpc/getThing',
+        clients: BROWSER_ONLY,
+        buildRequest: () => new Request('http://x/rpc/getThing'),
+        invoke: async () => jsonResponse({ id: '1' }),
+    })
+    void getThing(undefined, { global: true, ttl: 20, tags: ['a'] })
+}
+void assertGlobalOptionTypechecks
+
+describe('smart bare rpc call — global store', () => {
+    let globalStore = createCacheStore()
+    beforeEach(() => {
+        globalStore = createCacheStore()
+        globalCacheStoreSlot.resolver = () => globalStore
+        /* Mirror the server entry's resolver so each runWithRequestScope gets its own
+           request store — without it every scope shares the process fallback and the
+           request-scoped control below would falsely reuse. */
+        cacheStoreSlot.resolver = () => requestContext.getStore()?.cache
+    })
+    afterEach(() => {
+        globalCacheStoreSlot.resolver = undefined
+        cacheStoreSlot.resolver = undefined
+    })
+
+    function countingRemote(url: string, onInvoke: () => number) {
+        return createRemoteFunction<undefined, { n: number }>({
+            method: 'GET',
+            url,
+            clients: BROWSER_ONLY,
+            buildRequest: () => new Request(`http://x${url}`),
+            invoke: async () => jsonResponse({ n: onInvoke() }),
+        })
+    }
+
+    test('global: true stores in the process-level store and later requests reuse it', async () => {
+        let invokes = 0
+        const getShared = countingRemote('/rpc/getShared', () => {
+            invokes += 1
+            return invokes
+        })
+        let first: unknown
+        let second: unknown
+        await runWithRequestScope(new Request('http://x/'), { logRequests: false }, async () => {
+            first = await getShared(undefined, { global: true })
+            return new Response('ok')
+        })
+        await runWithRequestScope(new Request('http://x/'), { logRequests: false }, async () => {
+            second = await getShared(undefined, { global: true })
+            return new Response('ok')
+        })
+        expect(first).toEqual({ n: 1 })
+        expect(second).toEqual({ n: 1 })
+        expect(invokes).toBe(1)
+        expect(globalStore.entries.size).toBe(1)
+    })
+
+    test('without global the default stays request-scoped — a later request re-fetches', async () => {
+        let invokes = 0
+        const getScoped = countingRemote('/rpc/getScoped', () => {
+            invokes += 1
+            return invokes
+        })
+        await runWithRequestScope(new Request('http://x/'), { logRequests: false }, async () => {
+            await getScoped()
+            return new Response('ok')
+        })
+        await runWithRequestScope(new Request('http://x/'), { logRequests: false }, async () => {
+            await getScoped()
+            return new Response('ok')
+        })
+        expect(invokes).toBe(2)
+        expect(globalStore.entries.size).toBe(0)
+    })
+})
 
 describe('smart bare rpc call', () => {
     test('two identical GET calls in one scope coalesce to a single invoke', async () => {

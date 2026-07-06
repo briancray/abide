@@ -45,6 +45,26 @@ describe('url at root mount', () => {
         expect(url('/product/[id]', { id: 5 }, { sort: 'asc' })).toBe('/product/5?sort=asc')
     })
 
+    test('interpolates a provided [[optional]] param like [name]', () => {
+        expect(url('/docs/[[page]]', { page: 'intro' })).toBe('/docs/intro')
+        expect(url('/[[lang]]/about', { lang: 'en' })).toBe('/en/about')
+    })
+
+    test('drops an absent [[optional]] segment and its slash', () => {
+        expect(url('/docs/[[page]]', {})).toBe('/docs')
+        expect(url('/docs/[[page]]', { page: undefined })).toBe('/docs')
+        expect(url('/[[lang]]/about', {})).toBe('/about')
+    })
+
+    test('a root-level absent [[optional]] resolves to /', () => {
+        expect(url('/[[lang]]', {})).toBe('/')
+    })
+
+    test('appends query after [[optional]] params, absent or present', () => {
+        expect(url('/docs/[[page]]', {}, { q: 'x' })).toBe('/docs?q=x')
+        expect(url('/docs/[[page]]', { page: 'intro' }, { q: 'x' })).toBe('/docs/intro?q=x')
+    })
+
     test('treats the second arg as query when the path has no params', () => {
         expect(url('/search', { q: 'hi', page: 2 })).toBe('/search?q=hi&page=2')
     })

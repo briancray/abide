@@ -1,5 +1,7 @@
 import { baseSlot } from '../shared/baseSlot.ts'
+import { createTraceContext } from '../shared/createTraceContext.ts'
 import { healthSeedSlot } from '../shared/healthSeedSlot.ts'
+import { requestScopeSlot } from '../shared/requestScopeSlot.ts'
 import { rpcTimeoutSlot } from '../shared/rpcTimeoutSlot.ts'
 import { setAppName } from '../shared/setAppName.ts'
 import type { SsrBootState } from '../shared/types/SsrBootState.ts'
@@ -20,6 +22,20 @@ const SEED: { [K in keyof Required<SsrBootState>]: (value: SsrBootState[K]) => v
     },
     clientTimeout: (value) => {
         rpcTimeoutSlot.ms = value
+    },
+    /* Continue the SSR request's trace (or mint a fresh sampled one if the stamp is
+       missing) and publish the browser's request scope: trace(), log line prefixes, and
+       the RPC traceparent header resolve through it. elapsedMs is navigation-relative —
+       exactly what performance.now() measures — and the path tracks client navigations
+       because the resolver reads location per call. */
+    trace: (value) => {
+        const traceContext = createTraceContext(value)
+        requestScopeSlot.resolver = () => ({
+            trace: traceContext,
+            elapsedMs: performance.now(),
+            method: 'GET',
+            path: typeof location === 'undefined' ? '' : location.pathname,
+        })
     },
 }
 

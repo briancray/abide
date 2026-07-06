@@ -1,4 +1,4 @@
-import type { BunRequest, Server } from 'bun'
+import type { Server } from 'bun'
 import { createMcpResourceServer } from '../../mcp/createMcpResourceServer.ts'
 import { mcpResourceServerSlot } from '../../mcp/mcpResourceServerSlot.ts'
 import type { McpServer } from '../../mcp/types/McpServer.ts'
@@ -16,13 +16,15 @@ import { IDENTITY_PATH } from '../../shared/IDENTITY_PATH.ts'
 import { INSPECTOR_PATH } from '../../shared/INSPECTOR_PATH.ts'
 import { isDebugNegated } from '../../shared/isDebugNegated.ts'
 import { logClosingRecord } from '../../shared/logClosingRecord.ts'
+import { matchRoute } from '../../shared/matchRoute.ts'
+import { normalizePathname } from '../../shared/normalizePathname.ts'
 import { OFFLINE_HEADER } from '../../shared/OFFLINE_HEADER.ts'
 import { parseBoundedEnvInt } from '../../shared/parseBoundedEnvInt.ts'
+import { parseRouteSegments } from '../../shared/parseRouteSegments.ts'
 import { requestScopeSlot } from '../../shared/requestScopeSlot.ts'
 import { SOCKETS_PATH } from '../../shared/SOCKETS_PATH.ts'
 import { setAppName } from '../../shared/setAppName.ts'
 import { TEXT_PLAIN } from '../../shared/TEXT_PLAIN.ts'
-import { toBunRoutePattern } from '../../shared/toBunRoutePattern.ts'
 import type { Layouts } from '../../ui/types/Layouts.ts'
 import type { Pages } from '../../ui/types/Pages.ts'
 import type { AppModule } from '../AppModule.ts'
@@ -309,58 +311,40 @@ export async function createServer({
     /*
     Route dispatch — rpc-vs-page-vs-404 resolution and method matching — lives
     behind createRouteDispatcher; renderPage is injected so those decisions stay
-    testable without SSR. buildRoutes() below binds the returned handler per URL.
+    testable without SSR. The fetch handler resolves a request URL to a handler
+    through the shared matchRoute — the same matcher the client router runs —
+    so params decode and route precedence agree across the sides by
+    construction (no Bun routes table with its own pattern semantics).
     */
     const buildRouteHandler = createRouteDispatcher({ pages, rpc, renderPage })
 
     /*
-    Page URLs (folder paths, e.g. `/media/[id]`) get translated to Bun's
-    pattern syntax (`/media/:id`) at registration. Bun's `*` wildcard
-    matches but does not capture into req.params, so for `[...rest]`
-    routes the catch-all value is reconstructed from the request URL by
-    slicing the pathname segments after the catch-all's pattern index.
-    The reconstructed value is set under the original name (e.g. `rest`)
-    so the page component's $props destructure stays consistent with the
-    file path. Page URLs and rpc URLs (always `/rpc/...`, flat) are
-    disjoint by construction, so a plain object needs no deduplication.
+    Handlers pre-bound per registered URL. rpc URLs are flat literals (always
+    `/rpc/...`), so they dispatch by direct lookup; page URLs carry `[name]` /
+    `[[name]]` / `[...rest]` segments and resolve through matchRoute. Page and
+    rpc URLs are disjoint by construction, so a request lands in exactly one.
     */
-    const routes: Record<string, (req: BunRequest) => Promise<Response>> = {}
-    for (const routeUrl of Object.keys(pages)) {
-        const handler = buildRouteHandler(routeUrl)
-        const { pattern, catchAllName } = toBunRoutePattern(routeUrl)
-        const catchAllIndex = catchAllName
-            ? routeUrl.split('/').findIndex((segment) => segment.startsWith('[...'))
-            : -1
-        /* Only catch-all routes copy req.params (to write the reconstructed
-           segment); plain routes pass it through — it's never mutated downstream. */
-        routes[pattern] =
-            catchAllName && catchAllIndex !== -1
-                ? (req) => {
-                      const pathParams = {
-                          ...((req.params as Record<string, string> | undefined) ?? {}),
-                      }
-                      const url = new URL(req.url)
-                      /* Bun percent-decodes named :params, so decode the reconstructed
-                         catch-all the same way — [name] and [...rest] must agree on
-                         `/files/my%20doc`. */
-                      pathParams[catchAllName] = url.pathname
-                          .split('/')
-                          .slice(catchAllIndex)
-                          .map(decodePathSegment)
-                          .join('/')
-                      return dispatchRequest(req, pathParams, handler, url)
-                  }
-                : (req) =>
-                      dispatchRequest(
-                          req,
-                          (req.params as Record<string, string> | undefined) ?? {},
-                          handler,
-                      )
-    }
+    const rpcHandlers = new Map<string, ReturnType<typeof buildRouteHandler>>()
     for (const routeUrl of Object.keys(rpc)) {
-        const handler = buildRouteHandler(routeUrl)
-        routes[routeUrl] = (req) => dispatchRequest(req, {}, handler)
+        rpcHandlers.set(routeUrl, buildRouteHandler(routeUrl))
     }
+    const pageHandlers = new Map<string, ReturnType<typeof buildRouteHandler>>()
+    for (const routeUrl of Object.keys(pages)) {
+        /* A `[...rest]` consumes every remaining segment, so segments after it
+           can never constrain matching — the route would silently serve paths
+           it shouldn't. Fail at boot instead. */
+        const segments = parseRouteSegments(routeUrl)
+        const catchAllIndex = segments.findIndex(
+            (segment) => segment.kind === 'param' && segment.catchAll,
+        )
+        if (catchAllIndex !== -1 && catchAllIndex !== segments.length - 1) {
+            throw new Error(
+                `[abide] invalid page route ${routeUrl}: a [...name] catch-all must be the last segment`,
+            )
+        }
+        pageHandlers.set(routeUrl, buildRouteHandler(routeUrl))
+    }
+    const pageRouteUrls = Object.keys(pages)
 
     function dispatchRequest(
         req: Request,
@@ -370,8 +354,7 @@ export async function createServer({
             pathParams: Record<string, string>,
             store: RequestStore,
         ) => Promise<Response>,
-        /* Pre-parsed by the fetch fallback; routes-table callers omit it. */
-        url?: URL,
+        url: URL,
     ): Promise<Response> {
         return runWithRequestScope(req, { app, logRequests, url }, async (store) => {
             const response = app?.handle
@@ -424,8 +407,6 @@ export async function createServer({
                     socketDispatcher.close(ws)
                 },
             },
-
-            routes,
 
             async fetch(req, bunServer) {
                 const url = new URL(req.url)
@@ -590,6 +571,49 @@ export async function createServer({
                         url,
                     )
                 }
+                /*
+                App routes — rpc by flat lookup, pages through the shared
+                matcher (the client router runs the same one). Matched AFTER
+                the `/__abide/*` plumbing above (a reserved namespace no app
+                route occupies) and BEFORE the root-level framework surfaces
+                (/openapi.json, /_app/, public/ files), so a page route
+                shadows a same-path public file — the precedence the Bun
+                routes table used to impose implicitly, now pinned here.
+                */
+                const rpcHandler = rpcHandlers.get(url.pathname)
+                if (rpcHandler) {
+                    return dispatchRequest(req, {}, rpcHandler, url)
+                }
+                /*
+                Pages match only in canonical slash form; a non-canonical
+                request (`/admin/`, `//admin`) that would match is 308'd to the
+                canonical URL instead of served. Serving it directly would hand
+                app.handle — the auth seam — a pathname the matcher silently
+                normalized away, so an exact-match guard on `/admin` never sees
+                the request it's guarding (the old Bun routes table 404'd these
+                forms; the redirect keeps the guard sound AND the URL friendly).
+                rpc URLs stay exact-match strict, as they always were.
+                */
+                const canonicalPathname = normalizePathname(url.pathname)
+                if (canonicalPathname !== url.pathname) {
+                    if (matchRoute(pageRouteUrls, canonicalPathname)) {
+                        return new Response(null, {
+                            status: 308,
+                            headers: {
+                                Location: `${canonicalPathname}${url.search}`,
+                                'Cache-Control': NO_STORE,
+                            },
+                        })
+                    }
+                } else {
+                    const matchedPage = matchRoute(pageRouteUrls, url.pathname)
+                    if (matchedPage) {
+                        const pageHandler = pageHandlers.get(matchedPage.route)
+                        if (pageHandler) {
+                            return dispatchRequest(req, matchedPage.params, pageHandler, url)
+                        }
+                    }
+                }
                 if (url.pathname === OPENAPI_PATH) {
                     return dispatchRequest(
                         req,
@@ -729,10 +753,10 @@ export async function createServer({
     return server
 }
 
-/* Bun percent-decodes named :params, so catch-all reconstruction and the
-   internal-route name decodes must match it. A malformed escape (`/%`) keeps
-   the raw text — the downstream lookup misses naturally instead of a URIError
-   escaping the fetch handler as a 500. */
+/* Lenient percent-decode for the internal-route names above (dev hot-module
+   paths, socket names) — the same leniency matchRoute applies to page params.
+   A malformed escape (`/%`) keeps the raw text so the downstream lookup misses
+   naturally instead of a URIError escaping the fetch handler as a 500. */
 function decodePathSegment(segment: string): string {
     try {
         return decodeURIComponent(segment)

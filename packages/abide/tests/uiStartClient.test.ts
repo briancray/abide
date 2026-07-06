@@ -2,6 +2,8 @@ import { afterEach, beforeAll, describe, expect, test } from 'bun:test'
 import { activeCacheStore } from '../src/lib/shared/activeCacheStore.ts'
 import { cacheStoreSlot } from '../src/lib/shared/cacheStoreSlot.ts'
 import { keyForRemoteCall } from '../src/lib/shared/keyForRemoteCall.ts'
+import { requestScopeSlot } from '../src/lib/shared/requestScopeSlot.ts'
+import { trace } from '../src/lib/shared/trace.ts'
 import type { Route } from '../src/lib/ui/runtime/types/Route.ts'
 import { startClient } from '../src/lib/ui/startClient.ts'
 import { installMiniDom } from './support/installMiniDom.ts'
@@ -12,6 +14,7 @@ beforeAll(() => {
 afterEach(() => {
     cacheStoreSlot.resolver = undefined
     cacheStoreSlot.fallback = undefined
+    requestScopeSlot.resolver = undefined
     delete (globalThis as { __SSR__?: unknown }).__SSR__
     delete (globalThis as { __abideResumeCache?: unknown }).__abideResumeCache
 })
@@ -103,6 +106,54 @@ describe('startClient', () => {
         expect(store.entries.get(warmKey)?.value).toEqual(['streamed'])
         // the miss marker seeds nothing — that read falls back to a live fetch
         expect(store.entries.has(missKey)).toBe(false)
+
+        dispose()
+    })
+
+    /* Regression: the abide-ui rewrite of startClient dropped the browser request-scope
+       install, so trace() was permanently undefined client-side — the SSR text survived
+       hydration (non-reactive read) but any SPA navigation rendered "undefined", and RPC
+       fetches stopped carrying traceparent. */
+    test('continues the SSR trace so trace() resolves client-side', async () => {
+        const ssrTraceparent = '00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01'
+        ;(globalThis as { __SSR__?: unknown }).__SSR__ = { base: '', trace: ssrTraceparent }
+
+        const host = document.createElement('div')
+        const home = Object.assign(
+            (target: Element) => {
+                target.appendChild(document.createTextNode('home'))
+                return () => undefined
+            },
+            { build: (target: Node) => target.appendChild(document.createTextNode('home')) },
+        ) as Route
+        const load = (): Promise<{ default: Route }> => Promise.resolve({ default: home })
+        const dispose = startClient({ '/': load, '*': load }, {}, host)
+        await flush()
+
+        // the trace id continues; the browser hop mints its own span id
+        expect(trace()).toStartWith('00-0af7651916cd43dd8448eb211c80319c-')
+        expect(trace()).toEndWith('-01')
+        expect(trace()).not.toBe(ssrTraceparent)
+
+        dispose()
+    })
+
+    test('mints a fresh sampled trace when the __SSR__ stamp is missing', async () => {
+        ;(globalThis as { __SSR__?: unknown }).__SSR__ = { base: '' }
+
+        const host = document.createElement('div')
+        const home = Object.assign(
+            (target: Element) => {
+                target.appendChild(document.createTextNode('home'))
+                return () => undefined
+            },
+            { build: (target: Node) => target.appendChild(document.createTextNode('home')) },
+        ) as Route
+        const load = (): Promise<{ default: Route }> => Promise.resolve({ default: home })
+        const dispose = startClient({ '/': load, '*': load }, {}, host)
+        await flush()
+
+        expect(trace()).toMatch(/^00-[0-9a-f]{32}-[0-9a-f]{16}-01$/)
 
         dispose()
     })

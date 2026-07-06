@@ -6,6 +6,7 @@ import { createServer } from '../../src/lib/server/runtime/createServer.ts'
 import { requestContext } from '../../src/lib/server/runtime/requestContext.ts'
 import { resolvePageSnapshot } from '../../src/lib/server/runtime/resolvePageSnapshot.ts'
 import { serverSlot } from '../../src/lib/server/runtime/serverSlot.ts'
+import type { Assets } from '../../src/lib/server/runtime/types/Assets.ts'
 import type { SocketRoutes } from '../../src/lib/server/sockets/types/SocketRoutes.ts'
 import { baseSlot } from '../../src/lib/shared/baseSlot.ts'
 import { cacheStoreSlot } from '../../src/lib/shared/cacheStoreSlot.ts'
@@ -34,6 +35,8 @@ export async function bootTestServer(manifests: {
     app?: AppModule
     mcp?: McpServer
     shell?: string
+    /* Embedded public/ files (request path → gzip bytes) for precedence tests. */
+    publicAssets?: Assets
     /* Mounts the dev-only surface (live-reload SSE, hot-module endpoint). */
     dev?: boolean
 }): Promise<{ origin: string; server: Server<unknown>; stop: () => void }> {
@@ -62,7 +65,7 @@ export async function bootTestServer(manifests: {
         app: manifests.app,
         mcp: manifests.mcp,
         assets: {},
-        publicAssets: {},
+        publicAssets: manifests.publicAssets ?? {},
         mcpResources: {},
         port: 0,
         dev: manifests.dev,

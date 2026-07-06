@@ -1,5 +1,4 @@
 * you are making a type-safe isomorphic framework built on web standards and bun.
-* ignore changes to README and examples unless i specifically instruct you to
 * `AGENTS.md` (repo root) is the complete public-surface map — every export grouped by namespace with signature + one-line spec, plus CLI, env vars, routes, and the `.abide` grammar. Read it to understand the full featureset; keep it in sync after changing the `exports` map (run `bun run packages/abide/scripts/readmeSurfaces.ts`).
 
 # project goals
