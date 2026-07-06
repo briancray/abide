@@ -7,6 +7,7 @@ import { appendTextAt } from './dom/appendTextAt.ts'
 import { attach } from './dom/attach.ts'
 import { attr } from './dom/attr.ts'
 import { awaitBlock } from './dom/awaitBlock.ts'
+import { bindSelectValue } from './dom/bindSelectValue.ts'
 import { cloneStatic } from './dom/cloneStatic.ts'
 import { each } from './dom/each.ts'
 import { eachAsync } from './dom/eachAsync.ts'
@@ -66,6 +67,7 @@ export function installHotBridge(): void {
         attr,
         on,
         attach,
+        bindSelectValue,
         each,
         eachAsync,
         when,

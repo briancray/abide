@@ -103,6 +103,7 @@
         "./ui/dom/attr": "./src/lib/ui/dom/attr.ts",
         "./ui/dom/on": "./src/lib/ui/dom/on.ts",
         "./ui/dom/attach": "./src/lib/ui/dom/attach.ts",
+        "./ui/dom/bindSelectValue": "./src/lib/ui/dom/bindSelectValue.ts",
         "./ui/dom/each": "./src/lib/ui/dom/each.ts",
         "./ui/dom/eachAsync": "./src/lib/ui/dom/eachAsync.ts",
         "./ui/dom/when": "./src/lib/ui/dom/when.ts",

@@ -22,6 +22,7 @@ import { skeletonContext } from './skeletonContext.ts'
 import { snippetPlan } from './snippetPlan.ts'
 import { spreadExcludedNames } from './spreadExcludedNames.ts'
 import { staticAttr } from './staticAttr.ts'
+import { staticAttrValue } from './staticAttrValue.ts'
 import { staticTextPart } from './staticTextPart.ts'
 import { switchPlan } from './switchPlan.ts'
 import { tryPlan } from './tryPlan.ts'
@@ -180,15 +181,37 @@ export function generateBuild(
                 `$$on(${varName}, "change", () => { const $groupValue = ${value}; if (${varName}.checked) { if (!(${lowerExpression(attr.code)}).includes($groupValue)) { ${lowerStatement(`${attr.code}.push($groupValue)`)} } } else { const $groupIndex = (${lowerExpression(attr.code)}).indexOf($groupValue); if ($groupIndex !== -1) { ${lowerStatement(`delete ${attr.code}[$groupIndex]`)} } } });\n`
             )
         }
+        /* `<select bind:value>` — options frequently mount after this binding runs (a
+           `{#for}` child, an async list) and the browser drops a `value` set naming a
+           not-yet-present option, so route to `bindSelectValue`: it re-applies on option
+           changes via a MutationObserver and switches single/array semantics on `multiple`
+           (`<select multiple>` binds an array of the selected option values). The read/write
+           are the same lvalue/accessor forms every bind uses; the helper decides how to
+           apply and collect them. */
+        if (attr.property === 'value' && node.tag === 'select') {
+            const multiple = staticAttrValue(node, 'multiple') !== undefined
+            return `$$bindSelectValue(${varName}, () => (${bindRead(attr.code)}), ($selectValue) => { ${bindWrite(attr.code, '$selectValue')} }, ${multiple});\n`
+        }
         /* Two-way: drive the property from the bind target, and write it back on the
            property's native event (`input` for most fields, but `toggle` for
            `<details open>`, `change` for checked/select). An lvalue target reads as
            itself and writes by assignment; an accessor object (`{ get, set }`) reads via
-           `.get()` and writes via `.set(v)` — see `bindRead`/`bindWrite`. */
+           `.get()` and writes via `.set(v)` — see `bindRead`/`bindWrite`. A numeric input
+           (`type="number"`/`"range"`) reports its edit as a string on `el.value`, which
+           would corrupt number-typed state; source the write-back from `valueAsNumber`
+           instead (empty field → `undefined`), gated on a statically-known type. */
         const event = bindListenEvent(attr.property, node.tag)
+        const staticType = staticAttrValue(node, 'type')
+        const isNumericInput =
+            attr.property === 'value' &&
+            node.tag === 'input' &&
+            (staticType === 'number' || staticType === 'range')
+        const writeSource = isNumericInput
+            ? `(${varName}.value === '' ? undefined : ${varName}.valueAsNumber)`
+            : `${varName}.${attr.property}`
         return (
             `$$watch(${namedThunk(`bind_${attr.property}`, `${varName}.${attr.property} = ${bindRead(attr.code)};`)});\n` +
-            `$$on(${varName}, ${JSON.stringify(event)}, () => { ${bindWrite(attr.code, `${varName}.${attr.property}`)} });\n`
+            `$$on(${varName}, ${JSON.stringify(event)}, () => { ${bindWrite(attr.code, writeSource)} });\n`
         )
     }
 

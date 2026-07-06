@@ -332,11 +332,31 @@ const label = 'hi'</script><i>{label}</i>`,
         expect(compileComponent(`<input bind:value={name}/>`)).toContain(
             'on(el1, "input", () => { name = el1.value; })',
         )
-        expect(
-            compileComponent(`<select bind:value={choice}><option>a</option></select>`),
-        ).toContain('on(el1, "change", () => { choice = el1.value; })')
         expect(compileComponent(`<input type="checkbox" bind:checked={agree}/>`)).toContain(
             'on(el1, "change", () => { agree = el1.checked; })',
+        )
+    })
+
+    test('<select bind:value> routes to bindSelectValue (options can mount late)', () => {
+        // A plain `bind:value` would set `el.value` once, before `{#for}`/async options
+        // exist; `bindSelectValue` re-applies on option changes and handles `multiple`.
+        expect(
+            compileComponent(`<select bind:value={choice}><option>a</option></select>`),
+        ).toContain(
+            'bindSelectValue(el1, () => (choice), ($selectValue) => { choice = $selectValue; }, false)',
+        )
+        expect(
+            compileComponent(`<select multiple bind:value={picks}><option>a</option></select>`),
+        ).toContain(', true)')
+    })
+
+    test('numeric input bind:value writes back a number, not a string', () => {
+        // regression: `el.value` is a string, silently corrupting number-typed state.
+        expect(compileComponent(`<input type="number" bind:value={qty}/>`)).toContain(
+            "qty = (el1.value === '' ? undefined : el1.valueAsNumber)",
+        )
+        expect(compileComponent(`<input type="range" bind:value={vol}/>`)).toContain(
+            "vol = (el1.value === '' ? undefined : el1.valueAsNumber)",
         )
     })
 

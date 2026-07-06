@@ -34,6 +34,7 @@ export const UI_RUNTIME_IMPORTS: { name: string; specifier: string; alias?: stri
     { name: 'attr', specifier: 'ui/dom/attr', alias: '$$attr' },
     { name: 'on', specifier: 'ui/dom/on', alias: '$$on' },
     { name: 'attach', specifier: 'ui/dom/attach', alias: '$$attach' },
+    { name: 'bindSelectValue', specifier: 'ui/dom/bindSelectValue', alias: '$$bindSelectValue' },
     { name: 'each', specifier: 'ui/dom/each', alias: '$$each' },
     { name: 'eachAsync', specifier: 'ui/dom/eachAsync', alias: '$$eachAsync' },
     { name: 'when', specifier: 'ui/dom/when', alias: '$$when' },

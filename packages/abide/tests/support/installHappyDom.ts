@@ -15,7 +15,15 @@ parse through the SAME parser, so they agree regardless of fostering.)
 export function installHappyDom(): () => void {
     const window = new Window()
     const target = globalThis as Record<string, unknown>
-    const carriers = ['document', 'window', 'Node', 'NodeFilter', 'Event', 'DocumentFragment']
+    const carriers = [
+        'document',
+        'window',
+        'Node',
+        'NodeFilter',
+        'Event',
+        'DocumentFragment',
+        'MutationObserver',
+    ]
     const previous = Object.fromEntries(carriers.map((name) => [name, target[name]]))
     for (const name of carriers) {
         target[name] =

@@ -23,6 +23,7 @@ import { skeletonContext } from './skeletonContext.ts'
 import { snippetPlan } from './snippetPlan.ts'
 import { spreadExcludedNames } from './spreadExcludedNames.ts'
 import { staticAttr } from './staticAttr.ts'
+import { staticAttrValue } from './staticAttrValue.ts'
 import { staticTextPart } from './staticTextPart.ts'
 import { stripEffects } from './stripEffects.ts'
 import { switchPlan } from './switchPlan.ts'
@@ -70,6 +71,12 @@ export function generateSSR(
        allocated separately at runtime via `$ctx.next++`. */
     const nextVar = makeVarNamer()
 
+    /* The enclosing `<select bind:value>`s, innermost last: each carries the JS var holding
+       its bound value and whether it's a `multiple` (array) select, so an `<option>` rendered
+       within can emit `selected` by comparing its own value against the bound one. Pushed when
+       a bound select opens, popped after its children. */
+    const selectBinds: { variable: string; multiple: boolean }[] = []
+
     /* The shared signal→`model` lowering + branch-scoped nested-script deref scope. */
     const {
         expression: lowerExpression,
@@ -90,6 +97,47 @@ export function generateSSR(
 
     function push(target: string, literal: string): string {
         return `${target}.push(${JSON.stringify(literal)});\n`
+    }
+
+    /* The JS expression for an `<option>`'s value, to compare against an enclosing bound
+       `<select>`: the `value` attribute (static/expression/interpolated), else the option's
+       static text content (the browser's own fallback, whitespace-trimmed). Returns undefined
+       when the value can't be known at compile time (a dynamic-text option with no `value`
+       attr) — the client selects it on hydrate. */
+    function optionValueForSSR(
+        node: Extract<TemplateNode, { kind: 'element' }>,
+    ): string | undefined {
+        const valueAttr = node.attrs.find(
+            (attr) =>
+                (attr.kind === 'static' ||
+                    attr.kind === 'expression' ||
+                    attr.kind === 'interpolated') &&
+                attr.name === 'value',
+        )
+        if (valueAttr !== undefined) {
+            if (valueAttr.kind === 'static') {
+                return JSON.stringify(valueAttr.value)
+            }
+            if (valueAttr.kind === 'expression') {
+                return lowerExpression(valueAttr.code)
+            }
+            if (valueAttr.kind === 'interpolated') {
+                return lowerExpression(interpolatedTemplateLiteral(valueAttr.parts))
+            }
+        }
+        let staticText = ''
+        for (const child of node.children) {
+            if (child.kind !== 'text') {
+                return undefined
+            }
+            for (const part of child.parts) {
+                if (part.kind !== 'static') {
+                    return undefined
+                }
+                staticText += part.value
+            }
+        }
+        return JSON.stringify(staticText.trim())
     }
 
     function generateInto(children: TemplateNode[], target: string): string {
@@ -443,6 +491,14 @@ export function generateSSR(
                 /* A boolean property — its mere presence means checked, so emit the
                    attribute only when truthy (a string `checked="false"` still checks). */
                 code += `${target}.push((${bindRead(attr.code)}) ? ' checked' : '');\n`
+            } else if (attr.kind === 'bind' && attr.property === 'open') {
+                /* `<details open>` — `open` is a boolean attribute, so `open="false"` would
+                   still render open. Emit the bare attribute only when truthy, like checked. */
+                code += `${target}.push((${bindRead(attr.code)}) ? ' open' : '');\n`
+            } else if (attr.kind === 'bind' && attr.property === 'value' && node.tag === 'select') {
+                /* `<select bind:value>` selects via `selected` on the matching option (a
+                   `value="…"` on the select is ignored by browsers), wired below. Emit nothing
+                   here. */
             } else if (attr.kind === 'bind') {
                 code += `${target}.push(${JSON.stringify(` ${attr.property}="`)} + $esc(${bindRead(attr.code)}) + '"');\n`
             }
@@ -455,7 +511,33 @@ export function generateSSR(
         if (merge.mergeStyle) {
             code += `${target}.push(' style="' + $esc([${merge.styleParts.join(', ')}].filter(Boolean).join(';')) + '"');\n`
         }
+        /* An `<option>` inside a bound `<select>`: emit `selected` when its value equals the
+           bound value (single) or is a member of it (multiple). */
+        if (node.tag === 'option' && selectBinds.length > 0) {
+            const optionValue = optionValueForSSR(node)
+            if (optionValue !== undefined) {
+                const bind = selectBinds[selectBinds.length - 1]
+                const present = bind.multiple
+                    ? `Array.isArray(${bind.variable}) && ${bind.variable}.includes(${optionValue})`
+                    : `(${optionValue}) === (${bind.variable})`
+                code += `${target}.push((${present}) ? ' selected' : '');\n`
+            }
+        }
         code += push(target, '>')
+        /* A bound `<select>` publishes its current value to a local so the options rendered
+           as its children can compare against it; popped once past those children. */
+        const selectValueBind =
+            node.tag === 'select'
+                ? node.attrs.find((attr) => attr.kind === 'bind' && attr.property === 'value')
+                : undefined
+        if (selectValueBind !== undefined && selectValueBind.kind === 'bind') {
+            const variable = nextVar('$sel')
+            code += `const ${variable} = ${bindRead(selectValueBind.code)};\n`
+            selectBinds.push({
+                variable,
+                multiple: staticAttrValue(node, 'multiple') !== undefined,
+            })
+        }
         if (!plan.isVoid) {
             /* Each child's skeleton position (whether its reactive text interleaves into an
                anchor, whether a nested block anchors) is already recorded by `skeletonContext`
@@ -463,6 +545,9 @@ export function generateSSR(
                this element's subtree. */
             code += withNestedScripts(node.children, () => generateInto(node.children, target))
             code += push(target, `</${node.tag}>`)
+        }
+        if (selectValueBind !== undefined) {
+            selectBinds.pop()
         }
         return code
     }
