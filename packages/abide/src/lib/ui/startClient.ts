@@ -1,14 +1,11 @@
 import { createCacheStore } from '../shared/createCacheStore.ts'
-import { healthSeedSlot } from '../shared/healthSeedSlot.ts'
-import { rpcTimeoutSlot } from '../shared/rpcTimeoutSlot.ts'
-import { setAppName } from '../shared/setAppName.ts'
-import { setBaseResolver } from '../shared/setBaseResolver.ts'
 import { setCacheStoreResolver } from '../shared/setCacheStoreResolver.ts'
 import { setGlobalCacheStoreResolver } from '../shared/setGlobalCacheStoreResolver.ts'
 import { setPageResolver } from '../shared/setPageResolver.ts'
-import type { CacheSnapshotEntry } from '../shared/types/CacheSnapshotEntry.ts'
+import type { SsrPayload } from '../shared/types/SsrPayload.ts'
 import type { StreamedResolution } from '../shared/types/StreamedResolution.ts'
 import { probeNavigation } from './probeNavigation.ts'
+import { seedBootState } from './seedBootState.ts'
 
 /* Build-time flag the production client defines false (see build.ts `define`) so the dev-only
    hot bridge — and the entire DOM runtime it statically pulls in for re-builds — is dead-code-
@@ -20,15 +17,6 @@ import { router } from './router.ts'
 import { clientPage } from './runtime/clientPage.ts'
 import type { RouteLoader } from './runtime/types/RouteLoader.ts'
 import { seedResolved } from './seedResolved.ts'
-
-/* The server's __SSR__ payload this entry consumes. */
-type SsrPayload = {
-    cache?: CacheSnapshotEntry[]
-    base?: string
-    app?: string
-    health?: Record<string, unknown>
-    clientTimeout?: number
-}
 
 /*
 The official abide-ui client entry. Reads the server's `window.__SSR__` payload,
@@ -67,16 +55,14 @@ export function startClient(
     if ((globalThis as { __abideInspect?: boolean }).__abideInspect) {
         import('./installInspectorBridge.ts').then((module) => module.installInspectorBridge())
     }
-    const ssr = (globalThis as { __SSR__?: SsrPayload }).__SSR__ ?? {}
-    setBaseResolver(() => ssr.base ?? '')
-    /* Seed the per-page __SSR__ stamps into their shared slots before mount: the app
-       name (default log channel), the health payload (so health()'s first probe is warm),
-       and the env-configured RPC timeout (ABIDE_CLIENT_TIMEOUT, shipped per request).
-       Without this the browser falls back to channel 'app', a cold first health probe,
-       and unbounded RPC fetches. */
-    setAppName(ssr.app)
-    healthSeedSlot.payload = ssr.health
-    rpcTimeoutSlot.ms = ssr.clientTimeout
+    const ssr = (globalThis as { __SSR__?: Partial<SsrPayload> }).__SSR__ ?? {}
+    /* Seed the per-page __SSR__ stamps into their shared slots before mount: the mount
+       base, app name (default log channel), health payload (so health()'s first probe is
+       warm), and the env-configured RPC timeout (ABIDE_CLIENT_TIMEOUT, shipped per
+       request). Driven by the exhaustive `seedBootState` map so a new boot field can't be
+       stamped server-side and silently dropped here. Without seeding: no mount base,
+       channel 'app', a cold first health probe, and unbounded RPC fetches. */
+    seedBootState(ssr)
     /* The `page` proxy reads route/params/url off the router-updated snapshot. */
     setPageResolver(() => clientPage.value)
 

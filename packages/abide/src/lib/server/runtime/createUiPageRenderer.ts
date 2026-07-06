@@ -5,6 +5,7 @@ import { layoutChainForRoute } from '../../shared/layoutChainForRoute.ts'
 import { safeJsonForScript } from '../../shared/safeJsonForScript.ts'
 import { snapshotShippable } from '../../shared/snapshotShippable.ts'
 import type { CacheSnapshotEntry } from '../../shared/types/CacheSnapshotEntry.ts'
+import type { SsrPayload } from '../../shared/types/SsrPayload.ts'
 import type { StreamedResolution } from '../../shared/types/StreamedResolution.ts'
 import { renderChain } from '../../ui/renderChain.ts'
 import { renderToStream } from '../../ui/renderToStream.ts'
@@ -115,7 +116,7 @@ export function createUiPageRenderer({
             app: appNameSlot.name,
             health,
             clientTimeout,
-        })
+        } satisfies SsrPayload)
         return `<script>window.__SSR__ = ${payload};</script>`
     }
 
