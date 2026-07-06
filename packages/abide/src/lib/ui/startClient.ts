@@ -1,7 +1,7 @@
 import { cacheStoreSlot } from '../shared/cacheStoreSlot.ts'
 import { createCacheStore } from '../shared/createCacheStore.ts'
-import { globalCacheStoreSlot } from '../shared/globalCacheStoreSlot.ts'
 import { pageSlot } from '../shared/pageSlot.ts'
+import { sharedCacheStoreSlot } from '../shared/sharedCacheStoreSlot.ts'
 import type { SsrPayload } from '../shared/types/SsrPayload.ts'
 import type { StreamedResolution } from '../shared/types/StreamedResolution.ts'
 import { probeNavigation } from './probeNavigation.ts'
@@ -68,8 +68,8 @@ export function startClient(
 
     const store = createCacheStore()
     cacheStoreSlot.resolver = () => store
-    /* One tab store: cache(fn, { global: true }) shares it, so global is a no-op here. */
-    globalCacheStoreSlot.resolver = () => store
+    /* One tab store: cache(fn, { shared: true }) shares it, so shared is a no-op here. */
+    sharedCacheStoreSlot.resolver = () => store
     /* Seed both SSR cache partitions through the one streamed-resolution sink: `ssr.cache`
        (inline — reads settled at render-return, in __SSR__) and `__abideResumeCache` (pending
        {#await} reads whose `__abideResolve(...)` chunks the stream pushed during parse, before

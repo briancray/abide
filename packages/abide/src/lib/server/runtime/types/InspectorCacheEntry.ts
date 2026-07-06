@@ -1,5 +1,5 @@
 /*
-One global cache entry projected for the inspector — the serializable facts the
+One shared cache entry projected for the inspector — the serializable facts the
 Cache tab renders. The stored promise/Request/timer aren't included; what an
 operator wants is the entry's identity, lifecycle state, retention, and a peek
 at the held value.

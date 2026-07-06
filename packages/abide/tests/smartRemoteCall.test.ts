@@ -4,8 +4,8 @@ import { runWithRequestScope } from '../src/lib/server/runtime/runWithRequestSco
 import { cacheStoreSlot } from '../src/lib/shared/cacheStoreSlot.ts'
 import { createCacheStore } from '../src/lib/shared/createCacheStore.ts'
 import { createRemoteFunction } from '../src/lib/shared/createRemoteFunction.ts'
-import { globalCacheStoreSlot } from '../src/lib/shared/globalCacheStoreSlot.ts'
 import { refreshing } from '../src/lib/shared/refreshing.ts'
+import { sharedCacheStoreSlot } from '../src/lib/shared/sharedCacheStoreSlot.ts'
 import { settle } from './support/settle.ts'
 
 const BROWSER_ONLY = { browser: true, mcp: false, cli: false }
@@ -18,8 +18,8 @@ function jsonResponse(value: unknown): Response {
 }
 
 /* Type-level coverage (tsgo validates the body, never executed): the smart bare
-   call's second arg accepts `global` alongside the retention/refetch options. */
-function assertGlobalOptionTypechecks(): void {
+   call's second arg accepts `shared` alongside the retention/refetch options. */
+function assertSharedOptionTypechecks(): void {
     const getThing = createRemoteFunction<undefined, { id: string }>({
         method: 'GET',
         url: '/rpc/getThing',
@@ -27,22 +27,22 @@ function assertGlobalOptionTypechecks(): void {
         buildRequest: () => new Request('http://x/rpc/getThing'),
         invoke: async () => jsonResponse({ id: '1' }),
     })
-    void getThing(undefined, { global: true, ttl: 20, tags: ['a'] })
+    void getThing(undefined, { shared: true, ttl: 20, tags: ['a'] })
 }
-void assertGlobalOptionTypechecks
+void assertSharedOptionTypechecks
 
-describe('smart bare rpc call — global store', () => {
-    let globalStore = createCacheStore()
+describe('smart bare rpc call — shared store', () => {
+    let sharedStore = createCacheStore()
     beforeEach(() => {
-        globalStore = createCacheStore()
-        globalCacheStoreSlot.resolver = () => globalStore
+        sharedStore = createCacheStore()
+        sharedCacheStoreSlot.resolver = () => sharedStore
         /* Mirror the server entry's resolver so each runWithRequestScope gets its own
            request store — without it every scope shares the process fallback and the
            request-scoped control below would falsely reuse. */
         cacheStoreSlot.resolver = () => requestContext.getStore()?.cache
     })
     afterEach(() => {
-        globalCacheStoreSlot.resolver = undefined
+        sharedCacheStoreSlot.resolver = undefined
         cacheStoreSlot.resolver = undefined
     })
 
@@ -56,7 +56,7 @@ describe('smart bare rpc call — global store', () => {
         })
     }
 
-    test('global: true stores in the process-level store and later requests reuse it', async () => {
+    test('shared: true stores in the process-level store and later requests reuse it', async () => {
         let invokes = 0
         const getShared = countingRemote('/rpc/getShared', () => {
             invokes += 1
@@ -65,20 +65,20 @@ describe('smart bare rpc call — global store', () => {
         let first: unknown
         let second: unknown
         await runWithRequestScope(new Request('http://x/'), { logRequests: false }, async () => {
-            first = await getShared(undefined, { global: true })
+            first = await getShared(undefined, { shared: true })
             return new Response('ok')
         })
         await runWithRequestScope(new Request('http://x/'), { logRequests: false }, async () => {
-            second = await getShared(undefined, { global: true })
+            second = await getShared(undefined, { shared: true })
             return new Response('ok')
         })
         expect(first).toEqual({ n: 1 })
         expect(second).toEqual({ n: 1 })
         expect(invokes).toBe(1)
-        expect(globalStore.entries.size).toBe(1)
+        expect(sharedStore.entries.size).toBe(1)
     })
 
-    test('without global the default stays request-scoped — a later request re-fetches', async () => {
+    test('without shared the default stays request-scoped — a later request re-fetches', async () => {
         let invokes = 0
         const getScoped = countingRemote('/rpc/getScoped', () => {
             invokes += 1
@@ -93,7 +93,7 @@ describe('smart bare rpc call — global store', () => {
             return new Response('ok')
         })
         expect(invokes).toBe(2)
-        expect(globalStore.entries.size).toBe(0)
+        expect(sharedStore.entries.size).toBe(0)
     })
 })
 

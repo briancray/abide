@@ -1,4 +1,4 @@
-import { globalCacheStore } from '../../shared/globalCacheStore.ts'
+import { sharedCacheStore } from '../../shared/sharedCacheStore.ts'
 import type { CacheEntry } from '../../shared/types/CacheEntry.ts'
 import type { InspectorCacheEntry } from './types/InspectorCacheEntry.ts'
 import type { InspectorCacheSnapshot } from './types/InspectorCacheSnapshot.ts'
@@ -48,14 +48,14 @@ function projectEntry(entry: CacheEntry, now: number): InspectorCacheEntry {
 }
 
 /*
-Snapshots the process-level cache store (the persistent one `cache(fn, { global:
+Snapshots the process-level cache store (the persistent one `cache(fn, { shared:
 true })` writes to) for the inspector. Read at call time, so it reflects the
 store as it stands; request-scoped stores are deliberately excluded — they're
 ephemeral and already visible as per-request cache tallies.
 */
 export function buildCacheSnapshot(): InspectorCacheSnapshot {
     const now = Date.now()
-    const entries = Array.from(globalCacheStore().entries.values(), (entry) =>
+    const entries = Array.from(sharedCacheStore().entries.values(), (entry) =>
         projectEntry(entry, now),
     )
     return { entries }

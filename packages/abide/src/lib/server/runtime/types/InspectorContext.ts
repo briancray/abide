@@ -17,7 +17,7 @@ export type InspectorContext = {
     app: { name: string; version: string }
     /* Eager-loads the registries, then projects the current RPC + socket catalog. */
     loadSurface: () => Promise<InspectorSurface>
-    /* Snapshots the persistent (global) cache store — current entries with their
+    /* Snapshots the persistent (shared) cache store — current entries with their
        lifecycle state, retention, tags, and a value preview. */
     cacheSnapshot: () => InspectorCacheSnapshot
     /* Snapshots the requests whose handler is executing right now — the live

@@ -11,12 +11,13 @@ number = TTL.
 multiple when a call belongs to multiple invalidation groups. A unique tag (e.g.
 a uuid) shared by a set of calls gives them their own private invalidation group.
 
-`global` opts the entry into the process-level store instead of the default
-request-scoped one (server) — so a value computed in one request is reused by
-later requests, e.g. memoising an external endpoint the server calls. Omit it
-for per-request data: the default keeps a per-user response from leaking across
-requests. Write only `global: true`; there is no `false` form. On the client
-there is a single tab store, so the flag is a no-op there.
+`shared` opts the entry into the process-level store instead of the default
+request-scoped one (server) — a store that outlives every request. It selects
+the store only; it does NOT retain (pair it with `ttl` to memoise across
+requests). The shared store is keyed by method+url+args, never by user, so do
+not put per-user data in it — it would be served to other users. Omit `shared`
+for per-request data. Write only `shared: true`; there is no `false` form. On
+the client there is a single tab store, so the flag is a no-op there.
 
 `swr` is stale-while-revalidate: it changes what a `cache.invalidate` hit does
 to this key. Without it, an invalidate drops the entry and the next read shows
@@ -44,7 +45,7 @@ with the same wrap-time guard as the `swr` window: set one, not both.
 export type CacheOptions = {
     ttl?: number
     tags?: string[]
-    global?: boolean
+    shared?: boolean
     swr?: boolean | { throttle?: number; debounce?: number }
     throttle?: number
     debounce?: number

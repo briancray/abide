@@ -8,9 +8,9 @@ import { cache } from '../src/lib/shared/cache.ts'
 import { cacheEntryFromSnapshot } from '../src/lib/shared/cacheEntryFromSnapshot.ts'
 import { cacheStoreSlot } from '../src/lib/shared/cacheStoreSlot.ts'
 import { createCacheStore } from '../src/lib/shared/createCacheStore.ts'
-import { globalCacheStoreSlot } from '../src/lib/shared/globalCacheStoreSlot.ts'
 import { isReplayableMethod } from '../src/lib/shared/isReplayableMethod.ts'
 import { keyForRemoteCall } from '../src/lib/shared/keyForRemoteCall.ts'
+import { sharedCacheStoreSlot } from '../src/lib/shared/sharedCacheStoreSlot.ts'
 import type { CacheStore } from '../src/lib/shared/types/CacheStore.ts'
 import type { RawRemoteFunction } from '../src/lib/shared/types/RawRemoteFunction.ts'
 import { settle } from './support/settle.ts'
@@ -23,7 +23,7 @@ edges the other cache suites don't pin:
 
   - ttl=0 remote entries on the SERVER stay in the request-scoped store after
     settling so the post-render SSR snapshot can still inline them; on the
-    CLIENT (window defined) and in the process-level global store they evict
+    CLIENT (window defined) and in the process-level shared store they evict
     the moment they settle.
   - ttl>0 entries evict after expiry; a read inside the window shares the
     entry without re-running the handler.
@@ -58,7 +58,7 @@ beforeAll(() => {
 })
 afterAll(() => {
     cacheStoreSlot.resolver = undefined
-    globalCacheStoreSlot.resolver = undefined
+    sharedCacheStoreSlot.resolver = undefined
 })
 
 async function inServerScope<T>(body: (store: CacheStore) => Promise<T>): Promise<T> {
@@ -117,16 +117,16 @@ describe('ttl=0 (dedupe only)', () => {
         })
     })
 
-    test('the process-level global store evicts on settle (would leak forever)', async () => {
-        const globalStore = createCacheStore()
-        globalCacheStoreSlot.resolver = () => globalStore
+    test('the process-level shared store evicts on settle (would leak forever)', async () => {
+        const sharedStore = createCacheStore()
+        sharedCacheStoreSlot.resolver = () => sharedStore
         try {
             await inServerScope(async () => {
-                await cache(countedRemote, undefined, { ttl: 0, global: true })
+                await cache(countedRemote, undefined, { ttl: 0, shared: true })
             })
-            expect(globalStore.entries.size).toBe(0)
+            expect(sharedStore.entries.size).toBe(0)
         } finally {
-            globalCacheStoreSlot.resolver = undefined
+            sharedCacheStoreSlot.resolver = undefined
         }
     })
 })
@@ -134,15 +134,15 @@ describe('ttl=0 (dedupe only)', () => {
 describe('ttl>0 (expire after resolve)', () => {
     test('a read inside the window shares the entry; expiry evicts it', async () => {
         calls = 0
-        const globalStore = createCacheStore()
-        globalCacheStoreSlot.resolver = () => globalStore
+        const sharedStore = createCacheStore()
+        sharedCacheStoreSlot.resolver = () => sharedStore
         try {
-            /* Global store so the entry outlives the request scope, like a real memo. */
+            /* Shared store so the entry outlives the request scope, like a real memo. */
             await inServerScope(async () => {
-                await cache(countedRemote, undefined, { ttl: 20, global: true })
+                await cache(countedRemote, undefined, { ttl: 20, shared: true })
             })
             await inServerScope(async () => {
-                expect(await cache(countedRemote, undefined, { ttl: 20, global: true })).toEqual({
+                expect(await cache(countedRemote, undefined, { ttl: 20, shared: true })).toEqual({
                     hit: 1,
                 })
             })
@@ -150,14 +150,14 @@ describe('ttl>0 (expire after resolve)', () => {
 
             /* Past expiry the entry is evicted and the next read re-runs the handler. */
             await Bun.sleep(35)
-            expect(globalStore.entries.size).toBe(0)
+            expect(sharedStore.entries.size).toBe(0)
             await inServerScope(async () => {
-                expect(await cache(countedRemote, undefined, { ttl: 20, global: true })).toEqual({
+                expect(await cache(countedRemote, undefined, { ttl: 20, shared: true })).toEqual({
                     hit: 2,
                 })
             })
         } finally {
-            globalCacheStoreSlot.resolver = undefined
+            sharedCacheStoreSlot.resolver = undefined
         }
     })
 })

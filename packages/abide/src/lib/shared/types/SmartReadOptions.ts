@@ -12,12 +12,13 @@ Fetch reads:
 - `tags` — free-form invalidation-group labels (see the selector grammar).
 - `throttle` / `debounce` — rate-limit the background refetch clock (set one, not
   both). Leading-edge-then-coalesce, or fire-after-quiet respectively.
-- `global` — store the entry in the process-level store instead of the default
-  request-scoped one (server), so a value computed in one request is reused by
-  later requests — the memoise-an-external-endpoint case. Omit it for per-user
-  data: the default keeps a per-user response from leaking across requests.
-  Write only `global: true`; there is no `false` form. On the client there is a
-  single tab store, so the flag is a no-op there.
+- `shared` — opts the entry into the process-level store instead of the default
+  request-scoped one (server) — a store that outlives every request. It selects
+  the store only; it does NOT retain (pair it with `ttl` to memoise across
+  requests). The shared store is keyed by method+url+args, never by user, so do
+  not put per-user data in it — it would be served to other users. Omit `shared`
+  for per-request data. Write only `shared: true`; there is no `false` form. On
+  the client there is a single tab store, so the flag is a no-op there.
 
 Streaming reads (jsonl/sse):
 - `n` — how many retained frames to replay before going live.
@@ -27,6 +28,6 @@ export type SmartReadOptions = {
     tags?: string[]
     throttle?: number
     debounce?: number
-    global?: boolean
+    shared?: boolean
     n?: number
 }

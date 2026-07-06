@@ -31,10 +31,10 @@ import { requestContext } from './lib/server/runtime/requestContext.ts'
 import { resolvePageSnapshot } from './lib/server/runtime/resolvePageSnapshot.ts'
 import { cacheStoreSlot } from './lib/shared/cacheStoreSlot.ts'
 import { createCacheStore } from './lib/shared/createCacheStore.ts'
-import { globalCacheStoreSlot } from './lib/shared/globalCacheStoreSlot.ts'
 import { loadEnvFromDataDir } from './lib/shared/loadEnvFromDataDir.ts'
 import { pageSlot } from './lib/shared/pageSlot.ts'
 import { runningAsStandaloneBinary } from './lib/shared/runningAsStandaloneBinary.ts'
+import { sharedCacheStoreSlot } from './lib/shared/sharedCacheStoreSlot.ts'
 
 /*
 Resolve config into process.env before anything reads it (createServer reads
@@ -70,11 +70,11 @@ cacheStoreSlot.resolver = () => requestContext.getStore()?.cache
 pageSlot.resolver = resolvePageSnapshot
 
 /*
-Process-level store for cache(fn, { global: true }) — one per server process,
+Process-level store for cache(fn, { shared: true }) — one per server process,
 outlives every request so memoised external calls are shared across them.
 */
-const globalCacheStore = createCacheStore()
-globalCacheStoreSlot.resolver = () => globalCacheStore
+const sharedCacheStore = createCacheStore()
+sharedCacheStoreSlot.resolver = () => sharedCacheStore
 
 await createServer({
     pages,

@@ -42,7 +42,7 @@ describe('maybeMountInspector', () => {
         expect(Array.isArray(surface.prompts)).toBe(true)
     })
 
-    test('serves the global cache snapshot as JSON', async () => {
+    test('serves the shared cache snapshot as JSON', async () => {
         process.env.ABIDE_ENABLE_INSPECTOR = 'true'
         const handler = await maybeMountInspector(APP)
         const response = await handler!(...request('/__abide/inspector/cache'))

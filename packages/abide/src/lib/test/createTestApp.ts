@@ -37,10 +37,10 @@ import { buildRpcRequest } from '../shared/buildRpcRequest.ts'
 import { cacheStoreSlot } from '../shared/cacheStoreSlot.ts'
 import { commandNameForUrl } from '../shared/commandNameForUrl.ts'
 import { createCacheStore } from '../shared/createCacheStore.ts'
-import { globalCacheStoreSlot } from '../shared/globalCacheStoreSlot.ts'
 import { HEALTH_PATH } from '../shared/HEALTH_PATH.ts'
 import { pageSlot } from '../shared/pageSlot.ts'
 import { SOCKETS_PATH } from '../shared/SOCKETS_PATH.ts'
+import { sharedCacheStoreSlot } from '../shared/sharedCacheStoreSlot.ts'
 import type { RemoteFunction } from '../shared/types/RemoteFunction.ts'
 import type { Socket } from '../shared/types/Socket.ts'
 import { createTestSocketChannel } from './createTestSocketChannel.ts'
@@ -98,15 +98,15 @@ leaking the request-scope/cache/page resolvers into the next test file.
 export async function createTestApp(): Promise<TestApp> {
     const previous = {
         cacheResolver: cacheStoreSlot.resolver,
-        globalResolver: globalCacheStoreSlot.resolver,
+        sharedResolver: sharedCacheStoreSlot.resolver,
         pageResolver: pageSlot.resolver,
         baseResolver: baseSlot.resolver,
         activeServer: serverSlot.active,
     }
 
     cacheStoreSlot.resolver = () => requestContext.getStore()?.cache
-    const globalStore = createCacheStore()
-    globalCacheStoreSlot.resolver = () => globalStore
+    const sharedStore = createCacheStore()
+    sharedCacheStoreSlot.resolver = () => sharedStore
     pageSlot.resolver = resolvePageSnapshot
 
     /* Eager env validation, exactly as serverEntry: a top-level env(schema) in
@@ -185,7 +185,7 @@ export async function createTestApp(): Promise<TestApp> {
         channel?.close()
         server.stop(true)
         cacheStoreSlot.resolver = previous.cacheResolver
-        globalCacheStoreSlot.resolver = previous.globalResolver
+        sharedCacheStoreSlot.resolver = previous.sharedResolver
         pageSlot.resolver = previous.pageResolver
         baseSlot.resolver = previous.baseResolver
         serverSlot.active = previous.activeServer

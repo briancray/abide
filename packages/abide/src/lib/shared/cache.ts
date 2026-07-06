@@ -3,7 +3,6 @@ import { activeCacheStore } from './activeCacheStore.ts'
 import { cacheStores } from './cacheStores.ts'
 import { decodeResponse } from './decodeResponse.ts'
 import { getRemoteMeta } from './getRemoteMeta.ts'
-import { globalCacheStore } from './globalCacheStore.ts'
 import { HttpError } from './HttpError.ts'
 import { hydratingSlot } from './hydratingSlot.ts'
 import { invalidateEvent } from './invalidateEvent.ts'
@@ -16,6 +15,7 @@ import { rpcErrorRegistry } from './rpcErrorRegistry.ts'
 import { SocketDisconnectedError } from './SocketDisconnectedError.ts'
 import { selectorMatcher } from './selectorMatcher.ts'
 import { selectorPrefix } from './selectorPrefix.ts'
+import { sharedCacheStore } from './sharedCacheStore.ts'
 import { openStreamProbe } from './subscribableProbes.ts'
 import { toTagSet } from './toTagSet.ts'
 import type { CacheEntry } from './types/CacheEntry.ts'
@@ -36,7 +36,7 @@ const cacheLog = abideLog.channel('abide:cache')
 
 /*
 Tallies one read and narrates it on the diagnostics channel. The sink is the
-request/tab store even when the data store is the process-level global one —
+request/tab store even when the data store is the process-level shared one —
 attribution follows the asker, so a request's closing record reflects every
 read it made. A settled retained entry (including the warm SSR sync path) is
 a hit; an unsettled entry is a coalesced join of an in-flight call; no entry
@@ -87,7 +87,7 @@ new reference every call and never does; a warning fires once per such call
 site), and the promise is stored and handed back as-is (no Response, no decode,
 no SSR snapshot).
 
-`options.global` puts the entry in the process-level store instead of the
+`options.shared` puts the entry in the process-level store instead of the
 request-scoped one, so a value computed in one request is reused by later
 requests — the memoise-an-external-endpoint case. Default (omitted) is
 request-scoped on the server, which keeps per-user data from leaking across
@@ -215,7 +215,7 @@ function readThrough<Args, Return>(
     if (!isRemote) {
         warnAnonymousProducer(fn as Producer<Args, Return>)
     }
-    const store = effectiveOptions?.global ? globalCacheStore() : activeCacheStore()
+    const store = effectiveOptions?.shared ? sharedCacheStore() : activeCacheStore()
     if (!isRemote) {
         return invokeProducer(store, fn as Producer<Args, Return>, args, effectiveOptions)
     }
@@ -223,7 +223,7 @@ function readThrough<Args, Return>(
     const key = keyForRemoteCall(remote.method, remote.url, args)
     store.subscribe(key)
     const existing = store.entries.get(key)
-    recordRead(effectiveOptions?.global ? activeCacheStore() : store, key, existing)
+    recordRead(effectiveOptions?.shared ? activeCacheStore() : store, key, existing)
     if (existing) {
         tagEntry(existing, effectiveOptions?.tags)
         attachPolicy(existing, effectiveOptions, () => remote(args as Args), retain)
@@ -404,7 +404,7 @@ function invokeProducer<Args, Return>(
     const key = producerKey(producer, args)
     store.subscribe(key)
     const existing = store.entries.get(key)
-    recordRead(options?.global ? activeCacheStore() : store, key, existing)
+    recordRead(options?.shared ? activeCacheStore() : store, key, existing)
     if (existing) {
         tagEntry(existing, options?.tags)
         attachPolicy(existing, options, () => producer(args), false)
@@ -502,11 +502,11 @@ function registerEntry(
     own method filter; writes never ship). The keep never applies on the
     client (the tab store outlives any unit — a kept write would block every
     future re-submit, so entries evict the moment they settle), to producer
-    entries (no request), or to the process-level `global` store (not
+    entries (no request), or to the process-level `shared` store (not
     request-scoped — keeping it would leak forever).
     */
     const keepZeroTtlForRequest =
-        request !== undefined && !options?.global && typeof window === 'undefined'
+        request !== undefined && !options?.shared && typeof window === 'undefined'
     function deleteIfCurrent() {
         evictIfCurrent(store, entry)
     }
@@ -890,10 +890,10 @@ function peek<Args, Return>(
     active.trackLifecycle(key)
     let entry = active.entries.get(key)
     if (entry === undefined) {
-        const global = globalCacheStore()
-        global.subscribe(key)
-        global.trackLifecycle(key)
-        entry = global.entries.get(key)
+        const shared = sharedCacheStore()
+        shared.subscribe(key)
+        shared.trackLifecycle(key)
+        entry = shared.entries.get(key)
     }
     if (entry === undefined || entry.settled !== true || entry.value === undefined) {
         return undefined

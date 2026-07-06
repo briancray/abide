@@ -111,7 +111,7 @@ describe('fn.refresh / fn.patch / fn.peek instance methods', () => {
         expect(typeof getList.patch).toBe('function')
         expect(typeof getList.refresh).toBe('function')
 
-        /* peek mirrors the global: undefined before a read, the value after. */
+        /* peek mirrors the standalone function: undefined before a read, the value after. */
         expect(getList.peek()).toBe(peek(getList))
         expect(getList.peek()).toBeUndefined()
         await getList()

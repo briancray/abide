@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { cache } from '../src/lib/shared/cache.ts'
 import { cacheStoreSlot } from '../src/lib/shared/cacheStoreSlot.ts'
 import { createCacheStore } from '../src/lib/shared/createCacheStore.ts'
-import { globalCacheStoreSlot } from '../src/lib/shared/globalCacheStoreSlot.ts'
+import { sharedCacheStoreSlot } from '../src/lib/shared/sharedCacheStoreSlot.ts'
 
 describe('cache read stats', () => {
     beforeEach(() => {
@@ -12,7 +12,7 @@ describe('cache read stats', () => {
     afterEach(() => {
         cacheStoreSlot.resolver = undefined
         cacheStoreSlot.fallback = undefined
-        globalCacheStoreSlot.resolver = undefined
+        sharedCacheStoreSlot.resolver = undefined
     })
 
     test('miss, coalesced join, then hit tally in order', async () => {
@@ -33,14 +33,14 @@ describe('cache read stats', () => {
         expect(stats()).toEqual({ hits: 1, misses: 1, coalesced: 1 })
     })
 
-    test('global reads attribute to the requesting store, not the global one', async () => {
-        const globalStore = createCacheStore()
-        globalCacheStoreSlot.resolver = () => globalStore
+    test('shared reads attribute to the requesting store, not the shared one', async () => {
+        const sharedStore = createCacheStore()
+        sharedCacheStoreSlot.resolver = () => sharedStore
         const fetchRates = () => Promise.resolve(1.08)
-        await cache(fetchRates, undefined, { global: true })
-        // Data lands in the global store; the tally lands in the asker's store.
-        expect(globalStore.entries.size).toBe(1)
-        expect(globalStore.stats).toEqual({ hits: 0, misses: 0, coalesced: 0 })
+        await cache(fetchRates, undefined, { shared: true })
+        // Data lands in the shared store; the tally lands in the asker's store.
+        expect(sharedStore.entries.size).toBe(1)
+        expect(sharedStore.stats).toEqual({ hits: 0, misses: 0, coalesced: 0 })
         expect(cacheStoreSlot.fallback!.stats.misses).toBe(1)
     })
 })

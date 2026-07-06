@@ -11,8 +11,8 @@ import type { SocketRoutes } from '../../src/lib/server/sockets/types/SocketRout
 import { baseSlot } from '../../src/lib/shared/baseSlot.ts'
 import { cacheStoreSlot } from '../../src/lib/shared/cacheStoreSlot.ts'
 import { createCacheStore } from '../../src/lib/shared/createCacheStore.ts'
-import { globalCacheStoreSlot } from '../../src/lib/shared/globalCacheStoreSlot.ts'
 import { pageSlot } from '../../src/lib/shared/pageSlot.ts'
+import { sharedCacheStoreSlot } from '../../src/lib/shared/sharedCacheStoreSlot.ts'
 import type { Pages } from '../../src/lib/ui/types/Pages.ts'
 
 /* Minimal shell carrying the three SSR markers createServer splices into. */
@@ -22,7 +22,7 @@ const TEST_SHELL =
 /*
 Boots the real createServer on an ephemeral port with the same slot wiring
 serverEntry performs at boot: the ALS-backed cache store resolver, the
-request-scoped page resolver, and a process-level global cache store. Assets
+request-scoped page resolver, and a process-level shared cache store. Assets
 ride the embedded (empty) maps so no dist/ or public/ scan happens. Returns
 the origin for fetch() assertions and a stop() that releases the port and
 restores every touched slot, so a suite boots and tears down without leaking
@@ -42,7 +42,7 @@ export async function bootTestServer(manifests: {
 }): Promise<{ origin: string; server: Server<unknown>; stop: () => void }> {
     const previous = {
         cacheResolver: cacheStoreSlot.resolver,
-        globalResolver: globalCacheStoreSlot.resolver,
+        sharedResolver: sharedCacheStoreSlot.resolver,
         pageResolver: pageSlot.resolver,
         baseResolver: baseSlot.resolver,
         activeServer: serverSlot.active,
@@ -50,8 +50,8 @@ export async function bootTestServer(manifests: {
 
     cacheStoreSlot.resolver = () => requestContext.getStore()?.cache
 
-    const globalStore = createCacheStore()
-    globalCacheStoreSlot.resolver = () => globalStore
+    const sharedStore = createCacheStore()
+    sharedCacheStoreSlot.resolver = () => sharedStore
 
     /* The same resolver serverEntry registers: the page proxy reads the live match off the ALS store. */
     pageSlot.resolver = resolvePageSnapshot
@@ -74,7 +74,7 @@ export async function bootTestServer(manifests: {
     function stop(): void {
         server.stop(true)
         cacheStoreSlot.resolver = previous.cacheResolver
-        globalCacheStoreSlot.resolver = previous.globalResolver
+        sharedCacheStoreSlot.resolver = previous.sharedResolver
         pageSlot.resolver = previous.pageResolver
         baseSlot.resolver = previous.baseResolver
         serverSlot.active = previous.activeServer

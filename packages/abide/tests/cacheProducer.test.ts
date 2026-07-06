@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { cache } from '../src/lib/shared/cache.ts'
 import { cacheStoreSlot } from '../src/lib/shared/cacheStoreSlot.ts'
 import { createCacheStore } from '../src/lib/shared/createCacheStore.ts'
-import { globalCacheStoreSlot } from '../src/lib/shared/globalCacheStoreSlot.ts'
+import { sharedCacheStoreSlot } from '../src/lib/shared/sharedCacheStoreSlot.ts'
 import { settle } from './support/settle.ts'
 
 /* A producer reporting its own invocation count, so a dedupe holds the count
@@ -20,7 +20,7 @@ describe('cache() producer', () => {
     afterEach(() => {
         cacheStoreSlot.resolver = undefined
         cacheStoreSlot.fallback = undefined
-        globalCacheStoreSlot.resolver = undefined
+        sharedCacheStoreSlot.resolver = undefined
     })
 
     test('dedupes by producer reference', async () => {
@@ -87,41 +87,41 @@ describe('cache() producer', () => {
     })
 })
 
-describe('cache() producer with global: true', () => {
-    let globalStore = createCacheStore()
+describe('cache() producer with shared: true', () => {
+    let sharedStore = createCacheStore()
     beforeEach(() => {
         cacheStoreSlot.resolver = () => cacheStoreSlot.fallback
         cacheStoreSlot.fallback = createCacheStore()
-        globalStore = createCacheStore()
-        globalCacheStoreSlot.resolver = () => globalStore
+        sharedStore = createCacheStore()
+        sharedCacheStoreSlot.resolver = () => sharedStore
     })
     afterEach(() => {
         cacheStoreSlot.resolver = undefined
         cacheStoreSlot.fallback = undefined
-        globalCacheStoreSlot.resolver = undefined
+        sharedCacheStoreSlot.resolver = undefined
     })
 
     test('lands in the process-level store, not the request store', async () => {
         const fetchValue = counter()
-        await cache(fetchValue, undefined, { global: true })
-        expect(globalStore.entries.size).toBe(1)
+        await cache(fetchValue, undefined, { shared: true })
+        expect(sharedStore.entries.size).toBe(1)
         expect(cacheStoreSlot.fallback!.entries.size).toBe(0)
     })
 
     test('memoised value survives a new request (swapped active store)', async () => {
         const fetchValue = counter()
-        const first = await cache(fetchValue, undefined, { global: true })
+        const first = await cache(fetchValue, undefined, { shared: true })
         /* Simulate the next request: fresh request-scoped store, same process store. */
         cacheStoreSlot.fallback = createCacheStore()
-        const second = await cache(fetchValue, undefined, { global: true })
+        const second = await cache(fetchValue, undefined, { shared: true })
         expect(first).toBe(1)
         expect(second).toBe(1)
     })
 
     test('invalidate reaches the process-level store', async () => {
         const fetchValue = counter()
-        await cache(fetchValue, undefined, { global: true })
+        await cache(fetchValue, undefined, { shared: true })
         cache.invalidate(fetchValue)
-        expect(globalStore.entries.size).toBe(0)
+        expect(sharedStore.entries.size).toBe(0)
     })
 })
