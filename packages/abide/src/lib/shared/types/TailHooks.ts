@@ -1,5 +1,6 @@
 /*
-Hooks a tail() reader passes to a Subscribable's retention capability.
+Hooks a `tail(count, hooks)` caller passes to a Subscribable's retention
+capability.
 `replayed` must be signalled in-band exactly once per iteration — after the
 last replayed frame, before any live frame, and even when nothing was
 replayed — so a window reader can commit its seed atomically instead of

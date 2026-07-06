@@ -1,426 +1,460 @@
 # AGENTS.md — abide complete surface map
 
-> The exhaustive public-surface map: every `exports` key in
-> `packages/abide/package.json`, grouped by namespace, each with its import
-> specifier and a one-line spec, plus the file conventions, CLI, generated
-> routes, environment variables, and the `.abide` template grammar. Where the
-> `README.md` is the curated three-primitive intro (RPC + socket + component),
-> this is the complete reference. `CONTEXT.md` is the domain glossary and
-> `docs/adr/` the rationale.
->
-> Package `@abide/abide`, runtime Bun `>=1.3.0`, one direct dependency
-> (TypeScript; `tailwindcss` / `bun-plugin-tailwind` are optional styling
-> peers). No barrels: every public name has its own module path, and the
-> namespace marks the side it runs on — `abide/server/*` server-only,
-> `abide/ui/*` client-only, `abide/shared/*` isomorphic (same callable, same
-> behaviour on both sides). Import specifiers below are the `@abide/abide/…`
-> keys; the file path each maps to is an implementation detail.
+> This file is the exhaustive public-surface map of `@abide/abide`: every
+> `exports` key, grouped by namespace, with its import specifier and a one-line
+> spec. The README is the curated three-primitive intro; `CONTEXT.md` is the
+> domain glossary; `docs/adr/` holds the rationale behind decisions. Ground
+> rules: there are **no barrels** — every public name has its own module path,
+> and the namespace marks the side it runs on (`abide/server/*` server-only,
+> `abide/ui/*` client-only, `abide/shared/*` isomorphic — same callable, same
+> behavior on both sides). Package `@abide/abide`, runtime Bun ≥ 1.3, one
+> direct dependency (TypeScript). Import specifiers below are `exports`-map
+> keys (`@abide/abide/server/GET`), not source file paths.
 
 ## The premise
 
-One typed RPC declaration fans out to five faces:
+One typed declaration fans out to every surface:
 
 ```text
-                    ┌─ SSR call       getMessages({ room })
-                    ├─ browser fetch  getMessages({ room }) (proxy)
-  getMessages (GET) ┼─ MCP tool       read-only + schema (auto-exposed)
-                    ├─ CLI subcommand the generated CLI binary
-                    └─ OpenAPI op     /openapi.json
+src/server/rpc/getMessages.ts
+      │
+      ├─ SSR / server   await getMessages({ room })  in-process, no HTTP
+      ├─ browser        await getMessages({ room })  typed fetch proxy
+      ├─ HTTP           GET /rpc/getMessages?room=…
+      ├─ CLI            my-app get-messages --room …
+      ├─ MCP            tool: get-messages
+      └─ OpenAPI        operation in /openapi.json
 ```
 
-An `inputSchema` (Standard Schema — zod / valibot / arktype, unadapted) unlocks
-the CLI for any rpc and, for a read-only method (`GET`/`HEAD`), the MCP tool. A
-mutating method (`POST`/`PUT`/`PATCH`/`DELETE`) never auto-exposes to MCP; it
-needs an explicit `clients: { mcp: true }`. Explicit `clients` always wins. The
-bare call is isomorphic — the same `getMessages({ room })` reads in-process
-during SSR and over `fetch` in the browser.
+An `inputSchema` (any Standard Schema library — zod, valibot, arktype,
+unadapted) is the gate: it unlocks the CLI, and for read-only methods
+(GET/HEAD) the MCP tool. A mutating method (POST/PUT/PATCH/DELETE) never
+auto-exposes to MCP — it requires explicit `clients: { mcp: true }`.
 
 ## File-based conventions
 
-The bundler reads these paths and generates the wiring:
-
 | Path | Meaning |
 | --- | --- |
-| `src/server/rpc/<name>.ts` | An RPC per file; path → URL `/rpc/<name>`, export name → HTTP method. |
-| `src/server/sockets/<name>.ts` | A socket per file; path → the socket's identity. |
-| `src/server/config.ts` | `env(schema)` config, eager-imported so a bad env fails boot. |
-| `src/app.ts` | Optional `AppModule` hooks (`init`/`handle`/`handleError`/`health`/`forwardHeaders`). |
-| `src/ui/pages/**/page.abide` | A routed page; a `[id]` segment → `page.params.id`. |
-| `src/ui/pages/**/layout.abide` | A layout wrapping nested routes; its `{children()}` is the outlet. |
-| `src/ui/**/*.abide` | A component, imported via `$ui/…`. |
-| `src/ui/public/` | Static assets served at the site root. |
-| `src/mcp/prompts/<name>.md` | An MCP prompt (front-matter + template body). |
-| `src/mcp/resources/` | Static MCP resources. |
-| `src/bundle/window.ts` | Default-exported `BundleWindow` config for the desktop bundle. |
-| `src/.abide/*.d.ts` | Generated ambient types (typed `url()`, `health()`, routes). |
-| `dist/_app/` | Client build output; `dist/` holds the production server. |
+| `src/server/rpc/<name>.ts` | One RPC per file; the export name must match the file stem; the file path becomes the URL `/rpc/<name>` (subdirectories nest into the path) |
+| `src/server/sockets/<name>.ts` | One broadcast socket per file; export name = file stem = topic name |
+| `src/mcp/prompts/<name>.md` | An MCP prompt template; `{{arg}}` placeholders become the prompt's arguments |
+| `src/mcp/resources/**` | Files served as MCP resources (gzip-embedded into builds) |
+| `src/server/config.ts` | Boot-time `env()` validation; eager-imported so a bad environment fails the boot |
+| `src/app.ts` | Optional `AppModule` hooks: `init`, `handle`, `handleError`, `health`, `forwardHeaders` |
+| `src/bundle/window.ts` | Optional `BundleWindow` default export configuring the desktop bundle's window and menus |
+| `src/ui/pages/**/page.abide` | A routed page; the directory path is the route, a `[id]` folder is a path param |
+| `src/ui/pages/**/layout.abide` | A layout wrapping the pages below it; its `{children()}` is the router outlet |
+| `src/ui/public/` | Static assets served as-is |
+| `src/.abide/*.d.ts` | Generated typing (rpc args for `url()`, page routes, health fields, test rpc/socket clients, public asset paths) |
+| `dist/` | Build output — `dist/_app` client bundle, `dist/cli-thin/<platform>/` CLI tarballs |
+
+Project import aliases resolve to the five top-level source dirs: `$server`,
+`$ui`, `$shared`, `$mcp`, `$cli` (e.g. `$server/rpc/getMessages`,
+`$ui/pages/...`). `$server/rpc/*` and `$server/sockets/*` are proxied into
+client bundles; any other `$server/*` import from client code is a
+side-crossing error.
 
 ## CLI
 
 | Command | Does |
 | --- | --- |
-| `abide scaffold <name>` | Scaffold the template, install, and (in a TTY) start dev. `--no-install` / `--no-dev` opt out. |
-| `abide dev` | Build the client + run the server child with hot reload. |
-| `abide build` | Build the client bundle into `dist/_app/` (no server). |
-| `abide start` | Run the production server against an already-built `dist/`. |
-| `abide run <file> [args]` | Run a script under the abide preload (same runtime as the server). |
-| `abide compile` | Produce a standalone Bun server executable (`--target` / `--out`). |
-| `abide cli` | Build the thin CLI client binary (`--platforms a,b,c` cross-compiles). |
-| `abide bundle` | Assemble a self-contained desktop app bundle for the host platform. |
-| `abide check` | Type-check every `.abide` template + props; non-zero on any error. |
-| `abide lsp` | Run the `.abide` language server over stdio (editor diagnostics). |
-| `abide init-agent` | Write/refresh the agent-guide pointer in the project's root `CLAUDE.md`. |
+| `bunx abide scaffold <name>` | Scaffolds the bundled template, installs it, and (interactive TTY only) starts the dev server; `--no-install` / `--no-dev` opt out |
+| `abide dev` | Dev orchestrator: builds the client, runs the server as a child, watches `src/`, rebuilds + restarts on change, live-reloads the browser |
+| `abide build` | One-shot client build into `dist/_app` (CI / static deploys) |
+| `abide start` | Runs the production server against an already-built `dist/` |
+| `abide run <file> [args...]` | Runs any script under the abide preload — same runtime as the server (`.abide` compilation, `abide/*` + `$` alias resolution) |
+| `abide compile [--target=…] [--out=…]` | Compiles a standalone server executable (client assets embedded) |
+| `abide cli [--target=…] [--out=…] [--platforms=a,b,c]` | Builds the thin CLI binary (rpc manifest baked in) that talks to a remote server or starts a local one; `--platforms` cross-compiles into `dist/cli-thin/<platform>/` |
+| `abide bundle` | Assembles a movable, self-contained desktop app bundle (server binary + launcher + webview) for the host platform; unsigned |
+| `abide check` | Type-checks every `.abide` component's template + props through its shadow; non-zero exit on errors |
+| `abide lsp` | Runs the `.abide` language server over stdio (JSON-RPC) for editor diagnostics |
+| `abide init-agent` | Writes/refreshes the CLAUDE.md pointer to this surface map for non-scaffolded projects |
 
-For tests, add the preload so the `.abide` loader + virtual resolver are active:
-`preload = ["@abide/abide/preload"]` under `[test]` in `bunfig.toml`.
+For tests, add `preload = ["@abide/abide/preload"]` under `[test]` in
+`bunfig.toml` and use `bun test`.
 
 ## Authoring contracts
 
-- **RPC** (`GET`/`POST`/… in `src/server/rpc/<name>.ts`): the handler receives
-  `InferOutput<inputSchema>` (or raw args), reads `request()` / `cookies()`, and
-  returns `json` / `jsonl` / `sse` / `error` / `redirect` / an `error.typed`
-  constructor / a raw `Response`. The errors an rpc can raise are the
-  `error.typed(...)` values it RETURNS — inferred into `fn.isError`; there is no
-  `errors:` option. Options: `inputSchema`, `outputSchema` (OpenAPI 200 + MCP
-  `outputSchema`), `filesSchema` (File parts → validated, merged into the args
-  bag; the call sends a `FormData`), `clients:{ browser, mcp, cli }`,
-  `crossOrigin` (exempt a mutating rpc from the same-origin CSRF gate, else 403),
-  `maxBodySize` (413 before parse), `timeout` (a 504 on every surface; aborts
-  `request().signal` on the network path), and `outbox: true` on a mutating rpc
-  (durable delivery — the call still throws on an unreachable server and parks
-  the request, drained via `fn.outbox.retry()`; a read rpc rejects it at compile
-  time). GET/DELETE/HEAD args travel as query strings — use `z.coerce.*`. Consume
-  forms: `fn(args, opts?)` (the smart call — cached, coalesced, reactive, SWR
-  always on for replayable reads; throws `HttpError`; `opts` is `SmartReadOptions`
-  = `ttl`/`tags`/`throttle`/`debounce`/`n`), `fn.raw(args, init?)` (raw `Response`,
-  uncached, where per-call transport options live), and the bound
-  selectors/mutators `fn.refresh` / `fn.patch` / `fn.peek` / `fn.pending` /
-  `fn.refreshing` / `fn.error` (`./shared/*` for the free-function forms), plus
-  the client-only reaction sugar `fn.watch(handler)` / `fn.watch(args, handler)`
-  (≡ `watch(fn, …)`; SSR-inert no-op). A
-  streaming handler (`jsonl`/`sse`) makes the bare call return a `Subscribable` —
-  `for await` or `state(fn(args))`; `await fn(args)` is a compile error.
-- **Socket** (`socket(opts)` in `src/server/sockets/<name>.ts`): options
-  `schema`, `tail` (retained-frame count, default `1`; `0` opts out), `ttl` (lazy
-  eviction of retained frames), `clients`, `clientPublish`. `Socket<T>` is an
-  isomorphic `AsyncIterable<T>`; `.broadcast(m)` fans out to every subscriber
-  (server always; client only when `clientPublish` is set), `.peek()` reads the
-  latest retained frame synchronously (`peek(socket)` routes here), `.refresh()`
-  drops local frames and re-pulls the server tail (client) / no-op (server),
-  `.watch(handler)` runs the handler per delivered frame (client-only reaction
-  sugar ≡ `watch(chat, …)`; SSR-inert no-op). The probe family rides the instance
-  too — `.pending()` / `.refreshing()` / `.done()` ≡ `pending(socket)` etc., and
-  `.error()` the terminal stream error (instance-only) — the socket as the
-  pre-bound stream selector. Consume live frames directly —
-  `for await (… of chat)`, a `{#for await}` block, or `watch(chat, frame => …)` —
-  and seed the first paint from `.peek()`.
-- **Page / layout**: a `page.abide` under `src/ui/pages/`; `[id]` dynamic
-  segments surface on `page.params`; `layout.abide` wraps nested routes with
-  `{children()}` as its outlet. Read the active route reactively via `page`;
-  navigate with `navigate()` and build hrefs with `url()`.
-- **`src/app.ts`** exports the optional `AppModule` hooks; **`src/server/config.ts`**
-  exports `env(schema)`.
-- **Isomorphism move**: an SSR-blocking `{#await getMessages(args)}` runs the
-  smart bare call in-process, bakes the value into the initial HTML, and the
-  client hydrates warm from the streamed cache snapshot — one callable, no
-  separate SSR read helper.
+**RPC** — the handler receives the schema-validated args
+(`InferOutput<inputSchema>`); typed generics on the helper are a compile error
+— type the parameter, let the body infer. Inside it, `request()` / `cookies()`
+/ `server()` read the request scope. Return `json(data)` (or `jsonl` / `sse`
+for streams, `error` / `redirect`, or a raw `Response`). Options:
+`inputSchema`, `outputSchema`, `filesSchema` (validates uploaded `File` parts,
+kept out of the JSON-Schema projection), `clients: { browser, mcp, cli }`,
+`crossOrigin` (exempts a mutating rpc from the same-origin CSRF gate),
+`timeout` (handler deadline in ms → 504 on every surface, composed into
+`request().signal`), `maxBodySize` (per-rpc 413 cap), `outbox` (durable
+delivery, mutating methods only). Query args on GET/HEAD/DELETE travel as
+strings — coerce in the schema (`z.coerce.number()`). A body rpc also accepts
+a `FormData` in place of typed args (the upload escape hatch): text fields
+validate as args, `File` parts validate against `filesSchema`.
 
-## .abide template grammar
+**Consuming an rpc** — the bare call `fn(args, opts?)` IS the smart read:
+cached, coalesced, reactive, stale-while-revalidate for replayable (GET/HEAD)
+reads; the second arg takes `{ ttl, tags, throttle, debounce, n }` (retention
+and the refetch clock — not transport). During SSR the same call resolves
+in-process and its value is baked into the HTML so hydration starts warm —
+there is no `cache()` wrapper; the bare call carries the caching. Around it:
+`fn.raw(args, init?)` returns the raw `Response` (per-call transport options —
+`signal`, `headers`, `keepalive`, … — live here); `fn.refresh(args?)`
+refetches keeping the stale value visible; `fn.patch(args?, updater)` mutates
+the retained value locally (absent on streaming rpcs); `fn.peek(args?)` reads
+it synchronously; `fn.pending(args?)` / `fn.refreshing(args?)` are reactive
+probes; `fn.error(args?)` is the rpc's last typed error; `fn.watch(args?,
+handler)` pipes each resolved value to a handler (client-only; SSR-inert);
+`fn.isError(e, kind?)` type-guards a caught error against the rpc's declared
+error kinds; `fn.outbox()` exposes a durable rpc's parked-write queue. A
+handler that returns `jsonl()`/`sse()` makes the bare call return a
+`Subscribable` (`for await` it) — detected at build, nothing to declare;
+awaiting a streaming call is a compile error.
 
-A `.abide` file is a component: a leading `<script>` (module scope: imports +
-setup), template markup, and a root `<style>` (component-scoped). Derived from
-the parser (`src/lib/ui/compile/parseTemplate.ts`), never from `examples/`.
+**Typed errors** — declare a constructor with
+`error.typed(name, status, schema?)` and `return` it from the handler; the
+client's `HttpError` then carries `kind` (the name) and `data` (the schema's
+payload), narrowed via `rpc.isError`. The framework reserves
+`kind: 'validation'` (422, `data: ValidationErrorData`) and `kind: 'queued'`
+(a durable call parked while unreachable; `data` is the parked `OutboxEntry`).
 
-**Ambient authoring names**: `props()` (prop reader, no import) and `children()`
-(the single slot fill point). Reactive primitives are ordinary imports —
-`state` (`abide/ui/state`), `watch` (`abide/ui/watch`), `html` (`abide/ui/html`),
-`snippet` (`abide/shared/snippet`) — recognised by import binding (alias-safe).
-`watch` is the single reaction primitive; the lower-level `effect`
-(`abide/ui/effect`) is internal plumbing the compiler emits, not an authored
-name.
+**Durable outbox** — an `outbox: true` (mutating) rpc still fetches and throws
+normally, but an unreachable server (transport failure or 502/503/504/52x)
+parks the request for replay as a side-effect and throws `kind: 'queued'`;
+once a backlog exists new calls park straight to the tail so writes stay
+ordered. Nothing auto-drains: replay via `rpc.outbox.retry()` or the global
+`outbox.retry()`; cancel via an entry's `controller.abort()`.
 
-Reactive state:
+**Socket** — `socket<T>(opts)` or `socket({ schema, … })` (with a schema, `T`
+infers and publishes validate). Options: `tail` (retained frames, default 1 —
+`tail: 0` opts out), `ttl` (retained frames expire lazily after N ms),
+`clientPublish` (accept browser/HTTP publishes, off by default), `clients`
+(mcp/cli exposure; a schema flips both on by default). The socket IS the
+`AsyncIterable` — iterating is the live stream, no replay. Members:
+`broadcast(msg)` (isomorphic publish — server fans out in-process + to remote
+subscribers, client sends a validated `pub` frame), `tail(count?)` (a
+subscription seeded with retained frames), `peek()` (latest retained frame),
+`refresh()` (drop local frames and re-pull the server tail; server-side
+no-op), `watch(handler)` ≡ `watch(socket, handler)` (client-only, SSR-inert),
+`pending()` / `refreshing()` / `done()` / `error()` (reactive stream probes),
+plus `name` and `clients`.
 
-| Form | Meaning |
+**Pages and layouts** — `src/ui/pages/blog/[id]/page.abide` serves
+`/blog/:id`; the param arrives as a prop (`const { id } = props()`) and on the
+reactive `page.params`. A `layout.abide` wraps every page below its directory
+and renders the page at its `{children()}` outlet. Links are plain `<a href>`
+(the router intercepts in-app hrefs); build paths with `url()` and navigate
+programmatically with `navigate()`.
+
+**app.ts / config.ts** — `src/app.ts` optionally exports the `AppModule`
+hooks: `init({ server })` (boot; may return a cleanup run on SIGINT/SIGTERM),
+`handle(request, next)` (single middleware), `handleError(error, request)`,
+`health(request)` (fields merged into the `/__abide/health` payload — public
+and unauthenticated, keep it cheap), and `forwardHeaders` (extra inbound
+header names forwarded onto in-process rpc requests beyond the built-in
+auth/identity set). `src/server/config.ts` holds the `env(schema)` call so a
+bad environment fails at boot.
+
+## `.abide` template grammar
+
+A component file is: an optional leading `<script>` (imports + author scope),
+markup, optional `<style>` blocks. The compiler emits a client build and an
+SSR render from the same parse; `abide check` / the LSP type-check the
+template through a generated shadow. HTML comments are dropped; a bare
+`<template>` is an inert element.
+
+Reactive state is reached through **imported primitives**, resolved by import
+binding (alias-safe) and lowered by the compiler — inside a component you read
+and write the declared names as plain variables (`{count}`,
+`onclick={() => (count += 1)}`); there is no `.value` in `.abide` authoring
+and no `$state` sigils. In plain `.ts` modules the same imports are runtime
+cells read/written through `.value`.
+
+| Primitive | Import | Spec |
+| --- | --- | --- |
+| `state(initial, transform?)` | `@abide/abide/ui/state` | Writable cell. Plain `state(v)` lowers to a serializable doc slot (SSR-resumable); with `transform` the gate runs on every write (`(next, previous) => stored`) |
+| `state.computed(fn)` | member of `state` | Read-only derived value, lazy, never serialized |
+| `state.linked(fn, transform?)` | member of `state` | Writable cell re-seeded whenever the thunk's dependencies change |
+| `state.share(key, value)` / `state.shared(key)` | members of `state` | Put a named value on the ambient scope / read the closest ancestor's |
+| `watch(source, handler)` | `@abide/abide/ui/watch` | The single reaction primitive (client-only, stripped from SSR). Sources: a bare thunk `watch(() => …)` (auto-tracked effect), a state cell, a cell array, a socket/stream (`handler(frame)` per frame with reconnect replay), an rpc (`watch(fn, args?, handler)` — runs the smart read, `handler(value)` on each change). Returns a scope-tied disposer |
+| `html(str)` / `` html`…` `` | `@abide/abide/ui/html` | Brands trusted raw HTML so `{expr}` inserts nodes instead of escaped text; plain `{value}` always escapes |
+| `props()` | ambient (no import) | The prop reader: `const { name = fallback, ...rest } = props()`; a page's props are its route params |
+
+Bindings and directives (the attribute kinds `readAttributes` parses):
+
+| Form | Spec |
 | --- | --- |
-| `let x = state(v, transform?)` | Writable cell; read/write `x.value`. `transform` gates writes. |
-| `state<T>()` | Writable cell of `T \| undefined` (typed no-arg). |
-| `const d = state.computed(() => …)` | Read-only derived cell; lazy, never serialized. |
-| `const l = state.linked(() => src, transform?)` | Writable cell reseeded when the thunk's deps change. |
-| `state.share(key, value)` / `state.shared(key)` | Put / read a named value on the ambient scope. |
-| `watch(source, handler)` | The single reaction primitive (client-only, stripped from SSR): a state cell, a cell array, a socket/stream, or an rpc → `handler(newValue)` on change; bare `watch(thunk)` is an auto-tracked effect. |
-| `const { a = fallback, ...rest } = props()` | Ambient prop reader. |
+| `{expr}` | Text interpolation, escaped; a snippet or `html`-branded value mounts as nodes |
+| `name={expr}` | Attribute/prop bound to an expression |
+| `name="a {expr} b"` | Interpolated attribute — a literal `{` in a quoted value always interpolates (write `&lbrace;` for a literal brace) |
+| `{...expr}` | Spread — props onto a component, attributes onto a native element (rejected on `<template>`) |
+| `on<event>={fn}` | Event listener (`onclick`, `onsubmit`, …); on a component it is a checked callback prop |
+| `bind:value={cell}` | Two-way input/select/textarea binding. `<input type="number"/"range">` writes back a number; `<select>` re-applies against late-mounting options and `<select multiple>` binds an array of selected values |
+| `bind:value={{ get, set }}` | Writable-computed binding: read via `get()`, write via `set(next)` |
+| `bind:checked={cell}` / `bind:group={cell}` | Checkbox boolean / radio-group value (SSR emits boolean attributes bare — `checked`, `open`, `selected` on the matching option) |
+| `class:name={cond}` | Toggles a class; merges with a reactive `class` base in one effect |
+| `style:property={value}` | Sets one style property; merges with a reactive `style` base |
+| `attach={fn}` | Runs `fn(element)` at build time; an optional returned teardown runs on dispose |
 
-Bindings and directives (on an element and on a component alike):
+Control flow is mustache blocks (`{#…}` open, `{:…}` branch, `{/…}` close —
+the close must name its block, and a branch outside its block is a parse
+error):
 
-| Form | Meaning |
+| Block | Spec |
 | --- | --- |
-| `{expr}` | Reactive text (escaped). |
-| `{html` … `}` / `{html(str)}` | Trusted raw-HTML insertion (opt-in; no auto-escape). |
-| `name={expr}` | Attribute / prop bound to an expression. |
-| `name="… {expr} …"` | Interpolated string attribute / prop. |
-| `on<event>={fn}` | Event listener (e.g. `onclick`, `onsubmit`). |
-| `bind:value={x}` / `bind:checked={x}` / `bind:group={x}` | Two-way form binds. |
-| `bind:value={{ get, set }}` | Derived two-way binding (a writable computed at the site). |
-| `class:name={cond}` | Toggle a class. |
-| `style:property={value}` | Set one style property. |
-| `attach={fn}` | Run `fn(node)` at build; optional teardown return. |
-| `{...expr}` | Spread an object's keys as props (component) / attributes (element). |
+| `{#if cond}…{:else if cond}…{:else}…{/if}` | Conditional chain (the branch keyword is `{:else if}`, with a space) |
+| `{#for item, i of list by key}…{:catch e}…{/for}` | Keyed list; `, i` index and `by` key optional; `{#for await item of asyncIterable}` renders rows as they arrive (its `{:catch}` shows the stream error) |
+| `{#await p}…{:then v}…{:catch e}…{:finally}…{/await}` | Async block. The branch form streams: SSR flushes the shell and streams the fragment out of order. The head form `{#await p then v}` is blocking — rendered inline (depth-first, serial) during the SSR pass |
+| `{#switch subject}{:case match}…{:default}…{/switch}` | Multi-branch on a subject; only branches render — stray content is a compile error |
+| `{#try}…{:catch e}…{:finally}…{/try}` | Synchronous error boundary around a build/reactive throw |
+| `{#snippet name(args)}…{/snippet}` | Declares a reusable builder, called as an interpolation: `{name(args)}`; a snippet value passes through props like any other value |
 
-Control flow — mustache `{#…}` blocks (the `<template if>` / `<slot>` forms were
-removed; a bare `<template>` is now an inert element and a removed form throws a
-migration error):
+Components are capitalised tags (`<Panel prop={x}>…</Panel>`); nested content
+renders where the component calls `{children()}` — the single fill point
+(`{#if children}{children()}{:else}…{/if}` for a fallback; there are no named
+slots and no `<slot>` element). A layout's `{children()}` is the route outlet.
 
-| Block | Branches |
-| --- | --- |
-| `{#if cond}` … `{/if}` | `{:else if cond}`, `{:else}` |
-| `{#for item, i of list by key}` … `{/for}` | (keyed list; `, i` and `by key` optional) |
-| `{#for await item of source}` … `{/for}` | `{:catch e}` (over an `AsyncIterable`) |
-| `{#await promise}` … `{/await}` | `{:then v}`, `{:catch e}`, `{:finally}` |
-| `{#switch subject}` … `{/switch}` | `{:case value}`, `{:default}` |
-| `{#try}` … `{/try}` | `{:catch e}`, `{:finally}` |
-| `{#snippet name(args)}` … `{/snippet}` | reusable builder, invoked `{name(args)}` |
+`<script>` and `<style>` are **not component-root-only**: either may sit
+inside a control-flow branch, scoped to that branch. A nested `<script>`
+declares branch-local `state` / `state.computed` / `state.linked` the same
+imported way (re-seeded per mount; static `import` statements are illegal
+there — imports live in the leading `<script>`). A **root** `<style>` is
+component-scoped; a nested `<style>` scopes to its sibling subtree only.
 
-Components are capitalised tags; nested content renders where the child calls
-`{children()}` (fallback: `{#if children}{children()}{:else}…{/if}` — no named
-slots). A `<script>` or `<style>` may sit inside a control-flow branch, scoped to
-that branch: a nested `<script>` declares branch-local `state`/`state.computed`/
-`watch` (inherited by canonical name — it carries no imports, which must live in
-the leading `<script>`), and a nested `<style>` scopes to its sibling subtree.
+Removed forms throw migration errors at parse time: the `<slot>` element (use
+`{children()}`), `<template name>` snippets (use `{#snippet}`), and all
+`<template if/each/await/switch/…>` control flow (use `{#…}` blocks).
 
-## Server surface — abide/server/*
+## Server surface — `abide/server/*`
 
-### RPC helpers — @documentation rpc
+### RPC — `@documentation rpc`
 
-- `@abide/abide/server/GET` — declare a `GET` rpc (read; schema → CLI + MCP auto-exposed).
-- `@abide/abide/server/POST` — declare a `POST` rpc (mutating; body args or `FormData`).
-- `@abide/abide/server/PUT` — declare a `PUT` rpc (mutating).
-- `@abide/abide/server/PATCH` — declare a `PATCH` rpc (mutating).
-- `@abide/abide/server/DELETE` — declare a `DELETE` rpc (mutating; query args).
-- `@abide/abide/server/HEAD` — declare a `HEAD` rpc (read; headers only).
+- `@abide/abide/server/GET` — GET rpc helper: `export const x = GET(handler, opts?)` inside `src/server/rpc/`; the bundler rewrites it to the server dispatcher or the browser proxy — calling it outside an rpc module throws.
+- `@abide/abide/server/POST` — POST rpc helper (mutating: accepts `outbox`, JSON/FormData body).
+- `@abide/abide/server/PUT` — PUT rpc helper (mutating).
+- `@abide/abide/server/PATCH` — PATCH rpc helper (mutating).
+- `@abide/abide/server/DELETE` — DELETE rpc helper (mutating; args travel in the query string).
+- `@abide/abide/server/HEAD` — HEAD rpc helper (read-only).
 
-### Response helpers — @documentation response
+### Responses — `@documentation response`
 
-- `@abide/abide/server/json` — JSON `Response` from a value (typed body for the caller).
-- `@abide/abide/server/jsonl` — wrap an `AsyncIterable` as a JSON-Lines streaming `Response`.
-- `@abide/abide/server/sse` — wrap an `AsyncIterable` as a Server-Sent-Events streaming `Response` (15s keepalive).
-- `@abide/abide/server/error` — plain-text error `Response`; `error(status, message?, init?)`, message defaults to the reason phrase. `error.typed(name, status, schema?)` builds a reusable typed-error constructor whose returns infer `fn.isError`/`fn.error()`.
-- `@abide/abide/server/redirect` — redirect `Response` accepting relative URLs, default 302.
+- `@abide/abide/server/json` — `json(data, init?)`: JSON response with `Cache-Control: no-store` default; `json(undefined)` emits 204 and round-trips back to `undefined`; carries the value type so the rpc's `Return` infers.
+- `@abide/abide/server/jsonl` — `jsonl(asyncIterable, init?)`: JSON Lines streaming response; consumer cancel flows into the generator's `return`; a generator throw becomes a final `{"$error": message}` line.
+- `@abide/abide/server/sse` — `sse(asyncIterable, init?)`: Server-Sent Events response with a 15s keepalive comment; errors emit an `event: error` frame carrying only the message.
+- `@abide/abide/server/error` — `error(status, message?, init?)`: plain-text error response (message defaults to the reason phrase); the caller's await throws `HttpError`. Member `error.typed(name, status, schema?)` declares a reusable typed-error constructor the handler returns (see Authoring contracts).
+- `@abide/abide/server/redirect` — `redirect(url, status = 302, init?)`: redirect response accepting relative URLs; 301/302/303/307/308.
 
-### Request scope — @documentation request-scope
+### Request scope — `@documentation request-scope`
 
-- `@abide/abide/server/request` — the inbound `Request` for the current SSR/RPC pass (throws outside a scope).
-- `@abide/abide/server/cookies` — the request's `Bun.CookieMap`; reads parse the inbound header, writes flush as `Set-Cookie`.
-- `@abide/abide/server/server` — the live `Bun.Server` inside a request scope.
+- `@abide/abide/server/request` — `request()`: the inbound `Request` for the in-flight SSR/rpc pass (AsyncLocalStorage); throws outside a request scope.
+- `@abide/abide/server/cookies` — `cookies()`: the request's cookie jar (Bun `CookieMap`) — reads parse the inbound header; `set`/`delete` flush as `Set-Cookie` when the handler returns.
+- `@abide/abide/server/server` — `server()`: the active `Bun.serve` instance; a no-op stand-in during in-process dispatch (CLI/MCP/tests); throws before boot.
 
-### Sockets — @documentation sockets
+### Configuration — `@documentation configuration`
 
-- `@abide/abide/server/socket` — declare a broadcast `Socket<T>` (`{ schema, tail, ttl, clients, clientPublish }`); `.broadcast` / `.peek` / `.refresh` / `.watch` (last is client-only reaction sugar) plus the probe family `.pending` / `.refreshing` / `.done` / `.error` (≡ `pending(socket)` etc.), `tail` default `1`.
+- `@abide/abide/server/env` — `env(schema)`: validates `Bun.env` against a Standard Schema at module top level (synchronous; every issue reported at once) and returns the typed config; the schema also projects the bundle's first-run setup form.
 
-### Configuration — @documentation configuration
+### Sockets — `@documentation sockets`
 
-- `@abide/abide/server/env` — validate `Bun.env` against a Standard Schema at boot; returns typed config, registers it for the setup form.
+- `@abide/abide/server/socket` — `socket<T>(opts?)` / `socket({ schema, tail, ttl, clientPublish, clients })`: declares the broadcast topic inside `src/server/sockets/<name>.ts`; see Authoring contracts for the full `Socket<T>` member surface.
 
-### Observability — @documentation observability
+### Agent — `@documentation agent`
 
-- `@abide/abide/server/reachable` — server-only cached outbound host reachability; `await reachable(host)` HEADs the origin, background-polls per TTL.
+- `@abide/abide/server/agent` — `agent(engine, messages)`: runs a provider engine (an `@abide/<provider>` package) against the app's own MCP surface inside an rpc's request scope and returns its `AgentFrame` stream; the handler picks the transport (`jsonl(agent(…))` / `sse(agent(…))`). The module also exports the neutral contract types: `NeutralMessage` (user/assistant/tool turns), `AgentFrame` (`text` deltas, `tool_use`, `tool_result`, `done` with a stop reason), `AgentSurface` (the gated tool/prompt/resource surface), and `AgentEngine` (surface + messages + origin in, frames out).
 
-### Agent — @documentation agent
+### Observability — `@documentation observability`
 
-- `@abide/abide/server/agent` — run a model engine against the app's own MCP surface; `agent(engine, messages)` returns the engine's neutral `AgentFrame` stream (wrap in `jsonl`/`sse`).
+- `@abide/abide/server/reachable` — `await reachable(host)`: server-only outbound reachability. The first call probes (HEAD) and starts a TTL background poll; later calls answer instantly off the warm value. Any completed HTTP response counts as reachable. Tuned by `ABIDE_REACHABLE_TTL` / `ABIDE_REACHABLE_TIMEOUT`.
 
-### Desktop bundle — @documentation bundle
+### Server plumbing — `@documentation plumbing`
 
-- `@abide/abide/server/appDataDir` — the running bundle's per-user data dir, keyed by the program name (cwd-independent, pure).
+- `@abide/abide/server/AppModule` — the type of `src/app.ts`'s optional hooks (`init`, `handle`, `handleError`, `health`, `forwardHeaders`).
+- `@abide/abide/server/InspectorContext` — the capability object core injects into `@abide/inspector` (`loadSurface`, `cacheSnapshot`, `inFlightSnapshot`, `onRecord`, app identity); keeps the inspector a pure consumer.
+- `@abide/abide/server/rpc/defineRpc` — `defineRpc(method, url, handler, opts?)`: the server-side construction the bundler rewrites rpc helper calls into — validation, timeout composition, client-flag resolution, registry entry.
+- `@abide/abide/server/sockets/defineSocket` — `defineSocket(name, opts?)`: server-side socket construction (retained-tail buffer with lazy TTL eviction, per-subscriber queues, `server.publish` fan-out).
+- `@abide/abide/server/prompts/definePrompt` — `definePrompt(name, opts)`: registers an MCP prompt; the resolver plugin generates one call per `src/mcp/prompts/<name>.md`.
+- `@abide/abide/server/prompts/renderPromptTemplate` — `renderPromptTemplate(template, args)`: substitutes `{{name}}` placeholders in a prompt body (missing args collapse to empty).
 
-### Plumbing — @documentation plumbing
+## Isomorphic surface — `abide/shared/*`
 
-- `@abide/abide/server/rpc/defineRpc` — the runtime the bundler rewrites each rpc export into (method + URL + handler + opts). Not hand-authored.
-- `@abide/abide/server/sockets/defineSocket` — the runtime the bundler rewrites each `socket(opts)` export into (name + opts). Not hand-authored.
-- `@abide/abide/server/prompts/definePrompt` — the runtime a generated `src/mcp/prompts/<file>.md` module calls to register a prompt.
-- `@abide/abide/server/prompts/renderPromptTemplate` — interpolate `{{arg}}` placeholders in a prompt template body with string args.
-- `@abide/abide/server/AppModule` — the type of the optional `src/app.ts` hooks (`init`/`handle`/`handleError`/`health`/`forwardHeaders`).
-- `@abide/abide/server/InspectorContext` — the context type the inspector surface receives.
+### Cache mutators — `@documentation cache`
 
-## Isomorphic surface — abide/shared/*
+- `@abide/abide/shared/refresh` — `refresh(selector?, args?)`: refetch every cached read matching the selector, keeping the stale value visible until the fresh one swaps in. Selector grammar: `(fn, args)` exact call, `(fn)` every args-variant, `({ tags })` a tagged group, `()` everything. `fn.refresh(args?)` is the pre-bound sugar.
+- `@abide/abide/shared/patch` — `patch(fn, args?, updater)` / `patch({ tags }, updater)`: mutate the retained value(s) in place — reactive, no network; the optimistic-update / socket-frame primitive. `fn.patch(…)` is the sugar.
 
-### Cache mutation — @documentation cache
+### Probes — `@documentation probes`
 
-- `@abide/abide/shared/refresh` — `refresh(fn, args?)` refetches every cached read matching the selector, keeping the stale value visible (`refreshing()` true) until the fresh one swaps in — never drops to a blank. Selectors: exact call, `refresh(fn)` (every args-variant), `refresh({ tags })`, `refresh()` (all). Instance sugar `fn.refresh(args?)`.
-- `@abide/abide/shared/patch` — `patch(fn, args?, updater)` mutates the retained value of the matching read(s) in place, reactive, no network — the optimistic-update / real-time primitive. Updater is always last; `patch(fn, updater)` and `patch({ tags }, updater)` variants. Instance sugar `fn.patch(args?, updater)`; fetch-only (a streaming rpc has no single value to patch).
+Probes report, never act — reading one opens no fetch and no stream.
 
-### Probes — @documentation probes
+- `@abide/abide/shared/pending` — `pending(selector?, args?)`: reactive "no value yet" probe over calls and streams (global, per-rpc, per-call, tagged, per-subscribable; a durable rpc's parked writes count too).
+- `@abide/abide/shared/refreshing` — `refreshing(selector?, args?)`: "holding a value while a fresher one is in flight" — the SWR reload / stream-reconnect badge.
+- `@abide/abide/shared/peek` — `peek(fn, args?)` / `peek(socket)`: the retained value (or latest frame), synchronously, `T | undefined`; reactive inside a tracking scope.
+- `@abide/abide/shared/done` — `done(subscribable)`: true once a stream closed (stream-only; a cache read's "done" is `!pending && !refreshing`).
+- `@abide/abide/shared/online` — `online()`: reactive connectivity probe — browser `online`/`offline` events; server-side it reflects the *calling client's* reported connectivity (always true during SSR and outside a scope).
 
-- `@abide/abide/shared/pending` — reactive "no value yet" probe over cache calls + tail streams; `pending()` / `pending(fn)` / `pending(fn, args)` / `pending({ tags })` / `pending(subscribable)` (also counts a durable rpc's parked writes). Instance sugar `fn.pending(args?)` / `socket.pending()`.
-- `@abide/abide/shared/refreshing` — reactive "holding a value while a fresher one is in flight" probe; same selector grammar as `pending`. Instance sugar `fn.refreshing(args?)` / `socket.refreshing()`.
-- `@abide/abide/shared/peek` — the value member: `peek(fn, args?)` returns the retained cache value synchronously (reactive in a tracking scope, no fetch); `peek(socket)` returns the latest frame. `T | undefined`. Instance sugar `fn.peek(args?)` / `socket.peek()`.
-- `@abide/abide/shared/done` — reactive stream-terminal probe; true once a subscribable has closed (`tail` status `done`). Stream-only. Instance sugar `socket.done()`.
-- `@abide/abide/shared/online` — reactive connectivity probe; the browser's `navigator.onLine` (client) or the calling client's reported offline header (server); always true during SSR.
+### Errors — `@documentation response`
 
-### Page — @documentation page
+- `@abide/abide/shared/HttpError` — thrown by rpc calls on non-2xx; carries `status`, `statusText`, the raw `response`, and — for typed/validation/queued errors — `kind` + `data`.
+- `@abide/abide/shared/ValidationErrorData` — the `data` shape of a `kind: 'validation'` failure: the raw Standard Schema `issues` plus a `fields` (field → first message) map.
 
-- `@abide/abide/shared/page` — the reactive page proxy: `page.route`, `page.params`, `page.url`, `page.navigating` — isomorphic across SSR and hydration.
+### Schema projection — `@documentation rpc`
 
-### URL — @documentation url
+- `@abide/abide/shared/withJsonSchema` — `withJsonSchema(schema, toJsonSchema)`: attaches the `toJSONSchema()` projection to a Standard Schema whose library lacks one, feeding OpenAPI, MCP, CLI help, and the bundle setup form.
 
-- `@abide/abide/shared/url` — resolve any in-app URL to its base-correct, typed form (rpc query args, page params, or bare path); external URLs pass through.
+### Observability — `@documentation observability`
 
-### Templating — @documentation templating
+- `@abide/abide/shared/health` — `health()`: reactive backend health — `{ reachable, abide, name, version, …app health-hook fields }`, polled from `/__abide/health` only while a tracking scope reads it; SSR-seeded so hydration starts warm; constant `{ reachable: true }` on the server. The `AppHealth`/`AppHealthMap` types augment from the generated `health.d.ts`.
+- `@abide/abide/shared/log` — the unified logger: `log(...)` / `.warn` / `.error` / `.trace` on the app's always-on channel, every record carrying request-scope context (short trace id, +elapsed, method+path); member `log.channel(name)` returns the same shape on a DEBUG-gated diagnostic channel. Renders tsv (default) or JSON per `ABIDE_LOG_FORMAT`.
+- `@abide/abide/shared/trace` — `trace()`: the current request's W3C `traceparent` (client-side: the trace of the request that rendered the page), or undefined outside any scope.
 
-- `@abide/abide/shared/snippet` — brand a payload as a `Snippet` so a `{expr}` interpolation mounts it (a DOM builder on the client, a pre-rendered string on the server).
+### Page — `@documentation page`
 
-### Responses — @documentation response
+- `@abide/abide/shared/page` — the reactive page proxy: `page.route`, `page.params`, `page.url` (browser-space on both sides, mount base included), `page.navigating`; isomorphic, re-runs readers across navigations.
 
-- `@abide/abide/shared/HttpError` — the error a non-2xx remote call throws; carries `status`, `statusText`, the raw `response`, and `kind`/`data` for a typed error.
-- `@abide/abide/shared/ValidationErrorData` — the shape of a 422 validation error's `.data` (the Standard Schema issue list).
+### URL — `@documentation url`
 
-### RPC schema — @documentation rpc
+- `@abide/abide/shared/url` — `url(path, params?/args?)`: resolves any in-app URL to its base-correct form — a page route literal interpolates its `[name]` params (typed via `PathParams`), a GET rpc path serializes typed args to the query, anything else is base-prefixed. Also exports the augmentable `RpcRoutes` / `PageRoutes` / `PublicAssets` maps and the `PathParams<P>` type.
 
-- `@abide/abide/shared/withJsonSchema` — attach a hand-written JSON Schema to a Standard Schema so the OpenAPI/MCP/CLI projection uses it verbatim.
+### Templating — `@documentation templating`
 
-### Observability — @documentation observability
+- `@abide/abide/shared/snippet` — `snippet(payload)`: brands a snippet payload so a `{expr}` interpolation mounts it (client: a DOM builder; server: the rendered string); the compiler wraps `{#snippet}` bodies in this. Also exports the `Snippet<P>` type and `snippetPayload(value)` (the payload, or undefined for plain values).
 
-- `@abide/abide/shared/health` — `AppHealth` / `HealthState` types for the `health()` payload, augmented by the generated `health.d.ts`.
-- `@abide/abide/shared/log` — the unified request-context logger: `log`/`warn`/`error`/`trace` on the app channel, `log.channel(name)` for a DEBUG-gated channel; tsv or `ABIDE_LOG_FORMAT=json`.
-- `@abide/abide/shared/trace` — the current request's short trace id (undefined outside a scope).
+### Shared plumbing — `@documentation plumbing`
 
-### Plumbing — @documentation plumbing
+- `@abide/abide/shared/createSubscriber` — `createSubscriber(start)`: open-on-first-tracked-read / close-on-last-reader resource lifecycle grounded in the signal core; the substrate under `health()`, `online()`, and the tail probes.
 
-- `@abide/abide/shared/createSubscriber` — the open-on-first-read / close-on-last-reader subscriber primitive backing streams / `online` (grounded in abide's signal core).
+## UI surface — `abide/ui/*` (client-only)
 
-## UI surface — abide/ui/* (client-only)
+### Reactive state — `@documentation reactive-state`
 
-### Reactive state — @documentation reactive-state
+- `@abide/abide/ui/state` — the `state` primitive: `state(initial, transform?)` writable cell, `state.computed(fn)` read-only derived, `state.linked(fn, transform?)` writable-reseeded, `state.share(key, value)` / `state.shared(key)` ambient context. In `.abide` files the compiler lowers reads/writes to plain variable syntax; in `.ts` the cell is read/written through `.value`.
+- `@abide/abide/ui/watch` — `watch(source, handler)`: the single reaction primitive over a thunk, cell, cell array, socket/stream, or rpc (see the grammar table). Client-only; the compiler strips author calls from SSR, and the `socket.watch` / `fn.watch` instance sugar is SSR-inert.
 
-- `@abide/abide/ui/state` — the `state` callable + `.computed` / `.linked` / `.share` / `.shared` members (see the grammar tables). Imported and called bare in a `.abide` `<script>`.
-- `@abide/abide/ui/watch` — the single reaction primitive: `watch(source, handler)` runs `handler` with the source's new value on change; source is a state cell, a cell array, a socket/stream (per-frame, replacing `socket.on`/`cache.on`), or an rpc (runs the smart read). Bare `watch(thunk)` is an auto-tracked effect and the compiler's binding form. Instance sugar mirrors the global for the two subscribable/rpc sources — `socket.watch(handler)` and `fn.watch(handler)` / `fn.watch(args, handler)`. Client-only; returns a scope-tied disposer.
+### Templating — `@documentation templating`
 
-### Templating — @documentation templating
+- `@abide/abide/ui/html` — `html(string)` / `` html`…` ``: brands trusted raw HTML for unescaped interpolation; the tag does not escape its interpolations — only feed it values you trust.
 
-- `@abide/abide/ui/html` — mark a string as trusted raw HTML for `{expr}` insertion; `html(str)` plain or tagged `` html`…` ``. No `{@html}` mustache.
+### Navigate — `@documentation navigate`
 
-### Navigate — @documentation navigate
+- `@abide/abide/ui/navigate` — `navigate(path, params?, options?)`: typed programmatic navigation off the route map; params interpolate through `url()` (base-correct). Options `{ replace, keepScroll }`. The module also exports `navigatePath(path, options?)` (already-resolved paths — the router's own entry, no re-basing) and the `NavigateOptions` type.
 
-- `@abide/abide/ui/navigate` — client navigation to a typed in-app path; `navigate('/p/[id]', { id }, options?)`, built through `url()`. `replace` / `keepScroll` options.
+### Outbox — `@documentation ui`
 
-### UI — @documentation ui
+- `@abide/abide/ui/outbox` — the global reactive outbox: `outbox()` lists every durable rpc's undelivered entries (each tagged with its `rpc`), member `outbox.retry()` drains every queue. Empty list server-side. Types `GlobalOutbox`, `GlobalOutboxEntry`.
 
-- `@abide/abide/ui/outbox` — the global durable-write outbox: `outbox()` lists every parked entry across rpcs, `outbox.retry()` drains every queue.
+### UI plumbing — `@documentation plumbing`
 
-### Plumbing — @documentation plumbing
+Compiler/runtime machinery — published so generated code, the type shadow, and
+tests can import it, not for app code.
 
-- `@abide/abide/ui/effect` — the low-level `effect(fn)` primitive (run + re-run on dep change, optional teardown; client-only). Internal — the compiler emits it and `watch` wraps it; authors use `watch`.
-- `@abide/abide/ui/currentScope` — resolve the current lexical scope (`scope()`); the internal lowering host for generated code + the type shadow import, not authored.
-- `@abide/abide/ui/enterRenderScope` — open a fresh SSR render scope, returning the previous one.
-- `@abide/abide/ui/exitRenderScope` — restore the scope `enterRenderScope` saved.
-- `@abide/abide/ui/router` — the client router: mounts pages/layouts into a host, restores scroll, optionally probes navigations through the server's `app.handle`.
-- `@abide/abide/ui/startClient` — boot the client runtime: seed the cache/health/page from `__SSR__`, hydrate, start the router.
-- `@abide/abide/ui/renderToStream` — out-of-order SSR streaming: yield the shell, then one resolved fragment per streaming `await` block as it settles.
-- `@abide/abide/ui/remoteProxy` — the browser-side rpc runtime the bundler swaps in (fetch over the network; durable `outbox` park-on-unreachable).
-- `@abide/abide/ui/socketProxy` — the browser-side socket runtime the bundler swaps in (subscribe over the multiplexed ws channel).
-- `@abide/abide/ui/dom/mount` — mount a top-level page/layout into a host element.
-- `@abide/abide/ui/dom/mountChild` — mount a nested child component as a comment-anchored range.
-- `@abide/abide/ui/dom/mergeProps` — compose a child's props from ordered explicit + spread layers.
-- `@abide/abide/ui/dom/spreadProps` — wrap a `{...source}` prop-spread layer as live value thunks.
-- `@abide/abide/ui/dom/restProps` — the live `...rest` of a component's props.
-- `@abide/abide/ui/dom/spreadAttrs` — spread an object's keys onto a native element's attributes.
-- `@abide/abide/ui/dom/readCall` — guarded method call on a reactive-document read.
-- `@abide/abide/ui/dom/hydrate` — adopt server-rendered DOM instead of rebuilding it.
-- `@abide/abide/ui/dom/text` — a text node tracking a reactive `read()`.
-- `@abide/abide/ui/dom/appendText` — a reactive `{expr}` interpolation appended under a parent.
-- `@abide/abide/ui/dom/appendTextAt` — a reactive `{expr}` interpolation mounted at a skeleton anchor comment.
-- `@abide/abide/ui/dom/appendSnippet` — mount a branded snippet builder's nodes in a range.
-- `@abide/abide/ui/dom/appendStatic` — append a static (non-reactive) text node.
-- `@abide/abide/ui/dom/cloneStatic` — append a fully-static cloned subtree.
-- `@abide/abide/ui/dom/skeleton` — clone a static template and expose its binding holes by path/anchor.
-- `@abide/abide/ui/dom/anchorCursor` — position a skeleton-anchored control-flow block or slot at its `<!--a-->` anchor.
-- `@abide/abide/ui/dom/mountSlot` — mount a component's slot content as a marker-bounded range.
-- `@abide/abide/ui/dom/outlet` — a layout's `<!--abide:outlet-->` range where nested route content mounts.
-- `@abide/abide/ui/dom/attr` — bind an element attribute to a reactive `read()`.
-- `@abide/abide/ui/dom/on` — attach an event listener and register its removal with the owning scope.
-- `@abide/abide/ui/dom/attach` — run an `attach={fn}` against an element and register its teardown.
-- `@abide/abide/ui/dom/each` — the keyed-list runtime for `{#for … by key}`.
-- `@abide/abide/ui/dom/eachAsync` — the async keyed-list runtime for `{#for await … of …}`.
-- `@abide/abide/ui/dom/when` — the conditional runtime for `{#if}` (with optional else).
-- `@abide/abide/ui/dom/awaitBlock` — the async runtime for `{#await}` (pending / then / catch / finally).
-- `@abide/abide/ui/dom/tryBlock` — the synchronous error-boundary runtime for `{#try}`.
-- `@abide/abide/ui/dom/switchBlock` — the multi-branch runtime for `{#switch}` and `{#if}` chains.
-- `@abide/abide/ui/dom/applyResolved` — the bundle-side consumer that swaps an SSR stream fragment into its `await` boundary.
-- `@abide/abide/ui/runtime/escapeKey` — JSON-Pointer-escape one object key (`~`/`/`) for a reactive-doc path segment.
-- `@abide/abide/ui/runtime/nextBlockId` — the next block id in the current render pass (await/try boundaries).
-- `@abide/abide/ui/runtime/enterRenderPass` — mark entry into a render/mount; the outermost resets the block-id counter.
-- `@abide/abide/ui/runtime/exitRenderPass` — mark exit from a render/mount, unwinding the pass depth.
+- `@abide/abide/ui/effect` — `effect(fn)`: the raw auto-tracked effect the compiler emits for bindings; authors use `watch`. Returns a disposer; SSR strips author calls.
+- `@abide/abide/ui/currentScope` — `scope()`: the ambient lexical scope — the internal lowering host for `state`/`effect` (`derive`/`linked`/`effect`/`share` land here).
+- `@abide/abide/ui/enterRenderScope` — `enterScope()`: opens an isolated scope for an SSR render; returns the previous scope to restore.
+- `@abide/abide/ui/exitRenderScope` — `exitScope(previous)`: restores the scope `enterScope` saved.
+- `@abide/abide/ui/router` — `router(...)`: the client router — fills layout/page chains into comment-marker outlet boundaries, intercepts in-app links, buckets/restores scroll per history entry.
+- `@abide/abide/ui/startClient` — `startClient(...)`: the client entry — reads every `__SSR__` field into its shared slot (cache seed, health seed, client timeout, resume manifest), hydrates the chain, starts the router.
+- `@abide/abide/ui/renderToStream` — `renderToStream(render)`: out-of-order SSR streaming — shell first, then one `<abide-resolve>` fragment per streaming await block in completion order; blocking (`then`-head) awaits render inline.
+- `@abide/abide/ui/remoteProxy` — `remoteProxy(method, url, opts?)`: the browser-side rpc stub the bundler emits (fetch, decode, HttpError, outbox parking, streaming); the `DurableOptions` type rides along.
+- `@abide/abide/ui/socketProxy` — `socketProxy(name)`: the browser-side socket stub — the identical `Socket<T>` shape over the page's lazily-opened multiplexed ws channel.
+- `@abide/abide/ui/runtime/escapeKey` — JSON-Pointer-escapes one reactive-doc path key (`~`→`~0`, `/`→`~1`).
+- `@abide/abide/ui/runtime/nextBlockId` — the next await/try block id in the current render pass (document order, shared across inlined children).
+- `@abide/abide/ui/runtime/enterRenderPass` — marks entry into a render/mount; the outermost resets the block-id counter.
+- `@abide/abide/ui/runtime/exitRenderPass` — unwinds `enterRenderPass`'s depth.
+- `@abide/abide/ui/dom/mount` — mounts a top-level page/layout into a host under an ownership scope; returns the unmount.
+- `@abide/abide/ui/dom/mountChild` — mounts a nested child component as a comment-marker range (dev builds also register it with the hot bridge).
+- `@abide/abide/ui/dom/mountSlot` — mounts a component's passed-children content as a marker-bounded range.
+- `@abide/abide/ui/dom/outlet` — a layout's outlet: an empty `<!--abide:outlet-->…<!--/abide:outlet-->` boundary the router fills.
+- `@abide/abide/ui/dom/hydrate` — adopts server-rendered DOM instead of rebuilding: runs the build with a claim cursor over the existing nodes.
+- `@abide/abide/ui/dom/skeleton` — the parsed-once static-structure clone path every bound element builds through; element holes by path, blocks by anchor comments.
+- `@abide/abide/ui/dom/anchorCursor` — positions a skeleton-anchored block/slot at its `<!--a-->` anchor, in clone and hydrate modes alike.
+- `@abide/abide/ui/dom/cloneStatic` — appends a fully-static subtree (no bindings, control flow, or listeners) by cloning.
+- `@abide/abide/ui/dom/appendStatic` — a static text node: created (create mode) or claimed from server-rendered text (hydrate mode).
+- `@abide/abide/ui/dom/appendText` — a reactive `{expr}` text node under a parent.
+- `@abide/abide/ui/dom/appendTextAt` — a reactive text node mounted at a skeleton anchor (text interleaved with element siblings).
+- `@abide/abide/ui/dom/appendSnippet` — mounts a `{snippet(args)}` interpolation's builder into a marker-bounded range.
+- `@abide/abide/ui/dom/text` — a text node whose content tracks a reactive read.
+- `@abide/abide/ui/dom/attr` — binds an element attribute to a read (boolean true → bare attribute, false/nullish → removed).
+- `@abide/abide/ui/dom/on` — attaches an event listener whose removal is registered with the ownership scope.
+- `@abide/abide/ui/dom/attach` — runs an `attach={fn}` attachment and registers its optional teardown.
+- `@abide/abide/ui/dom/bindSelectValue` — two-way `<select>` binding that re-applies the selection when the option set changes (late-mounting `{#for}`/async options; `multiple` binds an array).
+- `@abide/abide/ui/dom/each` — keyed `{#for}` runtime: marker-bounded rows reconciled by key.
+- `@abide/abide/ui/dom/eachAsync` — `{#for await}` runtime: rows append/reconcile as the AsyncIterable yields.
+- `@abide/abide/ui/dom/when` — `{#if}` runtime (single-branch swap in a marker-bounded range).
+- `@abide/abide/ui/dom/switchBlock` — `{#switch}` runtime (also `{#if}` chains with `{:else if}` branches).
+- `@abide/abide/ui/dom/awaitBlock` — `{#await}` runtime: pending → resolved/error branch swap, teardown-generation guarded.
+- `@abide/abide/ui/dom/tryBlock` — `{#try}` runtime: synchronous error boundary around a subtree build.
+- `@abide/abide/ui/dom/applyResolved` — consumes a streamed SSR `<abide-resolve>` chunk, swapping it into its await boundary (the bundle-side counterpart of the doc stream's inline scripts).
+- `@abide/abide/ui/dom/mergeProps` — composes a child's props from explicit thunk runs, spread layers, and the trailing children layer.
+- `@abide/abide/ui/dom/spreadProps` — wraps a `{...source}` spread layer so every key resolves to a live value thunk.
+- `@abide/abide/ui/dom/restProps` — the live unconsumed-props object behind `const { …, ...rest } = props()`.
+- `@abide/abide/ui/dom/spreadAttrs` — spreads an object's keys onto a native element (`<div {...rest}>`), keys enumerated once.
+- `@abide/abide/ui/dom/readCall` — guarded method call on a reactive-doc read (the `model.draft.trim()` lowering).
 
 ## Build / tooling
 
-### Building — @documentation building
+### Building — `@documentation building`
 
-- `@abide/abide/build` — build the client bundle into `dist/_app/` (Bun.build with the `.abide` loader + virtual resolver + optional Tailwind + optional gzip).
-- `@abide/abide/compile` — produce a standalone Bun server executable (runs the client build first).
+- `@abide/abide/build` — `build({ cwd, … })`: builds the client bundle into `dist/_app` (`.abide` loader, virtual-module resolver, optional Tailwind); production builds also emit `.gz` siblings; staged and atomically swapped so a live dev server never sees a half-built dist.
+- `@abide/abide/compile` — `compile({ cwd, target?, outfile? })`: produces a standalone server executable (runs the client build first and embeds the compressed assets); returns the binary path.
 
-### Testing — @documentation testing
+### Tooling plumbing — `@documentation plumbing`
 
-- `@abide/abide/test/createTestApp` — spin up an in-memory abide app (rpc/socket/MCP surfaces) for tests.
+- `@abide/abide/preload` — the Bun preload installing the `.abide` loader, the virtual-module resolver, and a `.css` no-op loader — the same runtime for the server, scripts (`abide run`), and `bun test`.
+- `@abide/abide/resolver-plugin` — the resolver plugin itself: `$`-alias + virtual-module (`abide:*`) resolution, rpc/socket module rewriting, side-crossing guards.
+- `@abide/abide/ui-plugin` — the Bun plugin that compiles `.abide` single-file components to ES modules (layouts flagged by filename; scoped styles bundled into the entry stylesheet).
+- `@abide/abide/tsconfig` — the base tsconfig apps extend (`bundler` resolution, strict, `types: ["bun"]`, erasable syntax only).
 
-### Plumbing — @documentation plumbing
+## Desktop bundle — `@documentation bundle`
 
-- `@abide/abide/preload` — the Bun preload that installs the `.abide` loader + virtual resolver (`[test]` preload, `abide run`).
-- `@abide/abide/resolver-plugin` — the Bun plugin wiring every `abide:*` virtual module and rewriting rpc/socket modules per target.
-- `@abide/abide/ui-plugin` — the Bun plugin that loads `.abide` single-file components (compiles each to an ES module).
-- `@abide/abide/tsconfig` — the shared `tsconfig.app.json` a project extends.
-- `@abide/abide/test/createScriptedSurface` — a scripted MCP/tool surface for agent-engine tests.
-- `@abide/abide/test/assertAgentFrameConformance` — assert an engine's frame stream satisfies the neutral `AgentFrame` contract.
+- `@abide/abide/bundle/BundleWindow` — the type of `src/bundle/window.ts`'s default export: window title/size plus custom `menu` entries inserted between the standard Edit and Window menus.
+- `@abide/abide/bundle/BundleMenu` — one top-level custom menu (`label` + `items`).
+- `@abide/abide/bundle/BundleMenuItem` — one menu entry: a divider, an `emit` item dispatching an `abide:menu` CustomEvent into the page (optional Cmd `shortcut`), or a `navigate` item repointing the window itself.
+- `@abide/abide/bundle/onMenu` — `onMenu(handler)` / `onMenu(name, handler)`: subscribes to bundle menu clicks; returns an unsubscribe; inert during SSR and in plain browser tabs.
+- `@abide/abide/bundle/bundled` — `bundled()`: true inside the desktop bundle (client: webview init flag; server: launcher-spawned process), false in a plain browser tab or on a remote server.
+- `@abide/abide/server/appDataDir` — `appDataDir()`: the running bundle's per-user data dir, keyed by the bundler-injected program name; pure path computation, cwd-independent (`ABIDE_DATA_DIR` overrides).
 
-## MCP
+## MCP — `@documentation mcp`
 
-### MCP — @documentation mcp
+- `@abide/abide/mcp/createMcpServer` — `createMcpServer(opts?)`: the MCP server behind `/__abide/mcp` — tools derived from every `clients.mcp` rpc and socket (a `<name>-tail` read tool, plus `<name>-publish` under `clientPublish`), prompts from `src/mcp/prompts/`, auth inherited from the inbound request, optional `authorize` hook. Framework-constructed; there is no user-authored server module.
 
-- `@abide/abide/mcp/createMcpServer` — construct the MCP server bound to the project's rpc registry; its `handle(request)` backs `/__abide/mcp`. Framework-internal (the `abide:mcp` virtual default-constructs it).
+## Testing
 
-## Desktop bundle — @documentation bundle
-
-- `@abide/abide/bundle/BundleWindow` — the type of the default export from `src/bundle/window.ts` (title, size, menus).
-- `@abide/abide/bundle/BundleMenu` — a top-level bundle menu (`label` + `items`).
-- `@abide/abide/bundle/BundleMenuItem` — one menu entry (a divider or a clickable item dispatching an `abide:menu` event).
-- `@abide/abide/bundle/onMenu` — subscribe to bundle menu clicks; returns an unsubscribe (drops into a `watch`).
-- `@abide/abide/bundle/bundled` — `true` when running inside the abide desktop bundle rather than a plain browser tab.
+- `@abide/abide/test/createTestApp` — `@documentation testing` — boots the app in-process for `bun test`: typed `app.rpc.<name>` / `app.sockets.<name>` clients (typed via the generated `testRpc.d.ts` / `testSockets.d.ts`), request scope included, no network.
+- `@abide/abide/test/createScriptedSurface` — `@documentation plumbing` — a scripted `AgentSurface` for engine tests: declarative tool stubs in, an MCP surface out, every dispatched call recorded for assertions.
+- `@abide/abide/test/assertAgentFrameConformance` — `@documentation plumbing` — collects an engine's frame stream and asserts the neutral `AgentFrame` contract (exactly one terminal `done`, paired `tool_use`/`tool_result`, string deltas); returns the frames for provider-specific assertions.
 
 ## Generated machine surfaces
 
-Routes the runtime serves (the internal `/__abide/{config,dev,disconnect,reload}`
-routes are deliberately undocumented plumbing):
-
 | Route | Serves |
 | --- | --- |
-| `/openapi.json` | The OpenAPI 3 spec projected from every schema'd rpc. |
-| `/__abide/mcp` | The MCP endpoint (tools + prompts from schema'd rpcs and prompt files). |
-| `/__abide/health` | The health payload the client `health()` polls (identity + app `health()` fields). |
-| `/__abide/sockets` | The multiplexed WebSocket hub; `/__abide/sockets/<name>` GET tail / POST publish. |
-| `/__abide/cli` | The CLI binary download endpoint (per-platform thin client + server). |
-| `/__abide/hot` | The dev hot-reload channel. |
-| `/__abide/identity` | The app identity (name/version) probe. |
-| `/__abide/inspector` | The inspector surface (gated by `ABIDE_ENABLE_INSPECTOR`). |
+| `/openapi.json` | The OpenAPI document projected from every rpc's method, URL, and schemas |
+| `/__abide/mcp` | The MCP endpoint (tools from rpcs/sockets, prompts, resources); auth flows from the inbound request |
+| `/__abide/health` | Liveness + identity JSON: framework version, app name/version, plus the app `health(request)` hook's fields; answered ahead of `app.handle` |
+| `/__abide/identity` | Compatibility alias for the same payload with the legacy `abide: true` marker |
+| `/__abide/sockets` | The single multiplexed WebSocket every client socket rides |
+| `/__abide/sockets/<name>` | A socket's HTTP face: `GET` = retained tail as JSON (SSE stream under `Accept: text/event-stream`; `?tail=N` caps/seeds), `POST` = publish gated by `clientPublish`; 404 unless the socket is exposed to mcp/cli |
+| `/__abide/cli` | `GET` = shell install script; `/__abide/cli/<platform>` streams the thin-CLI tarball (cli + server binaries, `.env` baked with `ABIDE_APP_URL`/`ABIDE_APP_TOKEN`) |
+| `/__abide/inspector` | The `@abide/inspector` UI, mounted only under `ABIDE_ENABLE_INSPECTOR=true` |
+| `/__abide/hot/<moduleId>` | Dev-only component hot-module endpoint backing `.abide` HMR |
 
 ## Environment variables
 
 | Variable | Effect |
 | --- | --- |
-| `PORT` | The port the server binds. |
-| `APP_URL` / `ABIDE_APP_URL` | The app's public base URL (mount subpath, absolute link/asset resolution). |
-| `ABIDE_APP_TOKEN` | Shared token authenticating a CLI/remote client to the server. |
-| `ABIDE_CLIENT_TIMEOUT` | Client-wide default timeout (ms) for browser rpc fetches. |
-| `ABIDE_DATA_DIR` | Override the per-user data dir (`appDataDir()`). |
-| `ABIDE_MAX_REQUEST_BODY_SIZE` | Server-wide default max request body bytes. |
-| `ABIDE_IDLE_TIMEOUT` | Idle timeout (s) for connections. |
-| `ABIDE_REACHABLE_TIMEOUT` | Per-probe timeout (ms) for `reachable()`. |
-| `ABIDE_REACHABLE_TTL` | Freshness window (ms) for a cached `reachable()` result. |
-| `ABIDE_LOG_FORMAT` | `json` for one JSON object per log line (default: tsv). |
-| `ABIDE_ENABLE_INSPECTOR` | Enable the `/__abide/inspector` surface. |
-| `ABIDE_INSPECT` | Attach the inspector to a run. |
-| `DEBUG` | Enable DEBUG-gated diagnostic channels (e.g. `abide:cache`, `abide:rpc`). |
+| `PORT` | Binds that exact port (a collision fails loudly); unset, the server finds an open port from the default |
+| `APP_URL` | The app's public origin and optional mount base path (a bare `/v2` is tolerated); drives `url()` base-prefixing |
+| `ABIDE_APP_URL` | The remote server a thin CLI binary talks to (baked into its downloaded `.env`) |
+| `ABIDE_APP_TOKEN` | Bearer token the thin CLI sends; baked into the downloaded `.env` when the download request was authenticated |
+| `ABIDE_CLIENT_TIMEOUT` | Default browser-side rpc timeout in ms — read at server boot, shipped to the client via the SSR payload |
+| `ABIDE_DATA_DIR` | Overrides the per-user data directory on every platform |
+| `ABIDE_ENABLE_INSPECTOR` | `true` mounts `@abide/inspector` at `/__abide/inspector` (the package must be installed) |
+| `ABIDE_IDLE_TIMEOUT` | Bun per-connection idle timeout in seconds (default 10) |
+| `ABIDE_INSPECT` | Enables right-click → Inspect in the desktop bundle's webview |
+| `ABIDE_LOG_FORMAT` | `json` renders one JSON object per log line (default: tab-separated tsv) |
+| `ABIDE_MAX_REQUEST_BODY_SIZE` | Server-wide max request body bytes (a per-rpc `maxBodySize` refines it) |
+| `ABIDE_REACHABLE_TTL` | `reachable()` poll cadence / freshness in ms (default 30000) |
+| `ABIDE_REACHABLE_TIMEOUT` | `reachable()` per-probe bound in ms (default 3000) |
+| `DEBUG` | Channel-gated diagnostics (`DEBUG=abide:rpc`, `abide:sockets`, `abide:build`, …); `DEBUG=-abide` silences the framework's own channel |
 
-## Maintenance
+---
 
-This map mirrors the `exports` in `packages/abide/package.json`. After adding or
-renaming an export, run `bun run packages/abide/scripts/readmeSurfaces.ts` and
-re-sync this file.
+This file mirrors `package.json`'s `exports`; after adding or renaming an
+export, run `bun run packages/abide/scripts/readmeSurfaces.ts` and regenerate.

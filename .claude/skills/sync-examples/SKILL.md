@@ -58,8 +58,8 @@ running code. Sync means this invariant holds:
   it; don't keep it because it still builds. **A demo is not an orphan merely
   because the README omits it** — the README covers only three primitives.
   Terminology for the three primitives is the README's, verbatim (if the README
-  says `tail`, no example says `subscribe`); terminology for every other
-  surface is AGENTS.md's / the source's.
+  says `watch(chat, …)`, no example says the retired `chat.on(…)`); terminology
+  for every other surface is AGENTS.md's / the source's.
 - **Grammar coverage (constructs → examples).** The `.abide` *template grammar* —
   the control-flow blocks (`{#if}`/`{:else if}`/`{:else}`, `{#for}` + `{#for await}`,
   `{#await}` incl. `{:finally}`, `{#switch}`, `{#try}`, `{#snippet}`, `{children()}`)
@@ -229,10 +229,12 @@ existing content.
        done
      ```
 
-     The reactive surface (`scope().state`/`.computed`/`.linked`/`.effect`) is the
-     `reactive-state` *export* slug, covered by the slug→export checklist above (and
-     satisfied by the destructure idiom `const { state } = scope()` + bare calls), so
-     it is not in the grammar token list.
+     The reactive surface — the imported `state` (bare, with `state.computed`/
+     `state.linked` members) from `abide/ui/state` and the single reaction primitive
+     `watch` from `abide/ui/watch` — is the `reactive-state` *export* slug, covered by
+     the slug→export checklist above (satisfied by importing those primitives and
+     calling them bare; `scope()` is internal lowering plumbing, not authored), so it
+     is not in the grammar token list.
 
    - **Band conformance**: every HEAVY slug is a multi-page section (a
      `layout.abide` with subpages), every MEDIUM slug a single `page.abide`. Drift

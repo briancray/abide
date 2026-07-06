@@ -1,6 +1,6 @@
 const SNIPPET = Symbol.for('abide.snippet')
 
-/* A `<template name args>` snippet, called like a function: it carries a payload a
+/* A `{#snippet name(args)}` snippet, called like a function: it carries a payload a
    `{expr}` interpolation mounts in place — a DOM builder `(host) => void` on the
    client, the pre-rendered HTML string on the server. The brand is a registered
    Symbol so it survives across module/bundle copies (same idiom as `html\`\``). */

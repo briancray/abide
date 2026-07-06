@@ -84,17 +84,24 @@ const LIVE = '/templating/bindings'
 <Recipe task="Bind a select" live={LIVE} code={`let sort = state('newest')
 
 <select bind:value={sort}>
-    <option value="newest">Newest</option>
-    <option value="oldest">Oldest</option>
-</select>`} note={"`bind:value` on a `<select>` binds the chosen option's value. For `multiple`, the cell holds an array."} />
+    {#for option of sortOptions by option}
+        <option value={option}>{option}</option>
+    {/for}
+</select>`} note={"`bind:value` on a `<select>` binds the chosen option's value — even when the options mount later (a `{#for}` or async data), the selection re-applies. For `multiple`, the cell holds an array of the picked values."} />
+
+<Recipe task="Bind a numeric input" live={LIVE} code={`let celsius = state<number>(20, (v) => v ?? 0)
+
+<input type="number" bind:value={celsius} />`} note={'A `type="number"` / `type="range"` input binds a number natively (via `valueAsNumber`); an empty field binds `undefined`. The transform is `state`\'s write gate — here it turns the empty field back into 0.'} />
 
 <Recipe
-    task="Coerce an input's value on write"
+    task="Bind an element property"
     live={LIVE}
-    code={`let celsius = state(20, (v) => Number(v) || 0)
+    code={`let expanded = state(false)
 
-<input type="number" bind:value={celsius} />`}
-    note={"`state`'s second argument transforms every write, so the cell stays a number even though the input hands back a string."} />
+<details bind:open={expanded}>
+    <summary>more</summary>…
+</details>`}
+    note={'`bind:<property>` is generic — the write-back listens on the right event per property (`toggle` for `open`, `change` for `checked` and selects, `input` otherwise).'} />
 
 <Recipe
     task="Two-way bind through a getter/setter lens"
@@ -103,7 +110,7 @@ const LIVE = '/templating/bindings'
     type="number"
     bind:value={{
         get: () => Math.round((celsius * 9) / 5 + 32),
-        set: (f) => (celsius = ((Number(f) || 0) - 32) * 5 / 9),
+        set: (f) => (celsius = ((f ?? 32) - 32) * 5 / 9),
     }} />`}
     note={'`bind:value={{ get, set }}` is the writable-computed form — derive a view of a cell and write edits back through the setter.'} />
 

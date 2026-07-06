@@ -15,7 +15,13 @@ let muted = state(false)
 let agreed = state(true)
 let topic = state('all')
 let toppings = state<string[]>([])
-let celsius = state(20, (n) => Number(n) || 0)
+let sort = state('oldest')
+const sortOptions = ['newest', 'oldest', 'busiest']
+let picks = state<string[]>(['green'])
+let expanded = state(false)
+// a numeric input binds a number natively (valueAsNumber); the transform only
+// gates the empty field, which binds undefined
+let celsius = state<number>(20, (n) => n ?? 0)
 
 // a plain object spread onto an element — every key becomes an attribute
 const extra = { 'data-role': 'demo', title: 'spread applied' }
@@ -56,7 +62,10 @@ const focusOnMount = (node: HTMLInputElement) => node.focus()
                 <td class="px-4 py-2 text-slate-600">
                     two-way — also <code class="font-mono">bind:checked</code>,
                     <code class="font-mono">bind:group</code>,
-                    <code class="font-mono">{'bind:value={{ get, set }}'}</code> (accessor lens)
+                    <code class="font-mono">{'bind:value={{ get, set }}'}</code> (accessor lens), and any property
+                    (<code class="font-mono">bind:open</code>); a select re-applies across late
+                    options (<code class="font-mono">multiple</code>
+                    binds an array); numeric inputs bind numbers
                 </td>
             </tr>
             <tr>
@@ -167,10 +176,52 @@ const focusOnMount = (node: HTMLInputElement) => node.focus()
                 type="number"
                 bind:value={{
                     get: () => Math.round((celsius * 9) / 5 + 32),
-                    set: (f: string) => (celsius = (((Number(f) || 0) - 32) * 5) / 9),
+                    set: (f: number | undefined) => (celsius = (((f ?? 32) - 32) * 5) / 9),
                 }}
                 class="w-full rounded-md border border-slate-300 px-3 py-1.5" />
         </label>
+    </div>
+
+    <div class="rounded-lg border border-slate-200 bg-white p-5">
+        <h3 class="text-xs font-semibold text-slate-500">bind:value — select</h3>
+        <select
+            bind:value={sort}
+            class="mt-2 w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm">
+            {#for option of sortOptions by option}
+                <option value={option}>{option}</option>
+            {/for}
+        </select>
+        <p class="mt-2 font-mono text-xs text-slate-500">sort = {sort}</p>
+        <select
+            multiple
+            bind:value={picks}
+            class="mt-2 w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm">
+            <option value="red">red</option>
+            <option value="green">green</option>
+            <option value="blue">blue</option>
+        </select>
+        <p class="mt-2 font-mono text-xs text-slate-500">picks = [{picks.join(', ')}]</p>
+        <p class="mt-1 text-xs text-slate-500">
+            The options mount from a {'{#for}'} after the bind runs — the selection re-applies. A
+            <code class="font-mono">multiple</code> select binds an array of the picked values.
+        </p>
+    </div>
+
+    <div class="rounded-lg border border-slate-200 bg-white p-5">
+        <h3 class="text-xs font-semibold text-slate-500">bind:open — generic bind:property</h3>
+        <details
+            bind:open={expanded}
+            class="mt-2 rounded-md border border-slate-200 p-2 text-sm">
+            <summary class="cursor-pointer">disclosure</summary>
+            Toggling writes the cell; writing the cell toggles it.
+        </details>
+        <p class="mt-2 font-mono text-xs text-slate-500">expanded = {expanded ? 'yes' : 'no'}</p>
+        <button
+            type="button"
+            class="mt-2 rounded-md border border-slate-300 px-2 py-1 text-xs hover:bg-slate-100"
+            onclick={() => (expanded = !expanded)}>
+            toggle from state
+        </button>
     </div>
 </div>
 

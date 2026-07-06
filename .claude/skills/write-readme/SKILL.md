@@ -81,13 +81,19 @@ The artifacts argue; prose doesn't.
   OpenAPI operation. Standard Schema is the contract (zod / valibot / arktype,
   unadapted).
 * One `GET` example (a `getMessages`-style RPC with an `inputSchema`).
-* The **fan-out diagram** — one declared RPC branching to: SSR call
-  (`cache(fn)()`), browser fetch (typed proxy), MCP tool, CLI subcommand,
-  OpenAPI op. This diagram is the whole premise; keep it.
+* The **fan-out diagram** — one declared RPC branching to: SSR call (the bare
+  call — the smart read, resolved in-process), browser fetch (typed proxy), MCP
+  tool, CLI subcommand, OpenAPI op. This diagram is the whole premise; keep it.
 * The gating note: a schema unlocks the CLI and (for read-only methods, GET/HEAD)
   MCP; a mutating method (POST/PUT/PATCH/DELETE) never auto-exposes to MCP — it
-  needs explicit `clients: { mcp: true }`. Note the consume forms (`cache(fn)()`
-  in-process, swapped `fetch` in the browser, `.raw(args)`, `.stream(args)`).
+  needs explicit `clients: { mcp: true }`. Note the consume forms: the **bare call
+  `fn(args)` IS the smart read** (cached, coalesced, reactive; isomorphic — same
+  callable in-process on the server and swapped to `fetch` in the browser),
+  `fn.raw(args, init?)` for the raw `Response`, the mutators/probes
+  `fn.refresh()` / `.patch(...)` / `.peek()` / `.pending()` / `.refreshing()` /
+  `.error()`, and a streaming handler (`jsonl`/`sse`) makes the bare call return
+  a `Subscribable`. (There is no `cache()` wrapper — it was removed; the bare
+  call carries the caching.)
 * `> ` warning: query args travel as strings — use `z.coerce.*`. The per-RPC
   `timeout` (504, every surface) is distinct from `ABIDE_CLIENT_TIMEOUT`.
 
@@ -119,16 +125,24 @@ e.g. `<slot>` at the `{children()}` site, `<template name>` / `<template if>` at
 copy idiom from `examples/` (they drift). Never trust this prose as the complete
 set. It should show:
 
-* `<script>` — imports (`cache`, `tail`, the rpc + socket via `$server/…`, a
-  child component via `$ui/…`), `props()` destructure reads, and **every**
-  reactive primitive reached through the **destructure-once idiom** — abide's
-  documented authoring default: write `const { state,
-  computed, linked, effect } = scope()` once at the top of the `<script>`, then
-  call them **bare** (`let count = state(0)`, `const doubled = computed(() =>
-  …)`, `linked(...)`, `effect(...)` (client-only)) — NOT the repeated
-  `scope().state(...)` longhand at each call site. A nested branch `<script>`
-  destructures off its own `scope()` the same way (`const { computed } =
-  scope()`). Also show an event handler that calls a mutating RPC.
+* `<script>` — imports (the rpc + socket via `$server/…`, a child component via
+  `$ui/…`, and the reactive primitives by their own module paths: `state` from
+  `abide/ui/state`, `watch` from `abide/ui/watch`, `html` from `abide/ui/html`),
+  `props()` destructure reads (ambient — no import), and **every** reactive
+  primitive in its current **imported form**: `state` is imported and called
+  **bare** (`let count = state(0)`), with its members `state.computed(() => …)`
+  (read-only derived) and `state.linked(() => src)` (writable, reseeded from a
+  thunk); `watch(source, handler)` is the **single reaction primitive**
+  (client-only) — it unified the old author `effect` / `socket.on` / `cache.on`,
+  so demo `watch(cell, …)` and `watch(socket, frame => …)`. Do NOT write the
+  retired `scope()` destructure-once idiom (`const { state, computed } =
+  scope()`) — `scope()` is internal plumbing now, not authored; the primitives
+  are resolved by their import binding. `effect` (`abide/ui/effect`) is likewise
+  internal plumbing the compiler emits — authors use `watch`, so the README
+  should not teach a bare `effect(...)`. A nested branch `<script>` declares its
+  own branch-local `state` / `state.computed` the same imported way (re-seeded
+  per mount, no module imports). Also show an event handler that calls a mutating
+  RPC.
 * **every binding / directive**: `{expr}` text, an `html`-branded (unescaped)
   interpolation, `name={expr}` attribute, `on<event>={fn}`, the form binds
   `bind:value` / `bind:checked` / `bind:group`, the derived two-way
@@ -180,13 +194,19 @@ is the editorial layer):
   reads `request()`/`cookies()`, returns `json`/`jsonl`/`sse`/`error`/`redirect`/raw
   `Response`; the `opts` fields incl. `clients: { browser, mcp, cli }`,
   `crossOrigin`, `timeout`, `maxBodySize`, `filesSchema`, `outbox`; the `z.coerce`
-  query-arg rule; the four
-  consume forms), the socket, page/layout (`[id]` → `page.params`, layout outlet,
-  `url`/`navigate`), `app.ts`/`config.ts`, and the isomorphism move (`cache()` for
-  warm hydration). Read each contract from the source types — do not invent.
-* **.abide template grammar** — the component file anatomy + the ambient names
-  (`scope`, `props`, `effect`, `html`, `snippet`), then tables for reactive state
-  (`scope().state/.computed/.linked`, `effect`, `props()`), bindings (`{expr}`,
+  query-arg rule; the consume forms — the bare call is the smart read, plus
+  `fn.raw(args, init?)`, the `refresh`/`patch`/`peek`/`pending`/`refreshing`/
+  `error` members, and a streaming handler making the bare call a `Subscribable`),
+  the socket, page/layout (`[id]` → `page.params`, layout outlet,
+  `url`/`navigate`), `app.ts`/`config.ts`, and the isomorphism move (the bare
+  smart call reads in-process during SSR and bakes its value into the HTML for
+  warm hydration — there is no `cache()` wrapper). Read each contract from the
+  source types — do not invent.
+* **.abide template grammar** — the component file anatomy + the imported
+  primitives (`state`, `watch`, `html`, `snippet` — each on its own module path,
+  resolved by import binding) alongside the one ambient reader `props()` (no
+  import), then tables for reactive state (`state`/`state.computed`/`state.linked`,
+  `watch`, `props()`), bindings (`{expr}`,
   `name={expr}`, `on<event>`, `bind:value/checked/group`, `bind:value={{get,set}}`,
   `class:name`, `style:property`, `attach`, `{...spread}`), and control flow — the
   mustache blocks `{#if}`/`{:else if}`/`{:else}`/`{/if}`,
@@ -202,8 +222,8 @@ is the editorial layer):
   removed form throws a migration error). Note that `<script>` and
   `<style>` are **not component-root-only**: either may sit inside a control-flow
   branch, scoped to that branch's lexical scope (a nested `<script>` declares
-  branch-local `scope().state/linked/computed`, re-seeded per mount, no module
-  imports; a nested `<style>` scopes to its sibling subtree, not the whole
+  branch-local `state`/`state.computed`/`state.linked`, re-seeded per mount, no
+  module imports; a nested `<style>` scopes to its sibling subtree, not the whole
   component) — so write "a root `<style>` is component-scoped", never a bare
   "`<style>` is component-scoped". Re-derive the FULL set from the parser, not
   from this prose, which drifts: the attribute-directive kinds (`event`/`bind`/
@@ -243,19 +263,26 @@ Derive every `.abide` form from `packages/abide/src/lib/ui/compile` (the parser
 and its removal guards) and prove it with the compile gate; never copy from
 `examples/` (they drift) and never write Svelte syntax.
 
-* **Reactive state is reached only through `scope()`**, and the documented
-  default is the **destructure-once idiom** —
-  `const { state, computed, linked, effect } = scope()` at the top of the
-  `<script>`, then **bare** calls (`let count = state(0)`, `const doubled =
-  computed(() => …)`). Always WRITE THE DESTRUCTURE FORM in docs/snippets, not
-  the repeated `scope().state(...)` longhand at each call site (the longhand is
-  the equivalent reference form, not the form to teach). `computed` is read-only,
-  `effect` is client-only (stripped from SSR), `state(v, transform?)` and
-  `linked(fn, transform?)` are writable. Bare `state`/`computed`/`linked`/
-  `effect`/`derived` with NO `scope()` destructure in scope are a compile error
-  (a writable computed is expressed at the binding, `bind:value={{ get, set }}`).
-  A nested branch `<script>` destructures off its own `scope()` the same way
-  (`const { computed } = scope()`). `props()` is the ambient prop reader
+* **Reactive state is reached through imported primitives**, resolved by import
+  binding (alias-safe) — not through `scope()` (that is internal lowering
+  plumbing now, `@documentation plumbing`, never authored). Import `state` from
+  `abide/ui/state` and call it **bare** (`let count = state(0)`), using its
+  members `state.computed(() => …)` (read-only, lazy, never serialized) and
+  `state.linked(() => src, transform?)` (writable, reseeded when the thunk's deps
+  change); `state(v, transform?)` is the writable cell whose `transform` gates
+  writes. Read/write through `.value`. The retired `scope().state(...)` /
+  destructure-once (`const { state, computed } = scope()`) form is **no longer
+  recognised** by the compiler — always write the imported-bare form in
+  docs/snippets. A writable computed is expressed at the binding,
+  `bind:value={{ get, set }}`. `watch` (from `abide/ui/watch`) is the **single
+  reaction primitive** — `watch(source, handler)` over a cell, a cell array, a
+  socket/stream, or an rpc; it unified the old author `effect` / `socket.on` /
+  `cache.on`, and bare `watch(thunk)` is an auto-tracked effect (also the
+  compiler's binding form). Client-only, stripped from SSR. `effect`
+  (`abide/ui/effect`) still exists but is internal plumbing the compiler emits —
+  authors use `watch`, so don't teach a bare `effect(...)`. A nested branch
+  `<script>` declares its own branch-local `state`/`state.computed` the same
+  imported way. `props()` is the ambient prop reader
   (`const { name = fallback, ...rest } = props()`, no import, no `scope()`).
   These are functions, **not** `$state`/`$derived`.
 * Control flow is **mustache blocks**, not `<template>`: `{#if}`/`{:else if}`/
@@ -310,18 +337,19 @@ and its removal guards) and prove it with the compile gate; never copy from
    for t in '{#if' '{:else if' '{:else}' '{/if}' '{#for ' '{#for await' '{/for}' \
      '{#await' '{:then' '{:catch' '{:finally' '{#switch' '{:case' '{:default' \
      '{#try' '{/try}' 'bind:value' 'bind:checked' 'bind:group' 'get, set' \
-     'class:' 'style:' 'attach=' '{...' '} = scope()' '= state(' 'computed(' \
-     'linked(' 'effect(' 'html`' '{#snippet ' '{/snippet}' 'children()'; do
+     'class:' 'style:' 'attach=' '{...' 'ui/state' '= state(' 'state.computed(' \
+     'state.linked(' 'watch(' 'html`' '{#snippet ' '{/snippet}' 'children()'; do
      grep -qF -- "$t" packages/abide/README.md || echo "MISSING from README §4: $t"
    done
    ```
 
-   The reactive-primitive tokens enforce the **destructure form**: `} = scope()`
-   (the destructure is present) plus the bare callables (`= state(`, `computed(`,
-   `linked(`, `effect(`). A README that used the longhand `scope().state(...)`
-   at each call site would now flag `} = scope()` MISSING — that is the point:
-   teach the destructure idiom, not the longhand. The branch keyword is
-   `{:else if}` (a space), not `{:elseif}` — re-confirm against
+   The reactive-primitive tokens enforce the **imported form**: `ui/state` (the
+   `state` primitive is imported by its module path) plus the bare callables and
+   members (`= state(`, `state.computed(`, `state.linked(`, `watch(`). A README
+   that wrote the retired `scope().state(...)` destructure form would now flag
+   `ui/state` and the member tokens MISSING — that is the point: teach the
+   imported-primitive surface, not the removed `scope()` idiom. The branch keyword
+   is `{:else if}` (a space), not `{:elseif}` — re-confirm against
    `parseTemplate.ts` if the parser changes.
 
 5. **Compile gate (authoritative — run this, do not skip)** — extract every
