@@ -763,8 +763,10 @@ function emitNode(node: TemplateNode, builder: Builder): void {
             emitNodes(node.children, builder)
             return
         case 'branch':
-            /* Reached only for a stray branch outside an await (none today); the await
-               handler binds resolved/error types for its own branch children. */
+            /* Reached for a `{#try}`'s `catch`/`finally`: the `try` handler emits its
+               children directly (guarded content + these branch nodes), so a `{:catch err}`
+               binds its error here as `any` (statically unknowable). The `await`/`if`/`switch`
+               handlers consume their own branches inline and never route through this case. */
             builder.raw('{\n')
             if (node.as !== undefined) {
                 builder.raw(`const ${node.as} = undefined as any;\n`)
