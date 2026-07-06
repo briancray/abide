@@ -9,7 +9,9 @@ import CodeBlock from '$ui/CodeBlock.abide'
 /* Seed from the socket's retained frame (peek), then keep a cell current with a
    watch — the socket is a subscribable, so watch fires the handler per frame. */
 let latest = state(peek(chat))
-watch(chat, (message) => (latest = message))
+watch(chat, (message) => {
+    latest = message
+})
 
 let from = state('alice')
 let text = state('hello socket!')
