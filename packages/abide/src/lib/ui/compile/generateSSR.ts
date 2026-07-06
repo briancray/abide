@@ -515,8 +515,8 @@ export function generateSSR(
            bound value (single) or is a member of it (multiple). */
         if (node.tag === 'option' && selectBinds.length > 0) {
             const optionValue = optionValueForSSR(node)
-            if (optionValue !== undefined) {
-                const bind = selectBinds[selectBinds.length - 1]
+            const bind = selectBinds[selectBinds.length - 1]
+            if (optionValue !== undefined && bind !== undefined) {
                 const present = bind.multiple
                     ? `Array.isArray(${bind.variable}) && ${bind.variable}.includes(${optionValue})`
                     : `(${optionValue}) === (${bind.variable})`
