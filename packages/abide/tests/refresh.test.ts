@@ -5,10 +5,14 @@ import { createRemoteFunction } from '../src/lib/shared/createRemoteFunction.ts'
 import { refresh } from '../src/lib/shared/refresh.ts'
 import { refreshing } from '../src/lib/shared/refreshing.ts'
 import { settle } from './support/settle.ts'
+import { useBrowserWindow } from './support/useBrowserWindow.ts'
 
 const BROWSER_ONLY = { browser: true, mcp: false, cli: false }
 
 describe('refresh()', () => {
+    /* SWR retain (the mechanism refresh()'s stale-visible swap relies on) is a
+       client-only concern since Task 2 — exercise this describe as a browser tab. */
+    useBrowserWindow()
     beforeEach(() => {
         cacheStoreSlot.resolver = () => cacheStoreSlot.fallback
         cacheStoreSlot.fallback = createCacheStore()
@@ -43,7 +47,7 @@ describe('refresh()', () => {
         expect(refreshing(getN)).toBe(false)
 
         refresh(getN)
-        /* No window → the refetch fired now and is parked; the stale value stays. */
+        /* The refetch fired now and is parked; the retained stale value stays visible. */
         expect(refreshing(getN)).toBe(true)
         expect(await getN()).toEqual({ n: 1 })
 

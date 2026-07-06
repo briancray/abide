@@ -4,9 +4,9 @@ import type { CacheSelector } from './types/CacheSelector.ts'
 /*
 Refetch every cached read matching the selector, keeping the stale value visible
 until the fresh one swaps in (refreshing() true meanwhile) — the smart-call
-refetch. Because the smart read retains its value (SWR unconditional), a refresh
-always refetches-and-swaps; it never drops to a pending blank. Follows the shared
-selector grammar:
+refetch. Because the smart read retains its value on the client (SWR
+unconditional there), a refresh always refetches-and-swaps; it never drops to a
+pending blank. Follows the shared selector grammar:
 
   refresh(getFoo, args)   → that exact call
   refresh(getFoo)         → every args-variant of that rpc

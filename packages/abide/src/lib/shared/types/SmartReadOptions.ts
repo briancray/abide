@@ -5,10 +5,13 @@ these govern retention and the refetch clock — NOT transport. Per-call transpo
 options (signal/keepalive/priority/cache/headers) live on `.raw(args, init)`.
 
 Fetch reads:
-- `ttl` — retention/staleness in ms: undefined = retain forever (no auto-refetch),
-  N ms = the retained value goes stale after N ms and the next access triggers a
-  background revalidation (stale stays visible, `refreshing()` true). The display
-  value is never dropped; ttl drives staleness, not eviction.
+- `ttl` — retention/staleness in ms. Default: 0 on the server (coalesce-only —
+  the request is the atomic unit, nothing is retained past it), Infinity on the
+  client (retain until invalidate/refresh — the tab is the atomic unit). On the
+  client, N ms marks a staleness deadline: the retained value goes stale after N
+  ms and the next access triggers a background revalidation (stale stays visible,
+  `refreshing()` true); the display value is never dropped. On the server, N ms
+  is a plain expiry and only takes effect in the shared store (pair with `shared`).
 - `tags` — free-form invalidation-group labels (see the selector grammar).
 - `throttle` / `debounce` — rate-limit the background refetch clock (set one, not
   both). Leading-edge-then-coalesce, or fire-after-quiet respectively.

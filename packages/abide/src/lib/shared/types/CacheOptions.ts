@@ -2,10 +2,13 @@
 Options for cache(). The key is always auto-derived (method+url+args for a remote
 function, producer-reference+args for a plain producer): hoist a producer to a
 stable reference to share its entry across calls. `ttl` is the
-milliseconds-past-resolve that the entry stays live: omitted = forever, 0 =
-dedupe only (entry dropped once the promise settles — the mutation idiom:
-in-flight coalescing and pending() visibility, nothing retained), any other
-number = TTL.
+milliseconds-past-resolve that the entry stays live: 0 = dedupe only (entry
+dropped once the promise settles — the mutation idiom: in-flight coalescing and
+pending() visibility, nothing retained), any other number = TTL. Omitted = forever
+for a producer and for a remote call on the client; a remote call on the SERVER
+with neither `ttl` nor `swr` stated defaults to 0 (coalesce-only — the request is
+the atomic unit, nothing is retained past it; pair with `shared` + an explicit
+`ttl` to memoise across requests).
 `tags` is an array of free-form labels grouping unrelated calls so one
 `cache.invalidate({ tags })` drops every entry sharing any of them — list
 multiple when a call belongs to multiple invalidation groups. A unique tag (e.g.

@@ -190,10 +190,13 @@ describe('rejection', () => {
 
 /*
 A hydrated snapshot entry ships without its wrap options, so the first read
-adopts its call site's ttl: omitted keeps the entry (exactly as shipped),
-ttl > 0 starts the expiry clock at that read, and ttl: 0 serves the hydration
-pass only — evicted a macrotask later, so every reader in the pass still warm-
-hits but the next render fetches live. The first reader's declaration wins.
+adopts its call site's ttl. On the SERVER an omitted ttl now defaults to 0
+(the coalesce-only retention model), so it behaves exactly like an explicit
+ttl: 0 — the hydration pass's readers still warm-hit, but the entry is
+evicted a macrotask later and the next render fetches live. ttl > 0 is the
+one way to retain past the pass: it starts the expiry clock at that read. On
+the CLIENT (window defined) an omitted ttl is unchanged — it still adopts the
+entry forever. The first reader's declaration wins.
 */
 describe('hydrated entries adopt the reading call site ttl', () => {
     function hydrate(store: CacheStore, remote: RawRemoteFunction<undefined>): string {
@@ -229,20 +232,43 @@ describe('hydrated entries adopt the reading call site ttl', () => {
         expect(store.entries.has(key)).toBe(false)
     })
 
-    test('an omitted ttl keeps the hydrated entry, and a later ttl: 0 read cannot evict it', async () => {
+    test('server: an omitted ttl now defaults to ttl: 0 — same-pass reads warm-hit, then it evicts', async () => {
         const store = createCacheStore()
         cacheStoreSlot.resolver = () => store
         const key = hydrate(store, countedRemote.raw)
 
-        /* First reader declares forever — it consumes the adoption. */
+        /* First reader declares nothing — the server default (ttl: 0) applies. */
         expect(await cache(countedRemote)).toEqual({ hit: 0 })
-        await settle()
-        expect(store.entries.has(key)).toBe(true)
-
-        /* The losing later declaration neither evicts nor re-arms. */
+        /* A same-pass explicit ttl: 0 read still warm-hits off the same entry. */
         expect(await cache(countedRemote, undefined, { ttl: 0 })).toEqual({ hit: 0 })
         await settle()
-        expect(store.entries.has(key)).toBe(true)
+        expect(store.entries.has(key)).toBe(false)
+    })
+
+    test('client: an omitted ttl still keeps the hydrated entry forever', async () => {
+        const globalDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'window')
+        ;(globalThis as Record<string, unknown>).window = {}
+        try {
+            const store = createCacheStore()
+            cacheStoreSlot.resolver = () => store
+            const key = hydrate(store, countedRemote.raw)
+
+            /* First reader declares forever — it consumes the adoption. */
+            expect(await cache(countedRemote)).toEqual({ hit: 0 })
+            await settle()
+            expect(store.entries.has(key)).toBe(true)
+
+            /* The losing later declaration neither evicts nor re-arms. */
+            expect(await cache(countedRemote, undefined, { ttl: 0 })).toEqual({ hit: 0 })
+            await settle()
+            expect(store.entries.has(key)).toBe(true)
+        } finally {
+            if (globalDescriptor) {
+                Object.defineProperty(globalThis, 'window', globalDescriptor)
+            } else {
+                delete (globalThis as Record<string, unknown>).window
+            }
+        }
     })
 
     test('ttl > 0 starts the expiry clock at the first read', async () => {

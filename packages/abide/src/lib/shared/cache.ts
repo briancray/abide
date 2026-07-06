@@ -62,8 +62,10 @@ Reads a call through a cache store. `cache(fn, args?, options?)` checks the stor
 for a prior entry and returns a shared promise on hit, or invokes `fn` once and
 stores its promise on miss — a direct read-through call, not a curried invoker.
 Args lead (the common refinement); options trail in a fixed final position so
-they can't collide with arg shapes. TTL = undefined → forever; ttl = 0 → dedupe
-only; ttl > 0 → entry expires `ttl` ms after the promise resolves.
+they can't collide with arg shapes. ttl = 0 → dedupe only; ttl > 0 → entry
+expires `ttl` ms after the promise resolves. Omitted ttl → forever for a
+producer and for a remote call on the client; a remote call on the server with
+neither ttl nor swr stated defaults to 0 (coalesce-only, see CacheOptions).
 
 Coalescing is always on: identical in-flight calls share one flight, so
 `cache(createPost, args, { ttl: 0 })` is the mutation idiom — double-submit
@@ -172,9 +174,9 @@ cache.read = smartRead
 
 /*
 The shared read-through core. `smart` marks the smart bare call, which enables
-unconditional SWR retention for replayable reads (see smartRead / entry.retain);
-the public cache() passes false, keeping its explicit drop-on-ttl /
-drop-on-invalidate old surface.
+unconditional SWR retention for a replayable read — but only on the client (see
+smartRead / entry.retain and the `retain` computation below); the public cache()
+passes false, keeping its explicit drop-on-ttl / drop-on-invalidate old surface.
 */
 function readThrough<Args, Return>(
     fn: AnyRemote<Args, Return> | Producer<Args, Return>,
@@ -200,18 +202,25 @@ function readThrough<Args, Return>(
     const method = isRemote ? (rawFn as RawRemoteFunction<Args>).method : undefined
     const replayable = method !== undefined && REPLAYABLE_METHODS.has(method.toUpperCase())
     validatePolicy(options, method, smart)
-    /* Unconditional SWR retention for a smart replayable read (unless opted out). */
-    const retain = smart && replayable && options?.swr !== false
+    /* SWR retention is a client concern (the tab store lives; revalidation is
+       visible). On the server there is no live UI to hold stale, so a smart read
+       never retains — it coalesces only. */
+    const retain = smart && replayable && options?.swr !== false && typeof window !== 'undefined'
     /*
-    A smart write is coalesce-only, not retained (design: same as cache(fn, body,
-    { ttl: 0 })) — a second identical submit must re-fire, never replay the first
-    result. Default a smart write's ttl to 0 when the caller left it open. Reads and
-    explicit cache() keep the caller's ttl (undefined = forever).
+    ttl defaults to 0 (coalesce-only) on the server for any remote read/write, and
+    on the client for a smart write — in both cases only when the caller stated
+    neither ttl nor swr. The server default makes retention opt-in (via an explicit
+    ttl, paired with `shared` to survive the request). An explicit swr opts out so
+    it does not trip validatePolicy's "swr + ttl:0" throw; server-side swr is a
+    client-only concept with no added server guarantee.
     */
-    const effectiveOptions =
-        smart && isRemote && !replayable && options?.ttl === undefined
-            ? { ...options, ttl: 0 }
-            : options
+    const serverTtlZero =
+        isRemote &&
+        typeof window === 'undefined' &&
+        options?.ttl === undefined &&
+        options?.swr === undefined
+    const smartWriteTtlZero = smart && isRemote && !replayable && options?.ttl === undefined
+    const effectiveOptions = serverTtlZero || smartWriteTtlZero ? { ...options, ttl: 0 } : options
     if (!isRemote) {
         warnAnonymousProducer(fn as Producer<Args, Return>)
     }

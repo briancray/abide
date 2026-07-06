@@ -7,6 +7,7 @@ import { createRemoteFunction } from '../src/lib/shared/createRemoteFunction.ts'
 import { refreshing } from '../src/lib/shared/refreshing.ts'
 import { sharedCacheStoreSlot } from '../src/lib/shared/sharedCacheStoreSlot.ts'
 import { settle } from './support/settle.ts'
+import { useBrowserWindow } from './support/useBrowserWindow.ts'
 
 const BROWSER_ONLY = { browser: true, mcp: false, cli: false }
 
@@ -56,24 +57,41 @@ describe('smart bare rpc call — shared store', () => {
         })
     }
 
-    test('shared: true stores in the process-level store and later requests reuse it', async () => {
+    test('shared without ttl is coalesce-only on the server — a later request re-fetches', async () => {
         let invokes = 0
         const getShared = countingRemote('/rpc/getShared', () => {
             invokes += 1
             return invokes
         })
-        let first: unknown
-        let second: unknown
         await runWithRequestScope(new Request('http://x/'), { logRequests: false }, async () => {
-            first = await getShared(undefined, { shared: true })
+            await getShared(undefined, { shared: true })
             return new Response('ok')
         })
         await runWithRequestScope(new Request('http://x/'), { logRequests: false }, async () => {
-            second = await getShared(undefined, { shared: true })
+            await getShared(undefined, { shared: true })
             return new Response('ok')
         })
-        expect(first).toEqual({ n: 1 })
-        expect(second).toEqual({ n: 1 })
+        expect(invokes).toBe(2)
+        await settle()
+        expect(sharedStore.entries.size).toBe(0)
+    })
+
+    test('shared + ttl memoizes across requests', async () => {
+        let invokes = 0
+        const getRates = countingRemote('/rpc/getRates', () => {
+            invokes += 1
+            return invokes
+        })
+        for (let i = 0; i < 2; i += 1) {
+            await runWithRequestScope(
+                new Request('http://x/'),
+                { logRequests: false },
+                async () => {
+                    await getRates(undefined, { shared: true, ttl: 60_000 })
+                    return new Response('ok')
+                },
+            )
+        }
         expect(invokes).toBe(1)
         expect(sharedStore.entries.size).toBe(1)
     })
@@ -133,6 +151,10 @@ describe('smart bare rpc call', () => {
    coalesce-only (never retained/revalidated). Drive a single persistent store (the
    client tab store) via cacheStoreSlot. */
 describe('smart bare rpc call — SWR retention', () => {
+    /* SWR retention is a client-only concern (Task 2): every test in this describe
+       exercises the smart read's unconditional retain/staleness machinery, which
+       only engages when `typeof window !== 'undefined'`. */
+    useBrowserWindow()
     beforeEach(() => {
         cacheStoreSlot.resolver = () => cacheStoreSlot.fallback
         cacheStoreSlot.fallback = createCacheStore()
@@ -143,45 +165,38 @@ describe('smart bare rpc call — SWR retention', () => {
     })
 
     test('client: a read retains across reads while a write re-fires (coalesce-only)', async () => {
-        const globals = globalThis as Record<string, unknown>
-        const realWindow = globals.window
-        globals.window = { location: { href: 'http://x/' } }
-        try {
-            let reads = 0
-            let writes = 0
-            const getThing = createRemoteFunction<undefined, { n: number }>({
-                method: 'GET',
-                url: '/rpc/read',
-                clients: BROWSER_ONLY,
-                buildRequest: () => new Request('http://x/rpc/read'),
-                invoke: async () => {
-                    reads += 1
-                    return jsonResponse({ n: reads })
-                },
-            })
-            const doWrite = createRemoteFunction<{ v: number }, { ok: boolean }>({
-                method: 'POST',
-                url: '/rpc/write',
-                clients: BROWSER_ONLY,
-                buildRequest: () => new Request('http://x/rpc/write', { method: 'POST' }),
-                invoke: async () => {
-                    writes += 1
-                    return jsonResponse({ ok: true })
-                },
-            })
-            /* Read retained: a second read after the first settled is a warm hit. */
-            expect(await getThing()).toEqual({ n: 1 })
-            await new Promise((resolve) => setTimeout(resolve, 0))
-            expect(await getThing()).toEqual({ n: 1 })
-            expect(reads).toBe(1)
-            /* Write coalesce-only: evicted on settle, so a second submit re-fires. */
-            await doWrite({ v: 1 })
-            await new Promise((resolve) => setTimeout(resolve, 0))
-            await doWrite({ v: 1 })
-            expect(writes).toBe(2)
-        } finally {
-            globals.window = realWindow
-        }
+        let reads = 0
+        let writes = 0
+        const getThing = createRemoteFunction<undefined, { n: number }>({
+            method: 'GET',
+            url: '/rpc/read',
+            clients: BROWSER_ONLY,
+            buildRequest: () => new Request('http://x/rpc/read'),
+            invoke: async () => {
+                reads += 1
+                return jsonResponse({ n: reads })
+            },
+        })
+        const doWrite = createRemoteFunction<{ v: number }, { ok: boolean }>({
+            method: 'POST',
+            url: '/rpc/write',
+            clients: BROWSER_ONLY,
+            buildRequest: () => new Request('http://x/rpc/write', { method: 'POST' }),
+            invoke: async () => {
+                writes += 1
+                return jsonResponse({ ok: true })
+            },
+        })
+        /* Read retained: a second read after the first settled is a warm hit. */
+        expect(await getThing()).toEqual({ n: 1 })
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        expect(await getThing()).toEqual({ n: 1 })
+        expect(reads).toBe(1)
+        /* Write coalesce-only: evicted on settle, so a second submit re-fires. */
+        await doWrite({ v: 1 })
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        await doWrite({ v: 1 })
+        expect(writes).toBe(2)
     })
 
     test('a read past the ttl triggers a background revalidation that keeps the stale value visible', async () => {
