@@ -18,6 +18,18 @@ function jsonResponse(value: unknown): Response {
     })
 }
 
+/* A remote whose invoke count is controlled by the caller — shared across the
+   shared-store and outside-a-request describes below. */
+function countingRemote(url: string, onInvoke: () => number) {
+    return createRemoteFunction<undefined, { n: number }>({
+        method: 'GET',
+        url,
+        clients: BROWSER_ONLY,
+        buildRequest: () => new Request(`http://x${url}`),
+        invoke: async () => jsonResponse({ n: onInvoke() }),
+    })
+}
+
 /* Type-level coverage (tsgo validates the body, never executed): the smart bare
    call's second arg accepts `shared` alongside the retention/refetch options. */
 function assertSharedOptionTypechecks(): void {
@@ -46,16 +58,6 @@ describe('smart bare rpc call — shared store', () => {
         sharedCacheStoreSlot.resolver = undefined
         cacheStoreSlot.resolver = undefined
     })
-
-    function countingRemote(url: string, onInvoke: () => number) {
-        return createRemoteFunction<undefined, { n: number }>({
-            method: 'GET',
-            url,
-            clients: BROWSER_ONLY,
-            buildRequest: () => new Request(`http://x${url}`),
-            invoke: async () => jsonResponse({ n: onInvoke() }),
-        })
-    }
 
     test('shared without ttl is coalesce-only on the server — a later request re-fetches', async () => {
         let invokes = 0
@@ -232,5 +234,36 @@ describe('smart bare rpc call — SWR retention', () => {
         await settle()
         expect(refreshing(getN)).toBe(false)
         expect(await getN(undefined, { ttl: 20 })).toEqual({ n: 2 })
+    })
+})
+
+describe('smart bare rpc call — outside a request', () => {
+    let sharedStore = createCacheStore()
+    beforeEach(() => {
+        sharedStore = createCacheStore()
+        sharedCacheStoreSlot.resolver = () => sharedStore
+        /* Mirror the fixed server entry: no request scope → the shared store. */
+        cacheStoreSlot.resolver = () => requestContext.getStore()?.cache ?? sharedStore
+    })
+    afterEach(() => {
+        sharedCacheStoreSlot.resolver = undefined
+        cacheStoreSlot.resolver = undefined
+        cacheStoreSlot.fallback = undefined
+    })
+
+    test('a bare read with no request in flight coalesces in the shared store', async () => {
+        let invokes = 0
+        const getThing = countingRemote('/rpc/getOutside', () => {
+            invokes += 1
+            return invokes
+        })
+        /* Fired concurrently (not sequentially awaited): the coalesce-only default
+           still shares one in-flight call, proving both routing and dedupe. */
+        const [first, second] = await Promise.all([getThing(), getThing()])
+        expect(first).toEqual({ n: 1 })
+        expect(second).toEqual({ n: 1 })
+        expect(invokes).toBe(1)
+        /* The `?? sharedStore` resolver means the lazy orphan fallback is never built. */
+        expect(cacheStoreSlot.fallback).toBeUndefined()
     })
 })

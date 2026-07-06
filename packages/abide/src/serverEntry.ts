@@ -65,16 +65,18 @@ await import('./_virtual/config.ts')
 // In a bundle, tie this server's life to the launcher's (no-op standalone).
 exitWithParent()
 
-cacheStoreSlot.resolver = () => requestContext.getStore()?.cache
-
-pageSlot.resolver = resolvePageSnapshot
-
 /*
-Process-level store for cache(fn, { shared: true }) — one per server process,
-outlives every request so memoised external calls are shared across them.
+Process-level ("shared") store for cache(fn, { shared: true }) — one per server
+process, outlives every request so memoised external calls are shared across them.
+It is also the store a read with no request in flight resolves to, so boot/cron/
+socket-handler reads coalesce into a real store instead of an orphan fallback.
 */
 const sharedCacheStore = createCacheStore()
 sharedCacheStoreSlot.resolver = () => sharedCacheStore
+
+cacheStoreSlot.resolver = () => requestContext.getStore()?.cache ?? sharedCacheStore
+
+pageSlot.resolver = resolvePageSnapshot
 
 await createServer({
     pages,

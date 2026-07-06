@@ -104,9 +104,9 @@ export async function createTestApp(): Promise<TestApp> {
         activeServer: serverSlot.active,
     }
 
-    cacheStoreSlot.resolver = () => requestContext.getStore()?.cache
     const sharedStore = createCacheStore()
     sharedCacheStoreSlot.resolver = () => sharedStore
+    cacheStoreSlot.resolver = () => requestContext.getStore()?.cache ?? sharedStore
     pageSlot.resolver = resolvePageSnapshot
 
     /* Eager env validation, exactly as serverEntry: a top-level env(schema) in
