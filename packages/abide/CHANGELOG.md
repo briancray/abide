@@ -1,5 +1,85 @@
 # abide
 
+## 0.47.0
+
+### Minor Changes
+
+- 981c53f: server-side streaming — defineRpc opts.streaming + rewriteForServer injects it ([`00f6fa8`](https://github.com/briancray/abide/commit/00f6fa8fdedc412808108c959c8ad9cced2b643b))
+- 981c53f: socket/rpc instance methods + reactive-surface follow-through ([`0d3d686`](https://github.com/briancray/abide/commit/0d3d686125d7906e1360af4f040f40f39892caa6))
+- 981c53f: on(source, handler) reaction primitive ([`1cfa4f9`](https://github.com/briancray/abide/commit/1cfa4f94bf2e6cd5b612ae26a449007d2b1e1769))
+- 981c53f: syntactic import-resolved reactive recognition (alias-safe, checker-free) ([`1e3e041`](https://github.com/briancray/abide/commit/1e3e041865541058d36c0f5d759d6b09f1256bb4))
+- 981c53f: capture call errors at the boundary, clear on success/invalidate ([`32f3ee7`](https://github.com/briancray/abide/commit/32f3ee7ae495149a7873b5102b215b1d8c07ca04))
+- 981c53f: bare call reads through the cache store (coalesced, reactive) ([`410e552`](https://github.com/briancray/abide/commit/410e552f5b233a814640737954cb01bf5825e816))
+- 981c53f: typed fn.error(args?) probe over the rpc error registry ([`41f4d4a`](https://github.com/briancray/abide/commit/41f4d4a2127a35327bbc573f3656eda9dcf9307a))
+- 981c53f: parked durable writes are pending, not errored ([`41fefbc`](https://github.com/briancray/abide/commit/41fefbc2d4f25c9364bd3e866edb90e1eb82df4e))
+- 981c53f: .refresh/.patch/.peek instance methods ([`55d4051`](https://github.com/briancray/abide/commit/55d40512d6113a20960d128c3d47b5a54d4d6f98))
+- 981c53f: patch() — optimistic/real-time local value mutation ([`67a2df7`](https://github.com/briancray/abide/commit/67a2df733d4e3948e68d253671daf322816737b0))
+- 981c53f: rpc error registry (last error per call identity, reactive) ([`7138e23`](https://github.com/briancray/abide/commit/7138e23bf0285da2f90fdc08e918a4abe3b749ad))
+- 981c53f: export ./ui/state; withdraw scope()/effect from author doc surface ([`77b5221`](https://github.com/briancray/abide/commit/77b52217d5baa9fa22b26d8aba8b0111237434eb))
+- 981c53f: peek() — synchronous non-triggering value probe ([`78469a8`](https://github.com/briancray/abide/commit/78469a89dac0cc014b8958f8e1ffa85e4fb189ba))
+- 981c53f: pre-bound selector methods on rpc instances (pending/refreshing/invalidate/cache) ([`8154dd0`](https://github.com/briancray/abide/commit/8154dd03ca4a1ac1b8c26292a43f72a85f3a9dab))
+- 981c53f: SWR retention always-on for smart reads; type the smart call ([`844a8b7`](https://github.com/briancray/abide/commit/844a8b79a9b526d5d82e5e7febe57f61f23aa98d))
+- 981c53f: done(sub) terminal reader + tail prober reports done/error ([`8a11ab3`](https://github.com/briancray/abide/commit/8a11ab31417edc59f062042b8181e5eaaa6bc140))
+- 981c53f: state() gains .linked/.computed/.share/.shared ([`b02aead`](https://github.com/briancray/abide/commit/b02aeade95173ddea2ea363f6de2f9e1cc23fc90))
+- 981c53f: refresh() — always-refetch over the selector grammar ([`b7bddb2`](https://github.com/briancray/abide/commit/b7bddb2dba94c269449ba2f52193f8c5ace6d5c1))
+- 981c53f: wire client streaming — detectStreaming codegen + proxy flag ([`bac63fe`](https://github.com/briancray/abide/commit/bac63fe94d08a94cbf887600bf2f61764170dbc0))
+- 981c53f: refresh() + peek() ([`d2f8f1a`](https://github.com/briancray/abide/commit/d2f8f1a5f541707a627a9e196ee0b53a060b721a))
+- 981c53f: broadcast() + tail defaults to 1 ([`dc280e9`](https://github.com/briancray/abide/commit/dc280e9e76a781994ee92af8c98967220e4f793e))
+- 981c53f: type-driven streaming — bare call returns Subscribable, drop .stream() ([`f457a2c`](https://github.com/briancray/abide/commit/f457a2c9c716a35ac398217196af92cf5751d650))
+- 981c53f: emit $$watch for bindings; watch recognized + SSR-stripped (renames on) ([`f4f7812`](https://github.com/briancray/abide/commit/f4f781201c82fdfe28d50e5535d93766b0e130c8))
+- c0db71d: Rebuild the data & reactivity surface around one smart call plus thin modifiers/probes/reactions.
+
+    **Breaking changes:**
+
+    - The **bare rpc call is now the smart read** — cached, coalesced, reactive, and stale-while-revalidate by default for replayable (GET/HEAD) reads; writes are coalesce-only. `cache(getFoo, args)` → `getFoo(args)`. The `cache()` function and the `./shared/cache` export are removed (the store remains the internal substrate). Per-call transport options (`signal`/`headers`/`keepalive`/`priority`/`cache`) move to `getFoo.raw(args, init)`; the smart call's second arg is cache/stream options (`ttl`/`tags`/`throttle`/`debounce`/`n`).
+    - **`.refresh` / `.patch` / `.peek`** — new global functions (`./shared/refresh`, `./shared/patch`, `./shared/peek`) and rpc instance methods. `.refresh` replaces `.invalidate` (refetch keeping the stale value visible, never blanking); `.patch` mutates the retained value locally with no network; `.peek` reads the retained value synchronously. `fn.invalidate`/`fn.cache` instance methods are removed (`fn.refresh` / the bare call replace them).
+    - **`watch(source, handler)`** (`./ui/watch`) is the single reaction primitive, replacing `effect`, `socket.on`, and `cache.on` for authors and the compiler (bindings emit `$$watch`). `effect` is off the taught surface (internal plumbing). Instance sugar mirrors the global for the two subscribable/rpc sources — `socket.watch(handler)` and `fn.watch(handler)` / `fn.watch(args, handler)` (client-only; SSR-inert no-op).
+    - **Sockets:** `socket.broadcast(msg)` replaces `.publish`; retention (`tail`) defaults to `1`; `socket.peek()` / `socket.refresh()` added. The `tail()` reactive-consumer function (`./ui/tail`) and `socket.tail()` are off the taught surface — consume the socket directly (`for await` / `watch`) and window via `watch` + `state`; `pending`/`refreshing`/`done`(socket) now register on consumption.
+
+- 2a42d90: Remove all later-hydration: the inferred deferred `{#await cache()}` inert path and the explicit `client:idle` / `client:visible` component islands. Both traded eager hydration for a wake-later heuristic, and the inference was the source of the "control renders dead until the wake fires" bug class. A blocking `{#await cache()}` now renders on the server, seeds warm, and hydrates eagerly — live on the first frame. `client:idle` / `client:visible` are no longer recognized directives. Very large grids that relied on island deferral should adopt their own virtualization.
+- f0f8d77: Close the `<select>` and boolean/numeric binding gaps.
+
+    - **`<select bind:value>` now handles late-mounting options.** Options produced by a `{#for}` block or async data mount _after_ the binding runs, and the browser drops a `value` set that names a not-yet-present option — so the initial value silently failed to apply. The bind now routes through a new `bindSelectValue` runtime helper (`./ui/dom/bindSelectValue`) that re-applies the selection whenever the option set changes (via a `MutationObserver`), covering static, `{#for}`, and async options uniformly.
+    - **`<select multiple bind:value>`** binds an array of the selected option values (two-way): the bound array drives which options are `selected`, and a user's picks are collected back into it.
+    - **SSR selects the matching option.** A server-rendered `<select bind:value>` now emits `selected` on the matching `<option>` (single) or every member (multiple) — the browser ignores a `value="…"` on the select, so the pre-hydration/no-JS state was wrong before. Option value is taken from its `value` attribute, else its static text.
+    - **`<details bind:open>` SSR fix.** `open` is a boolean attribute, so the old generic path emitted `open="false"` and rendered the element _open_ when closed. It now emits the bare attribute only when truthy, like `checked`.
+    - **Numeric input coercion.** `bind:value` on `<input type="number">` / `type="range"` now writes back a number (via `valueAsNumber`, empty field → `undefined`) instead of a string, so number-typed state stays a number.
+
+### Patch Changes
+
+- 981c53f: rpc error registry is client-only — no cross-request SSR leak ([`00c6efb`](https://github.com/briancray/abide/commit/00c6efb0053c0bcd0e44748ebcb85826ec382b27))
+- 981c53f: decide the tool namespace once — mcpTools replaces buildTools/callTool ([`05b31f1`](https://github.com/briancray/abide/commit/05b31f18a02c2ec344f8d17bcbda50d534aad104))
+- 981c53f: migrate .abide fixtures off scope() onto the imported reactive surface ([`0d487db`](https://github.com/briancray/abide/commit/0d487dbf02c6368bd1f889c6679951fc49c364ca))
+- 981c53f: Breaking: re-home subscribable probes onto consume; remove tail() ([`1e0ae9f`](https://github.com/briancray/abide/commit/1e0ae9ff75f2c48921c807c6c4445930933533c6))
+- 981c53f: desugar via import-resolution; bare imported primitives are the surface ([`21a52a5`](https://github.com/briancray/abide/commit/21a52a5b733da810a155eab6863d35b9e9ddd459))
+- 981c53f: keep SSR/client text claims congruent ([`383f7ab`](https://github.com/briancray/abide/commit/383f7ab5582533f7ecaad7c76b01c6ce7c114818))
+- 981c53f: shadow + nested-script recognize imported reactives; effect author-imported ([`415a232`](https://github.com/briancray/abide/commit/415a23223b44ff60776f5f68226d93dc9c2c5c7c))
+- 981c53f: regenerate README + AGENTS.md for the imported-reactive / flat-cache / bare-streaming surface ([`42a7404`](https://github.com/briancray/abide/commit/42a7404c00fa90334d14d715d2a17095f5b5456d))
+- 981c53f: extract finalizeResponse — the dynamic route's wire-handling step ([`4369119`](https://github.com/briancray/abide/commit/4369119ae41e3338af2769790ccd4a2b3cad68de))
+- 981c53f: regenerate README + AGENTS.md for the new data/reactivity surface ([`4c6d6eb`](https://github.com/briancray/abide/commit/4c6d6eb1033f64770c8e2154e856f00f6a5a834f))
+- 981c53f: hoist value consts above __Props so keyof typeof prop annotations resolve ([`581eebe`](https://github.com/briancray/abide/commit/581eebefd41f05d2875f96a3965d90c2c7a1da63))
+- 981c53f: import-resolution is the sole reactive recognition path ([`5b13721`](https://github.com/briancray/abide/commit/5b13721741e5c7bd85844b21f23372b588f05d24))
+- 981c53f: bump scaffold @abide/abide floor to ^0.46.0 ([`5d10cb5`](https://github.com/briancray/abide/commit/5d10cb5b2388fd45e0403b798ca8908b08f0a0e4))
+- 981c53f: reject streaming rpcs at compile time (@deprecated overload → never) ([`7277533`](https://github.com/briancray/abide/commit/7277533c74eec1103c4021844bbb5547f8b452de))
+- 981c53f: narrow the select-bind indexed access so tsgo passes under noUncheckedIndexedAccess ([`796340c`](https://github.com/briancray/abide/commit/796340c5aed2e21a1a46411fda30a4cb9450a95d))
+- 981c53f: resolve full-codebase review findings (22 bugs + cleanups) ([`8523d25`](https://github.com/briancray/abide/commit/8523d25d596d435ffea989ce93da75b4210bb655))
+- 981c53f: server streaming rewrite handles trailing comma / empty opts ([`89eb801`](https://github.com/briancray/abide/commit/89eb80142cae47fc53b3654e0c81f1bd9a394ecc))
+- 981c53f: unify **SSR** payload behind a shared contract + exhaustive boot seed ([`8b242f1`](https://github.com/briancray/abide/commit/8b242f1d0dab035a3bd439370b6a5066d5254d86))
+- 981c53f: sync examples, README, and AGENTS.md to {#snippet} block syntax ([`8fa8e72`](https://github.com/briancray/abide/commit/8fa8e7256eb2ddb1df48ab19c39ebfa1a86ac7c8))
+- 981c53f: repoint scope host to plumbing exports; drop dead reactive imports ([`a58aee6`](https://github.com/briancray/abide/commit/a58aee6418136de675a56190e4b7ee7dc84d54cc))
+- 981c53f: type {#snippet} as Snippet-returning in the check shadow ([`b2bca21`](https://github.com/briancray/abide/commit/b2bca217dfc12a6fe5870bdecf0bca2ef4e4b628))
+- 981c53f: Breaking: flatten cache(fn, args, options) — direct read-through, drop the wrapper ([`b8d356f`](https://github.com/briancray/abide/commit/b8d356fb078a548433311dd19a2bec930c30e29a))
+- 981c53f: migrate template + scaffold to the new surface ([`bc1ccfd`](https://github.com/briancray/abide/commit/bc1ccfdc7699cc0de034bdadcf79b7cc5e3695bd))
+- 981c53f: guard detectStreaming indexed access under noUncheckedIndexedAccess ([`bc5cecb`](https://github.com/briancray/abide/commit/bc5cecbf5b6669297a90e16cf8762110b928b641))
+- 981c53f: one module per resolved runtime value — the slot is the seam ([`c2dcde4`](https://github.com/briancray/abide/commit/c2dcde496e43868aeb94c23773e9f6630820b3c9))
+- 981c53f: declare pending/refreshing/invalidate/cache instance methods ([`c743df8`](https://github.com/briancray/abide/commit/c743df80777f6dcf1c7d326713c6124254a4bca4))
+- 981c53f: record why the type-check shadow stays off the Plan model (ADR-0014) ([`c9f77dd`](https://github.com/briancray/abide/commit/c9f77ddb44832354e71d711d035be497fa258ef6))
+- 981c53f: flatten cache() and update .stream() doc to bare streaming-rpc call ([`cfdf715`](https://github.com/briancray/abide/commit/cfdf71546bf14c2e29714d057307b14081e048a9))
+- 981c53f: Breaking: remove .invalidate/.cache instance methods ([`e809b22`](https://github.com/briancray/abide/commit/e809b22280ff851e51dbbbc3e65c6e8e6fb86a81))
+- 981c53f: Breaking: remove ./shared/cache export; retag ./ui/effect as plumbing ([`e9b5e94`](https://github.com/briancray/abide/commit/e9b5e9463f6f201bbf7e7b9455e5090e4c4c6ba6))
+- 981c53f: fold route matching into shared matchRoute ([`f00630b`](https://github.com/briancray/abide/commit/f00630bd2366f968e412d61b7b791e679d985414))
+- 981c53f: Breaking: remove .publish, migrate all call sites to .broadcast ([`fa0fd00`](https://github.com/briancray/abide/commit/fa0fd00f5f891d9f804155aaf496f6cf0eb9c535))
+
 ## 0.46.0
 
 ### Minor Changes
