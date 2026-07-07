@@ -10,14 +10,32 @@ export function discardBoundary(
     closeData: string,
     hydration: NonNullable<(typeof RENDER)['hydration']>,
 ): Node | null {
-    let node = open
-    let after: Node | null = null
+    /* Nothing to discard (no open marker) — park the cursor and return, as before. */
+    if (open === null) {
+        hydration.next.set(parent, null)
+        return null
+    }
+    /* Locate the close marker WITHOUT mutating first. Removing as we walk would, on a
+       marker/id desync (the await/try block-id counter drifting between server and
+       client), delete every remaining sibling before discovering there is no match —
+       silently wiping unrelated later content. Throw AT the divergence like `outlet`
+       instead, rather than over-clear to end-of-parent. */
+    let close: Node | null = open
+    while (close !== null && (close as { data?: string }).data !== closeData) {
+        close = close.nextSibling
+    }
+    if (close === null) {
+        throw new Error(
+            `[abide] hydration desync: boundary open marker has no matching close "${closeData}" — the server DOM is truncated or the block id drifted.`,
+        )
+    }
+    const after = close.nextSibling
+    /* Remove open..close inclusive now that the range is known-bounded. */
+    let node: Node | null = open
     while (node !== null) {
         const next = node.nextSibling
-        const isClose = (node as { data?: string }).data === closeData
         parent.removeChild(node)
-        if (isClose) {
-            after = next
+        if (node === close) {
             break
         }
         node = next

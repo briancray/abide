@@ -24,6 +24,7 @@ const schema = {
         verbose: { type: 'boolean' },
         count: { type: 'number' },
         tags: { type: 'array' },
+        nums: { type: 'array', items: { type: 'number' } },
     },
 }
 
@@ -121,6 +122,24 @@ describe('parseArgvForRpc value semantics preserved over the shared tokenizer', 
     test('boolean and --no- negation', async () => {
         expect(await parseArgvForRpc(['--verbose'], schema)).toEqual({ verbose: true })
         expect(await parseArgvForRpc(['--no-verbose'], schema)).toEqual({ verbose: false })
+    })
+
+    test('inline --flag=false on a boolean honours the RHS (not always true)', async () => {
+        expect(await parseArgvForRpc(['--verbose=false'], schema)).toEqual({ verbose: false })
+        expect(await parseArgvForRpc(['--verbose=true'], schema)).toEqual({ verbose: true })
+        expect(await parseArgvForRpc(['--verbose=0'], schema)).toEqual({ verbose: false })
+        expect(parseArgvForRpc(['--verbose=maybe'], schema)).rejects.toThrow(/true or false/)
+    })
+
+    test('array elements coerce per items.type', async () => {
+        expect(await parseArgvForRpc(['--nums', '1', '--nums', '2'], schema)).toEqual({
+            nums: [1, 2],
+        })
+        expect(parseArgvForRpc(['--nums', 'x'], schema)).rejects.toThrow(/expects a number/)
+        // an untyped array stays string-valued
+        expect(await parseArgvForRpc(['--tags', 'a', '--tags', 'b'], schema)).toEqual({
+            tags: ['a', 'b'],
+        })
     })
 
     test('number coercion and blank rejection', async () => {

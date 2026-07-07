@@ -14,11 +14,17 @@ import { scope } from './scope.ts'
    reached ambiently so a component can pass a named value down its subtree. */
 type StateFn = {
     /* No-arg form for an undefined initial with a declared type: `state<Foo>()` is
-       `State<Foo | undefined>`. Without it `state<Foo>(undefined)` is an arity/assign
-       error and `state(undefined)` infers `T = undefined` (every `.value` access then
-       narrows to `never`). */
+       `State<Foo | undefined>`. Without it `state(undefined)` infers `T = undefined`
+       (every `.value` access then narrows to `never`). */
     <T>(): State<T | undefined>
     <T>(initial: T, transform?: (next: T, previous: T) => T): State<T>
+    /* The no-arg form spelled out: `state<Foo>(undefined)` is `State<Foo | undefined>`
+       too. Kept a distinct overload (not `initial?: T`) BELOW the general form — a real
+       initial still binds `T` from the value; only an explicit `undefined` (which the
+       general form rejects as "not assignable to T") falls through to here. A bare
+       `state(undefined)` still resolves against the general form (`T = undefined`), so
+       this overload changes nothing for it. */
+    <T>(initial: undefined): State<T | undefined>
     /* A writable cell reseeded from a reactive thunk (`state.linked(() => src())`). */
     linked: typeof linked
     /* A read-only cell computed from other cells (`state.computed(() => a() + b())`). */

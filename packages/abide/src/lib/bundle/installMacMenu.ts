@@ -30,9 +30,19 @@ export function installMacMenu(
     if (process.platform !== 'darwin') {
         return
     }
-    const { symbols, close } = dlopen(libPath, {
-        abide_install_app_menu: { args: [FFIType.ptr, FFIType.ptr], returns: FFIType.void },
-    })
+    /* The abide_install_app_menu symbol is compiled only into abide's own webview lib.
+       A user who points ABIDE_WEBVIEW_LIB at a vanilla webview.dylib is on darwin but
+       lacks the symbol, so dlopen throws — degrade to a no-op (native menu simply absent)
+       rather than crashing the launcher, matching bindConnectedFlag/bindRequestNavigate. */
+    let symbols: { abide_install_app_menu: (handle: Pointer | null, config: Uint8Array) => void }
+    let close: () => void
+    try {
+        ;({ symbols, close } = dlopen(libPath, {
+            abide_install_app_menu: { args: [FFIType.ptr, FFIType.ptr], returns: FFIType.void },
+        }))
+    } catch {
+        return
+    }
     const config = JSON.stringify({ appName, fileMenu, menu })
     symbols.abide_install_app_menu(webviewHandle, new TextEncoder().encode(`${config}\0`))
     close()

@@ -6,6 +6,24 @@ import { linked } from '../src/lib/ui/linked.ts'
 import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
 import { state } from '../src/lib/ui/state.ts'
 
+describe('reactive doc cell', () => {
+    test('cell() does NOT auto-vivify ancestors until first write', () => {
+        // the bug: hoistCells lifts `model.cell(path)` to mount scope, and cell() vivified
+        // ancestors eagerly — fabricating structure for a path only written behind a
+        // never-run branch/handler. Vivify must be lazy (on the first set).
+        const d = doc({ settings: {} })
+        const cell = d.cell<string>('settings/theme/color')
+        // Creating the cell (and reading it) must not fabricate `settings.theme`.
+        expect(d.snapshot()).toEqual({ settings: {} })
+        expect(cell.get()).toBeUndefined()
+        expect(d.snapshot()).toEqual({ settings: {} })
+        // First write vivifies the ancestor and lands in the live tree.
+        cell.set('red')
+        expect(d.snapshot()).toEqual({ settings: { theme: { color: 'red' } } })
+        expect(cell.get()).toBe('red')
+    })
+})
+
 describe('reactive cells', () => {
     test('effect reruns on state change and not on equal write', () => {
         const count = state(0)
@@ -57,6 +75,47 @@ describe('reactive cells', () => {
         params.value = { id: '2', rest: 'b' } // id changed → wakes
         expect(runs).toBe(2)
         dispose()
+    })
+
+    test('a throwing effect does not strand siblings queued behind it, and both recover', () => {
+        // critical bug: one effect throwing mid-flush swapped away the pending batch, so
+        // every effect queued behind it never ran AND could never be re-queued (its status
+        // was left dirty, so mark()'s CLEAN→dirty gate ignored later writes forever).
+        const trigger = state(0)
+        let aRuns = 0
+        let bRuns = 0
+        let aThrows = false
+        const disposeA = effect(() => {
+            trigger.value
+            aRuns += 1
+            if (aThrows) {
+                throw new Error('effect A boom')
+            }
+        })
+        const disposeB = effect(() => {
+            trigger.value
+            bRuns += 1
+        })
+        expect(aRuns).toBe(1)
+        expect(bRuns).toBe(1)
+
+        // A (created first, queued first) throws; B must still run this pass.
+        aThrows = true
+        expect(() => {
+            trigger.value = 1
+        }).toThrow('effect A boom')
+        expect(bRuns).toBe(2) // sibling not stranded
+
+        // A recovers: a later write re-queues it (not permanently inert), and B keeps reacting.
+        aThrows = false
+        expect(() => {
+            trigger.value = 2
+        }).not.toThrow()
+        expect(aRuns).toBe(3) // A ran again after having thrown once
+        expect(bRuns).toBe(3)
+
+        disposeA()
+        disposeB()
     })
 
     test('memoisation stops at the first unchanged computed in a chain', () => {

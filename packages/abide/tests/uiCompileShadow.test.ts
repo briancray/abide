@@ -231,6 +231,22 @@ let ready = state(false)
         /* Exactly one `import { effect }` — the author's; the preamble drops its own. */
         expect(code.match(/import \{ effect \} from/g)).toHaveLength(1)
     })
+
+    test('an element attach checks its value against a tag-typed attachment', () => {
+        const { code } = compileShadow(`<input attach={(node) => { node.value = '' }} />`)
+        /* The aliases are emitted (attach present) and the value lands in the contextual
+           position with the tag baked into `__ElementFor`. */
+        expect(code).toContain('type __ElementFor<T extends string>')
+        expect(code).toContain('type __Attachment<E extends Element>')
+        expect(code).toContain('((__attach: __Attachment<__ElementFor<"input">>) => {})(')
+        expect(code).toContain("(node) => { node.value = '' }")
+    })
+
+    test('a template with no element attach omits the attachment aliases', () => {
+        const { code } = compileShadow(`<div>hi</div>`)
+        expect(code).not.toContain('__ElementFor')
+        expect(code).not.toContain('__Attachment')
+    })
 })
 
 test('shadow: imported props is additive with the route shape; no ambient children', () => {

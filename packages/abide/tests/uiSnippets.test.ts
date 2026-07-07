@@ -182,6 +182,40 @@ let item = state('STATE')</script>
             /<template name>.*\{#snippet/s,
         )
     })
+
+    /* A snippet body that renders `{children()}` emits `await $props.$children()` in SSR,
+       so the snippet must be an `async function` — else it produces a non-async function
+       with an `await` inside ("await can only be used inside an async function"), a build
+       failure `abide check` doesn't catch. */
+    test('a snippet body rendering {children()} is an async SSR function', async () => {
+        const src = `
+            {#snippet inner()}<span>{children()}</span>{/snippet}
+            <div>{inner()}</div>
+        `
+        const ssr = compileSSR(src)
+        expect(ssr).toContain('async function inner')
+        // the generated SSR body must be syntactically valid (a plain function would throw)
+        expect(() => new Function('$props', '$ctx', ssr)).not.toThrow()
+        const html = (await component(src).render({ $children: async () => 'SLOTTED' })).html
+        expect(html).toBe(
+            '<div><!--abide:snippet--><span><!--a--><!--[-->SLOTTED<!--]--></span>' +
+                '<!--/abide:snippet--></div>',
+        )
+    })
+
+    /* Transitive: a snippet that text-calls a `{children()}`-bearing snippet is awaited too,
+       so the async fixpoint must promote the caller. */
+    test('a snippet that calls a {children()} snippet is also async in SSR', () => {
+        const src = `
+            {#snippet inner()}{children()}{/snippet}
+            {#snippet outer()}<b>{inner()}</b>{/snippet}
+            <div>{outer()}</div>
+        `
+        const ssr = compileSSR(src)
+        expect(ssr).toContain('async function inner')
+        expect(ssr).toContain('async function outer')
+        expect(() => new Function('$props', '$ctx', ssr)).not.toThrow()
+    })
 })
 
 describe('snippets passed across components', () => {

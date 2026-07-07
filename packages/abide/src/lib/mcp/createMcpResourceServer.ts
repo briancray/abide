@@ -1,5 +1,6 @@
 // node:fs existsSync — cheap sync presence check, mirrors createPublicAssetServer
 import { existsSync } from 'node:fs'
+import { resolve, sep } from 'node:path'
 import { Glob } from 'bun'
 import { mimeForExtension } from '../server/runtime/mimeForExtension.ts'
 import type { Assets } from '../server/runtime/types/Assets.ts'
@@ -81,8 +82,10 @@ export function createMcpResourceServer({
                 return undefined
             }
             const relativePath = uri.slice(URI_PREFIX.length)
-            // reject `..` traversal in the requested uri before any disk read
-            if (relativePath.split('/').includes('..')) {
+            // reject `..` traversal on EITHER separator — a backslash-joined `..\` escapes
+            // resourcesDir on Windows (its OS layer treats `\` as a separator regardless of
+            // how the JS string was built), so a `/`-only split lets it through.
+            if (relativePath.split(/[\\/]/).includes('..')) {
                 return undefined
             }
             if (mcpResources) {
@@ -91,6 +94,14 @@ export function createMcpResourceServer({
                     return undefined
                 }
                 return contentsFor(relativePath, Bun.gunzipSync(compressed))
+            }
+            // Belt-and-braces for the on-disk branch: resolve the target and confirm it
+            // stays inside resourcesDir, catching any traversal the segment check missed
+            // (absolute paths, platform separator quirks).
+            const root = resolve(resourcesDir)
+            const target = resolve(root, relativePath)
+            if (target !== root && !target.startsWith(root + sep)) {
+                return undefined
             }
             const file = Bun.file(`${resourcesDir}/${relativePath}`)
             if (!(await file.exists())) {

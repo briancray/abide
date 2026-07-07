@@ -1,3 +1,4 @@
+import { abideLog } from '../../shared/abideLog.ts'
 import type { EffectResult } from './types/EffectResult.ts'
 import type { Teardown } from './types/Teardown.ts'
 
@@ -15,15 +16,21 @@ export function toTeardown(result: EffectResult): Teardown | undefined {
     }
     if (result instanceof Promise) {
         return () => {
-            /* Swallow a rejection: an async body that rejected (e.g. an aborted RPC) must
-               not surface as an unhandled rejection when the teardown runs at dispose. */
             result.then(
                 (teardown) => {
                     if (typeof teardown === 'function') {
                         teardown()
                     }
                 },
-                () => undefined,
+                (error) => {
+                    /* A superseded reactive read aborts its in-flight RPC — expected, stays
+                       quiet. Any OTHER rejection is a real bug in the async effect body;
+                       surface it (the visibility goal) instead of silently discarding it. */
+                    const aborted = (error as { name?: string } | undefined)?.name === 'AbortError'
+                    if (!aborted) {
+                        abideLog.error(error)
+                    }
+                },
             )
         }
     }

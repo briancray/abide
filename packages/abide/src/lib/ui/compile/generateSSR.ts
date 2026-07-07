@@ -184,15 +184,17 @@ export function generateSSR(
         })
 
     /* Snippet names whose body produces an `await`, so the snippet must be an `async function`
-       and its `{name(...)}` call sites awaited: it inlines a child component / holds an await
-       block (a structural scan), OR it text-calls another async snippet. The latter is a
-       dependency between snippets, so resolve it to a fixpoint — seed with the structural set,
-       then keep adding any snippet that calls an already-async one until nothing changes. */
+       and its `{name(...)}` call sites awaited: it inlines a child component, holds an await
+       block, or emits a `{children()}` slot fill (all `await $props.$children()` in SSR) — a
+       structural scan — OR it text-calls another async snippet. The latter is a dependency
+       between snippets, so resolve it to a fixpoint — seed with the structural set, then keep
+       adding any snippet that calls an already-async one until nothing changes. */
     const subtreeAwaits = (children: TemplateNode[]): boolean =>
         children.some(
             (child) =>
                 child.kind === 'component' ||
                 child.kind === 'await' ||
+                (child.kind === 'element' && child.tag === 'slot') ||
                 ('children' in child && subtreeAwaits(child.children)),
         )
     const snippetDefs = new Map<string, TemplateNode[]>()
@@ -223,14 +225,20 @@ export function generateSSR(
             }
         }
     }
-    /* A text-part expression that calls an async snippet, so its value is `await`ed before
-       `$text`. */
-    const callsAsyncSnippet = (code: string): boolean => {
-        // The common no-async-snippet component pays zero regex work per text part.
-        if (asyncSnippets.size === 0) {
+    /* A text-part expression whose value may be a Promise, so `$text` must `await` it:
+       either it calls an async snippet declared HERE, or it CALLS a computed-backed
+       binding. The latter covers a snippet handed down as a prop and called by its prop
+       name (`{item(label)}`) — that prop lowers to a computed, so it never appears in this
+       component's own `asyncSnippets`, yet the parent's snippet body may be async and the
+       call returns a Promise (the `[object Promise]` bug). A computed READ (`{full}`) is not
+       a call, so plain interpolation stays sync; only `name(...)` on a computed is awaited. */
+    const awaitableCallNames = new Set<string>([...asyncSnippets, ...computedNames])
+    const callsAwaitable = (code: string): boolean => {
+        // The common component with no async snippet and no computed pays zero regex work.
+        if (awaitableCallNames.size === 0) {
             return false
         }
-        for (const name of asyncSnippets) {
+        for (const name of awaitableCallNames) {
             if (callPattern(name).test(code)) {
                 return true
             }
@@ -285,7 +293,7 @@ export function generateSSR(
                        Plain expressions stay sync, so a component with only interpolation keeps a
                        sync render. */
                     const lowered = lowerExpression(part.code)
-                    const value = callsAsyncSnippet(part.code)
+                    const value = callsAwaitable(part.code)
                         ? `$text(await (${lowered}))`
                         : `$text(${lowered})`
                     return markText.get(node)
@@ -433,7 +441,11 @@ export function generateSSR(
             return (
                 anchor +
                 push(target, RANGE_OPEN) +
-                `const ${result} = await ${node.name}.render(${propsExpr}, $ctx);\n` +
+                /* The tag lowers like any reference (see generateBuild): a static import
+                   is left bare, a reactive/loop/await binding derefs — SSR registers such
+                   a binding as `plain`, so it reads the bare local holding the resolved
+                   component, keeping SSR and client congruent. */
+                `const ${result} = await ${lowerExpression(node.name)}.render(${propsExpr}, $ctx);\n` +
                 `${target}.push(${result}.html);\n` +
                 `for (const $a of ${result}.awaits) { $awaits.push($a); }\n` +
                 `Object.assign($resume, ${result}.resume);\n` +

@@ -262,6 +262,35 @@ describe('abide check', () => {
         expect(diagnostics[0]!.message).toContain('possibly')
     })
 
+    /* `state<T>(undefined)` is the no-arg form spelled out — an explicit `undefined`
+       initial with a declared type, so it is `T | undefined` (never `= (undefined)`
+       checked against a non-optional `T`, which spuriously flagged "not assignable"). */
+    test('state<T>(undefined) is T | undefined, not an "undefined not assignable" error', () => {
+        const guarded = project({
+            'g.abide': `<script>\nimport { state } from '@abide/abide/ui/state'\nlet x = state<string>(undefined)\n</script>\n{#if x !== undefined}<span>{x.toUpperCase()}</span>{/if}\n`,
+        })
+        expect(collectAbideDiagnostics(createShadowProgram(guarded))).toHaveLength(0)
+    })
+
+    /* A binding annotation pins the cell type just like the generic does: `let x: T =
+       state(v)` must carry `: T` into the shadow, so a narrow/`any` inference of the
+       initial (`state([])` → `any[]`) can't leak and produce unrelated errors downstream. */
+    test('let x: T = state(v) honors the binding annotation (not the initial inference)', () => {
+        const dir = project({
+            'b.abide': `<script>\nimport { state } from '@abide/abide/ui/state'\ntype Item = { id: number }\nlet items: Item[] = state([])\n</script>\n<button onclick={() => { items = [...items, { id: 1 }] }}>{items.length}</button>\n`,
+        })
+        expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
+    })
+
+    /* A binding annotation is also honored with no initial (`let x: T = state()`): the
+       value is `T | undefined`, narrowing cleanly under a guard. */
+    test('let x: T = state() with a binding annotation is T | undefined', () => {
+        const dir = project({
+            'n.abide': `<script>\nimport { state } from '@abide/abide/ui/state'\nlet x: string = state()\n</script>\n{#if x !== undefined}<span>{x.toUpperCase()}</span>{/if}\n`,
+        })
+        expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
+    })
+
     /* The full range model accepts any branch content, including a component plus
        static text directly in a branch — type-checks clean. */
     test('check accepts a component and text directly in a control-flow branch', () => {
@@ -558,6 +587,52 @@ describe('abide check', () => {
     test('scope().effect is not flagged', () => {
         const dir = project({
             'good.abide': `<script>\nconst stop = scope().effect(() => {})\n</script>\n<p>hi</p>\n`,
+        })
+        expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
+    })
+
+    /* An element `attach` types its `node` param from the element's tag, so the
+       attachment body reads the specific DOM interface with no implicit-any noise. */
+    test('an element attach types node from its tag — an input-only member is clean', () => {
+        const dir = project({
+            'field.abide': `<input attach={(node) => { node.value = ''; node.select() }} />\n`,
+        })
+        expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
+    })
+
+    /* The type is the SPECIFIC element, not `any`/`Element`: a member that exists on
+       `HTMLInputElement` but not `HTMLDivElement` is caught when the tag is `<div>`. */
+    test('an element attach node is the specific tag type — a wrong member is caught', () => {
+        const source = `<div attach={(node) => { node.value }} />\n`
+        const dir = project({ 'box.abide': source })
+        const diagnostics = collectAbideDiagnostics(createShadowProgram(dir))
+        expect(diagnostics).toHaveLength(1)
+        expect(diagnostics[0]!.message).toContain('value')
+        /* The squiggle lands inside the attachment expression, on the member read. */
+        const span = source.slice(
+            diagnostics[0]!.start,
+            diagnostics[0]!.start + diagnostics[0]!.length,
+        )
+        expect(source).toContain(span)
+        expect(span).toContain('value')
+    })
+
+    /* The attach VALUE is now checked as an attachment — a non-function is rejected
+       (previously it slipped through as a bare statement). */
+    test('an element attach rejects a non-function value', () => {
+        const dir = project({
+            'bad.abide': `<div attach={"nope"} />\n`,
+        })
+        const diagnostics = collectAbideDiagnostics(createShadowProgram(dir))
+        expect(diagnostics).toHaveLength(1)
+        expect(diagnostics[0]!.message).toContain('not assignable')
+    })
+
+    /* An unknown/custom tag falls back to `Element` — a base-interface member reads
+       clean and the param is still typed (no implicit-any). */
+    test('a custom-element attach falls back to Element without implicit-any', () => {
+        const dir = project({
+            'widget.abide': `<my-widget attach={(node) => { node.tagName }} />\n`,
         })
         expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
     })

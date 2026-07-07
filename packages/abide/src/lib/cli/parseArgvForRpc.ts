@@ -74,8 +74,36 @@ export async function parseArgvForRpc(
         }
         const name = token.name
         const propType = properties[name]?.type
+        /* Coerce one string token to a schema scalar type (or throw). Shared by scalar
+           props and array ELEMENTS so `--tags 1 --tags 2` on `z.array(z.number())` yields
+           numbers, not strings the server then rejects. */
+        const coerceScalar = (raw: string, type: string | undefined): unknown => {
+            if (type === 'number' || type === 'integer') {
+                // Reject a blank value explicitly — `Number('')` / `Number('  ')` is 0,
+                // not NaN, so the NaN guard alone would silently coerce it to zero.
+                const n = raw.trim() === '' ? Number.NaN : Number(raw)
+                if (Number.isNaN(n)) {
+                    throw new Error(`--${name} expects a number, got ${raw}`)
+                }
+                return n
+            }
+            if (type === 'boolean') {
+                const lowered = raw.trim().toLowerCase()
+                if (lowered === 'true' || lowered === '1') {
+                    return true
+                }
+                if (lowered === 'false' || lowered === '0') {
+                    return false
+                }
+                throw new Error(`--${name} expects true or false, got ${raw}`)
+            }
+            return raw
+        }
         if (propType === 'boolean') {
-            args[name] = !token.negated
+            /* Bare `--flag` / `--no-flag` toggles; inline `--flag=false` honours the RHS
+               instead of always resolving to true. */
+            args[name] =
+                token.value !== undefined ? coerceScalar(token.value, 'boolean') : !token.negated
             continue
         }
         if (token.missingValue || token.value === undefined) {
@@ -83,18 +111,17 @@ export async function parseArgvForRpc(
         }
         const value = token.value
         if (propType === 'number' || propType === 'integer') {
-            // Reject a blank value explicitly — `Number('')` / `Number('  ')` is 0,
-            // not NaN, so the NaN guard alone would silently coerce it to zero.
-            const n = value.trim() === '' ? Number.NaN : Number(value)
-            if (Number.isNaN(n)) {
-                throw new Error(`--${name} expects a number, got ${value}`)
-            }
-            args[name] = n
+            args[name] = coerceScalar(value, propType)
             continue
         }
         if (propType === 'array') {
+            /* Coerce each repeated element per the schema's `items.type` — a string-only
+               array arg silently fails server-side Zod validation for numeric/boolean items. */
+            const itemType = (properties[name] as { items?: { type?: string } } | undefined)?.items
+                ?.type
+            const element = coerceScalar(value, itemType)
             const existing = args[name]
-            args[name] = Array.isArray(existing) ? [...existing, value] : [value]
+            args[name] = Array.isArray(existing) ? [...existing, element] : [element]
             continue
         }
         args[name] = value

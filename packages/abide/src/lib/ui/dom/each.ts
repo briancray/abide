@@ -183,6 +183,16 @@ export function each<T>(
             for (let index = list.length - 1; index >= 0; index -= 1) {
                 let row = resolved[index]
                 if (row === undefined) {
+                    /* Duplicate key within this list: a row for this key was already built
+                       earlier in this pass. Building another and rows.set-ing it would
+                       overwrite the map entry for the first, orphaning it — the prune loop
+                       only reaches rows still in the map, so it would leak on screen forever.
+                       Collapse to one row (like the hydration path above), skipping this
+                       index rather than inserting an unreachable duplicate. */
+                    const built = rows.get(keys[index] as string)
+                    if (built !== undefined && built.gen === pass) {
+                        continue
+                    }
                     row = buildRow(list[index] as T, index)
                     row.gen = pass
                     rows.set(keys[index] as string, row)

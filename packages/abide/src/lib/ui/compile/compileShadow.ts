@@ -141,6 +141,19 @@ export function compileShadow(source: string, propsType = 'Record<string, any>')
     /* Nested `<script>` blocks inline into the synchronous `build()` too, so a top-level
        await in one is the same build-breaker — flag it, mapped via the node's body offset. */
     collectNestedScriptAwaitDiagnostics(templateNodes, diagnostics)
+    /* Emit the DOM-typed attachment aliases only when an element `attach` uses them: they
+       reference `HTMLElementTagNameMap`/`Element`, so a template with no element attach never
+       forces DOM lib into its shadow. `__ElementFor` maps a tag to its element interface
+       (HTML-first; unknown/custom tags fall back to `Element`); `__Attachment` sources its
+       return type from the real `attach` runtime signature so it never drifts. */
+    if (hasElementAttach(templateNodes)) {
+        builder.raw(
+            'type __ElementFor<T extends string> = T extends keyof HTMLElementTagNameMap ? HTMLElementTagNameMap[T] : T extends keyof SVGElementTagNameMap ? SVGElementTagNameMap[T] : T extends keyof MathMLElementTagNameMap ? MathMLElementTagNameMap[T] : Element;\n',
+        )
+        builder.raw(
+            `type __Attachment<E extends Element> = (node: E) => ReturnType<Parameters<typeof import('${ABIDE_PACKAGE_NAME}/ui/dom/attach').attach>[1]>;\n`,
+        )
+    }
     emitNodes(templateNodes, builder)
     builder.raw('}\n')
     return { ...builder.result(), diagnostics }
@@ -485,14 +498,22 @@ function scopeLineFor(
     })
     if (callee === 'state') {
         /* state<T>(initial): T is the value type — carry it onto the `let` so an
-           explicit annotation isn't lost to `any`/`any[]` inference of the initial. */
-        const typeNode = call.typeArguments?.[0]
+           explicit annotation isn't lost to `any`/`any[]` inference of the initial. The
+           type comes from the generic (`state<T>(v)`), else the binding annotation
+           (`let x: T = state(v)`) — either form pins the cell type, so a narrow/`any`
+           inference of the initial (`state([])` → `any[]`) can't leak. */
+        const typeNode = call.typeArguments?.[0] ?? declaration.type
         const annotation = typeNode === undefined ? '' : `: ${verbatim(typeNode)}`
         const init = call.arguments[0]
-        if (init === undefined) {
-            /* No initial (`state<T>()`): the value is `T | undefined`. A definite-
-               assignment assertion (`!`) gives that union without a use-before-assign
-               false-positive AND without control-flow narrowing it to just `undefined`
+        /* A literal `undefined` initial is the no-arg form spelled out (`state<T>(undefined)`):
+           the value is `T | undefined`, never `= (undefined)` checked against a non-optional
+           `T` — which would spuriously flag "undefined not assignable to T". */
+        const initIsUndefined =
+            init !== undefined && ts.isIdentifier(init) && init.text === 'undefined'
+        if (init === undefined || initIsUndefined) {
+            /* No initial (`state<T>()` / `state<T>(undefined)`): the value is `T | undefined`.
+               A definite-assignment assertion (`!`) gives that union without a use-before-
+               assign false-positive AND without control-flow narrowing it to just `undefined`
                (an `= undefined` initializer, never reassigned in the shadow, would make
                a guard like `x !== undefined` collapse to `never`). Unguarded access is
                then correctly flagged possibly-undefined; a guard narrows cleanly. */
@@ -510,9 +531,12 @@ function scopeLineFor(
         })
     }
     /* computed<T>(compute) / linked<T>(seed) — the only callees left: T is the value
-       type — the call's first arg is a thunk, so invoking it yields the value. Annotate
-       so an explicit type argument isn't lost to inference of the thunk's return. */
-    const typeNode = call.typeArguments?.[0]
+       type — the call's first arg is a thunk, so invoking it yields the value. The type
+       comes from the generic (`computed<T>(fn)`), else the binding annotation
+       (`let x: T = state.computed(fn)`) — same fallback as `state` above, so a binding
+       annotation isn't dropped and `abide check` doesn't emit `never`-inference false
+       positives on the thunk's return. */
+    const typeNode = call.typeArguments?.[0] ?? declaration.type
     const annotation = typeNode === undefined ? '' : `: ${verbatim(typeNode)}`
     const fn = call.arguments[0]
     /* `linked` is a writable `State<T>` at runtime (it reseeds AND accepts `.value =`
@@ -531,6 +555,28 @@ function scopeLineFor(
         text: `${prefix}${verbatim(fn)})();`,
         segments: [span(declaration.name, keywordOffset), span(fn, prefix.length)],
     })
+}
+
+/* Whether any ELEMENT in the tree carries an `attach` — gates emitting the DOM-typed
+   attachment aliases. All nested content (block bodies, await/switch branches, snippet
+   bodies) routes through `children`, so a recursive `children` walk is complete. */
+function hasElementAttach(nodes: TemplateNode[]): boolean {
+    for (const node of nodes) {
+        if (node === undefined) {
+            continue
+        }
+        if (node.kind === 'element') {
+            for (const attr of node.attrs) {
+                if (attr.kind === 'attach') {
+                    return true
+                }
+            }
+        }
+        if ('children' in node && node.children !== undefined && hasElementAttach(node.children)) {
+            return true
+        }
+    }
+    return false
 }
 
 /* Emits a sibling list — each node standalone via `emitNode`. */
@@ -556,15 +602,26 @@ function emitNode(node: TemplateNode, builder: Builder): void {
             return
         case 'element':
             for (const attr of node.attrs) {
-                /* An interpolated value checks each `{expr}` part on its own offset; every
-                   other dynamic attribute checks its single `code`. */
-                if (attr.kind === 'interpolated') {
+                if (attr.kind === 'attach') {
+                    /* `attach={code}` types its callback's `node` param from the element's tag
+                       (via `__ElementFor`) and checks the whole value is an attachment: an inline
+                       arrow's `node` reads the specific DOM interface, and a non-function value is
+                       rejected. Same IIFE-parameter contextual-typing trick the component-prop
+                       path uses; the leading `;` guards an unterminated preceding statement. */
+                    builder.raw(
+                        `;((__attach: __Attachment<__ElementFor<${JSON.stringify(node.tag)}>>) => {})(`,
+                    )
+                    builder.expr(attr.code, attr.loc)
+                    builder.raw(');\n')
+                } else if (attr.kind === 'interpolated') {
+                    /* An interpolated value checks each `{expr}` part on its own offset. */
                     for (const part of attr.parts) {
                         if (part.kind === 'expression') {
                             builder.stmt(part.code, part.loc)
                         }
                     }
                 } else if (attr.kind !== 'static') {
+                    /* Every other dynamic attribute checks its single `code`. */
                     builder.stmt(attr.code, attr.loc)
                 }
             }

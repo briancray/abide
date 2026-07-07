@@ -1,4 +1,4 @@
-import { claimChild } from '../runtime/claimChild.ts'
+import { claimExpected } from '../runtime/claimExpected.ts'
 import { OWNER } from '../runtime/OWNER.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { scopeGroup } from '../runtime/scopeGroup.ts'
@@ -59,12 +59,14 @@ export function tryBlock(
 
     const hydration = RENDER.hydration
     if (hydration !== undefined) {
-        const open = claimChild(hydration, parent)
-        hydration.next.set(parent, open?.nextSibling ?? null) // advance past the open marker
+        // Guaranteed control-flow markers — claimExpected throws a legible desync (the close
+        // is caught below → rebuild the catch fresh) instead of claiming null and over-clearing.
+        const open = claimExpected(hydration, parent, `abide:try:${id} open marker`)
+        hydration.next.set(parent, open.nextSibling ?? null) // advance past the open marker
         try {
             guard(() => renderTry(parent)) // claims the guarded nodes in place
-            const close = claimChild(hydration, parent) // claim the close marker
-            hydration.next.set(parent, close?.nextSibling ?? null)
+            const close = claimExpected(hydration, parent, `/abide:try:${id} close marker`)
+            hydration.next.set(parent, close.nextSibling ?? null)
         } catch (error) {
             /* The server markup didn't adopt — drop the whole boundary and build the
                catch fresh in its place. */

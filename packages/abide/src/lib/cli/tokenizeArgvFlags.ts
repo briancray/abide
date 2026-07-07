@@ -64,9 +64,11 @@ export function* tokenizeArgvFlags(
             : undefined
         const negated = negatedName !== undefined && properties[negatedName]?.type === 'boolean'
         const name = negated ? (negatedName as string) : literalName
-        // Boolean props and inline `--name=value` consume no following token.
+        // Boolean props and inline `--name=value` consume no following token. Pass any
+        // inline value through (`--flag=false`) so the parser can honour the RHS instead
+        // of the boolean always resolving to true.
         if (properties[name]?.type === 'boolean') {
-            yield { name, negated }
+            yield { name, negated, value: inlineValue }
             continue
         }
         if (inlineValue !== undefined) {

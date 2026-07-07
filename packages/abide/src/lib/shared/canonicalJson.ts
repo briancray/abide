@@ -8,7 +8,8 @@ POST/PUT/PATCH bodies; the output is a key, not a request body, so it is free to
 encode types JSON.stringify would silently flatten (Map/Set → {}), coerce
 (Date → its ISO string, via toJSON before any replacer sees it) or drop
 (undefined). Covers the value types commonly passed as rpc args: primitives,
-arrays, plain objects, Date, Map, Set, and bigint. Functions and symbols can't
+arrays, plain objects, Date, Map, Set, bigint, and FormData/File/Blob (the
+multipart upload path). Functions and symbols can't
 key anything meaningful but are tagged rather than dropped so a stray one can't
 silently collapse two distinct argument sets onto the same key.
 */
@@ -54,6 +55,28 @@ export function canonicalJson(value: unknown): string {
     if (value instanceof Set) {
         const members = Array.from(value, canonicalJson).sort()
         return `Set{${members.join(',')}}`
+    }
+    /* FormData is the documented multipart escape hatch for body rpcs. Its fields are
+       NOT own enumerable keys, so the generic object branch below would return `{}` for
+       every distinct upload — collapsing them onto one cache key and coalescing unrelated
+       uploads onto each other. Encode its entries (sorted, so field order doesn't change
+       the key) with File/Blob distinguished by identity attributes below. */
+    if (typeof FormData !== 'undefined' && value instanceof FormData) {
+        const entries: string[] = []
+        value.forEach((entryValue, entryKey) => {
+            entries.push(`${JSON.stringify(entryKey)}=>${canonicalJson(entryValue)}`)
+        })
+        entries.sort()
+        return `FormData{${entries.join(',')}}`
+    }
+    /* File extends Blob — check it first so a named upload keys on its name too. Contents
+       can't be read synchronously, so identity attributes are the best available key;
+       distinct files (name/size/type/mtime) get distinct keys, which is the fix. */
+    if (typeof File !== 'undefined' && value instanceof File) {
+        return `File(${JSON.stringify(value.name)},${value.size},${JSON.stringify(value.type)},${value.lastModified})`
+    }
+    if (typeof Blob !== 'undefined' && value instanceof Blob) {
+        return `Blob(${value.size},${JSON.stringify(value.type)})`
     }
     const record = value as Record<string, unknown>
     const entries = Object.keys(record)

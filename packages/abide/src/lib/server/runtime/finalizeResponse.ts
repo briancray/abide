@@ -1,5 +1,6 @@
 import { responseBodyKind } from '../../shared/responseBodyKind.ts'
 import { gzipResponse } from './gzipResponse.ts'
+import { STREAMED_HTML_HEADER } from './STREAMED_HTML_HEADER.ts'
 import type { RequestStore } from './types/RequestStore.ts'
 
 /*
@@ -24,7 +25,16 @@ export function finalizeResponse(
     exemptIdleTimeout: () => void,
 ): Response {
     const kind = responseBodyKind(response)
-    store.responseStreaming = kind === 'streaming'
+    /* Close-monitoring (defer the closing record + cache-stats snapshot until the body
+       actually drains) must also cover progressively-streamed SSR HTML — a live
+       ReadableStream marked by STREAMED_HTML_HEADER that classifies as 'compressible' (it
+       still gzips), NOT as 'streaming'. Read the marker before gzipResponse strips it.
+       Without this, a page with a slow `{#await}` logs ~1ms elapsed and near-empty cache
+       stats at header time instead of the true drain-time values. */
+    const streamedHtml = response.headers.has(STREAMED_HTML_HEADER)
+    store.responseStreaming = kind === 'streaming' || streamedHtml
+    /* Only true frame protocols (SSE/JSONL, socket tail) opt out of the idle-timeout cap;
+       streamed HTML pages deliberately rely on it (see STREAMED_HTML_HEADER). */
     if (kind === 'streaming') {
         exemptIdleTimeout()
     }

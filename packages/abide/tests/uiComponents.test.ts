@@ -147,6 +147,23 @@ describe('component composition', () => {
         expect(host.textContent).toContain('new')
     })
 
+    test('a component tag bound by a {#for} item mounts the looped component', () => {
+        /* The tag `<Icon>` is the loop item `icon: Icon`, a reactive cell. The
+           component-tag emitter must deref it (`Icon.value`) like every other reference
+           site — emitting the raw cell hands `mountChild` a `{ value }` object whose
+           `.build` is undefined, throwing `build is not a function`. */
+        const Star = component(`<em>star</em>`)
+        const Bolt = component(`<em>bolt</em>`)
+        const host = document.createElement('div')
+        component(
+            `<script>const ICONS = [{ key: 'a', icon: Star }, { key: 'b', icon: Bolt }]</script>
+{#for { key, icon: Icon } of ICONS by key}<Icon />{/for}`,
+            { Star, Bolt },
+        )(host)
+        expect(host.textContent).toContain('star')
+        expect(host.textContent).toContain('bolt')
+    })
+
     test('a `props()` destructure default fills in for an absent prop', () => {
         const Badge = component(`
             <script>import { props } from '@abide/abide/ui/props'

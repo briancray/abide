@@ -316,23 +316,39 @@ export function createDoc(initial: unknown): Doc {
         const node = nodeFor(path)
         const segments = pathSegments(path)
         const leafKey = segments[segments.length - 1] as string
-        /* Auto-vivify missing ancestor objects so binding a nested path on a doc
-           booted shallow (e.g. `state({})`) doesn't crash, and a later `set` writes
-           into the LIVE tree (so snapshot/persist see it). Mirrors the container
-           assumption applyPatchToTree makes — except the patch path is authored, this
-           walk is compiler-emitted, so the intermediates may not exist yet. */
-        let parent = tree as Record<string, unknown>
-        for (const segment of segments.slice(0, -1)) {
-            let next = parent[segment]
-            if (next === null || typeof next !== 'object') {
-                next = {}
-                parent[segment] = next
+        const ancestors = segments.slice(0, -1)
+        /* The resolved parent container, cached after the first write. `get` never needs
+           it (it reads through `node`), so it is not computed at cell creation. */
+        let parent: Record<string, unknown> | undefined
+        /* Auto-vivify missing ancestor objects so a `set` on a nested path bound over a
+           doc booted shallow (e.g. `state({})`) writes into the LIVE tree (snapshot/persist
+           see it) rather than crashing. Done LAZILY on the first write, NOT at cell
+           creation: `hoistCells` lifts a cell to component-mount scope, so vivifying eagerly
+           would fabricate container structure for a path only ever written behind a branch /
+           in a handler that never runs. Mirrors applyPatchToTree's container assumption,
+           but the intermediates may not exist yet since this walk is compiler-emitted. */
+        const resolveParent = (): Record<string, unknown> => {
+            let current = tree as Record<string, unknown>
+            for (let index = 0; index < ancestors.length; index += 1) {
+                const segment = ancestors[index] as string
+                let next = current[segment]
+                if (next === null || typeof next !== 'object') {
+                    /* Create an array when the NEXT segment addresses an array element (a
+                       numeric index or the `-` push slot), else a plain object — otherwise a
+                       bound path like `items/0/name` on a shallow doc fabricates `items` as an
+                       object keyed by "0", which a later `add("items/-", …)` can't push into. */
+                    const childKey = (ancestors[index + 1] ?? leafKey) as string
+                    next = childKey === '-' || /^\d+$/.test(childKey) ? [] : {}
+                    current[segment] = next
+                }
+                current = next as Record<string, unknown>
             }
-            parent = next as Record<string, unknown>
+            return current
         }
         return {
             get: () => readNode(node) as T,
             set: (value: T) => {
+                parent ??= resolveParent()
                 parent[leafKey] = value
                 writeNode(node, value)
             },
