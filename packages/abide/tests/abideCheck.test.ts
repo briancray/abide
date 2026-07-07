@@ -252,6 +252,35 @@ describe('abide check', () => {
         expect(diagnostics[0]!.message).toContain('possibly')
     })
 
+    /* `state<T>(undefined)` is the no-arg form spelled out — an explicit `undefined`
+       initial with a declared type, so it is `T | undefined` (never `= (undefined)`
+       checked against a non-optional `T`, which spuriously flagged "not assignable"). */
+    test('state<T>(undefined) is T | undefined, not an "undefined not assignable" error', () => {
+        const guarded = project({
+            'g.abide': `<script>\nimport { state } from '@abide/abide/ui/state'\nlet x = state<string>(undefined)\n</script>\n{#if x !== undefined}<span>{x.toUpperCase()}</span>{/if}\n`,
+        })
+        expect(collectAbideDiagnostics(createShadowProgram(guarded))).toHaveLength(0)
+    })
+
+    /* A binding annotation pins the cell type just like the generic does: `let x: T =
+       state(v)` must carry `: T` into the shadow, so a narrow/`any` inference of the
+       initial (`state([])` → `any[]`) can't leak and produce unrelated errors downstream. */
+    test('let x: T = state(v) honors the binding annotation (not the initial inference)', () => {
+        const dir = project({
+            'b.abide': `<script>\nimport { state } from '@abide/abide/ui/state'\ntype Item = { id: number }\nlet items: Item[] = state([])\n</script>\n<button onclick={() => { items = [...items, { id: 1 }] }}>{items.length}</button>\n`,
+        })
+        expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
+    })
+
+    /* A binding annotation is also honored with no initial (`let x: T = state()`): the
+       value is `T | undefined`, narrowing cleanly under a guard. */
+    test('let x: T = state() with a binding annotation is T | undefined', () => {
+        const dir = project({
+            'n.abide': `<script>\nimport { state } from '@abide/abide/ui/state'\nlet x: string = state()\n</script>\n{#if x !== undefined}<span>{x.toUpperCase()}</span>{/if}\n`,
+        })
+        expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
+    })
+
     /* The full range model accepts any branch content, including a component plus
        static text directly in a branch — type-checks clean. */
     test('check accepts a component and text directly in a control-flow branch', () => {

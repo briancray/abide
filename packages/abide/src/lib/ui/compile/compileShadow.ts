@@ -459,14 +459,22 @@ function scopeLineFor(
     })
     if (callee === 'state') {
         /* state<T>(initial): T is the value type — carry it onto the `let` so an
-           explicit annotation isn't lost to `any`/`any[]` inference of the initial. */
-        const typeNode = call.typeArguments?.[0]
+           explicit annotation isn't lost to `any`/`any[]` inference of the initial. The
+           type comes from the generic (`state<T>(v)`), else the binding annotation
+           (`let x: T = state(v)`) — either form pins the cell type, so a narrow/`any`
+           inference of the initial (`state([])` → `any[]`) can't leak. */
+        const typeNode = call.typeArguments?.[0] ?? declaration.type
         const annotation = typeNode === undefined ? '' : `: ${verbatim(typeNode)}`
         const init = call.arguments[0]
-        if (init === undefined) {
-            /* No initial (`state<T>()`): the value is `T | undefined`. A definite-
-               assignment assertion (`!`) gives that union without a use-before-assign
-               false-positive AND without control-flow narrowing it to just `undefined`
+        /* A literal `undefined` initial is the no-arg form spelled out (`state<T>(undefined)`):
+           the value is `T | undefined`, never `= (undefined)` checked against a non-optional
+           `T` — which would spuriously flag "undefined not assignable to T". */
+        const initIsUndefined =
+            init !== undefined && ts.isIdentifier(init) && init.text === 'undefined'
+        if (init === undefined || initIsUndefined) {
+            /* No initial (`state<T>()` / `state<T>(undefined)`): the value is `T | undefined`.
+               A definite-assignment assertion (`!`) gives that union without a use-before-
+               assign false-positive AND without control-flow narrowing it to just `undefined`
                (an `= undefined` initializer, never reassigned in the shadow, would make
                a guard like `x !== undefined` collapse to `never`). Unguarded access is
                then correctly flagged possibly-undefined; a guard narrows cleanly. */
