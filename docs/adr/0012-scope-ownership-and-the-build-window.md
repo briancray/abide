@@ -1,11 +1,11 @@
 # ADR-0012: The lexical scope and the build window are two lifetimes, not one
 
-**Status:** superseded by ADR-0018 (2026-07-07) — the two systems merge into one
-ownership tree, but this ADR's correctness invariant (ambient-bound primitives,
-branch-granular disposal) is kept as ADR-0018 Wave 1's guardrail. If the
-`reseeds === 1` probe cannot stay green under one tree, this decision stands.
-
-**Status (original):** accepted (2026-06-26)
+**Status:** accepted (2026-06-26). Re-examined under ADR-0018 (2026-07-07): a
+merge into one ownership tree was spiked and **deferred** — on close reading
+`scopeGroup`'s synchronous-owner capture doesn't vanish, the two pointers serve
+genuinely different concerns, the LOC win is ~−100 (not the −400/−600 claimed),
+and there is no current bug. This decision stands until a forcing function (e.g.
+the patch-bus persistent store needing richer scope identity) appears.
 
 ## Context
 

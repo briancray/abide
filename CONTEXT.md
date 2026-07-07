@@ -33,9 +33,8 @@ URL → route + decoded params. Server-side only: Bun's router matches, the catc
 **Registry**
 The *reactive* store of registered async work with a lifecycle channel. There
 are two: the cache (calls — request/tab store + process-level shared store,
-entries keyed by wire or reference identity; the read-through core is
-`callRegistry` *(target; ADR-0018)*) and the tail registry (streams, keyed by
-`Subscribable.name`, with the window size `last` folded into the key);
+entries keyed by wire or reference identity) and the tail registry (streams,
+keyed by `Subscribable.name`, with the window size `last` folded into the key);
 `rpcErrorRegistry` is the same signal-node-backed kind. A **handler registry**
 (`rpcRegistry` / `socketRegistry` / `promptRegistry`) is the qualified
 sub-sense: a plain `Map` populated at boot, no reactive channel. The build-time
@@ -93,40 +92,28 @@ The SSR→client agreement for pending `{#await}` reads: the document ships `__S
 
 ## Reactivity
 
-**Scope** *(target; ADR-0018 — merges the former "Lexical scope" + "Build window")*
-The single ownership node; one tree (`CURRENT_SCOPE`, walked via `walkScopes`).
-Every node owns the disposers collected during one synchronous build — a
-component, but equally a control-flow branch or a list row. A **block scope**
-(`blockScope`) carries disposers only; a **component scope**
-(`createComponentScope`) additionally carries a `ScopeContext`. The finer
-granularity that was the point of the old two-system split survives as finer
-*nodes*: a reactive cell built in a branch dies when the **branch** flips
-because the branch is its own (block) scope node. The reactive primitives
-(`state`/`linked`/`computed`/`effect`) are **ambient-bound to the nearest node,
-not receiver-bound** — so `someScope.computed(fn)` does not create state in
-someScope. Read the ambient node via `currentScope()`; SSR brackets an isolated
-one with `enterRenderScope`/`exitRenderScope`. *(Until Wave 1 lands, the code
-still has the two systems of ADR-0012 — `Scope`/`withScope` + `OWNER`/
-`scopeGroup`.)*
+**Lexical scope**
+The *component*-granular reactive unit (`Scope`, established per lexical level by
+the compiler via `CURRENT_SCOPE`/`withScope`). Owns a region's reactive doc, its
+boundary-crossing capabilities (`record`/`persist`/`broadcast`), its context
+(`share`/`shared`), its identity (`id`), and an explicit `child()` tree. `scope()`
+is the sole public entry; everything else is a method reached through it. Its data
+methods (`read`/`replace`/`cell`/`derive`/…) are receiver-bound to that scope's
+doc.
 
-**ScopeContext** *(target; ADR-0018)*
-The ambient bag a component scope carries: `{ doc, shareMap, capabilities, id }`
-— the region's reactive doc, its context (`share`/`shared`), its
-boundary-crossing capabilities (`record`/`persist`/`broadcast`), and its
-identity. Data methods (`read`/`replace`/`cell`/`derive`/…) are receiver-bound
-to its doc. Joins the `-Context = ambient bag` family (`REACTIVE_CONTEXT`,
-`InspectorContext`).
-
-**Request context** *(target; ADR-0018)*
-The server's per-request execution region (`runWithRequestContext` /
-`RequestContext`, seated on `requestContextSlot`): trace position, elapsed,
-method+path, the cookie-flushing request store. **Not** a reactive `Scope` — it
-carries request-lifetime state, no reactive graph — which is why it moves off
-the "scope" word (it previously wore the `withScope`/`inScope` verb shape as
-`runWithRequestScope`).
+**Build window**
+The *finest*-granular ownership unit (`OWNER`/`scopeGroup`/`runtime/scope.ts`):
+the disposers collected during one synchronous build — a component, but equally a
+control-flow branch or a list row. Distinct from the lexical scope on purpose: a
+reactive cell built in a branch must die when the **branch** flips, which is finer
+than the component the lexical scope spans (see ADR-0012). The reactive primitives
+(`state`/`linked`/`computed`/`effect`) bind the ambient build window, not the
+lexical receiver — so `someScope.computed(fn)` does not create state in someScope.
+(A merge of these two into one tree was spiked under ADR-0018 and **deferred** —
+0012 stands.)
 
 **Adoption**
-A component scope created in `awaiting` mode takes its doc from the first `doc()`
+A lexical scope created in `awaiting` mode takes its doc from the first `doc()`
 its component body creates, rather than minting one eagerly — so the compiler
 emits one data-lowering whether or not a component owns a scope. A body that never
 creates a `doc()` mints an empty one lazily on first data access.

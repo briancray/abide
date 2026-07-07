@@ -1,8 +1,11 @@
 # ADR-0018: The consolidation round — align internals to the surface, and the vocabulary to the internals
 
-**Status:** accepted (2026-07-07); execution pending, wave-by-wave
-
-**Supersedes:** ADR-0012 (adopts its correctness invariant as this round's guardrail — see Decision C).
+**Status:** accepted (2026-07-07). Wave 0's mechanical extractions shipped
+(`withoutHydration`, `buildArtifact`); the round's larger items (`BootShims`,
+the `cache.ts` split, the Wave 1 ownership merge) did **not** survive
+validation — see Consequences. Does **not** supersede ADR-0012 (the merge was
+spiked and deferred; 0012 stands). Remaining waves (2–5) are planned but
+unvalidated — validate each against the code + ADRs before implementing.
 
 ## Context
 
@@ -74,7 +77,7 @@ skipped.
 | --- | --- | --- | --- |
 | **0** | `withoutHydration` (5→1); `buildArtifact` (build-or-die, 5→1) | SHIP ✅ | — |
 | **0′** | ~~split `cache.ts`~~ + `callRegistry` + the ⊕ invertible-`Doc`-journal seam | **DEFERRED** to the patch-bus round | moves there — ADR-0001's re-propose gate (a persistent store adapter) is that round, not now |
-| **1** | **One ownership tree** (supersedes 0012) | BIG-BET | ⊕ stable `ScopeContext.id` + a dev-gated `walkScopes()` read API |
+| **1** | ~~One ownership tree~~ | **DEFERRED** — spiked; 0012 stands (see Decision C) | — |
 | **2** | `MarkerRange` + `RangeList` (fold the range zoo, `awaitBlock`/`each`/`eachAsync` reimplementations) | SHIP | guards are `MarkerRange` mechanics, not per-block logic |
 | **3** | Fan-out engine: project scan + delegating resolver; superset `describe()`; unconditional typing emit | SHIP | ⊕ the descriptor stays a **superset carrying the entry handle** — a 5th surface must be one new renderer with no `describe()` change |
 | **4** | `assembleSubscribable(FrameSource)` | SPIKE | ⊕ `FrameSource.subscribe` is **pluggable** (no single-process `server.publish` baked in); a 2nd fake-cross-instance adapter passes the replay/reconnect corpus. `watch` stays inert in the shell, client-injected |
@@ -84,27 +87,35 @@ The patch-bus capability arc (undo → local-first persistence → offline mutat
 → multiplayer) is a **deliberate next round** riding the Wave 0/1 `Doc` seam and
 the Wave 4 `FrameSource` seam — not built in this round.
 
-### C. Overturn ADR-0012: one ownership tree, its correctness invariant kept
+### C. Ownership merge — spiked and DEFERRED; ADR-0012 stands
 
-ADR-0012 kept the lexical scope and the build window as **two separate
-systems** because a reactive cell built in a control-flow branch must die when
-the **branch** flips (finer than the component), and *receiver-binding* the
-primitives to the lexical scope leaked (`reseeds === 2`).
+The proposal was to merge the lexical scope and the build window into one
+ownership tree (finer nodes: a *block scope* = disposers only, a *component
+scope* additionally carries `ScopeContext`), keeping ambient binding so 0012's
+`reseeds === 2` receiver-binding leak can't return.
 
-This round overturns 0012's **structural conclusion** (two systems, two types)
-while **keeping its correctness invariant**: the primitives stay
-**ambient-bound, not receiver-bound**, and branch-granular disposal is
-preserved — as finer **nodes in one tree** rather than a separate system. A
-block scope is the finest node (disposers only); a component scope is a node
-that additionally carries a `ScopeContext { doc, shareMap, capabilities, id }`.
-Ambient binding to the nearest node gives exactly the branch-flip teardown 0012
-protected.
+The Wave 1 spike found the merge **feasible but not worth it now**:
 
-**Guardrail:** the focused `reseeds === 1` probe and the branch-flip teardown
-suite must stay green through Wave 1. They are what proves ambient ≠ receiver
-binding and that 0012's leak does not return. If Wave 1's spike cannot keep them
-green with one tree, 0012's two-system structure stands and this decision
-reverts.
+- **`scopeGroup` does not vanish.** It captures the enclosing owner
+  *synchronously during the parent build* and holds children built *later, in
+  flip effects* (when `OWNER.current` is undefined) — which is exactly why
+  `scope()` deliberately doesn't self-register. A unified tree still needs that
+  sync-capture-then-add-children mechanism; it's `scopeGroup` renamed.
+- **The two pointers are cleanly separate concerns** (disposer lifetime vs
+  data context), not a conflation. Merging shrinks the code by ~−100 LOC, not
+  the −400/−600 estimated.
+- **ADR-0012 already ran this analysis** and its reasoning holds — it found the
+  granularities load-bearing, fixed the one real smell (the teardown interface,
+  via `own`), and explicitly flagged the deeper merge as "its own effort."
+- **No current bug.** `reseeds === 1` already holds; teardown leaks already
+  fixed by `scopeGroup`; the public surface has no opinion on tree count.
+
+**Decision:** defer. A 30-file rewrite of the reactive core for ~−100 LOC of
+elegance, against a sound ADR, with no forcing function, is not justified.
+Re-open when a forcing function appears (e.g. the patch-bus persistent store
+needing richer scope identity). ADR-0012 stands; the Scope-family renames
+(`blockScope`/`currentScope`/`createComponentScope`/`walkScopes`/`ScopeContext`/
+`RequestContext`) defer with it.
 
 ### D. Two mechanisms considered and declined
 
@@ -168,7 +179,11 @@ bar than internal ones.
 (the product is the protected `RemoteFunction` type, and `assemble*` mirroring
 the product type is the consistent convention vs `create*` for primitives).
 
-**Master rename table (the load-bearing renames; internal unless marked):**
+**Master rename table (the load-bearing renames; internal unless marked).**
+Status note: the Scope-family rows (`scope(build)`/`scopeGroup`/`createScope`/
+`scope()`/`enter|exitScope`/`runWithRequestScope`) and `callRegistry` are
+**DEFERRED** with their waves (Decision C, the cache deferral) — they land only
+when their forcing function appears. The rest ride Waves 2–5, still unvalidated.
 
 | Current | Proposed | Kind |
 | --- | --- | --- |
@@ -210,10 +225,9 @@ vocabulary per wave as each rename lands.
 
 ## Consequences
 
-- **Supersedes ADR-0012**, but adopts its invariant (ambient binding,
-  branch-granular disposal) as Wave 1's guardrail. Do not re-pitch the
-  two-system structure unless the `reseeds === 1` probe cannot be kept green
-  under one tree — in which case 0012 stands.
+- **Does NOT supersede ADR-0012.** The ownership merge was spiked (Decision C)
+  and deferred; 0012 stands. Re-open only under a forcing function, not for
+  elegance.
 - **Does not decide the questions ADR-0015/0016/0017 settled.** Wave 3 ships
   only the internal-dedup form that *respects 0017* — the resolver delegates to
   a producer table without extracting the side-crossing guard, and the single
@@ -256,12 +270,21 @@ vocabulary per wave as each rename lands.
   current `*Slot` is one file, one export, one purpose, well-documented — already
   the CLAUDE.md ideal. Do not re-pitch the fold. (A pilot migration of the two
   probe slots was implemented green, then reverted on this finding.)
-- **Capability payoff:** because Wave 0/1/4 land their seams invertible and
-  pluggable, the patch-bus arc (undo/persist/local-first/multiplayer) becomes a
-  bounded next round rather than another refactor of the same modules.
-- **First concrete step:** this ADR + the `CONTEXT.md` glossary edits (Scope
-  merge, Registry qualify, Frame broaden, Plan broaden, add `ScopeContext`/
-  `RequestContext`/`MarkerRange`/`RangeList`/`FrameSource`) land *before any
-  codemod*, so each wave renames straight to the agreed target instead of twice.
-  Then the Scope-collapse wave runs first: its `walkScopes` / `track`
-  de-collision is the load-bearing correctness change the rest depend on.
+- **Meta-pattern (the round's real lesson).** Three of the four large
+  structural items — BootShims, the `cache.ts` split, and the ownership merge —
+  did **not** survive validation, each because the codebase was already
+  well-factored and a prior ADR (the `SsrBootState` seeder, ADR-0001, ADR-0012)
+  had already reasoned through it. A surface-down review spots large targets
+  well but is blind to *why* the current shape exists; the ADRs encode that. So
+  **validate-before-implement is mandatory**, and the honest finding of this
+  round is that abide's internals are closer to ideal than "75% aligned"
+  implied — the accidental complexity kept turning out to be essential or
+  already-handled. What shipped were two small mechanical DRYs.
+- **Capability payoff:** the patch-bus arc (undo/persist/local-first/
+  multiplayer) is the deliberate next round; it is also the **forcing function**
+  that would re-open the `cache.ts` split (ADR-0001's gate) and possibly the
+  ownership merge — so those are designed *there*, against real requirements,
+  not speculatively here.
+- **First concrete step (done):** ADR + `CONTEXT.md` glossary edits landed, then
+  Wave 0's mechanical extractions. Remaining waves (2–5) are unvalidated —
+  apply the same validate-before-implement pass to each before touching code.
