@@ -1,6 +1,6 @@
 import { decodeRefJson } from '../../shared/decodeRefJson.ts'
 import { effect } from '../effect.ts'
-import { claimChild } from '../runtime/claimChild.ts'
+import { claimExpected } from '../runtime/claimExpected.ts'
 import { generationGuard } from '../runtime/generationGuard.ts'
 import { RANGE_CLOSE, RANGE_OPEN } from '../runtime/RANGE_MARKER.ts'
 import { RENDER } from '../runtime/RENDER.ts'
@@ -204,8 +204,11 @@ export function awaitBlock(
             if (buildFailed) {
                 throw buildError
             }
-            const close = claimChild(cursor, parent)
-            cursor.next.set(parent, close?.nextSibling ?? null)
+            /* A guaranteed control-flow marker — claimExpected throws on a desync (caught by
+               firstHydrate's adopt try/catch → rebuildCold) instead of silently claiming null
+               and over-clearing the parent. */
+            const close = claimExpected(cursor, parent, `/abide:await:${id} close marker`)
+            cursor.next.set(parent, close.nextSibling ?? null)
             /* Bracket the adopted nodes: `[` before the first claimed node (or before `close`
                for an empty branch), `]` then the anchor just before `close`. */
             const start = document.createComment(RANGE_OPEN)
@@ -255,7 +258,9 @@ export function awaitBlock(
        warm cache (or re-fetches) instead of crashing hydration. */
     const firstHydrate = (): void => {
         const cursor = hydration as NonNullable<typeof hydration>
-        const open = claimChild(cursor, parent)
+        /* The await block's open marker is compiler-guaranteed — claimExpected throws a
+           legible desync here rather than propagating a null that over-clears the parent. */
+        const open = claimExpected(cursor, parent, `abide:await:${id} open marker`)
         /* RESUME holds the ref-json-encoded entry STRING; decode here, where the codec
            lives. A decode failure (malformed/absent payload) reads as "no resume" — fall
            through to the live promise rather than crash hydration. */

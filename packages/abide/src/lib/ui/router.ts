@@ -379,6 +379,15 @@ export function router(
            would re-run the router and re-mount the page, dropping local state. */
         const path = runtimePath.value
         untrack(() => {
+            /* Capture whether THIS run is the first paint, then flip the shared flag
+               synchronously. Previously `first` was only cleared inside the async `.then`,
+               so a second navigation that began before the boot resolve settled (a
+               double-tapped back button, two quick `navigate()` calls) still read
+               `first === true` and skipped its auth/redirect probe. Each run's `.then`
+               closes over its own `isFirstRun`, so hydration still keys off the real first
+               paint. */
+            const isFirstRun = first
+            first = false
             /* The route matches on the pathname only; the query/hash ride along for
                the probe (so server gating sees them) and for clientPage.url. */
             const pathname = path.split(/[?#]/)[0] ?? path
@@ -390,7 +399,7 @@ export function router(
             const targetUrl = resolveUrl(path)
             const mountedUrl = clientPage.value.url
             if (
-                !first &&
+                !isFirstRun &&
                 mountedUrl.pathname === targetUrl.pathname &&
                 mountedUrl.search === targetUrl.search &&
                 mountedUrl.hash !== targetUrl.hash
@@ -422,13 +431,13 @@ export function router(
                Skipped on first paint — there is no page to leave. An instant SPA hop
                (chunk cached, no probe) flips it back within the same microtask, so the
                browser never paints the intermediate state — no flash. */
-            if (!first && !clientPage.value.navigating) {
+            if (!isFirstRun && !clientPage.value.navigating) {
                 clientPage.value = { ...clientPage.value, navigating: true }
             }
             /* First paint adopts a document the server already ran handle() on;
                only later navigations re-run it through the probe. */
             const verdict: Promise<NavVerdict> =
-                first || probe === undefined ? Promise.resolve({ kind: 'mount' }) : probe(path)
+                isFirstRun || probe === undefined ? Promise.resolve({ kind: 'mount' }) : probe(path)
             /* Resolve the page chunk, its layout chunks, and the gate in parallel,
                keeping the current chain mounted until all land — no blank frame while
                imports are in flight or the probe is in the air. */
@@ -439,14 +448,10 @@ export function router(
             ])
                 .then(([pageView, resolvedLayouts, decision]) => {
                     if (token !== sequence || disposed) {
-                        /* Consume the first-paint flag even when superseded: the boot SSR DOM
-                           is valid only for THIS boot navigation. Leaving `first` true would
-                           let a navigation that started before this settled (to a different
-                           page) skip its auth probe and hydrate the boot URL's SSR DOM as its
-                           own — claimExpected then throws and commit swallows it, stranding a
-                           broken page. Cleared here → the superseding nav builds create-mode
-                           (clearing the stale SSR DOM) and runs its probe. */
-                        first = false
+                        /* Superseded (or disposed) — drop this build. The first-paint flag was
+                           already consumed synchronously at run start (`first = false`), so a
+                           navigation that started after this one already saw `first === false`,
+                           ran its probe, and builds in create mode over the stale SSR DOM. */
                         return
                     }
                     /* handle() redirected: go where it pointed, replacing the blocked
@@ -474,9 +479,8 @@ export function router(
                     ) {
                         divergence += 1
                     }
-                    const firstPaint = first
-                    const hydrating = first && pageView?.hydratable === true
-                    first = false
+                    const firstPaint = isFirstRun
+                    const hydrating = isFirstRun && pageView?.hydratable === true
                     /* Same page, same layout chain — only params/url differ (e.g. stepping
                        between episodes on one detail page). The whole structure survives, so
                        publish the new snapshot on the reactive `page` proxy and let the mounted

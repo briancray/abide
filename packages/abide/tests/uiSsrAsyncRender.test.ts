@@ -111,6 +111,27 @@ describe('async-snippet detection (fixpoint + escaped regex)', () => {
         expect(html).toContain('<i>kid</i>')
         expect(html).not.toContain('[object Promise]')
     })
+
+    /* An async snippet handed to a CHILD as a prop and called by its prop name. The child's
+       `{item("x")}` never appears in the child's own `asyncSnippets` (item is a prop, lowered
+       to a computed), so the pre-fix child dropped the `await` and rendered `[object Promise]`.
+       The fix awaits calls to computed-backed bindings, which is where snippet props live. */
+    test('an async snippet passed as a prop and called in the child is awaited', async () => {
+        const List = component(
+            '<script>const { item } = props<{ item: (label: string) => unknown }>()</script><ul>{item("x")}</ul>',
+        )
+        const render = component(
+            `
+            {#snippet row(label)}<b>{label}</b><Kid />{/snippet}
+            <List item={row} />
+        `,
+            { Kid, List },
+        ).render
+        const { html } = await render()
+        expect(html).toContain('<i>kid</i>') // the async snippet body rendered
+        expect(html).toContain('x') // the label the child passed
+        expect(html).not.toContain('[object Promise]')
+    })
 })
 
 describe('nested streaming awaits flush', () => {

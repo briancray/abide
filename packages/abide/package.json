@@ -89,6 +89,7 @@
         "./ui/dom/restProps": "./src/lib/ui/dom/restProps.ts",
         "./ui/dom/spreadAttrs": "./src/lib/ui/dom/spreadAttrs.ts",
         "./ui/dom/readCall": "./src/lib/ui/dom/readCall.ts",
+        "./ui/dom/mutateDocArray": "./src/lib/ui/dom/mutateDocArray.ts",
         "./ui/dom/hydrate": "./src/lib/ui/dom/hydrate.ts",
         "./ui/dom/text": "./src/lib/ui/dom/text.ts",
         "./ui/dom/appendText": "./src/lib/ui/dom/appendText.ts",

@@ -116,6 +116,11 @@ function interpolate(segments: RouteSegment[], params: Query): string {
             if (segment.optional && (value === undefined || value === '')) {
                 return undefined
             }
+            /* A required `[name]`/`[...rest]` with no value would otherwise stringify to the
+               literal "undefined" and silently mis-route; fail loudly instead. */
+            if (value === undefined || value === null) {
+                throw new Error(`abide url(): missing required param "${segment.name}"`)
+            }
             const text = String(value)
             return segment.catchAll
                 ? text.split('/').map(encodeURIComponent).join('/')

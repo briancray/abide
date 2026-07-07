@@ -200,7 +200,7 @@ export function generateBuild(
            (`type="number"`/`"range"`) reports its edit as a string on `el.value`, which
            would corrupt number-typed state; source the write-back from `valueAsNumber`
            instead (empty field → `undefined`), gated on a statically-known type. */
-        const event = bindListenEvent(attr.property, node.tag)
+        const event = bindListenEvent(attr.property)
         const staticType = staticAttrValue(node, 'type')
         const isNumericInput =
             attr.property === 'value' &&

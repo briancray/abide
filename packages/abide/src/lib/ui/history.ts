@@ -53,9 +53,12 @@ export function history(doc: Doc, { limit = 100 }: { limit?: number } = {}): His
             }
         } finally {
             sink = undefined
-        }
-        if (captured.length > 0) {
-            push(target, captured)
+            /* Push captured inverses even if `apply` threw mid-loop: the already-popped
+               entry is gone, so the forward patches for what DID apply must land on the
+               opposite stack or a partial replay becomes irreversible. */
+            if (captured.length > 0) {
+                push(target, captured)
+            }
         }
     }
 
@@ -86,10 +89,14 @@ export function history(doc: Doc, { limit = 100 }: { limit?: number } = {}): His
                 run()
             } finally {
                 sink = undefined
-            }
-            if (entry.length > 0) {
-                push(undoStack, entry)
-                redoStack.length = 0
+                /* Commit whatever was applied even if `run` threw partway: those patches are
+                   already live in the doc, so their inverses must reach the undo stack or the
+                   committed changes are left with no way to undo them. The throw still
+                   propagates after this. */
+                if (entry.length > 0) {
+                    push(undoStack, entry)
+                    redoStack.length = 0
+                }
             }
         },
         dispose: () => {

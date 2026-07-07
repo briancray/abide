@@ -1,8 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import { lowerDocAccess } from '../src/lib/ui/compile/lowerDocAccess.ts'
+import { mutateDocArray } from '../src/lib/ui/dom/mutateDocArray.ts'
 import { readCall } from '../src/lib/ui/dom/readCall.ts'
 import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
 import { escapeKey } from '../src/lib/ui/runtime/escapeKey.ts'
+import { PATCH_BUS } from '../src/lib/ui/runtime/PATCH_BUS.ts'
 import type { Doc } from '../src/lib/ui/runtime/types/Doc.ts'
 
 /* Normalises printer whitespace so substring assertions are stable. */
@@ -66,6 +68,24 @@ describe('lowerDocAccess — emitted shape', () => {
         expect(lower('model.lines.push(v)')).toContain('model.add("lines/-", v)')
     })
 
+    test('in-place-mutating array methods route through mutateDocArray, not readCall', () => {
+        // the bug: only `push` patched; `.splice`/`.pop`/`.sort`/… fell into the generic
+        // readCall branch and mutated the live tree by reference, emitting no patch.
+        expect(lower('model.todos.splice(i, 1)')).toContain(
+            '$$mutateDocArray(model, "todos", "splice", [i, 1])',
+        )
+        expect(lower('model.todos.pop()')).toContain('$$mutateDocArray(model, "todos", "pop", [])')
+        expect(lower('model.todos.sort()')).toContain(
+            '$$mutateDocArray(model, "todos", "sort", [])',
+        )
+        // non-mutating methods still read + guard on the value
+        expect(lower('model.todos.map(f)')).toContain(
+            '$$readCall(model.read("todos"), "todos", "map", [f])',
+        )
+        // optional-chained mutation keeps bare-call skip-if-absent semantics
+        expect(lower('model.todos?.splice(0, 1)')).toContain('model.read("todos")?.splice(0, 1)')
+    })
+
     test('a called member reads the receiver and guards the method on the value', () => {
         // a method call is not a deeper path: `draft.trim()` ≠ read("draft/trim"). It routes
         // through `readCall`, carrying the path + member so a nullish read throws naming them.
@@ -115,7 +135,13 @@ describe('lowerDocAccess — emitted shape', () => {
    calls — exactly the names the real module imports. */
 function run(document: Doc, body: string): unknown {
     const lowered = lowerDocAccess(body, 'model')
-    return new Function('model', 'escapeKey', 'readCall', lowered)(document, escapeKey, readCall)
+    return new Function('model', 'escapeKey', 'readCall', 'mutateDocArray', lowered)(
+        document,
+        escapeKey,
+        readCall,
+        (d: Doc, path: string, member: string, args: unknown[]) =>
+            mutateDocArray(d, path, member, args),
+    )
 }
 
 describe('lowerDocAccess — executed semantics', () => {
@@ -160,6 +186,33 @@ describe('lowerDocAccess — executed semantics', () => {
         expect(run(d, 'return model.modal?.close()')).toBeUndefined()
         d.replace('modal', { close: () => 'closed' })
         expect(run(d, 'return model.modal?.close()')).toBe('closed')
+    })
+
+    test('a mutating array method emits a patch and updates the tree', () => {
+        // the critical bug: `.splice`/`.pop`/… mutated the live array by reference and
+        // emitted no patch, so readers never woke and undo/persistence never saw it.
+        const d = doc({ todos: ['a', 'b', 'c'] })
+        const events: unknown[] = []
+        const off = PATCH_BUS.subscribe((e) => events.push(e))
+        const removed = run(d, 'return model.todos.splice(1, 1)')
+        off()
+        expect(removed).toEqual(['b']) // native return value preserved
+        expect(d.read<string[]>('todos')).toEqual(['a', 'c']) // tree advanced
+        expect(events.length).toBe(1) // a real patch fired (readers wake, undo journals)
+    })
+
+    test('pop/shift/unshift/sort/reverse all patch through the document', () => {
+        const d = doc({ nums: [3, 1, 2] })
+        expect(run(d, 'return model.nums.pop()')).toBe(2)
+        expect(d.read<number[]>('nums')).toEqual([3, 1])
+        run(d, 'model.nums.unshift(9)')
+        expect(d.read<number[]>('nums')).toEqual([9, 3, 1])
+        expect(run(d, 'return model.nums.shift()')).toBe(9)
+        expect(d.read<number[]>('nums')).toEqual([3, 1])
+        run(d, 'model.nums.sort()')
+        expect(d.read<number[]>('nums')).toEqual([1, 3])
+        run(d, 'model.nums.reverse()')
+        expect(d.read<number[]>('nums')).toEqual([3, 1])
     })
 
     test('a key containing / round-trips — read and remove address the whole key', () => {

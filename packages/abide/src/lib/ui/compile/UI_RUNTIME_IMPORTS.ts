@@ -49,6 +49,7 @@ export const UI_RUNTIME_IMPORTS: { name: string; specifier: string; alias?: stri
     { name: 'restProps', specifier: 'ui/dom/restProps', alias: '$$restProps' },
     { name: 'spreadAttrs', specifier: 'ui/dom/spreadAttrs', alias: '$$spreadAttrs' },
     { name: 'readCall', specifier: 'ui/dom/readCall', alias: '$$readCall' },
+    { name: 'mutateDocArray', specifier: 'ui/dom/mutateDocArray', alias: '$$mutateDocArray' },
     { name: 'hydrate', specifier: 'ui/dom/hydrate', alias: '$$hydrate' },
     { name: 'escapeKey', specifier: 'ui/runtime/escapeKey', alias: '$$escapeKey' },
     { name: 'nextBlockId', specifier: 'ui/runtime/nextBlockId', alias: '$$nextBlockId' },

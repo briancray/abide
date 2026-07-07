@@ -1,3 +1,4 @@
+import { abideLog } from '../../shared/abideLog.ts'
 import { error } from '../error.ts'
 
 /*
@@ -39,7 +40,17 @@ export function runWithRpcTimeout(
                     (late) => {
                         void late.body?.cancel()
                     },
-                    () => {},
+                    (rejection) => {
+                        /* The handler outlived its timeout and then rejected. A cooperative
+                           abort (it honoured the composed signal) is expected and stays quiet;
+                           any other error is a genuine handler bug and would otherwise leave
+                           zero server-side trace behind the client's 504 — log it. */
+                        const aborted =
+                            (rejection as { name?: string } | undefined)?.name === 'AbortError'
+                        if (!aborted) {
+                            abideLog.error(rejection)
+                        }
+                    },
                 )
             }
         }

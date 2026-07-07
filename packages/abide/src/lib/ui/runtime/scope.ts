@@ -23,6 +23,17 @@ export function scope(build: () => void): () => void {
     OWNER.current = disposers
     try {
         untrack(build)
+    } catch (error) {
+        /* A build that throws partway (e.g. a hydration desync deep in a subtree) has
+           already created and subscribed some effects/listeners. The caller never
+           receives this scope's disposer on the throw path, so tear down what was built —
+           in reverse, children before parents — before rethrowing; otherwise those effects
+           stay subscribed forever with no owner able to dispose them. */
+        for (let index = disposers.length - 1; index >= 0; index -= 1) {
+            disposers[index]?.()
+        }
+        disposers.length = 0
+        throw error
     } finally {
         OWNER.current = previous
     }

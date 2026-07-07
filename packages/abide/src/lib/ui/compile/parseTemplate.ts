@@ -590,7 +590,9 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
                     value += source.charAt(cursor)
                     cursor += 1
                 }
-                attrs.push({ kind: 'static', name, value })
+                /* Decode entities like the quoted path does — a real HTML parser decodes
+                   unquoted attribute values too, so `value=a&amp;b` is the value `a&b`. */
+                attrs.push({ kind: 'static', name, value: decodeHtmlEntities(value) })
             }
         }
         return attrs

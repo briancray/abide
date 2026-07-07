@@ -492,9 +492,12 @@ function scopeLineFor(
         })
     }
     /* computed<T>(compute) / linked<T>(seed) — the only callees left: T is the value
-       type — the call's first arg is a thunk, so invoking it yields the value. Annotate
-       so an explicit type argument isn't lost to inference of the thunk's return. */
-    const typeNode = call.typeArguments?.[0]
+       type — the call's first arg is a thunk, so invoking it yields the value. The type
+       comes from the generic (`computed<T>(fn)`), else the binding annotation
+       (`let x: T = state.computed(fn)`) — same fallback as `state` above, so a binding
+       annotation isn't dropped and `abide check` doesn't emit `never`-inference false
+       positives on the thunk's return. */
+    const typeNode = call.typeArguments?.[0] ?? declaration.type
     const annotation = typeNode === undefined ? '' : `: ${verbatim(typeNode)}`
     const fn = call.arguments[0]
     /* `linked` is a writable `State<T>` at runtime (it reseeds AND accepts `.value =`

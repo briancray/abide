@@ -68,8 +68,12 @@ function appendQuery(method: HttpMethod, url: string, args: unknown): string {
     if (args === undefined) {
         return url
     }
-    if (typeof args !== 'object' || args === null || Array.isArray(args)) {
-        const got = Array.isArray(args) ? 'array' : typeof args
+    const isFormData = typeof FormData !== 'undefined' && args instanceof FormData
+    if (typeof args !== 'object' || args === null || Array.isArray(args) || isFormData) {
+        /* FormData has no own enumerable keys, so `queryStringFromArgs` would silently drop
+           every field; a query-carrying method (GET/DELETE/HEAD) can't take a body anyway.
+           Fail loudly like any other non-plain-object arg. */
+        const got = Array.isArray(args) ? 'array' : isFormData ? 'FormData' : typeof args
         throw new Error(`[abide] ${method} ${url} args must be a plain object — got ${got}`)
     }
     const suffix = queryStringFromArgs(args as Record<string, unknown>, false)

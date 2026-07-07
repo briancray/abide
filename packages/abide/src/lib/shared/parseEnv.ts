@@ -9,7 +9,9 @@ counterpart to loadEnvFile (which merges into process.env) and serializeEnv
 */
 export function parseEnv(text: string): Record<string, string> {
     const result: Record<string, string> = {}
-    for (const line of text.split('\n')) {
+    // Split on CRLF or LF — a Windows-saved (or git autocrlf) .env otherwise leaves a
+    // trailing \r that breaks ENV_LINE's `$` anchor, silently dropping every line.
+    for (const line of text.split(/\r?\n/)) {
         if (!line || line.startsWith('#')) {
             continue
         }
@@ -19,11 +21,20 @@ export function parseEnv(text: string): Record<string, string> {
         }
         const [, key, rawValue] = match
         const trimmed = rawValue?.trim() ?? ''
-        const unquoted =
-            (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
-            (trimmed.startsWith("'") && trimmed.endsWith("'"))
-                ? trimmed.slice(1, -1)
-                : trimmed
+        let unquoted: string
+        if (trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"')) {
+            // Double-quoted: unescape the sequences serializeEnv writes (`\\`, `\"`, `\n`, `\r`).
+            unquoted = trimmed
+                .slice(1, -1)
+                .replace(/\\([nr"\\])/g, (_, c: string) =>
+                    c === 'n' ? '\n' : c === 'r' ? '\r' : c,
+                )
+        } else if (trimmed.length >= 2 && trimmed.startsWith("'") && trimmed.endsWith("'")) {
+            // Single-quoted: taken verbatim (no escaping applied on the way out).
+            unquoted = trimmed.slice(1, -1)
+        } else {
+            unquoted = trimmed
+        }
         result[key as string] = unquoted
     }
     return result

@@ -39,6 +39,22 @@ type Segment = { kind: 'literal'; value: string } | { kind: 'expression'; node: 
 /* Maps a compound-assignment operator to its plain binary counterpart. Logical
    assignments (`||=`/`&&=`/`??=`) lower to an unconditional replace of the
    combined value — consistent with how `+=` lowers (the patch always writes). */
+/* Array methods that mutate the receiver in place. Called on a doc-rooted array
+   these can't lower to a bare `readCall` (which would mutate the live tree by
+   reference and never emit a patch — no re-render, no undo/persistence/sync);
+   they route through `$$mutateDocArray`, which clones-applies-replaces so a real
+   patch fires. `push` is handled separately above (fine-grained `add` patches). */
+const MUTATING_ARRAY_METHODS = new Set([
+    'pop',
+    'shift',
+    'unshift',
+    'splice',
+    'sort',
+    'reverse',
+    'fill',
+    'copyWithin',
+])
+
 const COMPOUND_OPERATORS = new Map<ts.SyntaxKind, ts.BinaryOperator>([
     [ts.SyntaxKind.PlusEqualsToken, ts.SyntaxKind.PlusToken],
     [ts.SyntaxKind.MinusEqualsToken, ts.SyntaxKind.MinusToken],
@@ -162,10 +178,32 @@ export function docAccessTransformer(docName: string): ts.TransformerFactory<ts.
                 const access = node.expression
                 const segments = pathSegments(access.expression)
                 if (segments) {
-                    const read = docCall(docName, 'read', [buildPath(segments)])
                     const args = node.arguments.map(
                         (arg) => ts.visitNode(arg, visit) as ts.Expression,
                     )
+                    /* An in-place-mutating array method on a doc path → route through
+                       `$$mutateDocArray(doc, path, member, [args])` so the mutation lands as a
+                       patch instead of silently mutating the live tree by reference. Optional
+                       chaining (`model.items?.splice(…)`) keeps the bare-call semantics below —
+                       skip-if-absent is the author's explicit choice, and a nullish array has
+                       nothing to mutate. */
+                    if (
+                        MUTATING_ARRAY_METHODS.has(access.name.text) &&
+                        !access.questionDotToken &&
+                        !node.questionDotToken
+                    ) {
+                        return ts.factory.createCallExpression(
+                            ts.factory.createIdentifier('$$mutateDocArray'),
+                            undefined,
+                            [
+                                ts.factory.createIdentifier(docName),
+                                buildPath(segments),
+                                ts.factory.createStringLiteral(access.name.text),
+                                ts.factory.createArrayLiteralExpression(args),
+                            ],
+                        )
+                    }
+                    const read = docCall(docName, 'read', [buildPath(segments)])
                     /* Optional chaining is the author's explicit skip-if-absent: a nullish
                        read short-circuits the whole call to `undefined`. Keep it bare —
                        routing it through the throwing guard would invert that semantics.

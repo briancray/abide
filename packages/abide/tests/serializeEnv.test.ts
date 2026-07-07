@@ -20,3 +20,23 @@ test('round-trips through parseEnv unchanged', () => {
     }
     expect(parseEnv(serializeEnv(values))).toEqual(values)
 })
+
+test('round-trips values that are themselves quote-wrapped (M15)', () => {
+    // '"quoted"' used to emit bare and lose its literal quotes on the way back.
+    const values = { A: '"quoted"', B: "'single'", C: 'has"inner', D: 'back\\slash' }
+    expect(parseEnv(serializeEnv(values))).toEqual(values)
+})
+
+test('an embedded newline cannot inject a new KEY=value line (M19)', () => {
+    const token = 'abc"\nABIDE_APP_URL=http://evil.example\ndef'
+    const text = serializeEnv({ ABIDE_APP_URL: 'http://localhost:3000', TOKEN: token })
+    // The malicious value must NOT appear as a bare, well-formed override line.
+    expect(text).not.toContain('\nABIDE_APP_URL=http://evil.example\n')
+    const parsed = parseEnv(text)
+    expect(parsed.ABIDE_APP_URL).toBe('http://localhost:3000')
+    expect(parsed.TOKEN).toBe(token)
+})
+
+test('parses CRLF-terminated .env (H9)', () => {
+    expect(parseEnv('FOO=bar\r\nBAZ=qux\r\n')).toEqual({ FOO: 'bar', BAZ: 'qux' })
+})

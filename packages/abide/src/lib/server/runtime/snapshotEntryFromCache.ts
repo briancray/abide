@@ -63,8 +63,16 @@ export async function snapshotEntryFromCache(
     }
     /* Read a CLONE, not the original: a reader that captured this same `entry.promise`
        before the replacement below still holds `response` and may `.clone()` it — reading
-       the original here would lock its body and throw "Body already used" for that reader. */
-    const body = await response.clone().text()
+       the original here would lock its body and throw "Body already used" for that reader.
+       The body stream can still error mid-read (reset/truncated upstream) after headers
+       resolved — degrade that to undefined (matching the fetch-rejection path) so one flaky
+       entry doesn't reject the whole snapshot batch and 500 / abort the page stream. */
+    let body: string
+    try {
+        body = await response.clone().text()
+    } catch {
+        return undefined
+    }
     entry.promise = Promise.resolve(
         new Response(body, {
             status: response.status,

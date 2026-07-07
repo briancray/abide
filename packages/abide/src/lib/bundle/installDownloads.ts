@@ -16,9 +16,19 @@ export function installDownloads(libPath: string, webviewHandle: Pointer | null)
     if (process.platform !== 'darwin') {
         return
     }
-    const { symbols, close } = dlopen(libPath, {
-        abide_install_downloads: { args: [FFIType.ptr], returns: FFIType.void },
-    })
+    /* abide_install_downloads exists only in abide's own webview lib. A vanilla
+       ABIDE_WEBVIEW_LIB on darwin lacks it, so dlopen throws — degrade to a no-op
+       (downloads simply unhandled) instead of crashing the launcher, matching the
+       optional-symbol FFI binders. */
+    let symbols: { abide_install_downloads: (handle: Pointer | null) => void }
+    let close: () => void
+    try {
+        ;({ symbols, close } = dlopen(libPath, {
+            abide_install_downloads: { args: [FFIType.ptr], returns: FFIType.void },
+        }))
+    } catch {
+        return
+    }
     symbols.abide_install_downloads(webviewHandle)
     close()
 }

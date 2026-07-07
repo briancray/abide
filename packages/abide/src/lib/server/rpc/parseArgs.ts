@@ -137,7 +137,21 @@ export async function parseArgs(
     needs the schema threaded in here (or a coercing schema adapter at the rpc).
     */
     const bodyObject = (body ?? {}) as Record<string, unknown>
-    const merged = { ...Object.fromEntries(url.searchParams), ...bodyObject }
+    /* Collect the query into an object, arraying repeated keys (`?tag=a&tag=b` → `['a','b']`)
+       rather than letting `Object.fromEntries` silently keep only the last — mirrors
+       splitFormData, so a repeated field reaches the schema as an array, not a dropped value. */
+    const queryObject: Record<string, unknown> = {}
+    for (const [key, value] of url.searchParams) {
+        const existing = queryObject[key]
+        if (!(key in queryObject)) {
+            queryObject[key] = value
+        } else if (Array.isArray(existing)) {
+            existing.push(value)
+        } else {
+            queryObject[key] = [existing, value]
+        }
+    }
+    const merged = { ...queryObject, ...bodyObject }
     if (Object.keys(merged).length === 0) {
         return undefined
     }

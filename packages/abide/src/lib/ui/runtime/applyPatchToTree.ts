@@ -1,3 +1,4 @@
+import { setOwnProperty } from '../../shared/setOwnProperty.ts'
 import type { Patch } from './types/Patch.ts'
 
 /*
@@ -21,16 +22,28 @@ export function applyPatchToTree(tree: unknown, patch: Patch, segments: string[]
     }
     let parent = tree as Record<string, unknown>
     for (const segment of segments.slice(0, -1)) {
-        parent = parent[segment] as Record<string, unknown>
+        /* Only descend into an OWN property. A segment of `__proto__`/`constructor`/
+           `prototype` is not own on a plain data object/array, so this refuses to walk
+           into a shared prototype (or the constructor function) that a later write would
+           then pollute — the real vector, since `apply` is reachable from `sync()` with
+           unvalidated peer-controlled patch paths. A legit document key that happens to be
+           named `constructor` is an own data property, so `hasOwn` still traverses it. */
+        const next = Object.hasOwn(parent, segment) ? parent[segment] : undefined
+        if (next === null || typeof next !== 'object') {
+            throw new TypeError(
+                `abide: patch path segment "${segment}" does not address a container`,
+            )
+        }
+        parent = next as Record<string, unknown>
     }
     const key = segments[segments.length - 1] as string
     if (patch.op === 'replace') {
-        parent[key] = patch.value
+        setOwnProperty(parent, key, patch.value)
     } else if (patch.op === 'add') {
         if (Array.isArray(parent)) {
             parent.splice(key === '-' ? parent.length : Number(key), 0, patch.value)
         } else {
-            parent[key] = patch.value
+            setOwnProperty(parent, key, patch.value)
         }
     } else if (Array.isArray(parent)) {
         parent.splice(Number(key), 1)

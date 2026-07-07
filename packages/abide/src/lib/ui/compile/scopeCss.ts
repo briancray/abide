@@ -79,12 +79,35 @@ function scopeSelector(selector: string, attribute: string): string {
     if (selector === '') {
         return selector
     }
-    const match = selector.match(/^(.*?)([^\s>+~]+)$/)
-    if (match === null) {
+    /* The last compound begins just after the final combinator (whitespace / `>` / `+` / `~`)
+       at bracket depth zero. Bracket-aware so a space inside a quoted attribute value
+       (`[data-label="Read more"]`) is NOT mistaken for a descendant combinator — a plain
+       `/\s/` split there desyncs pseudoIndex's bracket count and drops the whole rule. */
+    let depth = 0
+    let lastCompoundStart = 0
+    for (let index = 0; index < selector.length; index += 1) {
+        const char = selector[index] as string
+        if (char === '[') {
+            depth += 1
+        } else if (char === ']') {
+            depth -= 1
+        } else if (
+            depth === 0 &&
+            (char === ' ' ||
+                char === '\t' ||
+                char === '\n' ||
+                char === '>' ||
+                char === '+' ||
+                char === '~')
+        ) {
+            lastCompoundStart = index + 1
+        }
+    }
+    const prefix = selector.slice(0, lastCompoundStart)
+    const last = selector.slice(lastCompoundStart)
+    if (last === '') {
         return `${selector}[${attribute}]`
     }
-    const prefix = match[1] ?? ''
-    const last = match[2] ?? ''
     const pseudo = pseudoIndex(last)
     const scopedLast =
         pseudo === -1

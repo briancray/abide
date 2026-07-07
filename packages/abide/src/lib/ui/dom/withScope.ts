@@ -22,6 +22,13 @@ export function withScope(label: string | undefined, build: () => () => void): {
     CURRENT_SCOPE.current = lexical
     try {
         lexical.own(build())
+    } catch (error) {
+        /* `build` threw before returning its stopper — e.g. a hydration desync in one of
+           several sibling blocks. `own` never ran, so nothing downstream will dispose this
+           lexical scope; tear it down here (its child scopes/effects created before the
+           throw) before rethrowing, rather than leaking a live, unreachable scope. */
+        lexical.dispose()
+        throw error
     } finally {
         exitRenderPass()
         CURRENT_SCOPE.current = parentScope

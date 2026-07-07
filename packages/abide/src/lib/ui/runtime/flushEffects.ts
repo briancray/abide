@@ -1,3 +1,4 @@
+import { NODE_STATE } from './NODE_STATE.ts'
 import { REACTIVE_CONTEXT } from './REACTIVE_CONTEXT.ts'
 import type { ReactiveNode } from './types/ReactiveNode.ts'
 import { updateIfNecessary } from './updateIfNecessary.ts'
@@ -39,13 +40,31 @@ export function flushEffects(): void {
 
 function drain(): void {
     let spare: ReactiveNode[] = []
+    let errors: unknown[] | undefined
     do {
         const batch = REACTIVE_CONTEXT.pendingEffects
         REACTIVE_CONTEXT.pendingEffects = spare
         for (let index = 0; index < batch.length; index += 1) {
-            updateIfNecessary(batch[index] as ReactiveNode)
+            const node = batch[index] as ReactiveNode
+            try {
+                updateIfNecessary(node)
+            } catch (error) {
+                /* One effect throwing must not strand the effects queued behind it — they
+                   live in this same `batch`, which becomes unreachable the moment we swap
+                   `pendingEffects`. Reset the culprit to CLEAN so a later write to its
+                   dependencies can re-queue it (otherwise `mark`'s CLEAN→dirty gate leaves
+                   it permanently inert), then keep draining and surface the error(s) once
+                   the graph has settled rather than swallowing them. */
+                node.status = NODE_STATE.CLEAN
+                ;(errors ??= []).push(error)
+            }
         }
         batch.length = 0
         spare = batch
     } while (REACTIVE_CONTEXT.pendingEffects.length > 0)
+    if (errors !== undefined) {
+        throw errors.length === 1
+            ? errors[0]
+            : new AggregateError(errors, 'abide: effects threw during flush')
+    }
 }
