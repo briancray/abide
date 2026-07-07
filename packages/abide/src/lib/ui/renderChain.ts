@@ -36,7 +36,9 @@ export async function renderChain(
     /* Route params as thunks (static server-side — only shape parity with the client so
        `props()` reads `$props["id"]?.()` resolve). A layout (every view but the last) also
        gets `children` set to `CHILD_PRESENT` so SSR renders `{#if children}` the same way
-       the client does, keeping hydration congruent. */
+       the client does, keeping hydration congruent. The sentinel itself must be thunk-wrapped
+       (`() => CHILD_PRESENT`) since the destructure lowering CALLS every bag entry — leaving
+       it raw would invoke `CHILD_PRESENT` (a function) and read back `undefined`. */
     const paramThunks: UiProps = {}
     for (const key of Object.keys(params)) {
         paramThunks[key] = () => params[key]
@@ -44,7 +46,7 @@ export async function renderChain(
     for (let index = 0; index < views.length; index += 1) {
         const view = views[index] as UiComponent
         const hasChild = index < views.length - 1
-        const props: UiProps = hasChild ? { ...paramThunks, children: CHILD_PRESENT } : paramThunks
+        const props: UiProps = hasChild ? { ...paramThunks, children: () => CHILD_PRESENT } : paramThunks
         renders.push(await view.render(props, ctx))
     }
     let html = renders[renders.length - 1]?.html ?? ''

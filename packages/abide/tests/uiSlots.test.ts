@@ -220,7 +220,7 @@ const { children } = props<{ children?: Snippet }>()
 
     test('renders the presence branch when a child layer exists', () => {
         const host = document.createElement('div')
-        component(Layout)(host, { children: CHILD_PRESENT })
+        component(Layout)(host, { children: () => CHILD_PRESENT })
         const html = (
             globalThis as unknown as { serializeMiniDom: (h: unknown) => string }
         ).serializeMiniDom(host)

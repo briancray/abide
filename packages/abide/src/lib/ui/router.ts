@@ -203,14 +203,16 @@ export function router(
                same-route hops, so the bag need not rebuild. A layout also gets `children`
                set to `CHILD_PRESENT` when a child layer exists below it, read by
                `{#if children}` (a layout's `{children()}` lowers to its `outlet()` boundary,
-               so it ignores this value). */
+               so it ignores this value). Every bag entry is a thunk — `props()` destructure
+               lowers to `$props["key"]?.()` — so the sentinel must be wrapped too, or calling
+               it would invoke `CHILD_PRESENT` and yield `undefined` instead of the sentinel. */
             const propsBag = (hasChild: boolean): UiProps => {
                 const bag: UiProps = {}
                 for (const key of Object.keys(params)) {
                     bag[key] = () => clientPage.value.params[key]
                 }
                 if (hasChild) {
-                    bag.children = CHILD_PRESENT
+                    bag.children = () => CHILD_PRESENT
                 }
                 return bag
             }
