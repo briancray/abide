@@ -77,24 +77,30 @@ export function compileShadow(source: string, propsType = 'Record<string, any>')
     const scriptStart = leadingScript ? source.indexOf('>', leadingScript.index) + 1 : 0
     const templateStart = leadingScript ? (leadingScript.index ?? 0) + leadingScript[0].length : 0
 
-    const { imports, types, scope, propsShapes, diagnostics, importedReactives } = analyzeScript(
-        scriptBody,
-        scriptStart,
-    )
+    const { imports, types, scope, propsShapes, diagnostics, importedReactives, propsLocalName } =
+        analyzeScript(scriptBody, scriptStart)
     builder.raw(shadowPreamble(importedReactives))
     /* `props` is a required import (`abide/ui/props`). The shadow owns its type so the
        return is file-contextual — the route param shape (page/layout) or `Record<string,
        any>` (component), intersected with the author's annotation `T` so declared props
        (notably `children: Snippet`) are ADDITIVE and route params never need re-spelling.
-       Emitted only when imported: a missing import surfaces as "Cannot find name 'props'",
-       so `abide check` flags it. */
-    if (importedReactives.has('props')) {
-        builder.raw(`declare function props<T = {}>(): (${propsType}) & T\n`)
+       Emitted only when imported: a missing import surfaces as "Cannot find name 'props'"
+       (or the author's local alias), so `abide check` flags it. Declared under the LOCAL
+       binding name (alias-safe, like `state`/`effect`) — a `props as p` import must get a
+       `p` declare, or `p()` reads as undefined once the import below is stripped. */
+    if (propsLocalName !== undefined) {
+        builder.raw(`declare function ${propsLocalName}<T = {}>(): (${propsType}) & T\n`)
     }
+    const propsSpecifier = `${ABIDE_PACKAGE_NAME}/ui/props`
     for (const line of imports) {
-        /* The `props` import is replaced by the contextual `declare function props` above;
-           emitting it too would be a duplicate-identifier error. */
-        if (/from\s*['"][^'"]*\/ui\/props['"]/.test(line.text)) {
+        /* The `props` import is replaced by the contextual `declare function` above;
+           emitting it too would be a duplicate-identifier error. Matched by EXACT specifier
+           (either quote style, not a loose suffix match) so an unrelated user module merely
+           named `.../ui/props` survives verbatim. */
+        if (
+            line.text.includes(`from '${propsSpecifier}'`) ||
+            line.text.includes(`from "${propsSpecifier}"`)
+        ) {
             continue
         }
         builder.flush(line)
@@ -221,6 +227,10 @@ type ScriptAnalysis = {
     /* The reactive primitives the author imports (`state`/`effect`), so the preamble
        omits the ambient fallback for each and avoids a duplicate-identifier error. */
     importedReactives: Set<string>
+    /* The LOCAL binding name the author's `props` import is bound to (alias-safe — `props`
+       for the canonical import, `p` for `props as p`), or undefined when not imported. The
+       `declare function` for `props` must target this name, not the canonical `'props'`. */
+    propsLocalName: string | undefined
 }
 
 /* Pushes a diagnostic for every author binding whose name starts with the reserved `$$`
@@ -333,7 +343,15 @@ function analyzeScript(scriptBody: string, scriptStart: number): ScriptAnalysis 
     const propsShapes: string[] = []
     const diagnostics: ShadowDiagnostic[] = []
     if (scriptBody.trim() === '') {
-        return { imports, types, scope, propsShapes, diagnostics, importedReactives: new Set() }
+        return {
+            imports,
+            types,
+            scope,
+            propsShapes,
+            diagnostics,
+            importedReactives: new Set(),
+            propsLocalName: undefined,
+        }
     }
     const file = ts.createSourceFile('script.ts', scriptBody, ts.ScriptTarget.Latest, true)
     /* The author's reactive import bindings (alias-safe) — recognition source for
@@ -341,6 +359,15 @@ function analyzeScript(scriptBody: string, scriptStart: number): ScriptAnalysis 
        the preamble omits its ambient fallback for. */
     const bindings = reactiveImportBindings(file)
     const importedReactives = new Set(bindings.direct.values())
+    /* The local name bound to `props` (alias-safe): the key whose value is the canonical
+       `'props'`. At most one — a file imports `props` from one specifier. */
+    let propsLocalName: string | undefined
+    for (const [local, canonical] of bindings.direct) {
+        if (canonical === 'props') {
+            propsLocalName = local
+            break
+        }
+    }
     /* The `$$` prefix is reserved for the compiler's injected runtime (`$$each`, `$$model`,
        `$$scope`, …), so an author binding may not start with it — that's the contract that
        lets a user freely name a variable after any helper. Flag every such declaration. */
@@ -380,7 +407,7 @@ function analyzeScript(scriptBody: string, scriptStart: number): ScriptAnalysis 
             scope.push(scopeLineFor(declaration, propsShapes, verbatim, span, bindings))
         }
     }
-    return { imports, types, scope, propsShapes, diagnostics, importedReactives }
+    return { imports, types, scope, propsShapes, diagnostics, importedReactives, propsLocalName }
 }
 
 /* Value-projects a nested control-flow `<script>` body the way `analyzeScript`

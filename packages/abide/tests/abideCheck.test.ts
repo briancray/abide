@@ -44,6 +44,16 @@ describe('abide check', () => {
         expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
     })
 
+    test('an aliased props import (`props as p`) type-checks clean', () => {
+        /* Regression: the shadow used to declare the ambient reader under the CANONICAL
+           name `props` regardless of the author's local alias, so `p()` read as undefined
+           once the real import was stripped. */
+        const dir = project({
+            'clean.abide': `<script>\nimport { props as p } from '@abide/abide/ui/props'\nconst { title } = p<{ title: string }>()\n</script>\n<h1>{title.toUpperCase()}</h1>\n`,
+        })
+        expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
+    })
+
     test('{#if children} is a valid presence test, not an always-true condition', () => {
         /* `children` is optional (undefined when nothing is slotted / no child layer), so
            the fallback form must type-check without a 2774 "always true" false positive. */

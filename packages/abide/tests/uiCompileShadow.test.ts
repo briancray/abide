@@ -255,3 +255,31 @@ const { id } = props()
     const { code } = compileShadow(src, '{ id: string }')
     expect(code).not.toContain('declare function props')
 })
+
+test('shadow: an aliased props import declares under the LOCAL name, not the canonical one', () => {
+    /* Alias-safe like `state`/`effect`: an author importing `props as p` must get a
+       `p` declare (matching their own `p()` call), not a `props` declare that leaves
+       `p` undefined — see the `state as s` aliasing already covered above. */
+    const src = `<script>
+import { props as p } from '@abide/abide/ui/props'
+const { id } = p<{ children: Snippet }>()
+</script>
+{#if id}{id}{/if}`
+    const { code } = compileShadow(src, '{ id: string }')
+    expect(code).toContain('declare function p<T = {}>(): ({ id: string }) & T')
+    expect(code).not.toContain('declare function props')
+    // the author's aliased import is stripped (our declare owns the type)
+    expect(code).not.toMatch(/import\s*\{\s*props\s*as\s*p\s*\}\s*from/)
+})
+
+test('shadow: only the real abide props import is stripped, not a lookalike user module', () => {
+    /* The strip used to be a loose regex matching any specifier ending in ui/props — a
+       user module at that path (unrelated to '@abide/abide/ui/props') must survive verbatim. */
+    const src = `<script>
+import { props } from './my/ui/props'
+</script>
+<p>{props}</p>`
+    const { code } = compileShadow(src)
+    expect(code).toContain(`import { props } from './my/ui/props'`)
+    expect(code).not.toContain('declare function props')
+})
