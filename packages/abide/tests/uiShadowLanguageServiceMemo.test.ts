@@ -43,7 +43,7 @@ function open(source: string): {
     return { service, path }
 }
 
-const SOURCE = `<script>\nconst { title } = props<{ title: string }>()\n</script>\n<h1>{title}</h1>\n`
+const SOURCE = `<script>\nimport { props } from '@abide/abide/ui/props'\nconst { title } = props<{ title: string }>()\n</script>\n<h1>{title}</h1>\n`
 
 describe('shadow language service compile memo', () => {
     test('repeated reads at one version recompile at most once and stay identical', () => {
@@ -84,7 +84,7 @@ describe('shadow language service compile memo', () => {
         expect(compileCalls).toBe(0)
 
         /* A new overlay bumps the version → next read recompiles and reflects it. */
-        const next = `<script>\nconst { title } = props<{ title: number }>()\n</script>\n<h1>{title}</h1>\n`
+        const next = `<script>\nimport { props } from '@abide/abide/ui/props'\nconst { title } = props<{ title: number }>()\n</script>\n<h1>{title}</h1>\n`
         service.update(path, next)
         const hoverAt = next.indexOf('{title}') + 1
         const info = service.quickInfo(path, hoverAt)

@@ -39,7 +39,7 @@ function project(files: Record<string, string>): string {
 describe('abide check', () => {
     test('a well-typed template produces no diagnostics', () => {
         const dir = project({
-            'clean.abide': `<script>\nconst { title } = props<{ title: string }>()\n</script>\n<h1>{title.toUpperCase()}</h1>\n`,
+            'clean.abide': `<script>\nimport { props } from '@abide/abide/ui/props'\nconst { title } = props<{ title: string }>()\n</script>\n<h1>{title.toUpperCase()}</h1>\n`,
         })
         expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
     })
@@ -48,13 +48,13 @@ describe('abide check', () => {
         /* `children` is optional (undefined when nothing is slotted / no child layer), so
            the fallback form must type-check without a 2774 "always true" false positive. */
         const dir = project({
-            'card.abide': `<section>{#if children}{children()}{:else}<p>empty</p>{/if}</section>\n`,
+            'card.abide': `<script>\nimport { props } from '@abide/abide/ui/props'\nimport type { Snippet } from '@abide/abide/shared/snippet'\nconst { children } = props<{ children?: Snippet }>()\n</script>\n<section>{#if children}{children()}{:else}<p>empty</p>{/if}</section>\n`,
         })
         expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
     })
 
     test('a wrong member on a typed prop is caught and mapped to the expression', () => {
-        const source = `<script>\nconst { count } = props<{ count: number }>()\n</script>\n<h1>{count.toUpperCase()}</h1>\n`
+        const source = `<script>\nimport { props } from '@abide/abide/ui/props'\nconst { count } = props<{ count: number }>()\n</script>\n<h1>{count.toUpperCase()}</h1>\n`
         const dir = project({ 'broken.abide': source })
         const diagnostics = collectAbideDiagnostics(createShadowProgram(dir))
         expect(diagnostics).toHaveLength(1)
@@ -69,7 +69,7 @@ describe('abide check', () => {
 
     test('a wrong prop type on a child component is caught in the parent', () => {
         const dir = project({
-            'child.abide': `<script>\nconst { label } = props<{ label: string }>()\n</script>\n<span>{label}</span>\n`,
+            'child.abide': `<script>\nimport { props } from '@abide/abide/ui/props'\nconst { label } = props<{ label: string }>()\n</script>\n<span>{label}</span>\n`,
             'parent.abide': `<script>\nimport Child from './child.abide'\n</script>\n<Child label={42} />\n`,
         })
         const diagnostics = collectAbideDiagnostics(createShadowProgram(dir))
@@ -86,7 +86,7 @@ describe('abide check', () => {
            effect. The child prop is well-typed, so the only possible diagnostic is the
            bug; expect none. */
         const dir = project({
-            'child.abide': `<script>\nconst { open } = props<{ open: boolean }>()\n</script>\n<span>{open}</span>\n`,
+            'child.abide': `<script>\nimport { props } from '@abide/abide/ui/props'\nconst { open } = props<{ open: boolean }>()\n</script>\n<span>{open}</span>\n`,
             'host.abide': `<script>\nimport { state } from '@abide/abide/ui/state'\nimport Child from './child.abide'\nlet shown = state(true)\neffect(() => { console.log(shown) })\n</script>\n<Child open={shown} />\n`,
         })
         const diagnostics = collectAbideDiagnostics(createShadowProgram(dir))
@@ -99,7 +99,7 @@ describe('abide check', () => {
         /* The separator must not swallow the prop check: a wrong prop type next to an
            unterminated call still surfaces. */
         const dir = project({
-            'child.abide': `<script>\nconst { open } = props<{ open: boolean }>()\n</script>\n<span>{open}</span>\n`,
+            'child.abide': `<script>\nimport { props } from '@abide/abide/ui/props'\nconst { open } = props<{ open: boolean }>()\n</script>\n<span>{open}</span>\n`,
             'host.abide': `<script>\nimport { state } from '@abide/abide/ui/state'\nimport Child from './child.abide'\nlet shown = state(0)\neffect(() => { console.log(shown) })\n</script>\n<Child open={shown} />\n`,
         })
         const diagnostics = collectAbideDiagnostics(createShadowProgram(dir)).filter((diagnostic) =>
@@ -165,7 +165,7 @@ describe('abide check', () => {
        the positive narrowing, so `toFixed` errored on the narrowed `string`. */
     test('a nested else child carries the condition negative narrowing', () => {
         const dir = project({
-            'elseok.abide': `<script>\nconst { v } = props<{ v: string | number }>()\n</script>\n{#if typeof v === 'string'}{v.toUpperCase()}{:else}{v.toFixed(2)}{/if}\n`,
+            'elseok.abide': `<script>\nimport { props } from '@abide/abide/ui/props'\nconst { v } = props<{ v: string | number }>()\n</script>\n{#if typeof v === 'string'}{v.toUpperCase()}{:else}{v.toFixed(2)}{/if}\n`,
         })
         expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
     })
@@ -175,7 +175,7 @@ describe('abide check', () => {
        each branch on the right union member, so every member access is well-typed. */
     test('an elseif branch carries the correct discriminated narrowing', () => {
         const dir = project({
-            'shape.abide': `<script>\nconst { s } = props<{ s: { k: 'circle'; r: number } | { k: 'square'; side: number } | { k: 'none' } }>()\n</script>\n{#if s.k === 'circle'}{s.r}{:else if s.k === 'square'}{s.side}{:else}none{/if}\n`,
+            'shape.abide': `<script>\nimport { props } from '@abide/abide/ui/props'\nconst { s } = props<{ s: { k: 'circle'; r: number } | { k: 'square'; side: number } | { k: 'none' } }>()\n</script>\n{#if s.k === 'circle'}{s.r}{:else if s.k === 'square'}{s.side}{:else}none{/if}\n`,
         })
         expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
     })
@@ -184,7 +184,7 @@ describe('abide check', () => {
        member — proof the branch is narrowed to `square`, not the widened union. */
     test('a wrong member inside an elseif branch is caught', () => {
         const dir = project({
-            'shapebad.abide': `<script>\nconst { s } = props<{ s: { k: 'circle'; r: number } | { k: 'square'; side: number } }>()\n</script>\n{#if s.k === 'circle'}{s.r}{:else if s.k === 'square'}{s.r}{/if}\n`,
+            'shapebad.abide': `<script>\nimport { props } from '@abide/abide/ui/props'\nconst { s } = props<{ s: { k: 'circle'; r: number } | { k: 'square'; side: number } }>()\n</script>\n{#if s.k === 'circle'}{s.r}{:else if s.k === 'square'}{s.r}{/if}\n`,
         })
         const diagnostics = collectAbideDiagnostics(createShadowProgram(dir))
         expect(diagnostics).toHaveLength(1)
@@ -196,7 +196,7 @@ describe('abide check', () => {
        positive narrowing, so a compare against another member read as "no overlap" — the
        error a downstream app worked around with hand-rolled string-cast deriveds. */
     test('a template-literal union narrows across a nested if/else and a switch', () => {
-        const head = `<script>\ntype LayoutKey = \`layout-\${'home' | 'about'}\`\nconst { layoutKey } = props<{ layoutKey: LayoutKey }>()\n</script>\n`
+        const head = `<script>\nimport { props } from '@abide/abide/ui/props'\ntype LayoutKey = \`layout-\${'home' | 'about'}\`\nconst { layoutKey } = props<{ layoutKey: LayoutKey }>()\n</script>\n`
         const ifElse = project({
             'a.abide': `${head}{#if layoutKey === 'layout-home'}home{:else}{layoutKey === 'layout-about' ? 'a' : 'x'}{/if}\n`,
         })
@@ -210,7 +210,7 @@ describe('abide check', () => {
     /* A real `switch` narrows the discriminant subject into each case body. */
     test('a switch case narrows a discriminated union subject', () => {
         const dir = project({
-            'shape.abide': `<script>\ntype Shape = { kind: 'circle'; r: number } | { kind: 'square'; side: number }\nconst { shape } = props<{ shape: Shape }>()\n</script>\n{#switch shape.kind}\n  {:case 'circle'}{shape.r}\n  {:case 'square'}{shape.side}\n{/switch}\n`,
+            'shape.abide': `<script>\nimport { props } from '@abide/abide/ui/props'\ntype Shape = { kind: 'circle'; r: number } | { kind: 'square'; side: number }\nconst { shape } = props<{ shape: Shape }>()\n</script>\n{#switch shape.kind}\n  {:case 'circle'}{shape.r}\n  {:case 'square'}{shape.side}\n{/switch}\n`,
         })
         expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
     })
@@ -219,7 +219,7 @@ describe('abide check', () => {
        element type instead of erroring on the missing sync iterator. */
     test('an async each binds the AsyncIterable element type', () => {
         const dir = project({
-            'stream.abide': `<script>\nconst { stream } = props<{ stream: AsyncIterable<number> }>()\n</script>\n{#for await n of stream}{n.toFixed(2)}{/for}\n`,
+            'stream.abide': `<script>\nimport { props } from '@abide/abide/ui/props'\nconst { stream } = props<{ stream: AsyncIterable<number> }>()\n</script>\n{#for await n of stream}{n.toFixed(2)}{/for}\n`,
         })
         expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
     })
@@ -228,7 +228,7 @@ describe('abide check', () => {
        resolved data is caught (previously bound as `any`, silently unchecked). */
     test('a streaming then branch type-checks the resolved value', () => {
         const dir = project({
-            'await.abide': `<script>\nconst { load } = props<{ load: Promise<{ title: string }> }>()\n</script>\n{#await load}loading{:then data}{data.bogus}{/await}\n`,
+            'await.abide': `<script>\nimport { props } from '@abide/abide/ui/props'\nconst { load } = props<{ load: Promise<{ title: string }> }>()\n</script>\n{#await load}loading{:then data}{data.bogus}{/await}\n`,
         })
         const diagnostics = collectAbideDiagnostics(createShadowProgram(dir))
         expect(diagnostics).toHaveLength(1)
@@ -256,7 +256,7 @@ describe('abide check', () => {
        static text directly in a branch — type-checks clean. */
     test('check accepts a component and text directly in a control-flow branch', () => {
         const dir = project({
-            'child.abide': `<script>\nconst { label } = props<{ label: string }>()\n</script>\n<span>{label}</span>\n`,
+            'child.abide': `<script>\nimport { props } from '@abide/abide/ui/props'\nconst { label } = props<{ label: string }>()\n</script>\n<span>{label}</span>\n`,
             'ok.abide': `<script>\nimport { state } from '@abide/abide/ui/state'\nimport Child from './child.abide'\nlet on = state(true)\n</script>\n{#if on}<Child label="x"/>plain{/if}\n`,
         })
         expect(
@@ -272,7 +272,7 @@ describe('abide check', () => {
     test('a static import in a nested script is rejected with a clear diagnostic', () => {
         const dir = project({
             'badimport.abide': `<script>\nimport { state } from '@abide/abide/ui/state'\nlet on = state(true)\n</script>\n{#if on}\n<script>import Heavy from './child.abide'</script>\n{/if}\n`,
-            'child.abide': `<script>\nconst { label } = props<{ label: string }>()\n</script>\n<span>{label}</span>\n`,
+            'child.abide': `<script>\nimport { props } from '@abide/abide/ui/props'\nconst { label } = props<{ label: string }>()\n</script>\n<span>{label}</span>\n`,
         })
         const diagnostics = collectAbideDiagnostics(createShadowProgram(dir)).filter((diagnostic) =>
             diagnostic.file.endsWith('badimport.abide'),
@@ -347,7 +347,7 @@ describe('abide check', () => {
     test('a dynamic import in a nested script is allowed', () => {
         const dir = project({
             'lazy.abide': `<script>\nimport { state } from '@abide/abide/ui/state'\nlet p = state(Promise.resolve(1))\n</script>\n{#await p then v}\n<script>effect(() => { void import('./child.abide') })</script>\n<span>{v}</span>\n{/await}\n`,
-            'child.abide': `<script>\nconst { label } = props<{ label: string }>()\n</script>\n<span>{label}</span>\n`,
+            'child.abide': `<script>\nimport { props } from '@abide/abide/ui/props'\nconst { label } = props<{ label: string }>()\n</script>\n<span>{label}</span>\n`,
         })
         expect(
             collectAbideDiagnostics(createShadowProgram(dir)).filter((diagnostic) =>
@@ -373,19 +373,19 @@ describe('abide check', () => {
        so a wrong-typed prop on a child is still caught in the parent. */
     test('a typed props() destructure checks its bindings and the parent prop', () => {
         const clean = project({
-            'card.abide': `<script>\nconst { lang = 'ts', code } = props<{ lang?: string; code: string }>()\n</script>\n<pre data-lang={lang.toUpperCase()}>{code}</pre>\n`,
+            'card.abide': `<script>\nimport { props } from '@abide/abide/ui/props'\nconst { lang = 'ts', code } = props<{ lang?: string; code: string }>()\n</script>\n<pre data-lang={lang.toUpperCase()}>{code}</pre>\n`,
         })
         expect(collectAbideDiagnostics(createShadowProgram(clean))).toHaveLength(0)
 
         const badMember = project({
-            'card.abide': `<script>\nconst { lang = 'ts' } = props<{ lang?: string }>()\n</script>\n<pre>{lang.toFixed(2)}</pre>\n`,
+            'card.abide': `<script>\nimport { props } from '@abide/abide/ui/props'\nconst { lang = 'ts' } = props<{ lang?: string }>()\n</script>\n<pre>{lang.toFixed(2)}</pre>\n`,
         })
         const memberDiagnostics = collectAbideDiagnostics(createShadowProgram(badMember))
         expect(memberDiagnostics).toHaveLength(1)
         expect(memberDiagnostics[0]!.message).toContain('toFixed')
 
         const badParent = project({
-            'card.abide': `<script>\nconst { code } = props<{ code: string }>()\n</script>\n<pre>{code}</pre>\n`,
+            'card.abide': `<script>\nimport { props } from '@abide/abide/ui/props'\nconst { code } = props<{ code: string }>()\n</script>\n<pre>{code}</pre>\n`,
             'page.abide': `<script>\nimport Card from './card.abide'\n</script>\n<Card code={42} />\n`,
         })
         const parent = collectAbideDiagnostics(createShadowProgram(badParent)).filter(
@@ -409,7 +409,7 @@ describe('abide check', () => {
        component's full prop shape, not just check the props that were supplied. */
     test('a missing required child prop is caught in the parent', () => {
         const dir = project({
-            'child.abide': `<script>\nconst { label } = props<{ label: string }>()\n</script>\n<span>{label}</span>\n`,
+            'child.abide': `<script>\nimport { props } from '@abide/abide/ui/props'\nconst { label } = props<{ label: string }>()\n</script>\n<span>{label}</span>\n`,
             'parent.abide': `<script>\nimport Child from './child.abide'\n</script>\n<Child />\n`,
         })
         const parent = collectAbideDiagnostics(createShadowProgram(dir)).filter((diagnostic) =>
@@ -423,7 +423,7 @@ describe('abide check', () => {
        not pass silently. */
     test('an excess unknown child prop is caught in the parent', () => {
         const dir = project({
-            'child.abide': `<script>\nconst { label } = props<{ label: string }>()\n</script>\n<span>{label}</span>\n`,
+            'child.abide': `<script>\nimport { props } from '@abide/abide/ui/props'\nconst { label } = props<{ label: string }>()\n</script>\n<span>{label}</span>\n`,
             'parent.abide': `<script>\nimport Child from './child.abide'\n</script>\n<Child label="x" bogusProp={1} />\n`,
         })
         const parent = collectAbideDiagnostics(createShadowProgram(dir)).filter((diagnostic) =>
@@ -439,7 +439,7 @@ describe('abide check', () => {
        passed correctly produces no diagnostics. */
     test('a declared hyphenated child prop type-checks cleanly', () => {
         const dir = project({
-            'child.abide': `<script>\nconst { 'aria-label': ariaLabel } = props<{ 'aria-label': string }>()\n</script>\n<span aria-label={ariaLabel} />\n`,
+            'child.abide': `<script>\nimport { props } from '@abide/abide/ui/props'\nconst { 'aria-label': ariaLabel } = props<{ 'aria-label': string }>()\n</script>\n<span aria-label={ariaLabel} />\n`,
             'parent.abide': `<script>\nimport Child from './child.abide'\n</script>\n<Child aria-label="open" />\n`,
         })
         const parent = collectAbideDiagnostics(createShadowProgram(dir)).filter((diagnostic) =>
@@ -453,7 +453,7 @@ describe('abide check', () => {
     test('an excess hyphenated child prop is caught and mapped to its name', () => {
         const source = `<script>\nimport Child from './child.abide'\n</script>\n<Child label="x" data-bogus="y" />\n`
         const dir = project({
-            'child.abide': `<script>\nconst { label } = props<{ label: string }>()\n</script>\n<span>{label}</span>\n`,
+            'child.abide': `<script>\nimport { props } from '@abide/abide/ui/props'\nconst { label } = props<{ label: string }>()\n</script>\n<span>{label}</span>\n`,
             'parent.abide': source,
         })
         const parent = collectAbideDiagnostics(createShadowProgram(dir)).filter((diagnostic) =>
@@ -470,7 +470,7 @@ describe('abide check', () => {
        as a missing required prop. */
     test('a passed required on* callback prop satisfies the child shape', () => {
         const dir = project({
-            'child.abide': `<script>\nconst { label, onsave } = props<{ label: string; onsave: () => void }>()\n</script>\n<button onclick={onsave}>{label}</button>\n`,
+            'child.abide': `<script>\nimport { props } from '@abide/abide/ui/props'\nconst { label, onsave } = props<{ label: string; onsave: () => void }>()\n</script>\n<button onclick={onsave}>{label}</button>\n`,
             'parent.abide': `<script>\nimport Child from './child.abide'\nfunction save() {}\n</script>\n<Child label="x" onsave={save} />\n`,
         })
         const parent = collectAbideDiagnostics(createShadowProgram(dir)).filter((diagnostic) =>
@@ -482,7 +482,7 @@ describe('abide check', () => {
     /* A missing required `on*` callback prop is still caught — completeness is enforced. */
     test('a missing required on* callback prop is caught in the parent', () => {
         const dir = project({
-            'child.abide': `<script>\nconst { label, onsave } = props<{ label: string; onsave: () => void }>()\n</script>\n<button onclick={onsave}>{label}</button>\n`,
+            'child.abide': `<script>\nimport { props } from '@abide/abide/ui/props'\nconst { label, onsave } = props<{ label: string; onsave: () => void }>()\n</script>\n<button onclick={onsave}>{label}</button>\n`,
             'parent.abide': `<script>\nimport Child from './child.abide'\n</script>\n<Child label="x" />\n`,
         })
         const parent = collectAbideDiagnostics(createShadowProgram(dir)).filter((diagnostic) =>
@@ -497,7 +497,7 @@ describe('abide check', () => {
        module"). */
     test('a parent-relative .abide import resolves and type-checks', () => {
         const dir = project({
-            'ui/Card.abide': `<script>\nconst { title } = props<{ title: string }>()\n</script>\n<h2>{title}</h2>\n`,
+            'ui/Card.abide': `<script>\nimport { props } from '@abide/abide/ui/props'\nconst { title } = props<{ title: string }>()\n</script>\n<h2>{title}</h2>\n`,
             'ui/pages/page.abide': `<script>\nimport Card from '../Card.abide'\n</script>\n<Card title={42} />\n`,
         })
         const diagnostics = collectAbideDiagnostics(createShadowProgram(dir)).filter((diagnostic) =>
@@ -509,7 +509,7 @@ describe('abide check', () => {
 
     test('a page infers its route params via props() — string ops clean', () => {
         const dir = project({
-            'src/ui/pages/[id]/page.abide': `<script>\nconst { id } = props()\n</script>\n<p>{id.toUpperCase()}</p>\n`,
+            'src/ui/pages/[id]/page.abide': `<script>\nimport { props } from '@abide/abide/ui/props'\nconst { id } = props()\n</script>\n<p>{id.toUpperCase()}</p>\n`,
         })
         const diagnostics = collectAbideDiagnostics(createShadowProgram(dir)).filter((diagnostic) =>
             diagnostic.file.endsWith('page.abide'),
@@ -519,7 +519,7 @@ describe('abide check', () => {
 
     test('a page route param is typed string — a number op is caught', () => {
         const dir = project({
-            'src/ui/pages/[id]/page.abide': `<script>\nconst { id } = props()\n</script>\n<p>{id.toFixed(2)}</p>\n`,
+            'src/ui/pages/[id]/page.abide': `<script>\nimport { props } from '@abide/abide/ui/props'\nconst { id } = props()\n</script>\n<p>{id.toFixed(2)}</p>\n`,
         })
         const diagnostics = collectAbideDiagnostics(createShadowProgram(dir)).filter((diagnostic) =>
             diagnostic.file.endsWith('page.abide'),

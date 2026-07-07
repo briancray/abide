@@ -180,6 +180,7 @@ describe('an await binding named like the awaited expression', () => {
     test('a blocking await reusing a prop name renders (no temporal-dead-zone crash)', async () => {
         const render = component(`
             <script>
+                import { props } from '@abide/abide/ui/props'
                 const { foo } = props()
             </script>
             {#await foo then foo}<span>{foo.label}</span>{/await}

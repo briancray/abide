@@ -63,7 +63,8 @@ function component(
 describe('SSR component composition', () => {
     test('a parent server-renders its child, and SSR matches the client DOM', async () => {
         const Greeting = component(`
-            <script>const { label } = props()</script>
+            <script>import { props } from '@abide/abide/ui/props'
+            const { label } = props()</script>
             <span>Hi {label}</span>
         `)
         const parentSource = `
@@ -127,7 +128,8 @@ let active = state(true)</script>
            at all, so a component name can never collide with an HTML tag — the child's own
            `<input>` is just emitted between the `[`…`]` markers as a direct child. */
         const Input = component(`
-            <script>const { value } = props()</script>
+            <script>import { props } from '@abide/abide/ui/props'
+            const { value } = props()</script>
             <input value={value} />
         `)
         const parentSource = `
@@ -149,7 +151,8 @@ let q = state('hi')</script>
 
     test('a `{...object}` spread server-renders and matches the client DOM', async () => {
         const Card = component(`
-            <script>const { title, body } = props()</script>
+            <script>import { props } from '@abide/abide/ui/props'
+            const { title, body } = props()</script>
             <article>{title}: {body}</article>
         `)
         /* Spread mixed with an explicit prop that overrides one spread key. */
@@ -173,7 +176,8 @@ let q = state('hi')</script>
 
     test('an explicit attr wins over a spread of the same key, with no duplicate (SSR == client)', async () => {
         const Field = component(`
-            <script>const { ...rest } = props()</script>
+            <script>import { props } from '@abide/abide/ui/props'
+            const { ...rest } = props()</script>
             <input type="text" {...rest} />
         `)
         /* The forwarded rest carries `type`, colliding with the explicit `type="text"`. */
@@ -195,7 +199,8 @@ let q = state('hi')</script>
 
     test('rest props forwarded onto a native element render server-side and match the client', async () => {
         const Field = component(`
-            <script>const { label, ...rest } = props()</script>
+            <script>import { props } from '@abide/abide/ui/props'
+            const { label, ...rest } = props()</script>
             <input {...rest} />
         `)
         const parentSource = `<div><Field label="Name" type="email" placeholder="x" /></div>`

@@ -63,7 +63,12 @@ function component(
 }
 
 describe('slots (component children)', () => {
-    const Card = `<div class="card">{children()}</div>`
+    const Card = `<script>
+import { props } from '@abide/abide/ui/props'
+import type { Snippet } from '@abide/abide/shared/snippet'
+const { children } = props<{ children: Snippet }>()
+</script>
+<div class="card">{children()}</div>`
     const parent = `
         <script>import { state } from '@abide/abide/ui/state'
 let name = state('world')</script>
@@ -77,7 +82,9 @@ let name = state('world')</script>
             globalThis as unknown as { serializeMiniDom: (h: unknown) => string }
         ).serializeMiniDom(host)
         expect(html).toBe(
-            '<!--[--><div class="card"><!--a--><!--[-->Hello world!<!--]--></div><!--]-->',
+            '<!--[--><div class="card"><!--a-->' +
+                '<!--[--><!--abide:snippet-->Hello world!<!--/abide:snippet--><!--]-->' +
+                '</div><!--]-->',
         )
     })
 
@@ -85,7 +92,9 @@ let name = state('world')</script>
         const CardComponent = component(Card)
         const server = await component(parent, { Card: CardComponent }).render()
         expect(server.html).toBe(
-            '<!--[--><div class="card"><!--a--><!--[-->Hello world!<!--]--></div><!--]-->',
+            '<!--[--><div class="card"><!--a-->' +
+                '<!--[--><!--abide:snippet-->Hello world!<!--/abide:snippet--><!--]-->' +
+                '</div><!--]-->',
         )
     })
 
@@ -96,7 +105,12 @@ let name = state('world')</script>
     })
 
     test('{#if children} renders fallback via {:else} when no children passed', () => {
-        const Box = `<b>{#if children}{children()}{:else}empty{/if}</b>`
+        const Box = `<script>
+import { props } from '@abide/abide/ui/props'
+import type { Snippet } from '@abide/abide/shared/snippet'
+const { children } = props<{ children?: Snippet }>()
+</script>
+<b>{#if children}{children()}{:else}empty{/if}</b>`
         const host = document.createElement('div')
         component(`<Box></Box>`, { Box: component(Box) })(host)
         const html = (
@@ -106,7 +120,12 @@ let name = state('world')</script>
     })
 
     test('{#if children} renders the slot when children are passed', () => {
-        const Box = `<b>{#if children}{children()}{:else}empty{/if}</b>`
+        const Box = `<script>
+import { props } from '@abide/abide/ui/props'
+import type { Snippet } from '@abide/abide/shared/snippet'
+const { children } = props<{ children?: Snippet }>()
+</script>
+<b>{#if children}{children()}{:else}empty{/if}</b>`
         const host = document.createElement('div')
         component(`<Box>hi</Box>`, { Box: component(Box) })(host)
         const html = (
@@ -173,7 +192,8 @@ const { children } = props<{ children: Snippet }>()
 
 describe('page params via props()', () => {
     test('a page reads route params through props() (client + SSR)', async () => {
-        const Page = `<script>const { id } = props()</script><p>{id}</p>`
+        const Page = `<script>import { props } from '@abide/abide/ui/props'
+const { id } = props()</script><p>{id}</p>`
         const host = document.createElement('div')
         component(Page)(host, { id: () => '42' })
         const html = (
@@ -187,11 +207,20 @@ describe('page params via props()', () => {
 })
 
 describe('layout {#if children} presence (3a)', () => {
-    const Layout = `<main>{#if children}<nav>has</nav>{/if}</main>`
+    /* `children` is an ordinary destructured prop now (no ambient `$props?.children`
+       reader) — a layout that presence-checks it must import `props` and declare it,
+       same as any component. The router/renderChain set the presence sentinel under the
+       `children` key (see CHILD_PRESENT). */
+    const Layout = `<script>
+import { props } from '@abide/abide/ui/props'
+import type { Snippet } from '@abide/abide/shared/snippet'
+const { children } = props<{ children?: Snippet }>()
+</script>
+<main>{#if children}<nav>has</nav>{/if}</main>`
 
     test('renders the presence branch when a child layer exists', () => {
         const host = document.createElement('div')
-        component(Layout)(host, { $children: CHILD_PRESENT })
+        component(Layout)(host, { children: CHILD_PRESENT })
         const html = (
             globalThis as unknown as { serializeMiniDom: (h: unknown) => string }
         ).serializeMiniDom(host)

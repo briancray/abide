@@ -169,12 +169,17 @@ let active = state(true)</script>
            fresh context inside the child's skeletonable `<aside>`. */
         const Panel = `
             <script>import { state } from '@abide/abide/ui/state'
-let open = state(true)</script>
+import { props } from '@abide/abide/ui/props'
+import type { Snippet } from '@abide/abide/shared/snippet'
+let open = state(true)
+const { children } = props<{ children?: Snippet }>()</script>
             <aside class={open ? 'open' : 'shut'}>
                 {#if children}{children()}{:else}{#if open}<span>fallback</span>{/if}{/if}
             </aside>`
-        const server = (await component(Panel).render()) as SsrRender
-        const client = clientHtml((host) => component(Panel)(host))
+        // a real mount always supplies a props bag (even an empty one) — no route
+        // params, no passed children, matching a top-level component with none of either.
+        const server = (await component(Panel).render({})) as SsrRender
+        const client = clientHtml((host) => component(Panel)(host, {}))
         expect(client).toBe(server.html)
     })
 })

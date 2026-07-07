@@ -228,7 +228,7 @@ let count = state(0)</script>
        bag of the unconsumed props. */
     test('a props() rest binding lowers to restProps over the unconsumed keys', () => {
         const body = compileComponent(
-            `<script>const { foo, ...rest } = props()</script><i>{foo}</i>`,
+            `<script>import { props } from '@abide/abide/ui/props'\nconst { foo, ...rest } = props()</script><i>{foo}</i>`,
         )
         expect(body).toContain('const rest = $$restProps($props, ["foo"])')
         expect(body).toContain('const foo = $$scope().derive("foo", () => $props["foo"]?.())')

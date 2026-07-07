@@ -87,7 +87,8 @@ function findButton(node: { childNodes: { tagName?: string; childNodes?: unknown
 describe('component composition', () => {
     test('a child receives a reactive prop that updates from the parent', () => {
         const Greeting = component(`
-            <script>const { label } = props()</script>
+            <script>import { props } from '@abide/abide/ui/props'
+            const { label } = props()</script>
             <span>Hi {label}</span>
         `)
 
@@ -137,7 +138,8 @@ describe('component composition', () => {
 
     test('a static prop is passed through', () => {
         const Badge = component(`
-            <script>const { kind } = props()</script>
+            <script>import { props } from '@abide/abide/ui/props'
+            const { kind } = props()</script>
             <em>{kind}</em>
         `)
         const host = document.createElement('div')
@@ -147,7 +149,8 @@ describe('component composition', () => {
 
     test('a `props()` destructure default fills in for an absent prop', () => {
         const Badge = component(`
-            <script>const { lang = 'ts' } = props()</script>
+            <script>import { props } from '@abide/abide/ui/props'
+            const { lang = 'ts' } = props()</script>
             <em>{lang}</em>
         `)
         const absent = document.createElement('div')
@@ -161,7 +164,8 @@ describe('component composition', () => {
 
     test('a `props()` binding stays reactive and honours a rename', () => {
         const Greeting = component(`
-            <script>const { who: name = 'world' } = props()</script>
+            <script>import { props } from '@abide/abide/ui/props'
+            const { who: name = 'world' } = props()</script>
             <span>Hi {name}</span>
         `)
         const host = document.createElement('div')
@@ -209,7 +213,8 @@ describe('spread props', () => {
     /* The child reads each key as a normal prop, so any subset is supplied at once. */
     test('a `{...object}` spreads its keys onto the child', () => {
         const Card = component(`
-            <script>const { title, body } = props()</script>
+            <script>import { props } from '@abide/abide/ui/props'
+            const { title, body } = props()</script>
             <article>{title}: {body}</article>
         `)
         const host = document.createElement('div')
@@ -225,7 +230,8 @@ describe('spread props', () => {
        and a spread after an explicit prop wins. */
     test('source order resolves spread-vs-explicit overrides', () => {
         const Show = component(`
-            <script>const { value } = props()</script>
+            <script>import { props } from '@abide/abide/ui/props'
+            const { value } = props()</script>
             <em>{value}</em>
         `)
         const explicitWins = document.createElement('div')
@@ -248,7 +254,8 @@ describe('spread props', () => {
     /* A spread key stays live: mutating the source object's value re-renders the child. */
     test('a spread key stays reactive', () => {
         const Greeting = component(`
-            <script>const { name } = props()</script>
+            <script>import { props } from '@abide/abide/ui/props'
+            const { name } = props()</script>
             <span>Hi {name}</span>
         `)
         const host = document.createElement('div')
@@ -273,7 +280,8 @@ describe('spread props', () => {
        `{...rest}` forwards them onto a native element as attributes. */
     test('rest props forward onto a native element', () => {
         const Field = component(`
-            <script>const { label, ...rest } = props()</script>
+            <script>import { props } from '@abide/abide/ui/props'
+            const { label, ...rest } = props()</script>
             <input {...rest} />
         `)
         const host = document.createElement('div')
@@ -292,7 +300,8 @@ describe('spread props', () => {
     /* An `on<event>` handler in the rest bag wires as a listener on the native element. */
     test('a rest event handler attaches as a native listener', () => {
         const Clickable = component(`
-            <script>const { ...rest } = props()</script>
+            <script>import { props } from '@abide/abide/ui/props'
+            const { ...rest } = props()</script>
             <button {...rest}>go</button>
         `)
         const host = document.createElement('div')
@@ -307,16 +316,17 @@ describe('spread props', () => {
         expect(clicks).toBe(1)
     })
 
-    /* A spread source that happens to carry the internal `$children` slot key must not
+    /* A spread source that happens to carry the reserved `children` slot key must not
        surface it as slot content — the child keeps rendering its `{:else}` fallback. */
-    test('a spread carrying $children does not leak as slot content', () => {
+    test('a spread carrying children does not leak as slot content', () => {
         const Card = component(`
-            <script>const { title } = props()</script>
+            <script>import { props } from '@abide/abide/ui/props'
+            const { title, children } = props()</script>
             <article>{title} {#if children}{children()}{:else}fallback{/if}</article>
         `)
         const host = document.createElement('div')
         component(
-            `<script>const data = { title: 'Hi', $children: 'leak' }</script>
+            `<script>const data = { title: 'Hi', children: 'leak' }</script>
              <div><Card {...data} /></div>`,
             { Card },
         )(host)

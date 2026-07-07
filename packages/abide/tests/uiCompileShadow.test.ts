@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { compileShadow } from '../src/lib/ui/compile/compileShadow.ts'
 
 const SOURCE = `<script>import { state } from '@abide/abide/ui/state'
+import { props } from '@abide/abide/ui/props'
 
 import Child from './Child.abide'
 let count = state(0)
@@ -144,6 +145,7 @@ let rows = state<string[]>([])
 
     test('hoists component-local types above __Props so prop annotations resolve them', () => {
         const { code } = compileShadow(`<script>
+import { props } from '@abide/abide/ui/props'
 type FilePropertyName = 'audio' | 'size'
 const { property } = props<{ property: FilePropertyName }>()
 </script>
@@ -161,6 +163,7 @@ const { property } = props<{ property: FilePropertyName }>()
 
     test('hoists value consts above __Props so `keyof typeof` prop annotations resolve', () => {
         const { code } = compileShadow(`<script>
+import { props } from '@abide/abide/ui/props'
 const sizes = { sm: 'text-xs', md: 'text-sm' } as const
 const { size } = props<{ size: keyof typeof sizes }>()
 </script>

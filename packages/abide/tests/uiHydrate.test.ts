@@ -601,7 +601,8 @@ describe('hydrate — adopt server DOM', () => {
         const values = names.map((n) => runtime[n as keyof typeof runtime])
 
         // a child component with a prop, available as client mounter + SSR render
-        const childSource = `<script>const { label } = props()</script><span>Hi {label}</span>`
+        const childSource = `<script>import { props } from '@abide/abide/ui/props'
+const { label } = props()</script><span>Hi {label}</span>`
         const childClient = compileComponent(childSource)
         const childSsr = compileSSR(childSource)
         const greetingBuild = (host: Element, props?: unknown) => {
@@ -904,7 +905,11 @@ let name = state('world')</script><div><Greeting label={name} /></div>`
            slot. If SSR and client disagree on the row's wrapper contents, the row's inner
            skeleton claims an empty run → `resolveElementHole` throws → the enclosing await
            cold-rebuilds the whole subtree (the blink). */
-        const childSource = `<script>const { value } = props<{ value: unknown }>()</script><div data-value={value}>{children()}</div>`
+        const childSource = `<script>
+import { props } from '@abide/abide/ui/props'
+import type { Snippet } from '@abide/abide/shared/snippet'
+const { value, children } = props<{ value: unknown; children: Snippet }>()
+</script><div data-value={value}>{children()}</div>`
         const childClient = compileComponent(childSource)
         const childSsr = compileSSR(childSource)
         const baseRuntime = {
