@@ -6,6 +6,7 @@ import { appendText } from '../src/lib/ui/dom/appendText.ts'
 import { attr } from '../src/lib/ui/dom/attr.ts'
 import { awaitBlock } from '../src/lib/ui/dom/awaitBlock.ts'
 import { each } from '../src/lib/ui/dom/each.ts'
+import { hydrate } from '../src/lib/ui/dom/hydrate.ts'
 import { mount } from '../src/lib/ui/dom/mount.ts'
 import { text } from '../src/lib/ui/dom/text.ts'
 import { when } from '../src/lib/ui/dom/when.ts'
@@ -118,5 +119,85 @@ let show = state(true)</script>
         await flush()
 
         expect(host.textContent).not.toContain('LATE')
+    })
+
+    /* The backstop the generationGuard does not cover: a block whose anchor is pulled out
+       of the DOM by an ancestor removal that did NOT dispose this block's scope (so the
+       guard's generation is never bumped and `live()` still returns true). Reproduces the
+       field crash — a deep nested-await hydration where an aborted `adopt` → `rebuildCold`
+       removes an inner range while its in-flight promise stays live. `place` must drop the
+       settle instead of `insertBefore`-ing onto a detached anchor (NotFoundError, a
+       process-fatal unhandled rejection under Bun). Driven directly against the runtime
+       because the guard catches every teardown that goes through scope disposal. */
+    test('a settle onto a detached anchor is dropped, not a NotFoundError crash', async () => {
+        let resolveIt: (value: string) => void = () => {}
+        const host = document.createElement('div')
+        mount(host, (target) => {
+            /* Pending promise, no pending branch → the block detaches and parks an empty
+               text anchor in `target`. */
+            awaitBlock(
+                target,
+                1,
+                () => new Promise<string>((resolve) => (resolveIt = resolve)),
+                undefined,
+                (parent, value) => {
+                    const span = document.createElement('span')
+                    span.textContent = String((value as { value: unknown }).value)
+                    parent.appendChild(span)
+                },
+                undefined,
+                null,
+            )
+        })
+        /* Detach the parked anchor exactly as an ancestor `removeRange` would — WITHOUT
+           disposing the block's scope, so its guard stays live. */
+        const anchor = host.firstChild as ChildNode
+        anchor.remove()
+
+        resolveIt('LATE') // the late settle now lands on a dead anchor
+        await flush()
+
+        expect(host.textContent).not.toContain('LATE')
+    })
+
+    /* The root cause behind the detached-anchor settle: a hydration `adopt` whose build
+       throws (a claim desync — the guarded fallback firstHydrate recovers from via
+       `rebuildCold`) must dispose the partial branch scope it already created. Before the
+       fix the throw escaped `scope()`, stranding the disposer of any inner effect/guard the
+       partial build had spun up — a leaked, still-subscribed effect whose guard never bumps
+       (so a late settle stays "live" and lands on the now-detached anchor). Driven white-box:
+       a `renderThen` that creates an effect then throws on its FIRST (adopt) build and
+       succeeds on the `rebuildCold` rebuild, so exactly one live effect must remain. */
+    test('an adopt whose build throws disposes the partial branch scope (no leaked effect)', async () => {
+        const sig = state(0)
+        let runs = 0
+        let firstBuild = true
+        const renderThen = (host: Node): void => {
+            effect(() => {
+                void sig.value
+                runs += 1
+            })
+            if (firstBuild) {
+                firstBuild = false
+                throw new Error('adopt build desync')
+            }
+            host.appendChild(document.createTextNode('OK'))
+        }
+        const host = document.createElement('div')
+        /* A minimal server await boundary: open marker, close marker. The warm-sync value
+           `'V'` drives firstHydrate's adopt path; the build throws, so it recovers cold. */
+        host.innerHTML = '<!--abide:await:1--><!--/abide:await:1-->'
+        hydrate(host, (target) => {
+            awaitBlock(target, 1, () => 'V', undefined, renderThen as never, undefined, null)
+        })
+        await flush()
+        expect(host.textContent).toContain('OK') // recovered via rebuildCold
+
+        const before = runs
+        sig.value = 1
+        await flush()
+        /* Only the LIVE (rebuilt) effect re-runs; the partial-build effect was disposed. A
+           delta of 2 means the orphaned effect leaked. */
+        expect(runs - before).toBe(1)
     })
 })

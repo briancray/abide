@@ -89,6 +89,18 @@ export function awaitBlock(
        nested blocks — appends freely), the same create primitive the keyed-list runtimes use,
        which lands as a marker-bounded range the next swap detaches with `removeRange`. */
     const place = (build: (parent: Node) => void): void => {
+        /* Backstop for a settle whose anchor has been detached from the tree. The
+           generationGuard is the PRIMARY defense — it drops a late settle after the owner
+           tears down — but it only covers teardowns that dispose THIS block's scope. A
+           gap (e.g. a nested hydration `adopt` that aborts to `rebuildCold`, leaving the
+           inner block's range removed while its guard stays live) can still route a late
+           settle here with `anchor` already pulled out of the DOM. Inserting before a
+           node that is no longer a child of any parent throws a `NotFoundError` from
+           `insertBefore` — surfacing as a process-fatal unhandled rejection under Bun. A
+           detached anchor unambiguously means the block is gone, so drop the settle. */
+        if (anchor !== undefined && anchor.parentNode === null) {
+            return
+        }
         detach()
         const namespaceParent = anchor?.parentNode ?? parent
         const { start, end, fragment, dispose } = buildDetachedRange(namespaceParent, build)
@@ -166,18 +178,50 @@ export function awaitBlock(
         const cursor = hydration as NonNullable<typeof hydration>
         const firstAdopted = open?.nextSibling ?? null
         cursor.next.set(parent, firstAdopted)
-        const dispose = group.track(scope(() => build(parent)))
-        const close = claimChild(cursor, parent)
-        cursor.next.set(parent, close?.nextSibling ?? null)
-        /* Bracket the adopted nodes: `[` before the first claimed node (or before `close`
-           for an empty branch), `]` then the anchor just before `close`. */
-        const start = document.createComment(RANGE_OPEN)
-        parent.insertBefore(start, firstAdopted ?? close)
-        const end = document.createComment(RANGE_CLOSE)
-        parent.insertBefore(end, close)
-        anchor = document.createTextNode('')
-        parent.insertBefore(anchor, close)
-        active = { start, end, dispose }
+        /* Adoption is guarded (see firstHydrate): a build that can't claim the server
+           markup — a resume value that didn't round-trip, a nested-adopt claim desync —
+           throws, and the caller recovers via `rebuildCold`. But the partial build may have
+           already created a live sub-scope (an inner `await`'s effect/guard, a subscription)
+           before it threw; letting the throw escape `scope()` would strand that scope's
+           disposer (unreachable → never disposed), leaking the effect AND leaving its guard
+           un-bumped so a late settle stays "live". So capture the build's error, ALWAYS take
+           the returned disposer, and dispose it on ANY failure before rethrowing — `rebuildCold`
+           then starts from a clean slate. */
+        let dispose: (() => void) | undefined
+        try {
+            let buildFailed = false
+            let buildError: unknown
+            dispose = group.track(
+                scope(() => {
+                    try {
+                        build(parent)
+                    } catch (error) {
+                        buildFailed = true
+                        buildError = error
+                    }
+                }),
+            )
+            if (buildFailed) {
+                throw buildError
+            }
+            const close = claimChild(cursor, parent)
+            cursor.next.set(parent, close?.nextSibling ?? null)
+            /* Bracket the adopted nodes: `[` before the first claimed node (or before `close`
+               for an empty branch), `]` then the anchor just before `close`. */
+            const start = document.createComment(RANGE_OPEN)
+            parent.insertBefore(start, firstAdopted ?? close)
+            const end = document.createComment(RANGE_CLOSE)
+            parent.insertBefore(end, close)
+            anchor = document.createTextNode('')
+            parent.insertBefore(anchor, close)
+            active = { start, end, dispose }
+        } catch (error) {
+            /* `dispose` (the group-tracked wrapper) is idempotent; running it here tears the
+               partial branch scope down and drops it from the group so `rebuildCold` doesn't
+               inherit a stranded scope, then the caller's `catch` falls back to a cold build. */
+            dispose?.()
+            throw error
+        }
     }
 
     /* Discard the SSR boundary and (re)build the block from the live promise, fresh
