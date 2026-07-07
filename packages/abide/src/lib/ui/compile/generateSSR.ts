@@ -184,15 +184,17 @@ export function generateSSR(
         })
 
     /* Snippet names whose body produces an `await`, so the snippet must be an `async function`
-       and its `{name(...)}` call sites awaited: it inlines a child component / holds an await
-       block (a structural scan), OR it text-calls another async snippet. The latter is a
-       dependency between snippets, so resolve it to a fixpoint — seed with the structural set,
-       then keep adding any snippet that calls an already-async one until nothing changes. */
+       and its `{name(...)}` call sites awaited: it inlines a child component, holds an await
+       block, or emits a `{children()}` slot fill (all `await $props.$children()` in SSR) — a
+       structural scan — OR it text-calls another async snippet. The latter is a dependency
+       between snippets, so resolve it to a fixpoint — seed with the structural set, then keep
+       adding any snippet that calls an already-async one until nothing changes. */
     const subtreeAwaits = (children: TemplateNode[]): boolean =>
         children.some(
             (child) =>
                 child.kind === 'component' ||
                 child.kind === 'await' ||
+                (child.kind === 'element' && child.tag === 'slot') ||
                 ('children' in child && subtreeAwaits(child.children)),
         )
     const snippetDefs = new Map<string, TemplateNode[]>()
