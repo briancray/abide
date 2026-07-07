@@ -70,8 +70,9 @@ const prefix = '• '                       // closed over by the snippet below
 
 <!-- SnippetRows.abide: type the render prop off the Snippet brand -->
 <script>
+import { props } from '@abide/abide/ui/props'
 import type { Snippet } from '@abide/abide/shared/snippet'
-const { items, item } = props<{ items: string[]; item: (label: string) => Snippet<unknown> }>()
+const { items, item } = props<{ items: string[]; item: Snippet<[string]> }>()
 </script>
 <ul>
     {#for label of items by label} {item(label)} {/for}
@@ -99,7 +100,11 @@ const { items, item } = props<{ items: string[]; item: (label: string) => Snippe
 <Card title="Empty" />
 
 <!-- inside Card.abide -->
-<script>const { title = 'Card' } = props()</script>
+<script>
+import { props } from '@abide/abide/ui/props'
+import type { Snippet } from '@abide/abide/shared/snippet'
+const { title = 'Card', children } = props<{ title?: string; children?: Snippet }>()
+</script>
 <section>
     <h3>{title}</h3>
     {#if children}{children()}{:else}<p>empty</p>{/if}

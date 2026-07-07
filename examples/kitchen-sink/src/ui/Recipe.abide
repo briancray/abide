@@ -1,5 +1,6 @@
 <script>
 import { url } from '@abide/abide/shared/url'
+import { props } from '@abide/abide/ui/props'
 import CodeBlock from '$ui/CodeBlock.abide'
 import { type Lang } from '$server/rpc/highlightCode.ts'
 

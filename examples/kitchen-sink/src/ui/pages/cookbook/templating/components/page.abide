@@ -19,13 +19,15 @@ const LIVE = '/templating/snippets'
 <Recipe task="Pass props to a component" live={LIVE} code={`<Card title="Orders" count={orders.length} />`} note={'Attributes become props. Static strings pass as strings; `name={expr}` passes the value. Missing required props are a compile error.'} />
 
 <Recipe task="Read props with defaults" live={LIVE} code={`<script>
+    import { props } from '@abide/abide/ui/props'
     const { title = 'Card', count = 0 } = props()
-</script>`} note={'`props()` is ambient (no import). Destructure with defaults; add `...rest` to collect the remaining props.'} />
+</script>`} note={'`props` is imported from `@abide/abide/ui/props`. Destructure with defaults; add `...rest` to collect the remaining props.'} />
 
 <Recipe
     task="Type a component's props"
     live={LIVE}
     code={`<script>
+    import { props } from '@abide/abide/ui/props'
     const { title, count = 0 } = props<{ title: string; count?: number }>()
 </script>`}
     note={'Passing the type parameter to `props<T>()` type-checks every call site — required props, excess props, and handler signatures are all caught.'} />
@@ -98,7 +100,10 @@ const LIVE = '/templating/snippets'
 <Panel header={header} footer={footer} />
 
 <!-- inside Panel.abide -->
-<script>const { header, footer } = props()</script>
+<script>
+import { props } from '@abide/abide/ui/props'
+const { header, footer } = props()
+</script>
 <section>{header()}<div>{children()}</div>{footer()}</section>`}
     note={"There are no named slots — but a snippet is a value: pass one as a prop and the child calls it, capturing the parent's scope. That covers every multi-slot case, plus `{children()}` for the main body."} />
 
@@ -108,7 +113,10 @@ const LIVE = '/templating/snippets'
     code={`<Field value={name} onChange={(v) => (name = v)} />
 
 <!-- inside Field.abide -->
-<script>const { value, onChange } = props<{ value: string; onChange: (v: string) => void }>()</script>
+<script>
+import { props } from '@abide/abide/ui/props'
+const { value, onChange } = props<{ value: string; onChange: (v: string) => void }>()
+</script>
 <input value={value} oninput={(e) => onChange(e.target.value)} />`}
     note={'Value down, callback up. `on*` handlers on a component are real typed props (not passed through to a DOM node), so the signature is checked.'} />
 
@@ -122,6 +130,9 @@ const LIVE = '/templating/snippets'
 <Recipe
     task="Forward attributes and events to the child root"
     live={LIVE}
-    code={`<script>const { class: cls, ...rest } = props()</script>
+    code={`<script>
+import { props } from '@abide/abide/ui/props'
+const { class: cls, ...rest } = props()
+</script>
 <button class="btn {cls}" {...rest}>{children()}</button>`}
     note={'Collect leftover props with `...rest` and spread them onto the root element — `onclick`, `aria-*`, `data-*` all pass through to the real node.'} />

@@ -30,12 +30,12 @@ const areas = [
         One <code class="font-mono">&lt;script&gt;</code> (module scope; re-runs per render), markup
         with <code class="font-mono">{'{#…}'}</code> blocks and
         <code class="font-mono">{'{expr}'}</code> bindings, and an optional scoped
-        <code class="font-mono">&lt;style&gt;</code>. <code class="font-mono">props()</code> is in
-        scope without import; reactive primitives like <code class="font-mono">state</code> are
-        imported.
+        <code class="font-mono">&lt;style&gt;</code>. <code class="font-mono">props()</code> and
+        reactive primitives like <code class="font-mono">state</code> are both imported.
     </p>
     <div class="mt-3">
         <CodeBlock title="Greeting.abide — the whole shape" code={`<script>
+    import { props } from '@abide/abide/ui/props'
     import { state } from '@abide/abide/ui/state'
     const { name = 'world' } = props()
     let count = state(0)
