@@ -581,7 +581,13 @@ export function generateBuild(
         parentVar: string,
         before: string,
     ): string {
-        return `$$mountChild(${parentVar}, ${node.name}, ${propsArg(node)}, ${before}, ${JSON.stringify(node.name)});\n`
+        /* The tag lowers through `lowerExpression` like any other reference: a static
+           module import (`Button`) is left bare, but a reactive binding — a `{#for}`
+           item, an `await` `then` value, a component signal — derefs to its `.value`
+           cell, so `<Icon>` from `{#for {icon: Icon} of …}` mounts the component the cell
+           holds, not the cell object (whose `.build` is undefined → `build is not a
+           function`). SSR emits the same lowering for congruence. */
+        return `$$mountChild(${parentVar}, ${lowerExpression(node.name)}, ${propsArg(node)}, ${before}, ${JSON.stringify(node.name)});\n`
     }
 
     /* An await block: pending → resolved(value) / error branches. Each branch is a

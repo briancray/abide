@@ -430,7 +430,11 @@ export function generateSSR(
             return (
                 anchor +
                 push(target, RANGE_OPEN) +
-                `const ${result} = await ${node.name}.render(${propsExpr}, $ctx);\n` +
+                /* The tag lowers like any reference (see generateBuild): a static import
+                   is left bare, a reactive/loop/await binding derefs — SSR registers such
+                   a binding as `plain`, so it reads the bare local holding the resolved
+                   component, keeping SSR and client congruent. */
+                `const ${result} = await ${lowerExpression(node.name)}.render(${propsExpr}, $ctx);\n` +
                 `${target}.push(${result}.html);\n` +
                 `for (const $a of ${result}.awaits) { $awaits.push($a); }\n` +
                 `Object.assign($resume, ${result}.resume);\n` +
