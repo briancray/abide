@@ -61,11 +61,6 @@ export function signalRefsTransformer(
         ...derivedNames,
         ...computedNames,
         ...blockLocal,
-        /* The reserved slot reader (`{#if children}` → `$props?.$children`) is rewritten
-           through `referenceFor` like a signal, so it inherits the same lexical-scope
-           tracking: a `{#snippet row(children)}` arg, a `{#for children of …}` item, a
-           script param named `children` re-binds it for that subtree and is left untouched. */
-        'children',
         /* `scope` is the author-facing reactive entry (`scope().state(...)`), lowered to the
            reserved `$$scope` import so a user variable named `scope` can never collide — but
            shadowably: a `const scope`/param `scope` re-binds it for that subtree and is left
@@ -332,10 +327,11 @@ function functionParameters(node: ts.Node): ts.NodeArray<ts.ParameterDeclaration
 
 /* `$$model.<name>` for a state binding, `<name>()` for a computed doc-slot (the
    string-free reader `scope().derive` returns), `<name>.value` for a runtime cell
-   (linked / lens / transform-state), `$props?.$children` for the reserved slot reader,
-   else undefined. A `blockLocal` binding shadows any same-named component signal — it is
-   a nearer lexical scope — so it derefs as a cell (`<name>.value`) regardless of a
-   colliding `state`/`computed`/`derived`, and ahead of the `children` slot reader. */
+   (linked / lens / transform-state), else undefined. A `blockLocal` binding shadows
+   any same-named component signal — it is a nearer lexical scope — so it derefs as a
+   cell (`<name>.value`) regardless of a colliding `state`/`computed`/`derived`.
+   `children` is an ordinary destructured prop now — it rewrites via the `derivedNames`
+   branch below like any other, with no special case. */
 function referenceFor(
     name: string,
     stateNames: ReadonlySet<string>,
@@ -345,15 +341,6 @@ function referenceFor(
 ): ts.Expression | undefined {
     if (blockLocal.has(name)) {
         return ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier(name), 'value')
-    }
-    /* `{children()}` is a slot NODE the parser handles; any other bare `children` read
-       (notably `{#if children}`) is the reserved reader. `?.` guards a propless mount. */
-    if (name === 'children') {
-        return ts.factory.createPropertyAccessChain(
-            ts.factory.createIdentifier('$props'),
-            ts.factory.createToken(ts.SyntaxKind.QuestionDotToken),
-            ts.factory.createIdentifier('$children'),
-        )
     }
     /* The author-facing reactive entry `scope` lowers to its reserved `$$scope` import (the
        value read only — a `.scope` member or a shadowing local is never reached here). */
