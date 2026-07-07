@@ -24,8 +24,32 @@ function channelPatterns(): string | undefined {
     return undefined
 }
 
+/* One line for an AggregateError sub-error: its message, prefixed with the source
+   position when it carries one. A thrown `Bun.build` failure holds a `BuildMessage`
+   per diagnostic, each with a `position.file` — naming that file is the point, since
+   without it a codegen/parse failure reads as a detail-free "Bundle failed". */
+function formatAggregateEntry(entry: unknown): string {
+    if (typeof entry === 'object' && entry !== null && 'message' in entry) {
+        const message = String((entry as { message: unknown }).message)
+        const position = (entry as { position?: { file?: string; line?: number; column?: number } })
+            .position
+        if (position?.file) {
+            return `  ${position.file}:${position.line ?? 0}:${position.column ?? 0} — ${message}`
+        }
+        return `  ${message}`
+    }
+    return `  ${String(entry)}`
+}
+
 // Prefers a full stack trace when the value is an Error so logs include the call site.
+// An AggregateError (a thrown Bun.build failure among them) carries the real diagnostics
+// in `.errors` — its own message is only a summary ("Bundle failed") — so expand each one,
+// or every per-file position is dropped and the failure reads with zero detail.
 function errorParts(value: unknown): { msg: string; stack?: string } {
+    if (value instanceof AggregateError && value.errors.length > 0) {
+        const details = value.errors.map(formatAggregateEntry).join('\n')
+        return { msg: `${value.message}\n${details}` }
+    }
     if (value instanceof Error) {
         return { msg: value.message, stack: value.stack }
     }
