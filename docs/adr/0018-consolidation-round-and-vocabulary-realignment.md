@@ -72,7 +72,8 @@ skipped.
 
 | Wave | Change | Class | ⊕ Seam acceptance criteria |
 | --- | --- | --- | --- |
-| **0** | `buildArtifact`; `withoutClaimCursor`; split `cache.ts` (read core + ops) | SHIP | ⊕ the `Doc` bus emits **invertible** patches and exposes a **subscribable journal**, not just internal wake — round-trip test required |
+| **0** | `withoutHydration` (5→1); `buildArtifact` (build-or-die, 5→1) | SHIP ✅ | — |
+| **0′** | ~~split `cache.ts`~~ + `callRegistry` + the ⊕ invertible-`Doc`-journal seam | **DEFERRED** to the patch-bus round | moves there — ADR-0001's re-propose gate (a persistent store adapter) is that round, not now |
 | **1** | **One ownership tree** (supersedes 0012) | BIG-BET | ⊕ stable `ScopeContext.id` + a dev-gated `walkScopes()` read API |
 | **2** | `MarkerRange` + `RangeList` (fold the range zoo, `awaitBlock`/`each`/`eachAsync` reimplementations) | SHIP | guards are `MarkerRange` mechanics, not per-block logic |
 | **3** | Fan-out engine: project scan + delegating resolver; superset `describe()`; unconditional typing emit | SHIP | ⊕ the descriptor stays a **superset carrying the entry handle** — a 5th surface must be one new renderer with no `describe()` change |
@@ -225,6 +226,21 @@ vocabulary per wave as each rename lands.
   frozen standard name; the large unifications a broader review rejected (one
   registry substrate, a shared `keyedRange`, `awaitBlock` absorbed into a generic
   range).
+- **The `cache.ts` split is DEFERRED to the patch-bus round, not done now.**
+  On validation, `cache.ts` has a single export (`cache`, a function with
+  `.invalidate`/`.refresh`/`.patch`/`.peek`/`.on` attached inline; the public
+  `refresh`/`patch`/`peek` modules are already thin wrappers over it), so there is
+  no one-export-per-file violation, and `cache` is on the realignment's protected
+  list. Decisively, **ADR-0001 already declined extracting the cache lifecycle**
+  and named the exact re-propose trigger — "a persistent cache store with
+  different settle semantics" — which *is* the patch-bus / local-first store, a
+  future round. Splitting now would re-propose a declined change before its gate,
+  turn tightly-coupled lifecycle internals (`registerEntry`/`notify`/`emit`/
+  `fireRefetch`) into a cross-module API, and churn a hot path for ~0 net LOC. So
+  the split, the `cache`→`callRegistry` rename, and the invertible-`Doc`-journal
+  seam all move into the patch-bus round, shaped by the persistent store's real
+  requirements. Wave 0's *mechanical* work (withoutHydration, buildArtifact) is
+  therefore complete; BootShims and the cache split were its two non-survivors.
 - **`BootShims` (the `*Slot` boot-holder fold) was attempted and withdrawn.**
   The clean-room review's premise — "~16 loose `*Slot` singletons, each
   independently forgettable → one typed object kills the silent-gap class" —
