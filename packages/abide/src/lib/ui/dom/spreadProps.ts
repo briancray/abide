@@ -14,8 +14,7 @@ export function spreadProps(
 ): Record<string, () => unknown> {
     /* A spread key the merged bag exposes — present on the current source and not the
        reserved `children` slot key (a source carrying one must not become slot content). */
-    const carries = (key: string | symbol): boolean =>
-        key !== 'children' && key in (source() ?? {})
+    const carries = (key: string | symbol): boolean => key !== 'children' && key in (source() ?? {})
     return new Proxy(
         {},
         {

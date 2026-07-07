@@ -46,7 +46,9 @@ export async function renderChain(
     for (let index = 0; index < views.length; index += 1) {
         const view = views[index] as UiComponent
         const hasChild = index < views.length - 1
-        const props: UiProps = hasChild ? { ...paramThunks, children: () => CHILD_PRESENT } : paramThunks
+        const props: UiProps = hasChild
+            ? { ...paramThunks, children: () => CHILD_PRESENT }
+            : paramThunks
         renders.push(await view.render(props, ctx))
     }
     let html = renders[renders.length - 1]?.html ?? ''
