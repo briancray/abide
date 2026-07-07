@@ -547,21 +547,29 @@ export function generateBuild(
         return `$$switchBlock(${parentVar}, () => (${lowerExpression(node.subject)}), [${cases}], ${before});\n`
     }
 
-    /* A `{children()}` slot fill point: render the parent-provided content (`$children`).
-       A fallback is now an authored `{#if children}…{:else}…{/if}`, so the slot node never
-       carries children — the invoke is unconditional but guarded against a propless mount. */
+    /* A component `{children()}` fill point: mount the `children` prop (a `Snippet`) by
+       calling it and mounting the resulting value through the snippet interpolation path,
+       exactly as any `{snippet(args)}`. `lowerExpression('children()')` reads the destructured
+       `children` computed and calls it → a `SnippetValue`, which `appendText` routes to
+       `appendSnippet`. A fallback is now an authored `{#if children}…{:else}…{/if}`, so the slot
+       node carries no children. Layouts never reach here — their slots are rewritten to `outlet`
+       elements by `asOutlet`. */
     function generateSlot(
         _node: Extract<TemplateNode, { kind: 'element' }>,
         parentVar: string,
     ): string {
-        return `if ($props && $props.$children) { $props.$children(${parentVar}); }\n`
+        return `$$appendText(${parentVar}, () => (${lowerExpression('children()')}));\n`
     }
 
-    /* The child's slot content as a host-taking builder (`$children`), or undefined when
-       the component has no slotted children. */
+    /* Slot content as a zero-arg `Snippet` under the `children` key — a callable returning a
+       `$$snippet`-branded builder, so it unifies with a passed `children={snippet}` and mounts
+       through the standard snippet interpolation path. `composeProps` wraps it in the prop-bag
+       thunk, so the final bag value is `() => (Snippet callable)`. */
     function slotPart(node: Extract<TemplateNode, { kind: 'component' }>): string | undefined {
         const slotCode = generateChildren(node.children, '$slot')
-        return slotCode.trim() === '' ? undefined : `"$children": ($slot) => {\n${slotCode}}`
+        return slotCode.trim() === ''
+            ? undefined
+            : `"children": () => (() => $$snippet(($slot) => {\n${slotCode}}))`
     }
 
     /* The props bag a child mount receives — composed by the shared `composeProps` so the

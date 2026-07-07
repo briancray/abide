@@ -65,7 +65,12 @@ function component(
     return Object.assign(fn, { render: fn.render, build: fn })
 }
 
-const Box = `<div class="box">{children()}</div>`
+const Box = `<script>
+import { props } from '@abide/abide/ui/props'
+import type { Snippet } from '@abide/abide/shared/snippet'
+const { children } = props<{ children: Snippet }>()
+</script>
+<div class="box">{children()}</div>`
 
 const serialize = (host: unknown): string =>
     (globalThis as unknown as { serializeMiniDom: (h: unknown) => string }).serializeMiniDom(host)

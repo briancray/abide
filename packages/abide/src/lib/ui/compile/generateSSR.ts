@@ -404,19 +404,22 @@ export function generateSSR(
                records it reset, so its children emit no enclosing-skeleton anchors the client
                slot builder would lack. */
             const slotCode = generateInto(node.children, '$slot')
-            /* `$children` is an ASYNC builder the child `await`s at its `<slot>` position
-               (`generateSlot`), NOT a pre-resolved string. Pre-resolving here would run the
-               slot's `$ctx.next++` block ids BEFORE the child render's own, but the client
-               builds slot content lazily at the `<slot>` site — so a child with an await/try
-               before its `<slot>` would allocate ids in the opposite order and desync hydration.
-               Keeping the slot lazy makes the slot's ids draw at the `<slot>` site on both
-               sides. The builder shares the enclosing render's `$ctx`/`$awaits`/`$resume` (a
-               closure), so nested awaits register and number correctly during the child render.
-               A child with a `<slot>` is therefore always an async render. */
+            /* Slot content rides the `children` prop key as a `Snippet`: a zero-arg callable
+               returning an ASYNC builder the child `await`s at its `{children()}` position
+               (`generateSlot`), whose resolved value is a `$snip`-branded string — so it renders
+               through the same `$text` snippet-marker path as any `{snippet(args)}` and unifies
+               with a passed `children={snippet}`. It is NOT pre-resolved: pre-resolving here would
+               run the slot's `$ctx.next++` block ids BEFORE the child render's own, but the client
+               builds slot content lazily at the `{children()}` site — so a child with an await/try
+               before its slot would allocate ids in the opposite order and desync hydration.
+               Keeping the slot lazy draws its ids at the `{children()}` site on both sides. The
+               builder shares the enclosing render's `$ctx`/`$awaits`/`$resume` (a closure), so
+               nested awaits register and number correctly during the child render. A child with a
+               slot fill is therefore always an async render. */
             const slotPart =
                 slotCode.trim() === ''
                     ? undefined
-                    : `"$children": async () => { const $slot = []; ${slotCode}return $slot.join(''); }`
+                    : `"children": () => (async () => { const $slot = []; ${slotCode}return $snip($slot.join('')); })`
             /* The same last-wins layering the client build emits (`composeProps`), so SSR
                and hydration read the same prop bag. */
             const propsExpr = composeProps(node.props, lowerExpression, slotPart)
@@ -572,26 +575,23 @@ export function generateSSR(
         return code
     }
 
-    /* A `<slot>` outlet: emit the parent-provided content (`$children`), falling back to the
-       slot's own children when none was supplied. Inside a skeleton the slot is positioned
-       by an `<!--a-->` anchor and its content bounded by a `[ … ]` range (matching the
-       client's `mountSlot`), so it can sit among static siblings. The fallback is a fresh,
-       non-skeleton build context — the client builds it via `mountSlot`/`fillBefore`, not the
-       skeleton clone — so its reactive text takes no anchor (`skeletonContext` records the
-       fallback children reset). */
+    /* A component `{children()}` fill point: render the `children` prop (a `Snippet`) as a
+       snippet text part. `children()()` reads the destructured `children` computed and calls
+       it → a Promise of a `$snip`-branded string; `await` it and push through `$text`, which
+       wraps the branded string in `<!--abide:snippet-->` markers — the same range the client's
+       appendText→appendSnippet emits and claims, so hydration stays congruent. Inside a skeleton
+       the slot is positioned by an `<!--a-->` anchor and bounded by a `[ … ]` range (matching the
+       client's `mountSlot`); outside one it emits just the snippet markers (matching the client's
+       direct `appendText`). The `await` makes a component with a slot an async render (its caller
+       already `await`s `render()`). A fallback is now an authored `{#if children}…{:else}…{/if}`,
+       so the slot node carries no children. */
     function generateSlot(
         node: Extract<TemplateNode, { kind: 'element' }>,
         target: string,
         anchor: string,
     ): string {
         const wrap = inSkeleton.get(node)
-        /* `$children` is an async builder the parent passes lazily; `await` it here so the
-           slot content's block ids allocate AT the slot position — the same order the
-           client builds slot content — keeping hydration congruent. The `await` makes a
-           component with a slot an async render (its caller already `await`s `render()`).
-           A fallback is now an authored `{#if children}…{:else}…{/if}`, so the slot node
-           carries no children. */
-        const body = `if ($props && $props.$children) { ${target}.push(await $props.$children()); }\n`
+        const body = `${target}.push($text(await (${lowerExpression('children()')})));\n`
         if (!wrap) {
             return body
         }

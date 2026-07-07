@@ -84,7 +84,12 @@ skeletonable parent (a reactive-attr element) â€” the only place a leak shows â€
 server markup equals serialized client DOM. A regression on any back-end fails here.
 */
 describe('skeleton-context parity across fresh-context boundaries', () => {
-    const Box = `<div class="box">{children()}</div>`
+    const Box = `<script>
+import { props } from '@abide/abide/ui/props'
+import type { Snippet } from '@abide/abide/shared/snippet'
+const { children } = props<{ children: Snippet }>()
+</script>
+<div class="box">{children()}</div>`
 
     const cases: Array<{ name: string; source: string }> = [
         {

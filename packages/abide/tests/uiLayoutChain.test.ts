@@ -114,7 +114,11 @@ describe('layout compiler outlet', () => {
 
     test('a non-layout component keeps {children()} as a passed-children slot', () => {
         const { code: module } = compileModule('<div>{children()}</div>', { isLayout: false })
-        expect(module).toContain('$props.$children')
+        // the slot rides the `children` prop and mounts through the snippet interpolation
+        // path (`mountSlot`/`appendText`), not the retired `$props.$children` wire — and it is
+        // NOT rewritten to a router `outlet` the way a layout's `{children()}` is.
+        expect(module).toContain('mountSlot')
+        expect(module).not.toContain('$props.$children')
         expect(module).not.toContain('abide:outlet')
     })
 

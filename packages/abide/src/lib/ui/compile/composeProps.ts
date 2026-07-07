@@ -11,8 +11,9 @@ SSR/client prop congruence rests on. No spread → the plain object literal of n
 value thunks (+ the trailing slot). With a `{...expr}` spread → a `mergeProps` of
 ordered layers — explicit-prop runs, `$$spreadProps(expr)` spreads, the slot —
 resolved last-wins per key, so source order decides overrides (like JSX).
-`lowerExpression` is the caller's expression lowering; `slotPart` is its `$children`
-layer (a host-taking builder for the client, a string-returning thunk for SSR) or
+`lowerExpression` is the caller's expression lowering; `slotPart` is its `children`
+layer — slotted content as a `Snippet` under the `children` prop key (a builder-
+returning callable for the client, a `$snip`-string-returning callable for SSR) — or
 undefined when the component has no slotted children.
 */
 export function composeProps(

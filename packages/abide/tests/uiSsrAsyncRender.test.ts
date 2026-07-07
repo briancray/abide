@@ -350,7 +350,10 @@ describe('slot content shares the page block-id counter (depth-first)', () => {
        order — so the resume manifest mis-keyed and hydration adopted the wrong branch. */
     test('the child await numbers before the slot await', async () => {
         const Child = component(`
-            <script>let load = () => Promise.resolve('CV')</script>
+            <script>import { props } from '@abide/abide/ui/props'
+import type { Snippet } from '@abide/abide/shared/snippet'
+let load = () => Promise.resolve('CV')
+const { children } = props<{ children: Snippet }>()</script>
             <div>
                 {#await load() then v}<b>{v}</b>{/await}
                 {children()}

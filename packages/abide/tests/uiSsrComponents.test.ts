@@ -95,7 +95,12 @@ let name = state('world')</script>
            server run and an inner skeleton's element hole walked off the end at hydrate.
            The parent's reactive `class` makes `<section>` skeletonable; `Box`'s slot holds a
            control-flow block, the exact shape that leaked. */
-        const Box = component(`<div class="box">{children()}</div>`)
+        const Box = component(`<script>
+import { props } from '@abide/abide/ui/props'
+import type { Snippet } from '@abide/abide/shared/snippet'
+const { children } = props<{ children: Snippet }>()
+</script>
+<div class="box">{children()}</div>`)
         const parentSource = `
             <script>import { state } from '@abide/abide/ui/state'
 let active = state(true)</script>

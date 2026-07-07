@@ -116,6 +116,60 @@ let name = state('world')</script>
     })
 })
 
+/* The migrated authoring form: a slotted component destructures `children` from `props`
+   and mounts it with `{children()}`. Slot content rides the ordinary `children` prop key as
+   a `Snippet`, so `<Card>slot</Card>` and `<Card children={aSnippet} />` reach the same fill
+   point, and SSR/client stay congruent (snippet-marker-bounded on both sides). */
+describe('slots ride the children prop (migrated form)', () => {
+    const serialize = (host: unknown): string =>
+        (globalThis as unknown as { serializeMiniDom: (h: unknown) => string }).serializeMiniDom(
+            host,
+        )
+
+    const Card = `<script>
+import { props } from '@abide/abide/ui/props'
+import type { Snippet } from '@abide/abide/shared/snippet'
+const { children } = props<{ children: Snippet }>()
+</script>
+<div class="card">{#if children}{children()}{/if}</div>`
+
+    test('slotted content mounts through the children prop, not $children', () => {
+        const host = document.createElement('div')
+        component(`<Card>hello</Card>`, { Card: component(Card) })(host)
+        expect(serialize(host)).toContain('hello')
+        // the parent-passing side no longer wires slot content under the `$children` key
+        expect(compileComponent(`<Card>hello</Card>`)).not.toContain('$children')
+        // and the child no longer reads a `$props.$children` slot
+        expect(compileComponent(Card)).not.toContain('$children')
+    })
+
+    test('children={aSnippet} reaches the same fill point as slotted content', () => {
+        const withSnippet = `{#snippet greeting()}hello{/snippet}<Card children={greeting} />`
+        const withSlot = `<Card>hello</Card>`
+        const a = document.createElement('div')
+        const b = document.createElement('div')
+        component(withSnippet, { Card: component(Card) })(a)
+        component(withSlot, { Card: component(Card) })(b)
+        // both mount the same snippet-marker-bounded content at the child's `{children()}`
+        expect(serialize(a)).toContain('<!--abide:snippet-->hello<!--/abide:snippet-->')
+        expect(serialize(b)).toContain('<!--abide:snippet-->hello<!--/abide:snippet-->')
+    })
+
+    test('SSR markup equals the client DOM for a slotted component (congruence)', async () => {
+        const host = document.createElement('div')
+        component(`<Card>hello</Card>`, { Card: component(Card) })(host)
+        const client = serialize(host)
+        const server = await component(`<Card>hello</Card>`, { Card: component(Card) }).render()
+        // the hydration guarantee: same markers, same order, both sides
+        expect(client).toBe(server.html)
+        expect(server.html).toBe(
+            '<!--[--><div class="card"><!--a-->' +
+                '<!--[--><!--abide:snippet-->hello<!--/abide:snippet--><!--]-->' +
+                '</div><!--]-->',
+        )
+    })
+})
+
 describe('page params via props()', () => {
     test('a page reads route params through props() (client + SSR)', async () => {
         const Page = `<script>const { id } = props()</script><p>{id}</p>`
