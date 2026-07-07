@@ -5,6 +5,7 @@ import { RENDER } from '../runtime/RENDER.ts'
 import { scope } from '../runtime/scope.ts'
 import { scopeGroup } from '../runtime/scopeGroup.ts'
 import type { State } from '../runtime/types/State.ts'
+import { withoutHydration } from '../runtime/withoutHydration.ts'
 import { state } from '../state.ts'
 import { buildDetachedRange } from './buildDetachedRange.ts'
 import { moveRange } from './moveRange.ts'
@@ -144,11 +145,9 @@ export function each<T>(
            write that reconciles *mid-hydrate* (RENDER.hydration still active — e.g. a
            page setting shared state during the hydrate pass) would otherwise make
            buildRow and its inner row render claim SSR nodes that don't exist for a
-           freshly keyed row. The same `next` Map is restored, so the outer hydration
-           cursor is untouched (mirrors awaitBlock/tryBlock). */
-        const previousHydration = RENDER.hydration
-        RENDER.hydration = undefined
-        try {
+           freshly keyed row. withoutHydration restores the outer cursor after, so the
+           enclosing hydrate pass is untouched (mirrors awaitBlock/tryBlock). */
+        withoutHydration(() => {
             const list = Array.isArray(source) ? source : [...source]
             const keys = list.map(keyOf)
             generation += 1
@@ -207,8 +206,6 @@ export function each<T>(
                 placeBefore(row, cursor)
                 cursor = row.start
             }
-        } finally {
-            RENDER.hydration = previousHydration
-        }
+        })
     })
 }

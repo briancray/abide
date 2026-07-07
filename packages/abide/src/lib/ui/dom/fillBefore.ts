@@ -1,5 +1,5 @@
-import { RENDER } from '../runtime/RENDER.ts'
 import { scope } from '../runtime/scope.ts'
+import { withoutHydration } from '../runtime/withoutHydration.ts'
 import { enterNamespace } from './enterNamespace.ts'
 
 /*
@@ -29,15 +29,14 @@ export function fillBefore(end: Node, content: (into: Node) => void): () => void
         return () => {}
     }
     const fragment = document.createDocumentFragment()
-    const previousHydration = RENDER.hydration
-    RENDER.hydration = undefined
-    try {
+    /* `fillBefore` is exclusively the CREATE path, so build with the claim cursor
+       cleared (see withoutHydration): a rebuild that runs mid-hydrate must not claim
+       SSR nodes that don't exist for this fresh content. */
+    return withoutHydration(() => {
         /* Build under the insertion parent's foreign namespace (if any), so foreign
            elements built into the fragment are namespaced off `end`'s live parent. */
         const dispose = enterNamespace(end.parentNode ?? end, () => scope(() => content(fragment)))
         ;(end.parentNode ?? end).insertBefore(fragment, end)
         return dispose
-    } finally {
-        RENDER.hydration = previousHydration
-    }
+    })
 }

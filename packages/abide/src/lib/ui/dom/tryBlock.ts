@@ -2,6 +2,7 @@ import { claimExpected } from '../runtime/claimExpected.ts'
 import { OWNER } from '../runtime/OWNER.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { scopeGroup } from '../runtime/scopeGroup.ts'
+import { withoutHydration } from '../runtime/withoutHydration.ts'
 import { discardBoundary } from './discardBoundary.ts'
 import { enterNamespace } from './enterNamespace.ts'
 
@@ -74,15 +75,11 @@ export function tryBlock(
             if (renderCatch === undefined) {
                 throw error
             }
-            const previous = RENDER.hydration
-            RENDER.hydration = undefined
-            try {
+            withoutHydration(() => {
                 const fragment = document.createDocumentFragment()
                 enterNamespace(parent, () => guard(() => renderCatch(fragment, error)))
                 parent.insertBefore(fragment, after)
-            } finally {
-                RENDER.hydration = previous
-            }
+            })
         }
         return
     }

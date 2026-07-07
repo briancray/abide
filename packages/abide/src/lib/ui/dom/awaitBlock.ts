@@ -9,6 +9,7 @@ import { RESUME } from '../runtime/RESUME.ts'
 import { scope } from '../runtime/scope.ts'
 import { scopeGroup } from '../runtime/scopeGroup.ts'
 import type { State } from '../runtime/types/State.ts'
+import { withoutHydration } from '../runtime/withoutHydration.ts'
 import { state } from '../state.ts'
 import { buildDetachedRange } from './buildDetachedRange.ts'
 import { discardBoundary } from './discardBoundary.ts'
@@ -242,13 +243,7 @@ export function awaitBlock(
         )
         anchor = document.createTextNode('')
         parent.insertBefore(anchor, after)
-        const previous = RENDER.hydration
-        RENDER.hydration = undefined
-        try {
-            render(promiseThunk())
-        } finally {
-            RENDER.hydration = previous
-        }
+        withoutHydration(() => render(promiseThunk()))
     }
 
     /* The first run when hydrating: adopt by precedence (resume / warm-sync), else
@@ -332,15 +327,9 @@ export function awaitBlock(
         anchor = document.createTextNode('')
         parent.insertBefore(anchor, after)
         /* The boundary's server nodes are gone, so the pending branch builds FRESH — clear
-           the claim cursor (mirrors `rebuildCold`) so its `cloneStatic`/text don't try to
+           the claim cursor (see withoutHydration) so its `cloneStatic`/text don't try to
            claim discarded nodes and silently render nothing. */
-        const previous = RENDER.hydration
-        RENDER.hydration = undefined
-        try {
-            render(result)
-        } finally {
-            RENDER.hydration = previous
-        }
+        withoutHydration(() => render(result))
     }
 
     effect(() => {
