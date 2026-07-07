@@ -130,11 +130,16 @@ component you read and write state as plain variables. The same file renders on
 the server — blocking awaits inline, streaming awaits out of order, cached
 reads seeded warm — and hydrates in the browser.
 
-A child component renders whatever you nest in it at `{children()}`:
+Nested content becomes the component's `children` prop — an ordinary declared
+prop of type `Snippet` — and renders wherever the component calls
+`{children()}`:
 
 ```html
 <script>
-    const { title } = props()
+    import { props } from '@abide/abide/ui/props'
+    import type { Snippet } from '@abide/abide/shared/snippet'
+
+    const { title, children } = props<{ title: string; children?: Snippet }>()
 </script>
 
 <section>
@@ -160,9 +165,10 @@ template grammar:
     import { state } from '@abide/abide/ui/state'
     import { watch } from '@abide/abide/ui/watch'
     import { html } from '@abide/abide/ui/html'
+    import { props } from '@abide/abide/ui/props'
     import Panel from '$ui/components/Panel.abide'
 
-    const { room = 'lobby' } = props()
+    const { room = 'lobby' } = props<{ room?: string }>()
 
     let draft = state('')
     let author = state('anon')

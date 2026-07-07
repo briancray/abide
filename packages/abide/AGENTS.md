@@ -189,7 +189,7 @@ cells read/written through `.value`.
 | `state.share(key, value)` / `state.shared(key)` | members of `state` | Put a named value on the ambient scope / read the closest ancestor's |
 | `watch(source, handler)` | `@abide/abide/ui/watch` | The single reaction primitive (client-only, stripped from SSR). Sources: a bare thunk `watch(() => …)` (auto-tracked effect), a state cell, a cell array, a socket/stream (`handler(frame)` per frame with reconnect replay), an rpc (`watch(fn, args?, handler)` — runs the smart read, `handler(value)` on each change). Returns a scope-tied disposer |
 | `html(str)` / `` html`…` `` | `@abide/abide/ui/html` | Brands trusted raw HTML so `{expr}` inserts nodes instead of escaped text; plain `{value}` always escapes |
-| `props()` | ambient (no import) | The prop reader: `const { name = fallback, ...rest } = props()`; a page's props are its route params |
+| `props()` | `@abide/abide/ui/props` | The prop reader, resolved by import binding (alias-safe) like `state`: `const { name = fallback, ...rest } = props()`; a page/layout's declared props are additive with its route-param shape. `children` is an ordinary declared prop (`const { children } = props<{ children: Snippet }>()`), not ambient |
 
 Bindings and directives (the attribute kinds `readAttributes` parses):
 
@@ -221,9 +221,15 @@ error):
 | `{#snippet name(args)}…{/snippet}` | Declares a reusable builder, called as an interpolation: `{name(args)}`; a snippet value passes through props like any other value |
 
 Components are capitalised tags (`<Panel prop={x}>…</Panel>`); nested content
-renders where the component calls `{children()}` — the single fill point
-(`{#if children}{children()}{:else}…{/if}` for a fallback; there are no named
-slots and no `<slot>` element). A layout's `{children()}` is the route outlet.
+becomes the component's `children` prop — an ordinary declared prop of type
+`Snippet`, read with `const { children } = props<{ children: Snippet }>()`
+and called as `{children()}` — the single fill point (`{#if children}
+{children()}{:else}…{/if}` for a fallback; there are no named slots and no
+`<slot>` element). Slotted content (`<Panel>…</Panel>`) and an explicit
+`children={aSnippet}` attribute set the same prop — slotted content rides in
+as the trailing prop layer, so it wins over an explicit `children` attribute
+on the same tag (`mergeProps`, last layer wins per key). A layout's
+`{children()}` is the route outlet.
 
 `<script>` and `<style>` are **not component-root-only**: either may sit
 inside a control-flow branch, scoped to that branch. A nested `<script>`
@@ -233,8 +239,9 @@ there — imports live in the leading `<script>`). A **root** `<style>` is
 component-scoped; a nested `<style>` scopes to its sibling subtree only.
 
 Removed forms throw migration errors at parse time: the `<slot>` element (use
-`{children()}`), `<template name>` snippets (use `{#snippet}`), and all
-`<template if/each/await/switch/…>` control flow (use `{#…}` blocks).
+a declared `children: Snippet` prop, called `{children()}`), `<template
+name>` snippets (use `{#snippet}`), and all `<template
+if/each/await/switch/…>` control flow (use `{#…}` blocks).
 
 ## Server surface — `abide/server/*`
 
@@ -325,7 +332,7 @@ Probes report, never act — reading one opens no fetch and no stream.
 
 ### Templating — `@documentation templating`
 
-- `@abide/abide/shared/snippet` — `snippet(payload)`: brands a snippet payload so a `{expr}` interpolation mounts it (client: a DOM builder; server: the rendered string); the compiler wraps `{#snippet}` bodies in this. Also exports the `Snippet<P>` type and `snippetPayload(value)` (the payload, or undefined for plain values).
+- `@abide/abide/shared/snippet` — `snippet(payload)`: brands a snippet payload so a `{expr}` interpolation mounts it (client: a DOM builder; server: the rendered string); the compiler wraps `{#snippet}` bodies in this. Also exports the `Snippet<Args>` type — a callable `(...args: Args) => SnippetValue`, generic over its call arguments (`children` is `Snippet`, invoked `children()`; a row snippet is `Snippet<[Item]>`, invoked `row(item)`) — plus `SnippetValue` (the internal payload brand) and `snippetPayload(value)` (a branded value's payload, or undefined for plain values).
 
 ### Shared plumbing — `@documentation plumbing`
 
@@ -337,6 +344,7 @@ Probes report, never act — reading one opens no fetch and no stream.
 
 - `@abide/abide/ui/state` — the `state` primitive: `state(initial, transform?)` writable cell, `state.computed(fn)` read-only derived, `state.linked(fn, transform?)` writable-reseeded, `state.share(key, value)` / `state.shared(key)` ambient context. In `.abide` files the compiler lowers reads/writes to plain variable syntax; in `.ts` the cell is read/written through `.value`.
 - `@abide/abide/ui/watch` — `watch(source, handler)`: the single reaction primitive over a thunk, cell, cell array, socket/stream, or rpc (see the grammar table). Client-only; the compiler strips author calls from SSR, and the `socket.watch` / `fn.watch` instance sugar is SSR-inert.
+- `@abide/abide/ui/props` — `props<T>()`: the prop reader, resolved by import binding (alias-safe) like `state`; a required import — there is no ambient `props()`. Destructure declared props off it (`const { name, ...rest } = props<T>()`); a page/layout's declared `T` is additive with its auto-typed route-param shape. `children` is an ordinary declared prop, not ambient: `const { children } = props<{ children: Snippet }>()` (`Snippet` from `@abide/abide/shared/snippet`).
 
 ### Templating — `@documentation templating`
 
