@@ -22,8 +22,10 @@ OMITTED (see `shadowPreamble`) to avoid a duplicate identifier. Otherwise
 `state`/`linked`/`computed` are declared ambiently and `effect` is imported as a fallback
 for a bare/nested use the top-level rewrite doesn't project (unused when projected — fine,
 the shadow disables noUnusedLocals). `props` is the prop reader — destructured
-(`const { a = 1 } = props<Shape>()`); declared returning its type argument (default
-`Record<string, any>`) so each binding inherits its prop type and its `= default` narrows.
+(`const { a = 1 } = props<Shape>()`); a required import (`abide/ui/props`), so the shadow
+declares it only when imported, returning the file's contextual shape (route params or
+`Record<string, any>`) intersected with its own type argument — additive, so declared props
+like `children: Snippet` layer on top instead of re-spelling the route shape.
 */
 function shadowPreamble(importedReactives: ReadonlySet<string>): string {
     /* Omit the ambient fallback for a primitive the author imports — its own binding is
