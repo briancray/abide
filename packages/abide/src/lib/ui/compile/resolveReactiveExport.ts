@@ -9,9 +9,7 @@ export type ReactivePrimitive = 'state' | 'linked' | 'computed' | 'effect' | 'wa
 
 /* The `abide/ui/*` specifier each importable reactive primitive is published at,
    mapped to its canonical name. Built from the package name so a rename is one edit.
-   `linked`/`computed` are members of `state`, not standalone imports; `props` is
-   ambient sugar today (no module) — kept here so a future `abide/ui/props` resolves
-   with no code change. */
+   `linked`/`computed` are members of `state`, not standalone imports. */
 const REACTIVE_SPECIFIERS: Record<string, ReactivePrimitive> = {
     [`${ABIDE_PACKAGE_NAME}/ui/state`]: 'state',
     [`${ABIDE_PACKAGE_NAME}/ui/effect`]: 'effect',
@@ -39,6 +37,7 @@ export const NESTED_REACTIVE_BINDINGS: ReactiveImportBindings = {
         ['state', 'state'],
         ['effect', 'effect'],
         ['watch', 'watch'],
+        ['props', 'props'],
     ]),
     stateRoots: new Set(['state']),
 }
@@ -70,9 +69,7 @@ export function reactiveImportBindings(source: ts.SourceFile): ReactiveImportBin
     return { direct, stateRoots }
 }
 
-/* The reactive primitive a call's callee resolves to, or undefined. A bare `props`
-   identifier is always the ambient prop reader — the one primitive with no runtime module
-   (pure compiler sugar), so it resolves with no import. Every other bare identifier
+/* The reactive primitive a call's callee resolves to, or undefined. Every bare identifier
    resolves through the direct import bindings (alias-safe); a `stateRoot.linked` /
    `.computed` member call resolves off a local bound to `state`. Every other callee is
    undefined (a user's own function, an unrelated member access). */
@@ -81,7 +78,7 @@ export function resolveReactiveExport(
     bindings: ReactiveImportBindings,
 ): ReactivePrimitive | undefined {
     if (ts.isIdentifier(callee)) {
-        return callee.text === 'props' ? 'props' : bindings.direct.get(callee.text)
+        return bindings.direct.get(callee.text)
     }
     if (
         ts.isPropertyAccessExpression(callee) &&

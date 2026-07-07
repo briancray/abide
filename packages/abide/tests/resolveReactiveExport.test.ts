@@ -67,4 +67,12 @@ describe('resolveReactiveExport — import-binding resolution, checker-free', ()
     test('a non-state root member call does not resolve', () => {
         expect(resolve(`const obj = { computed(){} }\nobj.computed()`)).toBeUndefined()
     })
+
+    test('bare unimported props does NOT resolve', () => {
+        expect(resolve(`const { a } = props()`)).toBeUndefined()
+    })
+
+    test('an imported props resolves (alias-safe)', () => {
+        expect(resolve(`import { props as p } from '@abide/abide/ui/props'\np()`)).toBe('props')
+    })
 })
