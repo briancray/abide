@@ -277,6 +277,26 @@ describe('compiled layout round-trip', () => {
         expect(serialize(host)).toBe(ssr.html)
     })
 
+    test('a layout {#if children} reads truthy with a child layer, falsy without — through the real router/renderChain thunk-wrap', async () => {
+        /* Regression for the `() => CHILD_PRESENT` thunk-wrap in renderChain.ts/router.ts:
+           a hand-built `$props` bag can't catch a revert to a raw (uncalled) sentinel, since
+           the destructure lowering CALLS every bag entry — this drives the real compiled
+           template + renderChain path end to end. `{children()}` (the outlet) and
+           `{#if children}` (the presence read) coexist in one layout. */
+        const source =
+            "<script>\nimport { props } from '@abide/abide/ui/props'\nconst { children } = props()\n</script>\n<div>{#if children}[has-child]{:else}[leaf]{/if}{children()}</div>"
+        const layout = compiled(source, true)
+        const page = compiled('<main>page</main>', false)
+
+        const withChild = await renderChain([layout, page], {})
+        expect(withChild.html).toContain('[has-child]')
+        expect(withChild.html).not.toContain('[leaf]')
+
+        const leaf = await renderChain([layout], {})
+        expect(leaf.html).toContain('[leaf]')
+        expect(leaf.html).not.toContain('[has-child]')
+    })
+
     test('hydration claims the outlet boundary in place, leaving the page nodes for the page', async () => {
         const layout = compiled('<div class="shell">[shell]{children()}</div>', true)
         const page = compiled('<main>page</main>', false)
