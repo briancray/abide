@@ -3,7 +3,7 @@ import type { UiProps } from '../runtime/types/UiProps.ts'
 /*
 Composes a child's props from ordered layers — explicit prop runs (`{ name: () =>
 value }` thunk maps), `{...spread}` layers (`spreadProps`), and a trailing slot
-layer (`$children`) — into one prop bag, last layer wins per key (source order, like
+layer (`children`) — into one prop bag, last layer wins per key (source order, like
 JSX). A key resolves by scanning layers in reverse for the first that carries it, so
 an explicit prop after a spread overrides it and vice-versa. Emitted only when a
 component carries a spread; the plain object literal stays the path otherwise.

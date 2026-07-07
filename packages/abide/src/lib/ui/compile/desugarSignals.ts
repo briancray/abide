@@ -430,7 +430,7 @@ function propsStatements(
                 ),
             )
         }
-        /* The rest bag gathers every prop not named above (and not `$children`). */
+        /* The rest bag gathers every prop not named above (and not `children`). */
         if (rest !== undefined) {
             const consumed = propBindings.map((binding) => factory.createStringLiteral(binding.key))
             statements.push(

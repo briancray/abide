@@ -27,7 +27,7 @@ when a caller (a test, a top-level render) omits it.
 
 The body is wrapped in an ASYNC IIFE (returns `Promise<SsrRender>`) ONLY when it contains
 an inline `await` — a blocking `{#await … then}` block, a child-component render, a `<slot>`
-read (its `$children` builder is async), or a top-level `await` in the author script. A
+read (its `children` builder is async), or a top-level `await` in the author script. A
 purely synchronous / streaming-await / try-only component returns `SsrRender` directly. The
 framework always `await`s `render()`, so production is uniform either way; the sync return
 keeps static pages off the microtask queue and leaves the bulk of the SSR tests synchronous.

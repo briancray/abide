@@ -402,11 +402,11 @@ describe('readCall guards a non-callable member (#6)', () => {
 })
 
 describe('restProps tolerates plain-value props (#9)', () => {
-    test('child thunk props unwrap; consumed and $children are excluded', () => {
-        const rest = restProps({ a: () => 1, b: () => 2, $children: () => 'x' } as never, ['a'])
+    test('child thunk props unwrap; consumed and children are excluded', () => {
+        const rest = restProps({ a: () => 1, b: () => 2, children: () => 'x' } as never, ['a'])
         expect(rest.b).toBe(2)
         expect('a' in rest).toBe(false)
-        expect('$children' in rest).toBe(false)
+        expect('children' in rest).toBe(false)
     })
     test('a page/layout plain-string param map is returned as-is, not called', () => {
         const rest = restProps({ id: '42', slug: 'hi' } as never, [])

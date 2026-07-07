@@ -35,7 +35,7 @@ export async function renderChain(
     const renders: SsrRender[] = []
     /* Route params as thunks (static server-side — only shape parity with the client so
        `props()` reads `$props["id"]?.()` resolve). A layout (every view but the last) also
-       gets `$children` set to `CHILD_PRESENT` so SSR renders `{#if children}` the same way
+       gets `children` set to `CHILD_PRESENT` so SSR renders `{#if children}` the same way
        the client does, keeping hydration congruent. */
     const paramThunks: UiProps = {}
     for (const key of Object.keys(params)) {
@@ -44,7 +44,7 @@ export async function renderChain(
     for (let index = 0; index < views.length; index += 1) {
         const view = views[index] as UiComponent
         const hasChild = index < views.length - 1
-        const props: UiProps = hasChild ? { ...paramThunks, $children: CHILD_PRESENT } : paramThunks
+        const props: UiProps = hasChild ? { ...paramThunks, children: CHILD_PRESENT } : paramThunks
         renders.push(await view.render(props, ctx))
     }
     let html = renders[renders.length - 1]?.html ?? ''

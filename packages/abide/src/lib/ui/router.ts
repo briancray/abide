@@ -200,7 +200,7 @@ export function router(
             /* Route params as reactive thunks: reading `clientPage.value.params` inside the
                thunk tracks the page signal, so an in-place same-route hop (params change, the
                page stays mounted) re-runs each `props()` derive. The key set is stable across
-               same-route hops, so the bag need not rebuild. A layout also gets `$children`
+               same-route hops, so the bag need not rebuild. A layout also gets `children`
                set to `CHILD_PRESENT` when a child layer exists below it, read by
                `{#if children}` (a layout's `{children()}` lowers to its `outlet()` boundary,
                so it ignores this value). */
@@ -210,7 +210,7 @@ export function router(
                     bag[key] = () => clientPage.value.params[key]
                 }
                 if (hasChild) {
-                    bag.$children = CHILD_PRESENT
+                    bag.children = CHILD_PRESENT
                 }
                 return bag
             }

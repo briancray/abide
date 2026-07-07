@@ -8,7 +8,7 @@ import { openMarker } from './openMarker.ts'
 /*
 Mounts a component's `<slot>` content as a marker-bounded range, so a slot positions among
 static siblings exactly like a control-flow block — by `before` (create) or the claim
-cursor (hydrate). `render` appends the parent-supplied `$children`, or the slot's own
+cursor (hydrate). `render` appends the parent-supplied `children`, or the slot's own
 fallback when none was passed; it runs once (a slot never toggles), so there is no effect or
 re-render — the markers exist only to delimit the range for create insertion and hydrate
 claiming.

@@ -9,6 +9,7 @@ import { awaitBlock } from '../src/lib/ui/dom/awaitBlock.ts'
 import { each } from '../src/lib/ui/dom/each.ts'
 import { mount } from '../src/lib/ui/dom/mount.ts'
 import { on } from '../src/lib/ui/dom/on.ts'
+import { restProps } from '../src/lib/ui/dom/restProps.ts'
 import { switchBlock } from '../src/lib/ui/dom/switchBlock.ts'
 import { text } from '../src/lib/ui/dom/text.ts'
 import { when } from '../src/lib/ui/dom/when.ts'
@@ -205,4 +206,11 @@ describe('layout {#if children} presence (3a)', () => {
         ).serializeMiniDom(host)
         expect(html).not.toContain('has')
     })
+})
+
+test('restProps excludes the children slot key', () => {
+    const bag = { a: () => 1, children: () => () => ({}) } as any
+    const rest = restProps(bag, [])
+    expect('children' in rest).toBe(false)
+    expect(rest.a).toBe(1)
 })

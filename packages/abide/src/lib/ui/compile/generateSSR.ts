@@ -396,7 +396,7 @@ export function generateSSR(
             /* Server-render the child via its `render` and inline the HTML inside the same
                `[ … ]` marker range the client mounts into (`mountRange`) — no wrapper element,
                so SSR and client agree and the child's root lays out as a direct child. Props
-               pass as thunks; slot content passes as a string-returning `$children` the child
+               pass as thunks; slot content passes as a string-returning `children` the child
                invokes from its <slot>. */
             /* Slot content is a fresh build context — the child's `<slot>` mounts it via
                `mountSlot`, not the parent skeleton clone, and the client builds it through
