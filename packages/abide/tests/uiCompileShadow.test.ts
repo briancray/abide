@@ -229,3 +229,26 @@ let ready = state(false)
         expect(code.match(/import \{ effect \} from/g)).toHaveLength(1)
     })
 })
+
+test('shadow: imported props is additive with the route shape; no ambient children', () => {
+    const src = `<script>
+import { props } from '@abide/abide/ui/props'
+const { id, children } = props<{ children: Snippet }>()
+</script>
+{#if children}{children()}{/if}`
+    const { code } = compileShadow(src, '{ id: string }')
+    // additive: route shape intersected with the annotation
+    expect(code).toContain('): ({ id: string }) & T')
+    // the author's props import is stripped (our declare owns the type)
+    expect(code).not.toMatch(/import\s*\{\s*props\s*\}\s*from/)
+    // the ambient children declaration is gone
+    expect(code).not.toContain('declare const children')
+})
+
+test('shadow: props declaration is omitted when props is NOT imported', () => {
+    const src = `<script>
+const { id } = props()
+</script>`
+    const { code } = compileShadow(src, '{ id: string }')
+    expect(code).not.toContain('declare function props')
+})

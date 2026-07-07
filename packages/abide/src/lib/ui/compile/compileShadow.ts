@@ -46,7 +46,6 @@ function shadowPreamble(importedReactives: ReadonlySet<string>): string {
         importedReactives.has('computed')
             ? undefined
             : 'declare function computed<T>(compute: () => T): { readonly value: T }',
-        'declare const children: (() => void) | undefined',
         /* `effect` is defined either way — the preamble import or the author's own import. */
         'void [effect, snippet, scope]',
     ]
@@ -81,10 +80,21 @@ export function compileShadow(source: string, propsType = 'Record<string, any>')
         scriptStart,
     )
     builder.raw(shadowPreamble(importedReactives))
-    /* `props()` defaults to the file's type — a page/layout's route param shape, else
-       `Record<string, any>` — so `const { id } = props()` infers from the route. */
-    builder.raw(`declare function props<T = ${propsType}>(): T\n`)
+    /* `props` is a required import (`abide/ui/props`). The shadow owns its type so the
+       return is file-contextual — the route param shape (page/layout) or `Record<string,
+       any>` (component), intersected with the author's annotation `T` so declared props
+       (notably `children: Snippet`) are ADDITIVE and route params never need re-spelling.
+       Emitted only when imported: a missing import surfaces as "Cannot find name 'props'",
+       so `abide check` flags it. */
+    if (importedReactives.has('props')) {
+        builder.raw(`declare function props<T = {}>(): (${propsType}) & T\n`)
+    }
     for (const line of imports) {
+        /* The `props` import is replaced by the contextual `declare function props` above;
+           emitting it too would be a duplicate-identifier error. */
+        if (/from\s*['"][^'"]*\/ui\/props['"]/.test(line.text)) {
+            continue
+        }
         builder.flush(line)
     }
     /* Component-local `type`/`interface` declarations are hoisted to module scope —
