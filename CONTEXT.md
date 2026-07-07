@@ -2,6 +2,12 @@
 
 Terms the code and its discussions use exactly. One meaning per term; sharpen here when a term drifts.
 
+> **Vocabulary realignment in progress (ADR-0018).** The names below are the
+> agreed *target*; the code adopts them wave-by-wave. Entries marked *(target;
+> ADR-0018)* describe a name the restructure lands, not the symbol shipping in
+> `main` today — the prior name holds until that name's wave. See ADR-0018 for
+> the master rename table, the frozen/protected list, and the phasing.
+
 ## Routing & rendering
 
 **Route**
@@ -25,10 +31,16 @@ URL → route + decoded params. Server-side only: Bun's router matches, the catc
 ## Cache & streaming
 
 **Registry**
-A store of registered async work with a lifecycle channel. There are two: the
-cache (calls — request/tab store + process-level shared store, entries keyed by
-wire or reference identity) and the tail registry (streams, keyed by
-`Subscribable.name`, with the window size `last` folded into the key).
+The *reactive* store of registered async work with a lifecycle channel. There
+are two: the cache (calls — request/tab store + process-level shared store,
+entries keyed by wire or reference identity; the read-through core is
+`callRegistry` *(target; ADR-0018)*) and the tail registry (streams, keyed by
+`Subscribable.name`, with the window size `last` folded into the key);
+`rpcErrorRegistry` is the same signal-node-backed kind. A **handler registry**
+(`rpcRegistry` / `socketRegistry` / `promptRegistry`) is the qualified
+sub-sense: a plain `Map` populated at boot, no reactive channel. The build-time
+scan of `src/` is *not* a Registry — it is the `ProjectManifest` *(target;
+ADR-0018)*.
 Registries act: they coalesce identical in-flight calls
 (always on; `ttl` is only the retention dial — `ttl: 0` is the mutation idiom,
 retaining nothing beyond the store's atomic unit: the whole request on the
@@ -81,39 +93,77 @@ The SSR→client agreement for pending `{#await}` reads: the document ships `__S
 
 ## Reactivity
 
-**Lexical scope**
-The *component*-granular reactive unit (`Scope`, established per lexical level by
-the compiler via `CURRENT_SCOPE`/`withScope`). Owns a region's reactive doc, its
-boundary-crossing capabilities (`record`/`persist`/`broadcast`), its context
-(`share`/`shared`), its identity (`id`), and an explicit `child()` tree. `scope()`
-is the sole public entry; everything else is a method reached through it. Its data
-methods (`read`/`replace`/`cell`/`derive`/…) are receiver-bound to that scope's
-doc.
+**Scope** *(target; ADR-0018 — merges the former "Lexical scope" + "Build window")*
+The single ownership node; one tree (`CURRENT_SCOPE`, walked via `walkScopes`).
+Every node owns the disposers collected during one synchronous build — a
+component, but equally a control-flow branch or a list row. A **block scope**
+(`blockScope`) carries disposers only; a **component scope**
+(`createComponentScope`) additionally carries a `ScopeContext`. The finer
+granularity that was the point of the old two-system split survives as finer
+*nodes*: a reactive cell built in a branch dies when the **branch** flips
+because the branch is its own (block) scope node. The reactive primitives
+(`state`/`linked`/`computed`/`effect`) are **ambient-bound to the nearest node,
+not receiver-bound** — so `someScope.computed(fn)` does not create state in
+someScope. Read the ambient node via `currentScope()`; SSR brackets an isolated
+one with `enterRenderScope`/`exitRenderScope`. *(Until Wave 1 lands, the code
+still has the two systems of ADR-0012 — `Scope`/`withScope` + `OWNER`/
+`scopeGroup`.)*
 
-**Build window**
-The *finest*-granular ownership unit (`OWNER`/`scopeGroup`/`runtime/scope.ts`):
-the disposers collected during one synchronous build — a component, but equally a
-control-flow branch or a list row. Distinct from the lexical scope on purpose: a
-reactive cell built in a branch must die when the **branch** flips, which is finer
-than the component the lexical scope spans (see ADR-0012). The reactive primitives
-(`state`/`linked`/`computed`/`effect`) bind the ambient build window, not the
-lexical receiver — so `someScope.computed(fn)` does not create state in someScope.
+**ScopeContext** *(target; ADR-0018)*
+The ambient bag a component scope carries: `{ doc, shareMap, capabilities, id }`
+— the region's reactive doc, its context (`share`/`shared`), its
+boundary-crossing capabilities (`record`/`persist`/`broadcast`), and its
+identity. Data methods (`read`/`replace`/`cell`/`derive`/…) are receiver-bound
+to its doc. Joins the `-Context = ambient bag` family (`REACTIVE_CONTEXT`,
+`InspectorContext`).
+
+**Request context** *(target; ADR-0018)*
+The server's per-request execution region (`runWithRequestContext` /
+`RequestContext`, seated on `requestContextSlot`): trace position, elapsed,
+method+path, the cookie-flushing request store. **Not** a reactive `Scope` — it
+carries request-lifetime state, no reactive graph — which is why it moves off
+the "scope" word (it previously wore the `withScope`/`inScope` verb shape as
+`runWithRequestScope`).
 
 **Adoption**
-A lexical scope created in `awaiting` mode takes its doc from the first `doc()`
+A component scope created in `awaiting` mode takes its doc from the first `doc()`
 its component body creates, rather than minting one eagerly — so the compiler
 emits one data-lowering whether or not a component owns a scope. A body that never
 creates a `doc()` mints an empty one lazily on first data access.
 
+## Runtime substrate *(target; ADR-0018)*
+
+These names land wave-by-wave; each replaces a fragmented set of today's
+constructs.
+
+**MarkerRange / RangeList**
+The one marker-bounded swappable DOM region (`mount`/`adopt`/`swap`/`dispose`),
+carrying the detached-anchor short-circuit and adopt-strand-dispose guards as
+first-class mechanics; every block runtime (`if`/`for`/`await`/`try`/`switch`)
+mounts through it. `RangeList` is the keyed/unkeyed list form over it. Named
+`MarkerRange` — not bare `Range` (a DOM standard) nor `RangeSlot` (the `<slot>`
+vocabulary was purged).
+
+**FrameSource**
+The per-side carrier (`subscribe`, `publish?`, `tail?`, `peek`, `refresh`) that
+`assembleSubscribable` wraps into one `Subscribable` shell — server and client
+supply different adapters (`peek`/`refresh` are genuinely per-side;
+`subscribe` owns replay atomicity). Kept pluggable so a cross-instance adapter
+is additive.
+
 ## Compilation
 
 **Plan**
-A block's shared compile model — its branch structure and its `bindings` — that
-both code-generation backends render from (`generateBuild` → client wiring,
-`generateSSR` → HTML string). One module per binding-introducing block
-(`awaitPlan`/`ifPlan`/`switchPlan`/`tryPlan`/`eachPlan`/`snippetPlan`). The
-per-block sibling of `skeletonContext`'s element-level positional model: the
-single source of truth that keeps the two backends congruent for hydration.
+A shared compile model both code-generation backends render from
+(`generateBuild` → client wiring, `generateSSR` → HTML string). Per **block**:
+one module per binding-introducing block
+(`awaitPlan`/`ifPlan`/`switchPlan`/`tryPlan`/`eachPlan`/`snippetPlan`), the
+per-block sibling of `skeletonContext`'s element-level positional model — the
+single source of truth that keeps the backends congruent for hydration. Per
+**component**: `ComponentPlan` *(target; ADR-0018 — the renamed
+`AnalyzedComponent`)*, the whole-file parsed template + styles a component
+compiles from, from which the type-check shadow also projects. A component is
+not a block — there is no `{#component}` form.
 
 **Binding**
 A name a block introduces into its body's scope, carried on its `Plan` and
@@ -131,7 +181,11 @@ binding that mis-lowers to the enclosing component signal is the
 A provider adapter satisfying `AgentEngine`: surface + neutral conversation in, `AgentFrame` stream out. It owns its own loop. Lives in `@abide/<provider>`, never in core.
 
 **Frame**
-One provider-neutral streaming event (`text` / `tool_use` / `tool_result` / `done`). The frame contract is what all engines must agree on.
+The unit event of any `Subscribable` stream. An **`AgentFrame`** is the
+provider-neutral engine event (`text` / `tool_use` / `tool_result` / `done`);
+the same word names a socket topic's message and the per-side event a
+`FrameSource` *(target; ADR-0018)* feeds into `assembleSubscribable`. The
+`AgentFrame` contract (below) is what all engines must agree on.
 
 **Frame conformance**
 The invariants every engine's stream must satisfy — exactly one `done`, last; every `tool_use` answered by a same-id same-name `tool_result`. Encoded once in `abide/test/assertAgentFrameConformance`; each provider package runs it against scripted provider output (`abide/test/createScriptedSurface` records tool dispatches).

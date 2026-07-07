@@ -1,6 +1,11 @@
 # ADR-0012: The lexical scope and the build window are two lifetimes, not one
 
-**Status:** accepted (2026-06-26)
+**Status:** superseded by ADR-0018 (2026-07-07) — the two systems merge into one
+ownership tree, but this ADR's correctness invariant (ambient-bound primitives,
+branch-granular disposal) is kept as ADR-0018 Wave 1's guardrail. If the
+`reseeds === 1` probe cannot stay green under one tree, this decision stands.
+
+**Status (original):** accepted (2026-06-26)
 
 ## Context
 
