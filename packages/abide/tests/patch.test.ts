@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { cacheStoreSlot } from '../src/lib/shared/cacheStoreSlot.ts'
 import { createCacheStore } from '../src/lib/shared/createCacheStore.ts'
-import { sharedCacheStoreSlot } from '../src/lib/shared/sharedCacheStoreSlot.ts'
 import { createRemoteFunction } from '../src/lib/shared/createRemoteFunction.ts'
 import { patch } from '../src/lib/shared/patch.ts'
+import { sharedCacheStoreSlot } from '../src/lib/shared/sharedCacheStoreSlot.ts'
 import { settle } from './support/settle.ts'
 
 const BROWSER_ONLY = { browser: true, mcp: false, cli: false }
