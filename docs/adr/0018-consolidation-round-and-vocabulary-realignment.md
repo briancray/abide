@@ -1,11 +1,12 @@
 # ADR-0018: The consolidation round — align internals to the surface, and the vocabulary to the internals
 
-**Status:** accepted (2026-07-07). Wave 0's mechanical extractions shipped
-(`withoutHydration`, `buildArtifact`); the round's larger items (`BootShims`,
-the `cache.ts` split, the Wave 1 ownership merge) did **not** survive
-validation — see Consequences. Does **not** supersede ADR-0012 (the merge was
-spiked and deferred; 0012 stands). Remaining waves (2–5) are planned but
-unvalidated — validate each against the code + ADRs before implementing.
+**Status:** closed (2026-07-07). All waves validated. Only Wave 0's two
+mechanical extractions shipped (`withoutHydration`, `buildArtifact`); **every**
+larger structural item (BootShims, cache split, ownership merge, range fold,
+`describe()` engine, shadow→Plan) was withdrawn, deferred, or declined against
+the code + ADRs — see the wave table and Consequences. Does **not** supersede
+ADR-0012. Net finding: abide's internals carry no significant accidental
+complexity.
 
 ## Context
 
@@ -78,10 +79,10 @@ skipped.
 | **0** | `withoutHydration` (5→1); `buildArtifact` (build-or-die, 5→1) | SHIP ✅ | — |
 | **0′** | ~~split `cache.ts`~~ + `callRegistry` + the ⊕ invertible-`Doc`-journal seam | **DEFERRED** to the patch-bus round | moves there — ADR-0001's re-propose gate (a persistent store adapter) is that round, not now |
 | **1** | ~~One ownership tree~~ | **DEFERRED** — spiked; 0012 stands (see Decision C) | — |
-| **2** | `MarkerRange` + `RangeList` (fold the range zoo, `awaitBlock`/`each`/`eachAsync` reimplementations) | SHIP | guards are `MarkerRange` mechanics, not per-block logic |
-| **3** | Fan-out engine: project scan + delegating resolver; superset `describe()`; unconditional typing emit | SHIP | ⊕ the descriptor stays a **superset carrying the entry handle** — a 5th surface must be one new renderer with no `describe()` change |
-| **4** | `assembleSubscribable(FrameSource)` | SPIKE | ⊕ `FrameSource.subscribe` is **pluggable** (no single-process `server.publish` baked in); a 2nd fake-cross-instance adapter passes the replay/reconnect corpus. `watch` stays inert in the shell, client-injected |
-| **5** | Single compile front-end (`ComponentPlan`); shadow becomes a projector | SPIKE | `Binding` gains `loc`; the typed-emit printer trade-off (readability vs correctness-by-construction) is the author's call |
+| **2** | ~~fold the range zoo~~ | **DEFERRED** — validated | the 9 range helpers are already one-export/one-purpose and shared (`when`/`switch` delegate to `mountSwappableRange`; `awaitBlock`/`each`/`eachAsync` already reuse `removeRange`/`moveRange`). The bespoke blocks differ only in essential orchestration (async settle, keyed reconcile); the risky convergence was already dropped by round-1 |
+| **3** | ~~fan-out `describe()` engine~~ | **DEFERRED** — validated | the drift-prone decisions (`commandNameForUrl`/`carriesBodyArgs`/`resolveClientFlags`/`socketOperations`) are **already single-sourced** in `shared/`; the rest is hygiene touching ADR-0015/0016/0017 |
+| **4** | ~~`assembleSubscribable(FrameSource)`~~ | **DEFERRED** to the patch-bus round | the drift-prone `attachSocketSelectorMethods` is **already shared** by both socket sites; the residual shell wouldn't reduce (essential server/client asymmetry), and `FrameSource` pluggability only matters once a cross-instance/patch-bus adapter exists |
+| **5** | ~~shadow becomes a Plan projector~~ | **DECLINED** — **ADR-0014** | 0014 spiked this exact fold and declined it (shadow reads the same tree; renders to types not cells; its real coupling — `loc` mapping — is what Plans omit). Its Consequences literally say to read it before re-pitching |
 
 The patch-bus capability arc (undo → local-first persistence → offline mutations
 → multiplayer) is a **deliberate next round** riding the Wave 0/1 `Doc` seam and
@@ -270,16 +271,19 @@ vocabulary per wave as each rename lands.
   current `*Slot` is one file, one export, one purpose, well-documented — already
   the CLAUDE.md ideal. Do not re-pitch the fold. (A pilot migration of the two
   probe slots was implemented green, then reverted on this finding.)
-- **Meta-pattern (the round's real lesson).** Three of the four large
-  structural items — BootShims, the `cache.ts` split, and the ownership merge —
-  did **not** survive validation, each because the codebase was already
-  well-factored and a prior ADR (the `SsrBootState` seeder, ADR-0001, ADR-0012)
-  had already reasoned through it. A surface-down review spots large targets
-  well but is blind to *why* the current shape exists; the ADRs encode that. So
-  **validate-before-implement is mandatory**, and the honest finding of this
-  round is that abide's internals are closer to ideal than "75% aligned"
-  implied — the accidental complexity kept turning out to be essential or
-  already-handled. What shipped were two small mechanical DRYs.
+- **Meta-pattern (the round's real lesson).** **Every** large structural item
+  was validated against the actual code + ADRs, and **none** survived — each was
+  already factored or already reasoned-through by a prior decision:
+  BootShims ← the `SsrBootState` exhaustive seeder; `cache.ts` split ← ADR-0001;
+  ownership merge ← ADR-0012; range fold ← already one-export/shared, round-1
+  drop; `describe()` engine ← decisions already single-sourced, ADR-0015/16/17;
+  shadow→Plan ← ADR-0014 (which pre-declined the exact fold). A surface-down
+  review spots large targets well but is blind to *why* the current shape
+  exists; the ADRs encode that. **The honest finding: abide's internals carry no
+  significant accidental complexity — they are already at a deliberate local
+  optimum.** What shipped were two small mechanical DRYs (`withoutHydration`,
+  `buildArtifact`); everything else was correctly left alone. Future "consolidate
+  the internals" reviews should start here.
 - **Capability payoff:** the patch-bus arc (undo/persist/local-first/
   multiplayer) is the deliberate next round; it is also the **forcing function**
   that would re-open the `cache.ts` split (ADR-0001's gate) and possibly the
