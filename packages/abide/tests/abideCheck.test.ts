@@ -551,4 +551,50 @@ describe('abide check', () => {
         })
         expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
     })
+
+    /* An element `attach` types its `node` param from the element's tag, so the
+       attachment body reads the specific DOM interface with no implicit-any noise. */
+    test('an element attach types node from its tag — an input-only member is clean', () => {
+        const dir = project({
+            'field.abide': `<input attach={(node) => { node.value = ''; node.select() }} />\n`,
+        })
+        expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
+    })
+
+    /* The type is the SPECIFIC element, not `any`/`Element`: a member that exists on
+       `HTMLInputElement` but not `HTMLDivElement` is caught when the tag is `<div>`. */
+    test('an element attach node is the specific tag type — a wrong member is caught', () => {
+        const source = `<div attach={(node) => { node.value }} />\n`
+        const dir = project({ 'box.abide': source })
+        const diagnostics = collectAbideDiagnostics(createShadowProgram(dir))
+        expect(diagnostics).toHaveLength(1)
+        expect(diagnostics[0]!.message).toContain('value')
+        /* The squiggle lands inside the attachment expression, on the member read. */
+        const span = source.slice(
+            diagnostics[0]!.start,
+            diagnostics[0]!.start + diagnostics[0]!.length,
+        )
+        expect(source).toContain(span)
+        expect(span).toContain('value')
+    })
+
+    /* The attach VALUE is now checked as an attachment — a non-function is rejected
+       (previously it slipped through as a bare statement). */
+    test('an element attach rejects a non-function value', () => {
+        const dir = project({
+            'bad.abide': `<div attach={"nope"} />\n`,
+        })
+        const diagnostics = collectAbideDiagnostics(createShadowProgram(dir))
+        expect(diagnostics).toHaveLength(1)
+        expect(diagnostics[0]!.message).toContain('not assignable')
+    })
+
+    /* An unknown/custom tag falls back to `Element` — a base-interface member reads
+       clean and the param is still typed (no implicit-any). */
+    test('a custom-element attach falls back to Element without implicit-any', () => {
+        const dir = project({
+            'widget.abide': `<my-widget attach={(node) => { node.tagName }} />\n`,
+        })
+        expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
+    })
 })
