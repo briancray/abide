@@ -2,7 +2,7 @@ import { build } from './build.ts'
 import { abideLog } from './lib/shared/abideLog.ts'
 import { detectTarget } from './lib/shared/detectTarget.ts'
 import { exeSuffix } from './lib/shared/exeSuffix.ts'
-import { exitOnBuildFailure } from './lib/shared/exitOnBuildFailure.ts'
+import { buildArtifact } from './lib/shared/buildArtifact.ts'
 import type { CompileTarget } from './lib/shared/types/CompileTarget.ts'
 import { serverBuildPlugins } from './serverBuildPlugins.ts'
 
@@ -40,7 +40,7 @@ export async function compile({
 
     const outPath = outfile ?? `${cwd}/dist/app${exeSuffix(target)}`
 
-    const result = await Bun.build({
+    await buildArtifact({
         entrypoints: [SERVER_ENTRY],
         target: 'bun',
         format: 'esm',
@@ -55,8 +55,6 @@ export async function compile({
         compile: { target, outfile: outPath },
         plugins: serverBuildPlugins({ cwd, embedAssets: true }),
     })
-
-    exitOnBuildFailure(result)
 
     abideLog.success(`compiled standalone binary: ${outPath} (target: ${target})`)
     return outPath

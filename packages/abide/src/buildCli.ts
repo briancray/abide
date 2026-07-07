@@ -4,7 +4,7 @@ import { compile } from './compile.ts'
 import { abideLog } from './lib/shared/abideLog.ts'
 import { detectTarget } from './lib/shared/detectTarget.ts'
 import { exeSuffix } from './lib/shared/exeSuffix.ts'
-import { exitOnBuildFailure } from './lib/shared/exitOnBuildFailure.ts'
+import { buildArtifact } from './lib/shared/buildArtifact.ts'
 import { programNameForPackage } from './lib/shared/programNameForPackage.ts'
 import { readPackageJson } from './lib/shared/readPackageJson.ts'
 import type { CompileTarget } from './lib/shared/types/CompileTarget.ts'
@@ -56,14 +56,13 @@ export async function buildCli({
     stdout. We don't `bun build --compile` here because the discovery output is
     throwaway; a plain JS bundle runs faster. Additive — does not clear dist.
     */
-    const discoveryResult = await Bun.build({
+    await buildArtifact({
         entrypoints: [DISCOVERY_ENTRY],
         target: 'bun',
         outdir: distDir,
         naming: '_discovery.js',
         plugins,
     })
-    exitOnBuildFailure(discoveryResult)
 
     const proc = Bun.spawn({
         cmd: ['bun', discoveryOut],
@@ -94,13 +93,12 @@ export async function buildCli({
     async function buildTargetPair(platformTarget: CompileTarget, cliOut: string): Promise<string> {
         const serverOut = join(dirname(cliOut), `server${exeSuffix(platformTarget)}`)
         await compile({ cwd, target: platformTarget, outfile: serverOut, buildClient: false })
-        const result = await Bun.build({
+        await buildArtifact({
             entrypoints: [CLI_ENTRY],
             target: 'bun',
             compile: { target: platformTarget, outfile: cliOut },
             plugins,
         })
-        exitOnBuildFailure(result)
         abideLog.success(`compiled cli + server: ${cliOut}`)
         return cliOut
     }

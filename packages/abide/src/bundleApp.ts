@@ -10,7 +10,7 @@ import { webviewLibName } from './lib/bundle/webviewLibName.ts'
 import { abideLog } from './lib/shared/abideLog.ts'
 import { bundleLayout } from './lib/shared/bundleLayout.ts'
 import { detectTarget } from './lib/shared/detectTarget.ts'
-import { exitOnBuildFailure } from './lib/shared/exitOnBuildFailure.ts'
+import { buildArtifact } from './lib/shared/buildArtifact.ts'
 import { programNameForPackage } from './lib/shared/programNameForPackage.ts'
 import { readPackageJson } from './lib/shared/readPackageJson.ts'
 import { serverBuildPlugins } from './serverBuildPlugins.ts'
@@ -82,7 +82,7 @@ export async function bundleApp({ cwd = process.cwd() }: { cwd?: string } = {}):
     // 3. Launcher binary — named after the program so CFBundleExecutable matches.
     const launcherSuffix = target.includes('windows') ? '.exe' : ''
     const launcherPath = `${binDir}/${programName}${launcherSuffix}`
-    const launcherResult = await Bun.build({
+    await buildArtifact({
         entrypoints: [APP_ENTRY],
         target: 'bun',
         compile: { target, outfile: launcherPath },
@@ -96,7 +96,6 @@ export async function bundleApp({ cwd = process.cwd() }: { cwd?: string } = {}):
         */
         define: { __ABIDE_WORKER_ENTRY__: JSON.stringify(WORKER_ENTRY) },
     })
-    exitOnBuildFailure(launcherResult)
 
     // 4. Webview lib — built from the vendored source if needed, then copied
     // beside the binaries (or into Frameworks on macOS) so the bundle is self-contained.

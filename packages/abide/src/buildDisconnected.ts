@@ -1,6 +1,6 @@
 import { clientBuildPlugins } from './clientBuildPlugins.ts'
 import { abideLog } from './lib/shared/abideLog.ts'
-import { exitOnBuildFailure } from './lib/shared/exitOnBuildFailure.ts'
+import { buildArtifact } from './lib/shared/buildArtifact.ts'
 
 const ENTRY = new URL('./bundleDisconnectedEntry.ts', import.meta.url).pathname
 const CSS_ENTRY = new URL('./lib/bundle/disconnected.css', import.meta.url).pathname
@@ -47,7 +47,7 @@ export async function buildDisconnected({
     the entry (which TS can't type), so it compiles to a standalone artifact we
     inline alongside the JS — the component carries no <style> of its own.
     */
-    const result = await Bun.build({
+    const result = await buildArtifact({
         entrypoints: [ENTRY, CSS_ENTRY],
         target: 'browser',
         minify: true,
@@ -55,7 +55,6 @@ export async function buildDisconnected({
         define: { __ABIDE_DEV__: 'false' },
         plugins,
     })
-    exitOnBuildFailure(result)
 
     // Collect the JS bundle + extracted CSS from the in-memory artifacts.
     let js = ''
