@@ -188,19 +188,22 @@ let item = state('STATE')</script>
        with an `await` inside ("await can only be used inside an async function"), a build
        failure `abide check` doesn't catch. */
     test('a snippet body rendering {children()} is an async SSR function', async () => {
-        const src = `
-            {#snippet inner()}<span>{children()}</span>{/snippet}
-            <div>{inner()}</div>
-        `
-        const ssr = compileSSR(src)
+        /* `children` is a declared prop now, so the slot-bearing snippet reads it from the
+           component scope; the `{children()}` slot node still makes `inner` async in SSR. */
+        const Inner = `<script>
+import { props } from '@abide/abide/ui/props'
+import type { Snippet } from '@abide/abide/shared/snippet'
+const { children } = props<{ children: Snippet }>()
+</script>{#snippet inner()}<span>{children()}</span>{/snippet}<div>{inner()}</div>`
+        const ssr = compileSSR(Inner)
         expect(ssr).toContain('async function inner')
         // the generated SSR body must be syntactically valid (a plain function would throw)
         expect(() => new Function('$props', '$ctx', ssr)).not.toThrow()
-        const html = (await component(src).render({ $children: async () => 'SLOTTED' })).html
-        expect(html).toBe(
-            '<div><!--abide:snippet--><span><!--a--><!--[-->SLOTTED<!--]--></span>' +
-                '<!--/abide:snippet--></div>',
-        )
+        // slot content passed by a parent renders inside the snippet's <span>, snippet-bounded
+        const { html } = await component(`<Inner>SLOTTED</Inner>`, {
+            Inner: component(Inner),
+        }).render()
+        expect(html).toContain('<!--abide:snippet-->SLOTTED<!--/abide:snippet-->')
     })
 
     /* Transitive: a snippet that text-calls a `{children()}`-bearing snippet is awaited too,

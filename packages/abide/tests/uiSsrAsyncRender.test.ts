@@ -118,7 +118,8 @@ describe('async-snippet detection (fixpoint + escaped regex)', () => {
        The fix awaits calls to computed-backed bindings, which is where snippet props live. */
     test('an async snippet passed as a prop and called in the child is awaited', async () => {
         const List = component(
-            '<script>const { item } = props<{ item: (label: string) => unknown }>()</script><ul>{item("x")}</ul>',
+            `<script>import { props } from '@abide/abide/ui/props'
+const { item } = props<{ item: (label: string) => unknown }>()</script><ul>{item("x")}</ul>`,
         )
         const render = component(
             `
