@@ -1,5 +1,10 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
-import { snippet } from '../src/lib/shared/snippet.ts'
+import {
+    type Snippet,
+    type SnippetValue,
+    snippet,
+    snippetPayload,
+} from '../src/lib/shared/snippet.ts'
 import { compileComponent } from '../src/lib/ui/compile/compileComponent.ts'
 import { compileSSR } from '../src/lib/ui/compile/compileSSR.ts'
 import { computed } from '../src/lib/ui/computed.ts'
@@ -62,6 +67,17 @@ function component(
 
 const serialize = (host: unknown): string =>
     (globalThis as unknown as { serializeMiniDom: (h: unknown) => string }).serializeMiniDom(host)
+
+test('Snippet<Args> is a callable returning a SnippetValue', () => {
+    // A zero-arg snippet prop (like `children`) is invoked with no args.
+    const children: Snippet = () => snippet((host: unknown) => void host)
+    const value: SnippetValue = children()
+    expect(typeof snippetPayload(value)).toBe('function')
+
+    // An arg-taking snippet prop, invoked with its args.
+    const row: Snippet<[number]> = (n) => snippet(`row ${n}`)
+    expect(snippetPayload(row(3))).toBe('row 3')
+})
 
 describe('snippets ({#snippet name(args)} called like a function)', () => {
     /* A snippet that closes over the component scope (`prefix`) and takes an arg. */

@@ -773,7 +773,7 @@ function emitNode(node: TemplateNode, builder: Builder): void {
                 builder.mapped(node.params, node.loc)
             }
             /* Wrap the body in `snippet(() => …)` so the shadow types the snippet as
-               `(args) => Snippet<…>` — mirroring the runtime lowering (which returns
+               `(args) => SnippetValue` — mirroring the runtime lowering (which returns
                `$$snippet(($host) => …)`) so a snippet passed to a `Snippet`-typed prop
                type-checks instead of reading as `() => void`. */
             builder.raw(') => snippet(() => {\n')
