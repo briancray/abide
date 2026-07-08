@@ -1,6 +1,6 @@
 // node:fs existsSync — Bun plugin onResolve is sync-only; Bun.file().exists() is async
 import { existsSync, statSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { resolve } from 'node:path'
 import type { BunPlugin } from 'bun'
 import { Glob } from 'bun'
 import { abideImportName } from './lib/shared/abideImportName.ts'
@@ -206,27 +206,39 @@ export function abideResolverPlugin({
     const promptsFilter = new RegExp(`^${escapeRegex(promptsDir)}/.*\\.md$`)
 
     /*
-    Side-crossing guard (client target only). The client bundle must never pull a
-    server-only name into the browser. The exception is a registered rpc/socket —
-    `$server/rpc/*` and `$server/sockets/*` are replaced with remoteProxy/socketProxy
-    stubs by the onLoad hooks below — so only OTHER paths under src/server/ (helpers,
-    runtime/) and the public `abide/server/*` names are violations. `importerOf` records
-    each resolved edge so a violation can show the import chain back to its client-side
-    origin as evidence; it is reset per build in onStart.
+    Side-crossing guard (client target only). The client bundle must never ship server-only
+    code to the browser. A registered rpc/socket is the carve-out — `$server/rpc/*` and
+    `$server/sockets/*` are replaced with remoteProxy/socketProxy stubs by the onLoad hooks —
+    so a violation is a SURVIVING module under src/server/ that isn't one of those, or the
+    public `abide/server/*` names.
+
+    ADR-0022 D3 makes the project-server edge REACHABILITY-based rather than
+    presence-at-resolve: the D2 client rpc transform keeps the real module (handler elided),
+    so the elided handler's now-dead `$server/*` / `abide/server/*` imports are textually
+    present until tree-shaking removes them. A resolve-time throw would false-positive on
+    those. So the authority is a post-bundle `build.onEnd` pass that walks `metafile.inputs`
+    (the DCE-accurate graph) and flags any server-only module that SURVIVED. The one guard
+    that still fires at resolve is the public `abide/server/*` names reaching a genuine client
+    module — those live in node_modules, outside `serverDir`, so the metafile classifier can't
+    see them; the kept rpc module (proxied) is exempted so its dead handler imports don't
+    reject before DCE.
     */
-    const importerOf = new Map<string, string>()
     const isProxiedServerModule = (path: string): boolean =>
         path.startsWith(`${rpcDir}/`) || path.startsWith(`${socketsDir}/`)
     const isServerOnlyModule = (path: string): boolean =>
         path.startsWith(`${serverDir}/`) && !isProxiedServerModule(path)
     const showPath = (path: string): string =>
         path.startsWith(`${cwd}/`) ? path.slice(cwd.length + 1) : path
-    /* Walks the recorded edges from the offending importer back to a graph root (cycle-safe),
-       formatting each module relative to cwd — the evidence a side-crossing throws. */
-    function sideCrossingChain(leaf: string, importer: string): string {
-        const chain = [leaf, importer]
-        const seen = new Set([importer])
-        let cursor = importer
+    /*
+    The import chain from a graph root down to the offending server-only module, reconstructed
+    from the metafile's `importerOf` edges (child → its importer, first edge wins — enough for
+    one witness). Cycle-safe; formats each module relative to cwd — the evidence the onEnd
+    guard throws, in root→offender order (same shape the resolve-time guard gave before).
+    */
+    function metafileChain(offender: string, importerOf: Map<string, string>): string {
+        const chain = [offender]
+        const seen = new Set([offender])
+        let cursor = offender
         while (importerOf.has(cursor)) {
             cursor = importerOf.get(cursor) as string
             if (seen.has(cursor)) {
@@ -236,22 +248,6 @@ export function abideResolverPlugin({
             chain.push(cursor)
         }
         return chain.reverse().map(showPath).join('\n  → ')
-    }
-    function throwSideCrossing(leaf: string, label: string, importer: string): never {
-        throw new Error(
-            `[abide] a client module imports the server-only name \`${label}\` — server code must not reach the browser bundle. Move it to src/shared/ or behind an RPC. Import chain:\n  ${sideCrossingChain(leaf, importer)}`,
-        )
-    }
-    /* Records the edge and, on the client target, rejects a non-server module reaching a
-       server-only one. Shared by the relative-import and `$server` alias resolvers. */
-    function recordAndGuard(resolved: string, label: string, importer: string | undefined): void {
-        if (importer === undefined) {
-            return
-        }
-        importerOf.set(resolved, importer)
-        if (target === 'client' && isServerOnlyModule(resolved) && !isServerOnlyModule(importer)) {
-            throwSideCrossing(resolved, label, importer)
-        }
     }
 
     return {
@@ -264,33 +260,65 @@ export function abideResolverPlugin({
                build, so a freshly-created file resolves instead of staying "not found".
                onStart is build-time only — absent in the runtime/preload plugin context. */
             build.onStart?.(() => {
-                importerOf.clear()
                 resolveExtensionCache.clear()
             })
 
             /*
-            Relative-import edge recorder + side-crossing guard. Matches `./` and `../`
-            specifiers, records the edge for the evidence chain, and (client target) throws
-            when a non-server module reaches a server-only file. Returns undefined so normal
-            resolution proceeds — this only observes and, on violation, aborts.
+            Reachability-based side-crossing guard (client target, ADR-0022 D3). After the
+            bundle is built, `metafile.inputs` is the post-DCE module graph: a textually-imported
+            but tree-shaken module is ABSENT, a surviving one PRESENT. So walk it, flag any
+            server-only module that survived (the elided rpc handler's dead `$server/*` imports
+            are gone by now; a policy or page that LIVE-reaches server-only code is not), and on a
+            hit reconstruct the import chain from the graph's own edges. This is the sole authority
+            for the project-server edge — the resolve-time throw was relaxed so the kept rpc module
+            can carry its handler's imports until DCE. metafile.inputs keys are relative to
+            process.cwd(); edge `path`s are absolute — resolve both to absolute to match serverDir.
             */
-            build.onResolve({ filter: /^\.\.?\// }, (args) => {
-                if (args.importer) {
-                    const resolved = resolveExtension(join(dirname(args.importer), args.path))
-                    recordAndGuard(resolved, args.path, args.importer)
+            build.onEnd?.((result) => {
+                if (target !== 'client' || !result.metafile) {
+                    return
                 }
-                return undefined
+                const processCwd = process.cwd()
+                /* child(absolute) → its importer(absolute); first edge wins — one witness chain. */
+                const importerOf = new Map<string, string>()
+                let offender: string | undefined
+                for (const [key, input] of Object.entries(result.metafile.inputs)) {
+                    const modulePath = resolve(processCwd, key)
+                    if (offender === undefined && isServerOnlyModule(modulePath)) {
+                        offender = modulePath
+                    }
+                    for (const edge of input.imports) {
+                        if (!importerOf.has(edge.path)) {
+                            importerOf.set(edge.path, modulePath)
+                        }
+                    }
+                }
+                if (offender !== undefined) {
+                    throw new Error(
+                        `[abide] a client module reaches the server-only name \`${showPath(offender)}\` — server code must not reach the browser bundle. Move it to src/shared/ or behind an RPC. Import chain:\n  ${metafileChain(offender, importerOf)}`,
+                    )
+                }
             })
 
             /*
-            The public `abide/server/*` names are server-only. Importing one into the client
-            bundle is a side-crossing (the canonical `abide` and `@abide/abide` specifiers; a
-            custom package alias falls through to the relative/`$server` guards). The server
-            target resolves these normally.
+            The public `abide/server/*` names are server-only and live in node_modules — outside
+            `serverDir`, so the onEnd metafile classifier can't see them; this stays the resolve-time
+            guard for them (the canonical `abide` and `@abide/abide` specifiers; a custom package
+            alias falls through to the reachability guard). A genuine client module importing one is a
+            side-crossing. The kept rpc/socket module (proxied) is EXEMPTED: the D2 client transform
+            leaves its elided handler's `abide/server/*` imports textually present until DCE drops
+            them, so rejecting here would false-positive. The server target resolves these normally.
             */
             build.onResolve({ filter: /(^|\/)abide\/server\// }, (args) => {
-                if (target === 'client' && args.importer && !isServerOnlyModule(args.importer)) {
-                    throwSideCrossing(args.path, args.path, args.importer)
+                if (
+                    target === 'client' &&
+                    args.importer &&
+                    !isServerOnlyModule(args.importer) &&
+                    !isProxiedServerModule(args.importer)
+                ) {
+                    throw new Error(
+                        `[abide] a client module imports the server-only name \`${args.path}\` — server code must not reach the browser bundle. Move it to src/shared/ or behind an RPC. Import chain:\n  ${showPath(args.importer)}\n  → ${args.path}`,
+                    )
                 }
                 return undefined
             })
@@ -325,9 +353,10 @@ export function abideResolverPlugin({
                 build.onResolve({ filter: new RegExp(`^\\${alias}(\\/.*)?$`) }, (args) => {
                     const subpath = args.path.slice(alias.length)
                     const resolved = resolveExtension(subpath ? `${baseDir}${subpath}` : baseDir)
-                    /* `$server/rpc/*` + `$server/sockets/*` are proxied (allowed); other
-                       `$server/*` imports into the client bundle are side-crossings. */
-                    recordAndGuard(resolved, args.path, args.importer)
+                    /* No resolve-time side-crossing throw: a `$server/*` import that only the
+                       elided rpc handler reaches is dead code DCE removes. Whether server-only
+                       code actually survives into the client bundle is decided post-bundle by the
+                       onEnd metafile reachability guard (ADR-0022 D3). */
                     return { path: resolved }
                 })
             }
@@ -374,35 +403,22 @@ export function abideResolverPlugin({
                     )
                 }
                 /*
-                For the client bundle, replace the entire module source
-                with a single proxy stub so the handler body and any
-                server-only top-level imports never reach the browser.
-                The stub keeps the same export name the source declared,
-                so page imports resolve identically on both sides.
+                Client bundle: keep the real module but swap the METHOD( call for a remoteProxy(
+                call with the handler ELIDED (ADR-0022 D2), symmetric with the server rewrite
+                below. The handler body and the top-level imports only it used become dead code the
+                bundler tree-shakes out; the endpoint `opts` (schemas/cache/stream) rides through as
+                a LIVE expression, so policy can reference imports and separate modules. The
+                surviving-server-module reachability guard (build.onEnd) is the authority that no
+                server-only code leaks — resolve-time presence of the elided handler's imports is no
+                longer a violation.
                 */
                 if (target === 'client') {
-                    /* The client proxy stub's opts: build-time flags plus the endpoint's cache /
-                       stream policy (ADR-0020). `outbox: true` parks unreachable calls;
-                       `streaming: true` (handler returns jsonl()/sse()) makes the bare call return
-                       the NamedAsyncIterable directly; `cache` / `stream` carry the endpoint policy
-                       so the client honours the declared ttl (staleness/SWR), the refetch clock
-                       (throttle/debounce), and tags. Joined with `, ` so no combination yields a
-                       stray comma; all absent → no opts arg (unchanged from before). */
-                    const optsFields = [
-                        prepared.durable ? 'outbox: true' : undefined,
-                        prepared.streaming ? 'streaming: true' : undefined,
-                        prepared.cachePolicyText !== undefined
-                            ? `cache: ${prepared.cachePolicyText}`
-                            : undefined,
-                        prepared.streamPolicyText !== undefined
-                            ? `stream: ${prepared.streamPolicyText}`
-                            : undefined,
-                    ].filter((field): field is string => field !== undefined)
-                    const optsArg = optsFields.length > 0 ? `, { ${optsFields.join(', ')} }` : ''
-                    const contents = `import { remoteProxy as __abideRemoteProxy__ } from '${importName}/ui/remoteProxy';
-export const ${prepared.exportName} = __abideRemoteProxy__(${JSON.stringify(prepared.method)}, ${JSON.stringify(url)}${optsArg});
+                    const banner = `import { remoteProxy as __abideRemoteProxy__ } from '${importName}/ui/remoteProxy';
 `
-                    return { contents, loader: 'ts' }
+                    return {
+                        contents: `${banner}${prepared.rewriteForClient(url)}`,
+                        loader: 'ts',
+                    }
                 }
                 /*
                 Server target: strip the user's rpc import, then rewrite

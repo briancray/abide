@@ -16,21 +16,9 @@ export type PreparedRpcModule = {
     /* The handler calls jsonl()/sse() — the client proxy is emitted streaming (bare call
        returns the NamedAsyncIterable). Congruent with the RemoteCallable conditional by construction. */
     streaming: boolean
-    /* The verbatim source TEXT of the endpoint's `cache` / `stream` policy (ADR-0020) — the
-       value expression of the `cache:` / `stream:` property in the opts object literal, or
-       undefined when the property (or the whole opts arg) is absent. The resolver plugin splices
-       these into the client proxy stub so `remote.cache` / `remote.stream` govern client cache
-       behaviour (staleness/SWR, the refetch clock, tags), not just the server-side read.
-
-       BUILD-TIME, SELF-CONTAINED constraint (mirrors the `outbox`-must-be-a-literal rule): the
-       text is lifted into a fresh client stub that has NONE of the source module's imports, so the
-       policy expression must reference only literals and self-contained arrow functions
-       (`tags: (args) => ['rates:' + args.base]`) — never a server-module-scope identifier or
-       import. A reference that resolves in the source module would be undefined in the stub. */
-    cachePolicyText?: string
-    streamPolicyText?: string
     exportName: string
     rewriteForServer: (url: string) => string
+    rewriteForClient: (url: string) => string
 }
 
 /* The `outbox` opts key plus its value's leading token (up to the next comma / whitespace /
@@ -85,20 +73,14 @@ export function prepareRpcModule(
     const durable = detectDurable(stripped, site.parenStart, site.parenEnd, method)
     const streaming = detectStreaming(stripped, site.parenStart, site.parenEnd)
     /* The call's top-level args (handler + optional opts), dropping a trailing-comma empty
-       part. Computed once from the ORIGINAL opts — before any streaming injection — so the
-       policy text lifted for the client stub is the author's, untouched. */
+       part. The handler is elided on the client; `opts` (schemas/cache/stream) rides through as
+       a LIVE expression in the kept module (ADR-0022 D2) — evaluated in its real scope, so it can
+       reference imported constants, composed values, and separate modules. */
     const argParts = splitTopLevelArgs(stripped, site.parenStart, site.parenEnd)
-    const optsText = argParts[1]
-    const cachePolicyText =
-        optsText === undefined ? undefined : extractObjectProperty(optsText, 'cache')
-    const streamPolicyText =
-        optsText === undefined ? undefined : extractObjectProperty(optsText, 'stream')
     return {
         method,
         durable,
         streaming,
-        cachePolicyText,
-        streamPolicyText,
         exportName: site.exportName,
         rewriteForServer(url: string): string {
             const binding = `__abideDefineRpc__(${JSON.stringify(method)}, ${JSON.stringify(url)}, `
@@ -113,6 +95,29 @@ export function prepareRpcModule(
             const [handler, opts] = argParts
             const injected = opts ? `{ streaming: true, ...(${opts}) }` : '{ streaming: true }'
             return `${head}${handler}, ${injected}${stripped.slice(site.parenEnd)}`
+        },
+        /*
+        Client rewrite, symmetric with rewriteForServer: keep the real module, swap the
+        METHOD( call for a remoteProxy( call, and ELIDE the handler argument. The handler and
+        the imports only it used become dead code the bundler tree-shakes out of the client
+        bundle (proven safe by the D3 reachability guard). `method`/`url` are the build-time
+        scalars; `opts` is left VERBATIM as a live expression, so endpoint policy (cache/stream)
+        can reference imports; `streaming` is the only genuinely build-injected flag — it's
+        derived from the elided handler body (returns jsonl()/sse()), so it can't ride `opts`.
+        remoteProxy reads only outbox/streaming/cache/stream off the opts and ignores the rest.
+        */
+        rewriteForClient(url: string): string {
+            const callHead = `${stripped.slice(0, site.callStart)}__abideRemoteProxy__(${JSON.stringify(method)}, ${JSON.stringify(url)}`
+            const opts = argParts[1]
+            let argsText: string
+            if (opts === undefined) {
+                argsText = streaming ? ', { streaming: true }' : ''
+            } else {
+                argsText = streaming ? `, { streaming: true, ...(${opts}) }` : `, ${opts}`
+            }
+            /* Keep everything from the call's closing paren onward (same slicing discipline as
+               rewriteForServer) so any trailing content after the call survives. */
+            return `${callHead}${argsText}${stripped.slice(site.parenEnd)}`
         },
     }
 }
@@ -243,116 +248,4 @@ function lastArgText(source: string, parenStart: number, parenEnd: number): stri
         i++
     }
     return lastComma === -1 ? undefined : source.slice(lastComma + 1, parenEnd)
-}
-
-/*
-The verbatim source text of a top-level property's value in an object literal —
-`extractObjectProperty('{ cache: { ttl: 5 }, timeout: 3 }', 'cache')` → `'{ ttl: 5 }'`.
-Walks depth-aware from the literal's opening brace, skipping strings / templates / comments
-/ regex (skipNonCode) so their braces, commas, and colons can't miscount. A key matches only
-at the object's own top level (immediately after `{` or a top-level `,`) and only when
-followed by `:`, so a nested occurrence (`schemas: { cache: … }`) or a shorthand (`{ cache }`)
-never matches. Returns the value expression spanning balanced braces/parens/brackets up to the
-next top-level comma or the closing brace; undefined when the key is absent.
-*/
-function extractObjectProperty(objectLiteralText: string, key: string): string | undefined {
-    const open = objectLiteralText.indexOf('{')
-    if (open === -1) {
-        return undefined
-    }
-    let depth = 0
-    /* The last non-whitespace CODE character seen (strings/comments skipped) — a key sits at
-       the top level only when it follows the opening `{` or a top-level `,`. */
-    let prevCode = ''
-    let i = open
-    while (i < objectLiteralText.length) {
-        const skipped = skipNonCode(objectLiteralText, i)
-        if (skipped !== undefined) {
-            prevCode = objectLiteralText[skipped - 1] ?? prevCode
-            i = skipped
-            continue
-        }
-        const c = objectLiteralText[i] ?? ''
-        if (/\s/.test(c)) {
-            i += 1
-            continue
-        }
-        if (c === '{' || c === '[' || c === '(') {
-            depth += 1
-            prevCode = c
-            i += 1
-            continue
-        }
-        if (c === '}' || c === ']' || c === ')') {
-            depth -= 1
-            prevCode = c
-            i += 1
-            if (depth === 0) {
-                return undefined
-            }
-            continue
-        }
-        /* A candidate key: an identifier at the object's top level, right after `{` or `,`. */
-        if (depth === 1 && (prevCode === '{' || prevCode === ',') && IDENT_START.test(c)) {
-            let j = i + 1
-            while (j < objectLiteralText.length && IDENT_PART.test(objectLiteralText[j] ?? '')) {
-                j += 1
-            }
-            const ident = objectLiteralText.slice(i, j)
-            let colon = j
-            while (colon < objectLiteralText.length && /\s/.test(objectLiteralText[colon] ?? '')) {
-                colon += 1
-            }
-            if (objectLiteralText[colon] === ':') {
-                if (ident === key) {
-                    return readPropertyValue(objectLiteralText, colon + 1)
-                }
-                /* A different key — resume just past its colon; its value walks normally below. */
-                prevCode = ':'
-                i = colon + 1
-                continue
-            }
-            /* Shorthand or spread — not a `key:` property; skip the identifier. */
-            prevCode = objectLiteralText[j - 1] ?? prevCode
-            i = j
-            continue
-        }
-        prevCode = c
-        i += 1
-    }
-    return undefined
-}
-
-/*
-Reads a property's value expression starting just after its `:` — skips leading whitespace, then
-consumes chars depth-aware (strings/comments via skipNonCode) until the top-level `,` that ends
-the property or the `}` that closes the object. Returns the trimmed value text.
-*/
-function readPropertyValue(source: string, afterColon: number): string {
-    let i = afterColon
-    while (i < source.length && /\s/.test(source[i] ?? '')) {
-        i += 1
-    }
-    const valueStart = i
-    let depth = 0
-    while (i < source.length) {
-        const skipped = skipNonCode(source, i)
-        if (skipped !== undefined) {
-            i = skipped
-            continue
-        }
-        const c = source[i]
-        if (c === '{' || c === '[' || c === '(') {
-            depth += 1
-        } else if (c === '}' || c === ']' || c === ')') {
-            if (depth === 0) {
-                break
-            }
-            depth -= 1
-        } else if (c === ',' && depth === 0) {
-            break
-        }
-        i += 1
-    }
-    return source.slice(valueStart, i).trim()
 }

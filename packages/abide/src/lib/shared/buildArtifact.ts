@@ -11,7 +11,10 @@ this: it must clean its staging dir and return `false` rather than exit, so it
 keeps its own epilogue.
 */
 export async function buildArtifact(config: BuildConfig): Promise<BuildOutput> {
-    const result = await Bun.build(config)
+    /* metafile: true so the abideResolverPlugin's onEnd reachability guard (ADR-0022 D3) can read
+       the post-DCE graph on a client build (buildDisconnected). Harmless extra output on the
+       server builds that also route through here. A caller can still override it explicitly. */
+    const result = await Bun.build({ metafile: true, ...config })
     exitOnBuildFailure(result)
     return result
 }

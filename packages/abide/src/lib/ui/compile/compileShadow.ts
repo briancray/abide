@@ -482,10 +482,13 @@ function scopeLineFor(
        `verbatim(call.expression)` below keeps the AUTHOR's text for the trailing hover ref. */
     const callee = resolveReactiveExport(call.expression, bindings)
     if (callee === 'props') {
-        /* `const {…} = props<Shape>()`: the type arg (default `Record<string, any>`)
-           IS the parent-facing prop shape, and the destructure projects verbatim against
-           the declared typed `props()` so each binding inherits its value type. */
-        const shape = call.typeArguments?.[0]
+        /* The parent-facing prop shape. Like `state`/`computed` below, it comes from the
+           generic (`const {…} = props<Shape>()`) OR the destructure's binding annotation
+           (`const {…}: Shape = props()`) — either TS-idiomatic form resolves through the
+           shadow's own imports, so an imported/aliased type just works, no inline gotcha.
+           Default `Record<string, any>`; the destructure then projects verbatim so each
+           binding inherits its value type. */
+        const shape = call.typeArguments?.[0] ?? declaration.type
         propsShapes.push(shape === undefined ? 'Record<string, any>' : verbatim(shape))
         return { text: `const ${verbatim(declaration)};`, segments: [span(declaration, 6)] }
     }

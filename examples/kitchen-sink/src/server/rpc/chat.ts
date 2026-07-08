@@ -51,38 +51,50 @@ const inputSchema = z.object({
 
 /*
 Deny-all-but-allowlist: no built-ins (`tools: []`), `dontAsk` denies anything
-unlisted, and `allow` names the two read rpcs the agent may call. Static, so
-the engine is built once at module load rather than per request.
+unlisted, and `allow` names the two read rpcs the agent may call.
+
+The engine is constructed INSIDE the handler (ADR-0022): the client rpc transform
+elides the handler and tree-shakes its imports, so a handler-scoped `engine(...)`
+takes the server-only `@abide/claude-code` import (Node builtins: child_process,
+readline, …) out of the browser bundle with it. A module-level `const chatEngine =
+engine(...)` would survive DCE — the bundler can't prove the module-load call dead —
+and leak the SDK into the client build.
 
 The system prompt tells the model what the permission layer enforces — tool
 listing shows every mcp-exposed rpc, but denial only happens at call time, so
 without this the model demos a denied rpc and then speculates about "enabling
 permissions" as if a visitor could. It also pins plain prose: the page renders
 text raw, so markdown tables would show as pipes.
-*/
-const chatEngine = engine({
-    tools: [],
-    permissions: {
-        defaultMode: 'dontAsk',
-        allow: ['mcp__kitchen_sink__getProduct', 'mcp__kitchen_sink__getRates'],
-    },
-    options: {
-        systemPrompt: [
-            'You are the demo agent on the abide kitchen-sink "agent" page, chatting with a site visitor.',
-            'Server policy allows you exactly two tools: getProduct and getRates. Every other tool you can see will be denied at call time — that allowlist is fixed server-side and nobody in this chat can change it.',
-            'When asked to demonstrate a tool, pick an allowed one. Products with IDs "1" and "2" exist — use one of those for getProduct demos. If the visitor asks for a denied rpc, attempt it once so they see the denial, then note the server-side allowlist in one sentence — never suggest changing settings or permission modes.',
-            'Reply in short plain prose. No markdown tables, headings, or bullet lists — the page renders your text verbatim.',
-        ].join('\n'),
-    },
-})
 
-/*
 POST with a schema but no explicit `clients.mcp`, so it stays off the MCP
 surface — the agent rpc is never itself a tool, which keeps the agent from
 being handed a tool that re-enters the agent. `clients.cli` is off too: a
 messages-array turn isn't a meaningful CLI subcommand. Browser-only.
 */
-export const chat = POST(({ messages }) => jsonl(agent(chatEngine, messages)), {
-    schemas: { input: inputSchema },
-    clients: { cli: false },
-})
+export const chat = POST(
+    ({ messages }) =>
+        jsonl(
+            agent(
+                engine({
+                    tools: [],
+                    permissions: {
+                        defaultMode: 'dontAsk',
+                        allow: ['mcp__kitchen_sink__getProduct', 'mcp__kitchen_sink__getRates'],
+                    },
+                    options: {
+                        systemPrompt: [
+                            'You are the demo agent on the abide kitchen-sink "agent" page, chatting with a site visitor.',
+                            'Server policy allows you exactly two tools: getProduct and getRates. Every other tool you can see will be denied at call time — that allowlist is fixed server-side and nobody in this chat can change it.',
+                            'When asked to demonstrate a tool, pick an allowed one. Products with IDs "1" and "2" exist — use one of those for getProduct demos. If the visitor asks for a denied rpc, attempt it once so they see the denial, then note the server-side allowlist in one sentence — never suggest changing settings or permission modes.',
+                            'Reply in short plain prose. No markdown tables, headings, or bullet lists — the page renders your text verbatim.',
+                        ].join('\n'),
+                    },
+                }),
+                messages,
+            ),
+        ),
+    {
+        schemas: { input: inputSchema },
+        clients: { cli: false },
+    },
+)

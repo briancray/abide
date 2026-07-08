@@ -1,11 +1,13 @@
 import { describe, expect, test } from 'bun:test'
 import { prepareRpcModule } from '../src/lib/shared/prepareRpcModule.ts'
 
-/* ADR-0020: the endpoint's `cache` / `stream` policy must ship to the client. The bundler lifts
-   the verbatim source text of the `cache:` / `stream:` property out of the rpc definition and
-   splices it into the client proxy stub so `remote.cache` / `remote.stream` govern client cache
-   behaviour (staleness/SWR, the refetch clock, tags). These tests pin the extraction and the
-   emitted client-stub opts. */
+/* ADR-0022 D2: the client rpc transform keeps the REAL module, swaps the METHOD( call for a
+   remoteProxy( call, and ELIDES the handler argument — leaving the endpoint `opts` (schemas /
+   cache / stream) as a LIVE expression in its original scope. So policy is ordinary JavaScript
+   that can reference imports and separate modules; the old text-splice of a `cache:` literal into
+   a self-contained stub (with its extractObjectProperty tokenizer) is gone. These tests pin the
+   emitted client module: handler elided, remoteProxy call, live opts verbatim, streaming injected.
+   The symmetric server rewrite is asserted separately (streamingRpc.test.ts). */
 
 const getMod = (call: string) =>
     `import { GET } from '@abide/abide/server/GET'\nexport const getRates = ${call}`
@@ -13,135 +15,101 @@ const getMod = (call: string) =>
 const streamMod = (call: string) =>
     `import { GET } from '@abide/abide/server/GET'\nimport { jsonl } from '@abide/abide/server/jsonl'\nexport const feed = ${call}`
 
-/* Mirrors abideResolverPlugin's client stub composition so the assertions pin the actual emitted
-   opts object, including the `, `-join that guards against a stray `{ , }`. */
-function clientStubOpts(prepared: ReturnType<typeof prepareRpcModule>): string {
-    const optsFields = [
-        prepared?.durable ? 'outbox: true' : undefined,
-        prepared?.streaming ? 'streaming: true' : undefined,
-        prepared?.cachePolicyText !== undefined ? `cache: ${prepared.cachePolicyText}` : undefined,
-        prepared?.streamPolicyText !== undefined
-            ? `stream: ${prepared.streamPolicyText}`
-            : undefined,
-    ].filter((field): field is string => field !== undefined)
-    return optsFields.length > 0 ? `, { ${optsFields.join(', ')} }` : ''
-}
+const clientRewrite = (source: string, url = '/rpc/rates') =>
+    prepareRpcModule(source, '@abide/abide')?.rewriteForClient(url)
 
-describe('prepareRpcModule — endpoint cache/stream policy extraction (ADR-0020)', () => {
-    test('cache with a literal ttl', () => {
+describe('prepareRpcModule — client rpc transform (ADR-0022 D2)', () => {
+    test('the field-based policy text extraction is gone', () => {
         const prepared = prepareRpcModule(
             getMod('GET((a) => a, { cache: { ttl: 5000 } })'),
             '@abide/abide',
         )
-        expect(prepared?.cachePolicyText).toBe('{ ttl: 5000 }')
-        expect(prepared?.streamPolicyText).toBeUndefined()
-        expect(clientStubOpts(prepared)).toBe(', { cache: { ttl: 5000 } }')
+        expect(prepared).toBeDefined()
+        /* No more cachePolicyText/streamPolicyText on the prepared module. */
+        expect('cachePolicyText' in (prepared as object)).toBe(false)
+        expect('streamPolicyText' in (prepared as object)).toBe(false)
     })
 
-    test('cache with an arrow-function tags (arg-derived group)', () => {
-        const prepared = prepareRpcModule(
-            getMod(
-                "GET((a) => a, { cache: { ttl: 60000, tags: (args) => ['rates:' + args.base] } })",
-            ),
-            '@abide/abide',
-        )
-        expect(prepared?.cachePolicyText).toBe(
-            "{ ttl: 60000, tags: (args) => ['rates:' + args.base] }",
-        )
-        expect(clientStubOpts(prepared)).toBe(
-            ", { cache: { ttl: 60000, tags: (args) => ['rates:' + args.base] } }",
+    test('a literal cache policy rides through as a live opts expression, handler elided', () => {
+        const out = clientRewrite(getMod('GET((a) => myHandler(a), { cache: { ttl: 5000 } })'))
+        expect(out).toContain('__abideRemoteProxy__("GET", "/rpc/rates", { cache: { ttl: 5000 } })')
+        /* The handler and its body are gone — no arg name, no call to the handler helper. */
+        expect(out).not.toContain('myHandler')
+        expect(out).not.toContain('=>')
+    })
+
+    test('an IMPORTED policy value survives verbatim (the self-contained constraint is gone)', () => {
+        const source =
+            `import { ratePolicy } from '../shared/ratePolicy.ts'\n` +
+            `import { GET } from '@abide/abide/server/GET'\n` +
+            `export const getRates = GET((a) => a, { cache: ratePolicy })`
+        const out = clientRewrite(source)
+        /* The policy import is kept (referenced by the live opts) and the opts references it. */
+        expect(out).toContain(`import { ratePolicy } from '../shared/ratePolicy.ts'`)
+        expect(out).toContain('__abideRemoteProxy__("GET", "/rpc/rates", { cache: ratePolicy })')
+    })
+
+    test('an imported const inside the policy rides through', () => {
+        const source =
+            `import { RATE_TTL } from '../shared/ratePolicy.ts'\n` +
+            `import { GET } from '@abide/abide/server/GET'\n` +
+            `export const getRates = GET((a) => a, { cache: { ttl: RATE_TTL } })`
+        const out = clientRewrite(source)
+        expect(out).toContain(
+            '__abideRemoteProxy__("GET", "/rpc/rates", { cache: { ttl: RATE_TTL } })',
         )
     })
 
-    test('stream with n', () => {
-        const prepared = prepareRpcModule(
+    test('no opts → a bare remoteProxy call', () => {
+        const out = clientRewrite(getMod('GET((a) => a)'))
+        expect(out).toContain('__abideRemoteProxy__("GET", "/rpc/rates")')
+        expect(out).not.toContain('=>')
+    })
+
+    test('streaming, no opts → { streaming: true } injected', () => {
+        const out = clientRewrite(streamMod('GET((a) => jsonl(readSource()))'), '/rpc/feed')
+        expect(out).toContain('__abideRemoteProxy__("GET", "/rpc/feed", { streaming: true })')
+        /* The import line survives textually (DCE drops it at build); the handler BODY is elided. */
+        expect(out).not.toContain('readSource()')
+        expect(out).not.toContain('=>')
+    })
+
+    test('streaming + opts → streaming flag spread over the live opts', () => {
+        const out = clientRewrite(
             streamMod('GET((a) => jsonl(source()), { stream: { n: 20 } })'),
-            '@abide/abide',
+            '/rpc/feed',
         )
-        expect(prepared?.streamPolicyText).toBe('{ n: 20 }')
-        expect(prepared?.cachePolicyText).toBeUndefined()
-        expect(prepared?.streaming).toBe(true)
-        /* streaming flag + stream policy both land in the stub opts. */
-        expect(clientStubOpts(prepared)).toBe(', { streaming: true, stream: { n: 20 } }')
-    })
-
-    test('absent policy → both undefined, no policy in the stub opts', () => {
-        const prepared = prepareRpcModule(
-            getMod('GET((a) => a, { schemas: { input } })'),
-            '@abide/abide',
+        expect(out).toContain(
+            '__abideRemoteProxy__("GET", "/rpc/feed", { streaming: true, ...({ stream: { n: 20 } }) })',
         )
-        expect(prepared?.cachePolicyText).toBeUndefined()
-        expect(prepared?.streamPolicyText).toBeUndefined()
-        expect(clientStubOpts(prepared)).toBe('')
     })
 
-    test('a bare handler (no opts) → both undefined', () => {
-        const prepared = prepareRpcModule(getMod('GET((a) => a)'), '@abide/abide')
-        expect(prepared?.cachePolicyText).toBeUndefined()
-        expect(prepared?.streamPolicyText).toBeUndefined()
-        expect(clientStubOpts(prepared)).toBe('')
-    })
-
-    test('a trailing comma after opts does not swallow the policy', () => {
-        const prepared = prepareRpcModule(
-            getMod('GET((a) => a, { cache: { ttl: 5 } },)'),
-            '@abide/abide',
+    test('a durable POST keeps outbox in the live opts (read at runtime, not build-injected)', () => {
+        const source =
+            `import { POST } from '@abide/abide/server/POST'\n` +
+            `export const save = POST((a) => a, { outbox: true, cache: { ttl: 0 } })`
+        const prepared = prepareRpcModule(source, '@abide/abide')
+        expect(prepared?.durable).toBe(true)
+        const out = prepared?.rewriteForClient('/rpc/save')
+        /* outbox rides the live opts verbatim; no separately-injected `outbox: true`. */
+        expect(out).toContain(
+            '__abideRemoteProxy__("POST", "/rpc/save", { outbox: true, cache: { ttl: 0 } })',
         )
-        expect(prepared?.cachePolicyText).toBe('{ ttl: 5 }')
     })
 
-    test('policy alongside schemas / clients — only the cache value is lifted', () => {
-        const prepared = prepareRpcModule(
+    test('a trailing comma after opts does not leak into the emitted call', () => {
+        const out = clientRewrite(getMod('GET((a) => a, { cache: { ttl: 5 } },)'))
+        expect(out).toContain('__abideRemoteProxy__("GET", "/rpc/rates", { cache: { ttl: 5 } })')
+    })
+
+    test('policy alongside schemas / clients is forwarded whole (no per-key extraction)', () => {
+        const out = clientRewrite(
             getMod(
                 'GET((a) => a, { schemas: { input, output }, clients: { browser: true }, cache: { ttl: 5, shared: true } })',
             ),
-            '@abide/abide',
         )
-        expect(prepared?.cachePolicyText).toBe('{ ttl: 5, shared: true }')
-        expect(prepared?.streamPolicyText).toBeUndefined()
-    })
-
-    test('a nested `cache` key inside schemas does not misfire', () => {
-        const prepared = prepareRpcModule(
-            getMod('GET((a) => a, { schemas: { input: { cache: 1 } } })'),
-            '@abide/abide',
+        expect(out).toContain(
+            '__abideRemoteProxy__("GET", "/rpc/rates", { schemas: { input, output }, clients: { browser: true }, cache: { ttl: 5, shared: true } })',
         )
-        expect(prepared?.cachePolicyText).toBeUndefined()
-    })
-
-    test('a shorthand `cache` (no colon) is not treated as a policy', () => {
-        const prepared = prepareRpcModule(getMod('GET((a) => a, { cache })'), '@abide/abide')
-        expect(prepared?.cachePolicyText).toBeUndefined()
-    })
-
-    test('streaming + cache + stream all combine in the stub opts', () => {
-        const prepared = prepareRpcModule(
-            streamMod('GET((a) => jsonl(source()), { stream: { n: 3 }, cache: { ttl: 5 } })'),
-            '@abide/abide',
-        )
-        expect(prepared?.streaming).toBe(true)
-        expect(prepared?.cachePolicyText).toBe('{ ttl: 5 }')
-        expect(prepared?.streamPolicyText).toBe('{ n: 3 }')
-        expect(clientStubOpts(prepared)).toBe(
-            ', { streaming: true, cache: { ttl: 5 }, stream: { n: 3 } }',
-        )
-    })
-
-    test('a `cache:` mention inside a string in the opts does not misfire', () => {
-        const prepared = prepareRpcModule(
-            getMod("GET((a) => a, { timeout: 3, note: 'cache: none' })"),
-            '@abide/abide',
-        )
-        expect(prepared?.cachePolicyText).toBeUndefined()
-    })
-
-    test('a durable POST keeps outbox and can also carry cache — both in the stub opts', () => {
-        const prepared = prepareRpcModule(
-            "import { POST } from '@abide/abide/server/POST'\nexport const save = POST((a) => a, { outbox: true, cache: { ttl: 0 } })",
-            '@abide/abide',
-        )
-        expect(prepared?.durable).toBe(true)
-        expect(prepared?.cachePolicyText).toBe('{ ttl: 0 }')
-        expect(clientStubOpts(prepared)).toBe(', { outbox: true, cache: { ttl: 0 } }')
     })
 })

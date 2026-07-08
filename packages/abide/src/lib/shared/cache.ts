@@ -202,9 +202,7 @@ function readThrough<Args, Return>(
     const replayable = method !== undefined && REPLAYABLE_METHODS.has(method.toUpperCase())
     /* Remote policy is endpoint-declared — the bottom (and only) layer; a producer has no
        endpoint, so its explicit cache() options stand in. */
-    const policy = isRemote
-        ? resolveEndpointCache(fn as AnyRemote<Args, Return>, args)
-        : options
+    const policy = isRemote ? resolveEndpointCache(fn as AnyRemote<Args, Return>, args) : options
     /* SWR retention is a client concern (the tab store lives; revalidation is
        visible). On the server there is no live UI to hold stale, so a smart read
        never retains — it coalesces only. Unconditional for a replayable read now

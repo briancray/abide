@@ -2,6 +2,7 @@ import { error } from '@abide/abide/server/error'
 import { GET } from '@abide/abide/server/GET'
 import { json } from '@abide/abide/server/json'
 import { reachable } from '@abide/abide/shared/reachable'
+import { ratePolicy } from '../../shared/ratePolicy.ts'
 
 type Rates = { base: string; date: string; rates: Record<string, number> }
 
@@ -33,7 +34,11 @@ export const getRates = GET(
         const rates = (await response.json()) as Rates
         return json(rates)
     },
-    { cache: { ttl: 60_000, debounce: 300, tags: (args) => [`rates:${args?.base ?? 'USD'}`] } },
+    /* ADR-0022: the cache policy is an IMPORTED value from a shared module, not an inline literal.
+       The client rpc transform forwards this live `opts` object, so `ratePolicy` reaches the client
+       bundle while the handler above (and its server-only `error`/`json`/`reachable` imports)
+       tree-shakes out. */
+    { cache: ratePolicy },
 )
 
 /*

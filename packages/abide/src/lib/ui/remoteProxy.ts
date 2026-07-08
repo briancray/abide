@@ -26,18 +26,27 @@ import { watch } from './watch.ts'
    branch with `error instanceof HttpError && error.kind === 'queued'`. */
 const QUEUED = 'queued'
 
-/* Build-time options the bundler stamps onto the client proxy stub. `outbox: true` parks an
-   unreachable call for replay; `streaming: true` (handler returns jsonl()/sse()) makes the bare
-   call return the NamedAsyncIterable directly; `cache` / `stream` carry the endpoint's declared
-   cache/stream policy (ADR-0020) so the client honours the ttl (staleness/SWR), the refetch clock
-   (throttle/debounce), and tags — spliced verbatim from the rpc definition by the resolver plugin;
-   `store` exists for testing (production uses the default persistence store). */
+/* The proxy's third argument. ADR-0022 D2: the client rpc transform passes the endpoint's LIVE
+   `opts` object here verbatim, so the type widens to the endpoint opts shape — remoteProxy reads
+   only the four keys below and IGNORES the rest (`schemas` / `clients` / `crossOrigin` / `timeout`
+   / `maxBodySize`), which ride along harmlessly. `outbox: true` parks an unreachable call for
+   replay; `streaming: true` (handler returns jsonl()/sse(), build-injected) makes the bare call
+   return the NamedAsyncIterable directly; `cache` / `stream` carry the endpoint's declared policy
+   (ADR-0020) so the client honours the ttl (staleness/SWR), the refetch clock (throttle/debounce),
+   and tags; `store` exists for testing (production uses the default persistence store). */
 export type DurableOptions<Args = unknown> = {
     outbox?: boolean
     streaming?: boolean
     cache?: CachePolicy<Args>
     stream?: StreamPolicy
     store?: PersistenceStore
+    /* Ignored endpoint opts keys, present only so the author's live `opts` object type-checks
+       when the client transform forwards it verbatim (ADR-0022). */
+    schemas?: unknown
+    clients?: unknown
+    crossOrigin?: unknown
+    timeout?: unknown
+    maxBodySize?: unknown
 }
 
 /*
