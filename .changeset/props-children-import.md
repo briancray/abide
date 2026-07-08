@@ -1,5 +1,5 @@
 ---
-'@abide/abide': major
+'@abide/abide': minor
 ---
 
 `props` is now a required import (`@abide/abide/ui/props`), resolved by import binding like `state` — a bare ambient `props()` no longer works, and every component that reads props must `import { props } from '@abide/abide/ui/props'`.
