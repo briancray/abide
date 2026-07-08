@@ -406,7 +406,7 @@ function cellStatements(
         /* `linked` wraps its seed argument (a bare value/`await`/stream expression becomes a
            thunk, a literal `() => …` passes through) so the runtime primitive can route it to
            an async cell; `state` is a value-taker — its args pass verbatim, never wrapped. */
-        if (callee === 'linked') {
+        if (callee === 'linked' && args[0] !== undefined) {
             const wrapped = wrapSeed(args[0])
             if (isAsyncSeed(wrapped)) {
                 warnPostAwaitReads(wrapped, signalNames)
