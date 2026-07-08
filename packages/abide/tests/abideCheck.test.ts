@@ -88,6 +88,47 @@ describe('abide check', () => {
         expect(parent[0]!.message).toContain('not assignable')
     })
 
+    test('an IMPORTED props type via the destructure annotation is checked in the parent (ADR-0022 D4)', () => {
+        /* `const {…}: MyProps = props()` — the TS-idiomatic annotation form with a type
+           imported from a sibling module. Before the `?? declaration.type` fallback the
+           annotation was ignored and __Props collapsed to Record<string, any>, so a parent
+           could pass anything — a silent false negative. Types now behave like TypeScript. */
+        const dir = project({
+            'props-types.ts': `export type MyProps = { label: string }\n`,
+            'child.abide': `<script>\nimport { props } from '@abide/abide/ui/props'\nimport type { MyProps } from './props-types.ts'\nconst { label }: MyProps = props()\n</script>\n<span>{label}</span>\n`,
+            'parent.abide': `<script>\nimport Child from './child.abide'\n</script>\n<Child label={42} />\n`,
+        })
+        const parent = collectAbideDiagnostics(createShadowProgram(dir)).filter((diagnostic) =>
+            diagnostic.file.endsWith('parent.abide'),
+        )
+        expect(parent).toHaveLength(1)
+        expect(parent[0]!.message).toContain('not assignable')
+    })
+
+    test('an imported props type via the props<T>() generic is checked in the parent', () => {
+        /* The generic-arg form with an imported type already resolves through the shadow's
+           real program (ADR-0022 D4 discovery) — a regression lock so it stays that way. */
+        const dir = project({
+            'props-types.ts': `export type MyProps = { label: string }\n`,
+            'child.abide': `<script>\nimport { props } from '@abide/abide/ui/props'\nimport type { MyProps } from './props-types.ts'\nconst { label } = props<MyProps>()\n</script>\n<span>{label}</span>\n`,
+            'parent.abide': `<script>\nimport Child from './child.abide'\n</script>\n<Child label={42} />\n`,
+        })
+        const parent = collectAbideDiagnostics(createShadowProgram(dir)).filter((diagnostic) =>
+            diagnostic.file.endsWith('parent.abide'),
+        )
+        expect(parent).toHaveLength(1)
+        expect(parent[0]!.message).toContain('not assignable')
+    })
+
+    test('the imported-annotation props form type-checks clean with a valid parent', () => {
+        const dir = project({
+            'props-types.ts': `export type MyProps = { label: string }\n`,
+            'child.abide': `<script>\nimport { props } from '@abide/abide/ui/props'\nimport type { MyProps } from './props-types.ts'\nconst { label }: MyProps = props()\n</script>\n<span>{label.toUpperCase()}</span>\n`,
+            'parent.abide': `<script>\nimport Child from './child.abide'\n</script>\n<Child label="hi" />\n`,
+        })
+        expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
+    })
+
     test('a call statement with no trailing semicolon does not merge into the next component', () => {
         /* The script's last statement is a call (`effect(...)`) left unterminated, and
            the template starts with a prop-bearing component — whose shadow emission

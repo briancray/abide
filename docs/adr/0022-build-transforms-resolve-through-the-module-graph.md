@@ -132,13 +132,21 @@ guard would flag them wrongly. So the guard asks the real question:
   replaced with a `remoteProxy` / `socketProxy` stub — the isomorphic-callable mechanism,
   not a crossing.
 
-### D4 — `props<T>()` resolves its type through the shadow's real program
+### D4 — component types behave like TypeScript (no inline-only gotcha)
 
-The shadow is already a virtual `.ts` at the source file's own path (ADR-0010), so its
-imports resolve. Extend it so a component's props type may be resolved *through that
-program* — an imported or aliased `Props` — rather than only the inline `prop<T>()`
-literal harvest. Same principle as D1: use the type graph TS already has, don't lift a
-literal.
+Investigation (`docs/handoffs/adr-0022-d4-props-findings.md`) found the premise was mostly
+already true: the shadow is a virtual `.ts` at the source path (ADR-0010), so a
+`props<MyProps>()` generic argument — *including* an imported/aliased `MyProps` — already
+resolves through the real TS program (a type *reference* stays in a module that carries its
+`import type`; TS resolves it natively — not the D1 anti-pattern). The actual gap was narrow:
+the TS-idiomatic *annotation* form `const {…}: MyProps = props()` was silently ignored
+(`compileShadow.ts` read only the generic arg, defaulting to `Record<string, any>` — a false
+negative that let a parent pass anything). The sibling `state`/`computed` branches already
+honored both forms via `call.typeArguments?.[0] ?? declaration.type`; the `props` branch just
+omitted the fallback. **Fixed** by adding it — both TS-idiomatic forms now resolve
+identically, so component prop types behave like TypeScript with no inline-only special case.
+(Implemented; the ADR-0010 reference to a singular `prop<T>()` reader was already stale — that
+form is removed.)
 
 ## Consequences
 
@@ -183,4 +191,4 @@ literal.
 - No isolation sweep needed — D3 adds no edges, only makes the existing
   client-reaches-server edge reachability-based. The post-DCE-metafile prerequisite is
   **confirmed** (Bun 1.3.14, see D3), so no fallback is required.
-- D4 can land independently of D2/D3 (separate subsystem).
+- D4 landed independently (a one-line `?? declaration.type` in `compileShadow.ts` + regression tests).
