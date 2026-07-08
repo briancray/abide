@@ -1,5 +1,44 @@
 # abide
 
+## 0.49.0
+
+### Minor Changes
+
+- dfb4f13: props import required + additive route-shape type; drop ambient children ([`0dbe248`](https://github.com/briancray/abide/commit/0dbe248fc959f3ca8168fb83e6f30619a17eff3b))
+- dfb4f13: slotted content rides the children prop key as a Snippet ([`0de19e5`](https://github.com/briancray/abide/commit/0de19e594dabb6ddd92b08d5e473f13296f17247))
+- dfb4f13: publish abide/ui/props module for the props reader ([`197c1a9`](https://github.com/briancray/abide/commit/197c1a900c0ea81b40d1cbb4a6bec1e021b9e932))
+- dfb4f13: type element attach node param from the element tag ([`444ef35`](https://github.com/briancray/abide/commit/444ef356372f8fc39a0b5786bca2f70dcf750c53))
+- 951e90b: `props` is now a required import (`@abide/abide/ui/props`), resolved by import binding like `state` — a bare ambient `props()` no longer works, and every component that reads props must `import { props } from '@abide/abide/ui/props'`.
+
+    `children` is now an ordinary declared prop instead of an ambient callable: read it with `const { children } = props<{ children: Snippet }>()` (`Snippet` from `@abide/abide/shared/snippet`). Slotted content (`<Panel>…</Panel>`) and an explicit `children={aSnippet}` attribute now set the same `children` prop key (slotted content wins if both are present). `props<T>()` stays additive — a page/layout still gets its route-param shape auto-typed, and declaring `children` (or any other prop) only adds to it.
+
+    The `Snippet` type's generic changed from its internal payload to its call arguments: `Snippet<Args extends unknown[] = []>` is now `(...args: Args) => SnippetValue` — `children` is `Snippet` (invoked `children()`), a row/label snippet is `Snippet<[Item]>` (invoked `row(item)`). The former payload-generic form (`Snippet<Payload>` describing the value flowing through) is gone; the internal payload is the newly exported `SnippetValue`.
+
+    **Behavior change:** an unguarded `{children()}` on a component mounted without children now throws at render, where it previously rendered nothing. Guard with `{#if children}{children()}{:else}…{/if}`, or declare `children: Snippet` as a required (non-optional) prop so `abide check` catches missing children at the call site.
+
+    Migration: add `import { props } from '@abide/abide/ui/props'` to every component that calls `props()`; for any component that reads `children`, add `import type { Snippet } from '@abide/abide/shared/snippet'` and declare it — `const { children } = props<{ children: Snippet }>()` (or `children?: Snippet` if optional).
+
+### Patch Changes
+
+- 4a6bf93: mount a reactive/loop-bound component tag by its value, not the cell ([`32a7cb8`](https://github.com/briancray/abide/commit/32a7cb8bdef0800d76b418eefbe550b0a939cd73))
+- dfb4f13: correct UiProps.children to the ordinary prop-thunk shape ([`33a0de7`](https://github.com/briancray/abide/commit/33a0de72dc2fe6ce4a0e025e4158ab192e47f1f0))
+- c7d25e4: type state<T>(undefined) and binding-annotated state() as T | undefined ([`3c40d99`](https://github.com/briancray/abide/commit/3c40d9981617968330a00bc2f034456b80365419))
+- c7d25e4: await a snippet whose body fills a {children()} slot ([`4c2744b`](https://github.com/briancray/abide/commit/4c2744bc1aa42728a80adb3426a77c02c79b30d4))
+- dfb4f13: repair pre-existing gate failures blocking release ([`4c55a4a`](https://github.com/briancray/abide/commit/4c55a4a1cbcb0b2afc842f7cc7134aed590006ce))
+- dfb4f13: layout child sentinel + restProps skip move to the children key ([`500d1d8`](https://github.com/briancray/abide/commit/500d1d8d696147602eb1ce34706cbbbf724ceb0b))
+- dfb4f13: fix stale props-declaration comment in compileShadow ([`532e079`](https://github.com/briancray/abide/commit/532e0796c54aa77c7b155145ae2d16193b7de4e5))
+- c7d25e4: expand a thrown Bun.build AggregateError into per-file diagnostics ([`5643d95`](https://github.com/briancray/abide/commit/5643d95691dd9211bc5f3edb5a2ae77aa3989f63))
+- dfb4f13: children lowers as a destructured prop, not $children ([`60bbbeb`](https://github.com/briancray/abide/commit/60bbbeb15cae41d34e5f5b4f07590bf0a5a1b795))
+- dfb4f13: resolve 35 correctness/ergonomics findings from full-tree audit ([`73a72ac`](https://github.com/briancray/abide/commit/73a72ac1946f901f76d790b38fa3ebbf29b661fe))
+- dfb4f13: extract buildArtifact (build-or-die primitive) ([`938e312`](https://github.com/briancray/abide/commit/938e3129f03cb6787624703422cd9472fbdcb83b))
+- dfb4f13: format spreadProps + renderChain to canonical prettier ([`97b1565`](https://github.com/briancray/abide/commit/97b1565670eb0977b8079425f8e92becd6deb68e))
+- dfb4f13: thunk-wrap layout children sentinel so {#if children} presence reads truthy ([`a884de1`](https://github.com/briancray/abide/commit/a884de1bbb0fcffaea91268cf49aa1d1b24a3d7a))
+- 4a6bf93: drop an await settle whose anchor was detached from the tree ([`ad3d00c`](https://github.com/briancray/abide/commit/ad3d00c36ecfd935721164e7ebff7a7b3fffca4e))
+- dfb4f13: resolve props by import binding, not ambient special-case ([`b624893`](https://github.com/briancray/abide/commit/b624893745aa0e1fdb407047b15f29ac0ceac3ec))
+- dfb4f13: shadow declares props under the author's local alias ([`b821a5b`](https://github.com/briancray/abide/commit/b821a5bfef17233b2aa24502ea397eede62329a0))
+- dfb4f13: extract withoutHydration (5 sites -> 1 helper) ([`c36be09`](https://github.com/briancray/abide/commit/c36be09d64846f76216bfcc7932cdbc026631f04))
+- dfb4f13: redefine Snippet<Args> as a callable; add SnippetValue ([`ecc861f`](https://github.com/briancray/abide/commit/ecc861f589d5149a299b92ba6d08fd362644bcd1))
+
 ## 0.48.0
 
 ### Minor Changes
