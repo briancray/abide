@@ -1,3 +1,4 @@
+import { AbideCompileError } from './AbideCompileError.ts'
 import { decodeHtmlEntities } from './decodeHtmlEntities.ts'
 import { interpolatedTemplateLiteral } from './interpolatedTemplateLiteral.ts'
 import { isWhitespaceText } from './isWhitespaceText.ts'
@@ -45,6 +46,12 @@ type Braced = { code: string; loc: number }
 export function parseTemplate(source: string, baseOffset = 0): { nodes: TemplateNode[] } {
     let cursor = 0
 
+    /* A per-parse counter minting the synthetic binding name for each `{await expr}`
+       interpolation — `__await0`, `__await1`, … — so every desugared block in this
+       component binds a distinct, collision-safe local. Reset per parse, so the first
+       interpolation of any component is always `__await0`. */
+    let awaitInterpolationCount = 0
+
     /* Reads a `{...}` expression starting at `cursor` (on the `{`), tracking
        string literals and nested braces so the matching `}` is found. `loc` is the
        absolute offset (baseOffset-relative) of the trimmed code's first char. */
@@ -72,6 +79,60 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
         const raw = source.slice(start, cursor - 1)
         const leading = raw.length - raw.trimStart().length
         return { code: raw.trim(), loc: baseOffset + start + leading }
+    }
+
+    /* True when the cursor sits on a standalone `{await …}` interpolation — a braced
+       expression whose first token is a top-level `await`. Peeks WITHOUT consuming
+       (skips whitespace after `{`, then matches `await` on a word boundary), so the
+       scan loops can route it to `readAwaitInterpolation` before falling to `readText`.
+       A `{#`/`{:`/`{/` block token is not interpolation, so it is excluded. */
+    function atAwaitInterpolation(): boolean {
+        if (source.charAt(cursor) !== '{') {
+            return false
+        }
+        const next = source.charAt(cursor + 1)
+        if (next === '#' || next === ':' || next === '/') {
+            return false
+        }
+        let index = cursor + 1
+        while (index < source.length && WHITESPACE.test(source.charAt(index))) {
+            index += 1
+        }
+        /* `await` at depth 0 with a following word boundary — spares `awaiting`/`awaitable`. */
+        return (
+            source.startsWith('await', index) && !/\w/.test(source.charAt(index + 'await'.length))
+        )
+    }
+
+    /* Reads a `{await expr}` interpolation and desugars it to a BLOCKING `await` node —
+       equivalent to `{#await expr then __awaitN}{__awaitN}{/await}`. The leading `await`
+       token is stripped from the expression (it marks the syntactic await, not part of
+       the promise); the resolved value binds a fresh synthetic name and renders as the
+       block's sole text child. No new node kind or codegen — the synthesised node flows
+       through the same blocking-await machinery the explicit block uses. */
+    function readAwaitInterpolation(): TemplateNode {
+        const { code, loc } = readBracedExpression()
+        const afterAwait = code.slice('await'.length)
+        const promise = afterAwait.trim()
+        if (promise === '') {
+            throw new AbideCompileError('[abide] {await …} requires an expression to await', loc)
+        }
+        /* `loc` points at the leading `await`; advance past it (and any whitespace) so the
+           node's `loc` aligns with the promise expression — the shadow source-map invariant
+           (source text at `loc` equals the emitted code). The synthetic binding has no source
+           position, so its `asLoc` and the reading text part's `loc` stay undefined. */
+        const promiseLoc =
+            loc + 'await'.length + (afterAwait.length - afterAwait.trimStart().length)
+        const binding = `__await${awaitInterpolationCount++}`
+        return {
+            kind: 'await',
+            promise,
+            blocking: true,
+            as: binding,
+            children: [{ kind: 'text', parts: [{ kind: 'expression', code: binding }] }],
+            loc: promiseLoc,
+            asLoc: undefined,
+        }
     }
 
     /* Skips an HTML comment starting at `cursor` (on `<!--`), advancing past its
@@ -175,11 +236,13 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
             if (condition === '') {
                 throw new Error('[abide] {#if} requires a condition expression')
             }
+            rejectAwaitValue(condition, exprLoc(open.loc, open.body, start))
             const children = readBlockChildren('if')
             return { kind: 'if', condition, children, loc: exprLoc(open.loc, open.body, start) }
         }
         if (keyword === 'for') {
             const head = parseForHead(open.body, open.loc)
+            rejectAwaitValue(head.items, head.loc)
             const children = readBlockChildren('for')
             return {
                 kind: 'each',
@@ -227,6 +290,7 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
             if (subject === '') {
                 throw new Error('[abide] {#switch} requires a subject expression')
             }
+            rejectAwaitValue(subject, exprLoc(open.loc, open.body, start))
             const children = readBlockChildren('switch')
             return { kind: 'switch', subject, children, loc: exprLoc(open.loc, open.body, start) }
         }
@@ -280,6 +344,8 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
             nodes.push(readBlock())
         } else if (atChildrenCall()) {
             nodes.push(readChildrenCall())
+        } else if (atAwaitInterpolation()) {
+            nodes.push(readAwaitInterpolation())
         } else if (source.startsWith('<!--', cursor)) {
             skipComment()
         } else if (atStyleTag()) {
@@ -463,6 +529,9 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
                 if (next === '#' || next === ':' || next === '/') {
                     break // a block/continuation/close token — not interpolation
                 }
+                if (atAwaitInterpolation()) {
+                    break // a `{await …}` — read as its own node by the enclosing scan loop
+                }
                 if (literal !== '') {
                     parts.push({ kind: 'static', value: decodeHtmlEntities(literal) })
                     literal = ''
@@ -527,6 +596,7 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
             }
             if (source.charAt(cursor) === '{') {
                 const { code, loc } = readBracedExpression()
+                rejectAwaitValue(code, loc) // no block can be synthesised in an attribute value
                 if (name.startsWith('on')) {
                     attrs.push({ kind: 'event', event: name.slice(2), code, loc })
                 } else if (name.startsWith('bind:')) {
@@ -555,6 +625,7 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
                             literal = ''
                         }
                         const { code, loc } = readBracedExpression()
+                        rejectAwaitValue(code, loc) // no block in a quoted attribute value
                         parts.push({ kind: 'expression', code, loc })
                     } else {
                         literal += source.charAt(cursor)
@@ -695,6 +766,8 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
                 nodes.push(readBlock())
             } else if (atChildrenCall()) {
                 nodes.push(readChildrenCall())
+            } else if (atAwaitInterpolation()) {
+                nodes.push(readAwaitInterpolation())
             } else if (source.charAt(cursor) === '<') {
                 nodes.push(readElement())
             } else {
@@ -715,6 +788,8 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
             roots.push(readBlock())
         } else if (atChildrenCall()) {
             roots.push(readChildrenCall())
+        } else if (atAwaitInterpolation()) {
+            roots.push(readAwaitInterpolation())
         } else if (source.charAt(cursor) === '<') {
             roots.push(readElement())
         } else {
@@ -723,6 +798,20 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
     }
     rejectStrayBranches(roots, undefined)
     return { nodes: roots }
+}
+
+/* Rejects a leading top-level `await` in a NON-content value position — an attribute
+   value, or an `{#if}`/`{#for}`/`{#switch}` head. `{await …}` desugars to a blocking
+   await BLOCK, which can only stand where element content stands; in a value slot there
+   is no block to synthesise. `code` is the already-trimmed expression, so a depth-0
+   leading `await` is simply its prefix. */
+function rejectAwaitValue(code: string, loc: number): void {
+    if (AWAIT_PREFIX.test(code)) {
+        throw new AbideCompileError(
+            '[abide] {await …} is only valid as element content — in an attribute value or an {#if}/{#for}/{#switch} head, use computed(await …) and bind the cell',
+            loc,
+        )
+    }
 }
 
 /* Finds the index of a ` <token> ` keyword (` of `, ` by `) at brace/paren/bracket
