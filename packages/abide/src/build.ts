@@ -81,6 +81,9 @@ export async function build({
             splitting: true,
             minify,
             sourcemap: 'linked',
+            /* The abideResolverPlugin's onEnd reachability guard (ADR-0022 D3) reads this to
+               classify surviving modules post-DCE and reject any server-only code that leaked. */
+            metafile: true,
             naming: {
                 entry: 'client-[hash].[ext]',
                 chunk: '[name]-[hash].[ext]',

@@ -1,5 +1,5 @@
-import type { RpcOptions } from './RpcOptions.ts'
 import type { NamedAsyncIterable } from './NamedAsyncIterable.ts'
+import type { RpcOptions } from './RpcOptions.ts'
 
 /*
 Call signature shared by RemoteFunction and RawRemoteFunction. The base

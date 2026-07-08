@@ -42,6 +42,32 @@ describe('remoteProxy endpoint policy — client-side (ADR-0020)', () => {
         expect(getRates.raw.cache?.ttl).toBe(20)
     })
 
+    test('an IMPORTED policy value is honored — ADR-0022: opts is a live expression, not a lifted literal', () => {
+        /* Stands in for `import { RATE_TTL, ratePolicy } from '$shared/ratePolicy'` — the D2 client
+           transform forwards the live opts object, so a policy composed from imported values reaches
+           the client proxy exactly as a literal would. The old text-splice could only carry inline
+           literals; this is the constraint the ADR deletes. */
+        const RATE_TTL = 60_000
+        const ratePolicy = {
+            ttl: RATE_TTL,
+            debounce: 300,
+            tags: (args: { base?: string }) => ['rates:' + (args.base ?? 'USD')],
+        }
+        const getRates = remoteProxy<{ base?: string }, { rate: number }>(
+            'GET',
+            '/rpc/importedRates',
+            {
+                cache: ratePolicy,
+            },
+        )
+        expect(getRates.cache?.ttl).toBe(RATE_TTL)
+        expect(getRates.cache?.debounce).toBe(300)
+        expect(
+            (getRates.cache?.tags as (a: { base?: string }) => string[])({ base: 'EUR' }),
+        ).toEqual(['rates:EUR'])
+        expect(getRates.raw.cache?.ttl).toBe(RATE_TTL)
+    })
+
     test('no policy → cache/stream undefined (unchanged default)', () => {
         const plain = remoteProxy<undefined, { ok: boolean }>('GET', '/rpc/plain')
         expect(plain.cache).toBeUndefined()
