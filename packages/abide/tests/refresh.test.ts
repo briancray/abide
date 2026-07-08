@@ -84,7 +84,7 @@ describe('refresh()', () => {
         expect(n).toBe(1)
         tracked.stop()
         await settle()
-        expect(cacheStoreSlot.fallback.entries.has('GET /rpc/refreshNoReader')).toBe(true)
+        expect(cacheStoreSlot.fallback!.entries.has('GET /rpc/refreshNoReader')).toBe(true)
 
         /* No listener left to swap a fresh value into → the refetch is skipped and the
            entry is dropped so the next read reloads fresh, rather than firing now. */
@@ -92,7 +92,7 @@ describe('refresh()', () => {
         await settle()
         expect(n).toBe(1)
         expect(refreshing(getN)).toBe(false)
-        expect(cacheStoreSlot.fallback.entries.has('GET /rpc/refreshNoReader')).toBe(false)
+        expect(cacheStoreSlot.fallback!.entries.has('GET /rpc/refreshNoReader')).toBe(false)
     })
 
     test('refresh() with no match is a no-op (nothing to refetch)', async () => {
