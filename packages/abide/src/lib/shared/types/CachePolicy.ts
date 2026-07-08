@@ -6,13 +6,15 @@ also accepts an arg-derived function so the group can vary by call. That makes t
 type generic over the rpc's `Args`: `(args) => ['rates:' + args.base]` is typed
 against the endpoint's own argument shape.
 
-- `ttl` — retention/staleness in ms, interpreted per side (server expiry vs client
-  staleness deadline). Default 0 on the server (coalesce-only), Infinity on a
-  replayable client read.
+- `ttl` — retention/staleness in ms. Default Infinity: the entry is retained for its
+  store's lifetime — the request on the server (a non-shared read dies with the request,
+  regardless of ttl), the tab on the client (until invalidate/refresh). An explicit ttl
+  is a hard expiry on the server, a staleness deadline (SWR) on the client.
 - `tags` — static invalidation-group labels, or a function of the call's args.
 - `throttle` / `debounce` — the background refetch clock (set one, not both).
-- `shared` — opt the entry into the process-level store (never per-user data — the
-  store is keyed by method+url+args, not by user). A client no-op (one tab store).
+- `shared` — opt the entry into the process-level store (never per-user data — the store
+  is keyed by method+url+args, not by user). With the default Infinity ttl this memoises
+  across requests; an explicit ttl bounds it. A client no-op (one tab store).
 */
 export type CachePolicy<Args> = {
     ttl?: number

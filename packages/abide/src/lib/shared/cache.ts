@@ -69,8 +69,11 @@ the endpoint definition (`GET(fn, { cache: {...} })`) and readThrough reads it a
 the bottom layer. A plain PRODUCER has no endpoint, so it keeps a trailing
 `options?: CacheOptions` (ttl/tags/throttle/debounce/shared) — its only policy
 home. ttl = 0 → dedupe only; ttl > 0 → entry expires `ttl` ms after the promise
-resolves. Omitted ttl → forever for a producer; a remote call on the server with
-no endpoint ttl defaults to 0 (coalesce-only, see CacheOptions / CachePolicy).
+resolves. Omitted ttl → retained for the store's lifetime: a producer or a remote
+READ is kept as long as its store lives (the request on the server, the tab on the
+client), while a remote WRITE coalesces only (ttl 0 — the mutation idiom). A remote
+read made outside any request scope falls back to the process store and coalesces
+only too, so a scopeless read can't leak forever. See CachePolicy.
 
 Coalescing is always on: identical in-flight calls share one flight — double-
 submit coalescing and pending() visibility with nothing retained beyond the
@@ -208,19 +211,33 @@ function readThrough<Args, Return>(
        (no swr toggle to opt out of). */
     const retain = smart && replayable && typeof window !== 'undefined'
     /*
-    ttl defaults to 0 (coalesce-only) on the server for any remote read/write, and
-    on the client for a smart write — in both cases only when the endpoint stated no
-    ttl. The server default makes retention opt-in (via an explicit ttl, paired with
-    `shared` to survive the request).
+    ttl defaults to Infinity — an entry is retained for as long as its STORE lives, and
+    the store's lifetime (not ttl) is what ends a read: the request-scoped store on the
+    server (so a non-shared read dies with the request regardless of ttl), the tab store
+    on the client (until invalidate/refresh). `shared` selects the process store, where
+    the default Infinity memoises across requests and an explicit ttl bounds it — so
+    `shared` alone is "memoise", not a store-selector that retains nothing.
     */
-    const serverTtlZero =
-        isRemote && typeof window === 'undefined' && policy?.ttl === undefined
-    const smartWriteTtlZero = smart && isRemote && !replayable && policy?.ttl === undefined
-    const effectiveOptions = serverTtlZero || smartWriteTtlZero ? { ...policy, ttl: 0 } : policy
+    const store = policy?.shared ? sharedCacheStore() : activeCacheStore()
+    /*
+    Two cases force coalesce-only (ttl 0) when the caller stated no ttl — nothing retained
+    beyond the in-flight window:
+    - a write (non-replayable remote): dropped on settle so a re-submit of the same body
+      isn't blocked by a retained entry (the mutation idiom);
+    - a read that resolved to the process store WITHOUT `shared` — a server read outside any
+      request scope, where activeCacheStore() falls back to the shared store. Nothing bounds
+      its lifetime there, so retaining it would leak forever.
+    Both apply on either side and however the call is made.
+    */
+    const coalesceOnly =
+        isRemote &&
+        policy?.ttl === undefined &&
+        (!replayable ||
+            (!policy?.shared && typeof window === 'undefined' && store === sharedCacheStore()))
+    const effectiveOptions = coalesceOnly ? { ...policy, ttl: 0 } : policy
     if (!isRemote) {
         warnAnonymousProducer(fn as Producer<Args, Return>)
     }
-    const store = effectiveOptions?.shared ? sharedCacheStore() : activeCacheStore()
     if (!isRemote) {
         return invokeProducer(store, fn as Producer<Args, Return>, args, effectiveOptions)
     }

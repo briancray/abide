@@ -68,7 +68,7 @@ describe('smart bare rpc call — shared store', () => {
         cacheStoreSlot.resolver = undefined
     })
 
-    test('shared without ttl is coalesce-only on the server — a later request re-fetches', async () => {
+    test('shared without ttl memoizes across requests — the default ttl is Infinity', async () => {
         let invokes = 0
         const getShared = countingRemote(
             '/rpc/getShared',
@@ -86,9 +86,12 @@ describe('smart bare rpc call — shared store', () => {
             await getShared(undefined)
             return new Response('ok')
         })
-        expect(invokes).toBe(2)
+        /* `shared` alone now retains: the process store lives across requests and the default
+           ttl is Infinity, so the second request hits the memoised entry (was coalesce-only —
+           ADR-0020 ttl-default). Pair with an explicit ttl to bound the memoisation. */
+        expect(invokes).toBe(1)
         await settle()
-        expect(sharedStore.entries.size).toBe(0)
+        expect(sharedStore.entries.size).toBe(1)
     })
 
     test('shared + ttl memoizes across requests', async () => {

@@ -224,13 +224,14 @@ describe('rejection', () => {
 
 /*
 A hydrated snapshot entry ships without its wrap options, so the first read
-adopts its call site's ttl. On the SERVER an omitted ttl now defaults to 0
-(the coalesce-only retention model), so it behaves exactly like an explicit
-ttl: 0 — the hydration pass's readers still warm-hit, but the entry is
-evicted a macrotask later and the next render fetches live. ttl > 0 is the
-one way to retain past the pass: it starts the expiry clock at that read. On
-the CLIENT (window defined) an omitted ttl is unchanged — it still adopts the
-entry forever. The first reader's declaration wins.
+adopts its call site's ttl. These reads run OUTSIDE a request scope, so the
+store falls back to the process store — and an un-shared read there coalesces
+only (ttl 0, no request lifetime to bound it), so it behaves exactly like an
+explicit ttl: 0: the hydration pass's readers still warm-hit, but the entry is
+evicted a macrotask later and the next render fetches live. ttl > 0 is the one
+way to retain past the pass: it starts the expiry clock at that read. On the
+CLIENT (window defined) an omitted ttl is retained forever (the tab store is the
+atomic unit). The first reader's declaration wins.
 */
 describe('hydrated entries adopt the reading call site ttl', () => {
     function hydrate(store: CacheStore, remote: RawRemoteFunction<undefined>): string {
@@ -259,20 +260,20 @@ describe('hydrated entries adopt the reading call site ttl', () => {
         cacheStoreSlot.resolver = () => store
         const key = hydrate(store, countedRemote.raw)
 
-        /* Both same-pass readers warm-hit — eviction is deferred a macrotask. Server
-           coalesce-only default (ttl: 0) drives the eviction. */
+        /* Both same-pass readers warm-hit — eviction is deferred a macrotask. The
+           process-store fallback's coalesce-only default (ttl: 0) drives the eviction. */
         expect(await cache(countedRemote)).toEqual({ hit: 0 })
         expect(await cache(countedRemote)).toEqual({ hit: 0 })
         await settle()
         expect(store.entries.has(key)).toBe(false)
     })
 
-    test('server: an omitted ttl now defaults to ttl: 0 — same-pass reads warm-hit, then it evicts', async () => {
+    test('server outside a request: an omitted ttl coalesces only (process-store fallback) — same-pass reads warm-hit, then it evicts', async () => {
         const store = createCacheStore()
         cacheStoreSlot.resolver = () => store
         const key = hydrate(store, countedRemote.raw)
 
-        /* First reader declares nothing — the server default (ttl: 0) applies. */
+        /* First reader declares nothing — the scopeless process-store fallback default (ttl: 0) applies. */
         expect(await cache(countedRemote)).toEqual({ hit: 0 })
         /* A same-pass re-read still warm-hits off the same entry. */
         expect(await cache(countedRemote)).toEqual({ hit: 0 })
