@@ -1,5 +1,6 @@
 import { decodeRefJson } from '../../shared/decodeRefJson.ts'
 import { effect } from '../effect.ts'
+import { CURRENT_BOUNDARY } from '../runtime/CURRENT_BOUNDARY.ts'
 import { claimExpected } from '../runtime/claimExpected.ts'
 import { generationGuard } from '../runtime/generationGuard.ts'
 import { RANGE_CLOSE, RANGE_OPEN } from '../runtime/RANGE_MARKER.ts'
@@ -43,8 +44,9 @@ export function awaitBlock(
     promiseThunk: () => unknown,
     renderPending: ((parent: Node) => void) | undefined,
     renderThen: (parent: Node, value: unknown) => void,
-    /* Absent when the block has no catch branch — a rejection then surfaces (re-throws
-       to the unhandled-rejection path) instead of rendering an empty branch. */
+    /* Absent when the block has no catch branch — a rejection then routes to the enclosing
+       {#try} boundary captured at build (if any), else surfaces (re-throws to the
+       unhandled-rejection path) instead of rendering an empty branch. */
     renderCatch: ((parent: Node, error: unknown) => void) | undefined,
     /* A static node located by the skeleton: the block's anchor inserts before it on
        create (block before a static suffix). Null appends (tail). insertBefore(x, null)
@@ -52,6 +54,10 @@ export function awaitBlock(
     before: Node | null = null,
 ): void {
     const hydration = RENDER.hydration
+    /* The enclosing {#try} boundary ambient at BUILD (like createEffectNode captures it). A
+       catch-less rejection settles LATER, after CURRENT_BOUNDARY has been restored, so we must
+       capture it into this closure now rather than read it at settle time. */
+    const capturedBoundary = CURRENT_BOUNDARY.current
     /* The live branch's scope, registered with the owner so it disposes on owner
        teardown — not only when a settle/re-run swaps branches via detach. */
     const group = scopeGroup()
@@ -125,9 +131,15 @@ export function awaitBlock(
         activeKind = 'then'
     }
 
-    /* Settle to a rejection: surface it with no catch branch, else swap to the catch branch. */
+    /* Settle to a rejection: with a local catch branch, swap to it. With no local catch, route
+       to the enclosing {#try} boundary captured at build if one was ambient; otherwise surface
+       (unhandled rejection), preserving the prior behaviour when there's no boundary. */
     const settleError = (error: unknown): void => {
         if (renderCatch === undefined) {
+            if (capturedBoundary !== undefined) {
+                capturedBoundary.handle(error)
+                return
+            }
             throw error
         }
         valueCell = undefined

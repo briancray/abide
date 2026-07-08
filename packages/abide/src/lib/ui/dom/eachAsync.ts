@@ -1,4 +1,5 @@
 import { effect } from '../effect.ts'
+import { CURRENT_BOUNDARY } from '../runtime/CURRENT_BOUNDARY.ts'
 import { claimChild } from '../runtime/claimChild.ts'
 import { generationGuard } from '../runtime/generationGuard.ts'
 import { RENDER } from '../runtime/RENDER.ts'
@@ -32,11 +33,16 @@ export function eachAsync<T>(
        `each`; the streaming runtime rebuilds the row on a re-yield rather than patching, and
        the position is the stream arrival ordinal (a stream only appends, never reorders). */
     render: (parent: Node, item: State<T>, index: State<number>) => void,
-    /* Absent → an iterator rejection surfaces instead of rendering a catch branch. */
+    /* Absent → an iterator rejection routes to the enclosing {#try} boundary captured at build
+       (if any), else surfaces, instead of rendering a catch branch. */
     renderCatch: ((parent: Node, error: unknown) => void) | undefined,
     before: Node | null = null,
 ): void {
     const rows = new Map<string, EachRow>()
+    /* The enclosing {#try} boundary ambient at BUILD (see `awaitBlock`). A catch-less rejection
+       arrives LATER from the async drain, after CURRENT_BOUNDARY has been restored, so capture
+       it into this closure now rather than read it at settle time. */
+    const capturedBoundary = CURRENT_BOUNDARY.current
     /* Each row's (and the error branch's) scope, registered with the owner so they
        dispose on owner teardown; the block's own teardown only stops the stream. */
     const group = scopeGroup()
@@ -133,8 +139,13 @@ export function eachAsync<T>(
             if (!guard.live(generationAtStart)) {
                 return
             }
-            /* No catch branch → surface the rejection (mirrors `<template await>`). */
+            /* No catch branch → route to the enclosing {#try} boundary captured at build if one
+               was ambient; otherwise surface the rejection (mirrors `<template await>`). */
             if (renderCatch === undefined) {
+                if (capturedBoundary !== undefined) {
+                    capturedBoundary.handle(error)
+                    return
+                }
                 throw error
             }
             /* Keep the streamed rows; render the catch branch after them, at the anchor. */
