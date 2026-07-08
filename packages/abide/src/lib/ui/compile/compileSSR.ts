@@ -2,6 +2,7 @@ import { analyzeComponent } from './analyzeComponent.ts'
 import { generateSSR } from './generateSSR.ts'
 import { SSR_ESCAPE } from './SSR_ESCAPE.ts'
 import type { AnalyzedComponent } from './types/AnalyzedComponent.ts'
+import type { InterpolationClassifier } from './types/InterpolationClassifier.ts'
 
 /*
 Compiles a component into the body of a server render function. Runs the shared
@@ -43,8 +44,13 @@ export function compileSSR(
     source: string,
     isLayout = false,
     scopeSeed?: string,
-    analyzed: AnalyzedComponent = analyzeComponent(source, scopeSeed),
+    analyzed?: AnalyzedComponent,
+    classify?: InterpolationClassifier,
 ): string {
+    /* `analyzed` is shared by `compileModule` (analyzed once, classifier already applied);
+       a direct caller (tests) omits it and the front-end runs here — threading `classify`
+       so a type-directed lowering happens on this path too. */
+    const resolved = analyzed ?? analyzeComponent(source, scopeSeed, classify)
     const {
         ssrScript: lowered,
         stateNames,
@@ -52,7 +58,7 @@ export function compileSSR(
         computedNames,
         cellReadNames,
         nodes,
-    } = analyzed
+    } = resolved
     const ssr = generateSSR(nodes, stateNames, derivedNames, computedNames, isLayout, cellReadNames)
     /* The Tier-2 await-barrier (ADR-0019): between the lowered cell declarations and the
        template, drain + await every async cell's in-flight promise so the template's

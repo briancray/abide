@@ -4,6 +4,8 @@ import { isLayoutFile } from '../../shared/isLayoutFile.ts'
 import { messageFromError } from '../../shared/messageFromError.ts'
 import { AbideCompileError } from './AbideCompileError.ts'
 import { compileModule } from './compileModule.ts'
+import type { ShadowProgram } from './createShadowProgram.ts'
+import { interpolationClassifierForRoot } from './interpolationClassifierForRoot.ts'
 import { nearestProjectRoot } from './nearestProjectRoot.ts'
 import { offsetToLineColumn } from './offsetToLineColumn.ts'
 
@@ -38,11 +40,20 @@ export const abideUiPlugin: BunPlugin = {
         /* Scoped CSS keyed by its virtual specifier, filled as each `.abide` loads and
            read back when Bun resolves the matching `abide-style:` import (browser only). */
         const cssByVirtual = new Map<string, string>()
+        /* One WARM shadow program per project root (ADR-0019, Stage B): the checker +
+           per-file mappings type-directed lowering needs, built lazily on first `.abide`
+           in a root and reused for every component there — not rebuilt per module. */
+        const shadowByRoot = new Map<string, ShadowProgram | undefined>()
 
         build.onLoad({ filter: /\.abide$/ }, async (args) => {
             const source = await Bun.file(args.path).text()
-            const moduleId = relative(nearestProjectRoot(args.path, process.cwd()), args.path)
+            const root = nearestProjectRoot(args.path, process.cwd())
+            const moduleId = relative(root, args.path)
             const isLayout = isLayoutFile(args.path)
+            /* The classifier for this file over its root's warm shadow program. Fail-open:
+               a program that can't build (or a file with no shadow) yields `undefined`, so
+               the module compiles exactly as before. */
+            const classify = interpolationClassifierForRoot(shadowByRoot, root, args.path)
             /* Bun frames a plugin throw at `<file>:0` regardless of the real spot, so
                carry the component path + resolved line:col in the message — otherwise a
                control-flow / compile error reads as `:0` and (in deep imports) can look
@@ -66,7 +77,7 @@ export const abideUiPlugin: BunPlugin = {
                the styles come from the analysis `compileModule` already ran, so the loader no
                longer re-analyzes the source just to recover them. */
             const { code, styles } = compileAbide(() =>
-                compileModule(source, { isLayout, moduleId }),
+                compileModule(source, { isLayout, moduleId, classify }),
             )
             /* Browser build with `<style>`(s): concatenate every scoped block's CSS and
                pull it into the bundle via one virtual import, keyed by `moduleId` so the

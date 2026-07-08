@@ -2,6 +2,9 @@ import { resolve } from 'node:path'
 import { NO_STORE } from '../../shared/CACHE_CONTROL_VALUES.ts'
 import { isLayoutFile } from '../../shared/isLayoutFile.ts'
 import { compileModule } from '../../ui/compile/compileModule.ts'
+import type { ShadowProgram } from '../../ui/compile/createShadowProgram.ts'
+import { interpolationClassifierForRoot } from '../../ui/compile/interpolationClassifierForRoot.ts'
+import { nearestProjectRoot } from '../../ui/compile/nearestProjectRoot.ts'
 
 // Reused across requests — strips the embedded author TypeScript to browser JS.
 const TRANSPILER = new Bun.Transpiler({ loader: 'ts' })
@@ -27,10 +30,22 @@ export async function devHotModuleResponse(moduleId: string): Promise<Response> 
     if (source === undefined) {
         return new Response('not found', { status: 404 })
     }
+    /* The SAME type-directed classifier the build uses (ADR-0019), so a hot-swapped module
+       lowers promise interpolations identically to a full build. A fresh per-request shadow
+       program (its own cache) reflects the just-saved edit — the warm per-root reuse the
+       build relies on would go stale across edits, which is the one thing HMR can't tolerate.
+       Fail-open: an unbuildable program yields no classifier and the module compiles as before. */
+    const projectRoot = nearestProjectRoot(path, process.cwd())
+    const classify = interpolationClassifierForRoot(
+        new Map<string, ShadowProgram | undefined>(),
+        projectRoot,
+        path,
+    )
     const { code } = compileModule(source, {
         isLayout: isLayoutFile(moduleId),
         moduleId,
         hot: true,
+        classify,
     })
     return new Response(TRANSPILER.transformSync(code), {
         headers: {

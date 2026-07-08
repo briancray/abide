@@ -1,7 +1,9 @@
+import { lowerAsyncInterpolations } from './lowerAsyncInterpolations.ts'
 import { lowerScript } from './lowerScript.ts'
 import { parseTemplate } from './parseTemplate.ts'
 import { scopeCss } from './scopeCss.ts'
 import type { AnalyzedComponent } from './types/AnalyzedComponent.ts'
+import type { InterpolationClassifier } from './types/InterpolationClassifier.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
 
 /*
@@ -20,20 +22,40 @@ component+position identity, not CSS text: an edit to a `<style>` keeps the same
 `data-a-…`, so the live elements still match and the CSS can hot-swap in place.
 Absent (direct compile calls / tests) it falls back to hashing the style body.
 */
-export function analyzeComponent(source: string, scopeSeed?: string): AnalyzedComponent {
+export function analyzeComponent(
+    source: string,
+    scopeSeed?: string,
+    classify?: InterpolationClassifier,
+): AnalyzedComponent {
     /* Only the LEADING `<script>` is the component script; scripts nested in the
        template (scoped reactive blocks) survive into the parsed nodes. The `<style>`
        is left in the template for the parser to extract structurally (below), so a
        `<style>` quoted inside an expression is never mistaken for the component's. */
     const scriptMatch = source.match(/^\s*<script[^>]*>([\s\S]*?)<\/script>/)
     const scriptBody = (scriptMatch?.[1] ?? '').trim()
-    const template = source.replace(/^\s*<script[^>]*>[\s\S]*?<\/script>/, '').trim()
+    const afterScript = scriptMatch ? source.slice(scriptMatch[0].length) : source
+    const template = afterScript.trim()
+    /* Absolute source offset of the trimmed template's first char (script length + the
+       remainder's leading whitespace). Passed as the parse base so each interpolation's
+       `loc` is an offset into the ORIGINAL source — the coordinate the shadow's
+       source→shadow `mappings` use, so a type-directed classifier resolves against it.
+       The runtime back-ends ignore `loc`, so this only affects the classifier's lookup. */
+    const templateBase =
+        (scriptMatch ? scriptMatch[0].length : 0) +
+        (afterScript.length - afterScript.trimStart().length)
 
     /* Parse the template first so the nested branch `<script>`s are in hand before the
        leading script lowers: their raw code feeds the dead-import usage check, keeping a
        reactive import (`state`) alive when only a nested branch uses it (its
        `state.computed(...)` stays literal, unlike the desugared leading script). */
-    const { nodes } = parseTemplate(template)
+    const parsed = parseTemplate(template, templateBase)
+    /* Type-directed interpolation lowering (ADR-0019): when the build supplies a
+       classifier, rewrite each promise-typed text interpolation into a streaming await
+       block BEFORE the script lowers and scopes annotate — the synthesized await node then
+       flows through the same back-ends as an explicit `{#await}`. Without a classifier the
+       template is returned untouched, so the default path is exactly today's behavior. */
+    const nodes =
+        classify === undefined ? parsed.nodes : lowerAsyncInterpolations(parsed.nodes, classify)
     const nestedScriptCode = collectNestedScriptCode(nodes)
     /* `lowerScript` parses the script ONCE and chains signal desugaring, reference
        renaming, and doc-access lowering over that single tree, then hoists top-level

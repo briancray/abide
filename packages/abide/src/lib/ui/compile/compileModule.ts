@@ -6,6 +6,7 @@ import { assertTranspiles } from './assertTranspiles.ts'
 import { compileComponent } from './compileComponent.ts'
 import { compileSSR } from './compileSSR.ts'
 import type { AnalyzedComponent } from './types/AnalyzedComponent.ts'
+import type { InterpolationClassifier } from './types/InterpolationClassifier.ts'
 import { UI_RUNTIME_IMPORTS } from './UI_RUNTIME_IMPORTS.ts'
 
 /*
@@ -26,14 +27,23 @@ what the `.abide` bundler loader emits.
 */
 export function compileModule(
     source: string,
-    options: { isLayout?: boolean; moduleId?: string; hot?: boolean } = {},
+    options: {
+        isLayout?: boolean
+        moduleId?: string
+        hot?: boolean
+        /* Type-directed interpolation lowering (ADR-0019): the warm shadow classifier the
+           bundler plugin builds per `.abide`. Optional and fail-open — absent, the module
+           compiles exactly as before (every interpolation binds as a plain value). */
+        classify?: InterpolationClassifier
+    } = {},
 ): { code: string; styles: AnalyzedComponent['styles'] } {
     const isLayout = options.isLayout ?? false
     /* Run the shared front-end once and feed it to both back-ends — the analysis is
        pure over (source, moduleId), so the client and SSR builds reuse one parse
        instead of re-running it. `imports` (hoisted child-component imports) and the
-       per-element scopes both come from this single pass. */
-    const analyzed = analyzeComponent(source, options.moduleId)
+       per-element scopes both come from this single pass. The classifier (when present)
+       lowers promise-typed interpolations here, so both back-ends see one lowered tree. */
+    const analyzed = analyzeComponent(source, options.moduleId, options.classify)
     const userImports = analyzed.imports
     const body = indent(compileComponent(source, isLayout, options.moduleId, analyzed))
 
