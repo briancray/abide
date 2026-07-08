@@ -1,4 +1,5 @@
 import type { CacheStore } from '../../../shared/types/CacheStore.ts'
+import type { PendingAsyncCells } from '../../../shared/types/PendingAsyncCells.ts'
 import type { TraceContext } from '../../../shared/types/TraceContext.ts'
 import type { Scope } from '../../../ui/types/Scope.ts'
 
@@ -13,6 +14,13 @@ export type RequestStore = {
     url: URL
     req: Request
     cache: CacheStore
+    /*
+    In-flight async-cell promises registered during this request's SSR pass. The
+    Tier-2 barrier (`settleAsyncCells`) drains and awaits them between a
+    component's cell declarations and its template so resolved values bake into
+    the HTML. Per-request (like `cache`) so concurrent renders never share a drain.
+    */
+    pendingAsyncCells: PendingAsyncCells
     /*
     W3C trace position: inbound `traceparent` continued (prefer-incoming) or a
     fresh sampled trace minted at the boundary. Read by trace()/log via the

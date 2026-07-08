@@ -33,6 +33,7 @@ import { cacheStoreSlot } from './lib/shared/cacheStoreSlot.ts'
 import { createCacheStore } from './lib/shared/createCacheStore.ts'
 import { loadEnvFromDataDir } from './lib/shared/loadEnvFromDataDir.ts'
 import { pageSlot } from './lib/shared/pageSlot.ts'
+import { pendingAsyncCellsSlot } from './lib/shared/pendingAsyncCellsSlot.ts'
 import { runningAsStandaloneBinary } from './lib/shared/runningAsStandaloneBinary.ts'
 import { sharedCacheStoreSlot } from './lib/shared/sharedCacheStoreSlot.ts'
 
@@ -75,6 +76,13 @@ const sharedCacheStore = createCacheStore()
 sharedCacheStoreSlot.resolver = () => sharedCacheStore
 
 cacheStoreSlot.resolver = () => requestContext.getStore()?.cache ?? sharedCacheStore
+
+/* One process-wide fallback list for reads with no request in flight (boot/cron/socket) —
+   real requests each carry their own `pendingAsyncCells`, so the SSR barrier drains a
+   per-request list and concurrent renders never cross-contaminate. */
+const sharedPendingAsyncCells = { promises: [] }
+pendingAsyncCellsSlot.resolver = () =>
+    requestContext.getStore()?.pendingAsyncCells ?? sharedPendingAsyncCells
 
 pageSlot.resolver = resolvePageSnapshot
 

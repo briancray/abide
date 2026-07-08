@@ -406,6 +406,7 @@ tests can import it, not for app code.
 - `@abide/abide/ui/dom/spreadAttrs` — spreads an object's keys onto a native element (`<div {...rest}>`), keys enumerated once.
 - `@abide/abide/ui/dom/readCall` — guarded method call on a reactive-doc read (the `model.draft.trim()` lowering).
 - `@abide/abide/ui/dom/readCell` — unified read for a `linked`/async-`computed` reference (the `$$readCell(NAME)` lowering): peeks an async cell, reads `.value` off a sync one.
+- `@abide/abide/ui/settleAsyncCells` — the SSR Tier-2 await-barrier (the `await $$settleAsyncCells()` lowering emitted between a component's cell declarations and its template): drains + awaits the request-scoped in-flight async-cell promises so their resolved values bake into the first-pass HTML.
 
 ## Build / tooling
 

@@ -1,6 +1,7 @@
 import { ASYNC_CELL } from '../../shared/ASYNC_CELL.ts'
 import { isSubscribable } from '../../shared/isSubscribable.ts'
 import { isThenable } from '../../shared/isThenable.ts'
+import { pendingAsyncCellsSlot } from '../../shared/pendingAsyncCellsSlot.ts'
 import type { AsyncComputed } from '../../shared/types/AsyncComputed.ts'
 import type { AsyncState } from '../../shared/types/AsyncState.ts'
 import type { NamedAsyncIterable } from '../../shared/types/NamedAsyncIterable.ts'
@@ -54,6 +55,9 @@ export function createAsyncCell(
     let written = false
     /* Supersedes out-of-order settles: only the latest run's promise/stream may write. */
     let runId = 0
+    /* The current run's in-flight promise (undefined once settled, or for a stream/sync seed).
+       Surfaced through `settled()` for the SSR barrier's structural read; a stream never sets it. */
+    let inFlight: Promise<unknown> | undefined
     /* Cancels the active stream subscription (a reseed, refresh, or dispose supersedes it). */
     let cancelStream: (() => void) | undefined
 
@@ -70,6 +74,7 @@ export function createAsyncCell(
         if (myRun !== runId) {
             return
         }
+        inFlight = undefined
         acceptValue(value)
         writeNode(errorNode, undefined)
         writeNode(inFlightNode, false)
@@ -81,6 +86,7 @@ export function createAsyncCell(
         if (myRun !== runId) {
             return
         }
+        inFlight = undefined
         writeNode(errorNode, error)
         writeNode(inFlightNode, false)
     }
@@ -144,6 +150,15 @@ export function createAsyncCell(
             return
         }
         if (isThenable(produced)) {
+            inFlight = produced as Promise<unknown>
+            /* Server-only: register the in-flight promise on the request-scoped pending list so
+               the SSR barrier (`$$settleAsyncCells`) awaits it before the template peeks the
+               cell — baking the resolved value into the first-pass HTML (ADR-0019 Tier-2). A
+               stream (the `isSubscribable` branch above) never registers: it never settles. The
+               `window` guard keeps client construction from ever registering. */
+            if (typeof window === 'undefined') {
+                pendingAsyncCellsSlot.get()?.promises.push(inFlight)
+            }
             /* `.then(onValue, onError)` handles the rejection inline — contained in `error()`,
                never an unhandled rejection. */
             ;(produced as PromiseLike<unknown>).then(
@@ -178,11 +193,15 @@ export function createAsyncCell(
         error: () => readNode(errorNode),
         /* Re-invoke the seed keeping the value visible (SWR); not a reseed, so a write holds. */
         refresh: () => run(false),
-    }
+        /* The current in-flight promise (undefined once settled / not-a-promise) — an internal
+           runtime affordance the SSR barrier reads structurally; not on the public cell types. */
+        settled: () => inFlight,
+    } as AsyncComputed<unknown>
     if (!options.writable) {
         return readOnly
     }
-    /* A writable cell adds `set()`: latches until the next reseed. */
+    /* A writable cell adds `set()`: latches until the next reseed. `settled` rides along from
+       the `readOnly` spread (a runtime affordance not on the public type). */
     const writable: AsyncState<unknown> = {
         ...readOnly,
         set: (value: unknown): void => {

@@ -54,13 +54,21 @@ export function compileSSR(
         nodes,
     } = analyzed
     const ssr = generateSSR(nodes, stateNames, derivedNames, computedNames, isLayout, cellReadNames)
+    /* The Tier-2 await-barrier (ADR-0019): between the lowered cell declarations and the
+       template, drain + await every async cell's in-flight promise so the template's
+       `$$readCell(name)` peeks the RESOLVED value and it bakes into the first-pass HTML —
+       single render pass, no client refetch. Emitted whenever the component declares a cell
+       (`cellReadNames`: every `linked` / async or bare-call `computed`); the barrier only
+       awaits promises a cell actually registered server-side (a sync/stream cell registers
+       none), so it is a cheap no-op for a component whose cells all settled synchronously. */
+    const barrier = cellReadNames.size > 0 ? 'await $$settleAsyncCells();\n' : ''
     /* No `<style>` in the markup — the scoped CSS is bundled into the entry stylesheet
        the shell links (see `abideUiPlugin`), so SSR output is styled by that sheet. The
        elements still carry their `data-a-…` scopes via `generateSSR`. */
     /* `typeof model` guards a component with no reactive state (a pure-async or
        static component declares no `model`); its snapshot is then empty. */
     const body =
-        `const $scope = $$enterScope();\ntry {\n${lowered}\n${SSR_ESCAPE}\nconst $out = [];\nconst $awaits = [];\nconst $resume = {};\n${ssr}` +
+        `const $scope = $$enterScope();\ntry {\n${lowered}\n${SSR_ESCAPE}\nconst $out = [];\nconst $awaits = [];\nconst $resume = {};\n${barrier}${ssr}` +
         `return { html: $out.join(''), state: (typeof $$model !== 'undefined' ? $$model.snapshot() : {}), awaits: $awaits, resume: $resume };\n` +
         `} finally { $$exitScope($scope); }`
     /* An inline `await` — a blocking await block, a child render, a slot read, or a
@@ -70,6 +78,6 @@ export function compileSSR(
        top-level `await` in a non-async function (a SyntaxError). `(?!:)` excludes the
        `<!--abide:await:N-->` boundary-marker strings; `\b` excludes `$awaits`. A false
        positive (the token in author text) only costs a needless async wrapper, never a crash. */
-    const needsAsync = /\bawait\b(?!:)/.test(`${lowered}${ssr}`)
+    const needsAsync = /\bawait\b(?!:)/.test(`${lowered}${ssr}${barrier}`)
     return `var $ctx = $ctx || { next: 0 };\n${needsAsync ? `return (async () => {\n${body}\n})();` : body}`
 }

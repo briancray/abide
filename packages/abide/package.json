@@ -91,6 +91,7 @@
         "./ui/dom/spreadAttrs": "./src/lib/ui/dom/spreadAttrs.ts",
         "./ui/dom/readCall": "./src/lib/ui/dom/readCall.ts",
         "./ui/dom/readCell": "./src/lib/ui/dom/readCell.ts",
+        "./ui/settleAsyncCells": "./src/lib/ui/settleAsyncCells.ts",
         "./ui/dom/mutateDocArray": "./src/lib/ui/dom/mutateDocArray.ts",
         "./ui/dom/hydrate": "./src/lib/ui/dom/hydrate.ts",
         "./ui/dom/text": "./src/lib/ui/dom/text.ts",

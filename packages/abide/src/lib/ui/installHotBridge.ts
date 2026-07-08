@@ -38,6 +38,7 @@ import { hotReloadEnabled } from './runtime/hotReloadEnabled.ts'
 import { hotReplace } from './runtime/hotReplace.ts'
 import { nextBlockId } from './runtime/nextBlockId.ts'
 import { scope } from './scope.ts'
+import { settleAsyncCells } from './settleAsyncCells.ts'
 import { watch } from './watch.ts'
 
 /*
@@ -85,6 +86,7 @@ export function installHotBridge(): void {
         spreadAttrs,
         readCall,
         readCell,
+        settleAsyncCells,
         mutateDocArray,
         hydrate,
         escapeKey,
