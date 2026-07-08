@@ -174,9 +174,10 @@ let count = state(0)</script>
         expect(list.children.map((child) => child.textContent)).toEqual(['9', '2', '3'])
     })
 
-    /* A component has no directives — every attribute is a prop under its written
-       name, so `on*`/`bind:`/`attach` pass through to `mountChild` instead of
-       being dropped (they'd be DOM directives only on a lowercase element). */
+    /* A component has no DOM directives — `on*`/`attach` pass through to `mountChild` as
+       props under their written name. A `bind:<name>` is a TWO-WAY prop under its BARE name
+       (`open`, not `bind:open`): the value thunk carries a `set` write-back channel
+       (`bindProp`), so the child can push changes upstream. */
     test('component attributes pass through as props, including on*/bind/attach', () => {
         const body = compileComponent(`
             <Button label="Save" onclick={handleClick} bind:open={state.open} attach={register}>
@@ -186,8 +187,50 @@ let count = state(0)</script>
         expect(body).toContain('mountChild')
         expect(body).toContain('"label": () => ("Save")')
         expect(body).toContain('"onclick": () => (handleClick)')
-        expect(body).toContain('"bind:open": () => (state.open)')
+        /* Two-way: the value thunk reads the target, `bindProp`'s setter writes it back. */
+        expect(body).toContain(
+            '"open": $$bindProp(() => (state.open), ($value) => { state.open = $value; })',
+        )
         expect(body).toContain('"attach": () => (register)')
+    })
+
+    /* The child half: a prop the component WRITES or forwards to another `bind:` becomes a
+       writable `.value` cell (`bindableProp`), so a parent's two-way `bind:prop` flows back;
+       a prop it only reads stays a cheap read-only derive (`name()`). */
+    test('a written/forwarded prop becomes a bindableProp cell; a read-only prop stays a derive', () => {
+        const forwarded = compileComponent(`
+            <script>
+                import { props } from '@abide/abide/ui/props'
+                const { value } = props()
+            </script>
+            <input type="number" bind:value={value} />
+        `)
+        expect(forwarded).toContain('const value = $$bindableProp($props, "value")')
+        expect(forwarded).toContain('el1.value = value.value')
+        expect(forwarded).toContain('value.value = ')
+
+        const written = compileComponent(`
+            <script>
+                import { props } from '@abide/abide/ui/props'
+                const { count = 0 } = props()
+            </script>
+            <button onclick={() => count += 1}>{count}</button>
+        `)
+        /* A `= default` becomes the fallback thunk `bindableProp` applies when the prop is absent. */
+        expect(written).toContain('const count = $$bindableProp($props, "count", () => (0))')
+        expect(written).toContain('count.value += 1')
+
+        const readOnly = compileComponent(`
+            <script>
+                import { props } from '@abide/abide/ui/props'
+                const { label } = props()
+            </script>
+            <span>{label}</span>
+        `)
+        expect(readOnly).toContain(
+            'const label = $$scope().derive("label", () => $props["label"]?.())',
+        )
+        expect(readOnly).not.toContain('bindableProp')
     })
 
     /* A `{...expr}` on a component spreads the object's keys as props: the build

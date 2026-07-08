@@ -66,6 +66,10 @@ export function lowerScript(
        so `desugarSignals` recognizes these declarations by name — routing each to an eager
        `trackedComputed` stream cell — rather than by import resolution. Empty on every other path. */
     injectedCellNames: ReadonlySet<string> = new Set(),
+    /* Names the template writes/forwards (`writtenTemplateNames`), so a `props()` binding used
+       two-way is desugared to a writable cell rather than a read-only derive. Empty for a nested
+       script (which declares no props). */
+    templateWrittenNames: ReadonlySet<string> = new Set(),
 ): {
     body: string
     imports: string
@@ -80,6 +84,7 @@ export function lowerScript(
     const { transformer, stateNames, derivedNames, computedNames, cellReadNames } = desugarSignals(
         source,
         injectedCellNames,
+        templateWrittenNames,
     )
     const result = ts.transform(source, [
         transformer,

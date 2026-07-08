@@ -39,12 +39,15 @@ type Segment = { kind: 'literal'; value: string } | { kind: 'expression'; node: 
 /* Maps a compound-assignment operator to its plain binary counterpart. Logical
    assignments (`||=`/`&&=`/`??=`) lower to an unconditional replace of the
    combined value — consistent with how `+=` lowers (the patch always writes). */
-/* Array methods that mutate the receiver in place. Called on a doc-rooted array
-   these can't lower to a bare `readCall` (which would mutate the live tree by
-   reference and never emit a patch — no re-render, no undo/persistence/sync);
-   they route through `$$mutateDocArray`, which clones-applies-replaces so a real
-   patch fires. `push` is handled separately above (fine-grained `add` patches). */
-const MUTATING_ARRAY_METHODS = new Set([
+/* Methods that mutate a doc-rooted container in place — Array, Map and Set (the three
+   mutable containers the doc codec serializes). Called on a doc value these can't lower to
+   a bare `readCall` (which would mutate the live tree by reference and never emit a patch —
+   no re-render, no undo/persistence/sync); they route through `$$mutateDocContainer`, which
+   clones-applies-replaces so a real patch fires. The names are disjoint across the three
+   container kinds, so one set routes them all and the runtime helper decides the kind by the
+   value's type. `push` is handled separately above (fine-grained `add` patches). */
+const MUTATING_CONTAINER_METHODS = new Set([
+    // Array
     'pop',
     'shift',
     'unshift',
@@ -53,6 +56,11 @@ const MUTATING_ARRAY_METHODS = new Set([
     'reverse',
     'fill',
     'copyWithin',
+    // Map / Set (`delete` + `clear` shared; `set` is Map, `add` is Set)
+    'set',
+    'add',
+    'delete',
+    'clear',
 ])
 
 const COMPOUND_OPERATORS = new Map<ts.SyntaxKind, ts.BinaryOperator>([
@@ -181,19 +189,19 @@ export function docAccessTransformer(docName: string): ts.TransformerFactory<ts.
                     const args = node.arguments.map(
                         (arg) => ts.visitNode(arg, visit) as ts.Expression,
                     )
-                    /* An in-place-mutating array method on a doc path → route through
-                       `$$mutateDocArray(doc, path, member, [args])` so the mutation lands as a
-                       patch instead of silently mutating the live tree by reference. Optional
-                       chaining (`model.items?.splice(…)`) keeps the bare-call semantics below —
-                       skip-if-absent is the author's explicit choice, and a nullish array has
-                       nothing to mutate. */
+                    /* An in-place-mutating container method (Array/Map/Set) on a doc path →
+                       route through `$$mutateDocContainer(doc, path, member, [args])` so the
+                       mutation lands as a patch instead of silently mutating the live tree by
+                       reference. Optional chaining (`model.items?.splice(…)`) keeps the bare-call
+                       semantics below — skip-if-absent is the author's explicit choice, and a
+                       nullish container has nothing to mutate. */
                     if (
-                        MUTATING_ARRAY_METHODS.has(access.name.text) &&
+                        MUTATING_CONTAINER_METHODS.has(access.name.text) &&
                         !access.questionDotToken &&
                         !node.questionDotToken
                     ) {
                         return ts.factory.createCallExpression(
-                            ts.factory.createIdentifier('$$mutateDocArray'),
+                            ts.factory.createIdentifier('$$mutateDocContainer'),
                             undefined,
                             [
                                 ts.factory.createIdentifier(docName),

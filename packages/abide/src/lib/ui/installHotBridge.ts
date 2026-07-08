@@ -7,6 +7,8 @@ import { appendTextAt } from './dom/appendTextAt.ts'
 import { attach } from './dom/attach.ts'
 import { attr } from './dom/attr.ts'
 import { awaitBlock } from './dom/awaitBlock.ts'
+import { bindableProp } from './dom/bindableProp.ts'
+import { bindProp } from './dom/bindProp.ts'
 import { bindSelectValue } from './dom/bindSelectValue.ts'
 import { cloneStatic } from './dom/cloneStatic.ts'
 import { each } from './dom/each.ts'
@@ -16,7 +18,7 @@ import { mergeProps } from './dom/mergeProps.ts'
 import { mount } from './dom/mount.ts'
 import { mountChild } from './dom/mountChild.ts'
 import { mountSlot } from './dom/mountSlot.ts'
-import { mutateDocArray } from './dom/mutateDocArray.ts'
+import { mutateDocContainer } from './dom/mutateDocContainer.ts'
 import { on } from './dom/on.ts'
 import { outlet } from './dom/outlet.ts'
 import { readCall } from './dom/readCall.ts'
@@ -83,11 +85,13 @@ export function installHotBridge(): void {
         mergeProps,
         spreadProps,
         restProps,
+        bindProp,
+        bindableProp,
         spreadAttrs,
         readCall,
         readCell,
         settleAsyncCells,
-        mutateDocArray,
+        mutateDocContainer,
         hydrate,
         escapeKey,
         nextBlockId,

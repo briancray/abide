@@ -86,6 +86,7 @@ export function generateSSR(
         withNestedScripts,
         withShadow,
         bindRead,
+        bindWrite,
     } = lowerContext(stateNames, derivedNames, computedNames, cellReadNames)
 
     /* SSR has no cells, so every plan `Binding` — `reactive` or `plain` — renders as a `plain`
@@ -432,7 +433,13 @@ export function generateSSR(
                     : `"children": () => (async () => { const $slot = []; ${slotCode}return $snip($slot.join('')); })`
             /* The same last-wins layering the client build emits (`composeProps`), so SSR
                and hydration read the same prop bag. */
-            const propsExpr = composeProps(node.props, lowerExpression, slotPart)
+            const propsExpr = composeProps(
+                node.props,
+                lowerExpression,
+                slotPart,
+                bindRead,
+                bindWrite,
+            )
             /* Render the child (awaited — render is async) sharing this render's `$ctx`,
                so its `await`/`try` block ids draw from the same depth-first counter,
                unique across page + children, and the streamed fragments resolve into the
