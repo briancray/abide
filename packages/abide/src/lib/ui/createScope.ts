@@ -2,6 +2,7 @@ import { computed } from './computed.ts'
 import { effect } from './effect.ts'
 import { history } from './history.ts'
 import { linked } from './linked.ts'
+import { trackedComputed } from './trackedComputed.ts'
 import { persist as persistDoc } from './persist.ts'
 import { createDoc } from './runtime/createDoc.ts'
 import { liveScopes } from './runtime/liveScopes.ts'
@@ -73,6 +74,7 @@ export function createScope(
         state,
         linked,
         computed,
+        trackedComputed,
         effect,
         own: (dispose) => {
             owned.push(dispose)

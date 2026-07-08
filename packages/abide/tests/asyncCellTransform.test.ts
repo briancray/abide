@@ -104,6 +104,21 @@ describe('async-cell wrap transform — lowering forms', () => {
         expect(body).toContain('u()')
     })
 
+    test('a bare-call computed routes to the eager `trackedComputed` (stream auto-track)', () => {
+        const body = compileComponent(`
+            <script>
+                import { state } from '@abide/abide/ui/state'
+                const frames = state.computed(getStream())
+            </script>
+            <p>{frames}</p>
+        `)
+        // a bare call (a potential stream/promise producer) → the eager classifying entry
+        expect(body).toContain('const frames = $$scope().trackedComputed(() => getStream())')
+        // read through the unified cell read (it peeks whatever the runtime resolved)
+        expect(body).toContain('$$readCell(frames)')
+        expect(body).not.toContain('frames()')
+    })
+
     test('a linked with an `await` seed routes to a writable async cell', () => {
         const body = compileComponent(`
             <script>

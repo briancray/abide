@@ -11,6 +11,7 @@ import { computed } from '../src/lib/ui/computed.ts'
 import { linked } from '../src/lib/ui/linked.ts'
 import { createAsyncCell } from '../src/lib/ui/runtime/createAsyncCell.ts'
 import { state } from '../src/lib/ui/state.ts'
+import { trackedComputed } from '../src/lib/ui/trackedComputed.ts'
 import { settle } from './support/settle.ts'
 
 /* A hand-driven NamedAsyncIterable — the stream-source shape (async-iterable + a stable
@@ -222,5 +223,31 @@ describe('writable async cell — linked(await …) / linked(getStream())', () =
         second.push('two')
         await settle()
         expect(cell.peek()).toBe('two')
+    })
+})
+
+describe('trackedComputed — the eager read-only stream-classifying entry', () => {
+    test('a stream seed auto-tracks frames as a read-only AsyncComputed', async () => {
+        const stream = makeStream<number>('tracked')
+        const cell = trackedComputed(() => stream) as AsyncComputed<number>
+        expect(isAsyncCell(cell)).toBe(true)
+        expect(cell.pending()).toBe(true)
+
+        stream.push(5)
+        await settle()
+        expect(cell.peek()).toBe(5)
+    })
+
+    test('an await seed unwraps its promise', async () => {
+        const cell = trackedComputed(async () => 9) as AsyncComputed<number>
+        expect(isAsyncCell(cell)).toBe(true)
+        await settle()
+        expect(cell.peek()).toBe(9)
+    })
+
+    test('a plain-value seed falls back to a lazy sync Computed (no cell)', () => {
+        const cell = trackedComputed(() => 3) as { value: number }
+        expect(isAsyncCell(cell)).toBe(false)
+        expect(cell.value).toBe(3)
     })
 })

@@ -83,6 +83,20 @@ function isAsyncComputed(declaration: ts.VariableDeclaration): boolean {
     return isAsyncSeed(wrapSeed(argument))
 }
 
+/* True for a SYNC `computed(...)` seed that is a bare CALL or IDENTIFIER — `computed(getStream())`
+   / `computed(ref)`, the shape that may produce a stream/promise source. These route to the
+   eager `scope().trackedComputed(...)` (which probes its seed and auto-tracks a
+   `NamedAsyncIterable`), read via `$$readCell`; an arithmetic/member/literal seed stays on the
+   lazy `derive` path (read as `name()`). Excludes the async case (`isAsyncComputed` owns it) and
+   a literal `() => …` thunk (a direct thunk the author wrote — left lazy on `derive`). */
+function isBareCallComputed(declaration: ts.VariableDeclaration): boolean {
+    const argument = seedArgument(declaration)
+    if (argument === undefined || isAsyncSeed(wrapSeed(argument))) {
+        return false
+    }
+    return ts.isCallExpression(argument) || ts.isIdentifier(argument)
+}
+
 /* Emits a compile WARNING (best-effort, never fatal) when a signal read appears AFTER the
    first top-level `await` in an async seed — a value read there is no longer tracked, so the
    cell won't reseed when it changes. Detection only: reads before the await (or with no
@@ -218,7 +232,7 @@ export function desugarSignals(source: ts.SourceFile): {
                 /* `computed(compute)` → either a lazy `scope().derive` doc slot referenced as
                    `name()` (a sync seed), or an async cell read via `$$readCell(name)` when the
                    wrapped seed is async (an `await`-lowered or passthrough-`async` thunk). */
-                if (isAsyncComputed(declaration)) {
+                if (isAsyncComputed(declaration) || isBareCallComputed(declaration)) {
                     cellReadNames.add(declaration.name.text)
                 } else {
                     computedNames.add(declaration.name.text)
@@ -460,11 +474,16 @@ function computedStatements(
                 : wrapSeed(argument)
         if (isAsyncSeed(wrapped)) {
             /* Async seed → the eager `computed` primitive (an `AsyncComputed` cell, read via
-               `$$readCell`); the runtime unwraps the promise / auto-tracks the stream. */
+               `$$readCell`); the runtime unwraps the promise. */
             warnPostAwaitReads(wrapped, signalNames)
             statements.push(constDeclaration(name, scopeMethodCall('computed', [wrapped])))
+        } else if (isBareCallComputed(declaration)) {
+            /* Bare call/identifier seed → the eager `trackedComputed`, which probes the seed and
+               auto-tracks a stream (`AsyncComputed`) or falls back to a lazy computed; read via
+               `$$readCell`. */
+            statements.push(constDeclaration(name, scopeMethodCall('trackedComputed', [wrapped])))
         } else {
-            /* Sync seed → the lazy `derive` doc slot, read as `name()`, unchanged. */
+            /* Sync arithmetic/member/literal seed → the lazy `derive` doc slot, read as `name()`. */
             statements.push(
                 constDeclaration(
                     name,

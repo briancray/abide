@@ -1,6 +1,7 @@
 import type { computed } from '../computed.ts'
 import type { effect } from '../effect.ts'
 import type { linked } from '../linked.ts'
+import type { trackedComputed } from '../trackedComputed.ts'
 import type { Patch } from '../runtime/types/Patch.ts'
 import type { state } from '../state.ts'
 import type { SyncTransport } from './SyncTransport.ts'
@@ -54,6 +55,9 @@ export type Scope = {
     state: typeof state
     linked: typeof linked
     computed: typeof computed
+    /* The eager stream-classifying read-only computed a bare-call `computed(getStream())`
+       lowers to — auto-tracks a stream/promise producer, falls back to a lazy computed. */
+    trackedComputed: typeof trackedComputed
     effect: typeof effect
     /* Adopts a teardown into this scope's lifetime — the build's reactivity stopper
        (effects/listeners), run first on `dispose` (before children, before capabilities).
