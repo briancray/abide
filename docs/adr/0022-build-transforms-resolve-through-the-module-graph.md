@@ -70,6 +70,24 @@ scope*.
   one irreducible syntactic step is locating the handler-argument span to elide, which
   the plugin already scans for the server rewrite.
 
+**Reconciliation with `remoteProxy` (pinned).** `remoteProxy` already reads
+`durable?.outbox`, `durable?.streaming`, `durable?.cache`, `durable?.stream` from its
+third argument *at runtime*, so it can take the author's live `opts` object directly and
+pick out what it needs — the extra keys (`schemas` / `clients` / `crossOrigin` / `timeout`
+/ `maxBodySize`) are ignored. So the emitted client call is:
+
+- no opts, non-streaming → `remoteProxy("M","/url")`
+- no opts, streaming → `remoteProxy("M","/url", { streaming: true })`
+- opts, non-streaming → `remoteProxy("M","/url", opts)` (opts left as the live expression)
+- opts, streaming → `remoteProxy("M","/url", { streaming: true, ...(opts) })`
+
+`streaming` is the *only* genuinely build-injected flag — it's derived from the handler
+body (returns `jsonl()`/`sse()`), which the client elides, so it can't ride `opts`.
+`outbox` and the cache/stream policy ride the live `opts` and are read at runtime; the
+build-time `outbox` scan stays only as the mutating-only + literal validation, no longer
+the value source. `remoteProxy`'s third-param type widens to the endpoint opts shape (it
+consumes only the four keys above).
+
 Schemas ride the client module too — harmless bytes today, and they open the door to
 opt-in client-side validation later. A size-conscious follow-up may prune them, but
 never by text extraction.
@@ -95,10 +113,15 @@ guard would flag them wrongly. So the guard asks the real question:
 > import server, or anything that (transitively) imports server, in code that survives
 > tree-shaking?
 
-- Judged from the post-DCE module graph (an `onEnd` pass over the bundle metafile, in the
-  same plugin — 0017's "guard stays in the plugin" holds; only its timing moves from
-  resolve to post-bundle). The import chain is reconstructed from that graph for the same
-  evidence `sideCrossingChain` gives today.
+- Judged from the post-DCE module graph via `Bun.build`'s metafile, read in a plugin
+  `build.onEnd` pass (0017's "guard stays in the plugin" holds; only its timing moves from
+  resolve to post-bundle). **Validated on Bun 1.3.14:** `Bun.build({ metafile: true })`
+  returns `{ inputs, outputs }`; a textually-imported-but-unused module is *absent* from
+  `metafile.inputs` (tree-shaken) while a used one is present, and each input carries
+  `imports: [{ path, kind, original }]` edges. So the guard walks `metafile.inputs`,
+  classifies each *surviving* module (server-only iff under the server dir and not a
+  proxied rpc/socket), and on a hit reconstructs the import chain from the `imports` edges
+  — the same evidence `sideCrossingChain` gives today, now DCE-accurate.
 - A dead server import a dropped handler left behind is **not** a violation; a server
   import a *live* client-reachable expression (e.g. a policy that references server-only
   state) **is** — an honest error, "move it to `shared/` or behind an rpc", replacing the
@@ -158,8 +181,6 @@ literal.
   D2. Amend the in-flight PR so the endpoint-policy core lands clean and the client
   transform lands on the new mechanism.
 - No isolation sweep needed — D3 adds no edges, only makes the existing
-  client-reaches-server edge reachability-based. The one prerequisite is a spike
-  confirming the bundler exposes a usable post-DCE module graph (metafile / `onEnd`) to
-  judge reachability; if not, fall back to eliding the handler's imports during the D2
-  transform via a real parse (not a hand-rolled tokenizer).
+  client-reaches-server edge reachability-based. The post-DCE-metafile prerequisite is
+  **confirmed** (Bun 1.3.14, see D3), so no fallback is required.
 - D4 can land independently of D2/D3 (separate subsystem).
