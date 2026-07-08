@@ -398,8 +398,7 @@ export function abideResolverPlugin({
                             ? `stream: ${prepared.streamPolicyText}`
                             : undefined,
                     ].filter((field): field is string => field !== undefined)
-                    const optsArg =
-                        optsFields.length > 0 ? `, { ${optsFields.join(', ')} }` : ''
+                    const optsArg = optsFields.length > 0 ? `, { ${optsFields.join(', ')} }` : ''
                     const contents = `import { remoteProxy as __abideRemoteProxy__ } from '${importName}/ui/remoteProxy';
 export const ${prepared.exportName} = __abideRemoteProxy__(${JSON.stringify(prepared.method)}, ${JSON.stringify(url)}${optsArg});
 `

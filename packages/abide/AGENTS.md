@@ -26,7 +26,7 @@ src/server/rpc/getMessages.ts
       └─ OpenAPI        operation in /openapi.json
 ```
 
-An `inputSchema` (any Standard Schema library — zod, valibot, arktype,
+A `schemas.input` (any Standard Schema library — zod, valibot, arktype,
 unadapted) is the gate: it unlocks the CLI, and for read-only methods
 (GET/HEAD) the MCP tool. A mutating method (POST/PUT/PATCH/DELETE) never
 auto-exposes to MCP — it requires explicit `clients: { mcp: true }`.
@@ -76,33 +76,36 @@ For tests, add `preload = ["@abide/abide/preload"]` under `[test]` in
 ## Authoring contracts
 
 **RPC** — the handler receives the schema-validated args
-(`InferOutput<inputSchema>`); typed generics on the helper are a compile error
+(`InferOutput<schemas.input>`); typed generics on the helper are a compile error
 — type the parameter, let the body infer. Inside it, `request()` / `cookies()`
 / `server()` read the request scope. Return `json(data)` (or `jsonl` / `sse`
-for streams, `error` / `redirect`, or a raw `Response`). Options:
-`inputSchema`, `outputSchema`, `filesSchema` (validates uploaded `File` parts,
-kept out of the JSON-Schema projection), `clients: { browser, mcp, cli }`,
-`crossOrigin` (exempts a mutating rpc from the same-origin CSRF gate),
+for streams, `error` / `redirect`, or a raw `Response`). Options are namespaced
+(ADR-0020): `schemas: { input, output, files }` (`files` validates uploaded
+`File` parts, kept out of the JSON-Schema projection); `clients: { browser, mcp,
+cli }`; `crossOrigin` (exempts a mutating rpc from the same-origin CSRF gate);
 `timeout` (handler deadline in ms → 504 on every surface, composed into
-`request().signal`), `maxBodySize` (per-rpc 413 cap), `outbox` (durable
-delivery, mutating methods only). Query args on GET/HEAD/DELETE travel as
+`request().signal`); `maxBodySize` (per-rpc 413 cap); on read helpers (GET/HEAD)
+`cache: { ttl, tags, throttle, debounce, shared }` (the endpoint's
+retention/refetch policy) and `stream: { n }` (replay depth); on mutating helpers
+`outbox` (durable delivery). Kind-scoped by type: `cache`/`stream` on a write, or
+`outbox` on a read, is a compile error. Query args on GET/HEAD/DELETE travel as
 strings — coerce in the schema (`z.coerce.number()`). A body rpc also accepts
 a `FormData` in place of typed args (the upload escape hatch): text fields
-validate as args, `File` parts validate against `filesSchema`.
+validate as args, `File` parts validate against `schemas.files`.
 
-**Consuming an rpc** — the bare call `fn(args, opts?)` IS the smart read:
-cached, coalesced, reactive, stale-while-revalidate for replayable (GET/HEAD)
-reads; the second arg takes `{ ttl, tags, throttle, debounce, shared, n }`
-(retention and the refetch clock — not transport). `ttl` defaults to `0` on
-the server (coalesce-only — the request is the atomic unit, nothing is
-retained past it) and `Infinity` on the client (retain until invalidate/
-refresh). `shared: true` selects the process-level store instead of the
-request-scoped default (server) — it does not by itself retain, pair it with
-an explicit `ttl` (e.g. `{ shared: true, ttl: Infinity }`) to memoise across
-requests, for an external endpoint, never per-user data; on the client it is
-a no-op (one tab store). A read with no request in flight (e.g. a background
-job) also resolves against the process-level store. During SSR the same call
-resolves
+**Consuming an rpc** — the bare call `fn(args)` IS the smart read: cached,
+coalesced, reactive, stale-while-revalidate for replayable (GET/HEAD) reads.
+There are no call-site options (ADR-0020) — all retention/refetch policy is
+declared once on the endpoint's `cache`/`stream`. `ttl` defaults to `Infinity`:
+an entry is retained for its store's lifetime — the request on the server (a
+non-shared read dies with the request), the tab on the client (until
+invalidate/refresh); a write coalesces only (ttl 0, the mutation idiom).
+`shared` selects the process-level store instead of the request-scoped default
+(server); with the default `Infinity` ttl it memoises across requests (an
+explicit `ttl` bounds it) — for an external endpoint, never per-user data; on
+the client it is a no-op (one tab store). A read with no request in flight (e.g.
+a background job) resolves against the process-level store and coalesces only
+(so it can't leak forever). During SSR the same call resolves
 in-process and its value is baked into the HTML so hydration starts warm —
 there is no `cache()` wrapper; the bare call carries the caching. Around it:
 `fn.raw(args, init?)` returns the raw `Response` (per-call transport options —

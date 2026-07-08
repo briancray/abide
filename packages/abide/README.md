@@ -30,7 +30,7 @@ cd examples/kitchen-sink && bun run dev
 
 An RPC is one exported handler per file under `src/server/rpc/` — the file path
 is the URL. The export wraps the handler in an HTTP-method helper (`GET`,
-`POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`); a Standard Schema `inputSchema`
+`POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`); a Standard Schema `schemas.input`
 (zod, valibot, arktype — no adapter) validates the args and projects the CLI
 flags, the MCP tool, and the OpenAPI operation from the one declaration.
 
@@ -44,10 +44,12 @@ import { listMessages } from '$server/store'
 export const getMessages = GET(
     async ({ room, limit }) => json(await listMessages(room, limit)),
     {
-        inputSchema: z.object({
-            room: z.string(),
-            limit: z.coerce.number().default(50),
-        }),
+        schemas: {
+            input: z.object({
+                room: z.string(),
+                limit: z.coerce.number().default(50),
+            }),
+        },
     },
 )
 ```

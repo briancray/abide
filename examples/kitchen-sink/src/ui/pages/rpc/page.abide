@@ -85,8 +85,8 @@ const calls = [
                     <td class="px-4 py-2 font-mono">cache</td>
                     <td class="px-4 py-2 text-slate-600">
                         endpoint cache policy on a read (GET/HEAD):
-                        <code class="font-mono">{'{ ttl, tags, throttle, debounce, shared }'}</code> — the smart
-                        call reads it, no call-site options
+                        <code class="font-mono">{'{ ttl, tags, throttle, debounce, shared }'}</code> — the smart call reads it, no
+                        call-site options
                     </td>
                     <td class="px-4 py-2 text-slate-600">method defaults</td>
                 </tr>

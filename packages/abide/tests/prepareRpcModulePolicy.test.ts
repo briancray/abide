@@ -40,7 +40,9 @@ describe('prepareRpcModule — endpoint cache/stream policy extraction (ADR-0020
 
     test('cache with an arrow-function tags (arg-derived group)', () => {
         const prepared = prepareRpcModule(
-            getMod("GET((a) => a, { cache: { ttl: 60000, tags: (args) => ['rates:' + args.base] } })"),
+            getMod(
+                "GET((a) => a, { cache: { ttl: 60000, tags: (args) => ['rates:' + args.base] } })",
+            ),
             '@abide/abide',
         )
         expect(prepared?.cachePolicyText).toBe(

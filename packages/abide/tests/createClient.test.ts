@@ -10,7 +10,9 @@ import { testSchema } from './standardSchema.ts'
 describe('createClient in-process happy path', () => {
     test('plain call decodes the body; .raw returns the Response', async () => {
         defineRpc('GET', '/rpc/cli-ping', ({ n }: { n?: string }) => json({ pong: n ?? '0' }), {
-            schemas: { input: testSchema({ type: 'object', properties: { n: { type: 'string' } } }) },
+            schemas: {
+                input: testSchema({ type: 'object', properties: { n: { type: 'string' } } }),
+            },
         })
         const client = createClient()
 
