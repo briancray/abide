@@ -206,6 +206,7 @@ Bindings and directives (the attribute kinds `readAttributes` parses):
 | `bind:value={cell}` | Two-way input/select/textarea binding. `<input type="number"/"range">` writes back a number; `<select>` re-applies against late-mounting options and `<select multiple>` binds an array of selected values |
 | `bind:value={{ get, set }}` | Writable-computed binding: read via `get()`, write via `set(next)` |
 | `bind:checked={cell}` / `bind:group={cell}` | Checkbox boolean / radio-group value (SSR emits boolean attributes bare — `checked`, `open`, `selected` on the matching option) |
+| `bind:prop={target}` (on a component) | Two-way prop binding — the same `target` forms as an element bind (an lvalue or `{ get, set }`). The child reads `prop` normally; if it writes `prop` or forwards it to another `bind:`, those writes flow back to `target`. Bindability is usage-inferred (no child-side marker): a prop only read stays read-only, and a `bind:prop` whose child never writes is simply one-way |
 | `class:name={cond}` | Toggles a class; merges with a reactive `class` base in one effect |
 | `style:property={value}` | Sets one style property; merges with a reactive `style` base |
 | `attach={fn}` | Runs `fn(element)` at build time; an optional returned teardown runs on dispose |
@@ -406,6 +407,8 @@ tests can import it, not for app code.
 - `@abide/abide/ui/dom/mergeProps` — composes a child's props from explicit thunk runs, spread layers, and the trailing children layer.
 - `@abide/abide/ui/dom/spreadProps` — wraps a `{...source}` spread layer so every key resolves to a live value thunk.
 - `@abide/abide/ui/dom/restProps` — the live unconsumed-props object behind `const { …, ...rest } = props()`.
+- `@abide/abide/ui/dom/bindProp` — the parent half of a component `bind:prop`: annotates a prop's value thunk with a `set` write-back channel.
+- `@abide/abide/ui/dom/bindableProp` — the child half: the writable cell a component gets for a prop it writes or forwards (pass-through to the parent when bound, a local reseeding cell when not).
 - `@abide/abide/ui/dom/spreadAttrs` — spreads an object's keys onto a native element (`<div {...rest}>`), keys enumerated once.
 - `@abide/abide/ui/dom/readCall` — guarded method call on a reactive-doc read (the `model.draft.trim()` lowering).
 - `@abide/abide/ui/dom/readCell` — unified read for a `linked`/async-`computed` reference (the `$$readCell(NAME)` lowering): peeks an async cell, reads `.value` off a sync one.

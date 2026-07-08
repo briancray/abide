@@ -577,7 +577,7 @@ export function generateBuild(
     /* The props bag a child mount receives — composed by the shared `composeProps` so the
        build and SSR back-ends emit the same last-wins layering. */
     function propsArg(node: Extract<TemplateNode, { kind: 'component' }>): string {
-        return composeProps(node.props, lowerExpression, slotPart(node))
+        return composeProps(node.props, lowerExpression, slotPart(node), bindRead, bindWrite)
     }
 
     /* Mounts a child component as a marker-bounded range on `parentVar`, positioned at

@@ -88,6 +88,8 @@
         "./ui/dom/mergeProps": "./src/lib/ui/dom/mergeProps.ts",
         "./ui/dom/spreadProps": "./src/lib/ui/dom/spreadProps.ts",
         "./ui/dom/restProps": "./src/lib/ui/dom/restProps.ts",
+        "./ui/dom/bindProp": "./src/lib/ui/dom/bindProp.ts",
+        "./ui/dom/bindableProp": "./src/lib/ui/dom/bindableProp.ts",
         "./ui/dom/spreadAttrs": "./src/lib/ui/dom/spreadAttrs.ts",
         "./ui/dom/readCall": "./src/lib/ui/dom/readCall.ts",
         "./ui/dom/readCell": "./src/lib/ui/dom/readCell.ts",

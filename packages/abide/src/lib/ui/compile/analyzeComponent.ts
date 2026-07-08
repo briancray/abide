@@ -5,6 +5,7 @@ import { scopeCss } from './scopeCss.ts'
 import type { AnalyzedComponent } from './types/AnalyzedComponent.ts'
 import type { InterpolationClassifier } from './types/InterpolationClassifier.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
+import { writtenTemplateNames } from './writtenTemplateNames.ts'
 
 /*
 The shared compile front-end: splits the leading `<script>` off the template,
@@ -79,6 +80,10 @@ export function analyzeComponent(
               ? `${scriptBody}\n${injectedScript.join('\n')}`
               : injectedScript.join('\n')
     const nestedScriptCode = collectNestedScriptCode(nodes)
+    /* Names the markup writes or forwards as a `bind:` target — unioned (in `desugarSignals`)
+       with the script's own writes so a `props()` binding used two-way desugars to a writable
+       cell (`bindableProp`) rather than a read-only derive. */
+    const templateWrittenNames = writtenTemplateNames(nodes)
     /* `lowerScript` parses the script ONCE and chains signal desugaring, reference
        renaming, and doc-access lowering over that single tree, then hoists top-level
        imports off the tree structurally — imports live at module scope, not inside the
@@ -92,7 +97,7 @@ export function analyzeComponent(
         computedNames,
         cellReadNames,
         droppedReactiveImports,
-    } = lowerScript(fullScriptBody, nestedScriptCode, injectedCellNames)
+    } = lowerScript(fullScriptBody, nestedScriptCode, injectedCellNames, templateWrittenNames)
     /* `annotateScopes` mutates the tree — assigning each style its scope attribute and
        stamping covered elements — and returns the scoped CSS per block for the bundler. */
     const styles = annotateScopes(nodes, [], scopeSeed, { count: 0 })

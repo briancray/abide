@@ -77,8 +77,18 @@ export type TemplateNode =
           loc?: number
           /* Each authored attribute as a prop. A `spread` entry (`{...code}`) carries no
              `name`; its keys merge in at runtime (`mergeProps`/`spreadProps`). `nameLoc` is
-             the prop name's source offset — the anchor for an excess-prop diagnostic. */
-          props: { name: string; code: string; loc?: number; nameLoc?: number; spread?: boolean }[]
+             the prop name's source offset — the anchor for an excess-prop diagnostic. `bind`
+             marks a `bind:<name>={target}` two-way prop: `code` is the writable target (an
+             lvalue or a `{ get, set }` accessor), passed with a write-back channel so the
+             child can push changes upstream (`bindProp`/`bindableProp`). */
+          props: {
+              name: string
+              code: string
+              loc?: number
+              nameLoc?: number
+              spread?: boolean
+              bind?: true
+          }[]
           children: TemplateNode[]
       }
     | { kind: 'switch'; subject: string; children: TemplateNode[]; loc?: number }

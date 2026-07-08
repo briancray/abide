@@ -1097,22 +1097,27 @@ function toProps(
                 nameLoc: attr.nameLoc,
             }
         }
-        /* Every non-static kind keeps its `code`/`loc`; only the prop name differs —
-           a directive (`event`/`bind`/`class`/`style`/`attach`) round-trips to its written
-           name as a passthrough prop. */
+        /* A `bind:<name>={target}` is a two-way prop under its BARE name (`value`, not
+           `bind:value`): the back-ends pass it with a write-back channel so the child can
+           push changes upstream (`bindProp`), and the child upgrades it to a writable cell
+           (`bindableProp`) when it writes or forwards it. */
+        if (attr.kind === 'bind') {
+            return { name: attr.property, code: attr.code, loc: attr.loc, bind: true as const }
+        }
+        /* Every other non-static kind keeps its `code`/`loc`; only the prop name differs —
+           a directive (`event`/`class`/`style`/`attach`) round-trips to its written name as
+           a passthrough prop. */
         const name =
             attr.kind === 'event'
                 ? `on${attr.event}`
-                : attr.kind === 'bind'
-                  ? `bind:${attr.property}`
-                  : attr.kind === 'class'
-                    ? `class:${attr.name}`
-                    : attr.kind === 'style'
-                      ? `style:${attr.property}`
-                      : attr.kind === 'attach'
-                        ? 'attach'
-                        : attr.name
-        /* Only `expression` carries a name offset; event/bind/attach are framework-handled
+                : attr.kind === 'class'
+                  ? `class:${attr.name}`
+                  : attr.kind === 'style'
+                    ? `style:${attr.property}`
+                    : attr.kind === 'attach'
+                      ? 'attach'
+                      : attr.name
+        /* Only `expression` carries a name offset; event/attach are framework-handled
            passthrough excluded from the strict prop check, so theirs is unused. */
         const nameLoc = attr.kind === 'expression' ? attr.nameLoc : undefined
         return { name, code: attr.code, loc: attr.loc, nameLoc }

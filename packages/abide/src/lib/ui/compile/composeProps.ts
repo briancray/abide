@@ -20,9 +20,19 @@ export function composeProps(
     props: ComponentProps,
     lowerExpression: (code: string) => string,
     slotPart: string | undefined,
+    /* The two-way bind accessors (`lowerContext`): `bindRead` lowers a target to its
+       current value, `bindWrite` to the statement that writes a value back. Shared with
+       element `bind:`, so a component bind accepts the same lvalue / `{ get, set }` targets. */
+    bindRead: (code: string) => string,
+    bindWrite: (code: string, valueExpr: string) => string,
 ): string {
-    const propThunk = (prop: { name: string; code: string }): string =>
-        `${JSON.stringify(prop.name)}: () => (${lowerExpression(prop.code)})`
+    /* A `bind:<name>={target}` prop: the normal `() => value` entry, annotated with a
+       `set` write-back channel (`bindProp`) so the child can push changes upstream. A
+       read-only consumer still just calls the thunk; the setter rides along unseen. */
+    const propThunk = (prop: { name: string; code: string; bind?: true }): string =>
+        prop.bind === true
+            ? `${JSON.stringify(prop.name)}: $$bindProp(() => (${bindRead(prop.code)}), ($value) => { ${bindWrite(prop.code, '$value')} })`
+            : `${JSON.stringify(prop.name)}: () => (${lowerExpression(prop.code)})`
     if (!props.some((prop) => prop.spread)) {
         const parts = props.map(propThunk)
         if (slotPart !== undefined) {

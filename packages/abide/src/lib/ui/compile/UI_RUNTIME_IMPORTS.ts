@@ -47,6 +47,8 @@ export const UI_RUNTIME_IMPORTS: { name: string; specifier: string; alias?: stri
     { name: 'mergeProps', specifier: 'ui/dom/mergeProps', alias: '$$mergeProps' },
     { name: 'spreadProps', specifier: 'ui/dom/spreadProps', alias: '$$spreadProps' },
     { name: 'restProps', specifier: 'ui/dom/restProps', alias: '$$restProps' },
+    { name: 'bindProp', specifier: 'ui/dom/bindProp', alias: '$$bindProp' },
+    { name: 'bindableProp', specifier: 'ui/dom/bindableProp', alias: '$$bindableProp' },
     { name: 'spreadAttrs', specifier: 'ui/dom/spreadAttrs', alias: '$$spreadAttrs' },
     { name: 'readCall', specifier: 'ui/dom/readCall', alias: '$$readCall' },
     { name: 'readCell', specifier: 'ui/dom/readCell', alias: '$$readCell' },

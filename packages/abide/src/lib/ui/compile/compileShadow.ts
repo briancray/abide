@@ -490,7 +490,12 @@ function scopeLineFor(
            binding inherits its value type. */
         const shape = call.typeArguments?.[0] ?? declaration.type
         propsShapes.push(shape === undefined ? 'Record<string, any>' : verbatim(shape))
-        return { text: `const ${verbatim(declaration)};`, segments: [span(declaration, 6)] }
+        /* `let`, not `const`: a prop the component writes back through a two-way `bind:prop`
+           (`value += 1`, or forwarding it to another `bind:`) is a legal reassignment, so the
+           destructure must not read as a `const`. Bindability is dynamic (decided by what the
+           parent passed), so the shadow can't single out which props are written — it relaxes
+           the whole destructure, matching the runtime's usage-inferred upgrade. */
+        return { text: `let ${verbatim(declaration)};`, segments: [span(declaration, 4)] }
     }
     /* The rewrite drops the callee from the line, so hovering `state`/`computed`/
        `linked` at its call site has nothing to resolve. Append the callee as a

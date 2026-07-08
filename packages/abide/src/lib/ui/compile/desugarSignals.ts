@@ -1,4 +1,5 @@
 import ts from 'typescript'
+import { assignmentTargetNames } from './assignmentTargetNames.ts'
 import { type ReactiveImportBindings, reactiveImportBindings } from './resolveReactiveExport.ts'
 import { signalCallee } from './signalCallee.ts'
 
@@ -188,6 +189,11 @@ export function desugarSignals(
        would be. Gated on the exact injected name (never a naming heuristic), so it can never
        reclassify author code — an author's own `computed(...)` still needs its import. */
     injectedCellNames: ReadonlySet<string> = new Set(),
+    /* Names the TEMPLATE writes (assigned in an event expression, or forwarded as a `bind:`
+       target) — see `writtenTemplateNames`. Unioned with the script's own write scan; a `props()`
+       binding whose name lands in the union is a WRITABLE prop (a `.value` cell via `bindableProp`)
+       rather than a read-only derive, so a two-way `bind:prop` on the parent can flow back. */
+    templateWrittenNames: ReadonlySet<string> = new Set(),
 ): {
     transformer: ts.TransformerFactory<ts.SourceFile>
     stateNames: Set<string>
@@ -196,6 +202,10 @@ export function desugarSignals(
     cellReadNames: Set<string>
 } {
     assertNoRemovedReaders(source)
+    /* The full set of names written anywhere (this script + the template). A prop in this set
+       is upgraded to a writable cell; a prop only read stays a cheap read-only derive. */
+    const writtenNames = new Set<string>(templateWrittenNames)
+    assignmentTargetNames(source, writtenNames)
     /* The file's reactive import bindings — each local (alias-safe) mapped to its
        canonical primitive. The single recognition authority: every callee below resolves
        against these import bindings and nothing else. */
@@ -228,7 +238,14 @@ export function desugarSignals(
                 }
                 hasPropsDestructure = true
                 for (const binding of propsDestructure(declaration).bindings) {
-                    computedNames.add(binding.local)
+                    /* A prop the component writes/forwards becomes a `.value` cell (`bindableProp`,
+                       read/written like `state(x, transform)` → `derivedNames`); one only read stays
+                       a read-only derive read as `name()` (`computedNames`). */
+                    if (writtenNames.has(binding.local)) {
+                        derivedNames.add(binding.local)
+                    } else {
+                        computedNames.add(binding.local)
+                    }
                 }
                 continue
             }
@@ -299,7 +316,13 @@ export function desugarSignals(
         ])
         for (const statement of root.statements) {
             statements.push(
-                ...loweredStatement(statement, bindings, signalNames, injectedCellNames),
+                ...loweredStatement(
+                    statement,
+                    bindings,
+                    signalNames,
+                    injectedCellNames,
+                    writtenNames,
+                ),
             )
         }
         return factory.updateSourceFile(root, statements)
@@ -317,13 +340,14 @@ function loweredStatement(
     bindings: ReactiveImportBindings,
     signalNames: ReadonlySet<string>,
     injectedCellNames: ReadonlySet<string>,
+    writtenNames: ReadonlySet<string>,
 ): ts.Statement[] {
     rejectMixedDeclaration(statement, bindings)
     return (
         injectedComputedStatements(statement, injectedCellNames) ??
         stateAssignmentStatements(statement, bindings) ??
         computedStatements(statement, bindings, signalNames) ??
-        propsStatements(statement, bindings) ??
+        propsStatements(statement, bindings, writtenNames) ??
         cellStatements(statement, bindings, signalNames) ?? [statement]
     )
 }
@@ -625,14 +649,18 @@ function propsBindingKey(element: ts.BindingElement): string {
     throw new Error('abide: computed prop keys in `props()` destructuring are not supported')
 }
 
-/* If `statement` is a `const {…, ...rest} = props()` destructure, returns one reactive
-   computed per named binding — `scope().derive("name", () => $props["key"]?.() ?? default)`,
-   read as `name()` — plus a `const rest = restProps($props, [consumed])` for a rest
-   binding; otherwise undefined. The `?? default` applies the binding's `= default`
-   fallback when the prop is absent. */
+/* If `statement` is a `const {…, ...rest} = props()` destructure, returns one binding per
+   named prop — plus a `const rest = restProps($props, [consumed])` for a rest binding;
+   otherwise undefined. A prop the component only READS is a read-only reactive computed
+   (`scope().derive("name", () => $props["key"]?.() ?? default)`, read as `name()`). A prop
+   it WRITES or forwards (in `writtenNames`) is a writable `.value` cell instead
+   (`$$bindableProp($props, "key", () => default)`, read/written as `name.value`), so a
+   two-way `bind:prop` on the parent flows back. The `?? default` / `fallback` thunk applies
+   the binding's `= default` when the prop is absent. */
 function propsStatements(
     statement: ts.Statement,
     bindings: ReactiveImportBindings,
+    writtenNames: ReadonlySet<string>,
 ): ts.Statement[] | undefined {
     if (!ts.isVariableStatement(statement)) {
         return undefined
@@ -647,6 +675,36 @@ function propsStatements(
         }
         const { bindings: propBindings, rest } = propsDestructure(declaration)
         for (const { local, key, initializer } of propBindings) {
+            /* A written/forwarded prop → `$$bindableProp($props, "key", () => default)`. */
+            if (writtenNames.has(local)) {
+                const args: ts.Expression[] = [
+                    factory.createIdentifier('$props'),
+                    factory.createStringLiteral(key),
+                ]
+                if (initializer !== undefined) {
+                    args.push(
+                        factory.createArrowFunction(
+                            undefined,
+                            undefined,
+                            [],
+                            undefined,
+                            factory.createToken(ts.SyntaxKind.EqualsGreaterThanToken),
+                            factory.createParenthesizedExpression(initializer),
+                        ),
+                    )
+                }
+                statements.push(
+                    constDeclaration(
+                        local,
+                        factory.createCallExpression(
+                            factory.createIdentifier('$$bindableProp'),
+                            undefined,
+                            args,
+                        ),
+                    ),
+                )
+                continue
+            }
             /* `$props["key"]?.()` — the parent thunk, optionally called. */
             const read = factory.createCallChain(
                 factory.createElementAccessExpression(

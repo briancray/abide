@@ -35,8 +35,9 @@ describe('compileShadow', () => {
     test('reconstructs the scope with value types', () => {
         expect(code).toContain('let count = (0);')
         expect(code).toContain('const doubled = (() => count * 2)();')
-        /* A `props()` destructure projects verbatim against the typed `props()`. */
-        expect(code).toContain('const { title } = props<{ title: string }>();')
+        /* A `props()` destructure projects verbatim against the typed `props()`, as a `let`
+           so a prop written back through a two-way `bind:prop` isn't a spurious const-assign. */
+        expect(code).toContain('let { title } = props<{ title: string }>();')
     })
 
     test('projects linked as a writable let, computed as a read-only const', () => {
@@ -75,6 +76,21 @@ describe('compileShadow', () => {
            child's whole prop shape — so missing/excess/wrong-type are all caught. */
         expect(code).toContain('((__c: Parameters<typeof Child>[0]): void => { void __c })({')
         expect(code).toContain('name: (title)')
+    })
+
+    test('checks a component bind:prop target against the child prop type', () => {
+        /* `bind:value={count}` is a two-way prop under its bare name `value`, so it joins the
+           completeness object literal like any data prop — its target type-checks against the
+           child's `value` prop, satisfies it if required, and flags excess if the child has no
+           such prop (unlike `class:`/`style:`/`attach`, which stay lenient framework directives). */
+        const { code } = compileShadow(`<script>
+import Child from './Child.abide'
+import { state } from '@abide/abide/ui/state'
+let count = state(0)
+</script>
+<Child bind:value={count} />`)
+        expect(code).toContain('((__c: Parameters<typeof Child>[0]): void => { void __c })({')
+        expect(code).toContain('value: (count)')
     })
 
     test('checks a {...spread} against a Partial of the child props', () => {

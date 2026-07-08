@@ -7,6 +7,8 @@ import { appendTextAt } from './dom/appendTextAt.ts'
 import { attach } from './dom/attach.ts'
 import { attr } from './dom/attr.ts'
 import { awaitBlock } from './dom/awaitBlock.ts'
+import { bindableProp } from './dom/bindableProp.ts'
+import { bindProp } from './dom/bindProp.ts'
 import { bindSelectValue } from './dom/bindSelectValue.ts'
 import { cloneStatic } from './dom/cloneStatic.ts'
 import { each } from './dom/each.ts'
@@ -83,6 +85,8 @@ export function installHotBridge(): void {
         mergeProps,
         spreadProps,
         restProps,
+        bindProp,
+        bindableProp,
         spreadAttrs,
         readCall,
         readCell,
