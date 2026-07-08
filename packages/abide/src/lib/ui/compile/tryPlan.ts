@@ -16,8 +16,9 @@ export type TryPlan = {
     finallyChildren: TemplateNode[]
     /* No catch → a throw propagates to the enclosing boundary (re-throw / `undefined` thunk). */
     hasCatch: boolean
-    /* The catch branch's binding (`catchAs`, `plain`); empty when no catch branch. The
-       guarded and `finally` branches bind nothing. */
+    /* The catch branch's binding (`catchAs`, `reactive`); empty when no catch branch. The
+       error is a `.value` cell so a catch→catch swap updates `err` in place. The guarded and
+       `finally` branches bind nothing. */
     catchBindings: Binding[]
 }
 
@@ -31,6 +32,6 @@ export function tryPlan(node: Extract<TemplateNode, { kind: 'try' }>): TryPlan {
         catchAs,
         finallyChildren: finallyBranch?.children ?? [],
         hasCatch: catchBranch !== undefined,
-        catchBindings: catchBinding(catchAs, catchBranch !== undefined),
+        catchBindings: catchBinding(catchAs, catchBranch !== undefined, true),
     }
 }

@@ -133,4 +133,43 @@ describe('reactive {#try} — regressions (same-state + initial throw)', () => {
         expect(serialize(host)).not.toContain('<p>')
         expect(host.textContent).toContain('caught:splat')
     })
+
+    test('catch → catch updates err IN PLACE — the catch node is not rebuilt', async () => {
+        /* Walk to the first <b> element (the catch branch's node). */
+        const firstB = (node: unknown): unknown => {
+            for (const child of (node as { childNodes?: unknown[] }).childNodes ?? []) {
+                if ((child as { tagName?: string }).tagName === 'b') {
+                    return child
+                }
+                const nested = firstB(child)
+                if (nested !== undefined) {
+                    return nested
+                }
+            }
+            return undefined
+        }
+        const gates: Deferred[] = []
+        const { host, model } = mount(ASYNC, {
+            gate: () => {
+                const d = deferred()
+                gates.push(d)
+                return d.promise
+            },
+        })
+        gates[0]?.reject(new Error('first'))
+        await settle()
+        expect(host.textContent).toContain('first')
+        const node = firstB(host) // the catch <b> after the first error
+        expect(node).toBeDefined()
+
+        /* A reseed produces a fresh flight that ALSO rejects → catch→catch. The err cell is
+           written in place, so the SAME <b> node survives with updated text (a rebuild would
+           mint a new one). */
+        model.replace('attempt', 1)
+        gates[1]?.reject(new Error('second'))
+        await settle()
+        expect(host.textContent).toContain('second')
+        expect(host.textContent).not.toContain('first')
+        expect(firstB(host)).toBe(node) // same node → updated in place, not rebuilt
+    })
 })

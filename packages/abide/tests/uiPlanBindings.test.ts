@@ -98,13 +98,14 @@ describe('per-plan bindings — the single source both back-ends register throug
         })
     })
 
-    /* try: the catch error is plain; guarded + finally bind nothing. */
+    /* try: the catch error is reactive (a `.value` cell so catch→catch updates `err` in
+       place); guarded + finally bind nothing. */
     describe('tryPlan', () => {
-        test('catch error is plain', () => {
+        test('catch error is reactive', () => {
             const plan = tryPlan(
                 block('try', `{#try}<x>a</x>{:catch e}<b>{e}</b>{:finally}<i>f</i>{/try}`),
             )
-            expect(tags(plan.catchBindings)).toEqual(['e@plain'])
+            expect(tags(plan.catchBindings)).toEqual(['e@reactive'])
         })
 
         test('no catch → empty catch bindings', () => {

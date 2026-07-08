@@ -7,7 +7,9 @@ import { RENDER } from '../runtime/RENDER.ts'
 import { scope } from '../runtime/scope.ts'
 import { scopeGroup } from '../runtime/scopeGroup.ts'
 import type { Boundary } from '../runtime/types/Boundary.ts'
+import type { State } from '../runtime/types/State.ts'
 import { withoutHydration } from '../runtime/withoutHydration.ts'
+import { state } from '../state.ts'
 import { buildDetachedRange } from './buildDetachedRange.ts'
 import { discardBoundary } from './discardBoundary.ts'
 import { removeRange } from './removeRange.ts'
@@ -46,7 +48,7 @@ export function tryBlock(
     parent: Node,
     id: number,
     renderTry: (parent: Node) => void,
-    renderCatch?: (parent: Node, error: unknown) => void,
+    renderCatch?: (parent: Node, error: State<unknown>) => void,
     before: Node | null = null,
 ): void {
     const hydration = RENDER.hydration
@@ -62,6 +64,11 @@ export function tryBlock(
     /* The keep-the-watch subscription on the throwing cell, live while the catch branch is
        shown (async-cell errors only); disposed on recover / swap / teardown. */
     let watchDispose: (() => void) | undefined
+    /* Which branch is mounted, and the reactive error cell the catch branch reads. A
+       catch→catch (a fresh error while still failing) WRITES this cell — the `err` binding
+       re-runs in place, no rebuild — mirroring how `awaitBlock` updates its then-value cell. */
+    let activeKind: 'try' | 'catch' | undefined
+    let errorCell: State<unknown> | undefined
 
     const boundary: Boundary = { handle: (error) => showCatch(error) }
 
@@ -118,6 +125,8 @@ export function tryBlock(
         disposeWatch()
         try {
             place((host) => renderTry(host), hasCatch)
+            activeKind = 'try'
+            errorCell = undefined
         } catch (error) {
             if (!hasCatch) {
                 throw error
@@ -126,14 +135,29 @@ export function tryBlock(
         }
     }
 
-    /* Swap to the catch branch (rebuilding it with the current error). Keeps a watch on the
-       throwing async cell so a recovery re-arms the guarded branch and a fresh error while
-       still failing rebuilds catch with the new value. */
+    /* Swap to the catch branch. A catch→catch (a fresh error while the catch branch is
+       already mounted) updates the reactive `err` cell IN PLACE — the binding re-runs, no
+       rebuild, focus/scroll inside the catch branch survive. Otherwise (try→catch, or the
+       initial throw) it builds the catch branch fresh around a new error cell. Either way it
+       keeps a watch on the throwing async cell so a recovery re-arms the guarded branch. */
     const showCatch = (error: unknown): void => {
+        if (activeKind === 'catch' && errorCell !== undefined) {
+            errorCell.value = error
+            rewatch(error)
+            return
+        }
+        const cell = state<unknown>(error)
+        errorCell = cell
+        place((host) => (renderCatch as NonNullable<typeof renderCatch>)(host, cell), false)
+        activeKind = 'catch'
+        rewatch(error)
+    }
+
+    /* (Re)subscribe the keep-the-watch to whatever cell threw this time. Only a reactive
+       async-cell error carries a source to watch; a plain render bug is terminal in v1 (a bug
+       is not a data state that self-heals). */
+    const rewatch = (error: unknown): void => {
         disposeWatch()
-        place((host) => (renderCatch as NonNullable<typeof renderCatch>)(host, error), false)
-        /* Only a reactive async-cell error carries a source to watch; a plain render bug is
-           terminal in v1 (no auto-recovery — a bug is not a data state that self-heals). */
         if (error instanceof AsyncCellError) {
             watchCell(error.cell)
         }
@@ -243,6 +267,7 @@ export function tryBlock(
             anchor = document.createTextNode('')
             parent.insertBefore(anchor, close)
             active = { start, end, dispose }
+            activeKind = 'try'
         } catch (error) {
             dispose?.()
             throw error
