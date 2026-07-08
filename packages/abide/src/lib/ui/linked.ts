@@ -1,4 +1,4 @@
-import { isSubscribable } from '../shared/isSubscribable.ts'
+import { isAsyncIterable } from '../shared/isAsyncIterable.ts'
 import type { AsyncState } from '../shared/types/AsyncState.ts'
 import type { NamedAsyncIterable } from '../shared/types/NamedAsyncIterable.ts'
 import { createAsyncCell } from './runtime/createAsyncCell.ts'
@@ -58,7 +58,7 @@ export function linked<T>(
     } catch {
         threw = true
     }
-    if (!threw && isSubscribable(probe)) {
+    if (!threw && isAsyncIterable(probe)) {
         return createAsyncCell(seed as () => unknown, {
             writable: true,
             transform: coerce,

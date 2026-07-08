@@ -1,5 +1,5 @@
 import { ASYNC_CELL } from '../../shared/ASYNC_CELL.ts'
-import { isSubscribable } from '../../shared/isSubscribable.ts'
+import { isAsyncIterable } from '../../shared/isAsyncIterable.ts'
 import { isThenable } from '../../shared/isThenable.ts'
 import { pendingAsyncCellsSlot } from '../../shared/pendingAsyncCellsSlot.ts'
 import type { AsyncComputed } from '../../shared/types/AsyncComputed.ts'
@@ -145,7 +145,7 @@ export function createAsyncCell(
             return
         }
 
-        if (isSubscribable(produced)) {
+        if (isAsyncIterable(produced)) {
             consumeStream(myRun, produced as NamedAsyncIterable<unknown>)
             return
         }
@@ -154,7 +154,7 @@ export function createAsyncCell(
             /* Server-only: register the in-flight promise on the request-scoped pending list so
                the SSR barrier (`$$settleAsyncCells`) awaits it before the template peeks the
                cell — baking the resolved value into the first-pass HTML (ADR-0019 Tier-2). A
-               stream (the `isSubscribable` branch above) never registers: it never settles. The
+               stream (the `isAsyncIterable` branch above) never registers: it never settles. The
                `window` guard keeps client construction from ever registering. */
             if (typeof window === 'undefined') {
                 pendingAsyncCellsSlot.get()?.promises.push(inFlight)

@@ -1,9 +1,9 @@
 import type { computed } from '../computed.ts'
 import type { effect } from '../effect.ts'
 import type { linked } from '../linked.ts'
-import type { trackedComputed } from '../trackedComputed.ts'
 import type { Patch } from '../runtime/types/Patch.ts'
 import type { state } from '../state.ts'
+import type { trackedComputed } from '../trackedComputed.ts'
 import type { SyncTransport } from './SyncTransport.ts'
 
 /*

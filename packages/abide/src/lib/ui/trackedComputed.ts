@@ -1,4 +1,4 @@
-import { isSubscribable } from '../shared/isSubscribable.ts'
+import { isAsyncIterable } from '../shared/isAsyncIterable.ts'
 import type { AsyncComputed } from '../shared/types/AsyncComputed.ts'
 import type { NamedAsyncIterable } from '../shared/types/NamedAsyncIterable.ts'
 import { createAsyncCell } from './runtime/createAsyncCell.ts'
@@ -41,7 +41,7 @@ export function trackedComputed<T>(
     } catch {
         threw = true
     }
-    if (!threw && isSubscribable(probe)) {
+    if (!threw && isAsyncIterable(probe)) {
         return createAsyncCell(compute as () => unknown, { writable: false }) as AsyncComputed<T>
     }
     /* Sync value or a bare (opaque) promise: the lazy computed, identical to the primitive. */

@@ -251,3 +251,37 @@ describe('trackedComputed — the eager read-only stream-classifying entry', () 
         expect(cell.value).toBe(3)
     })
 })
+
+describe('async cell — nameless async iterable auto-tracks (isAsyncIterable)', () => {
+    /* A plain async generator (an AsyncGenerator has no `name`) — the case `isSubscribable`
+       rejected and the broader `isAsyncIterable` classify now accepts. The eager stream-
+       classifying entries are `trackedComputed` (what the compiler routes `computed(getStream())`
+       to) and `linked`; the lazy `computed` primitive never probes, so it is not exercised here. */
+    async function* plainAsyncGen(): AsyncGenerator<number> {
+        yield 1
+        yield 2
+    }
+
+    test('trackedComputed(() => plainAsyncGen()) auto-tracks its latest frame (read-only)', async () => {
+        const cell = trackedComputed(() => plainAsyncGen()) as unknown as AsyncComputed<number>
+        expect(isAsyncCell(cell)).toBe(true)
+        await settle()
+        expect(cell.peek()).toBe(2)
+    })
+
+    test('linked(() => plainAsyncGen()) auto-tracks its latest frame (writable)', async () => {
+        const cell = linked(() => plainAsyncGen()) as unknown as AsyncState<number>
+        expect(isAsyncCell(cell)).toBe(true)
+        await settle()
+        expect(cell.peek()).toBe(2)
+    })
+
+    test('regression: a named makeStream iterable still auto-tracks', async () => {
+        const stream = makeStream<number>('named')
+        const cell = trackedComputed(() => stream) as unknown as AsyncComputed<number>
+        expect(isAsyncCell(cell)).toBe(true)
+        stream.push(9)
+        await settle()
+        expect(cell.peek()).toBe(9)
+    })
+})
