@@ -101,15 +101,17 @@ describe('<template try> (sync error boundary)', () => {
         expect(bad.textContent).toBe('kaboomfin')
     })
 
-    test('SSR: success renders guarded markup inside boundary comments', () => {
+    test('SSR: success renders guarded markup inside boundary + range comments', () => {
         const html = ssr(SUCCESS, doc({ label: 'hi' })).html
-        expect(html).toBe('<main><!--a--><!--abide:try:0--><p>hi</p><!--/abide:try:0--></main>')
+        expect(html).toBe(
+            '<main><!--a--><!--abide:try:0--><!--[--><p>hi</p><!--]--><!--/abide:try:0--></main>',
+        )
     })
 
     test('SSR: a throw renders catch markup, truncating the partial', () => {
         const html = ssr(THROW, doc({})).html
         expect(html).toBe(
-            '<main><!--a--><!--abide:try:0--><b>caught:kaboom</b><!--/abide:try:0--></main>',
+            '<main><!--a--><!--abide:try:0--><!--[--><b>caught:kaboom</b><!--]--><!--/abide:try:0--></main>',
         )
     })
 

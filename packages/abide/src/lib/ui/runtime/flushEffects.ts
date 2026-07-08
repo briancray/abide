@@ -1,3 +1,4 @@
+import { boundaryFor } from './boundaryFor.ts'
 import { NODE_STATE } from './NODE_STATE.ts'
 import { REACTIVE_CONTEXT } from './REACTIVE_CONTEXT.ts'
 import type { ReactiveNode } from './types/ReactiveNode.ts'
@@ -49,12 +50,21 @@ function drain(): void {
             try {
                 updateIfNecessary(node)
             } catch (error) {
-                /* One effect throwing must not strand the effects queued behind it — they
-                   live in this same `batch`, which becomes unreachable the moment we swap
-                   `pendingEffects`. Reset the culprit to CLEAN so a later write to its
-                   dependencies can re-queue it (otherwise `mark`'s CLEAN→dirty gate leaves
-                   it permanently inert), then keep draining and surface the error(s) once
-                   the graph has settled rather than swallowing them. */
+                /* A node built inside a reactive `{#try}` routes its throw to that boundary
+                   (swap the guarded content to the catch branch) instead of the rethrow
+                   fallback — this is the "later re-run throw" the sync boundary could not
+                   catch. Reset it CLEAN either way so a later write to its deps can re-queue
+                   it (otherwise `mark`'s CLEAN→dirty gate leaves it permanently inert). */
+                const boundary = boundaryFor.get(node)
+                if (boundary !== undefined) {
+                    boundary.handle(error)
+                    node.status = NODE_STATE.CLEAN
+                    continue
+                }
+                /* No boundary — one effect throwing must not strand the effects queued behind
+                   it (they live in this same `batch`, unreachable once we swap
+                   `pendingEffects`); keep draining and surface the error(s) once the graph has
+                   settled rather than swallowing them. */
                 node.status = NODE_STATE.CLEAN
                 if (errors === undefined) {
                     errors = []

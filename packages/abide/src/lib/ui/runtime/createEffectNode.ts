@@ -1,3 +1,5 @@
+import { boundaryFor } from './boundaryFor.ts'
+import { CURRENT_BOUNDARY } from './CURRENT_BOUNDARY.ts'
 import { CURRENT_SCOPE } from './CURRENT_SCOPE.ts'
 import { inScope } from './inScope.ts'
 import { NODE_STATE } from './NODE_STATE.ts'
@@ -66,6 +68,13 @@ export function createEffectNode(fn: () => EffectResult): () => void {
     }
     if (OWNER.current !== undefined) {
         OWNER.current.push(dispose)
+    }
+    /* Effects built inside a reactive `{#try}` associate with its boundary so a LATER re-run
+       throw (an async cell that rejects post-mount, read via a throwing peek) routes there
+       rather than the collect-and-rethrow fallback. Populated only under a boundary — the
+       node shape stays untouched, the lookup is cold (only on the throw path). */
+    if (CURRENT_BOUNDARY.current !== undefined) {
+        boundaryFor.set(node, CURRENT_BOUNDARY.current)
     }
     return dispose
 }

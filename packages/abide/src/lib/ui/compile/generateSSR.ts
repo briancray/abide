@@ -723,18 +723,22 @@ export function generateSSR(
         return code
     }
 
-    /* A sync error boundary: push the guarded markup (++ finally) inside a real
-       try/catch; on a throw, truncate the output back to the boundary start and push
-       the catch markup (++ finally) instead — so even mid-stream a render throw
-       becomes catch markup, not a broken response. No catch re-throws (propagates to
-       an enclosing boundary / the 500 / the stream). Boundary comments let hydration
-       discard the server content if the client adoption fails. */
+    /* A reactive error boundary: push the guarded markup (++ finally) inside a real
+       try/catch; on a throw, truncate the output back to the range start and push the
+       catch markup (++ finally) instead — so even mid-stream a render throw becomes catch
+       markup, not a broken response. No catch re-throws (propagates to an enclosing boundary
+       / the 500 / the stream). The `abide:try:N` boundary comments let hydration discard the
+       server content if the client adoption fails; the inner `[ … ]` range markers are the
+       live range the render-many client (`tryBlock`) tracks — emitted here so a FRESH client
+       mount (which brackets its branch) and the SSR markup stay congruent. */
     function generateTry(node: Extract<TemplateNode, { kind: 'try' }>, target: string): string {
         const plan = tryPlan(node)
         const id = nextVar('$tid')
         const mark = nextVar('$trim')
         let code = `const ${id} = $ctx.next++;\n`
         code += `${target}.push("<!--abide:try:" + ${id} + "-->");\n`
+        code += openRange(target)
+        /* Truncate back to just after the range-open marker on a catch, so `[` survives. */
         code += `const ${mark} = ${target}.length;\n`
         code += `try {\n`
         code += branchContent(plan.guarded, target)
@@ -749,6 +753,7 @@ export function generateSSR(
             code += `throw ${plan.catchAs};\n`
         }
         code += `}\n`
+        code += closeRange(target)
         code += `${target}.push("<!--/abide:try:" + ${id} + "-->");\n`
         return code
     }
