@@ -2,10 +2,13 @@
 
 **Status:** proposed (2026-07-08). Supersedes the client-policy mechanism
 introduced for [ADR-0020](0020-cache-policy-on-the-endpoint.md) (the
-`extractObjectProperty` text-splice) and broadens the side-crossing guard from
-[ADR-0017](0017-side-crossing-guard-stays-inside-the-resolver-plugin.md) — the
-guard *stays in the resolver plugin* (0017 holds); only its semantics change.
-Touches the shadow from [ADR-0010](0010-template-type-checking-via-virtual-shadow.md).
+`extractObjectProperty` text-splice) and refines — does not broaden — the
+side-crossing guard from
+[ADR-0017](0017-side-crossing-guard-stays-inside-the-resolver-plugin.md): the one
+client-reaches-server edge becomes reachability-based rather than
+presence-at-resolve, with no new edges. The guard *stays in the resolver plugin*
+(0017 holds). Touches the shadow from
+[ADR-0010](0010-template-type-checking-via-virtual-shadow.md).
 
 ## Context
 
@@ -33,10 +36,13 @@ has.** The failure mode is always "you must inline it" — exactly what a framew
 built on web standards and real TypeScript should never force. Hand-rolled source
 tokenizers (`extractObjectProperty`, the inline-literal props harvest) are the smell.
 
-Separately, the side-crossing guard enforces only one edge today — a client-target
-build rejecting a `$server/*` import (ADR-0017). The isolation invariant abide's three
-namespaces (`server` / `ui` / `shared`) imply is stronger, and unenforced in the other
-directions.
+Separately, the side-crossing guard enforces exactly the edge that matters — a
+client-target build rejecting a `$server/*` import (ADR-0017), so server code can't reach
+the browser. That single edge is correct and complete (the other namespace edges,
+`server → client` and `shared → client`, ship no server code and are contradicted by
+abide's own SSR + isomorphic-reactive-core layering, so they must stay unguarded). Its one
+weakness is that it fires at *resolve* on textual presence, which would false-positive on
+the dead server imports D2's handler-elision leaves behind.
 
 ## Decision
 
@@ -68,35 +74,40 @@ Schemas ride the client module too — harmless bytes today, and they open the d
 opt-in client-side validation later. A size-conscious follow-up may prune them, but
 never by text extraction.
 
-### D3 — The side-isolation guard becomes reachability-aware and covers the full matrix
+### D3 — One boundary, reachability-based: no server code survives in the client bundle
 
-D2 emits the real module on the client, so the handler's now-dead `$server/*` imports
-are textually present until tree-shaking removes them. A presence-at-resolve guard
-would flag them wrongly. Two changes:
+The only safety-critical invariant is that **server-only code never reaches the
+browser**. That is the single edge worth guarding, and it is already the one ADR-0017
+enforces (a client-reachable module importing `$server/*`). The other edges a "full
+isolation matrix" would add — `server → client` and `shared → client` — are *not* safety
+concerns (they never put server code in a browser bundle) and are actively contradicted
+by abide's own architecture: SSR makes `lib/server` render `lib/ui` components, and the
+isomorphic reactive core (signals/`track`/`trigger`, filed under `lib/ui/runtime`) is
+used by the isomorphic `lib/shared` cache. Guarding those edges would flag SSR and the
+shared cache. So the matrix is rejected; the boundary stays a single edge.
 
-- **Reachability-aware, not presence-at-resolve.** A side-crossing is an illegal module
-  that *survives into the emitted bundle*, judged from the post-DCE module graph (an
-  `onEnd` pass over the bundle metafile in the same plugin — 0017's "guard stays in the
-  plugin" holds; only its timing changes). The import chain is reconstructed from that
-  graph for the same evidence `sideCrossingChain` gives today. A dead server import a
-  dropped handler left behind is **not** a violation; a server import a *live* policy
-  expression actually reaches **is** an honest error — "your cache policy depends on
-  server-only state; move it to `shared/` or behind an rpc" — which replaces the old
-  "inline it" constraint.
-- **Full matrix.** Enforce the complete isolation invariant the three namespaces imply,
-  both directions:
+The only change is to make that one edge **reachability-based, not presence-at-resolve**.
+D2 emits the real rpc module on the client, so the elided handler's now-dead `$server/*`
+imports are textually present until tree-shaking removes them; a presence-at-resolve
+guard would flag them wrongly. So the guard asks the real question:
 
-  | importer ↓ \ target → | `shared` | `server` | `client` |
-  |---|---|---|---|
-  | **shared** | ✓ | ✗ | ✗ |
-  | **server** | ✓ | ✓ | ✗ |
-  | **client** | ✓ | ✓ \* | ✓ |
+> Is any server-only module **reachable from the client bundle** — i.e. does the client
+> import server, or anything that (transitively) imports server, in code that survives
+> tree-shaking?
 
-  `shared` imports only `shared` — a side dependency makes it non-isomorphic, which is
-  the whole point of the namespace. `server` and `client` are independent leaves that
-  may use `shared` but never each other. **(\*)** the one carve-out stays: a client
-  import of `$server/rpc/*` or `$server/sockets/*` is replaced with a `remoteProxy` /
-  `socketProxy` stub — the isomorphic-callable mechanism, not a crossing.
+- Judged from the post-DCE module graph (an `onEnd` pass over the bundle metafile, in the
+  same plugin — 0017's "guard stays in the plugin" holds; only its timing moves from
+  resolve to post-bundle). The import chain is reconstructed from that graph for the same
+  evidence `sideCrossingChain` gives today.
+- A dead server import a dropped handler left behind is **not** a violation; a server
+  import a *live* client-reachable expression (e.g. a policy that references server-only
+  state) **is** — an honest error, "move it to `shared/` or behind an rpc", replacing the
+  old "inline it" constraint.
+- Transitivity is free: a `shared` module that pulls in `server` is caught the moment the
+  client reaches it, so no separate `shared → server` edge is needed.
+- The carve-out is unchanged: a client import of `$server/rpc/*` or `$server/sockets/*` is
+  replaced with a `remoteProxy` / `socketProxy` stub — the isomorphic-callable mechanism,
+  not a crossing.
 
 ### D4 — `props<T>()` resolves its type through the shadow's real program
 
@@ -111,14 +122,15 @@ literal.
 - **`extractObjectProperty` and the self-contained-policy constraint are deleted.**
   Endpoint policy behaves like ordinary JavaScript on both sides; policy can live in a
   shared module and be imported.
-- **The guard gets stricter and more honest.** Three previously-unenforced edges
-  (`shared → server`, `shared → client`, `server → client`) now fail the build; a
-  policy that transitively reaches server-only code fails with a real chain instead of
-  silently shipping a broken stub. Expect a one-time sweep to fix any latent crossings
-  the old one-edge guard never caught.
+- **The guard stays one edge, but gets more honest.** No new edges — `server → client`
+  and `shared → client` remain unguarded (they never ship server code). The single
+  client-reaches-server boundary just becomes transitive/reachability-based, so a policy
+  that reaches server-only code fails with a real chain instead of silently shipping a
+  broken stub.
 - **Guard timing moves from resolve to post-bundle.** A violation now surfaces at
   end-of-build rather than at first resolve. The metafile preserves the import chain, so
-  evidence is unchanged; `resolverSideCrossing.test.ts` extends to the new edges.
+  evidence is unchanged; `resolverSideCrossing.test.ts` extends to the reachable-vs-dead
+  distinction.
 - **`props<T>()` accepts an imported type.** Removes the inline-only limitation; the
   shadow harvest becomes a fallback, not the only path.
 - **Risk: DCE correctness now matters for correctness, not just size.** A server import
@@ -145,6 +157,9 @@ literal.
   `feat(rpc): ship endpoint cache/stream policy to the client stub`) and reimplement via
   D2. Amend the in-flight PR so the endpoint-policy core lands clean and the client
   transform lands on the new mechanism.
-- Sweep the codebase for the three newly-guarded edges before flipping D3 on; fix or
-  relocate any crossing (`shared/*` importing a side, `server ↔ client`).
+- No isolation sweep needed — D3 adds no edges, only makes the existing
+  client-reaches-server edge reachability-based. The one prerequisite is a spike
+  confirming the bundler exposes a usable post-DCE module graph (metafile / `onEnd`) to
+  judge reachability; if not, fall back to eliding the handler's imports during the D2
+  transform via a real parse (not a hand-rolled tokenizer).
 - D4 can land independently of D2/D3 (separate subsystem).
