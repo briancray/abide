@@ -20,7 +20,7 @@ HTTP/SSE read face); one-shot rpc streams omit it. Implementers must signal
 `hooks.replayed` in-band once the seed portion is delivered (even when
 empty) so a seeded reader can commit its window atomically; see TailHooks.
 */
-export interface Subscribable<T> extends AsyncIterable<T> {
+export interface NamedAsyncIterable<T> extends AsyncIterable<T> {
     readonly name: string
     tail?(count: number, hooks?: TailHooks): AsyncIterable<T>
 }

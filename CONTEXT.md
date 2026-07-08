@@ -34,7 +34,7 @@ URL → route + decoded params. Server-side only: Bun's router matches, the catc
 The *reactive* store of registered async work with a lifecycle channel. There
 are two: the cache (calls — request/tab store + process-level shared store,
 entries keyed by wire or reference identity) and the tail registry (streams,
-keyed by `Subscribable.name`, with the window size `last` folded into the key);
+keyed by `NamedAsyncIterable.name`, with the window size `last` folded into the key);
 `rpcErrorRegistry` is the same signal-node-backed kind. A **handler registry**
 (`rpcRegistry` / `socketRegistry` / `promptRegistry`) is the qualified
 sub-sense: a plain `Map` populated at boot, no reactive channel. The build-time
@@ -53,7 +53,7 @@ call, or a stream awaiting its first frame) and `refreshing()` (value held, a
 fresher source in flight — a policy refetch, a drop-then-reload, or a stream
 reconnecting; never a merely-open stream). Standalone modules
 (`abide/shared/pending`, `abide/shared/refreshing`) spanning both registries
-via the same selector grammar as `cache.invalidate` plus a Subscribable form.
+via the same selector grammar as `cache.invalidate` plus a NamedAsyncIterable form.
 Probes report, never act: reading one opens no fetch and no stream, and every
 registry behavior works with zero probe readers. A proposed probe that would
 need to trigger something is a registry feature wearing the wrong hat.
@@ -72,7 +72,7 @@ frames, however they arrived. `last` is the read-side word (how much the
 reader keeps), `tail` the declaration-side word (how much the topic retains);
 `last` clamps to the declared `tail`. Retention exists for readers who weren't
 there — late joiners, reconnect gaps, the CLI/MCP/SSE faces — which is why it
-can't be delegated to consumers. Seeding rides `Subscribable.tail(count,
+can't be delegated to consumers. Seeding rides `NamedAsyncIterable.tail(count,
 hooks?)`, an optional capability: sockets implement it verbatim, one-shot rpc
 streams omit it, and the consumer never special-cases either. Replay is
 demarcated on the wire: the seed arrives as one per-sub `replay` batch, so a
@@ -133,7 +133,7 @@ vocabulary was purged).
 
 **FrameSource**
 The per-side carrier (`subscribe`, `publish?`, `tail?`, `peek`, `refresh`) that
-`assembleSubscribable` wraps into one `Subscribable` shell — server and client
+`assembleSubscribable` wraps into one `NamedAsyncIterable` shell — server and client
 supply different adapters (`peek`/`refresh` are genuinely per-side;
 `subscribe` owns replay atomicity). Kept pluggable so a cross-instance adapter
 is additive.
@@ -168,7 +168,7 @@ binding that mis-lowers to the enclosing component signal is the
 A provider adapter satisfying `AgentEngine`: surface + neutral conversation in, `AgentFrame` stream out. It owns its own loop. Lives in `@abide/<provider>`, never in core.
 
 **Frame**
-The unit event of any `Subscribable` stream. An **`AgentFrame`** is the
+The unit event of any `NamedAsyncIterable` stream. An **`AgentFrame`** is the
 provider-neutral engine event (`text` / `tool_use` / `tool_result` / `done`);
 the same word names a socket topic's message and the per-side event a
 `FrameSource` *(target; ADR-0018)* feeds into `assembleSubscribable`. The

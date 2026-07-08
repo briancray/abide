@@ -25,7 +25,7 @@ import type { CacheSelector } from './types/CacheSelector.ts'
 import type { CacheStore } from './types/CacheStore.ts'
 import type { RawRemoteFunction } from './types/RawRemoteFunction.ts'
 import type { RemoteFunction } from './types/RemoteFunction.ts'
-import type { Subscribable } from './types/Subscribable.ts'
+import type { NamedAsyncIterable } from './types/NamedAsyncIterable.ts'
 import { withCacheManaged } from './withCacheManaged.ts'
 
 type AnyRemote<Args, Return> = RemoteFunction<Args, Return> | RawRemoteFunction<Args>
@@ -993,7 +993,7 @@ function applyPatch(
 }
 
 /*
-Event-driven cache maintenance: subscribes to a Subscribable (socket or rpc
+Event-driven cache maintenance: subscribes to a NamedAsyncIterable (socket or rpc
 stream) and runs `handler` once per frame — the declarative home for "this
 socket event stales that cached data", replacing the hand-rolled $effect +
 tail() + edge-detection pattern. Bare iteration means live frames only
@@ -1020,7 +1020,7 @@ already seeded the cache. Dispose aborts `signal`, stops delivery, and
 closes the subscription.
 */
 function on<T>(
-    source: Subscribable<T>,
+    source: NamedAsyncIterable<T>,
     handler: (frame: T, context: CacheOnContext) => void | Promise<void>,
 ): () => void {
     if (typeof window === 'undefined') {

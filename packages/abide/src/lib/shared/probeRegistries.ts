@@ -7,7 +7,7 @@ import { tailProbeSlot } from './tailProbeSlot.ts'
 import type { CacheEntry } from './types/CacheEntry.ts'
 import type { CacheSelector } from './types/CacheSelector.ts'
 import type { CacheStore } from './types/CacheStore.ts'
-import type { Subscribable } from './types/Subscribable.ts'
+import type { NamedAsyncIterable } from './types/NamedAsyncIterable.ts'
 
 /*
 Shared scan behind the pending() / refreshing() probes: one selector
@@ -39,7 +39,7 @@ cache/stream term falls back to false its lifecycle tap re-derives and the
 queue is read then.
 */
 export function probeRegistries<Args, Return>(
-    arg: CacheSelector<Args, Return> | Subscribable<unknown> | undefined,
+    arg: CacheSelector<Args, Return> | NamedAsyncIterable<unknown> | undefined,
     args: Args | undefined,
     field: 'pending' | 'refreshing',
     matchesEntry: (entry: CacheEntry) => boolean,

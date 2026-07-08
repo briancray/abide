@@ -83,7 +83,7 @@ over `fetch` in the browser. Around it:
 - `getMessages.pending(args?)` / `.refreshing(args?)` / `.error(args?)` —
   reactive probes
 - a handler that returns `jsonl()`/`sse()` makes the bare call return a
-  `Subscribable` you `for await` — detected at build time, nothing to declare
+  `NamedAsyncIterable` you `for await` — detected at build time, nothing to declare
 
 > Query args travel as strings — use `z.coerce.*` for numbers and booleans on
 > GET/HEAD. The per-RPC `timeout` option is a server-side handler deadline

@@ -18,7 +18,7 @@ propagation), and the success path types as Promise<Return> cleanly.
 Streaming Content-Types (SSE / JSONL / NDJSON) throw a clear error
 rather than silently doing the wrong thing: response.text() would hang
 forever on a never-ending body and response.json() would fail mid-parse.
-A streaming rpc's bare call already returns a Subscribable (the type makes
+A streaming rpc's bare call already returns a NamedAsyncIterable (the type makes
 `await fn(args)` a compile error), so this is a backstop for the paths that
 still decode a raw Response — `cache()` and the one-shot stream reader. The
 error points callers at the right tools: `state(fn(args))` for a reactive
@@ -39,7 +39,7 @@ export async function decodeResponse(response: Response): Promise<unknown> {
     const kind = contentBodyKind(contentType)
     if (kind === 'streaming') {
         throw new Error(
-            `[abide] response at ${response.url} is a stream (${contentType}) — a streaming rpc's bare call already returns a Subscribable: use state(fn(args)) for a reactive view or \`for await (… of fn(args))\` for iteration, not await/cache()`,
+            `[abide] response at ${response.url} is a stream (${contentType}) — a streaming rpc's bare call already returns a NamedAsyncIterable: use state(fn(args)) for a reactive view or \`for await (… of fn(args))\` for iteration, not await/cache()`,
         )
     }
     /* json/text go through the shared mapping warmValueFromSnapshot also uses, so a warm

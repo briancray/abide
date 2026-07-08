@@ -1,5 +1,5 @@
 import type { RpcOptions } from './RpcOptions.ts'
-import type { Subscribable } from './Subscribable.ts'
+import type { NamedAsyncIterable } from './NamedAsyncIterable.ts'
 
 /*
 Call signature shared by RemoteFunction and RawRemoteFunction. The base
@@ -16,18 +16,18 @@ signal/keepalive/priority/cache/headers). The server ignores either, so the
 callable stays isomorphic.
 
 A streaming `Resolved` (an `AsyncIterable<Frame>`, branded by jsonl()/sse()) makes
-the bare call return a `Subscribable<Frame>` synchronously — the iterable IS the
+the bare call return a `NamedAsyncIterable<Frame>` synchronously — the iterable IS the
 value, consumed by `for await` or `state(fn(args))`, no `.stream()`. Every other
 `Resolved` stays `Promise<Resolved>`. `await`-ing a streaming call is a compile
-error (a Subscribable is not awaitable), which replaces the old runtime guard.
+error (a NamedAsyncIterable is not awaitable), which replaces the old runtime guard.
 */
 /* `[Resolved] extends [never]` first: a handler that only ever returns error() resolves to
    `never`, and `never extends AsyncIterable` is vacuously true — without this guard its call
-   would mistype as a Subscribable. A real streaming rpc's `Resolved` is `AsyncIterable<Frame>`. */
+   would mistype as a NamedAsyncIterable. A real streaming rpc's `Resolved` is `AsyncIterable<Frame>`. */
 type CallResult<Resolved> = [Resolved] extends [never]
     ? Promise<Resolved>
     : Resolved extends AsyncIterable<infer Frame>
-      ? Subscribable<Frame>
+      ? NamedAsyncIterable<Frame>
       : Promise<Resolved>
 
 export type RemoteCallable<Args, Resolved, Opts = RpcOptions> = ((

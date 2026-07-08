@@ -1,6 +1,6 @@
 /*
 Internal slot the browser tail() registry registers its prober into, so the
-shared probes (pending / refreshing) can answer for Subscribables without
+shared probes (pending / refreshing) can answer for NamedAsyncIterables without
 shared/ importing browser/. The prober taps the registry's lifecycle channel
 (reactive inside $derived / $effect) and reports one stream by source name —
 spanning its latest-wins and window entries — or, with no name, whether any

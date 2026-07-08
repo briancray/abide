@@ -45,7 +45,7 @@ describe('subscribableFromResponse', () => {
             return jsonlResponse('{"n":1}\n')
         })
         const iterator = subscribable[Symbol.asyncIterator]()
-        // Constructing the Subscribable and its iterator opens nothing.
+        // Constructing the NamedAsyncIterable and its iterator opens nothing.
         expect(fetches).toBe(0)
         expect((await iterator.next()).value).toEqual({ n: 1 })
         expect(fetches).toBe(1)

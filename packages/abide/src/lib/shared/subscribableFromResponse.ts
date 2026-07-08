@@ -1,19 +1,19 @@
 import { streamResponse } from './streamResponse.ts'
-import type { Subscribable } from './types/Subscribable.ts'
+import type { NamedAsyncIterable } from './types/NamedAsyncIterable.ts'
 
 /*
-Builds the Subscribable returned by `fn.stream(args)`. The carried
+Builds the NamedAsyncIterable returned by `fn.stream(args)`. The carried
 `name` is the cache-style key for (method, url, args) so tail()
 dedupes multiple readers of identical args into one underlying
 fetch. The fetch is deferred until the first iterator pull so
-constructing the Subscribable (which happens on every $derived
+constructing the NamedAsyncIterable (which happens on every $derived
 re-evaluation) doesn't open a connection — tail()'s registry
 short-circuits the second instance before it iterates.
 */
 export function subscribableFromResponse<T>(
     name: string,
     fetchResponse: () => Promise<Response>,
-): Subscribable<T> {
+): NamedAsyncIterable<T> {
     return {
         name,
         [Symbol.asyncIterator]() {

@@ -115,7 +115,7 @@ handler)` pipes each resolved value to a handler (client-only; SSR-inert);
 `fn.isError(e, kind?)` type-guards a caught error against the rpc's declared
 error kinds; `fn.outbox()` exposes a durable rpc's parked-write queue. A
 handler that returns `jsonl()`/`sse()` makes the bare call return a
-`Subscribable` (`for await` it) — detected at build, nothing to declare;
+`NamedAsyncIterable` (`for await` it) — detected at build, nothing to declare;
 awaiting a streaming call is a compile error.
 
 **Typed errors** — declare a constructor with

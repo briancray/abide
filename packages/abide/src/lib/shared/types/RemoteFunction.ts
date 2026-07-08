@@ -21,7 +21,7 @@ method, same url, same args, no decode. Pass `fn.raw` to cache() to
 memoise raw Responses against the same cache key as `fn` (both share one
 stored entry — the decode just happens on the way out for callers of
 `fn`). A streaming handler (jsonl()/sse()) makes the bare call return a
-`Subscribable<Frame>` directly (the iterable IS the value) — consume it with
+`NamedAsyncIterable<Frame>` directly (the iterable IS the value) — consume it with
 `for await (… of fn(args))` or `state(fn(args))`; there is no `.stream()`, and
 `await`-ing a streaming call is a compile error. For sustained broadcast /
 pub-sub use the `abide/server/socket` primitive — HTTP rpc isn't the place for

@@ -9,7 +9,7 @@ fan-out and a client-side ws proxy by build target. Iterating the socket
 is the live stream — no replay. `.tail(count)` opens a subscription seeded
 with the last `count` frames of the retained tail (declared via
 `{ tail: n }`; no-arg = the whole retained tail) before going live — the
-optional Subscribable retention capability a reactive `watch(socket, …)`
+optional NamedAsyncIterable retention capability a reactive `watch(socket, …)`
 seeds from. `broadcast` is isomorphic: server code broadcasts in-process
 and fans out to remote subscribers; client code sends a `pub` frame the
 dispatcher validates against the topic's `clientPublish` flag. `clients`

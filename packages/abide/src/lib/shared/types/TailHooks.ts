@@ -1,5 +1,5 @@
 /*
-Hooks a `tail(count, hooks)` caller passes to a Subscribable's retention
+Hooks a `tail(count, hooks)` caller passes to a NamedAsyncIterable's retention
 capability.
 `replayed` must be signalled in-band exactly once per iteration — after the
 last replayed frame, before any live frame, and even when nothing was

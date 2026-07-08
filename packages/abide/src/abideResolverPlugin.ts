@@ -383,7 +383,7 @@ export function abideResolverPlugin({
                 if (target === 'client') {
                     /* Build-time flags on the client proxy stub: `outbox: true` parks
                        unreachable calls; `streaming: true` (handler returns jsonl()/sse())
-                       makes the bare call return the Subscribable directly. */
+                       makes the bare call return the NamedAsyncIterable directly. */
                     const flags = [
                         prepared.durable ? 'outbox: true' : undefined,
                         prepared.streaming ? 'streaming: true' : undefined,

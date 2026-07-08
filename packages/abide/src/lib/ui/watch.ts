@@ -2,7 +2,7 @@ import { cache } from '../shared/cache.ts'
 import { REMOTE_FUNCTION } from '../shared/REMOTE_FUNCTION.ts'
 import type { CacheOnContext } from '../shared/types/CacheOnContext.ts'
 import type { RemoteFunction } from '../shared/types/RemoteFunction.ts'
-import type { Subscribable } from '../shared/types/Subscribable.ts'
+import type { NamedAsyncIterable } from '../shared/types/NamedAsyncIterable.ts'
 import { effect } from './effect.ts'
 import { generationGuard } from './runtime/generationGuard.ts'
 import type { EffectResult } from './runtime/types/EffectResult.ts'
@@ -40,7 +40,7 @@ export function watch(
     handler: (values: unknown[]) => void,
 ): () => void
 export function watch<Frame>(
-    source: Subscribable<Frame>,
+    source: NamedAsyncIterable<Frame>,
     handler: (frame: Frame, context: CacheOnContext) => void | Promise<void>,
 ): () => void
 export function watch<Args, Return>(
@@ -74,7 +74,7 @@ export function watch(
        existing cache.on loop is the single implementation this branch delegates to. */
     if (isSubscribable(source)) {
         return cache.on(
-            source as Subscribable<unknown>,
+            source as NamedAsyncIterable<unknown>,
             handler as (frame: unknown, context: CacheOnContext) => void | Promise<void>,
         )
     }

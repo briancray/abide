@@ -64,7 +64,7 @@ export function defineRpc<Args, Return>(
            parked write drains on `rpc.outbox.retry()` (no auto-drain). Mutating methods
            only. */
         outbox?: boolean
-        /* Handler returns jsonl()/sse(): the bare call returns the Subscribable directly (for
+        /* Handler returns jsonl()/sse(): the bare call returns the NamedAsyncIterable directly (for
            isomorphic `for await (… of fn(args))` in server code). Bundler-stamped; the router's
            wire path (.fetch) is unaffected. */
         streaming?: boolean

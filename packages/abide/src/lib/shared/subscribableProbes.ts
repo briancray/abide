@@ -29,7 +29,7 @@ re-derive by scanning.
 const lifecycle = createLifecycleChannel()
 
 /*
-Installs the prober the shared probes call for a Subscribable (probeRegistries →
+Installs the prober the shared probes call for a NamedAsyncIterable (probeRegistries →
 tailProbeSlot). Register-on-consume: an entry exists only while something is
 consuming the stream, exactly as a cache entry exists only while a call is
 retained. A name with no entry reads as "no value yet" (pending) without opening

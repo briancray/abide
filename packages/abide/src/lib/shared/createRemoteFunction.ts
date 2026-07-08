@@ -12,14 +12,14 @@ import type { HttpMethod } from './types/HttpMethod.ts'
 import type { RawRemoteFunction } from './types/RawRemoteFunction.ts'
 import type { RemoteFunction } from './types/RemoteFunction.ts'
 import type { RpcOptions } from './types/RpcOptions.ts'
-import type { Subscribable } from './types/Subscribable.ts'
+import type { NamedAsyncIterable } from './types/NamedAsyncIterable.ts'
 
 /*
 Assembles the public RemoteFunction shape used identically by the
 server-side defineRpc (in-process handler invocation) and the
 client-side remoteProxy (network fetch). Centralising the wiring here
 keeps the call/raw/stream/fetch semantics — including WeakMap meta
-recording, Content-Type decode, and Subscribable derivation — in one
+recording, Content-Type decode, and NamedAsyncIterable derivation — in one
 place so the two halves can't drift.
 
 - `buildRequest(args)` synthesizes the Request a meta reader (cache()) or
@@ -50,7 +50,7 @@ export function createRemoteFunction<Args, Return>(opts: {
         opts?: RpcOptions,
     ) => Promise<Response>
     parseArgsForFetch?: (request: Request) => Promise<Args | undefined>
-    /* A streaming rpc (handler returns jsonl()/sse()): the bare call returns the Subscribable
+    /* A streaming rpc (handler returns jsonl()/sse()): the bare call returns the NamedAsyncIterable
        directly (the iterable IS the value) rather than decoding one Response body. Emitted by
        the bundler's syntactic scan; false/undefined keeps the decode-a-Response path. */
     streaming?: boolean
@@ -109,8 +109,8 @@ export function createRemoteFunction<Args, Return>(opts: {
     function callable(
         args: Args | FormData,
         opts?: RpcOptions,
-    ): Promise<Return> | Subscribable<Return> {
-        /* A streaming rpc (jsonl/sse) returns the Subscribable directly — the iterable IS the
+    ): Promise<Return> | NamedAsyncIterable<Return> {
+        /* A streaming rpc (jsonl/sse) returns the NamedAsyncIterable directly — the iterable IS the
            value (for await / state(fn(args))). Deferred fetch, keyForRemoteCall-keyed so tail()
            dedupes readers; no decode, so the error-capture path below doesn't apply. */
         if (streaming) {

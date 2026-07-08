@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { prepareRpcModule } from '../src/lib/shared/prepareRpcModule.ts'
-import type { Subscribable } from '../src/lib/shared/types/Subscribable.ts'
+import type { NamedAsyncIterable } from '../src/lib/shared/types/NamedAsyncIterable.ts'
 import { remoteProxy } from '../src/lib/ui/remoteProxy.ts'
 
 /* Type-driven streaming: a handler that calls jsonl()/sse() is detected at build time
    (prepareRpcModule.streaming), the client stub is emitted `{ streaming: true }`, and the bare
-   call returns a Subscribable directly (for await / state(fn(args))), no `.stream()`. */
+   call returns a NamedAsyncIterable directly (for await / state(fn(args))), no `.stream()`. */
 describe('streaming detection (codegen)', () => {
     const mod = (body: string) =>
         `import { GET } from '@abide/abide/server/GET'\nimport { jsonl } from '@abide/abide/server/jsonl'\nexport const feed = ${body}`
@@ -63,7 +63,7 @@ describe('streaming detection (codegen)', () => {
     })
 })
 
-describe('streaming rpc — bare call returns a Subscribable', () => {
+describe('streaming rpc — bare call returns a NamedAsyncIterable', () => {
     const realFetch = globalThis.fetch
     beforeEach(() => {
         ;(globalThis as { window?: unknown }).window = { location: { href: 'http://localhost/' } }
@@ -77,11 +77,11 @@ describe('streaming rpc — bare call returns a Subscribable', () => {
         delete (globalThis as { window?: unknown }).window
     })
 
-    test('the bare call is a Subscribable; for await yields the frames', async () => {
+    test('the bare call is a NamedAsyncIterable; for await yields the frames', async () => {
         const feed = remoteProxy<undefined, AsyncIterable<{ n: number }>>('GET', '/rpc/feed', {
             streaming: true,
         })
-        const sub = feed() as Subscribable<{ n: number }>
+        const sub = feed() as NamedAsyncIterable<{ n: number }>
         expect(typeof sub.name).toBe('string')
         expect(typeof sub[Symbol.asyncIterator]).toBe('function')
 

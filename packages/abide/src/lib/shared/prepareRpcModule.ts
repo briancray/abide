@@ -14,7 +14,7 @@ export type PreparedRpcModule = {
     /* `outbox: true` in the opts — the client proxy is emitted durable. */
     durable: boolean
     /* The handler calls jsonl()/sse() — the client proxy is emitted streaming (bare call
-       returns the Subscribable). Congruent with the RemoteCallable conditional by construction. */
+       returns the NamedAsyncIterable). Congruent with the RemoteCallable conditional by construction. */
     streaming: boolean
     exportName: string
     rewriteForServer: (url: string) => string

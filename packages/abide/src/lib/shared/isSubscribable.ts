@@ -1,11 +1,11 @@
-import type { Subscribable } from './types/Subscribable.ts'
+import type { NamedAsyncIterable } from './types/NamedAsyncIterable.ts'
 
 /*
-A Subscribable is a named AsyncIterable — distinguishes a stream argument from
+A NamedAsyncIterable is an AsyncIterable carrying a `name` — distinguishes a stream argument from
 the other probe selector shapes (callables and `{ tags }` objects, neither of
 which carries Symbol.asyncIterator).
 */
-export function isSubscribable(value: unknown): value is Subscribable<unknown> {
+export function isSubscribable(value: unknown): value is NamedAsyncIterable<unknown> {
     return (
         typeof value === 'object' &&
         value !== null &&

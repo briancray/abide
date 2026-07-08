@@ -1,5 +1,5 @@
 import { tailProbeSlot } from './tailProbeSlot.ts'
-import type { Subscribable } from './types/Subscribable.ts'
+import type { NamedAsyncIterable } from './types/NamedAsyncIterable.ts'
 
 /*
 Reactive terminal-state reader for a stream: true once the source has closed (its
@@ -9,6 +9,6 @@ tail entry status === 'done'). Stream-only — a cache entry's "done" is just
 registered (server render, or tail never imported) reads as not-done.
 */
 // @documentation probes
-export function done(subscribable: Subscribable<unknown>): boolean {
+export function done(subscribable: NamedAsyncIterable<unknown>): boolean {
     return tailProbeSlot.probe?.(subscribable.name)?.done ?? false
 }

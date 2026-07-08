@@ -26,7 +26,7 @@ const QUEUED = 'queued'
 
 /* Build-time options the bundler stamps onto the client proxy stub. `outbox: true` parks an
    unreachable call for replay; `streaming: true` (handler returns jsonl()/sse()) makes the bare
-   call return the Subscribable directly; `store` exists for testing (production uses the default
+   call return the NamedAsyncIterable directly; `store` exists for testing (production uses the default
    persistence store). */
 export type DurableOptions = {
     outbox?: boolean
