@@ -381,14 +381,25 @@ export function abideResolverPlugin({
                 so page imports resolve identically on both sides.
                 */
                 if (target === 'client') {
-                    /* Build-time flags on the client proxy stub: `outbox: true` parks
-                       unreachable calls; `streaming: true` (handler returns jsonl()/sse())
-                       makes the bare call return the NamedAsyncIterable directly. */
-                    const flags = [
+                    /* The client proxy stub's opts: build-time flags plus the endpoint's cache /
+                       stream policy (ADR-0020). `outbox: true` parks unreachable calls;
+                       `streaming: true` (handler returns jsonl()/sse()) makes the bare call return
+                       the NamedAsyncIterable directly; `cache` / `stream` carry the endpoint policy
+                       so the client honours the declared ttl (staleness/SWR), the refetch clock
+                       (throttle/debounce), and tags. Joined with `, ` so no combination yields a
+                       stray comma; all absent → no opts arg (unchanged from before). */
+                    const optsFields = [
                         prepared.durable ? 'outbox: true' : undefined,
                         prepared.streaming ? 'streaming: true' : undefined,
-                    ].filter(Boolean)
-                    const optsArg = flags.length > 0 ? `, { ${flags.join(', ')} }` : ''
+                        prepared.cachePolicyText !== undefined
+                            ? `cache: ${prepared.cachePolicyText}`
+                            : undefined,
+                        prepared.streamPolicyText !== undefined
+                            ? `stream: ${prepared.streamPolicyText}`
+                            : undefined,
+                    ].filter((field): field is string => field !== undefined)
+                    const optsArg =
+                        optsFields.length > 0 ? `, { ${optsFields.join(', ')} }` : ''
                     const contents = `import { remoteProxy as __abideRemoteProxy__ } from '${importName}/ui/remoteProxy';
 export const ${prepared.exportName} = __abideRemoteProxy__(${JSON.stringify(prepared.method)}, ${JSON.stringify(url)}${optsArg});
 `
