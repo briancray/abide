@@ -21,8 +21,16 @@ export function compileComponent(
     scopeSeed?: string,
     analyzed: AnalyzedComponent = analyzeComponent(source, scopeSeed),
 ): string {
-    const { script, stateNames, derivedNames, computedNames, nodes } = analyzed
-    const build = generateBuild(nodes, 'host', stateNames, derivedNames, computedNames, isLayout)
+    const { script, stateNames, derivedNames, computedNames, cellReadNames, nodes } = analyzed
+    const build = generateBuild(
+        nodes,
+        'host',
+        stateNames,
+        derivedNames,
+        computedNames,
+        isLayout,
+        cellReadNames,
+    )
     /* The scoped CSS is bundled into the entry stylesheet (see `abideUiPlugin`), not
        injected at runtime; the build only needs the `data-a-…` scope attributes on
        elements, which `generateBuild` reads from each node's annotated `scopes`. */

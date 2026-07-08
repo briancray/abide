@@ -68,13 +68,22 @@ export function lowerScript(
     stateNames: Set<string>
     derivedNames: Set<string>
     computedNames: Set<string>
+    cellReadNames: Set<string>
     droppedReactiveImports: Set<string>
 } {
     const source = ts.createSourceFile('component.ts', scriptBody, ts.ScriptTarget.Latest, true)
-    const { transformer, stateNames, derivedNames, computedNames } = desugarSignals(source)
+    const { transformer, stateNames, derivedNames, computedNames, cellReadNames } =
+        desugarSignals(source)
     const result = ts.transform(source, [
         transformer,
-        signalRefsTransformer(stateNames, derivedNames, computedNames),
+        signalRefsTransformer(
+            stateNames,
+            derivedNames,
+            computedNames,
+            new Set(),
+            new Set(),
+            cellReadNames,
+        ),
         docAccessTransformer('$$model'),
     ])
     const transformed = result.transformed[0] as ts.SourceFile
@@ -126,6 +135,7 @@ export function lowerScript(
         stateNames,
         derivedNames,
         computedNames,
+        cellReadNames,
         droppedReactiveImports,
     }
 }

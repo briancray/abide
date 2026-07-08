@@ -82,9 +82,9 @@ describe('desugar — state(transform) / linked cells; computed doc slot', () =>
         // transform state → scope cell, referenced as .value
         expect(body).toContain('const qty = $$scope().state(1, (n) => Math.max(1, n))')
         expect(body).toContain('qty.value')
-        // linked → scope cell, seed thunk derefs the upstream slot, ref as .value
+        // linked → scope cell, seed thunk derefs the upstream slot, read through the unified cell read
         expect(body).toContain('const draft = $$scope().linked(() => $$model.read("source"))')
-        expect(body).toContain('draft.value')
+        expect(body).toContain('$$readCell(draft)')
         // computed (read-only) → computed doc slot via derive, referenced as its reader call
         expect(body).toContain(
             'const doubled = $$scope().derive("doubled", () => $$model.read("source") * 2)',

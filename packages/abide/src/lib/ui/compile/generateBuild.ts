@@ -74,6 +74,8 @@ export function generateBuild(
     derivedNames: ReadonlySet<string>,
     computedNames: ReadonlySet<string>,
     isLayout = false,
+    /* `linked` / async `computed` names, lowered to `$$readCell(name)` in template exprs. */
+    cellReadNames: ReadonlySet<string> = new Set(),
 ): string {
     const nextVar = makeVarNamer()
 
@@ -109,7 +111,7 @@ export function generateBuild(
         withShadow,
         bindRead,
         bindWrite,
-    } = lowerContext(stateNames, derivedNames, computedNames)
+    } = lowerContext(stateNames, derivedNames, computedNames, cellReadNames)
 
     /* Maps a plan `Binding`'s classification to the client `ShadowKind`: a `reactive` value
        derefs as a `.value` cell (`derived`), a `plain` value as the bare local (`plain`). The

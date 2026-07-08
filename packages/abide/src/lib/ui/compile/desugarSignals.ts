@@ -4,6 +4,126 @@ import { signalCallee } from './signalCallee.ts'
 
 const factory = ts.factory
 
+/* True when `node` holds an `await` that runs at the seed's own top level — one NOT nested
+   inside a further function. The walk stops at every nested function boundary, so an
+   `await` in an inner callback (`items.map(async (x) => await f(x))`) does not count: only
+   a top-level `await` marks the seed itself as an async thunk the async-cell path unwraps. */
+function hasTopLevelAwait(node: ts.Node): boolean {
+    let found = false
+    const visit = (child: ts.Node): void => {
+        if (found) {
+            return
+        }
+        /* A nested function is its own await scope — don't descend into it. */
+        if (
+            ts.isFunctionDeclaration(child) ||
+            ts.isFunctionExpression(child) ||
+            ts.isArrowFunction(child)
+        ) {
+            return
+        }
+        if (ts.isAwaitExpression(child)) {
+            found = true
+            return
+        }
+        ts.forEachChild(child, visit)
+    }
+    visit(node)
+    return found
+}
+
+/* Normalises a `computed`/`linked` argument into a seed THUNK: a literal `() => …` /
+   `function` argument passes through unchanged (the author already wrote the thunk), any
+   other expression is wrapped as `() => arg`. The wrapper arrow is made ASYNC when the
+   expression contains a top-level `await` (`computed(await load())` → `async () => await
+   load()`), which is exactly the marker the runtime primitive uses to route to an async cell. */
+function wrapSeed(argument: ts.Expression): ts.Expression {
+    if (ts.isArrowFunction(argument) || ts.isFunctionExpression(argument)) {
+        return argument
+    }
+    const modifiers = hasTopLevelAwait(argument)
+        ? [factory.createModifier(ts.SyntaxKind.AsyncKeyword)]
+        : undefined
+    return factory.createArrowFunction(
+        modifiers,
+        undefined,
+        [],
+        undefined,
+        factory.createToken(ts.SyntaxKind.EqualsGreaterThanToken),
+        argument,
+    )
+}
+
+/* True for an async seed thunk — an arrow/function carrying the `async` modifier, whether
+   from `wrapSeed`'s `await` lowering or a passthrough `async () => …` literal the author
+   wrote. The routing signal: an async seed becomes an async cell (read via `$$readCell`),
+   a sync seed stays the lazy `derive` computed. */
+function isAsyncSeed(node: ts.Expression): boolean {
+    if (!ts.isArrowFunction(node) && !ts.isFunctionExpression(node)) {
+        return false
+    }
+    const modifiers = ts.getModifiers(node)
+    return modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword) ?? false
+}
+
+/* The seed argument of a `computed`/`linked` declaration (undefined for the arg-less
+   `computed()` edge). Reused by both the name-collection pass and the lowering. */
+function seedArgument(declaration: ts.VariableDeclaration): ts.Expression | undefined {
+    return (declaration.initializer as ts.CallExpression).arguments[0]
+}
+
+/* True when a `computed(...)` declaration's wrapped seed is async — its await-lowered or
+   passthrough-async thunk routes to `scope().computed(...)` (an async cell) instead of the
+   lazy `scope().derive(...)`. The one predicate the collection pass and the lowering share. */
+function isAsyncComputed(declaration: ts.VariableDeclaration): boolean {
+    const argument = seedArgument(declaration)
+    if (argument === undefined) {
+        return false
+    }
+    return isAsyncSeed(wrapSeed(argument))
+}
+
+/* Emits a compile WARNING (best-effort, never fatal) when a signal read appears AFTER the
+   first top-level `await` in an async seed — a value read there is no longer tracked, so the
+   cell won't reseed when it changes. Detection only: reads before the await (or with no
+   await) are fine. */
+function warnPostAwaitReads(seed: ts.Expression, signalNames: ReadonlySet<string>): void {
+    if (signalNames.size === 0) {
+        return
+    }
+    /* Walk the seed's BODY — the arrow/function itself is the seed, not a nested scope, so
+       descend into it; the guard below then skips any FURTHER nested function. */
+    const body = ts.isArrowFunction(seed) || ts.isFunctionExpression(seed) ? seed.body : seed
+    let awaited = false
+    const flagged = new Set<string>()
+    const visit = (child: ts.Node): void => {
+        /* Nested functions have their own tracking; the await that matters is at the seed's
+           own top level, so don't descend into them (mirrors `hasTopLevelAwait`). */
+        if (
+            ts.isFunctionDeclaration(child) ||
+            ts.isFunctionExpression(child) ||
+            ts.isArrowFunction(child)
+        ) {
+            return
+        }
+        if (ts.isAwaitExpression(child)) {
+            awaited = true
+            ts.forEachChild(child, visit)
+            return
+        }
+        if (awaited && ts.isIdentifier(child) && signalNames.has(child.text)) {
+            flagged.add(child.text)
+        }
+        ts.forEachChild(child, visit)
+    }
+    visit(body)
+    for (const name of flagged) {
+        console.warn(
+            `[abide] \`${name}\` is read after an \`await\` in an async computed/linked seed — reads after the first await are not tracked, so the cell will not reseed when \`${name}\` changes. Read it before the await (capture it into a local) to keep it tracked.`,
+        )
+    }
+}
+
 /* Throws on the removed `prop(...)` reader — props are now read by destructuring `props()`.
    Walks all calls, so a stray one nested in a function is caught too. Bare reactive
    primitives (`state(0)`) are the SURFACE now (recognised by import binding + lowered), so
@@ -49,6 +169,7 @@ export function desugarSignals(source: ts.SourceFile): {
     stateNames: Set<string>
     derivedNames: Set<string>
     computedNames: Set<string>
+    cellReadNames: Set<string>
 } {
     assertNoRemovedReaders(source)
     /* The file's reactive import bindings — each local (alias-safe) mapped to its
@@ -58,6 +179,11 @@ export function desugarSignals(source: ts.SourceFile): {
     const stateNames = new Set<string>()
     const derivedNames = new Set<string>()
     const computedNames = new Set<string>()
+    /* Names read through `$$readCell(name)`: every `linked` (a plain `State` or, when its seed
+       tracks an async source, an `AsyncState`) and every async `computed` (an `AsyncComputed`).
+       One read shape covers both — `$$readCell` peeks an async cell and reads `.value` off a
+       sync one — so `linked(getStream())` auto-tracks with no read-site branching. */
+    const cellReadNames = new Set<string>()
     /* A `props()` destructure must be lowered even when it declares no reactive binding
        (a rest-only `const { ...rest } = props()`), so track its presence on its own. */
     let hasPropsDestructure = false
@@ -89,14 +215,22 @@ export function desugarSignals(source: ts.SourceFile): {
                 /* Plain `state(initial)` → a serializable `model` doc slot. */
                 stateNames.add(declaration.name.text)
             } else if (isComputedSlot(declaration, bindings)) {
-                /* Read-only `computed(compute)` → a computed `scope().derive` doc slot,
-                   referenced as `name()` (its string-free reader): a function of other
-                   paths, recomputed via the graph, never stored/serialized. */
-                computedNames.add(declaration.name.text)
-            } else if (callee === 'linked' || callee === 'state') {
-                /* `.value` cells: `linked` and `state(initial, transform)` — they own
-                   a local store, so they stay cells (`computed` is always the read-only
-                   slot above; there is no writable-computed cell). */
+                /* `computed(compute)` → either a lazy `scope().derive` doc slot referenced as
+                   `name()` (a sync seed), or an async cell read via `$$readCell(name)` when the
+                   wrapped seed is async (an `await`-lowered or passthrough-`async` thunk). */
+                if (isAsyncComputed(declaration)) {
+                    cellReadNames.add(declaration.name.text)
+                } else {
+                    computedNames.add(declaration.name.text)
+                }
+            } else if (callee === 'linked') {
+                /* `linked` → a cell read via `$$readCell(name)`: a plain `State` when the seed
+                   is synchronous, an `AsyncState` when it tracks a promise/stream — one read
+                   shape auto-tracks whichever source the runtime primitive resolved to. */
+                cellReadNames.add(declaration.name.text)
+            } else if (callee === 'state') {
+                /* `state(initial, transform)` → a `.value` cell (its write-coercion transform
+                   forces a local store); referenced as `name.value`, unchanged. */
                 derivedNames.add(declaration.name.text)
             }
         }
@@ -106,6 +240,7 @@ export function desugarSignals(source: ts.SourceFile): {
         stateNames.size > 0 ||
         derivedNames.size > 0 ||
         computedNames.size > 0 ||
+        cellReadNames.size > 0 ||
         hasPropsDestructure
 
     const transformer: ts.TransformerFactory<ts.SourceFile> = () => (root) => {
@@ -123,13 +258,21 @@ export function desugarSignals(source: ts.SourceFile): {
                 ),
             )
         }
+        /* Every component signal name — the read set the post-`await` tracking lint checks
+           an async seed's body against. */
+        const signalNames = new Set<string>([
+            ...stateNames,
+            ...derivedNames,
+            ...computedNames,
+            ...cellReadNames,
+        ])
         for (const statement of root.statements) {
-            statements.push(...loweredStatement(statement, bindings))
+            statements.push(...loweredStatement(statement, bindings, signalNames))
         }
         return factory.updateSourceFile(root, statements)
     }
 
-    return { transformer, stateNames, derivedNames, computedNames }
+    return { transformer, stateNames, derivedNames, computedNames, cellReadNames }
 }
 
 /* The lowered form of a top-level statement: state slots → `model.x = init`
@@ -139,13 +282,14 @@ export function desugarSignals(source: ts.SourceFile): {
 function loweredStatement(
     statement: ts.Statement,
     bindings: ReactiveImportBindings,
+    signalNames: ReadonlySet<string>,
 ): ts.Statement[] {
     rejectMixedDeclaration(statement, bindings)
     return (
         stateAssignmentStatements(statement, bindings) ??
-        computedStatements(statement, bindings) ??
+        computedStatements(statement, bindings, signalNames) ??
         propsStatements(statement, bindings) ??
-        cellStatements(statement, bindings) ?? [statement]
+        cellStatements(statement, bindings, signalNames) ?? [statement]
     )
 }
 
@@ -243,6 +387,7 @@ function isComputedSlot(
 function cellStatements(
     statement: ts.Statement,
     bindings: ReactiveImportBindings,
+    signalNames: ReadonlySet<string>,
 ): ts.Statement[] | undefined {
     if (!ts.isVariableStatement(statement)) {
         return undefined
@@ -258,7 +403,23 @@ function cellStatements(
             return undefined
         }
         const args = (declaration.initializer as ts.CallExpression).arguments
-        statements.push(constDeclaration(declaration.name.text, scopeMethodCall(callee, args)))
+        /* `linked` wraps its seed argument (a bare value/`await`/stream expression becomes a
+           thunk, a literal `() => …` passes through) so the runtime primitive can route it to
+           an async cell; `state` is a value-taker — its args pass verbatim, never wrapped. */
+        if (callee === 'linked') {
+            const wrapped = wrapSeed(args[0])
+            if (isAsyncSeed(wrapped)) {
+                warnPostAwaitReads(wrapped, signalNames)
+            }
+            statements.push(
+                constDeclaration(
+                    declaration.name.text,
+                    scopeMethodCall('linked', [wrapped, ...args.slice(1)]),
+                ),
+            )
+        } else {
+            statements.push(constDeclaration(declaration.name.text, scopeMethodCall(callee, args)))
+        }
     }
     return statements
 }
@@ -268,6 +429,7 @@ function cellStatements(
 function computedStatements(
     statement: ts.Statement,
     bindings: ReactiveImportBindings,
+    signalNames: ReadonlySet<string>,
 ): ts.Statement[] | undefined {
     if (!ts.isVariableStatement(statement)) {
         return undefined
@@ -282,22 +444,34 @@ function computedStatements(
             return undefined
         }
         const name = declaration.name.text
-        const compute =
-            (declaration.initializer as ts.CallExpression).arguments[0] ??
-            factory.createArrowFunction(
-                undefined,
-                undefined,
-                [],
-                undefined,
-                factory.createToken(ts.SyntaxKind.EqualsGreaterThanToken),
-                factory.createIdentifier('undefined'),
+        const argument = seedArgument(declaration)
+        /* The seed thunk: a wrapped argument (bare expr / `await` / literal thunk), or an arg-
+           less `computed()` degenerating to `() => undefined`. */
+        const wrapped =
+            argument === undefined
+                ? factory.createArrowFunction(
+                      undefined,
+                      undefined,
+                      [],
+                      undefined,
+                      factory.createToken(ts.SyntaxKind.EqualsGreaterThanToken),
+                      factory.createIdentifier('undefined'),
+                  )
+                : wrapSeed(argument)
+        if (isAsyncSeed(wrapped)) {
+            /* Async seed → the eager `computed` primitive (an `AsyncComputed` cell, read via
+               `$$readCell`); the runtime unwraps the promise / auto-tracks the stream. */
+            warnPostAwaitReads(wrapped, signalNames)
+            statements.push(constDeclaration(name, scopeMethodCall('computed', [wrapped])))
+        } else {
+            /* Sync seed → the lazy `derive` doc slot, read as `name()`, unchanged. */
+            statements.push(
+                constDeclaration(
+                    name,
+                    scopeMethodCall('derive', [factory.createStringLiteral(name), wrapped]),
+                ),
             )
-        statements.push(
-            constDeclaration(
-                name,
-                scopeMethodCall('derive', [factory.createStringLiteral(name), compute]),
-            ),
-        )
+        }
     }
     return statements
 }

@@ -23,10 +23,18 @@ export function renameSignalRefs(
     stateNames: ReadonlySet<string>,
     derivedNames: ReadonlySet<string>,
     computedNames: ReadonlySet<string> = new Set(),
+    cellReadNames: ReadonlySet<string> = new Set(),
 ): string {
     const source = ts.createSourceFile('component.ts', code, ts.ScriptTarget.Latest, true)
     const result = ts.transform(source, [
-        signalRefsTransformer(stateNames, derivedNames, computedNames),
+        signalRefsTransformer(
+            stateNames,
+            derivedNames,
+            computedNames,
+            new Set(),
+            new Set(),
+            cellReadNames,
+        ),
     ])
     const output = TS_PRINTER.printFile(result.transformed[0] as ts.SourceFile)
     result.dispose()
@@ -53,6 +61,10 @@ export function signalRefsTransformer(
        bare identifier, not `.value`: SSR declares `const foo = <resolved>`, so a reference
        reads the local directly. Seeded into the root shadow set so it is left untouched. */
     blockLocalPlain: ReadonlySet<string> = new Set(),
+    /* Component signals read through `$$readCell(name)` — every `linked` and every async
+       `computed` (see `desugarSignals`). A nearer lexical binding of the same name shadows
+       them like any other signal. */
+    cellReadNames: ReadonlySet<string> = new Set(),
 ): ts.TransformerFactory<ts.SourceFile> {
     /* The signal names that a nested binding can shadow — only these matter for
        scope tracking, so we ignore every other local binding. */
@@ -60,6 +72,7 @@ export function signalRefsTransformer(
         ...stateNames,
         ...derivedNames,
         ...computedNames,
+        ...cellReadNames,
         ...blockLocal,
         /* `scope` is the author-facing reactive entry (`scope().state(...)`), lowered to the
            reserved `$$scope` import so a user variable named `scope` can never collide — but
@@ -109,6 +122,7 @@ export function signalRefsTransformer(
                         derivedNames,
                         computedNames,
                         blockLocal,
+                        cellReadNames,
                     )
                     if (replacement !== undefined) {
                         return ts.factory.createPropertyAssignment(node.name.text, replacement)
@@ -121,6 +135,7 @@ export function signalRefsTransformer(
                         derivedNames,
                         computedNames,
                         blockLocal,
+                        cellReadNames,
                     )
                     if (replacement !== undefined) {
                         return replacement
@@ -338,6 +353,7 @@ function referenceFor(
     derivedNames: ReadonlySet<string>,
     computedNames: ReadonlySet<string>,
     blockLocal: ReadonlySet<string> = new Set(),
+    cellReadNames: ReadonlySet<string> = new Set(),
 ): ts.Expression | undefined {
     if (blockLocal.has(name)) {
         return ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier(name), 'value')
@@ -346,6 +362,15 @@ function referenceFor(
        value read only — a `.scope` member or a shadowing local is never reached here). */
     if (name === 'scope') {
         return ts.factory.createIdentifier('$$scope')
+    }
+    /* A `linked` / async `computed` cell → `$$readCell(name)`: one read shape that peeks an
+       async cell and reads `.value` off a sync one. */
+    if (cellReadNames.has(name)) {
+        return ts.factory.createCallExpression(
+            ts.factory.createIdentifier('$$readCell'),
+            undefined,
+            [ts.factory.createIdentifier(name)],
+        )
     }
     if (stateNames.has(name)) {
         return ts.factory.createPropertyAccessExpression(

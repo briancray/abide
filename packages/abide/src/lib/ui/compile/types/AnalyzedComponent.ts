@@ -24,6 +24,10 @@ export type AnalyzedComponent = {
     stateNames: Set<string>
     derivedNames: Set<string>
     computedNames: Set<string>
+    /* Component signals read through `$$readCell(name)`: every `linked` and every async
+       `computed`. Threaded to both back-ends so a template reference (`{draft}`) lowers to
+       the unified cell read consistently on client and server. */
+    cellReadNames: Set<string>
     nodes: TemplateNode[]
     /* One entry per non-empty `<style>` in the template (in source order): the scope
        attribute its covered elements carry (annotated onto `nodes`) and the scoped

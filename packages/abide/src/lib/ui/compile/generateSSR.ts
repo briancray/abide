@@ -66,6 +66,8 @@ export function generateSSR(
     derivedNames: ReadonlySet<string>,
     computedNames: ReadonlySet<string>,
     isLayout = false,
+    /* `linked` / async `computed` names, lowered to `$$readCell(name)` in template exprs. */
+    cellReadNames: ReadonlySet<string> = new Set(),
 ): string {
     /* Unique temp var names (child render results); runtime block ids are
        allocated separately at runtime via `$ctx.next++`. */
@@ -84,7 +86,7 @@ export function generateSSR(
         withNestedScripts,
         withShadow,
         bindRead,
-    } = lowerContext(stateNames, derivedNames, computedNames)
+    } = lowerContext(stateNames, derivedNames, computedNames, cellReadNames)
 
     /* SSR has no cells, so every plan `Binding` — `reactive` or `plain` — renders as a `plain`
        shadow (a real JS local / loop var / arrow param, read as the bare identifier). The one

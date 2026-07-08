@@ -25,6 +25,8 @@ export function lowerContext(
     stateNames: ReadonlySet<string>,
     derivedNames: ReadonlySet<string>,
     computedNames: ReadonlySet<string> = new Set(),
+    /* `linked` / async `computed` names, read through `$$readCell(name)`. */
+    cellReadNames: ReadonlySet<string> = new Set(),
 ) {
     /* The typed branch-local shadow stack: one auto-popping value owning both kinds.
        `derived` names deref to `.value` like a `computed` (block value params the client
@@ -48,6 +50,7 @@ export function lowerContext(
                 computedNames,
                 new Set(scope.names('derived')),
                 new Set(scope.names('plain')),
+                cellReadNames,
             ),
             docAccessTransformer('$$model'),
         ])
@@ -101,6 +104,13 @@ export function lowerContext(
             return `(${expression(code)}).set(${valueExpr});`
         }
         guardWritableBind(code)
+        /* A `linked` cell (a writable `State`) is read through `$$readCell`, but that call is
+           not an lvalue — the WRITE goes straight to the cell's `.value` setter (`NAME.value =
+           …`). The name is a real local holding the cell, so it needs no reference lowering. */
+        const name = code.trim()
+        if (cellReadNames.has(name)) {
+            return `${name}.value = ${valueExpr};`
+        }
         return statement(`${code} = ${valueExpr}`)
     }
 

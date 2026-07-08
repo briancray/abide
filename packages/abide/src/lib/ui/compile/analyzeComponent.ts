@@ -46,6 +46,7 @@ export function analyzeComponent(source: string, scopeSeed?: string): AnalyzedCo
         stateNames,
         derivedNames,
         computedNames,
+        cellReadNames,
         droppedReactiveImports,
     } = lowerScript(scriptBody, nestedScriptCode)
     /* `annotateScopes` mutates the tree — assigning each style its scope attribute and
@@ -59,6 +60,7 @@ export function analyzeComponent(source: string, scopeSeed?: string): AnalyzedCo
         stateNames,
         derivedNames,
         computedNames,
+        cellReadNames,
         nodes,
         styles,
         /* Hydration adopts every block in place — including `await`, which resumes

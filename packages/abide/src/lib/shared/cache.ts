@@ -23,9 +23,9 @@ import type { CacheOnContext } from './types/CacheOnContext.ts'
 import type { CacheOptions } from './types/CacheOptions.ts'
 import type { CacheSelector } from './types/CacheSelector.ts'
 import type { CacheStore } from './types/CacheStore.ts'
+import type { NamedAsyncIterable } from './types/NamedAsyncIterable.ts'
 import type { RawRemoteFunction } from './types/RawRemoteFunction.ts'
 import type { RemoteFunction } from './types/RemoteFunction.ts'
-import type { NamedAsyncIterable } from './types/NamedAsyncIterable.ts'
 import { withCacheManaged } from './withCacheManaged.ts'
 
 type AnyRemote<Args, Return> = RemoteFunction<Args, Return> | RawRemoteFunction<Args>

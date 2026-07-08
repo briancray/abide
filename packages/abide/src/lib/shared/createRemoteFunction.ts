@@ -9,10 +9,10 @@ import { subscribableFromResponse } from './subscribableFromResponse.ts'
 import type { CacheOptions } from './types/CacheOptions.ts'
 import type { ClientFlags } from './types/ClientFlags.ts'
 import type { HttpMethod } from './types/HttpMethod.ts'
+import type { NamedAsyncIterable } from './types/NamedAsyncIterable.ts'
 import type { RawRemoteFunction } from './types/RawRemoteFunction.ts'
 import type { RemoteFunction } from './types/RemoteFunction.ts'
 import type { RpcOptions } from './types/RpcOptions.ts'
-import type { NamedAsyncIterable } from './types/NamedAsyncIterable.ts'
 
 /*
 Assembles the public RemoteFunction shape used identically by the

@@ -405,6 +405,7 @@ tests can import it, not for app code.
 - `@abide/abide/ui/dom/restProps` — the live unconsumed-props object behind `const { …, ...rest } = props()`.
 - `@abide/abide/ui/dom/spreadAttrs` — spreads an object's keys onto a native element (`<div {...rest}>`), keys enumerated once.
 - `@abide/abide/ui/dom/readCall` — guarded method call on a reactive-doc read (the `model.draft.trim()` lowering).
+- `@abide/abide/ui/dom/readCell` — unified read for a `linked`/async-`computed` reference (the `$$readCell(NAME)` lowering): peeks an async cell, reads `.value` off a sync one.
 
 ## Build / tooling
 

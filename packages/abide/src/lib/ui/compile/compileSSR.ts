@@ -45,8 +45,15 @@ export function compileSSR(
     scopeSeed?: string,
     analyzed: AnalyzedComponent = analyzeComponent(source, scopeSeed),
 ): string {
-    const { ssrScript: lowered, stateNames, derivedNames, computedNames, nodes } = analyzed
-    const ssr = generateSSR(nodes, stateNames, derivedNames, computedNames, isLayout)
+    const {
+        ssrScript: lowered,
+        stateNames,
+        derivedNames,
+        computedNames,
+        cellReadNames,
+        nodes,
+    } = analyzed
+    const ssr = generateSSR(nodes, stateNames, derivedNames, computedNames, isLayout, cellReadNames)
     /* No `<style>` in the markup — the scoped CSS is bundled into the entry stylesheet
        the shell links (see `abideUiPlugin`), so SSR output is styled by that sheet. The
        elements still carry their `data-a-…` scopes via `generateSSR`. */

@@ -20,6 +20,7 @@ import { mutateDocArray } from './dom/mutateDocArray.ts'
 import { on } from './dom/on.ts'
 import { outlet } from './dom/outlet.ts'
 import { readCall } from './dom/readCall.ts'
+import { readCell } from './dom/readCell.ts'
 import { restProps } from './dom/restProps.ts'
 import { skeleton } from './dom/skeleton.ts'
 import { spreadAttrs } from './dom/spreadAttrs.ts'
@@ -83,6 +84,7 @@ export function installHotBridge(): void {
         restProps,
         spreadAttrs,
         readCall,
+        readCell,
         mutateDocArray,
         hydrate,
         escapeKey,

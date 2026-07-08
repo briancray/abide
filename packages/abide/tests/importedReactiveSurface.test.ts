@@ -38,7 +38,7 @@ describe('imported reactive surface — bare state()/state.computed/state.linked
             `<script>import { state } from '${PKG}/ui/state'\nlet count = state(0)\nconst draft = state.linked(() => count)</script><p>{draft}</p>`,
         )
         expect(body).toContain('const draft = $$scope().linked(() => $$model.read("count"))')
-        expect(body).toContain('draft.value')
+        expect(body).toContain('$$readCell(draft)') // linked reads through the unified cell read
     })
 
     /* A nested branch `<script>` keeps its reactive calls literal (`state.computed(...)`)
