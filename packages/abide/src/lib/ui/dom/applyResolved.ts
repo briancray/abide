@@ -57,10 +57,23 @@ export function applyResolved(root: Element, frame: string): void {
         return
     }
     const { parent, start } = boundary
-    /* Remove the pending nodes between the markers (exclusive of the markers). */
-    let node = start.nextSibling
-    while (node !== null && !isComment(node, close)) {
-        const next = node.nextSibling
+    /* Locate the close marker WITHOUT mutating first — mirroring discardBoundary. Removing
+       nodes as we walk would, on a marker/id desync, delete every remaining sibling before
+       discovering there is no match — silently wiping unrelated later content. Throw at the
+       divergence instead of over-clearing to end-of-parent. */
+    let closeNode: Node | null = start.nextSibling
+    while (closeNode !== null && !isComment(closeNode, close)) {
+        closeNode = closeNode.nextSibling
+    }
+    if (closeNode === null) {
+        throw new Error(
+            `[abide] stream swap desync: await boundary open marker "${open}" has no matching close "${close}" — the streamed frame or block id drifted.`,
+        )
+    }
+    /* Remove the pending nodes between the markers (exclusive), now that the range is bounded. */
+    let node: Node | null = start.nextSibling
+    while (node !== null && node !== closeNode) {
+        const next: Node | null = node.nextSibling
         parent.removeChild(node)
         node = next
     }
