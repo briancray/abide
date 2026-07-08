@@ -458,6 +458,76 @@ describe('abide check', () => {
         expect(parent[0]!.message).toContain('label')
     })
 
+    /* Slotted content (`<Card>…</Card>`) supplies the child's `children` prop at runtime,
+       so a REQUIRED `children: Snippet` must NOT read as missing when content is slotted —
+       the shadow's completeness check drops `children`'s required-ness whenever the mount
+       carries renderable slot content. (The checker doesn't otherwise see the slot as
+       satisfying the prop, which forced `children` optional as a workaround.) */
+    test('slotted content satisfies a required children prop', () => {
+        const dir = project({
+            'card.abide': `<script>\nimport { props } from '@abide/abide/ui/props'\nimport type { Snippet } from '@abide/abide/shared/snippet'\nconst { children } = props<{ children: Snippet }>()\n</script>\n<section>{children()}</section>\n`,
+            'parent.abide': `<script>\nimport Card from './card.abide'\n</script>\n<Card>hello</Card>\n`,
+        })
+        const parent = collectAbideDiagnostics(createShadowProgram(dir)).filter((diagnostic) =>
+            diagnostic.file.endsWith('parent.abide'),
+        )
+        expect(parent).toHaveLength(0)
+    })
+
+    /* Only renderable slot content counts: a childless mount (`<Card />`) of a required-
+       `children` component is still flagged, and whitespace-only content doesn't satisfy it
+       either — matching the runtime, where an empty slot sets no `children` layer. */
+    test('a childless mount of a required-children component is still flagged', () => {
+        const dir = project({
+            'card.abide': `<script>\nimport { props } from '@abide/abide/ui/props'\nimport type { Snippet } from '@abide/abide/shared/snippet'\nconst { children } = props<{ children: Snippet }>()\n</script>\n<section>{children()}</section>\n`,
+            'childless.abide': `<script>\nimport Card from './card.abide'\n</script>\n<Card />\n`,
+            'blank.abide': `<script>\nimport Card from './card.abide'\n</script>\n<Card>\n  \n</Card>\n`,
+        })
+        const diagnostics = collectAbideDiagnostics(createShadowProgram(dir))
+        expect(
+            diagnostics.filter((diagnostic) => diagnostic.file.endsWith('childless.abide')),
+        ).toHaveLength(1)
+        expect(
+            diagnostics.filter((diagnostic) => diagnostic.file.endsWith('blank.abide')),
+        ).toHaveLength(1)
+    })
+
+    /* Slot content relaxes ONLY `children` — every other required prop is still demanded,
+       and an excess prop is still caught even when `children` is the child's sole declared
+       prop (the completeness type keeps `children` a known-optional key rather than
+       collapsing to a props-permissive `{}`). */
+    test('slot content relaxes only children — other completeness checks hold', () => {
+        const dir = project({
+            'card.abide': `<script>\nimport { props } from '@abide/abide/ui/props'\nimport type { Snippet } from '@abide/abide/shared/snippet'\nconst { title, children } = props<{ title: string; children: Snippet }>()\n</script>\n<section>{title}{children()}</section>\n`,
+            'onlyChildren.abide': `<script>\nimport { props } from '@abide/abide/ui/props'\nimport type { Snippet } from '@abide/abide/shared/snippet'\nconst { children } = props<{ children: Snippet }>()\n</script>\n<section>{children()}</section>\n`,
+            'missing.abide': `<script>\nimport Card from './card.abide'\n</script>\n<Card>hi</Card>\n`,
+            'excess.abide': `<script>\nimport Card from './onlyChildren.abide'\n</script>\n<Card bogus={1}>hi</Card>\n`,
+        })
+        const diagnostics = collectAbideDiagnostics(createShadowProgram(dir))
+        const missing = diagnostics.filter((diagnostic) =>
+            diagnostic.file.endsWith('missing.abide'),
+        )
+        expect(missing).toHaveLength(1)
+        expect(missing[0]!.message).toContain('title')
+        const excess = diagnostics.filter((diagnostic) => diagnostic.file.endsWith('excess.abide'))
+        expect(excess).toHaveLength(1)
+        expect(excess[0]!.message).toContain('bogus')
+    })
+
+    /* A component that declares NO `children` still accepts slotted content leniently — the
+       relaxation is a no-op on its shape (the slot's `children` layer is simply unread), so
+       the mount doesn't spuriously error on an undeclared `children`. */
+    test('a component declaring no children accepts slot content leniently', () => {
+        const dir = project({
+            'card.abide': `<script>\nimport { props } from '@abide/abide/ui/props'\nconst { title } = props<{ title: string }>()\n</script>\n<h2>{title}</h2>\n`,
+            'parent.abide': `<script>\nimport Card from './card.abide'\n</script>\n<Card title="x">ignored</Card>\n`,
+        })
+        const parent = collectAbideDiagnostics(createShadowProgram(dir)).filter((diagnostic) =>
+            diagnostic.file.endsWith('parent.abide'),
+        )
+        expect(parent).toHaveLength(0)
+    })
+
     /* An unknown/excess child prop is caught in the parent — a typo'd prop name should
        not pass silently. */
     test('an excess unknown child prop is caught in the parent', () => {

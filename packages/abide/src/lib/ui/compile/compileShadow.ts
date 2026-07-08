@@ -1,5 +1,6 @@
 import ts from 'typescript'
 import { ABIDE_PACKAGE_NAME } from '../../shared/ABIDE_PACKAGE_NAME.ts'
+import { isWhitespaceText } from './isWhitespaceText.ts'
 import { parseTemplate } from './parseTemplate.ts'
 import {
     NESTED_REACTIVE_BINDINGS,
@@ -644,6 +645,12 @@ function emitNode(node: TemplateNode, builder: Builder): void {
                 prop.name.startsWith('style:') ||
                 prop.name === 'attach'
             const hasSpread = node.props.some((prop) => prop.spread)
+            /* Default slot content (`<Card>…</Card>`) lowers to a `children` Snippet prop at
+               runtime (see generateBuild.slotPart), so the completeness check must treat
+               `children` as supplied when it's present (handled below). Mirror the runtime's
+               predicate: any child that isn't whitespace-only text is renderable slot content
+               — an empty/whitespace slot sets no `children` layer, so it doesn't count. */
+            const hasSlotContent = node.children.some((child) => !isWhitespaceText(child))
             for (const prop of node.props.filter(handled)) {
                 /* Lead with a defensive `;`: an IIFE/object-literal arg starts with `(` or
                    `{`, so without it a preceding scope statement left unterminated (a script
@@ -679,14 +686,30 @@ function emitNode(node: TemplateNode, builder: Builder): void {
                     builder.raw(');\n')
                 }
             } else {
-                builder.raw(`;((__c: Parameters<typeof ${node.name}>[0]): void => { void __c })({`)
+                /* With slot content the child's `children` prop is supplied by the slot, so
+                   check completeness against the shape with `children` made OPTIONAL rather
+                   than removed — dropping it via a bare `Omit` collapses a children-only
+                   shape to `{}`, a weak type that then lets excess props slip by. `Omit` +
+                   `Partial<Pick<…>>` keeps every other prop required and `children` as a
+                   known-optional key (a no-op `Partial<{}>` when the child declares none), so
+                   completeness and excess-prop checks both stay intact. The explicit
+                   `children={…}` attribute is dropped from the literal — the slot's key wins
+                   (`composeProps`), and leaving it in would read as excess. */
+                const propsShape = `Parameters<typeof ${node.name}>[0]`
+                const completenessType = hasSlotContent
+                    ? `Omit<${propsShape}, 'children'> & Partial<Pick<${propsShape}, Extract<keyof ${propsShape}, 'children'>>>`
+                    : propsShape
+                const literalProps = hasSlotContent
+                    ? dataProps.filter((prop) => prop.name !== 'children')
+                    : dataProps
+                builder.raw(`;((__c: ${completenessType}): void => { void __c })({`)
                 /* A zero-length anchor right after `{`, pointing at the tag: a missing-
                    required-prop error spans the literal from `{`, so it overlaps this and
                    maps to the tag (an empty span trivially satisfies the source-text ==
                    shadow-text invariant). */
                 builder.mapped('', node.loc)
                 builder.raw('\n')
-                for (const prop of dataProps) {
+                for (const prop of literalProps) {
                     /* The key mapped to its source name (excess-prop errors land on the key);
                        the value verbatim-mapped (wrong-type errors land on the value).
                        Hyphenated names (`aria-label`, `data-*`) aren't valid identifiers, so
