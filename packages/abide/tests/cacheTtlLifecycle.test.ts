@@ -32,7 +32,25 @@ edges the other cache suites don't pin:
 */
 
 let calls = 0
+/* No endpoint policy: exercises the method-default retention (server coalesce-only,
+   client forever) — the "omitted ttl" cases below. */
 const countedRemote = defineRpc('GET', '/rpc/ttl-counted', () => json({ hit: ++calls }))
+
+/* Explicit endpoint ttl:0 — the coalesce-only idiom, now that a remote carries no
+   call-site options (ADR-0020). Evicts on client/hydration settle. */
+let coalesceCalls = 0
+const coalesceRemote = defineRpc('GET', '/rpc/ttl-coalesce', () => json({ hit: ++coalesceCalls }), {
+    cache: { ttl: 0 },
+})
+
+/* Endpoint ttl:0 + shared: lands in the process-level store, and still evicts on settle. */
+let sharedCoalesceCalls = 0
+const sharedCoalesceRemote = defineRpc(
+    'GET',
+    '/rpc/ttl-shared-coalesce',
+    () => json({ hit: ++sharedCoalesceCalls }),
+    { cache: { ttl: 0, shared: true } },
+)
 
 let writes = 0
 const countedWrite = defineRpc('POST', '/rpc/ttl-write', () => json({ write: ++writes }))
@@ -47,10 +65,26 @@ const flakyRemote = defineRpc('GET', '/rpc/ttl-flaky', () => {
 })
 
 let errorStatusCalls = 0
-const errorStatusRemote = defineRpc('GET', '/rpc/ttl-error-status', () => {
-    errorStatusCalls += 1
-    /* A 500 RESPONSE (fetch resolves on it, doesn't reject) on the first call. */
-    return json({ hit: errorStatusCalls }, errorStatusCalls === 1 ? { status: 500 } : {})
+/* A long endpoint ttl proves an error-status Response is not retained despite it. */
+const errorStatusRemote = defineRpc(
+    'GET',
+    '/rpc/ttl-error-status',
+    () => {
+        errorStatusCalls += 1
+        /* A 500 RESPONSE (fetch resolves on it, doesn't reject) on the first call. */
+        return json({ hit: errorStatusCalls }, errorStatusCalls === 1 ? { status: 500 } : {})
+    },
+    { cache: { ttl: 60000, shared: true } },
+)
+
+/* ttl/retention now rides the endpoint (ADR-0020), so dedicated remotes declare the
+   policy the retention tests below exercise — countedRemote stays coalesce-only. */
+let retainedCalls = 0
+const retainedRemote = defineRpc('GET', '/rpc/ttl-retained', () => json({ hit: ++retainedCalls }), {
+    cache: { ttl: 20, shared: true },
+})
+const ttlAdoptRemote = defineRpc('GET', '/rpc/ttl-adopt', () => json({ hit: 0 }), {
+    cache: { ttl: 20 },
 })
 
 beforeAll(() => {
@@ -73,7 +107,8 @@ async function inServerScope<T>(body: (store: CacheStore) => Promise<T>): Promis
 describe('ttl=0 (dedupe only)', () => {
     test('server keeps the settled remote entry for the SSR snapshot', async () => {
         await inServerScope(async (store) => {
-            await cache(countedRemote, undefined, { ttl: 0 })
+            /* Omitted endpoint ttl → server coalesce-only default (ttl: 0). */
+            await cache(countedRemote)
             /* Settled, but retained: the snapshot runs after render() returns. */
             expect(store.entries.size).toBe(1)
             const inline = await serializeCacheSnapshot(store)
@@ -86,7 +121,8 @@ describe('ttl=0 (dedupe only)', () => {
         ;(globalThis as Record<string, unknown>).window = {}
         try {
             await inServerScope(async (store) => {
-                await cache(countedRemote, undefined, { ttl: 0 })
+                /* coalesceRemote declares endpoint ttl:0, so the client evicts on settle. */
+                await cache(coalesceRemote)
                 /* Settle handler ran in the await above; client path evicts immediately. */
                 expect(store.entries.size).toBe(0)
             })
@@ -102,13 +138,14 @@ describe('ttl=0 (dedupe only)', () => {
     test('the server coalesces a write for the whole request, but never snapshots it', async () => {
         writes = 0
         await inServerScope(async (store) => {
-            await cache(countedWrite, undefined, { ttl: 0 })
+            /* A write is coalesce-only by default (server ttl: 0), no policy needed. */
+            await cache(countedWrite)
             /*
             The request is the server's atomic unit: an identical call later in
             the same render coalesces deterministically, regardless of whether
             the first had already settled — one render, one effect.
             */
-            await cache(countedWrite, undefined, { ttl: 0 })
+            await cache(countedWrite)
             expect(writes).toBe(1)
             expect(store.entries.size).toBe(1)
             /* The kept entry serves the request only — a write never ships to the client. */
@@ -122,7 +159,7 @@ describe('ttl=0 (dedupe only)', () => {
         sharedCacheStoreSlot.resolver = () => sharedStore
         try {
             await inServerScope(async () => {
-                await cache(countedRemote, undefined, { ttl: 0, shared: true })
+                await cache(sharedCoalesceRemote)
             })
             expect(sharedStore.entries.size).toBe(0)
         } finally {
@@ -133,28 +170,25 @@ describe('ttl=0 (dedupe only)', () => {
 
 describe('ttl>0 (expire after resolve)', () => {
     test('a read inside the window shares the entry; expiry evicts it', async () => {
-        calls = 0
+        retainedCalls = 0
         const sharedStore = createCacheStore()
         sharedCacheStoreSlot.resolver = () => sharedStore
         try {
-            /* Shared store so the entry outlives the request scope, like a real memo. */
+            /* retainedRemote declares cache: { ttl: 20, shared: true } on its endpoint, so
+               the entry lands in the shared store and outlives the request scope. */
             await inServerScope(async () => {
-                await cache(countedRemote, undefined, { ttl: 20, shared: true })
+                await cache(retainedRemote)
             })
             await inServerScope(async () => {
-                expect(await cache(countedRemote, undefined, { ttl: 20, shared: true })).toEqual({
-                    hit: 1,
-                })
+                expect(await cache(retainedRemote)).toEqual({ hit: 1 })
             })
-            expect(calls).toBe(1)
+            expect(retainedCalls).toBe(1)
 
             /* Past expiry the entry is evicted and the next read re-runs the handler. */
             await Bun.sleep(35)
             expect(sharedStore.entries.size).toBe(0)
             await inServerScope(async () => {
-                expect(await cache(countedRemote, undefined, { ttl: 20, shared: true })).toEqual({
-                    hit: 2,
-                })
+                expect(await cache(retainedRemote)).toEqual({ hit: 2 })
             })
         } finally {
             sharedCacheStoreSlot.resolver = undefined
@@ -179,24 +213,25 @@ describe('rejection', () => {
         errorStatusCalls = 0
         await inServerScope(async (store) => {
             /* fetch resolves a 500 (only a network fault rejects), so decodeResponse throws. */
-            await expect(cache(errorStatusRemote, undefined, { ttl: 60000 })).rejects.toThrow()
+            await expect(cache(errorStatusRemote)).rejects.toThrow()
             await Bun.sleep(1) // let the settle handler's eviction run
             expect(store.entries.size).toBe(0)
             /* Within the ttl window, the next read retries rather than serving the cached 500. */
-            expect(await cache(errorStatusRemote, undefined, { ttl: 60000 })).toEqual({ hit: 2 })
+            expect(await cache(errorStatusRemote)).toEqual({ hit: 2 })
         })
     })
 })
 
 /*
 A hydrated snapshot entry ships without its wrap options, so the first read
-adopts its call site's ttl. On the SERVER an omitted ttl now defaults to 0
-(the coalesce-only retention model), so it behaves exactly like an explicit
-ttl: 0 — the hydration pass's readers still warm-hit, but the entry is
-evicted a macrotask later and the next render fetches live. ttl > 0 is the
-one way to retain past the pass: it starts the expiry clock at that read. On
-the CLIENT (window defined) an omitted ttl is unchanged — it still adopts the
-entry forever. The first reader's declaration wins.
+adopts its call site's ttl. These reads run OUTSIDE a request scope, so the
+store falls back to the process store — and an un-shared read there coalesces
+only (ttl 0, no request lifetime to bound it), so it behaves exactly like an
+explicit ttl: 0: the hydration pass's readers still warm-hit, but the entry is
+evicted a macrotask later and the next render fetches live. ttl > 0 is the one
+way to retain past the pass: it starts the expiry clock at that read. On the
+CLIENT (window defined) an omitted ttl is retained forever (the tab store is the
+atomic unit). The first reader's declaration wins.
 */
 describe('hydrated entries adopt the reading call site ttl', () => {
     function hydrate(store: CacheStore, remote: RawRemoteFunction<undefined>): string {
@@ -225,22 +260,23 @@ describe('hydrated entries adopt the reading call site ttl', () => {
         cacheStoreSlot.resolver = () => store
         const key = hydrate(store, countedRemote.raw)
 
-        /* Both same-pass readers warm-hit — eviction is deferred a macrotask. */
-        expect(await cache(countedRemote, undefined, { ttl: 0 })).toEqual({ hit: 0 })
-        expect(await cache(countedRemote, undefined, { ttl: 0 })).toEqual({ hit: 0 })
+        /* Both same-pass readers warm-hit — eviction is deferred a macrotask. The
+           process-store fallback's coalesce-only default (ttl: 0) drives the eviction. */
+        expect(await cache(countedRemote)).toEqual({ hit: 0 })
+        expect(await cache(countedRemote)).toEqual({ hit: 0 })
         await settle()
         expect(store.entries.has(key)).toBe(false)
     })
 
-    test('server: an omitted ttl now defaults to ttl: 0 — same-pass reads warm-hit, then it evicts', async () => {
+    test('server outside a request: an omitted ttl coalesces only (process-store fallback) — same-pass reads warm-hit, then it evicts', async () => {
         const store = createCacheStore()
         cacheStoreSlot.resolver = () => store
         const key = hydrate(store, countedRemote.raw)
 
-        /* First reader declares nothing — the server default (ttl: 0) applies. */
+        /* First reader declares nothing — the scopeless process-store fallback default (ttl: 0) applies. */
         expect(await cache(countedRemote)).toEqual({ hit: 0 })
-        /* A same-pass explicit ttl: 0 read still warm-hits off the same entry. */
-        expect(await cache(countedRemote, undefined, { ttl: 0 })).toEqual({ hit: 0 })
+        /* A same-pass re-read still warm-hits off the same entry. */
+        expect(await cache(countedRemote)).toEqual({ hit: 0 })
         await settle()
         expect(store.entries.has(key)).toBe(false)
     })
@@ -258,8 +294,8 @@ describe('hydrated entries adopt the reading call site ttl', () => {
             await settle()
             expect(store.entries.has(key)).toBe(true)
 
-            /* The losing later declaration neither evicts nor re-arms. */
-            expect(await cache(countedRemote, undefined, { ttl: 0 })).toEqual({ hit: 0 })
+            /* A later re-read of the same forever endpoint neither evicts nor re-arms. */
+            expect(await cache(countedRemote)).toEqual({ hit: 0 })
             await settle()
             expect(store.entries.has(key)).toBe(true)
         } finally {
@@ -274,9 +310,10 @@ describe('hydrated entries adopt the reading call site ttl', () => {
     test('ttl > 0 starts the expiry clock at the first read', async () => {
         const store = createCacheStore()
         cacheStoreSlot.resolver = () => store
-        const key = hydrate(store, countedRemote.raw)
+        /* ttlAdoptRemote declares cache: { ttl: 20 }; the hydrated entry adopts it. */
+        const key = hydrate(store, ttlAdoptRemote.raw)
 
-        expect(await cache(countedRemote, undefined, { ttl: 20 })).toEqual({ hit: 0 })
+        expect(await cache(ttlAdoptRemote)).toEqual({ hit: 0 })
         await settle()
         expect(store.entries.has(key)).toBe(true)
 

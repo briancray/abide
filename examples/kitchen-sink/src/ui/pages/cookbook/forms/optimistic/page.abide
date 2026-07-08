@@ -151,7 +151,7 @@ const cities = state.computed(() => country ? getCities({ country }) : [])`}
     gap={true}
     code={`// abide has no CSRF token — it uses an Origin gate instead
 // mutating rpcs 403 a cross-origin browser before the handler runs
-export const transfer = POST(handler, { inputSchema })  // gated by default`}
+export const transfer = POST(handler, { schemas: { input: inputSchema } })  // gated by default`}
     note={"There's no CSRF token to mint or attach. Mutating rpcs reject a cross-origin browser `Origin` automatically (opt out per-rpc with `crossOrigin: true`). If your threat model needs token-based CSRF on top, you'd wire it yourself in middleware."} />
 
 <Recipe

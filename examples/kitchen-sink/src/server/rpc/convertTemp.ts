@@ -40,5 +40,5 @@ const inputSchema = withJsonSchema(celsiusSchema, () => ({
 }))
 
 export const convertTemp = GET(({ celsius }) => json({ celsius, fahrenheit: celsius * 1.8 + 32 }), {
-    inputSchema,
+    schemas: { input: inputSchema },
 })

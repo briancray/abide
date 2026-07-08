@@ -12,7 +12,7 @@ const LIVE = '/outbox'
     a reload — and drains on reconnect.
 </p>
 
-<Recipe task="Make a write durable" live={LIVE} code={`export const saveMessage = POST(handler, { inputSchema, outbox: true })`} note={"`outbox: true` on a mutating rpc makes each call durable. It's a per-rpc declaration, not a wrapper at the call site — `GET(fn, { outbox })` is a compile error."} />
+<Recipe task="Make a write durable" live={LIVE} code={`export const saveMessage = POST(handler, { schemas: { input: inputSchema }, outbox: true })`} note={"`outbox: true` on a mutating rpc makes each call durable. It's a per-rpc declaration, not a wrapper at the call site — `GET(fn, { outbox })` is a compile error."} />
 
 <Recipe task="Enqueue a write" live={LIVE} code={`await saveMessage({ id, text })   // delivers now, or parks durably if unreachable`} note={"Call it like any rpc. If the server is reachable it delivers; if not, the call parks in the durable queue and drains later — the call site doesn't change."} />
 
@@ -68,7 +68,7 @@ outbox.retry()`}
     code={`export const saveMessage = POST(({ id, text }) => {
     saved.set(id, text)   // keyed by client id — a replay is a no-op
     return json({ id }, { status: 201 })
-}, { inputSchema, outbox: true })`}
+}, { schemas: { input: inputSchema }, outbox: true })`}
     note={'Delivery is at-least-once: a crash between send and dequeue replays the call. Key writes on a client-supplied id so a replay overwrites rather than duplicates.'} />
 
 <Recipe
@@ -98,6 +98,6 @@ await saveMessage({ id, text })   // parked writes are restored on next load`}
 <Recipe
     task="Choose when the queue is durable"
     live={LIVE}
-    code={`export const track = POST(handler, { inputSchema, outbox: true })   // durable
-export const ping = POST(handler, { inputSchema })                    // no queue — fails fast`}
+    code={`export const track = POST(handler, { schemas: { input: inputSchema }, outbox: true })   // durable
+export const ping = POST(handler, { schemas: { input: inputSchema } })                    // no queue — fails fast`}
     note={'Only opt writes into the outbox when replay-later is the right behaviour. A non-durable rpc simply rejects when unreachable — right for actions that are meaningless once stale.'} />

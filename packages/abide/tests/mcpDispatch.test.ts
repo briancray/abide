@@ -29,11 +29,13 @@ function findTool(tools: Tool[], name: string): Tool | undefined {
 describe('MCP dispatch happy path', () => {
     beforeAll(() => {
         defineRpc('GET', '/rpc/mcp-echo', ({ id }: { id: string }) => json({ id }), {
-            inputSchema: testSchema({ type: 'object', properties: { id: { type: 'string' } } }),
-            outputSchema: testSchema({ type: 'object', properties: { id: { type: 'string' } } }),
+            schemas: {
+                input: testSchema({ type: 'object', properties: { id: { type: 'string' } } }),
+                output: testSchema({ type: 'object', properties: { id: { type: 'string' } } }),
+            },
         })
         defineRpc('DELETE', '/rpc/mcp-remove', () => json({ ok: true }), {
-            inputSchema: testSchema(),
+            schemas: { input: testSchema() },
             clients: { mcp: true },
         })
     })

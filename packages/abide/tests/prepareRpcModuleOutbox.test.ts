@@ -18,7 +18,7 @@ describe('prepareRpcModule outbox detection', () => {
     })
 
     test('no outbox key → not durable', () => {
-        expect(durableFor('{ inputSchema }')).toBe(false)
+        expect(durableFor('{ schemas: { input } }')).toBe(false)
     })
 
     test('outbox: false → not durable', () => {
@@ -40,7 +40,7 @@ describe('prepareRpcModule outbox detection', () => {
     })
 
     test('an `outbox:` mention in the handler body does not misfire', () => {
-        const call = 'POST(async (a) => ({ outbox: a.flag }), { inputSchema })'
+        const call = 'POST(async (a) => ({ outbox: a.flag }), { schemas: { input } })'
         const prepared = prepareRpcModule(mod(call), '@abide/abide')
         expect(prepared?.durable).toBe(false)
     })

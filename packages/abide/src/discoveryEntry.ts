@@ -24,7 +24,7 @@ await Promise.all([
 const manifest: Record<string, CliManifestEntry> = {}
 
 for (const entry of rpcRegistry.values()) {
-    if (!entry.clients.cli) {
+    if (!entry.remote.clients.cli) {
         continue
     }
     manifest[commandNameForUrl(entry.remote.url)] = {

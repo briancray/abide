@@ -54,7 +54,7 @@ CMD ["server"]`}
     task="Scale within one process"
     live={LIVE}
     code={`// retained smart-call values, socket fan-out, subscriptions = process memory
-getRates({ base: 'USD' }, { ttl: 60_000 })`}
+getRates({ base: 'USD' })   // endpoint declares cache: { ttl: 60_000 }`}
     note={'abide is single-process: the retained cache, socket subscriptions, and fan-out live in process memory, not shared across instances. Scale vertically, or move shared state behind an rpc/store.'} />
 
 <Recipe

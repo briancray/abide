@@ -10,7 +10,11 @@ describe('defineRpc happy path', () => {
             'GET',
             '/rpc/get-user',
             ({ id }) => json({ id }),
-            { inputSchema: testSchema({ type: 'object', properties: { id: { type: 'string' } } }) },
+            {
+                schemas: {
+                    input: testSchema({ type: 'object', properties: { id: { type: 'string' } } }),
+                },
+            },
         )
         expect(getUser.method).toBe('GET')
         expect(getUser.clients).toEqual({ browser: true, mcp: true, cli: true })
@@ -20,17 +24,17 @@ describe('defineRpc happy path', () => {
         expect(response.status).toBe(200)
         expect(await response.json()).toEqual({ id: '42' })
 
-        expect(rpcRegistry.get('/rpc/get-user')?.clients.mcp).toBe(true)
+        expect(rpcRegistry.get('/rpc/get-user')?.remote.clients.mcp).toBe(true)
     })
 
     test('mutating rpcs are gated from mcp but stay on cli', () => {
         const create = defineRpc('POST', '/rpc/make-thing', () => json({ ok: true }), {
-            inputSchema: testSchema(),
+            schemas: { input: testSchema() },
         })
         expect(create.clients).toEqual({ browser: true, mcp: false, cli: true })
 
         const remove = defineRpc('DELETE', '/rpc/drop-thing', () => json({ ok: true }), {
-            inputSchema: testSchema(),
+            schemas: { input: testSchema() },
         })
         expect(remove.clients.mcp).toBe(false)
         expect(remove.clients.cli).toBe(true)
@@ -38,7 +42,7 @@ describe('defineRpc happy path', () => {
 
     test('explicit clients.mcp opts a mutation back in', () => {
         const create = defineRpc('POST', '/rpc/opt-in', () => json({ ok: true }), {
-            inputSchema: testSchema(),
+            schemas: { input: testSchema() },
             clients: { mcp: true },
         })
         expect(create.clients.mcp).toBe(true)
@@ -71,8 +75,7 @@ describe('defineRpc happy path', () => {
     test('output schema is recorded on the registry entry', () => {
         const outputSchema = testSchema({ type: 'object', properties: { id: { type: 'string' } } })
         defineRpc('GET', '/rpc/with-output', () => json({ id: '1' }), {
-            inputSchema: testSchema(),
-            outputSchema,
+            schemas: { input: testSchema(), output: outputSchema },
         })
         expect(rpcRegistry.get('/rpc/with-output')?.outputSchema).toBe(outputSchema)
     })

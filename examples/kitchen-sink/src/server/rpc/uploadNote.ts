@@ -23,5 +23,5 @@ export const uploadNote = POST(
             title,
             attachments: attachments.map((file) => ({ name: file.name, bytes: file.size })),
         }),
-    { inputSchema, filesSchema, maxBodySize: 5 * 1024 * 1024 },
+    { schemas: { input: inputSchema, files: filesSchema }, maxBodySize: 5 * 1024 * 1024 },
 )

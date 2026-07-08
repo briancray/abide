@@ -6,13 +6,14 @@ import { REMOTE_FUNCTION } from './REMOTE_FUNCTION.ts'
 import { recordRemoteMeta } from './recordRemoteMeta.ts'
 import { rpcErrorRegistry } from './rpcErrorRegistry.ts'
 import { subscribableFromResponse } from './subscribableFromResponse.ts'
-import type { CacheOptions } from './types/CacheOptions.ts'
+import type { CachePolicy } from './types/CachePolicy.ts'
 import type { ClientFlags } from './types/ClientFlags.ts'
 import type { HttpMethod } from './types/HttpMethod.ts'
 import type { NamedAsyncIterable } from './types/NamedAsyncIterable.ts'
 import type { RawRemoteFunction } from './types/RawRemoteFunction.ts'
 import type { RemoteFunction } from './types/RemoteFunction.ts'
 import type { RpcOptions } from './types/RpcOptions.ts'
+import type { StreamPolicy } from './types/StreamPolicy.ts'
 
 /*
 Assembles the public RemoteFunction shape used identically by the
@@ -54,6 +55,10 @@ export function createRemoteFunction<Args, Return>(opts: {
        directly (the iterable IS the value) rather than decoding one Response body. Emitted by
        the bundler's syntactic scan; false/undefined keeps the decode-a-Response path. */
     streaming?: boolean
+    /* Endpoint cache/stream policy (ADR-0020) — stamped onto both callable variants so
+       readThrough reads it as the bottom policy layer. Declared once on the rpc definition. */
+    cache?: CachePolicy<Args>
+    stream?: StreamPolicy
 }): RemoteFunction<Args, Return> {
     const {
         method,
@@ -64,6 +69,8 @@ export function createRemoteFunction<Args, Return>(opts: {
         invoke,
         parseArgsForFetch,
         streaming,
+        cache: cachePolicy,
+        stream: streamPolicy,
     } = opts
 
     /*
@@ -102,20 +109,21 @@ export function createRemoteFunction<Args, Return>(opts: {
     }
     rawCall.method = method
     rawCall.url = url
+    /* Endpoint policy on both variants so readThrough can read it off whichever the caller
+       passed (`fn` for the decoded read, `fn.raw` for the raw escape hatch). */
+    rawCall.cache = cachePolicy
+    rawCall.stream = streamPolicy
     /* Non-enumerable brand on both variants; see REMOTE_FUNCTION. */
     Object.defineProperty(rawCall, REMOTE_FUNCTION, { value: true })
     const raw = rawCall as RawRemoteFunction<Args>
 
-    function callable(
-        args: Args | FormData,
-        opts?: RpcOptions,
-    ): Promise<Return> | NamedAsyncIterable<Return> {
+    function callable(args: Args | FormData): Promise<Return> | NamedAsyncIterable<Return> {
         /* A streaming rpc (jsonl/sse) returns the NamedAsyncIterable directly — the iterable IS the
            value (for await / state(fn(args))). Deferred fetch, keyForRemoteCall-keyed so tail()
            dedupes readers; no decode, so the error-capture path below doesn't apply. */
         if (streaming) {
             return subscribableFromResponse(keyForRemoteCall(method, url, args), () =>
-                raw(args as Args, opts),
+                raw(args as Args),
             )
         }
         /* The bare call IS the smart read: route through the cache store's smart-read
@@ -123,33 +131,33 @@ export function createRemoteFunction<Args, Return>(opts: {
            reactive, while a write is coalesce-only — the raw fetch moves to `.raw`.
            `cache.read(callable, …)` brand-reads `callable.raw` for the undecoded variant
            and decodes on the way out, so pass the callable (which carries `.raw`), not
-           `raw`. `opts` supplies cache options (ttl/tags/throttle/debounce); per-call
-           transport options live on `.raw` now. */
+           `raw`. There is no call-site options argument any more — all cache policy is read
+           from the endpoint (`callable.cache`); per-call transport options live on `.raw`. */
         const key = keyForRemoteCall(method, url, args)
-        return cache
-            .read(callable as RemoteFunction<Args, Return>, args as Args, opts as CacheOptions)
-            .then(
-                /* Capture the rejection into the rpc error registry (design Part 4) keyed by call
+        return cache.read(callable as RemoteFunction<Args, Return>, args as Args).then(
+            /* Capture the rejection into the rpc error registry (design Part 4) keyed by call
                identity, and clear it on success — the reactive `fn.error()` probe reads it. */
-                (value) => {
-                    rpcErrorRegistry.clear(key)
-                    return value as Return
-                },
-                (error: unknown) => {
-                    /* A parked durable write throws a `kind: 'queued'` sentinel — it's pending
+            (value) => {
+                rpcErrorRegistry.clear(key)
+                return value as Return
+            },
+            (error: unknown) => {
+                /* A parked durable write throws a `kind: 'queued'` sentinel — it's pending
                    retry, not a failure. Don't record it, so fn.error() stays undefined for a
                    merely-parked write (pending() already reflects it via the outbox). */
-                    if (!(error instanceof HttpError && error.kind === 'queued')) {
-                        rpcErrorRegistry.record(key, error)
-                    }
-                    throw error
-                },
-            )
+                if (!(error instanceof HttpError && error.kind === 'queued')) {
+                    rpcErrorRegistry.record(key, error)
+                }
+                throw error
+            },
+        )
     }
     callable.method = method
     callable.url = url
     callable.clients = clients
     callable.crossOrigin = crossOrigin
+    callable.cache = cachePolicy
+    callable.stream = streamPolicy
     callable.raw = raw
     /* Uniform runtime guard for every rpc — the per-rpc data typing lives entirely in the
        RpcErrorGuard<Errors> signature RemoteFunction projects onto it (Errors flows from the

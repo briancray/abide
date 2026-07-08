@@ -18,14 +18,14 @@ const LIVE = '/rpc/errors'
     code={`import { z } from 'zod'
 
 const inputSchema = z.object({ sku: z.string(), quantity: z.number().int().min(1) })
-export const checkout = POST(handler, { inputSchema })`}
+export const checkout = POST(handler, { schemas: { input: inputSchema } })`}
     note={'Any Standard Schema (zod, valibot, …) works. Invalid input is rejected with a 422 before the handler runs — the handler only ever sees valid, typed args.'} />
 
 <Recipe
     task="Infer arg and return types from the schema"
     live={LIVE}
     code={`const inputSchema = z.object({ celsius: z.coerce.number() })
-export const convert = GET(({ celsius }) => json({ f: celsius * 9 / 5 + 32 }), { inputSchema })`}
+export const convert = GET(({ celsius }) => json({ f: celsius * 9 / 5 + 32 }), { schemas: { input: inputSchema } })`}
     note={"With `inputSchema` set, the handler's args infer from it — no explicit generics. The return type flows from what `json()` carries."} />
 
 <Recipe
@@ -76,7 +76,7 @@ const inputSchema = withJsonSchema(schema, () => ({ type: 'object', properties: 
     note={"`err.data.fields` maps each failing field to its message, keyed by the schema's path — render it beside the input to build server-authoritative field errors."} />
 
 <Recipe task="Declare a typed error" live={LIVE} code={`const outOfStock = error.typed('outOfStock', 409, z.object({ sku: z.string(), available: z.number() }))
-export const checkout = POST(handler, { inputSchema })`} note={"`error.typed(name, status, schema?)` declares one reusable typed-error constructor at module scope. There's no `errors:` option — the rpc infers its error surface from whichever constructors the handler returns."} />
+export const checkout = POST(handler, { schemas: { input: inputSchema } })`} note={"`error.typed(name, status, schema?)` declares one reusable typed-error constructor at module scope. There's no `errors:` option — the rpc infers its error surface from whichever constructors the handler returns."} />
 
 <Recipe
     task="Return a typed domain error"
@@ -87,7 +87,7 @@ const outOfStock = error.typed('outOfStock', 409, z.object({ sku: z.string(), av
 export const checkout = POST(({ sku, quantity }) => {
     if (quantity > stock(sku)) return outOfStock({ sku, available: stock(sku) })
     return json({ ok: true })
-}, { inputSchema })`}
+}, { schemas: { input: inputSchema } })`}
     note={"Returning the constructor IS the error — it sends the declared status with the typed data payload. No `ctx` param, no `errors:` option; the constructors the handler returns ARE the rpc's error surface."} />
 
 <Recipe

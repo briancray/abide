@@ -126,7 +126,7 @@ async function submit(event: SubmitEvent) {
     <CodeBlock
         title="this page — RPC-native durable queue, optimistic UI, reconcile"
         code={`// src/server/rpc/saveMessage.ts
-export const saveMessage = POST(handler, { inputSchema, outbox: true })
+export const saveMessage = POST(handler, { schemas: { input: inputSchema }, outbox: true })
 
 // the page — one call form; it queues and returns the cancelable entry
 saveMessage({ id, text })                    // durable, drains when online

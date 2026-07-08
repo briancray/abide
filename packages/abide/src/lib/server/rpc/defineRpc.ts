@@ -4,10 +4,12 @@ import { createRemoteFunction } from '../../shared/createRemoteFunction.ts'
 import { forwardHeaders } from '../../shared/forwardHeaders.ts'
 import { isReadOnlyMethod } from '../../shared/isReadOnlyMethod.ts'
 import { resolveClientFlags } from '../../shared/resolveClientFlags.ts'
+import type { CachePolicy } from '../../shared/types/CachePolicy.ts'
 import type { ClientFlags } from '../../shared/types/ClientFlags.ts'
 import type { HttpMethod } from '../../shared/types/HttpMethod.ts'
 import type { RemoteFunction } from '../../shared/types/RemoteFunction.ts'
 import type { StandardSchemaV1 } from '../../shared/types/StandardSchemaV1.ts'
+import type { StreamPolicy } from '../../shared/types/StreamPolicy.ts'
 import { requestContext } from '../runtime/requestContext.ts'
 import { parseArgs } from './parseArgs.ts'
 import { registerRpc } from './registerRpc.ts'
@@ -50,9 +52,13 @@ export function defineRpc<Args, Return>(
     url: string,
     handler: RemoteHandler<Args, Return>,
     opts?: {
-        inputSchema?: StandardSchemaV1
-        outputSchema?: StandardSchemaV1
-        filesSchema?: StandardSchemaV1
+        /* Namespaced schemas (ADR-0020): `input` types + validates args, `output` is the
+           success-body schema (OpenAPI/MCP), `files` validates multipart File parts. */
+        schemas?: {
+            input?: StandardSchemaV1
+            output?: StandardSchemaV1
+            files?: StandardSchemaV1
+        }
         clients?: Partial<ClientFlags>
         crossOrigin?: boolean
         /* Per-rpc cap on actual received body bytes (413 past it); omitted = Bun's server-wide maxRequestBodySize. */
@@ -68,6 +74,10 @@ export function defineRpc<Args, Return>(
            isomorphic `for await (… of fn(args))` in server code). Bundler-stamped; the router's
            wire path (.fetch) is unaffected. */
         streaming?: boolean
+        /* Endpoint cache policy (ADR-0020) — read helpers only; readThrough's bottom layer. */
+        cache?: CachePolicy<Args>
+        /* Endpoint stream policy (ADR-0020) — streaming read helpers only; replay depth `n`. */
+        stream?: StreamPolicy
     },
 ): RemoteFunction<Args, Return> {
     /* `outbox: true` is a mutation contract — a read RPC has nothing to durably deliver,
@@ -79,9 +89,9 @@ export function defineRpc<Args, Return>(
         )
     }
     const timeout = opts?.timeout
-    const inputSchema = opts?.inputSchema
-    const outputSchema = opts?.outputSchema
-    const filesSchema = opts?.filesSchema
+    const inputSchema = opts?.schemas?.input
+    const outputSchema = opts?.schemas?.output
+    const filesSchema = opts?.schemas?.files
     /*
     An input schema makes the handler safe to advertise to non-browser
     surfaces. CLI flips on for any rpc with one (a human/script invokes it
@@ -189,6 +199,8 @@ export function defineRpc<Args, Return>(
         clients,
         streaming: opts?.streaming ?? false,
         crossOrigin: opts?.crossOrigin,
+        cache: opts?.cache,
+        stream: opts?.stream,
         buildRequest,
         invoke,
         parseArgsForFetch: async (request) => {
@@ -227,10 +239,8 @@ export function defineRpc<Args, Return>(
         inputSchema,
         outputSchema,
         filesSchema,
-        clients,
         timeout,
         maxBodySize: opts?.maxBodySize,
-        crossOrigin: opts?.crossOrigin,
     })
     return remote
 }

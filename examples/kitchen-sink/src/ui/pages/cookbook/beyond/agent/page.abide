@@ -18,7 +18,7 @@ const LIVE = '/agent'
     code={`import { agent } from '@abide/abide/server/agent'
 import { jsonl } from '@abide/abide/server/jsonl'
 
-export const chat = POST(({ messages }) => jsonl(agent(engine, messages)), { inputSchema })`}
+export const chat = POST(({ messages }) => jsonl(agent(engine, messages)), { schemas: { input: inputSchema } })`}
     note={"`agent(engine, messages)` returns the engine's `AgentFrame` stream; the mcp-exposed rpcs become the model's tools. Frame it with `jsonl()` (or `sse()`) so the browser reads it like any streaming rpc."} />
 
 <Recipe task="Pick a model engine" live={LIVE} code={`import { engine } from '@abide/claude-code'   // or '@abide/anthropic'
@@ -64,7 +64,7 @@ await chat.raw({ messages: history })   // post the whole transcript`}
 <Recipe
     task="Keep the agent rpc off its own tool surface"
     live={LIVE}
-    code={`export const chat = POST(handler, { inputSchema, clients: { cli: false } })
+    code={`export const chat = POST(handler, { schemas: { input: inputSchema }, clients: { cli: false } })
 // no clients.mcp → the agent rpc is never itself a tool`}
     note={"A mutating POST stays off MCP unless it opts in — leave `clients.mcp` off so the agent can't be handed a tool that re-enters the agent."} />
 
@@ -79,5 +79,5 @@ permissions: { defaultMode: 'dontAsk', allow: ['mcp__app__getRates'] }`}
     task="Serve the agent over SSE instead of JSONL"
     live={LIVE}
     code={`import { sse } from '@abide/abide/server/sse'
-export const chat = POST(({ messages }) => sse(agent(engine, messages)), { inputSchema })`}
+export const chat = POST(({ messages }) => sse(agent(engine, messages)), { schemas: { input: inputSchema } })`}
     note={'Swap `jsonl()` for `sse()` and consume with `EventSource` — the handler picks the transport; the `AgentFrame` stream is the same either way.'} />

@@ -70,7 +70,7 @@ const roomMessages = state.computed(() => recent.filter((m) => m.room === roomId
 
 <Recipe task="Gate a socket by auth" live="/security" code={`// browsers can't publish (clientPublish false) — the publish rpc authorises
 export const feed = socket({ schema })
-export const publishFeed = POST(handler, { inputSchema })  // check identity here`} note={"Authorise writes in the publish rpc (the default read-only socket keeps browsers from publishing). Reads over the multiplexed socket carry the connection's auth; enforce there for read gating."} />
+export const publishFeed = POST(handler, { schemas: { input: inputSchema } })  // check identity here`} note={"Authorise writes in the publish rpc (the default read-only socket keeps browsers from publishing). Reads over the multiplexed socket carry the connection's auth; enforce there for read gating."} />
 
 <Recipe task="Rate-limit publishes" gap={true} code={`// no built-in publish throttle — gate in the rpc
 let last = 0

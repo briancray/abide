@@ -83,6 +83,6 @@ being handed a tool that re-enters the agent. `clients.cli` is off too: a
 messages-array turn isn't a meaningful CLI subcommand. Browser-only.
 */
 export const chat = POST(({ messages }) => jsonl(agent(chatEngine, messages)), {
-    inputSchema,
+    schemas: { input: inputSchema },
     clients: { cli: false },
 })

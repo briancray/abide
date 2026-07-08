@@ -12,5 +12,5 @@ schema and zod stay server-side — the bundler swaps this module for a
 remote proxy in the browser bundle.
 */
 export const getEcho = GET(({ message }) => json({ method: 'GET' as const, message }), {
-    inputSchema,
+    schemas: { input: inputSchema },
 })

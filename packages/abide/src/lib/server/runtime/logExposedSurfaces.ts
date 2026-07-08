@@ -134,9 +134,9 @@ export async function logExposedSurfaces(routing: { pages: Pages }): Promise<voi
     const rpcRows = Array.from(rpcRegistry.values(), (entry) => [
         withMethod(entry.remote.method, entry.remote.url),
         schemaCell(Boolean(entry.inputSchema)),
-        flag(entry.clients.browser),
-        flag(entry.clients.mcp),
-        flag(entry.clients.cli),
+        flag(entry.remote.clients.browser),
+        flag(entry.remote.clients.mcp),
+        flag(entry.remote.clients.cli),
     ]).sort()
 
     logTables([

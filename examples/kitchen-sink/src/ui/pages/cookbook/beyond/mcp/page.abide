@@ -16,14 +16,14 @@ const LIVE = '/mcp'
 <Recipe
     task="Expose a read rpc as a tool"
     live={LIVE}
-    code={`export const getProduct = GET(handler, { inputSchema })
+    code={`export const getProduct = GET(handler, { schemas: { input: inputSchema } })
 // GET/HEAD with a schema auto-expose to MCP`}
     note={"A schema-bearing GET/HEAD becomes an MCP tool automatically. The schema is the tool's input contract — one declaration drives the tool, the OpenAPI op, and the CLI flags."} />
 
 <Recipe
     task="Expose a mutating rpc as a tool"
     live={LIVE}
-    code={`export const createEcho = POST(handler, { inputSchema, clients: { mcp: true } })`}
+    code={`export const createEcho = POST(handler, { schemas: { input: inputSchema }, clients: { mcp: true } })`}
     note={"Mutating verbs stay off MCP by default (a model shouldn't write without intent). Opt in explicitly with `clients: { mcp: true }`."} />
 
 <Recipe
@@ -70,5 +70,5 @@ export const handle = async (request, next) => {
 <Recipe
     task="Keep an rpc off the MCP surface"
     live={LIVE}
-    code={`export const chat = POST(handler, { inputSchema })   // no clients.mcp → not a tool`}
+    code={`export const chat = POST(handler, { schemas: { input: inputSchema } })   // no clients.mcp → not a tool`}
     note={"Omit `clients.mcp` (the default for mutating verbs) to keep an rpc off MCP — e.g. the agent rpc itself, so the model can't re-enter the agent."} />

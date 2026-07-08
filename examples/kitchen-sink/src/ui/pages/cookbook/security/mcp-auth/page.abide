@@ -44,7 +44,7 @@ export const handle = async (request, next) => {
     if (!user) throw new HttpError(401, 'sign in')
     feed.broadcast({ text, by: user.id })
     return json({ ok: true })
-}, { inputSchema })`} note={"Put the authorization in the publish rpc. It runs server-side under the origin gate, so it's the right place to check identity before fanning a frame out."} />
+}, { schemas: { input: inputSchema } })`} note={"Put the authorization in the publish rpc. It runs server-side under the origin gate, so it's the right place to check identity before fanning a frame out."} />
 
 <Recipe
     task="Validate every publish against the schema"
@@ -68,7 +68,7 @@ export const getSecret2 = GET(handler, { clients: { mcp: false } })  // hidden`}
 <Recipe
     task="Keep the agent rpc off its own surface"
     live="/agent"
-    code={`export const chat = POST(agentHandler, { inputSchema })   // no clients.mcp`}
+    code={`export const chat = POST(agentHandler, { schemas: { input: inputSchema } })   // no clients.mcp`}
     note={'Never expose the agent rpc as an MCP tool — a model handed a tool that re-enters the agent can loop. Leaving `clients.mcp` off (the mutating default) prevents it.'} />
 
 <Recipe

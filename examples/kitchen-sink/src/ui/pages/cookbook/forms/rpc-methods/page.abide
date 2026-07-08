@@ -24,15 +24,15 @@ export const getProduct = GET(({ id }: { id: string }) => json(lookup(id)))`} no
 
 <Recipe task="Define a create" live={LIVE} code={`import { POST } from '@abide/abide/server/POST'
 
-export const createEcho = POST(({ message }) => json({ message }, { status: 201 }), { inputSchema })`} note={'`POST` args arrive in the JSON request body. Return `json(body, { status: 201 })` to signal creation.'} />
+export const createEcho = POST(({ message }) => json({ message }, { status: 201 }), { schemas: { input: inputSchema } })`} note={'`POST` args arrive in the JSON request body. Return `json(body, { status: 201 })` to signal creation.'} />
 
 <Recipe task="Define a replace" live={LIVE} code={`import { PUT } from '@abide/abide/server/PUT'
 
-export const replaceEcho = PUT(({ id, message }) => json(save(id, message)), { inputSchema })`} note={'`PUT` replaces a resource wholesale — idempotent by intent. Mutating verbs are origin-gated against cross-site browsers by default.'} />
+export const replaceEcho = PUT(({ id, message }) => json(save(id, message)), { schemas: { input: inputSchema } })`} note={'`PUT` replaces a resource wholesale — idempotent by intent. Mutating verbs are origin-gated against cross-site browsers by default.'} />
 
 <Recipe task="Define a partial update" live={LIVE} code={`import { PATCH } from '@abide/abide/server/PATCH'
 
-export const patchEcho = PATCH(({ id, ...fields }) => json(update(id, fields)), { inputSchema })`} note={'`PATCH` merges a subset of fields. Same mutating-verb protections as PUT/POST/DELETE.'} />
+export const patchEcho = PATCH(({ id, ...fields }) => json(update(id, fields)), { schemas: { input: inputSchema } })`} note={'`PATCH` merges a subset of fields. Same mutating-verb protections as PUT/POST/DELETE.'} />
 
 <Recipe task="Define a delete" live={LIVE} code={`import { DELETE } from '@abide/abide/server/DELETE'
 
@@ -115,4 +115,4 @@ message = ''`}
 console.log(response.status, response.headers.get('location'))`}
     note={'`.raw(args)` returns the `Response` instead of the decoded body — the escape hatch when you need the status line or headers, not just the payload.'} />
 
-<Recipe task="Expose a mutating rpc to MCP" live="/mcp" code={`export const createEcho = POST(handler, { inputSchema, clients: { mcp: true } })`} note={'GET/HEAD auto-expose to MCP; a mutating verb opts in with `clients: { mcp: true }` so a model can call it. An `inputSchema` also auto-exposes it to the CLI.'} />
+<Recipe task="Expose a mutating rpc to MCP" live="/mcp" code={`export const createEcho = POST(handler, { schemas: { input: inputSchema }, clients: { mcp: true } })`} note={'GET/HEAD auto-expose to MCP; a mutating verb opts in with `clients: { mcp: true }` so a model can call it. An `inputSchema` also auto-exposes it to the CLI.'} />

@@ -41,7 +41,7 @@ watch(() => localStorage.setItem('draft', draft))`}
 <Recipe
     task="Queue mutations while offline"
     live={OUTBOX}
-    code={`export const addTodo = POST(handler, { inputSchema, outbox: true })
+    code={`export const addTodo = POST(handler, { schemas: { input: inputSchema }, outbox: true })
 // calls made offline park durably and drain on reconnect`}
     note={'The outbox is the durable-write half of local-first. Declare `outbox: true` on the mutations that should survive going offline — see the outbox recipes.'} />
 

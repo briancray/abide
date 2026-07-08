@@ -28,7 +28,7 @@ export const chat = socket({ schema })`}
     const message = { id: crypto.randomUUID(), from, text, at: Date.now() }
     chat.broadcast(message)
     return json(message)
-}, { inputSchema })`} note={'Publishing flows through a server rpc that validates input, so every live reader — server `for await` or browser `watch(chat, …)` — receives the frame.'} />
+}, { schemas: { input: inputSchema } })`} note={'Publishing flows through a server rpc that validates input, so every live reader — server `for await` or browser `watch(chat, …)` — receives the frame.'} />
 
 <Recipe
     task="Retain recent frames for late joiners"

@@ -22,5 +22,5 @@ export const saveMessage = POST(
         saved.set(id, text)
         return json({ id, text, total: saved.size }, { status: 201 })
     },
-    { inputSchema, outbox: true },
+    { schemas: { input: inputSchema }, outbox: true },
 )

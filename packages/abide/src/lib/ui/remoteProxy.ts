@@ -6,10 +6,12 @@ import { HttpError } from '../shared/HttpError.ts'
 import { OFFLINE_HEADER } from '../shared/OFFLINE_HEADER.ts'
 import { rpcTimeoutSlot } from '../shared/rpcTimeoutSlot.ts'
 import { trace } from '../shared/trace.ts'
+import type { CachePolicy } from '../shared/types/CachePolicy.ts'
 import type { HttpMethod } from '../shared/types/HttpMethod.ts'
 import type { Outbox } from '../shared/types/Outbox.ts'
 import type { RemoteFunction } from '../shared/types/RemoteFunction.ts'
 import type { RpcOptions } from '../shared/types/RpcOptions.ts'
+import type { StreamPolicy } from '../shared/types/StreamPolicy.ts'
 import { UNREACHABLE_STATUSES } from '../shared/UNREACHABLE_STATUSES.ts'
 import { withBase } from '../shared/withBase.ts'
 import { createOutboxQueue, type OutboxQueue } from './rpcOutbox/createOutboxQueue.ts'
@@ -26,11 +28,15 @@ const QUEUED = 'queued'
 
 /* Build-time options the bundler stamps onto the client proxy stub. `outbox: true` parks an
    unreachable call for replay; `streaming: true` (handler returns jsonl()/sse()) makes the bare
-   call return the NamedAsyncIterable directly; `store` exists for testing (production uses the default
-   persistence store). */
-export type DurableOptions = {
+   call return the NamedAsyncIterable directly; `cache` / `stream` carry the endpoint's declared
+   cache/stream policy (ADR-0020) so the client honours the ttl (staleness/SWR), the refetch clock
+   (throttle/debounce), and tags — spliced verbatim from the rpc definition by the resolver plugin;
+   `store` exists for testing (production uses the default persistence store). */
+export type DurableOptions<Args = unknown> = {
     outbox?: boolean
     streaming?: boolean
+    cache?: CachePolicy<Args>
+    stream?: StreamPolicy
     store?: PersistenceStore
 }
 
@@ -60,17 +66,17 @@ the app owns when to replay. `rpc.outbox()` exposes the queue.
 export function remoteProxy<Args, Return>(
     method: HttpMethod,
     url: string,
-    durable: DurableOptions & { outbox: true },
+    durable: DurableOptions<Args> & { outbox: true },
 ): RemoteFunction<Args, Return, Record<never, never>, true>
 export function remoteProxy<Args, Return>(
     method: HttpMethod,
     url: string,
-    durable?: DurableOptions,
+    durable?: DurableOptions<Args>,
 ): RemoteFunction<Args, Return>
 export function remoteProxy<Args, Return>(
     method: HttpMethod,
     url: string,
-    durable?: DurableOptions,
+    durable?: DurableOptions<Args>,
 ): RemoteFunction<Args, Return, Record<never, never>, boolean> {
     /* Assigned after `createRemoteFunction` so the invoke closure (which runs later, per
        call) parks through the shared queue; undefined leaves the plain fetch path. */
@@ -80,6 +86,11 @@ export function remoteProxy<Args, Return>(
         url,
         clients: browserClientFlags,
         streaming: durable?.streaming ?? false,
+        /* Endpoint policy the resolver plugin spliced onto the stub — governs client cache
+           behaviour (ttl/staleness, refetch clock, tags). createRemoteFunction stamps it onto
+           `fn.cache` / `fn.stream` so readThrough reads it as the bottom policy layer. */
+        cache: durable?.cache,
+        stream: durable?.stream,
         /*
         The Request URL carries the mount base so the fetch routes through the
         proxy (/v2/rpc/…); the cache key keeps the bare `url` (keyForRemoteCall
@@ -211,7 +222,7 @@ function shouldParkRejection(error: unknown): boolean {
 function getOrCreateOutboxQueue<Args, Return>(
     url: string,
     rpc: RemoteFunction<Args, Return>,
-    durable: DurableOptions,
+    durable: DurableOptions<Args>,
 ): OutboxQueue<Args> {
     const existing = outboxRegistry.get(url)
     if (existing !== undefined) {

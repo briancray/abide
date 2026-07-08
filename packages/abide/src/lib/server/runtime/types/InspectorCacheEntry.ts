@@ -19,6 +19,6 @@ export type InspectorCacheEntry = {
     tags: string[]
     /* A short JSON preview of the decoded warm value, when the entry holds one. */
     value: string | undefined
-    /* An armed swr policy (`swr`, optionally + throttle/debounce + ms), if declared. */
+    /* An armed refetch policy (`refetch`, optionally + throttle/debounce + ms), if declared. */
     policy: string | undefined
 }

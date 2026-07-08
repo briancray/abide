@@ -18,20 +18,20 @@ function preview(value: unknown): string | undefined {
     }
 }
 
-/* The entry's armed swr policy as a label, if it declared one. A bare `swr: true`
-   has no window, so it labels as plain `swr`. */
+/* The entry's armed refetch (stale-while-revalidate) policy as a label, if it declared
+   one. A windowless policy refetches immediately, so it labels as plain `refetch`. */
 function policyLabel(entry: CacheEntry): string | undefined {
     const policy = entry.invalidation
     if (!policy) {
         return undefined
     }
     if (policy.debounce !== undefined) {
-        return `swr debounce ${policy.debounce}ms`
+        return `refetch debounce ${policy.debounce}ms`
     }
     if (policy.throttle !== undefined) {
-        return `swr throttle ${policy.throttle}ms`
+        return `refetch throttle ${policy.throttle}ms`
     }
-    return 'swr'
+    return 'refetch'
 }
 
 function projectEntry(entry: CacheEntry, now: number): InspectorCacheEntry {
@@ -48,10 +48,11 @@ function projectEntry(entry: CacheEntry, now: number): InspectorCacheEntry {
 }
 
 /*
-Snapshots the process-level cache store (the persistent one `cache(fn, { shared:
-true, ttl: Infinity })` writes to) for the inspector. Read at call time, so it
-reflects the store as it stands; request-scoped stores are deliberately
-excluded — they're ephemeral and already visible as per-request cache tallies.
+Snapshots the process-level cache store (the persistent one an endpoint declaring
+`cache: { shared: true, ttl }` — or a producer `cache(fn, args, { shared: true, ttl })`
+— writes to) for the inspector. Read at call time, so it reflects the store as it
+stands; request-scoped stores are deliberately excluded — they're ephemeral and
+already visible as per-request cache tallies.
 */
 export function buildCacheSnapshot(): InspectorCacheSnapshot {
     const now = Date.now()

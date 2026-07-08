@@ -33,5 +33,5 @@ export const publishChat = POST(
         chat.broadcast(message)
         return json(message)
     },
-    { inputSchema },
+    { schemas: { input: inputSchema } },
 )

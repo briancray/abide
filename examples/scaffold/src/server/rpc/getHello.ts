@@ -13,7 +13,7 @@ decoding) is inferred from the handler's return type via the
 plain `GET(() => json({...}))` already types end-to-end.
 
 For inbound validation pass a Standard Schema as `inputSchema` in the
-second argument: `GET(fn, { inputSchema })`. Args then infers from the
+second argument: `GET(fn, { schemas: { input: inputSchema } })`. Args then infers from the
 schema's output type and the server replies with 422 on validation
 failure. An optional `outputSchema` describes the success body for the
 OpenAPI 200 response and the MCP tool output.

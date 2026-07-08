@@ -220,7 +220,7 @@ export const checkout = POST(({ sku, quantity }) => {
     const available = stock[sku] ?? 0
     if (quantity > available) return outOfStock({ sku, available })
     return json({ ok: true, sku, quantity })
-}, { inputSchema })`} />
+}, { schemas: { input: inputSchema } })`} />
 
     <CodeBlock title="client — checkout.isError narrows kind + data" code={`try {
     await checkout({ sku: 'abide-mug', quantity: 3 })

@@ -61,9 +61,10 @@ refresh({ tags: ['orders'] })`}
 <Recipe
     task="Deduplicate a read used across components"
     live={LIVE}
-    code={`// unrelated components, one request per render
-const me = () => getCurrentUser(undefined, { tags: ['session'] })`}
-    note={'Export a shared wrapper around the bare smart call and use it wherever you need the value — coalescing collapses the concurrent reads into one, and the tag lets you refresh them all on sign-out.'} />
+    code={`// the endpoint declares the tag: GET(handler, { cache: { tags: ['session'] } })
+// unrelated components, one request per render
+const me = () => getCurrentUser()`}
+    note={'Export a shared wrapper around the bare smart call and use it wherever you need the value — coalescing collapses the concurrent reads into one, and the endpoint tag lets you refresh them all on sign-out.'} />
 
 <Recipe
     task="Render a page shell before its data"
