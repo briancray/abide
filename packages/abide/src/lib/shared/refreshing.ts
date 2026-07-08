@@ -1,4 +1,6 @@
+import { isAsyncCell } from './isAsyncCell.ts'
 import { probeRegistries } from './probeRegistries.ts'
+import type { AsyncComputed } from './types/AsyncComputed.ts'
 import type { CacheEntry } from './types/CacheEntry.ts'
 import type { CacheSelector } from './types/CacheSelector.ts'
 import type { NamedAsyncIterable } from './types/NamedAsyncIterable.ts'
@@ -22,9 +24,13 @@ registry spans) live in probeRegistries.
 */
 // @documentation probes
 export function refreshing<Args, Return>(
-    arg?: CacheSelector<Args, Return> | NamedAsyncIterable<unknown>,
+    arg?: CacheSelector<Args, Return> | NamedAsyncIterable<unknown> | AsyncComputed<unknown>,
     args?: Args,
 ): boolean {
+    /* An async cell answers from its own facet (`refreshing(cell)` ≡ `cell.refreshing()`). */
+    if (isAsyncCell(arg)) {
+        return arg.refreshing()
+    }
     return probeRegistries(arg, args, 'refreshing', reloading, false)
 }
 

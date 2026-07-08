@@ -1,4 +1,6 @@
 import { cache } from './cache.ts'
+import { isAsyncCell } from './isAsyncCell.ts'
+import type { AsyncComputed } from './types/AsyncComputed.ts'
 import type { RemoteFunction } from './types/RemoteFunction.ts'
 import type { Socket } from './types/Socket.ts'
 
@@ -20,7 +22,13 @@ export function peek<Args, Return>(
     args?: Args,
 ): Return | undefined
 export function peek<T>(source: Socket<T>): T | undefined
+export function peek<T>(cell: AsyncComputed<T>): T | undefined
 export function peek(source: unknown, args?: unknown): unknown {
+    /* An async cell carries its own probe surface — route to its method (`peek(cell)` ≡
+       `cell.peek()`), the same instance/standalone equivalence as an rpc or socket. */
+    if (isAsyncCell(source)) {
+        return source.peek()
+    }
     /* A subscribable (socket/stream) carries its own latest-frame probe; an rpc does not
        have Symbol.asyncIterator, so this cleanly splits the two even though both expose a
        `.peek` method. */

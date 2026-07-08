@@ -1,4 +1,6 @@
 import { cache } from './cache.ts'
+import { isAsyncCell } from './isAsyncCell.ts'
+import type { AsyncComputed } from './types/AsyncComputed.ts'
 import type { CacheSelector } from './types/CacheSelector.ts'
 
 /*
@@ -17,6 +19,14 @@ Instance sugar `getFoo.refresh(args?)` ≡ `refresh(getFoo, args?)`. Reports, ne
 retains a spinner — pair with `refreshing()` to surface the in-flight reload.
 */
 // @documentation cache
-export function refresh<Args, Return>(arg?: CacheSelector<Args, Return>, args?: Args): void {
-    cache.refresh(arg, args)
+export function refresh<Args, Return>(
+    arg?: CacheSelector<Args, Return> | AsyncComputed<unknown>,
+    args?: Args,
+): void {
+    /* An async cell re-invokes its own seed (`refresh(cell)` ≡ `cell.refresh()`). */
+    if (isAsyncCell(arg)) {
+        arg.refresh()
+        return
+    }
+    cache.refresh(arg as CacheSelector<Args, Return>, args)
 }
