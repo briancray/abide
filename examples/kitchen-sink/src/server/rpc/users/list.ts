@@ -17,5 +17,5 @@ tool/subcommand (slashes become dashes). `limit` rides the query string as a
 string, hence z.coerce.
 */
 export const list = GET(({ limit }) => json(users.slice(0, limit ?? users.length)), {
-    inputSchema,
+    schemas: { input: inputSchema },
 })

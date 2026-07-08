@@ -16,7 +16,7 @@ import Recipe from '$ui/Recipe.abide'
 const filesSchema = z.object({ attachments: z.array(z.instanceof(File)).min(1) })
 
 export const uploadNote = POST(({ title, attachments }) => json({ count: attachments.length }),
-    { inputSchema, filesSchema })`} note={"Text fields and files validate separately — `filesSchema` keeps binaries out of `inputSchema` so its OpenAPI/MCP/CLI projection never has to model a blob. Either schema's issues come back as 422."} />
+    { schemas: { input: inputSchema, files: filesSchema } })`} note={"Text fields and files validate separately — `filesSchema` keeps binaries out of `inputSchema` so its OpenAPI/MCP/CLI projection never has to model a blob. Either schema's issues come back as 422."} />
 
 <Recipe task="Send a FormData from the client" code={`const form = new FormData()
 form.append('title', title)
@@ -27,12 +27,12 @@ await uploadNote(form)`} note={"A body rpc takes a `FormData` directly in place 
     avatar: z.array(z.instanceof(File)).length(1).refine((f) => f[0].type.startsWith('image/')),
 })`} note={"Constrain count with `.length`/`.min` and type with a `.refine` on the `File`'s `type`. Enforce it server-side — client `accept=` is only a hint."} />
 
-<Recipe task="Cap the upload size" code={`export const uploadNote = POST(handler, { inputSchema, filesSchema, maxBodySize: 5 * 1024 * 1024 })`} note={'`maxBodySize` caps received bytes before any parse — a 413 past it. Per-rpc and opt-in; without it the only ceiling is the server-wide `ABIDE_MAX_REQUEST_BODY_SIZE`.'} />
+<Recipe task="Cap the upload size" code={`export const uploadNote = POST(handler, { schemas: { input: inputSchema, files: filesSchema }, maxBodySize: 5 * 1024 * 1024 })`} note={'`maxBodySize` caps received bytes before any parse — a 413 past it. Per-rpc and opt-in; without it the only ceiling is the server-wide `ABIDE_MAX_REQUEST_BODY_SIZE`.'} />
 
 <Recipe task="Read an uploaded file's bytes" code={`export const upload = POST(async ({ attachments }) => {
     const bytes = await attachments[0].arrayBuffer()
     return json({ size: bytes.byteLength })
-}, { inputSchema, filesSchema })`} note={'Each part is a standard `File` — read `.name`, `.size`, `.type`, or `await file.arrayBuffer()` / `.stream()` for the contents.'} />
+}, { schemas: { input: inputSchema, files: filesSchema } })`} note={'Each part is a standard `File` — read `.name`, `.size`, `.type`, or `await file.arrayBuffer()` / `.stream()` for the contents.'} />
 
 <Recipe
     task="Store an upload to the data dir"

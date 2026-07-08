@@ -23,7 +23,7 @@ export function buildInspectorSurface(): InspectorSurface {
         files: entry.filesSchema !== undefined,
         timeout: entry.timeout,
         maxBodySize: entry.maxBodySize,
-        crossOrigin: entry.crossOrigin,
+        crossOrigin: entry.remote.crossOrigin,
     }))
     const sockets = Array.from(socketRegistry.values()).map((entry) => ({
         name: entry.socket.name,

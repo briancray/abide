@@ -28,5 +28,5 @@ export const getProduct = GET(
         }
         return json(product)
     },
-    { inputSchema, outputSchema },
+    { schemas: { input: inputSchema, output: outputSchema } },
 )

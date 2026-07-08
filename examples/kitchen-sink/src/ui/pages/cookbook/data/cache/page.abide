@@ -31,21 +31,29 @@ getUser()`}
 <Recipe
     task="Retain a result for a while"
     live={LIVE}
-    code={`getRates({ base: 'USD' }, { ttl: 60_000 })`}
-    note={'`ttl` (ms) marks the value stale after it resolves; the retained value stays visible and the next access revalidates in the background. Staleness, not eviction.'} />
+    code={`// policy lives on the endpoint (ADR-0020), not the call
+export const getRates = GET(handler, { cache: { ttl: 60_000 } })
+
+// consumers just read
+getRates({ base: 'USD' })`}
+    note={'`cache.ttl` (ms) marks the value stale after it resolves; the retained value stays visible and the next access revalidates in the background. Staleness, not eviction — and one policy per endpoint, so every caller agrees.'} />
 
 <Recipe
     task="Coalesce only, never retain (the mutation idiom)"
     live={LIVE}
-    code={`getCounter(undefined, { ttl: 0 })`}
-    note={'`ttl: 0` shares concurrent flights but keeps nothing — the right default for data you refresh yourself after every write.'} />
+    code={`// a write is coalesce-only by default — nothing to declare
+saveCounter({ n })
+
+// a read opts into the same via its endpoint
+export const getCounter = GET(handler, { cache: { ttl: 0 } })`}
+    note={'`ttl: 0` shares concurrent flights but keeps nothing. A mutation is coalesce-only by default; a read declares `cache: { ttl: 0 }` on its endpoint to match.'} />
 
 <Recipe
     task="Tag entries for grouped invalidation"
     live={LIVE}
-    code={`getOrder({ id }, { tags: ['orders'] })
-getOrderList(undefined, { tags: ['orders'] })`}
-    note={"A shared tag groups unrelated entries so one call can refresh them together — the whole 'orders' surface at once."} />
+    code={`export const getOrder = GET(handler, { cache: { tags: ['orders'] } })
+export const getOrderList = GET(handler, { cache: { tags: ['orders'] } })`}
+    note={"A shared tag groups unrelated entries so one call can refresh them together — the whole 'orders' surface at once. Tags are endpoint-declared; the arg-derived form `(args) => ['order:' + args.id]` groups by args."} />
 
 <Recipe
     task="Refresh a cached read after a write"
@@ -83,7 +91,7 @@ export const getRates = GET(async ({ base = 'USD' }) => {
     const res = await fetch(\`https://api.example/latest?from=\${base}\`)
     return json(await res.json())
 })
-// consumers smart-call it: getRates({ base: 'USD' }, { ttl: 60_000 })`}
+// consumers smart-call it: getRates({ base: 'USD' })   // ttl lives on the endpoint`}
     note={"There's no `cache()` around a plain producer any more — make the producer a GET rpc under `src/server/rpc/` and the bare call gives you coalesce + retention + reactivity."} />
 
 <Recipe

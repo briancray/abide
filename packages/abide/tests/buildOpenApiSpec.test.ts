@@ -15,24 +15,30 @@ describe('buildOpenApiSpec happy path', () => {
 
     beforeAll(() => {
         defineRpc('GET', '/rpc/oa-get', ({ id }: { id: string }) => json({ id }), {
-            inputSchema: testSchema({
-                type: 'object',
-                properties: { id: { type: 'string' } },
-                required: ['id'],
-            }),
-            outputSchema: testSchema({ type: 'object', properties: { id: { type: 'string' } } }),
+            schemas: {
+                input: testSchema({
+                    type: 'object',
+                    properties: { id: { type: 'string' } },
+                    required: ['id'],
+                }),
+                output: testSchema({ type: 'object', properties: { id: { type: 'string' } } }),
+            },
         })
         defineRpc('POST', '/rpc/oa-make', ({ name }: { name: string }) => json({ name }), {
-            inputSchema: testSchema({ type: 'object', properties: { name: { type: 'string' } } }),
+            schemas: {
+                input: testSchema({ type: 'object', properties: { name: { type: 'string' } } }),
+            },
         })
         // upload rpc → text fields plus generic binary parts
         defineRpc('POST', '/rpc/oa-upload', () => json({ ok: true }), {
-            inputSchema: testSchema({
-                type: 'object',
-                properties: { title: { type: 'string' } },
-                required: ['title'],
-            }),
-            filesSchema: testSchema(),
+            schemas: {
+                input: testSchema({
+                    type: 'object',
+                    properties: { title: { type: 'string' } },
+                    required: ['title'],
+                }),
+                files: testSchema(),
+            },
         })
         const spec = buildOpenApiSpec({ title: 'app', version: '1.0.0' })
         paths = spec.paths as Record<string, Record<string, Operation>>

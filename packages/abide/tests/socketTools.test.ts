@@ -157,10 +157,10 @@ describe('MCP tool exposure', () => {
         // (mutating rpcs default clients.mcp off).
         defineSocket<{ text: string }>('collide', { schema: testSchema(), tail: 5 })
         defineRpc('POST', '/collide-tail', () => json({ ok: true }), {
-            inputSchema: testSchema(),
+            schemas: { input: testSchema() },
         })
         defineRpc('POST', '/hidden-write', () => json({ ok: true }), {
-            inputSchema: testSchema(),
+            schemas: { input: testSchema() },
         })
     })
 

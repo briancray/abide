@@ -17,6 +17,10 @@ the scoped form each narrow which entries count toward "loading".
 describe('pending()', () => {
     const getPost = defineRpc('GET', '/rpc/pending-post', () => json({ ok: true }))
     const getUser = defineRpc('GET', '/rpc/pending-user', () => json({ ok: true }))
+    /* Endpoint-declared tags (ADR-0020) — a remote has no call-site tags option. */
+    const getFeed = defineRpc('GET', '/rpc/pending-feed', () => json({ ok: true }), {
+        cache: { tags: ['feed'] },
+    })
 
     beforeAll(() => {
         cacheStoreSlot.resolver = () => requestContext.getStore()?.cache
@@ -50,7 +54,7 @@ describe('pending()', () => {
 
     test('tags selector tracks only entries carrying the tag', async () => {
         await runWithRequestScope(new Request('https://test.local/'), options, async () => {
-            const post = cache(getPost, undefined, { tags: ['feed'] })
+            const post = cache(getFeed)
             expect(pending({ tags: ['feed'] })).toBe(true)
             expect(pending({ tags: ['profile'] })).toBe(false)
             await post

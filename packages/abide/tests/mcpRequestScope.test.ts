@@ -46,7 +46,7 @@ describe('MCP tool dispatch request scope', () => {
         let runs = 0
         const producer = defineRpc('GET', '/rpc/mcp-scope-inner', () => json({ runs: ++runs }))
         defineRpc('GET', '/rpc/mcp-scope-cached', async () => json(await cache(producer)), {
-            inputSchema: testSchema(),
+            schemas: { input: testSchema() },
         })
 
         const first = await callTool('mcp-scope-cached')
@@ -59,7 +59,7 @@ describe('MCP tool dispatch request scope', () => {
 
     test('request() resolves instead of throwing', async () => {
         defineRpc('GET', '/rpc/mcp-scope-host', () => json({ host: new URL(request().url).host }), {
-            inputSchema: testSchema(),
+            schemas: { input: testSchema() },
         })
 
         const envelope = await callTool('mcp-scope-host')
@@ -74,7 +74,7 @@ describe('MCP tool dispatch request scope', () => {
             () => {
                 throw new Error('kaboom')
             },
-            { inputSchema: testSchema() },
+            { schemas: { input: testSchema() } },
         )
 
         const envelope = await callTool('mcp-scope-boom')

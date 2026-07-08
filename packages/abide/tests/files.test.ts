@@ -61,7 +61,7 @@ describe('multipart uploads', () => {
                 seen = args
                 return json({ ok: true })
             },
-            { inputSchema: passthrough, filesSchema: requirePhotos },
+            { schemas: { input: passthrough, files: requirePhotos } },
         )
         const form = new FormData()
         form.set('title', 'Hi')
@@ -76,8 +76,7 @@ describe('multipart uploads', () => {
 
     test('a filesSchema violation is a 422, like a bad text field', async () => {
         const createPost = defineRpc('POST', '/rpc/createPostStrict', () => json({ ok: true }), {
-            inputSchema: passthrough,
-            filesSchema: requirePhotos,
+            schemas: { input: passthrough, files: requirePhotos },
         })
         const form = new FormData()
         form.set('title', 'Hi') // no photos
@@ -95,7 +94,7 @@ describe('multipart uploads', () => {
                 seen = args
                 return json({ ok: true })
             },
-            { inputSchema: passthrough, filesSchema: requirePhotos },
+            { schemas: { input: passthrough, files: requirePhotos } },
         )
         const form = new FormData()
         form.set('title', 'Hi')

@@ -36,7 +36,7 @@ const requireEmail: StandardSchemaV1 = {
 const invalidCoupon = error.typed('invalidCoupon', 400, passthrough)
 
 const buy = defineRpc('POST', '/rpc/buy', () => invalidCoupon({ code: 'EXPIRED' }), {
-    inputSchema: passthrough,
+    schemas: { input: passthrough },
 })
 
 function post(url: string, body: unknown): Request {
@@ -80,7 +80,7 @@ test('the client decode throws HttpError carrying .kind and .data', async () => 
 })
 
 const signup = defineRpc('POST', '/rpc/signup', (args) => Response.json(args), {
-    inputSchema: requireEmail,
+    schemas: { input: requireEmail },
 })
 
 test('validation 422 carries issues + a typed field-error map, decoding to kind "validation"', async () => {
@@ -222,7 +222,7 @@ const stockDataSchema = undefined as unknown as StandardSchemaV1<{ available: nu
 function _inferenceCheck(caught: unknown): number | undefined {
     const outOfStock = error.typed('outOfStock', 409, stockDataSchema)
     const sell = POST((_args: { available: number }) => outOfStock({ available: 0 }), {
-        inputSchema: stockDataSchema,
+        schemas: { input: stockDataSchema },
     })
     if (sell.isError(caught, 'outOfStock')) {
         return caught.data.available

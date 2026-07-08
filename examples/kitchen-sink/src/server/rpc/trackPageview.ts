@@ -21,5 +21,5 @@ export const trackPageview = POST(
         pageviews.set(pageUrl, count)
         return json({ pageUrl, count })
     },
-    { inputSchema, crossOrigin: true },
+    { schemas: { input: inputSchema }, crossOrigin: true },
 )

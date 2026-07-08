@@ -27,5 +27,5 @@ export const countLog = GET(
                 }
             })(),
         ),
-    { inputSchema },
+    { schemas: { input: inputSchema } },
 )

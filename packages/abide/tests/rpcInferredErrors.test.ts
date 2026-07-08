@@ -19,7 +19,7 @@ function _inferSingle(caught: unknown): number | undefined {
     const sell = POST(
         ({ available }: { available: number }) =>
             available > 0 ? json({ ok: true as const }) : outOfStock({ available: 0 }),
-        { inputSchema: stockSchema },
+        { schemas: { input: stockSchema } },
     )
     if (sell.isError(caught, 'outOfStock')) {
         return caught.data.available // typed number — inferred from the returned constructor
@@ -37,7 +37,7 @@ function _inferUnion(caught: unknown): string | number | undefined {
             if (args.available === 0) return badCoupon({ code: 'X' })
             return json({ ok: true as const })
         },
-        { inputSchema: stockSchema },
+        { schemas: { input: stockSchema } },
     )
     if (checkout.isError(caught, 'outOfStock')) return caught.data.available
     if (checkout.isError(caught, 'badCoupon')) return caught.data.code
@@ -50,7 +50,7 @@ function _inferNullary(caught: unknown): boolean {
     const ping = POST(
         ({ available }: { available: number }) =>
             available > 0 ? json({ ok: true }) : rateLimited(),
-        { inputSchema: stockSchema },
+        { schemas: { input: stockSchema } },
     )
     return ping.isError(caught, 'rateLimited')
 }
@@ -61,7 +61,7 @@ async function _returnUnpolluted(): Promise<boolean> {
     const sell = POST(
         ({ available }: { available: number }) =>
             available > 0 ? json({ ok: true as const }) : outOfStock({ available: 0 }),
-        { inputSchema: stockSchema },
+        { schemas: { input: stockSchema } },
     )
     const result = await sell({ available: 1 })
     return result.ok // result is { ok: true }, not widened by the error branch
@@ -72,7 +72,7 @@ async function _returnUnpolluted(): Promise<boolean> {
 function _dataIsConcrete(caught: unknown): void {
     const outOfStock = error.typed('outOfStock', 409, stockSchema)
     const sell = POST((_a: { available: number }) => outOfStock({ available: 0 }), {
-        inputSchema: stockSchema,
+        schemas: { input: stockSchema },
     })
     if (sell.isError(caught, 'outOfStock')) {
         // @ts-expect-error `.data.available` is number, not string

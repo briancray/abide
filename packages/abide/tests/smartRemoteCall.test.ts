@@ -20,19 +20,26 @@ function jsonResponse(value: unknown): Response {
 }
 
 /* A remote whose invoke count is controlled by the caller — shared across the
-   shared-store and outside-a-request describes below. */
-function countingRemote(url: string, onInvoke: () => number) {
+   shared-store and outside-a-request describes below. Endpoint cache policy
+   (ADR-0020) rides on the definition, not the call. */
+function countingRemote(
+    url: string,
+    onInvoke: () => number,
+    cache?: { ttl?: number; shared?: boolean; tags?: string[] },
+) {
     return createRemoteFunction<undefined, { n: number }>({
         method: 'GET',
         url,
         clients: BROWSER_ONLY,
         buildRequest: () => new Request(`http://x${url}`),
         invoke: async () => jsonResponse({ n: onInvoke() }),
+        cache,
     })
 }
 
-/* Type-level coverage (tsgo validates the body, never executed): the smart bare
-   call's second arg accepts `shared` alongside the retention/refetch options. */
+/* Type-level coverage (tsgo validates the body, never executed): the endpoint cache
+   policy accepts `shared` alongside the retention/refetch options, and the bare call
+   takes only args. */
 function assertSharedOptionTypechecks(): void {
     const getThing = createRemoteFunction<undefined, { id: string }>({
         method: 'GET',
@@ -40,8 +47,9 @@ function assertSharedOptionTypechecks(): void {
         clients: BROWSER_ONLY,
         buildRequest: () => new Request('http://x/rpc/getThing'),
         invoke: async () => jsonResponse({ id: '1' }),
+        cache: { shared: true, ttl: 20, tags: ['a'] },
     })
-    void getThing(undefined, { shared: true, ttl: 20, tags: ['a'] })
+    void getThing(undefined)
 }
 void assertSharedOptionTypechecks
 
@@ -62,16 +70,20 @@ describe('smart bare rpc call — shared store', () => {
 
     test('shared without ttl is coalesce-only on the server — a later request re-fetches', async () => {
         let invokes = 0
-        const getShared = countingRemote('/rpc/getShared', () => {
-            invokes += 1
-            return invokes
-        })
+        const getShared = countingRemote(
+            '/rpc/getShared',
+            () => {
+                invokes += 1
+                return invokes
+            },
+            { shared: true },
+        )
         await runWithRequestScope(new Request('http://x/'), { logRequests: false }, async () => {
-            await getShared(undefined, { shared: true })
+            await getShared(undefined)
             return new Response('ok')
         })
         await runWithRequestScope(new Request('http://x/'), { logRequests: false }, async () => {
-            await getShared(undefined, { shared: true })
+            await getShared(undefined)
             return new Response('ok')
         })
         expect(invokes).toBe(2)
@@ -81,16 +93,20 @@ describe('smart bare rpc call — shared store', () => {
 
     test('shared + ttl memoizes across requests', async () => {
         let invokes = 0
-        const getRates = countingRemote('/rpc/getRates', () => {
-            invokes += 1
-            return invokes
-        })
+        const getRates = countingRemote(
+            '/rpc/getRates',
+            () => {
+                invokes += 1
+                return invokes
+            },
+            { shared: true, ttl: 60_000 },
+        )
         for (let i = 0; i < 2; i += 1) {
             await runWithRequestScope(
                 new Request('http://x/'),
                 { logRequests: false },
                 async () => {
-                    await getRates(undefined, { shared: true, ttl: 60_000 })
+                    await getRates(undefined)
                     return new Response('ok')
                 },
             )
@@ -124,14 +140,14 @@ describe('smart bare rpc call — shared store', () => {
             warnings.push(message)
         }) as typeof abideLog.warn
         try {
-            const getWarn = countingRemote('/rpc/getWarn', () => 1)
-            const getFine = countingRemote('/rpc/getFine', () => 1)
+            const getWarn = countingRemote('/rpc/getWarn', () => 1, { ttl: 5000 })
+            const getFine = countingRemote('/rpc/getFine', () => 1, { shared: true, ttl: 5000 })
             await runWithRequestScope(
                 new Request('http://x/'),
                 { logRequests: false },
                 async () => {
-                    await getWarn(undefined, { ttl: 5000 })
-                    await getFine(undefined, { shared: true, ttl: 5000 })
+                    await getWarn(undefined)
+                    await getFine(undefined)
                     return new Response('ok')
                 },
             )
@@ -265,20 +281,22 @@ describe('smart bare rpc call — SWR retention', () => {
                 }
                 return jsonResponse({ n })
             },
+            /* ttl now rides the endpoint (ADR-0020): the staleness deadline is fixed here. */
+            cache: { ttl: 20 },
         })
-        expect(await getN(undefined, { ttl: 20 })).toEqual({ n: 1 })
+        expect(await getN(undefined)).toEqual({ n: 1 })
         /* Let the ttl deadline pass. Revalidation is access-triggered, so merely
            waiting fires nothing — an untouched entry never polls on its own. */
         await new Promise((resolve) => setTimeout(resolve, 40))
         expect(refreshing(getN)).toBe(false)
         /* The next read sees the stale deadline: it serves the stale value now and
            kicks a background revalidation (n === 2, parked) — never blanks. */
-        expect(await getN(undefined, { ttl: 20 })).toEqual({ n: 1 })
+        expect(await getN(undefined)).toEqual({ n: 1 })
         expect(refreshing(getN)).toBe(true)
         releaseSecond()
         await settle()
         expect(refreshing(getN)).toBe(false)
-        expect(await getN(undefined, { ttl: 20 })).toEqual({ n: 2 })
+        expect(await getN(undefined)).toEqual({ n: 2 })
     })
 })
 

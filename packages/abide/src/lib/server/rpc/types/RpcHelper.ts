@@ -1,7 +1,9 @@
+import type { CachePolicy } from '../../../shared/types/CachePolicy.ts'
 import type { ClientFlags } from '../../../shared/types/ClientFlags.ts'
 import type { ErrorSpec } from '../../../shared/types/ErrorSpec.ts'
 import type { RemoteFunction } from '../../../shared/types/RemoteFunction.ts'
 import type { StandardSchemaV1 } from '../../../shared/types/StandardSchemaV1.ts'
+import type { StreamPolicy } from '../../../shared/types/StreamPolicy.ts'
 import type { TypedError } from './TypedError.ts'
 import type { TypedResponse } from './TypedResponse.ts'
 
@@ -59,15 +61,29 @@ type RpcOf<F extends RpcFn, Durable extends boolean = false> = RemoteFunction<
 >
 
 /*
-Options every rpc overload accepts: the OpenAPI 200 `outputSchema`, the
-`clients` surface flags, the same-origin CSRF exemption (`crossOrigin`), the
-pre-parse body-byte ceiling (`maxBodySize`), and the per-surface handler
-`timeout` (ms). The schema-bearing overloads intersect this with their own
-`inputSchema`/`filesSchema` members. Mutating helpers widen it with `outbox`
-(see MutatingRpcOpts) — a read RPC never accepts it.
+The schema namespace (ADR-0020): `schemas: { input?, output?, files? }` replaces the
+flat `inputSchema`/`outputSchema`/`filesSchema`. `input` drives the handler's arg type,
+`output` is the success-body schema (OpenAPI 200 / MCP outputSchema — never drives arg
+inference), `files` validates multipart File parts. The schema-bearing helper overloads
+tighten specific members to required.
 */
-type RpcBaseOpts = {
-    outputSchema?: StandardSchemaV1
+type RpcSchemas = {
+    input?: StandardSchemaV1
+    output?: StandardSchemaV1
+    files?: StandardSchemaV1
+}
+
+/*
+Options every rpc overload accepts: the `schemas` namespace, the `clients` surface
+flags, the same-origin CSRF exemption (`crossOrigin`), the pre-parse body-byte ceiling
+(`maxBodySize`), and the per-surface handler `timeout` (ms). Read helpers add the
+endpoint `cache`/`stream` policy (ADR-0020); mutating helpers add `outbox` instead —
+the kind-scoping is what makes `POST(fn, { cache })` and `GET(fn, { outbox: true })`
+compile errors rather than silent no-ops. The single canonical source both `defineRpc`
+and `RpcRegistryEntry` project from.
+*/
+type RpcSharedOpts = {
+    schemas?: RpcSchemas
     clients?: Partial<ClientFlags>
     crossOrigin?: boolean
     maxBodySize?: number
@@ -75,12 +91,22 @@ type RpcBaseOpts = {
 }
 
 /*
-Mutating-helper options: the shared base plus durable delivery. `outbox` lives
-here, not on RpcBaseOpts, because a read RPC has nothing to durably deliver —
-so `GET(fn, { outbox: true })` is a compile error, not the runtime throw it used
-to be. Keeps the type surface honest with the defineRpc guard.
+Read-helper (GET/HEAD) options: the shared base plus the endpoint `cache` policy
+(`ttl`/`tags`/`throttle`/`debounce`/`shared`) and `stream` policy (`n`, replay depth).
+Generic over `Args` so `cache.tags`'s `(args) => string[]` form is typed against the
+rpc's own argument shape. No `outbox` — a read has nothing to durably deliver.
 */
-type MutatingRpcOpts = RpcBaseOpts & {
+type RpcReadOpts<Args> = RpcSharedOpts & {
+    cache?: CachePolicy<Args>
+    stream?: StreamPolicy
+}
+
+/*
+Mutating-helper (POST/PUT/PATCH/DELETE) options: the shared base plus durable delivery.
+No `cache`/`stream` — coalesce-only is the method default, and a write has no replayable
+value to retain or stream. `Args` is unused but kept parallel to RpcReadOpts.
+*/
+type RpcMutatingOpts<_Args> = RpcSharedOpts & {
     /* Durable delivery: on an unreachable server the call still throws, and the request is
        parked for replay. Drains on `rpc.outbox.retry()` — no auto-drain. The call shape is
        unchanged — `rpc.outbox` exposes the queue. */
@@ -88,50 +114,27 @@ type MutatingRpcOpts = RpcBaseOpts & {
 }
 
 /*
-Shared signature for every rpc helper (GET / POST / …). The handler's return
-type is inferred whole (`Awaited<ReturnType<F>>`), then split: `SuccessBody`
-becomes the caller's `Return`, `InferredErrors` becomes the rpc's `Errors`
-(driving `isError`). Typed errors are raised by returning an
-`error.typed(name, status, schema?)` constructor — there is no `errors:` opt.
-Four overloads by argument source:
+The read helpers (GET/HEAD). The handler's return type is inferred whole
+(`Awaited<ReturnType<F>>`), then split: `SuccessBody` becomes the caller's `Return`,
+`InferredErrors` becomes the rpc's `Errors` (driving `isError`). Typed errors are raised
+by returning an `error.typed(name, status, schema?)` constructor — there is no `errors:`
+opt. Four overloads by argument source (most-specific first):
 
-  - `Rpc(fn, { inputSchema, outputSchema?, clients? })` — `Args` infers
-    from `InferInput<InputSchema>`, the handler receives
-    `InferOutput<InputSchema>`. `outputSchema` is an optional Standard Schema
-    for the success body — it feeds the OpenAPI 200 response and the MCP tool
-    `outputSchema`. JSON Schema is projected from each schema's own
-    `toJSONSchema()` (wrap with withJsonSchema if the library lacks one).
-    `clients` controls which surfaces (browser / mcp / cli) expose this rpc.
-    `crossOrigin: true` exempts a mutating rpc from the router's same-origin
-    CSRF gate — by default a browser request whose Origin doesn't match the
-    app's own host is refused with 403 on every non-GET/HEAD rpc.
-    `maxBodySize` caps the body's actual received bytes (413 past it),
-    enforced before parsing; omitted, the only ceiling is Bun.serve's
-    server-wide maxRequestBodySize. `timeout` (ms) bounds the handler's
-    execution on every surface (SSR / MCP / CLI / network) — a 504 once
-    exceeded; on the network path it also aborts request().signal so a
-    handler's `fetch(ext, { signal: request().signal })` is cancelled, not
-    just abandoned.
-  - `Rpc(fn, { clients })` — schemaless but with explicit client
-    targeting (e.g. server-internal RPC with `clients: { browser: false }`).
-  - `Rpc(fn)` — bare handler, a single `F extends RpcFn` generic. Everything
-    is read off the handler: `Args` from its parameter (annotate it —
-    `POST((a: { id: string }) => …)` — or leave it nullary for `undefined`),
-    `Return` from the `TypedResponse<T>` brand on
-    `json`/`error`/`redirect`/`jsonl`/`sse`, `Errors` from any
-    `error.typed(...)` branches. You never pass `<Args, Return>` generics; a
-    stray one is a loud constraint error, not a silent `unknown` body.
+  - `GET(fn, { schemas: { input, files, output? }, cache?, … })` — multipart upload.
+    The handler receives the text fields (`InferOutput<input>`) intersected with the
+    validated File parts (`InferOutput<files>`); the call site sends a FormData. `files`
+    stays off the JSON-Schema projection (a File has no honest conversion) — only `input`
+    feeds MCP/CLI/OpenAPI. `Args` (the RemoteFunction's call type) is `InferInput<input>`.
+  - `GET(fn, { schemas: { input, output? }, cache?, … })` — `Args` = `InferInput<input>`,
+    the handler receives `InferOutput<input>`. `output` feeds the OpenAPI 200 / MCP tool
+    outputSchema and never drives arg inference.
+  - `GET(fn, opts)` — schemaless-with-opts (includes `schemas: { output }`-only): args
+    read off the handler `F`. `cache`/`clients`/`timeout`/… live here.
+  - `GET(fn)` — bare handler; everything reads off `F`: `Args` from its parameter, `Return`
+    from the `TypedResponse<T>` brand, `Errors` from any `error.typed(...)` branches. You
+    never pass `<Args, Return>` generics; a stray one is a loud constraint error.
 */
-type RpcHelperOf<Opts> = {
-    /*
-    `Rpc(fn, { inputSchema, filesSchema, … })` — multipart upload. The
-    handler receives the text fields (`InferOutput<InputSchema>`) intersected
-    with the validated File parts (`InferOutput<FilesSchema>`); both are merged
-    into one args bag. The call site sends a FormData (RemoteFunction's call
-    accepts it), since a File can't ride a JSON body. filesSchema stays off the
-    JSON-Schema projection — a File has no honest conversion (see
-    jsonSchemaForSchema) — so only inputSchema feeds MCP/CLI/OpenAPI.
-    */
+export type RpcHelper = {
     <
         R extends Response,
         InputSchema extends StandardSchemaV1 = StandardSchemaV1,
@@ -141,21 +144,19 @@ type RpcHelperOf<Opts> = {
             args: StandardSchemaV1.InferOutput<InputSchema> &
                 StandardSchemaV1.InferOutput<FilesSchema>,
         ) => R | Promise<R>,
-        opts: Opts & {
-            inputSchema: InputSchema
-            filesSchema: FilesSchema
+        opts: RpcReadOpts<StandardSchemaV1.InferInput<InputSchema>> & {
+            schemas: { input: InputSchema; files: FilesSchema; output?: StandardSchemaV1 }
         },
     ): RemoteFunction<StandardSchemaV1.InferInput<InputSchema>, SuccessBody<R>, InferredErrors<R>>
     <R extends Response, InputSchema extends StandardSchemaV1 = StandardSchemaV1>(
         fn: (args: StandardSchemaV1.InferOutput<InputSchema>) => R | Promise<R>,
-        opts: Opts & { inputSchema: InputSchema },
+        opts: RpcReadOpts<StandardSchemaV1.InferInput<InputSchema>> & {
+            schemas: { input: InputSchema; output?: StandardSchemaV1 }
+        },
     ): RemoteFunction<StandardSchemaV1.InferInput<InputSchema>, SuccessBody<R>, InferredErrors<R>>
-    <F extends RpcFn>(fn: F, opts: Opts): RpcOf<F>
+    <F extends RpcFn>(fn: F, opts: RpcReadOpts<RpcArgs<F>>): RpcOf<F>
     <F extends RpcFn>(fn: F): RpcOf<F>
 }
-
-/* The read helpers (GET/HEAD): no `outbox` — a read has nothing to durably deliver. */
-export type RpcHelper = RpcHelperOf<RpcBaseOpts>
 
 /*
 Durable-call overloads: an `outbox: true` opt returns a RemoteFunction whose `Durable` bit
@@ -174,9 +175,8 @@ type DurableMutatingRpcHelper = {
             args: StandardSchemaV1.InferOutput<InputSchema> &
                 StandardSchemaV1.InferOutput<FilesSchema>,
         ) => R | Promise<R>,
-        opts: MutatingRpcOpts & {
-            inputSchema: InputSchema
-            filesSchema: FilesSchema
+        opts: RpcMutatingOpts<StandardSchemaV1.InferInput<InputSchema>> & {
+            schemas: { input: InputSchema; files: FilesSchema; output?: StandardSchemaV1 }
             outbox: true
         },
     ): RemoteFunction<
@@ -187,22 +187,50 @@ type DurableMutatingRpcHelper = {
     >
     <R extends Response, InputSchema extends StandardSchemaV1 = StandardSchemaV1>(
         fn: (args: StandardSchemaV1.InferOutput<InputSchema>) => R | Promise<R>,
-        opts: MutatingRpcOpts & { inputSchema: InputSchema; outbox: true },
+        opts: RpcMutatingOpts<StandardSchemaV1.InferInput<InputSchema>> & {
+            schemas: { input: InputSchema; output?: StandardSchemaV1 }
+            outbox: true
+        },
     ): RemoteFunction<
         StandardSchemaV1.InferInput<InputSchema>,
         SuccessBody<R>,
         InferredErrors<R>,
         true
     >
-    <F extends RpcFn>(fn: F, opts: MutatingRpcOpts & { outbox: true }): RpcOf<F, true>
+    <F extends RpcFn>(fn: F, opts: RpcMutatingOpts<RpcArgs<F>> & { outbox: true }): RpcOf<F, true>
 }
 
 /*
 The mutating helpers (POST/PUT/PATCH/DELETE). A durable (`outbox`) call is a normal
 RemoteFunction — it throws exactly like a non-durable one and only parks the request as a
 side-effect on an unreachable server — so there is no separate return shape; `outbox` rides
-MutatingRpcOpts and `rpc.outbox` exposes the queue. The distinct opts base is what makes
-`outbox` legal here and a compile error on the read helpers; the durable overloads then set
-the return type's `Durable` bit so `rpc.outbox` is present without an optional chain.
+RpcMutatingOpts and `rpc.outbox` exposes the queue. The distinct opts base is what makes
+`outbox` legal here and a compile error on the read helpers (and `cache`/`stream` a compile
+error here); the durable overloads then set the return type's `Durable` bit so `rpc.outbox`
+is present without an optional chain.
 */
-export type MutatingRpcHelper = DurableMutatingRpcHelper & RpcHelperOf<MutatingRpcOpts>
+type MutatingRpcHelperBase = {
+    <
+        R extends Response,
+        InputSchema extends StandardSchemaV1 = StandardSchemaV1,
+        FilesSchema extends StandardSchemaV1 = StandardSchemaV1,
+    >(
+        fn: (
+            args: StandardSchemaV1.InferOutput<InputSchema> &
+                StandardSchemaV1.InferOutput<FilesSchema>,
+        ) => R | Promise<R>,
+        opts: RpcMutatingOpts<StandardSchemaV1.InferInput<InputSchema>> & {
+            schemas: { input: InputSchema; files: FilesSchema; output?: StandardSchemaV1 }
+        },
+    ): RemoteFunction<StandardSchemaV1.InferInput<InputSchema>, SuccessBody<R>, InferredErrors<R>>
+    <R extends Response, InputSchema extends StandardSchemaV1 = StandardSchemaV1>(
+        fn: (args: StandardSchemaV1.InferOutput<InputSchema>) => R | Promise<R>,
+        opts: RpcMutatingOpts<StandardSchemaV1.InferInput<InputSchema>> & {
+            schemas: { input: InputSchema; output?: StandardSchemaV1 }
+        },
+    ): RemoteFunction<StandardSchemaV1.InferInput<InputSchema>, SuccessBody<R>, InferredErrors<R>>
+    <F extends RpcFn>(fn: F, opts: RpcMutatingOpts<RpcArgs<F>>): RpcOf<F>
+    <F extends RpcFn>(fn: F): RpcOf<F>
+}
+
+export type MutatingRpcHelper = DurableMutatingRpcHelper & MutatingRpcHelperBase

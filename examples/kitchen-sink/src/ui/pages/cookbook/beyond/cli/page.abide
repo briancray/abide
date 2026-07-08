@@ -22,7 +22,7 @@ const LIVE = '/cli'
 <Recipe
     task="Get a subcommand from an rpc"
     live={LIVE}
-    code={`export const getEcho = GET(handler, { inputSchema })
+    code={`export const getEcho = GET(handler, { schemas: { input: inputSchema } })
 // → \`cli getEcho --message=hello\``}
     note={'An `inputSchema` auto-exposes the rpc to the CLI — the subcommand is the rpc name, no separate command definition.'} />
 
@@ -66,7 +66,7 @@ const LIVE = '/cli'
 <Recipe
     task="Keep an rpc off the CLI"
     live={LIVE}
-    code={`export const chat = POST(handler, { inputSchema, clients: { cli: false } })`}
+    code={`export const chat = POST(handler, { schemas: { input: inputSchema }, clients: { cli: false } })`}
     note={"Opt an rpc out of the CLI with `clients: { cli: false }` — e.g. a messages-array agent turn that isn't a meaningful subcommand."} />
 
 <Recipe

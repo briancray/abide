@@ -37,7 +37,7 @@ RPCs enumerate first, so on a name collision the rpc tool wins.
 function mcpToolRefs(): McpToolRef[] {
     const refs: McpToolRef[] = []
     for (const entry of rpcRegistry.values()) {
-        if (!entry.clients.mcp) {
+        if (!entry.remote.clients.mcp) {
             continue
         }
         refs.push({ kind: 'rpc', name: commandNameForUrl(entry.remote.url), entry })

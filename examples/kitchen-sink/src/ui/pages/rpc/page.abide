@@ -63,21 +63,37 @@ const calls = [
             </thead>
             <tbody class="divide-y divide-slate-100">
                 <tr>
-                    <td class="px-4 py-2 font-mono">inputSchema</td>
+                    <td class="px-4 py-2 font-mono">schemas.input</td>
                     <td class="px-4 py-2 text-slate-600">
                         Standard Schema (zod, valibot, …) validating args; 422 on failure
                     </td>
                     <td class="px-4 py-2 text-slate-500">none</td>
                 </tr>
                 <tr>
-                    <td class="px-4 py-2 font-mono">outputSchema</td>
+                    <td class="px-4 py-2 font-mono">schemas.output</td>
                     <td class="px-4 py-2 text-slate-600">success body for OpenAPI / MCP output</td>
                     <td class="px-4 py-2 text-slate-500">none</td>
                 </tr>
                 <tr>
-                    <td class="px-4 py-2 font-mono">filesSchema</td>
+                    <td class="px-4 py-2 font-mono">schemas.files</td>
                     <td class="px-4 py-2 text-slate-600">
                         validates <code class="font-mono">File</code> parts of a multipart body
+                    </td>
+                    <td class="px-4 py-2 text-slate-500">none</td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">cache</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        endpoint cache policy on a read (GET/HEAD):
+                        <code class="font-mono">{'{ ttl, tags, throttle, debounce, shared }'}</code> — the smart
+                        call reads it, no call-site options
+                    </td>
+                    <td class="px-4 py-2 text-slate-600">method defaults</td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">stream</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        streaming read replay depth <code class="font-mono">{'{ n }'}</code>
                     </td>
                     <td class="px-4 py-2 text-slate-500">none</td>
                 </tr>
@@ -162,7 +178,7 @@ import { json } from '@abide/abide/server/json'
 import { z } from 'zod'
 const inputSchema = z.object({ message: z.string() })
 export const getEcho = GET(({ message }) =>
-    json({ method: 'GET' as const, message }), { inputSchema })
+    json({ method: 'GET' as const, message }), { schemas: { input: inputSchema } })
 
 // headEcho.ts — HEAD: response carries headers, no body
 export const headEcho = HEAD(() =>
@@ -246,5 +262,5 @@ const inputSchema = withJsonSchema(celsiusSchema, () => ({
     required: ['celsius'],
 }))
 export const convertTemp = GET(({ celsius }) =>
-    json({ celsius, fahrenheit: celsius * 1.8 + 32 }), { inputSchema })`} />
+    json({ celsius, fahrenheit: celsius * 1.8 + 32 }), { schemas: { input: inputSchema } })`} />
 </section>

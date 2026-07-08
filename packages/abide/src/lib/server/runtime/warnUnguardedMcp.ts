@@ -18,10 +18,19 @@ export async function warnUnguardedMcp(): Promise<void> {
     } catch {
         return
     }
-    const isMcpExposed = (entry: { clients: { mcp: boolean } }): boolean => entry.clients.mcp
-    const exposed = [...rpcRegistry.values(), ...socketRegistry.values()].filter(
-        isMcpExposed,
-    ).length
+    /* Rpc entries carry the resolved clients on `entry.remote` (ADR-0020); socket entries
+       keep their own `entry.clients`. Count each from its own home. */
+    let exposed = 0
+    for (const entry of rpcRegistry.values()) {
+        if (entry.remote.clients.mcp) {
+            exposed += 1
+        }
+    }
+    for (const entry of socketRegistry.values()) {
+        if (entry.clients.mcp) {
+            exposed += 1
+        }
+    }
     if (exposed === 0) {
         return
     }

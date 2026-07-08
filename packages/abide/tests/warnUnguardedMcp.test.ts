@@ -6,7 +6,9 @@ import { testSchema } from './standardSchema.ts'
 import { bootTestServer } from './support/bootTestServer.ts'
 
 /* A schema'd GET auto-exposes to MCP, so the boot below has ≥1 exposed tool. */
-defineRpc('GET', '/rpc/warn-probe', () => json({ ok: true }), { inputSchema: testSchema() })
+defineRpc('GET', '/rpc/warn-probe', () => json({ ok: true }), {
+    schemas: { input: testSchema() },
+})
 
 /*
 The unguarded-MCP boot warning: mounted MCP endpoint + exposed tools + no

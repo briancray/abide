@@ -39,5 +39,5 @@ export const checkout = POST(
         }
         return json({ ok: true as const, sku, quantity })
     },
-    { inputSchema },
+    { schemas: { input: inputSchema } },
 )

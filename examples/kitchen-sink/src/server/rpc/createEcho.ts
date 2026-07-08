@@ -12,5 +12,5 @@ letting a model create an echo through the MCP tool too.
 */
 export const createEcho = POST(
     ({ message }) => json({ method: 'POST' as const, message }, { status: 201 }),
-    { inputSchema, clients: { mcp: true } },
+    { schemas: { input: inputSchema }, clients: { mcp: true } },
 )

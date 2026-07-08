@@ -10,8 +10,9 @@ optional-arg signature lets call sites write `fn()` instead of
 stays callable while `Args` is still generic (cache() invokes producers
 before `Args` resolves). FormData is the multipart upload escape hatch —
 see RemoteFunction. The trailing `Opts` differs by variant: the smart bare
-call (RemoteFunction) carries cache/stream options (SmartReadOptions), while
-`.raw` (RawRemoteFunction) carries per-call transport options (RpcOptions:
+call (RemoteFunction) takes no second argument at all (`Opts = never` — all
+cache/stream policy lives on the rpc definition per ADR-0020), while `.raw`
+(RawRemoteFunction) carries per-call transport options (RpcOptions:
 signal/keepalive/priority/cache/headers). The server ignores either, so the
 callable stays isomorphic.
 

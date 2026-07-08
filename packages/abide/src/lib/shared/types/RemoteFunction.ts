@@ -1,3 +1,4 @@
+import type { CachePolicy } from './CachePolicy.ts'
 import type { ClientFlags } from './ClientFlags.ts'
 import type { ErrorSpec } from './ErrorSpec.ts'
 import type { HttpMethod } from './HttpMethod.ts'
@@ -6,7 +7,7 @@ import type { RawRemoteFunction } from './RawRemoteFunction.ts'
 import type { RemoteCallable } from './RemoteCallable.ts'
 import type { RpcError } from './RpcError.ts'
 import type { RpcErrorGuard } from './RpcErrorGuard.ts'
-import type { SmartReadOptions } from './SmartReadOptions.ts'
+import type { StreamPolicy } from './StreamPolicy.ts'
 
 /*
 Remote function reference produced by GET/POST/... inside an `$rpc/**`
@@ -45,11 +46,17 @@ export type RemoteFunction<
     Return,
     Errors extends ErrorSpec = Record<never, never>,
     Durable extends boolean = false,
-> = RemoteCallable<Args, Return, SmartReadOptions> & {
+> = RemoteCallable<Args, Return, never> & {
     readonly method: HttpMethod
     readonly url: string
     readonly clients: ClientFlags
     readonly crossOrigin?: boolean
+    /* Endpoint cache/stream policy declared on the rpc definition (ADR-0020), stamped
+       here so the smart read (readThrough) reads it as the bottom policy layer. Ships to
+       the client too — it governs client cache behaviour and is behaviour, not secrets
+       (`shared` is a client no-op). Absent on a plainly-defined rpc (method defaults only). */
+    readonly cache?: CachePolicy<Args>
+    readonly stream?: StreamPolicy
     readonly raw: RawRemoteFunction<Args>
     fetch(request: Request): Promise<Response>
     /* Type-guard a caught error against this rpc's declared `errors` (plus the framework
@@ -60,7 +67,8 @@ export type RemoteFunction<
     /* Pre-bound selector sugar: `fn.pending(args?)` ≡ `pending(fn, args?)`, and likewise for
        refreshing / refresh / peek — the rpc is the leading selector, bound in. The argument is
        this rpc's typed `Args` (the by-args refinement); tags / cross-cutting selection stay on
-       the globals. The bare call `fn(args, opts)` IS the cached read (was `fn.cache`), and
+       the globals. The bare call `fn(args)` IS the cached read (was `fn.cache`) — all cache
+       policy lives on the definition, so there is no second options argument, and
        `refresh(args?)` refetches keeping the stale value visible (was `invalidate`, which
        dropped). `peek(args?)` reads the retained value synchronously (a streaming rpc peeks its
        latest frame). `patch` is fetch-only, so it is omitted for a streaming rpc (a stream isn't

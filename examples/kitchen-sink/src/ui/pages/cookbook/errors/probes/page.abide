@@ -68,7 +68,7 @@ const dim = state.computed(() => getRates.refreshing())`}
     task="Disable a control while pending"
     live={LIVE}
     code={`<button disabled={submitOrder.pending()}>place order</button>`}
-    note={'Read the probe straight into `disabled`. Pair with the `fn(args, { ttl: 0 })` mutation idiom so the submit is coalesced and probe-visible.'} />
+    note={'Read the probe straight into `disabled`. A mutation is coalesce-only by default, so the submit is coalesced and probe-visible — no call options needed.'} />
 
 <Recipe
     task="Show a skeleton while pending"
@@ -91,8 +91,9 @@ const dim = state.computed(() => getRates.refreshing())`}
 <Recipe
     task="Coalesce background revalidations"
     live={LIVE}
-    code={`const rates = state.computed(() => getRates({ base: 'USD' }, { debounce: 300 }))`}
-    note={'SWR is always on for a replayable read, so the stale value stays on screen while `refreshing()` is true. A `debounce` (or `throttle`) window coalesces a burst of refreshes into one background revalidation.'} />
+    code={`// the endpoint sets the window: GET(handler, { cache: { debounce: 300 } })
+const rates = state.computed(() => getRates({ base: 'USD' }))`}
+    note={"SWR is always on for a replayable read, so the stale value stays on screen while `refreshing()` is true. The endpoint's `cache.debounce` (or `throttle`) window coalesces a burst of refreshes into one background revalidation."} />
 
 <Recipe
     task="Detect that the browser is offline"

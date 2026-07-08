@@ -11,8 +11,13 @@ import { track } from './support/reactiveScope.ts'
 import { settle } from './support/settle.ts'
 import { useBrowserWindow } from './support/useBrowserWindow.ts'
 
-/* A raw remote that records request meta so cache() accepts it as a remote. */
-function remote(method: HttpMethod, url: string): RawRemoteFunction<undefined> {
+/* A raw remote that records request meta so cache() accepts it as a remote. Endpoint
+   cache policy (ADR-0020) rides on the definition — no call-site options for a remote. */
+function remote(
+    method: HttpMethod,
+    url: string,
+    cachePolicy?: { ttl?: number },
+): RawRemoteFunction<undefined> {
     const fn = () => {
         const request = new Request(`https://test.local${url}`, { method })
         const promise = Promise.resolve(
@@ -23,7 +28,7 @@ function remote(method: HttpMethod, url: string): RawRemoteFunction<undefined> {
         remoteMetaStore.set(promise, () => request)
         return promise
     }
-    return Object.assign(fn, { method, url, [REMOTE_FUNCTION]: true })
+    return Object.assign(fn, { method, url, cache: cachePolicy, [REMOTE_FUNCTION]: true })
 }
 
 /*
@@ -55,8 +60,8 @@ describe('pendingRefresh garbage collection', () => {
     })
 
     test('a ttl-retained entry invalidated with no live reader leaves no marker', async () => {
-        const get = remote('GET', '/rpc/gc-no-reader')
-        const tracked = track(() => cache(get, undefined, { ttl: 60_000 }))
+        const get = remote('GET', '/rpc/gc-no-reader', { ttl: 60_000 })
+        const tracked = track(() => cache(get))
         await settle()
         /* Reader unmounts; the ttl keeps the entry but the subscriber is gone. */
         tracked.stop()

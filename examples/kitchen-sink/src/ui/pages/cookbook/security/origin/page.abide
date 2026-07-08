@@ -16,7 +16,7 @@ const LIVE = '/security'
     task="Get CSRF protection by default"
     live={LIVE}
     code={`// nothing to configure — POST/PUT/PATCH/DELETE are gated
-export const transfer = POST(handler, { inputSchema })`}
+export const transfer = POST(handler, { schemas: { input: inputSchema } })`}
     note={"Every mutating rpc rejects a cross-origin browser `Origin` with a 403 before the handler runs. There's no token to mint or verify — the gate is the default CSRF defence."} />
 
 <Recipe
@@ -29,7 +29,7 @@ await getProduct({ id })   // GET — never gated`}
 <Recipe
     task="Opt one rpc out of the gate"
     live={LIVE}
-    code={`export const trackPageview = POST(handler, { inputSchema, crossOrigin: true })`}
+    code={`export const trackPageview = POST(handler, { schemas: { input: inputSchema }, crossOrigin: true })`}
     note={'`crossOrigin: true` lets a mutating rpc accept cross-origin browsers — for a public analytics beacon or a webhook receiver that legitimately posts from elsewhere.'} />
 
 <Recipe

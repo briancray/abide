@@ -21,6 +21,7 @@ import { toTagSet } from './toTagSet.ts'
 import type { CacheEntry } from './types/CacheEntry.ts'
 import type { CacheOnContext } from './types/CacheOnContext.ts'
 import type { CacheOptions } from './types/CacheOptions.ts'
+import type { CachePolicy } from './types/CachePolicy.ts'
 import type { CacheSelector } from './types/CacheSelector.ts'
 import type { CacheStore } from './types/CacheStore.ts'
 import type { RawRemoteFunction } from './types/RawRemoteFunction.ts'
@@ -58,28 +59,31 @@ function recordRead(sink: CacheStore, key: string, existing: CacheEntry | undefi
 }
 
 /*
-Reads a call through a cache store. `cache(fn, args?, options?)` checks the store
-for a prior entry and returns a shared promise on hit, or invokes `fn` once and
-stores its promise on miss — a direct read-through call, not a curried invoker.
-Args lead (the common refinement); options trail in a fixed final position so
-they can't collide with arg shapes. ttl = 0 → dedupe only; ttl > 0 → entry
-expires `ttl` ms after the promise resolves. Omitted ttl → forever for a
-producer and for a remote call on the client; a remote call on the server with
-neither ttl nor swr stated defaults to 0 (coalesce-only, see CacheOptions).
+Reads a call through a cache store. `cache(fn, args?)` checks the store for a
+prior entry and returns a shared promise on hit, or invokes `fn` once and stores
+its promise on miss — a direct read-through call, not a curried invoker. Args
+lead (the common refinement).
 
-Coalescing is always on: identical in-flight calls share one flight, so
-`cache(createPost, args, { ttl: 0 })` is the mutation idiom — double-submit
-coalescing and pending() visibility with nothing retained beyond the store's
-atomic unit (the whole request on the server: one render, one effect; the
+A REMOTE rpc carries no call-site options (ADR-0020): its cache policy lives on
+the endpoint definition (`GET(fn, { cache: {...} })`) and readThrough reads it as
+the bottom layer. A plain PRODUCER has no endpoint, so it keeps a trailing
+`options?: CacheOptions` (ttl/tags/throttle/debounce/shared) — its only policy
+home. ttl = 0 → dedupe only; ttl > 0 → entry expires `ttl` ms after the promise
+resolves. Omitted ttl → forever for a producer; a remote call on the server with
+no endpoint ttl defaults to 0 (coalesce-only, see CacheOptions / CachePolicy).
+
+Coalescing is always on: identical in-flight calls share one flight — double-
+submit coalescing and pending() visibility with nothing retained beyond the
+store's atomic unit (the whole request on the server: one render, one effect; the
 in-flight window in the tab). Caching is the retention `ttl` adds on top.
 
 `fn` is either a remote function (a GET/POST/... helper) or a plain producer
 returning a Promise:
 
-  cache(getPost, { id })          // → Promise<Post>      (decoded body)
+  cache(getPost, { id })          // → Promise<Post>      (decoded body; policy on the endpoint)
   cache(getPost.raw, { id })      // → Promise<Response>  (raw escape hatch)
   cache(fetchRates)               // → Promise<Rates>     (plain producer, no args)
-  cache(createPost, body, { ttl: 0 })  // options trail; no-arg-with-options: cache(fn, undefined, opts)
+  cache(computeReport, input, { ttl: 60_000 })  // producer options trail
 
 Remote calls key on fn.method + fn.url + args and store the underlying Response
 (the decoded view is derived on the way out for the non-raw variant; both share
@@ -89,11 +93,12 @@ new reference every call and never does; a warning fires once per such call
 site), and the promise is stored and handed back as-is (no Response, no decode,
 no SSR snapshot).
 
-`options.shared` puts the entry in the process-level store instead of the
-request-scoped one, so a value computed in one request is reused by later
-requests — the memoise-an-external-endpoint case. Default (omitted) is
-request-scoped on the server, which keeps per-user data from leaking across
-requests; on the client there is one tab store either way, so it is a no-op.
+`options.shared` (producer) / `cache.shared` (endpoint) puts the entry in the
+process-level store instead of the request-scoped one, so a value computed in one
+request is reused by later requests — the memoise-an-external-endpoint case.
+Default (omitted) is request-scoped on the server, which keeps per-user data from
+leaking across requests; on the client there is one tab store either way, so it is
+a no-op.
 
 Reactivity is implicit: the read calls `store.subscribe(key)`, which registers
 the surrounding state.computed() / effect() scope. Invalidating the key then
@@ -132,16 +137,8 @@ export function cache<Args>(
     fn: RemoteFunction<Args, AsyncIterable<unknown>>,
     ...rest: never[]
 ): never
-export function cache<Args, Return>(
-    fn: RemoteFunction<Args, Return>,
-    args?: Args,
-    options?: CacheOptions,
-): Promise<Return>
-export function cache<Args>(
-    fn: RawRemoteFunction<Args>,
-    args?: Args,
-    options?: CacheOptions,
-): Promise<Response>
+export function cache<Args, Return>(fn: RemoteFunction<Args, Return>, args?: Args): Promise<Return>
+export function cache<Args>(fn: RawRemoteFunction<Args>, args?: Args): Promise<Response>
 export function cache<Args, Return>(
     fn: Producer<Args, Return>,
     args?: Args,
@@ -160,15 +157,12 @@ The smart bare rpc call routes here (createRemoteFunction.callable → cache.rea
 identical to cache() except a replayable read gets unconditional SWR retention —
 its value is kept for display regardless of ttl, and ttl marks a staleness
 deadline (the next read past it revalidates in the background) instead of driving
-eviction. Always a decoded RemoteFunction read (the callable carries .raw), so it
-returns Promise<Return>.
+eviction. No call-site options (ADR-0020): all policy is read off the endpoint
+(fn.cache). Always a decoded RemoteFunction read (the callable carries .raw), so
+it returns Promise<Return>.
 */
-function smartRead<Args, Return>(
-    fn: RemoteFunction<Args, Return>,
-    args?: Args,
-    options?: CacheOptions,
-): Promise<Return> {
-    return readThrough(fn, args, options, true) as Promise<Return>
+function smartRead<Args, Return>(fn: RemoteFunction<Args, Return>, args?: Args): Promise<Return> {
+    return readThrough(fn, args, undefined, true) as Promise<Return>
 }
 cache.read = smartRead
 
@@ -177,6 +171,8 @@ The shared read-through core. `smart` marks the smart bare call, which enables
 unconditional SWR retention for a replayable read — but only on the client (see
 smartRead / entry.retain and the `retain` computation below); the public cache()
 passes false, keeping its explicit drop-on-ttl / drop-on-invalidate old surface.
+A remote's policy is read off the endpoint (fn.cache — ADR-0020); a producer's
+policy is its explicit cache() `options`.
 */
 function readThrough<Args, Return>(
     fn: AnyRemote<Args, Return> | Producer<Args, Return>,
@@ -201,26 +197,26 @@ function readThrough<Args, Return>(
           : (fn as RemoteFunction<Args, Return>).raw
     const method = isRemote ? (rawFn as RawRemoteFunction<Args>).method : undefined
     const replayable = method !== undefined && REPLAYABLE_METHODS.has(method.toUpperCase())
-    validatePolicy(options, method, smart)
+    /* Remote policy is endpoint-declared — the bottom (and only) layer; a producer has no
+       endpoint, so its explicit cache() options stand in. */
+    const policy = isRemote
+        ? resolveEndpointCache(fn as AnyRemote<Args, Return>, args)
+        : options
     /* SWR retention is a client concern (the tab store lives; revalidation is
        visible). On the server there is no live UI to hold stale, so a smart read
-       never retains — it coalesces only. */
-    const retain = smart && replayable && options?.swr !== false && typeof window !== 'undefined'
+       never retains — it coalesces only. Unconditional for a replayable read now
+       (no swr toggle to opt out of). */
+    const retain = smart && replayable && typeof window !== 'undefined'
     /*
     ttl defaults to 0 (coalesce-only) on the server for any remote read/write, and
-    on the client for a smart write — in both cases only when the caller stated
-    neither ttl nor swr. The server default makes retention opt-in (via an explicit
-    ttl, paired with `shared` to survive the request). An explicit swr opts out so
-    it does not trip validatePolicy's "swr + ttl:0" throw; server-side swr is a
-    client-only concept with no added server guarantee.
+    on the client for a smart write — in both cases only when the endpoint stated no
+    ttl. The server default makes retention opt-in (via an explicit ttl, paired with
+    `shared` to survive the request).
     */
     const serverTtlZero =
-        isRemote &&
-        typeof window === 'undefined' &&
-        options?.ttl === undefined &&
-        options?.swr === undefined
-    const smartWriteTtlZero = smart && isRemote && !replayable && options?.ttl === undefined
-    const effectiveOptions = serverTtlZero || smartWriteTtlZero ? { ...options, ttl: 0 } : options
+        isRemote && typeof window === 'undefined' && policy?.ttl === undefined
+    const smartWriteTtlZero = smart && isRemote && !replayable && policy?.ttl === undefined
+    const effectiveOptions = serverTtlZero || smartWriteTtlZero ? { ...policy, ttl: 0 } : policy
     if (!isRemote) {
         warnAnonymousProducer(fn as Producer<Args, Return>)
     }
@@ -318,72 +314,48 @@ function cloneWarmValue(value: unknown): unknown {
 }
 
 /*
-Normalises the refetch window, or undefined when off. Precedence: an explicit
-`swr` object carries its own throttle/debounce; `swr: true` (or `defaultOn`) uses
-the root `throttle`/`debounce` window if present, else `{}` (fire immediately).
-`swr: false` is an explicit opt-out and wins over `defaultOn`. `defaultOn` is the
-smart bare call's unconditional SWR for replayable reads — it turns the window on
-without an `swr` toggle. Collapsing all of this here lets every downstream site
-treat "is SWR on" as a single defined/undefined check.
+Resolves an rpc endpoint's declared cache policy (ADR-0020) into a plain
+CacheOptions for the read-through machinery, evaluating the `tags` function form
+against this call's args. Both remote variants (decoded + raw) carry `.cache`, so
+either can be passed. Undefined when the endpoint declared no policy (method
+defaults still apply below).
 */
-function swrWindow(
-    options: CacheOptions | undefined,
-    defaultOn: boolean,
-): { throttle?: number; debounce?: number } | undefined {
-    const swr = options?.swr
-    if (swr === false) {
+function resolveEndpointCache<Args, Return>(
+    fn: AnyRemote<Args, Return>,
+    args: Args | undefined,
+): CacheOptions | undefined {
+    const policy = (fn as { cache?: CachePolicy<Args> }).cache
+    if (policy === undefined) {
         return undefined
     }
-    const root =
-        options?.throttle !== undefined || options?.debounce !== undefined
-            ? { throttle: options?.throttle, debounce: options?.debounce }
-            : undefined
-    /* Explicit window object (swr: { throttle | debounce }). */
-    if (swr !== undefined && swr !== true) {
-        return swr
+    const tags = typeof policy.tags === 'function' ? policy.tags(args as Args) : policy.tags
+    return {
+        ttl: policy.ttl,
+        tags,
+        shared: policy.shared,
+        throttle: policy.throttle,
+        debounce: policy.debounce,
     }
-    if (swr === true || defaultOn) {
-        return root ?? {}
-    }
-    return undefined
 }
 
 /*
-Guards impossible option combinations at wrap time, where the call site is on
-the stack. `swr` declares "this call is safe to re-run unprompted", so a
-non-replayable remote method (a write) must never carry it — replaying a write
-through the invalidation grammar would be a state change disguised as a
-refresh. Producers are opaque (no method to check); the same contract is on
-the caller there. ttl: 0 retains nothing, so there is nothing to revalidate;
-and the two coalescing windows are exclusive by construction.
+The keep-stale-and-revalidate refetch window, or undefined when the entry should
+hard-drop on invalidate instead. Present when the smart bare call retains a
+replayable read (`defaultOn`, SWR unconditional — the window is just the endpoint's
+throttle/debounce, or `{}` = fire immediately) OR when a policy explicitly declares
+a throttle/debounce window (producer options / endpoint cache). Collapsing this here
+lets every downstream site treat "is a refetch window armed" as a single
+defined/undefined check.
 */
-function validatePolicy(
+function refetchWindow(
     options: CacheOptions | undefined,
-    method: string | undefined,
-    smart: boolean,
-): void {
-    const replayable = method !== undefined && REPLAYABLE_METHODS.has(method.toUpperCase())
-    const policy = swrWindow(options, smart && replayable)
-    if (!policy) {
-        return
+    defaultOn: boolean,
+): { throttle?: number; debounce?: number } | undefined {
+    const hasWindow = options?.throttle !== undefined || options?.debounce !== undefined
+    if (defaultOn || hasWindow) {
+        return { throttle: options?.throttle, debounce: options?.debounce }
     }
-    if (policy.throttle !== undefined && policy.debounce !== undefined) {
-        throw new Error('[abide] cache(): set throttle or debounce, not both')
-    }
-    /* An EXPLICIT swr with ttl: 0 is the old error — nothing retained to revalidate.
-       The smart read's implicit SWR retains unconditionally, so ttl: 0 is fine there. */
-    const explicitSwr =
-        options?.swr === true || (typeof options?.swr === 'object' && options?.swr !== null)
-    if (explicitSwr && options?.ttl === 0) {
-        throw new Error(
-            '[abide] cache(): swr requires retention — ttl: 0 keeps nothing to revalidate',
-        )
-    }
-    if (method !== undefined && !replayable) {
-        throw new Error(
-            `[abide] cache(): swr re-runs the call unprompted — ${method.toUpperCase()} is a write and must not be replayed`,
-        )
-    }
+    return undefined
 }
 
 /*
@@ -498,9 +470,9 @@ function registerEntry(
     retain: boolean,
 ): CacheEntry {
     const ttl = options?.ttl
-    /* Capture the refetch thunk + window when swr was asked for OR this is a smart
-       retained read (SWR unconditional). */
-    const policy = swrWindow(options, retain)
+    /* Capture the refetch thunk + window when a smart retained read (SWR unconditional)
+       or an explicit throttle/debounce window is present. */
+    const policy = refetchWindow(options, retain)
     const invalidation = policy
         ? { refetch, throttle: policy.throttle, debounce: policy.debounce }
         : undefined
@@ -748,7 +720,7 @@ Invalidates every entry matching the selector (see selectorMatcher) across both
 the request/tab store and the process-level store, and notifies readers.
 `args` narrows a fn selector to exactly that call's entry — derived through
 the same encoders the read path uses, so other args variants stay warm. An entry
-with an swr policy is kept and its refetch coalesced (stale served
+with a refetch policy is kept and its refetch coalesced (stale served
 until it resolves); every other match is dropped so the next read refetches —
 its key recorded in pendingRefresh so that read reports as a reload (refreshing())
 rather than a first-ever load. An empty or unmatched selector is a no-op on the
@@ -867,7 +839,7 @@ function refresh<Args, Return>(arg?: CacheSelector<Args, Return>, args?: Args): 
             if (entry.invalidation !== undefined) {
                 scheduleInvalidationRefetch(store, entry)
             } else {
-                /* No policy, no request (a producer never cached with swr): drop so the
+                /* No policy, no request (a producer never cached with a refetch window): drop so the
                    next read reloads. A reader is holding it (checked above), so flag the
                    next read a reload (refreshing()). */
                 store.entries.delete(entry.key)
@@ -1089,7 +1061,7 @@ function on<T>(
 cache.on = on
 
 /*
-Schedules a coalesced refetch per the entry's swr policy. No window (swr: true):
+Schedules a coalesced refetch per the entry's refetch policy. No window:
 fire immediately (throttle defaults to 0, so the leading-edge branch always
 takes). debounce: (re)arm a timer that fires after N ms of quiet. throttle: fire
 on the leading edge when a full window has elapsed since the last fire, else arm
@@ -1177,7 +1149,7 @@ function fireRefetch(store: CacheStore, entry: CacheEntry): void {
                entry keeps its original expiresAt and would read as stale (or be evicted
                at the old deadline) despite holding fresh data. Mirrors registerEntry's
                settle path: a retained smart read re-stamps the staleness deadline (the
-               next read past it revalidates), an explicit-swr entry re-arms the eviction
+               next read past it revalidates), a windowed producer entry re-arms the eviction
                clock. */
             if (entry.ttl !== undefined && entry.ttl !== 0) {
                 if (entry.retain) {
@@ -1284,7 +1256,7 @@ function attachPolicy(
     if (defaultOn) {
         entry.retain = true
     }
-    const policy = swrWindow(options, defaultOn)
+    const policy = refetchWindow(options, defaultOn)
     if (entry.invalidation || !policy) {
         return
     }
@@ -1299,7 +1271,7 @@ fire and the pending()/refreshing() probes re-derive; only the keys in `emitted`
 had their VISIBLE value change, so the 'invalidate' event fires and the reading
 scope re-reads. The two sets diverge by design — a refetch start marks but does
 not emit (the stale value is still on screen), an invalidate-drop does both, an
-swr invalidate marks the whole match set while emitting only the dropped subset.
+a keep-stale (refetch-policy) invalidate marks the whole match set while emitting only the dropped subset.
 The trailing store-wide mark fires even when nothing matched, so a bare probe
 still re-derives (to the same value); marks coalesce per microtask, so a key in
 both lists is not double work.

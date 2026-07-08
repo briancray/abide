@@ -1,13 +1,13 @@
-import type { ClientFlags } from '../../../shared/types/ClientFlags.ts'
 import type { RemoteFunction } from '../../../shared/types/RemoteFunction.ts'
 import type { StandardSchemaV1 } from '../../../shared/types/StandardSchemaV1.ts'
 
 /*
 Per-rpc registry record on the server side. MCP and CLI enumerate this
-to discover which RPCs are advertised (clients flags) and what shapes
-they expect/return. The schemas and resolved clients stay off the public
-RemoteFunction shape so the browser-side proxy doesn't need to carry
-server-only state.
+to discover what shapes an rpc expects/returns. The schemas stay off the
+public RemoteFunction shape so the browser-side proxy doesn't need to carry
+server-only state; the resolved `clients` and `crossOrigin` ride on
+`entry.remote` (ADR-0020 sweep finding #4 — no duplicate fields), so readers
+reach them via `entry.remote.clients` / `entry.remote.crossOrigin`.
 
 `inputSchema` validates the argument bag and feeds the MCP tool
 `inputSchema` / OpenAPI parameters; `outputSchema` describes the success
@@ -25,11 +25,9 @@ export type RpcRegistryEntry = {
     inputSchema: StandardSchemaV1 | undefined
     outputSchema: StandardSchemaV1 | undefined
     filesSchema: StandardSchemaV1 | undefined
-    clients: ClientFlags
     /* The rpc's declared opts, recorded so introspection (inspector) can report
-       the deadline/body-cap/CSRF-exemption a handler runs under. Undefined = the
-       framework default (no deadline, Bun's server-wide body ceiling, gated). */
+       the deadline/body-cap a handler runs under. Undefined = the framework default
+       (no deadline, Bun's server-wide body ceiling). */
     timeout: number | undefined
     maxBodySize: number | undefined
-    crossOrigin: boolean | undefined
 }
