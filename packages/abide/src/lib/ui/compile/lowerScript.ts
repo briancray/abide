@@ -61,6 +61,11 @@ export function lowerScript(
        desugared away. Folded into the dead-import usage check so a live import isn't dropped
        (→ `ReferenceError: state is not defined` in the branch). Empty for a nested script. */
     externalUsage = '',
+    /* Names of synthetic `const __cN = computed(...)` cells `analyzeComponent` prepended for
+       asyncIterable interpolations (ADR-0019 Stage D). `computed` here is an unimported callee,
+       so `desugarSignals` recognizes these declarations by name — routing each to an eager
+       `trackedComputed` stream cell — rather than by import resolution. Empty on every other path. */
+    injectedCellNames: ReadonlySet<string> = new Set(),
 ): {
     body: string
     imports: string
@@ -72,8 +77,10 @@ export function lowerScript(
     droppedReactiveImports: Set<string>
 } {
     const source = ts.createSourceFile('component.ts', scriptBody, ts.ScriptTarget.Latest, true)
-    const { transformer, stateNames, derivedNames, computedNames, cellReadNames } =
-        desugarSignals(source)
+    const { transformer, stateNames, derivedNames, computedNames, cellReadNames } = desugarSignals(
+        source,
+        injectedCellNames,
+    )
     const result = ts.transform(source, [
         transformer,
         signalRefsTransformer(

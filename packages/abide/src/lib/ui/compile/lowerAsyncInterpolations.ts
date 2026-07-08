@@ -2,75 +2,103 @@ import type { InterpolationClassifier } from './types/InterpolationClassifier.ts
 import type { TemplateNode } from './types/TemplateNode.ts'
 import type { TextPart } from './types/TextPart.ts'
 
-/*
-Type-directed lowering of text-position interpolations (ADR-0019, Stage C). Walks
-the parsed template and, for each `{expr}` part the classifier resolves to a
-`promise`, replaces it with a synthesized STREAMING `await` node — the same
-TemplateNode shape the explicit `{#await expr}{:then v}{v}{/await}` block parses
-to, so it flows through the existing `awaitPlan`/`generateStreamingAwait` and
-client await runtime unchanged. An `asyncIterable` interpolation is left untouched
-here (Stage D handles cell injection); a `sync` one is left as-is.
+/* A synthetic stream cell an `asyncIterable` interpolation lowers to: a unique local name
+   and the raw interpolation expression it seeds. `analyzeComponent` prepends `const <name> =
+   computed(<code>)` to the component script so the expression lowers through the normal signal
+   pipeline (its author-signal reads become reactive reads) and desugars to an eager
+   `trackedComputed` stream cell; the interpolation itself is rewritten to a bare `{name}`. */
+export type InjectedCell = { name: string; code: string }
 
-Splitting mirrors the parser's `{await}` handling: an await block can only stand
-where element content stands, so a promise part splits its surrounding text run —
-the parts before it stay one text node, the await node stands between, the parts
-after become another text node. Called only when a classifier is available; without
-one the template is returned untouched, preserving today's plain-value binding.
+/* The result of the type-directed interpolation lowering: the transformed template plus the
+   stream cells the `asyncIterable` interpolations were rewritten into (empty when none). */
+export type LoweredInterpolations = { nodes: TemplateNode[]; cells: InjectedCell[] }
+
+/*
+Type-directed lowering of text-position interpolations (ADR-0019, Stages C+D). Walks the
+parsed template and, per `{expr}` part, rewrites it by the classifier's verdict:
+
+  - `promise`      → a synthesized STREAMING `await` node — the same TemplateNode shape the
+                     explicit `{#await expr}{:then v}{v}{/await}` block parses to, so it flows
+                     through the existing `awaitPlan`/`generateStreamingAwait` unchanged.
+  - `asyncIterable`→ a stream CELL: the part is replaced by a bare `{__cN}` reference and a
+                     `{ name, code }` cell is recorded, so it renders its latest frame live
+                     (exactly as if the author had written `const __cN = computed(expr)` and
+                     interpolated `{__cN}` — see `analyzeComponent`'s cell injection).
+  - `sync`         → left as-is (a plain value bind).
+
+Splitting mirrors the parser's `{await}` handling: an await block can only stand where element
+content stands, so a promise part splits its surrounding text run — the parts before it stay
+one text node, the await node stands between, the parts after become another text node. An
+asyncIterable part needs no split: it stays an expression part in place (just renamed to its
+cell), so it never breaks its text run. Called only when a classifier is available; without one
+the template is returned untouched (no cells), preserving today's plain-value binding.
 */
 export function lowerAsyncInterpolations(
     nodes: TemplateNode[],
     classify: InterpolationClassifier,
-): TemplateNode[] {
-    /* Per-call counter for the synthesized `then` binding (`__v${n}`), so nested and
-       sibling lowerings never collide on a name. */
-    const counter = { next: 0 }
-    return lowerList(nodes, classify, counter)
+): LoweredInterpolations {
+    /* Per-call counters so nested and sibling lowerings never collide on a name: `__v${n}`
+       for the promise `then` binding, `__c${n}` for the asyncIterable stream cell. */
+    const counters = { await: 0, cell: 0 }
+    const cells: InjectedCell[] = []
+    const loweredNodes = lowerList(nodes, classify, counters, cells)
+    return { nodes: loweredNodes, cells }
 }
 
-/* Lowers a sibling list, splitting any text node that carries a promise interpolation. */
+/* Lowers a sibling list, splitting any text node that carries a promise interpolation and
+   renaming any asyncIterable interpolation to its stream cell. */
 function lowerList(
     nodes: TemplateNode[],
     classify: InterpolationClassifier,
-    counter: { next: number },
+    counters: { await: number; cell: number },
+    cells: InjectedCell[],
 ): TemplateNode[] {
     const result: TemplateNode[] = []
     for (const node of nodes) {
         if (node.kind === 'text') {
-            appendLoweredText(node.parts, classify, counter, result)
+            appendLoweredText(node.parts, classify, counters, cells, result)
             continue
         }
         if ('children' in node) {
-            node.children = lowerList(node.children, classify, counter)
+            node.children = lowerList(node.children, classify, counters, cells)
         }
         result.push(node)
     }
     return result
 }
 
-/* Splits a text node's parts around each promise interpolation, pushing the
-   surrounding runs as text nodes and the promise parts as streaming await nodes. */
+/* Splits a text node's parts around each promise interpolation (pushing the surrounding runs
+   as text nodes and the promise parts as streaming await nodes), and rewrites each
+   asyncIterable interpolation in place to a bare reference to its recorded stream cell. */
 function appendLoweredText(
     parts: TextPart[],
     classify: InterpolationClassifier,
-    counter: { next: number },
+    counters: { await: number; cell: number },
+    cells: InjectedCell[],
     out: TemplateNode[],
 ): void {
     let run: TextPart[] = []
     for (const part of parts) {
-        if (
-            part.kind === 'expression' &&
-            part.loc !== undefined &&
-            classify(part.loc, part.code) === 'promise'
-        ) {
-            if (run.length > 0) {
-                out.push({ kind: 'text', parts: run })
-                run = []
+        if (part.kind === 'expression' && part.loc !== undefined) {
+            const kind = classify(part.loc, part.code)
+            if (kind === 'promise') {
+                if (run.length > 0) {
+                    out.push({ kind: 'text', parts: run })
+                    run = []
+                }
+                out.push(streamingAwaitNode(part.code, part.loc, counters.await++))
+                continue
             }
-            out.push(streamingAwaitNode(part.code, part.loc, counter.next++))
-            continue
+            if (kind === 'asyncIterable') {
+                /* Record a stream cell for the expression and rename the interpolation to it —
+                   `analyzeComponent` injects `const __cN = computed(<code>)` so the cell exists,
+                   and this bare `{__cN}` reference lowers to `$$readCell(__cN)` (latest frame). */
+                const name = `__c${counters.cell++}`
+                cells.push({ name, code: part.code })
+                run.push({ kind: 'expression', code: name })
+                continue
+            }
         }
-        /* TODO(stage D): an `asyncIterable` interpolation stays a plain part here — Stage D
-           injects a draining cell instead of lowering it to an await block. */
         run.push(part)
     }
     if (run.length > 0) {

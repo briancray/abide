@@ -178,7 +178,17 @@ between passes. Plain `state` becomes `model.x` access that `lowerDocAccess` low
 patches/reads. No reactive declarations → an identity transformer (the explicit
 `const model = doc(...)` form still works).
 */
-export function desugarSignals(source: ts.SourceFile): {
+export function desugarSignals(
+    source: ts.SourceFile,
+    /* Synthetic `const __cN = computed(...)` cells `analyzeComponent` injected for asyncIterable
+       interpolations (ADR-0019 Stage D). Their `computed` callee is UNIMPORTED, so import
+       resolution (`signalCallee`) can't recognize them — instead a declaration whose name is in
+       this set is treated as a bare-call computed slot: routed to an eager `trackedComputed`
+       stream cell and read via `$$readCell`, exactly as an explicit `state.computed(getStream())`
+       would be. Gated on the exact injected name (never a naming heuristic), so it can never
+       reclassify author code — an author's own `computed(...)` still needs its import. */
+    injectedCellNames: ReadonlySet<string> = new Set(),
+): {
     transformer: ts.TransformerFactory<ts.SourceFile>
     stateNames: Set<string>
     derivedNames: Set<string>
@@ -223,6 +233,13 @@ export function desugarSignals(source: ts.SourceFile): {
                 continue
             }
             if (!ts.isIdentifier(declaration.name)) {
+                continue
+            }
+            if (injectedCellNames.has(declaration.name.text)) {
+                /* Injected asyncIterable-interpolation cell (`const __cN = computed(expr)`): an
+                   eager `trackedComputed` stream cell, read via `$$readCell` — recognized by its
+                   injected name since `computed` is unimported here. */
+                cellReadNames.add(declaration.name.text)
                 continue
             }
             if (isPlainStateSlot(declaration, bindings)) {
@@ -281,7 +298,9 @@ export function desugarSignals(source: ts.SourceFile): {
             ...cellReadNames,
         ])
         for (const statement of root.statements) {
-            statements.push(...loweredStatement(statement, bindings, signalNames))
+            statements.push(
+                ...loweredStatement(statement, bindings, signalNames, injectedCellNames),
+            )
         }
         return factory.updateSourceFile(root, statements)
     }
@@ -297,14 +316,53 @@ function loweredStatement(
     statement: ts.Statement,
     bindings: ReactiveImportBindings,
     signalNames: ReadonlySet<string>,
+    injectedCellNames: ReadonlySet<string>,
 ): ts.Statement[] {
     rejectMixedDeclaration(statement, bindings)
     return (
+        injectedComputedStatements(statement, injectedCellNames) ??
         stateAssignmentStatements(statement, bindings) ??
         computedStatements(statement, bindings, signalNames) ??
         propsStatements(statement, bindings) ??
         cellStatements(statement, bindings, signalNames) ?? [statement]
     )
+}
+
+/* Lowers a synthetic `const __cN = computed(expr)` (an asyncIterable interpolation cell
+   `analyzeComponent` injected) to `const __cN = scope().trackedComputed(() => expr)` — the same
+   eager stream cell an explicit `state.computed(getStream())` bare-call seed produces, so the two
+   forms emit byte-identically. Recognized by the injected name, since `computed` is unimported
+   here; returns undefined for any statement that is not one of these injected cells (each is
+   emitted as its own single-declaration statement). */
+function injectedComputedStatements(
+    statement: ts.Statement,
+    injectedCellNames: ReadonlySet<string>,
+): ts.Statement[] | undefined {
+    if (!ts.isVariableStatement(statement)) {
+        return undefined
+    }
+    const statements: ts.Statement[] = []
+    for (const declaration of statement.declarationList.declarations) {
+        if (!ts.isIdentifier(declaration.name) || !injectedCellNames.has(declaration.name.text)) {
+            return undefined
+        }
+        const argument = seedArgument(declaration)
+        const wrapped =
+            argument === undefined
+                ? factory.createArrowFunction(
+                      undefined,
+                      undefined,
+                      [],
+                      undefined,
+                      factory.createToken(ts.SyntaxKind.EqualsGreaterThanToken),
+                      factory.createIdentifier('undefined'),
+                  )
+                : wrapSeed(argument)
+        statements.push(
+            constDeclaration(declaration.name.text, scopeMethodCall('trackedComputed', [wrapped])),
+        )
+    }
+    return statements
 }
 
 /* Each lowering function above is all-or-nothing per VariableStatement: it returns
