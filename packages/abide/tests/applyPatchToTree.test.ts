@@ -40,7 +40,7 @@ describe('applyPatchToTree — prototype-pollution defense', () => {
     test('a legit own key named constructor still traverses (own data, not the inherited one)', () => {
         const tree: Record<string, unknown> = { constructor: { nested: 1 } }
         apply(tree, { op: 'replace', path: 'constructor/nested', value: 2 })
-        expect((tree.constructor as Record<string, unknown>).nested).toBe(2)
+        expect((tree.constructor as unknown as Record<string, unknown>).nested).toBe(2)
     })
 
     test('normal nested writes are unaffected', () => {

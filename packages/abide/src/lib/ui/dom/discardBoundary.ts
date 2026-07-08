@@ -33,7 +33,7 @@ export function discardBoundary(
     /* Remove open..close inclusive now that the range is known-bounded. */
     let node: Node | null = open
     while (node !== null) {
-        const next = node.nextSibling
+        const next: Node | null = node.nextSibling
         parent.removeChild(node)
         if (node === close) {
             break

@@ -56,7 +56,10 @@ function drain(): void {
                    it permanently inert), then keep draining and surface the error(s) once
                    the graph has settled rather than swallowing them. */
                 node.status = NODE_STATE.CLEAN
-                ;(errors ??= []).push(error)
+                if (errors === undefined) {
+                    errors = []
+                }
+                errors.push(error)
             }
         }
         batch.length = 0

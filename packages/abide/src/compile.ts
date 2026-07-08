@@ -1,8 +1,8 @@
 import { build } from './build.ts'
 import { abideLog } from './lib/shared/abideLog.ts'
+import { buildArtifact } from './lib/shared/buildArtifact.ts'
 import { detectTarget } from './lib/shared/detectTarget.ts'
 import { exeSuffix } from './lib/shared/exeSuffix.ts'
-import { buildArtifact } from './lib/shared/buildArtifact.ts'
 import type { CompileTarget } from './lib/shared/types/CompileTarget.ts'
 import { serverBuildPlugins } from './serverBuildPlugins.ts'
 
