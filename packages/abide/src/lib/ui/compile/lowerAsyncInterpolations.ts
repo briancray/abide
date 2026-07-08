@@ -1,3 +1,6 @@
+import { AbideCompileError } from './AbideCompileError.ts'
+import { asyncValuePositionError } from './asyncValuePositionError.ts'
+import { asyncValuePositionInterpolations } from './asyncValuePositionInterpolations.ts'
 import type { InterpolationClassifier } from './types/InterpolationClassifier.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
 import type { TextPart } from './types/TextPart.ts'
@@ -37,6 +40,19 @@ export function lowerAsyncInterpolations(
     nodes: TemplateNode[],
     classify: InterpolationClassifier,
 ): LoweredInterpolations {
+    /* Stage E guard (ADR-0019): a promise/asyncIterable can only render over time in CONTENT
+       position (lowered below). In a NON-content value position — an attribute, an `{#if}` /
+       `{#switch}` head, or a sync `{#each}` iterable — it would silently stringify to `[object
+       Promise]` or fail to iterate, so classify each such interpolation and reject one that is
+       async (a `{#for await}` iterable excepted — its `AsyncIterable` is the sanctioned form).
+       Runs only with a classifier, so the default (no-classifier) path is unaffected. */
+    for (const interpolation of asyncValuePositionInterpolations(nodes)) {
+        const kind = classify(interpolation.loc, interpolation.code)
+        const message = asyncValuePositionError(kind, interpolation.position)
+        if (message !== undefined) {
+            throw new AbideCompileError(message, interpolation.loc)
+        }
+    }
     /* Per-call counters so nested and sibling lowerings never collide on a name: `__v${n}`
        for the promise `then` binding, `__c${n}` for the asyncIterable stream cell. */
     const counters = { await: 0, cell: 0 }

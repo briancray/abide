@@ -275,6 +275,30 @@ describe('abide check', () => {
         expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
     })
 
+    /* Stage E parity (ADR-0019): the build front-end throws on a promise/asyncIterable in a
+       NON-content value position; `abide check` surfaces the same guard as a located Error so
+       the LSP and CLI catch it too. */
+    test('a promise in an attribute value is flagged and mapped to the expression', () => {
+        const source = `<script>\nimport { props } from '@abide/abide/ui/props'\nconst { title } = props<{ title: Promise<string> }>()\n</script>\n<div class={title}></div>\n`
+        const dir = project({ 'attr.abide': source })
+        const diagnostics = collectAbideDiagnostics(createShadowProgram(dir))
+        expect(diagnostics).toHaveLength(1)
+        expect(diagnostics[0]!.message).toContain('an attribute')
+        /* The span lands on the offending interpolation. */
+        const span = source.slice(
+            diagnostics[0]!.start,
+            diagnostics[0]!.start + diagnostics[0]!.length,
+        )
+        expect(span).toBe('title')
+    })
+
+    /* The sanctioned `{#for await}` iterable is exempt — an AsyncIterable there is valid. */
+    test('an AsyncIterable in {#for await} raises no value-position diagnostic', () => {
+        const source = `<script>\nimport { props } from '@abide/abide/ui/props'\nconst { stream } = props<{ stream: AsyncIterable<number> }>()\n</script>\n{#for await n of stream}{n.toFixed(2)}{/for}\n`
+        const dir = project({ 'ok.abide': source })
+        expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
+    })
+
     /* The streaming `then` branch binds the awaited value, so a wrong member on the
        resolved data is caught (previously bound as `any`, silently unchecked). */
     test('a streaming then branch type-checks the resolved value', () => {

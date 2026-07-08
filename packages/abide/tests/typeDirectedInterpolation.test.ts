@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, test } from 'bun:test'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { AbideCompileError } from '../src/lib/ui/compile/AbideCompileError.ts'
 import { classifyInterpolationType } from '../src/lib/ui/compile/classifyInterpolationType.ts'
 import { compileComponent } from '../src/lib/ui/compile/compileComponent.ts'
 import { compileSSR } from '../src/lib/ui/compile/compileSSR.ts'
@@ -246,6 +247,67 @@ const count: number = 5
         const plain = compileComponent(source)
         expect(plain).not.toContain('trackedComputed')
         expect(plain).toMatch(/\$\$appendText\([^;]*getStream/)
+    })
+})
+
+/* Stage E: a promise/asyncIterable in a NON-content VALUE position (an attribute, an `{#if}` /
+   `{#switch}` head, a sync `{#each}` iterable) is a compile error — it can't render over time
+   there and would silently stringify to `[object Promise]` or fail to iterate. The guard only
+   fires with a classifier; the sanctioned `{#for await}` async iterable is exempt. */
+describe('type-directed interpolation lowering — async value-position guard (Stage E)', () => {
+    const PROMISE_DECL = `async function getPromise(): Promise<string> { return 'x' }`
+    const STREAM_DECL = `function getStream(): AsyncIterable<string> { return (async function* () { yield 'x' })() }`
+
+    /* Compiles a source under a classifier resolved against that same source. */
+    const compileClassified = (source: string): string => {
+        const classify = makeClassifier(source)
+        return compileComponent(source, false, undefined, undefined, classify)
+    }
+
+    test('a promise in an attribute value throws', () => {
+        const source = `<script>\n${PROMISE_DECL}\n</script>\n<div class={getPromise()}></div>\n`
+        expect(() => compileClassified(source)).toThrow(AbideCompileError)
+    })
+
+    test('a promise in an {#if} head throws', () => {
+        const source = `<script>\nasync function getPromise(): Promise<boolean> { return true }\n</script>\n{#if getPromise()}<p>yes</p>{/if}\n`
+        expect(() => compileClassified(source)).toThrow(AbideCompileError)
+    })
+
+    test('a promise in a {#switch} head throws', () => {
+        const source = `<script>\nasync function getPromise(): Promise<string> { return 'a' }\n</script>\n{#switch getPromise()}{:case 'a'}<p>a</p>{/switch}\n`
+        expect(() => compileClassified(source)).toThrow(AbideCompileError)
+    })
+
+    test('a promise as a sync {#each} iterable throws (a promise is not iterable)', () => {
+        const source = `<script>\nasync function getPromise(): Promise<string[]> { return [] }\n</script>\n{#for x of getPromise()}<p>{x}</p>{/for}\n`
+        expect(() => compileClassified(source)).toThrow(AbideCompileError)
+    })
+
+    test('an AsyncIterable as a sync {#each} iterable throws (needs {#for await})', () => {
+        const source = `<script>\n${STREAM_DECL}\n</script>\n{#for x of getStream()}<p>{x}</p>{/for}\n`
+        expect(() => compileClassified(source)).toThrow(AbideCompileError)
+    })
+
+    test('not errored: a promise in TEXT position still lowers to a streaming await', () => {
+        const source = `<script>\n${PROMISE_DECL}\n</script>\n<p>{getPromise()}</p>\n`
+        const lowered = compileClassified(source)
+        /* Position-scoped: the text interpolation streams (Stage C), it does not throw. */
+        expect(lowered).toContain('$$awaitBlock(')
+    })
+
+    test('not errored: an AsyncIterable in {#for await} (the sanctioned async position) compiles', () => {
+        const source = `<script>\n${STREAM_DECL}\n</script>\n{#for await x of getStream()}<p>{x}</p>{/for}\n`
+        expect(() => compileClassified(source)).not.toThrow()
+    })
+
+    test('without a classifier none of the guarded positions throw (default path unchanged)', () => {
+        const attr = `<script>\n${PROMISE_DECL}\n</script>\n<div class={getPromise()}></div>\n`
+        const ifHead = `<script>\nasync function getPromise(): Promise<boolean> { return true }\n</script>\n{#if getPromise()}<p>yes</p>{/if}\n`
+        const eachStream = `<script>\n${STREAM_DECL}\n</script>\n{#for x of getStream()}<p>{x}</p>{/for}\n`
+        expect(() => compileComponent(attr)).not.toThrow()
+        expect(() => compileComponent(ifHead)).not.toThrow()
+        expect(() => compileComponent(eachStream)).not.toThrow()
     })
 })
 
