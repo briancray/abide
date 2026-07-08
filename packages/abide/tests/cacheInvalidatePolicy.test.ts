@@ -172,9 +172,11 @@ describe('cache() swr (stale-while-revalidate)', () => {
         await wait(30)
         /* Not retained — a 404 on revalidation means the resource no longer exists. */
         expect(cacheStoreSlot.fallback!.entries.size).toBe(0)
-        /* The next read of the key is flagged a reload, mirroring a policy-less drop. */
+        /* These are bare reads, so nothing is holding the key on screen — the eviction
+           mints no reload marker (a future mount is a first load, not a reload). The
+           reader-present flag path is covered by cachePendingRefreshGc. */
         expect(cacheStoreSlot.fallback!.pendingRefresh.has(producerKey(producer, undefined))).toBe(
-            true,
+            false,
         )
     })
 
@@ -247,31 +249,31 @@ describe('cache() swr (stale-while-revalidate)', () => {
         expect(await cache(fetchValue)).toBe(2) // 2: this read, not a ghost refetch
     })
 
-    test('without a policy, the next read after invalidate reports as a reload', async () => {
+    test('without a live reader, the next read after invalidate is a first load, not a reload', async () => {
         let resolveSecond: (value: number) => void = () => {}
         const second = new Promise<number>((resolve) => {
             resolveSecond = resolve
         })
-        const values: Promise<number>[] = [Promise.resolve(1), second]
         let index = 0
-        const producer = () => values[index++]
+        const producer = () => (index++ === 0 ? Promise.resolve(1) : second)
 
         expect(await cache(producer)).toBe(1)
         /* A settled cold load is not a reload. */
         expect(refreshing(producer)).toBe(false)
 
-        cache.invalidate(producer) // drops the entry, marks the key for refresh
+        /* Bare reads don't subscribe, so nothing is holding this key on screen.
+           invalidate drops the entry but mints no reload marker — the next read is a
+           fresh mount, a first-ever load, not a reload. (The reader-present reload-flag
+           path is covered by cachePendingRefreshGc's live case.) */
+        cache.invalidate(producer)
 
-        /* The next read is a cold miss (no stale value → also pending), but flagged
-           a reload because it follows an invalidate. */
         const reload = cache(producer)
-        expect(refreshing(producer)).toBe(true)
+        expect(refreshing(producer)).toBe(false)
         expect(pending(producer)).toBe(true)
 
         resolveSecond(2)
         expect(await reload).toBe(2)
         await settle()
-        /* Reload settled → fresh value, no longer refreshing. */
         expect(refreshing(producer)).toBe(false)
         expect(pending(producer)).toBe(false)
     })

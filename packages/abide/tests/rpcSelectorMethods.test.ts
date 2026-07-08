@@ -9,6 +9,7 @@ import { createRemoteFunction } from '../src/lib/shared/createRemoteFunction.ts'
 import { peek } from '../src/lib/shared/peek.ts'
 import { pending } from '../src/lib/shared/pending.ts'
 import { refreshing } from '../src/lib/shared/refreshing.ts'
+import { track } from './support/reactiveScope.ts'
 import { settle } from './support/settle.ts'
 
 const options = { logRequests: false }
@@ -125,9 +126,13 @@ describe('fn.refresh / fn.patch / fn.peek instance methods', () => {
         expect(getList.peek()).toEqual(['a', 'b'])
         expect(invokes).toBe(1)
 
-        /* refresh instance refetches. */
+        /* refresh instance refetches — but only for a key with a live reader holding it
+           on screen (a bare read no longer counts as a reader), so mount one. */
+        const tracked = track(() => getList())
+        await settle()
         getList.refresh()
         await settle()
         expect(invokes).toBe(2)
+        tracked.stop()
     })
 })

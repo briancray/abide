@@ -4,6 +4,7 @@ import { createCacheStore } from '../src/lib/shared/createCacheStore.ts'
 import { createRemoteFunction } from '../src/lib/shared/createRemoteFunction.ts'
 import { refresh } from '../src/lib/shared/refresh.ts'
 import { refreshing } from '../src/lib/shared/refreshing.ts'
+import { track } from './support/reactiveScope.ts'
 import { settle } from './support/settle.ts'
 import { useBrowserWindow } from './support/useBrowserWindow.ts'
 
@@ -43,6 +44,10 @@ describe('refresh()', () => {
                 })
             },
         })
+        /* A live tracking reader holds the value on screen — refresh() refetches-and-swaps
+           only for a key with a reader, so mount one rather than relying on a bare read. */
+        const tracked = track(() => getN())
+        await settle()
         expect(await getN()).toEqual({ n: 1 })
         expect(refreshing(getN)).toBe(false)
 
@@ -55,6 +60,39 @@ describe('refresh()', () => {
         await settle()
         expect(refreshing(getN)).toBe(false)
         expect(await getN()).toEqual({ n: 2 })
+        tracked.stop()
+    })
+
+    test('does not refetch an rpc whose reader has torn down (no listeners)', async () => {
+        let n = 0
+        const getN = createRemoteFunction<undefined, { n: number }>({
+            method: 'GET',
+            url: '/rpc/refreshNoReader',
+            clients: BROWSER_ONLY,
+            buildRequest: () => new Request('http://x/rpc/refreshNoReader'),
+            invoke: async () => {
+                n += 1
+                return new Response(JSON.stringify({ n }), {
+                    headers: { 'content-type': 'application/json' },
+                })
+            },
+        })
+        /* Mount a reactive reader (a real subscriber), then tear it down — the ttl
+           keeps the entry warm but nothing on screen is holding its value. */
+        const tracked = track(() => getN())
+        await settle()
+        expect(n).toBe(1)
+        tracked.stop()
+        await settle()
+        expect(cacheStoreSlot.fallback.entries.has('GET /rpc/refreshNoReader')).toBe(true)
+
+        /* No listener left to swap a fresh value into → the refetch is skipped and the
+           entry is dropped so the next read reloads fresh, rather than firing now. */
+        refresh(getN)
+        await settle()
+        expect(n).toBe(1)
+        expect(refreshing(getN)).toBe(false)
+        expect(cacheStoreSlot.fallback.entries.has('GET /rpc/refreshNoReader')).toBe(false)
     })
 
     test('refresh() with no match is a no-op (nothing to refetch)', async () => {

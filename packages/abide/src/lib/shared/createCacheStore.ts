@@ -1,3 +1,4 @@
+import { REACTIVE_CONTEXT } from '../ui/runtime/REACTIVE_CONTEXT.ts'
 import { createLifecycleChannel } from './createLifecycleChannel.ts'
 import { createSubscriber } from './createSubscriber.ts'
 import { keyMatchesPrefix } from './keyMatchesPrefix.ts'
@@ -28,6 +29,16 @@ export function createCacheStore(): CacheStore {
     const pendingRefresh = new Set<string>()
 
     function subscribe(key: string): void {
+        /* An untracked read (an event handler, a setup-time `await getFoo()`, any
+           server render) subscribes to nothing: `track` inside createSubscriber no-ops,
+           node.subsHead stays empty, and the resource never opens. Skip the bookkeeping
+           too — otherwise a bare read would pin an entry in `subscribers` for the tab's
+           lifetime, growing the map and leaving hasReader() over-reporting a reader that
+           isn't there. Honouring the tracking seam here makes hasReader() mean exactly
+           "a live tracking reader exists". */
+        if (REACTIVE_CONTEXT.observer === undefined) {
+            return
+        }
         const existing = subscribers.get(key)
         if (existing) {
             existing()
@@ -103,10 +114,11 @@ export function createCacheStore(): CacheStore {
         entries,
         events,
         subscribe,
-        /* True while a reactive scope is reading this key — i.e. someone is holding
-           its value on screen. invalidate() gates its reload marker on this: a key
-           with no live reader has nothing to reload into, so the next read is a
-           first-ever load, not a refresh. */
+        /* True iff a live tracking scope is reading this key — i.e. someone is holding
+           its value on screen right now. An untracked read never registers (subscribe
+           gates on the tracking seam), so a bare handler/setup read does not make this
+           true. invalidate()/refresh() gate on this: a key with no live reader has
+           nothing to reload into, so the next read is a first-ever load, not a refresh. */
         hasReader: (key: string) => subscribers.has(key),
         trackLifecycle,
         markLifecycle,

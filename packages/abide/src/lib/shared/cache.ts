@@ -821,6 +821,12 @@ blanks. This is the old invalidate reborn as *refetch*: because SWR retains the
 value, there is no "invalidate that drops to pending" for the smart call. Follows
 invalidate's exact selector grammar (fn / fn+args / { tags } / bare = all).
 
+Only a match with a live reader refetches: refresh keeps the stale value visible
+until the fresh one swaps in, and with no reader on screen there is nothing to
+swap into — so a match whose reactive scope has torn down ("no longer has
+listeners") drops instead of firing a wasted network refetch, and the next read
+reloads it fresh.
+
 A smart-read match already carries an invalidation policy, so it routes straight
 through scheduleInvalidationRefetch (throttle/debounce-honouring). A policy-less
 remote match (an explicit cache() entry, or a hydrated one) gets a refetch armed
@@ -842,6 +848,16 @@ function refresh<Args, Return>(arg?: CacheSelector<Args, Return>, args?: Args): 
                 continue
             }
             matched.push(entry.key)
+            /* No live reader is holding this key — its reactive scope has torn down (or
+               it was never read reactively and already dropped). A refresh has no
+               on-screen value to keep-stale-and-swap, so firing the network now is
+               wasted work that may be stale again before anything shows it. Drop the
+               entry so the next read reloads fresh instead — the same lazy path a
+               reader-less invalidate() takes. */
+            if (!store.hasReader(entry.key)) {
+                store.entries.delete(entry.key)
+                continue
+            }
             /* Arm a refetch on the fly for a policy-less remote entry by replaying its
                stored Request — so a refresh always refetches-and-swaps, never blanks. */
             if (entry.invalidation === undefined && entry.request !== undefined) {
@@ -852,11 +868,10 @@ function refresh<Args, Return>(arg?: CacheSelector<Args, Return>, args?: Args): 
                 scheduleInvalidationRefetch(store, entry)
             } else {
                 /* No policy, no request (a producer never cached with swr): drop so the
-                   next read reloads, flagged a reload if a reader is holding it. */
+                   next read reloads. A reader is holding it (checked above), so flag the
+                   next read a reload (refreshing()). */
                 store.entries.delete(entry.key)
-                if (store.hasReader(entry.key)) {
-                    store.pendingRefresh.add(entry.key)
-                }
+                store.pendingRefresh.add(entry.key)
                 affected.push(entry.key)
             }
         }
