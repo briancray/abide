@@ -424,12 +424,19 @@ export function abideResolverPlugin({
                    expects (ADR-0028). undefined (no program / unresolvable Args / no coercible
                    field) stamps no plan — a GET field stays a string, exactly as today. */
                 const coercion = rpcServerProgram?.inputCoercionForModule(args.path)
+                /* The handler's return type projected to JSON Schema, stamped as `outputJsonSchema` so
+                   the runtime OpenAPI 200 / MCP outputSchema / inspector surface renders the real
+                   response shape without an author-declared `schemas.output` (ADR-0030 D2). undefined
+                   (no program / unprojectable body / an explicit override wins at runtime) stamps
+                   nothing — the surface falls back to today's behavior. */
+                const returnBodySchema = rpcServerProgram?.returnBodySchemaForModule(args.path)
                 const prepared = prepareRpcModule(
                     source,
                     importName,
                     streamingOverride,
                     durableOverride,
                     coercion,
+                    returnBodySchema,
                 )
                 if (!prepared) {
                     throw new Error(

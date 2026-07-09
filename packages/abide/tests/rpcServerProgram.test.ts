@@ -184,6 +184,37 @@ describe('rpc return-body resolution through the warm server program (ADR-0030)'
     })
 })
 
+describe('rpc return-body JSON Schema projection through the warm server program (ADR-0030 D2)', () => {
+    const program = createRpcServerProgram(STREAM_CWD, STREAM_RPC_DIR)
+
+    test('a plain json() handler projects its success body to an object schema', () => {
+        /* `plainData` is `GET(() => json({ ok: true }))` — the body `{ ok: boolean }` projects to an
+           object schema with `ok` required, feeding the OpenAPI 200 / MCP outputSchema when no
+           `schemas.output` is declared. */
+        expect(program.returnBodySchemaForModule(streamModule('plainData'))).toEqual({
+            type: 'object',
+            properties: { ok: { type: 'boolean' } },
+            required: ['ok'],
+        })
+    })
+
+    test('a jsonl() handler projects its per-FRAME body (not the iterable)', () => {
+        /* `directFeed` streams `{ n: number }` frames — the projected schema describes one streamed
+           item, mirroring returnBodyForModule's per-frame semantics. */
+        expect(program.returnBodySchemaForModule(streamModule('directFeed'))).toEqual({
+            type: 'object',
+            properties: { n: { type: 'number' } },
+            required: ['n'],
+        })
+    })
+
+    test('an unknown module path fails open to undefined (caller defers to schemas.output)', () => {
+        expect(
+            program.returnBodySchemaForModule(resolve(STREAM_RPC_DIR, 'missing.ts')),
+        ).toBeUndefined()
+    })
+})
+
 describe('rpc structured wire-kind plan through the warm server program (ADR-0029)', () => {
     const program = createRpcServerProgram(SERVER_CWD, SERVER_RPC_DIR)
 

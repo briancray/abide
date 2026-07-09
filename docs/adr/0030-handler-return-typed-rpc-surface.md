@@ -48,12 +48,27 @@ frame type) — reusing `handlerReturnsStream`'s handler-signature + `unwrapProm
 then projecting `SuccessBody` (drop error branches, take the `TypedResponse` body). Fail-open to
 undefined like every other query.
 
-### D2 — the generators consume it; `schemas.output` becomes an override, not a requirement
+### D2 — the generators consume it; `schemas.output` becomes an override, not a requirement (ACCEPTED)
 
-`writeRpcDts` emits the resolved body type. The OpenAPI/MCP projection uses the resolved type
-when no `schemas.output` is declared, and lets an explicit `schemas.output` **override** it (a
-runtime-validated narrowing the type can't express). So a plainly-typed handler gets a typed
-surface for free; an author who wants runtime output validation still declares `schemas.output`.
+**Shipped.** A `ts.Type`→JSON-Schema projector (`jsonSchemaForType`) — the complement of
+`jsonSchemaForSchema`, which projects a runtime validator — generates the OpenAPI 200 / MCP
+`outputSchema` / inspector output shape from the handler's return type when no `schemas.output`
+validator is declared. A `returnBodySchemaForModule` query on the warm server program resolves the
+same success-body `ts.Type`(s) as `returnBodyForModule` and runs the projector. An explicit
+`schemas.output` still **overrides** it (a runtime-validated narrowing the type can't express). So a
+plainly-typed handler gets a typed output surface for free; an author who wants runtime output
+validation still declares `schemas.output`. `.d.ts` return-body emission stays out of scope — the
+spike confirmed the caller's `Return` already flows natively (below).
+
+**Projector scope.** Covers what `json()`/`jsonl()` emit: string / string-literal `const` / literal
+union `enum`; number / boolean / null; `bigint` → string (no JSON bigint — matches the ADR-0029 wire
+representation); `Date` → `date-time`; object → `properties` + `required` (optional and
+`undefined`-bearing properties excluded); index signature / `Record<string,V>` → `additionalProperties`;
+`T[]` → `items`; tuple → `prefixItems` + `items: false`; union → `anyOf` with optionality-only
+`undefined`/`null` members stripped. **Fails open** to permissive `{}` (omitted at the top level) for
+`any`/`unknown`, generics it can't resolve, intersections, functions, branded/opaque types; a
+**mandatory cycle guard** emits `{}` on a self-referential revisit. It never throws, so a projection
+gap can't break a build.
 
 ## Consequences (anticipated)
 
@@ -67,14 +82,22 @@ surface for free; an author who wants runtime output validation still declares `
 
 ## Resolved by the spike (2026-07-09)
 
-- **Type → JSON-Schema projection quality → DEFERRED.** There is **no** TS-type→JSON-Schema step to
-  reuse. The single projector, `jsonSchemaForSchema`, runs off a **runtime** Standard-Schema object
-  (it probes `schema.toJsonSchema()`/`toJSONSchema()`) — it cannot consume a `ts.Type`. Every
-  external surface (`buildOpenApiSpec`, `mcpTools`, `buildInspectorSurface`) feeds it the runtime
-  `entry.outputSchema`. Wiring the resolved return type into those surfaces therefore requires a new
-  `ts.Type`→JSON-Schema projector whose fidelity (unions, generics, branded types) is the real
-  cost. Per the ADR's "spike before committing", D2's generator wiring is **deferred**; D1's query
-  ships as the foundation.
+- **Type → JSON-Schema projection quality → RESOLVED, projector built.** There was **no**
+  TS-type→JSON-Schema step to reuse: the single projector, `jsonSchemaForSchema`, runs off a
+  **runtime** Standard-Schema object (it probes `schema.toJsonSchema()`/`toJSONSchema()`) — it can't
+  consume a `ts.Type`. D2 adds the missing `ts.Type`→JSON-Schema projector (`jsonSchemaForType`) at
+  the fidelity above.
+- **Where do the surfaces get their schema — build time or runtime? → RUNTIME registry, so the
+  projected schema is BAKED at build time.** Every external surface (`buildOpenApiSpec`, `mcpTools`,
+  `buildInspectorSurface`) renders off the live `rpcRegistry` — it reads `entry.outputSchema` and runs
+  it through `jsonSchemaForSchema`. None of them runs inside the resolver-plugin build context, so
+  none can reach the warm program to project on demand. The projected schema therefore has to be
+  **baked at build time and stamped into the runtime `defineRpc` call**, exactly like ADR-0028's
+  `coerce` plan: the resolver plugin calls `returnBodySchemaForModule` and `prepareRpcModule` stamps
+  the result as an `outputJsonSchema` opt; `defineRpc` threads it onto a new
+  `RpcRegistryEntry.outputJsonSchema` field; the three surfaces fall back to it when
+  `entry.outputSchema` (the validator) is absent. Evidence: the surfaces import `rpcRegistry` and read
+  `entry.outputSchema`; the `coerce` plan already follows this stamp-into-`defineRpc` path.
 - **`.d.ts` emission vs. native resolution → external surfaces only.** Confirmed empirically:
   `writeRpcDts` emits only `RpcArgs<typeof import(...)>` (the args side), never the return body — the
   caller's `Return` flows through TS natively from the imported rpc module (ADR-0022 D2). So the
@@ -83,10 +106,14 @@ surface for free; an author who wants runtime output validation still declares `
 
 ## Open questions (deferred)
 
-- **The TS-type→JSON-Schema projector.** The blocker for D2. Once it exists, `buildOpenApiSpec` /
-  `mcpTools` / `buildInspectorSurface` use `returnBodyForModule`'s resolved type when no
-  `schemas.output` is declared, with `schemas.output` still overriding (a runtime-validated
-  narrowing the type can't express). The projector's fidelity bounds what the surface can claim.
+- **`.d.ts` return-body emission.** Still not emitted — the spike confirmed `writeRpcDts` emits only
+  the args side (`RpcArgs<typeof import(...)>`) and the caller's `Return` flows natively from the
+  imported rpc module (ADR-0022 D2), so client typing needs nothing here. Emitting the body type into
+  the `.d.ts` for external (non-TS) consumers remains a possible extension.
 - **Error-branch surfacing.** `InferredErrors` already types the client guard from the handler's
   `error.typed(...)` branches; whether the OpenAPI error responses should be generated from the same
-  resolution is a natural extension to weigh alongside the projector work.
+  resolution — reusing `jsonSchemaForType` on the dropped `TypedError` branches — is a natural
+  extension now that the projector exists.
+- **Projector fidelity growth.** The projector fails open on generics, intersections, and branded
+  types; widening coverage (e.g. resolved generic instantiations) is incremental and bounded only by
+  what a surface can honestly claim.

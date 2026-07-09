@@ -24,6 +24,10 @@ export type RpcRegistryEntry = {
     remote: RemoteFunction<unknown, unknown>
     inputSchema: StandardSchemaV1 | undefined
     outputSchema: StandardSchemaV1 | undefined
+    /* The handler's return type projected to JSON Schema at build time (ADR-0030 D2) — the output
+       surface's fallback when no `outputSchema` VALIDATOR is declared. Already JSON Schema (not a
+       validator), so surfaces use it verbatim; `outputSchema`, when present, overrides it. */
+    outputJsonSchema: Record<string, unknown> | undefined
     filesSchema: StandardSchemaV1 | undefined
     /* The rpc's declared opts, recorded so introspection (inspector) can report
        the deadline/body-cap a handler runs under. Undefined = the framework default
