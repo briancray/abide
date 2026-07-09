@@ -67,6 +67,11 @@ export function lowerScript(
        so `desugarSignals` recognizes these declarations by name — routing each to an eager
        `trackedComputed` stream cell — rather than by import resolution. Empty on every other path. */
     injectedCellNames: ReadonlySet<string> = new Set(),
+    /* The subset of `injectedCellNames` whose author wrote `await` (ADR-0032): a BLOCKING peek-cell
+       that joins the SSR barrier (resolved inline), vs a streaming one that ships pending. Threaded
+       to `desugarSignals` so `injectedComputedStatements` passes the right `trackedComputed`
+       streaming flag. Empty on every other path. */
+    blockingCellNames: ReadonlySet<string> = new Set(),
     /* Names the template writes/forwards (`writtenTemplateNames`), so a `props()` binding used
        two-way is desugared to a writable cell rather than a read-only derive. Empty for a nested
        script (which declares no props). */
@@ -90,6 +95,7 @@ export function lowerScript(
     const { transformer, stateNames, derivedNames, computedNames, cellReadNames } = desugarSignals(
         source,
         injectedCellNames,
+        blockingCellNames,
         templateWrittenNames,
         seedClassify,
         scriptBase,

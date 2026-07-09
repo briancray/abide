@@ -25,10 +25,18 @@ the enclosing build.
 */
 export function trackedComputed<T>(
     compute: () => T | Promise<T> | NamedAsyncIterable<T>,
+    /* ADR-0032: when the compiler lifts a no-`await` async (sub)expression to a cell, it passes
+       `streaming: true` so the resolved promise does not join the SSR blocking barrier (the shell
+       ships pending, the client resolves). Default false = today's blocking registration; a stream
+       seed never registers regardless, so it only matters for a promise-unwrapping seed. */
+    streaming = false,
 ): Computed<T> | AsyncComputed<T> {
     /* `await` marker: an async-function seed unwraps its promise into a read-only async cell. */
     if (isAsyncFunction(compute)) {
-        return createAsyncCell(compute as () => unknown, { writable: false }) as AsyncComputed<T>
+        return createAsyncCell(compute as () => unknown, {
+            writable: false,
+            streaming,
+        }) as AsyncComputed<T>
     }
     /* Probe the seed once (untracked) to detect a self-identifying stream. A discarded stream
        iterable costs nothing — a streaming rpc defers its fetch to the first pull, which never
@@ -42,7 +50,10 @@ export function trackedComputed<T>(
         threw = true
     }
     if (!threw && isAsyncIterable(probe)) {
-        return createAsyncCell(compute as () => unknown, { writable: false }) as AsyncComputed<T>
+        return createAsyncCell(compute as () => unknown, {
+            writable: false,
+            streaming,
+        }) as AsyncComputed<T>
     }
     /* Sync value or a bare (opaque) promise: the lazy computed, identical to the primitive. */
     const node = createComputedNode(compute as () => unknown)

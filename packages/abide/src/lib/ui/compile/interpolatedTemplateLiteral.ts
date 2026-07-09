@@ -16,9 +16,11 @@ prop value can't diverge on the concatenation. Always yields a string, so an
 interpolated attribute is always present.
 */
 export function interpolatedTemplateLiteral(parts: TextPart[]): string {
+    /* A dynamic slot coerces nullish to empty so `attr="a {v} b"` with a pending/undefined
+       `v` yields `"a  b"`, never `"a undefined b"` (ADR-0032 D3). */
     const body = parts
         .map((part) =>
-            part.kind === 'static' ? escapeTemplateChunk(part.value) : `\${${part.code}}`,
+            part.kind === 'static' ? escapeTemplateChunk(part.value) : `\${(${part.code}) ?? ''}`,
         )
         .join('')
     return `\`${body}\``

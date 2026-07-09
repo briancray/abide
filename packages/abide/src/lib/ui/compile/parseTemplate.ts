@@ -236,13 +236,11 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
             if (condition === '') {
                 throw new Error('[abide] {#if} requires a condition expression')
             }
-            rejectAwaitValue(condition, exprLoc(open.loc, open.body, start))
             const children = readBlockChildren('if')
             return { kind: 'if', condition, children, loc: exprLoc(open.loc, open.body, start) }
         }
         if (keyword === 'for') {
             const head = parseForHead(open.body, open.loc)
-            rejectAwaitValue(head.items, head.loc)
             const children = readBlockChildren('for')
             return {
                 kind: 'each',
@@ -290,7 +288,6 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
             if (subject === '') {
                 throw new Error('[abide] {#switch} requires a subject expression')
             }
-            rejectAwaitValue(subject, exprLoc(open.loc, open.body, start))
             const children = readBlockChildren('switch')
             return { kind: 'switch', subject, children, loc: exprLoc(open.loc, open.body, start) }
         }
@@ -596,7 +593,6 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
             }
             if (source.charAt(cursor) === '{') {
                 const { code, loc } = readBracedExpression()
-                rejectAwaitValue(code, loc) // no block can be synthesised in an attribute value
                 if (name.startsWith('on')) {
                     attrs.push({ kind: 'event', event: name.slice(2), code, loc })
                 } else if (name.startsWith('bind:')) {
@@ -625,7 +621,6 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
                             literal = ''
                         }
                         const { code, loc } = readBracedExpression()
-                        rejectAwaitValue(code, loc) // no block in a quoted attribute value
                         parts.push({ kind: 'expression', code, loc })
                     } else {
                         literal += source.charAt(cursor)
@@ -798,20 +793,6 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
     }
     rejectStrayBranches(roots, undefined)
     return { nodes: roots }
-}
-
-/* Rejects a leading top-level `await` in a NON-content value position — an attribute
-   value, or an `{#if}`/`{#for}`/`{#switch}` head. `{await …}` desugars to a blocking
-   await BLOCK, which can only stand where element content stands; in a value slot there
-   is no block to synthesise. `code` is the already-trimmed expression, so a depth-0
-   leading `await` is simply its prefix. */
-function rejectAwaitValue(code: string, loc: number): void {
-    if (AWAIT_PREFIX.test(code)) {
-        throw new AbideCompileError(
-            '[abide] {await …} is only valid as element content — in an attribute value or an {#if}/{#for}/{#switch} head, use computed(await …) and bind the cell',
-            loc,
-        )
-    }
 }
 
 /* Finds the index of a ` <token> ` keyword (` of `, ` by `) at brace/paren/bracket

@@ -67,29 +67,35 @@ export function analyzeComponent(
        reactive import (`state`) alive when only a nested branch uses it (its
        `state.computed(...)` stays literal, unlike the desugared leading script). */
     const parsed = parseTemplate(template, templateBase)
-    /* Type-directed interpolation lowering (ADR-0019): when the build supplies a
-       classifier, rewrite each promise-typed text interpolation into a streaming await
-       block and each asyncIterable-typed one into a stream cell BEFORE the script lowers and
-       scopes annotate — the synthesized await node then flows through the same back-ends as an
-       explicit `{#await}`, and the stream cell through the normal signal pipeline. Without a
-       classifier the template is returned untouched, so the default path is exactly today's
-       behavior. */
-    const { nodes, cells } =
-        classify === undefined
-            ? { nodes: parsed.nodes, cells: [] }
-            : lowerAsyncInterpolations(parsed.nodes, classify)
-    /* Each asyncIterable interpolation `{expr}` was rewritten to a bare `{__cN}`; APPEND a
-       matching `const __cN = computed(expr)` to the script so `expr`'s author-signal reads lower
-       through the normal pipeline and the declaration desugars to an eager `trackedComputed`
-       stream cell (read via `$$readCell(__cN)`). `computed` here is a bare, unimported callee —
-       `desugarSignals` recognizes it by the injected name (`injectedCellNames`), not by import
-       resolution, so it routes to `trackedComputed` exactly as an explicit `state.computed(expr)`
-       bare-call seed would. Appended (after the author's `state(...)` inits, not before) so a
-       signal-arg stream `{getStream(count)}` seeds from the INITIALIZED `count` rather than
-       transiently subscribing to `getStream(undefined)` and reseeding — the cell only feeds the
-       render, which runs after the whole script, so end-of-script placement is safe. */
+    /* Type-directed async lowering (ADR-0032): lift every promise/`AsyncIterable`-typed
+       (sub)expression — in content AND value positions — to an injected peek-cell, rewriting it
+       in place to a bare `{__vN}` reference BEFORE the script lowers and scopes annotate, so it
+       reads `undefined` while pending and composes with `??`/`?.`. Runs unconditionally: with no
+       classifier only syntactic `await`s lift (fail-open), so a value-position `{await …}` still
+       works while a bare async position degrades to today's plain binding. */
+    const { nodes, cells } = lowerAsyncInterpolations(parsed.nodes, classify)
+    /* Each lifted async (sub)expression was rewritten to a bare `{__vN}` reference; APPEND a
+       matching `const __vN = computed(<seed>)` to the script so the seed's author-signal reads
+       lower through the normal pipeline and the declaration desugars to a `trackedComputed` cell
+       (read via `$$readCell(__vN)`). `computed` here is a bare, unimported callee — `desugarSignals`
+       recognizes it by the injected name (`injectedCellNames`), not by import resolution. A
+       BLOCKING cell (author `await`, `blockingCellNames`) joins the SSR barrier; a streaming one
+       ships pending. Appended (after the author's `state(...)` inits, not before) so a signal-arg
+       seed `{getStream(count)}` reads the INITIALIZED `count`; the cell only feeds the render,
+       which runs after the whole script, so end-of-script placement is safe. */
     const injectedCellNames = new Set(cells.map((cell) => cell.name))
-    const injectedScript = cells.map((cell) => `const ${cell.name} = computed(${cell.code});`)
+    const blockingCellNames = new Set(
+        cells.filter((cell) => cell.blocking).map((cell) => cell.name),
+    )
+    /* A promise seed is wrapped as an async thunk `async () => await (<code>)` — inside an async
+       arrow `await` is a keyword and the parens are unambiguous (a bare-text `computed(await (X))`
+       reparsed at module scope reads `await(X)` as a call). A stream seed stays a bare
+       `computed(<code>)` (byte-identical to an explicit `state.computed(getStream())`). */
+    const injectedScript = cells.map((cell) =>
+        cell.kind === 'promise'
+            ? `const ${cell.name} = computed(async () => await (${cell.code}));`
+            : `const ${cell.name} = computed(${cell.code});`,
+    )
     const fullScriptBody =
         injectedScript.length === 0
             ? scriptBody
@@ -118,6 +124,7 @@ export function analyzeComponent(
         fullScriptBody,
         nestedScriptCode,
         injectedCellNames,
+        blockingCellNames,
         templateWrittenNames,
         seedClassify,
         scriptContentBase,

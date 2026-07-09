@@ -85,7 +85,9 @@ describe('attribute interpolation — component props', () => {
         const { nodes } = parseTemplate(`<Greeting label="hi {name}!" />`)
         const comp = nodes[0]
         if (comp.kind !== 'component') throw new Error('not component')
-        expect(comp.props[0]).toMatchObject({ name: 'label', code: '`hi ${name}!`' })
+        /* Each dynamic slot coerces nullish to empty (ADR-0032 D3), so a pending/undefined
+           `name` yields `"hi !"`, never `"hi undefined!"`. */
+        expect(comp.props[0]).toMatchObject({ name: 'label', code: "`hi ${(name) ?? ''}!`" })
     })
 })
 

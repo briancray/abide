@@ -17,7 +17,10 @@ across bundles. Emitted inline (not imported) so the generated render module is
 self-contained.
 */
 export const SSR_ESCAPE =
-    'const $esc = (v) => String(v).replace(/[&<>"\']/g, (c) => ' +
+    // Nullish escapes to empty text, never the literal `"undefined"` — a pending async
+    // read (ADR-0032 D3) renders nothing. `$attr` guards nullish before it calls `$esc`,
+    // so its whole-value undefined still drops the attribute.
+    'const $esc = (v) => (v == null ? "" : String(v)).replace(/[&<>"\']/g, (c) => ' +
     "({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', \"'\": '&#39;' })[c]);\n" +
     'const $attr = (n, v) => (v === false || v === null || v === undefined) ? "" ' +
     ': v === true ? (" " + n) : (" " + n + \'="\' + $esc(v) + \'"\');\n' +

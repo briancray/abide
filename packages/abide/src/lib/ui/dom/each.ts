@@ -107,7 +107,9 @@ export function each<T>(
     const hydration = RENDER.hydration
     if (hydration !== undefined) {
         let position = 0
-        for (const item of items()) {
+        /* An undefined source renders an empty list, not a throw — a `{#for x in promise}`
+           whose lifted source peeks undefined while pending (ADR-0032 D3). */
+        for (const item of items() ?? []) {
             const key = keyOf(item)
             const row = buildRow(item, position) // claims the SSR row where it sits
             if (rows.has(key)) {
@@ -148,7 +150,8 @@ export function each<T>(
            freshly keyed row. withoutHydration restores the outer cursor after, so the
            enclosing hydrate pass is untouched (mirrors awaitBlock/tryBlock). */
         withoutHydration(() => {
-            const list = Array.isArray(source) ? source : [...source]
+            /* Undefined source → empty list (see the hydration loop, ADR-0032 D3). */
+            const list = source == null ? [] : Array.isArray(source) ? source : [...source]
             const keys = list.map(keyOf)
             generation += 1
             const pass = generation

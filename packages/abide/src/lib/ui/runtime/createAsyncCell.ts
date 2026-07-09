@@ -17,6 +17,12 @@ type Transform = (next: unknown, previous: unknown) => unknown
 type AsyncCellOptions = {
     writable: boolean
     transform?: Transform
+    /* ADR-0032: a STREAMING cell must NOT join the SSR blocking barrier. A no-`await` async
+       value/content position lowers to a cell that ships pending-`undefined` in the shell and
+       resolves on the client, rather than blocking the first flush inline (that is the `await`
+       tier). Absent/false → today's blocking registration (`await` tier / a keyed bare read).
+       A stream (`isAsyncIterable`) never registers regardless — this only gates a promise seed. */
+    streaming?: boolean
 }
 
 /*
@@ -155,8 +161,10 @@ export function createAsyncCell(
                the SSR barrier (`$$settleAsyncCells`) awaits it before the template peeks the
                cell — baking the resolved value into the first-pass HTML (ADR-0019 Tier-2). A
                stream (the `isAsyncIterable` branch above) never registers: it never settles. The
-               `window` guard keeps client construction from ever registering. */
-            if (typeof window === 'undefined') {
+               `window` guard keeps client construction from ever registering. A `streaming`
+               cell (ADR-0032, a no-`await` position) opts OUT: it ships pending and resolves on
+               the client instead of blocking the flush. */
+            if (typeof window === 'undefined' && options.streaming !== true) {
                 pendingAsyncCellsSlot.get()?.promises.push(inFlight)
             }
             /* `.then(onValue, onError)` handles the rejection inline — contained in `error()`,

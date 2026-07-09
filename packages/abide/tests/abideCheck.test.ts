@@ -275,21 +275,29 @@ describe('abide check', () => {
         expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
     })
 
-    /* Stage E parity (ADR-0019): the build front-end throws on a promise/asyncIterable in a
-       NON-content value position; `abide check` surfaces the same guard as a located Error so
-       the LSP and CLI catch it too. */
-    test('a promise in an attribute value is flagged and mapped to the expression', () => {
+    /* ADR-0032: a promise in an attribute value now LIFTS to a peek-cell — it is no longer a
+       value-position error, so `abide check` raises no diagnostic for it. */
+    test('a promise in an attribute value is no longer flagged (it lifts to a peek-cell)', () => {
         const source = `<script>\nimport { props } from '@abide/abide/ui/props'\nconst { title } = props<{ title: Promise<string> }>()\n</script>\n<div class={title}></div>\n`
         const dir = project({ 'attr.abide': source })
         const diagnostics = collectAbideDiagnostics(createShadowProgram(dir))
-        expect(diagnostics).toHaveLength(1)
-        expect(diagnostics[0]!.message).toContain('an attribute')
-        /* The span lands on the offending interpolation. */
-        const span = source.slice(
-            diagnostics[0]!.start,
-            diagnostics[0]!.start + diagnostics[0]!.length,
+        expect(diagnostics).toHaveLength(0)
+    })
+
+    /* ADR-0032 D4a: the ONE remaining value-position error — a raw `AsyncIterable` driving a
+       PLAIN `{#for}` (a frame is not a collection; iterate with `{#for await}`). Flagged and
+       mapped to the items expression. */
+    test('a raw AsyncIterable in a plain {#for} is flagged and mapped to the items expression', () => {
+        const source = `<script>\nimport { props } from '@abide/abide/ui/props'\nconst { stream } = props<{ stream: AsyncIterable<number> }>()\n</script>\n{#for n of stream}<p>{n}</p>{/for}\n`
+        const dir = project({ 'each.abide': source })
+        const diagnostics = collectAbideDiagnostics(createShadowProgram(dir))
+        const flagged = diagnostics.filter((diagnostic) =>
+            diagnostic.message.includes('{#for await}'),
         )
-        expect(span).toBe('title')
+        expect(flagged).toHaveLength(1)
+        /* The span lands on the offending items expression. */
+        const span = source.slice(flagged[0]!.start, flagged[0]!.start + flagged[0]!.length)
+        expect(span).toBe('stream')
     })
 
     /* The sanctioned `{#for await}` iterable is exempt — an AsyncIterable there is valid. */

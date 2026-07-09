@@ -198,7 +198,8 @@ Bindings and directives (the attribute kinds `readAttributes` parses):
 
 | Form | Spec |
 | --- | --- |
-| `{expr}` | Text interpolation, escaped; a snippet or `html`-branded value mounts as nodes |
+| `{expr}` | Text interpolation, escaped; a snippet or `html`-branded value mounts as nodes. Type-directed (ADR-0032): a `Promise`/`AsyncIterable`-typed `{expr}` (or an async sub-expression) lifts to a peek-cell — `undefined` while pending (composes with `??`/`?.`), then the resolved value / latest frame; a plain value binds directly |
+| `{await expr}` | Explicit **blocking** await — renders the awaited value inline during SSR. Valid in every position (ADR-0032): content, an attribute, an `{#if}`/`{#switch}` subject, a `{#for}` source |
 | `name={expr}` | Attribute/prop bound to an expression |
 | `name="a {expr} b"` | Interpolated attribute — a literal `{` in a quoted value always interpolates (write `&lbrace;` for a literal brace) |
 | `{...expr}` | Spread — props onto a component, attributes onto a native element (rejected on `<template>`) |
@@ -223,6 +224,15 @@ error):
 | `{#switch subject}{:case match}…{:default}…{/switch}` | Multi-branch on a subject; only branches render — stray content is a compile error |
 | `{#try}…{:catch e}…{:finally}…{/try}` | Synchronous error boundary around a build/reactive throw |
 | `{#snippet name(args)}…{/snippet}` | Declares a reusable builder, called as an interpolation: `{name(args)}`; a snippet value passes through props like any other value |
+
+A `Promise`/`AsyncIterable` (or an async sub-expression) lifts to a peek-cell in
+**every** position (ADR-0032) — content, an attribute, an `{#if}`/`{#switch}`
+subject, a plain `{#for}` source — reading `undefined` while pending, so
+`{getFoo() ?? 'Loading…'}` shows the fallback, `{#if getFoo()}` takes the else
+branch, and a pending `{#for}` renders empty. A leading `await` makes it
+SSR-blocking (resolved inline); no `await` streams (pending shell, resolves on the
+client). The one rejection is a raw `AsyncIterable` driving a plain `{#for}` —
+iterate its frames with `{#for await}`.
 
 Components are capitalised tags (`<Panel prop={x}>…</Panel>`); nested content
 becomes the component's `children` prop — an ordinary declared prop of type

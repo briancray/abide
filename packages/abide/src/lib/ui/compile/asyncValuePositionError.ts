@@ -2,28 +2,20 @@ import type { InterpolationKind } from './types/InterpolationKind.ts'
 import type { ValuePositionInterpolation } from './types/ValuePositionInterpolation.ts'
 
 /*
-The Stage E guard rule (ADR-0019): given a value-position interpolation's classified
-kind and position, returns the compile-error message when a `Promise`/`AsyncIterable`
-sits where it can't render over time (so it would silently stringify to `[object
-Promise]`), or undefined when it's allowed. A `Promise` errors in EVERY value position;
-an `AsyncIterable` errors everywhere EXCEPT `{#for await}`, its sanctioned iterable. A
-`sync` value is always allowed. Shared by the two guard sites so both raise identically.
+The narrowed value-position guard (ADR-0032): a promise/`AsyncIterable` (sub)expression now LIFTS
+to a peek-cell in every position — an attribute, an `{#if}`/`{#switch}` subject, a plain `{#for}`
+source — reading `undefined` while pending. The ONE remaining error is a raw `AsyncIterable`
+driving a PLAIN `{#for}`: a frame is not a collection, so iterate its frames with `{#for await}`
+(the `for await` position is exempt). Everything else (promises everywhere, streams in attribute/
+`{#if}`/`{#switch}`/content) is allowed. Shared by the build front-end (`liftAsyncSubExpressions`
+throws the same message) and `abide check` (`collectAbideDiagnostics`).
 */
 export function asyncValuePositionError(
     kind: InterpolationKind,
     position: ValuePositionInterpolation['position'],
 ): string | undefined {
-    const errors = kind === 'promise' || (kind === 'asyncIterable' && position !== 'for await')
-    if (!errors) {
+    if (kind !== 'asyncIterable' || position !== 'each') {
         return undefined
     }
-    const where =
-        position === 'attribute'
-            ? 'an attribute'
-            : position === 'if'
-              ? 'an `{#if}`'
-              : position === 'switch'
-                ? 'a `{#switch}`'
-                : 'an `{#each}`'
-    return `[abide] a \`Promise\`/\`AsyncIterable\` can't be used in ${where} here — render it as content (\`{await …}\` or \`{expr}\`), or wrap it in \`computed(await …)\` / \`computed(getStream())\` and bind the resulting cell.`
+    return "[abide] an `AsyncIterable` can't drive a plain `{#for}` — iterate its frames with `{#for await}`."
 }

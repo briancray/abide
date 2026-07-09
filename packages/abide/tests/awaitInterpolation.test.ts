@@ -91,36 +91,39 @@ describe('{await expr} SSR (blocking, bakes into the HTML)', () => {
     })
 })
 
-describe('{await expr} position guard', () => {
-    /* An attribute value is not element content — no block can be synthesised there. */
-    test('a leading await in an attribute value is a compile error', () => {
-        expect(() => compileComponent('<div class={await foo()}></div>')).toThrow(
-            /only valid as element content/,
-        )
+/* ADR-0032 D2/D5: a leading `await` in a value position is no longer rejected — it lifts to a
+   BLOCKING peek-cell (`, false`), joining the SSR barrier, and the position reads `$$readCell`.
+   `await` is syntactic, so the lift fires WITHOUT a classifier. */
+describe('{await expr} value-position lift (blocking)', () => {
+    test('a leading await in an attribute value lifts to a blocking peek-cell', () => {
+        const lowered = compileComponent('<div class={await foo()}></div>')
+        expect(lowered).toContain('$$scope().trackedComputed(async () => await (foo()), false)')
+        expect(lowered).toContain('$$attr(el1, "class"')
+        expect(lowered).toContain('$$readCell(__v0)')
     })
 
-    test('a leading await in a quoted attribute value is a compile error', () => {
-        expect(() => compileComponent('<div class="{await foo()}"></div>')).toThrow(
-            /only valid as element content/,
-        )
+    test('a leading await in a quoted attribute value lifts to a blocking peek-cell', () => {
+        const lowered = compileComponent('<div class="{await foo()}"></div>')
+        expect(lowered).toContain('$$scope().trackedComputed(async () => await (foo()), false)')
+        expect(lowered).toContain('$$readCell(__v0)')
     })
 
-    test('a leading await in an {#if} head is a compile error', () => {
-        expect(() => compileComponent('{#if await ready()}<p>ok</p>{/if}')).toThrow(
-            /only valid as element content/,
-        )
+    test('a leading await in an {#if} head lifts to a blocking peek-cell', () => {
+        const lowered = compileComponent('{#if await ready()}<p>ok</p>{/if}')
+        expect(lowered).toContain('$$scope().trackedComputed(async () => await (ready()), false)')
+        expect(lowered).toContain('$$when(host, () => ($$readCell(__v0))')
     })
 
-    test('a leading await in a {#for} iterable is a compile error', () => {
-        expect(() => compileComponent('{#for x of await list()}<p>{x}</p>{/for}')).toThrow(
-            /only valid as element content/,
-        )
+    test('a leading await in a {#for} iterable lifts to a blocking peek-cell', () => {
+        const lowered = compileComponent('{#for x of await list()}<p>{x}</p>{/for}')
+        expect(lowered).toContain('$$scope().trackedComputed(async () => await (list()), false)')
+        expect(lowered).toContain('$$each(host, () => ($$readCell(__v0))')
     })
 
-    test('a leading await in a {#switch} subject is a compile error', () => {
-        expect(() => compileComponent('{#switch await pick()}{:case 1}<p>a</p>{/switch}')).toThrow(
-            /only valid as element content/,
-        )
+    test('a leading await in a {#switch} subject lifts to a blocking peek-cell', () => {
+        const lowered = compileComponent('{#switch await pick()}{:case 1}<p>a</p>{/switch}')
+        expect(lowered).toContain('$$scope().trackedComputed(async () => await (pick()), false)')
+        expect(lowered).toContain('$$switchBlock(host, () => ($$readCell(__v0))')
     })
 })
 

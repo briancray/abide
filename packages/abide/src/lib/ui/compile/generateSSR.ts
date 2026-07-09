@@ -388,10 +388,13 @@ export function generateSSR(
             /* `index="i"` binds the row position. SSR reads it as a plain number from
                `entries()` over a materialized array; the client reads the same number from a
                cell, so first paint is congruent. No index → a plain `for…of` over the items. */
+            /* An undefined source renders no rows, not a throw — a `{#for x in promise}`
+               whose lifted source peeks undefined while pending (ADR-0032 D3). Mirrors the
+               client `each`'s undefined-as-empty guard. */
             const header =
                 plan.index === undefined
-                    ? `for (const ${plan.as} of (${lowerExpression(plan.items)}))`
-                    : `for (const [${plan.index}, ${plan.as}] of [...(${lowerExpression(plan.items)})].entries())`
+                    ? `for (const ${plan.as} of ((${lowerExpression(plan.items)}) ?? []))`
+                    : `for (const [${plan.index}, ${plan.as}] of [...((${lowerExpression(plan.items)}) ?? [])].entries())`
             return `${anchor}${header} {\n${rowBody}}\n`
         }
         if (node.kind === 'await') {

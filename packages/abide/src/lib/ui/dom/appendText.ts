@@ -38,7 +38,10 @@ export function appendText(parent: Node, read: () => unknown, splitAlways = fals
     const hydration = RENDER.hydration
     if (hydration !== undefined) {
         const claimed = claimChild(hydration, parent)
-        const value = String(read())
+        /* Nullish reads render as empty text, never the literal `"undefined"` — so a
+           pending async read (undefined-while-pending, ADR-0032 D3) shows nothing. */
+        const firstValue = read()
+        const value = firstValue == null ? '' : String(firstValue)
         /* A value that first rendered empty produced NO server text node, so the cursor
            points at the following node (an element/comment) or past the end (null) — not a
            text node to claim. Bind to a Text node either way: claim the merged SSR node when
@@ -74,14 +77,16 @@ export function appendText(parent: Node, read: () => unknown, splitAlways = fals
            at the end). */
         hydration.next.set(parent, isText ? node.nextSibling : claimed)
         effect(() => {
-            node.data = String(read())
+            const next = read()
+            node.data = next == null ? '' : String(next)
         })
         return
     }
     const node = document.createTextNode('')
     parent.appendChild(node)
     effect(() => {
-        node.data = String(read())
+        const next = read()
+        node.data = next == null ? '' : String(next)
     })
 }
 

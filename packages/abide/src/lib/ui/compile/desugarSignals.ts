@@ -197,6 +197,11 @@ export function desugarSignals(
        would be. Gated on the exact injected name (never a naming heuristic), so it can never
        reclassify author code — an author's own `computed(...)` still needs its import. */
     injectedCellNames: ReadonlySet<string> = new Set(),
+    /* The subset of `injectedCellNames` whose seed the author wrote `await` on (ADR-0032): a
+       BLOCKING peek-cell (`scope().trackedComputed(async …, false)` — an `AsyncComputed` that
+       joins the SSR barrier), vs a streaming one (`trackedComputed(async …, true)` — ships
+       pending, resolves on the client). Names not in this set are streaming. */
+    blockingCellNames: ReadonlySet<string> = new Set(),
     /* Names the TEMPLATE writes (assigned in an event expression, or forwarded as a `bind:`
        target) — see `writtenTemplateNames`. Unioned with the script's own write scan; a `props()`
        binding whose name lands in the union is a WRITABLE prop (a `.value` cell via `bindableProp`)
@@ -373,6 +378,7 @@ export function desugarSignals(
                     bindings,
                     signalNames,
                     injectedCellNames,
+                    blockingCellNames,
                     writtenNames,
                     isEagerStreamComputed,
                 ),
@@ -393,12 +399,13 @@ function loweredStatement(
     bindings: ReactiveImportBindings,
     signalNames: ReadonlySet<string>,
     injectedCellNames: ReadonlySet<string>,
+    blockingCellNames: ReadonlySet<string>,
     writtenNames: ReadonlySet<string>,
     isEagerStreamComputed: EagerStreamPredicate,
 ): ts.Statement[] {
     rejectMixedDeclaration(statement, bindings)
     return (
-        injectedComputedStatements(statement, injectedCellNames) ??
+        injectedComputedStatements(statement, injectedCellNames, blockingCellNames) ??
         stateAssignmentStatements(statement, bindings) ??
         computedStatements(statement, bindings, signalNames, isEagerStreamComputed) ??
         propsStatements(statement, bindings, writtenNames) ??
@@ -406,15 +413,20 @@ function loweredStatement(
     )
 }
 
-/* Lowers a synthetic `const __cN = computed(expr)` (an asyncIterable interpolation cell
-   `analyzeComponent` injected) to `const __cN = scope().trackedComputed(() => expr)` — the same
-   eager stream cell an explicit `state.computed(getStream())` bare-call seed produces, so the two
-   forms emit byte-identically. Recognized by the injected name, since `computed` is unimported
-   here; returns undefined for any statement that is not one of these injected cells (each is
-   emitted as its own single-declaration statement). */
+/* Lowers a synthetic `const __vN = computed(<seed>)` (an async (sub)expression peek-cell
+   `analyzeComponent` injected, ADR-0032) to a `scope().trackedComputed(...)` cell read via
+   `$$readCell`. Two shapes, by the seed:
+     - a PROMISE seed (`computed(await X)` → an async `() => await X` thunk) → `trackedComputed(
+       thunk, <streaming>)`, where `streaming = !blockingCellNames.has(name)`: a blocking cell
+       (author `await`) joins the SSR barrier and resolves inline; a streaming one ships pending.
+     - an `AsyncIterable` seed (`computed(getStream())` → a bare `() => getStream()` thunk) →
+       `trackedComputed(thunk)`, byte-identical to an explicit `state.computed(getStream())`.
+   Recognized by the injected name (`computed` is unimported here); returns undefined for any
+   statement that is not one of these injected cells (each is its own single-declaration statement). */
 function injectedComputedStatements(
     statement: ts.Statement,
     injectedCellNames: ReadonlySet<string>,
+    blockingCellNames: ReadonlySet<string>,
 ): ts.Statement[] | undefined {
     if (!ts.isVariableStatement(statement)) {
         return undefined
@@ -424,6 +436,7 @@ function injectedComputedStatements(
         if (!ts.isIdentifier(declaration.name) || !injectedCellNames.has(declaration.name.text)) {
             return undefined
         }
+        const name = declaration.name.text
         const argument = seedArgument(declaration)
         const wrapped =
             argument === undefined
@@ -436,9 +449,13 @@ function injectedComputedStatements(
                       factory.createIdentifier('undefined'),
                   )
                 : wrapSeed(argument)
-        statements.push(
-            constDeclaration(declaration.name.text, scopeMethodCall('trackedComputed', [wrapped])),
-        )
+        /* A promise seed (async thunk) unwraps to the resolved value and carries the SSR tier flag;
+           a stream seed (bare thunk) probes to a frame cell and needs no flag (a stream never joins
+           the barrier), so it stays a single-arg call to byte-match the explicit form. */
+        const args = isAsyncSeed(wrapped)
+            ? [wrapped, blockingCellNames.has(name) ? factory.createFalse() : factory.createTrue()]
+            : [wrapped]
+        statements.push(constDeclaration(name, scopeMethodCall('trackedComputed', args)))
     }
     return statements
 }
