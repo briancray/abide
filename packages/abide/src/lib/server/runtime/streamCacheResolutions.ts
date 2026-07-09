@@ -15,6 +15,7 @@ settles.
 export async function* streamCacheResolutions(
     store: CacheStore,
     pending: CacheEntry[],
+    deadlineMs?: number,
 ): AsyncIterable<StreamedResolution> {
     /*
     Tag each pending serialization with its key so the loop can drop exactly
@@ -29,9 +30,33 @@ export async function* streamCacheResolutions(
             snapshotEntryFromCache(store, entry).then((snapshot) => ({ key: entry.key, snapshot })),
         )
     }
+    /*
+    Fail-closed deadline (ADR-0024): an auto-streamed BARE read triggered at render is
+    handed here still-pending, and its fetch may never settle. When the per-render deadline
+    elapses, ship every still-inflight key as a `{ key, miss }` marker so the client refetches
+    on hydrate — the always-buffered Tier-1 fallback — rather than holding the response stream
+    open unbounded. The {#await} drain passes settled entries that resolve well inside any
+    deadline, so it never fires there; `undefined` disables the deadline entirely (the
+    pre-ADR-0024 behavior). `unref` keeps the timer from holding the process open on its own.
+    */
+    const deadline =
+        deadlineMs === undefined
+            ? undefined
+            : new Promise<'deadline'>((resolve) => {
+                  setTimeout(() => resolve('deadline'), deadlineMs).unref?.()
+              })
     while (inflight.size > 0) {
-        const { key, snapshot } = await Promise.race(inflight.values())
-        inflight.delete(key)
-        yield snapshot ?? { key, miss: true }
+        const settled =
+            deadline === undefined
+                ? await Promise.race(inflight.values())
+                : await Promise.race([...inflight.values(), deadline])
+        if (settled === 'deadline') {
+            for (const key of inflight.keys()) {
+                yield { key, miss: true }
+            }
+            return
+        }
+        inflight.delete(settled.key)
+        yield settled.snapshot ?? { key: settled.key, miss: true }
     }
 }

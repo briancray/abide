@@ -59,6 +59,15 @@ new **Tier-1-streamed** tier: server-triggered, streamed-in, no client refetch.
   on hydrate — degrading to today's Tier-1 behavior, never holding the connection open
   indefinitely. The deadline is the safety valve the always-buffered model didn't need.
 
+**Scope vs. ADR-0023 (implementation finding).** The common *directly-interpolated* form
+`{getUser()}` is already promoted to streaming by ADR-0023's type-directed interpolation
+lowering (a `promise`-kind interpolation → a synthetic streaming `{#await}`, i.e. Tier-3). So
+this ADR's net-new surface is the **pending point read that is not directly interpolated** — a
+triggered read held in a variable / read via a probe — plus the gate/deadline/wake infra that
+also underpins the interpolation path. The two ADRs are complementary, not competing:
+type-directed lowering decides *what streams*, this decides *how a pending non-interpolated read
+drains and is bounded*.
+
 ### D2 — the buffered/streamed gate also opens on a pending triggered read
 
 `createUiPageRenderer.ts:205` takes the streaming path when `ssr.awaits.length > 0` **or**

@@ -1,9 +1,10 @@
 import { appNameSlot } from '../../shared/appNameSlot.ts'
 import { SSR_CACHE_CONTROL } from '../../shared/CACHE_CONTROL_VALUES.ts'
 import { formatTraceparent } from '../../shared/formatTraceparent.ts'
+import { hasReplayableRequest } from '../../shared/hasReplayableRequest.ts'
 import { layoutChainForRoute } from '../../shared/layoutChainForRoute.ts'
 import { safeJsonForScript } from '../../shared/safeJsonForScript.ts'
-import { snapshotShippable } from '../../shared/snapshotShippable.ts'
+import type { CacheEntry } from '../../shared/types/CacheEntry.ts'
 import type { CacheSnapshotEntry } from '../../shared/types/CacheSnapshotEntry.ts'
 import type { SsrPayload } from '../../shared/types/SsrPayload.ts'
 import type { StreamedResolution } from '../../shared/types/StreamedResolution.ts'
@@ -12,6 +13,7 @@ import { renderToStream } from '../../ui/renderToStream.ts'
 import { resumeSeedScript } from '../../ui/resumeSeedScript.ts'
 import type { UiComponent } from '../../ui/runtime/types/UiComponent.ts'
 import { pageUrlFromStore } from './pageUrlFromStore.ts'
+import { SSR_STREAM_DEADLINE_MS } from './SSR_STREAM_DEADLINE_MS.ts'
 import { SSR_SWAP_SCRIPT } from './SSR_SWAP_SCRIPT.ts'
 import { STREAMED_HTML_HEADER } from './STREAMED_HTML_HEADER.ts'
 import { serializeCacheSnapshot } from './serializeCacheSnapshot.ts'
@@ -48,16 +50,18 @@ function resolveChunk(resolution: StreamedResolution): string {
 The abide-ui SSR document renderer. A matched route + params in, a finished HTML
 Response out.
 
-A page with no `await` block renders synchronously and ships buffered. A page with
-await blocks STREAMS: the pending shell flushes first, then each resolved fragment
-(`<abide-resolve>` carrying a JSON `<script>`) as its promise settles, swapped into its boundary
-by the inline SSR_SWAP_SCRIPT — which also registers the value into the resume
+A page with no `await` block AND no pending triggered bare read renders synchronously and
+ships buffered. A page with await blocks — or a triggered BARE async read still pending at
+render-return (ADR-0024) — STREAMS: the pending shell flushes first, then each resolved
+fragment (`<abide-resolve>` carrying a JSON `<script>`) as its promise settles, swapped into
+its boundary by the inline SSR_SWAP_SCRIPT — which also registers the value into the resume
 manifest so client hydration adopts it without re-fetching (see abide/ui/awaitBlock).
 Then, once the stream has run every `{#await}` thunk (creating and settling its cache
-entry mid-stream, after the render-return snapshot), each such entry streams an inline
-`__abideResolve(...)` chunk — a warm snapshot, or a `{ key, miss }` marker for an
-unshippable body (→ live refetch) — seeding the client store before the deferred bundle
-so the block's subscription read is warm (no refetch).
+entry mid-stream, after the render-return snapshot), each such entry — plus any bare-read
+entry triggered during the sync render — streams an inline `__abideResolve(...)` chunk: a
+warm snapshot, or a `{ key, miss }` marker for an unshippable body OR a read that missed the
+fail-closed deadline (→ live refetch) — seeding the client store before the deferred bundle
+so the block's / bare read's subscription is warm (no refetch).
 
 `__SSR__` carries the route/params, mount base, trace, app name, client timeout,
 and the render-return cache snapshot (top-level `await` reads; the client seeds its tab
@@ -76,6 +80,7 @@ export function createUiPageRenderer({
     layouts,
     routePreloads = {},
     healthPayload,
+    streamDeadlineMs = SSR_STREAM_DEADLINE_MS,
 }: {
     shell: string
     base: string
@@ -84,6 +89,9 @@ export function createUiPageRenderer({
     layouts: Record<string, LoadPage>
     routePreloads?: Record<string, string[]>
     healthPayload: (request: Request) => Promise<Record<string, unknown>>
+    /* The fail-closed drain deadline (ADR-0024); defaults to SSR_STREAM_DEADLINE_MS. Injectable
+       so a test can force the miss path without a real-time wait. */
+    streamDeadlineMs?: number
 }): {
     renderPage: (
         routeUrl: string,
@@ -199,10 +207,24 @@ export function createUiPageRenderer({
         const inline = await serializeCacheSnapshot(store.cache)
         const inlinedKeys = new Set(inline.map((entry) => entry.key))
 
-        /* No STREAMING await blocks → ship buffered. Blocking `{#await … then}` blocks
-           rendered inline (their markup is already in `ssr.html`); seed their resolved
-           values so hydration adopts them without a refetch. */
-        if (ssr.awaits.length === 0) {
+        /* ADR-0024: a bare async read (`{user}`, no `{#await}`) that TRIGGERED its fetch during
+           the sync render leaves a still-pending replayable entry in the store at render-return
+           — not yet settled, so it missed the inline snapshot above. Detecting one here is what
+           opens the streaming gate for a page with no await block, so its value streams in
+           instead of shipping `undefined` buffered. `hasReplayableRequest` (the request half of
+           shippability — not `snapshotShippable`, which also demands `settled`) is the gate: it
+           excludes producers, writes, and stream cells (a `NamedAsyncIterable` cell holds no
+           wire request), which must stay `peek()`-at-flush and buffered. `!inlinedKeys` drops
+           anything already baked into `__SSR__` (a Tier-2 top-level `await`) so a value never
+           double-ships. */
+        const pendingBareReads = Array.from(store.cache.entries.values()).filter(
+            (entry) => hasReplayableRequest(entry) && !inlinedKeys.has(entry.key),
+        )
+
+        /* No STREAMING await blocks AND no triggered bare read pending → ship buffered exactly
+           as before. Blocking `{#await … then}` blocks rendered inline (their markup is already
+           in `ssr.html`); seed their resolved values so hydration adopts them without a refetch. */
+        if (ssr.awaits.length === 0 && pendingBareReads.length === 0) {
             const html = injectRoutePreloads(
                 shell.replace(SSR_MARKER, (_match, key: string) =>
                     key === 'body' ? ssr.html : key === 'state' ? '' : '',
@@ -256,19 +278,31 @@ export function createUiPageRenderer({
                             )
                             first = false
                         }
-                        /* The {#await} reads created (and settled) their cache entries DURING the
-                           stream — the await expression is a thunk `renderToStream` ran lazily —
-                           so they missed the render-return snapshot. Drain them now: each lands an
-                           inline `__abideResolve(...)` chunk (a warm snapshot, or a `{ key, miss }`
-                           marker for an unshippable body → live refetch) before the deferred
-                           bundle, so startClient seeds the store and the block's subscription read
-                           is warm. Skip keys already shipped inline in __SSR__. */
-                        const streamedEntries = Array.from(store.cache.entries.values()).filter(
-                            (entry) => snapshotShippable(entry) && !inlinedKeys.has(entry.key),
+                        /* Two kinds of pending entry land here. (1) `{#await}` reads created (and
+                           settled) their cache entries DURING the stream — the await expression is a
+                           thunk `renderToStream` ran lazily — so they missed the render-return
+                           snapshot. (2) A triggered BARE read (ADR-0024) created its entry during the
+                           sync render but was never awaited, so it may still be in flight now. Drain
+                           both: each lands an inline `__abideResolve(...)` chunk (a warm snapshot, or a
+                           `{ key, miss }` marker for an unshippable body OR a read that missed the
+                           deadline → live refetch) before the deferred bundle, so startClient seeds the
+                           store and the read's subscription is warm. Skip keys already shipped inline in
+                           __SSR__. */
+                        const streamedEntries: CacheEntry[] = Array.from(
+                            store.cache.entries.values(),
+                        ).filter(
+                            (entry) => hasReplayableRequest(entry) && !inlinedKeys.has(entry.key),
                         )
+                        /* `hasReplayableRequest`, NOT `snapshotShippable`: a triggered bare read
+                           (ADR-0024) is drained here still-pending (never awaited by an `{#await}`
+                           thunk), so gating on `settled` up front would skip it — streamCacheResolutions
+                           awaits each entry's body itself (see snapshotEntryFromCache) and bounds the
+                           wait with the fail-closed deadline. A late-settling `{#await}` entry is already
+                           settled by now, so the set is unchanged for the Tier-3 path. */
                         for await (const resolution of streamCacheResolutions(
                             store.cache,
                             streamedEntries,
+                            streamDeadlineMs,
                         )) {
                             controller.enqueue(encoder.encode(resolveChunk(resolution)))
                         }

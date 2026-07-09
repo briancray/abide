@@ -22,10 +22,17 @@ export function seedStreamedResolution(resolution: StreamedResolution): void {
        an unconsumed hydrated seed (`hydrated === true`, cleared by the first cache()
        read). A live/settled non-hydrated entry is authoritative; clobbering it with a
        stale snapshot would drop a fresher value (e.g. one a live fetch already wrote). */
-    const { entries } = activeCacheStore()
-    const existing = entries.get(resolution.key)
+    const store = activeCacheStore()
+    const existing = store.entries.get(resolution.key)
     if (existing !== undefined && existing.hydrated !== true) {
         return
     }
-    entries.set(resolution.key, cacheEntryFromSnapshot(resolution))
+    store.entries.set(resolution.key, cacheEntryFromSnapshot(resolution))
+    /* Wake any reader subscribed to this key's lifecycle channel. Seeding used to rely on
+       seed-before-mount ordering (valid for the await path, whose subscription reads the
+       resume manifest, not the cache); an auto-streamed BARE read (ADR-0024) has already
+       mounted and its throwing-peek subscribed the key, so without an explicit dispatch the
+       peek that read `undefined` never re-runs on the streamed value. markLifecycle re-derives
+       the peek scope — the same wake materializeRetained relies on for a late-landing value. */
+    store.markLifecycle(resolution.key)
 }
