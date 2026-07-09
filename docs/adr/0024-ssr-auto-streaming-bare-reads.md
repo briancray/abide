@@ -1,6 +1,7 @@
 # ADR-0024: SSR auto-streaming for bare async reads
 
-**Status:** proposed (2026-07-08). Promotes the "Optional follow-up (v2 —
+**Status:** accepted (2026-07-08; implemented 2026-07-09, `feat(ssr): auto-stream pending
+bare async reads`). Promotes the "Optional follow-up (v2 —
 auto-streaming bare reads)" section of
 [ADR-0019](0019-async-computeds-and-rpc-auto-reads.md) into a decided change, now
 that the async-cell probe lifecycle, the SSR tier model, and the streamed-cache

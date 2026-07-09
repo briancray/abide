@@ -1,6 +1,7 @@
 # ADR-0027: Two-way `bind:prop` on components is usage-inferred, not declared
 
-**Status:** proposed (2026-07-08). Extends the element two-way bind
+**Status:** accepted (2026-07-08; implemented 2026-07-08, `feat(ui): two-way bind:prop on
+components`). Extends the element two-way bind
 (`bind:value`/`bind:checked`/…) to child components, reusing the accessor contract
 in `lowerContext` (`bindRead`/`bindWrite`) and the prop pipeline
 (`composeProps` → `props()` desugaring). Touches the shadow from

@@ -1,6 +1,7 @@
 # ADR-0023: Type-directed async-cell classification for `computed`/`linked` seeds
 
-**Status:** proposed (2026-07-08). Extends
+**Status:** accepted (2026-07-08; implemented 2026-07-09, `feat(compile): type-directed
+async-cell classification`). Extends
 [ADR-0019](0019-async-computeds-and-rpc-auto-reads.md)'s type-directed lowering
 from template *interpolations* to the `computed`/`linked` *cell* transform, closing
 an asymmetry inside ADR-0019 itself. Reuses the warm-shadow classifier machinery
