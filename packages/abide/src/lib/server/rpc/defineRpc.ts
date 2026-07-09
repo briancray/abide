@@ -6,6 +6,7 @@ import { isReadOnlyMethod } from '../../shared/isReadOnlyMethod.ts'
 import { resolveClientFlags } from '../../shared/resolveClientFlags.ts'
 import type { CachePolicy } from '../../shared/types/CachePolicy.ts'
 import type { ClientFlags } from '../../shared/types/ClientFlags.ts'
+import type { ErrorJsonSchemas } from '../../shared/types/ErrorJsonSchemas.ts'
 import type { HttpMethod } from '../../shared/types/HttpMethod.ts'
 import type { InputCoercion } from '../../shared/types/InputCoercion.ts'
 import type { RemoteFunction } from '../../shared/types/RemoteFunction.ts'
@@ -85,6 +86,12 @@ export function defineRpc<Args, Return>(
            when no `schemas.output` validator is declared (which still overrides it). Absent on the
            fail-open path — the surface then omits the response schema exactly as before. */
         outputJsonSchema?: Record<string, unknown>
+        /* The handler's typed-error branches as a status-keyed JSON-Schema map (ADR-0030). Bundler-
+           stamped from the endpoint's `error.typed(...)` return branches; feeds the OpenAPI
+           `responses[status]` surface so each typed error's status + data payload is documented
+           alongside the 200. Absent on the fail-open path — the surface then omits the error
+           responses exactly as before. */
+        errorJsonSchemas?: ErrorJsonSchemas
         /* Endpoint cache policy (ADR-0020) — read helpers only; readThrough's bottom layer. */
         cache?: CachePolicy<Args>
         /* Endpoint stream policy (ADR-0020) — streaming read helpers only; replay depth `n`. */
@@ -250,6 +257,7 @@ export function defineRpc<Args, Return>(
         inputSchema,
         outputSchema,
         outputJsonSchema: opts?.outputJsonSchema,
+        errorJsonSchemas: opts?.errorJsonSchemas,
         filesSchema,
         timeout,
         maxBodySize: opts?.maxBodySize,

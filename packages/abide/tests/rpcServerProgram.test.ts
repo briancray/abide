@@ -215,6 +215,63 @@ describe('rpc return-body JSON Schema projection through the warm server program
     })
 })
 
+describe('rpc typed-error branch schemas through the warm server program (ADR-0030)', () => {
+    const program = createRpcServerProgram(STREAM_CWD, STREAM_RPC_DIR)
+
+    test('each typed-error branch projects a status-keyed data schema; shared status combines under anyOf', () => {
+        /* `typedErrors` returns `json({ ok })` plus four `error.typed(...)` branches: notFound(404,
+           {id}), conflict(409, {existingId}), gone(404, {movedTo}), rateLimited(429, nullary). The two
+           404 branches carry distinct data schemas, so they combine under `anyOf`. */
+        const schemas = program.errorSchemasForModule(streamModule('typedErrors'))
+        expect(schemas?.[409]).toEqual({
+            type: 'object',
+            properties: { existingId: { type: 'number' } },
+            required: ['existingId'],
+        })
+        /* A nullary error (no data schema) still surfaces its status, with a bare permissive schema. */
+        expect(schemas?.[429]).toEqual({})
+        const shared = schemas?.[404] as { anyOf: unknown[] }
+        expect(shared.anyOf).toHaveLength(2)
+        expect(shared.anyOf).toContainEqual({
+            type: 'object',
+            properties: { id: { type: 'string' } },
+            required: ['id'],
+        })
+        expect(shared.anyOf).toContainEqual({
+            type: 'object',
+            properties: { movedTo: { type: 'string' } },
+            required: ['movedTo'],
+        })
+    })
+
+    test('a handler with no typed errors resolves undefined (no error responses stamped)', () => {
+        /* `plainData` is `GET(() => json({ ok: true }))` — no `error.typed(...)` branch, so the query
+           yields undefined and the surface omits error responses. */
+        expect(program.errorSchemasForModule(streamModule('plainData'))).toBeUndefined()
+    })
+
+    test('an unknown module path fails open to undefined', () => {
+        expect(program.errorSchemasForModule(resolve(STREAM_RPC_DIR, 'missing.ts'))).toBeUndefined()
+    })
+
+    test('the error-schema map is stamped into the server rewrite as an `errorJsonSchemas` opt', () => {
+        const source = readFileSync(streamModule('typedErrors'), 'utf8')
+        const schemas = program.errorSchemasForModule(streamModule('typedErrors'))
+        const rewritten = prepareRpcModule(
+            source,
+            '@abide/abide',
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            schemas,
+        )?.rewriteForServer('/rpc/typedErrors')
+        expect(rewritten).toContain('errorJsonSchemas: {')
+        expect(rewritten).toContain('"409"')
+        expect(rewritten).toContain('"anyOf"')
+    })
+})
+
 describe('rpc structured wire-kind plan through the warm server program (ADR-0029)', () => {
     const program = createRpcServerProgram(SERVER_CWD, SERVER_RPC_DIR)
 
