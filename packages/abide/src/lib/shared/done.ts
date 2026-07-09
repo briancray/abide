@@ -10,5 +10,11 @@ registered (server render, or tail never imported) reads as not-done.
 */
 // @documentation probes
 export function done(subscribable: NamedAsyncIterable<unknown>): boolean {
+    /* Null-tolerant: a promise/iterable subexpression peek-lifts to `undefined` while
+       pending (ADR-0032), so `done(getFeed())` in a template hands us `undefined` on the
+       first pass — treat a missing source as not-done rather than throwing. */
+    if (subscribable == null) {
+        return false
+    }
     return tailProbeSlot.probe?.(subscribable.name)?.done ?? false
 }

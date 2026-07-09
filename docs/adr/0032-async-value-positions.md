@@ -287,3 +287,10 @@ node for a content-position `promise` interpolation** (`streamingAwaitNode`) —
   `abide check`. Parity gap, not a runtime bug.
 - **An interpolation that doesn't re-parse as a single expression skips the lift** (a bare object
   literal `{ {a: getFoo()} }`), degrading to today's stringify — fail-open, acceptable, documented.
+- **A probe fed a lifted async expression sees `undefined` first.** `{done(getFeed())}` /
+  `{peek(getFeed())}` want the *subscribable itself*, but the peek-lift hands the probe `undefined`
+  while pending (and, for an `AsyncIterable`, the latest *frame* once settled — not the source). The
+  idiom is to probe in script (`const closed = state.computed(() => done(feed))`) and read the boolean
+  in markup. `done()` / `peek()` are now null-tolerant (return `false` / `undefined` on a nullish
+  argument) so the inline form renders gracefully instead of throwing on `subscribable.name`; the
+  script form remains the correct way to get an accurate stream probe.
