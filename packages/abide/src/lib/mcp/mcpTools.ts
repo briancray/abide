@@ -72,8 +72,13 @@ function describeTool(ref: McpToolRef): ToolDescriptor {
             inputSchema,
             annotations: annotationsForMethod(ref.entry.remote.method),
         }
-        if (ref.entry.outputSchema) {
-            tool.outputSchema = jsonSchemaForSchema(ref.entry.outputSchema)
+        // The declared outputSchema VALIDATOR overrides the build-projected return-type schema
+        // (ADR-0030 D2); with neither the tool advertises no outputSchema, exactly as before.
+        const outputSchema = ref.entry.outputSchema
+            ? jsonSchemaForSchema(ref.entry.outputSchema)
+            : ref.entry.outputJsonSchema
+        if (outputSchema) {
+            tool.outputSchema = outputSchema
         }
         return tool
     }

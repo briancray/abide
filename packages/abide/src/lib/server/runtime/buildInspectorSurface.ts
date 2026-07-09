@@ -19,7 +19,9 @@ export function buildInspectorSurface(): InspectorSurface {
         method: entry.remote.method,
         clients: { ...entry.remote.clients },
         inputSchema: entry.inputSchema ? jsonSchemaForSchema(entry.inputSchema) : undefined,
-        outputSchema: entry.outputSchema ? jsonSchemaForSchema(entry.outputSchema) : undefined,
+        outputSchema: entry.outputSchema
+            ? jsonSchemaForSchema(entry.outputSchema)
+            : entry.outputJsonSchema,
         files: entry.filesSchema !== undefined,
         timeout: entry.timeout,
         maxBodySize: entry.maxBodySize,

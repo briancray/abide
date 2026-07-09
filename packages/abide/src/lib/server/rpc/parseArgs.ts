@@ -5,6 +5,7 @@ import { HttpError } from '../../shared/HttpError.ts'
 import { REF_JSON_HEADER } from '../../shared/REF_JSON_HEADER.ts'
 import type { HttpMethod } from '../../shared/types/HttpMethod.ts'
 import type { InputCoercion } from '../../shared/types/InputCoercion.ts'
+import type { WireKind } from '../../shared/types/WireKind.ts'
 import { error } from '../error.ts'
 import { requestContext } from '../runtime/requestContext.ts'
 import { readBodyWithinLimit } from './readBodyWithinLimit.ts'
@@ -167,33 +168,63 @@ export async function parseArgs(
 }
 
 /*
-Coerces the string query/form values in `args` to the numeric/boolean types the plan declares,
-in place. Only string values are touched — a value the merge layered in from a JSON body is
-already typed and left alone; a repeated key (`?tag=1&tag=2`) is an array whose string members
-coerce per element. A non-numeric/non-boolean string is left as the original string so the
-schema surfaces an honest validation issue rather than a silent `NaN`.
+Revives the plain-JSON wire values in `args` into the runtime types the plan declares, in place
+(ADR-0028 scalars, ADR-0029 structured). The scalar kinds (number/boolean/date/bigint) touch
+strings only — a value the merge layered in from a typed JSON body is already the right type and
+left alone; a repeated key (`?tag=1&tag=2`) is an array whose string members revive per element.
+The container kinds (set/map) build from a JSON array (or object) but pass an already-typed value
+(from the abide client's ref-json body) through untouched. Every branch is fail-open: an
+unrevivable value stays its JSON form so the schema surfaces an honest issue rather than a throw.
 */
 function applyCoercion(args: Record<string, unknown>, coerce: InputCoercion): void {
     for (const key in coerce) {
         if (!(key in args)) {
             continue
         }
-        const kind = coerce[key]
-        const value = args[key]
-        if (typeof value === 'string') {
-            args[key] = coerceScalar(value, kind)
-        } else if (Array.isArray(value)) {
-            args[key] = value.map((element) =>
-                typeof element === 'string' ? coerceScalar(element, kind) : element,
-            )
-        }
+        args[key] = reviveValue(args[key], coerce[key])
     }
 }
 
-/* One string → its number/boolean value, or the original string when it doesn't parse cleanly
-   (empty/whitespace or `NaN` for a number; anything but `true`/`false` for a boolean), so a bad
-   value fails validation with the field intact instead of coercing to `0`/`NaN`. */
-function coerceScalar(value: string, kind: 'number' | 'boolean'): unknown {
+/* One field's wire value → its runtime type per `kind`, fail-open. The container kinds wrap a JSON
+   array/object; the scalar kinds revive a string (or each string in a repeated-key array). An
+   already-typed value (Set/Map/Date/bigint from the abide ref-json body) passes through. */
+function reviveValue(value: unknown, kind: WireKind): unknown {
+    if (kind === 'set') {
+        if (value instanceof Set) {
+            return value
+        }
+        /* Top-level only: array MEMBERS are not descended into (ADR-0029 defers nesting). */
+        return Array.isArray(value) ? new Set(value) : value
+    }
+    if (kind === 'map') {
+        if (value instanceof Map) {
+            return value
+        }
+        /* A JSON array of `[key, value]` entries, or a plain object's own entries. */
+        if (Array.isArray(value)) {
+            return new Map(value as [unknown, unknown][])
+        }
+        if (value !== null && typeof value === 'object') {
+            return new Map(Object.entries(value))
+        }
+        return value
+    }
+    if (typeof value === 'string') {
+        return reviveScalar(value, kind)
+    }
+    if (Array.isArray(value)) {
+        return value.map((element) =>
+            typeof element === 'string' ? reviveScalar(element, kind) : element,
+        )
+    }
+    return value
+}
+
+/* One string → its number/boolean/date/bigint value, or the original string when it doesn't parse
+   cleanly (empty/whitespace, `NaN`, a non-`true`/`false` boolean, an unparseable date, a
+   non-integer bigint), so a bad value fails validation with the field intact instead of coercing
+   to `0`/`NaN`/`Invalid Date`. */
+function reviveScalar(value: string, kind: WireKind): unknown {
     if (kind === 'number') {
         if (value.trim() === '') {
             return value
@@ -201,11 +232,29 @@ function coerceScalar(value: string, kind: 'number' | 'boolean'): unknown {
         const parsed = Number(value)
         return Number.isNaN(parsed) ? value : parsed
     }
-    if (value === 'true') {
-        return true
+    if (kind === 'boolean') {
+        if (value === 'true') {
+            return true
+        }
+        if (value === 'false') {
+            return false
+        }
+        return value
     }
-    if (value === 'false') {
-        return false
+    if (kind === 'date') {
+        const date = new Date(value)
+        return Number.isNaN(date.getTime()) ? value : date
+    }
+    if (kind === 'bigint') {
+        if (value.trim() === '') {
+            return value
+        }
+        try {
+            return BigInt(value)
+        } catch {
+            /* A non-integer / malformed literal throws — keep the string for the schema to reject. */
+            return value
+        }
     }
     return value
 }

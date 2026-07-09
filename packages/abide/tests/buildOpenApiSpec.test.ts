@@ -7,7 +7,10 @@ import { testSchema } from './standardSchema.ts'
 type Operation = {
     parameters?: Array<{ name: string; in: string; required: boolean; schema?: unknown }>
     requestBody?: { content: Record<string, { schema: unknown }> }
-    responses: Record<string, { content?: Record<string, { schema: unknown }> }>
+    responses: Record<
+        string,
+        { description?: string; content?: Record<string, { schema: unknown }> }
+    >
 }
 
 describe('buildOpenApiSpec happy path', () => {
@@ -87,5 +90,106 @@ describe('buildOpenApiSpec happy path', () => {
         expect(
             paths['/rpc/oa-upload'].post.requestBody?.content['application/json'],
         ).toBeUndefined()
+    })
+})
+
+/* ADR-0030 D2: the handler return type, projected to JSON Schema at build time and stamped as
+   `outputJsonSchema`, drives the 200 body when no `schemas.output` VALIDATOR is declared; a declared
+   `schemas.output` still overrides it. */
+describe('buildOpenApiSpec — build-projected output schema (ADR-0030 D2)', () => {
+    const PROJECTED = {
+        type: 'object',
+        properties: { ok: { type: 'boolean' } },
+        required: ['ok'],
+    }
+
+    test('the projected outputJsonSchema drives the 200 body when no schemas.output', () => {
+        defineRpc('GET', '/rpc/oa-projected', () => json({ ok: true }), {
+            outputJsonSchema: PROJECTED,
+        })
+        const paths = buildOpenApiSpec({ title: 'app', version: '1.0.0' }).paths as Record<
+            string,
+            Record<string, Operation>
+        >
+        expect(
+            paths['/rpc/oa-projected'].get.responses['200'].content?.['application/json'].schema,
+        ).toEqual(PROJECTED)
+    })
+
+    test('a declared schemas.output overrides the projected schema', () => {
+        defineRpc('GET', '/rpc/oa-override', () => json({ ok: true }), {
+            schemas: {
+                output: testSchema({
+                    type: 'object',
+                    properties: { validated: { type: 'string' } },
+                }),
+            },
+            outputJsonSchema: PROJECTED,
+        })
+        const paths = buildOpenApiSpec({ title: 'app', version: '1.0.0' }).paths as Record<
+            string,
+            Record<string, Operation>
+        >
+        expect(
+            paths['/rpc/oa-override'].get.responses['200'].content?.['application/json'].schema,
+        ).toEqual({ type: 'object', properties: { validated: { type: 'string' } } })
+    })
+})
+
+/* ADR-0030: the handler's typed-error branches, baked as a status-keyed `errorJsonSchemas` map, add
+   one `responses[status]` entry each — documenting each error's status + data payload alongside the
+   200, all from the one handler return type. */
+describe('buildOpenApiSpec — typed error responses (ADR-0030)', () => {
+    const OUTPUT = { type: 'object', properties: { ok: { type: 'boolean' } }, required: ['ok'] }
+    const NOT_FOUND = { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] }
+    const MOVED = {
+        type: 'object',
+        properties: { movedTo: { type: 'string' } },
+        required: ['movedTo'],
+    }
+    const CONFLICT = {
+        type: 'object',
+        properties: { existingId: { type: 'number' } },
+        required: ['existingId'],
+    }
+
+    function specFor(url: string, opts: Parameters<typeof defineRpc>[3]): Operation {
+        defineRpc('GET', url, () => json({ ok: true }), opts)
+        const paths = buildOpenApiSpec({ title: 'app', version: '1.0.0' }).paths as Record<
+            string,
+            Record<string, Operation>
+        >
+        return paths[url].get
+    }
+
+    test('each typed error surfaces as a responses[status] entry; the 200 is preserved', () => {
+        const operation = specFor('/rpc/oa-errors', {
+            outputJsonSchema: OUTPUT,
+            errorJsonSchemas: { 404: { anyOf: [NOT_FOUND, MOVED] }, 409: CONFLICT, 429: {} },
+        })
+        // The success 200 survives the merge, still carrying the projected output body.
+        expect(operation.responses['200'].content?.['application/json'].schema).toEqual(OUTPUT)
+        // A data-bearing error surfaces its status reason phrase + the projected data schema.
+        expect(operation.responses['404']).toEqual({
+            description: 'Not Found',
+            content: { 'application/json': { schema: { anyOf: [NOT_FOUND, MOVED] } } },
+        })
+        expect(operation.responses['409'].content?.['application/json'].schema).toEqual(CONFLICT)
+        // A nullary error (bare `{}`) surfaces the status with no content schema.
+        expect(operation.responses['429']).toEqual({ description: 'Too Many Requests' })
+    })
+
+    test('an error status never clobbers an existing response (the 200 wins a collision)', () => {
+        const operation = specFor('/rpc/oa-err-collide', {
+            errorJsonSchemas: { 200: NOT_FOUND },
+        })
+        // The success 200 is left untouched even when a (degenerate) error map names status 200.
+        expect(operation.responses['200'].description).toBe('OK')
+        expect(operation.responses['200'].content).toBeUndefined()
+    })
+
+    test('no errorJsonSchemas leaves the responses at just the 200 (fail-open)', () => {
+        const operation = specFor('/rpc/oa-no-errors', {})
+        expect(Object.keys(operation.responses)).toEqual(['200'])
     })
 })

@@ -6,6 +6,7 @@ import { isReadOnlyMethod } from '../../shared/isReadOnlyMethod.ts'
 import { resolveClientFlags } from '../../shared/resolveClientFlags.ts'
 import type { CachePolicy } from '../../shared/types/CachePolicy.ts'
 import type { ClientFlags } from '../../shared/types/ClientFlags.ts'
+import type { ErrorJsonSchemas } from '../../shared/types/ErrorJsonSchemas.ts'
 import type { HttpMethod } from '../../shared/types/HttpMethod.ts'
 import type { InputCoercion } from '../../shared/types/InputCoercion.ts'
 import type { RemoteFunction } from '../../shared/types/RemoteFunction.ts'
@@ -80,6 +81,17 @@ export function defineRpc<Args, Return>(
            typed value the input schema expects (ADR-0028). Bundler-stamped from the endpoint's
            `Args` type; absent on the fail-open path (a GET field then stays a string as before). */
         coerce?: InputCoercion
+        /* The handler's return type projected to JSON Schema (ADR-0030 D2). Bundler-stamped from the
+           endpoint's success-body type; feeds the OpenAPI 200 / MCP outputSchema / inspector surface
+           when no `schemas.output` validator is declared (which still overrides it). Absent on the
+           fail-open path — the surface then omits the response schema exactly as before. */
+        outputJsonSchema?: Record<string, unknown>
+        /* The handler's typed-error branches as a status-keyed JSON-Schema map (ADR-0030). Bundler-
+           stamped from the endpoint's `error.typed(...)` return branches; feeds the OpenAPI
+           `responses[status]` surface so each typed error's status + data payload is documented
+           alongside the 200. Absent on the fail-open path — the surface then omits the error
+           responses exactly as before. */
+        errorJsonSchemas?: ErrorJsonSchemas
         /* Endpoint cache policy (ADR-0020) — read helpers only; readThrough's bottom layer. */
         cache?: CachePolicy<Args>
         /* Endpoint stream policy (ADR-0020) — streaming read helpers only; replay depth `n`. */
@@ -181,7 +193,8 @@ export function defineRpc<Args, Return>(
     /* Abort the controller parseArgsForFetch stashed on store.req; a no-op when none was stashed (SSR cache reads). */
     function abortRpcTimeout(): void {
         const req = requestContext.getStore()?.req as
-            (Request & { [RPC_TIMEOUT_ABORT]?: AbortController }) | undefined
+            | (Request & { [RPC_TIMEOUT_ABORT]?: AbortController })
+            | undefined
         req?.[RPC_TIMEOUT_ABORT]?.abort(new DOMException('handler timeout', 'TimeoutError'))
     }
 
@@ -243,6 +256,8 @@ export function defineRpc<Args, Return>(
         remote: remote as RemoteFunction<unknown, unknown>,
         inputSchema,
         outputSchema,
+        outputJsonSchema: opts?.outputJsonSchema,
+        errorJsonSchemas: opts?.errorJsonSchemas,
         filesSchema,
         timeout,
         maxBodySize: opts?.maxBodySize,

@@ -1,0 +1,7 @@
+---
+"@abide/abide": patch
+---
+
+Handler-return-typed RPC output surface (ADR-0030 D2). A `ts.Type` → JSON-Schema projector (`jsonSchemaForType`) generates an rpc's OpenAPI 200 / MCP `outputSchema` / inspector output shape from the handler's return type when no `schemas.output` validator is declared — the complement of `jsonSchemaForSchema` (which projects a runtime validator). It covers the subset abide's `json()`/`jsonl()` emit (primitives, string-literal `const`/`enum`, objects with `required`, `Record` → `additionalProperties`, arrays, tuples, unions with optional-stripping, `Date` → `date-time`, `bigint` → string per ADR-0029) and fails OPEN — an unsupported/unresolvable type projects to permissive `{}` (omitted at the top level), with a mandatory cycle guard so a recursive type can't infinite-loop; it never throws, so a projection gap can't break a build.
+
+The warm server program gains a `returnBodySchemaForModule` query that resolves the same success-body `ts.Type`(s) as `returnBodyForModule` and runs the projector. Since the OpenAPI/MCP/inspector surfaces render off the runtime rpc registry (not the build-time program), the resolver plugin BAKES the projected schema into the server `defineRpc` call — stamped as `outputJsonSchema`, exactly like the ADR-0028 `coerce` plan — so the registry entry carries it at runtime. A declared `schemas.output` validator still overrides the projection (a runtime narrowing the type can't express); with neither, the surface omits the response schema exactly as before.

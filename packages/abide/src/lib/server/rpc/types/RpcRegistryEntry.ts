@@ -1,3 +1,4 @@
+import type { ErrorJsonSchemas } from '../../../shared/types/ErrorJsonSchemas.ts'
 import type { RemoteFunction } from '../../../shared/types/RemoteFunction.ts'
 import type { StandardSchemaV1 } from '../../../shared/types/StandardSchemaV1.ts'
 
@@ -24,6 +25,15 @@ export type RpcRegistryEntry = {
     remote: RemoteFunction<unknown, unknown>
     inputSchema: StandardSchemaV1 | undefined
     outputSchema: StandardSchemaV1 | undefined
+    /* The handler's return type projected to JSON Schema at build time (ADR-0030 D2) — the output
+       surface's fallback when no `outputSchema` VALIDATOR is declared. Already JSON Schema (not a
+       validator), so surfaces use it verbatim; `outputSchema`, when present, overrides it. */
+    outputJsonSchema: Record<string, unknown> | undefined
+    /* The handler's typed-error branches projected to a status-keyed JSON-Schema map at build time
+       (ADR-0030) — each `error.typed(...)` return branch's status + `data` payload. Feeds the OpenAPI
+       `responses[status]` entries alongside the 200; undefined when the handler declares no typed
+       errors or the build couldn't resolve them, so the surface omits the error responses. */
+    errorJsonSchemas: ErrorJsonSchemas | undefined
     filesSchema: StandardSchemaV1 | undefined
     /* The rpc's declared opts, recorded so introspection (inspector) can report
        the deadline/body-cap a handler runs under. Undefined = the framework default

@@ -1,7 +1,9 @@
 import { carriesBodyArgs } from '../../shared/carriesBodyArgs.ts'
 import { commandNameForUrl } from '../../shared/commandNameForUrl.ts'
 import { jsonSchemaForSchema } from '../../shared/jsonSchemaForSchema.ts'
+import type { ErrorJsonSchemas } from '../../shared/types/ErrorJsonSchemas.ts'
 import { rpcRegistry } from '../rpc/rpcRegistry.ts'
+import { STATUS_TEXT } from './STATUS_TEXT.ts'
 
 /*
 Turns a rpc's resolved JSON Schema into OpenAPI query parameters — one
@@ -44,6 +46,34 @@ function multipartBodySchema(textSchema: Record<string, unknown>): Record<string
 }
 
 /*
+Adds one `responses[status]` entry per typed-error branch (ADR-0030) — its description is the
+status's standard reason phrase, and its `application/json` content is the error's projected `data`
+schema (omitted for a bare `{}`, a nullary error with no payload). An already-present status (the
+200, or any explicit response) is left untouched, so the success body and validation responses win a
+collision. A no-op when the handler declared no typed errors (`errorJsonSchemas` undefined).
+*/
+function mergeErrorResponses(
+    responses: Record<string, unknown>,
+    errorJsonSchemas: ErrorJsonSchemas | undefined,
+): void {
+    if (errorJsonSchemas === undefined) {
+        return
+    }
+    for (const [status, schema] of Object.entries(errorJsonSchemas)) {
+        if (responses[status] !== undefined) {
+            continue
+        }
+        const response: Record<string, unknown> = {
+            description: STATUS_TEXT[Number(status)] ?? 'Error',
+        }
+        if (Object.keys(schema).length > 0) {
+            response.content = { 'application/json': { schema } }
+        }
+        responses[status] = response
+    }
+}
+
+/*
 Builds an OpenAPI 3.1 document from the rpc registry — the HTTP surface
 every rpc exposes regardless of which non-browser clients it advertises.
 GET/DELETE/HEAD args become query parameters; POST/PUT/PATCH args become
@@ -61,22 +91,31 @@ export function buildOpenApiSpec(info: {
         const jsonSchema = jsonSchemaForSchema(entry.inputSchema)
         const description = jsonSchema.description as string | undefined
         /*
-        When the rpc declares an `outputSchema`, describe the 200 body
-        with it so external tooling sees the real return shape; otherwise
-        fall back to a bare OK.
+        Describe the 200 body from the `outputSchema` VALIDATOR when declared, else from the handler
+        return type projected to JSON Schema at build time (ADR-0030 D2 — `entry.outputJsonSchema`);
+        otherwise fall back to a bare OK. The validator overrides the projection (a runtime narrowing
+        the type can't express).
         */
         const okResponse: Record<string, unknown> = { description: 'OK' }
-        if (entry.outputSchema) {
-            okResponse.content = {
-                'application/json': {
-                    schema: jsonSchemaForSchema(entry.outputSchema),
-                },
-            }
+        const outputSchema = entry.outputSchema
+            ? jsonSchemaForSchema(entry.outputSchema)
+            : entry.outputJsonSchema
+        if (outputSchema) {
+            okResponse.content = { 'application/json': { schema: outputSchema } }
         }
+        /*
+        Merge the handler's typed-error branches (ADR-0030 — `entry.errorJsonSchemas`, a status-keyed
+        data-schema map baked from the `error.typed(...)` return branches) into the responses. Each
+        status gets a `responses[status]` entry describing the error's data payload; an existing
+        response (the 200, or a future explicit entry) is never clobbered. So the 200 success body and
+        every typed error's status + payload are documented from the one handler return type.
+        */
+        const responses: Record<string, unknown> = { '200': okResponse }
+        mergeErrorResponses(responses, entry.errorJsonSchemas)
         const operation: Record<string, unknown> = {
             operationId: commandNameForUrl(url),
             ...(description ? { description } : {}),
-            responses: { '200': okResponse },
+            responses,
         }
         if (carriesBodyArgs(method)) {
             operation.requestBody = entry.filesSchema
