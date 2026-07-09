@@ -74,6 +74,14 @@ export async function build({
             tailwindWarning: 'bun-plugin-tailwind not installed; building without Tailwind',
         })
 
+        /* One-shot builds warm a per-root server `ts.Program` on the first rpc transform (ADR-0025),
+           a few hundred ms that otherwise reads as a silent pause at the start of `abide build`.
+           Announce the build so the command isn't mistaken for hung. Dev rebuilds stay quiet (they
+           already log per rebuild, and the plugin instance keeps the program warm across them). */
+        if (!dev) {
+            abideLog.info('building client bundle…')
+        }
+
         const result = await Bun.build({
             entrypoints: [CLIENT_ENTRY],
             outdir: stagingDir,

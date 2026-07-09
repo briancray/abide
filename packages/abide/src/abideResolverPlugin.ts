@@ -5,7 +5,7 @@ import type { BunPlugin } from 'bun'
 import { Glob } from 'bun'
 import { abideImportName } from './lib/shared/abideImportName.ts'
 import { abideLog } from './lib/shared/abideLog.ts'
-import type { RpcStreamingProgram } from './lib/shared/createRpcStreamingProgram.ts'
+import type { RpcServerProgram } from './lib/shared/createRpcServerProgram.ts'
 import { escapeRegex } from './lib/shared/escapeRegex.ts'
 import { fileName } from './lib/shared/fileName.ts'
 import { fileStem } from './lib/shared/fileStem.ts'
@@ -18,7 +18,7 @@ import { prepareSocketModule } from './lib/shared/prepareSocketModule.ts'
 import { programNameForPackage } from './lib/shared/programNameForPackage.ts'
 import { promptNameForFile } from './lib/shared/promptNameForFile.ts'
 import { readPackageJson } from './lib/shared/readPackageJson.ts'
-import { rpcStreamingForRoot } from './lib/shared/rpcStreamingForRoot.ts'
+import { rpcServerForRoot } from './lib/shared/rpcServerForRoot.ts'
 import { rpcUrlForFile } from './lib/shared/rpcUrlForFile.ts'
 import { socketNameForFile } from './lib/shared/socketNameForFile.ts'
 import { writeHealthDts } from './lib/shared/writeHealthDts.ts'
@@ -159,7 +159,19 @@ export function abideResolverPlugin({
     const scanRpcOnce = once(() =>
         scanDir(rpcDir, '**/*.ts').then(async (rpcFiles) => {
             const importName = await abideImportNameOnce()
-            await writeRpcDts({ cwd, rpcDir, rpcFiles, importName })
+            /* Resolve each rpc's method off its export helper SYMBOL (alias/re-export-aware) via
+               the same warm per-root program the streaming/outbox queries use; undefined per file
+               falls open to writeRpcDts's `detectRpcMethod` regex (ADR-0025 D2/D3). */
+            const rpcServerProgram = rpcServerForRoot(rpcServerByRoot, cwd, rpcDir)
+            await writeRpcDts({
+                cwd,
+                rpcDir,
+                rpcFiles,
+                importName,
+                methodForModule: rpcServerProgram
+                    ? (modulePath) => rpcServerProgram.methodForModule(modulePath)
+                    : undefined,
+            })
             /* Typed createTestApp `app.rpc.<rpc>` surface. */
             await writeTestRpcDts({ cwd, rpcFiles, importName })
             return rpcFiles
@@ -252,11 +264,12 @@ export function abideResolverPlugin({
         return chain.reverse().map(showPath).join('\n  → ')
     }
 
-    /* Warm per-root rpc streaming program (ADR-0025 D1). Lives in the setup closure so one
-       build reuses a single `ts.Program` across every rpc transform; built lazily on the first
-       rpc onLoad (so a build with no rpc modules never pays for it) and failing open to
-       undefined, in which case streaming detection stays on the char-scan. */
-    const rpcStreamingByRoot = new Map<string, RpcStreamingProgram | undefined>()
+    /* Warm per-root rpc server program (ADR-0025 D1). Lives in the setup closure so one build
+       reuses a single `ts.Program` across every rpc transform (streaming/method/outbox queries);
+       built lazily on the first rpc onLoad or rpc.d.ts write (so a build with no rpc modules never
+       pays for it) and failing open to undefined, in which case each query stays on its
+       char-scan/regex. */
+    const rpcServerByRoot = new Map<string, RpcServerProgram | undefined>()
 
     return {
         name: 'abide-resolver',
@@ -398,16 +411,20 @@ export function abideResolverPlugin({
                 const source = await Bun.file(args.path).text()
                 const url = rpcUrlForFile(relativePath)
                 const importName = await abideImportNameOnce()
-                /* Ask the warm server program whether this handler streams (resolving through the
-                   type graph, so a stream returned via a wrapper function is seen); undefined when
-                   no program built or the node didn't resolve, so prepareRpcModule falls open to
-                   its char-scan (ADR-0025 D2/D3). */
-                const streamingOverride = rpcStreamingForRoot(
-                    rpcStreamingByRoot,
-                    cwd,
-                    rpcDir,
-                )?.streamingForModule(args.path)
-                const prepared = prepareRpcModule(source, importName, streamingOverride)
+                /* Ask the warm server program for this handler's streaming verdict (return-type
+                   query — a stream returned via a wrapper function is seen) and its `outbox`
+                   durability (opts property-type query — an imported-const literal is read); each
+                   is undefined when no program built or the node didn't resolve, so prepareRpcModule
+                   falls open to its char-scan/regex (ADR-0025 D2/D3). One program, two queries. */
+                const rpcServerProgram = rpcServerForRoot(rpcServerByRoot, cwd, rpcDir)
+                const streamingOverride = rpcServerProgram?.streamingForModule(args.path)
+                const durableOverride = rpcServerProgram?.outboxForModule(args.path)
+                const prepared = prepareRpcModule(
+                    source,
+                    importName,
+                    streamingOverride,
+                    durableOverride,
+                )
                 if (!prepared) {
                     throw new Error(
                         `[abide] src/server/rpc/${relativePath} has no \`export const <name> = <METHOD>(...)\` — every $rpc module must declare exactly one remote function`,

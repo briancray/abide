@@ -1,9 +1,11 @@
+import { resolve } from 'node:path'
 import { augmentModule } from './augmentModule.ts'
 import { carriesBodyArgs } from './carriesBodyArgs.ts'
 import { detectRpcMethod } from './detectRpcMethod.ts'
 import { fileStem } from './fileStem.ts'
 import { RPC_ARGS_TYPE } from './RPC_ARGS_TYPE.ts'
 import { rpcUrlForFile } from './rpcUrlForFile.ts'
+import type { HttpMethod } from './types/HttpMethod.ts'
 import { writeDts } from './writeDts.ts'
 
 /*
@@ -22,15 +24,23 @@ export async function writeRpcDts({
     rpcDir,
     rpcFiles,
     importName,
+    methodForModule,
 }: {
     cwd: string
     rpcDir: string
     rpcFiles: string[]
     importName: string
+    /* Warm server-program method resolver (ADR-0025 D2): reads the method off the export's
+       helper symbol so an aliased/re-exported helper resolves where `detectRpcMethod`'s
+       `RPC_EXPORT` regex misses it. Absent (no warm program) or undefined-per-file falls open to
+       the regex, byte-identical to before. */
+    methodForModule?: (modulePath: string) => HttpMethod | undefined
 }): Promise<void> {
     const pairs = await Promise.all(
         rpcFiles.map(async (file): Promise<[string, string] | undefined> => {
-            const method = detectRpcMethod(await Bun.file(`${rpcDir}/${file}`).text())
+            const method =
+                methodForModule?.(resolve(rpcDir, file)) ??
+                detectRpcMethod(await Bun.file(`${rpcDir}/${file}`).text())
             // A body rpc's args can't ride a URL — leave it out of the url() rpc map.
             if (!method || carriesBodyArgs(method)) {
                 return undefined
