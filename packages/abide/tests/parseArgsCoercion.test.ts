@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { parseArgs } from '../src/lib/server/rpc/parseArgs.ts'
+import { encodeRefJson } from '../src/lib/shared/encodeRefJson.ts'
+import { REF_JSON_HEADER } from '../src/lib/shared/REF_JSON_HEADER.ts'
 import type { InputCoercion } from '../src/lib/shared/types/InputCoercion.ts'
 
 /*
@@ -75,5 +77,112 @@ describe('parseArgs query coercion (ADR-0028)', () => {
         })
         const args = (await parseArgs('POST', request, undefined, PLAN)) as Record<string, unknown>
         expect(args).toEqual({ id: 5, active: false, name: 'keep' })
+    })
+})
+
+/*
+ADR-0029: the plan codomain widens from scalars to structured wire kinds. parseArgs revives a
+`Date` from an ISO string, a `bigint` from a numeric string (query paths), and a `Set`/`Map` from
+a JSON array/entries (a non-abide JSON body) — top-level fields only, fail-open for the
+unrevivable, and already-typed values (the abide ref-json path) pass through untouched.
+*/
+const STRUCTURED: InputCoercion = {
+    when: 'date',
+    big: 'bigint',
+    ids: 'set',
+    counts: 'map',
+}
+
+describe('parseArgs structured wire codec (ADR-0029)', () => {
+    test('an ISO-string query field revives to a Date', async () => {
+        const args = await get('when=2020-01-02T03:04:05.000Z', STRUCTURED)
+        expect(args.when).toBeInstanceOf(Date)
+        expect((args.when as Date).toISOString()).toBe('2020-01-02T03:04:05.000Z')
+    })
+
+    test('an unparseable date stays a string so validation can reject it', async () => {
+        const args = await get('when=not-a-date', STRUCTURED)
+        expect(args.when).toBe('not-a-date')
+    })
+
+    test('a numeric-string query field revives to a bigint', async () => {
+        const args = await get('big=9007199254740993', STRUCTURED)
+        expect(args.big).toBe(9007199254740993n)
+    })
+
+    test('a non-integer bigint value stays a string (fail-open)', async () => {
+        const args = await get('big=1.5', STRUCTURED)
+        expect(args.big).toBe('1.5')
+    })
+
+    test('an empty bigint value stays the empty string (never coerced to 0n)', async () => {
+        const args = await get('big=', STRUCTURED)
+        expect(args.big).toBe('')
+    })
+
+    test('a JSON array body field revives to a Set', async () => {
+        const request = new Request('https://test.local/rpc/x', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ ids: ['a', 'b', 'a'] }),
+        })
+        const args = (await parseArgs('POST', request, undefined, STRUCTURED)) as Record<
+            string,
+            unknown
+        >
+        expect(args.ids).toBeInstanceOf(Set)
+        expect([...(args.ids as Set<string>)]).toEqual(['a', 'b'])
+    })
+
+    test('a JSON entries body field revives to a Map', async () => {
+        const request = new Request('https://test.local/rpc/x', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+                counts: [
+                    ['a', 1],
+                    ['b', 2],
+                ],
+            }),
+        })
+        const args = (await parseArgs('POST', request, undefined, STRUCTURED)) as Record<
+            string,
+            unknown
+        >
+        expect(args.counts).toBeInstanceOf(Map)
+        expect([...(args.counts as Map<string, number>)]).toEqual([
+            ['a', 1],
+            ['b', 2],
+        ])
+    })
+
+    test('an already-typed ref-json body value passes through untouched', async () => {
+        /* The abide client encodes a structured POST body with ref-json (which round-trips Set/Map/
+           Date/bigint). parseArgs decodes it to real values BEFORE applying the plan, so reviveValue
+           must leave an existing Set/Map/Date/bigint alone rather than re-wrap it. */
+        const request = new Request('https://test.local/rpc/x', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', [REF_JSON_HEADER]: '1' },
+            body: encodeRefJson({
+                ids: new Set(['x', 'y']),
+                counts: new Map([['a', 1]]),
+                when: new Date('2021-06-07T00:00:00.000Z'),
+                big: 42n,
+            }),
+        })
+        const args = (await parseArgs('POST', request, undefined, STRUCTURED)) as Record<
+            string,
+            unknown
+        >
+        expect([...(args.ids as Set<string>)]).toEqual(['x', 'y'])
+        expect([...(args.counts as Map<string, number>)]).toEqual([['a', 1]])
+        expect((args.when as Date).toISOString()).toBe('2021-06-07T00:00:00.000Z')
+        expect(args.big).toBe(42n)
+    })
+
+    test('with no structured field present the untouched fields survive', async () => {
+        /* A query that carries only an unrelated string leaves the plan a no-op on absent keys. */
+        const args = await get('name=keep', STRUCTURED)
+        expect(args).toEqual({ name: 'keep' })
     })
 })

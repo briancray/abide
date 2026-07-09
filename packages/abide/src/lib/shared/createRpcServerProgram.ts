@@ -4,10 +4,12 @@ import { loadProjectTsConfig } from './loadProjectTsConfig.ts'
 import type { HttpMethod } from './types/HttpMethod.ts'
 import type { InputCoercion } from './types/InputCoercion.ts'
 import type { ReturnBody } from './types/ReturnBody.ts'
+import type { WireKind } from './types/WireKind.ts'
 
 const RPC_HELPERS = new Set<string>(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'])
 const NUMBER_FLAGS = ts.TypeFlags.Number | ts.TypeFlags.NumberLiteral
 const BOOLEAN_FLAGS = ts.TypeFlags.Boolean | ts.TypeFlags.BooleanLiteral
+const BIGINT_FLAGS = ts.TypeFlags.BigInt | ts.TypeFlags.BigIntLiteral
 const NULLISH_FLAGS = ts.TypeFlags.Undefined | ts.TypeFlags.Null | ts.TypeFlags.Void
 
 export type RpcServerProgram = {
@@ -39,13 +41,13 @@ export type RpcServerProgram = {
     */
     outboxForModule(modulePath: string): boolean | undefined
     /*
-    The input-args coercion plan (ADR-0028): the endpoint's wire `Args` type read off the
-    exported RemoteFunction's call signature, projected to the numeric/boolean fields parseArgs
-    must coerce a string query/form value into. Reads `InferInput` (the wire shape the schema
-    validates), so a self-coercing schema whose input is loose is correctly left uncoerced.
-    undefined when the export call or its Args type can't be resolved, or no field is
-    numeric/boolean — the caller then stamps no plan, so a GET field stays a string exactly as
-    today.
+    The input-args wire codec plan (ADR-0028 scalars, ADR-0029 structured): the endpoint's wire
+    `Args` type read off the exported RemoteFunction's call signature, projected to the
+    number/boolean/date/bigint/set/map fields parseArgs revives a plain-JSON wire value into. Reads
+    `InferInput` (the wire shape the schema validates), so a self-coercing schema whose input is
+    loose is correctly left uncoerced. undefined when the export call or its Args type can't be
+    resolved, or no field is a recognized WireKind — the caller then stamps no plan, so a GET field
+    stays a string exactly as today.
     */
     inputCoercionForModule(modulePath: string): InputCoercion | undefined
     /*
@@ -379,12 +381,13 @@ function pushUnique(list: string[], value: string): void {
 }
 
 /*
-The coercion plan for an rpc export's input args (ADR-0028). The export's type is its
-RemoteFunction; its call signature's first parameter is the wire `Args` type (`InferInput` of
-the input schema, or the handler's annotated param when schemaless). Each numeric/boolean field
-of that Args object becomes a plan entry; every other field is omitted. undefined when the
-RemoteFunction has no call signature, the Args aren't a single object type, or no field is
-coercible — the caller then ships no plan (today's string-through behavior).
+The wire codec plan for an rpc export's input args (ADR-0028 scalars, ADR-0029 structured). The
+export's type is its RemoteFunction; its call signature's first parameter is the wire `Args` type
+(`InferInput` of the input schema, or the handler's annotated param when schemaless). Each
+number/boolean/date/bigint/set/map field of that Args object becomes a plan entry; every other
+field is omitted. undefined when the RemoteFunction has no call signature, the Args aren't a
+single object type, or no field is a recognized WireKind — the caller then ships no plan (today's
+string-through behavior).
 */
 function inputCoercionPlan(
     checker: ts.TypeChecker,
@@ -404,12 +407,12 @@ function inputCoercionPlan(
     }
     const plan: InputCoercion = {}
     for (const property of argsType.getProperties()) {
-        const kind = coercionKind(checker, checker.getTypeOfSymbolAtLocation(property, call))
+        const kind = wireKind(checker, checker.getTypeOfSymbolAtLocation(property, call))
         if (kind !== undefined) {
             plan[property.getName()] = kind
         }
     }
-    /* An empty plan (no coercible field) ships nothing, so no opts are injected. */
+    /* An empty plan (no codec-eligible field) ships nothing, so no opts are injected. */
     return Object.keys(plan).length === 0 ? undefined : plan
 }
 
@@ -431,19 +434,35 @@ function argsBagType(parameterType: ts.Type): ts.Type | undefined {
 }
 
 /*
-A field's coercion kind, or undefined when it must not be coerced. Unwraps `T | undefined` (an
-optional field) and a `T[]` (a repeated query key arrays into a list) to the target type, then
-classifies: a pure `number` (or numeric-literal union) → 'number', a pure `boolean` → 'boolean',
-anything else — a string, a `number | string` union, an object, a Date — → undefined, so it
-stays a string and the schema decides.
+A field's wire codec kind, or undefined when it isn't codec-eligible. Unwraps `T | undefined` (an
+optional field) and a `T[]` (a repeated query key / JSON array whose ELEMENTS revive per item) to
+the target type, then classifies: a pure `number`/`boolean`/`bigint` by its type flag, a `Date`/
+`Set`/`Map` by its symbol identity through the checker. Anything else — a string, a `number |
+string` union, a plain object — → undefined, so it stays its JSON form and the schema decides. The
+symbol checks are top-level only: a `Set` NESTED in another value is not descended into (ADR-0029
+defers recursive descent).
 */
-function coercionKind(checker: ts.TypeChecker, type: ts.Type): 'number' | 'boolean' | undefined {
-    const target = arrayElement(checker, unwrapOptional(type)) ?? type
+function wireKind(checker: ts.TypeChecker, type: ts.Type): WireKind | undefined {
+    const bare = unwrapOptional(type)
+    const target = arrayElement(checker, bare) ?? bare
     if (isKind(target, NUMBER_FLAGS)) {
         return 'number'
     }
     if (isKind(target, BOOLEAN_FLAGS)) {
         return 'boolean'
+    }
+    if (isKind(target, BIGINT_FLAGS)) {
+        return 'bigint'
+    }
+    const symbolName = target.getSymbol()?.name
+    if (symbolName === 'Date') {
+        return 'date'
+    }
+    if (symbolName === 'Set' || symbolName === 'ReadonlySet') {
+        return 'set'
+    }
+    if (symbolName === 'Map' || symbolName === 'ReadonlyMap') {
+        return 'map'
     }
     return undefined
 }
