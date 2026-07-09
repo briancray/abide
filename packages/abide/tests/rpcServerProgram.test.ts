@@ -157,6 +157,39 @@ describe('rpc input coercion plan through the warm server program (ADR-0028)', (
     })
 })
 
+describe('rpc structured wire-kind plan through the warm server program (ADR-0029)', () => {
+    const program = createRpcServerProgram(SERVER_CWD, SERVER_RPC_DIR)
+
+    test('Date/Set/Map/bigint fields classify by type identity; strings are left out', () => {
+        /* The Args bag is `{ when: Date; ids: Set<string>; counts: Map<string, number>; big: bigint;
+           name: string }`. Date/Set/Map resolve by symbol identity, bigint by type flag; `name`
+           (a string) is never in the plan. */
+        expect(program.inputCoercionForModule(serverModule('wireCodec'))).toEqual({
+            when: 'date',
+            ids: 'set',
+            counts: 'map',
+            big: 'bigint',
+        })
+    })
+
+    test('the structured plan is stamped into the server rewrite as a `coerce` opt', () => {
+        const source = readFileSync(serverModule('wireCodec'), 'utf8')
+        const plan = program.inputCoercionForModule(serverModule('wireCodec'))
+        const rewritten = prepareRpcModule(
+            source,
+            '@abide/abide',
+            undefined,
+            undefined,
+            plan,
+        )?.rewriteForServer('/rpc/wireCodec')
+        expect(rewritten).toContain('coerce: {')
+        expect(rewritten).toContain('"when":"date"')
+        expect(rewritten).toContain('"ids":"set"')
+        expect(rewritten).toContain('"counts":"map"')
+        expect(rewritten).toContain('"big":"bigint"')
+    })
+})
+
 /* Fail-open: with NO warm program (the override arguments absent), prepareRpcModule produces
    byte-identical output to today — streaming/durable verdicts come from the char-scan and the
    emitted client/server rewrites are unchanged. */
