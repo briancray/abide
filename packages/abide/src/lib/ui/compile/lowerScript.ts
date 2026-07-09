@@ -7,6 +7,7 @@ import { docAccessTransformer } from './lowerDocAccess.ts'
 import { signalRefsTransformer } from './renameSignalRefs.ts'
 import { stripEffectsTransformer } from './stripEffects.ts'
 import { TS_PRINTER } from './TS_PRINTER.ts'
+import type { SeedTypeClassifier } from './types/SeedTypeClassifier.ts'
 
 /* The `abide/ui/*` modules the reactive surface is imported from. An author's import of
    one is compiler-recognised and lowered, so its binding is often fully consumed — a plain
@@ -70,6 +71,11 @@ export function lowerScript(
        two-way is desugared to a writable cell rather than a read-only derive. Empty for a nested
        script (which declares no props). */
     templateWrittenNames: ReadonlySet<string> = new Set(),
+    /* Type-directed seed classifier + this script's absolute source base (ADR-0023), threaded
+       to `desugarSignals` so a no-marker `computed(seed)` routes on the seed's checker type.
+       Absent ⇒ fail-open to the `isBareCallComputed` syntax heuristic (today's behavior). */
+    seedClassify?: SeedTypeClassifier,
+    scriptBase = 0,
 ): {
     body: string
     imports: string
@@ -85,6 +91,8 @@ export function lowerScript(
         source,
         injectedCellNames,
         templateWrittenNames,
+        seedClassify,
+        scriptBase,
     )
     const result = ts.transform(source, [
         transformer,

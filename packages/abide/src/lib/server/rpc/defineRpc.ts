@@ -59,6 +59,7 @@ export function defineRpc<Args, Return>(
             output?: StandardSchemaV1
             files?: StandardSchemaV1
         }
+        /* Surface-exposure flags (browser/mcp/cli) — which surfaces advertise this rpc. */
         clients?: Partial<ClientFlags>
         crossOrigin?: boolean
         /* Per-rpc cap on actual received body bytes (413 past it); omitted = Bun's server-wide maxRequestBodySize. */

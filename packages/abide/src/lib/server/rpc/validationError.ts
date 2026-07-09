@@ -1,7 +1,7 @@
+import { fieldErrorsFromIssues } from '../../shared/fieldErrorsFromIssues.ts'
 import type { StandardSchemaV1 } from '../../shared/types/StandardSchemaV1.ts'
 import type { ValidationErrorData } from '../../shared/types/ValidationErrorData.ts'
 import { typedErrorResponse } from '../runtime/typedErrorResponse.ts'
-import { fieldErrorsFromIssues } from './fieldErrorsFromIssues.ts'
 
 /*
 The framework-reserved `validation` typed error a 422 carries: the raw Standard

@@ -3,6 +3,7 @@ import { generateSSR } from './generateSSR.ts'
 import { SSR_ESCAPE } from './SSR_ESCAPE.ts'
 import type { AnalyzedComponent } from './types/AnalyzedComponent.ts'
 import type { InterpolationClassifier } from './types/InterpolationClassifier.ts'
+import type { SeedTypeClassifier } from './types/SeedTypeClassifier.ts'
 
 /*
 Compiles a component into the body of a server render function. Runs the shared
@@ -46,11 +47,12 @@ export function compileSSR(
     scopeSeed?: string,
     analyzed?: AnalyzedComponent,
     classify?: InterpolationClassifier,
+    seedClassify?: SeedTypeClassifier,
 ): string {
-    /* `analyzed` is shared by `compileModule` (analyzed once, classifier already applied);
-       a direct caller (tests) omits it and the front-end runs here — threading `classify`
-       so a type-directed lowering happens on this path too. */
-    const resolved = analyzed ?? analyzeComponent(source, scopeSeed, classify)
+    /* `analyzed` is shared by `compileModule` (analyzed once, classifiers already applied);
+       a direct caller (tests) omits it and the front-end runs here — threading `classify` and
+       `seedClassify` so type-directed interpolation + cell lowering happen on this path too. */
+    const resolved = analyzed ?? analyzeComponent(source, scopeSeed, classify, seedClassify)
     const {
         ssrScript: lowered,
         stateNames,

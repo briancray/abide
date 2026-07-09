@@ -29,9 +29,16 @@ export async function* streamCacheResolutions(
             snapshotEntryFromCache(store, entry).then((snapshot) => ({ key: entry.key, snapshot })),
         )
     }
+    /*
+    Drain in settle order. A pending BARE read (ADR-0024 auto-streaming) is bounded by its OWN
+    endpoint `timeout` — which 504s the in-process handler during SSR, settling the entry into an
+    error that snapshots as a `{ key, miss }` (the client refetches on hydrate). So there is no
+    separate SSR-stream deadline (ADR-0024 option a): a read with a declared timeout self-settles;
+    a read that declares none is unbounded — the author bounds it with a `timeout`.
+    */
     while (inflight.size > 0) {
-        const { key, snapshot } = await Promise.race(inflight.values())
-        inflight.delete(key)
-        yield snapshot ?? { key, miss: true }
+        const settled = await Promise.race(inflight.values())
+        inflight.delete(settled.key)
+        yield settled.snapshot ?? { key: settled.key, miss: true }
     }
 }

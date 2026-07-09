@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { lowerDocAccess } from '../src/lib/ui/compile/lowerDocAccess.ts'
-import { mutateDocArray } from '../src/lib/ui/dom/mutateDocArray.ts'
+import { mutateDocContainer } from '../src/lib/ui/dom/mutateDocContainer.ts'
 import { readCall } from '../src/lib/ui/dom/readCall.ts'
 import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
 import { escapeKey } from '../src/lib/ui/runtime/escapeKey.ts'
@@ -68,15 +68,17 @@ describe('lowerDocAccess — emitted shape', () => {
         expect(lower('model.lines.push(v)')).toContain('model.add("lines/-", v)')
     })
 
-    test('in-place-mutating array methods route through mutateDocArray, not readCall', () => {
+    test('in-place-mutating array methods route through mutateDocContainer, not readCall', () => {
         // the bug: only `push` patched; `.splice`/`.pop`/`.sort`/… fell into the generic
         // readCall branch and mutated the live tree by reference, emitting no patch.
         expect(lower('model.todos.splice(i, 1)')).toContain(
-            '$$mutateDocArray(model, "todos", "splice", [i, 1])',
+            '$$mutateDocContainer(model, "todos", "splice", [i, 1])',
         )
-        expect(lower('model.todos.pop()')).toContain('$$mutateDocArray(model, "todos", "pop", [])')
+        expect(lower('model.todos.pop()')).toContain(
+            '$$mutateDocContainer(model, "todos", "pop", [])',
+        )
         expect(lower('model.todos.sort()')).toContain(
-            '$$mutateDocArray(model, "todos", "sort", [])',
+            '$$mutateDocContainer(model, "todos", "sort", [])',
         )
         // non-mutating methods still read + guard on the value
         expect(lower('model.todos.map(f)')).toContain(
@@ -84,6 +86,27 @@ describe('lowerDocAccess — emitted shape', () => {
         )
         // optional-chained mutation keeps bare-call skip-if-absent semantics
         expect(lower('model.todos?.splice(0, 1)')).toContain('model.read("todos")?.splice(0, 1)')
+    })
+
+    test('in-place-mutating Set/Map methods route through mutateDocContainer too', () => {
+        // the doc codec serializes Map/Set, so a doc-held collection is legit — but `.add`/
+        // `.set`/`.delete`/`.clear` mutated the live collection by reference, emitting no patch.
+        expect(lower('model.tags.add(x)')).toContain(
+            '$$mutateDocContainer(model, "tags", "add", [x])',
+        )
+        expect(lower('model.tags.delete(x)')).toContain(
+            '$$mutateDocContainer(model, "tags", "delete", [x])',
+        )
+        expect(lower('model.byId.set(k, v)')).toContain(
+            '$$mutateDocContainer(model, "byId", "set", [k, v])',
+        )
+        expect(lower('model.byId.clear()')).toContain(
+            '$$mutateDocContainer(model, "byId", "clear", [])',
+        )
+        // non-mutating collection reads still guard through readCall
+        expect(lower('model.tags.has(x)')).toContain(
+            '$$readCall(model.read("tags"), "tags", "has", [x])',
+        )
     })
 
     test('a called member reads the receiver and guards the method on the value', () => {
@@ -135,12 +158,12 @@ describe('lowerDocAccess — emitted shape', () => {
    calls — exactly the names the real module imports. */
 function run(document: Doc, body: string): unknown {
     const lowered = lowerDocAccess(body, 'model')
-    return new Function('model', 'escapeKey', 'readCall', 'mutateDocArray', lowered)(
+    return new Function('model', 'escapeKey', 'readCall', 'mutateDocContainer', lowered)(
         document,
         escapeKey,
         readCall,
         (d: Doc, path: string, member: string, args: unknown[]) =>
-            mutateDocArray(d, path, member, args),
+            mutateDocContainer(d, path, member, args),
     )
 }
 
@@ -213,6 +236,31 @@ describe('lowerDocAccess — executed semantics', () => {
         expect(d.read<number[]>('nums')).toEqual([1, 3])
         run(d, 'model.nums.reverse()')
         expect(d.read<number[]>('nums')).toEqual([3, 1])
+    })
+
+    test('a mutating Set method emits a patch and updates the tree', () => {
+        // a doc-held Set: `.add`/`.delete`/`.clear` must clone-apply-replace so a patch fires,
+        // exactly like the array path — a bare in-place call mutated by reference, no re-render.
+        const d = doc({ tags: new Set(['a', 'b']) })
+        const events: unknown[] = []
+        const off = PATCH_BUS.subscribe((e) => events.push(e))
+        run(d, "model.tags.add('c')")
+        expect([...d.read<Set<string>>('tags')]).toEqual(['a', 'b', 'c'])
+        const deleted = run(d, "return model.tags.delete('a')")
+        off()
+        expect(deleted).toBe(true) // native return value preserved
+        expect([...d.read<Set<string>>('tags')]).toEqual(['b', 'c'])
+        expect(events.length).toBe(2) // one patch per mutation (readers wake, undo journals)
+    })
+
+    test('a mutating Map method emits a patch and updates the tree', () => {
+        const d = doc({ byId: new Map<string, number>([['a', 1]]) })
+        run(d, "model.byId.set('b', 2)")
+        expect(d.read<Map<string, number>>('byId').get('b')).toBe(2)
+        run(d, "model.byId.delete('a')")
+        expect(d.read<Map<string, number>>('byId').has('a')).toBe(false)
+        run(d, 'model.byId.clear()')
+        expect(d.read<Map<string, number>>('byId').size).toBe(0)
     })
 
     test('a key containing / round-trips — read and remove address the whole key', () => {

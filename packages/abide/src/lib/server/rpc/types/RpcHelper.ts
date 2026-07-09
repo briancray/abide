@@ -75,7 +75,8 @@ type RpcSchemas = {
 
 /*
 Options every rpc overload accepts: the `schemas` namespace, the `clients` surface
-flags, the same-origin CSRF exemption (`crossOrigin`), the pre-parse body-byte ceiling
+flags (browser/mcp/cli), the same-origin
+CSRF exemption (`crossOrigin`), the pre-parse body-byte ceiling
 (`maxBodySize`), and the per-surface handler `timeout` (ms). Read helpers add the
 endpoint `cache`/`stream` policy (ADR-0020); mutating helpers add `outbox` instead —
 the kind-scoping is what makes `POST(fn, { cache })` and `GET(fn, { outbox: true })`

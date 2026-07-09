@@ -4,6 +4,7 @@ import { parseTemplate } from './parseTemplate.ts'
 import { scopeCss } from './scopeCss.ts'
 import type { AnalyzedComponent } from './types/AnalyzedComponent.ts'
 import type { InterpolationClassifier } from './types/InterpolationClassifier.ts'
+import type { SeedTypeClassifier } from './types/SeedTypeClassifier.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
 import { writtenTemplateNames } from './writtenTemplateNames.ts'
 
@@ -27,13 +28,29 @@ export function analyzeComponent(
     source: string,
     scopeSeed?: string,
     classify?: InterpolationClassifier,
+    /* Type-directed SEED classifier (ADR-0023): resolves a no-marker `computed(seed)`'s
+       async-ness from the seed's checker type over the SAME warm shadow program `classify`
+       uses. Optional and fail-open — absent, every seed routes by the `isBareCallComputed`
+       syntax heuristic (today's behavior). */
+    seedClassify?: SeedTypeClassifier,
 ): AnalyzedComponent {
     /* Only the LEADING `<script>` is the component script; scripts nested in the
        template (scoped reactive blocks) survive into the parsed nodes. The `<style>`
        is left in the template for the parser to extract structurally (below), so a
        `<style>` quoted inside an expression is never mistaken for the component's. */
     const scriptMatch = source.match(/^\s*<script[^>]*>([\s\S]*?)<\/script>/)
-    const scriptBody = (scriptMatch?.[1] ?? '').trim()
+    const rawScriptBody = scriptMatch?.[1] ?? ''
+    const scriptBody = rawScriptBody.trim()
+    /* Absolute `.abide` source offset where the TRIMMED `<script>` body begins — the base that
+       maps a desugared `computed(seed)` node (offset-relative to the trimmed body) back to an
+       original source location, so the type-directed seed classifier (ADR-0023) resolves it
+       against the shadow's source→shadow `mappings`, exactly as `templateBase` anchors each
+       interpolation's `loc`. `indexOf('>')` lands just past the opening `<script …>` (matching
+       `compileShadow`'s `scriptStart`); the trim delta re-adds the leading whitespace the parsed
+       script dropped. */
+    const scriptContentBase =
+        (scriptMatch ? source.indexOf('>', scriptMatch.index) + 1 : 0) +
+        (rawScriptBody.length - rawScriptBody.trimStart().length)
     const afterScript = scriptMatch ? source.slice(scriptMatch[0].length) : source
     const template = afterScript.trim()
     /* Absolute source offset of the trimmed template's first char (script length + the
@@ -97,7 +114,14 @@ export function analyzeComponent(
         computedNames,
         cellReadNames,
         droppedReactiveImports,
-    } = lowerScript(fullScriptBody, nestedScriptCode, injectedCellNames, templateWrittenNames)
+    } = lowerScript(
+        fullScriptBody,
+        nestedScriptCode,
+        injectedCellNames,
+        templateWrittenNames,
+        seedClassify,
+        scriptContentBase,
+    )
     /* `annotateScopes` mutates the tree — assigning each style its scope attribute and
        stamping covered elements — and returns the scoped CSS per block for the bundler. */
     const styles = annotateScopes(nodes, [], scopeSeed, { count: 0 })

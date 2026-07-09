@@ -18,7 +18,7 @@ import { mergeProps } from './dom/mergeProps.ts'
 import { mount } from './dom/mount.ts'
 import { mountChild } from './dom/mountChild.ts'
 import { mountSlot } from './dom/mountSlot.ts'
-import { mutateDocArray } from './dom/mutateDocArray.ts'
+import { mutateDocContainer } from './dom/mutateDocContainer.ts'
 import { on } from './dom/on.ts'
 import { outlet } from './dom/outlet.ts'
 import { readCall } from './dom/readCall.ts'
@@ -91,7 +91,7 @@ export function installHotBridge(): void {
         readCall,
         readCell,
         settleAsyncCells,
-        mutateDocArray,
+        mutateDocContainer,
         hydrate,
         escapeKey,
         nextBlockId,

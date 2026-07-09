@@ -1,9 +1,14 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { validationError } from '../src/lib/server/rpc/validationError.ts'
 import { cache } from '../src/lib/shared/cache.ts'
 import { cacheStoreSlot } from '../src/lib/shared/cacheStoreSlot.ts'
 import { createCacheStore } from '../src/lib/shared/createCacheStore.ts'
+import { HttpError } from '../src/lib/shared/HttpError.ts'
+import { httpErrorFor } from '../src/lib/shared/httpErrorFor.ts'
 import { refreshing } from '../src/lib/shared/refreshing.ts'
+import type { StandardSchemaV1 } from '../src/lib/shared/types/StandardSchemaV1.ts'
 import { remoteProxy } from '../src/lib/ui/remoteProxy.ts'
+import { importedNameSchema } from './support/importedNameSchema.ts'
 import { settle } from './support/settle.ts'
 
 /* ADR-0020 client gap: the endpoint's cache/stream policy ships to the client on the
@@ -127,5 +132,153 @@ describe('remoteProxy endpoint policy — client-side (ADR-0020)', () => {
         await new Promise((resolve) => setTimeout(resolve, 60))
         expect(await getThing(undefined)).toEqual({ n: 2 })
         expect(fetches).toBe(2)
+    })
+})
+
+/* ADR-0026: client-side pre-flight input validation — always on. Whenever an endpoint carries
+   `schemas.input`, remoteProxy validates the TYPED args against it before the fetch and, on a
+   returned failure, throws an HttpError shaped identically to the server's 422 — saving the
+   round-trip. A validator that THROWS (can't run client-side) falls through to the server rather
+   than failing the call. Server validation stays authoritative regardless; this is UX only. */
+
+/* A rejecting Standard Schema: requires a non-empty string `name`, else one issue at ['name'].
+   `async: true` returns the result as a Promise to exercise the awaited-validate path (D3). */
+function nameSchema(async = false): StandardSchemaV1<{ name: string }, { name: string }> {
+    return {
+        '~standard': {
+            version: 1,
+            vendor: 'abide-test',
+            validate(value: unknown) {
+                const name = (value as { name?: unknown } | undefined)?.name
+                const result: StandardSchemaV1.Result<{ name: string }> =
+                    typeof name === 'string' && name.length > 0
+                        ? { value: { name } }
+                        : { issues: [{ message: 'Required', path: ['name'] }] }
+                return async ? Promise.resolve(result) : result
+            },
+        },
+    }
+}
+
+/* The issues the schema yields for a given (invalid) input — used to build the SERVER's 422 for
+   the identical-shape assertion. */
+function issuesFor(input: unknown): readonly StandardSchemaV1.Issue[] {
+    const result = nameSchema()['~standard'].validate(input) as StandardSchemaV1.FailureResult
+    return result.issues
+}
+
+/* A Standard Schema whose validator THROWS (cannot complete in this environment) rather than
+   returning issues — models a non-portable / async-resource refinement. The client pre-flight must
+   fall through to the server on this, never hard-fail the call. */
+function throwingSchema(): StandardSchemaV1<{ name: string }, { name: string }> {
+    return {
+        '~standard': {
+            version: 1,
+            vendor: 'abide-test',
+            validate() {
+                throw new Error('validator cannot run in this environment')
+            },
+        },
+    }
+}
+
+describe('remoteProxy client-side pre-flight validation (ADR-0026)', () => {
+    let fetchCalls = 0
+    beforeEach(() => {
+        fetchCalls = 0
+        ;(globalThis as { window?: unknown }).window = { location: { href: 'http://localhost/' } }
+        cacheStoreSlot.resolver = () => cacheStoreSlot.fallback
+        cacheStoreSlot.fallback = createCacheStore()
+        globalThis.fetch = (async () => {
+            fetchCalls += 1
+            return jsonResponse({ ok: true })
+        }) as unknown as typeof fetch
+    })
+    afterEach(() => {
+        globalThis.fetch = realFetch
+        delete (globalThis as { window?: unknown }).window
+        cacheStoreSlot.resolver = undefined
+        cacheStoreSlot.fallback = undefined
+    })
+
+    test('invalid args → throws the SERVER-identical 422 before any fetch', async () => {
+        const signup = remoteProxy<{ name: string }, { ok: boolean }>('POST', '/rpc/signup', {
+            schemas: { input: nameSchema() },
+        })
+        let thrown: unknown
+        try {
+            await signup({ name: '' })
+        } catch (error) {
+            thrown = error
+        }
+        /* No round-trip: the pre-flight rejected before dispatch. */
+        expect(fetchCalls).toBe(0)
+        expect(thrown).toBeInstanceOf(HttpError)
+        const clientError = thrown as HttpError
+        /* The exact HttpError a caller gets when the SERVER rejects the same schema + input. */
+        const serverError = await httpErrorFor(validationError(issuesFor({ name: '' })))
+        expect(clientError.status).toBe(422)
+        expect(clientError.status).toBe(serverError.status)
+        expect(clientError.statusText).toBe(serverError.statusText)
+        expect(clientError.kind).toBe('validation')
+        expect(clientError.kind).toBe(serverError.kind)
+        expect(clientError.message).toBe(serverError.message)
+        expect(clientError.data).toEqual(serverError.data)
+        /* The form-friendly field map is the shape a caller's 422 handler reads. */
+        expect((clientError.data as { fields: Record<string, string> }).fields).toEqual({
+            name: 'Required',
+        })
+    })
+
+    test('valid args → validates, then fetches normally', async () => {
+        const signup = remoteProxy<{ name: string }, { ok: boolean }>('POST', '/rpc/signupOk', {
+            schemas: { input: nameSchema() },
+        })
+        expect(await signup({ name: 'ada' })).toEqual({ ok: true })
+        expect(fetchCalls).toBe(1)
+    })
+
+    test('no input schema → sends without validating', async () => {
+        const signup = remoteProxy<{ name: string }, { ok: boolean }>(
+            'POST',
+            '/rpc/signupNoSchema',
+            {},
+        )
+        expect(await signup({ name: '' })).toEqual({ ok: true })
+        expect(fetchCalls).toBe(1)
+    })
+
+    test('a validator that THROWS falls through to the server (never hard-fails the call)', async () => {
+        const signup = remoteProxy<{ name: string }, { ok: boolean }>('POST', '/rpc/signupThrows', {
+            schemas: { input: throwingSchema() },
+        })
+        /* The validator cannot run here — the client must NOT reject; it fetches and lets the
+           authoritative server validate. */
+        expect(await signup({ name: '' })).toEqual({ ok: true })
+        expect(fetchCalls).toBe(1)
+    })
+
+    test('async schema (validate returns a Promise) is awaited before the fetch decision', async () => {
+        const signup = remoteProxy<{ name: string }, { ok: boolean }>('POST', '/rpc/signupAsync', {
+            schemas: { input: nameSchema(true) },
+        })
+        await expect(signup({ name: '' })).rejects.toBeInstanceOf(HttpError)
+        expect(fetchCalls).toBe(0)
+        expect(await signup({ name: 'grace' })).toEqual({ ok: true })
+        expect(fetchCalls).toBe(1)
+    })
+
+    test('an IMPORTED schema validates client-side (ADR-0022 D2 live-opts reach)', async () => {
+        const signup = remoteProxy<{ name: string }, { ok: boolean }>(
+            'POST',
+            '/rpc/signupImported',
+            {
+                schemas: { input: importedNameSchema },
+            },
+        )
+        await expect(signup({ name: '' })).rejects.toBeInstanceOf(HttpError)
+        expect(fetchCalls).toBe(0)
+        expect(await signup({ name: 'linus' })).toEqual({ ok: true })
+        expect(fetchCalls).toBe(1)
     })
 })

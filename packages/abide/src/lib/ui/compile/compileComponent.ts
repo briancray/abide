@@ -3,6 +3,7 @@ import { generateBuild } from './generateBuild.ts'
 import { hoistCells } from './hoistCells.ts'
 import type { AnalyzedComponent } from './types/AnalyzedComponent.ts'
 import type { InterpolationClassifier } from './types/InterpolationClassifier.ts'
+import type { SeedTypeClassifier } from './types/SeedTypeClassifier.ts'
 
 /*
 Compiles a single-file abide component into the body of a client build function.
@@ -22,11 +23,12 @@ export function compileComponent(
     scopeSeed?: string,
     analyzed?: AnalyzedComponent,
     classify?: InterpolationClassifier,
+    seedClassify?: SeedTypeClassifier,
 ): string {
-    /* `analyzed` is shared by `compileModule` (analyzed once, classifier already applied);
-       a direct caller (tests) omits it and the front-end runs here — threading `classify`
-       so a type-directed lowering happens on this path too. */
-    const resolved = analyzed ?? analyzeComponent(source, scopeSeed, classify)
+    /* `analyzed` is shared by `compileModule` (analyzed once, classifiers already applied);
+       a direct caller (tests) omits it and the front-end runs here — threading `classify` and
+       `seedClassify` so type-directed interpolation + cell lowering happen on this path too. */
+    const resolved = analyzed ?? analyzeComponent(source, scopeSeed, classify, seedClassify)
     const { script, stateNames, derivedNames, computedNames, cellReadNames, nodes } = resolved
     const build = generateBuild(
         nodes,

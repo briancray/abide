@@ -7,6 +7,7 @@ import { compileComponent } from './compileComponent.ts'
 import { compileSSR } from './compileSSR.ts'
 import type { AnalyzedComponent } from './types/AnalyzedComponent.ts'
 import type { InterpolationClassifier } from './types/InterpolationClassifier.ts'
+import type { SeedTypeClassifier } from './types/SeedTypeClassifier.ts'
 import { UI_RUNTIME_IMPORTS } from './UI_RUNTIME_IMPORTS.ts'
 
 /*
@@ -35,6 +36,10 @@ export function compileModule(
            bundler plugin builds per `.abide`. Optional and fail-open — absent, the module
            compiles exactly as before (every interpolation binds as a plain value). */
         classify?: InterpolationClassifier
+        /* Type-directed cell lowering (ADR-0023): the seed classifier the plugin builds over
+           the SAME warm shadow program. Optional and fail-open — absent, a no-marker
+           `computed(seed)` routes by the `isBareCallComputed` syntax heuristic (today's behavior). */
+        seedClassify?: SeedTypeClassifier
     } = {},
 ): { code: string; styles: AnalyzedComponent['styles'] } {
     const isLayout = options.isLayout ?? false
@@ -43,7 +48,12 @@ export function compileModule(
        instead of re-running it. `imports` (hoisted child-component imports) and the
        per-element scopes both come from this single pass. The classifier (when present)
        lowers promise-typed interpolations here, so both back-ends see one lowered tree. */
-    const analyzed = analyzeComponent(source, options.moduleId, options.classify)
+    const analyzed = analyzeComponent(
+        source,
+        options.moduleId,
+        options.classify,
+        options.seedClassify,
+    )
     const userImports = analyzed.imports
     const body = indent(compileComponent(source, isLayout, options.moduleId, analyzed))
 

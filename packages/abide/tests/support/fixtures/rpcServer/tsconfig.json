@@ -1,0 +1,4 @@
+{
+    "extends": "@abide/abide/tsconfig",
+    "include": ["src/**/*.ts"]
+}

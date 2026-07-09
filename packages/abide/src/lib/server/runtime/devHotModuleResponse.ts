@@ -5,6 +5,7 @@ import { compileModule } from '../../ui/compile/compileModule.ts'
 import type { ShadowProgram } from '../../ui/compile/createShadowProgram.ts'
 import { interpolationClassifierForRoot } from '../../ui/compile/interpolationClassifierForRoot.ts'
 import { nearestProjectRoot } from '../../ui/compile/nearestProjectRoot.ts'
+import { seedTypeClassifierForRoot } from '../../ui/compile/seedTypeClassifierForRoot.ts'
 
 // Reused across requests — strips the embedded author TypeScript to browser JS.
 const TRANSPILER = new Bun.Transpiler({ loader: 'ts' })
@@ -36,16 +37,18 @@ export async function devHotModuleResponse(moduleId: string): Promise<Response> 
        build relies on would go stale across edits, which is the one thing HMR can't tolerate.
        Fail-open: an unbuildable program yields no classifier and the module compiles as before. */
     const projectRoot = nearestProjectRoot(path, process.cwd())
-    const classify = interpolationClassifierForRoot(
-        new Map<string, ShadowProgram | undefined>(),
-        projectRoot,
-        path,
-    )
+    /* One fresh per-request cache shared by both classifiers, so the interpolation and seed
+       classifiers reuse a SINGLE shadow program for this edit (ADR-0023) rather than each
+       building its own. */
+    const shadowCache = new Map<string, ShadowProgram | undefined>()
+    const classify = interpolationClassifierForRoot(shadowCache, projectRoot, path)
+    const seedClassify = seedTypeClassifierForRoot(shadowCache, projectRoot, path)
     const { code } = compileModule(source, {
         isLayout: isLayoutFile(moduleId),
         moduleId,
         hot: true,
         classify,
+        seedClassify,
     })
     return new Response(TRANSPILER.transformSync(code), {
         headers: {
