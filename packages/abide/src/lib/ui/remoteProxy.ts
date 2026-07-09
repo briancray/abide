@@ -9,6 +9,7 @@ import { trace } from '../shared/trace.ts'
 import type { CachePolicy } from '../shared/types/CachePolicy.ts'
 import type { HttpMethod } from '../shared/types/HttpMethod.ts'
 import type { Outbox } from '../shared/types/Outbox.ts'
+import type { OutputWirePlan } from '../shared/types/OutputWirePlan.ts'
 import type { RemoteFunction } from '../shared/types/RemoteFunction.ts'
 import type { RpcOptions } from '../shared/types/RpcOptions.ts'
 import type { StandardSchemaV1 } from '../shared/types/StandardSchemaV1.ts'
@@ -40,6 +41,10 @@ const QUEUED = 'queued'
 export type DurableOptions<Args = unknown> = {
     outbox?: boolean
     streaming?: boolean
+    /* The client output wire codec plan (ADR-0029) the resolver plugin baked onto the stub — the
+       handler's structured success fields, so the proxy revives a `Set`/`Map`/`bigint`/`Date` off a
+       decoded response. Absent on the fail-open path (a response array then stays an array). */
+    outputWirePlan?: OutputWirePlan
     cache?: CachePolicy<Args>
     stream?: StreamPolicy
     store?: PersistenceStore
@@ -112,6 +117,9 @@ export function remoteProxy<Args, Return>(
         url,
         clients: browserClientFlags,
         streaming: durable?.streaming ?? false,
+        /* The client revives a decoded response's structured fields through this plan (ADR-0029
+           output path); undefined leaves the honest-JSON body untouched. */
+        outputWirePlan: durable?.outputWirePlan,
         /* Endpoint policy the resolver plugin spliced onto the stub — governs client cache
            behaviour (ttl/staleness, refetch clock, tags). createRemoteFunction stamps it onto
            `fn.cache` / `fn.stream` so readThrough reads it as the bottom policy layer. */

@@ -305,6 +305,51 @@ describe('rpc structured wire-kind plan through the warm server program (ADR-002
     })
 })
 
+describe('rpc output wire plan through the warm server program (ADR-0029 output path)', () => {
+    const program = createRpcServerProgram(SERVER_CWD, SERVER_RPC_DIR)
+
+    test("the success body's structured fields resolve to an output plan; strings/numbers are left out", () => {
+        /* The handler returns `json({ when: Date, ids: Set<string>, counts: Map<string, number>,
+           big: bigint, name: string })`. Only the structured kinds are revived on the client — `name`
+           (a string) is omitted. */
+        expect(program.outputWirePlanForModule(serverModule('wireCodec'))).toEqual({
+            when: 'date',
+            ids: 'set',
+            counts: 'map',
+            big: 'bigint',
+        })
+    })
+
+    test('an unknown module path fails open to undefined (the client bakes no plan)', () => {
+        expect(
+            program.outputWirePlanForModule(resolve(SERVER_RPC_DIR, 'missing.ts')),
+        ).toBeUndefined()
+    })
+
+    test('the output plan is baked onto the CLIENT rewrite as an `outputWirePlan` opt', () => {
+        const source = readFileSync(serverModule('wireCodec'), 'utf8')
+        const plan = program.outputWirePlanForModule(serverModule('wireCodec'))
+        const rewritten = prepareRpcModule(
+            source,
+            '@abide/abide',
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            plan,
+        )?.rewriteForClient('/rpc/wireCodec')
+        expect(rewritten).toContain('__abideRemoteProxy__(')
+        expect(rewritten).toContain('outputWirePlan: {')
+        expect(rewritten).toContain('"when":"date"')
+        expect(rewritten).toContain('"ids":"set"')
+        expect(rewritten).toContain('"counts":"map"')
+        expect(rewritten).toContain('"big":"bigint"')
+        /* The handler stays elided from the client bundle (symmetric with the server rewrite). */
+        expect(rewritten).not.toContain('__abideDefineRpc__')
+    })
+})
+
 /* Fail-open: with NO warm program (the override arguments absent), prepareRpcModule produces
    byte-identical output to today — streaming/durable verdicts come from the char-scan and the
    emitted client/server rewrites are unchanged. */

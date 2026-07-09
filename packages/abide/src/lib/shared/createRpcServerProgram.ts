@@ -5,6 +5,7 @@ import { loadProjectTsConfig } from './loadProjectTsConfig.ts'
 import type { ErrorJsonSchemas } from './types/ErrorJsonSchemas.ts'
 import type { HttpMethod } from './types/HttpMethod.ts'
 import type { InputCoercion } from './types/InputCoercion.ts'
+import type { OutputWirePlan } from './types/OutputWirePlan.ts'
 import type { ReturnBody } from './types/ReturnBody.ts'
 import type { WireKind } from './types/WireKind.ts'
 
@@ -52,6 +53,18 @@ export type RpcServerProgram = {
     stays a string exactly as today.
     */
     inputCoercionForModule(modulePath: string): InputCoercion | undefined
+    /*
+    The output-args wire codec plan (ADR-0029 output path): the endpoint's success RESPONSE body type
+    (resolved the same way `returnBodyForModule`/`walkSuccessBodies` read it — unwrap `Promise`, drop
+    the `TypedError` branches) projected to the structured `date`/`bigint`/`set`/`map` fields the
+    client proxy revives from a decoded response. The response-side sibling of
+    `inputCoercionForModule`: it is baked onto the CLIENT `remoteProxy` stub (not the server
+    `defineRpc`), so an abide client revives a `Set`/`Map`/`bigint`/`Date` the server encoded to
+    honest JSON. Only the structured kinds are listed — `number`/`boolean` already ride as their JSON
+    type. undefined when the export call or its success body can't be resolved, or no field is a
+    structured WireKind, so the client bakes no plan and a response array stays an array.
+    */
+    outputWirePlanForModule(modulePath: string): OutputWirePlan | undefined
     /*
     The endpoint's success-BODY type (ADR-0030), read from the handler's return type the same way
     streaming detection reads it: unwrap `Promise`, drop the `TypedError` branches, take each
@@ -139,6 +152,9 @@ export function createRpcServerProgram(cwd: string, rpcDir: string): RpcServerPr
         },
         inputCoercionForModule(modulePath) {
             return query(modulePath, (call) => inputCoercionPlan(checker, call.node))
+        },
+        outputWirePlanForModule(modulePath) {
+            return query(modulePath, (call) => outputWirePlan(checker, call.node))
         },
         returnBodyForModule(modulePath) {
             return query(modulePath, (call) => handlerReturnBody(checker, call.node))
@@ -623,6 +639,39 @@ function inputCoercionPlan(
     }
     /* An empty plan (no codec-eligible field) ships nothing, so no opts are injected. */
     return Object.keys(plan).length === 0 ? undefined : plan
+}
+
+/*
+The wire codec plan for an rpc export's success RESPONSE body (ADR-0029 output path) — the
+response-side sibling of `inputCoercionPlan`. Walks the handler's success-body constituents the same
+way the ADR-0030 surfaces do (`walkSuccessBodies` — unwrap `Promise`, drop the `TypedError` branches)
+and, for each OBJECT body, reads each property's `WireKind` and keeps only the STRUCTURED kinds
+(`date`/`bigint`/`set`/`map`) the client revives — `number`/`boolean` already ride as their JSON type.
+A streaming body is skipped (its frame encoding is deferred). undefined when no handler signature
+resolves or no structured field is present, so the client bakes no plan.
+*/
+function outputWirePlan(
+    checker: ts.TypeChecker,
+    call: ts.CallExpression,
+): OutputWirePlan | undefined {
+    const plan: OutputWirePlan = {}
+    const resolved = walkSuccessBodies(checker, call, (part, streaming) => {
+        /* Frame-level encoding for jsonl()/sse() is deferred (ADR-0029), and an untagged Response
+           body is `unknown` — neither yields a top-level field plan. */
+        if (streaming || part === undefined) {
+            return
+        }
+        for (const property of part.getProperties()) {
+            const kind = wireKind(checker, checker.getTypeOfSymbol(property))
+            if (kind === 'date' || kind === 'bigint' || kind === 'set' || kind === 'map') {
+                plan[property.getName()] = kind
+            }
+        }
+    })
+    if (!resolved || Object.keys(plan).length === 0) {
+        return undefined
+    }
+    return plan
 }
 
 /*
