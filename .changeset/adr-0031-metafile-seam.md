@@ -1,0 +1,5 @@
+---
+"@abide/abide": patch
+---
+
+Factor the post-DCE metafile walk into a reusable analysis seam and add a bundle-budget diagnostic (ADR-0031 D2). The client build's `build.onEnd` reachability pass is now `bundleGraphFromMetafile` — one walk of `Bun.build`'s metafile into a `BundleGraph` (`{ modules, importerChain }`) that both the side-crossing guard (unchanged behavior) and a new consumer read. First consumer: a non-blocking bundle-budget warning — a project `src/` module that survives tree-shaking into the client bundle over 512 KiB earns an `abideLog.warn` with its import chain, so an accidentally-huge input becomes observable without a new bundler pass. Never fails the build; the only hard `onEnd` failure remains a real client-reachable `$server/*` violation. ADR-0031 D1 (sharpening the post-await tracking lint with the script-region classifier) is deferred: the spike found the classifier precise but the current warning already never fires on the inert captures it was meant to stop flagging.
