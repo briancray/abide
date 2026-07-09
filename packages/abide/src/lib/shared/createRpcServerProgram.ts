@@ -3,6 +3,7 @@ import ts from 'typescript'
 import { loadProjectTsConfig } from './loadProjectTsConfig.ts'
 import type { HttpMethod } from './types/HttpMethod.ts'
 import type { InputCoercion } from './types/InputCoercion.ts'
+import type { ReturnBody } from './types/ReturnBody.ts'
 
 const RPC_HELPERS = new Set<string>(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'])
 const NUMBER_FLAGS = ts.TypeFlags.Number | ts.TypeFlags.NumberLiteral
@@ -47,6 +48,18 @@ export type RpcServerProgram = {
     today.
     */
     inputCoercionForModule(modulePath: string): InputCoercion | undefined
+    /*
+    The endpoint's success-BODY type (ADR-0030), read from the handler's return type the same way
+    streaming detection reads it: unwrap `Promise`, drop the `TypedError` branches, take each
+    success `TypedResponse<Body>` body. `type` is that body rendered as a TS type string; a
+    streaming endpoint reports `streaming: true` and the per-FRAME type (the `AsyncIterable`
+    element) so a surface describes one streamed item. This is the output-side sibling of
+    `inputCoercionForModule` — the handler's return is the single source for the generated surfaces
+    (`.d.ts`/OpenAPI 200/MCP outputSchema) instead of a hand-written `schemas.output`. undefined
+    when the export call or its handler body type can't be resolved, so a consumer falls open to an
+    author-declared `schemas.output`.
+    */
+    returnBodyForModule(modulePath: string): ReturnBody | undefined
 }
 
 /*
@@ -99,6 +112,9 @@ export function createRpcServerProgram(cwd: string, rpcDir: string): RpcServerPr
         },
         inputCoercionForModule(modulePath) {
             return query(modulePath, (call) => inputCoercionPlan(checker, call.node))
+        },
+        returnBodyForModule(modulePath) {
+            return query(modulePath, (call) => handlerReturnBody(checker, call.node))
         },
     }
 }
@@ -267,6 +283,99 @@ function typeIsAsyncIterable(checker: ts.TypeChecker, type: ts.Type): boolean {
         }
     }
     return false
+}
+
+/*
+The rpc export's success-body descriptor (ADR-0030), projected from the handler's return type the
+same way `handlerReturnsStream` reads it — unwrap one `Promise` layer, then walk the return union.
+This mirrors `RpcHelper`'s `SuccessBody<R>`: a `TypedError` branch (its `__abideError` brand) is an
+error response and is dropped; every success `TypedResponse<Body>` (its `__body` phantom) yields its
+body. A branch is a streaming body when the body is async-iterable, in which case its per-FRAME type
+(the `AsyncIterable` element) is taken and the descriptor marked streaming. undefined when no handler
+call signature or no success body resolves — the caller falls open to an author-declared schema.
+*/
+function handlerReturnBody(
+    checker: ts.TypeChecker,
+    call: ts.CallExpression,
+): ReturnBody | undefined {
+    const handler = call.arguments[0]
+    if (handler === undefined) {
+        return undefined
+    }
+    const signature = checker.getTypeAtLocation(handler).getCallSignatures()[0]
+    if (signature === undefined) {
+        return undefined
+    }
+    const returnType = unwrapPromise(checker, checker.getReturnTypeOfSignature(signature))
+    const members = returnType.isUnion() ? returnType.types : [returnType]
+    const rendered: string[] = []
+    let streaming = false
+    for (const member of members) {
+        // A TypedError branch is an error response, not a success body — drop it.
+        if (member.getProperty('__abideError') !== undefined) {
+            continue
+        }
+        const bodyProperty = member.getProperty('__body')
+        if (bodyProperty === undefined) {
+            // An untagged Response has no phantom body — its success body is `unknown` (SuccessBody's fallback).
+            pushUnique(rendered, 'unknown')
+            continue
+        }
+        const declaration = bodyProperty.valueDeclaration ?? bodyProperty.declarations?.[0]
+        if (declaration === undefined) {
+            pushUnique(rendered, 'unknown')
+            continue
+        }
+        const bodyType = checker.getTypeOfSymbolAtLocation(bodyProperty, declaration)
+        // The `__body?` phantom is optional, so reading its type adds a spurious `| undefined`;
+        // drop the nullish members before rendering (indistinguishable from an authored optional
+        // body, which the surface treats the same — the present value's shape).
+        for (const part of meaningfulMembers(bodyType)) {
+            if (typeIsAsyncIterable(checker, part)) {
+                streaming = true
+                pushUnique(
+                    rendered,
+                    checker.typeToString(asyncIterableElement(checker, part) ?? part),
+                )
+            } else {
+                pushUnique(rendered, checker.typeToString(part))
+            }
+        }
+    }
+    if (rendered.length === 0) {
+        return undefined
+    }
+    return { type: rendered.join(' | '), streaming }
+}
+
+/* The non-nullish constituents of a body type — a single-element list for a non-union, else the
+   union's members with `undefined`/`null`/`void` dropped (the `__body?` phantom's optionality). All
+   members nullish (an unusual `undefined`-only body) keeps them so something still renders. */
+function meaningfulMembers(type: ts.Type): ts.Type[] {
+    if (!type.isUnion()) {
+        return [type]
+    }
+    const kept = type.types.filter((member) => (member.flags & NULLISH_FLAGS) === 0)
+    return kept.length > 0 ? kept : type.types
+}
+
+/* The element type of an `AsyncIterable<Frame>` (or the AsyncIterableIterator/AsyncGenerator a
+   generator produces) — the per-frame type `jsonl()`/`sse()` streams. undefined when the type isn't
+   one of those references, so the caller renders the whole body instead. */
+function asyncIterableElement(checker: ts.TypeChecker, type: ts.Type): ts.Type | undefined {
+    const name = type.getSymbol()?.name
+    if (name === 'AsyncIterable' || name === 'AsyncIterableIterator' || name === 'AsyncGenerator') {
+        return checker.getTypeArguments(type as ts.TypeReference)[0]
+    }
+    return undefined
+}
+
+/* Appends `value` only when not already present, so a union of identical success branches renders
+   once (the rendered list stays a small monomorphic string array). */
+function pushUnique(list: string[], value: string): void {
+    if (!list.includes(value)) {
+        list.push(value)
+    }
 }
 
 /*

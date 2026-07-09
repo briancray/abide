@@ -1,6 +1,6 @@
 # ADR-0030: Handler-return-typed RPC surface generation
 
-**Status:** proposed (2026-07-09). A third consumer of the warm server program from
+**Status:** accepted (2026-07-09). A third consumer of the warm server program from
 [ADR-0025](0025-warm-server-graph-checker-for-build-transforms.md): the program already
 resolves a handler's return type for streaming detection
 (`handlerReturnsStream` → `TypedResponse<AsyncIterable<…>>`); this reuses that
@@ -8,6 +8,18 @@ resolution to derive the endpoint's **success-body type** for the generated surf
 (`.d.ts`, OpenAPI 200, MCP `outputSchema`) instead of requiring an author-declared
 `schemas.output`. Sibling to [ADR-0028](0028-type-directed-query-coercion.md) (input
 side) — this is the output side of "the checker reads what the author already wrote."
+
+**Implementation note (2026-07-09).** D1 shipped: `createRpcServerProgram` gains
+`returnBodyForModule(modulePath)` returning a `ReturnBody` (`{ type, streaming }`) — the
+handler's success body rendered as a TS type string, or the per-frame type with
+`streaming: true` for a streaming endpoint. It reuses `handlerReturnsStream`'s
+signature + `unwrapPromise` + `typeIsAsyncIterable` machinery, drops `TypedError`
+(`__abideError`) branches, takes each success `TypedResponse` `__body` (stripping the
+phantom-optional `undefined`), and fails open to `undefined` like every other query.
+Unit tests in `rpcServerProgram.test.ts` cover a typed json() body, a streaming jsonl()
+frame, and the unknown-path fail-open. **D2 is deferred** (see Open questions): the
+generator wiring is a no-op until a TS-type→JSON-Schema projector exists — the query
+lands first, the consumer follows, matching ADR-0025/0028's cadence.
 
 ## Context
 
@@ -53,16 +65,28 @@ surface for free; an author who wants runtime output validation still declares `
 - **`schemas.output` is demoted from "required for a typed output surface" to "runtime-validation
   opt-in"** — parallel to how ADR-0028 made coercion type-derived rather than schema-required.
 
-## Open questions (discovery-first)
+## Resolved by the spike (2026-07-09)
 
-- **Type → JSON-Schema projection quality.** OpenAPI/MCP want JSON Schema, not a TS type string.
-  Is there an existing type→JSON-Schema step to reuse, or does this need a projector? The
-  projector's fidelity (unions, generics, branded types) bounds what this can claim. Spike before
-  committing.
-- **`.d.ts` emission vs. native resolution.** The client already imports the real rpc module
-  (ADR-0022 D2), so the caller's `Return` type flows through TS natively — does `writeRpcDts` even
-  need the body type for *client typing*, or only for the *external* surfaces (OpenAPI/MCP/CLI)?
-  Scope the consumer set first; this may be OpenAPI/MCP-only.
+- **Type → JSON-Schema projection quality → DEFERRED.** There is **no** TS-type→JSON-Schema step to
+  reuse. The single projector, `jsonSchemaForSchema`, runs off a **runtime** Standard-Schema object
+  (it probes `schema.toJsonSchema()`/`toJSONSchema()`) — it cannot consume a `ts.Type`. Every
+  external surface (`buildOpenApiSpec`, `mcpTools`, `buildInspectorSurface`) feeds it the runtime
+  `entry.outputSchema`. Wiring the resolved return type into those surfaces therefore requires a new
+  `ts.Type`→JSON-Schema projector whose fidelity (unions, generics, branded types) is the real
+  cost. Per the ADR's "spike before committing", D2's generator wiring is **deferred**; D1's query
+  ships as the foundation.
+- **`.d.ts` emission vs. native resolution → external surfaces only.** Confirmed empirically:
+  `writeRpcDts` emits only `RpcArgs<typeof import(...)>` (the args side), never the return body — the
+  caller's `Return` flows through TS natively from the imported rpc module (ADR-0022 D2). So the
+  return-body type is needed **only** for the external OpenAPI/MCP/CLI surfaces, not for client
+  typing. This narrows the deferred consumer set to the JSON-Schema-projecting surfaces above.
+
+## Open questions (deferred)
+
+- **The TS-type→JSON-Schema projector.** The blocker for D2. Once it exists, `buildOpenApiSpec` /
+  `mcpTools` / `buildInspectorSurface` use `returnBodyForModule`'s resolved type when no
+  `schemas.output` is declared, with `schemas.output` still overriding (a runtime-validated
+  narrowing the type can't express). The projector's fidelity bounds what the surface can claim.
 - **Error-branch surfacing.** `InferredErrors` already types the client guard from the handler's
-  `error.typed(...)` branches; whether the OpenAPI error responses should be generated from the
-  same resolution is a natural extension to weigh here.
+  `error.typed(...)` branches; whether the OpenAPI error responses should be generated from the same
+  resolution is a natural extension to weigh alongside the projector work.
