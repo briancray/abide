@@ -83,18 +83,46 @@ const calls = [
                     <td class="px-4 py-2 text-slate-500">none</td>
                 </tr>
                 <tr>
-                    <td class="px-4 py-2 font-mono">cache</td>
+                    <td class="px-4 py-2 font-mono">cache.ttl</td>
                     <td class="px-4 py-2 text-slate-600">
-                        endpoint cache policy on a read (GET/HEAD):
-                        <code class="font-mono">{'{ ttl, tags, throttle, debounce, shared }'}</code> — the smart call reads it, no
-                        call-site options
+                        ms an entry stays live past resolve; <code class="font-mono">0</code> = coalesce
+                        only (the mutation idiom); omitted = forever
                     </td>
-                    <td class="px-4 py-2 text-slate-600">method defaults</td>
+                    <td class="px-4 py-2 text-slate-600">method default</td>
                 </tr>
                 <tr>
-                    <td class="px-4 py-2 font-mono">stream</td>
+                    <td class="px-4 py-2 font-mono">cache.tags</td>
                     <td class="px-4 py-2 text-slate-600">
-                        streaming read replay depth <code class="font-mono">{'{ n }'}</code>
+                        labels grouping entries so <code class="font-mono">refresh({'{ tags }'})</code>
+                        invalidates them together
+                    </td>
+                    <td class="px-4 py-2 text-slate-500">none</td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">cache.throttle</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        stale-while-revalidate refetch clock — leading-edge, then coalesce (set
+                        throttle <em>or</em> debounce, not both)
+                    </td>
+                    <td class="px-4 py-2 text-slate-500">none</td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">cache.debounce</td>
+                    <td class="px-4 py-2 text-slate-600">the same SWR refetch clock, fire-after-quiet</td>
+                    <td class="px-4 py-2 text-slate-500">none</td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">cache.shared</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        use the process-level store (outlives requests; pair with
+                        <code class="font-mono">ttl</code> to memoise) — server-only, never per-user data
+                    </td>
+                    <td class="px-4 py-2 text-slate-500">request-scoped</td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">stream.n</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        streaming read replay depth — frames a late reader replays on connect
                     </td>
                     <td class="px-4 py-2 text-slate-500">none</td>
                 </tr>
