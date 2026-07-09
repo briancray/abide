@@ -1,10 +1,10 @@
 // node:fs existsSync — Bun plugin onResolve is sync-only; Bun.file().exists() is async
 import { existsSync, statSync } from 'node:fs'
-import { resolve } from 'node:path'
 import type { BunPlugin } from 'bun'
 import { Glob } from 'bun'
 import { abideImportName } from './lib/shared/abideImportName.ts'
 import { abideLog } from './lib/shared/abideLog.ts'
+import { bundleGraphFromMetafile } from './lib/shared/bundleGraphFromMetafile.ts'
 import type { RpcServerProgram } from './lib/shared/createRpcServerProgram.ts'
 import { escapeRegex } from './lib/shared/escapeRegex.ts'
 import { fileName } from './lib/shared/fileName.ts'
@@ -69,6 +69,13 @@ function resolveExtensionUncached(path: string): string {
 }
 
 const NS = 'abide-virtual'
+
+/* Per-input source-byte budget for the client bundle-hygiene diagnostic (ADR-0031 D2): a single
+   project module that SURVIVES tree-shaking into the client bundle heavier than this earns a
+   non-blocking build warning, so an accidentally-huge module (an inlined dataset, a fat vendored
+   dep pulled into src) is observable without a new bundler pass. Never fails the build — the only
+   hard onEnd failure stays the real side-crossing violation. */
+const CLIENT_BUNDLE_INPUT_BUDGET_BYTES = 512 * 1024
 
 /* Memoises a zero-arg async producer so repeat calls reuse the first in-flight promise. */
 function once<T>(produce: () => Promise<T>): () => Promise<T> {
@@ -243,26 +250,10 @@ export function abideResolverPlugin({
         path.startsWith(`${serverDir}/`) && !isProxiedServerModule(path)
     const showPath = (path: string): string =>
         path.startsWith(`${cwd}/`) ? path.slice(cwd.length + 1) : path
-    /*
-    The import chain from a graph root down to the offending server-only module, reconstructed
-    from the metafile's `importerOf` edges (child → its importer, first edge wins — enough for
-    one witness). Cycle-safe; formats each module relative to cwd — the evidence the onEnd
-    guard throws, in root→offender order (same shape the resolve-time guard gave before).
-    */
-    function metafileChain(offender: string, importerOf: Map<string, string>): string {
-        const chain = [offender]
-        const seen = new Set([offender])
-        let cursor = offender
-        while (importerOf.has(cursor)) {
-            cursor = importerOf.get(cursor) as string
-            if (seen.has(cursor)) {
-                break
-            }
-            seen.add(cursor)
-            chain.push(cursor)
-        }
-        return chain.reverse().map(showPath).join('\n  → ')
-    }
+    /* Renders a root→offender absolute-path chain (from the bundle graph seam) as the cwd-relative
+       `a\n  → b\n  → c` evidence the onEnd diagnostics print — the same shape the resolve-time guard
+       gives. */
+    const formatChain = (chain: string[]): string => chain.map(showPath).join('\n  → ')
 
     /* Warm per-root rpc server program (ADR-0025 D1). Lives in the setup closure so one build
        reuses a single `ts.Program` across every rpc transform (streaming/method/outbox queries);
@@ -299,25 +290,34 @@ export function abideResolverPlugin({
                 if (target !== 'client' || !result.metafile) {
                     return
                 }
-                const processCwd = process.cwd()
-                /* child(absolute) → its importer(absolute); first edge wins — one witness chain. */
-                const importerOf = new Map<string, string>()
-                let offender: string | undefined
-                for (const [key, input] of Object.entries(result.metafile.inputs)) {
-                    const modulePath = resolve(processCwd, key)
-                    if (offender === undefined && isServerOnlyModule(modulePath)) {
-                        offender = modulePath
-                    }
-                    for (const edge of input.imports) {
-                        if (!importerOf.has(edge.path)) {
-                            importerOf.set(edge.path, modulePath)
-                        }
-                    }
-                }
+                /* The post-DCE graph, walked once (ADR-0031 D2). Both consumers below read it — the
+                   side-crossing guard and the bundle-budget diagnostic — instead of each re-walking
+                   the metafile. */
+                const graph = bundleGraphFromMetafile(result.metafile, process.cwd())
+
+                /* Side-crossing guard (ADR-0022 D3): the FIRST surviving server-only module is a real
+                   violation — throw with its import chain. The sole hard onEnd failure. */
+                const offender = graph.modules.find((module) => isServerOnlyModule(module.path))
                 if (offender !== undefined) {
                     throw new Error(
-                        `[abide] a client module reaches the server-only name \`${showPath(offender)}\` — server code must not reach the browser bundle. Move it to src/shared/ or behind an RPC. Import chain:\n  ${metafileChain(offender, importerOf)}`,
+                        `[abide] a client module reaches the server-only name \`${showPath(offender.path)}\` — server code must not reach the browser bundle. Move it to src/shared/ or behind an RPC. Import chain:\n  ${formatChain(graph.importerChain(offender.path))}`,
                     )
+                }
+
+                /* Bundle-budget diagnostic (ADR-0031 D2), first consumer of the seam: a project src
+                   module that survived DCE heavier than the budget earns a NON-BLOCKING warn with its
+                   import chain — never fails the build. Scoped to files under cwd (excluding
+                   node_modules) so the warning is about code the author owns and can act on. */
+                for (const module of graph.modules) {
+                    if (
+                        module.bytes > CLIENT_BUNDLE_INPUT_BUDGET_BYTES &&
+                        module.path.startsWith(`${cwd}/`) &&
+                        !module.path.includes('/node_modules/')
+                    ) {
+                        abideLog.warn(
+                            `client bundle input \`${showPath(module.path)}\` is ${(module.bytes / 1024).toFixed(1)} KiB (over the ${CLIENT_BUNDLE_INPUT_BUDGET_BYTES / 1024} KiB budget) — consider splitting or lazy-loading it. Import chain:\n  ${formatChain(graph.importerChain(module.path))}`,
+                        )
+                    }
                 }
             })
 
