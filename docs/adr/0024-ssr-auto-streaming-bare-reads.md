@@ -54,19 +54,23 @@ new **Tier-1-streamed** tier: server-triggered, streamed-in, no client refetch.
 
 - **Stream cells stay `peek()`-at-flush** (ADR-0019: you can't block/stream an unbounded
   stream on an SSR barrier). Only point reads (promise/rpc cells) auto-stream.
-- **Bounded, fail-closed.** A triggered read that has not settled by a per-render deadline
-  ships its `{ key, miss }` marker (the existing unshippable path) and the client refetches
-  on hydrate — degrading to today's Tier-1 behavior, never holding the connection open
-  indefinitely. The deadline is the safety valve the always-buffered model didn't need.
+- **Bounded by the endpoint `timeout`, not a separate SSR clock (option a).** A pending read is
+  already bounded by its own endpoint `timeout`, which 504s the in-process handler during SSR
+  (`defineRpc` `runWithRpcTimeout` — "a 504 once exceeded, on every surface (SSR/…)"), settling
+  the entry into an error that snapshots as a `{ key, miss }` → the client refetches on hydrate.
+  So there is **no separate SSR-stream deadline**: a read with a declared `timeout` self-settles;
+  a read that declares none is unbounded and can hold the stream open — the author bounds it with
+  a `timeout`. (A separate short SSR deadline was rejected: it would pre-empt an endpoint that
+  declared a *longer* timeout, cutting a read off before its own deadline.)
 
 **Scope vs. ADR-0023 (implementation finding).** The common *directly-interpolated* form
 `{getUser()}` is already promoted to streaming by ADR-0023's type-directed interpolation
 lowering (a `promise`-kind interpolation → a synthetic streaming `{#await}`, i.e. Tier-3). So
 this ADR's net-new surface is the **pending point read that is not directly interpolated** — a
-triggered read held in a variable / read via a probe — plus the gate/deadline/wake infra that
-also underpins the interpolation path. The two ADRs are complementary, not competing:
-type-directed lowering decides *what streams*, this decides *how a pending non-interpolated read
-drains and is bounded*.
+triggered read held in a variable / read via a probe — plus the gate/wake infra that also
+underpins the interpolation path. The two ADRs are complementary, not competing: type-directed
+lowering decides *what streams*, this decides *how a pending non-interpolated read drains* (its
+bound is the endpoint `timeout`, D1).
 
 ### D2 — the buffered/streamed gate also opens on a pending triggered read
 
@@ -89,28 +93,34 @@ bare read subscribed to the lifecycle channel needs the wake, so it fires
   without ceremony, and the client adopts the streamed branch instead of refetching.
 - **TTFB tradeoff — must be conscious.** A page with a slow bare read now holds the response
   stream (shell flushes first, so TTFB to first paint is unchanged; time-to-complete grows).
-  The D1 deadline bounds it. A page with no async reads is unaffected (buffered, as today).
+  The read's endpoint `timeout` bounds it (D1); a read with no timeout can hold the stream — the
+  author sets a `timeout`. A page with no async reads is unaffected (buffered, as today).
 - **The SSR tier table changes:** the bare-read row moves from "renders `undefined`, ships
   buffered, client refetches" to "server-triggers, streams in, no refetch." ADR-0019's Tier
   table and the AGENTS surface note update.
 - **Reuses all existing streaming machinery** — `streamCacheResolutions` / `resolveChunk` /
   `CACHE_RESOLVE_SCRIPT` / `seedStreamedResolution` / `applyResolved`. The only new server
-  behavior is triggering bare reads + the deadline; the only runtime edit is D3's
-  `markLifecycle`.
+  behavior is triggering bare reads (the endpoint `timeout` already bounds them); the only
+  runtime edit is D3's `markLifecycle`.
 - **Lights up `applyResolved.ts`'s `<abide-cache>` producer gap** — ADR-0019 flagged it as a
   consumer with no producer; the bundle-consumed streaming path (SPA nav / socket-delivered
   SSR) gains its producer here too.
 
 ## Open questions
 
-- **The deadline: fixed, per-page, or per-read?** Leaning a single per-render deadline
-  (simple, one knob) with a possible endpoint-policy override later (ADR-0020's `cache`
-  namespace is the natural home). A per-read opt-out (`{#await}` remains the explicit
-  "stream this one") stays available.
 - **Interaction with the blocking Tier-2 barrier** (top-level `await` / `computed(await …)`,
   ADR-0019). Tier-2 awaits `allSettled` inline before flush; a triggered bare read must NOT
   join that barrier (it would reintroduce the waterfall Tier-2's `Promise.all` avoids) — it
   streams *after* the shell. Confirm the trigger fires outside the Tier-2 gather.
 - **Should auto-trigger be default-on, or opt-in?** Leaning default-on for point reads (it is
-  the DX the ADR-0019 model promised) with the deadline as the fail-closed backstop; a strict
-  flag to force buffered stays open.
+  the DX the ADR-0019 model promised); the endpoint `timeout` is the bound. A strict flag to
+  force buffered stays open.
+
+## Resolved
+
+- **The deadline → removed (option a).** There is no separate SSR-stream deadline. A pending
+  read is bounded by its own endpoint `timeout` (which 504s the in-process handler during SSR,
+  settling the entry → `{ key, miss }` → client refetch); a read with no timeout is unbounded
+  (the author sets one). A separate short SSR clock was rejected because it would pre-empt an
+  endpoint that declared a *longer* timeout. Validated: an in-process read with `timeout: 30`
+  settles in ~30ms during SSR and ships a miss with no hang (`uiBareReadStream.test.ts`).

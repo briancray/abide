@@ -15,7 +15,6 @@ settles.
 export async function* streamCacheResolutions(
     store: CacheStore,
     pending: CacheEntry[],
-    deadlineMs?: number,
 ): AsyncIterable<StreamedResolution> {
     /*
     Tag each pending serialization with its key so the loop can drop exactly
@@ -31,31 +30,14 @@ export async function* streamCacheResolutions(
         )
     }
     /*
-    Fail-closed deadline (ADR-0024): an auto-streamed BARE read triggered at render is
-    handed here still-pending, and its fetch may never settle. When the per-render deadline
-    elapses, ship every still-inflight key as a `{ key, miss }` marker so the client refetches
-    on hydrate — the always-buffered Tier-1 fallback — rather than holding the response stream
-    open unbounded. The {#await} drain passes settled entries that resolve well inside any
-    deadline, so it never fires there; `undefined` disables the deadline entirely (the
-    pre-ADR-0024 behavior). `unref` keeps the timer from holding the process open on its own.
+    Drain in settle order. A pending BARE read (ADR-0024 auto-streaming) is bounded by its OWN
+    endpoint `timeout` — which 504s the in-process handler during SSR, settling the entry into an
+    error that snapshots as a `{ key, miss }` (the client refetches on hydrate). So there is no
+    separate SSR-stream deadline (ADR-0024 option a): a read with a declared timeout self-settles;
+    a read that declares none is unbounded — the author bounds it with a `timeout`.
     */
-    const deadline =
-        deadlineMs === undefined
-            ? undefined
-            : new Promise<'deadline'>((resolve) => {
-                  setTimeout(() => resolve('deadline'), deadlineMs).unref?.()
-              })
     while (inflight.size > 0) {
-        const settled =
-            deadline === undefined
-                ? await Promise.race(inflight.values())
-                : await Promise.race([...inflight.values(), deadline])
-        if (settled === 'deadline') {
-            for (const key of inflight.keys()) {
-                yield { key, miss: true }
-            }
-            return
-        }
+        const settled = await Promise.race(inflight.values())
         inflight.delete(settled.key)
         yield settled.snapshot ?? { key: settled.key, miss: true }
     }

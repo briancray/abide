@@ -13,7 +13,6 @@ import { renderToStream } from '../../ui/renderToStream.ts'
 import { resumeSeedScript } from '../../ui/resumeSeedScript.ts'
 import type { UiComponent } from '../../ui/runtime/types/UiComponent.ts'
 import { pageUrlFromStore } from './pageUrlFromStore.ts'
-import { SSR_STREAM_DEADLINE_MS } from './SSR_STREAM_DEADLINE_MS.ts'
 import { SSR_SWAP_SCRIPT } from './SSR_SWAP_SCRIPT.ts'
 import { STREAMED_HTML_HEADER } from './STREAMED_HTML_HEADER.ts'
 import { serializeCacheSnapshot } from './serializeCacheSnapshot.ts'
@@ -59,8 +58,8 @@ manifest so client hydration adopts it without re-fetching (see abide/ui/awaitBl
 Then, once the stream has run every `{#await}` thunk (creating and settling its cache
 entry mid-stream, after the render-return snapshot), each such entry — plus any bare-read
 entry triggered during the sync render — streams an inline `__abideResolve(...)` chunk: a
-warm snapshot, or a `{ key, miss }` marker for an unshippable body OR a read that missed the
-fail-closed deadline (→ live refetch) — seeding the client store before the deferred bundle
+warm snapshot, or a `{ key, miss }` marker for an unshippable body — e.g. a read 504'd by its
+endpoint `timeout` (→ live refetch) — seeding the client store before the deferred bundle
 so the block's / bare read's subscription is warm (no refetch).
 
 `__SSR__` carries the route/params, mount base, trace, app name, client timeout,
@@ -80,7 +79,6 @@ export function createUiPageRenderer({
     layouts,
     routePreloads = {},
     healthPayload,
-    streamDeadlineMs = SSR_STREAM_DEADLINE_MS,
 }: {
     shell: string
     base: string
@@ -89,9 +87,6 @@ export function createUiPageRenderer({
     layouts: Record<string, LoadPage>
     routePreloads?: Record<string, string[]>
     healthPayload: (request: Request) => Promise<Record<string, unknown>>
-    /* The fail-closed drain deadline (ADR-0024); defaults to SSR_STREAM_DEADLINE_MS. Injectable
-       so a test can force the miss path without a real-time wait. */
-    streamDeadlineMs?: number
 }): {
     renderPage: (
         routeUrl: string,
@@ -284,9 +279,9 @@ export function createUiPageRenderer({
                            snapshot. (2) A triggered BARE read (ADR-0024) created its entry during the
                            sync render but was never awaited, so it may still be in flight now. Drain
                            both: each lands an inline `__abideResolve(...)` chunk (a warm snapshot, or a
-                           `{ key, miss }` marker for an unshippable body OR a read that missed the
-                           deadline → live refetch) before the deferred bundle, so startClient seeds the
-                           store and the read's subscription is warm. Skip keys already shipped inline in
+                           `{ key, miss }` marker for an unshippable body — e.g. a read 504'd by its
+                           endpoint timeout → live refetch) before the deferred bundle, so startClient seeds
+                           the store and the read's subscription is warm. Skip keys already shipped inline in
                            __SSR__. */
                         const streamedEntries: CacheEntry[] = Array.from(
                             store.cache.entries.values(),
@@ -296,13 +291,13 @@ export function createUiPageRenderer({
                         /* `hasReplayableRequest`, NOT `snapshotShippable`: a triggered bare read
                            (ADR-0024) is drained here still-pending (never awaited by an `{#await}`
                            thunk), so gating on `settled` up front would skip it — streamCacheResolutions
-                           awaits each entry's body itself (see snapshotEntryFromCache) and bounds the
-                           wait with the fail-closed deadline. A late-settling `{#await}` entry is already
-                           settled by now, so the set is unchanged for the Tier-3 path. */
+                           awaits each entry's body itself (see snapshotEntryFromCache). A pending read is
+                           bounded by its OWN endpoint `timeout` (which 504s the in-process handler during
+                           SSR), so there is no separate SSR-stream deadline. A late-settling `{#await}`
+                           entry is already settled by now, so the set is unchanged for the Tier-3 path. */
                         for await (const resolution of streamCacheResolutions(
                             store.cache,
                             streamedEntries,
-                            streamDeadlineMs,
                         )) {
                             controller.enqueue(encoder.encode(resolveChunk(resolution)))
                         }
