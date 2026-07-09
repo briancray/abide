@@ -93,15 +93,15 @@ expose the error on `rpc.isError(e, 'name')` (`.kind` and typed `.data`). No
 (a const can't read its own variable name); `schema` types `.data` and is never
 validated at runtime here.
 */
-function typed<Name extends string, Schema extends StandardSchemaV1>(
+function typed<Name extends string, Status extends number, Schema extends StandardSchemaV1>(
     name: Name,
-    status: number,
+    status: Status,
     schema: Schema,
-): (data: StandardSchemaV1.InferInput<Schema>) => TypedError<Name, { status: number; data: Schema }>
-function typed<Name extends string>(
+): (data: StandardSchemaV1.InferInput<Schema>) => TypedError<Name, { status: Status; data: Schema }>
+function typed<Name extends string, Status extends number>(
     name: Name,
-    status: number,
-): () => TypedError<Name, { status: number; data?: undefined }>
+    status: Status,
+): () => TypedError<Name, { status: Status; data?: undefined }>
 function typed(name: string, status: number, _schema?: StandardSchemaV1) {
     return (data?: unknown) => typedErrorResponse(name, status, data)
 }

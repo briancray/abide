@@ -2,6 +2,7 @@ import { resolve } from 'node:path'
 import ts from 'typescript'
 import { jsonSchemaForType } from './jsonSchemaForType.ts'
 import { loadProjectTsConfig } from './loadProjectTsConfig.ts'
+import type { ErrorJsonSchemas } from './types/ErrorJsonSchemas.ts'
 import type { HttpMethod } from './types/HttpMethod.ts'
 import type { InputCoercion } from './types/InputCoercion.ts'
 import type { ReturnBody } from './types/ReturnBody.ts'
@@ -74,6 +75,18 @@ export type RpcServerProgram = {
     `defineRpc` call (like the ADR-0028 `coerce` plan) so the runtime registry can carry it.
     */
     returnBodySchemaForModule(modulePath: string): Record<string, unknown> | undefined
+    /*
+    The endpoint's typed-error branches surfaced as a status-keyed JSON-Schema map (ADR-0030) — the
+    error-branch sibling of `returnBodySchemaForModule`. Walks the SAME return union but KEEPS the
+    `TypedError` branches success projection drops: for each, reads the `error.typed(name, status,
+    schema?)` brand's numeric `status` and projects the error's `data` type (its schema's
+    `~standard.types.input`) through `jsonSchemaForType`. Errors sharing a status combine under
+    `anyOf`; a nullary error (no data) contributes a bare `{}` so the status still surfaces. undefined
+    when no handler signature resolves or the handler declares no typed errors, so a consumer omits
+    the error responses exactly as today. The build stamps the resolved map into the server
+    `defineRpc` call (like `outputJsonSchema`) so the runtime registry can carry it to OpenAPI.
+    */
+    errorSchemasForModule(modulePath: string): ErrorJsonSchemas | undefined
 }
 
 /*
@@ -132,6 +145,9 @@ export function createRpcServerProgram(cwd: string, rpcDir: string): RpcServerPr
         },
         returnBodySchemaForModule(modulePath) {
             return query(modulePath, (call) => returnBodyJsonSchema(checker, call.node))
+        },
+        errorSchemasForModule(modulePath) {
+            return query(modulePath, (call) => errorBranchSchemas(checker, call.node))
         },
     }
 }
@@ -368,16 +384,10 @@ function walkSuccessBodies(
     call: ts.CallExpression,
     visit: (part: ts.Type | undefined, streaming: boolean) => void,
 ): boolean {
-    const handler = call.arguments[0]
-    if (handler === undefined) {
+    const members = returnUnionMembers(checker, call)
+    if (members === undefined) {
         return false
     }
-    const signature = checker.getTypeAtLocation(handler).getCallSignatures()[0]
-    if (signature === undefined) {
-        return false
-    }
-    const returnType = unwrapPromise(checker, checker.getReturnTypeOfSignature(signature))
-    const members = returnType.isUnion() ? returnType.types : [returnType]
     for (const member of members) {
         if (member.getProperty('__abideError') !== undefined) {
             continue
@@ -405,6 +415,138 @@ function walkSuccessBodies(
         }
     }
     return true
+}
+
+/* The handler's return-type union members — the shared front of both the success walk
+   (`walkSuccessBodies`) and the error walk (`errorBranchSchemas`): resolve the handler call
+   signature, unwrap one `Promise` layer, then split the union (a lone return is a one-member list).
+   undefined when no handler call signature resolves, so both callers fail open. */
+function returnUnionMembers(
+    checker: ts.TypeChecker,
+    call: ts.CallExpression,
+): ts.Type[] | undefined {
+    const handler = call.arguments[0]
+    if (handler === undefined) {
+        return undefined
+    }
+    const signature = checker.getTypeAtLocation(handler).getCallSignatures()[0]
+    if (signature === undefined) {
+        return undefined
+    }
+    const returnType = unwrapPromise(checker, checker.getReturnTypeOfSignature(signature))
+    return returnType.isUnion() ? returnType.types : [returnType]
+}
+
+/*
+The handler's typed-error branches projected to a status-keyed JSON-Schema map (ADR-0030) — the
+error-branch sibling of `returnBodyJsonSchema`, walking the SAME return union but keeping the
+`TypedError` members the success walk drops. For each `__abideError`-branded branch it reads the
+brand's numeric `entry.status` (a literal, captured by `error.typed`'s `Status` type param) and
+projects the error's `data` type (its schema's `~standard.types.input`) through `jsonSchemaForType`.
+Branches sharing a status combine their distinct data schemas under `anyOf`; a nullary error (no
+`data`) contributes a bare `{}` so the status still surfaces. undefined when no handler signature
+resolves or no typed-error branch is present, so the caller stamps nothing and the surface omits the
+error responses exactly as today.
+*/
+function errorBranchSchemas(
+    checker: ts.TypeChecker,
+    call: ts.CallExpression,
+): ErrorJsonSchemas | undefined {
+    const members = returnUnionMembers(checker, call)
+    if (members === undefined) {
+        return undefined
+    }
+    // Status → its collected distinct data schemas (empty when only nullary errors share the status).
+    const byStatus = new Map<number, Record<string, unknown>[]>()
+    for (const member of members) {
+        const brand = member.getProperty('__abideError')
+        if (brand === undefined) {
+            continue
+        }
+        const entry = memberType(checker, checker.getTypeOfSymbol(brand), 'entry')
+        if (entry === undefined) {
+            continue
+        }
+        const status = numberLiteral(memberType(checker, entry, 'status'))
+        if (status === undefined) {
+            continue
+        }
+        let schemas = byStatus.get(status)
+        if (schemas === undefined) {
+            schemas = []
+            byStatus.set(status, schemas)
+        }
+        const dataSchema = errorDataSchema(checker, memberType(checker, entry, 'data'))
+        if (dataSchema !== undefined) {
+            pushUniqueSchema(schemas, dataSchema)
+        }
+    }
+    if (byStatus.size === 0) {
+        return undefined
+    }
+    const result: ErrorJsonSchemas = {}
+    for (const [status, schemas] of byStatus) {
+        result[status] =
+            schemas.length === 0 ? {} : schemas.length === 1 ? schemas[0] : { anyOf: schemas }
+    }
+    return result
+}
+
+/* An error branch's `data` type projected to JSON Schema — navigates the schema brand's phantom
+   `~standard.types.input` (the data payload the `error.typed` constructor receives) and projects it
+   via `jsonSchemaForType`. undefined for a nullary error (its `entry.data` is `undefined`, so the
+   `~standard` chain doesn't resolve) or an unprojectable/permissive data type, so the status
+   surfaces without a content schema. */
+function errorDataSchema(
+    checker: ts.TypeChecker,
+    dataType: ts.Type | undefined,
+): Record<string, unknown> | undefined {
+    if (dataType === undefined) {
+        return undefined
+    }
+    const standard = memberType(checker, dataType, '~standard')
+    if (standard === undefined) {
+        return undefined
+    }
+    // `types` is `{ input; output } | undefined` (the spec's optional phantom) — take the non-nullish member.
+    const types = memberType(checker, standard, 'types')
+    if (types === undefined) {
+        return undefined
+    }
+    const input = memberType(checker, nonNullishType(types), 'input')
+    if (input === undefined) {
+        return undefined
+    }
+    return jsonSchemaForType(checker, input)
+}
+
+/* A named property's type, read location-free off a resolved type. undefined when the type has no
+   such property — the phantom-navigation guard for the error brand's nested `entry`/`status`/`data`
+   / `~standard`/`types`/`input` chain. */
+function memberType(checker: ts.TypeChecker, type: ts.Type, name: string): ts.Type | undefined {
+    const symbol = type.getProperty(name)
+    return symbol === undefined ? undefined : checker.getTypeOfSymbol(symbol)
+}
+
+/* A type's numeric-literal value (e.g. `404`), or undefined when it isn't a single number literal
+   (a widened `number`, a union, or undefined) — so a computed error status the type can't pin down
+   is skipped rather than guessed. */
+function numberLiteral(type: ts.Type | undefined): number | undefined {
+    if (type === undefined || (type.flags & ts.TypeFlags.NumberLiteral) === 0) {
+        return undefined
+    }
+    return (type as ts.NumberLiteralType).value
+}
+
+/* Drops the nullish members of a `T | undefined` union, returning the lone survivor; else the type
+   unchanged (a non-union or a genuine multi-member union stays as-is). Used to strip the spec's
+   optional `types?` phantom down to its concrete `Types` object. */
+function nonNullishType(type: ts.Type): ts.Type {
+    if (!type.isUnion()) {
+        return type
+    }
+    const kept = type.types.filter((member) => (member.flags & NULLISH_FLAGS) === 0)
+    return kept.length === 1 ? kept[0] : type
 }
 
 /* The non-nullish constituents of a body type — a single-element list for a non-union, else the

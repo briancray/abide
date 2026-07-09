@@ -104,16 +104,46 @@ gap can't break a build.
   return-body type is needed **only** for the external OpenAPI/MCP/CLI surfaces, not for client
   typing. This narrows the deferred consumer set to the JSON-Schema-projecting surfaces above.
 
+## Accepted increment — error-branch surfacing (2026-07-09)
+
+The success projection (D1/D2) walks the handler's return union and *drops* the `TypedError`
+branches. This increment keeps them: a new `errorSchemasForModule` query on the warm server program
+walks the SAME union, reads each `error.typed(name, status, schema?)` brand, and projects the error
+`data` type to JSON Schema alongside the 200 — so the generated OpenAPI documents the full contract
+(200 success body + each typed error's status and payload) from the one handler return type, nothing
+declared twice.
+
+- **Reading status + data off the brand (spike).** `TypedError<Name, Entry>` carries the spec in its
+  phantom `__abideError: { name; entry }`. The numeric **status** reads off `entry.status` — but only
+  after tightening `error.typed`'s overloads to capture a `Status extends number` type param, since
+  the prior `status: number` erased the literal. A probe over a fixture handler (`json(...)` + several
+  `error.typed(...)` branches) confirmed the literals `404`/`409`/`429` then flow through the checker
+  as `NumberLiteral` types. The **data type** reads off `entry.data` — the Standard Schema — by
+  navigating its `~standard.types.input` phantom to the data payload `ts.Type`, then reusing the D2
+  `jsonSchemaForType` projector. A nullary error (no `data`, its `entry.data` is `undefined`) resolves
+  no schema and surfaces its status with no body.
+- **Combining + baking.** Errors sharing a status combine their distinct data schemas under `anyOf`
+  (mirroring the multi-branch success `anyOf`). Like D2, the surfaces render off the runtime
+  `rpcRegistry`, which has no error-schema source — so the resolved status→schema map is baked at
+  build time as `errorJsonSchemas` (the resolver plugin queries it → `prepareRpcModule` stamps it into
+  the server `defineRpc` opts → `RpcRegistryEntry.errorJsonSchemas`), exactly paralleling the
+  `outputJsonSchema` path. `buildOpenApiSpec` merges each `[status, schema]` into `responses[status]`
+  without clobbering the 200 (or any explicit response), using the status's standard reason phrase as
+  the description. Fail-open throughout: no warm program / unresolvable branch ⇒ nothing baked ⇒ the
+  surface behaves exactly as today.
+- **Consumer scope.** OpenAPI is the natural consumer (its `responses` map has a per-status slot). MCP
+  tools and the inspector carry only a single `outputSchema` slot with no per-status error map, so
+  they are left unchanged.
+
 ## Open questions (deferred)
 
 - **`.d.ts` return-body emission.** Still not emitted — the spike confirmed `writeRpcDts` emits only
   the args side (`RpcArgs<typeof import(...)>`) and the caller's `Return` flows natively from the
   imported rpc module (ADR-0022 D2), so client typing needs nothing here. Emitting the body type into
   the `.d.ts` for external (non-TS) consumers remains a possible extension.
-- **Error-branch surfacing.** `InferredErrors` already types the client guard from the handler's
-  `error.typed(...)` branches; whether the OpenAPI error responses should be generated from the same
-  resolution — reusing `jsonSchemaForType` on the dropped `TypedError` branches — is a natural
-  extension now that the projector exists.
+- **Error names in the OpenAPI description.** The baked map is status→schema only, so the error
+  response description falls back to the status reason phrase; threading the `error.typed` name(s)
+  into the description would require widening the baked map beyond `Record<number, JsonSchema>`.
 - **Projector fidelity growth.** The projector fails open on generics, intersections, and branded
   types; widening coverage (e.g. resolved generic instantiations) is incremental and bounded only by
   what a surface can honestly claim.

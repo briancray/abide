@@ -2,6 +2,7 @@ import type { ExportCallSite } from './findExportCallSite.ts'
 import { isReadOnlyMethod } from './isReadOnlyMethod.ts'
 import { prepareRemoteExport } from './prepareRemoteExport.ts'
 import { skipNonCode } from './skipNonCode.ts'
+import type { ErrorJsonSchemas } from './types/ErrorJsonSchemas.ts'
 import type { HttpMethod } from './types/HttpMethod.ts'
 import type { InputCoercion } from './types/InputCoercion.ts'
 
@@ -57,6 +58,7 @@ export function prepareRpcModule(
     durableOverride?: boolean,
     coercion?: InputCoercion,
     outputSchema?: Record<string, unknown>,
+    errorSchemas?: ErrorJsonSchemas,
 ): PreparedRpcModule | undefined {
     /*
     The "no barrels" surface places each method at its own path
@@ -99,10 +101,11 @@ export function prepareRpcModule(
             const binding = `__abideDefineRpc__(${JSON.stringify(method)}, ${JSON.stringify(url)}, `
             const head = stripped.slice(0, site.callStart) + binding
             /* Build-injected server opts: `streaming` (from the handler body / return type), the
-               `coerce` plan (numeric/boolean query fields → typed, ADR-0028), and `outputJsonSchema`
-               (the handler return type projected to JSON Schema, ADR-0030 D2). All are stamped into a
-               fresh opts object that spreads the author's opts, so policy stays live. With none present
-               the original args pass through untouched. */
+               `coerce` plan (numeric/boolean query fields → typed, ADR-0028), `outputJsonSchema` (the
+               handler return type projected to JSON Schema, ADR-0030 D2), and `errorJsonSchemas` (the
+               handler's typed-error branches as a status-keyed schema map, ADR-0030). All are stamped
+               into a fresh opts object that spreads the author's opts, so policy stays live. With none
+               present the original args pass through untouched. */
             const injected: string[] = []
             if (streaming) {
                 injected.push('streaming: true')
@@ -112,6 +115,9 @@ export function prepareRpcModule(
             }
             if (outputSchema !== undefined) {
                 injected.push(`outputJsonSchema: ${JSON.stringify(outputSchema)}`)
+            }
+            if (errorSchemas !== undefined) {
+                injected.push(`errorJsonSchemas: ${JSON.stringify(errorSchemas)}`)
             }
             if (injected.length === 0) {
                 return head + stripped.slice(site.parenStart + 1)

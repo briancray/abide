@@ -430,6 +430,12 @@ export function abideResolverPlugin({
                    (no program / unprojectable body / an explicit override wins at runtime) stamps
                    nothing — the surface falls back to today's behavior. */
                 const returnBodySchema = rpcServerProgram?.returnBodySchemaForModule(args.path)
+                /* The handler's typed-error branches projected to a status-keyed JSON-Schema map,
+                   stamped as `errorJsonSchemas` so the runtime OpenAPI surface documents each typed
+                   error's status + data payload alongside the 200 (ADR-0030). undefined (no program /
+                   no typed errors / unresolvable branch) stamps nothing — the surface omits the error
+                   responses exactly as today. */
+                const errorSchemas = rpcServerProgram?.errorSchemasForModule(args.path)
                 const prepared = prepareRpcModule(
                     source,
                     importName,
@@ -437,6 +443,7 @@ export function abideResolverPlugin({
                     durableOverride,
                     coercion,
                     returnBodySchema,
+                    errorSchemas,
                 )
                 if (!prepared) {
                     throw new Error(
