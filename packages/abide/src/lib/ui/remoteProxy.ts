@@ -11,8 +11,10 @@ import type { HttpMethod } from '../shared/types/HttpMethod.ts'
 import type { Outbox } from '../shared/types/Outbox.ts'
 import type { RemoteFunction } from '../shared/types/RemoteFunction.ts'
 import type { RpcOptions } from '../shared/types/RpcOptions.ts'
+import type { StandardSchemaV1 } from '../shared/types/StandardSchemaV1.ts'
 import type { StreamPolicy } from '../shared/types/StreamPolicy.ts'
 import { UNREACHABLE_STATUSES } from '../shared/UNREACHABLE_STATUSES.ts'
+import { validationHttpError } from '../shared/validationHttpError.ts'
 import { withBase } from '../shared/withBase.ts'
 import { createOutboxQueue, type OutboxQueue } from './rpcOutbox/createOutboxQueue.ts'
 import { outboxRegistry } from './rpcOutbox/outboxRegistry.ts'
@@ -28,21 +30,29 @@ const QUEUED = 'queued'
 
 /* The proxy's third argument. ADR-0022 D2: the client rpc transform passes the endpoint's LIVE
    `opts` object here verbatim, so the type widens to the endpoint opts shape — remoteProxy reads
-   only the four keys below and IGNORES the rest (`schemas` / `clients` / `crossOrigin` / `timeout`
-   / `maxBodySize`), which ride along harmlessly. `outbox: true` parks an unreachable call for
-   replay; `streaming: true` (handler returns jsonl()/sse(), build-injected) makes the bare call
-   return the NamedAsyncIterable directly; `cache` / `stream` carry the endpoint's declared policy
-   (ADR-0020) so the client honours the ttl (staleness/SWR), the refetch clock (throttle/debounce),
-   and tags; `store` exists for testing (production uses the default persistence store). */
+   only the keys below and IGNORES the rest (`crossOrigin` / `timeout` / `maxBodySize`), which ride
+   along harmlessly. `outbox: true` parks an unreachable call for replay; `streaming: true` (handler
+   returns jsonl()/sse(), build-injected) makes the bare call return the NamedAsyncIterable directly;
+   `cache` / `stream` carry the endpoint's declared policy (ADR-0020) so the client honours the ttl
+   (staleness/SWR), the refetch clock (throttle/debounce), and tags; `store` exists for testing
+   (production uses the default persistence store). `schemas` — its live `input` validator now reaches
+   the stub (ADR-0022 D2) — drives the ADR-0026 client-side pre-flight. */
 export type DurableOptions<Args = unknown> = {
     outbox?: boolean
     streaming?: boolean
     cache?: CachePolicy<Args>
     stream?: StreamPolicy
     store?: PersistenceStore
+    /* The endpoint's live schema group (ADR-0022 D2 forwards it verbatim). `input` is the
+       Standard Schema the ADR-0026 pre-flight validates the typed args against. */
+    schemas?: {
+        input?: StandardSchemaV1
+        output?: StandardSchemaV1
+        files?: StandardSchemaV1
+    }
     /* Ignored endpoint opts keys, present only so the author's live `opts` object type-checks
-       when the client transform forwards it verbatim (ADR-0022). */
-    schemas?: unknown
+       when the client transform forwards it verbatim (ADR-0022). `clients` (surface flags) is
+       read only on the server. */
     clients?: unknown
     crossOrigin?: unknown
     timeout?: unknown
@@ -90,6 +100,13 @@ export function remoteProxy<Args, Return>(
     /* Assigned after `createRemoteFunction` so the invoke closure (which runs later, per
        call) parks through the shared queue; undefined leaves the plain fetch path. */
     let queue: OutboxQueue<Args> | undefined
+    /* ADR-0026 client-side pre-flight: validate the typed args against the endpoint's input
+       schema (forwarded to the stub, ADR-0022 D2) BEFORE the fetch whenever one is present — always
+       on, no opt-in. This is a UX optimization ONLY: the server's unconditional inputSchema validate
+       → 422 (defineRpc.ts `validateThenHandle`) stays the trust boundary, so a client that skips or
+       fakes this check is still fully validated on the server. undefined here (no input schema)
+       keeps today's behaviour — the client serializes and sends unvalidated. */
+    const preflightSchema = durable?.schemas?.input
     const fn = createRemoteFunction<Args, Return>({
         method,
         url,
@@ -125,49 +142,86 @@ export function remoteProxy<Args, Return>(
         can `await (error.data as OutboxEntry).settled` for the eventual outcome.
         */
         invoke: (args, getRequest, opts) => {
-            if (queue === undefined) {
-                return fetchWithTimeout(getRequest(), opts)
+            /* ADR-0026 D2/D3: an input schema present → validate the TYPED args (pre-serialization
+               — NOT the string-shaped serialized form, which sidesteps parseArgs's query-coercion
+               gap) before any fetch or outbox park. The validate may return a Promise
+               (StandardSchemaV1), so await it (D3). On a returned failure throw an HttpError shaped
+               IDENTICALLY to the server's 422 (validationHttpError) and make NO fetch — saving the
+               round-trip. */
+            if (preflightSchema !== undefined) {
+                return Promise.resolve()
+                    .then(() => preflightSchema['~standard'].validate(args))
+                    .then((result) => {
+                        if (result.issues) {
+                            throw validationHttpError(result.issues)
+                        }
+                        return dispatch(args, getRequest, opts)
+                    })
+                    .catch((error) => {
+                        /* Only a returned `issues` result — a definitive "this input is invalid" —
+                           blocks the call; rethrow that. Any OTHER throw means the validator itself
+                           could not run here (a non-portable / async-resource refinement), which is
+                           NOT a verdict on the input: fall through to the fetch and let the server
+                           (the authoritative validator) decide. So a schema can never break a call
+                           merely by failing to run client-side. */
+                        if (error instanceof HttpError && error.kind === 'validation') {
+                            throw error
+                        }
+                        return dispatch(args, getRequest, opts)
+                    })
             }
-            /* A non-empty queue means an undelivered backlog: park this call at the TAIL
-               and throw, rather than let a live fetch leapfrog the older writes and land
-               out of order. `retry()` then flushes the whole queue FIFO. */
-            if (queue.size() > 0) {
-                return Promise.reject(
-                    queuedThrow(
-                        queue,
-                        args as Args,
-                        getRequest().clone(),
-                        unreachableResponse(),
-                        undefined,
-                    ),
-                )
-            }
-            const request = getRequest()
-            const parkable = request.clone()
-            return fetchWithTimeout(request, opts).then(
-                (response) => {
-                    if (UNREACHABLE_STATUSES.has(response.status)) {
-                        throw queuedThrow(
-                            queue,
-                            args as Args,
-                            parkable,
-                            response,
-                            new HttpError(response.clone()),
-                        )
-                    }
-                    return response
-                },
-                (error: unknown) => {
-                    if (shouldParkRejection(error)) {
-                        const response =
-                            error instanceof HttpError ? error.response : unreachableResponse()
-                        throw queuedThrow(queue, args as Args, parkable, response, error)
-                    }
-                    throw error
-                },
-            )
+            return dispatch(args, getRequest, opts)
         },
     })
+    /* The base send: outbox park-or-fetch. Split out of `invoke` so the ADR-0026 pre-flight can
+       gate it without duplicating the durable path. */
+    function dispatch(
+        args: Args | undefined,
+        getRequest: () => Request,
+        opts?: RpcOptions,
+    ): Promise<Response> {
+        if (queue === undefined) {
+            return fetchWithTimeout(getRequest(), opts)
+        }
+        /* A non-empty queue means an undelivered backlog: park this call at the TAIL
+           and throw, rather than let a live fetch leapfrog the older writes and land
+           out of order. `retry()` then flushes the whole queue FIFO. */
+        if (queue.size() > 0) {
+            return Promise.reject(
+                queuedThrow(
+                    queue,
+                    args as Args,
+                    getRequest().clone(),
+                    unreachableResponse(),
+                    undefined,
+                ),
+            )
+        }
+        const request = getRequest()
+        const parkable = request.clone()
+        return fetchWithTimeout(request, opts).then(
+            (response) => {
+                if (UNREACHABLE_STATUSES.has(response.status)) {
+                    throw queuedThrow(
+                        queue,
+                        args as Args,
+                        parkable,
+                        response,
+                        new HttpError(response.clone()),
+                    )
+                }
+                return response
+            },
+            (error: unknown) => {
+                if (shouldParkRejection(error)) {
+                    const response =
+                        error instanceof HttpError ? error.response : unreachableResponse()
+                    throw queuedThrow(queue, args as Args, parkable, response, error)
+                }
+                throw error
+            },
+        )
+    }
     /* Overwrite the inert `.watch` the shared attach bound: on the client the real reaction
        sugar routes to the `watch` ui primitive (`fn.watch(handler)` / `fn.watch(args, handler)`).
        Attached here — not in the shared attach — so `watch` never rides into a server bundle. */

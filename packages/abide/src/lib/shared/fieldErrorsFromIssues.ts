@@ -1,4 +1,4 @@
-import type { StandardSchemaV1 } from '../../shared/types/StandardSchemaV1.ts'
+import type { StandardSchemaV1 } from './types/StandardSchemaV1.ts'
 
 /*
 Flattens Standard Schema issues into a top-level-field → first-message map, the
@@ -7,6 +7,10 @@ bare `PropertyKey` or a `{ key }` wrapper (the spec allows both), so normalize
 before reading. First message wins per field (a form shows one per input); the
 raw `issues` keep every message and the full path. Issues with no string field
 (root-level refinements) are omitted — they live only in `issues`.
+
+Isomorphic (only the type-only StandardSchemaV1 import): the server 422 path
+(validationError.ts) and the client pre-flight (validationHttpError.ts, ADR-0026)
+both build the identical `fields` map from the same issue list.
 */
 export function fieldErrorsFromIssues(
     issues: readonly StandardSchemaV1.Issue[],

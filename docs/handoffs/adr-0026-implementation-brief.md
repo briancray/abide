@@ -1,7 +1,9 @@
 # Handoff brief — implement ADR-0026
 
 **Spec (read first, it is the contract):** `docs/adr/0026-opt-in-client-side-validation.md`
-**Also read:** `CLAUDE.md`, ADR-0022 D2 (why `schemas` now reaches the client stub), ADR-0020 (endpoint-declared opts + the `clients` namespace), ADR-0021 (the fail-closed instinct: explicit opt-in, never on-by-schema).
+**Also read:** `CLAUDE.md`, ADR-0022 D2 (why `schemas` now reaches the client stub), ADR-0020 (endpoint-declared opts + the `clients` namespace).
+
+> **Note (2026-07-09):** this brief describes the original *opt-in* (`clients: { validate: true }`) implementation. The accepted decision is now **always-on** validation with a throw→fall-through safety — see the revised `docs/adr/0026-opt-in-client-side-validation.md`. Kept for history.
 
 ## Goal
 
