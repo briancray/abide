@@ -1,6 +1,13 @@
 # ADR-0025: A warm server-graph checker for the rpc/socket build transforms
 
-**Status:** proposed (2026-07-08). Extends
+**Status:** accepted (2026-07-09) — landed in two phases. **Phase 1** shipped the
+streaming-detection query through the warm per-root program and gated the program to that one
+transform, deferring `outbox`/method on a build-cost budget. **Phase 2** lifts that budget
+(the per-root program's ~0.5 s cold cost is acceptable, paid once, fail-open) and routes the
+remaining transforms — HTTP method and `outbox` — through the same warm program, plus a
+build-start progress line so the program-warming pause isn't mistaken for a hang. The
+hand-rolled scanners survive only as the fail-open fallback and as the residual span-finder
+for splicing (see D3 / Consequences). Extends
 [ADR-0022](0022-build-transforms-resolve-through-the-module-graph.md) D1 ("build
 transforms resolve through the module graph, never by lifting inline text") from the
 UI compile side to the server-transform side, which never got a checker.
@@ -71,10 +78,15 @@ on the metafile) and is not touched — this ADR changes *how a transform reads 
 
 ## Consequences
 
-- **The hand-rolled server tokenizer family retires** (or shrinks to a residual span-finder):
-  `OUTBOX_OPT`, `STREAM_HELPERS`, `detectStreaming`'s char scan, `RPC_EXPORT`,
-  `detectDurable`'s string compare, and much of `findExportCallSite` / `splitTopLevelArgs` /
-  `lastArgText`.
+- **The hand-rolled server tokenizer family demotes to a fail-open fallback + a residual
+  span-finder** — not deleted, because fail-open (D3) is non-negotiable and the rewrite splices
+  on the *stripped* source (imports removed), whose offsets the program's AST (parsed from the
+  original on-disk file) can't supply. So the program is the primary meaning source and the
+  scanners remain the byte-identical fallback: `detectStreaming` (streaming), `OUTBOX_OPT` /
+  `detectDurable` (`outbox`), and `RPC_EXPORT` / `detectRpcMethod` (method) now run only when no
+  program resolved the value. `findExportCallSite` / `splitTopLevelArgs` / `skipNonCode` stay
+  live as the residual span-finder for the splice (the "genuinely-syntactic step the AST can't
+  replace"); `lastArgText` is now reached only on the `detectDurable` fallback path.
 - **Streaming detection gains correctness** — the wrapper-indirection case (handler returns a
   stream through a helper) is detected, not silently treated as non-streaming.
 - **The two build-transform sides finally agree** with ADR-0022 D1: both the UI compile and
@@ -99,7 +111,13 @@ on the metafile) and is not touched — this ADR changes *how a transform reads 
   (the incremental LS doesn't expose the checker publicly). Reuse that pattern, or invest in
   an LS overlay for incremental dev rebuilds? Leaning: reuse the one-shot program first,
   optimize later if dev-rebuild latency bites.
-- **Build-time budget.** Quantify the added cold-build cost on kitchen-sink; if material,
-  gate the warm program behind the transforms that actually benefit (streaming detection is
-  the one with a correctness gap; `outbox`/method are conveniences the regexes handle
-  adequately, so they can stay on the scan if the program cost isn't justified for them).
+- **Build-time budget.** ~~Quantify the added cold-build cost on kitchen-sink; if material,
+  gate the warm program behind the transforms that actually benefit.~~ **Resolved (phase 2).**
+  The cold cost is ~0.5 s once per project root (kitchen-sink, 31 rpc roots pulling ~720 files
+  transitively), amortized across every transform in the build and never on the critical path
+  (fail-open). That is acceptable, so the budget gate is lifted: `outbox` and method now resolve
+  through the same warm program as streaming, and a one-line build-start log
+  (`[abide] building client bundle…`, non-dev only) covers the warming pause. `outbox`/method
+  carried no correctness gap, but routing them through the checker still buys real hardening —
+  method reads through aliased/re-exported helpers, and `outbox` lifts from "inline literal
+  only" to "statically known" (an imported const now resolves instead of erroring).

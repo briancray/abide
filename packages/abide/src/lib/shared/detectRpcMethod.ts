@@ -9,6 +9,12 @@ undefined when no rpc export matches — the caller skips the file rather
 than guessing. Used by the rpc.d.ts codegen to type url() against
 query-carrying rpcs; matching the same convention the bundler rewrites
 keeps the two from drifting.
+
+The FAIL-OPEN fallback for writeRpcDts's method resolution (ADR-0025 D2/D3): when a
+warm server program is present the method is read off the export's helper SYMBOL
+(alias/re-export-aware), and this regex — keyed on the literal helper name — is used
+only when no program built or the query didn't resolve. Byte-identical to the pre-ADR
+path when no program is present.
 */
 const RPC_EXPORT = /export\s+const\s+\w+\s*=\s*(GET|POST|PUT|PATCH|DELETE|HEAD)\s*[<(]/
 

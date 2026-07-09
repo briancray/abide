@@ -1,3 +1,4 @@
+import type { ExportCallSite } from './findExportCallSite.ts'
 import { isReadOnlyMethod } from './isReadOnlyMethod.ts'
 import { prepareRemoteExport } from './prepareRemoteExport.ts'
 import { skipNonCode } from './skipNonCode.ts'
@@ -52,6 +53,7 @@ export function prepareRpcModule(
     source: string,
     importName: string,
     streamingOverride?: boolean,
+    durableOverride?: boolean,
 ): PreparedRpcModule | undefined {
     /*
     The "no barrels" surface places each method at its own path
@@ -71,7 +73,11 @@ export function prepareRpcModule(
     }
     const { stripped, site } = prepared
     const method = site.ident as HttpMethod
-    const durable = detectDurable(stripped, site.parenStart, site.parenEnd, method)
+    /* Durability is decided by the warm server program's outbox-property type query when it
+       resolved a verdict (ADR-0025 D2 — it reads an imported-const `outbox` the regex can't);
+       undefined (no warm program / a computed value) falls open to the char-scan `detectDurable`,
+       which rejects a non-literal loudly. The mutating-method invariant holds on either path. */
+    const durable = resolveDurable(stripped, site, method, durableOverride)
     /* Streaming is decided by the warm server program's return-type query when it resolved a
        verdict (ADR-0025 D2 — it sees the wrapper-indirection case the scan misses); undefined
        (no warm program / unresolvable node) falls open to the char-scan, byte-identical to before. */
@@ -126,9 +132,32 @@ export function prepareRpcModule(
     }
 }
 
+/* The rpc's durability, program-primary with the char-scan as fail-open fallback. A resolved
+   `durableOverride` (the warm program read the `outbox` property's boolean-literal type) skips
+   the scan but still enforces the mutating-method invariant, so the WITH-program path is byte-
+   equivalent to the scan for every case the scan handles and additionally reads a statically-
+   known non-inline `outbox`. undefined defers wholly to `detectDurable`. */
+function resolveDurable(
+    source: string,
+    site: ExportCallSite,
+    method: HttpMethod,
+    durableOverride: boolean | undefined,
+): boolean {
+    if (durableOverride === undefined) {
+        return detectDurable(source, site.parenStart, site.parenEnd, method)
+    }
+    if (durableOverride && isReadOnlyMethod(method)) {
+        throw new Error(
+            `[abide] outbox: true is only valid on mutating RPCs (POST/PUT/PATCH/DELETE), not ${method}`,
+        )
+    }
+    return durableOverride
+}
+
 /* Reads the `outbox` flag off the call's opts object (the trailing argument), enforcing the
-   two build-time invariants. Scoping to the opts object keeps the scan off the handler body,
-   so a handler that mentions `outbox:` doesn't misfire. */
+   two build-time invariants. The fail-open fallback for `resolveDurable` when no warm program
+   resolved the outbox literal type (ADR-0025 D3). Scoping to the opts object keeps the scan off
+   the handler body, so a handler that mentions `outbox:` doesn't misfire. */
 function detectDurable(
     source: string,
     parenStart: number,
