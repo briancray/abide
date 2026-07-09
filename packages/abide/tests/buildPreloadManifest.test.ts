@@ -46,7 +46,7 @@ afterAll(async () => {
 
 describe('buildPreloadManifest', () => {
     test('maps each route to its page + layout-chain chunks and route-only runtime, excluding the entry graph', async () => {
-        const manifest = await buildPreloadManifest({ distDir })
+        const manifest = await buildPreloadManifest({ appDir })
 
         /* "/" → its page chunk + the root layout chunk + their route-only runtime deps.
            The entry's shared runtime (clientEntry-shared{1,2,3}) is excluded. */
@@ -92,14 +92,14 @@ describe('buildPreloadManifest', () => {
             ]),
         ) as Record<string, Uint8Array<ArrayBuffer>>
 
-        const fromAssets = await buildPreloadManifest({ distDir: '/tmp/unused', assets })
-        const fromDisk = await buildPreloadManifest({ distDir })
+        const fromAssets = await buildPreloadManifest({ appDir: '/tmp/unused', assets })
+        const fromDisk = await buildPreloadManifest({ appDir })
         expect(fromAssets).toEqual(fromDisk)
     })
 
     test('returns an empty map when the build tree is absent', async () => {
-        expect(await buildPreloadManifest({ distDir: '/tmp/abide-preload-missing-xyz' })).toEqual(
-            {},
-        )
+        expect(
+            await buildPreloadManifest({ appDir: '/tmp/abide-preload-missing-xyz/_app' }),
+        ).toEqual({})
     })
 })

@@ -1,4 +1,4 @@
-import { watch } from 'node:fs'
+import { readdirSync, watch } from 'node:fs'
 import type { Subprocess } from 'bun'
 import { build } from './build.ts'
 import { DEFAULT_PORT } from './lib/server/runtime/DEFAULT_PORT.ts'
@@ -26,6 +26,13 @@ loop we own end to end:
      in-process invalidation. Killing the incumbent drops the browser's
      live-reload channel; it reconnects straight onto the already-listening
      replacement and reloads itself.
+
+Each client build lands in its OWN `dist/_app.gen-<id>` directory (build.ts,
+`clean: false`) and the worker spawned for it is pinned to that dir via
+`ABIDE_APP_DIR`. So the incumbent keeps serving its generation's chunks off disk
+for the whole overlap while the replacement serves the new one — nothing is a
+shared mutable `_app`, so a draining worker can never 500 on chunks the new build
+would otherwise have deleted. A generation dir is pruned once its worker exits.
 
 Restarts are serialized (a build mid-flight queues the next) and the port is
 fixed so the browser tab stays valid across restarts. A failed build — or a
@@ -56,8 +63,9 @@ function isGenerated(filename: string): boolean {
     return filename.split(/[\\/]/).includes(GENERATED_DIR)
 }
 
-// clean:false leaves the live dist in place — each build swaps _app in atomically,
-// so the running server never serves a half-built or emptied bundle.
+// clean:false leaves the live dist in place — each build emits its own
+// `_app.gen-<id>` dir, so the running server never serves a half-built bundle and
+// a rebuild never mutates the dir an existing worker is reading.
 const buildOptions = {
     cwd,
     minify: false,
@@ -69,16 +77,55 @@ const buildOptions = {
 
 // The worker currently meant to be serving; undefined while crashed or replaced.
 let server: Subprocess | undefined
+// The `_app.gen-<id>` dir the active worker is pinned to — the bundle it serves and
+// the dir to prune once it (and no successor sharing it) is gone.
+let currentAppDir = `${cwd}/dist/_app`
 let shuttingDown = false
 // Worker exits since the last ready signal — bounds the crash-respawn loop.
 let exitsWithoutReady = 0
 
+/* Remove a spent generation dir. Guarded to a `_app.gen-*` path so a bug (or the
+   `${cwd}/dist/_app` fallback when the first build failed) can never `rm` the wrong
+   thing. Best-effort — a leftover is swept by pruneStaleBuildDirs next dev start. */
+async function pruneGenDir(dir: string): Promise<void> {
+    if (!dir.includes('/_app.gen-')) {
+        return
+    }
+    await Bun.$`rm -rf ${dir}`.quiet().nothrow()
+}
+
+/* Sweep generation/staging/old dirs left by a prior dev session that exited without
+   cleaning up (crash, kill -9). Runs once before the first build so dist doesn't
+   accumulate them across sessions. */
+function pruneStaleBuildDirs(): void {
+    const distDir = `${cwd}/dist`
+    let entries: string[]
+    try {
+        entries = readdirSync(distDir)
+    } catch {
+        return // no dist yet — nothing to sweep
+    }
+    for (const name of entries) {
+        if (/^_app\.(gen|staging|old)-/.test(name)) {
+            void Bun.$`rm -rf ${distDir}/${name}`.quiet().nothrow()
+        }
+    }
+}
+
 /*
-Spawn a server worker against the fixed dev port. `ready` resolves when the
-worker reports its listener is up and init() has run (DEV_READY_MESSAGE) — the
-cue that a replacement may retire its predecessor.
+Spawn a server worker against the fixed dev port, pinned to `appDir` (its build
+generation) via ABIDE_APP_DIR so its shell, preload manifest, and asset server all
+read that one dir for its whole life. `ready` resolves when the worker reports its
+listener is up and init() has run (DEV_READY_MESSAGE) — the cue that a replacement
+may retire its predecessor.
 */
-function spawnWorker(port: number): { proc: Subprocess; ready: Promise<void> } {
+function spawnWorker(
+    port: number,
+    appDir: string,
+    /* Only the first worker prints the diagnostic surface map (it eager-loads the
+       registry — off the reload hot path for every respawn, whose surface is identical). */
+    printSurface = false,
+): { proc: Subprocess; ready: Promise<void> } {
     const readiness = Promise.withResolvers<void>()
     const proc = Bun.spawn({
         cmd: ['bun', '--preload', PRELOAD, SERVER_ENTRY],
@@ -94,6 +141,8 @@ function spawnWorker(port: number): { proc: Subprocess; ready: Promise<void> } {
             PORT: String(port),
             ABIDE_DEV: '1',
             ABIDE_PARENT_PID: String(process.pid),
+            ABIDE_APP_DIR: appDir,
+            ABIDE_DEV_SURFACE: printSurface ? '1' : '0',
         },
         stdio: ['inherit', 'inherit', 'inherit'],
         // The child's POST /__abide/reload route signals a rebuild over IPC, so the
@@ -108,7 +157,7 @@ function spawnWorker(port: number): { proc: Subprocess; ready: Promise<void> } {
             }
         },
     })
-    respawnOnUnexpectedExit(proc, port)
+    respawnOnUnexpectedExit(proc, port, appDir)
     return { proc, ready: readiness.promise }
 }
 
@@ -118,7 +167,7 @@ shutdown — used to leave the port dead until a manual restart. Respawn it,
 giving up after MAX_EXITS_WITHOUT_READY exits in a row so a crash-on-boot
 doesn't spin; the next save retries through rebuild.
 */
-function respawnOnUnexpectedExit(proc: Subprocess, port: number): void {
+function respawnOnUnexpectedExit(proc: Subprocess, port: number, appDir: string): void {
     void proc.exited.then((exitCode) => {
         if (shuttingDown || server !== proc) {
             return
@@ -132,7 +181,8 @@ function respawnOnUnexpectedExit(proc: Subprocess, port: number): void {
             return
         }
         abideLog.warn(`server exited unexpectedly (code ${exitCode}) — restarting`)
-        server = spawnWorker(port).proc
+        // Respawn on the SAME generation dir — the bundle is fine, the process crashed.
+        server = spawnWorker(port, appDir).proc
     })
 }
 
@@ -145,16 +195,21 @@ async function stopWorker(proc: Subprocess): Promise<void> {
 }
 
 /*
-Zero-downtime swap. The replacement overlaps the incumbent — both bind the dev
-port via reusePort (see createServer) and the kernel keeps delivering
-connections to the incumbent until it stops — so the port answers throughout
-the new module graph's boot. Only a replacement that reports ready retires the
-incumbent; one that dies or hangs booting is discarded and the last-good server
-keeps serving, mirroring how a failed build is handled.
+Zero-downtime swap onto `nextAppDir` (the new build's generation dir). The
+replacement overlaps the incumbent — both bind the dev port via reusePort (see
+createServer) and the kernel keeps delivering connections to the incumbent until it
+stops — so the port answers throughout the new module graph's boot, and each worker
+serves its own generation dir so the overlap never crosses chunk sets. Only a
+replacement that reports ready retires the incumbent; one that dies or hangs booting
+is discarded and the last-good server keeps serving, mirroring how a failed build is
+handled. A generation dir is pruned once no worker references it: the retired
+incumbent's dir after it exits, or the failed replacement's own dir if it never
+took over (unless a server-only restart reused the incumbent's dir — then it stays).
 */
-async function replaceServer(port: number): Promise<void> {
+async function replaceServer(port: number, nextAppDir: string): Promise<void> {
     const previous = server
-    const next = spawnWorker(port)
+    const previousAppDir = currentAppDir
+    const next = spawnWorker(port, nextAppDir)
     const outcome = await Promise.race([
         next.ready.then(() => 'ready' as const),
         next.proc.exited.then(() => 'exited' as const),
@@ -165,11 +220,22 @@ async function replaceServer(port: number): Promise<void> {
             await stopWorker(next.proc)
         }
         abideLog.warn('new server failed to boot — the previous one (if any) keeps serving')
+        // The replacement never served; its fresh generation dir is orphaned. Prune it,
+        // unless a server-only restart reused the still-serving incumbent's dir.
+        if (nextAppDir !== previousAppDir) {
+            await pruneGenDir(nextAppDir)
+        }
         return
     }
     server = next.proc
+    currentAppDir = nextAppDir
     if (previous) {
         await stopWorker(previous)
+        // The incumbent is gone; retire its generation dir — unless the replacement is
+        // serving that same dir (a server-only restart with no client rebuild).
+        if (previousAppDir !== nextAppDir) {
+            await pruneGenDir(previousAppDir)
+        }
     }
 }
 
@@ -200,9 +266,12 @@ async function rebuild(port: number, skipClientBuild = false): Promise<void> {
     }
     building = true
     try {
-        const succeeded = skipClientBuild ? true : await build(buildOptions)
-        if (succeeded) {
-            await replaceServer(port)
+        /* A server/MCP-only change keeps the existing client bundle, so the replacement
+           worker reuses the incumbent's generation dir; a client rebuild produces a fresh
+           one. Either way the swap needs the dir the new worker should serve. */
+        const built = skipClientBuild ? { appDir: currentAppDir } : await build(buildOptions)
+        if (built) {
+            await replaceServer(port, built.appDir)
         }
         /* A server/MCP-only change reuses the existing client bundle. That's correct for
            an rpc/socket handler BODY edit, but changing an rpc's method, its export name,
@@ -231,11 +300,18 @@ on the same predictable 3000+ address as `bun start`; reusing the number across
 restarts (not re-scanning) is what keeps the tab valid.
 */
 const port = findOpenPort(DEFAULT_PORT)
+// Sweep generation dirs a prior session may have left behind before building afresh.
+pruneStaleBuildDirs()
 const firstBuild = await build(buildOptions)
-if (!firstBuild) {
+if (firstBuild) {
+    currentAppDir = firstBuild.appDir
+} else {
+    // Leave currentAppDir at the `${cwd}/dist/_app` fallback; the worker will serve
+    // broken assets until a save produces a real generation, matching prior behaviour.
     abideLog.warn('initial build failed — fix the error and save to retry')
 }
-server = spawnWorker(port).proc
+// The initial worker prints the surface map once (printSurface); respawns don't.
+server = spawnWorker(port, currentAppDir, true).proc
 
 /*
 ABIDE_DEV_NO_WATCH=1 skips the fs watcher: rebuild only on demand via POST
@@ -279,6 +355,9 @@ const shutdown = async () => {
     if (server) {
         await stopWorker(server)
     }
+    // Drop the active generation dir on the way out; any other leftover is swept on the
+    // next dev start by pruneStaleBuildDirs.
+    await pruneGenDir(currentAppDir)
     process.exit(0)
 }
 process.on('SIGINT', shutdown)

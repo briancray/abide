@@ -218,6 +218,16 @@ export async function createServer({
         ? inspectedShell.replace(/(["'])\/_app\//g, `$1${base}/_app/`)
         : inspectedShell
     /*
+    The physical dir the `/_app/*` URLs map onto. Production reads the stable
+    `dist/_app`; under `abide dev` the orchestrator serves each build generation from
+    its own `_app.gen-<id>` dir and passes it as ABIDE_APP_DIR, so this worker serves
+    exactly the generation it was spawned on. A rebuild's replacement worker gets a
+    fresh dir while this one keeps reading its own, immutable for its lifetime — which
+    is why a retiring worker never 500s on chunks a rebuild would otherwise have
+    deleted. Must match the dir abideResolverPlugin rewrote the shell's entry ref from.
+    */
+    const appDir = process.env.ABIDE_APP_DIR ?? `${distDir}/_app`
+    /*
     Boot-path disk scans run concurrently — they share no data, and under
     `abide dev` the worker-swap window is bounded by exactly this boot.
     devClientFingerprint (dev only) hashes the browser-visible surface so the
@@ -235,9 +245,20 @@ export async function createServer({
               })
             : undefined,
         createPublicAssetServer({ publicDir, publicAssets }),
-        createAppAssetServer({ distDir, assets }),
-        buildPreloadManifest({ distDir, assets }),
+        createAppAssetServer({ appDir, assets }),
+        buildPreloadManifest({ appDir, assets }),
     ])
+    /*
+    Diagnostic (DEBUG=abide:dev): one line recording what this worker actually serves —
+    its generation dir and the hashed client entry the shell points at. Pinning makes a
+    shell⇄disk mismatch structurally impossible (the entry always lives in appDir), so
+    this is confirmation/defense-in-depth, not a routine line: it stays off by default.
+    Dev only — an embedded standalone build has no on-disk generation dir.
+    */
+    if (dev && !assets) {
+        const entryRef = activeShell.match(/\/_app\/(client-[a-z0-9]+\.js)/i)?.[1] ?? 'client.js'
+        abideLog.channel('abide:dev')(`serving ${appDir.split('/').pop()} · entry ${entryRef}`)
+    }
     setRegistryManifests({ rpc, sockets, prompts })
     mcpResourceServerSlot.server = createMcpResourceServer({ resourcesDir, mcpResources })
     const cliName = cliProgramName ?? 'app'
@@ -729,26 +750,42 @@ export async function createServer({
     process.once('SIGINT', shutdown)
     process.once('SIGTERM', shutdown)
 
-    /*
-    Diagnostic only, and only under `abide` debug logging — eager-loads the
-    registry to print the page/socket/rpc surface maps (routing + which
-    declarations reach mcp/cli/openapi), making abide's multimodal-by-default
-    exposure auditable. Awaited so `ready` lands after all of abide's own
-    startup output rather than interleaving with it.
-    */
-    if (logRequests) {
-        await logExposedSurfaces({ pages })
-    }
-    // Unguarded machine surface check — app.handle is the blessed auth seam.
-    if (mcp && !app?.handle) {
-        await warnUnguardedMcp()
-    }
     abideLog.success(`ready at http://localhost:${server.port}`)
     // Tell the dev orchestrator (when it spawned us with ipc) that boot is
     // complete, so it can retire the previous worker — finishing the
     // zero-downtime swap. No-op on a bare server: process.send is undefined.
     if (dev) {
         process.send?.(DEV_READY_MESSAGE)
+    }
+    /* Unguarded machine surface check — app.handle is the blessed auth seam. Runs AFTER ready
+       like the surface map below: warnUnguardedMcp eager-loads the registry (building the rpc
+       ts.Program via the onLoad transform), so leaving it pre-ready would re-block boot for an
+       unguarded-MCP app. Guarded so the warning can't fell a now-ready worker. */
+    if (mcp && !app?.handle) {
+        try {
+            await warnUnguardedMcp()
+        } catch (error) {
+            abideLog.error(error)
+        }
+    }
+    /*
+    Diagnostic surface map (on by default via `logRequests`; opt out with DEBUG=-abide):
+    eager-loads the registry to
+    print the page/socket/rpc surface (routing + which declarations reach mcp/cli/openapi),
+    making abide's multimodal-by-default exposure auditable. It runs AFTER the ready signal
+    because that eager load imports every rpc/socket module — which builds the rpc ts.Program
+    via the onLoad transform — ~1.4s that used to block readiness on EVERY dev worker boot.
+    The server is already listening, so printing it now costs nothing off time-to-ready, and
+    the registry (and its program) stays lazy on the reload hot path. In dev only the first
+    worker prints it (ABIDE_DEV_SURFACE, set by the orchestrator) — a respawn's surface is
+    identical. Guarded: a diagnostic failure must never fell a now-ready worker.
+    */
+    if (logRequests && (!dev || process.env.ABIDE_DEV_SURFACE === '1')) {
+        try {
+            await logExposedSurfaces({ pages })
+        } catch (error) {
+            abideLog.error(error)
+        }
     }
     return server
 }

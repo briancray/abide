@@ -7,7 +7,6 @@ import { abideLog } from './lib/shared/abideLog.ts'
 import { bundleGraphFromMetafile } from './lib/shared/bundleGraphFromMetafile.ts'
 import type { RpcServerProgram } from './lib/shared/createRpcServerProgram.ts'
 import { escapeRegex } from './lib/shared/escapeRegex.ts'
-import { fileName } from './lib/shared/fileName.ts'
 import { fileStem } from './lib/shared/fileStem.ts'
 import { jsonSchemaForPromptArguments } from './lib/shared/jsonSchemaForPromptArguments.ts'
 import { manifestModule } from './lib/shared/manifestModule.ts'
@@ -20,13 +19,8 @@ import { promptNameForFile } from './lib/shared/promptNameForFile.ts'
 import { readPackageJson } from './lib/shared/readPackageJson.ts'
 import { rpcServerForRoot } from './lib/shared/rpcServerForRoot.ts'
 import { rpcUrlForFile } from './lib/shared/rpcUrlForFile.ts'
+import { scanPages } from './lib/shared/scanPages.ts'
 import { socketNameForFile } from './lib/shared/socketNameForFile.ts'
-import { writeHealthDts } from './lib/shared/writeHealthDts.ts'
-import { writePublicAssetsDts } from './lib/shared/writePublicAssetsDts.ts'
-import { writeRoutesDts } from './lib/shared/writeRoutesDts.ts'
-import { writeRpcDts } from './lib/shared/writeRpcDts.ts'
-import { writeTestRpcDts } from './lib/shared/writeTestRpcDts.ts'
-import { writeTestSocketsDts } from './lib/shared/writeTestSocketsDts.ts'
 
 /*
 Resolves a bare directory or extensionless path to a concrete file. Mirrors
@@ -153,69 +147,19 @@ export function abideResolverPlugin({
     re-globbing the trees. The shell read is memoised the same way so two
     passes don't re-read app.html from disk.
     */
-    const scanPagesOnce = once(() =>
-        scanPages(pagesDir).then(async (scan) => {
-            await writeRoutesDts({
-                cwd,
-                pageFiles: scan.pageFiles,
-                importName: await abideImportNameOnce(),
-            })
-            return scan
-        }),
-    )
-    const scanRpcOnce = once(() =>
-        scanDir(rpcDir, '**/*.ts').then(async (rpcFiles) => {
-            const importName = await abideImportNameOnce()
-            /* Resolve each rpc's method off its export helper SYMBOL (alias/re-export-aware) via
-               the same warm per-root program the streaming/outbox queries use; undefined per file
-               falls open to writeRpcDts's `detectRpcMethod` regex (ADR-0025 D2/D3). */
-            const rpcServerProgram = rpcServerForRoot(rpcServerByRoot, cwd, rpcDir)
-            await writeRpcDts({
-                cwd,
-                rpcDir,
-                rpcFiles,
-                importName,
-                methodForModule: rpcServerProgram
-                    ? (modulePath) => rpcServerProgram.methodForModule(modulePath)
-                    : undefined,
-            })
-            /* Typed createTestApp `app.rpc.<rpc>` surface. */
-            await writeTestRpcDts({ cwd, rpcFiles, importName })
-            return rpcFiles
-        }),
-    )
-    const scanSocketsOnce = once(() =>
-        scanDir(socketsDir, '**/*.ts').then(async (socketFiles) => {
-            /* Typed createTestApp `app.sockets.<name>` surface. */
-            await writeTestSocketsDts({
-                cwd,
-                socketFiles,
-                importName: await abideImportNameOnce(),
-            })
-            return socketFiles
-        }),
-    )
-    /* One write per build, from the abide:app loader (the seam that already knows whether src/app.ts exists). */
-    let healthDtsWritten: Promise<void> | undefined
-    const writeHealthDtsOnce = (hasAppModule: boolean): Promise<void> => {
-        healthDtsWritten ??= abideImportNameOnce().then((importName) =>
-            writeHealthDts({ cwd, hasAppModule, importName }),
-        )
-        return healthDtsWritten
-    }
+    const scanPagesOnce = once(() => scanPages(pagesDir))
+    const scanRpcOnce = once(() => scanDir(rpcDir, '**/*.ts'))
+    const scanSocketsOnce = once(() => scanDir(socketsDir, '**/*.ts'))
     /*
-    Globs public/ once per build and writes publicAssets.d.ts so url() can
-    autocomplete known assets — independent of embedding (runs in dev/start
-    too, where the files are read off disk). The public-assets virtual reuses
-    the returned list for its embed.
+    Globs public/ once per build; the public-assets virtual reuses the returned
+    list for its embed. (.d.ts codegen — publicAssets.d.ts and its siblings —
+    moved to generateDeclarations, owned by build().)
     */
-    const scanPublicOnce = once(async () => {
-        const publicFiles = existsSync(publicDir)
+    const scanPublicOnce = once(async () =>
+        existsSync(publicDir)
             ? await Array.fromAsync(new Glob('**/*').scan({ cwd: publicDir, onlyFiles: true }))
-            : []
-        await writePublicAssetsDts({ cwd, publicFiles, importName: await abideImportNameOnce() })
-        return publicFiles
-    })
+            : [],
+    )
     const scanPromptsOnce = once(() => scanDir(promptsDir, '**/*.md'))
     const loadShellOnce = once(() => loadShell(cwd))
     /* Project package.json read once per build — three virtuals (cli-name,
@@ -257,9 +201,9 @@ export function abideResolverPlugin({
 
     /* Warm per-root rpc server program (ADR-0025 D1). Lives in the setup closure so one build
        reuses a single `ts.Program` across every rpc transform (streaming/method/outbox queries);
-       built lazily on the first rpc onLoad or rpc.d.ts write (so a build with no rpc modules never
-       pays for it) and failing open to undefined, in which case each query stays on its
-       char-scan/regex. */
+       built lazily on the first rpc onLoad (so a build with no rpc modules never pays for it) and
+       failing open to undefined, in which case each query stays on its char-scan/regex. (The
+       rpc.d.ts codegen builds its own program in generateDeclarations, owned by build().) */
     const rpcServerByRoot = new Map<string, RpcServerProgram | undefined>()
 
     return {
@@ -632,8 +576,6 @@ ${optionLines}
                 if (args.path === 'abide:app') {
                     const userApp = `${cwd}/src/app.ts`
                     const hasAppModule = await Bun.file(userApp).exists()
-                    /* health.d.ts keys the client health() read to the app hook's return type. */
-                    await writeHealthDtsOnce(hasAppModule)
                     if (hasAppModule) {
                         abideLog.info('using custom src/app.ts')
                         return {
@@ -969,30 +911,6 @@ ${encoded.map((entry) => entry.line).join('\n')}
 `
 }
 
-type PagesScan = {
-    pageFiles: string[]
-    layoutFiles: string[]
-}
-
-/*
-Walks src/ui/pages once and classifies each `.abide` leaf by filename: a
-`page.abide` is a route (its URL is the folder path), a `layout.abide` is a
-layout that wraps every page at or below its folder (keyed by the same folder
-URL). Any other `.abide` file (a shared component) is ignored here — free to
-live anywhere and be imported relatively.
-*/
-async function scanPages(pagesDir: string): Promise<PagesScan> {
-    if (!existsSync(pagesDir)) {
-        return { pageFiles: [], layoutFiles: [] }
-    }
-    const allFiles = await Array.fromAsync(new Glob('**/*.abide').scan({ cwd: pagesDir }))
-    const leafIs = (name: string) => (file: string) => fileName(file) === name
-    return {
-        pageFiles: allFiles.filter(leafIs('page.abide')),
-        layoutFiles: allFiles.filter(leafIs('layout.abide')),
-    }
-}
-
 /*
 Walks one registry directory once: src/server/rpc (every `.ts` file is an
 HTTP-method rpc handler), src/server/sockets (each `.ts` file declares one
@@ -1092,16 +1010,24 @@ function injectBeforeTag(
 }
 
 /*
-Scans `dist/_app/` for the hashed client entry filenames produced by
-build.ts (e.g. `client-abc12345.js`, `client-abc12345.css`) and swaps the
-shell's literal `/_app/client.js` and `/_app/client.css` references for
-them. The js reference appears twice (the modulepreload <link> and the entry
-<script>), so replaceAll covers both. When the directory is missing (someone
-running the server before a build) the shell is returned unchanged so the
-existing broken-asset behaviour is preserved.
+Scans the client-bundle directory for the hashed client entry filenames produced
+by build.ts (e.g. `client-abc12345.js`, `client-abc12345.css`) and swaps the
+shell's literal `/_app/client.js` and `/_app/client.css` references for them. The
+js reference appears twice (the modulepreload <link> and the entry <script>), so
+replaceAll covers both. When the directory is missing (someone running the server
+before a build) the shell is returned unchanged so the existing broken-asset
+behaviour is preserved.
+
+The directory is `dist/_app` for a production build, but under `abide dev` the
+orchestrator serves each build generation from its own `_app.gen-<id>` dir and
+passes it as `ABIDE_APP_DIR` (this runs in the worker, which resolves `abide:shell`
+at boot). Reading that env keeps the shell's entry ref, the preload manifest, and
+the asset server all pointed at the one generation this worker owns — never a
+sibling generation a concurrent worker is serving. Each generation dir holds
+exactly one entry, so `.find` is unambiguous.
 */
 async function rewriteHashedClientEntries(shell: string, cwd: string): Promise<string> {
-    const appDir = `${cwd}/dist/_app`
+    const appDir = process.env.ABIDE_APP_DIR ?? `${cwd}/dist/_app`
     if (!existsSync(appDir)) {
         return shell
     }

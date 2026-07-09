@@ -18,7 +18,7 @@ const ROUTE_CHUNK = /"(\/[^"]*)"\s*:\s*\(\)\s*=>\s*import\("\.\/((?:page|layout)
 /* Reads a `_app` chunk's source by filename — gunzipped from the embedded asset map
    (standalone compile) or off disk (dev + `abide start`). Undefined on a miss. */
 function chunkReader(
-    distDir: string,
+    appDir: string,
     assets?: Assets,
 ): (name: string) => Promise<string | undefined> {
     if (assets) {
@@ -28,23 +28,25 @@ function chunkReader(
         }
     }
     return async (name) => {
-        const file = Bun.file(`${distDir}/_app/${name}`)
+        const file = Bun.file(`${appDir}/${name}`)
         return (await file.exists()) ? file.text() : undefined
     }
 }
 
-/* The hashed client entry filename (`client-<hash>.js`), from the asset map or disk. */
-async function findEntry(distDir: string, assets?: Assets): Promise<string | undefined> {
+/* The hashed client entry filename (`client-<hash>.js`), from the asset map or disk.
+   Each build's `appDir` holds exactly one entry (production `_app`, or a dev
+   generation dir), so `.find` is unambiguous. */
+async function findEntry(appDir: string, assets?: Assets): Promise<string | undefined> {
     const isEntry = (name: string): boolean => /^client-[a-z0-9]+\.js$/i.test(name)
     if (assets) {
         const key = Object.keys(assets).find((path) => isEntry(path.replace('/_app/', '')))
         return key?.replace('/_app/', '')
     }
-    if (!existsSync(`${distDir}/_app`)) {
+    if (!existsSync(appDir)) {
         return undefined
     }
     const names = await Array.fromAsync(
-        new Glob('client-*.js').scan({ cwd: `${distDir}/_app`, onlyFiles: true }),
+        new Glob('client-*.js').scan({ cwd: appDir, onlyFiles: true }),
     )
     return names.find(isEntry)
 }
@@ -64,14 +66,14 @@ stream-close instead of waterfalling after it. Returns an empty map when the bun
 absent or unparseable, so rendering degrades to the entry-only preload.
 */
 export async function buildPreloadManifest({
-    distDir,
+    appDir,
     assets,
 }: {
-    distDir: string
+    appDir: string
     assets?: Assets
 }): Promise<Record<string, string[]>> {
-    const read = chunkReader(distDir, assets)
-    const entryName = await findEntry(distDir, assets)
+    const read = chunkReader(appDir, assets)
+    const entryName = await findEntry(appDir, assets)
     const entrySource = entryName ? await read(entryName) : undefined
     if (entryName === undefined || entrySource === undefined) {
         return {}

@@ -24,23 +24,29 @@ Unlike the public server this answers every `/_app/` request itself (404 on
 a miss — nothing falls through past the build tree). The path-traversal
 guard inspects the raw request URL because the WHATWG parser normalizes
 encoded `..` segments away before `url.pathname` is visible.
+
+`appDir` is the physical directory the `/_app/*` URLs map onto: `dist/_app` for
+a production build, or — under `abide dev` — the generation dir this worker was
+spawned on (`ABIDE_APP_DIR`). The URL space stays `/_app/*` either way; only the
+disk location this worker reads from moves, so a rebuild's new worker reads a new
+dir while this one keeps serving its own, immutable for its lifetime.
 */
 export async function createAppAssetServer({
-    distDir,
+    appDir,
     assets,
 }: {
-    distDir: string
+    appDir: string
     assets?: Assets
 }): Promise<(req: Request, url: URL) => Promise<Response>> {
     // Per-pathname asset header bundles, hashed-chunk-aware Cache-Control.
     const headersForAsset = createAssetHeaderCache(cacheControlForAsset)
-    /* Boot snapshot of every disk `_app` path, mirroring createPublicAssetServer: the
-       header cache keys on (request-controlled) pathnames, so building bundles for junk
-       `/_app/*` probes would grow it without bound. A rebuild restarts the server (same
-       restart `bun --watch` triggers on a code change), re-snapshotting. */
+    /* Boot snapshot of every disk chunk path (keyed by its `/_app/*` URL), mirroring
+       createPublicAssetServer: the header cache keys on (request-controlled) pathnames,
+       so building bundles for junk `/_app/*` probes would grow it without bound. A
+       rebuild spawns a fresh worker (against a fresh generation dir), re-snapshotting. */
     const diskPaths = assets
         ? new Set<string>()
-        : await globToPathSet(`${distDir}/_app`, '**/*', (file) => `/_app/${file}`)
+        : await globToPathSet(appDir, '**/*', (file) => `/_app/${file}`)
     /* Derive the precompressed `.gz` sibling set from the single tree scan (it already
        includes the `.gz` files) — a gzip-capable client gets those bytes without
        on-the-fly compression. Keyed by the base path (the `.gz` suffix stripped). */
@@ -88,7 +94,9 @@ export async function createAppAssetServer({
             return notFound()
         }
         const { base: baseHeaders, gzip: gzipHeaders } = headersForAsset(assetPath)
-        const diskPath = distDir + assetPath
+        // Map the `/_app/<file>` URL onto the physical dir: strip the `/_app` prefix
+        // (5 chars) and join under appDir, which already IS the `_app` (or generation) dir.
+        const diskPath = appDir + assetPath.slice('/_app'.length)
         if (acceptsGzip(req) && diskGzipPaths.has(assetPath)) {
             return new Response(Bun.file(`${diskPath}.gz`), { headers: gzipHeaders })
         }
