@@ -1,6 +1,12 @@
 import { NO_STORE } from '../shared/CACHE_CONTROL_VALUES.ts'
+import { wireJsonReplacer } from '../shared/wireJsonReplacer.ts'
 import type { TypedResponse } from './rpc/types/TypedResponse.ts'
 import { withResponseDefaults } from './runtime/withResponseDefaults.ts'
+
+/* The Content-Type `Response.json` sets — replicated here because the wire-encode step serializes
+   with a replacer, so the body is built by hand rather than through `Response.json`. Seeds the
+   default header set so an explicit caller `content-type` still wins. */
+const JSON_CONTENT_TYPE = 'application/json;charset=utf-8'
 
 /*
 JSON Response with rpc-friendly defaults — same shape as
@@ -36,8 +42,15 @@ export function json<T>(data: T, init?: ResponseInit): TypedResponse<T> {
             withResponseDefaults(init, { 'Cache-Control': NO_STORE }, 204),
         ) as TypedResponse<T>
     }
-    return Response.json(
-        data,
-        withResponseDefaults(init, { 'Cache-Control': NO_STORE }),
+    /* Wire-encode the body (ADR-0029 output path): a value-directed replacer rewrites a `Set` →
+       array, a `Map` → `[K,V]` entries, and a `bigint` → digit string, so a structured return
+       crosses as honest JSON rather than a lost `{}` or a 500 (plain `Response.json` throws on a
+       bigint). A `Date` already rides as an ISO string via its native `toJSON`. */
+    return new Response(
+        JSON.stringify(data, wireJsonReplacer),
+        withResponseDefaults(init, {
+            'Cache-Control': NO_STORE,
+            'Content-Type': JSON_CONTENT_TYPE,
+        }),
     ) as TypedResponse<T>
 }

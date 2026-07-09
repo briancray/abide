@@ -4,12 +4,14 @@ import { HttpError } from './HttpError.ts'
 import { keyForRemoteCall } from './keyForRemoteCall.ts'
 import { REMOTE_FUNCTION } from './REMOTE_FUNCTION.ts'
 import { recordRemoteMeta } from './recordRemoteMeta.ts'
+import { reviveWireOutput } from './reviveWireOutput.ts'
 import { rpcErrorRegistry } from './rpcErrorRegistry.ts'
 import { subscribableFromResponse } from './subscribableFromResponse.ts'
 import type { CachePolicy } from './types/CachePolicy.ts'
 import type { ClientFlags } from './types/ClientFlags.ts'
 import type { HttpMethod } from './types/HttpMethod.ts'
 import type { NamedAsyncIterable } from './types/NamedAsyncIterable.ts'
+import type { OutputWirePlan } from './types/OutputWirePlan.ts'
 import type { RawRemoteFunction } from './types/RawRemoteFunction.ts'
 import type { RemoteFunction } from './types/RemoteFunction.ts'
 import type { RpcOptions } from './types/RpcOptions.ts'
@@ -59,6 +61,11 @@ export function createRemoteFunction<Args, Return>(opts: {
        readThrough reads it as the bottom policy layer. Declared once on the rpc definition. */
     cache?: CachePolicy<Args>
     stream?: StreamPolicy
+    /* Client-only: the output wire codec plan (ADR-0029) the remoteProxy stub carries — the decoded
+       response body's structured fields are revived through it (a `Set`/`Map`/`bigint`/`Date`). The
+       server defineRpc never sets it, so an in-process read is untouched. undefined leaves the body
+       as its honest-JSON form. */
+    outputWirePlan?: OutputWirePlan
 }): RemoteFunction<Args, Return> {
     const {
         method,
@@ -71,6 +78,7 @@ export function createRemoteFunction<Args, Return>(opts: {
         streaming,
         cache: cachePolicy,
         stream: streamPolicy,
+        outputWirePlan,
     } = opts
 
     /*
@@ -139,7 +147,12 @@ export function createRemoteFunction<Args, Return>(opts: {
                identity, and clear it on success — the reactive `fn.error()` probe reads it. */
             (value) => {
                 rpcErrorRegistry.clear(key)
-                return value as Return
+                /* Revive the decoded body's structured fields per the baked output plan (ADR-0029):
+                   a wire array → `Set`/`Map`, a digit string → `bigint`, an ISO string → `Date`. The
+                   decoded value is call-private (a fresh decode or cloned warm value), so the revive
+                   mutates in place. No plan (undefined — every server-side read, or a client endpoint
+                   with no structured field) returns the value untouched. */
+                return reviveWireOutput(value, outputWirePlan) as Return
             },
             (error: unknown) => {
                 /* A parked durable write throws a `kind: 'queued'` sentinel — it's pending

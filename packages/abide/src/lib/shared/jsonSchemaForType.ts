@@ -82,6 +82,14 @@ function project(
     if (symbolName === 'Array' || symbolName === 'ReadonlyArray') {
         return projectArray(checker, type, seen)
     }
+    // A `Set`/`Map` rides the wire as a JSON array (ADR-0029 output encode), so the projected schema
+    // MUST agree with those bytes — a `Set<T>` is `T[]`, a `Map<K,V>` is `[K,V][]` entries.
+    if (symbolName === 'Set' || symbolName === 'ReadonlySet') {
+        return projectSet(checker, type, seen)
+    }
+    if (symbolName === 'Map' || symbolName === 'ReadonlyMap') {
+        return projectMap(checker, type, seen)
+    }
     if (isTupleType(type)) {
         return projectTuple(checker, type, seen)
     }
@@ -133,6 +141,39 @@ function projectArray(
     const items = element === undefined ? {} : project(checker, element, seen)
     seen.delete(type)
     return { type: 'array', items }
+}
+
+/* `Set<T>`/`readonly Set<T>` → `{ type: 'array', items: project(T) }` — congruent with the
+   `wireJsonReplacer` encode (`[...set]`). */
+function projectSet(
+    checker: ts.TypeChecker,
+    type: ts.Type,
+    seen: Set<ts.Type>,
+): Record<string, unknown> {
+    const element = checker.getTypeArguments(type as ts.TypeReference)[0]
+    seen.add(type)
+    const items = element === undefined ? {} : project(checker, element, seen)
+    seen.delete(type)
+    return { type: 'array', items }
+}
+
+/* `Map<K,V>`/`readonly Map<K,V>` → an array of `[K,V]` entry tuples — congruent with the
+   `wireJsonReplacer` encode (`[...map]`). Each entry is a fixed 2-tuple, so the item schema is
+   positional `prefixItems` with `items: false` to forbid extras (matching projectTuple). */
+function projectMap(
+    checker: ts.TypeChecker,
+    type: ts.Type,
+    seen: Set<ts.Type>,
+): Record<string, unknown> {
+    const args = checker.getTypeArguments(type as ts.TypeReference)
+    seen.add(type)
+    const keySchema = args[0] === undefined ? {} : project(checker, args[0], seen)
+    const valueSchema = args[1] === undefined ? {} : project(checker, args[1], seen)
+    seen.delete(type)
+    return {
+        type: 'array',
+        items: { type: 'array', prefixItems: [keySchema, valueSchema], items: false },
+    }
 }
 
 /* A fixed-length tuple → positional `prefixItems`, `items: false` to forbid extras (JSON Schema

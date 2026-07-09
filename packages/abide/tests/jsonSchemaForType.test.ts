@@ -18,6 +18,8 @@ export type Bool = boolean
 export type Nul = null
 export type Big = bigint
 export type When = Date
+export type SetT = Set<string>
+export type MapT = Map<string, number>
 export type Obj = { a: string; b?: number }
 export type ObjBearsUndefined = { a: string; c: number | undefined }
 export type Rec = Record<string, number>
@@ -105,6 +107,23 @@ describe('jsonSchemaForType — primitives and literals', () => {
 
     test('Date → { type: string, format: date-time }', () => {
         expect(schemaOf('When')).toEqual({ type: 'string', format: 'date-time' })
+    })
+
+    /* ADR-0029 wire coherence: the projected schema MUST match the bytes the wireJsonReplacer emits —
+       a Set rides as an array of its values, a Map as an array of [key, value] entry tuples. */
+    test('Set<T> → { type: array, items } (matches the encoded wire array)', () => {
+        expect(schemaOf('SetT')).toEqual({ type: 'array', items: { type: 'string' } })
+    })
+
+    test('Map<K, V> → an array of [K, V] entry tuples (matches the encoded wire entries)', () => {
+        expect(schemaOf('MapT')).toEqual({
+            type: 'array',
+            items: {
+                type: 'array',
+                prefixItems: [{ type: 'string' }, { type: 'number' }],
+                items: false,
+            },
+        })
     })
 })
 

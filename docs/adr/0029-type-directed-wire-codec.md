@@ -1,6 +1,7 @@
 # ADR-0029: A type-directed wire codec for structured RPC values
 
-**Status:** accepted (2026-07-09) — first increment shipped (input path; output deferred).
+**Status:** accepted (2026-07-09) — input path AND output/response path shipped; nested descent
+and streaming-frame encoding deferred.
 Generalizes
 [ADR-0028](0028-type-directed-query-coercion.md) from scalar query coercion to the
 whole RPC value path: the same warm server program (ADR-0025) that supplies a field's
@@ -89,25 +90,72 @@ unrevivable value, or an already-typed value (the abide client's ref-json body) 
 never thrown. The plan is stamped into the server `defineRpc` `coerce` opt exactly as ADR-0028's;
 no wire tag is added, so a plain-JSON / OpenAPI client still reads the contract.
 
-**What was deferred:**
+**What was deferred (from the first increment):**
 
-- **The output/response codec.** The response path serializes with plain `Response.json`, which
-  drops a `Set`/`Map` to `{}` and throws on a `bigint` — so an output codec needs a server-side
-  ENCODE step (and a decision on its interaction with `json()`/ref-json) before a client-side
-  output plan can revive anything. The abide client's own POST/PUT/PATCH body already round-trips
-  all four kinds via ref-json, so the input plan's marginal value is the query-string and
-  non-abide-client paths (ADR-0028's scope, one level up); the output direction is a follow-up.
 - **Nested/recursive descent.** Only top-level `Args` fields are classified/revived. A `Date`
   inside an array inside an object still needs a *path*-shaped plan; bounded out of this increment.
 
+## Implementation note (second increment — the output/response codec)
+
+The deferred output/response codec now ships, keeping D1–D3 exactly. The load-bearing insight from
+the spike below: the response path is broken one step EARLIER than the input path — `json()`
+serializes via `Response.json` → plain `JSON.stringify`, which destroys structured values *before*
+they reach the wire (`Set`/`Map` → `{}`, `bigint` → a 500 throw, `Date` → ISO string, which
+survives). So a client decoder would have nothing to revive; the fix is a server ENCODE step first,
+then a type-directed client DECODE.
+
+**Spike result — two plug points confirmed.**
+
+- *Server serialization point:* `json()` (`src/lib/server/json.ts`) is the single point where a
+  point-read body is stringified. A `JSON.stringify` REPLACER plugs in there and fixes bigint/Set/Map
+  for every client without breaking existing response tests. Streaming (`jsonl()`/`sse()`) is a
+  separate serialization path, left for a follow-up.
+- *Client bake + decode point:* the output plan rides the `remoteProxy` opts exactly the way the
+  live `schemas` do (ADR-0022 D2) — `prepareRpcModule.rewriteForClient` injects `outputWirePlan: {…}`
+  into the emitted `__abideRemoteProxy__(…)` opts, `remoteProxy` forwards it to
+  `createRemoteFunction`, and the decoded-read path (`callable`, after `cache.read`) applies revival.
+  This is a NEW baking direction: the input `coerce` plan bakes into the server `defineRpc`; the
+  output plan bakes into the CLIENT stub.
+
+**What shipped.**
+
+- **Server encode — value-directed, runs for ALL clients.** `wireJsonReplacer`
+  (`src/lib/shared/wireJsonReplacer.ts`) rewrites `bigint` → its digit string, `Set<T>` → a JSON
+  array of `T`, `Map<K,V>` → a JSON array of `[K,V]` entries; `Date` needs no branch (native
+  `toJSON`). `json()` serializes with it, so a structured return crosses as honest JSON matching the
+  projected schema — no runtime type tag (D2). The bigint-500 crash and the Set/Map data loss are
+  fixed for every client, abide or not. Never throws.
+- **Query — `outputWirePlanForModule`.** On `createRpcServerProgram`, resolves the handler's
+  success-body type the same way `returnBodyForModule`/`walkSuccessBodies` do and projects each
+  OBJECT body's fields to `{field: WireKind}` via the shared `wireKind` classifier, keeping only the
+  structured kinds (`date`/`bigint`/`set`/`map`) — `number`/`boolean` already ride as their JSON
+  type. Fail-open undefined.
+- **Client bake + decode.** `OutputWirePlan` (`src/lib/shared/types/OutputWirePlan.ts`) is stamped
+  onto the client stub; `reviveWireOutput` (`src/lib/shared/reviveWireOutput.ts`) revives the
+  DECODED body's named top-level fields (array → `Set`/`Map`, digit string → `bigint`, ISO string →
+  `Date`). A field absent from the plan (a genuine array) is untouched. Fail-open, top-level only.
+- **Projector coherence.** `jsonSchemaForType` now projects `Set<T>` → `{type:'array',items:T}` and
+  `Map<K,V>` → an array of `[K,V]` entry tuples, so the generated OpenAPI matches the actual bytes.
+
+**What was deferred (from this increment):**
+
+- **Nested/recursive descent (both directions).** The output plan, like the input plan, is a flat
+  top-level field map — a `Set` inside an array inside an object still needs a *path*-shaped plan.
+- **Streaming-frame encoding.** `jsonl()`/`sse()` frames are not run through the wire replacer, and
+  a streaming body contributes no output plan; a structured value inside a streamed frame is
+  unchanged. Follow-up.
+- **Server-side in-process revival.** The output plan is baked onto the CLIENT only (D1). A server
+  in-process read (SSR/cache) decodes its own `json()` response and now sees the honest-JSON form
+  (an array/entries/string) rather than the pre-encode `{}` — data-preserving but not the original
+  `Set`/`Map`. Full isomorphic revival on the server path is a follow-up.
+
 ## Open questions (remaining)
 
-- **The output/response codec** — see "deferred" above: it hinges on a server-side response encode
-  step. Is the output plan worth the client bytes for every endpoint, or opt-in per kind?
 - **Nested/recursive structures.** A `Date` inside an array inside an object needs a *path*-shaped
   plan, not a flat field map. Decide whether to bound to top-level + one array level (as ADR-0028
   does) or invest in a recursive descent — the cost/coverage tradeoff is the crux.
-- **Interaction with ref-json (output side).** On the input side the boundary is settled:
-  type-directed revival is a no-op on already-typed ref-json values, and ref-json remains the
-  escape hatch for structural cases (cycles/shared refs). The output side must draw the same line
-  once the response encode step exists, without double-encoding.
+- **Interaction with ref-json (output side).** The response codec keeps responses on tag-free honest
+  JSON (D2); ref-json stays the escape hatch for the genuinely structural cases (cycles/shared refs)
+  a flat field kind can't express. If a future increment routes a cyclic response through ref-json,
+  the type-directed revival must stay a no-op on the already-typed ref-json value, exactly as the
+  input side already does — without double-encoding.

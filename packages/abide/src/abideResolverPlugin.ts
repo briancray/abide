@@ -436,6 +436,12 @@ export function abideResolverPlugin({
                    no typed errors / unresolvable branch) stamps nothing — the surface omits the error
                    responses exactly as today. */
                 const errorSchemas = rpcServerProgram?.errorSchemasForModule(args.path)
+                /* The handler's structured success fields, baked onto the CLIENT stub as
+                   `outputWirePlan` so the proxy revives a `Set`/`Map`/`bigint`/`Date` off a decoded
+                   response the server encoded to honest JSON (ADR-0029 output path). undefined (no
+                   program / unresolvable body / no structured field) bakes nothing — a response array
+                   stays an array. */
+                const outputWirePlan = rpcServerProgram?.outputWirePlanForModule(args.path)
                 const prepared = prepareRpcModule(
                     source,
                     importName,
@@ -444,6 +450,7 @@ export function abideResolverPlugin({
                     coercion,
                     returnBodySchema,
                     errorSchemas,
+                    outputWirePlan,
                 )
                 if (!prepared) {
                     throw new Error(

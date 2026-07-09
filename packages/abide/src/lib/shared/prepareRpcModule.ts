@@ -5,6 +5,7 @@ import { skipNonCode } from './skipNonCode.ts'
 import type { ErrorJsonSchemas } from './types/ErrorJsonSchemas.ts'
 import type { HttpMethod } from './types/HttpMethod.ts'
 import type { InputCoercion } from './types/InputCoercion.ts'
+import type { OutputWirePlan } from './types/OutputWirePlan.ts'
 
 const RPC_NAMES = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'] as const
 const RPC_SET = new Set<string>(RPC_NAMES)
@@ -59,6 +60,7 @@ export function prepareRpcModule(
     coercion?: InputCoercion,
     outputSchema?: Record<string, unknown>,
     errorSchemas?: ErrorJsonSchemas,
+    outputWirePlan?: OutputWirePlan,
 ): PreparedRpcModule | undefined {
     /*
     The "no barrels" surface places each method at its own path
@@ -144,11 +146,27 @@ export function prepareRpcModule(
         rewriteForClient(url: string): string {
             const callHead = `${stripped.slice(0, site.callStart)}__abideRemoteProxy__(${JSON.stringify(method)}, ${JSON.stringify(url)}`
             const opts = argParts[1]
+            /* Build-injected CLIENT opts: `streaming` (build-derived from the elided handler body)
+               and the `outputWirePlan` (the handler's structured success fields → the client revives
+               a `Set`/`Map`/`bigint`/`Date` off the decoded response, ADR-0029). Both are stamped
+               into a fresh opts object that spreads the author's live `opts`, so endpoint policy
+               (cache/stream/schemas) still rides through verbatim. */
+            const injected: string[] = []
+            if (streaming) {
+                injected.push('streaming: true')
+            }
+            if (outputWirePlan !== undefined) {
+                injected.push(`outputWirePlan: ${JSON.stringify(outputWirePlan)}`)
+            }
             let argsText: string
-            if (opts === undefined) {
-                argsText = streaming ? ', { streaming: true }' : ''
+            if (injected.length === 0) {
+                argsText = opts === undefined ? '' : `, ${opts}`
             } else {
-                argsText = streaming ? `, { streaming: true, ...(${opts}) }` : `, ${opts}`
+                const injectedText = injected.join(', ')
+                argsText =
+                    opts === undefined
+                        ? `, { ${injectedText} }`
+                        : `, { ${injectedText}, ...(${opts}) }`
             }
             /* Keep everything from the call's closing paren onward (same slicing discipline as
                rewriteForServer) so any trailing content after the call survives. */
