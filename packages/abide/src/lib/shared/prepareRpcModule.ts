@@ -3,6 +3,7 @@ import { isReadOnlyMethod } from './isReadOnlyMethod.ts'
 import { prepareRemoteExport } from './prepareRemoteExport.ts'
 import { skipNonCode } from './skipNonCode.ts'
 import type { HttpMethod } from './types/HttpMethod.ts'
+import type { InputCoercion } from './types/InputCoercion.ts'
 
 const RPC_NAMES = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'] as const
 const RPC_SET = new Set<string>(RPC_NAMES)
@@ -54,6 +55,7 @@ export function prepareRpcModule(
     importName: string,
     streamingOverride?: boolean,
     durableOverride?: boolean,
+    coercion?: InputCoercion,
 ): PreparedRpcModule | undefined {
     /*
     The "no barrels" surface places each method at its own path
@@ -95,16 +97,28 @@ export function prepareRpcModule(
         rewriteForServer(url: string): string {
             const binding = `__abideDefineRpc__(${JSON.stringify(method)}, ${JSON.stringify(url)}, `
             const head = stripped.slice(0, site.callStart) + binding
-            if (!streaming) {
+            /* Build-injected server opts: `streaming` (from the handler body / return type) and
+               the `coerce` plan (numeric/boolean query fields → typed, ADR-0028). Both are stamped
+               into a fresh opts object that spreads the author's opts, so policy stays live. With
+               neither present the original args pass through untouched. */
+            const injected: string[] = []
+            if (streaming) {
+                injected.push('streaming: true')
+            }
+            if (coercion !== undefined) {
+                injected.push(`coerce: ${JSON.stringify(coercion)}`)
+            }
+            if (injected.length === 0) {
                 return head + stripped.slice(site.parenStart + 1)
             }
-            /* Inject the build-time streaming flag into the handler's opts, preserving any author
-               opts by spread. Reuse the top-level arg split (handler + optional opts) so a trailing
-               comma or absent opts can't produce `...()`. `head` ends after the METHOD( paren; keep
-               everything from `)` onward. */
+            /* Reuse the top-level arg split (handler + optional opts) so a trailing comma or absent
+               opts can't produce `...()`. `head` ends after the METHOD( paren; keep everything from
+               `)` onward. */
             const [handler, opts] = argParts
-            const injected = opts ? `{ streaming: true, ...(${opts}) }` : '{ streaming: true }'
-            return `${head}${handler}, ${injected}${stripped.slice(site.parenEnd)}`
+            const optsObject = opts
+                ? `{ ${injected.join(', ')}, ...(${opts}) }`
+                : `{ ${injected.join(', ')} }`
+            return `${head}${handler}, ${optsObject}${stripped.slice(site.parenEnd)}`
         },
         /*
         Client rewrite, symmetric with rewriteForServer: keep the real module, swap the

@@ -4,6 +4,7 @@ import { decodeRefJson } from '../../shared/decodeRefJson.ts'
 import { HttpError } from '../../shared/HttpError.ts'
 import { REF_JSON_HEADER } from '../../shared/REF_JSON_HEADER.ts'
 import type { HttpMethod } from '../../shared/types/HttpMethod.ts'
+import type { InputCoercion } from '../../shared/types/InputCoercion.ts'
 import { error } from '../error.ts'
 import { requestContext } from '../runtime/requestContext.ts'
 import { readBodyWithinLimit } from './readBodyWithinLimit.ts'
@@ -62,6 +63,7 @@ export async function parseArgs(
     method: HttpMethod,
     request: Request,
     maxBodySize?: number,
+    coerce?: InputCoercion,
 ): Promise<unknown> {
     /*
     Skip the URL parse entirely when the raw request URL has no query —
@@ -122,19 +124,22 @@ export async function parseArgs(
     }
 
     if (!url) {
-        /* `body` is undefined or a plain object here — return it as-is. */
+        /* `body` is undefined or a plain object here. A form-encoded body arrives stringly, so
+           coerce its numeric/boolean fields (a JSON body's values are already typed — non-strings
+           the coercion leaves untouched). */
+        if (body !== undefined && coerce !== undefined) {
+            applyCoercion(body as Record<string, unknown>, coerce)
+        }
         return body
     }
 
     /*
-    TODO(query-coercion): query params arrive as strings, so a numeric/boolean
-    field reaches schema validation as `'2'`/`'true'`. Deferred deliberately:
-    parseArgs has no access to the rpc's inputSchema (it lives in defineRpc),
-    and Standard Schema exposes no type structure to drive type-aware coercion.
-    Blind value-shape coercion is unsafe — it would corrupt legitimately
-    string-typed fields whose value looks numeric/boolean (ids, zip codes,
-    version strings like '1.0'), silently breaking GET validation. A correct fix
-    needs the schema threaded in here (or a coercing schema adapter at the rpc).
+    Query params (and form-encoded body fields) arrive as strings, so a numeric/boolean field
+    would reach schema validation as `'2'`/`'true'`. `coerce` (ADR-0028) is the build-time plan
+    of exactly which fields are numeric/boolean in the endpoint's `Args` type — resolved through
+    the warm server program, so a string-typed field that merely looks numeric (an id, a zip code,
+    `'1.0'`) is never listed and stays a string. Applied to the merged bag below; a JSON body's
+    already-typed values are non-strings the coercion skips.
     */
     const bodyObject = (body ?? {}) as Record<string, unknown>
     /* Collect the query into an object, arraying repeated keys (`?tag=a&tag=b` → `['a','b']`)
@@ -155,5 +160,52 @@ export async function parseArgs(
     if (Object.keys(merged).length === 0) {
         return undefined
     }
+    if (coerce !== undefined) {
+        applyCoercion(merged, coerce)
+    }
     return merged
+}
+
+/*
+Coerces the string query/form values in `args` to the numeric/boolean types the plan declares,
+in place. Only string values are touched — a value the merge layered in from a JSON body is
+already typed and left alone; a repeated key (`?tag=1&tag=2`) is an array whose string members
+coerce per element. A non-numeric/non-boolean string is left as the original string so the
+schema surfaces an honest validation issue rather than a silent `NaN`.
+*/
+function applyCoercion(args: Record<string, unknown>, coerce: InputCoercion): void {
+    for (const key in coerce) {
+        if (!(key in args)) {
+            continue
+        }
+        const kind = coerce[key]
+        const value = args[key]
+        if (typeof value === 'string') {
+            args[key] = coerceScalar(value, kind)
+        } else if (Array.isArray(value)) {
+            args[key] = value.map((element) =>
+                typeof element === 'string' ? coerceScalar(element, kind) : element,
+            )
+        }
+    }
+}
+
+/* One string → its number/boolean value, or the original string when it doesn't parse cleanly
+   (empty/whitespace or `NaN` for a number; anything but `true`/`false` for a boolean), so a bad
+   value fails validation with the field intact instead of coercing to `0`/`NaN`. */
+function coerceScalar(value: string, kind: 'number' | 'boolean'): unknown {
+    if (kind === 'number') {
+        if (value.trim() === '') {
+            return value
+        }
+        const parsed = Number(value)
+        return Number.isNaN(parsed) ? value : parsed
+    }
+    if (value === 'true') {
+        return true
+    }
+    if (value === 'false') {
+        return false
+    }
+    return value
 }

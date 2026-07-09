@@ -7,6 +7,7 @@ import { resolveClientFlags } from '../../shared/resolveClientFlags.ts'
 import type { CachePolicy } from '../../shared/types/CachePolicy.ts'
 import type { ClientFlags } from '../../shared/types/ClientFlags.ts'
 import type { HttpMethod } from '../../shared/types/HttpMethod.ts'
+import type { InputCoercion } from '../../shared/types/InputCoercion.ts'
 import type { RemoteFunction } from '../../shared/types/RemoteFunction.ts'
 import type { StandardSchemaV1 } from '../../shared/types/StandardSchemaV1.ts'
 import type { StreamPolicy } from '../../shared/types/StreamPolicy.ts'
@@ -75,6 +76,10 @@ export function defineRpc<Args, Return>(
            isomorphic `for await (… of fn(args))` in server code). Bundler-stamped; the router's
            wire path (.fetch) is unaffected. */
         streaming?: boolean
+        /* Numeric/boolean input fields → parseArgs coerces a string query/form value into the
+           typed value the input schema expects (ADR-0028). Bundler-stamped from the endpoint's
+           `Args` type; absent on the fail-open path (a GET field then stays a string as before). */
+        coerce?: InputCoercion
         /* Endpoint cache policy (ADR-0020) — read helpers only; readThrough's bottom layer. */
         cache?: CachePolicy<Args>
         /* Endpoint stream policy (ADR-0020) — streaming read helpers only; replay depth `n`. */
@@ -176,8 +181,7 @@ export function defineRpc<Args, Return>(
     /* Abort the controller parseArgsForFetch stashed on store.req; a no-op when none was stashed (SSR cache reads). */
     function abortRpcTimeout(): void {
         const req = requestContext.getStore()?.req as
-            | (Request & { [RPC_TIMEOUT_ABORT]?: AbortController })
-            | undefined
+            (Request & { [RPC_TIMEOUT_ABORT]?: AbortController }) | undefined
         req?.[RPC_TIMEOUT_ABORT]?.abort(new DOMException('handler timeout', 'TimeoutError'))
     }
 
@@ -205,7 +209,7 @@ export function defineRpc<Args, Return>(
         buildRequest,
         invoke,
         parseArgsForFetch: async (request) => {
-            const args = await parseArgs(method, request, opts?.maxBodySize)
+            const args = await parseArgs(method, request, opts?.maxBodySize, opts?.coerce)
             /*
             Compose this rpc's deadline into request().signal so a handler's
             fetch(ext, { signal: request().signal }) is cancelled when the

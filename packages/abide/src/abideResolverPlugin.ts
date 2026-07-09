@@ -419,11 +419,17 @@ export function abideResolverPlugin({
                 const rpcServerProgram = rpcServerForRoot(rpcServerByRoot, cwd, rpcDir)
                 const streamingOverride = rpcServerProgram?.streamingForModule(args.path)
                 const durableOverride = rpcServerProgram?.outboxForModule(args.path)
+                /* The numeric/boolean input fields the server rewrite stamps as a `coerce` plan so
+                   parseArgs turns a string query/form value into the typed value the schema
+                   expects (ADR-0028). undefined (no program / unresolvable Args / no coercible
+                   field) stamps no plan — a GET field stays a string, exactly as today. */
+                const coercion = rpcServerProgram?.inputCoercionForModule(args.path)
                 const prepared = prepareRpcModule(
                     source,
                     importName,
                     streamingOverride,
                     durableOverride,
+                    coercion,
                 )
                 if (!prepared) {
                     throw new Error(

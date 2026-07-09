@@ -2,8 +2,12 @@ import { resolve } from 'node:path'
 import ts from 'typescript'
 import { loadProjectTsConfig } from './loadProjectTsConfig.ts'
 import type { HttpMethod } from './types/HttpMethod.ts'
+import type { InputCoercion } from './types/InputCoercion.ts'
 
 const RPC_HELPERS = new Set<string>(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'])
+const NUMBER_FLAGS = ts.TypeFlags.Number | ts.TypeFlags.NumberLiteral
+const BOOLEAN_FLAGS = ts.TypeFlags.Boolean | ts.TypeFlags.BooleanLiteral
+const NULLISH_FLAGS = ts.TypeFlags.Undefined | ts.TypeFlags.Null | ts.TypeFlags.Void
 
 export type RpcServerProgram = {
     /*
@@ -33,6 +37,16 @@ export type RpcServerProgram = {
     fails open to `detectDurable` — which rejects a non-literal loudly.
     */
     outboxForModule(modulePath: string): boolean | undefined
+    /*
+    The input-args coercion plan (ADR-0028): the endpoint's wire `Args` type read off the
+    exported RemoteFunction's call signature, projected to the numeric/boolean fields parseArgs
+    must coerce a string query/form value into. Reads `InferInput` (the wire shape the schema
+    validates), so a self-coercing schema whose input is loose is correctly left uncoerced.
+    undefined when the export call or its Args type can't be resolved, or no field is
+    numeric/boolean — the caller then stamps no plan, so a GET field stays a string exactly as
+    today.
+    */
+    inputCoercionForModule(modulePath: string): InputCoercion | undefined
 }
 
 /*
@@ -55,7 +69,10 @@ export function createRpcServerProgram(cwd: string, rpcDir: string): RpcServerPr
     /* Every query fails open to its char-scan/regex counterpart: an unresolved module or any
        checker throw yields undefined so a type-resolution hiccup never breaks a build (ADR-0025
        D3). */
-    const query = <T>(modulePath: string, read: (call: ResolvedRpcCall) => T | undefined): T | undefined => {
+    const query = <T>(
+        modulePath: string,
+        read: (call: ResolvedRpcCall) => T | undefined,
+    ): T | undefined => {
         try {
             const sourceFile = program.getSourceFile(modulePath)
             if (sourceFile === undefined) {
@@ -79,6 +96,9 @@ export function createRpcServerProgram(cwd: string, rpcDir: string): RpcServerPr
         },
         outboxForModule(modulePath) {
             return query(modulePath, (call) => outboxLiteral(checker, call.node))
+        },
+        inputCoercionForModule(modulePath) {
+            return query(modulePath, (call) => inputCoercionPlan(checker, call.node))
         },
     }
 }
@@ -247,4 +267,105 @@ function typeIsAsyncIterable(checker: ts.TypeChecker, type: ts.Type): boolean {
         }
     }
     return false
+}
+
+/*
+The coercion plan for an rpc export's input args (ADR-0028). The export's type is its
+RemoteFunction; its call signature's first parameter is the wire `Args` type (`InferInput` of
+the input schema, or the handler's annotated param when schemaless). Each numeric/boolean field
+of that Args object becomes a plan entry; every other field is omitted. undefined when the
+RemoteFunction has no call signature, the Args aren't a single object type, or no field is
+coercible — the caller then ships no plan (today's string-through behavior).
+*/
+function inputCoercionPlan(
+    checker: ts.TypeChecker,
+    call: ts.CallExpression,
+): InputCoercion | undefined {
+    const signature = checker.getTypeAtLocation(call).getCallSignatures()[0]
+    if (signature === undefined) {
+        return undefined
+    }
+    const parameter = signature.getParameters()[0]
+    if (parameter === undefined) {
+        return undefined
+    }
+    const argsType = argsBagType(checker.getTypeOfSymbolAtLocation(parameter, call))
+    if (argsType === undefined) {
+        return undefined
+    }
+    const plan: InputCoercion = {}
+    for (const property of argsType.getProperties()) {
+        const kind = coercionKind(checker, checker.getTypeOfSymbolAtLocation(property, call))
+        if (kind !== undefined) {
+            plan[property.getName()] = kind
+        }
+    }
+    /* An empty plan (no coercible field) ships nothing, so no opts are injected. */
+    return Object.keys(plan).length === 0 ? undefined : plan
+}
+
+/*
+The object `Args` constituent of a RemoteCallable parameter. Every rpc call signature types its
+first parameter `Args | FormData` (the multipart upload escape hatch), so the FormData and any
+nullish members are dropped and the lone remaining type returned. undefined when the arg is not
+a single object type — a no-input rpc (`Args = undefined`) or a FormData-only body — so no plan
+is produced.
+*/
+function argsBagType(parameterType: ts.Type): ts.Type | undefined {
+    if (!parameterType.isUnion()) {
+        return parameterType
+    }
+    const kept = parameterType.types.filter(
+        (member) => member.getSymbol()?.name !== 'FormData' && (member.flags & NULLISH_FLAGS) === 0,
+    )
+    return kept.length === 1 ? kept[0] : undefined
+}
+
+/*
+A field's coercion kind, or undefined when it must not be coerced. Unwraps `T | undefined` (an
+optional field) and a `T[]` (a repeated query key arrays into a list) to the target type, then
+classifies: a pure `number` (or numeric-literal union) → 'number', a pure `boolean` → 'boolean',
+anything else — a string, a `number | string` union, an object, a Date — → undefined, so it
+stays a string and the schema decides.
+*/
+function coercionKind(checker: ts.TypeChecker, type: ts.Type): 'number' | 'boolean' | undefined {
+    const target = arrayElement(checker, unwrapOptional(type)) ?? type
+    if (isKind(target, NUMBER_FLAGS)) {
+        return 'number'
+    }
+    if (isKind(target, BOOLEAN_FLAGS)) {
+        return 'boolean'
+    }
+    return undefined
+}
+
+/* Drops the nullish members of a `T | undefined` optional; returns the lone survivor, else the
+   type unchanged (a genuine multi-member union stays as-is for isKind to reject). */
+function unwrapOptional(type: ts.Type): ts.Type {
+    if (!type.isUnion()) {
+        return type
+    }
+    const kept = type.types.filter((member) => (member.flags & NULLISH_FLAGS) === 0)
+    return kept.length === 1 ? kept[0] : type
+}
+
+/* The element type of a `T[]`/`readonly T[]`, so a repeated query key (`?tag=1&tag=2`) coerces
+   per element; undefined for a non-array (tuples included — their element type is heterogeneous). */
+function arrayElement(checker: ts.TypeChecker, type: ts.Type): ts.Type | undefined {
+    const name = type.getSymbol()?.name
+    if (name === 'Array' || name === 'ReadonlyArray') {
+        return checker.getTypeArguments(type as ts.TypeReference)[0]
+    }
+    return undefined
+}
+
+/* True when every meaningful (non-nullish) member of the type matches `mask` — so `number`,
+   `number | undefined`, and a `1 | 2` literal union all read as number; a `number | string`
+   union does not. A bare `boolean` is a `true | false` union, handled by the recursion. */
+function isKind(type: ts.Type, mask: ts.TypeFlags): boolean {
+    if (type.isUnion()) {
+        const meaningful = type.types.filter((member) => (member.flags & NULLISH_FLAGS) === 0)
+        return meaningful.length > 0 && meaningful.every((member) => isKind(member, mask))
+    }
+    return (type.flags & mask) !== 0
 }

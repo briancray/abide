@@ -111,6 +111,52 @@ describe('rpc outbox resolution through the warm server program (ADR-0025)', () 
     })
 })
 
+describe('rpc input coercion plan through the warm server program (ADR-0028)', () => {
+    const program = createRpcServerProgram(SERVER_CWD, SERVER_RPC_DIR)
+
+    test('numeric/boolean fields are planned; string and unknown fields are left out', () => {
+        /* The Args bag is `{ id: number; active: boolean; name: string; tags: number[]; page?: number }`.
+           Only the numeric/boolean fields (scalar, array element, and optional) are planned; `name`
+           (a string) is never coerced. */
+        expect(program.inputCoercionForModule(serverModule('coerceArgs'))).toEqual({
+            id: 'number',
+            active: 'boolean',
+            tags: 'number',
+            page: 'number',
+        })
+    })
+
+    test('an unknown module path fails open to undefined (no plan stamped)', () => {
+        expect(
+            program.inputCoercionForModule(resolve(SERVER_RPC_DIR, 'missing.ts')),
+        ).toBeUndefined()
+    })
+
+    test('the plan is stamped into the server rewrite as a `coerce` opt', () => {
+        const source = readFileSync(serverModule('coerceArgs'), 'utf8')
+        const plan = program.inputCoercionForModule(serverModule('coerceArgs'))
+        const rewritten = prepareRpcModule(
+            source,
+            '@abide/abide',
+            undefined,
+            undefined,
+            plan,
+        )?.rewriteForServer('/rpc/coerceArgs')
+        expect(rewritten).toContain('coerce: {')
+        expect(rewritten).toContain('"active":"boolean"')
+        /* No author opts, so the injected object is the whole second argument. */
+        expect(rewritten).toContain('__abideDefineRpc__("GET", "/rpc/coerceArgs", ')
+    })
+
+    test('no plan leaves the server rewrite free of a coerce opt (fail-open)', () => {
+        const source = readFileSync(serverModule('coerceArgs'), 'utf8')
+        const rewritten = prepareRpcModule(source, '@abide/abide')?.rewriteForServer(
+            '/rpc/coerceArgs',
+        )
+        expect(rewritten).not.toContain('coerce:')
+    })
+})
+
 /* Fail-open: with NO warm program (the override arguments absent), prepareRpcModule produces
    byte-identical output to today — streaming/durable verdicts come from the char-scan and the
    emitted client/server rewrites are unchanged. */
