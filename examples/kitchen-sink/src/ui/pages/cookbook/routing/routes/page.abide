@@ -5,13 +5,17 @@ import Recipe from '$ui/Recipe.abide'
 const LIVE = '/pages'
 </script>
 
+<div class="flex flex-col gap-8">
+<div class="flex flex-col gap-2">
 <h1 class="text-3xl font-bold">routes & params</h1>
-<p class="mt-2 text-slate-600">
+<p class="text-slate-600">
     Every folder under <code class="font-mono">src/ui/pages/</code> with a
     <code class="font-mono">page.abide</code> is a route. Params come off the reactive
     <code class="font-mono">page</code> proxy; <code class="font-mono">url()</code> builds typed,
     base-correct links.
 </p>
+</div>
+<div class="flex flex-col gap-4">
 
 <Recipe task="Add a page route" live={LIVE} code={`src/ui/pages/about/page.abide      →  /about
 src/ui/pages/settings/page.abide   →  /settings`} note={'The folder path is the route; no route table, no registration. `src/ui/pages/page.abide` is the index at `/`.'} />
@@ -87,3 +91,6 @@ const repo = state.computed(() => page.params.repo)`} note={'Every dynamic segme
     live={LIVE}
     code={`<a href={url('https://bun.sh', { utm: 'abide' })}>Bun</a>`}
     note={'An absolute URL passes through untouched except for appended query args — handy for adding tracking params to outbound links.'} />
+
+</div>
+</div>

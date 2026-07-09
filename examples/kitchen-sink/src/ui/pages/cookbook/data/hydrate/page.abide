@@ -6,11 +6,15 @@ const LIVE = '/reactive-state'
 const PROBES = '/probes'
 </script>
 
+<div class="flex flex-col gap-8">
+<div class="flex flex-col gap-2">
 <h1 class="text-3xl font-bold">hydrate & fetch patterns</h1>
-<p class="mt-2 text-slate-600">
+<p class="text-slate-600">
     Loading data on the client — on navigation, on demand, in parallel — and the
     stale-while-revalidate and pagination shapes, including where abide leaves the last mile to you.
 </p>
+</div>
+<div class="flex flex-col gap-4">
 
 <Recipe task="Fetch on navigation" live={LIVE} code={`const { params } = page
 const user = state.computed(() => getUser({ id: params.id }))`} note={'Read `page.params` in the call args and the read refetches when the route param changes on SPA navigation — the client router keeps the layout mounted, the cell re-derives.'} />
@@ -104,3 +108,5 @@ watch(() => {
     return () => window.removeEventListener('focus', onFocus)
 })`}
     note={"There's no refetch-on-focus option. Wire the `focus` (or `visibilitychange`) event in a watch thunk and refresh the tags you want revalidated when the user comes back."} />
+</div>
+</div>

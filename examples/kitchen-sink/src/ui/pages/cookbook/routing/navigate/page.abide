@@ -6,13 +6,17 @@ const LIVE = '/pages'
 const REDIR = '/rpc/respond'
 </script>
 
+<div class="flex flex-col gap-8">
+<div class="flex flex-col gap-2">
 <h1 class="text-3xl font-bold">navigate, url & redirects</h1>
-<p class="mt-2 text-slate-600">
+<p class="text-slate-600">
     <code class="font-mono">navigate()</code> moves the client router;
     <code class="font-mono">url()</code> builds the href;
     <code class="font-mono">redirect()</code> sends one from the server. All typed off the generated
     route map.
 </p>
+</div>
+<div class="flex flex-col gap-4">
 
 <Recipe task="Navigate programmatically" live={LIVE} code={`import { navigate } from '@abide/abide/ui/navigate'
 
@@ -110,3 +114,6 @@ watch(() => onMenu('open-settings', () => void navigate('/settings')))`}
     code={`// no transition hook — cross-fade via CSS on the page root
 <main class="route-fade">{children()}</main>`}
     note={"There's no route-transition API (enter/leave hooks tied to navigation). CSS can fade a page on mount; a coordinated leave animation across a route change has no first-class hook yet."} />
+
+</div>
+</div>

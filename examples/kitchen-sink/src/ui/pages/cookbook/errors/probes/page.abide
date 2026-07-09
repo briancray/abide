@@ -6,8 +6,10 @@ const LIVE = '/probes'
 const OBS = '/observability'
 </script>
 
+<div class="flex flex-col gap-8">
+<div class="flex flex-col gap-2">
 <h1 class="text-3xl font-bold">pending & refreshing</h1>
-<p class="mt-2 text-slate-600">
+<p class="text-slate-600">
     Standalone reactive probes spanning smart calls and streams.
     <code class="font-mono">pending</code> = no value yet;
     <code class="font-mono">refreshing</code> = value held, a fresher source in flight. They report,
@@ -17,6 +19,8 @@ const OBS = '/observability'
     standalone modules for a bare all-activity probe or a
     <code class="font-mono">{'{ tags }'}</code> group.
 </p>
+</div>
+<div class="flex flex-col gap-4">
 
 <Recipe
     task="Show that anything is loading"
@@ -118,3 +122,5 @@ const status = await health()   // typed, augmented from the app's health() hook
     {online() ? 'Save' : 'Offline'}
 </button>`}
     note={'Gate a network action on `online()`. For work that should survive going offline and send later, declare the rpc `outbox: true` instead of blocking.'} />
+</div>
+</div>

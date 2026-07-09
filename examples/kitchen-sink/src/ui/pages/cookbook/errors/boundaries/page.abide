@@ -6,13 +6,17 @@ const LIVE = '/pages/boundary?explode=1'
 const CTRL = '/templating/control-flow'
 </script>
 
+<div class="flex flex-col gap-8">
+<div class="flex flex-col gap-2">
 <h1 class="text-3xl font-bold">failure boundaries</h1>
-<p class="mt-2 text-slate-600">
+<p class="text-slate-600">
     Contain a failure to a subtree instead of blanking the page.
     <code class="font-mono">{'{#try}'}</code> catches a synchronous render throw;
     <code class="font-mono">{'{:catch}'}</code> on <code class="font-mono">{'{#await}'}</code> catches
     a rejected promise.
 </p>
+</div>
+<div class="flex flex-col gap-4">
 
 <Recipe
     task="Add a synchronous error boundary"
@@ -152,3 +156,5 @@ watch(() => {
     window.addEventListener('unhandledrejection', (e) => sendToSentry(e.reason))
 })`}
     note={"There's no built-in Sentry/error-tracking integration. Wire `window` error events in a root-layout watch, and use `log.error` + `trace()` server-side; forward both to your provider yourself."} />
+</div>
+</div>

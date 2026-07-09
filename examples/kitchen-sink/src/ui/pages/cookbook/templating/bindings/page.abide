@@ -5,14 +5,18 @@ import Recipe from '$ui/Recipe.abide'
 const LIVE = '/templating/bindings'
 </script>
 
+<div class="flex flex-col gap-8">
+<div class="flex flex-col gap-2">
 <h1 class="text-3xl font-bold">bindings & interpolation</h1>
-<p class="mt-2 text-slate-600">
+<p class="text-slate-600">
     Reactive attributes and two-way binds. <code class="font-mono">{'{expr}'}</code> reads a cell
     into text or an attribute; <code class="font-mono">bind:</code> is two-way;
     <code class="font-mono">class:</code> / <code class="font-mono">style:</code> /
     <code class="font-mono">attach</code> / <code class="font-mono">{'{...spread}'}</code> are the
     directives.
 </p>
+</div>
+<div class="flex flex-col gap-4">
 
 <Recipe
     task="Interpolate an expression in text"
@@ -143,3 +147,6 @@ const LIVE = '/templating/bindings'
 
 <input attach={focus} />`}
     note={'`attach={fn}` runs `fn(element)` at mount (client-only) and may return a teardown. Use it for focus, measuring, or wiring a non-abide library.'} />
+
+</div>
+</div>

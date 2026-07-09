@@ -4,13 +4,17 @@ import Recipe from '$ui/Recipe.abide'
 /* Cookbook · files & media · uploads. */
 </script>
 
+<div class="flex flex-col gap-8">
+<div class="flex flex-col gap-2">
 <h1 class="text-3xl font-bold">uploads</h1>
-<p class="mt-2 text-slate-600">
+<p class="text-slate-600">
     A body rpc accepts a <code class="font-mono">FormData</code> in place of typed args — text
     fields validate against <code class="font-mono">inputSchema</code>,
     <code class="font-mono">File</code> parts against <code class="font-mono">filesSchema</code>,
     merged into the handler's args.
 </p>
+</div>
+<div class="flex flex-col gap-4">
 
 <Recipe task="Accept a file upload" code={`const inputSchema = z.object({ title: z.string() })
 const filesSchema = z.object({ attachments: z.array(z.instanceof(File)).min(1) })
@@ -62,3 +66,5 @@ export const signUpload = POST(async ({ key }) => {
 })
 // client then PUTs the file straight to that URL`}
     note={"There's no built-in direct-to-S3 / signed-URL upload flow. Mint a presigned URL in an rpc with your storage SDK and have the client PUT to it — abide handles the rpc, not the storage integration."} />
+</div>
+</div>

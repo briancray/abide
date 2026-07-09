@@ -5,12 +5,16 @@ import Recipe from '$ui/Recipe.abide'
 const LIVE = '/rpc/errors'
 </script>
 
+<div class="flex flex-col gap-8">
+<div class="flex flex-col gap-2">
 <h1 class="text-3xl font-bold">validation</h1>
-<p class="mt-2 text-slate-600">
+<p class="text-slate-600">
     An <code class="font-mono">inputSchema</code> validates args before the handler runs and types
     them for you. A failure is a <code class="font-mono">422</code> the client narrows as
     <code class="font-mono">kind: 'validation'</code>; declared errors add typed domain failures.
 </p>
+</div>
+<div class="flex flex-col gap-4">
 
 <Recipe
     task="Validate args with a schema"
@@ -129,3 +133,5 @@ if (!found) throw new HttpError(404, 'not found')`}
     priority: z.number().default(3),
 })`}
     note={'Schema constraints (`min`, `default`, `optional`) are enforced server-side and reflected in the generated OpenAPI/CLI — one declaration, every surface.'} />
+</div>
+</div>

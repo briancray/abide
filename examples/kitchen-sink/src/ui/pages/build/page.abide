@@ -7,18 +7,21 @@ import CodeBlock from '$ui/CodeBlock.abide'
    lives on /reference. */
 </script>
 
-<h1 class="text-3xl font-bold">Build · test · deploy</h1>
-<p class="mt-2 text-slate-600">
-    From <code class="font-mono">abide dev</code> to a deployed binary. The commands, the
+<div class="flex flex-col gap-8">
+    <div class="flex flex-col gap-2">
+        <h1 class="text-3xl font-bold">Build · test · deploy</h1>
+        <p class="text-slate-600">
+            From <code class="font-mono">abide dev</code> to a deployed binary. The commands, the
     <code class="font-mono">env()</code> / <code class="font-mono">app.ts</code> configuration
     seams, an in-process test harness that boots the real app, and a Dockerfile that ships a single
     executable — no Bun, no <code class="font-mono">node_modules</code>.
-</p>
+        </p>
+    </div>
 
 <!-- Commands -->
-<section class="mt-6">
+<section class="flex flex-col gap-2">
     <h2 class="text-sm font-semibold">Commands</h2>
-    <div class="mt-2 overflow-x-auto rounded-lg border border-slate-200 bg-white">
+    <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
         <table class="w-full text-sm">
             <thead class="border-b border-slate-200 bg-slate-50 text-left">
                 <tr>
@@ -77,13 +80,16 @@ import CodeBlock from '$ui/CodeBlock.abide'
 </section>
 
 <!-- Configuration -->
-<section class="mt-6 space-y-3 rounded-lg border border-slate-200 bg-white p-5">
+<section class="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5">
     <h2 class="text-sm font-semibold">Configuration</h2>
+
+    <h3 class="text-xs font-semibold text-slate-500">
+        Environment — <code class="font-mono">env()</code>
+    </h3>
     <p class="text-sm text-slate-600">
         <code class="font-mono">env()</code> validates the process environment against a Standard
         Schema at module load, so a bad deploy fails the boot loudly rather than surfacing
-        <code class="font-mono">undefined</code> inside a handler. An optional
-        <code class="font-mono">src/app.ts</code> exports boot hooks.
+        <code class="font-mono">undefined</code> inside a handler.
     </p>
     <CodeBlock title="src/server/config.ts" code={`import { env } from '@abide/abide/server/env'
 import { z } from 'zod'
@@ -92,6 +98,13 @@ export const config = env(z.object({
     DATABASE_URL: z.string().url(),
     PORT: z.coerce.number().default(3000),
 }))`} />
+
+    <h3 class="text-xs font-semibold text-slate-500">
+        Boot hooks — <code class="font-mono">src/app.ts</code>
+    </h3>
+    <p class="text-sm text-slate-600">
+        An optional <code class="font-mono">src/app.ts</code> exports lifecycle + request hooks.
+    </p>
     <CodeBlock title="src/app.ts — optional boot hooks" code={`export async function init() { /* boot + return cleanup */ }
 export async function handle(request, next) { /* request middleware, the auth seam */ return next(request) }
 export function handleError(error, request) { /* map a throw to a Response */ }
@@ -102,7 +115,7 @@ export function health() { return { db: 'ok' } }          // merged into /__abid
 <!-- Testing -->
 <section
     id="testing"
-    class="scroll-mt-4 mt-6 space-y-3 rounded-lg border border-slate-200 bg-white p-5">
+    class="scroll-mt-4 flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5">
     <h2 class="text-sm font-semibold">Testing</h2>
     <p class="text-sm text-slate-600">
         <code class="font-mono">createTestApp()</code> boots the real app in-process on an ephemeral
@@ -122,7 +135,7 @@ const product = await app.rpc.searchProducts({ q: 'shoes' })
 <!-- Deploy -->
 <section
     id="deploy"
-    class="scroll-mt-4 mt-6 space-y-3 rounded-lg border border-slate-200 bg-white p-5">
+    class="scroll-mt-4 flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5">
     <h2 class="text-sm font-semibold">Deploy</h2>
     <p class="text-sm text-slate-600">
         abide is single-process: the <code class="font-mono">global</code> cache, socket
@@ -147,3 +160,4 @@ CMD ["server"]`} />
         full env-var table lives on <a class="underline" href="/reference">reference</a>.
     </p>
 </section>
+</div>

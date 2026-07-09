@@ -5,12 +5,16 @@ import Recipe from '$ui/Recipe.abide'
 const LIVE = '/outbox'
 </script>
 
+<div class="flex flex-col gap-8">
+<div class="flex flex-col gap-2">
 <h1 class="text-3xl font-bold">the outbox</h1>
-<p class="mt-2 text-slate-600">
+<p class="text-slate-600">
     Local-first durability is declared on the rpc. A mutating rpc marked
     <code class="font-mono">{'{ outbox: true }'}</code> queues every call durably — persisted, so it survives
     a reload — and drains on reconnect.
 </p>
+</div>
+<div class="flex flex-col gap-4">
 
 <Recipe task="Make a write durable" live={LIVE} code={`export const saveMessage = POST(handler, { schemas: { input: inputSchema }, outbox: true })`} note={"`outbox: true` on a mutating rpc makes each call durable. It's a per-rpc declaration, not a wrapper at the call site — `GET(fn, { outbox })` is a compile error."} />
 
@@ -101,3 +105,6 @@ await saveMessage({ id, text })   // parked writes are restored on next load`}
     code={`export const track = POST(handler, { schemas: { input: inputSchema }, outbox: true })   // durable
 export const ping = POST(handler, { schemas: { input: inputSchema } })                    // no queue — fails fast`}
     note={'Only opt writes into the outbox when replay-later is the right behaviour. A non-durable rpc simply rejects when unreachable — right for actions that are meaningless once stale.'} />
+
+</div>
+</div>

@@ -23,18 +23,21 @@ async function loadProduct(productId: string) {
 }
 </script>
 
-<nav class="mb-2 text-sm text-slate-500">
-    <a href="/pages" class="hover:text-slate-900">Pages</a>
-    <span class="mx-2">/</span>
-    <span>Product {id}</span>
-</nav>
-<h1 class="text-3xl font-bold">Product {id}</h1>
-<p class="mt-2 text-slate-600">
-    Dynamic page segment <code class="font-mono">[id]</code> from the folder name. The cache key
+<div class="flex flex-col gap-8">
+    <div class="flex flex-col gap-2">
+        <nav class="text-sm text-slate-500">
+            <a href="/pages" class="hover:text-slate-900">Pages</a>
+            <span class="mx-2">/</span>
+            <span>Product {id}</span>
+        </nav>
+        <h1 class="text-3xl font-bold">Product {id}</h1>
+        <p class="text-slate-600">
+            Dynamic page segment <code class="font-mono">[id]</code> from the folder name. The cache key
     folds in the call args, so each id gets its own entry; the await block re-runs on nav.
-</p>
+        </p>
+    </div>
 
-<section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
+<section class="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5">
     {#await loadProduct(id)}
     {:then product}
         <div>
@@ -45,7 +48,7 @@ async function loadProduct(productId: string) {
             {/if}
         </div>
     {/await}
-    <div class="mt-4 flex flex-wrap gap-2 text-sm">
+    <div class="flex flex-wrap gap-2 text-sm">
         {#for candidate of ['1', '2', '3'] by candidate}
             <button
                 type="button"
@@ -66,3 +69,4 @@ const id = state.computed(() => page.params.id)    // typed via src/.abide/route
     ...{product.name}...
 {/await}`} />
 </section>
+</div>

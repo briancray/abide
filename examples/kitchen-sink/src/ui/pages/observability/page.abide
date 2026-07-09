@@ -5,6 +5,7 @@ import { log } from '@abide/abide/shared/log'
 import { trace } from '@abide/abide/shared/trace'
 import { getRates } from '$server/rpc/getRates.ts'
 import CodeBlock from '$ui/CodeBlock.abide'
+import Demo from '$ui/Demo.abide'
 
 /* Connectivity reads are reactive: the computed re-runs on online/offline events
    (online) or when a poll lands (health). Both ran during SSR, so the first value
@@ -30,8 +31,10 @@ async function runTraced() {
 }
 </script>
 
+<div class="flex flex-col gap-8">
+<div class="flex flex-col gap-2">
 <h1 class="text-3xl font-bold">observability</h1>
-<p class="mt-2 text-slate-600">
+<p class="text-slate-600">
     Connectivity, logging, and tracing — one surface on both sides.
     <code class="font-mono">online()</code> / <code class="font-mono">health()</code> report
     reachability; <code class="font-mono">log</code> and <code class="font-mono">trace()</code>
@@ -39,11 +42,79 @@ async function runTraced() {
     <code class="font-mono">reachable()</code> is the server-side reachability probe
     <code class="font-mono">health()</code> builds on.
 </p>
+</div>
 
-<section class="mt-6 grid gap-4 sm:grid-cols-2">
-    <div class="rounded-lg border border-slate-200 bg-white p-5">
+<section class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+    <table class="w-full text-sm">
+        <thead class="border-b border-slate-200 bg-slate-50 text-left">
+            <tr>
+                <th class="px-4 py-2 font-mono font-medium">callable</th>
+                <th class="px-4 py-2 font-medium">is</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+            <tr>
+                <td class="px-4 py-2 font-mono">online()</td>
+                <td class="px-4 py-2 text-slate-600">
+                    reactive connectivity — browser online/offline, always true during SSR
+                </td>
+            </tr>
+            <tr>
+                <td class="px-4 py-2 font-mono">await reachable(host?)</td>
+                <td class="px-4 py-2 text-slate-600">
+                    outbound reachability probe (both sides); warm after the first check, tuned by
+                    <code class="font-mono">ABIDE_REACHABLE_TTL/TIMEOUT</code>
+                </td>
+            </tr>
+            <tr>
+                <td class="px-4 py-2 font-mono">health()</td>
+                <td class="px-4 py-2 text-slate-600">
+                    liveness + identity JSON (framework/app version + the app
+                    <code class="font-mono">health</code> hook)
+                </td>
+            </tr>
+            <tr>
+                <td class="px-4 py-2 font-mono">log(…) · .warn · .error · .trace</td>
+                <td class="px-4 py-2 text-slate-600">
+                    the always-on logger — each record carries request-scope context (trace id,
+                    +elapsed, method+path)
+                </td>
+            </tr>
+            <tr>
+                <td class="px-4 py-2 font-mono">log.channel(name)</td>
+                <td class="px-4 py-2 text-slate-600">
+                    the same logger on a DEBUG-gated diagnostic channel
+                </td>
+            </tr>
+            <tr>
+                <td class="px-4 py-2 font-mono">trace()</td>
+                <td class="px-4 py-2 text-slate-600">
+                    elapsed ms + W3C <code class="font-mono">traceparent</code> for the current
+                    request
+                </td>
+            </tr>
+        </tbody>
+    </table>
+</section>
+
+<section class="rounded-lg border border-slate-200 bg-white p-5">
+    <div class="flex flex-col gap-1">
+    <h2 class="text-sm font-semibold"><code class="font-mono">reachable(host?)</code></h2>
+    <p class="text-xs text-slate-500">
+        The server-side reachability probe <code class="font-mono">health()</code> builds on — same
+        callable on both sides. The first call probes (HEAD) and starts a TTL background poll; later
+        calls answer instantly off the warm value.
+    </p>
+    </div>
+    <CodeBlock code={`import { reachable } from '@abide/abide/shared/reachable'
+
+const up = await reachable('https://api.example')   // HEAD probe, then warm for ABIDE_REACHABLE_TTL
+const backendUp = await reachable()                  // the app's own backend (constant true on loopback)`} />
+</section>
+
+<section class="grid gap-4 sm:grid-cols-2">
+    <Demo title="online()" code={`const connected = state.computed(() => online())   // browser online/offline events`}>
         <div class="flex items-center justify-between">
-            <h2 class="text-sm font-semibold"><code class="font-mono">online()</code></h2>
             <span
                 class="rounded-full px-2 py-0.5 text-xs"
                 class:bg-emerald-100={connected}
@@ -53,91 +124,91 @@ async function runTraced() {
                 >{connected ? 'online' : 'offline'}</span
             >
         </div>
-        <p class="mt-1 text-xs text-slate-500">
+        <p class="text-xs text-slate-500">
             Rides the browser's <code class="font-mono">online</code>/<code class="font-mono"
                 >offline</code
             >
             events. It can false-positive behind a captive portal — which is what
             <code class="font-mono">health()</code> verifies.
         </p>
-    </div>
-    <div id="health" class="scroll-mt-4 rounded-lg border border-slate-200 bg-white p-5">
-        <div class="flex items-center justify-between">
-            <h2 class="text-sm font-semibold"><code class="font-mono">health()</code></h2>
-            <span
-                class="rounded-full px-2 py-0.5 text-xs"
-                class:bg-emerald-100={backend.reachable}
-                class:text-emerald-700={backend.reachable}
-                class:bg-red-100={!backend.reachable}
-                class:text-red-700={!backend.reachable}>
-                {backend.reachable ? 'reachable' : 'unreachable'}
-            </span>
-        </div>
-        <p class="mt-1 text-xs text-slate-500">
-            The full <code class="font-mono">/__abide/health</code> payload plus
-            <code class="font-mono">reachable</code>. Read during SSR, then polled every 10s while a
-            scope reads it; the <code class="font-mono">uptimeSeconds</code> field comes from the
-            <code class="font-mono">health</code> hook in <code class="font-mono">src/app.ts</code>.
-        </p>
-        <pre
-            class="mt-3 overflow-x-auto rounded-md bg-slate-900 p-3 text-xs leading-relaxed text-slate-100"><code>{JSON.stringify(backend, undefined, 2)}</code></pre>
+    </Demo>
+    <div id="health" class="scroll-mt-4">
+        <Demo title="health()" code={`const connected = state.computed(() => online())   // browser online/offline events
+const backend = state.computed(() => health())      // { reachable, ...AppHealth }, polled every 10s`}>
+            <div class="flex items-center justify-between">
+                <span
+                    class="rounded-full px-2 py-0.5 text-xs"
+                    class:bg-emerald-100={backend.reachable}
+                    class:text-emerald-700={backend.reachable}
+                    class:bg-red-100={!backend.reachable}
+                    class:text-red-700={!backend.reachable}>
+                    {backend.reachable ? 'reachable' : 'unreachable'}
+                </span>
+            </div>
+            <p class="text-xs text-slate-500">
+                The full <code class="font-mono">/__abide/health</code> payload plus
+                <code class="font-mono">reachable</code>. Read during SSR, then polled every 10s
+                while a scope reads it; the <code class="font-mono">uptimeSeconds</code> field comes
+                from the <code class="font-mono">health</code> hook in
+                <code class="font-mono">src/app.ts</code>.
+            </p>
+            <pre
+                class="overflow-x-auto rounded-md border border-slate-200 bg-slate-50 p-3 text-xs leading-relaxed text-slate-800"><code>{JSON.stringify(backend, undefined, 2)}</code></pre>
 
-        <CodeBlock code={`const connected = state.computed(() => online())   // browser online/offline events
-const backend = state.computed(() => health())      // { reachable, ...AppHealth }, polled every 10s`} />
-
-        <CodeBlock title="the wire — public, app fields included" lang="sh" code={`curl -s http://localhost:3000/__abide/health
+            <CodeBlock
+                title="the wire — public, app fields included"
+                lang="sh"
+                code={`curl -s http://localhost:3000/__abide/health
 # { "uptimeSeconds": 42, "abide": "<version>", "name": "kitchen-sink", "version": "0.0.0" }`} />
+        </Demo>
     </div>
 </section>
 
-<section id="logging" class="scroll-mt-4 mt-6 rounded-lg border border-slate-200 bg-white p-5">
-    <h2 class="text-sm font-semibold">log — open the browser console</h2>
-    <div class="mt-3 flex flex-wrap gap-2 text-sm">
-        <button
-            type="button"
-            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
-            onclick={() => log('button clicked', { at: Date.now() })}>
-            log('button clicked') — always on
-        </button>
-        <button
-            type="button"
-            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
-            onclick={() => demoChannel('a gated diagnostic record')}>
-            log.channel('kitchen-sink:demo')(…)
-        </button>
-        <button
-            type="button"
-            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
-            onclick={armChannel}>
-            {channelArmed ? 'abide-debug set ✓' : "arm: abide-debug = 'kitchen-sink:demo'"}
-        </button>
-        <button
-            type="button"
-            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
-            onclick={runTraced}>
-            log.trace('fetch rates', …)
-        </button>
-    </div>
-    <p class="mt-3 font-mono text-xs text-slate-700">{traced}</p>
-    <p class="mt-2 text-xs text-slate-500">
-        The channel button is silent until armed — <code class="font-mono">abide-debug</code> is
-        read per call, so toggling it takes effect without a reload. Server lines render as TSV, or
-        one JSON object per line under <code class="font-mono">ABIDE_LOG_FORMAT=json</code>.
-    </p>
-
-    <CodeBlock code={`log('button clicked', { at: Date.now() })             // always-on app channel
+<div id="logging" class="scroll-mt-4">
+    <Demo title="log — open the browser console" code={`log('button clicked', { at: Date.now() })             // always-on app channel
 log.channel('kitchen-sink:demo')('gated record')      // DEBUG / abide-debug gated
-await log.trace('fetch rates', () => getRates({ base: 'USD' }))  // timed, rethrows`} />
-</section>
+await log.trace('fetch rates', () => getRates({ base: 'USD' }))  // timed, rethrows`}>
+        <div class="flex flex-wrap gap-2 text-sm">
+            <button
+                type="button"
+                class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+                onclick={() => log('button clicked', { at: Date.now() })}>
+                log('button clicked') — always on
+            </button>
+            <button
+                type="button"
+                class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+                onclick={() => demoChannel('a gated diagnostic record')}>
+                log.channel('kitchen-sink:demo')(…)
+            </button>
+            <button
+                type="button"
+                class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+                onclick={armChannel}>
+                {channelArmed ? 'abide-debug set ✓' : "arm: abide-debug = 'kitchen-sink:demo'"}
+            </button>
+            <button
+                type="button"
+                class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+                onclick={runTraced}>
+                log.trace('fetch rates', …)
+            </button>
+        </div>
+        <p class="font-mono text-xs text-slate-700">{traced}</p>
+        <p class="text-xs text-slate-500">
+            The channel button is silent until armed — <code class="font-mono">abide-debug</code> is
+            read per call, so toggling it takes effect without a reload. Server lines render as TSV,
+            or one JSON object per line under <code class="font-mono">ABIDE_LOG_FORMAT=json</code>.
+        </p>
+    </Demo>
+</div>
 
-<section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
-    <h2 class="text-sm font-semibold"><code class="font-mono">trace()</code></h2>
-    <p class="mt-1 text-xs text-slate-500">
+<Demo title="trace()" code={`const pageTrace = trace()   // W3C traceparent of this request, either side`}>
+    <p class="text-xs text-slate-500">
         The current W3C <code class="font-mono">traceparent</code>, on either side — in the browser,
         the trace of the request that rendered this page:
     </p>
     <pre
-        class="mt-3 overflow-x-auto rounded-md bg-slate-900 p-3 text-xs leading-relaxed text-slate-100"><code>{pageTrace}</code></pre>
-
-    <CodeBlock code={`const pageTrace = trace()   // W3C traceparent of this request, either side`} />
-</section>
+        class="overflow-x-auto rounded-md border border-slate-200 bg-slate-50 p-3 text-xs leading-relaxed text-slate-800"><code>{pageTrace}</code></pre>
+</Demo>
+</div>

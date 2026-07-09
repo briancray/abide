@@ -5,14 +5,18 @@ import Recipe from '$ui/Recipe.abide'
 const LIVE = '/reactive-state'
 </script>
 
+<div class="flex flex-col gap-8">
+<div class="flex flex-col gap-2">
 <h1 class="text-3xl font-bold">watch</h1>
-<p class="mt-2 text-slate-600">
+<p class="text-slate-600">
     <code class="font-mono">watch</code> is the single reaction. The 1-arg thunk form —
     <code class="font-mono">watch(() =&gt; …)</code> — runs a side effect when the cells it reads
     change; the 2-arg form <code class="font-mono">watch(source, handler)</code> names its trigger.
     Watches are client-only — the SSR back-end strips them — and the thunk returns a cleanup
     function.
 </p>
+</div>
+<div class="flex flex-col gap-4">
 
 <Recipe
     task="Run a side effect when state changes"
@@ -103,3 +107,6 @@ watch(() => (count = count + 1))`}
     code={`// reach a specific element: use attach, not watch
 <input attach={(node) => node.focus()} />`}
     note={'`attach={fn}` hands you the real element at mount and is the right tool for focus/measure/wire-a-library. Reserve `watch` for reacting to state.'} />
+
+</div>
+</div>

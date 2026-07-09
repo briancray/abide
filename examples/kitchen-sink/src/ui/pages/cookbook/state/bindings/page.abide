@@ -5,13 +5,17 @@ import Recipe from '$ui/Recipe.abide'
 const LIVE = '/reactive-state'
 </script>
 
+<div class="flex flex-col gap-8">
+<div class="flex flex-col gap-2">
 <h1 class="text-3xl font-bold">shared context</h1>
-<p class="mt-2 text-slate-600">
+<p class="text-slate-600">
     Passing a value down the component tree without threading it through every prop.
     <code class="font-mono">state.share(key, value)</code> puts a value on the ambient scope;
     <code class="font-mono">state.shared(key)</code> reads the closest ancestor that shared it.
     Context flows down only — it is not the reactive doc, which does not inherit.
 </p>
+</div>
+<div class="flex flex-col gap-4">
 
 <Recipe
     task="Share a value down the tree"
@@ -65,3 +69,6 @@ state.share('app', appStore)
 // anywhere:
 const app = state.shared('app')`}
     note={"There's no standalone shared-store export. The idiom is a value shared from the root layout — app-wide and reactive when you share an accessor, but you wire it in the root layout yourself rather than importing a ready-made store."} />
+
+</div>
+</div>

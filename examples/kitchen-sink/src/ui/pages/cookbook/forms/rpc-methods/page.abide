@@ -5,8 +5,10 @@ import Recipe from '$ui/Recipe.abide'
 const LIVE = '/rpc'
 </script>
 
+<div class="flex flex-col gap-8">
+<div class="flex flex-col gap-2">
 <h1 class="text-3xl font-bold">rpc methods</h1>
-<p class="mt-2 text-slate-600">
+<p class="text-slate-600">
     One rpc per file under <code class="font-mono">src/server/rpc/</code>. The verb helper (<code
         class="font-mono"
         >GET</code
@@ -16,6 +18,8 @@ const LIVE = '/rpc'
     <code class="font-mono">HEAD</code>) sets the method; the schema projects the CLI, MCP, and
     OpenAPI surfaces.
 </p>
+</div>
+<div class="flex flex-col gap-4">
 
 <Recipe task="Define a read" live={LIVE} code={`import { GET } from '@abide/abide/server/GET'
 import { json } from '@abide/abide/server/json'
@@ -99,7 +103,7 @@ async function submit() {
 }
 
 <button disabled={saving}>save</button>`}
-    note={'Flip a `saving` cell around the await, clearing it in `finally` so an error still re-enables the button. Prevents double-submits and signals progress.'} />
+    note={'Flip a `saving` cell around the await, clearing it in `finally` so an error still re-enables the button. Prevents double-submits and signals progress. For a zero-plumbing version, `disabled={createEcho.pending()}` reads the same in-flight state off the call registry (see errors › probes).'} />
 
 <Recipe
     task="Reset a form after a successful submit"
@@ -116,3 +120,5 @@ console.log(response.status, response.headers.get('location'))`}
     note={'`.raw(args)` returns the `Response` instead of the decoded body — the escape hatch when you need the status line or headers, not just the payload.'} />
 
 <Recipe task="Expose a mutating rpc to MCP" live="/mcp" code={`export const createEcho = POST(handler, { schemas: { input: inputSchema }, clients: { mcp: true } })`} note={'GET/HEAD auto-expose to MCP; a mutating verb opts in with `clients: { mcp: true }` so a model can call it. An `inputSchema` also auto-exposes it to the CLI.'} />
+</div>
+</div>

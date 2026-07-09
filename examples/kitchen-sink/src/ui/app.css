@@ -13,3 +13,17 @@
     margin: 0;
     background: transparent !important;
 }
+
+/* Bindings demo (templating/bindings): an interpolated `class="badge tone-{tone}"`
+   and a `data-tone={tone}` attribute drive a live badge colour, so "swap tone"
+   visibly toggles the badge sky ↔ rose. */
+.badge[data-tone="sky"],
+.tone-sky {
+    background: var(--color-sky-500);
+    color: white;
+}
+.badge[data-tone="rose"],
+.tone-rose {
+    background: var(--color-rose-500);
+    color: white;
+}

@@ -5,12 +5,16 @@ import Recipe from '$ui/Recipe.abide'
 const LIVE = '/security'
 </script>
 
+<div class="flex flex-col gap-8">
+<div class="flex flex-col gap-2">
 <h1 class="text-3xl font-bold">the origin gate</h1>
-<p class="mt-2 text-slate-600">
+<p class="text-slate-600">
     Mutating rpcs 403 a cross-origin browser <code class="font-mono">Origin</code> before the
     handler runs — the no-preflight CSRF shape. Reads, curl, the CLI, and MCP clients send no
     <code class="font-mono">Origin</code> and pass.
 </p>
+</div>
+<div class="flex flex-col gap-4">
 
 <Recipe
     task="Get CSRF protection by default"
@@ -107,3 +111,6 @@ export const handle = async (request, next) => {
     code={`<p>{comment.text}</p>            <!-- escaped: safe -->
 <p>{html(sanitize(comment.html))}</p>  <!-- sanitise first -->`}
     note={'Plain `{expr}` escapes, so user text is safe by default. Only `html()` bypasses escaping — never hand it untrusted input without sanitising.'} />
+
+</div>
+</div>

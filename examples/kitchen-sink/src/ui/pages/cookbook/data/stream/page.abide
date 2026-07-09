@@ -6,16 +6,20 @@ const LIVE = '/sockets'
 const HTTP = '/rpc/streaming'
 </script>
 
+<div class="flex flex-col gap-8">
+<div class="flex flex-col gap-2">
 <h1 class="text-3xl font-bold">stream to the UI</h1>
-<p class="mt-2 text-slate-600">
+<p class="text-slate-600">
     Anything streaming — a socket or a streaming rpc's bare call — is a
-    <code class="font-mono">Subscribable</code>. Consume it with
+    <code class="font-mono">NamedAsyncIterable</code>. Consume it with
     <code class="font-mono">watch(source, frame =&gt; …)</code>,
     <code class="font-mono">{'{#for await}'}</code>, or <code class="font-mono">for await</code>; seed
     the latest retained frame with <code class="font-mono">peek(source)</code>. For plain HTTP, a
     handler returns <code class="font-mono">sse()</code> or
     <code class="font-mono">jsonl()</code> and the client reads it with native APIs.
 </p>
+</div>
+<div class="flex flex-col gap-4">
 
 <Recipe
     task="Consume a stream reactively"
@@ -127,3 +131,5 @@ while (true) {
     handle(frame)
 }`}
     note={'A streaming rpc call returns an `AsyncIterable` — drive it with `{#for await}` in markup, or `for await` in script when you need imperative control.'} />
+</div>
+</div>

@@ -6,11 +6,15 @@ const LIVE = '/security'
 const MCP = '/mcp'
 </script>
 
+<div class="flex flex-col gap-8">
+<div class="flex flex-col gap-2">
 <h1 class="text-3xl font-bold">gating MCP, sockets & agents</h1>
-<p class="mt-2 text-slate-600">
+<p class="text-slate-600">
     The non-browser surfaces need their own posture: what a model may call, who may publish, and how
     the MCP endpoint is authorised.
 </p>
+</div>
+<div class="flex flex-col gap-4">
 
 <Recipe
     task="Keep mutating rpcs off MCP by default"
@@ -82,3 +86,6 @@ export const handle = async (request, next) => {
     return next(request)
 }`}
     note={"There's no built-in per-token, per-tool MCP permission model (scopes mapping callers to allowed tools). Gate the whole endpoint in `handle`, or check identity inside each exposed rpc — fine-grained scoping you build yourself."} />
+
+</div>
+</div>

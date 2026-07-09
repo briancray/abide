@@ -14,21 +14,28 @@ async function probeHealth() {
 }
 </script>
 
+<div class="flex flex-col gap-8">
+<div class="flex flex-col gap-2">
 <h1 class="text-3xl font-bold">CLI</h1>
-<p class="mt-2 text-slate-600">
+<p class="text-slate-600">
     <code class="font-mono">abide cli</code> builds a standalone binary — a thin remote client with
     the rpc manifest baked in, shipped beside the compiled <em>server</em>. Schema-bearing rpcs
-    auto-expose as commands; argv parses against the same JSON Schema MCP uses. Each socket adds a
+    auto-expose as commands (opt one out with <code class="font-mono">{'clients: { cli: false }'}</code>); argv
+    parses against the same JSON Schema MCP uses. Each socket adds a
     <code class="font-mono">&lt;name&gt;-tail</code> command.
 </p>
+</div>
 
-<section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
+<section class="rounded-lg border border-slate-200 bg-white p-5">
+    <div class="flex flex-col gap-4">
+    <div class="flex flex-col gap-1">
     <h2 class="text-sm font-semibold">Connection</h2>
-    <p class="mt-1 text-sm text-slate-600">
+    <p class="text-sm text-slate-600">
         One rule: <code class="font-mono">/</code> manages the connection, a bare word runs a
         command.
     </p>
-    <div class="mt-3 overflow-x-auto rounded-lg border border-slate-200">
+    </div>
+    <div class="overflow-x-auto rounded-lg border border-slate-200">
         <table class="w-full text-sm">
             <thead class="border-b border-slate-200 bg-slate-50 text-left">
                 <tr>
@@ -58,34 +65,49 @@ async function probeHealth() {
             </tbody>
         </table>
     </div>
-    <p class="mt-3 text-sm text-slate-600">
+    <p class="text-sm text-slate-600">
         <code class="font-mono">ABIDE_APP_URL</code> is the default server URL;
         <code class="font-mono">ABIDE_APP_TOKEN</code> is sent as
         <code class="font-mono">Authorization: Bearer &lt;value&gt;</code>.
     </p>
 
+    <div class="flex flex-col gap-1">
+    <h3 class="text-xs font-semibold text-slate-500">Build the binary</h3>
     <CodeBlock title="build — cli binary plus its sibling server" lang="sh" code={`abide cli                  # writes ./dist/cli and ./dist/server
 abide cli --platforms=linux-x64,darwin-arm64`} />
+    </div>
 
+    <div class="flex flex-col gap-1">
+    <h3 class="text-xs font-semibold text-slate-500">
+        Open a session — connect / start / resume
+    </h3>
     <CodeBlock
         title="connect, start, resume — open an interactive session"
         lang="sh"
         code={`./dist/cli /start                        # boot a local instance, drop into a session
 ./dist/cli /connect https://app.example  # connect to a remote server
 ./dist/cli                               # resume the saved connection`} />
+    </div>
 
+    <div class="flex flex-col gap-1">
+    <h3 class="text-xs font-semibold text-slate-500">One-shot dispatch — for scripting</h3>
     <CodeBlock title="one-shot dispatch — for scripting" lang="sh" code={`ABIDE_APP_URL=http://localhost:3000 ./dist/cli getEcho --message=hello
 ./dist/cli countLog --to=5         # streaming jsonl rpc → NDJSON frames
 ./dist/cli chat-tail --tail=10     # socket: replay last 10, then stream live`} />
+    </div>
+    </div>
 </section>
 
-<section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
+<section class="rounded-lg border border-slate-200 bg-white p-5">
+    <div class="flex flex-col gap-4">
+    <div class="flex flex-col gap-1">
     <h2 class="text-sm font-semibold">Server-side install endpoint</h2>
-    <p class="mt-1 text-sm text-slate-600">
+    <p class="text-sm text-slate-600">
         A running server offers <code class="font-mono">GET /__abide/cli</code> (shell installer)
         and <code class="font-mono">GET /__abide/cli/&lt;platform&gt;</code> (gzipped tarball).
     </p>
-    <div class="mt-3 flex flex-wrap gap-2 text-sm">
+    </div>
+    <div class="flex flex-wrap gap-2 text-sm">
         <button
             type="button"
             class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
@@ -100,8 +122,10 @@ abide cli --platforms=linux-x64,darwin-arm64`} />
         </button>
     </div>
     <pre
-        class="mt-3 overflow-x-auto rounded-md bg-slate-900 p-3 text-xs leading-relaxed text-slate-100"><code>installer: {installer}
+        class="overflow-x-auto rounded-md border border-slate-200 bg-slate-50 p-3 text-xs leading-relaxed text-slate-800"><code>installer: {installer}
 identity: {identity}</code></pre>
 
     <CodeBlock title="users install from a running server" lang="sh" code={`curl -fsSL https://your-app.example/__abide/cli | sh`} />
+    </div>
 </section>
+</div>

@@ -5,12 +5,54 @@ import Recipe from '$ui/Recipe.abide'
 const LIVE = '/reactive-state'
 </script>
 
-<h1 class="text-3xl font-bold">await during SSR</h1>
-<p class="mt-2 text-slate-600">
-    Getting data resolved on the server so the page arrives rendered. Inline
-    <code class="font-mono">{'{#await … then}'}</code> blocks the SSR stream; the branch form streams the
-    shell first.
+<div class="flex flex-col gap-8">
+<div class="flex flex-col gap-2">
+<h1 class="text-3xl font-bold">async reads & SSR</h1>
+<p class="text-slate-600">
+    A promise-typed read is a peek in every template position:
+    <code class="font-mono">undefined</code> while pending, the resolved value once it settles — so
+    it composes with <code class="font-mono">??</code>, <code class="font-mono">?.</code>,
+    <code class="font-mono">{'{#if}'}</code>, and attributes with no
+    <code class="font-mono">{'{#await}'}</code> block. A leading
+    <code class="font-mono">await</code> blocks the SSR stream (rendered inline, warm hydrate); no
+    <code class="font-mono">await</code> streams the shell and resolves on the client. Reach for
+    <code class="font-mono">{'{#await}'}</code> only for distinct pending markup, a local
+    <code class="font-mono">{':catch'}</code>, or
+    <code class="font-mono">{':then'}</code> narrowing.
 </p>
+</div>
+<div class="flex flex-col gap-4">
+
+<Recipe
+    task="Read async data inline — pending is undefined"
+    live={LIVE}
+    code={`<p>hi {getUser()?.name}</p>`}
+    note={'A promise-typed read peeks: `undefined` while pending (renders empty), then the resolved value. No block, no ceremony — the bare call `getUser()` is the smart cached read.'} />
+
+<Recipe
+    task="Fall back while a read is pending"
+    live={LIVE}
+    code={`<p>{getUser()?.name ?? 'loading…'}</p>`}
+    note={'`??` composes because pending is a real `undefined` at the expression level — the sub-expression `getUser()` lifts to the peek, the surrounding `?.`/`??` stay intact around it. `{cell ?? …}` and `{promise ?? …}` now behave identically.'} />
+
+<Recipe
+    task="Branch on async data (value position)"
+    live={LIVE}
+    code={`{#if getUser()}
+    <Profile user={getUser()} />
+{:else}
+    <Skeleton />
+{/if}
+
+<a href={getUser()?.profileUrl}>profile</a>`}
+    note={'Pending is falsy, so an `{#if}` shows its `{:else}` first; a whole-value `undefined` unsets an attribute (here `href`); a promise of a list renders an empty `{#for}` until it resolves. No value position has a pending slot — distinguish loading from a settled falsy value with `??`, a probe, or `{#await}`.'} />
+
+<Recipe
+    task="Block SSR with await, stream without"
+    live={LIVE}
+    code={`<h1>{await getTitle()}</h1>   <!-- blocks SSR: rendered inline, warm hydrate -->
+<p>{getBody()?.text}</p>       <!-- streams: pending on first paint, fills on the client -->`}
+    note={'A leading `await` joins the SSR blocking barrier — the server resolves it before flush. No `await` streams the shell immediately and the read resolves after hydration. For a bare read the `await` keyword picks the tier (the `{#await … then}` head form blocks too); either way the resolved value is the same.'} />
 
 <Recipe
     task="Await data so it renders on the server"
@@ -18,7 +60,7 @@ const LIVE = '/reactive-state'
     code={`{#await getUser() then user}
     <h1>{user.name}</h1>
 {/await}`}
-    note={'The inline `then` form is blocking: the server awaits the promise and renders the value into the initial HTML — no client round-trip, good for SEO and first paint.'} />
+    note={'The inline `then` head is blocking — the server awaits the promise and bakes the value into the initial HTML (no client round-trip, good for SEO and first paint). Reach for the block over a bare `{await getUser()...}` when you want the narrowed `user` across several fields or a `{:catch}`.'} />
 
 <Recipe
     task="Stream the shell, then fill the slot"
@@ -126,3 +168,5 @@ const LIVE = '/reactive-state'
     <Feed items={feed} />
 {/await}`}
     note={'A streaming bare `{#await fn()}` creates its cache entry mid-stream, so it is seeded into the page after the stream via resolve chunks — the client still hydrates warm without a second fetch.'} />
+</div>
+</div>

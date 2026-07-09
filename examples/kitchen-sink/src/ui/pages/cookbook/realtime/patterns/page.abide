@@ -6,13 +6,17 @@ const LIVE = '/sockets'
 const STATE = '/reactive-state'
 </script>
 
+<div class="flex flex-col gap-8">
+<div class="flex flex-col gap-2">
 <h1 class="text-3xl font-bold">presence & patterns</h1>
-<p class="mt-2 text-slate-600">
+<p class="text-slate-600">
     Common realtime shapes built on broadcast sockets — chat, presence, typing, live counters, job
     progress — and the gaps where a single-process broadcast topic isn't enough. Consume every
     socket with <code class="font-mono">watch(source, frame =&gt; …)</code>, folding frames into a
     windowed <code class="font-mono">state</code> cell.
 </p>
+</div>
+<div class="flex flex-col gap-4">
 
 <Recipe task="Build a chat room" live={LIVE} code={`export const chat = socket({ schema, tail: 100 })
 // publish via a POST rpc; read with watch(chat, m => recent = [...recent, m].slice(-50))`} note={'A retained socket plus a publish rpc is the whole chat primitive — history for late joiners, live delivery, validated writes.'} />
@@ -106,3 +110,6 @@ chat.broadcast(m)       // best-effort live delivery
     code={`// broadcast is in-process — a frame published on instance A
 // does NOT reach a subscriber connected to instance B`}
     note={"Sockets fan out within one process. Behind a multi-instance load balancer, publishes don't cross instances — you'd need an external broker (Redis pub/sub, a message bus) bridged to `broadcast()` yourself. Single-process and single-node deployments are unaffected."} />
+
+</div>
+</div>

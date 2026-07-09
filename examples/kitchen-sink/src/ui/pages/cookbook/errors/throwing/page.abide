@@ -5,14 +5,18 @@ import Recipe from '$ui/Recipe.abide'
 const LIVE = '/rpc/errors'
 </script>
 
+<div class="flex flex-col gap-8">
+<div class="flex flex-col gap-2">
 <h1 class="text-3xl font-bold">throwing & catching</h1>
-<p class="mt-2 text-slate-600">
+<p class="text-slate-600">
     A non-2xx remote call rejects with an <code class="font-mono">HttpError</code> carrying the raw
     <code class="font-mono">Response</code> plus <code class="font-mono">kind</code>/<code
         class="font-mono"
         >data</code
     >. Throw one on the server, narrow it on the client.
 </p>
+</div>
+<div class="flex flex-col gap-4">
 
 <Recipe task="Throw a typed HTTP error" live={LIVE} code={`import { HttpError } from '@abide/abide/shared/HttpError'
 
@@ -79,7 +83,7 @@ try {
     code={`if (checkout.isError(err, 'outOfStock')) {
     show(\`only \${err.data.available} left\`)
 }`}
-    note={"Each named error in the rpc's `errors` spec is narrowable by kind, with `err.data` typed from that error's schema — no casts, no message parsing."} />
+    note={"Each typed error the handler returns is narrowable by kind, with `err.data` typed from that error's schema — no casts, no message parsing. There's no `errors:` option to declare; the `error.typed(...)` constructors the handler returns are its error surface."} />
 
 <Recipe task="Retry after an error" live={LIVE} code={`let lastError = state(undefined)
 async function run() {
@@ -122,3 +126,5 @@ throw new HttpError(500, \`failed (trace \${trace()})\`)`}
     }
 }`}
     note={'Treat 5xx as retryable/transient and 4xx as user-actionable. The status is the branch point; the message is for humans.'} />
+</div>
+</div>

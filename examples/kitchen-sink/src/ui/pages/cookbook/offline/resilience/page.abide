@@ -7,11 +7,15 @@ const STATE = '/reactive-state'
 const OUTBOX = '/outbox'
 </script>
 
+<div class="flex flex-col gap-8">
+<div class="flex flex-col gap-2">
 <h1 class="text-3xl font-bold">offline resilience</h1>
-<p class="mt-2 text-slate-600">
+<p class="text-slate-600">
     Surviving a flaky network — reading connectivity, persisting local state, and the durable outbox
     that queues writes offline and drains on reconnect, plus the gaps beyond it.
 </p>
+</div>
+<div class="flex flex-col gap-4">
 
 <Recipe
     task="Detect that the browser went offline"
@@ -95,3 +99,6 @@ watch(() => localStorage.setItem('items', JSON.stringify(items)))
     code={`// no field-level merge — reconcile in the handler or on read
 // e.g. server returns the authoritative record; client re-seeds a state.linked() draft`}
     note={"There's no per-field conflict resolution. Reconcile server-side (the handler decides) or on the client by re-seeding a `state.linked()` draft from the authoritative record after a sync."} />
+
+</div>
+</div>

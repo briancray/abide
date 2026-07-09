@@ -1,0 +1,138 @@
+<script>
+import { state } from '@abide/abide/ui/state'
+import { watch } from '@abide/abide/ui/watch'
+import CodeBlock from '$ui/CodeBlock.abide'
+import Demo from '$ui/Demo.abide'
+
+/*
+The cell primitives, live. `state` is a writable cell; `state.computed` derives a
+read-only value; `state.linked` seeds a local draft from upstream; a `transform`
+coerces every write. The 1-arg `watch(thunk)` form is the auto-tracked side effect.
+*/
+
+let count = state(0)
+const doubled = state.computed(() => count * 2)
+
+// watch(thunk): a client-only reaction, stripped from SSR; return a cleanup.
+let ticks = state(0)
+watch(() => {
+    const id = setInterval(() => (ticks = ticks + 1), 1000)
+    return () => clearInterval(id)
+})
+
+// transform coerces every write — clamp into 1..99
+let qty = state(1, (n) => Math.max(1, Math.min(99, Math.round(Number(n) || 0))))
+
+// linked: a local draft seeded from upstream; reseeds when the source changes
+let serverName = state('ada')
+let nameDraft = state.linked(() => serverName)
+</script>
+
+<div class="flex flex-col gap-8">
+<h2 class="text-xl font-semibold">cells, computed, linked</h2>
+
+<section class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+    <table class="w-full text-sm">
+        <thead class="border-b border-slate-200 bg-slate-50 text-left">
+            <tr>
+                <th class="px-4 py-2 font-mono font-medium">primitive</th>
+                <th class="px-4 py-2 font-medium">demoed here</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+            <tr>
+                <td class="px-4 py-2 font-mono">state(v, transform?)</td>
+                <td class="px-4 py-2 text-slate-600">the count buttons + the clamped qty input</td>
+            </tr>
+            <tr>
+                <td class="px-4 py-2 font-mono">state.computed(fn)</td>
+                <td class="px-4 py-2 text-slate-600">
+                    read-only <code class="font-mono">doubled</code>
+                </td>
+            </tr>
+            <tr>
+                <td class="px-4 py-2 font-mono">state.linked(fn, transform?)</td>
+                <td class="px-4 py-2 text-slate-600">the reseeding name draft</td>
+            </tr>
+            <tr>
+                <td class="px-4 py-2 font-mono">watch(() =&gt; …)</td>
+                <td class="px-4 py-2 text-slate-600">
+                    the ticking interval (thunk form; the sourced forms live under
+                    <a class="underline" href="/reactive-state/reactions">reactions</a>)
+                </td>
+            </tr>
+        </tbody>
+    </table>
+</section>
+
+<div class="rounded-lg border border-slate-200 bg-white p-5">
+    <div class="flex flex-wrap items-center gap-4 text-sm">
+        <button
+            type="button"
+            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+            onclick={() => (count = count - 1)}>
+            −
+        </button>
+        <span class="font-mono">count = <strong>{count}</strong></span>
+        <button
+            type="button"
+            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+            onclick={() => (count = count + 1)}>
+            +
+        </button>
+        <span class="font-mono text-slate-500">computed doubled = {doubled}</span>
+        <span class="ml-auto font-mono text-slate-500">watch ticks = {ticks}s</span>
+    </div>
+</div>
+
+<div class="grid gap-4 sm:grid-cols-2">
+    <Demo title="state(v, transform)" code={`// transform coerces every write — clamp to 1..99
+let qty = state(1, (n) => Math.max(1, Math.min(99, Math.round(Number(n) || 0))))
+
+<input type="number" bind:value={qty} />`}>
+        <p class="text-xs text-slate-500">Type anything — the write is clamped to 1..99.</p>
+        <input
+            type="number"
+            bind:value={qty}
+            class="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
+        <p class="font-mono text-xs text-slate-600">qty = {qty}</p>
+    </Demo>
+
+    <Demo title="state.linked(fn) — draft" code={`let serverName = state('ada')
+let nameDraft = state.linked(() => serverName)   // reseeds when serverName changes
+
+<input bind:value={nameDraft} />`}>
+        <p class="text-xs text-slate-500">
+            Edit the draft; "pull" reseeds it from the source.
+        </p>
+        <input
+            bind:value={nameDraft}
+            class="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
+        <div class="flex items-center gap-2">
+            <button
+                type="button"
+                class="rounded-md border border-slate-300 px-2 py-1 text-xs hover:bg-slate-100"
+                onclick={() => (serverName = serverName === 'ada' ? 'grace' : 'ada')}>
+                pull from source
+            </button>
+            <span class="font-mono text-xs text-slate-500">source = {serverName}</span>
+        </div>
+    </Demo>
+</div>
+
+<section class="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5">
+    <CodeBlock
+        title="the counter above — state, state.computed, watch(thunk)"
+        code={`<script>
+    import { state } from '@abide/abide/ui/state'   // state.computed / state.linked attached
+    import { watch } from '@abide/abide/ui/watch'
+    let count = state(0)                            // writable cell — the +/− buttons
+    const doubled = state.computed(() => count * 2)       // recomputes when count changes
+    let ticks = state(0)
+    watch(() => {                                   // thunk form: client-only, cleanup on unmount
+        const id = setInterval(() => (ticks = ticks + 1), 1000)
+        return () => clearInterval(id)
+    })
+</script>`} />
+</section>
+</div>

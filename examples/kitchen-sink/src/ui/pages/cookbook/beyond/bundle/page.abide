@@ -5,12 +5,16 @@ import Recipe from '$ui/Recipe.abide'
 const LIVE = '/bundle'
 </script>
 
+<div class="flex flex-col gap-8">
+<div class="flex flex-col gap-2">
 <h1 class="text-3xl font-bold">desktop bundle</h1>
-<p class="mt-2 text-slate-600">
+<p class="text-slate-600">
     <code class="font-mono">abide bundle</code> wraps the app in a movable, self-contained desktop
     app — native menus through <code class="font-mono">onMenu()</code>, a connect screen for
     embedded or remote servers, and <code class="font-mono">bundled()</code> to detect the context.
 </p>
+</div>
+<div class="flex flex-col gap-4">
 
 <Recipe
     task="Build a desktop bundle"
@@ -74,3 +78,5 @@ const dbPath = \`\${appDataDir()}/app.sqlite\``}
     code={`// public/ assets and the built client are packaged into the .app
 <img src={url('/logo.svg')} />`}
     note={'`public/` assets and the compiled client are bundled in, so the desktop app runs fully offline of your CDN. Reference them with `url()` as usual.'} />
+</div>
+</div>

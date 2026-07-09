@@ -5,16 +5,20 @@ import Recipe from '$ui/Recipe.abide'
 const LIVE = '/reactive-state'
 </script>
 
+<div class="flex flex-col gap-8">
+<div class="flex flex-col gap-2">
 <h1 class="text-3xl font-bold">computed, linked & transforms</h1>
-<p class="mt-2 text-slate-600">
-    Derived values. <code class="font-mono">computed</code> is read-only and recomputes on demand;
-    <code class="font-mono">linked</code> is a writable draft that reseeds from upstream; a
-    <code class="font-mono">transform</code> coerces writes.
+<p class="text-slate-600">
+    Derived values. <code class="font-mono">state.computed</code> is read-only and recomputes on
+    demand; <code class="font-mono">state.linked</code> is a writable draft that reseeds from
+    upstream; a <code class="font-mono">transform</code> coerces writes.
 </p>
+</div>
+<div class="flex flex-col gap-4">
 
 <Recipe task="Derive a read-only value" live={LIVE} code={`import { state } from '@abide/abide/ui/state'
 let count = state(0)
-const doubled = state.computed(() => count * 2)`} note={'`computed` re-runs only when a cell it read changes, and caches otherwise. Read it bare in markup — it is always read-only.'} />
+const doubled = state.computed(() => count * 2)`} note={'`state.computed` re-runs only when a cell it read changes, and caches otherwise. Read it bare in markup — it is always read-only.'} />
 
 <Recipe
     task="Derive from multiple sources"
@@ -63,8 +67,9 @@ let nameDraft = state.linked(() => serverName)`}
 <Recipe
     task="Reset a draft back to upstream"
     live={LIVE}
-    code={`<button onclick={() => (serverName = serverName)}>revert</button>`}
-    note={'Reseeding is triggered by the upstream changing. To force a revert, re-read/refetch the source; a `linked` draft snaps back to it.'} />
+    code={`// a linked draft reseeds when its upstream value changes — there is no reset()
+serverName = 'grace'   // nameDraft snaps to 'grace'`}
+    note={'`state.linked` snaps back to upstream when the upstream value changes (an equal-value write is an `Object.is` no-op). For an explicit reset button, keep a plain `state` seeded from a constant and reassign it (see the scope page) rather than a linked draft.'} />
 
 <Recipe
     task="Coerce a linked draft on write"
@@ -80,4 +85,7 @@ let nameDraft = state.linked(() => serverName)`}
         get: () => fullName,
         set: (v) => ([first, last] = v.split(' ')),
     }} />`}
-    note={'`computed` is always read-only — a two-way derived value lives at the binding as `{{ get, set }}`, not as a primitive. This is the writable-computed form.'} />
+    note={'`state.computed` is always read-only — a two-way derived value lives at the binding as `{{ get, set }}`, not as a primitive. This is the writable-computed form.'} />
+
+</div>
+</div>

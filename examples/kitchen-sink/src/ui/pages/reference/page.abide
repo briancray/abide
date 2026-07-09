@@ -6,17 +6,20 @@ import CodeBlock from '$ui/CodeBlock.abide'
    deploy) live on /build. */
 </script>
 
-<h1 class="text-3xl font-bold">Reference</h1>
-<p class="mt-2 text-slate-600">
-    Project layout, framework routes, and environment variables. Import namespaces mark the side a
+<div class="flex flex-col gap-8">
+    <div class="flex flex-col gap-2">
+        <h1 class="text-3xl font-bold">Reference</h1>
+        <p class="text-slate-600">
+            Project layout, framework routes, and environment variables. Import namespaces mark the side a
     name runs on: <code class="font-mono">@abide/abide/server/*</code> server-side,
     <code class="font-mono">@abide/abide/ui/*</code> client-side,
     <code class="font-mono">@abide/abide/shared/*</code> isomorphic. The commands, configuration,
     testing, and deploy seams live on <a class="underline" href="/build">build · test · deploy</a>.
-</p>
+        </p>
+    </div>
 
 <!-- Project structure -->
-<section class="mt-6 space-y-3 rounded-lg border border-slate-200 bg-white p-5">
+<section class="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5">
     <h2 class="text-sm font-semibold">Project structure</h2>
     <CodeBlock title="a project" lang="text" code={`src/
   app.ts                  # optional: init, handle, handleError, forwardHeaders, health
@@ -37,9 +40,9 @@ bunfig.toml               # preload = ["@abide/abide/preload"]`} />
 </section>
 
 <!-- Routes -->
-<section id="routes" class="scroll-mt-4 mt-6">
+<section id="routes" class="scroll-mt-4 flex flex-col gap-2">
     <h2 class="text-sm font-semibold">Framework routes</h2>
-    <div class="mt-2 overflow-x-auto rounded-lg border border-slate-200 bg-white">
+    <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
         <table class="w-full text-sm">
             <thead class="border-b border-slate-200 bg-slate-50 text-left">
                 <tr>
@@ -82,9 +85,9 @@ bunfig.toml               # preload = ["@abide/abide/preload"]`} />
 </section>
 
 <!-- Env vars -->
-<section id="env" class="scroll-mt-4 mt-6">
+<section id="env" class="scroll-mt-4 flex flex-col gap-2">
     <h2 class="text-sm font-semibold">Environment variables</h2>
-    <div class="mt-2 overflow-x-auto rounded-lg border border-slate-200 bg-white">
+    <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
         <table class="w-full text-sm">
             <thead class="border-b border-slate-200 bg-slate-50 text-left">
                 <tr>
@@ -155,12 +158,18 @@ bunfig.toml               # preload = ["@abide/abide/preload"]`} />
                     <td class="px-4 py-2 text-slate-600">enable webview devtools in a bundle</td>
                 </tr>
                 <tr>
-                    <td class="px-4 py-2 font-mono">ABIDE_APP_URL / ABIDE_APP_TOKEN</td>
+                    <td class="px-4 py-2 font-mono">ABIDE_APP_URL</td>
+                    <td class="px-4 py-2 text-slate-600">CLI thin-client target server</td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">ABIDE_APP_TOKEN</td>
                     <td class="px-4 py-2 text-slate-600">
-                        CLI thin-client target server + auth token
+                        CLI auth token (sent as
+                        <code class="font-mono">Authorization: Bearer</code>)
                     </td>
                 </tr>
             </tbody>
         </table>
     </div>
 </section>
+</div>

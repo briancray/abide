@@ -1,9 +1,11 @@
 <script>
-import CodeBlock from '$ui/CodeBlock.abide'
+import Demo from '$ui/Demo.abide'
 
 /*
-Control-flow showcase — every {#…} block live. Each block is a lexical scope:
-value-params ({:then v}, {#for x of …}) and nested <script>/<style> bind inside it.
+Control-flow showcase — the structural {#…} blocks live. Each block is a lexical
+scope: value-params ({#for x of …}) and nested <script>/<style> bind inside it.
+Async blocks ({#await}, {#for await}) and bare async reads live on the async
+subpage.
 */
 import { state } from '@abide/abide/ui/state'
 
@@ -22,25 +24,6 @@ function addItem(event: SubmitEvent) {
     draft = ''
 }
 
-// await demo: `attempt` is read by the {#await} expression, so bumping it re-runs
-// the promise and re-seeds the branch. The roster rotates by `attempt` so each
-// reload resolves to a visibly different slice — proof the branch re-seeds.
-let attempt = state(0)
-const ROSTER = ['ada', 'grace', 'linus', 'edsger', 'barbara']
-function loadNames(attempt: number): Promise<string[]> {
-    const start = attempt % ROSTER.length
-    const names = [0, 1, 2].map((offset) => ROSTER[(start + offset) % ROSTER.length])
-    return new Promise((resolve) => setTimeout(() => resolve(names), 400))
-}
-
-// {#for await} drives a live AsyncIterable — here a generator yielding a few ticks.
-async function* ticker(): AsyncGenerator<number> {
-    for (let n = 1; n <= 5; n++) {
-        await new Promise((resolve) => setTimeout(resolve, 600))
-        yield n
-    }
-}
-
 // {#try} catches a throw while building its subtree; flip this to see the branch swap.
 let crash = state(false)
 function guarded(): string {
@@ -51,7 +34,15 @@ function guarded(): string {
 }
 </script>
 
-<section class="mt-6 overflow-x-auto rounded-lg border border-slate-200 bg-white">
+<div class="flex flex-col gap-8">
+<p class="text-sm text-slate-600">
+    The structural <code class="font-mono">{'{#…}'}</code> blocks — branching, keyed lists, and a
+    synchronous error boundary. Async data (<code class="font-mono">{'{#await}'}</code>,
+    <code class="font-mono">{'{#for await}'}</code>, and bare peek reads) lives on
+    <a class="underline" href="/templating/async">async</a>.
+</p>
+
+<section class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
     <table class="w-full text-sm">
         <thead class="border-b border-slate-200 bg-slate-50 text-left">
             <tr>
@@ -68,19 +59,7 @@ function guarded(): string {
             </tr>
             <tr>
                 <td class="px-4 py-2 font-mono">{'{#for x, i of list by x.id}'} · {'{/for}'}</td>
-                <td class="px-4 py-2 text-slate-600">
-                    keyed list; <code class="font-mono">{'{#for await x of …}'}</code> drains an
-                    <code class="font-mono">AsyncIterable</code>
-                </td>
-            </tr>
-            <tr>
-                <td class="px-4 py-2 font-mono">
-                    {'{#await p}'} · {'{:then v}'} · {'{:catch e}'} · {'{:finally}'} · {'{/await}'}
-                </td>
-                <td class="px-4 py-2 text-slate-600">
-                    promise — streaming branches, or
-                    <code class="font-mono">{'{#await p then v}'}</code> blocks inline
-                </td>
+                <td class="px-4 py-2 text-slate-600">keyed list with optional index and key</td>
             </tr>
             <tr>
                 <td class="px-4 py-2 font-mono">
@@ -103,10 +82,17 @@ function guarded(): string {
     </table>
 </section>
 
-<div class="mt-6 grid gap-3 sm:grid-cols-2">
-    <div class="rounded-lg border border-slate-200 bg-white p-5">
-        <h3 class="text-xs font-semibold text-slate-500">if / else if / else</h3>
-        <div class="mt-2 flex gap-2 text-sm">
+<div class="grid gap-4 sm:grid-cols-2">
+    <Demo title="if / else if / else" code={`{#if !open}
+    closed
+{:else if level === 0}
+    open · level 0
+{:else if level === 1}
+    open · level 1
+{:else}
+    open · level 2
+{/if}`}>
+        <div class="flex gap-2 text-sm">
             <button
                 type="button"
                 class="rounded-md border border-slate-300 px-2 py-1 hover:bg-slate-100"
@@ -121,19 +107,25 @@ function guarded(): string {
             </button>
         </div>
         {#if !open}
-            <p class="mt-2 text-sm text-slate-500">closed</p>
+            <p class="text-sm text-slate-500">closed</p>
         {:else if level === 0}
-            <p class="mt-2 text-sm text-emerald-700">open · level 0</p>
+            <p class="text-sm text-emerald-700">open · level 0</p>
         {:else if level === 1}
-            <p class="mt-2 text-sm text-sky-700">open · level 1</p>
+            <p class="text-sm text-sky-700">open · level 1</p>
         {:else}
-            <p class="mt-2 text-sm text-violet-700">open · level 2</p>
+            <p class="text-sm text-violet-700">open · level 2</p>
         {/if}
-    </div>
+    </Demo>
 
-    <div class="rounded-lg border border-slate-200 bg-white p-5">
-        <h3 class="text-xs font-semibold text-slate-500">switch</h3>
-        <div class="mt-2 flex gap-2 text-sm">
+    <Demo title="switch" code={`{#switch tab}
+{:case 'one'}
+    first
+{:case 'two'}
+    second
+{:default}
+    other
+{/switch}`}>
+        <div class="flex gap-2 text-sm">
             {#for t of ['one', 'two', 'three'] by t}
                 <button
                     type="button"
@@ -145,111 +137,59 @@ function guarded(): string {
         </div>
         {#switch tab}
         {:case 'one'}
-            <p class="mt-2 text-sm">first</p>
+            <p class="text-sm">first</p>
         {:case 'two'}
-            <p class="mt-2 text-sm">second</p>
+            <p class="text-sm">second</p>
         {:default}
-            <p class="mt-2 text-sm text-slate-500">other</p>
+            <p class="text-sm text-slate-500">other</p>
         {/switch}
-    </div>
+    </Demo>
 </div>
 
-<div class="mt-3 rounded-lg border border-slate-200 bg-white p-5">
-    <h3 class="text-xs font-semibold text-slate-500">for — keyed list</h3>
-    <form class="mt-2 flex gap-2 text-sm" onsubmit={addItem}>
-        <input
-            bind:value={draft}
-            placeholder="add item"
-            class="rounded-md border border-slate-300 px-3 py-1.5" />
-        <button
-            type="submit"
-            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100">
-            add
-        </button>
-    </form>
-    <ul class="mt-3 space-y-1 text-sm">
-        {#for item, i of items by item}
-            <li class="font-mono">{i + 1}. {item}</li>
-        {/for}
-    </ul>
+<div>
+    <Demo title="for — keyed list" code={`{#for item, i of items by item}
+    <li>{i + 1}. {item}</li>
+{/for}`}>
+        <form class="flex gap-2 text-sm" onsubmit={addItem}>
+            <input
+                bind:value={draft}
+                placeholder="add item"
+                class="rounded-md border border-slate-300 px-3 py-1.5" />
+            <button
+                type="submit"
+                class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100">
+                add
+            </button>
+        </form>
+        <ul class="flex flex-col gap-1 text-sm">
+            {#for item, i of items by item}
+                <li class="font-mono">{i + 1}. {item}</li>
+            {/for}
+        </ul>
+    </Demo>
 </div>
 
-<div class="mt-3 rounded-lg border border-slate-200 bg-white p-5">
-    <h3 class="text-xs font-semibold text-slate-500">for await — drain an AsyncIterable</h3>
-    <p class="mt-1 text-xs text-slate-500">Yields a tick every 600ms, reseeding on mount.</p>
-    <ul class="mt-2 space-y-1 font-mono text-sm">
-        {#for await tick of ticker()}
-            <li>tick {tick}</li>
-        {/for}
-    </ul>
-</div>
-
-<div class="mt-3 rounded-lg border border-slate-200 bg-white p-5">
-    <h3 class="text-xs font-semibold text-slate-500">await — a branch is a lexical scope</h3>
-    <p class="mt-1 text-xs text-slate-500">
-        The resolved value binds into <code class="font-mono">{':then'}</code>, where a nested
-        <code class="font-mono">&lt;script&gt;</code> declares branch-local signals computed from it
-        and a nested <code class="font-mono">&lt;style&gt;</code> scopes to that branch alone;
-        <code class="font-mono">{':finally'}</code> runs after settle either way.
-    </p>
-    <button
-        type="button"
-        class="mt-2 rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100"
-        onclick={() => (attempt = attempt + 1)}>
-        reload
-    </button>
-    {#await loadNames(attempt)}
-        <p class="mt-2 text-sm text-slate-500">loading…</p>
-    {:then names}
-        <script>
-        // `names` (the resolved value) is in lexical scope here; branch-local, re-seeded each reload.
-        // `state` is imported in the leading <script>; nested scripts share module scope.
-        let total = state.computed(() => names.length)
-        </script>
-        <p class="resolved mt-2 text-sm">{total} names: {names.join(', ')}</p>
-        <style>
-        .resolved {
-            font-weight: 600;
-            color: #047857;
-        }
-        </style>
-    {:catch error}
-        <p class="mt-2 text-sm text-rose-700">failed: {error.message}</p>
-    {:finally}
-        <hr class="mt-3 border-slate-200" />
-    {/await}
-
-    <CodeBlock
-        title="await — the then branch is a lexical scope (nested <script> + <style>)"
-        code={`{#await loadNames(attempt)}
-    <p>loading…</p>
-{:then names}
-    <script>
-        // \`names\` is in scope; branch-local, re-seeded each mount. \`state\` is imported up top.
-        let total = state.computed(() => names.length)
-    </script>
-    <p class="resolved">{total} names: {names.join(', ')}</p>
-    <style>.resolved { font-weight: 600 }</style>   <!-- scoped to this branch alone -->
+<div>
+    <Demo title="try — synchronous error boundary" code={`{#try}
+    <p>guarded: {guarded()}</p>
 {:catch error}
-    <p>failed: {error.message}</p>
+    <p>caught: {error.message}</p>
 {:finally}
-    <hr />
-{/await}`} />
+    boundary settled
+{/try}`}>
+        <button
+            type="button"
+            class="rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100"
+            onclick={() => (crash = !crash)}>
+            {crash ? 'stop throwing' : 'throw during render'}
+        </button>
+        {#try}
+            <p class="text-sm text-slate-700">guarded: {guarded()}</p>
+        {:catch error}
+            <p class="text-sm text-rose-700">caught: {error.message}</p>
+        {:finally}
+            <p class="text-xs text-slate-400">boundary settled</p>
+        {/try}
+    </Demo>
 </div>
-
-<div class="mt-3 rounded-lg border border-slate-200 bg-white p-5">
-    <h3 class="text-xs font-semibold text-slate-500">try — synchronous error boundary</h3>
-    <button
-        type="button"
-        class="mt-2 rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100"
-        onclick={() => (crash = !crash)}>
-        {crash ? 'stop throwing' : 'throw during render'}
-    </button>
-    {#try}
-        <p class="mt-2 text-sm text-slate-700">guarded: {guarded()}</p>
-    {:catch error}
-        <p class="mt-2 text-sm text-rose-700">caught: {error.message}</p>
-    {:finally}
-        <p class="mt-1 text-xs text-slate-400">boundary settled</p>
-    {/try}
 </div>

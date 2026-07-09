@@ -5,11 +5,15 @@ import Recipe from '$ui/Recipe.abide'
 const LIVE = '/reactive-state'
 </script>
 
+<div class="flex flex-col gap-8">
+<div class="flex flex-col gap-2">
 <h1 class="text-3xl font-bold">optimistic updates & flows</h1>
-<p class="mt-2 text-slate-600">
+<p class="text-slate-600">
     Mutation UX — apply the change before the server confirms, refresh the reads it touches, and the
     common submit patterns: debounce, cancel, confirm, bulk, and retry.
 </p>
+</div>
+<div class="flex flex-col gap-4">
 
 <Recipe
     task="Apply an optimistic update, then confirm"
@@ -115,7 +119,7 @@ async function submit() {
     submitting = true
     try { await save(form) } finally { submitting = false }
 }`}
-    note={"Guard on a flag at the top and clear it in `finally`. Pair with a `disabled` button so a fast double-click can't fire the mutation twice."} />
+    note={"Guard on a flag at the top and clear it in `finally`. Pair with a `disabled` button so a fast double-click can't fire the mutation twice — or skip the flag entirely and read `save.pending()` (see errors › probes) when you just need the in-flight state."} />
 
 <Recipe task="Retry a failed submit" live={LIVE} code={`let error = state(undefined)
 async function submit() {
@@ -162,3 +166,5 @@ const xhr = new XMLHttpRequest()
 xhr.upload.onprogress = (e) => (pct = e.loaded / e.total)
 xhr.open('POST', uploadNote.url)`}
     note={'The typed rpc call is `fetch`-based and exposes no upload-progress events. For a progress bar, post to `rpc.url` with `XMLHttpRequest` (which does emit them) and forgo the typed wrapper for that one call.'} />
+</div>
+</div>

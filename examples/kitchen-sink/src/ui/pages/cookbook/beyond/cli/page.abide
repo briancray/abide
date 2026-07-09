@@ -5,12 +5,16 @@ import Recipe from '$ui/Recipe.abide'
 const LIVE = '/cli'
 </script>
 
+<div class="flex flex-col gap-8">
+<div class="flex flex-col gap-2">
 <h1 class="text-3xl font-bold">cli</h1>
-<p class="mt-2 text-slate-600">
+<p class="text-slate-600">
     Every schema-bearing rpc is also a CLI subcommand.
     <code class="font-mono">abide cli</code> builds a thin binary that ships the server beside it;
     flags are computed from the schema.
 </p>
+</div>
+<div class="flex flex-col gap-4">
 
 <Recipe
     task="Build the CLI binary"
@@ -75,3 +79,5 @@ const LIVE = '/cli'
     code={`abide run scripts/seed.ts        # same preload/runtime as the server`}
     lang="sh"
     note={'`abide run <file>` executes a one-off script with the abide preload — import your rpcs and sockets directly for seeding, migrations, or maintenance tasks.'} />
+</div>
+</div>

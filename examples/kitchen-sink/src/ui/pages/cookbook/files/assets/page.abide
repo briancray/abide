@@ -5,12 +5,16 @@ import Recipe from '$ui/Recipe.abide'
 const BUNDLE = '/bundle'
 </script>
 
+<div class="flex flex-col gap-8">
+<div class="flex flex-col gap-2">
 <h1 class="text-3xl font-bold">static assets & the data dir</h1>
-<p class="mt-2 text-slate-600">
+<p class="text-slate-600">
     Files under <code class="font-mono">public/</code> are served at the root and resolved
     base-correctly by <code class="font-mono">url()</code>. Runtime files live under
     <code class="font-mono">appDataDir()</code>, the per-user data dir.
 </p>
+</div>
+<div class="flex flex-col gap-4">
 
 <Recipe task="Serve a static asset" code={`// src/ui/public/logo.svg  →  served at /logo.svg
 <img src={url('/logo.svg')} alt="logo" />`} note={"Drop a file in `src/ui/public/` and it's served at the root. Reference it through `url()` so it survives a subpath deploy."} />
@@ -59,3 +63,5 @@ export const thumbnail = GET(async ({ id }) => {
     return new Response(buf, { headers: { 'Content-Type': 'image/webp' } })
 })`}
     note={"There's no built-in image transformation, resizing, or thumbnail pipeline. Call an image library (sharp, etc.) inside an rpc and cache the result yourself — abide serves the bytes, it doesn't process them."} />
+</div>
+</div>

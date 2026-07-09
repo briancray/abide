@@ -1,63 +1,20 @@
 <script>
-import { state } from '@abide/abide/ui/state'
-import { watch } from '@abide/abide/ui/watch'
-import { getChatCount } from '$server/rpc/getChatCount.ts'
-import { getChatLog } from '$server/rpc/getChatLog.ts'
-import { publishChat } from '$server/rpc/publishChat.ts'
-import { chat } from '$server/sockets/chat.ts'
 import CodeBlock from '$ui/CodeBlock.abide'
-
-/*
-Reactive state — the two imported primitives. `state` carries `state.computed`
-and `state.linked`; `watch` is the single reaction. Call them bare; a cell reads
-and writes like a plain variable. props is the one reactive name in scope without
-an import.
-*/
-
-let count = state(0)
-const doubled = state.computed(() => count * 2)
-
-// watch(thunk): a client-only reaction, stripped from SSR; return a cleanup.
-let ticks = state(0)
-watch(() => {
-    const id = setInterval(() => (ticks = ticks + 1), 1000)
-    return () => clearInterval(id)
-})
-
-// transform coerces every write — clamp into 1..99
-let qty = state(1, (n) => Math.max(1, Math.min(99, Math.round(Number(n) || 0))))
-
-// linked: a local draft seeded from upstream; reseeds when the source changes
-let serverName = state('ada')
-let nameDraft = state.linked(() => serverName)
-
-/* watch(source, handler): name the trigger. A chat frame refreshes the count
-   (stale total stays visible, revalidates) and patches the log in place (the
-   frame IS the new message — fold it in, no refetch). */
-watch(chat, (message) => {
-    getChatCount.refresh()
-    getChatLog.patch((log) => ({ messages: [...log.messages, message].slice(-20) }))
-})
-const chatCount = state.computed(() => getChatCount())
-const chatLog = state.computed(() => getChatLog())
 </script>
 
-<h1 class="text-3xl font-bold">reactive state</h1>
-<p class="mt-2 text-slate-600">
-    Two imported primitives — <code class="font-mono">state</code> from
-    <code class="font-mono">abide/ui/state</code> (with
-    <code class="font-mono">state.computed</code> and
-    <code class="font-mono">state.linked</code> attached) and
-    <code class="font-mono">watch</code> from <code class="font-mono">abide/ui/watch</code> — then
-    called bare. <code class="font-mono">props</code> is the one reactive name in scope without an
-    import. A writable computed lives at the bind site as an accessor (<a
-        class="underline"
-        href="/templating/bindings"
-        ><code class="font-mono">{'bind:value={{ get, set }}'}</code></a
-    >), never as a primitive — <code class="font-mono">computed</code> itself is always read-only.
+<div class="flex flex-col gap-8">
+<div class="flex flex-col gap-2">
+<h2 class="text-xl font-semibold">the surface</h2>
+<p class="text-slate-600">
+    Every reactive name is a plain function, resolved by its import binding — no
+    <code class="font-mono">$state</code> / <code class="font-mono">$derived</code> runes, no
+    <code class="font-mono">scope()</code> destructure. See them live under
+    <a class="underline" href="/reactive-state/primitives">primitives</a> and
+    <a class="underline" href="/reactive-state/reactions">reactions</a>.
 </p>
+</div>
 
-<section class="mt-6 overflow-x-auto rounded-lg border border-slate-200 bg-white">
+<section class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
     <table class="w-full text-sm">
         <thead class="border-b border-slate-200 bg-slate-50 text-left">
             <tr>
@@ -101,129 +58,35 @@ const chatLog = state.computed(() => getChatLog())
                     <code class="font-mono">= default</code>
                 </td>
             </tr>
+            <tr>
+                <td class="px-4 py-2 font-mono">state.share(key, value)</td>
+                <td class="px-4 py-2 text-slate-600">
+                    put a named value on the ambient scope — implicit context, no prop threading
+                </td>
+            </tr>
+            <tr>
+                <td class="px-4 py-2 font-mono">state.shared(key)</td>
+                <td class="px-4 py-2 text-slate-600">
+                    read the closest ancestor scope that shared <code class="font-mono">key</code>
+                </td>
+            </tr>
         </tbody>
     </table>
 </section>
 
-<div class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
-    <div class="flex flex-wrap items-center gap-3 text-sm">
-        <button
-            type="button"
-            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
-            onclick={() => (count = count - 1)}>
-            −
-        </button>
-        <span class="font-mono">count = <strong>{count}</strong></span>
-        <button
-            type="button"
-            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
-            onclick={() => (count = count + 1)}>
-            +
-        </button>
-        <span class="font-mono text-slate-500">computed doubled = {doubled}</span>
-        <span class="ml-auto font-mono text-slate-500">watch ticks = {ticks}s</span>
-    </div>
-</div>
+<section class="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-5">
+    <h3 class="text-sm font-semibold">
+        Implicit context — <code class="font-mono">state.share</code> /
+        <code class="font-mono">state.shared</code>
+    </h3>
+    <p class="text-xs text-slate-500">
+        A parent puts a value on the ambient scope; any descendant reads the closest ancestor that
+        shared the key — no prop threading. Reads are reactive.
+    </p>
+    <CodeBlock code={`// a layout or ancestor component
+state.share('theme', theme)
 
-<div class="mt-3 grid gap-3 sm:grid-cols-2">
-    <div class="rounded-lg border border-slate-200 bg-white p-5">
-        <h3 class="text-xs font-semibold text-slate-500">state(v, transform)</h3>
-        <p class="mt-1 text-xs text-slate-500">Type anything — the write is clamped to 1..99.</p>
-        <input
-            type="number"
-            bind:value={qty}
-            class="mt-2 w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
-        <p class="mt-2 font-mono text-xs text-slate-600">qty = {qty}</p>
-    </div>
-
-    <div class="rounded-lg border border-slate-200 bg-white p-5">
-        <h3 class="text-xs font-semibold text-slate-500">state.linked(fn) — draft</h3>
-        <p class="mt-1 text-xs text-slate-500">
-            Edit the draft; "pull" reseeds it from the source.
-        </p>
-        <input
-            bind:value={nameDraft}
-            class="mt-2 w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
-        <div class="mt-2 flex items-center gap-2">
-            <button
-                type="button"
-                class="rounded-md border border-slate-300 px-2 py-1 text-xs hover:bg-slate-100"
-                onclick={() => (serverName = serverName === 'ada' ? 'grace' : 'ada')}>
-                pull from source
-            </button>
-            <span class="font-mono text-xs text-slate-500">source = {serverName}</span>
-        </div>
-    </div>
-</div>
-
-<section class="mt-6 space-y-3 rounded-lg border border-slate-200 bg-white p-5">
-    <CodeBlock title="reactive primitives — exactly what this demo runs" code={`<script>
-    import { state } from '@abide/abide/ui/state'   // state.computed / state.linked attached
-    import { watch } from '@abide/abide/ui/watch'
-    let count = state(0)                            // writable cell — the +/− buttons
-    const doubled = state.computed(() => count * 2)       // recomputes when count changes
-    let ticks = state(0)
-    watch(() => {                                   // thunk form: client-only, cleanup on unmount
-        const id = setInterval(() => (ticks = ticks + 1), 1000)
-        return () => clearInterval(id)
-    })
-
-    // transform coerces every write; linked seeds a draft from upstream
-    let qty = state(1, (n) => Math.max(1, Math.min(99, Math.round(Number(n) || 0))))
-    let serverName = state('ada')
-    let nameDraft = state.linked(() => serverName)
-</script>`} />
+// any descendant, however deep
+const theme = state.shared<Theme>('theme')   // closest ancestor's value, or undefined`} />
 </section>
-
-<h2 class="mt-10 text-2xl font-bold">
-    <code class="font-mono">watch</code> a source · <code class="font-mono">refresh</code> /
-    <code class="font-mono">patch</code> a cached read
-</h2>
-<p class="mt-2 text-slate-600">
-    <code class="font-mono">watch(source, handler)</code> names its trigger. Here a chat frame
-    drives two reactions on cached reads: <code class="font-mono">refresh</code> revalidates a count
-    in the background (the stale value stays visible, never blanks) while
-    <code class="font-mono">patch</code> folds the frame's own payload into a cached list with no
-    refetch.
-</p>
-
-<section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
-    <div class="mt-1 grid gap-3 sm:grid-cols-2">
-        <div class="rounded-md border border-slate-200 p-3">
-            <p class="text-xs text-slate-500">published — <code class="font-mono">refresh</code></p>
-            {#await chatCount then data}
-                <p class="mt-1 font-mono text-3xl text-slate-900">{data.published}</p>
-            {/await}
-        </div>
-        <div class="rounded-md border border-slate-200 p-3">
-            <p class="text-xs text-slate-500">recent — <code class="font-mono">patch</code></p>
-            {#await chatLog then data}
-                {#if data.messages.length === 0}
-                    <p class="mt-1 text-sm text-slate-400">none yet</p>
-                {:else}
-                    <ul class="mt-1 space-y-0.5 text-sm text-slate-700">
-                        {#for message of data.messages.slice(-5) by message.id}
-                            <li><strong>{message.from}</strong>: {message.text}</li>
-                        {/for}
-                    </ul>
-                {/if}
-            {/await}
-        </div>
-    </div>
-    <button
-        type="button"
-        class="mt-3 rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100"
-        onclick={() => publishChat({ from: 'state page', text: 'ping' })}>
-        {'publishChat({ from, text })'}
-    </button>
-
-    <CodeBlock title="watch a socket, refresh + patch the reads" code={`import { watch } from '@abide/abide/ui/watch'
-
-// one reaction, named by its source — no hand-rolled subscribe/teardown
-watch(chat, (message) => {
-    getChatCount.refresh()                                         // revalidate; stale total stays visible
-    getChatLog.patch((log) => ({ messages: [...log.messages, message].slice(-20) }))  // fold in, no refetch
-})
-const chatCount = state.computed(() => getChatCount())   // the bare call IS the smart cached read
-const chatLog = state.computed(() => getChatLog())`} />
-</section>
+</div>

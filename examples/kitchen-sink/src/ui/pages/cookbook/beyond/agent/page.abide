@@ -5,12 +5,16 @@ import Recipe from '$ui/Recipe.abide'
 const LIVE = '/agent'
 </script>
 
+<div class="flex flex-col gap-8">
+<div class="flex flex-col gap-2">
 <h1 class="text-3xl font-bold">agent</h1>
-<p class="mt-2 text-slate-600">
+<p class="text-slate-600">
     <code class="font-mono">agent(engine, messages)</code> runs a model against the app's own MCP
     surface — every schema-bearing, mcp-exposed rpc is a tool it may call — and returns an
     <code class="font-mono">AgentFrame</code> stream the handler frames like any other stream.
 </p>
+</div>
+<div class="flex flex-col gap-4">
 
 <Recipe
     task="Run a model over the app's tools"
@@ -64,8 +68,8 @@ await chat.raw({ messages: history })   // post the whole transcript`}
 <Recipe
     task="Keep the agent rpc off its own tool surface"
     live={LIVE}
-    code={`export const chat = POST(handler, { schemas: { input: inputSchema }, clients: { cli: false } })
-// no clients.mcp → the agent rpc is never itself a tool`}
+    code={`export const chat = POST(handler, { schemas: { input: inputSchema } })
+// no clients.mcp → the mutating rpc is never itself an MCP tool`}
     note={"A mutating POST stays off MCP unless it opts in — leave `clients.mcp` off so the agent can't be handed a tool that re-enters the agent."} />
 
 <Recipe
@@ -81,3 +85,5 @@ permissions: { defaultMode: 'dontAsk', allow: ['mcp__app__getRates'] }`}
     code={`import { sse } from '@abide/abide/server/sse'
 export const chat = POST(({ messages }) => sse(agent(engine, messages)), { schemas: { input: inputSchema } })`}
     note={'Swap `jsonl()` for `sse()` and consume with `EventSource` — the handler picks the transport; the `AgentFrame` stream is the same either way.'} />
+</div>
+</div>

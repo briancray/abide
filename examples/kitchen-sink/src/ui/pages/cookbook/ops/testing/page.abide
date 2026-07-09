@@ -5,12 +5,16 @@ import Recipe from '$ui/Recipe.abide'
 const LIVE = '/build#testing'
 </script>
 
+<div class="flex flex-col gap-8">
+<div class="flex flex-col gap-2">
 <h1 class="text-3xl font-bold">testing</h1>
-<p class="mt-2 text-slate-600">
+<p class="text-slate-600">
     <code class="font-mono">createTestApp()</code> boots the real app in-process on an ephemeral
     port — the full pipeline (SSR, CSRF, cookies, base path) runs, not a fixture. The rpc/socket
     surface is typed off your project.
 </p>
+</div>
+<div class="flex flex-col gap-4">
 
 <Recipe task="Boot an app in a test" live={LIVE} code={`import { createTestApp } from '@abide/abide/test/createTestApp'
 
@@ -79,3 +83,6 @@ root = "tests"`}
     code={`// no fixtures, no manifests — createTestApp imports the project's own
 // route/rpc registries via the abide preload`}
     note={"There's nothing to mock: the test app is the app. You exercise SSR, rpc dispatch, the CSRF gate, and the health endpoint end-to-end, which is what actually breaks."} />
+
+</div>
+</div>

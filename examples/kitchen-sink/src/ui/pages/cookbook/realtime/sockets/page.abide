@@ -5,13 +5,17 @@ import Recipe from '$ui/Recipe.abide'
 const LIVE = '/sockets'
 </script>
 
+<div class="flex flex-col gap-8">
+<div class="flex flex-col gap-2">
 <h1 class="text-3xl font-bold">sockets & publish</h1>
-<p class="mt-2 text-slate-600">
+<p class="text-slate-600">
     A <code class="font-mono">socket</code> is a broadcast topic — one export per file under
     <code class="font-mono">src/server/sockets/</code>.
     <code class="font-mono">broadcast()</code> is isomorphic; retention defaults to the last frame
     (<code class="font-mono">tail: 1</code>) and scales via <code class="font-mono">tail: n</code>.
 </p>
+</div>
+<div class="flex flex-col gap-4">
 
 <Recipe task="Declare a broadcast topic" live={LIVE} code={`import { socket } from '@abide/abide/server/socket'
 
@@ -34,7 +38,7 @@ export const chat = socket({ schema })`}
     task="Retain recent frames for late joiners"
     live={LIVE}
     code={`export const chat = socket({ schema, tail: 100 })`}
-    note={'`tail: n` keeps the last n frames, so a browser that subscribes late seeds from history instead of starting empty. Without it, a socket is live-only.'} />
+    note={'`tail: n` keeps the last n frames, so a browser that subscribes late seeds from history instead of starting empty. A socket retains the last frame by default (`tail: 1`); set `tail: 0` for live-only.'} />
 
 <Recipe task="Bound retention by age" live={LIVE} code={`export const chat = socket({ schema, tail: 100, ttl: 3_600_000 })`} note={"`ttl` (ms) evicts retained frames older than the window, lazily (no timers) — a quiet room doesn't replay stale chatter on join."} />
 
@@ -98,3 +102,6 @@ watch(online, (presence) => (roster = presence))`}
     code={`// from a boot hook, a cron, or another handler
 deploys.broadcast({ version, at: Date.now() })`}
     note={"`broadcast()` works anywhere on the server — a background job, a webhook handler, a timer — not only inside the topic's own rpc."} />
+
+</div>
+</div>

@@ -6,12 +6,16 @@ const LIVE = '/build'
 const REF = '/reference'
 </script>
 
+<div class="flex flex-col gap-8">
+<div class="flex flex-col gap-2">
 <h1 class="text-3xl font-bold">config & boot</h1>
-<p class="mt-2 text-slate-600">
+<p class="text-slate-600">
     Validate environment config with <code class="font-mono">env()</code>, and shape the runtime
     with the <code class="font-mono">src/app.ts</code> boot hooks — resolved by the framework, no
     import needed from your code.
 </p>
+</div>
+<div class="flex flex-col gap-4">
 
 <Recipe
     task="Validate environment config"
@@ -110,3 +114,6 @@ export const forwardHeaders = ['user-agent']`}
     code={`ABIDE_DATA_DIR=/var/lib/myapp abide start`}
     lang="sh"
     note={'`ABIDE_DATA_DIR` overrides the per-user app data dir on every platform — point a bundle or server at a specific volume for its database and files.'} />
+
+</div>
+</div>

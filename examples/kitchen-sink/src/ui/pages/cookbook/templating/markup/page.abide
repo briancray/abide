@@ -6,11 +6,15 @@ const LIVE = '/templating/bindings'
 const STYLE_LIVE = '/templating/snippets'
 </script>
 
+<div class="flex flex-col gap-8">
+<div class="flex flex-col gap-2">
 <h1 class="text-3xl font-bold">raw html & scoped style</h1>
-<p class="mt-2 text-slate-600">
+<p class="text-slate-600">
     Escaping trusted markup, component-scoped <code class="font-mono">&lt;style&gt;</code>, foreign
     content, and the gaps where abide has no first-class answer yet.
 </p>
+</div>
+<div class="flex flex-col gap-4">
 
 <Recipe task="Render trusted raw HTML" live={LIVE} code={`import { html } from '@abide/abide/ui/html'
 
@@ -109,3 +113,6 @@ watch(() => {
     return () => el.remove()
 })`}
     note={'There is no portal directive to teleport markup elsewhere in the document. For a modal or a `<head>` tag, mount imperatively in a client-only watch and tear it down on cleanup.'} />
+
+</div>
+</div>

@@ -50,9 +50,10 @@ const calls = [
 ]
 </script>
 
-<section class="mt-6">
+<div class="flex flex-col gap-8">
+<section class="flex flex-col gap-2">
     <h2 class="text-sm font-semibold">Options</h2>
-    <div class="mt-2 overflow-x-auto rounded-lg border border-slate-200 bg-white">
+    <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
         <table class="w-full text-sm">
             <thead class="border-b border-slate-200 bg-slate-50 text-left">
                 <tr>
@@ -96,6 +97,14 @@ const calls = [
                         streaming read replay depth <code class="font-mono">{'{ n }'}</code>
                     </td>
                     <td class="px-4 py-2 text-slate-500">none</td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">outbox</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        durable delivery on a mutating helper — queues offline, drains on reconnect
+                        (<a class="underline" href="/outbox">outbox</a>)
+                    </td>
+                    <td class="px-4 py-2 font-mono text-slate-500">false</td>
                 </tr>
                 <tr>
                     <td class="px-4 py-2 font-mono">clients.browser</td>
@@ -146,15 +155,15 @@ const calls = [
     </div>
 </section>
 
-<section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
+<section class="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5">
     <h2 class="text-sm font-semibold">Try every rpc</h2>
-    <label class="mt-2 block text-xs font-medium">
+    <label class="block text-xs font-medium">
         message
         <input
             bind:value={message}
-            class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
+            class="block w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
     </label>
-    <div class="mt-3 flex flex-wrap gap-2 text-sm">
+    <div class="flex flex-wrap gap-2 text-sm">
         {#for call of calls by call.label}
             <button
                 type="button"
@@ -165,7 +174,7 @@ const calls = [
         {/for}
     </div>
     {#if log.length > 0}
-        <ul class="mt-3 space-y-1 font-mono text-xs text-slate-700">
+        <ul class="flex flex-col gap-1 font-mono text-xs text-slate-700">
             {#for entry of log by entry.id}
                 <li>{entry.rpc} →{entry.outcome}</li>
             {/for}
@@ -189,31 +198,31 @@ export const headEcho = HEAD(() =>
 // headEcho and deleteEcho resolve to undefined (204); the rest resolve to the decoded body`} />
 </section>
 
-<section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
+<section class="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5">
     <h2 class="text-sm font-semibold">
         <code class="font-mono">filesSchema</code> — multipart upload
     </h2>
-    <p class="mt-1 text-xs text-slate-500">
+    <p class="text-xs text-slate-500">
         A body rpc accepts a <code class="font-mono">FormData</code> in place of typed args: text
         fields validate against <code class="font-mono">inputSchema</code>,
         <code class="font-mono">File</code> parts against
         <code class="font-mono">filesSchema</code>, merged into the handler's args.
     </p>
-    <form class="mt-3 flex flex-wrap items-end gap-2 text-sm" onsubmit={async (event: SubmitEvent) => {
+    <form class="flex flex-wrap items-end gap-2 text-sm" onsubmit={async (event: SubmitEvent) => {
         event.preventDefault()
         const formData = new FormData(event.currentTarget as HTMLFormElement)
         await safeCall('upload', () => uploadNote(formData))
     }}>
-        <label class="text-xs font-medium">
+        <label class="flex flex-col gap-1 text-xs font-medium">
             title
             <input
                 name="title"
                 value="receipts"
-                class="mt-1 block rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
+                class="block rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
         </label>
-        <label class="text-xs font-medium">
+        <label class="flex flex-col gap-1 text-xs font-medium">
             attachments
-            <input name="attachments" type="file" multiple class="mt-1 block text-sm" />
+            <input name="attachments" type="file" multiple class="block text-sm" />
         </label>
         <button
             type="submit"
@@ -223,11 +232,11 @@ export const headEcho = HEAD(() =>
     </form>
 </section>
 
-<section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
+<section class="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5">
     <h2 class="text-sm font-semibold">
         <code class="font-mono">withJsonSchema</code> — a non-native schema
     </h2>
-    <p class="mt-1 text-xs text-slate-500">
+    <p class="text-xs text-slate-500">
         <code class="font-mono">convertTemp</code>'s <code class="font-mono">inputSchema</code> is
         hand-rolled — the bare <code class="font-mono">~standard</code> contract, no schema library.
         It carries no native <code class="font-mono">toJSONSchema()</code>, so
@@ -235,13 +244,13 @@ export const headEcho = HEAD(() =>
         validate but disappear from <a class="underline" href="/openapi.json">/openapi.json</a>,
         <a class="underline" href="/mcp">/mcp</a>, and the CLI.
     </p>
-    <div class="mt-3 flex flex-wrap items-end gap-2 text-sm">
-        <label class="text-xs font-medium">
+    <div class="flex flex-wrap items-end gap-2 text-sm">
+        <label class="flex flex-col gap-1 text-xs font-medium">
             celsius
             <input
                 type="number"
                 bind:value={celsius}
-                class="mt-1 block w-28 rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
+                class="block w-28 rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
         </label>
         <button
             type="button"
@@ -264,3 +273,4 @@ const inputSchema = withJsonSchema(celsiusSchema, () => ({
 export const convertTemp = GET(({ celsius }) =>
     json({ celsius, fahrenheit: celsius * 1.8 + 32 }), { schemas: { input: inputSchema } })`} />
 </section>
+</div>

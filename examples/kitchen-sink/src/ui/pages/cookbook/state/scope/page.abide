@@ -5,12 +5,16 @@ import Recipe from '$ui/Recipe.abide'
 const LIVE = '/reactive-state'
 </script>
 
+<div class="flex flex-col gap-8">
+<div class="flex flex-col gap-2">
 <h1 class="text-3xl font-bold">state basics</h1>
-<p class="mt-2 text-slate-600">
+<p class="text-slate-600">
     <code class="font-mono">state</code> is the reactive cell — imported from
     <code class="font-mono">abide/ui/state</code> and called bare. A cell reads and writes like a
     plain variable.
 </p>
+</div>
+<div class="flex flex-col gap-4">
 
 <Recipe
     task="Create a local reactive cell"
@@ -86,7 +90,7 @@ let form = state(INITIAL)
 function reset() {
     form = INITIAL
 }`}
-    note={'Keep the initial in a constant and reassign it. For a draft that tracks a moving source, reach for `linked` instead (see derived).'} />
+    note={'Keep the initial in a constant and reassign it. For a draft that tracks a moving source, reach for `state.linked` instead (see derived).'} />
 
 <Recipe
     task="Import before you use a primitive"
@@ -98,3 +102,6 @@ let count = state(0)
 import { state } from '@abide/abide/ui/state'
 let count = state(0)`}
     note={'`state` (with `state.computed` / `state.linked`) comes from `abide/ui/state`; `watch` from `abide/ui/watch`. Import the primitive you use — the compiler resolves the binding and owns each cell to the enclosing component lifetime.'} />
+
+</div>
+</div>

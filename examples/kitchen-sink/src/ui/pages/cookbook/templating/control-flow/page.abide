@@ -5,12 +5,16 @@ import Recipe from '$ui/Recipe.abide'
 const LIVE = '/templating/control-flow'
 </script>
 
+<div class="flex flex-col gap-8">
+<div class="flex flex-col gap-2">
 <h1 class="text-3xl font-bold">control flow</h1>
-<p class="mt-2 text-slate-600">
+<p class="text-slate-600">
     Every <code class="font-mono">{'{#…}'}</code> block is a lexical scope: its value-params and
     any nested <code class="font-mono">&lt;script&gt;</code> bind inside it. Recipes for rendering
     lists, branching, and awaiting.
 </p>
+</div>
+<div class="flex flex-col gap-4">
 
 <Recipe task="Render a list" live={LIVE} code={`{#for fruit of fruits}
     <li>{fruit}</li>
@@ -81,12 +85,18 @@ const LIVE = '/templating/control-flow'
     note={'`{#for}` has no empty branch — wrap it in `{#if list.length}…{:else}…` to render an empty state.'} />
 
 <Recipe
+    task="Read async data as a bare peek"
+    live={LIVE}
+    code={`<p>{getUser()?.name ?? 'loading…'}</p>`}
+    note={'A promise-typed read is a peek: `undefined` while pending, then the value — composing with `??` / `?.` / `{#if}` / attributes, no block. Add a leading `await` to block SSR, and reach for `{#await}` (below) when you want a distinct pending branch, `{:catch}`, or `{:then}` narrowing.'} />
+
+<Recipe
     task="Await data inline so it renders during SSR"
     live={LIVE}
     code={`{#await getUser() then user}
     <p>{user.name}</p>
 {/await}`}
-    note={'The inline `then` form renders blocking, depth-first, inside the SSR stream — no loading branch, the server waits for the value.'} />
+    note={'The inline `then` head blocks: the server waits and renders depth-first inside the SSR stream, no loading branch. Use it (over a bare `{await getUser()...}`) when you want the narrowed `user` across several fields.'} />
 
 <Recipe
     task="Show a spinner while a promise resolves"
@@ -157,3 +167,6 @@ const LIVE = '/templating/control-flow'
     <p>{total} names</p>
 {/await}`}
     note={'A nested <script> inside a branch declares branch-local reactive state over the value-param, re-seeded each time the branch mounts. It may not carry imports — hoist those to the leading script.'} />
+
+</div>
+</div>

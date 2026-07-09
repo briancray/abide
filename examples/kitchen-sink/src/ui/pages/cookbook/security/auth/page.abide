@@ -6,12 +6,16 @@ const LIVE = '/rpc/request-scope'
 const SEC = '/security'
 </script>
 
+<div class="flex flex-col gap-8">
+<div class="flex flex-col gap-2">
 <h1 class="text-3xl font-bold">auth & identity</h1>
-<p class="mt-2 text-slate-600">
+<p class="text-slate-600">
     Identify the caller from <code class="font-mono">request()</code>, persist a session with
     <code class="font-mono">cookies()</code>, and enforce access in the
     <code class="font-mono">handle</code> middleware or per handler.
 </p>
+</div>
+<div class="flex flex-col gap-4">
 
 <Recipe
     task="Read the current request anywhere"
@@ -91,3 +95,6 @@ export const forwardHeaders = ['authorization']`}
 // 2. handle hook → resolve session → currentUser()
 // 3. logout → cookies().delete('session')`}
     note={"There's no bundled auth library, OAuth client, or password store. abide gives you the primitives — `cookies()`, `request()`, the `handle` hook, rpc validation — and you assemble the flow (or bridge an external identity provider) yourself."} />
+
+</div>
+</div>

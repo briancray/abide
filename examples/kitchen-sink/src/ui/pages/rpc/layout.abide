@@ -23,9 +23,11 @@ const pillClass = (href: string) =>
         : 'rounded-full border border-slate-300 bg-white px-3 py-1 text-slate-600 hover:bg-slate-100'
 </script>
 
-<h1 class="text-3xl font-bold">rpc</h1>
-<p class="mt-2 text-slate-600">
-    One file per rpc under <code class="font-mono">src/server/rpc/</code>. Filename = export name =
+<div class="flex flex-col gap-4">
+    <div class="flex flex-col gap-2">
+        <h1 class="text-3xl font-bold">rpc</h1>
+        <p class="text-slate-600">
+            One file per rpc under <code class="font-mono">src/server/rpc/</code>. Filename = export name =
     URL path under <code class="font-mono">/rpc/</code>; the imported rpc (<code class="font-mono"
         >GET</code
     >
@@ -33,11 +35,13 @@ const pillClass = (href: string) =>
     <code class="font-mono">PATCH</code> / <code class="font-mono">DELETE</code> /
     <code class="font-mono">HEAD</code>, each its own import) picks the HTTP method. Args ride the
     query string (GET/DELETE/HEAD) or the JSON/form body (POST/PUT/PATCH); body wins on collision.
-</p>
-<nav class="mt-4 flex flex-wrap gap-2 text-sm">
-    {#for s of subpages by s.href}
-        <a href={s.href} class={pillClass(s.href)}>{s.label}</a>
-    {/for}
-</nav>
+        </p>
+    </div>
+    <nav class="flex flex-wrap gap-2 text-sm">
+        {#for s of subpages by s.href}
+            <a href={s.href} class={pillClass(s.href)}>{s.label}</a>
+        {/for}
+    </nav>
+</div>
 
 {children()}

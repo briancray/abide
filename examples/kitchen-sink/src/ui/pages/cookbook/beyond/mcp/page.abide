@@ -5,13 +5,17 @@ import Recipe from '$ui/Recipe.abide'
 const LIVE = '/mcp'
 </script>
 
+<div class="flex flex-col gap-8">
+<div class="flex flex-col gap-2">
 <h1 class="text-3xl font-bold">mcp</h1>
-<p class="mt-2 text-slate-600">
+<p class="text-slate-600">
     The app exposes a Model Context Protocol server at
     <code class="font-mono">POST /__abide/mcp</code> — tools from mcp-exposed rpcs and
     schema-bearing sockets, prompts from <code class="font-mono">src/mcp/prompts/</code>, resources
     from <code class="font-mono">src/mcp/resources/</code>.
 </p>
+</div>
+<div class="flex flex-col gap-4">
 
 <Recipe
     task="Expose a read rpc as a tool"
@@ -72,3 +76,5 @@ export const handle = async (request, next) => {
     live={LIVE}
     code={`export const chat = POST(handler, { schemas: { input: inputSchema } })   // no clients.mcp → not a tool`}
     note={"Omit `clients.mcp` (the default for mutating verbs) to keep an rpc off MCP — e.g. the agent rpc itself, so the model can't re-enter the agent."} />
+</div>
+</div>

@@ -6,12 +6,16 @@ const LIVE = '/build#deploy'
 const OBS = '/observability'
 </script>
 
+<div class="flex flex-col gap-8">
+<div class="flex flex-col gap-2">
 <h1 class="text-3xl font-bold">build & deploy</h1>
-<p class="mt-2 text-slate-600">
+<p class="text-slate-600">
     From dev to prod — the <code class="font-mono">abide</code> commands, a compiled binary that
     needs neither Bun nor <code class="font-mono">node_modules</code>, and the observability seams
     for a running server.
 </p>
+</div>
+<div class="flex flex-col gap-4">
 
 <Recipe
     task="Build the client for production"
@@ -101,3 +105,6 @@ import { trace } from '@abide/abide/shared/trace'
 const rows = await log.trace('load-rows', () => query())   // logs name + duration
 const id = trace()                                          // W3C traceparent`}
     note={"`log.trace(name, fn)` runs the work, logs its duration as a span, and rethrows failures — instrumentation never changes the result. `trace()` is the request's traceparent for correlating across services."} />
+
+</div>
+</div>

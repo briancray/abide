@@ -5,13 +5,17 @@ import Recipe from '$ui/Recipe.abide'
 const LIVE = '/reactive-state'
 </script>
 
+<div class="flex flex-col gap-8">
+<div class="flex flex-col gap-2">
 <h1 class="text-3xl font-bold">smart calls & refresh</h1>
-<p class="mt-2 text-slate-600">
+<p class="text-slate-600">
     The bare rpc call IS the smart read — coalesced, retained (SWR always on), reactive, with an SSR
     snapshot — the same line on server and client. <code class="font-mono">.raw</code> is the
     uncached transport escape hatch; <code class="font-mono">refresh</code> and
     <code class="font-mono">patch</code> drive the retained value.
 </p>
+</div>
+<div class="flex flex-col gap-4">
 
 <Recipe
     task="Read across SSR and client"
@@ -105,3 +109,5 @@ watch(() => {
     const id = setInterval(() => getRates.refresh(), 15_000)
     return () => clearInterval(id)
 })`} note={"There's no built-in poll option — refresh on a timer in a client-only watch and the reactive read revalidates. Clear the timer in the cleanup."} />
+</div>
+</div>

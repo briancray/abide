@@ -5,6 +5,7 @@ import { checkout } from '$server/rpc/checkout.ts'
 import { getEcho } from '$server/rpc/getEcho.ts'
 import { getProduct } from '$server/rpc/getProduct.ts'
 import CodeBlock from '$ui/CodeBlock.abide'
+import Demo from '$ui/Demo.abide'
 import { state } from '@abide/abide/ui/state'
 let outcome404 = state('(not triggered)')
 let outcome405 = state('(not triggered)')
@@ -69,20 +70,23 @@ async function trigger500() {
 }
 </script>
 
-<h1 class="mt-8 text-3xl font-bold"><code class="font-mono">HttpError</code></h1>
-<p class="mt-2 text-slate-600">
-    Non-2xx comes back through the same call site as the success path.
+<div class="flex flex-col gap-8">
+    <div class="flex flex-col gap-2">
+        <h1 class="text-3xl font-bold"><code class="font-mono">HttpError</code></h1>
+        <p class="text-slate-600">
+            Non-2xx comes back through the same call site as the success path.
     <code class="font-mono">HttpError</code> carries <code class="font-mono">status</code>,
     <code class="font-mono">statusText</code>, and the raw <code class="font-mono">response</code>.
-    A <em>typed</em> error — a declared <code class="font-mono">errors</code> entry or a validation
-    422 — also carries <code class="font-mono">.kind</code> (the error name) and
+    A <em>typed</em> error — a returned <code class="font-mono">error.typed(...)</code> constructor
+    or a validation 422 — also carries <code class="font-mono">.kind</code> (the error name) and
     <code class="font-mono">.data</code> (its payload). All error responses are
     <code class="font-mono">Cache-Control: no-store</code>.
-</p>
+        </p>
+    </div>
 
-<section class="mt-6">
+<section class="flex flex-col gap-2">
     <h2 class="text-sm font-semibold">Error origins</h2>
-    <div class="mt-2 overflow-x-auto rounded-lg border border-slate-200 bg-white">
+    <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
         <table class="w-full text-sm">
             <thead class="border-b border-slate-200 bg-slate-50 text-left">
                 <tr>
@@ -140,9 +144,22 @@ async function trigger500() {
     </div>
 </section>
 
-<section class="mt-6 rounded-lg border border-slate-200 bg-white p-5">
-    <h2 class="text-sm font-semibold">Try it</h2>
-    <div class="mt-3 flex flex-wrap gap-2 text-sm">
+<Demo title="HttpError — any non-2xx, one catch shape" code={`import { HttpError } from '@abide/abide/shared/HttpError'
+
+try {
+    await getProduct({ id: 'missing' })
+} catch (err) {
+    if (err instanceof HttpError && err.status === 404) {
+        // err.response is the underlying Response
+    }
+}`}>
+    <p class="text-xs text-slate-500">
+        A handler returns <code class="font-mono">error(404, …)</code>; a wrong method 405s. Both
+        surface at the call site as <code class="font-mono">HttpError</code> with
+        <code class="font-mono">status</code> and the raw <code class="font-mono">response</code> —
+        the same <code class="font-mono">catch</code> on every status.
+    </p>
+    <div class="flex flex-wrap gap-2 text-sm">
         <button
             type="button"
             class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
@@ -155,12 +172,61 @@ async function trigger500() {
             onclick={trigger405}>
             POST /rpc/getEcho → 405
         </button>
+    </div>
+    <ul class="flex flex-col gap-1 font-mono text-xs text-slate-700">
+        <li>404:{outcome404}</li>
+        <li>405:{outcome405}</li>
+    </ul>
+
+    <CodeBlock title="src/server/rpc/getProduct.ts — explicit 404" code={`import { GET } from '@abide/abide/server/GET'
+import { json } from '@abide/abide/server/json'
+import { error } from '@abide/abide/server/error'
+
+export const getProduct = GET(({ id }: { id: string }) => {
+    const product = products[id]
+    if (!product) return error(404, \`no product with id \${id}\`)
+    return json(product)
+})`} />
+</Demo>
+
+<Demo title="A thrown error → 500" code={`import { GET } from '@abide/abide/server/GET'
+
+export const boom = GET(() => {
+    throw new Error('intentional boom — exercising the 500 error path')
+})`}>
+    <p class="text-xs text-slate-500">
+        An uncaught <code class="font-mono">throw</code> routes through
+        <code class="font-mono">app.handleError</code> and comes back as a 500
+        <code class="font-mono">HttpError</code>.
+    </p>
+    <div class="flex flex-wrap gap-2 text-sm">
         <button
             type="button"
             class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
             onclick={trigger500}>
             boom() → 500
         </button>
+    </div>
+    <ul class="flex flex-col gap-1 font-mono text-xs text-slate-700">
+        <li>500:{outcome500}</li>
+    </ul>
+</Demo>
+
+<Demo title="Typed errors — error.typed(...) + isError" code={`try {
+    await checkout({ sku: 'abide-mug', quantity: 3 })
+} catch (err) {
+    if (checkout.isError(err, 'outOfStock')) {
+        err.data.available // typed from the returned error.typed constructor — no cast
+    } else if (checkout.isError(err, 'validation')) {
+        err.data.fields.quantity // ValidationErrorData — no cast
+    }
+}`}>
+    <p class="text-xs text-slate-500">
+        A declared constructor adds <code class="font-mono">.kind</code> and typed
+        <code class="font-mono">.data</code>; <code class="font-mono">fn.isError(err, kind)</code>
+        narrows both with no cast. Validation (422) is a built-in typed error.
+    </p>
+    <div class="flex flex-wrap gap-2 text-sm">
         <button
             type="button"
             class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
@@ -174,39 +240,10 @@ async function trigger500() {
             {'checkout({ quantity: 0 }) → 422 validation'}
         </button>
     </div>
-    <ul class="mt-3 space-y-1 font-mono text-xs text-slate-700">
-        <li>404:{outcome404}</li>
-        <li>405:{outcome405}</li>
-        <li>500:{outcome500}</li>
+    <ul class="flex flex-col gap-1 font-mono text-xs text-slate-700">
         <li>409:{outcomeTyped}</li>
         <li>422:{outcomeValidation}</li>
     </ul>
-
-    <CodeBlock title="src/server/rpc/getProduct.ts — explicit 404" code={`import { GET } from '@abide/abide/server/GET'
-import { json } from '@abide/abide/server/json'
-import { error } from '@abide/abide/server/error'
-
-export const getProduct = GET(({ id }: { id: string }) => {
-    const product = products[id]
-    if (!product) return error(404, \`no product with id \${id}\`)
-    return json(product)
-})`} />
-
-    <CodeBlock title="src/server/rpc/boom.ts — thrown error → 500" code={`import { GET } from '@abide/abide/server/GET'
-
-export const boom = GET(() => {
-    throw new Error('intentional boom — exercising the 500 error path')
-})`} />
-
-    <CodeBlock title="client — same catch shape for every status" code={`import { HttpError } from '@abide/abide/shared/HttpError'
-
-try {
-    await getProduct({ id: 'missing' })
-} catch (err) {
-    if (err instanceof HttpError && err.status === 404) {
-        // err.response is the underlying Response
-    }
-}`} />
 
     <CodeBlock title="src/server/rpc/checkout.ts — a declared typed error" code={`import { error } from '@abide/abide/server/error'
 import { json } from '@abide/abide/server/json'
@@ -221,14 +258,5 @@ export const checkout = POST(({ sku, quantity }) => {
     if (quantity > available) return outOfStock({ sku, available })
     return json({ ok: true, sku, quantity })
 }, { schemas: { input: inputSchema } })`} />
-
-    <CodeBlock title="client — checkout.isError narrows kind + data" code={`try {
-    await checkout({ sku: 'abide-mug', quantity: 3 })
-} catch (err) {
-    if (checkout.isError(err, 'outOfStock')) {
-        err.data.available // typed from checkout's errors spec — no cast
-    } else if (checkout.isError(err, 'validation')) {
-        err.data.fields.quantity // ValidationErrorData — no cast
-    }
-}`} />
-</section>
+</Demo>
+</div>

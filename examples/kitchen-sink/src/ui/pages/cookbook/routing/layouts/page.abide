@@ -5,12 +5,16 @@ import Recipe from '$ui/Recipe.abide'
 const LIVE = '/pages'
 </script>
 
+<div class="flex flex-col gap-8">
+<div class="flex flex-col gap-2">
 <h1 class="text-3xl font-bold">layout chains</h1>
-<p class="mt-2 text-slate-600">
+<p class="text-slate-600">
     A <code class="font-mono">layout.abide</code> wraps every page at or below its folder. The page
     lands where the layout calls <code class="font-mono">{'{children()}'}</code>; chains apply every
     ancestor outermost-first and stay mounted across navigation.
 </p>
+</div>
+<div class="flex flex-col gap-4">
 
 <Recipe task="Add a layout" live={LIVE} code={`src/ui/pages/layout.abide          // wraps the whole app
 src/ui/pages/admin/layout.abide    // wraps /admin/*`} note={'Drop a `layout.abide` in a folder and it wraps every page beneath it — no import, the resolver finds it by filename.'} />
@@ -104,8 +108,10 @@ src/ui/pages/app/layout.abide         // sidebar + topbar`}
 <Recipe
     task="Load route data with a loader convention"
     gap={true}
-    code={`// no loader/getServerSideProps file — fetch in the page or layout
-{#await getData() then data}
-    <View data={data} />
-{/await}`}
-    note={"There's no separate data-loader module per route. Data-fetching lives in the page/layout itself via the bare smart call + `{#await}` — colocated, isomorphic, and warm-hydrated, but not a distinct loader lifecycle."} />
+    code={`// no loader/getServerSideProps file — read in the page or layout
+const data = state.computed(() => getData())   // bare smart read — no loader file
+// {#await getData()} when you want a distinct pending / :catch branch`}
+    note={"There's no separate data-loader module per route. Data-fetching lives in the page/layout itself — a bare smart read is colocated, isomorphic, and warm-hydrated; `{#await}` just adds a pending or `{:catch}` branch when you need one. Not a distinct loader lifecycle."} />
+
+</div>
+</div>
