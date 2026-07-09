@@ -1,5 +1,6 @@
 import { resolve } from 'node:path'
 import ts from 'typescript'
+import { jsonSchemaForType } from './jsonSchemaForType.ts'
 import { loadProjectTsConfig } from './loadProjectTsConfig.ts'
 import type { HttpMethod } from './types/HttpMethod.ts'
 import type { InputCoercion } from './types/InputCoercion.ts'
@@ -62,6 +63,17 @@ export type RpcServerProgram = {
     author-declared `schemas.output`.
     */
     returnBodyForModule(modulePath: string): ReturnBody | undefined
+    /*
+    The endpoint's success-body projected to JSON Schema (ADR-0030 D2), for the OpenAPI 200 / MCP
+    outputSchema / inspector surface when the author declared no `schemas.output` validator. Resolves
+    the same success-body `ts.Type`(s) `returnBodyForModule` reads — unwrap `Promise`, drop the
+    `TypedError` branches, frame-unwrap a streaming body — then projects each through
+    `jsonSchemaForType`, combining multiple success branches under `anyOf`. undefined when no body
+    resolves or the projection is bare permissive `{}`, so a surface omits the schema exactly as today
+    when no `schemas.output` is declared. The build stamps the resolved schema into the server
+    `defineRpc` call (like the ADR-0028 `coerce` plan) so the runtime registry can carry it.
+    */
+    returnBodySchemaForModule(modulePath: string): Record<string, unknown> | undefined
 }
 
 /*
@@ -117,6 +129,9 @@ export function createRpcServerProgram(cwd: string, rpcDir: string): RpcServerPr
         },
         returnBodyForModule(modulePath) {
             return query(modulePath, (call) => handlerReturnBody(checker, call.node))
+        },
+        returnBodySchemaForModule(modulePath) {
+            return query(modulePath, (call) => returnBodyJsonSchema(checker, call.node))
         },
     }
 }
@@ -300,54 +315,96 @@ function handlerReturnBody(
     checker: ts.TypeChecker,
     call: ts.CallExpression,
 ): ReturnBody | undefined {
+    const rendered: string[] = []
+    let streaming = false
+    const resolved = walkSuccessBodies(checker, call, (part, isStreaming) => {
+        if (isStreaming) {
+            streaming = true
+        }
+        // An untagged Response (no `__body` phantom) has an `unknown` success body — SuccessBody's fallback.
+        pushUnique(rendered, part === undefined ? 'unknown' : checker.typeToString(part))
+    })
+    if (!resolved || rendered.length === 0) {
+        return undefined
+    }
+    return { type: rendered.join(' | '), streaming }
+}
+
+/*
+The rpc export's success body projected to JSON Schema (ADR-0030 D2) — the output-surface sibling of
+`handlerReturnBody`, walking the identical success-body constituents but projecting each through
+`jsonSchemaForType` instead of rendering a TS string. Multiple success branches combine under `anyOf`;
+an untagged/unprojectable body contributes the permissive `{}`. undefined when no handler signature
+resolves or the combined schema is bare permissive `{}` — the caller falls open to an author-declared
+`schemas.output`.
+*/
+function returnBodyJsonSchema(
+    checker: ts.TypeChecker,
+    call: ts.CallExpression,
+): Record<string, unknown> | undefined {
+    const schemas: Record<string, unknown>[] = []
+    const resolved = walkSuccessBodies(checker, call, (part) => {
+        const projected = part === undefined ? undefined : jsonSchemaForType(checker, part)
+        pushUniqueSchema(schemas, projected ?? {})
+    })
+    if (!resolved || schemas.length === 0) {
+        return undefined
+    }
+    const combined = schemas.length === 1 ? schemas[0] : { anyOf: schemas }
+    return Object.keys(combined).length === 0 ? undefined : combined
+}
+
+/*
+Walks a handler's success-body constituents, shared by `handlerReturnBody` (renders each to a TS
+string) and `returnBodyJsonSchema` (projects each to JSON Schema) so the two surfaces stay congruent.
+Unwraps one `Promise`, then over the return union drops the `TypedError` branches (their `__abideError`
+brand) and, for each success `TypedResponse<Body>` (its `__body` phantom), visits every meaningful body
+part — frame-unwrapped and flagged streaming when async-iterable. `visit` receives undefined for an
+untagged Response (its body is `unknown`). Returns false when no handler call signature resolves, so
+callers fail open.
+*/
+function walkSuccessBodies(
+    checker: ts.TypeChecker,
+    call: ts.CallExpression,
+    visit: (part: ts.Type | undefined, streaming: boolean) => void,
+): boolean {
     const handler = call.arguments[0]
     if (handler === undefined) {
-        return undefined
+        return false
     }
     const signature = checker.getTypeAtLocation(handler).getCallSignatures()[0]
     if (signature === undefined) {
-        return undefined
+        return false
     }
     const returnType = unwrapPromise(checker, checker.getReturnTypeOfSignature(signature))
     const members = returnType.isUnion() ? returnType.types : [returnType]
-    const rendered: string[] = []
-    let streaming = false
     for (const member of members) {
-        // A TypedError branch is an error response, not a success body — drop it.
         if (member.getProperty('__abideError') !== undefined) {
             continue
         }
         const bodyProperty = member.getProperty('__body')
         if (bodyProperty === undefined) {
-            // An untagged Response has no phantom body — its success body is `unknown` (SuccessBody's fallback).
-            pushUnique(rendered, 'unknown')
+            visit(undefined, false)
             continue
         }
         const declaration = bodyProperty.valueDeclaration ?? bodyProperty.declarations?.[0]
         if (declaration === undefined) {
-            pushUnique(rendered, 'unknown')
+            visit(undefined, false)
             continue
         }
-        const bodyType = checker.getTypeOfSymbolAtLocation(bodyProperty, declaration)
         // The `__body?` phantom is optional, so reading its type adds a spurious `| undefined`;
-        // drop the nullish members before rendering (indistinguishable from an authored optional
-        // body, which the surface treats the same — the present value's shape).
+        // drop the nullish members (indistinguishable from an authored optional body — the surface
+        // describes the present value's shape either way).
+        const bodyType = checker.getTypeOfSymbolAtLocation(bodyProperty, declaration)
         for (const part of meaningfulMembers(bodyType)) {
             if (typeIsAsyncIterable(checker, part)) {
-                streaming = true
-                pushUnique(
-                    rendered,
-                    checker.typeToString(asyncIterableElement(checker, part) ?? part),
-                )
+                visit(asyncIterableElement(checker, part) ?? part, true)
             } else {
-                pushUnique(rendered, checker.typeToString(part))
+                visit(part, false)
             }
         }
     }
-    if (rendered.length === 0) {
-        return undefined
-    }
-    return { type: rendered.join(' | '), streaming }
+    return true
 }
 
 /* The non-nullish constituents of a body type — a single-element list for a non-union, else the
@@ -377,6 +434,16 @@ function asyncIterableElement(checker: ts.TypeChecker, type: ts.Type): ts.Type |
 function pushUnique(list: string[], value: string): void {
     if (!list.includes(value)) {
         list.push(value)
+    }
+}
+
+/* Appends a projected schema only when structurally new, so identical success branches contribute one
+   `anyOf` member. Dedup by serialization — the schema objects are small plain data, and this build
+   path runs once per rpc. */
+function pushUniqueSchema(list: Record<string, unknown>[], schema: Record<string, unknown>): void {
+    const serialized = JSON.stringify(schema)
+    if (!list.some((existing) => JSON.stringify(existing) === serialized)) {
+        list.push(schema)
     }
 }
 

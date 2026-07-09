@@ -89,3 +89,46 @@ describe('buildOpenApiSpec happy path', () => {
         ).toBeUndefined()
     })
 })
+
+/* ADR-0030 D2: the handler return type, projected to JSON Schema at build time and stamped as
+   `outputJsonSchema`, drives the 200 body when no `schemas.output` VALIDATOR is declared; a declared
+   `schemas.output` still overrides it. */
+describe('buildOpenApiSpec — build-projected output schema (ADR-0030 D2)', () => {
+    const PROJECTED = {
+        type: 'object',
+        properties: { ok: { type: 'boolean' } },
+        required: ['ok'],
+    }
+
+    test('the projected outputJsonSchema drives the 200 body when no schemas.output', () => {
+        defineRpc('GET', '/rpc/oa-projected', () => json({ ok: true }), {
+            outputJsonSchema: PROJECTED,
+        })
+        const paths = buildOpenApiSpec({ title: 'app', version: '1.0.0' }).paths as Record<
+            string,
+            Record<string, Operation>
+        >
+        expect(
+            paths['/rpc/oa-projected'].get.responses['200'].content?.['application/json'].schema,
+        ).toEqual(PROJECTED)
+    })
+
+    test('a declared schemas.output overrides the projected schema', () => {
+        defineRpc('GET', '/rpc/oa-override', () => json({ ok: true }), {
+            schemas: {
+                output: testSchema({
+                    type: 'object',
+                    properties: { validated: { type: 'string' } },
+                }),
+            },
+            outputJsonSchema: PROJECTED,
+        })
+        const paths = buildOpenApiSpec({ title: 'app', version: '1.0.0' }).paths as Record<
+            string,
+            Record<string, Operation>
+        >
+        expect(
+            paths['/rpc/oa-override'].get.responses['200'].content?.['application/json'].schema,
+        ).toEqual({ type: 'object', properties: { validated: { type: 'string' } } })
+    })
+})

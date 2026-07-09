@@ -61,17 +61,17 @@ export function buildOpenApiSpec(info: {
         const jsonSchema = jsonSchemaForSchema(entry.inputSchema)
         const description = jsonSchema.description as string | undefined
         /*
-        When the rpc declares an `outputSchema`, describe the 200 body
-        with it so external tooling sees the real return shape; otherwise
-        fall back to a bare OK.
+        Describe the 200 body from the `outputSchema` VALIDATOR when declared, else from the handler
+        return type projected to JSON Schema at build time (ADR-0030 D2 — `entry.outputJsonSchema`);
+        otherwise fall back to a bare OK. The validator overrides the projection (a runtime narrowing
+        the type can't express).
         */
         const okResponse: Record<string, unknown> = { description: 'OK' }
-        if (entry.outputSchema) {
-            okResponse.content = {
-                'application/json': {
-                    schema: jsonSchemaForSchema(entry.outputSchema),
-                },
-            }
+        const outputSchema = entry.outputSchema
+            ? jsonSchemaForSchema(entry.outputSchema)
+            : entry.outputJsonSchema
+        if (outputSchema) {
+            okResponse.content = { 'application/json': { schema: outputSchema } }
         }
         const operation: Record<string, unknown> = {
             operationId: commandNameForUrl(url),
