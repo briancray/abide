@@ -207,6 +207,9 @@ template grammar:
         {room} — {shout}
     </h1>
 
+    <!-- {await expr} awaits inline (blocking); a Promise-typed {expr} would stream -->
+    <p>total messages: {await getMessages({ room }).then((all) => all.length)}</p>
+
     {#await getMessages({ room })}
         <p>loading…</p>
     {:then messages}

@@ -89,7 +89,12 @@ cli }`; `crossOrigin` (exempts a mutating rpc from the same-origin CSRF gate);
 retention/refetch policy) and `stream: { n }` (replay depth); on mutating helpers
 `outbox` (durable delivery). Kind-scoped by type: `cache`/`stream` on a write, or
 `outbox` on a read, is a compile error. Query args on GET/HEAD/DELETE travel as
-strings — coerce in the schema (`z.coerce.number()`). A body rpc also accepts
+strings — coerce in the schema (`z.coerce.number()`). Beyond scalars, a
+type-directed wire codec (ADR-0028/0029) revives a top-level arg field into the
+runtime value its declared type names — a numeric string → `number`/`bigint`, a
+`Date` from an ISO string, a `Set` from a JSON array, a `Map` from an entries
+array/object — resolved through the warm server program; reviving is fail-open
+(an unrevivable value passes through as its JSON form). A body rpc also accepts
 a `FormData` in place of typed args (the upload escape hatch): text fields
 validate as args, `File` parts validate against `schemas.files`.
 
@@ -420,6 +425,7 @@ tests can import it, not for app code.
 - `@abide/abide/ui/dom/bindProp` — the parent half of a component `bind:prop`: annotates a prop's value thunk with a `set` write-back channel.
 - `@abide/abide/ui/dom/bindableProp` — the child half: the writable cell a component gets for a prop it writes or forwards (pass-through to the parent when bound, a local reseeding cell when not).
 - `@abide/abide/ui/dom/spreadAttrs` — spreads an object's keys onto a native element (`<div {...rest}>`), keys enumerated once.
+- `@abide/abide/ui/dom/mutateDocContainer` — the lowering for an in-place mutating container method on a reactive doc (`model.items.splice(…)`, `.sort()`, a Set `.add()`, a Map `.set()`, …): clones the array/Map/Set, applies the mutation to the copy, and writes it back through `replace` so a real patch fires (readers wake, undo/persistence/sync see it); returns the native method's result unchanged.
 - `@abide/abide/ui/dom/readCall` — guarded method call on a reactive-doc read (the `model.draft.trim()` lowering).
 - `@abide/abide/ui/dom/readCell` — unified read for a `linked`/async-`computed` reference (the `$$readCell(NAME)` lowering): peeks an async cell, reads `.value` off a sync one.
 - `@abide/abide/ui/settleAsyncCells` — the SSR Tier-2 await-barrier (the `await $$settleAsyncCells()` lowering emitted between a component's cell declarations and its template): drains + awaits the request-scoped in-flight async-cell promises so their resolved values bake into the first-pass HTML.
@@ -461,7 +467,7 @@ tests can import it, not for app code.
 
 | Route | Serves |
 | --- | --- |
-| `/openapi.json` | The OpenAPI document projected from every rpc's method, URL, and schemas |
+| `/openapi.json` | The OpenAPI document projected from every rpc's method, URL, and schemas. The 200 response body comes from `schemas.output` or, absent one, the handler's return type projected to JSON Schema (ADR-0030 D2); each `error.typed(...)` branch the handler can return surfaces as its own status response (ADR-0030) |
 | `/__abide/mcp` | The MCP endpoint (tools from rpcs/sockets, prompts, resources); auth flows from the inbound request |
 | `/__abide/health` | Liveness + identity JSON: framework version, app name/version, plus the app `health(request)` hook's fields; answered ahead of `app.handle` |
 | `/__abide/identity` | Compatibility alias for the same payload with the legacy `abide: true` marker |
