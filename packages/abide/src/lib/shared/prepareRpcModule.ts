@@ -51,6 +51,7 @@ truth (the server-side defineRpc guard stays as a cheap backstop):
 export function prepareRpcModule(
     source: string,
     importName: string,
+    streamingOverride?: boolean,
 ): PreparedRpcModule | undefined {
     /*
     The "no barrels" surface places each method at its own path
@@ -71,7 +72,10 @@ export function prepareRpcModule(
     const { stripped, site } = prepared
     const method = site.ident as HttpMethod
     const durable = detectDurable(stripped, site.parenStart, site.parenEnd, method)
-    const streaming = detectStreaming(stripped, site.parenStart, site.parenEnd)
+    /* Streaming is decided by the warm server program's return-type query when it resolved a
+       verdict (ADR-0025 D2 — it sees the wrapper-indirection case the scan misses); undefined
+       (no warm program / unresolvable node) falls open to the char-scan, byte-identical to before. */
+    const streaming = streamingOverride ?? detectStreaming(stripped, site.parenStart, site.parenEnd)
     /* The call's top-level args (handler + optional opts), dropping a trailing-comma empty
        part. The handler is elided on the client; `opts` (schemas/cache/stream) rides through as
        a LIVE expression in the kept module (ADR-0022 D2) — evaluated in its real scope, so it can

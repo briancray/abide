@@ -5,6 +5,7 @@ import type { BunPlugin } from 'bun'
 import { Glob } from 'bun'
 import { abideImportName } from './lib/shared/abideImportName.ts'
 import { abideLog } from './lib/shared/abideLog.ts'
+import type { RpcStreamingProgram } from './lib/shared/createRpcStreamingProgram.ts'
 import { escapeRegex } from './lib/shared/escapeRegex.ts'
 import { fileName } from './lib/shared/fileName.ts'
 import { fileStem } from './lib/shared/fileStem.ts'
@@ -17,6 +18,7 @@ import { prepareSocketModule } from './lib/shared/prepareSocketModule.ts'
 import { programNameForPackage } from './lib/shared/programNameForPackage.ts'
 import { promptNameForFile } from './lib/shared/promptNameForFile.ts'
 import { readPackageJson } from './lib/shared/readPackageJson.ts'
+import { rpcStreamingForRoot } from './lib/shared/rpcStreamingForRoot.ts'
 import { rpcUrlForFile } from './lib/shared/rpcUrlForFile.ts'
 import { socketNameForFile } from './lib/shared/socketNameForFile.ts'
 import { writeHealthDts } from './lib/shared/writeHealthDts.ts'
@@ -250,6 +252,12 @@ export function abideResolverPlugin({
         return chain.reverse().map(showPath).join('\n  → ')
     }
 
+    /* Warm per-root rpc streaming program (ADR-0025 D1). Lives in the setup closure so one
+       build reuses a single `ts.Program` across every rpc transform; built lazily on the first
+       rpc onLoad (so a build with no rpc modules never pays for it) and failing open to
+       undefined, in which case streaming detection stays on the char-scan. */
+    const rpcStreamingByRoot = new Map<string, RpcStreamingProgram | undefined>()
+
     return {
         name: 'abide-resolver',
         setup(build) {
@@ -390,7 +398,16 @@ export function abideResolverPlugin({
                 const source = await Bun.file(args.path).text()
                 const url = rpcUrlForFile(relativePath)
                 const importName = await abideImportNameOnce()
-                const prepared = prepareRpcModule(source, importName)
+                /* Ask the warm server program whether this handler streams (resolving through the
+                   type graph, so a stream returned via a wrapper function is seen); undefined when
+                   no program built or the node didn't resolve, so prepareRpcModule falls open to
+                   its char-scan (ADR-0025 D2/D3). */
+                const streamingOverride = rpcStreamingForRoot(
+                    rpcStreamingByRoot,
+                    cwd,
+                    rpcDir,
+                )?.streamingForModule(args.path)
+                const prepared = prepareRpcModule(source, importName, streamingOverride)
                 if (!prepared) {
                     throw new Error(
                         `[abide] src/server/rpc/${relativePath} has no \`export const <name> = <METHOD>(...)\` — every $rpc module must declare exactly one remote function`,

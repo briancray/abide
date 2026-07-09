@@ -1,0 +1,26 @@
+import type { RpcStreamingProgram } from './createRpcStreamingProgram.ts'
+import { createRpcStreamingProgram } from './createRpcStreamingProgram.ts'
+
+/*
+Warm per-root accessor for the rpc streaming program (ADR-0025 D1), mirroring the UI
+shadow's `interpolationClassifierForRoot`: the first rpc transform in a root builds the
+`ts.Program`, every later transform reuses it. Fails open in two layers — a program that
+can't build stores `undefined` so the root is not retried and every query falls back to the
+char-scan (`streamingForModule` itself catches per-query throws). The cache lives in the
+resolver plugin's `setup` closure, so it persists across a whole build and is dropped between
+plugin instances.
+*/
+export function rpcStreamingForRoot(
+    cache: Map<string, RpcStreamingProgram | undefined>,
+    cwd: string,
+    rpcDir: string,
+): RpcStreamingProgram | undefined {
+    if (!cache.has(cwd)) {
+        try {
+            cache.set(cwd, createRpcStreamingProgram(cwd, rpcDir))
+        } catch {
+            cache.set(cwd, undefined)
+        }
+    }
+    return cache.get(cwd)
+}
