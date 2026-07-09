@@ -157,6 +157,33 @@ describe('rpc input coercion plan through the warm server program (ADR-0028)', (
     })
 })
 
+describe('rpc return-body resolution through the warm server program (ADR-0030)', () => {
+    const program = createRpcServerProgram(STREAM_CWD, STREAM_RPC_DIR)
+
+    test('a plain json() handler resolves its success-body type, non-streaming', () => {
+        /* `plainData` is `GET(() => json({ ok: true }))` — the handler return's `TypedResponse`
+           body is `{ ok: boolean }`, so the descriptor is that type, not streaming. */
+        const body = program.returnBodyForModule(streamModule('plainData'))
+        expect(body?.streaming).toBe(false)
+        expect(body?.type).toContain('ok')
+        expect(body?.type).toContain('boolean')
+    })
+
+    test('a jsonl() handler resolves its per-FRAME type and is marked streaming', () => {
+        /* `directFeed` streams `{ n: number }` frames; the descriptor exposes the frame type (the
+           AsyncIterable element), not the iterable itself. */
+        const body = program.returnBodyForModule(streamModule('directFeed'))
+        expect(body?.streaming).toBe(true)
+        expect(body?.type).toContain('n')
+        expect(body?.type).toContain('number')
+        expect(body?.type).not.toContain('AsyncIterable')
+    })
+
+    test('an unknown module path fails open to undefined (caller defers to schemas.output)', () => {
+        expect(program.returnBodyForModule(resolve(STREAM_RPC_DIR, 'missing.ts'))).toBeUndefined()
+    })
+})
+
 /* Fail-open: with NO warm program (the override arguments absent), prepareRpcModule produces
    byte-identical output to today — streaming/durable verdicts come from the char-scan and the
    emitted client/server rewrites are unchanged. */
