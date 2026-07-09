@@ -2,6 +2,14 @@ import ts from 'typescript'
 import { assignmentTargetNames } from './assignmentTargetNames.ts'
 import { type ReactiveImportBindings, reactiveImportBindings } from './resolveReactiveExport.ts'
 import { signalCallee } from './signalCallee.ts'
+import type { InterpolationKind } from './types/InterpolationKind.ts'
+import type { SeedTypeClassifier } from './types/SeedTypeClassifier.ts'
+
+/* The routing decision for a no-marker `computed(seed)`: `true` routes to the eager
+   `trackedComputed` stream cell (read via `$$readCell`, the `cellReadNames` bucket), `false`
+   to the lazy `derive` doc slot (read as `name()`, the `computedNames` bucket). Shared by the
+   name-collection pass and the lowering so both land the binding in the identical bucket. */
+type EagerStreamPredicate = (declaration: ts.VariableDeclaration) => boolean
 
 const factory = ts.factory
 
@@ -194,6 +202,16 @@ export function desugarSignals(
        binding whose name lands in the union is a WRITABLE prop (a `.value` cell via `bindableProp`)
        rather than a read-only derive, so a two-way `bind:prop` on the parent can flow back. */
     templateWrittenNames: ReadonlySet<string> = new Set(),
+    /* Type-directed seed classifier (ADR-0023): resolves a no-marker `computed(seed)`'s
+       async-ness from the seed's checker type via the warm shadow program. Absent (no warm
+       program, or any call site outside the shadow-warmed path) ⇒ every seed classifies
+       `undefined` ⇒ fail-open to the `isBareCallComputed` syntax heuristic — exactly today's
+       routing. The `await`-marker path (`isAsyncComputed`) is decided first and never consults it. */
+    seedClassify?: SeedTypeClassifier,
+    /* Absolute `.abide` source offset where this script's (trimmed) body begins — the base that
+       relocates a seed node's body-relative `getStart()` back to an ORIGINAL source location the
+       shadow's source→shadow `mappings` resolve. Unused when `seedClassify` is absent. */
+    scriptBase = 0,
 ): {
     transformer: ts.TransformerFactory<ts.SourceFile>
     stateNames: Set<string>
@@ -221,6 +239,39 @@ export function desugarSignals(
     /* A `props()` destructure must be lowered even when it declares no reactive binding
        (a rest-only `const { ...rest } = props()`), so track its presence on its own. */
     let hasPropsDestructure = false
+    /* Resolves a computed seed's async-ness through the warm shadow classifier (ADR-0023):
+       maps the seed's absolute source location to its checker-type kind. `undefined` when no
+       classifier is threaded OR on any resolution failure (a throw / an unmapped seed), so the
+       caller degrades to `isBareCallComputed` — never mistakes a failure for a `sync` type. */
+    const seedKind = (seed: ts.Expression): InterpolationKind | undefined => {
+        if (seedClassify === undefined) {
+            return undefined
+        }
+        try {
+            const start = seed.getStart(source)
+            return seedClassify(scriptBase + start, source.text.slice(start, seed.getEnd()))
+        } catch {
+            return undefined
+        }
+    }
+    /* The single routing authority for a no-marker `computed(seed)` — shared by the
+       name-collection pass below and `computedStatements` so both land the binding in the same
+       read-name bucket (a divergence would lower a reference to the wrong read form). Type-
+       directed when the seed classifier resolves the seed (`asyncIterable` → the eager stream
+       cell; `promise`/`sync` → the lazy `derive` slot), fail-open to today's `isBareCallComputed`
+       syntax heuristic otherwise. The `await`-marker seed (`isAsyncComputed`) is decided first by
+       each caller and excluded here (its wrapped thunk is async → returns false). */
+    const isEagerStreamComputed: EagerStreamPredicate = (declaration) => {
+        const argument = seedArgument(declaration)
+        if (argument === undefined || isAsyncSeed(wrapSeed(argument))) {
+            return false
+        }
+        const kind = seedKind(argument)
+        if (kind !== undefined) {
+            return kind === 'asyncIterable'
+        }
+        return isBareCallComputed(declaration)
+    }
     for (const statement of source.statements) {
         if (!ts.isVariableStatement(statement)) {
             continue
@@ -264,9 +315,10 @@ export function desugarSignals(
                 stateNames.add(declaration.name.text)
             } else if (isComputedSlot(declaration, bindings)) {
                 /* `computed(compute)` → either a lazy `scope().derive` doc slot referenced as
-                   `name()` (a sync seed), or an async cell read via `$$readCell(name)` when the
-                   wrapped seed is async (an `await`-lowered or passthrough-`async` thunk). */
-                if (isAsyncComputed(declaration) || isBareCallComputed(declaration)) {
+                   `name()` (a sync/promise seed), or an eager cell read via `$$readCell(name)`
+                   when the wrapped seed is async (an `await`-lowered / passthrough-`async` thunk)
+                   or its seed type resolves to a stream (`isEagerStreamComputed`, ADR-0023). */
+                if (isAsyncComputed(declaration) || isEagerStreamComputed(declaration)) {
                     cellReadNames.add(declaration.name.text)
                 } else {
                     computedNames.add(declaration.name.text)
@@ -322,6 +374,7 @@ export function desugarSignals(
                     signalNames,
                     injectedCellNames,
                     writtenNames,
+                    isEagerStreamComputed,
                 ),
             )
         }
@@ -341,12 +394,13 @@ function loweredStatement(
     signalNames: ReadonlySet<string>,
     injectedCellNames: ReadonlySet<string>,
     writtenNames: ReadonlySet<string>,
+    isEagerStreamComputed: EagerStreamPredicate,
 ): ts.Statement[] {
     rejectMixedDeclaration(statement, bindings)
     return (
         injectedComputedStatements(statement, injectedCellNames) ??
         stateAssignmentStatements(statement, bindings) ??
-        computedStatements(statement, bindings, signalNames) ??
+        computedStatements(statement, bindings, signalNames, isEagerStreamComputed) ??
         propsStatements(statement, bindings, writtenNames) ??
         cellStatements(statement, bindings, signalNames) ?? [statement]
     )
@@ -526,6 +580,7 @@ function computedStatements(
     statement: ts.Statement,
     bindings: ReactiveImportBindings,
     signalNames: ReadonlySet<string>,
+    isEagerStreamComputed: EagerStreamPredicate,
 ): ts.Statement[] | undefined {
     if (!ts.isVariableStatement(statement)) {
         return undefined
@@ -559,10 +614,11 @@ function computedStatements(
                `$$readCell`); the runtime unwraps the promise. */
             warnPostAwaitReads(wrapped, signalNames)
             statements.push(constDeclaration(name, scopeMethodCall('computed', [wrapped])))
-        } else if (isBareCallComputed(declaration)) {
-            /* Bare call/identifier seed → the eager `trackedComputed`, which probes the seed and
-               auto-tracks a stream (`AsyncComputed`) or falls back to a lazy computed; read via
-               `$$readCell`. */
+        } else if (isEagerStreamComputed(declaration)) {
+            /* Stream seed → the eager `trackedComputed`, which probes the seed and auto-tracks a
+               stream (`AsyncComputed`) or falls back to a lazy computed; read via `$$readCell`.
+               Reached when the seed type resolves to `asyncIterable` (ADR-0023) or, fail-open with
+               no warm program, when it is a bare call/identifier (`isBareCallComputed`). */
             statements.push(constDeclaration(name, scopeMethodCall('trackedComputed', [wrapped])))
         } else {
             /* Sync arithmetic/member/literal seed → the lazy `derive` doc slot, read as `name()`. */

@@ -8,6 +8,7 @@ import type { ShadowProgram } from './createShadowProgram.ts'
 import { interpolationClassifierForRoot } from './interpolationClassifierForRoot.ts'
 import { nearestProjectRoot } from './nearestProjectRoot.ts'
 import { offsetToLineColumn } from './offsetToLineColumn.ts'
+import { seedTypeClassifierForRoot } from './seedTypeClassifierForRoot.ts'
 
 /*
 Bun plugin that loads `.abide` single-file components: compiles each to the ES
@@ -54,6 +55,11 @@ export const abideUiPlugin: BunPlugin = {
                a program that can't build (or a file with no shadow) yields `undefined`, so
                the module compiles exactly as before. */
             const classify = interpolationClassifierForRoot(shadowByRoot, root, args.path)
+            /* The seed classifier for this file over the SAME warm shadow program (ADR-0023):
+               reuses the `shadowByRoot` cache `classify` just warmed, so no second program is
+               built. Fail-open identically — a no-marker `computed(seed)` routes by type when
+               it resolves, else by the `isBareCallComputed` syntax heuristic. */
+            const seedClassify = seedTypeClassifierForRoot(shadowByRoot, root, args.path)
             /* Bun frames a plugin throw at `<file>:0` regardless of the real spot, so
                carry the component path + resolved line:col in the message — otherwise a
                control-flow / compile error reads as `:0` and (in deep imports) can look
@@ -77,7 +83,7 @@ export const abideUiPlugin: BunPlugin = {
                the styles come from the analysis `compileModule` already ran, so the loader no
                longer re-analyzes the source just to recover them. */
             const { code, styles } = compileAbide(() =>
-                compileModule(source, { isLayout, moduleId, classify }),
+                compileModule(source, { isLayout, moduleId, classify, seedClassify }),
             )
             /* Browser build with `<style>`(s): concatenate every scoped block's CSS and
                pull it into the bundle via one virtual import, keyed by `moduleId` so the
