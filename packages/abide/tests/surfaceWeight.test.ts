@@ -3,7 +3,7 @@ import {
     bandFor,
     extractBlockKeywords,
     extractCompositionKinds,
-    extractReactiveCallees,
+    extractReactivePrimitives,
     extractTemplateAttrKinds,
     GRAMMAR_BUCKETS,
     SLUG_GRAMMAR,
@@ -35,9 +35,16 @@ test('extractTemplateAttrKinds returns directive kinds, excluding static literal
     ])
 })
 
-test('extractReactiveCallees reads the REACTIVE_CALLEES set members', () => {
-    const source = `export const REACTIVE_CALLEES: ReadonlySet<string> = new Set([\n  'state',\n  'linked',\n  'computed',\n  'props',\n])`
-    expect(extractReactiveCallees(source)).toEqual(['state', 'linked', 'computed', 'props'])
+test('extractReactivePrimitives reads the ReactivePrimitive union members', () => {
+    const source = `export type ReactivePrimitive = 'state' | 'linked' | 'computed' | 'effect' | 'watch' | 'props'`
+    expect(extractReactivePrimitives(source)).toEqual([
+        'state',
+        'linked',
+        'computed',
+        'effect',
+        'watch',
+        'props',
+    ])
 })
 
 test('extractCompositionKinds returns distinct snippet/component node kinds', () => {

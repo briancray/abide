@@ -1,15 +1,16 @@
 import { describe, expect, test } from 'bun:test'
-import { lowerDocAccess } from '../src/lib/ui/compile/lowerDocAccess.ts'
+import { docAccessTransformer } from '../src/lib/ui/compile/lowerDocAccess.ts'
 import { mutateDocContainer } from '../src/lib/ui/dom/mutateDocContainer.ts'
 import { readCall } from '../src/lib/ui/dom/readCall.ts'
 import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
 import { escapeKey } from '../src/lib/ui/runtime/escapeKey.ts'
 import { PATCH_BUS } from '../src/lib/ui/runtime/PATCH_BUS.ts'
 import type { Doc } from '../src/lib/ui/runtime/types/Doc.ts'
+import { transformSource } from './support/transformSource.ts'
 
 /* Normalises printer whitespace so substring assertions are stable. */
 function lower(code: string): string {
-    return lowerDocAccess(code, 'model').replace(/\s+/g, ' ').trim()
+    return transformSource(code, docAccessTransformer('model')).replace(/\s+/g, ' ').trim()
 }
 
 describe('lowerDocAccess — emitted shape', () => {
@@ -157,7 +158,7 @@ describe('lowerDocAccess — emitted shape', () => {
    the lowering emits — `escapeKey` for dynamic segments, `readCall` for guarded method
    calls — exactly the names the real module imports. */
 function run(document: Doc, body: string): unknown {
-    const lowered = lowerDocAccess(body, 'model')
+    const lowered = transformSource(body, docAccessTransformer('model'))
     return new Function('model', 'escapeKey', 'readCall', 'mutateDocContainer', lowered)(
         document,
         escapeKey,

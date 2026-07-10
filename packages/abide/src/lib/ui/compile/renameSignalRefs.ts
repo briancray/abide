@@ -1,10 +1,9 @@
 import ts from 'typescript'
-import { TS_PRINTER } from './TS_PRINTER.ts'
 
 /*
 Rewrites references to a component's signal bindings into the document form the
 rest of the pipeline understands: a `state` binding `count` becomes `$$model.count`
-(data access `lowerDocAccess` then lowers to a patch/read), and a `computed`
+(data access `docAccessTransformer` then lowers to a patch/read), and a `computed`
 binding `total` becomes `total.value`. Only value-position identifiers are
 touched — declaration names, parameter names, and property names are collected
 into a skip set first, and object shorthand (`{ count }`) is expanded to
@@ -17,35 +16,10 @@ to that inner binding, not the component signal, so it is left untouched. Withou
 this, a callback like `list.map(option => option.toUpperCase())` in a component
 that also has an `option` prop (`const { option } = props()`) would have its loop
 variable rewritten to `option()` and blow up at runtime (`option is not a function`).
-*/
-export function renameSignalRefs(
-    code: string,
-    stateNames: ReadonlySet<string>,
-    derivedNames: ReadonlySet<string>,
-    computedNames: ReadonlySet<string> = new Set(),
-    cellReadNames: ReadonlySet<string> = new Set(),
-): string {
-    const source = ts.createSourceFile('component.ts', code, ts.ScriptTarget.Latest, true)
-    const result = ts.transform(source, [
-        signalRefsTransformer(
-            stateNames,
-            derivedNames,
-            computedNames,
-            new Set(),
-            new Set(),
-            cellReadNames,
-        ),
-    ])
-    const output = TS_PRINTER.printFile(result.transformed[0] as ts.SourceFile)
-    result.dispose()
-    return output
-}
 
-/*
-The signal-rewrite as a `ts.TransformerFactory`, so the script pipeline can chain it
-with `docAccessTransformer` over a SINGLE parsed tree (see `lowerScript`) instead of
-print-then-reparse between passes. `renameSignalRefs` is the standalone string wrapper
-kept for test and one-off callers.
+Exposed as a `ts.TransformerFactory`, so the script pipeline can chain it with
+`docAccessTransformer` over a SINGLE parsed tree (see `lowerScript`) instead of
+print-then-reparse between passes.
 */
 export function signalRefsTransformer(
     stateNames: ReadonlySet<string>,

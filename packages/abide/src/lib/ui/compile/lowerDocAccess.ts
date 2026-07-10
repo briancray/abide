@@ -1,6 +1,5 @@
 import ts from 'typescript'
 import { escapeKey } from '../runtime/escapeKey.ts'
-import { TS_PRINTER } from './TS_PRINTER.ts'
 
 /*
 The linchpin compiler pass. Rewrites idiomatic data access on a reactive document
@@ -23,15 +22,10 @@ many — literal keys at compile time, dynamic ones wrapped in a runtime
 `escapeKey(...)`. Reads are lowered to `read(path)`; a later pass hoists
 static-path reads to a `cell` bound once at component init (the string-free hot
 path the bench measured). Index expressions are themselves visited, so a read
-used as an index lowers too.
+used as an index lowers too. Exposed as `docAccessTransformer` (a
+`ts.TransformerFactory`) so the script pipeline chains it after
+`signalRefsTransformer` over a single parsed tree (see `lowerScript`).
 */
-export function lowerDocAccess(code: string, docName: string): string {
-    const source = ts.createSourceFile('component.ts', code, ts.ScriptTarget.Latest, true)
-    const result = ts.transform(source, [docAccessTransformer(docName)])
-    const output = TS_PRINTER.printFile(result.transformed[0] as ts.SourceFile)
-    result.dispose()
-    return output
-}
 
 /* A path segment is either a literal key or a runtime expression (a dynamic index). */
 type Segment = { kind: 'literal'; value: string } | { kind: 'expression'; node: ts.Expression }
@@ -42,7 +36,7 @@ type Segment = { kind: 'literal'; value: string } | { kind: 'expression'; node: 
 /* Methods that mutate a doc-rooted container in place — Array, Map and Set (the three
    mutable containers the doc codec serializes). Called on a doc value these can't lower to
    a bare `readCall` (which would mutate the live tree by reference and never emit a patch —
-   no re-render, no undo/persistence/sync); they route through `$$mutateDocContainer`, which
+   so nothing re-renders); they route through `$$mutateDocContainer`, which
    clones-applies-replaces so a real patch fires. The names are disjoint across the three
    container kinds, so one set routes them all and the runtime helper decides the kind by the
    value's type. `push` is handled separately above (fine-grained `add` patches). */

@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { compileModule } from '../src/lib/ui/compile/compileModule.ts'
-import { lowerDocAccess } from '../src/lib/ui/compile/lowerDocAccess.ts'
-import { renameSignalRefs } from '../src/lib/ui/compile/renameSignalRefs.ts'
+import { docAccessTransformer } from '../src/lib/ui/compile/lowerDocAccess.ts'
+import { signalRefsTransformer } from '../src/lib/ui/compile/renameSignalRefs.ts'
+import { transformSource } from './support/transformSource.ts'
 
 /*
 Syntax fuzz corpus for the identifier-rewriting passes. The enumeration of which
@@ -47,7 +48,7 @@ describe('renameSignalRefs — name-slot snippets stay valid and unrewritten', (
     }
     for (const [label, code] of Object.entries(nameSlotCorpus)) {
         test(label, () => {
-            const out = renameSignalRefs(code, STATE, NONE)
+            const out = transformSource(code, signalRefsTransformer(STATE, NONE))
             assertValid(out, label)
             expect(out).not.toContain('model.sig')
         })
@@ -67,7 +68,7 @@ describe('renameSignalRefs — value-read snippets rewrite and stay valid', () =
     }
     for (const [label, code] of Object.entries(valueReadCorpus)) {
         test(label, () => {
-            const out = renameSignalRefs(code, STATE, NONE)
+            const out = transformSource(code, signalRefsTransformer(STATE, NONE))
             assertValid(out, label)
             expect(out).toContain('model.sig')
         })
@@ -122,7 +123,7 @@ describe('lowerDocAccess — optional chaining and rich access stay valid', () =
     ]
     for (const code of docCorpus) {
         test(code, () => {
-            const out = lowerDocAccess(code, 'model')
+            const out = transformSource(code, docAccessTransformer('model'))
             assertValid(out, code)
         })
     }

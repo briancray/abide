@@ -1,9 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import { hoistCells } from '../src/lib/ui/compile/hoistCells.ts'
-import { lowerDocAccess } from '../src/lib/ui/compile/lowerDocAccess.ts'
+import { docAccessTransformer } from '../src/lib/ui/compile/lowerDocAccess.ts'
 import { effect } from '../src/lib/ui/effect.ts'
 import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
 import type { Doc } from '../src/lib/ui/runtime/types/Doc.ts'
+import { transformSource } from './support/transformSource.ts'
 
 function squash(code: string): string {
     return code.replace(/\s+/g, ' ').trim()
@@ -35,7 +36,7 @@ describe('hoistCells — emitted shape', () => {
 /* The script-side composition the component compiler applies: lower idiomatic
    data access on `model`, then hoist its static paths to cells. */
 function lowerAndHoist(body: string): string {
-    return hoistCells(lowerDocAccess(body, 'model'), 'model')
+    return hoistCells(transformSource(body, docAccessTransformer('model')), 'model')
 }
 
 function run(document: Doc, body: string): unknown {
