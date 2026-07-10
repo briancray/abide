@@ -1,7 +1,8 @@
 import { resolve } from 'node:path'
 import ts from 'typescript'
 import { collectAbideDiagnostics } from './lib/ui/compile/collectAbideDiagnostics.ts'
-import { createShadowProgram } from './lib/ui/compile/createShadowProgram.ts'
+import { createShadowProgram, type ShadowProgram } from './lib/ui/compile/createShadowProgram.ts'
+import { interpolationClassifierForRoot } from './lib/ui/compile/interpolationClassifierForRoot.ts'
 import { nearestProjectRoot } from './lib/ui/compile/nearestProjectRoot.ts'
 import type { AbideDiagnostic } from './lib/ui/compile/types/AbideDiagnostic.ts'
 
@@ -58,8 +59,17 @@ function collectByProject(cwd: string): { diagnostics: AbideDiagnostic[]; checke
         const root = nearestProjectRoot(path, cwd)
         byProject.set(root, [...(byProject.get(root) ?? []), path])
     }
+    /* Per-root cache of the VERBATIM classifier program (ADR-0032). The type-check pass peek-wraps
+       async interpolations so they resolve to their settled value, but the classifier that decides
+       WHICH sub-expressions are async must read un-wrapped shadows — so it rides a separate verbatim
+       program, built (and reused) here per root. */
+    const classifierCache = new Map<string, ShadowProgram | undefined>()
     const diagnostics = [...byProject].flatMap(([root, paths]) =>
-        collectAbideDiagnostics(createShadowProgram(root, paths)),
+        collectAbideDiagnostics(
+            createShadowProgram(root, paths, (abidePath) =>
+                interpolationClassifierForRoot(classifierCache, root, abidePath),
+            ),
+        ),
     )
     const checked = [...byProject.values()].reduce((total, paths) => total + paths.length, 0)
     return { diagnostics, checked }

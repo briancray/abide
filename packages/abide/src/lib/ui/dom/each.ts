@@ -1,4 +1,5 @@
 import { effect } from '../effect.ts'
+import { CURRENT_PATH } from '../runtime/CURRENT_PATH.ts'
 import { claimChild } from '../runtime/claimChild.ts'
 import { claimExpected } from '../runtime/claimExpected.ts'
 import { RENDER } from '../runtime/RENDER.ts'
@@ -6,6 +7,7 @@ import { scope } from '../runtime/scope.ts'
 import { scopeGroup } from '../runtime/scopeGroup.ts'
 import type { State } from '../runtime/types/State.ts'
 import { withoutHydration } from '../runtime/withoutHydration.ts'
+import { withPathFrom } from '../runtime/withPathFrom.ts'
 import { state } from '../state.ts'
 import { buildDetachedRange } from './buildDetachedRange.ts'
 import { moveRange } from './moveRange.ts'
@@ -41,8 +43,17 @@ export function each<T>(
        read them; a direct caller reads `item.value` / `index.value`. */
     render: (parent: Node, item: State<T>, index: State<number>) => void,
     before: Node | null = null,
+    /* Whether the each has an explicit `by` key. A KEYED row takes its stable key as its
+       render-path segment (survives reorders/reloads); a KEYLESS row (no `by`, so `keyOf`
+       returns the raw item identity — unstable) takes its POSITION instead, which is at least
+       deterministic SSR↔client for a single render. Absent → keyless (a direct caller). */
+    keyed = false,
 ): void {
     const rows = new Map<string, EachRow>()
+    /* This each's render-path ancestry, captured at construction; every row builds under
+       `basePath/segment` so a component/cell in a row gets a stable id, re-established on a
+       post-mount reconcile (when the ambient path is gone). */
+    const basePath = CURRENT_PATH.current
     /* Monotonic reconcile-pass id. Each reconcile stamps every surviving row with the
        current pass, so prune is a `row.gen !== pass` int compare instead of building a
        `Set` of present keys every reconcile. */
@@ -66,11 +77,19 @@ export function each<T>(
            reconcile below) instead of rebuilding it. */
         const cell = state(item) as State<unknown>
         const indexCell = state(position)
+        /* Keyed rows key their path on the stable key; keyless on the position. */
+        const segment = keyed ? keyOf(item) : position
         const hydration = RENDER.hydration
         if (hydration !== undefined) {
             const start = claimExpected(hydration, parent, 'each row start marker')
             hydration.next.set(parent, start.nextSibling)
-            const dispose = group.track(scope(() => render(parent, cell as State<T>, indexCell)))
+            const dispose = group.track(
+                scope(() =>
+                    withPathFrom(basePath, segment, () =>
+                        render(parent, cell as State<T>, indexCell),
+                    ),
+                ),
+            )
             const end = claimExpected(hydration, parent, 'each row end marker')
             hydration.next.set(parent, end.nextSibling)
             return { start, end, dispose, cell, indexCell }
@@ -79,7 +98,7 @@ export function each<T>(
            foreign namespace (so svg/math row children are namespaced, not built as HTML),
            held in `pending` until placement inserts it. */
         const { start, end, fragment, dispose } = buildDetachedRange(parent, (host) =>
-            render(host, cell as State<T>, indexCell),
+            withPathFrom(basePath, segment, () => render(host, cell as State<T>, indexCell)),
         )
         return { start, end, dispose: group.track(dispose), cell, indexCell, pending: fragment }
     }

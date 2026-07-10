@@ -1,6 +1,7 @@
 import ts from 'typescript'
 import { ABIDE_PACKAGE_NAME } from '../../shared/ABIDE_PACKAGE_NAME.ts'
 import { isWhitespaceText } from './isWhitespaceText.ts'
+import { type LiftPosition, liftAsyncSubExpressions } from './liftAsyncSubExpressions.ts'
 import { parseTemplate } from './parseTemplate.ts'
 import {
     NESTED_REACTIVE_BINDINGS,
@@ -10,6 +11,7 @@ import {
 } from './resolveReactiveExport.ts'
 import { signalCallee } from './signalCallee.ts'
 import type { CompiledShadow, ShadowDiagnostic, ShadowMapping } from './types/CompiledShadow.ts'
+import type { InterpolationClassifier } from './types/InterpolationClassifier.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
 
 /*
@@ -70,8 +72,12 @@ The script's signal surface is rewritten to value types:
 Everything else (functions, plain consts, imports) is emitted verbatim, so
 expressions inside it (e.g. a computed's compute body) are checked and mapped too.
 */
-export function compileShadow(source: string, propsType = 'Record<string, any>'): CompiledShadow {
-    const builder = createBuilder()
+export function compileShadow(
+    source: string,
+    propsType = 'Record<string, any>',
+    classify?: InterpolationClassifier,
+): CompiledShadow {
+    const builder = createBuilder(classify)
     const leadingScript = source.match(/^\s*<script[^>]*>([\s\S]*?)<\/script>/)
     const scriptBody = leadingScript?.[1] ?? ''
     /* Body starts just past the opening `<script …>`; template just past `</script>`. */
@@ -81,6 +87,18 @@ export function compileShadow(source: string, propsType = 'Record<string, any>')
     const { imports, types, scope, propsShapes, diagnostics, importedReactives, propsLocalName } =
         analyzeScript(scriptBody, scriptStart)
     builder.raw(shadowPreamble(importedReactives))
+    /* The peek helpers the async-interpolation wrap targets (ADR-0032): `$$peek` unwraps a promise
+       sub-expression to its resolved value (`undefined` while pending) and `$$peekStream` reads an
+       async iterable's latest frame, so `getFoo()?.name`/`{#if getFoo()}` type-check against the
+       RESOLVED value the runtime peeks — not the raw `Promise`. Emitted only when a classifier is
+       present (the wrap is type-directed); their names carry the reserved `$$` prefix an author
+       binding can never take, so they cannot collide with user code. */
+    if (classify !== undefined) {
+        builder.raw('declare function $$peek<T>(v: T): Awaited<T> | undefined\n')
+        builder.raw(
+            'declare function $$peekStream<S>(v: S): (S extends AsyncIterable<infer F> ? F : unknown) | undefined\n',
+        )
+    }
     /* `props` is a required import (`abide/ui/props`). The shadow owns its type so the
        return is file-contextual — the route param shape (page/layout) or `Record<string,
        any>` (component), intersected with the author's annotation `T` so declared props
@@ -172,6 +190,12 @@ type Builder = {
     mapped: (text: string, sourceLoc: number | undefined) => void
     expr: (code: string, sourceLoc: number | undefined) => void
     stmt: (code: string, sourceLoc: number | undefined) => void
+    /* Like `expr`/`stmt` but for a template interpolation: async (sub)expressions are wrapped in a
+       peek helper (`$$peek`/`$$peekStream`) so their RESOLVED type composes (ADR-0032). Every source
+       span still maps 1:1 — the inserted wrapper chars are unmapped — so diagnostics land precisely.
+       With no classifier (or no async sub-expression) these are byte-identical to `expr`/`stmt`. */
+    asyncExpr: (code: string, sourceLoc: number | undefined, position: LiftPosition) => void
+    asyncStmt: (code: string, sourceLoc: number | undefined, position: LiftPosition) => void
     flush: (line: ScopeLine) => void
     /* A fresh shadow-local binding name (`__<base>_<n>`) — for synthesised bindings
        like an await's resolved value, kept distinct so nested blocks never collide. */
@@ -183,10 +207,55 @@ type Builder = {
    emitted verbatim from the original script), offset-relative to the line start. */
 type ScopeLine = { text: string; segments: ShadowMapping[] }
 
-function createBuilder(): Builder {
+function createBuilder(classify?: InterpolationClassifier): Builder {
     let code = ''
     let uniqueCounter = 0
     const mappings: ShadowMapping[] = []
+    /* The non-blocking async (sub)expression spans in one interpolation — the peek-wrap targets.
+       A leading `await` (blocking) stays verbatim: `await X` already resolves in the async shadow
+       render fn. Fail-open: no classifier, an unparseable field, or the D4a `AsyncIterable`-in-`each`
+       throw all yield no spans, so the emit is verbatim (`collectValuePositionDiagnostics` still
+       reports the D4a error separately). */
+    const peekSpans = (exprCode: string, sourceLoc: number, position: LiftPosition) => {
+        if (classify === undefined) {
+            return []
+        }
+        try {
+            let counter = 0
+            const result = liftAsyncSubExpressions(
+                exprCode,
+                sourceLoc,
+                classify,
+                () => `__v${counter++}`,
+                position,
+            )
+            return result.spans.filter((span) => !span.blocking)
+        } catch {
+            return []
+        }
+    }
+    /* Appends `exprCode` mapped 1:1 to source, but wraps each async span in its peek helper — the
+       wrapper chars are unmapped, every original char keeps its true source offset. */
+    const emitPeeked = (exprCode: string, sourceLoc: number, position: LiftPosition): void => {
+        const spans = peekSpans(exprCode, sourceLoc, position)
+        if (spans.length === 0) {
+            builder.mapped(exprCode, sourceLoc)
+            return
+        }
+        let cursor = 0
+        for (const span of spans) {
+            if (span.start > cursor) {
+                builder.mapped(exprCode.slice(cursor, span.start), sourceLoc + cursor)
+            }
+            builder.raw(span.kind === 'asyncIterable' ? '$$peekStream(' : '$$peek(')
+            builder.mapped(exprCode.slice(span.start, span.end), sourceLoc + span.start)
+            builder.raw(')')
+            cursor = span.end
+        }
+        if (cursor < exprCode.length) {
+            builder.mapped(exprCode.slice(cursor), sourceLoc + cursor)
+        }
+    }
     const builder: Builder = {
         unique(base) {
             return `__${base}_${uniqueCounter++}`
@@ -218,6 +287,21 @@ function createBuilder(): Builder {
         stmt(exprCode, sourceLoc) {
             code += ';'
             builder.expr(exprCode, sourceLoc)
+            code += ';\n'
+        },
+        asyncExpr(exprCode, sourceLoc, position) {
+            /* No source offset ⇒ can't map or classify — emit verbatim, like `expr`. */
+            if (sourceLoc === undefined) {
+                code += `(${exprCode})`
+                return
+            }
+            code += '('
+            emitPeeked(exprCode, sourceLoc, position)
+            code += ')'
+        },
+        asyncStmt(exprCode, sourceLoc, position) {
+            code += ';'
+            builder.asyncExpr(exprCode, sourceLoc, position)
             code += ';\n'
         },
         flush(line) {
@@ -605,7 +689,7 @@ function emitNode(node: TemplateNode, builder: Builder): void {
         case 'text':
             for (const part of node.parts) {
                 if (part.kind === 'expression') {
-                    builder.stmt(part.code, part.loc)
+                    builder.asyncStmt(part.code, part.loc, 'content')
                 }
             }
             return
@@ -626,12 +710,12 @@ function emitNode(node: TemplateNode, builder: Builder): void {
                     /* An interpolated value checks each `{expr}` part on its own offset. */
                     for (const part of attr.parts) {
                         if (part.kind === 'expression') {
-                            builder.stmt(part.code, part.loc)
+                            builder.asyncStmt(part.code, part.loc, 'attribute')
                         }
                     }
                 } else if (attr.kind !== 'static') {
                     /* Every other dynamic attribute checks its single `code`. */
-                    builder.stmt(attr.code, attr.loc)
+                    builder.asyncStmt(attr.code, attr.loc, 'attribute')
                 }
             }
             emitNodes(node.children, builder)
@@ -757,7 +841,7 @@ function emitNode(node: TemplateNode, builder: Builder): void {
             )
             const thenChildren = node.children.filter((child) => child.kind !== 'case')
             builder.raw('if ')
-            builder.expr(node.condition, node.loc)
+            builder.asyncExpr(node.condition, node.loc, 'if')
             builder.raw(' {\n')
             emitNodes(thenChildren, builder)
             builder.raw('}')
@@ -766,7 +850,7 @@ function emitNode(node: TemplateNode, builder: Builder): void {
             for (const branch of branches) {
                 if (branch.condition !== undefined) {
                     builder.raw(' else if ')
-                    builder.expr(branch.condition, branch.loc)
+                    builder.asyncExpr(branch.condition, branch.loc, 'if')
                     builder.raw(' {\n')
                 } else {
                     builder.raw(' else {\n')
@@ -848,7 +932,7 @@ function emitNode(node: TemplateNode, builder: Builder): void {
                non-case children (whitespace between cases) carry nothing and are
                skipped. `break` keeps cases independent under `noFallthroughCasesInSwitch`. */
             builder.raw('switch (')
-            builder.expr(node.subject, node.loc)
+            builder.asyncExpr(node.subject, node.loc, 'switch')
             builder.raw(') {\n')
             for (const child of node.children) {
                 if (child.kind !== 'case') {

@@ -3,6 +3,7 @@ import { hotReloadEnabled } from '../runtime/hotReloadEnabled.ts'
 import { OWNER } from '../runtime/OWNER.ts'
 import { registerHotInstance } from '../runtime/registerHotInstance.ts'
 import type { UiComponent } from '../runtime/types/UiComponent.ts'
+import { withPath } from '../runtime/withPath.ts'
 import { mountRange } from './mountRange.ts'
 
 /* Build-time flag the production client defines false (see build.ts `define`) so the hot
@@ -29,16 +30,23 @@ export function mountChild(
     props: Parameters<UiComponent>[1],
     before: Node | null = null,
     label?: string,
+    /* The compiler's source-order ordinal for this `<Child/>` mount site — pushed onto the render
+       path so the child's scope (and its cells) get a serialization-stable id under this parent
+       (two same-type siblings differ by ordinal; the same site across `{#each}` rows differs by the
+       row key the each block already pushed). Absent (a non-compiled caller) → no path segment. */
+    ordinal?: number,
 ): void {
+    /* `ordinal === undefined` skips the push (path unchanged) for callers that pass no site id. */
+    const build = <T>(run: () => T): T => (ordinal === undefined ? run() : withPath(ordinal, run))
     const moduleId = factory.__abideId
     if (!__ABIDE_DEV__ || !hotReloadEnabled.current || moduleId === undefined) {
-        mountRange(parent, factory.build, props, before, label)
+        build(() => mountRange(parent, factory.build, props, before, label))
         return
     }
     /* Capture the component's model alongside its mount handle, so a later swap can
        carry its state across (see `hotReplace`). */
-    const { value: handle, model } = captureModelDoc(() =>
-        mountRange(parent, factory.build, props, before, label),
+    const { value: handle, model } = build(() =>
+        captureModelDoc(() => mountRange(parent, factory.build, props, before, label)),
     )
     const instance = {
         factory,

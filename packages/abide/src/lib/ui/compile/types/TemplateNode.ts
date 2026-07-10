@@ -46,7 +46,17 @@ export type TemplateNode =
           keyLoc?: number
           indexLoc?: number
       }
-    | { kind: 'if'; condition: string; children: TemplateNode[]; loc?: number }
+    | {
+          kind: 'if'
+          condition: string
+          children: TemplateNode[]
+          loc?: number
+          /* `condition` is a bare async subject — the WHOLE test was one promise/stream that
+             `lowerAsyncInterpolations` lifted to a single peek-cell (`{#if getX()}`). The binary
+             back-ends then read its pending facet so a still-loading subject renders NO branch,
+             not the falsy `{:else}`. Unset (or on an `{:elseif}` chain) → the plain truthy test. */
+          asyncSubject?: boolean
+      }
     | {
           kind: 'await'
           promise: string
@@ -91,7 +101,15 @@ export type TemplateNode =
           }[]
           children: TemplateNode[]
       }
-    | { kind: 'switch'; subject: string; children: TemplateNode[]; loc?: number }
+    | {
+          kind: 'switch'
+          subject: string
+          children: TemplateNode[]
+          loc?: number
+          /* `subject` is a bare async subject (the whole expression lifted to one peek-cell) —
+             a still-loading subject selects no case (not even the default) until it settles. */
+          asyncSubject?: boolean
+      }
     /* A branch of a `<template switch>` (`match` set) or `<template if>` chain. Inside an
        `if`, `<template elseif={c}>` sets `condition` (match-less, truthy-tested), and
        `<template else>` leaves both unset (the default). `loc` points at whichever
@@ -102,6 +120,10 @@ export type TemplateNode =
           condition?: string
           children: TemplateNode[]
           loc?: number
+          /* An `{:elseif}` whose `condition` is a bare async subject (the whole test lifted to one
+             peek-cell) — the cond-chain holds at this branch while the cell is pending, resuming the
+             top-down walk (skip it / match it / fall to the next branch) once it settles. */
+          asyncSubject?: boolean
       }
     /* A `{#snippet row(item)}` snippet: a named, scope-capturing builder declared
        once and called like a function (`{row(item)}`). `params` is the raw

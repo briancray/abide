@@ -3,8 +3,10 @@ import CodeBlock from '$ui/CodeBlock.abide'
 
 /*
 Async data in templates. A promise/iterable-typed {expr} reads as a peek —
-`undefined` while pending — in every position, so it composes with ?? / ?. /
-{#if} / attributes with no block. Reach for {#await} when you want a distinct
+`undefined` while pending — in a value/content/attribute position, so it composes
+with ?? / ?. with no block. A bare async {#if}/{#switch} subject instead HOLDS
+while pending: it renders no branch until the value settles, so the else/default
+never conflates with "still loading". Reach for {#await} when you want a distinct
 pending branch, a local {:catch}, or {:then} narrowing.
 */
 import { state } from '@abide/abide/ui/state'
@@ -14,6 +16,10 @@ import { state } from '@abide/abide/ui/state'
 // visibly different value — proof the read re-runs. The explicit return type
 // lets the compiler classify the call as async.
 let attempt = state(0)
+// A plain sync toggle — drives the first branch of the mixed cond-chain below, so a sync
+// {#if} and an async {:else if} sit in one chain and each resolves by its own nature. Starts
+// on the sync branch so the first render is deterministic; untoggle to fall to the async one.
+let showId = state(true)
 const ROSTER = ['ada', 'grace', 'linus', 'edsger', 'barbara']
 
 function loadProfile(attempt: number): Promise<{ name: string; color: string }> {
@@ -34,6 +40,18 @@ async function* ticker(): AsyncGenerator<number> {
         await new Promise((resolve) => setTimeout(resolve, 600))
         yield n
     }
+}
+
+// The {#await} pending branch shows on a COLD mount only. Bumping `attempt` alone re-runs the
+// promise on the still-mounted block — a revalidation: the resolved branch stays and its value
+// updates in place, no pending flash (that's why a plain reload never showed `loading…`). To
+// actually SEE the pending branch we cold-mount: the block is wrapped in a single-item keyed
+// `{#for … by k}` whose key is `remountKey`, so bumping it tears the row down and rebuilds it —
+// through pending → then. `attempt` also bumps so the fresh mount resolves to a new roster.
+let remountKey = state(0)
+function remountAwait(): void {
+    remountKey = remountKey + 1
+    attempt = attempt + 1
 }
 </script>
 
@@ -66,7 +84,15 @@ async function* ticker(): AsyncGenerator<number> {
                         <td class="px-4 py-2 text-slate-600">
                             pending is <code class="font-mono">undefined</code>, composing with
                             <code class="font-mono">??</code> / <code class="font-mono">?.</code> /
-                            <code class="font-mono">{'{#if}'}</code> / attributes
+                            attributes
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">{'{#if getX()}'} · {'{#switch getX()}'}</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            a bare async subject <em>holds</em> — renders no branch while pending,
+                            so the <code class="font-mono">{':else'}</code> / default is never
+                            conflated with "still loading"
                         </td>
                     </tr>
                     <tr>
@@ -104,8 +130,9 @@ async function* ticker(): AsyncGenerator<number> {
         <p class="text-xs text-slate-500">
             A promise-typed read is a peek: <code class="font-mono">undefined</code> while pending,
             the resolved value once it settles. No block — it composes with
-            <code class="font-mono">??</code>, <code class="font-mono">?.</code>,
-            <code class="font-mono">{'{#if}'}</code>, and attributes.
+            <code class="font-mono">??</code>, <code class="font-mono">?.</code>, and attributes. A
+            bare <code class="font-mono">{'{#if}'}</code> subject is the exception: it
+            <em>holds</em> while pending (no branch) rather than reading the peek as falsy.
         </p>
         <button
             type="button"
@@ -117,16 +144,18 @@ async function* ticker(): AsyncGenerator<number> {
         <p class="text-sm">name: {loadProfile(attempt)?.name ?? 'loading…'}</p>
         <CodeBlock title="content — ?? / ?. compose on the peek" code={`{loadProfile(attempt)?.name ?? 'loading…'}`} />
 
-        <!-- value position: pending is falsy, so the else branch shows first -->
+        <!-- control-flow subject: a bare async {#if} HOLDS while pending — neither branch renders
+             until it settles, so the else never flashes for "still loading". Reach for {#await} if
+             you want an explicit pending branch. -->
         {#if loadProfile(attempt)}
-            <p class="text-sm text-emerald-700">resolved</p>
+            <p class="text-sm text-emerald-700">resolved (truthy)</p>
         {:else}
-            <p class="text-sm text-slate-400">pending…</p>
+            <p class="text-sm text-slate-400">settled falsy</p>
         {/if}
-        <CodeBlock title={'{#if} — pending is falsy, so the else branch shows first'} code={`{#if loadProfile(attempt)}
-    resolved
+        <CodeBlock title={'{#if} — a bare async subject renders NO branch while pending (else ≠ pending)'} code={`{#if loadProfile(attempt)}
+    resolved (truthy)
 {:else}
-    pending…
+    settled falsy       <!-- shows only on a settled falsy value, never while pending -->
 {/if}`} />
 
         <!-- attribute position: empty while pending, filled once resolved -->
@@ -138,6 +167,36 @@ async function* ticker(): AsyncGenerator<number> {
         <!-- leading await: blocking — the server resolves it before flush, no pending flash -->
         <p class="text-sm">blocking (SSR): {await loadProfile(attempt).then((p) => p.name)}</p>
         <CodeBlock title={'{await expr} — blocks SSR inline; no await streams the shell'} code={`{await loadProfile(attempt).then((p) => p.name)}`} />
+    </div>
+
+    <div class="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-5">
+        <h3 class="text-xs font-semibold text-slate-500">
+            mixing sync and async branches — each resolves at render time
+        </h3>
+        <p class="text-xs text-slate-500">
+            One <code class="font-mono">{'{#if}'}</code> chain, sync and async branches side by
+            side. The walk is top-down: the first <em>pending</em> branch holds the whole chain
+            (nothing renders past an undecided condition), the first <em>truthy</em> one wins.
+            Starts on the sync branch; untoggle to fall through to the async one.
+        </p>
+        <label class="flex items-center gap-2 text-sm">
+            <input type="checkbox" bind:checked={showId} />
+            show the raw id (sync branch)
+        </label>
+        {#if showId}
+            <p class="text-sm text-sky-700">raw id: attempt {attempt} (sync branch)</p>
+        {:else if loadProfile(attempt)}
+            <p class="text-sm text-emerald-700">profile: {loadProfile(attempt)?.name} (async branch)</p>
+        {:else}
+            <p class="text-sm text-slate-400">no profile</p>
+        {/if}
+        <CodeBlock title={'a mixed chain — sync {#if}, async {:else if}, decided per render'} code={`{#if showId}
+    raw id: attempt {attempt}          <!-- sync branch — instant -->
+{:else if loadProfile(attempt)}
+    profile: {loadProfile(attempt)?.name}   <!-- async branch — holds while pending -->
+{:else}
+    no profile
+{/if}`} />
     </div>
 
     <div class="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-5">
@@ -154,32 +213,50 @@ async function* ticker(): AsyncGenerator<number> {
             it and a nested <code class="font-mono">&lt;style&gt;</code> scopes to that branch
             alone; <code class="font-mono">{':finally'}</code> runs after settle either way.
         </p>
-        <button
-            type="button"
-            class="rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100"
-            onclick={() => (attempt = attempt + 1)}>
-            reload
-        </button>
-        {#await loadNames(attempt)}
-            <p class="text-sm text-slate-500">loading…</p>
-        {:then names}
-            <script>
-            // `names` (the resolved value) is in lexical scope here; branch-local, re-seeded each reload.
-            // `state` is imported in the leading <script>; nested scripts share module scope.
-            let total = state.computed(() => names.length)
-            </script>
-            <p class="resolved text-sm">{total} names: {names.join(', ')}</p>
-            <style>
-            .resolved {
-                font-weight: 600;
-                color: #047857;
-            }
-            </style>
-        {:catch error}
-            <p class="text-sm text-rose-700">failed: {error.message}</p>
-        {:finally}
-            <hr class="border-slate-200" />
-        {/await}
+        <p class="text-xs text-slate-500">
+            The pending branch shows on a <em>cold mount</em> only.
+            <strong>revalidate</strong> re-runs the promise on the still-mounted block — the
+            resolved branch stays and its value updates in place, <em>no</em>
+            <code class="font-mono">loading…</code> flash (the no-flash live-update path).
+            <strong>remount</strong> tears the block down and rebuilds it, so it cold-mounts through
+            <code class="font-mono">loading…</code> → resolved.
+        </p>
+        <div class="flex gap-2">
+            <button
+                type="button"
+                class="rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100"
+                onclick={() => (attempt = attempt + 1)}>
+                revalidate (in place)
+            </button>
+            <button
+                type="button"
+                class="rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100"
+                onclick={remountAwait}>
+                remount (show pending)
+            </button>
+        </div>
+        {#for k of [remountKey] by k}
+            {#await loadNames(attempt)}
+                <p class="text-sm text-slate-500">loading…</p>
+            {:then names}
+                <script>
+                // `names` (the resolved value) is in lexical scope here; branch-local, re-seeded each reload.
+                // `state` is imported in the leading <script>; nested scripts share module scope.
+                let total = state.computed(() => names.length)
+                </script>
+                <p class="resolved text-sm">{total} names: {names.join(', ')}</p>
+                <style>
+                .resolved {
+                    font-weight: 600;
+                    color: #047857;
+                }
+                </style>
+            {:catch error}
+                <p class="text-sm text-rose-700">failed: {error.message}</p>
+            {:finally}
+                <hr class="border-slate-200" />
+            {/await}
+        {/for}
 
         <CodeBlock title={'the {#await} block — {:then} narrows into a lexical scope (nested <script> + <style>)'} code={`{#await loadNames(attempt)}
     <p>loading…</p>

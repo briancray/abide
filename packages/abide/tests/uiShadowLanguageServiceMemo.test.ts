@@ -65,8 +65,10 @@ describe('shadow language service compile memo', () => {
 
         /* No further compiles past the first cold pass. */
         expect(compileCalls).toBe(afterFirst)
-        /* The cold pass itself compiles only once despite three entry points. */
-        expect(afterFirst).toBeLessThanOrEqual(1)
+        /* The cold pass compiles the component at most once PER shadow world despite three entry
+           points — twice total: the verbatim classifier pass and the peek-wrapped main pass (ADR-
+           0032). Both are memoised per version, so the count is bounded, not the churn. */
+        expect(afterFirst).toBeLessThanOrEqual(2)
 
         /* Output is byte-identical across versions. */
         expect(service.quickInfo(path, hoverAt)).toEqual(firstInfo)

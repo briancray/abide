@@ -14,6 +14,7 @@ import { seedBootState } from './seedBootState.ts'
 declare const __ABIDE_DEV__: boolean
 
 import { router } from './router.ts'
+import { CELL_SEED } from './runtime/CELL_SEED.ts'
 import { clientPage } from './runtime/clientPage.ts'
 import type { RouteLoader } from './runtime/types/RouteLoader.ts'
 import { seedResolved } from './seedResolved.ts'
@@ -79,6 +80,13 @@ export function startClient(
         (globalThis as { __abideResumeCache?: StreamedResolution[] }).__abideResumeCache ?? []
     for (const resolution of [...(ssr.cache ?? []), ...streamed]) {
         seedResolved({ kind: 'cache', resolution })
+    }
+    /* Seed the async-cell warm partition into `CELL_SEED` before mount: a hydrating
+       `createAsyncCell` reads its render-path key here to adopt the SSR-resolved value warm
+       instead of re-running its seed cold (Object.assign so an inline pre-bundle script that
+       already populated `__abideCells` isn't clobbered). */
+    if (ssr.cells !== undefined) {
+        Object.assign(CELL_SEED, ssr.cells)
     }
     /* Keep the cache channel live past boot: replace the head's buffering collector with
        the store-connected sink so a post-load resolution — streaming SPA navigation or a

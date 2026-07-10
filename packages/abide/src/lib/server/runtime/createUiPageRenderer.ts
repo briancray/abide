@@ -1,8 +1,10 @@
 import { appNameSlot } from '../../shared/appNameSlot.ts'
 import { SSR_CACHE_CONTROL } from '../../shared/CACHE_CONTROL_VALUES.ts'
+import { encodeRefJson } from '../../shared/encodeRefJson.ts'
 import { formatTraceparent } from '../../shared/formatTraceparent.ts'
 import { hasReplayableRequest } from '../../shared/hasReplayableRequest.ts'
 import { layoutChainForRoute } from '../../shared/layoutChainForRoute.ts'
+import { resolvedCellsSlot } from '../../shared/resolvedCellsSlot.ts'
 import { safeJsonForScript } from '../../shared/safeJsonForScript.ts'
 import type { CacheEntry } from '../../shared/types/CacheEntry.ts'
 import type { CacheSnapshotEntry } from '../../shared/types/CacheSnapshotEntry.ts'
@@ -100,6 +102,29 @@ export function createUiPageRenderer({
         stack?: string,
     ) => Promise<Response | undefined>
 } {
+    /* The `cells` partition of __SSR__: every async cell that RESOLVED during this render (drained
+       from the request-scoped `resolvedCellsSlot` populated by `createAsyncCell.settleValue`),
+       keyed by its render-path id, each value ref-json-encoded so an in-process graph survives.
+       An unserializable value is dropped (a warn) — that one cell falls back to a client re-run
+       rather than blanking the payload. Undefined when no cell resolved (the common static page). */
+    function resolvedCellCells(): Record<string, string> | undefined {
+        const entries = resolvedCellsSlot.get()?.entries ?? []
+        if (entries.length === 0) {
+            return undefined
+        }
+        const cells: Record<string, string> = {}
+        for (const { key, value } of entries) {
+            try {
+                cells[key] = encodeRefJson(value)
+            } catch {
+                console.warn(
+                    `[abide] async cell "${key}" resolved to an unserializable value — it will re-run on the client instead of hydrating warm.`,
+                )
+            }
+        }
+        return Object.keys(cells).length > 0 ? cells : undefined
+    }
+
     /* Build the __SSR__ <script> the client (startClient) reads on boot. The inline
        (settled) cache partition is computed once by the caller and threaded in, so the
        streaming branch can also drain the pending partition over the same render. */
@@ -114,6 +139,7 @@ export function createUiPageRenderer({
             route: routeUrl,
             params,
             cache: inline,
+            cells: resolvedCellCells(),
             base: base || undefined,
             trace: formatTraceparent(store.trace),
             app: appNameSlot.name,
@@ -190,9 +216,15 @@ export function createUiPageRenderer({
             ...chainKeys.map((key) => layouts[key]?.().then((module) => module.default)),
             loadPage().then((module) => module.default),
         ])
+        /* Route keys aligned 1:1 with `views` (layouts then page) — byte-identical to the client
+           router's `chainKeys`/`pageKey`, so a cell's render-path scope id matches across the
+           boundary for the warm-seed key. No layout view is ever dropped by the filter (every
+           `chainKeys[i]` resolves a real layout), so the keys stay index-aligned with it. */
+        const chainViewKeys = [...chainKeys, routeUrl]
         const ssr = await renderChain(
             views.filter((view): view is UiComponent => view !== undefined),
             params,
+            chainViewKeys,
         )
 
         /* Snapshot the cache settled by render-return — top-level `await` reads and blocking

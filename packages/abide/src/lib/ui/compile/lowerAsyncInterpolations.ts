@@ -75,9 +75,19 @@ function lowerList(
                 }
             }
         } else if (node.kind === 'if' && node.loc !== undefined) {
+            const lifted = cells.length
             node.condition = rewrite(node.condition, node.loc, classify, mint, cells, 'if')
+            node.asyncSubject = isBareLiftedCell(node.condition, cells, lifted)
         } else if (node.kind === 'switch' && node.loc !== undefined) {
+            const lifted = cells.length
             node.subject = rewrite(node.subject, node.loc, classify, mint, cells, 'switch')
+            node.asyncSubject = isBareLiftedCell(node.subject, cells, lifted)
+        } else if (node.kind === 'case' && node.condition !== undefined && node.loc !== undefined) {
+            /* An `{:elseif}` condition — a truthy-tested control-flow subject, lifted like an
+               `{#if}` head so a bare async `{:elseif}` holds the cond-chain while it loads. */
+            const lifted = cells.length
+            node.condition = rewrite(node.condition, node.loc, classify, mint, cells, 'if')
+            node.asyncSubject = isBareLiftedCell(node.condition, cells, lifted)
         } else if (node.kind === 'each' && node.loc !== undefined && !node.async) {
             /* A plain `{#for}` source lifts (a promise-of-iterable → empty while pending); a
                `{#for await}` source is the sanctioned `AsyncIterable`, drained by `eachAsync`
@@ -88,6 +98,21 @@ function lowerList(
             lowerList(node.children, classify, mint, cells)
         }
     }
+}
+
+/* True when a control-flow subject's WHOLE expression was lifted to one peek-cell — the
+   rewritten code is exactly a single injected name (`{#if getX()}` → `__v3`), not a compound
+   the peek composes into (`{#if getX()?.ok}` → `__v3?.ok`, still the falsy-else peek). `cells`
+   past index `lifted` are the ones this subject minted, so an equal name means the subject IS
+   that bare cell. Only then do the back-ends read its pending facet to hold the block. */
+function isBareLiftedCell(code: string, cells: InjectedCell[], lifted: number): boolean {
+    const name = code.trim()
+    for (let index = lifted; index < cells.length; index++) {
+        if (cells[index].name === name) {
+            return true
+        }
+    }
+    return false
 }
 
 /* Walks one interpolation field, appends any lifted cells, and returns the rewritten expression. */

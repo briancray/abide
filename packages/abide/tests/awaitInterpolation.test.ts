@@ -111,7 +111,7 @@ describe('{await expr} value-position lift (blocking)', () => {
     test('a leading await in an {#if} head lifts to a blocking peek-cell', () => {
         const lowered = compileComponent('{#if await ready()}<p>ok</p>{/if}')
         expect(lowered).toContain('$$scope().trackedComputed(async () => await (ready()), false)')
-        expect(lowered).toContain('$$when(host, () => ($$readCell(__v0))')
+        expect(lowered).toContain('$$when(host, () => $$readCell(__v0),')
     })
 
     test('a leading await in a {#for} iterable lifts to a blocking peek-cell', () => {
@@ -123,7 +123,7 @@ describe('{await expr} value-position lift (blocking)', () => {
     test('a leading await in a {#switch} subject lifts to a blocking peek-cell', () => {
         const lowered = compileComponent('{#switch await pick()}{:case 1}<p>a</p>{/switch}')
         expect(lowered).toContain('$$scope().trackedComputed(async () => await (pick()), false)')
-        expect(lowered).toContain('$$switchBlock(host, () => ($$readCell(__v0))')
+        expect(lowered).toContain('$$switchBlock(host, () => $$readCell(__v0),')
     })
 })
 

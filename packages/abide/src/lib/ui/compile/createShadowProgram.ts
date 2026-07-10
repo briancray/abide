@@ -8,6 +8,7 @@ import { pagePropsType } from './pagePropsType.ts'
 import { resolveAbideImports } from './resolveAbideImports.ts'
 import { shadowNaming } from './shadowNaming.ts'
 import type { CompiledShadow } from './types/CompiledShadow.ts'
+import type { InterpolationClassifier } from './types/InterpolationClassifier.ts'
 
 const { suffixed, isShadow, sourceOf } = shadowNaming
 
@@ -29,7 +30,16 @@ the project's tsconfig (lib/paths/baseUrl) so the shadows type-check against the
 same world the app does; `noUnusedLocals`/`noUnusedParameters` are forced off
 because the shadow legitimately declares scope bindings a template may not read.
 */
-export function createShadowProgram(cwd: string, abidePaths?: string[]): ShadowProgram {
+export function createShadowProgram(
+    cwd: string,
+    abidePaths?: string[],
+    /* Per-file interpolation classifier (ADR-0032). When provided, each shadow peek-wraps its async
+       sub-expressions so they type-check against the RESOLVED value; it must be backed by a SEPARATE
+       verbatim program (see `checkAbide`), since a classifier reading these same wrapped shadows
+       would be circular. Absent ⇒ verbatim shadows (the classifier-source pass, and any caller that
+       doesn't need the peek types). */
+    classifierFor?: (abidePath: string) => InterpolationClassifier | undefined,
+): ShadowProgram {
     const { options, fileNames } = loadShadowTsConfig(cwd)
     const shadows = new Map<string, CompiledShadow>()
     const parseErrors = new Map<string, string>()
@@ -47,7 +57,11 @@ export function createShadowProgram(cwd: string, abidePaths?: string[]): ShadowP
     const shadowText = (abidePath: string): string => {
         const source = ts.sys.readFile(abidePath) ?? ''
         try {
-            const compiled = compileShadow(source, pagePropsType(abidePath))
+            const compiled = compileShadow(
+                source,
+                pagePropsType(abidePath),
+                classifierFor?.(abidePath),
+            )
             shadows.set(abidePath, compiled)
             parseErrors.delete(abidePath)
             return compiled.code

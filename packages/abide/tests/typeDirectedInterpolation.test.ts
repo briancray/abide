@@ -272,19 +272,46 @@ describe('type-directed interpolation lowering — async value-position lift (AD
         expect(lowered).toContain('$$readCell(__v0)')
     })
 
-    test('a promise in an {#if} head lifts to a peek-cell', () => {
+    test('a promise in an {#if} head lifts to a peek-cell, pending-aware (renders no branch)', () => {
         const source = `<script>\nasync function getPromise(): Promise<boolean> { return true }\n</script>\n{#if getPromise()}<p>yes</p>{/if}\n`
         const lowered = compileClassified(source)
-        expect(lowered).toContain('$$when(host, () => ($$readCell(__v0))')
+        /* A bare async subject reads its value through the peek AND passes `when` a pending probe
+           so a still-loading cell renders neither branch (not the falsy `{:else}`). */
+        expect(lowered).toContain('$$when(host, () => $$readCell(__v0),')
+        expect(lowered).toContain('() => $$cellPending(__v0))')
         expect(lowered).toContain(
             '$$scope().trackedComputed(async () => await (getPromise()), true)',
         )
     })
 
-    test('a promise in a {#switch} head lifts to a peek-cell', () => {
+    test('a bare async {#if} head guards its SSR render behind the pending probe', () => {
+        const source = `<script>\nasync function getPromise(): Promise<boolean> { return true }\n</script>\n{#if getPromise()}<p>yes</p>{:else}<p>no</p>{/if}\n`
+        const classify = makeClassifier(source)
+        const ssr = compileSSR(source, false, undefined, undefined, classify)
+        /* SSR skips BOTH branches while the cell is pending (mirrors the client `when`): an empty
+           `$$cellPending` guard clause holds the chain, and the `$$readCell` clause picks then/else
+           once it settles — so a streaming subject's `{:else}` never bakes into the shell early. */
+        expect(ssr).toContain('if ($$cellPending(__v0)) {')
+        expect(ssr).toContain('else if ($$readCell(__v0)) {')
+    })
+
+    test('a mixed cond-chain interleaves sync and async branch clauses in SSR', () => {
+        const source = `<script>\nasync function getPromise(): Promise<boolean> { return true }\n</script>\n{#if false}<p>a</p>{:else if getPromise()}<p>b</p>{:else}<p>c</p>{/if}\n`
+        const classify = makeClassifier(source)
+        const ssr = compileSSR(source, false, undefined, undefined, classify)
+        /* The sync branch stays a plain clause; the async {:else if} expands to a pending-guard
+           clause (empty — holds) followed by its value clause, then the default {:else}. */
+        expect(ssr).toContain('if (false) {')
+        expect(ssr).toContain('else if ($$cellPending(__v0)) {')
+        expect(ssr).toContain('else if ($$readCell(__v0)) {')
+        expect(ssr).toMatch(/else \{[\s\S]*"c"/)
+    })
+
+    test('a promise in a {#switch} head lifts to a peek-cell, pending-aware (matches no case)', () => {
         const source = `<script>\nasync function getPromise(): Promise<string> { return 'a' }\n</script>\n{#switch getPromise()}{:case 'a'}<p>a</p>{/switch}\n`
         const lowered = compileClassified(source)
-        expect(lowered).toContain('$$switchBlock(host, () => ($$readCell(__v0))')
+        expect(lowered).toContain('$$switchBlock(host, () => $$readCell(__v0),')
+        expect(lowered).toContain('() => $$cellPending(__v0))')
         expect(lowered).toContain(
             '$$scope().trackedComputed(async () => await (getPromise()), true)',
         )
@@ -388,7 +415,7 @@ describe('ADR-0032 async sub-expression lift — composition & tiers', () => {
         const source = `<script>\nasync function ready(): Promise<boolean> { return true }\n</script>\n{#if await ready()}<p>ok</p>{/if}\n`
         const lowered = compileClassified(source)
         expect(lowered).toContain('$$scope().trackedComputed(async () => await (ready()), false)')
-        expect(lowered).toContain('$$when(host, () => ($$readCell(__v0))')
+        expect(lowered).toContain('$$when(host, () => $$readCell(__v0),')
     })
 
     test('a leading `await` selects the BLOCKING tier in an attribute (`, false`)', () => {

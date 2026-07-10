@@ -62,48 +62,49 @@ async function runJsonl() {
     <div class="flex flex-col gap-2">
         <h1 class="text-3xl font-bold">Streaming over HTTP</h1>
         <p class="text-slate-600">
-            Wrap an <code class="font-mono">AsyncIterable</code> in <code class="font-mono">sse()</code> or
-    <code class="font-mono">jsonl()</code>; consume client-side with native APIs. A generator throw
-    terminates the stream: <code class="font-mono">jsonl</code> emits a final
-    <code class="font-mono">{'{"$error": message}'}</code> line, <code class="font-mono">sse</code> an
-    <code class="font-mono">event: error</code> frame. On a bare streaming call the same
-    <code class="font-mono">pending/refreshing/done/error</code>
-    <a class="underline" href="/probes">probes</a> apply.
+            Wrap an <code class="font-mono">AsyncIterable</code> in
+            <code class="font-mono">sse()</code> or <code class="font-mono">jsonl()</code>; consume
+            client-side with native APIs. A generator throw terminates the stream:
+            <code class="font-mono">jsonl</code> emits a final
+            <code class="font-mono">{'{"$error": message}'}</code> line, <code class="font-mono">sse</code> an
+            <code class="font-mono">event: error</code> frame. On a bare streaming call the same
+            <code class="font-mono">pending/refreshing/done/error</code>
+            <a class="underline" href="/probes">probes</a> apply.
         </p>
     </div>
 
-<section class="flex flex-col gap-2">
-    <h2 class="text-sm font-semibold">The two helpers</h2>
-    <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-        <table class="w-full text-sm">
-            <thead class="border-b border-slate-200 bg-slate-50 text-left">
-                <tr>
-                    <th class="px-4 py-2 font-mono font-medium">helper</th>
-                    <th class="px-4 py-2 font-medium">content-type</th>
-                    <th class="px-4 py-2 font-medium">client consumer</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100">
-                <tr>
-                    <td class="px-4 py-2 font-mono">sse</td>
-                    <td class="px-4 py-2 font-mono text-slate-500">text/event-stream</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        <code class="font-mono">new EventSource(fn.url)</code>
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">jsonl</td>
-                    <td class="px-4 py-2 font-mono text-slate-500">application/jsonl</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        <code class="font-mono">fn.raw(args).then(r =&gt; r.body)</code>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-</section>
+    <section class="flex flex-col gap-2">
+        <h2 class="text-sm font-semibold">The two helpers</h2>
+        <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+            <table class="w-full text-sm">
+                <thead class="border-b border-slate-200 bg-slate-50 text-left">
+                    <tr>
+                        <th class="px-4 py-2 font-mono font-medium">helper</th>
+                        <th class="px-4 py-2 font-medium">content-type</th>
+                        <th class="px-4 py-2 font-medium">client consumer</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    <tr>
+                        <td class="px-4 py-2 font-mono">sse</td>
+                        <td class="px-4 py-2 font-mono text-slate-500">text/event-stream</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            <code class="font-mono">new EventSource(fn.url)</code>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">jsonl</td>
+                        <td class="px-4 py-2 font-mono text-slate-500">application/jsonl</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            <code class="font-mono">fn.raw(args).then(r =&gt; r.body)</code>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
 
-<Demo title="The bare call is the stream — watch() + done()" code={`import { done } from '@abide/abide/shared/done'
+    <Demo title="The bare call is the stream — watch() + done()" code={`import { done } from '@abide/abide/shared/done'
 import { watch } from '@abide/abide/ui/watch'
 
 const feed = countLog({ to: 5 })                 // the bare call IS the stream
@@ -111,20 +112,20 @@ watch(feed, (frame) => {                          // one shared fetch per distin
     watchedFrames = [...watchedFrames, frame.n]
 })
 const closed = state.computed(() => done(feed))  // probe in script; read the boolean in markup`}>
-    <p class="text-xs text-slate-500">
-        A streaming handler makes the bare call return the stream itself — consume it with
-        <code class="font-mono">watch(source, handler)</code> (or a
-        <code class="font-mono">{'{#for await}'}</code> block), never
-        <code class="font-mono">await</code>. This one started at mount; the
-        <code class="font-mono">done</code> probe flips when the finite stream closes.
-    </p>
-    <p class="font-mono text-xs text-slate-700">frames: [{watchedFrames.join(', ')}]</p>
-    <p class="font-mono text-xs {streamClosed ? 'text-emerald-600' : 'text-amber-600'}">
-        {streamClosed ? 'done() → true — stream closed' : 'done() → false — streaming…'}
-    </p>
-</Demo>
+        <p class="text-xs text-slate-500">
+            A streaming handler makes the bare call return the stream itself — consume it with
+            <code class="font-mono">watch(source, handler)</code> (or a
+            <code class="font-mono">{'{#for await}'}</code> block), never
+            <code class="font-mono">await</code>. This one started at mount; the
+            <code class="font-mono">done</code> probe flips when the finite stream closes.
+        </p>
+        <p class="font-mono text-xs text-slate-700">frames: [{watchedFrames.join(', ')}]</p>
+        <p class="font-mono text-xs {streamClosed ? 'text-emerald-600' : 'text-amber-600'}">
+            {streamClosed ? 'done() → true — stream closed' : 'done() → false — streaming…'}
+        </p>
+    </Demo>
 
-<Demo title="SSE stream, live" code={`import { GET } from '@abide/abide/server/GET'
+    <Demo title="SSE stream, live" code={`import { GET } from '@abide/abide/server/GET'
 import { sse } from '@abide/abide/server/sse'
 
 export const tickFeed = GET(() =>
@@ -135,22 +136,22 @@ export const tickFeed = GET(() =>
         }
     })()),
 )`}>
-    <button
-        type="button"
-        class="rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100"
-        onclick={runSse}>
-        run tickFeed (close after 5 frames)
-    </button>
-    {#if sseFrames.length > 0}
-        <ul class="flex flex-col gap-1 font-mono text-xs text-slate-700">
-            {#for frame of sseFrames by frame.n}
-                <li>{frame.text}</li>
-            {/for}
-        </ul>
-    {/if}
-</Demo>
+        <button
+            type="button"
+            class="rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100"
+            onclick={runSse}>
+            run tickFeed (close after 5 frames)
+        </button>
+        {#if sseFrames.length > 0}
+            <ul class="flex flex-col gap-1 font-mono text-xs text-slate-700">
+                {#for frame of sseFrames by frame.n}
+                    <li>{frame.text}</li>
+                {/for}
+            </ul>
+        {/if}
+    </Demo>
 
-<Demo title="JSONL stream, live" code={`import { GET } from '@abide/abide/server/GET'
+    <Demo title="JSONL stream, live" code={`import { GET } from '@abide/abide/server/GET'
 import { jsonl } from '@abide/abide/server/jsonl'
 
 export const countLog = GET(({ to }: { to: number }) =>
@@ -161,18 +162,18 @@ export const countLog = GET(({ to }: { to: number }) =>
         }
     })()),
 )`}>
-    <button
-        type="button"
-        class="rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100"
-        onclick={runJsonl}>
-        {'run countLog({ to: 8 })'}
-    </button>
-    {#if jsonlFrames.length > 0}
-        <ul class="flex flex-col gap-1 font-mono text-xs text-slate-700">
-            {#for frame of jsonlFrames by frame.n}
-                <li>{frame.text}</li>
-            {/for}
-        </ul>
-    {/if}
-</Demo>
+        <button
+            type="button"
+            class="rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100"
+            onclick={runJsonl}>
+            {'run countLog({ to: 8 })'}
+        </button>
+        {#if jsonlFrames.length > 0}
+            <ul class="flex flex-col gap-1 font-mono text-xs text-slate-700">
+                {#for frame of jsonlFrames by frame.n}
+                    <li>{frame.text}</li>
+                {/for}
+            </ul>
+        {/if}
+    </Demo>
 </div>

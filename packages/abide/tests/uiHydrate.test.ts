@@ -8,6 +8,7 @@ import { appendText } from '../src/lib/ui/dom/appendText.ts'
 import { applyResolved } from '../src/lib/ui/dom/applyResolved.ts'
 import { attr } from '../src/lib/ui/dom/attr.ts'
 import { awaitBlock } from '../src/lib/ui/dom/awaitBlock.ts'
+import { cloneStatic } from '../src/lib/ui/dom/cloneStatic.ts'
 import { each } from '../src/lib/ui/dom/each.ts'
 import { hydrate } from '../src/lib/ui/dom/hydrate.ts'
 import { on } from '../src/lib/ui/dom/on.ts'
@@ -1068,3 +1069,102 @@ const { value, children } = props<{ value: unknown; children: Snippet }>()
 function body(source: string): string {
     return compileComponent(source)
 }
+
+/*
+An ASYNC control-flow subject can be settled on the server (a barrier-baked value) yet pending
+on the client's first render, so SSR and the client select DIFFERENT branches. Adopting the SSR
+nodes in place then orphaned them and the next reactive swap duplicated (`<p>THEN</p>` twice in
+one range). The fix: for an async range (`isPending`/per-case `pending` supplied), hydration
+DISCARDS the server range content and builds the client's branch fresh. These drive `when`/
+`switchBlock` directly with a divergent client state, which is exactly the runtime shape the
+compiler emits for a bare async subject — no async-timing flakiness.
+*/
+describe('hydrate — an async range whose SSR branch differs from the client does not duplicate', () => {
+    const serialize = (node: Node): string =>
+        (globalThis as unknown as { serializeMiniDom: (n: Node) => string }).serializeMiniDom(node)
+
+    /* Parse SSR HTML into a host, hydrate with the given `when`, and return the serialized DOM
+       after hydrate and again after the pending flag flips to false (the branch resolves). */
+    function driveWhen(
+        ssrCondition: boolean,
+        pending: { value: boolean },
+    ): { afterHydrate: string; afterResolve: string } {
+        const ssr = compileSSR(`{#if ${ssrCondition}}<p>THEN</p>{:else}<p>ELSE</p>{/if}`)
+        const server = new Function('$props', '$ctx', ssr)(undefined, undefined) as SsrRender
+        const host = document.createElement('div')
+        host.innerHTML = server.html
+        hydrate(host, (target) => {
+            when(
+                target,
+                () => true,
+                (parent) => cloneStatic(parent, '<p>THEN</p>'),
+                (parent) => cloneStatic(parent, '<p>ELSE</p>'),
+                null,
+                () => pending.value,
+            )
+        })
+        const afterHydrate = serialize(host)
+        pending.value = false
+        return { afterHydrate, afterResolve: serialize(host) }
+    }
+
+    test('SSR rendered THEN, client pending → holds empty then resolves to a SINGLE THEN', () => {
+        const pending = state(true)
+        const { afterHydrate, afterResolve } = driveWhen(true, pending)
+        /* The SSR <p>THEN</p> is discarded on hydrate (the client is pending → empty range)… */
+        expect(afterHydrate).toBe('<!--[--><!--]-->')
+        /* …and resolves to exactly one THEN — not two (the pre-fix duplication). */
+        expect(afterResolve).toBe('<!--[--><p>THEN</p><!--]-->')
+    })
+
+    test('SSR rendered ELSE, client resolves to THEN → the client branch wins, no leftover', () => {
+        const pending = state(true)
+        const { afterHydrate, afterResolve } = driveWhen(false, pending)
+        expect(afterHydrate).toBe('<!--[--><!--]-->')
+        expect(afterResolve).toBe('<!--[--><p>THEN</p><!--]-->')
+    })
+
+    test('a SYNC range still adopts SSR nodes in place (no discard)', () => {
+        const ssr = compileSSR(`{#if true}<p>THEN</p>{:else}<p>ELSE</p>{/if}`)
+        const server = new Function('$props', '$ctx', ssr)(undefined, undefined) as SsrRender
+        const host = document.createElement('div')
+        host.innerHTML = server.html
+        const thenBefore = host.childNodes[1] // the SSR <p>THEN</p>
+        hydrate(host, (target) => {
+            when(
+                target,
+                () => true,
+                (parent) => cloneStatic(parent, '<p>THEN</p>'),
+                (parent) => cloneStatic(parent, '<p>ELSE</p>'),
+                null,
+                /* no isPending → sync range → adopt in place */
+            )
+        })
+        // adopted, not rebuilt: same node identity, no duplication
+        expect(serialize(host)).toBe('<!--[--><p>THEN</p><!--]-->')
+        expect(host.childNodes[1]).toBe(thenBefore)
+    })
+
+    test('the balanced scan clears a whole NESTED range, not the first inner close', () => {
+        // SSR: outer branch content holds a nested {#if} → nested [ … ] inside the outer [ … ].
+        const ssr = compileSSR(`{#if true}<p>A</p>{#if true}<span>B</span>{/if}<p>C</p>{/if}`)
+        const server = new Function('$props', '$ctx', ssr)(undefined, undefined) as SsrRender
+        const host = document.createElement('div')
+        host.innerHTML = server.html
+        // sanity: the server really nested a range inside the range
+        expect(server.html).toContain('<!--[--><p>A</p><!--[-->')
+        const pending = state(true)
+        hydrate(host, (target) => {
+            when(
+                target,
+                () => true,
+                (parent) => cloneStatic(parent, '<p>A</p>'),
+                undefined,
+                null,
+                () => pending.value,
+            )
+        })
+        // the ENTIRE nested SSR content is discarded (balanced to the OUTER close), leaving one empty range
+        expect(serialize(host)).toBe('<!--[--><!--]-->')
+    })
+})

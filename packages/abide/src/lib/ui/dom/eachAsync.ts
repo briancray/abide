@@ -1,10 +1,12 @@
 import { effect } from '../effect.ts'
 import { CURRENT_BOUNDARY } from '../runtime/CURRENT_BOUNDARY.ts'
+import { CURRENT_PATH } from '../runtime/CURRENT_PATH.ts'
 import { claimChild } from '../runtime/claimChild.ts'
 import { generationGuard } from '../runtime/generationGuard.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { scopeGroup } from '../runtime/scopeGroup.ts'
 import type { State } from '../runtime/types/State.ts'
+import { withPathFrom } from '../runtime/withPathFrom.ts'
 import { state } from '../state.ts'
 import { buildDetachedRange } from './buildDetachedRange.ts'
 import { removeRange } from './removeRange.ts'
@@ -37,8 +39,15 @@ export function eachAsync<T>(
        (if any), else surfaces, instead of rendering a catch branch. */
     renderCatch: ((parent: Node, error: unknown) => void) | undefined,
     before: Node | null = null,
+    /* Explicit `by` key → the row keys its render-path segment on the stable key; else on the
+       stream arrival ordinal (a stream only appends, so the ordinal is stable). */
+    keyed = false,
 ): void {
     const rows = new Map<string, EachRow>()
+    /* This each's render-path ancestry, captured at build; each row builds under
+       `basePath/segment` so a component/cell in a streamed row gets a stable id even though the
+       row arrives after the ambient path is gone. */
+    const basePath = CURRENT_PATH.current
     /* The enclosing {#try} boundary ambient at BUILD (see `awaitBlock`). A catch-less rejection
        arrives LATER from the async drain, after CURRENT_BOUNDARY has been restored, so capture
        it into this closure now rather than read it at settle time. */
@@ -116,9 +125,14 @@ export function eachAsync<T>(
                 const stale = rows.get(key)
                 const cell = state(result.value) as State<unknown>
                 const indexCell = state(arrivals)
+                const segment = keyed ? key : arrivals
                 arrivals += 1
                 rows.set(key, {
-                    ...insertRange((host) => render(host, cell as State<T>, indexCell)),
+                    ...insertRange((host) =>
+                        withPathFrom(basePath, segment, () =>
+                            render(host, cell as State<T>, indexCell),
+                        ),
+                    ),
                     cell,
                     indexCell,
                 })

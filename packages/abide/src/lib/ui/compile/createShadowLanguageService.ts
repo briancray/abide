@@ -4,14 +4,18 @@ import { messageFromError } from '../../shared/messageFromError.ts'
 import { mapSyntacticClassification, mapTsClassification } from './ABIDE_SEMANTIC_TOKENS_LEGEND.ts'
 import { assetModulesFile } from './assetModulesFile.ts'
 import { compileShadow } from './compileShadow.ts'
+import { isSpuriousAsyncReadDiagnostic } from './isSpuriousAsyncReadDiagnostic.ts'
 import { loadShadowTsConfig } from './loadShadowTsConfig.ts'
 import { pagePropsType } from './pagePropsType.ts'
 import { remapShadowDiagnostic } from './remapShadowDiagnostic.ts'
 import { resolveAbideImports } from './resolveAbideImports.ts'
+import { shadowInterpolationClassifier } from './shadowInterpolationClassifier.ts'
 import { shadowNaming } from './shadowNaming.ts'
 import { sourceToShadowOffset } from './sourceToShadowOffset.ts'
+import { templateStartOffset } from './templateStartOffset.ts'
 import type { AbideDiagnostic } from './types/AbideDiagnostic.ts'
 import type { CompiledShadow } from './types/CompiledShadow.ts'
+import type { InterpolationClassifier } from './types/InterpolationClassifier.ts'
 import type { SemanticToken } from './types/SemanticToken.ts'
 
 const { suffixed, isShadow, sourceOf } = shadowNaming
@@ -45,12 +49,6 @@ export function createShadowLanguageService(cwd: string): ShadowLanguageService 
     const { options, fileNames } = loadShadowTsConfig(cwd)
     const overlays = new Map<string, string>()
     const versions = new Map<string, number>()
-    const shadows = new Map<string, CompiledShadow>()
-    const parseErrors = new Map<string, string>()
-    /* Memo of `shadowText` output keyed by source path, tagged with the shadow
-       version it was compiled at; a stale tag forces recompilation. `update`/`close`
-       bump that version, so the next read recompiles. */
-    const compiledAt = new Map<string, { version: number; code: string }>()
     /* Memo of `pagePropsType` (route re-parse) per source path; the path → props
        type mapping is immutable, so no version tag is needed. */
     const propsTypes = new Map<string, string | undefined>()
@@ -69,33 +67,6 @@ export function createShadowLanguageService(cwd: string): ShadowLanguageService 
     const exists = (abidePath: string): boolean =>
         overlays.has(abidePath) || ts.sys.fileExists(abidePath)
 
-    /* Compiles (and caches) a component's shadow from its overlay or disk text; a
-       template parse error yields a minimal valid module + a recorded message.
-       Memoised against the shadow's version (bumped by `update`/`close`), so
-       repeated reads at the same version skip the ~700-line compile and the
-       `shadows`/`parseErrors` caches stay current. */
-    const shadowText = (abidePath: string): string => {
-        const version = versions.get(suffixed(abidePath)) ?? 0
-        const memo = compiledAt.get(abidePath)
-        if (memo !== undefined && memo.version === version) {
-            return memo.code
-        }
-        const source = overlays.get(abidePath) ?? ts.sys.readFile(abidePath) ?? ''
-        try {
-            const compiled = compileShadow(source, propsTypeOf(abidePath))
-            shadows.set(abidePath, compiled)
-            parseErrors.delete(abidePath)
-            compiledAt.set(abidePath, { version, code: compiled.code })
-            return compiled.code
-        } catch (error) {
-            shadows.set(abidePath, { code: '', mappings: [] })
-            parseErrors.set(abidePath, messageFromError(error))
-            const code = 'export default function (): void {}\n'
-            compiledAt.set(abidePath, { version, code })
-            return code
-        }
-    }
-
     /* All component shadows: those on disk plus any opened (possibly unsaved) ones. */
     const shadowNames = (): string[] => {
         const disk = [...new Bun.Glob('**/*.abide').scanSync({ cwd, onlyFiles: true })]
@@ -104,44 +75,99 @@ export function createShadowLanguageService(cwd: string): ShadowLanguageService 
         return [...new Set([...disk, ...overlays.keys()])].map(suffixed)
     }
 
-    const moduleResolutionHost: ts.ModuleResolutionHost = {
-        fileExists: (fileName) =>
-            fileName === assets.path ||
-            (isShadow(fileName) ? exists(sourceOf(fileName)) : ts.sys.fileExists(fileName)),
-        readFile: (fileName) =>
-            fileName === assets.path
-                ? assets.content
-                : isShadow(fileName)
-                  ? shadowText(sourceOf(fileName))
-                  : ts.sys.readFile(fileName),
+    /* One incremental language service over the shadow world, its shadows built by `compile`. Two
+       are made: a VERBATIM one (the classifier source — interpolations un-wrapped, so `getFoo()`
+       still types as `Promise`), and the WRAPPED main one (async interpolations peek-wrapped, ADR-
+       0032, so hover/completions/diagnostics see the RESOLVED value). They share `overlays`/`versions`
+       so both reflect unsaved edits, but hold SEPARATE shadow caches + document registries (the same
+       shadow file name carries different text in each). */
+    const buildService = (compile: (source: string, abidePath: string) => CompiledShadow) => {
+        const shadows = new Map<string, CompiledShadow>()
+        const parseErrors = new Map<string, string>()
+        /* Memo of `shadowText` output keyed by source path, tagged with the shadow version it was
+           compiled at; a stale tag forces recompilation. `update`/`close` bump that version. */
+        const compiledAt = new Map<string, { version: number; code: string }>()
+        const shadowText = (abidePath: string): string => {
+            const version = versions.get(suffixed(abidePath)) ?? 0
+            const memo = compiledAt.get(abidePath)
+            if (memo !== undefined && memo.version === version) {
+                return memo.code
+            }
+            const source = overlays.get(abidePath) ?? ts.sys.readFile(abidePath) ?? ''
+            try {
+                const compiled = compile(source, abidePath)
+                shadows.set(abidePath, compiled)
+                parseErrors.delete(abidePath)
+                compiledAt.set(abidePath, { version, code: compiled.code })
+                return compiled.code
+            } catch (error) {
+                shadows.set(abidePath, { code: '', mappings: [] })
+                parseErrors.set(abidePath, messageFromError(error))
+                const code = 'export default function (): void {}\n'
+                compiledAt.set(abidePath, { version, code })
+                return code
+            }
+        }
+        const moduleResolutionHost: ts.ModuleResolutionHost = {
+            fileExists: (fileName) =>
+                fileName === assets.path ||
+                (isShadow(fileName) ? exists(sourceOf(fileName)) : ts.sys.fileExists(fileName)),
+            readFile: (fileName) =>
+                fileName === assets.path
+                    ? assets.content
+                    : isShadow(fileName)
+                      ? shadowText(sourceOf(fileName))
+                      : ts.sys.readFile(fileName),
+        }
+        const host: ts.LanguageServiceHost = {
+            getScriptFileNames: () => [assets.path, ...fileNames, ...shadowNames()],
+            getScriptVersion: (fileName) => String(versions.get(fileName) ?? 0),
+            getScriptSnapshot: (fileName) => {
+                if (fileName === assets.path) {
+                    return ts.ScriptSnapshot.fromString(assets.content)
+                }
+                if (isShadow(fileName)) {
+                    return exists(sourceOf(fileName))
+                        ? ts.ScriptSnapshot.fromString(shadowText(sourceOf(fileName)))
+                        : undefined
+                }
+                const text = ts.sys.readFile(fileName)
+                return text === undefined ? undefined : ts.ScriptSnapshot.fromString(text)
+            },
+            getCurrentDirectory: () => cwd,
+            getCompilationSettings: () => options,
+            getDefaultLibFileName: (compilerOptions) => ts.getDefaultLibFilePath(compilerOptions),
+            fileExists: moduleResolutionHost.fileExists,
+            readFile: moduleResolutionHost.readFile,
+            readDirectory: ts.sys.readDirectory,
+            directoryExists: ts.sys.directoryExists,
+            getDirectories: ts.sys.getDirectories,
+            resolveModuleNames: resolveAbideImports(options, moduleResolutionHost),
+        }
+        return {
+            service: ts.createLanguageService(host, ts.createDocumentRegistry()),
+            shadows,
+            parseErrors,
+            shadowText,
+        }
     }
 
-    const host: ts.LanguageServiceHost = {
-        getScriptFileNames: () => [assets.path, ...fileNames, ...shadowNames()],
-        getScriptVersion: (fileName) => String(versions.get(fileName) ?? 0),
-        getScriptSnapshot: (fileName) => {
-            if (fileName === assets.path) {
-                return ts.ScriptSnapshot.fromString(assets.content)
-            }
-            if (isShadow(fileName)) {
-                return exists(sourceOf(fileName))
-                    ? ts.ScriptSnapshot.fromString(shadowText(sourceOf(fileName)))
-                    : undefined
-            }
-            const text = ts.sys.readFile(fileName)
-            return text === undefined ? undefined : ts.ScriptSnapshot.fromString(text)
-        },
-        getCurrentDirectory: () => cwd,
-        getCompilationSettings: () => options,
-        getDefaultLibFileName: (compilerOptions) => ts.getDefaultLibFilePath(compilerOptions),
-        fileExists: moduleResolutionHost.fileExists,
-        readFile: moduleResolutionHost.readFile,
-        readDirectory: ts.sys.readDirectory,
-        directoryExists: ts.sys.directoryExists,
-        getDirectories: ts.sys.getDirectories,
-        resolveModuleNames: resolveAbideImports(options, moduleResolutionHost),
+    const verbatim = buildService((source, abidePath) =>
+        compileShadow(source, propsTypeOf(abidePath)),
+    )
+    /* The wrapped shadow's peek-wrap is type-directed: it asks the verbatim program which
+       sub-expressions are async. `getProgram()` reflects the shared overlays/versions, so the
+       classifier tracks unsaved edits; fail-open to `undefined` (verbatim shadow) if unavailable. */
+    const classifierFor = (abidePath: string): InterpolationClassifier | undefined => {
+        const program = verbatim.service.getProgram()
+        return program === undefined
+            ? undefined
+            : shadowInterpolationClassifier(program, verbatim.shadows, abidePath)
     }
-    const service = ts.createLanguageService(host, ts.createDocumentRegistry())
+    const main = buildService((source, abidePath) =>
+        compileShadow(source, propsTypeOf(abidePath), classifierFor(abidePath)),
+    )
+    const { service, shadows, parseErrors, shadowText } = main
 
     const bump = (abidePath: string): void => {
         const fileName = suffixed(abidePath)
@@ -178,6 +204,12 @@ export function createShadowLanguageService(cwd: string): ShadowLanguageService 
                 ]
             }
             const mappings = shadows.get(abidePath)?.mappings ?? []
+            /* The shadow file + checker + template boundary, for the ADR-0032 bare-async-read
+               suppression (mirrors `collectAbideDiagnostics` so the editor and CLI agree). */
+            const shadowFile = service.getProgram()?.getSourceFile(fileName)
+            const checker = service.getProgram()?.getTypeChecker()
+            const source = overlays.get(abidePath) ?? ts.sys.readFile(abidePath) ?? ''
+            const templateStart = templateStartOffset(source)
             return raw.flatMap((diagnostic) => {
                 if (diagnostic.start === undefined) {
                     return []
@@ -188,6 +220,22 @@ export function createShadowLanguageService(cwd: string): ShadowLanguageService 
                     diagnostic.length ?? 0,
                 )
                 if (located === undefined) {
+                    return []
+                }
+                /* Drop the spurious "property missing on Promise" / "condition always defined" a
+                   bare async read provokes — the runtime peeks the resolved value (ADR-0032). */
+                if (
+                    shadowFile !== undefined &&
+                    checker !== undefined &&
+                    located.start >= templateStart &&
+                    isSpuriousAsyncReadDiagnostic(
+                        shadowFile,
+                        checker,
+                        diagnostic.code,
+                        diagnostic.start,
+                        diagnostic.length ?? 0,
+                    )
+                ) {
                     return []
                 }
                 return [

@@ -1,10 +1,15 @@
 import { ASYNC_CELL } from '../../shared/ASYNC_CELL.ts'
+import { decodeRefJson } from '../../shared/decodeRefJson.ts'
 import { isAsyncIterable } from '../../shared/isAsyncIterable.ts'
 import { isThenable } from '../../shared/isThenable.ts'
 import { pendingAsyncCellsSlot } from '../../shared/pendingAsyncCellsSlot.ts'
+import { resolvedCellsSlot } from '../../shared/resolvedCellsSlot.ts'
 import type { AsyncComputed } from '../../shared/types/AsyncComputed.ts'
 import type { AsyncState } from '../../shared/types/AsyncState.ts'
 import type { NamedAsyncIterable } from '../../shared/types/NamedAsyncIterable.ts'
+import type { Scope } from '../types/Scope.ts'
+import { CELL_SEED } from './CELL_SEED.ts'
+import { CURRENT_SCOPE } from './CURRENT_SCOPE.ts'
 import { createEffectNode } from './createEffectNode.ts'
 import { createSignalNode } from './createSignalNode.ts'
 import { readNode } from './readNode.ts'
@@ -56,6 +61,12 @@ export function createAsyncCell(
     const inFlightNode = createSignalNode(true)
     const hasValueNode = createSignalNode(false)
 
+    /* This cell's serialization-stable warm-seed key: its scope's render-path id + a per-scope
+       index, drawn at construction (in declaration order) so SSR and client agree on it. Undefined
+       for a detached cell (no scope) — such a cell never crosses SSR→client, so never warm-seeds. */
+    const scope = CURRENT_SCOPE.current as (Scope & { nextCellIndex: () => number }) | undefined
+    const warmKey = scope !== undefined ? `${scope.id}:${scope.nextCellIndex()}` : undefined
+
     /* `linked` write latch: a local `set()` holds the cell until the next reseed, so an
        arriving frame / settling promise never clobbers an in-progress edit. Cleared on reseed. */
     let written = false
@@ -84,6 +95,20 @@ export function createAsyncCell(
         acceptValue(value)
         writeNode(errorNode, undefined)
         writeNode(inFlightNode, false)
+        /* Server-only: record the resolved value keyed by this cell's render-path id, so the page
+           renderer stamps it into `__SSR__.cells` and the client hydrates it warm (the `window`
+           guard keeps client settles from ever recording). BLOCKING cells only: the barrier awaits
+           them before the template peeks, so the resolved value is baked into the SSR HTML and a
+           warm client value MATCHES it (no pending flash, no orphaned-node duplication). A STREAMING
+           cell (ADR-0032, a no-`await` position) is EXCLUDED — it ships pending in the shell (its
+           promise never settles during the synchronous render, and it is off the barrier), so the
+           SSR HTML holds the pending state; warm-seeding its resolved value would diverge from that
+           pending markup and corrupt the claimed text/branch on hydrate. The streaming tier instead
+           resolves on the client (cold re-run against the cache snapshot, or the `__abideResolve`
+           stream chunk), which is congruent with the pending shell. */
+        if (warmKey !== undefined && typeof window === 'undefined' && options.streaming !== true) {
+            resolvedCellsSlot.get()?.entries.push({ key: warmKey, value })
+        }
     }
 
     /* An error retains the value (SWR): a failed background refresh keeps the stale value
@@ -176,6 +201,24 @@ export function createAsyncCell(
             return
         }
         settleValue(myRun, produced)
+    }
+
+    /* Warm hydrate: if the server shipped this cell's resolved value (keyed by its render-path
+       id), adopt it NOW — before the eager run — so `hasValue` is already true. The cell then reads
+       as REFRESHING (not pending) through the eager run below, so the value shows instantly with no
+       flash and matches the SSR-rendered branch. The run still fires (revalidate + subscribe the
+       seed's deps for reactivity, SWR), and its settle supersedes via the `runId` guard. Client-
+       only in effect (the store is only ever populated by `startClient`, so it's empty on the
+       server — no `window` sniff needed); a decode failure falls through to a cold run. */
+    if (warmKey !== undefined) {
+        const seeded = CELL_SEED[warmKey]
+        if (seeded !== undefined) {
+            try {
+                acceptValue(decodeRefJson(seeded))
+            } catch {
+                /* Unserializable/corrupt seed → cold run renders it. */
+            }
+        }
     }
 
     /* The eager first-run + reactive reseed: the effect tracks the seed's synchronous reads,

@@ -62,6 +62,16 @@ describe('html`` raw markup via {expr}', () => {
         expect(out).toBe('<div><!--abide:html--><b>x</b><!--/abide:html--></div>')
     })
 
+    test('a plain call with a nullish argument renders empty (bare async read while pending)', () => {
+        /* ADR-0032: a bare async read hands `html()` `undefined` while pending
+           (`{html(highlight(code)?.html)}`), so the plain-call path degrades to empty raw
+           instead of throwing on `strings[0]` — mirroring `{value}`'s `undefined` → `""`. */
+        expect(html(undefined)).toEqual(html(''))
+        expect(html(null)).toEqual(html(''))
+        const out = ssr(`<div>{$$model.code}</div>`, doc({ code: html(undefined) })).html
+        expect(out).toBe('<div><!--abide:html--><!--/abide:html--></div>')
+    })
+
     test('client mount parses branded markup into real nodes', () => {
         const host = document.createElement('div')
         run(`<div>{$$model.code}</div>`, host, doc({ code: html('<b>hi</b>') }), 'mount')

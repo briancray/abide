@@ -20,6 +20,7 @@ import type { Route } from './runtime/types/Route.ts'
 import type { RouteLoader } from './runtime/types/RouteLoader.ts'
 import type { UiProps } from './runtime/types/UiProps.ts'
 import { untrack } from './runtime/untrack.ts'
+import { withPath } from './runtime/withPath.ts'
 
 /* An outlet boundary — the `<!--abide:outlet-->`…`<!--/abide:outlet-->` marker pair a
    layer's content lives between (a layout's `<slot/>`, or the router's root boundary in
@@ -220,15 +221,20 @@ export function router(
             for (let depth = index; depth < layoutViews.length; depth += 1) {
                 const view = layoutViews[depth] as Route
                 PENDING_OUTLET.current = undefined
-                const { dispose } = fillBoundary(
-                    boundary.open,
-                    boundary.close,
-                    view.build,
-                    /* A layout always has a child below: a deeper layout, or the page. */
-                    propsBag(depth < layoutViews.length - 1 || pageView !== undefined),
-                    /* The layout's route key names its scope in the inspector's Reactive tab
-                       (no host element to read a tag from — see `scopeLabel`). */
-                    chainKeys[depth],
+                /* Root this layer's render-path at its route key (the directory URL — stable
+                   across reloads and globally unique), so every scope/cell it builds gets a
+                   serialization-stable id under it (`withPath`). */
+                const { dispose } = withPath(chainKeys[depth] as string, () =>
+                    fillBoundary(
+                        boundary.open,
+                        boundary.close,
+                        view.build,
+                        /* A layout always has a child below: a deeper layout, or the page. */
+                        propsBag(depth < layoutViews.length - 1 || pageView !== undefined),
+                        /* The layout's route key names its scope in the inspector's Reactive tab
+                           (no host element to read a tag from — see `scopeLabel`). */
+                        chainKeys[depth],
+                    ),
                 )
                 const slot = PENDING_OUTLET.current
                 if (slot === undefined) {
@@ -241,14 +247,18 @@ export function router(
                 mountedPageKey = undefined
                 return
             }
-            disposePage = fillBoundary(
-                boundary.open,
-                boundary.close,
-                pageView.build,
-                /* A page is a leaf — no child layer. */
-                propsBag(false),
-                /* The page's route key names its scope in the inspector (see above). */
-                pageKey,
+            /* Root the page's render-path at its route key (stable, unique) — see the layout
+               layer above. */
+            disposePage = withPath(pageKey, () =>
+                fillBoundary(
+                    boundary.open,
+                    boundary.close,
+                    pageView.build,
+                    /* A page is a leaf — no child layer. */
+                    propsBag(false),
+                    /* The page's route key names its scope in the inspector (see above). */
+                    pageKey,
+                ),
             ).dispose
             mountedPageKey = pageKey
         }
@@ -532,15 +542,42 @@ export function router(
                         disposeFrom(divergence)
                         const url = resolveUrl(path)
                         clientPage.value = { route: chainRoute, params, url, navigating: false }
-                        buildFrom(
-                            divergence,
-                            chainKeys,
-                            layoutViews,
-                            pageView,
-                            key,
-                            params,
-                            hydrating,
-                        )
+                        try {
+                            buildFrom(
+                                divergence,
+                                chainKeys,
+                                layoutViews,
+                                pageView,
+                                key,
+                                params,
+                                hydrating,
+                            )
+                        } catch (error) {
+                            /* A cold mount owns no claim cursor, so the SSR-vs-client claim asserts
+                               (`assertClaimedText`, `claimExpected`) can't fire there — a throw from
+                               it is a genuine codegen/user-render defect. Rethrow to `commit`, which
+                               surfaces it and stops (a reload would re-run the same failure). */
+                            if (!hydrating) {
+                                throw error
+                            }
+                            /* A HYDRATING first paint threw — a server↔client markup divergence (a
+                               blocking cell whose resolved value the server couldn't serialize into
+                               `__SSR__.cells`, so the client reads pending where SSR baked a value;
+                               or any other SSR/client mismatch). A reload re-runs the same SSR, so
+                               recover CLIENT-side: discard the server markup and mount the page fresh
+                               (cold — pending reads render their empty state and fill in on settle,
+                               congruent because nothing is being adopted). Reset to the pristine
+                               pre-mount state so `run` re-establishes the root boundary and clears the
+                               host, then rebuild the whole chain cold. */
+                            console.warn(
+                                `[abide] hydration mismatch at ${path} — discarding server markup and rendering on the client:`,
+                                error,
+                            )
+                            disposeFrom(0)
+                            rootBoundary = undefined
+                            mountedPageKey = undefined
+                            buildFrom(0, chainKeys, layoutViews, pageView, key, params, false)
+                        }
                         /* Reapply the destination entry's scroll once its DOM exists — a
                        back/forward restores its offset, a fresh nav scrolls to the `#hash`
                        anchor (now built) or the top. SKIPPED on a hydrating first paint:

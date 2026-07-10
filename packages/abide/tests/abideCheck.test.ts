@@ -3,7 +3,11 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { collectAbideDiagnostics } from '../src/lib/ui/compile/collectAbideDiagnostics.ts'
-import { createShadowProgram } from '../src/lib/ui/compile/createShadowProgram.ts'
+import {
+    createShadowProgram,
+    type ShadowProgram,
+} from '../src/lib/ui/compile/createShadowProgram.ts'
+import { interpolationClassifierForRoot } from '../src/lib/ui/compile/interpolationClassifierForRoot.ts'
 
 /* The real package root, so the throwaway tsconfig resolves `@abide/abide/*` author imports
    (`ui/state`, `ui/effect`, …) to the actual sources — a consuming project resolves them
@@ -34,6 +38,19 @@ function project(files: Record<string, string>): string {
         writeFileSync(path, contents)
     }
     return dir
+}
+
+/* The two-pass check the `abide` CLI runs (ADR-0032): a verbatim classifier program feeds the
+   peek-wrapped diagnostic program, so async interpolations type-check against their RESOLVED value.
+   `collectAbideDiagnostics(createShadowProgram(dir))` (no classifier) instead exercises the verbatim
+   + suppression fail-open path. */
+function wrappedDiagnostics(dir: string): ReturnType<typeof collectAbideDiagnostics> {
+    const cache = new Map<string, ShadowProgram | undefined>()
+    return collectAbideDiagnostics(
+        createShadowProgram(dir, undefined, (abidePath) =>
+            interpolationClassifierForRoot(cache, dir, abidePath),
+        ),
+    )
 }
 
 describe('abide check', () => {
@@ -305,6 +322,82 @@ describe('abide check', () => {
         const source = `<script>\nimport { props } from '@abide/abide/ui/props'\nconst { stream } = props<{ stream: AsyncIterable<number> }>()\n</script>\n{#for await n of stream}{n.toFixed(2)}{/for}\n`
         const dir = project({ 'ok.abide': source })
         expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
+    })
+
+    /* ADR-0032: a bare async read is a peek at the RESOLVED value (`undefined` while pending), so
+       an optional read of a real member composes with `?.`/`??` and type-checks clean — the raw
+       `Promise` shadow's "property missing" / "always defined" diagnostics are suppressed. */
+    test('a bare async optional read and {#if} subject type-check clean', () => {
+        const head = `<script>\nimport { props } from '@abide/abide/ui/props'\nconst { load } = props<{ load: Promise<{ name: string }> }>()\n</script>\n`
+        const read = project({ 'read.abide': `${head}<p>{load?.name ?? 'loading'}</p>\n` })
+        expect(collectAbideDiagnostics(createShadowProgram(read))).toHaveLength(0)
+        const branch = project({ 'if.abide': `${head}{#if load}yes{:else}no{/if}\n` })
+        expect(collectAbideDiagnostics(createShadowProgram(branch))).toHaveLength(0)
+    })
+
+    /* The suppression is a peek at the RESOLVED type, not a blanket mute: a member that doesn't
+       exist on the awaited value is still a real error (a typo isn't hidden). */
+    test('a wrong member on a bare async read is still caught against the resolved type', () => {
+        const dir = project({
+            'typo.abide': `<script>\nimport { props } from '@abide/abide/ui/props'\nconst { load } = props<{ load: Promise<{ name: string }> }>()\n</script>\n<p>{load?.bogus}</p>\n`,
+        })
+        const diagnostics = collectAbideDiagnostics(createShadowProgram(dir))
+        expect(diagnostics).toHaveLength(1)
+        expect(diagnostics[0]!.message).toContain('bogus')
+    })
+
+    /* Only OPTIONAL (`?.`) access is the peek — a bare `.name` on a promise is the ADR-0032 footgun
+       (`__v.name` throws on `undefined` while pending), so it stays an error nudging toward `?.`. */
+    test('a non-optional member on a bare async read stays an error', () => {
+        const dir = project({
+            'bare.abide': `<script>\nimport { props } from '@abide/abide/ui/props'\nconst { load } = props<{ load: Promise<{ name: string }> }>()\n</script>\n<p>{load.name}</p>\n`,
+        })
+        const diagnostics = collectAbideDiagnostics(createShadowProgram(dir))
+        expect(diagnostics).toHaveLength(1)
+        expect(diagnostics[0]!.message).toContain('name')
+    })
+
+    /* The suppression is gated to the template region — a promise member access in the `<script>`
+       (a forgotten `await`) must still surface, so the peek relaxation never leaks into script code. */
+    test('a promise member access in the leading <script> is still an error', () => {
+        const dir = project({
+            'script.abide': `<script>\nimport { props } from '@abide/abide/ui/props'\nconst { load } = props<{ load: Promise<{ name: string }> }>()\nconst leaked = load.name\n</script>\n<p>{leaked}</p>\n`,
+        })
+        const diagnostics = collectAbideDiagnostics(createShadowProgram(dir))
+        expect(diagnostics.some((diagnostic) => diagnostic.message.includes('name'))).toBe(true)
+    })
+
+    /* A bare `AsyncIterable` read peeks its latest FRAME, so an optional read of a frame member
+       type-checks the same way (the frame type, not the un-awaited iterable). */
+    test('a bare async-iterable optional read type-checks against the frame type', () => {
+        const dir = project({
+            'frame.abide': `<script>\nimport { props } from '@abide/abide/ui/props'\nconst { stream } = props<{ stream: AsyncIterable<{ label: string }> }>()\n</script>\n<p>{stream?.label ?? '—'}</p>\n`,
+        })
+        expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
+    })
+
+    /* Under the CLI's two-pass wrap, an async interpolation type-checks against its RESOLVED value
+       (`$$peek(load)?.name`), so hover/completions see `{ name: string }`, not `Promise<…>`, and a
+       clean read plus an `{#if}` subject raise no diagnostic. */
+    test('the peek-wrap resolves a bare async read — clean read and {#if} type-check', () => {
+        const head = `<script>\nimport { props } from '@abide/abide/ui/props'\nconst { load } = props<{ load: Promise<{ name: string }> }>()\n</script>\n`
+        const read = project({ 'read.abide': `${head}<p>{load?.name ?? 'loading'}</p>\n` })
+        expect(wrappedDiagnostics(read)).toHaveLength(0)
+        const branch = project({ 'if.abide': `${head}{#if load}yes{:else}no{/if}\n` })
+        expect(wrappedDiagnostics(branch)).toHaveLength(0)
+    })
+
+    /* The wrap checks a typo against the AWAITED shape, so the error names the resolved type
+       (`{ name: string }`) rather than the raw `Promise` — the resolved-type feedback the peek gives. */
+    test('the peek-wrap reports a typo against the awaited type, not the promise', () => {
+        const dir = project({
+            'typo.abide': `<script>\nimport { props } from '@abide/abide/ui/props'\nconst { load } = props<{ load: Promise<{ name: string }> }>()\n</script>\n<p>{load?.bogus}</p>\n`,
+        })
+        const diagnostics = wrappedDiagnostics(dir)
+        expect(diagnostics).toHaveLength(1)
+        expect(diagnostics[0]!.message).toContain('bogus')
+        expect(diagnostics[0]!.message).toContain('{ name: string; }')
+        expect(diagnostics[0]!.message).not.toContain('Promise')
     })
 
     /* The streaming `then` branch binds the awaited value, so a wrong member on the

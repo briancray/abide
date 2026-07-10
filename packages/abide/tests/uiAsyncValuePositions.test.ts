@@ -70,17 +70,73 @@ beforeAll(() => {
 })
 
 describe('ADR-0032 async value positions render pending-undefined then resolve', () => {
-    test('{#if getFoo()} renders the ELSE branch while pending, the THEN branch after resolve', async () => {
+    test('{#if getFoo()} renders NEITHER branch while pending, the THEN branch after resolve', async () => {
         const host = mount(
             `<script>\nasync function getFoo() { return true }\n</script>\n{#if getFoo()}<span>THEN</span>{:else}<span>ELSE</span>{/if}\n`,
         )
-        /* Pending: the peek is `undefined` (falsy) → the else branch. Loading is not an error. */
-        expect(host.textContent).toContain('ELSE')
+        /* Pending: a bare async subject renders no branch — "still loading" is not conflated with
+           a settled falsy value, so the `{:else}` does NOT flash before the promise settles. */
+        expect(host.textContent).not.toContain('ELSE')
         expect(host.textContent).not.toContain('THEN')
         await settle()
         /* Resolved truthy → the then branch. */
         expect(host.textContent).toContain('THEN')
         expect(host.textContent).not.toContain('ELSE')
+    })
+
+    test('{#if getFoo()} resolving FALSY renders the ELSE branch (settled ≠ pending)', async () => {
+        const host = mount(
+            `<script>\nasync function getFoo() { return false }\n</script>\n{#if getFoo()}<span>THEN</span>{:else}<span>ELSE</span>{/if}\n`,
+        )
+        /* Pending renders nothing… */
+        expect(host.textContent).not.toContain('ELSE')
+        expect(host.textContent).not.toContain('THEN')
+        await settle()
+        /* …but once it SETTLES to a falsy value the else branch shows — the distinction the
+           pending-aware block preserves. */
+        expect(host.textContent).toContain('ELSE')
+        expect(host.textContent).not.toContain('THEN')
+    })
+
+    test('a mixed cond-chain: a sync-false {#if} falls to an async {:elseif}, holding until it settles', async () => {
+        const host = mount(
+            `<script>\nasync function getFoo() { return true }\n</script>\n{#if false}<span>A</span>{:else if getFoo()}<span>B</span>{:else}<span>C</span>{/if}\n`,
+        )
+        /* branch 0 is sync-false → skip; the async {:elseif} is pending → the chain HOLDS (no
+           branch), so C does not render on an undecided elseif. */
+        expect(host.textContent).not.toContain('A')
+        expect(host.textContent).not.toContain('B')
+        expect(host.textContent).not.toContain('C')
+        await settle()
+        /* elseif settled truthy → B (never C). */
+        expect(host.textContent).toContain('B')
+        expect(host.textContent).not.toContain('C')
+    })
+
+    test('a mixed cond-chain: an async {:elseif} settling FALSY falls through to {:else}', async () => {
+        const host = mount(
+            `<script>\nasync function getFoo() { return false }\n</script>\n{#if false}<span>A</span>{:else if getFoo()}<span>B</span>{:else}<span>C</span>{/if}\n`,
+        )
+        expect(host.textContent).not.toContain('B')
+        expect(host.textContent).not.toContain('C')
+        await settle()
+        /* elseif settled falsy → the default {:else} shows. */
+        expect(host.textContent).toContain('C')
+        expect(host.textContent).not.toContain('B')
+    })
+
+    test('a pending {#if} holds the chain even past a later sync-true {:elseif}', async () => {
+        const host = mount(
+            `<script>\nasync function getFoo() { return false }\n</script>\n{#if getFoo()}<span>A</span>{:else if true}<span>B</span>{/if}\n`,
+        )
+        /* The first branch is async-pending; the later {:else if true} must NOT render — its guard
+           ("all earlier conditions false") is not yet known, so the whole chain holds. */
+        expect(host.textContent).not.toContain('A')
+        expect(host.textContent).not.toContain('B')
+        await settle()
+        /* Once the {#if} settles falsy, the {:else if true} wins. */
+        expect(host.textContent).toContain('B')
+        expect(host.textContent).not.toContain('A')
     })
 
     test("{getFoo() ?? 'Loading...'} renders the fallback while pending, the value after resolve", async () => {

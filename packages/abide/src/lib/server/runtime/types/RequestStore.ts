@@ -1,5 +1,6 @@
 import type { CacheStore } from '../../../shared/types/CacheStore.ts'
 import type { PendingAsyncCells } from '../../../shared/types/PendingAsyncCells.ts'
+import type { ResolvedCells } from '../../../shared/types/ResolvedCells.ts'
 import type { TraceContext } from '../../../shared/types/TraceContext.ts'
 import type { Scope } from '../../../ui/types/Scope.ts'
 
@@ -21,6 +22,13 @@ export type RequestStore = {
     the HTML. Per-request (like `cache`) so concurrent renders never share a drain.
     */
     pendingAsyncCells: PendingAsyncCells
+    /*
+    Async-cell values that RESOLVED during this request's SSR pass, keyed by render-path id.
+    `createAsyncCell.settleValue` pushes each; the page renderer stamps them into `__SSR__.cells`
+    (ref-json) so the client hydrates the cell warm. Sibling of `pendingAsyncCells` (the barrier's
+    in-flight list) — this one holds settled VALUES, read at render-return, not awaited.
+    */
+    resolvedCells: ResolvedCells
     /*
     W3C trace position: inbound `traceparent` continued (prefer-incoming) or a
     fresh sampled trace minted at the boundary. Read by trace()/log via the
@@ -85,4 +93,11 @@ export type RequestStore = {
     one shared module global. Undefined until the render enters its first scope.
     */
     currentScope?: Scope
+    /*
+    The request's ambient RENDER-PATH during its SSR pass — the backing for
+    `CURRENT_PATH.current` (the serialization-stable lexical id the SSR pass composes
+    to key a cell's warm-seed value). Per-request for the same reason as `currentScope`:
+    a render awaits inline while its path is set. Undefined → the empty root.
+    */
+    currentPath?: string
 }

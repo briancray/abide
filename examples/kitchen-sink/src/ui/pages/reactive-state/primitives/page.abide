@@ -1,7 +1,6 @@
 <script>
 import { state } from '@abide/abide/ui/state'
 import { watch } from '@abide/abide/ui/watch'
-import CodeBlock from '$ui/CodeBlock.abide'
 import Demo from '$ui/Demo.abide'
 
 /*
@@ -73,7 +72,17 @@ let nameDraft = state.linked(() => serverName)
         </div>
     </section>
 
-    <div class="rounded-lg border border-slate-200 bg-white p-5">
+    <Demo title="state · state.computed · watch(thunk)" code={`<script>
+    import { state } from '@abide/abide/ui/state'   // state.computed / state.linked attached
+    import { watch } from '@abide/abide/ui/watch'
+    let count = state(0)                            // writable cell — the +/− buttons
+    const doubled = state.computed(() => count * 2)       // recomputes when count changes
+    let ticks = state(0)
+    watch(() => {                                   // thunk form: client-only, cleanup on unmount
+        const id = setInterval(() => (ticks = ticks + 1), 1000)
+        return () => clearInterval(id)
+    })
+</script>`}>
         <div class="flex flex-wrap items-center gap-4 text-sm">
             <button
                 type="button"
@@ -91,7 +100,7 @@ let nameDraft = state.linked(() => serverName)
             <span class="font-mono text-slate-500">computed doubled = {doubled}</span>
             <span class="ml-auto font-mono text-slate-500">watch ticks = {ticks}s</span>
         </div>
-    </div>
+    </Demo>
 
     <div class="grid gap-4 sm:grid-cols-2">
         <Demo title="state(v, transform)" code={`// transform coerces every write — clamp to 1..99
@@ -125,20 +134,4 @@ let nameDraft = state.linked(() => serverName)   // reseeds when serverName chan
             </div>
         </Demo>
     </div>
-
-    <section class="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5">
-        <CodeBlock
-            title="the counter above — state, state.computed, watch(thunk)"
-            code={`<script>
-    import { state } from '@abide/abide/ui/state'   // state.computed / state.linked attached
-    import { watch } from '@abide/abide/ui/watch'
-    let count = state(0)                            // writable cell — the +/− buttons
-    const doubled = state.computed(() => count * 2)       // recomputes when count changes
-    let ticks = state(0)
-    watch(() => {                                   // thunk form: client-only, cleanup on unmount
-        const id = setInterval(() => (ticks = ticks + 1), 1000)
-        return () => clearInterval(id)
-    })
-</script>`} />
-    </section>
 </div>

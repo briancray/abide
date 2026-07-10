@@ -3,10 +3,12 @@ import { asyncValuePositionError } from './asyncValuePositionError.ts'
 import { asyncValuePositionInterpolations } from './asyncValuePositionInterpolations.ts'
 import { classifyInterpolationType } from './classifyInterpolationType.ts'
 import type { ShadowProgram } from './createShadowProgram.ts'
+import { isSpuriousAsyncReadDiagnostic } from './isSpuriousAsyncReadDiagnostic.ts'
 import { nodeAtShadowOffset } from './nodeAtShadowOffset.ts'
 import { parseTemplate } from './parseTemplate.ts'
 import { remapShadowDiagnostic } from './remapShadowDiagnostic.ts'
 import { sourceToShadowOffset } from './sourceToShadowOffset.ts'
+import { templateStartOffset } from './templateStartOffset.ts'
 import type { AbideDiagnostic } from './types/AbideDiagnostic.ts'
 import type { ShadowMapping } from './types/CompiledShadow.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
@@ -50,6 +52,10 @@ export function collectAbideDiagnostics(shadow: ShadowProgram): AbideDiagnostic[
         if (sourceFile === undefined || mappings === undefined) {
             continue
         }
+        /* The template boundary: a diagnostic mapping at/after it is a template expression, so
+           eligible for the ADR-0032 bare-async-read suppression; anything before it is `<script>`
+           code, where a forgotten `await` must still surface. */
+        const templateStart = templateStartOffset(ts.sys.readFile(abidePath) ?? '')
         const raw = [
             ...program.getSyntacticDiagnostics(sourceFile),
             ...program.getSemanticDiagnostics(sourceFile),
@@ -64,6 +70,21 @@ export function collectAbideDiagnostics(shadow: ShadowProgram): AbideDiagnostic[
                 diagnostic.length ?? 0,
             )
             if (located === undefined) {
+                continue
+            }
+            /* Drop the diagnostics a bare async read (ADR-0032) provokes spuriously: the runtime
+               peeks the resolved value (`undefined` while pending), so a `?.` read of a real member
+               and an `{#if}` on the promise are valid — the raw-`Promise` shadow can't see that. */
+            if (
+                located.start >= templateStart &&
+                isSpuriousAsyncReadDiagnostic(
+                    sourceFile,
+                    checker,
+                    diagnostic.code,
+                    diagnostic.start,
+                    diagnostic.length ?? 0,
+                )
+            ) {
                 continue
             }
             diagnostics.push({
@@ -102,8 +123,7 @@ function collectValuePositionDiagnostics(
     }
     /* The template starts just past the leading `<script>` — the SAME base `compileShadow` parses
        from, so each interpolation's `loc` lines up with the shadow's source→shadow `mappings`. */
-    const leadingScript = source.match(/^\s*<script[^>]*>([\s\S]*?)<\/script>/)
-    const templateStart = leadingScript ? (leadingScript.index ?? 0) + leadingScript[0].length : 0
+    const templateStart = templateStartOffset(source)
     let nodes: TemplateNode[]
     try {
         nodes = parseTemplate(source.slice(templateStart), templateStart).nodes

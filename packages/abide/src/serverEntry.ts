@@ -34,6 +34,7 @@ import { createCacheStore } from './lib/shared/createCacheStore.ts'
 import { loadEnvFromDataDir } from './lib/shared/loadEnvFromDataDir.ts'
 import { pageSlot } from './lib/shared/pageSlot.ts'
 import { pendingAsyncCellsSlot } from './lib/shared/pendingAsyncCellsSlot.ts'
+import { resolvedCellsSlot } from './lib/shared/resolvedCellsSlot.ts'
 import { runningAsStandaloneBinary } from './lib/shared/runningAsStandaloneBinary.ts'
 import { sharedCacheStoreSlot } from './lib/shared/sharedCacheStoreSlot.ts'
 
@@ -83,6 +84,8 @@ cacheStoreSlot.resolver = () => requestContext.getStore()?.cache ?? sharedCacheS
 const sharedPendingAsyncCells = { promises: [] }
 pendingAsyncCellsSlot.resolver = () =>
     requestContext.getStore()?.pendingAsyncCells ?? sharedPendingAsyncCells
+const sharedResolvedCells = { entries: [] }
+resolvedCellsSlot.resolver = () => requestContext.getStore()?.resolvedCells ?? sharedResolvedCells
 
 pageSlot.resolver = resolvePageSnapshot
 

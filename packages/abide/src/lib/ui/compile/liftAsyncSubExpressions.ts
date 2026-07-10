@@ -8,6 +8,17 @@ import type { InterpolationKind } from './types/InterpolationKind.ts'
    source) forbids an `AsyncIterable` (D4a). Every other position renders a stream's latest frame. */
 export type LiftPosition = 'content' | 'attribute' | 'if' | 'switch' | 'each'
 
+/* A lifted (sub)expression's span within the interpolation `code` and how it lifts: `start`/`end`
+   index `code`, `kind` picks the peek flavour, `blocking` marks a leading `await`. The runtime uses
+   these to rewrite the span to a cell ref; the type-check shadow uses the non-blocking ones to wrap
+   the seed in a peek helper so its resolved type composes (ADR-0032). */
+export type LiftSpan = {
+    start: number
+    end: number
+    kind: 'promise' | 'asyncIterable'
+    blocking: boolean
+}
+
 /* The binary operators whose result reacts to a pending-`undefined` operand: the walk does NOT
    lift the composition, it descends into the operands so the operator composes the peek(s)
    (ADR-0032 D1). `?.` needs no entry — a member/call on a promise is sync-typed, so the default
@@ -42,17 +53,19 @@ export function liftAsyncSubExpressions(
     classify: InterpolationClassifier | undefined,
     mint: () => string,
     position: LiftPosition = 'content',
-): { code: string; lifts: InjectedCell[] } {
+): { code: string; lifts: InjectedCell[]; spans: LiftSpan[] } {
     const source = ts.createSourceFile('__lift.ts', code, ts.ScriptTarget.Latest, true)
     const first = source.statements[0]
     /* Only a single bare expression is walkable; anything else (a statement, empty) passes through. */
     if (first === undefined || source.statements.length !== 1 || !ts.isExpressionStatement(first)) {
-        return { code, lifts: [] }
+        return { code, lifts: [], spans: [] }
     }
     const lifts: InjectedCell[] = []
     /* Each lifted span, in walk (source) order; spliced right-to-left so earlier offsets stay valid.
        `start`/`end` index `code`; `name` replaces that span. */
     const edits: { start: number; end: number; name: string }[] = []
+    /* The same lifted spans with their kind/tier — the shadow's peek-wrap consumes these directly. */
+    const spans: LiftSpan[] = []
 
     const text = (node: ts.Node): string => code.slice(node.getStart(source), node.getEnd())
 
@@ -77,8 +90,11 @@ export function liftAsyncSubExpressions(
         blocking: boolean,
     ): void => {
         const name = mint()
+        const start = node.getStart(source)
+        const end = node.getEnd()
         lifts.push({ name, code: seed, kind, blocking })
-        edits.push({ start: node.getStart(source), end: node.getEnd(), name })
+        edits.push({ start, end, name })
+        spans.push({ start, end, kind, blocking })
     }
 
     const visit = (node: ts.Node): void => {
@@ -137,12 +153,14 @@ export function liftAsyncSubExpressions(
     visit(first.expression)
 
     if (edits.length === 0) {
-        return { code, lifts: [] }
+        return { code, lifts: [], spans: [] }
     }
     edits.sort((a, b) => b.start - a.start)
     let rewritten = code
     for (const edit of edits) {
         rewritten = rewritten.slice(0, edit.start) + edit.name + rewritten.slice(edit.end)
     }
-    return { code: rewritten, lifts }
+    /* Spans in ascending source order — the shadow's peek-wrap walks them left-to-right. */
+    spans.sort((a, b) => a.start - b.start)
+    return { code: rewritten, lifts, spans }
 }

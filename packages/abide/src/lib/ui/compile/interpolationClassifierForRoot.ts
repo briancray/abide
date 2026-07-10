@@ -1,8 +1,5 @@
-import { classifyInterpolationType } from './classifyInterpolationType.ts'
 import { createShadowProgram, type ShadowProgram } from './createShadowProgram.ts'
-import { nodeAtShadowOffset } from './nodeAtShadowOffset.ts'
-import { shadowNaming } from './shadowNaming.ts'
-import { sourceToShadowOffset } from './sourceToShadowOffset.ts'
+import { shadowInterpolationClassifier } from './shadowInterpolationClassifier.ts'
 import type { InterpolationClassifier } from './types/InterpolationClassifier.ts'
 
 /*
@@ -36,26 +33,5 @@ export function interpolationClassifierForRoot(
     if (shadowProgram === undefined) {
         return undefined
     }
-    const { program, shadows } = shadowProgram
-    const shadowFile = program.getSourceFile(shadowNaming.suffixed(abidePath))
-    if (shadowFile === undefined) {
-        return undefined
-    }
-    const checker = program.getTypeChecker()
-    return (loc, code) => {
-        try {
-            const mappings = shadows.get(abidePath)?.mappings ?? []
-            const offset = sourceToShadowOffset(mappings, loc)
-            if (offset === undefined) {
-                return 'sync'
-            }
-            const node = nodeAtShadowOffset(shadowFile, offset, code.length)
-            if (node === undefined) {
-                return 'sync'
-            }
-            return classifyInterpolationType(checker.getTypeAtLocation(node), node, checker)
-        } catch {
-            return 'sync'
-        }
-    }
+    return shadowInterpolationClassifier(shadowProgram.program, shadowProgram.shadows, abidePath)
 }

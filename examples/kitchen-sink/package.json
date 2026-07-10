@@ -10,6 +10,7 @@
         "compile": "abide compile",
         "cli": "abide cli",
         "bundle": "abide bundle",
+        "cookbook:index": "bun run scripts/cookbookIndex.ts",
         "test": "bun test"
     },
     "dependencies": {

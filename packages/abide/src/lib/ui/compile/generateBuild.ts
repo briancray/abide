@@ -78,6 +78,11 @@ export function generateBuild(
     cellReadNames: ReadonlySet<string> = new Set(),
 ): string {
     const nextVar = makeVarNamer()
+    /* A per-body source-order ordinal for each `<Child/>` mount site, so two same-type siblings
+       get distinct render-path segments. Combined with the ambient branch/row path a control-flow
+       ancestor pushes, this makes every mounted instance's id unique and stable (ADR render-path
+       identity). Drawn in document-order walk, matching the SSR back-end's identical walk. */
+    let childOrdinal = 0
 
     /* In a layout, `<slot/>` outlets are rewritten to `OUTLET_TAG` elements up front
        (`asOutlet`) so the static-clone path carries them as ordinary structure. `asOutlet`
@@ -546,6 +551,12 @@ export function generateBuild(
                 return `{ match: ${match}, render: ${branchThunk(branch.children)} }`
             })
             .join(', ')
+        /* A bare async subject holds the whole switch while the cell is pending — no case, not
+           even the default — then matches on the settled value's peek. */
+        if (node.asyncSubject === true) {
+            const cell = node.subject.trim()
+            return `$$switchBlock(${parentVar}, () => $$readCell(${cell}), [${cases}], ${before}, () => $$cellPending(${cell}));\n`
+        }
         return `$$switchBlock(${parentVar}, () => (${lowerExpression(node.subject)}), [${cases}], ${before});\n`
     }
 
@@ -597,7 +608,7 @@ export function generateBuild(
            cell, so `<Icon>` from `{#for {icon: Icon} of …}` mounts the component the cell
            holds, not the cell object (whose `.build` is undefined → `build is not a
            function`). SSR emits the same lowering for congruence. */
-        return `$$mountChild(${parentVar}, ${lowerExpression(node.name)}, ${propsArg(node)}, ${before}, ${JSON.stringify(node.name)});\n`
+        return `$$mountChild(${parentVar}, ${lowerExpression(node.name)}, ${propsArg(node)}, ${before}, ${JSON.stringify(node.name)}, ${childOrdinal++});\n`
     }
 
     /* An await block: pending → resolved(value) / error branches. Each branch is a
@@ -719,16 +730,35 @@ export function generateBuild(
             const thenThunk = branchThunk(plan.thenChildren)
             const elseThunk =
                 plan.elseBranch === undefined ? 'undefined' : branchThunk(plan.elseBranch.children)
+            /* A bare async subject (`{#if getX()}`) passes `when` a pending probe so a
+               still-loading cell renders NO branch; the condition itself is the plain peek read
+               (`$$readCell`), evaluated only once no longer pending. */
+            if (node.asyncSubject === true) {
+                const cell = node.condition.trim()
+                return `$$when(${parentVar}, () => $$readCell(${cell}), ${thenThunk}, ${elseThunk}, ${before}, () => $$cellPending(${cell}));\n`
+            }
             return `$$when(${parentVar}, () => (${lowerExpression(node.condition)}), ${thenThunk}, ${elseThunk}, ${before});\n`
         }
         /* if/elseif/else is a cond-chain — reuse `switchBlock` over a constant `true`
            subject with `Boolean`-coerced match thunks, so the first truthy branch wins
-           (`else` is the match-less default). */
+           (`else` is the match-less default). A branch whose own condition is a bare async
+           subject carries a `pending` probe: `switchBlock` holds the chain there while it loads,
+           so sync and async branches interleave and each resolves at render time — a pending
+           async branch never lets a later branch render on its not-yet-known condition. */
+        const condEntry = (
+            condition: string,
+            asyncSubject: boolean | undefined,
+            children: TemplateNode[],
+        ): string => {
+            const pending =
+                asyncSubject === true ? `, pending: () => $$cellPending(${condition.trim()})` : ''
+            return `{ match: () => Boolean(${lowerExpression(condition)}), render: ${branchThunk(children)}${pending} }`
+        }
         const entries = [
-            `{ match: () => Boolean(${lowerExpression(node.condition)}), render: ${branchThunk(plan.thenChildren)} }`,
+            condEntry(node.condition, node.asyncSubject, plan.thenChildren),
             ...plan.branches.map((branch) =>
                 branch.condition !== undefined
-                    ? `{ match: () => Boolean(${lowerExpression(branch.condition)}), render: ${branchThunk(branch.children)} }`
+                    ? condEntry(branch.condition, branch.asyncSubject, branch.children)
                     : `{ match: undefined, render: ${branchThunk(branch.children)} }`,
             ),
         ]
@@ -789,9 +819,12 @@ export function generateBuild(
         const catchArg = plan.async
             ? `, ${plan.hasCatch ? branchThunk(plan.catchChildren, plan.catchBindings) : 'undefined'}`
             : ''
+        /* Whether the each has an explicit `by` key — the row then keys its render-path segment
+           on the stable key rather than its position (see `each`/`eachAsync`). */
+        const keyed = plan.key !== undefined
         return (
             `${fn}(${parentVar}, () => (${lowerExpression(plan.items)}), ` +
-            `(${keyParam}) => (${keyExpression}), (${rowParam}, ${itemWiring.param}${indexParam}) => {\n${itemWiring.prefix}${rowBody}}${catchArg}, ${before});\n`
+            `(${keyParam}) => (${keyExpression}), (${rowParam}, ${itemWiring.param}${indexParam}) => {\n${itemWiring.prefix}${rowBody}}${catchArg}, ${before}, ${keyed});\n`
         )
     }
 

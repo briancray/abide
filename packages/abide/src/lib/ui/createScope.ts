@@ -3,6 +3,7 @@ import { effect } from './effect.ts'
 import { history } from './history.ts'
 import { linked } from './linked.ts'
 import { persist as persistDoc } from './persist.ts'
+import { CURRENT_PATH } from './runtime/CURRENT_PATH.ts'
 import { createDoc } from './runtime/createDoc.ts'
 import { liveScopes } from './runtime/liveScopes.ts'
 import type { Cell } from './runtime/types/Cell.ts'
@@ -14,10 +15,11 @@ import type { History } from './types/History.ts'
 import type { PersistHandle } from './types/PersistHandle.ts'
 import type { Scope } from './types/Scope.ts'
 
-/* A process-stable counter id. The serialization-stable LEXICAL id (route +
-   component + tree position) that `persist`/`broadcast` want across reloads/peers
-   is stamped by the compiler later; until then a scope's id is unique within a
-   run — enough for in-session undo and the bus, and as an explicit key's fallback. */
+/* The counter fallback for a DETACHED scope — one created outside any render (a bare
+   `scope()` on first use, a `scope().child()`), where the ambient render-path is empty.
+   A rendered scope instead takes the serialization-stable render-path id (`CURRENT_PATH`,
+   route + tree position), so `persist`/`broadcast` are stable across reloads/peers; only
+   the counter path remains merely run-unique. */
 let nextId = 0
 
 /*
@@ -38,7 +40,17 @@ export function createScope(
        never created one (a stateless component that still reaches for its scope). */
     let document: Doc | undefined = awaiting ? undefined : createDoc(initial)
     const data = (): Doc => (document ??= createDoc({}))
-    const id = parent === undefined ? `scope-${nextId++}` : `${parent.id}.${nextId++}`
+    /* The scope's serialization-stable id: the ambient render-path when created inside a render
+       (route + layout + branch/row + component ordinal, composed by `withPath` at each nesting
+       site), else the run-unique counter for a detached scope. Snapshotted at creation, so a
+       nested push doesn't mutate an ancestor's id. */
+    const renderPath = CURRENT_PATH.current
+    const id =
+        renderPath !== ''
+            ? renderPath
+            : parent === undefined
+              ? `scope-${nextId++}`
+              : `${parent.id}.${nextId++}`
     const children: Scope[] = []
     /* Adopted build teardowns (the reactivity stopper from the mount core). Disposed
        first and in reverse on teardown, before children and capabilities — so the one
@@ -50,13 +62,19 @@ export function createScope(
     let past: History | undefined
     let persistence: PersistHandle | undefined
     let unsync: (() => void) | undefined
+    /* Per-component monotonic index for the async cells constructed under this scope, in
+       declaration order — the local half of a cell's serialization-stable warm-seed key
+       (`${scope.id}:${index}`, see `createAsyncCell`). Per-scope (not global) so a client-only
+       sibling component can't shift another component's cell keys: divergence stays local. Both
+       SSR and client construct a component's cells in the same order, so the indices agree. */
+    let cellIndex = 0
 
-    /* `cell` is not on the public `Scope` type — it is the compiler-only leaf the
-       cell-hoisting lowering targets (`const _cell0 = $$scope().cell("path")`, see
-       `hoistCells`). It stays on the runtime object but off the documented surface,
-       so authors reach data through `read`/`replace`/`derive`, not a raw cell handle. */
-    const self: Scope & { cell: <T>(path: string) => Cell<T> } = {
+    /* `cell` and `nextCellIndex` are not on the public `Scope` type — `cell` is the compiler-only
+       cell-hoisting leaf; `nextCellIndex` is drawn by `createAsyncCell` for its warm-seed key.
+       Both stay on the runtime object but off the documented surface. */
+    const self: Scope & { cell: <T>(path: string) => Cell<T>; nextCellIndex: () => number } = {
         id,
+        nextCellIndex: () => cellIndex++,
         label,
         parent,
         read: (path) => data().read(path),

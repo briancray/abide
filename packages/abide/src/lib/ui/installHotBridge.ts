@@ -10,6 +10,7 @@ import { awaitBlock } from './dom/awaitBlock.ts'
 import { bindableProp } from './dom/bindableProp.ts'
 import { bindProp } from './dom/bindProp.ts'
 import { bindSelectValue } from './dom/bindSelectValue.ts'
+import { cellPending } from './dom/cellPending.ts'
 import { cloneStatic } from './dom/cloneStatic.ts'
 import { each } from './dom/each.ts'
 import { eachAsync } from './dom/eachAsync.ts'
@@ -39,6 +40,7 @@ import { exitRenderPass } from './runtime/exitRenderPass.ts'
 import { hotReloadEnabled } from './runtime/hotReloadEnabled.ts'
 import { hotReplace } from './runtime/hotReplace.ts'
 import { nextBlockId } from './runtime/nextBlockId.ts'
+import { withPath } from './runtime/withPath.ts'
 import { scope } from './scope.ts'
 import { settleAsyncCells } from './settleAsyncCells.ts'
 import { watch } from './watch.ts'
@@ -90,6 +92,7 @@ export function installHotBridge(): void {
         spreadAttrs,
         readCall,
         readCell,
+        cellPending,
         settleAsyncCells,
         mutateDocContainer,
         hydrate,
@@ -97,6 +100,7 @@ export function installHotBridge(): void {
         nextBlockId,
         enterRenderPass,
         exitRenderPass,
+        withPath,
         hotReplace,
     }
     hotReloadEnabled.current = true

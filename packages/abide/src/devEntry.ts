@@ -302,6 +302,11 @@ restarts (not re-scanning) is what keeps the tab valid.
 const port = findOpenPort(DEFAULT_PORT)
 // Sweep generation dirs a prior session may have left behind before building afresh.
 pruneStaleBuildDirs()
+/* Announce the boot before the first build. build() stays silent under dev (its
+   "building…" log is gated so watch rebuilds don't spam), so without this line the
+   terminal shows nothing for the whole initial build — a cold boot reads as a hang.
+   One line up front: the server is alive, building, and where it will land. */
+abideLog.info(`starting dev server at http://localhost:${port} — building client…`)
 const firstBuild = await build(buildOptions)
 if (firstBuild) {
     currentAppDir = firstBuild.appDir

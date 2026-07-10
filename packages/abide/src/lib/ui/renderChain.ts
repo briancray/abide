@@ -4,6 +4,7 @@ import type { RenderContext } from './runtime/types/RenderContext.ts'
 import type { SsrRender } from './runtime/types/SsrRender.ts'
 import type { UiComponent } from './runtime/types/UiComponent.ts'
 import type { UiProps } from './runtime/types/UiProps.ts'
+import { withPath } from './runtime/withPath.ts'
 
 const OPEN = `<!--${OUTLET_OPEN}-->`
 const CLOSE = `<!--${OUTLET_CLOSE}-->`
@@ -30,6 +31,10 @@ A layout missing its `<slot/>` is a build error surfaced here.
 export async function renderChain(
     views: UiComponent[],
     params: Record<string, string>,
+    /* Each view's route key (layout directory URL / page route pattern), aligned 1:1 with `views`
+       and byte-identical to the client router's `chainKeys`/`pageKey`. Each roots its layer's
+       render-path (`withPath`) so a cell's scope id matches the client's for the warm-seed key. */
+    keys: string[] = [],
 ): Promise<SsrRender> {
     const ctx: RenderContext = { next: 0 }
     const renders: SsrRender[] = []
@@ -49,7 +54,16 @@ export async function renderChain(
         const props: UiProps = hasChild
             ? { ...paramThunks, children: () => CHILD_PRESENT }
             : paramThunks
-        renders.push(await view.render(props, ctx))
+        /* Root this layer's render-path at its route key. `withPath` is synchronous; the render's
+           cell/scope construction runs in its own SYNCHRONOUS prefix (before the barrier `await`),
+           so the path is set for that construction, then restored as the pending promise is
+           returned and awaited outside — mirroring the client's `withPath(key, () => build)`. */
+        const key = keys[index]
+        renders.push(
+            key === undefined
+                ? await view.render(props, ctx)
+                : await withPath(key, () => view.render(props, ctx)),
+        )
     }
     let html = renders[renders.length - 1]?.html ?? ''
     for (let index = renders.length - 2; index >= 0; index -= 1) {

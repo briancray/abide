@@ -1,9 +1,13 @@
 import { effect } from '../effect.ts'
+import { CURRENT_PATH } from '../runtime/CURRENT_PATH.ts'
 import { RANGE_CLOSE, RANGE_OPEN } from '../runtime/RANGE_MARKER.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { scope } from '../runtime/scope.ts'
 import { scopeGroup } from '../runtime/scopeGroup.ts'
+import { withPathFrom } from '../runtime/withPathFrom.ts'
+import { clearBetween } from './clearBetween.ts'
 import { fillBefore } from './fillBefore.ts'
+import { matchingRangeClose } from './matchingRangeClose.ts'
 import { openMarker } from './openMarker.ts'
 import { replaceRange } from './replaceRange.ts'
 
@@ -35,6 +39,15 @@ export function mountSwappableRange<Key>(
     key: () => Key,
     contentFor: (key: Key) => ((parent: Node) => void) | undefined,
     before: Node | null = null,
+    /* The chosen branch MAY differ between SSR and the client's first render — set only for an
+       ASYNC subject (a bare async `{#if}`/`{#switch}`, or an async cond-chain branch), whose cell
+       can be settled on the server (a barrier-baked value) yet pending on the client, so each side
+       selects a different branch. Adopting SSR nodes in place then orphans them (they are neither
+       claimed nor cleared) and the next swap duplicates. When set, hydration DISCARDS the SSR range
+       content and builds the client's branch fresh instead — correct regardless of what the server
+       rendered. Left false for a sync range, where SSR and client always agree and in-place
+       adoption (node reuse, preserved focus/scroll) is safe. */
+    mayDiverge = false,
 ): void {
     const hydration = RENDER.hydration
     /* The live branch's scope, registered with the owner so it disposes on owner
@@ -44,10 +57,39 @@ export function mountSwappableRange<Key>(
     let activeKey: Key
     let end: Comment
 
+    /* Capture the render path at construction (this block's ancestry), and wrap each chosen
+       branch's builder so its content builds under `basePath/branchKey` — the key is the swap
+       discriminator (`'then'`/`'else'` or a case index), so a component/cell in one branch gets a
+       distinct, stable id from the other, re-established on every reactive swap (when the ambient
+       path is gone). An empty branch (`undefined`) needs no wrap. */
+    const basePath = CURRENT_PATH.current
+    const chosenFor = (branchKey: Key): ((parent: Node) => void) | undefined => {
+        const content = contentFor(branchKey)
+        if (content === undefined) {
+            return undefined
+        }
+        return (host) => withPathFrom(basePath, String(branchKey), () => content(host))
+    }
+
     const start = openMarker(parent, RANGE_OPEN, before)
-    if (hydration !== undefined) {
+    if (hydration !== undefined && mayDiverge) {
+        /* Async range: don't trust the SSR content to match the client's branch. Discard the
+           server's rendered range (balanced `[`…`]`), park the cursor on the real close so it
+           claims correctly, then build the client's chosen branch FRESH (`fillBefore` clears the
+           claim cursor for the build). Usually the client is pending here → nothing built → an
+           empty range the later reactive swap fills, matching a clean create. */
         activeKey = key()
-        const chosen = contentFor(activeKey)
+        const chosen = chosenFor(activeKey)
+        const matchedEnd = matchingRangeClose(start)
+        clearBetween(start, matchedEnd)
+        hydration.next.set(parent, matchedEnd)
+        end = openMarker(parent, RANGE_CLOSE)
+        if (chosen !== undefined) {
+            dispose = group.track(fillBefore(end, chosen))
+        }
+    } else if (hydration !== undefined) {
+        activeKey = key()
+        const chosen = chosenFor(activeKey)
         if (chosen !== undefined) {
             dispose = group.track(scope(() => chosen(parent))) // content claims the SSR nodes in place
         }
@@ -55,7 +97,7 @@ export function mountSwappableRange<Key>(
     } else {
         end = openMarker(parent, RANGE_CLOSE, before)
         activeKey = key()
-        const chosen = contentFor(activeKey)
+        const chosen = chosenFor(activeKey)
         if (chosen !== undefined) {
             dispose = group.track(fillBefore(end, chosen))
         }
@@ -67,7 +109,7 @@ export function mountSwappableRange<Key>(
             return
         }
         activeKey = next
-        const chosen = contentFor(next)
+        const chosen = chosenFor(next)
         /* Null `dispose` before `replaceRange` builds the new branch: a reentrant swap
            during that build (an effect in the new content writing the source) would
            otherwise re-enter with the already-disposed disposer and clear it twice. */

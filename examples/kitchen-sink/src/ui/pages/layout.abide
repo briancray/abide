@@ -4,6 +4,7 @@ import { onMenu } from '@abide/abide/bundle/onMenu'
 import { page } from '@abide/abide/shared/page'
 import { url } from '@abide/abide/shared/url'
 import { navigate } from '@abide/abide/ui/navigate'
+import { surfaceNav } from '$ui/surfaceNav.ts'
 
 /*
 First-party root layout. A `layout.abide` wraps every page at or below its
@@ -33,59 +34,9 @@ const linkClass = (prefix: string) =>
 
 /* The sidebar is the index — surfaces grouped by the job they do, top to bottom:
    stand up the server, build the UI on it, reach past the browser, then ship and
-   look it up. One destination page per link. */
-const groups = [
-    {
-        title: 'recipes',
-        links: [{ href: '/cookbook', label: 'cookbook' }],
-    },
-    {
-        title: 'build the server',
-        links: [
-            { href: '/rpc', label: 'rpc' },
-            { href: '/sockets', label: 'sockets' },
-            { href: '/security', label: 'security' },
-        ],
-    },
-    {
-        title: 'build the ui',
-        links: [
-            { href: '/pages', label: 'pages' },
-            { href: '/templating', label: 'templating' },
-            { href: '/reactive-state', label: 'reactive state' },
-            { href: '/probes', label: 'probes' },
-            { href: '/outbox', label: 'outbox' },
-        ],
-    },
-    {
-        title: 'beyond the browser',
-        links: [
-            { href: '/agent', label: 'agent' },
-            { href: '/mcp', label: 'mcp' },
-            { href: '/cli', label: 'cli' },
-            { href: '/bundle', label: 'bundle' },
-        ],
-    },
-    {
-        title: 'deploy',
-        links: [
-            { href: '/build', label: 'build' },
-            { href: '/build#testing', label: 'test' },
-            { href: '/build#deploy', label: 'deploy' },
-            { href: '/observability', label: 'online' },
-            { href: '/observability#health', label: 'health' },
-            { href: '/observability#logging', label: 'logging' },
-        ],
-    },
-    {
-        title: 'reference',
-        links: [
-            { href: '/reference', label: 'types' },
-            { href: '/reference#routes', label: 'routes' },
-            { href: '/reference#env', label: 'env' },
-        ],
-    },
-]
+   look it up. Rendered from the shared surfaceNav (single source of truth with the
+   landing grid): each page is a link, and its in-page `anchors` follow as flat
+   sub-links. */
 </script>
 
 <div class="min-h-screen bg-slate-50 text-slate-900">
@@ -95,17 +46,24 @@ const groups = [
             <div class="flex flex-col gap-8">
                 <a href={url('/')} class="text-base font-semibold">abide kitchen-sink</a>
                 <nav class="flex flex-col gap-8 text-sm">
-                    {#for group of groups by group.title}
+                    {#for group of surfaceNav by group.title}
                         <div class="flex flex-col gap-2">
                             <h2
                                 class="text-xs font-semibold uppercase tracking-wide text-slate-400">
                                 {group.title}
                             </h2>
                             <ul class="flex flex-col gap-1">
-                                {#for link of group.links by link.href}
+                                {#for page of group.pages by page.href}
                                     <li>
-                                        <a href={url(link.href)} class={linkClass(link.href)}>{link.label}</a>
+                                        <a href={url(page.href)} class={linkClass(page.href)}>{page.label}</a>
                                     </li>
+                                    {#for anchor of page.anchors ?? [] by anchor.href}
+                                        <li>
+                                            <a href={url(anchor.href)} class={linkClass(anchor.href)}
+                                                >{anchor.label}</a
+                                            >
+                                        </li>
+                                    {/for}
                                 {/for}
                             </ul>
                         </div>

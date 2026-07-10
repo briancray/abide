@@ -279,6 +279,36 @@ node for a content-position `promise` interpolation** (`streamingAwaitNode`) —
   correct grouping, not the sub-expression split. D2's `await`-precedence rule (`(await X) ?? Y`) is
   the *value-position* semantics, where the walk splits the operand; both agree for the common
   `{await getFoo()}`.
+- **The type-check shadow mirrors the peek, so `abide check`/the LSP see the RESOLVED type — no
+  false errors, and hover/completion are correct.** The runtime lift makes `getFoo()?.name` and
+  `{#if getFoo()}` read the resolved value, but a verbatim shadow type-checks the RAW expression —
+  `.name` on the un-awaited `Promise`, the promise always-truthy. So the shadow now **peek-wraps**
+  each async (sub)expression: `compileShadow` (given an `InterpolationClassifier`) emits
+  `$$peek(getFoo())?.name` / `if ($$peek(getFoo()))`, where `$$peek<T>(v): Awaited<T> | undefined`
+  and `$$peekStream<S>(v): (S extends AsyncIterable<infer F> ? F : unknown) | undefined`. Every
+  source char stays mapped 1:1 (the inserted wrapper chars are unmapped), so diagnostics and
+  hover-spans land precisely, and `?.`/`??`/`{#if}` compose on the resolved value exactly as at
+  runtime — a typo is now caught against the *awaited* shape, and hovering the member shows its real
+  type. The wrap reuses the runtime walk (`liftAsyncSubExpressions` now also returns its lifted
+  `spans`) and is gated to content/attribute/`{#if}`/`{#switch}`/`{:elseif}`; `await` stays verbatim
+  (it already resolves in the async shadow render fn), and component props / plain-`{#for}` sources
+  are left raw (they don't peek at runtime).
+- **The classifier rides a separate verbatim program (two passes).** Deciding *which*
+  sub-expressions are async needs types, and a classifier reading the peek-wrapped shadows would be
+  circular — so a verbatim shadow program is built first (`getFoo()` still `Promise`) and its
+  classifier drives the wrapped pass. `abide check` builds both per project root
+  (`interpolationClassifierForRoot` for the verbatim source); the LSP runs two `LanguageService`s
+  sharing `overlays`/`versions` (so both track unsaved edits) but with separate shadow caches +
+  document registries — the verbatim one classifies, the wrapped one answers diagnostics/hover/
+  tokens. `shadowInterpolationClassifier` is the shared core.
+- **`isSpuriousAsyncReadDiagnostic` remains as a fail-open backstop.** When no classifier is
+  available (no warm program, an unparseable field, a `classify` throw) the shadow falls back to
+  verbatim, which re-raises the spurious 2339 (missing property on `Promise`) / 2801 (always-defined
+  condition). The predicate drops exactly those two — 2339 only via `?.` on a promise/iterable whose
+  member resolves on the awaited/frame type (a bare `.name` and a real typo both stay), 2801 only
+  for a genuinely async subject, both only inside the template region — so a fail-open never leaks a
+  false error (it only loses the resolved-type hover). It is a no-op whenever the wrap succeeded (the
+  base is then the resolved type, not a promise).
 
 ## Known limitations
 

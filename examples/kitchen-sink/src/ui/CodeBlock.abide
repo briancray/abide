@@ -25,7 +25,5 @@ const {
 {/if}
 <div
     class="codeblock {flush ? '' : (title ? 'mt-1' : 'mt-3')} overflow-x-auto rounded-md text-xs leading-relaxed">
-    {#await highlightCode({ code, lang }) then result}
-        <div class="contents">{html(result.html)}</div>
-    {/await}
+    <div class="contents">{html(highlightCode({ code, lang })?.html)}</div>
 </div>

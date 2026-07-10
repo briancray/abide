@@ -40,6 +40,7 @@ import { createCacheStore } from '../shared/createCacheStore.ts'
 import { HEALTH_PATH } from '../shared/HEALTH_PATH.ts'
 import { pageSlot } from '../shared/pageSlot.ts'
 import { pendingAsyncCellsSlot } from '../shared/pendingAsyncCellsSlot.ts'
+import { resolvedCellsSlot } from '../shared/resolvedCellsSlot.ts'
 import { SOCKETS_PATH } from '../shared/SOCKETS_PATH.ts'
 import { sharedCacheStoreSlot } from '../shared/sharedCacheStoreSlot.ts'
 import type { RemoteFunction } from '../shared/types/RemoteFunction.ts'
@@ -103,6 +104,7 @@ export async function createTestApp(): Promise<TestApp> {
         pageResolver: pageSlot.resolver,
         baseResolver: baseSlot.resolver,
         pendingAsyncCellsResolver: pendingAsyncCellsSlot.resolver,
+        resolvedCellsResolver: resolvedCellsSlot.resolver,
         activeServer: serverSlot.active,
     }
 
@@ -112,6 +114,9 @@ export async function createTestApp(): Promise<TestApp> {
     const sharedPendingAsyncCells = { promises: [] }
     pendingAsyncCellsSlot.resolver = () =>
         requestContext.getStore()?.pendingAsyncCells ?? sharedPendingAsyncCells
+    const sharedResolvedCells = { entries: [] }
+    resolvedCellsSlot.resolver = () =>
+        requestContext.getStore()?.resolvedCells ?? sharedResolvedCells
     pageSlot.resolver = resolvePageSnapshot
 
     /* Eager env validation, exactly as serverEntry: a top-level env(schema) in
@@ -194,6 +199,7 @@ export async function createTestApp(): Promise<TestApp> {
         pageSlot.resolver = previous.pageResolver
         baseSlot.resolver = previous.baseResolver
         pendingAsyncCellsSlot.resolver = previous.pendingAsyncCellsResolver
+        resolvedCellsSlot.resolver = previous.resolvedCellsResolver
         serverSlot.active = previous.activeServer
     }
 

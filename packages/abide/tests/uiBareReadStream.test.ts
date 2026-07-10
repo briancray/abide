@@ -54,9 +54,7 @@ function renderer(pages: Record<string, () => Promise<{ default: UiComponent }>>
     })
 }
 
-function render(
-    pages: Record<string, () => Promise<{ default: UiComponent }>>,
-): Promise<string> {
+function render(pages: Record<string, () => Promise<{ default: UiComponent }>>): Promise<string> {
     return runWithRequestScope(new Request('https://test.local/'), options, async () => {
         const store = requestContext.getStore() as unknown as RequestStore
         return renderer(pages).renderPage('/', {}, store)

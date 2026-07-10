@@ -18,22 +18,42 @@ export function switchBlock(
     subject: () => unknown,
     cases: SwitchCase[],
     before: Node | null = null,
+    isPending?: () => boolean,
 ): void {
-    /* Pick the first case matching the subject (`===`), else the default (`match`
-       undefined), else -1 for no match. */
+    /* Walk the cases in source order (the same order a `{#if}`/`{:elseif}` chain reads): the
+       first whose own async condition is still `pending()` HOLDS the chain — returns -1, so no
+       later branch renders on a not-yet-known earlier condition; the first whose `match() ===`
+       the subject wins; a match-less `default` is the fallback once every case settled without a
+       match. A plain `{#switch}` (no per-case `pending`) reduces to first-match-else-default. */
     const select = (value: unknown): number => {
-        const matched = cases.findIndex(
-            (entry) => entry.match !== undefined && entry.match() === value,
-        )
-        return matched === -1 ? cases.findIndex((entry) => entry.match === undefined) : matched
+        let fallback = -1
+        for (let index = 0; index < cases.length; index++) {
+            const entry = cases[index]
+            if (entry.pending !== undefined && entry.pending()) {
+                return -1
+            }
+            if (entry.match === undefined) {
+                fallback = index
+            } else if (entry.match() === value) {
+                return index
+            }
+        }
+        return fallback
     }
     mountSwappableRange(
         parent,
-        () => select(subject()),
+        /* A pending bare async subject (compiler-supplied `isPending`) selects no case — not
+           even the default — so the block renders nothing until the cell settles, rather than
+           conflating "still loading" with a subject that matched the default. */
+        () => (isPending?.() === true ? -1 : select(subject())),
         (index) => {
             const chosen = index === -1 ? undefined : cases[index]
             return chosen && ((p) => chosen.render(p))
         },
         before,
+        /* Any async subject/branch (a bare async subject, or an async `{:else if}` in a cond-chain)
+           can select a different branch on the server than the pending client, so hydration must
+           discard the SSR range rather than adopt it in place. */
+        isPending !== undefined || cases.some((entry) => entry.pending !== undefined),
     )
 }

@@ -72,6 +72,10 @@ export function generateSSR(
     /* Unique temp var names (child render results); runtime block ids are
        allocated separately at runtime via `$ctx.next++`. */
     const nextVar = makeVarNamer()
+    /* A per-body source-order ordinal for each `<Child/>` render site — the render-path segment the
+       child roots under, matching the client `mountChild`'s `childOrdinal` (`generateBuild`) drawn
+       in the identical document-order walk, so both compose the same cell scope ids. */
+    let childOrdinal = 0
 
     /* The enclosing `<select bind:value>`s, innermost last: each carries the JS var holding
        its bound value and whether it's a `multiple` (array) select, so an `<option>` rendered
@@ -306,22 +310,56 @@ export function generateSSR(
                 .join('')
         }
         if (node.kind === 'if') {
-            /* `case` children are the `elseif`/`else` branches in source order; the rest are
-               the `then` content. Each `elseif` becomes an `else if`, the match-less `else`
-               the trailing `else`. */
+            /* `case` children are the `elseif`/`else` branches in source order; the rest are the
+               `then` content. The whole `if`/`elseif`/`else` chain desugars to a run of `if` /
+               `else if` clauses. A branch whose condition is a bare async subject contributes TWO
+               clauses in order — an empty `$$cellPending` guard (renders nothing, and stops the
+               chain: a still-loading branch holds, so nothing later renders on its unknown value)
+               then the `$$readCell` truthy test — so sync and async branches interleave and each
+               resolves at render time, mirroring the client `switchBlock` cond-chain. */
             const plan = ifPlan(node)
-            let code = `if (${lowerExpression(node.condition)}) {\n${branchContent(plan.thenChildren, target)}}`
+            const clauses: string[] = []
+            const conditional = (
+                condition: string,
+                asyncSubject: boolean | undefined,
+                children: TemplateNode[],
+            ): void => {
+                if (asyncSubject === true) {
+                    const cell = condition.trim()
+                    clauses.push(`($$cellPending(${cell})) {\n}`)
+                    clauses.push(`($$readCell(${cell})) {\n${branchContent(children, target)}}`)
+                } else {
+                    clauses.push(
+                        `(${lowerExpression(condition)}) {\n${branchContent(children, target)}}`,
+                    )
+                }
+            }
+            conditional(node.condition, node.asyncSubject, plan.thenChildren)
             for (const branch of plan.branches) {
-                code +=
-                    branch.condition !== undefined
-                        ? ` else if (${lowerExpression(branch.condition)}) {\n${branchContent(branch.children, target)}}`
-                        : ` else {\n${branchContent(branch.children, target)}}`
+                if (branch.condition !== undefined) {
+                    conditional(branch.condition, branch.asyncSubject, branch.children)
+                }
+            }
+            let code = clauses
+                .map((clause, index) => `${index === 0 ? 'if' : ' else if'} ${clause}`)
+                .join('')
+            if (plan.elseBranch !== undefined) {
+                code += ` else {\n${branchContent(plan.elseBranch.children, target)}}`
             }
             return `${anchor}${openRange(target)}${code}\n${closeRange(target)}`
         }
         if (node.kind === 'switch') {
             const plan = switchPlan(node)
-            let code = `{ const $s = (${lowerExpression(node.subject)});\n`
+            /* A bare async subject: read the peek, but only match once the cell has settled —
+               a pending subject renders no case (matching the client's `switchBlock`). */
+            const subjectExpr =
+                node.asyncSubject === true
+                    ? `$$readCell(${node.subject.trim()})`
+                    : `(${lowerExpression(node.subject)})`
+            let code = `{ const $s = ${subjectExpr};\n`
+            if (node.asyncSubject === true) {
+                code += `if (!$$cellPending(${node.subject.trim()})) {\n`
+            }
             let started = false
             for (const branch of plan.cases) {
                 if (branch.match !== undefined) {
@@ -331,6 +369,9 @@ export function generateSSR(
             }
             if (plan.fallback !== undefined) {
                 code += `${started ? 'else ' : ''}{\n${branchContent(plan.fallback.children, target)}}\n`
+            }
+            if (node.asyncSubject === true) {
+                code += `}\n`
             }
             return `${anchor}${openRange(target)}${code}}\n${closeRange(target)}`
         }
@@ -457,7 +498,12 @@ export function generateSSR(
                    is left bare, a reactive/loop/await binding derefs — SSR registers such
                    a binding as `plain`, so it reads the bare local holding the resolved
                    component, keeping SSR and client congruent. */
-                `const ${result} = await ${lowerExpression(node.name)}.render(${propsExpr}, $ctx);\n` +
+                /* Root the child's render-path at this mount site's source-order ordinal — the
+                   same segment the client's `mountChild` pushes — so the child's cells get a scope
+                   id matching the client's (the warm-seed key). `$$withPath` is synchronous; the
+                   child constructs its cells in its own synchronous prefix (before its barrier
+                   `await`) with the path set, then the pending promise is awaited outside. */
+                `const ${result} = await $$withPath(${childOrdinal++}, () => ${lowerExpression(node.name)}.render(${propsExpr}, $ctx));\n` +
                 `${target}.push(${result}.html);\n` +
                 `for (const $a of ${result}.awaits) { $awaits.push($a); }\n` +
                 `Object.assign($resume, ${result}.resume);\n` +

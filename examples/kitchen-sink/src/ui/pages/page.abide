@@ -1,111 +1,13 @@
 <script>
+import { url } from '@abide/abide/shared/url'
+import { surfaceNav } from '$ui/surfaceNav.ts'
+
 /*
 Kitchen-sink index — the framework reference, grouped the way the sidebar reads:
-stand up the server, build the UI, reach past the browser, ship it, look it up.
-Each card is a runnable, documented page.
+land on the cookbook, stand up the server, build the UI, reach past the browser,
+ship it, look it up. Each card is a runnable, documented page, rendered from the
+shared surfaceNav so the landing grid and the sidebar never drift apart.
 */
-const groups = [
-    {
-        title: 'build the server',
-        cards: [
-            {
-                href: '/rpc',
-                title: 'rpc',
-                body: 'One rpc per file under src/server/rpc/ — GET / POST / PUT / PATCH / DELETE / HEAD. The schema validates args and projects the MCP tool, CLI flags, and OpenAPI operation from one declaration.',
-            },
-            {
-                href: '/sockets',
-                title: 'sockets',
-                body: 'One broadcast topic per file under src/server/sockets/. broadcast() is isomorphic, retention defaults to the last frame (tail: 1) and scales via tail: n, and every browser subscription multiplexes one WebSocket.',
-            },
-            {
-                href: '/security',
-                title: 'security',
-                body: 'Mutating rpcs 403 a cross-origin browser Origin before the handler runs; crossOrigin: true is the per-rpc opt-out. /__abide/mcp gets the same check, and boot warns when MCP tools ship with no auth middleware.',
-            },
-        ],
-    },
-    {
-        title: 'build the ui',
-        cards: [
-            {
-                href: '/pages',
-                title: 'pages',
-                body: 'Folders under src/ui/pages/ are routes — [id] params, nested layout.abide chains, try/catch failure boundaries — plus the reactive page state, navigate(), and the typed base-correct url() builder.',
-            },
-            {
-                href: '/templating',
-                title: 'templating',
-                body: 'The .abide grammar — every {#…} control-flow block, {expr} / interpolated / bind: / class: / style: / attach / spread bindings, html raw markup, snippets, components & {children()}, and scoped <style>.',
-            },
-            {
-                href: '/reactive-state',
-                title: 'reactive state',
-                body: 'state / state.computed / state.linked and watch are imported from abide/ui and called bare; transforms coerce writes, watch names a reaction, and refresh / patch drive cached reads.',
-            },
-            {
-                href: '/probes',
-                title: 'probes',
-                body: 'Standalone reactive probes over smart calls and streams — pending (no value yet), refreshing (value held, fresher source in flight), and peek (the retained value, synchronously). They report, never act.',
-            },
-            {
-                href: '/outbox',
-                title: 'outbox',
-                body: 'Local-first durability per rpc — a call that parks on an unreachable server, persists, and drains when health() recovers; retry() and pending() span the queue.',
-            },
-        ],
-    },
-    {
-        title: 'beyond the browser',
-        cards: [
-            {
-                href: '/agent',
-                title: 'agent',
-                body: "agent(engine, messages) runs a model against the app's own gated MCP surface and streams AgentFrames; the handler picks the transport.",
-            },
-            {
-                href: '/mcp',
-                title: 'mcp',
-                body: 'POST /__abide/mcp, JSON-RPC — tools from clients.mcp rpcs and schema-d sockets, prompts from src/mcp/prompts/*.md, resources from src/mcp/resources/.',
-            },
-            {
-                href: '/cli',
-                title: 'cli',
-                body: 'A standalone binary: subcommands with schema-computed flags, streamed jsonl/sse, and a REPL — installable via curl <app>/__abide/cli | sh.',
-            },
-            {
-                href: '/bundle',
-                title: 'bundle',
-                body: 'abide bundle wraps the app in a movable desktop app — native menus through onMenu(), a connect screen for embedded or remote servers, bundled() to detect the context.',
-            },
-        ],
-    },
-    {
-        title: 'deploy',
-        cards: [
-            {
-                href: '/build',
-                title: 'build · test · deploy',
-                body: 'The dev-to-prod seams — the abide commands, env() config validation and app.ts boot hooks, in-process testing with createTestApp(), and the compiled-binary Dockerfile.',
-            },
-            {
-                href: '/observability',
-                title: 'observability',
-                body: "Connectivity + logging on both sides — online() / health() reachability reads, the one logger with DEBUG-gated channels and timed log.trace spans, and trace() returning the request's W3C traceparent.",
-            },
-        ],
-    },
-    {
-        title: 'reference',
-        cards: [
-            {
-                href: '/reference',
-                title: 'reference',
-                body: 'The cross-cutting reference — project layout, framework routes, every environment variable, and the import namespaces that mark which side a name runs on.',
-            },
-        ],
-    },
-]
 </script>
 
 <div class="flex flex-col gap-8">
@@ -118,18 +20,18 @@ const groups = [
         </p>
     </div>
 
-    {#for group of groups by group.title}
+    {#for group of surfaceNav by group.title}
         <section class="flex flex-col gap-4">
             <h2 class="text-xs font-semibold uppercase tracking-wide text-slate-400">
                 {group.title}
             </h2>
             <div class="grid gap-4 sm:grid-cols-2">
-                {#for card of group.cards by card.href}
+                {#for card of group.pages by card.href}
                     <a
-                        href={card.href}
+                        href={url(card.href)}
                         class="flex flex-col gap-1 rounded-lg border border-slate-200 bg-white p-5 hover:border-slate-400">
                         <h3 class="text-lg font-semibold">
-                            <code class="font-mono">{card.title}</code>
+                            <code class="font-mono">{card.title ?? card.label}</code>
                         </h3>
                         <p class="text-sm text-slate-600">{card.body}</p>
                     </a>
