@@ -6,75 +6,90 @@ const LIVE = '/mcp'
 </script>
 
 <div class="flex flex-col gap-8">
-<div class="flex flex-col gap-2">
-<h1 class="text-3xl font-bold">mcp</h1>
-<p class="text-slate-600">
-    The app exposes a Model Context Protocol server at
-    <code class="font-mono">POST /__abide/mcp</code> — tools from mcp-exposed rpcs and
-    schema-bearing sockets, prompts from <code class="font-mono">src/mcp/prompts/</code>, resources
-    from <code class="font-mono">src/mcp/resources/</code>.
-</p>
-</div>
-<div class="flex flex-col gap-4">
-
-<Recipe
-    task="Expose a read rpc as a tool"
-    live={LIVE}
-    code={`export const getProduct = GET(handler, { schemas: { input: inputSchema } })
+    <div class="flex flex-col gap-2">
+        <h1 class="text-3xl font-bold">mcp</h1>
+        <p class="text-slate-600">
+            The app exposes a Model Context Protocol server at
+            <code class="font-mono">POST /__abide/mcp</code> — tools from mcp-exposed rpcs and
+            schema-bearing sockets, prompts from <code class="font-mono">src/mcp/prompts/</code>,
+            resources from <code class="font-mono">src/mcp/resources/</code>.
+        </p>
+    </div>
+    <div class="flex flex-col gap-4">
+        <Recipe
+            task="Expose a read rpc as a tool"
+            live={LIVE}
+            code={`export const getProduct = GET(handler, { schemas: { input: inputSchema } })
 // GET/HEAD with a schema auto-expose to MCP`}
-    note={"A schema-bearing GET/HEAD becomes an MCP tool automatically. The schema is the tool's input contract — one declaration drives the tool, the OpenAPI op, and the CLI flags."} />
+            note={"A schema-bearing GET/HEAD becomes an MCP tool automatically. The schema is the tool's input contract — one declaration drives the tool, the OpenAPI op, and the CLI flags."} />
 
-<Recipe
-    task="Expose a mutating rpc as a tool"
-    live={LIVE}
-    code={`export const createEcho = POST(handler, { schemas: { input: inputSchema }, clients: { mcp: true } })`}
-    note={"Mutating verbs stay off MCP by default (a model shouldn't write without intent). Opt in explicitly with `clients: { mcp: true }`."} />
+        <Recipe
+            task="Expose a mutating rpc as a tool"
+            live={LIVE}
+            code={`export const createEcho = POST(handler, { schemas: { input: inputSchema }, clients: { mcp: true } })`}
+            note={"Mutating verbs stay off MCP by default (a model shouldn't write without intent). Opt in explicitly with `clients: { mcp: true }`."} />
 
-<Recipe
-    task="Expose a socket as a read tool"
-    live={LIVE}
-    code={`export const chat = socket({ schema })   // → a chat-tail MCP tool`}
-    note={'A schema-typed socket projects a `-tail` read tool (and a `-publish` tool if `clientPublish` is on) — a model can subscribe to your realtime topics.'} />
+        <Recipe
+            task="Expose a socket as a read tool"
+            live={LIVE}
+            code={`export const chat = socket({ schema })   // → a chat-tail MCP tool`}
+            note={'A schema-typed socket projects a `-tail` read tool (and a `-publish` tool if `clientPublish` is on) — a model can subscribe to your realtime topics.'} />
 
-<Recipe task="Add an MCP prompt" live={LIVE} code={`// src/mcp/prompts/summarize.md
+        <Recipe
+            task="Add an MCP prompt"
+            live={LIVE}
+            code={`// src/mcp/prompts/summarize.md
 ---
 description: Summarise a document
 ---
-Summarise the following in three bullets: {{input}}`} note={'Drop a Markdown file with front-matter under `src/mcp/prompts/` — the filename is the prompt name, the front-matter its metadata. No code.'} />
+Summarise the following in three bullets: {{input}}`}
+            note={'Drop a Markdown file with front-matter under `src/mcp/prompts/` — the filename is the prompt name, the front-matter its metadata. No code.'} />
 
-<Recipe task="Add an MCP resource" live={LIVE} code={`// src/mcp/resources/about.md → an addressable resource
-The kitchen-sink demonstrates every abide surface.`} note={'Files under `src/mcp/resources/` become addressable MCP resources a client can fetch for context — docs, schemas, fixtures.'} />
+        <Recipe
+            task="Add an MCP resource"
+            live={LIVE}
+            code={`// src/mcp/resources/about.md → an addressable resource
+The kitchen-sink demonstrates every abide surface.`}
+            note={'Files under `src/mcp/resources/` become addressable MCP resources a client can fetch for context — docs, schemas, fixtures.'} />
 
-<Recipe task="Call the MCP endpoint" live={LIVE} code={`curl -sX POST http://localhost:3000/__abide/mcp \\
+        <Recipe
+            task="Call the MCP endpoint"
+            live={LIVE}
+            code={`curl -sX POST http://localhost:3000/__abide/mcp \\
   -H 'content-type: application/json' \\
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'`} note={'`/__abide/mcp` speaks JSON-RPC. `tools/list` enumerates the projected tools; `tools/call` invokes one — the same wire any MCP client uses.'} />
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'`}
+            note={'`/__abide/mcp` speaks JSON-RPC. `tools/list` enumerates the projected tools; `tools/call` invokes one — the same wire any MCP client uses.'} />
 
-<Recipe
-    task="Point an MCP client at the app"
-    live={LIVE}
-    code={`{
+        <Recipe
+            task="Point an MCP client at the app"
+            live={LIVE}
+            code={`{
   "mcpServers": { "app": { "url": "http://localhost:3000/__abide/mcp" } }
 }`}
-    note={"Register the endpoint in an MCP client's config (Claude Desktop, an IDE) and your rpcs show up as tools — no adapter, the surface is generated from the rpc registry."} />
+            note={"Register the endpoint in an MCP client's config (Claude Desktop, an IDE) and your rpcs show up as tools — no adapter, the surface is generated from the rpc registry."} />
 
-<Recipe task="Authenticate MCP clients" live="/security" code={`// src/app.ts — the handle hook wraps the whole pipeline
+        <Recipe
+            task="Authenticate MCP clients"
+            live="/security"
+            code={`// src/app.ts — the handle hook wraps the whole pipeline
 export const handle = async (request, next) => {
     if (request.url.includes('/__abide/mcp') && !authorised(request)) {
         return new Response('unauthorized', { status: 401 })
     }
     return next(request)
-}`} note={'`/__abide/mcp` gets the same origin check as mutating rpcs. For real authz, gate it in the `handle` middleware hook in app.ts — boot warns when mcp tools ship with no auth middleware at all.'} />
+}`}
+            note={'`/__abide/mcp` gets the same origin check as mutating rpcs. For real authz, gate it in the `handle` middleware hook in app.ts — boot warns when mcp tools ship with no auth middleware at all.'} />
 
-<Recipe
-    task="Understand the tool name prefix"
-    live={LIVE}
-    code={`// package name "kitchen-sink" → tool "mcp__kitchen_sink__getProduct"`}
-    note={'Tool names are `mcp__<sanitised-package-name>__<rpc>` — deterministic across deploys, which is why agent permission allowlists stay valid.'} />
+        <Recipe
+            task="Understand the tool name prefix"
+            live={LIVE}
+            code={`// package name "kitchen-sink" → tool "mcp__kitchen_sink__getProduct"`}
+            note={'Tool names are `mcp__<sanitised-package-name>__<rpc>` — deterministic across deploys, which is why agent permission allowlists stay valid.'} />
 
-<Recipe
-    task="Keep an rpc off the MCP surface"
-    live={LIVE}
-    code={`export const chat = POST(handler, { schemas: { input: inputSchema } })   // no clients.mcp → not a tool`}
-    note={"Omit `clients.mcp` (the default for mutating verbs) to keep an rpc off MCP — e.g. the agent rpc itself, so the model can't re-enter the agent."} />
-</div>
+        <Recipe
+            task="Keep an rpc off the MCP surface"
+            live={LIVE}
+            code={`export const chat = POST(handler, { schemas: { input: inputSchema } })   // no clients.mcp → not a tool`}
+            note={"Omit `clients.mcp` (the default for mutating verbs) to keep an rpc off MCP — e.g. the agent rpc itself, so the model can't re-enter the agent."} />
+    </div>
 </div>

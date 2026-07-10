@@ -6,84 +6,92 @@ const LIVE = '/agent'
 </script>
 
 <div class="flex flex-col gap-8">
-<div class="flex flex-col gap-2">
-<h1 class="text-3xl font-bold">agent</h1>
-<p class="text-slate-600">
-    <code class="font-mono">agent(engine, messages)</code> runs a model against the app's own MCP
-    surface — every schema-bearing, mcp-exposed rpc is a tool it may call — and returns an
-    <code class="font-mono">AgentFrame</code> stream the handler frames like any other stream.
-</p>
-</div>
-<div class="flex flex-col gap-4">
-
-<Recipe
-    task="Run a model over the app's tools"
-    live={LIVE}
-    code={`import { agent } from '@abide/abide/server/agent'
+    <div class="flex flex-col gap-2">
+        <h1 class="text-3xl font-bold">agent</h1>
+        <p class="text-slate-600">
+            <code class="font-mono">agent(engine, messages)</code> runs a model against the app's
+            own MCP surface — every schema-bearing, mcp-exposed rpc is a tool it may call — and
+            returns an <code class="font-mono">AgentFrame</code> stream the handler frames like any
+            other stream.
+        </p>
+    </div>
+    <div class="flex flex-col gap-4">
+        <Recipe
+            task="Run a model over the app's tools"
+            live={LIVE}
+            code={`import { agent } from '@abide/abide/server/agent'
 import { jsonl } from '@abide/abide/server/jsonl'
 
 export const chat = POST(({ messages }) => jsonl(agent(engine, messages)), { schemas: { input: inputSchema } })`}
-    note={"`agent(engine, messages)` returns the engine's `AgentFrame` stream; the mcp-exposed rpcs become the model's tools. Frame it with `jsonl()` (or `sse()`) so the browser reads it like any streaming rpc."} />
+            note={"`agent(engine, messages)` returns the engine's `AgentFrame` stream; the mcp-exposed rpcs become the model's tools. Frame it with `jsonl()` (or `sse()`) so the browser reads it like any streaming rpc."} />
 
-<Recipe task="Pick a model engine" live={LIVE} code={`import { engine } from '@abide/claude-code'   // or '@abide/anthropic'
+        <Recipe
+            task="Pick a model engine"
+            live={LIVE}
+            code={`import { engine } from '@abide/claude-code'   // or '@abide/anthropic'
 
-const chatEngine = engine({ options: { systemPrompt: '…' } })`} note={'An engine is a separate package plugged into `agent()`. `@abide/claude-code` drives the Claude Code CLI (auth from its own login); `@abide/anthropic` calls the API directly with a key.'} />
+const chatEngine = engine({ options: { systemPrompt: '…' } })`}
+            note={'An engine is a separate package plugged into `agent()`. `@abide/claude-code` drives the Claude Code CLI (auth from its own login); `@abide/anthropic` calls the API directly with a key.'} />
 
-<Recipe
-    task="Restrict which tools the agent may call"
-    live={LIVE}
-    code={`const chatEngine = engine({
+        <Recipe
+            task="Restrict which tools the agent may call"
+            live={LIVE}
+            code={`const chatEngine = engine({
     tools: [],   // drop every built-in (no Bash/Read/Write on the host)
     permissions: { defaultMode: 'dontAsk', allow: ['mcp__app__getProduct'] },
 })`}
-    note={"Permission is the server's call, fixed here — not taken from the client. `tools: []` removes host built-ins; `defaultMode: 'dontAsk'` denies anything unlisted, so `allow` is the whole capability surface."} />
+            note={"Permission is the server's call, fixed here — not taken from the client. `tools: []` removes host built-ins; `defaultMode: 'dontAsk'` denies anything unlisted, so `allow` is the whole capability surface."} />
 
-<Recipe task="Set the system prompt" live={LIVE} code={`const chatEngine = engine({
+        <Recipe
+            task="Set the system prompt"
+            live={LIVE}
+            code={`const chatEngine = engine({
     options: { systemPrompt: 'You are the support agent. Reply in short plain prose.' },
-})`} note={'The system prompt is server-fixed too. Tell the model what the permission layer enforces — it can see every tool but only allowed ones succeed at call time.'} />
+})`}
+            note={'The system prompt is server-fixed too. Tell the model what the permission layer enforces — it can see every tool but only allowed ones succeed at call time.'} />
 
-<Recipe
-    task="Stream frames to the client"
-    live={LIVE}
-    code={`const response = await chat.raw({ messages: history })
+        <Recipe
+            task="Stream frames to the client"
+            live={LIVE}
+            code={`const response = await chat.raw({ messages: history })
 const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
 // read line by line, fold each AgentFrame into the live turn`}
-    note={'`.raw()` gives the streaming `Response`; read it frame-by-frame and fold each `AgentFrame` (text delta, tool_use, tool_result) into the assistant turn as it arrives.'} />
+            note={'`.raw()` gives the streaming `Response`; read it frame-by-frame and fold each `AgentFrame` (text delta, tool_use, tool_result) into the assistant turn as it arrives.'} />
 
-<Recipe
-    task="Show tool calls as they happen"
-    live={LIVE}
-    code={`// each frame is typed — branch on its kind
+        <Recipe
+            task="Show tool calls as they happen"
+            live={LIVE}
+            code={`// each frame is typed — branch on its kind
 if (frame.type === 'tool_use') toolCalls = [...toolCalls, frame]
 if (frame.type === 'tool_result') markDone(frame.id)`}
-    note={"`AgentFrame` is a discriminated union — surface tool_use frames as 'calling getProduct…' and reconcile their tool_result frames to show what the model actually did."} />
+            note={"`AgentFrame` is a discriminated union — surface tool_use frames as 'calling getProduct…' and reconcile their tool_result frames to show what the model actually did."} />
 
-<Recipe
-    task="Carry a multi-turn conversation"
-    live={LIVE}
-    code={`const history = [...messages, { role: 'user', text }]
+        <Recipe
+            task="Carry a multi-turn conversation"
+            live={LIVE}
+            code={`const history = [...messages, { role: 'user', text }]
 await chat.raw({ messages: history })   // post the whole transcript`}
-    note={'The engine is stateless per call — POST the running transcript each turn. Messages use the provider-neutral `NeutralMessage` shape (user / assistant / tool roles).'} />
+            note={'The engine is stateless per call — POST the running transcript each turn. Messages use the provider-neutral `NeutralMessage` shape (user / assistant / tool roles).'} />
 
-<Recipe
-    task="Keep the agent rpc off its own tool surface"
-    live={LIVE}
-    code={`export const chat = POST(handler, { schemas: { input: inputSchema } })
+        <Recipe
+            task="Keep the agent rpc off its own tool surface"
+            live={LIVE}
+            code={`export const chat = POST(handler, { schemas: { input: inputSchema } })
 // no clients.mcp → the mutating rpc is never itself an MCP tool`}
-    note={"A mutating POST stays off MCP unless it opts in — leave `clients.mcp` off so the agent can't be handed a tool that re-enters the agent."} />
+            note={"A mutating POST stays off MCP unless it opts in — leave `clients.mcp` off so the agent can't be handed a tool that re-enters the agent."} />
 
-<Recipe
-    task="Deny a tool and let the model explain"
-    live={LIVE}
-    code={`// unlisted rpcs are denied at call time, not hidden
+        <Recipe
+            task="Deny a tool and let the model explain"
+            live={LIVE}
+            code={`// unlisted rpcs are denied at call time, not hidden
 permissions: { defaultMode: 'dontAsk', allow: ['mcp__app__getRates'] }`}
-    note={'Tool listing shows every mcp-exposed rpc, but denial happens at call time — the model can attempt a denied rpc once and see the refusal, so the allowlist is authoritative, not advisory.'} />
+            note={'Tool listing shows every mcp-exposed rpc, but denial happens at call time — the model can attempt a denied rpc once and see the refusal, so the allowlist is authoritative, not advisory.'} />
 
-<Recipe
-    task="Serve the agent over SSE instead of JSONL"
-    live={LIVE}
-    code={`import { sse } from '@abide/abide/server/sse'
+        <Recipe
+            task="Serve the agent over SSE instead of JSONL"
+            live={LIVE}
+            code={`import { sse } from '@abide/abide/server/sse'
 export const chat = POST(({ messages }) => sse(agent(engine, messages)), { schemas: { input: inputSchema } })`}
-    note={'Swap `jsonl()` for `sse()` and consume with `EventSource` — the handler picks the transport; the `AgentFrame` stream is the same either way.'} />
-</div>
+            note={'Swap `jsonl()` for `sse()` and consume with `EventSource` — the handler picks the transport; the `AgentFrame` stream is the same either way.'} />
+    </div>
 </div>

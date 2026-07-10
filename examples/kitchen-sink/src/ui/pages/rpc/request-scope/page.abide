@@ -8,48 +8,48 @@ import Demo from '$ui/Demo.abide'
     <div class="flex flex-col gap-2">
         <h1 class="text-3xl font-bold">Request scope</h1>
         <p class="text-slate-600">
-            Per-request accessors backed by <code class="font-mono">AsyncLocalStorage</code> — reach for
-            them from any scope inside a handler or SSR pass, no plumbing.
+            Per-request accessors backed by <code class="font-mono">AsyncLocalStorage</code> — reach
+            for them from any scope inside a handler or SSR pass, no plumbing.
         </p>
     </div>
 
-<section>
-    <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-        <table class="w-full text-sm">
-            <thead class="border-b border-slate-200 bg-slate-50 text-left">
-                <tr>
-                    <th class="px-4 py-2 font-mono font-medium">helper</th>
-                    <th class="px-4 py-2 font-medium">returns</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100">
-                <tr>
-                    <td class="px-4 py-2 font-mono">request()</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        the inbound <code class="font-mono">Request</code> — throws outside a
-                        request scope
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">cookies()</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        <code class="font-mono">Bun.CookieMap</code>; mutations flush as
-                        <code class="font-mono">Set-Cookie</code> when the handler returns
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">server()</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        the live <code class="font-mono">Bun.Server</code> — in-process dispatch
-                        gets a no-op stand-in
-                    </td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-</section>
+    <section>
+        <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+            <table class="w-full text-sm">
+                <thead class="border-b border-slate-200 bg-slate-50 text-left">
+                    <tr>
+                        <th class="px-4 py-2 font-mono font-medium">helper</th>
+                        <th class="px-4 py-2 font-medium">returns</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    <tr>
+                        <td class="px-4 py-2 font-mono">request()</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            the inbound <code class="font-mono">Request</code> — throws outside a
+                            request scope
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">cookies()</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            <code class="font-mono">Bun.CookieMap</code>; mutations flush as
+                            <code class="font-mono">Set-Cookie</code> when the handler returns
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">server()</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            the live <code class="font-mono">Bun.Server</code> — in-process dispatch
+                            gets a no-op stand-in
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
 
-<Demo title="request() — read inbound headers" code={`import { GET } from '@abide/abide/server/GET'
+    <Demo title="request() — read inbound headers" code={`import { GET } from '@abide/abide/server/GET'
 import { request } from '@abide/abide/server/request'
 import { json } from '@abide/abide/server/json'
 
@@ -57,51 +57,52 @@ export const whoAmI = GET(() => {
     const headers = request().headers
     return json({ hasCookie: headers.has('cookie'), userAgent: headers.get('user-agent') })
 })`}>
-    <p class="text-xs text-slate-500">
-        <code class="font-mono">whoAmI()</code> reads <code class="font-mono">cookie</code> and
-        <code class="font-mono">user-agent</code> off the inbound request, rendered during SSR — it
-        carries your user-agent because <code class="font-mono">src/app.ts</code> declares
-        <code class="font-mono">forwardHeaders = ['user-agent']</code>.
-    </p>
-    <pre
-        class="overflow-x-auto rounded-md border border-slate-200 bg-slate-50 p-4 text-xs leading-relaxed text-slate-800"><code>{JSON.stringify(whoAmI(), undefined, 2)}</code></pre>
-</Demo>
+        <p class="text-xs text-slate-500">
+            <code class="font-mono">whoAmI()</code> reads <code class="font-mono">cookie</code> and
+            <code class="font-mono">user-agent</code> off the inbound request, rendered during SSR —
+            it carries your user-agent because <code class="font-mono">src/app.ts</code> declares
+            <code class="font-mono">forwardHeaders = ['user-agent']</code>.
+        </p>
+        <pre
+            class="overflow-x-auto rounded-md border border-slate-200 bg-slate-50 p-4 text-xs leading-relaxed text-slate-800"><code>{JSON.stringify(whoAmI(), undefined, 2)}</code></pre>
+    </Demo>
 
-<section class="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5">
-    <h2 class="text-sm font-semibold">
-        <code class="font-mono">cookies()</code> — the per-request cookie jar
-    </h2>
-    <p class="text-xs text-slate-500">
-        Returns the request's <code class="font-mono">Bun.CookieMap</code> from any scope.
-        <code class="font-mono">cookies().get(...)</code> reads, and
-        <code class="font-mono">cookies().set(...)</code> /
-        <code class="font-mono">cookies().delete(...)</code> mutations flush as
-        <code class="font-mono">Set-Cookie</code> when the handler returns — the same jar backs the
-        <code class="font-mono">cookie</code> header <code class="font-mono">whoAmI</code> reads
-        above.
-    </p>
+    <section class="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5">
+        <h2 class="text-sm font-semibold">
+            <code class="font-mono">cookies()</code> — the per-request cookie jar
+        </h2>
+        <p class="text-xs text-slate-500">
+            Returns the request's <code class="font-mono">Bun.CookieMap</code> from any scope.
+            <code class="font-mono">cookies().get(...)</code> reads, and
+            <code class="font-mono">cookies().set(...)</code> /
+            <code class="font-mono">cookies().delete(...)</code> mutations flush as
+            <code class="font-mono">Set-Cookie</code> when the handler returns — the same jar backs
+            the <code class="font-mono">cookie</code> header
+            <code class="font-mono">whoAmI</code> reads above.
+        </p>
 
-    <CodeBlock title="cookies() — read and write from any scope" code={`import { cookies } from '@abide/abide/server/cookies'
+        <CodeBlock title="cookies() — read and write from any scope" code={`import { cookies } from '@abide/abide/server/cookies'
 
 // inside a handler or SSR pass — no plumbing
 const seen = cookies().get('seen')
 cookies().set('seen', '1', { httpOnly: true, sameSite: 'lax', path: '/' })
 // the Set-Cookie flushes when the handler returns`} />
-</section>
+    </section>
 
-<section class="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5">
-    <h2 class="text-sm font-semibold">
-        <code class="font-mono">server()</code> — the active Bun server
-    </h2>
-    <p class="text-xs text-slate-500">
-        The live <code class="font-mono">Bun.serve</code> instance — for
-        <code class="font-mono">server.publish</code>, connection counts, or a manual ws upgrade. A
-        no-op stand-in during in-process dispatch (CLI/MCP/tests); throws before boot.
-    </p>
-    <CodeBlock title="server() — reach the Bun.serve instance" code={`import { server } from '@abide/abide/server/server'
+    <section class="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5">
+        <h2 class="text-sm font-semibold">
+            <code class="font-mono">server()</code> — the active Bun server
+        </h2>
+        <p class="text-xs text-slate-500">
+            The live <code class="font-mono">Bun.serve</code> instance — for
+            <code class="font-mono">server.publish</code>, connection counts, or a manual ws
+            upgrade. A no-op stand-in during in-process dispatch (CLI/MCP/tests); throws before
+            boot.
+        </p>
+        <CodeBlock title="server() — reach the Bun.serve instance" code={`import { server } from '@abide/abide/server/server'
 
 // inside a handler / SSR pass
 server().publish('room:42', JSON.stringify(frame))   // fan out over the ws
 const live = server().pendingWebSockets                // current ws count`} />
-</section>
+    </section>
 </div>

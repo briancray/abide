@@ -21,229 +21,232 @@ const externalHref = state.computed(() => url('https://bun.sh', { utm: 'abide' }
         <h1 class="text-3xl font-bold">Pages</h1>
         <p class="text-slate-600">
             Every folder under <code class="font-mono">src/ui/pages/</code> with a
-    <code class="font-mono">page.abide</code> is a route.
-    <code class="font-mono">pages/post/[id]/page.abide</code> →
-    <code class="font-mono">/post/[id]</code>; <code class="font-mono">[...rest]</code> catches all.
-    A <code class="font-mono">layout.abide</code> wraps the pages beneath its folder (chained
-    outermost-first); failure boundaries are <code class="font-mono">{'{#try}'}</code>.
+            <code class="font-mono">page.abide</code> is a route.
+            <code class="font-mono">pages/post/[id]/page.abide</code> →
+            <code class="font-mono">/post/[id]</code>;
+            <code class="font-mono">[...rest]</code> catches all. A
+            <code class="font-mono">layout.abide</code> wraps the pages beneath its folder (chained
+            outermost-first); failure boundaries are <code class="font-mono">{'{#try}'}</code>.
         </p>
     </div>
 
-<section class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-    <table class="w-full text-sm">
-        <thead class="border-b border-slate-200 bg-slate-50 text-left">
-            <tr>
-                <th class="px-4 py-2 font-mono font-medium">convention</th>
-                <th class="px-4 py-2 font-medium">meaning</th>
-            </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-100">
-            <tr>
-                <td class="px-4 py-2 font-mono">page.abide</td>
-                <td class="px-4 py-2 text-slate-600">
-                    a folder with one is a route; the path is the folder path
-                </td>
-            </tr>
-            <tr>
-                <td class="px-4 py-2 font-mono">[id]</td>
-                <td class="px-4 py-2 text-slate-600">
-                    a dynamic segment — typed onto <code class="font-mono">page.params</code>
-                </td>
-            </tr>
-            <tr>
-                <td class="px-4 py-2 font-mono">[...rest]</td>
-                <td class="px-4 py-2 text-slate-600">a catch-all segment</td>
-            </tr>
-            <tr>
-                <td class="px-4 py-2 font-mono">[[optional]]</td>
-                <td class="px-4 py-2 text-slate-600">an optional segment</td>
-            </tr>
-            <tr>
-                <td class="px-4 py-2 font-mono">layout.abide</td>
-                <td class="px-4 py-2 text-slate-600">
-                    wraps pages beneath its folder at <code class="font-mono">{'{children()}'}</code>,
-                    chained outermost-first
-                </td>
-            </tr>
-            <tr>
-                <td class="px-4 py-2 font-mono">{'{#try}{:catch}'}</td>
-                <td class="px-4 py-2 text-slate-600">
-                    a render error boundary (there is no separate error file)
-                </td>
-            </tr>
-            <tr>
-                <td class="px-4 py-2 font-mono">page.route</td>
-                <td class="px-4 py-2 text-slate-600">
-                    the matched route pattern (reactive, reassigned on every SPA nav)
-                </td>
-            </tr>
-            <tr>
-                <td class="px-4 py-2 font-mono">page.params</td>
-                <td class="px-4 py-2 text-slate-600">the typed dynamic-segment values</td>
-            </tr>
-            <tr>
-                <td class="px-4 py-2 font-mono">page.url</td>
-                <td class="px-4 py-2 text-slate-600">the current URL (pathname, search, …)</td>
-            </tr>
-            <tr>
-                <td class="px-4 py-2 font-mono">page.navigating</td>
-                <td class="px-4 py-2 text-slate-600">true while a navigation is in flight</td>
-            </tr>
-            <tr>
-                <td class="px-4 py-2 font-mono">navigate(url, {'{ replace, keepScroll }'})</td>
-                <td class="px-4 py-2 text-slate-600">client-side navigation</td>
-            </tr>
-            <tr>
-                <td class="px-4 py-2 font-mono">url(path)</td>
-                <td class="px-4 py-2 text-slate-600">build a URL honoring the app mount base</td>
-            </tr>
-        </tbody>
-    </table>
-</section>
-
-<section>
-    <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+    <section class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
         <table class="w-full text-sm">
             <thead class="border-b border-slate-200 bg-slate-50 text-left">
                 <tr>
-                    <th class="px-4 py-2 font-medium">demo</th>
-                    <th class="px-4 py-2 font-medium">shows</th>
+                    <th class="px-4 py-2 font-mono font-medium">convention</th>
+                    <th class="px-4 py-2 font-medium">meaning</th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-slate-100">
                 <tr>
-                    <td class="px-4 py-2">
-                        <a class="underline" href="/pages/product/1">/pages/product/[id]</a>
-                    </td>
+                    <td class="px-4 py-2 font-mono">page.abide</td>
                     <td class="px-4 py-2 text-slate-600">
-                        a dynamic <code class="font-mono">[id]</code> segment, typed via the
-                        generated <code class="font-mono">Routes</code> interface
+                        a folder with one is a route; the path is the folder path
                     </td>
                 </tr>
                 <tr>
-                    <td class="px-4 py-2">
-                        <a class="underline" href="/pages/boundary?explode=1"
-                            >/pages/boundary?explode=1</a
-                        >
-                    </td>
+                    <td class="px-4 py-2 font-mono">[id]</td>
                     <td class="px-4 py-2 text-slate-600">
-                        <code class="font-mono">{'{#try}'}</code> catching a render throw and
-                        rendering its <code class="font-mono">{'{:catch}'}</code>
+                        a dynamic segment — typed onto <code class="font-mono">page.params</code>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">[...rest]</td>
+                    <td class="px-4 py-2 text-slate-600">a catch-all segment</td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">[[optional]]</td>
+                    <td class="px-4 py-2 text-slate-600">an optional segment</td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">layout.abide</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        wraps pages beneath its folder at
+                        <code class="font-mono">{'{children()}'}</code>, chained outermost-first
+                    </td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">{'{#try}{:catch}'}</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        a render error boundary (there is no separate error file)
+                    </td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">page.route</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        the matched route pattern (reactive, reassigned on every SPA nav)
+                    </td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">page.params</td>
+                    <td class="px-4 py-2 text-slate-600">the typed dynamic-segment values</td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">page.url</td>
+                    <td class="px-4 py-2 text-slate-600">the current URL (pathname, search, …)</td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">page.navigating</td>
+                    <td class="px-4 py-2 text-slate-600">true while a navigation is in flight</td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">navigate(url, {'{ replace, keepScroll }'})</td>
+                    <td class="px-4 py-2 text-slate-600">client-side navigation</td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">url(path)</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        build a URL honoring the app mount base
                     </td>
                 </tr>
             </tbody>
         </table>
-    </div>
-</section>
+    </section>
 
-<section class="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5">
-    <h2 class="text-sm font-semibold">
-        <code class="font-mono">page</code> + <code class="font-mono">navigate</code>
-    </h2>
-    <p class="text-sm text-slate-600">
-        <code class="font-mono">page</code> is reactive page state —
-        <code class="font-mono">route</code>, <code class="font-mono">params</code>,
-        <code class="font-mono">url</code>, <code class="font-mono">navigating</code>. Same-pathname
-        navigations skip the fetch and remount.
-    </p>
-    <p class="font-mono text-sm text-slate-700">
-        page.url.pathname = <strong>{currentPath}</strong>
-        {#if navigating}<span class="text-amber-600">(navigating…)</span>{/if}
-    </p>
-    <div class="flex flex-wrap gap-2 text-sm">
-        <button
-            type="button"
-            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
-            onclick={() => navigate('/pages/product/1')}>
-            navigate('/pages/product/1')
-        </button>
-        <button
-            type="button"
-            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
-            onclick={() => navigate('/pages', { replace: true })}>
-            {"navigate('/pages', { replace: true })"}
-        </button>
-        <button
-            type="button"
-            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
-            onclick={() => navigate(`/pages?ts=${Date.now()}`)}>
-            same pathname — no fetch, no remount
-        </button>
-        <button
-            type="button"
-            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
-            onclick={() => navigate(`/pages?ts=${Date.now()}`, { keepScroll: true })}>
-            {'navigate(url, { keepScroll: true }) — hold scroll on in-page swap'}
-        </button>
-    </div>
+    <section>
+        <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+            <table class="w-full text-sm">
+                <thead class="border-b border-slate-200 bg-slate-50 text-left">
+                    <tr>
+                        <th class="px-4 py-2 font-medium">demo</th>
+                        <th class="px-4 py-2 font-medium">shows</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    <tr>
+                        <td class="px-4 py-2">
+                            <a class="underline" href="/pages/product/1">/pages/product/[id]</a>
+                        </td>
+                        <td class="px-4 py-2 text-slate-600">
+                            a dynamic <code class="font-mono">[id]</code> segment, typed via the
+                            generated <code class="font-mono">Routes</code> interface
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2">
+                            <a class="underline" href="/pages/boundary?explode=1"
+                                >/pages/boundary?explode=1</a
+                            >
+                        </td>
+                        <td class="px-4 py-2 text-slate-600">
+                            <code class="font-mono">{'{#try}'}</code> catching a render throw and
+                            rendering its <code class="font-mono">{'{:catch}'}</code>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
 
-    <CodeBlock code={`import { page } from '@abide/abide/shared/page'
+    <section class="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5">
+        <h2 class="text-sm font-semibold">
+            <code class="font-mono">page</code> + <code class="font-mono">navigate</code>
+        </h2>
+        <p class="text-sm text-slate-600">
+            <code class="font-mono">page</code> is reactive page state —
+            <code class="font-mono">route</code>, <code class="font-mono">params</code>,
+            <code class="font-mono">url</code>, <code class="font-mono">navigating</code>.
+            Same-pathname navigations skip the fetch and remount.
+        </p>
+        <p class="font-mono text-sm text-slate-700">
+            page.url.pathname = <strong>{currentPath}</strong>
+            {#if navigating}<span class="text-amber-600">(navigating…)</span>{/if}
+        </p>
+        <div class="flex flex-wrap gap-2 text-sm">
+            <button
+                type="button"
+                class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+                onclick={() => navigate('/pages/product/1')}>
+                navigate('/pages/product/1')
+            </button>
+            <button
+                type="button"
+                class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+                onclick={() => navigate('/pages', { replace: true })}>
+                {"navigate('/pages', { replace: true })"}
+            </button>
+            <button
+                type="button"
+                class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+                onclick={() => navigate(`/pages?ts=${Date.now()}`)}>
+                same pathname — no fetch, no remount
+            </button>
+            <button
+                type="button"
+                class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+                onclick={() => navigate(`/pages?ts=${Date.now()}`, { keepScroll: true })}>
+                {'navigate(url, { keepScroll: true }) — hold scroll on in-page swap'}
+            </button>
+        </div>
+
+        <CodeBlock code={`import { page } from '@abide/abide/shared/page'
 import { navigate } from '@abide/abide/ui/navigate'
 
 const currentPath = state.computed(() => page.url.pathname)    // re-runs on each navigation
 await navigate('/pages/product/1')                       // opts: { replace, keepScroll }`} />
-</section>
+    </section>
 
-<section class="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5">
-    <h2 class="text-sm font-semibold">
-        <code class="font-mono">url()</code> — typed, base-correct links
-    </h2>
-    <p class="text-sm text-slate-600">
-        One builder for every in-app URL — it reads the path to pick a resolution: an
-        <code class="font-mono">/rpc/*</code> path serialises the rpc's args to a query, an
-        <code class="font-mono">[id]</code> route takes its params, and a bare path takes an
-        optional query.
-    </p>
-    <div class="flex flex-wrap items-end gap-4">
-        <label class="flex flex-col gap-1 text-xs font-medium">
-            id
-            <input
-                bind:value={productId}
-                class="block w-24 rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
-        </label>
-    </div>
-    <div class="overflow-x-auto rounded-md border border-slate-200">
-        <table class="w-full text-sm">
-            <thead class="border-b border-slate-200 bg-slate-50 text-left">
-                <tr>
-                    <th class="px-4 py-2 font-mono font-medium">call</th>
-                    <th class="px-4 py-2 font-medium">kind</th>
-                    <th class="px-4 py-2 font-mono font-medium">result</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100">
-                <tr>
-                    <td class="px-4 py-2 font-mono">{"url('/rpc/getProduct', { id })"}</td>
-                    <td class="px-4 py-2 text-slate-600">rpc — args to query</td>
-                    <td class="px-4 py-2 font-mono text-slate-900">{rpcHref}</td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">{"url('/pages/product/[id]', { id })"}</td>
-                    <td class="px-4 py-2 text-slate-600">page — params interpolated</td>
-                    <td class="px-4 py-2 font-mono text-slate-900">{pageHref}</td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">{"url('/robots.txt')"}</td>
-                    <td class="px-4 py-2 text-slate-600">asset — bare path</td>
-                    <td class="px-4 py-2 font-mono text-slate-900">{assetHref}</td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">{"url('https://bun.sh', { utm })"}</td>
-                    <td class="px-4 py-2 text-slate-600">external — passes through</td>
-                    <td class="px-4 py-2 font-mono text-slate-900">{externalHref}</td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-    <p class="text-xs text-slate-500">
-        A real link: <a class="underline" href={pageHref}>{pageHref}</a>. Mounted under a
-        subpath via <code class="font-mono">APP_URL</code>, every rooted result gains that base.
-    </p>
+    <section class="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5">
+        <h2 class="text-sm font-semibold">
+            <code class="font-mono">url()</code> — typed, base-correct links
+        </h2>
+        <p class="text-sm text-slate-600">
+            One builder for every in-app URL — it reads the path to pick a resolution: an
+            <code class="font-mono">/rpc/*</code> path serialises the rpc's args to a query, an
+            <code class="font-mono">[id]</code> route takes its params, and a bare path takes an
+            optional query.
+        </p>
+        <div class="flex flex-wrap items-end gap-4">
+            <label class="flex flex-col gap-1 text-xs font-medium">
+                id
+                <input
+                    bind:value={productId}
+                    class="block w-24 rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
+            </label>
+        </div>
+        <div class="overflow-x-auto rounded-md border border-slate-200">
+            <table class="w-full text-sm">
+                <thead class="border-b border-slate-200 bg-slate-50 text-left">
+                    <tr>
+                        <th class="px-4 py-2 font-mono font-medium">call</th>
+                        <th class="px-4 py-2 font-medium">kind</th>
+                        <th class="px-4 py-2 font-mono font-medium">result</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    <tr>
+                        <td class="px-4 py-2 font-mono">{"url('/rpc/getProduct', { id })"}</td>
+                        <td class="px-4 py-2 text-slate-600">rpc — args to query</td>
+                        <td class="px-4 py-2 font-mono text-slate-900">{rpcHref}</td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">{"url('/pages/product/[id]', { id })"}</td>
+                        <td class="px-4 py-2 text-slate-600">page — params interpolated</td>
+                        <td class="px-4 py-2 font-mono text-slate-900">{pageHref}</td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">{"url('/robots.txt')"}</td>
+                        <td class="px-4 py-2 text-slate-600">asset — bare path</td>
+                        <td class="px-4 py-2 font-mono text-slate-900">{assetHref}</td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">{"url('https://bun.sh', { utm })"}</td>
+                        <td class="px-4 py-2 text-slate-600">external — passes through</td>
+                        <td class="px-4 py-2 font-mono text-slate-900">{externalHref}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <p class="text-xs text-slate-500">
+            A real link: <a class="underline" href={pageHref}>{pageHref}</a>. Mounted under a
+            subpath via <code class="font-mono">APP_URL</code>, every rooted result gains that base.
+        </p>
 
-    <CodeBlock code={`import { url } from '@abide/abide/shared/url'
+        <CodeBlock code={`import { url } from '@abide/abide/shared/url'
 
 url('/rpc/getProduct', { id })          // /rpc/getProduct?id=2   — rpc args
 url('/pages/product/[id]', { id })      // /pages/product/2       — page params
 url('https://bun.sh', { utm: 'abide' }) // untouched + ?utm=abide — external`} />
-</section>
+    </section>
 </div>

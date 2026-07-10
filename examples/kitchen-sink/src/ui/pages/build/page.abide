@@ -12,86 +12,91 @@ import CodeBlock from '$ui/CodeBlock.abide'
         <h1 class="text-3xl font-bold">Build · test · deploy</h1>
         <p class="text-slate-600">
             From <code class="font-mono">abide dev</code> to a deployed binary. The commands, the
-    <code class="font-mono">env()</code> / <code class="font-mono">app.ts</code> configuration
-    seams, an in-process test harness that boots the real app, and a Dockerfile that ships a single
-    executable — no Bun, no <code class="font-mono">node_modules</code>.
+            <code class="font-mono">env()</code> /
+            <code class="font-mono">app.ts</code> configuration seams, an in-process test harness
+            that boots the real app, and a Dockerfile that ships a single executable — no Bun, no
+            <code class="font-mono">node_modules</code>.
         </p>
     </div>
 
-<!-- Commands -->
-<section class="flex flex-col gap-2">
-    <h2 class="text-sm font-semibold">Commands</h2>
-    <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-        <table class="w-full text-sm">
-            <thead class="border-b border-slate-200 bg-slate-50 text-left">
-                <tr>
-                    <th class="px-4 py-2 font-mono font-medium">command</th>
-                    <th class="px-4 py-2 font-medium">does</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100">
-                <tr>
-                    <td class="px-4 py-2 font-mono">abide scaffold &lt;name&gt;</td>
-                    <td class="px-4 py-2 text-slate-600">scaffold + install + start dev</td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">abide dev</td>
-                    <td class="px-4 py-2 text-slate-600">build + run with hot reload</td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">abide build</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        build the client into <code class="font-mono">dist/_app/</code>
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">abide start</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        run the production server against <code class="font-mono">dist/</code>
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">abide run &lt;file&gt;</td>
-                    <td class="px-4 py-2 text-slate-600">run a script under the abide preload</td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">abide compile</td>
-                    <td class="px-4 py-2 text-slate-600">build a standalone server executable</td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">abide cli</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        build the thin CLI client (ships the server)
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">abide bundle</td>
-                    <td class="px-4 py-2 text-slate-600">build a movable desktop app bundle</td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">abide check</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        type-check <code class="font-mono">.abide</code> templates + props
-                    </td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-</section>
+    <!-- Commands -->
+    <section class="flex flex-col gap-2">
+        <h2 class="text-sm font-semibold">Commands</h2>
+        <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+            <table class="w-full text-sm">
+                <thead class="border-b border-slate-200 bg-slate-50 text-left">
+                    <tr>
+                        <th class="px-4 py-2 font-mono font-medium">command</th>
+                        <th class="px-4 py-2 font-medium">does</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    <tr>
+                        <td class="px-4 py-2 font-mono">abide scaffold &lt;name&gt;</td>
+                        <td class="px-4 py-2 text-slate-600">scaffold + install + start dev</td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">abide dev</td>
+                        <td class="px-4 py-2 text-slate-600">build + run with hot reload</td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">abide build</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            build the client into <code class="font-mono">dist/_app/</code>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">abide start</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            run the production server against <code class="font-mono">dist/</code>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">abide run &lt;file&gt;</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            run a script under the abide preload
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">abide compile</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            build a standalone server executable
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">abide cli</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            build the thin CLI client (ships the server)
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">abide bundle</td>
+                        <td class="px-4 py-2 text-slate-600">build a movable desktop app bundle</td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">abide check</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            type-check <code class="font-mono">.abide</code> templates + props
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
 
-<!-- Configuration -->
-<section class="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5">
-    <h2 class="text-sm font-semibold">Configuration</h2>
+    <!-- Configuration -->
+    <section class="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5">
+        <h2 class="text-sm font-semibold">Configuration</h2>
 
-    <h3 class="text-xs font-semibold text-slate-500">
-        Environment — <code class="font-mono">env()</code>
-    </h3>
-    <p class="text-sm text-slate-600">
-        <code class="font-mono">env()</code> validates the process environment against a Standard
-        Schema at module load, so a bad deploy fails the boot loudly rather than surfacing
-        <code class="font-mono">undefined</code> inside a handler.
-    </p>
-    <CodeBlock title="src/server/config.ts" code={`import { env } from '@abide/abide/server/env'
+        <h3 class="text-xs font-semibold text-slate-500">
+            Environment — <code class="font-mono">env()</code>
+        </h3>
+        <p class="text-sm text-slate-600">
+            <code class="font-mono">env()</code> validates the process environment against a
+            Standard Schema at module load, so a bad deploy fails the boot loudly rather than
+            surfacing <code class="font-mono">undefined</code> inside a handler.
+        </p>
+        <CodeBlock title="src/server/config.ts" code={`import { env } from '@abide/abide/server/env'
 import { z } from 'zod'
 
 export const config = env(z.object({
@@ -99,52 +104,52 @@ export const config = env(z.object({
     PORT: z.coerce.number().default(3000),
 }))`} />
 
-    <h3 class="text-xs font-semibold text-slate-500">
-        Boot hooks — <code class="font-mono">src/app.ts</code>
-    </h3>
-    <p class="text-sm text-slate-600">
-        An optional <code class="font-mono">src/app.ts</code> exports lifecycle + request hooks.
-    </p>
-    <CodeBlock title="src/app.ts — optional boot hooks" code={`export async function init() { /* boot + return cleanup */ }
+        <h3 class="text-xs font-semibold text-slate-500">
+            Boot hooks — <code class="font-mono">src/app.ts</code>
+        </h3>
+        <p class="text-sm text-slate-600">
+            An optional <code class="font-mono">src/app.ts</code> exports lifecycle + request hooks.
+        </p>
+        <CodeBlock title="src/app.ts — optional boot hooks" code={`export async function init() { /* boot + return cleanup */ }
 export async function handle(request, next) { /* request middleware, the auth seam */ return next(request) }
 export function handleError(error, request) { /* map a throw to a Response */ }
 export function forwardHeaders() { return ['x-tenant'] }  // extra in-process-forwarded headers
 export function health() { return { db: 'ok' } }          // merged into /__abide/health`} />
-</section>
+    </section>
 
-<!-- Testing -->
-<section
-    id="testing"
-    class="scroll-mt-4 flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5">
-    <h2 class="text-sm font-semibold">Testing</h2>
-    <p class="text-sm text-slate-600">
-        <code class="font-mono">createTestApp()</code> boots the real app in-process on an ephemeral
-        port — the full pipeline (CSRF, cookies, base path) runs, not a fixture. Register the
-        compile preload so <code class="font-mono">.abide</code> components build under
-        <code class="font-mono">bun test</code>.
-    </p>
-    <CodeBlock title="bunfig.toml" lang="toml" code={`[test]
+    <!-- Testing -->
+    <section
+        id="testing"
+        class="scroll-mt-4 flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5">
+        <h2 class="text-sm font-semibold">Testing</h2>
+        <p class="text-sm text-slate-600">
+            <code class="font-mono">createTestApp()</code> boots the real app in-process on an
+            ephemeral port — the full pipeline (CSRF, cookies, base path) runs, not a fixture.
+            Register the compile preload so <code class="font-mono">.abide</code> components build
+            under <code class="font-mono">bun test</code>.
+        </p>
+        <CodeBlock title="bunfig.toml" lang="toml" code={`[test]
 preload = ["@abide/abide/preload"]`} />
-    <CodeBlock title="a test" code={`import { createTestApp } from '@abide/abide/test/createTestApp'
+        <CodeBlock title="a test" code={`import { createTestApp } from '@abide/abide/test/createTestApp'
 
 await using app = await createTestApp()        // await using → auto stop + slot restore
 const product = await app.rpc.searchProducts({ q: 'shoes' })
 // app.sockets.<name> iterates a live socket; app.fetch(path) hits any route; app.health()`} />
-</section>
+    </section>
 
-<!-- Deploy -->
-<section
-    id="deploy"
-    class="scroll-mt-4 flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5">
-    <h2 class="text-sm font-semibold">Deploy</h2>
-    <p class="text-sm text-slate-600">
-        abide is single-process: the <code class="font-mono">global</code> cache, socket
-        subscriptions, and fan-out are process memory, not shared across instances — scale
-        vertically, or move shared state behind a rpc. The Dockerfile ships the
-        <strong>compiled binary</strong>, which needs neither Bun nor
-        <code class="font-mono">node_modules</code>.
-    </p>
-    <CodeBlock title="Dockerfile" lang="dockerfile" code={`FROM oven/bun:1 AS build
+    <!-- Deploy -->
+    <section
+        id="deploy"
+        class="scroll-mt-4 flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5">
+        <h2 class="text-sm font-semibold">Deploy</h2>
+        <p class="text-sm text-slate-600">
+            abide is single-process: the <code class="font-mono">global</code> cache, socket
+            subscriptions, and fan-out are process memory, not shared across instances — scale
+            vertically, or move shared state behind a rpc. The Dockerfile ships the
+            <strong>compiled binary</strong>, which needs neither Bun nor
+            <code class="font-mono">node_modules</code>.
+        </p>
+        <CodeBlock title="Dockerfile" lang="dockerfile" code={`FROM oven/bun:1 AS build
 WORKDIR /app
 COPY . .
 RUN bun install --frozen-lockfile && bunx abide compile --out=server
@@ -154,10 +159,10 @@ COPY --from=build /app/server /usr/local/bin/server
 ENV PORT=3000
 EXPOSE 3000
 CMD ["server"]`} />
-    <p class="text-xs text-slate-500">
-        <code class="font-mono">PORT</code> binds a fixed port (else it scans up from 3000);
-        <code class="font-mono">ABIDE_IDLE_TIMEOUT</code> tunes Bun's per-connection idle reap. The
-        full env-var table lives on <a class="underline" href="/reference">reference</a>.
-    </p>
-</section>
+        <p class="text-xs text-slate-500">
+            <code class="font-mono">PORT</code> binds a fixed port (else it scans up from 3000);
+            <code class="font-mono">ABIDE_IDLE_TIMEOUT</code> tunes Bun's per-connection idle reap.
+            The full env-var table lives on <a class="underline" href="/reference">reference</a>.
+        </p>
+    </section>
 </div>

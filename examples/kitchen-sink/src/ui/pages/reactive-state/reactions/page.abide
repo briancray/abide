@@ -22,62 +22,62 @@ const chatLog = state.computed(() => getChatLog())
 </script>
 
 <div class="flex flex-col gap-8">
-<div class="flex flex-col gap-2">
-<h2 class="text-xl font-semibold">
-    <code class="font-mono">watch</code> a source · <code class="font-mono">refresh</code> /
-    <code class="font-mono">patch</code> a cached read
-</h2>
-<p class="text-slate-600">
-    <code class="font-mono">watch(source, handler)</code> names its trigger. Here a chat frame
-    drives two reactions on cached reads: <code class="font-mono">refresh</code> revalidates a count
-    in the background (the stale value stays visible, never blanks) while
-    <code class="font-mono">patch</code> folds the frame's own payload into a cached list with no
-    refetch.
-</p>
-</div>
+    <div class="flex flex-col gap-2">
+        <h2 class="text-xl font-semibold">
+            <code class="font-mono">watch</code> a source · <code class="font-mono">refresh</code> /
+            <code class="font-mono">patch</code> a cached read
+        </h2>
+        <p class="text-slate-600">
+            <code class="font-mono">watch(source, handler)</code> names its trigger. Here a chat
+            frame drives two reactions on cached reads:
+            <code class="font-mono">refresh</code> revalidates a count in the background (the stale
+            value stays visible, never blanks) while <code class="font-mono">patch</code> folds the
+            frame's own payload into a cached list with no refetch.
+        </p>
+    </div>
 
-<section class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-    <table class="w-full text-sm">
-        <thead class="border-b border-slate-200 bg-slate-50 text-left">
-            <tr>
-                <th class="px-4 py-2 font-mono font-medium">watch(source, handler?)</th>
-                <th class="px-4 py-2 font-medium">handler fires</th>
-            </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-100">
-            <tr>
-                <td class="px-4 py-2 font-mono">watch(() =&gt; …)</td>
-                <td class="px-4 py-2 text-slate-600">
-                    auto-tracked effect — re-runs when any cell it reads changes (see
-                    <a class="underline" href="/reactive-state/primitives">primitives</a>)
-                </td>
-            </tr>
-            <tr>
-                <td class="px-4 py-2 font-mono">watch(cell, handler)</td>
-                <td class="px-4 py-2 text-slate-600">on each change of one state cell</td>
-            </tr>
-            <tr>
-                <td class="px-4 py-2 font-mono">watch([a, b], handler)</td>
-                <td class="px-4 py-2 text-slate-600">on a change of any cell in the array</td>
-            </tr>
-            <tr>
-                <td class="px-4 py-2 font-mono">watch(socket, handler)</td>
-                <td class="px-4 py-2 text-slate-600">
-                    per frame (with reconnect replay) — demoed below
-                </td>
-            </tr>
-            <tr>
-                <td class="px-4 py-2 font-mono">watch(fn, args?, handler)</td>
-                <td class="px-4 py-2 text-slate-600">
-                    runs the smart rpc read, <code class="font-mono">handler(value)</code> on each
-                    change
-                </td>
-            </tr>
-        </tbody>
-    </table>
-</section>
+    <section class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+        <table class="w-full text-sm">
+            <thead class="border-b border-slate-200 bg-slate-50 text-left">
+                <tr>
+                    <th class="px-4 py-2 font-mono font-medium">watch(source, handler?)</th>
+                    <th class="px-4 py-2 font-medium">handler fires</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                <tr>
+                    <td class="px-4 py-2 font-mono">watch(() =&gt; …)</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        auto-tracked effect — re-runs when any cell it reads changes (see
+                        <a class="underline" href="/reactive-state/primitives">primitives</a>)
+                    </td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">watch(cell, handler)</td>
+                    <td class="px-4 py-2 text-slate-600">on each change of one state cell</td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">watch([a, b], handler)</td>
+                    <td class="px-4 py-2 text-slate-600">on a change of any cell in the array</td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">watch(socket, handler)</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        per frame (with reconnect replay) — demoed below
+                    </td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">watch(fn, args?, handler)</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        runs the smart rpc read, <code class="font-mono">handler(value)</code> on
+                        each change
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
 
-<Demo title="watch a socket, refresh + patch the reads" code={`import { watch } from '@abide/abide/ui/watch'
+    <Demo title="watch a socket, refresh + patch the reads" code={`import { watch } from '@abide/abide/ui/watch'
 
 // one reaction, named by its source — no hand-rolled subscribe/teardown
 watch(chat, (message) => {
@@ -90,29 +90,31 @@ const chatLog = state.computed(() => getChatLog())
 <!-- read them bare — undefined while pending, no {#await} block -->
 <p>{chatCount?.published ?? '—'}</p>
 {#for m of chatLog?.messages?.slice(-5) ?? [] by m.id}<li>{m.text}</li>{/for}`}>
-    <div class="grid gap-4 sm:grid-cols-2">
-        <div class="flex flex-col gap-1 rounded-md border border-slate-200 p-3">
-            <p class="text-xs text-slate-500">published — <code class="font-mono">refresh</code></p>
-            <p class="font-mono text-3xl text-slate-900">{chatCount?.published ?? '—'}</p>
+        <div class="grid gap-4 sm:grid-cols-2">
+            <div class="flex flex-col gap-1 rounded-md border border-slate-200 p-3">
+                <p class="text-xs text-slate-500">
+                    published — <code class="font-mono">refresh</code>
+                </p>
+                <p class="font-mono text-3xl text-slate-900">{chatCount?.published ?? '—'}</p>
+            </div>
+            <div class="flex flex-col gap-1 rounded-md border border-slate-200 p-3">
+                <p class="text-xs text-slate-500">recent — <code class="font-mono">patch</code></p>
+                {#if chatLog?.messages?.length}
+                    <ul class="flex flex-col gap-0.5 text-sm text-slate-700">
+                        {#for message of chatLog?.messages?.slice(-5) ?? [] by message.id}
+                            <li><strong>{message.from}</strong>: {message.text}</li>
+                        {/for}
+                    </ul>
+                {:else}
+                    <p class="text-sm text-slate-400">none yet</p>
+                {/if}
+            </div>
         </div>
-        <div class="flex flex-col gap-1 rounded-md border border-slate-200 p-3">
-            <p class="text-xs text-slate-500">recent — <code class="font-mono">patch</code></p>
-            {#if chatLog?.messages?.length}
-                <ul class="flex flex-col gap-0.5 text-sm text-slate-700">
-                    {#for message of chatLog?.messages?.slice(-5) ?? [] by message.id}
-                        <li><strong>{message.from}</strong>: {message.text}</li>
-                    {/for}
-                </ul>
-            {:else}
-                <p class="text-sm text-slate-400">none yet</p>
-            {/if}
-        </div>
-    </div>
-    <button
-        type="button"
-        class="rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100"
-        onclick={() => publishChat({ from: 'state page', text: 'ping' })}>
-        {'publishChat({ from, text })'}
-    </button>
-</Demo>
+        <button
+            type="button"
+            class="rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100"
+            onclick={() => publishChat({ from: 'state page', text: 'ping' })}>
+            {'publishChat({ from, text })'}
+        </button>
+    </Demo>
 </div>

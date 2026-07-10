@@ -6,108 +6,112 @@ const LIVE = '/reactive-state'
 </script>
 
 <div class="flex flex-col gap-8">
-<div class="flex flex-col gap-2">
-<h1 class="text-3xl font-bold">smart calls & refresh</h1>
-<p class="text-slate-600">
-    The bare rpc call IS the smart read — coalesced, retained (SWR always on), reactive, with an SSR
-    snapshot — the same line on server and client. <code class="font-mono">.raw</code> is the
-    uncached transport escape hatch; <code class="font-mono">refresh</code> and
-    <code class="font-mono">patch</code> drive the retained value.
-</p>
-</div>
-<div class="flex flex-col gap-4">
-
-<Recipe
-    task="Read across SSR and client"
-    live={LIVE}
-    code={`import { state } from '@abide/abide/ui/state'
+    <div class="flex flex-col gap-2">
+        <h1 class="text-3xl font-bold">smart calls & refresh</h1>
+        <p class="text-slate-600">
+            The bare rpc call IS the smart read — coalesced, retained (SWR always on), reactive,
+            with an SSR snapshot — the same line on server and client.
+            <code class="font-mono">.raw</code> is the uncached transport escape hatch;
+            <code class="font-mono">refresh</code> and <code class="font-mono">patch</code> drive
+            the retained value.
+        </p>
+    </div>
+    <div class="flex flex-col gap-4">
+        <Recipe
+            task="Read across SSR and client"
+            live={LIVE}
+            code={`import { state } from '@abide/abide/ui/state'
 
 const user = state.computed(() => getUser())`}
-    note={'The bare `fn(args)` memoises by method + url + args, captures the SSR result into the page snapshot, and is reactive — one line, both sides, warm hydration for free.'} />
+            note={'The bare `fn(args)` memoises by method + url + args, captures the SSR result into the page snapshot, and is reactive — one line, both sides, warm hydration for free.'} />
 
-<Recipe
-    task="Coalesce identical in-flight calls"
-    live={LIVE}
-    code={`// three components, one request
+        <Recipe
+            task="Coalesce identical in-flight calls"
+            live={LIVE}
+            code={`// three components, one request
 getUser()`}
-    note={'Coalescing is always on: identical calls in flight at the same time share one request and one result. This holds even with `ttl: 0` — coalescing is not retention.'} />
+            note={'Coalescing is always on: identical calls in flight at the same time share one request and one result. This holds even with `ttl: 0` — coalescing is not retention.'} />
 
-<Recipe
-    task="Retain a result for a while"
-    live={LIVE}
-    code={`// policy lives on the endpoint (ADR-0020), not the call
+        <Recipe
+            task="Retain a result for a while"
+            live={LIVE}
+            code={`// policy lives on the endpoint (ADR-0020), not the call
 export const getRates = GET(handler, { cache: { ttl: 60_000 } })
 
 // consumers just read
 getRates({ base: 'USD' })`}
-    note={'`cache.ttl` (ms) marks the value stale after it resolves; the retained value stays visible and the next access revalidates in the background. Staleness, not eviction — and one policy per endpoint, so every caller agrees.'} />
+            note={'`cache.ttl` (ms) marks the value stale after it resolves; the retained value stays visible and the next access revalidates in the background. Staleness, not eviction — and one policy per endpoint, so every caller agrees.'} />
 
-<Recipe
-    task="Coalesce only, never retain (the mutation idiom)"
-    live={LIVE}
-    code={`// a write is coalesce-only by default — nothing to declare
+        <Recipe
+            task="Coalesce only, never retain (the mutation idiom)"
+            live={LIVE}
+            code={`// a write is coalesce-only by default — nothing to declare
 saveCounter({ n })
 
 // a read opts into the same via its endpoint
 export const getCounter = GET(handler, { cache: { ttl: 0 } })`}
-    note={'`ttl: 0` shares concurrent flights but keeps nothing. A mutation is coalesce-only by default; a read declares `cache: { ttl: 0 }` on its endpoint to match.'} />
+            note={'`ttl: 0` shares concurrent flights but keeps nothing. A mutation is coalesce-only by default; a read declares `cache: { ttl: 0 }` on its endpoint to match.'} />
 
-<Recipe
-    task="Tag entries for grouped invalidation"
-    live={LIVE}
-    code={`export const getOrder = GET(handler, { cache: { tags: ['orders'] } })
+        <Recipe
+            task="Tag entries for grouped invalidation"
+            live={LIVE}
+            code={`export const getOrder = GET(handler, { cache: { tags: ['orders'] } })
 export const getOrderList = GET(handler, { cache: { tags: ['orders'] } })`}
-    note={"A shared tag groups unrelated entries so one call can refresh them together — the whole 'orders' surface at once. Tags are endpoint-declared; the arg-derived form `(args) => ['order:' + args.id]` groups by args."} />
+            note={"A shared tag groups unrelated entries so one call can refresh them together — the whole 'orders' surface at once. Tags are endpoint-declared; the arg-derived form `(args) => ['order:' + args.id]` groups by args."} />
 
-<Recipe
-    task="Refresh a cached read after a write"
-    live={LIVE}
-    code={`await incrementCounter()
+        <Recipe
+            task="Refresh a cached read after a write"
+            live={LIVE}
+            code={`await incrementCounter()
 getCounter.refresh()   // revalidate; stale value stays visible`}
-    note={"`getCounter.refresh()` refetches that function's entries; the stale value stays on screen and `getCounter.refreshing()` reports the reload — the reader never blanks."} />
+            note={"`getCounter.refresh()` refetches that function's entries; the stale value stays on screen and `getCounter.refreshing()` reports the reload — the reader never blanks."} />
 
-<Recipe
-    task="Refresh a whole tag group"
-    live={LIVE}
-    code={`refresh({ tags: ['orders'] })`}
-    note={'Revalidate every entry sharing the tag — after a mutation that touches several reads, refresh the group instead of naming each function.'} />
+        <Recipe
+            task="Refresh a whole tag group"
+            live={LIVE}
+            code={`refresh({ tags: ['orders'] })`}
+            note={'Revalidate every entry sharing the tag — after a mutation that touches several reads, refresh the group instead of naming each function.'} />
 
-<Recipe
-    task="Refresh when a socket frame arrives"
-    live={LIVE}
-    code={`import { watch } from '@abide/abide/ui/watch'
+        <Recipe
+            task="Refresh when a socket frame arrives"
+            live={LIVE}
+            code={`import { watch } from '@abide/abide/ui/watch'
 watch(chat, () => getChatCount.refresh())`}
-    note={'`watch(source, handler)` runs once per socket/stream frame; call `getChatCount.refresh()` inside to revalidate a read. The watch is scope-tied, so it disposes with the component.'} />
+            note={'`watch(source, handler)` runs once per socket/stream frame; call `getChatCount.refresh()` inside to revalidate a read. The watch is scope-tied, so it disposes with the component.'} />
 
-<Recipe
-    task="Patch a cached read in place, no refetch"
-    live={LIVE}
-    code={`import { watch } from '@abide/abide/ui/watch'
+        <Recipe
+            task="Patch a cached read in place, no refetch"
+            live={LIVE}
+            code={`import { watch } from '@abide/abide/ui/watch'
 watch(chat, (message) =>
     getChatLog.patch((log) => ({ messages: [...log.messages, message] })))`}
-    note={'When the frame IS the new data, fold it into the retained value directly — `getChatLog.patch(updater)` mutates the cache reactively with no network round-trip. The optimistic-update primitive.'} />
+            note={'When the frame IS the new data, fold it into the retained value directly — `getChatLog.patch(updater)` mutates the cache reactively with no network round-trip. The optimistic-update primitive.'} />
 
-<Recipe
-    task="Front an external fetch as a GET rpc"
-    live={LIVE}
-    code={`// src/server/rpc/getRates.ts — the endpoint does the fetch
+        <Recipe
+            task="Front an external fetch as a GET rpc"
+            live={LIVE}
+            code={`// src/server/rpc/getRates.ts — the endpoint does the fetch
 export const getRates = GET(async ({ base = 'USD' }) => {
     const res = await fetch(\`https://api.example/latest?from=\${base}\`)
     return json(await res.json())
 })
 // consumers smart-call it: getRates({ base: 'USD' })   // ttl lives on the endpoint`}
-    note={"There's no `cache()` around a plain producer any more — make the producer a GET rpc under `src/server/rpc/` and the bare call gives you coalesce + retention + reactivity."} />
+            note={"There's no `cache()` around a plain producer any more — make the producer a GET rpc under `src/server/rpc/` and the bare call gives you coalesce + retention + reactivity."} />
 
-<Recipe
-    task="Show a cached read is fetching"
-    live="/probes"
-    code={`const loading = state.computed(() => getCounter.pending())`}
-    note={'`getCounter.pending()` is a standalone reactive probe of the smart-call/stream registries — true while the read is in flight, without threading a loading flag through the call.'} />
+        <Recipe
+            task="Show a cached read is fetching"
+            live="/probes"
+            code={`const loading = state.computed(() => getCounter.pending())`}
+            note={'`getCounter.pending()` is a standalone reactive probe of the smart-call/stream registries — true while the read is in flight, without threading a loading flag through the call.'} />
 
-<Recipe task="Refetch on an interval" live={LIVE} code={`import { watch } from '@abide/abide/ui/watch'
+        <Recipe
+            task="Refetch on an interval"
+            live={LIVE}
+            code={`import { watch } from '@abide/abide/ui/watch'
 watch(() => {
     const id = setInterval(() => getRates.refresh(), 15_000)
     return () => clearInterval(id)
-})`} note={"There's no built-in poll option — refresh on a timer in a client-only watch and the reactive read revalidates. Clear the timer in the cleanup."} />
-</div>
+})`}
+            note={"There's no built-in poll option — refresh on a timer in a client-only watch and the reactive read revalidates. Clear the timer in the cleanup."} />
+    </div>
 </div>

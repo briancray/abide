@@ -20,92 +20,93 @@ async function sendBeacon() {
 </script>
 
 <div class="flex flex-col gap-8">
-<div class="flex flex-col gap-2">
-<h1 class="text-3xl font-bold">Security defaults</h1>
-<p class="text-slate-600">
-    Mutating rpcs 403 a cross-origin browser <code class="font-mono">Origin</code> before the
-    handler runs — the no-preflight CSRF shapes. Reads, curl, CLI, and MCP clients send no
-    <code class="font-mono">Origin</code> and pass. <code class="font-mono">/__abide/mcp</code> and
-    socket publishes get the same check.
-</p>
-</div>
-
-<section class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-    <table class="w-full text-sm">
-        <thead class="border-b border-slate-200 bg-slate-50 text-left">
-            <tr>
-                <th class="px-4 py-2 font-mono font-medium">mechanism</th>
-                <th class="px-4 py-2 font-medium">what it does</th>
-            </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-100">
-            <tr>
-                <td class="px-4 py-2 font-mono">same-origin gate</td>
-                <td class="px-4 py-2 text-slate-600">
-                    a cross-origin browser <code class="font-mono">Origin</code> on
-                    POST/PUT/PATCH/DELETE 403s before the handler — no-preflight CSRF defense;
-                    reads/curl/CLI/MCP send no <code class="font-mono">Origin</code> and pass
-                </td>
-            </tr>
-            <tr>
-                <td class="px-4 py-2 font-mono">crossOrigin: true</td>
-                <td class="px-4 py-2 text-slate-600">
-                    per-rpc opt-out for endpoints third parties may legitimately call
-                </td>
-            </tr>
-            <tr>
-                <td class="px-4 py-2 font-mono">clientPublish (sockets)</td>
-                <td class="px-4 py-2 text-slate-600">
-                    a browser publish to
-                    <code class="font-mono">/__abide/sockets/&lt;name&gt;</code> gets the same
-                    Origin check (and is off by default — see
-                    <a class="underline" href="/sockets">sockets</a>)
-                </td>
-            </tr>
-            <tr>
-                <td class="px-4 py-2 font-mono">app.handle (auth seam)</td>
-                <td class="px-4 py-2 text-slate-600">
-                    middleware for machine clients (e.g.
-                    <code class="font-mono">/__abide/mcp</code>); boot warns when MCP tools are
-                    exposed with no <code class="font-mono">app.handle</code>
-                </td>
-            </tr>
-            <tr>
-                <td class="px-4 py-2 font-mono">forwardHeaders</td>
-                <td class="px-4 py-2 text-slate-600">
-                    which inbound headers cross into an in-process rpc's
-                    <code class="font-mono">request()</code> (see
-                    <a class="underline" href="/rpc/request-scope">request scope</a>)
-                </td>
-            </tr>
-        </tbody>
-    </table>
-</section>
-
-<section class="rounded-lg border border-slate-200 bg-white p-5">
-    <div class="flex flex-col gap-4">
-    <div class="flex flex-col gap-1">
-    <h2 class="text-sm font-semibold">The gate, observed</h2>
-    <p class="text-xs text-slate-500">
-        <code class="font-mono">probeOriginGate</code> POSTs at this app with a forged
-        <code class="font-mono">Origin: https://evil.example</code> — a normal mutation and the MCP
-        endpoint are refused with 403; <code class="font-mono">trackPageview</code> passes because
-        it declares <code class="font-mono">crossOrigin: true</code>.
-    </p>
+    <div class="flex flex-col gap-2">
+        <h1 class="text-3xl font-bold">Security defaults</h1>
+        <p class="text-slate-600">
+            Mutating rpcs 403 a cross-origin browser <code class="font-mono">Origin</code> before
+            the handler runs — the no-preflight CSRF shapes. Reads, curl, CLI, and MCP clients send
+            no <code class="font-mono">Origin</code> and pass.
+            <code class="font-mono">/__abide/mcp</code> and socket publishes get the same check.
+        </p>
     </div>
-    <button
-        type="button"
-        class="rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100"
-        onclick={runProbe}>
-        run the forged-Origin probe
-    </button>
-    <pre
-        class="overflow-x-auto rounded-md border border-slate-200 bg-slate-50 p-4 text-xs leading-relaxed text-slate-800"><code>{probe}</code></pre>
-    </div>
-</section>
 
-<div>
-    <Demo title="Per-rpc opt-out: crossOrigin: true" code={`export const trackPageview = POST(
+    <section class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+        <table class="w-full text-sm">
+            <thead class="border-b border-slate-200 bg-slate-50 text-left">
+                <tr>
+                    <th class="px-4 py-2 font-mono font-medium">mechanism</th>
+                    <th class="px-4 py-2 font-medium">what it does</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                <tr>
+                    <td class="px-4 py-2 font-mono">same-origin gate</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        a cross-origin browser <code class="font-mono">Origin</code> on
+                        POST/PUT/PATCH/DELETE 403s before the handler — no-preflight CSRF defense;
+                        reads/curl/CLI/MCP send no <code class="font-mono">Origin</code> and pass
+                    </td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">crossOrigin: true</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        per-rpc opt-out for endpoints third parties may legitimately call
+                    </td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">clientPublish (sockets)</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        a browser publish to
+                        <code class="font-mono">/__abide/sockets/&lt;name&gt;</code> gets the same
+                        Origin check (and is off by default — see
+                        <a class="underline" href="/sockets">sockets</a>)
+                    </td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">app.handle (auth seam)</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        middleware for machine clients (e.g.
+                        <code class="font-mono">/__abide/mcp</code>); boot warns when MCP tools are
+                        exposed with no <code class="font-mono">app.handle</code>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">forwardHeaders</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        which inbound headers cross into an in-process rpc's
+                        <code class="font-mono">request()</code> (see
+                        <a class="underline" href="/rpc/request-scope">request scope</a>)
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section class="rounded-lg border border-slate-200 bg-white p-5">
+        <div class="flex flex-col gap-4">
+            <div class="flex flex-col gap-1">
+                <h2 class="text-sm font-semibold">The gate, observed</h2>
+                <p class="text-xs text-slate-500">
+                    <code class="font-mono">probeOriginGate</code> POSTs at this app with a forged
+                    <code class="font-mono">Origin: https://evil.example</code> — a normal mutation
+                    and the MCP endpoint are refused with 403;
+                    <code class="font-mono">trackPageview</code> passes because it declares
+                    <code class="font-mono">crossOrigin: true</code>.
+                </p>
+            </div>
+            <button
+                type="button"
+                class="rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100"
+                onclick={runProbe}>
+                run the forged-Origin probe
+            </button>
+            <pre
+                class="overflow-x-auto rounded-md border border-slate-200 bg-slate-50 p-4 text-xs leading-relaxed text-slate-800"><code>{probe}</code></pre>
+        </div>
+    </section>
+
+    <div>
+        <Demo title="Per-rpc opt-out: crossOrigin: true" code={`export const trackPageview = POST(
     ({ pageUrl }) => {
         const count = (pageviews.get(pageUrl) ?? 0) + 1
         pageviews.set(pageUrl, count)
@@ -113,32 +114,33 @@ async function sendBeacon() {
     },
     { schemas: { input: inputSchema }, crossOrigin: true },
 )`}>
-        <p class="text-xs text-slate-500">
-            For a rpc third-party pages may legitimately call — a public beacon, an embedded
-            widget's API. Safe here because the handler reads no cookies.
-        </p>
-        <button
-            type="button"
-            class="rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100"
-            onclick={sendBeacon}>
-            {'trackPageview({ pageUrl: location.href })'}
-        </button>
-        <p class="font-mono text-xs text-slate-700">{beacon}</p>
-    </Demo>
-</div>
-
-<section class="rounded-lg border border-slate-200 bg-white p-5">
-    <div class="flex flex-col gap-2">
-    <h2 class="text-sm font-semibold">Guarding the MCP endpoint</h2>
-    <p class="text-sm text-slate-600">
-        The Origin check stops hostile pages, not hostile machines — auth for machine clients is
-        <code class="font-mono">app.handle</code> middleware. Boot warns when MCP tools are exposed
-        with no <code class="font-mono">app.handle</code> in
-        <code class="font-mono">src/app.ts</code>.
-    </p>
+            <p class="text-xs text-slate-500">
+                For a rpc third-party pages may legitimately call — a public beacon, an embedded
+                widget's API. Safe here because the handler reads no cookies.
+            </p>
+            <button
+                type="button"
+                class="rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100"
+                onclick={sendBeacon}>
+                {'trackPageview({ pageUrl: location.href })'}
+            </button>
+            <p class="font-mono text-xs text-slate-700">{beacon}</p>
+        </Demo>
     </div>
 
-    <CodeBlock title="src/app.ts — the auth seam for machine clients" code={`export function handle(request: Request, next: (req: Request) => Promise<Response>) {
+    <section class="rounded-lg border border-slate-200 bg-white p-5">
+        <div class="flex flex-col gap-2">
+            <h2 class="text-sm font-semibold">Guarding the MCP endpoint</h2>
+            <p class="text-sm text-slate-600">
+                The Origin check stops hostile pages, not hostile machines — auth for machine
+                clients is
+                <code class="font-mono">app.handle</code> middleware. Boot warns when MCP tools are
+                exposed with no <code class="font-mono">app.handle</code> in
+                <code class="font-mono">src/app.ts</code>.
+            </p>
+        </div>
+
+        <CodeBlock title="src/app.ts — the auth seam for machine clients" code={`export function handle(request: Request, next: (req: Request) => Promise<Response>) {
     if (new URL(request.url).pathname === '/__abide/mcp') {
         if (request.headers.get('authorization') !== \`Bearer \${config.MCP_TOKEN}\`) {
             return error(401)
@@ -146,5 +148,5 @@ async function sendBeacon() {
     }
     return next(request)
 }`} />
-</section>
+    </section>
 </div>

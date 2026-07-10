@@ -128,33 +128,33 @@ const categories = [
 </script>
 
 <div class="flex flex-col gap-8">
-<div class="flex flex-col gap-2">
-<h1 class="text-3xl font-bold">cookbook</h1>
-<p class="text-slate-600">
-    Task-first recipes — start from the job you came to do, not the primitive. Every recipe is a
-    statement, an accurate snippet, the nuance people get wrong, and a
-    <span class="font-mono">see it live →</span> link into the surface page that demos it. A
-    <span class="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700"
-        >no first-class answer yet</span
-    >
-    badge marks an honest gap — the pragmatic workaround, and why.
-</p>
-</div>
-<div class="grid gap-4 sm:grid-cols-2">
-    {#for category of categories by category.title}
-        <section class="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-5">
-            <h2 class="text-lg font-semibold">{category.title}</h2>
-            <p class="text-sm text-slate-600">{category.blurb}</p>
-            <ul class="flex flex-wrap gap-x-3 gap-y-1 text-sm">
-                {#for page of category.pages by page.href}
-                    <li>
-                        <a href={url(page.href)} class="text-slate-600 hover:text-slate-900">
-                            {page.label}
-                        </a>
-                    </li>
-                {/for}
-            </ul>
-        </section>
-    {/for}
-</div>
+    <div class="flex flex-col gap-2">
+        <h1 class="text-3xl font-bold">cookbook</h1>
+        <p class="text-slate-600">
+            Task-first recipes — start from the job you came to do, not the primitive. Every recipe
+            is a statement, an accurate snippet, the nuance people get wrong, and a
+            <span class="font-mono">see it live →</span> link into the surface page that demos it. A
+            <span class="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700"
+                >no first-class answer yet</span
+            >
+            badge marks an honest gap — the pragmatic workaround, and why.
+        </p>
+    </div>
+    <div class="grid gap-4 sm:grid-cols-2">
+        {#for category of categories by category.title}
+            <section class="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-5">
+                <h2 class="text-lg font-semibold">{category.title}</h2>
+                <p class="text-sm text-slate-600">{category.blurb}</p>
+                <ul class="flex flex-wrap gap-x-3 gap-y-1 text-sm">
+                    {#for page of category.pages by page.href}
+                        <li>
+                            <a href={url(page.href)} class="text-slate-600 hover:text-slate-900">
+                                {page.label}
+                            </a>
+                        </li>
+                    {/for}
+                </ul>
+            </section>
+        {/for}
+    </div>
 </div>

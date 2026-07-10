@@ -51,165 +51,173 @@ const calls = [
 </script>
 
 <div class="flex flex-col gap-8">
-<section class="flex flex-col gap-2">
-    <h2 class="text-sm font-semibold">Options</h2>
-    <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-        <table class="w-full text-sm">
-            <thead class="border-b border-slate-200 bg-slate-50 text-left">
-                <tr>
-                    <th class="px-4 py-2 font-mono font-medium">option</th>
-                    <th class="px-4 py-2 font-medium">effect</th>
-                    <th class="px-4 py-2 font-medium">default</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100">
-                <tr>
-                    <td class="px-4 py-2 font-mono">schemas.input</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        Standard Schema (zod, valibot, …) validating args; 422 on failure
-                    </td>
-                    <td class="px-4 py-2 text-slate-500">none</td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">schemas.output</td>
-                    <td class="px-4 py-2 text-slate-600">success body for OpenAPI / MCP output</td>
-                    <td class="px-4 py-2 text-slate-500">none</td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">schemas.files</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        validates <code class="font-mono">File</code> parts of a multipart body
-                    </td>
-                    <td class="px-4 py-2 text-slate-500">none</td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">cache.ttl</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        ms an entry stays live past resolve; <code class="font-mono">0</code> = coalesce
-                        only (the mutation idiom); omitted = forever
-                    </td>
-                    <td class="px-4 py-2 text-slate-600">method default</td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">cache.tags</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        labels grouping entries so <code class="font-mono">refresh({'{ tags }'})</code>
-                        invalidates them together
-                    </td>
-                    <td class="px-4 py-2 text-slate-500">none</td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">cache.throttle</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        stale-while-revalidate refetch clock — leading-edge, then coalesce (set
-                        throttle <em>or</em> debounce, not both)
-                    </td>
-                    <td class="px-4 py-2 text-slate-500">none</td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">cache.debounce</td>
-                    <td class="px-4 py-2 text-slate-600">the same SWR refetch clock, fire-after-quiet</td>
-                    <td class="px-4 py-2 text-slate-500">none</td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">cache.shared</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        use the process-level store (outlives requests; pair with
-                        <code class="font-mono">ttl</code> to memoise) — server-only, never per-user data
-                    </td>
-                    <td class="px-4 py-2 text-slate-500">request-scoped</td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">stream.n</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        streaming read replay depth — frames a late reader replays on connect
-                    </td>
-                    <td class="px-4 py-2 text-slate-500">none</td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">outbox</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        durable delivery on a mutating helper — queues offline, drains on reconnect
-                        (<a class="underline" href="/outbox">outbox</a>)
-                    </td>
-                    <td class="px-4 py-2 font-mono text-slate-500">false</td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">clients.browser</td>
-                    <td class="px-4 py-2 text-slate-600">expose to the browser bundle</td>
-                    <td class="px-4 py-2 font-mono text-slate-500">true</td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">clients.mcp</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        expose as an MCP tool — see <a class="underline" href="/mcp">mcp</a>
-                    </td>
-                    <td class="px-4 py-2 text-slate-600">
-                        auto for schema'd GET/HEAD; mutations opt in
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">clients.cli</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        expose as a CLI subcommand — see <a class="underline" href="/cli">cli</a>
-                    </td>
-                    <td class="px-4 py-2 text-slate-600">auto for any schema'd rpc</td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">crossOrigin</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        exempt from the same-origin mutation gate — see
-                        <a class="underline" href="/security">Security defaults</a>
-                    </td>
-                    <td class="px-4 py-2 font-mono text-slate-500">false</td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">maxBodySize</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        cap on received body bytes, 413 past it
-                    </td>
-                    <td class="px-4 py-2 text-slate-600">Bun's server-wide ceiling</td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">timeout</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        per-rpc handler deadline (ms); 504 once exceeded on every surface, aborting
-                        <code class="font-mono">request().signal</code>
-                    </td>
-                    <td class="px-4 py-2 text-slate-500">none</td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-</section>
+    <section class="flex flex-col gap-2">
+        <h2 class="text-sm font-semibold">Options</h2>
+        <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+            <table class="w-full text-sm">
+                <thead class="border-b border-slate-200 bg-slate-50 text-left">
+                    <tr>
+                        <th class="px-4 py-2 font-mono font-medium">option</th>
+                        <th class="px-4 py-2 font-medium">effect</th>
+                        <th class="px-4 py-2 font-medium">default</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    <tr>
+                        <td class="px-4 py-2 font-mono">schemas.input</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            Standard Schema (zod, valibot, …) validating args; 422 on failure
+                        </td>
+                        <td class="px-4 py-2 text-slate-500">none</td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">schemas.output</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            success body for OpenAPI / MCP output
+                        </td>
+                        <td class="px-4 py-2 text-slate-500">none</td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">schemas.files</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            validates <code class="font-mono">File</code> parts of a multipart body
+                        </td>
+                        <td class="px-4 py-2 text-slate-500">none</td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">cache.ttl</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            ms an entry stays live past resolve; <code class="font-mono">0</code> =
+                            coalesce only (the mutation idiom); omitted = forever
+                        </td>
+                        <td class="px-4 py-2 text-slate-600">method default</td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">cache.tags</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            labels grouping entries so
+                            <code class="font-mono">refresh({'{ tags }'})</code>
+                            invalidates them together
+                        </td>
+                        <td class="px-4 py-2 text-slate-500">none</td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">cache.throttle</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            stale-while-revalidate refetch clock — leading-edge, then coalesce (set
+                            throttle <em>or</em> debounce, not both)
+                        </td>
+                        <td class="px-4 py-2 text-slate-500">none</td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">cache.debounce</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            the same SWR refetch clock, fire-after-quiet
+                        </td>
+                        <td class="px-4 py-2 text-slate-500">none</td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">cache.shared</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            use the process-level store (outlives requests; pair with
+                            <code class="font-mono">ttl</code> to memoise) — server-only, never
+                            per-user data
+                        </td>
+                        <td class="px-4 py-2 text-slate-500">request-scoped</td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">stream.n</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            streaming read replay depth — frames a late reader replays on connect
+                        </td>
+                        <td class="px-4 py-2 text-slate-500">none</td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">outbox</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            durable delivery on a mutating helper — queues offline, drains on
+                            reconnect (<a class="underline" href="/outbox">outbox</a>)
+                        </td>
+                        <td class="px-4 py-2 font-mono text-slate-500">false</td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">clients.browser</td>
+                        <td class="px-4 py-2 text-slate-600">expose to the browser bundle</td>
+                        <td class="px-4 py-2 font-mono text-slate-500">true</td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">clients.mcp</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            expose as an MCP tool — see <a class="underline" href="/mcp">mcp</a>
+                        </td>
+                        <td class="px-4 py-2 text-slate-600">
+                            auto for schema'd GET/HEAD; mutations opt in
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">clients.cli</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            expose as a CLI subcommand — see
+                            <a class="underline" href="/cli">cli</a>
+                        </td>
+                        <td class="px-4 py-2 text-slate-600">auto for any schema'd rpc</td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">crossOrigin</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            exempt from the same-origin mutation gate — see
+                            <a class="underline" href="/security">Security defaults</a>
+                        </td>
+                        <td class="px-4 py-2 font-mono text-slate-500">false</td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">maxBodySize</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            cap on received body bytes, 413 past it
+                        </td>
+                        <td class="px-4 py-2 text-slate-600">Bun's server-wide ceiling</td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">timeout</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            per-rpc handler deadline (ms); 504 once exceeded on every surface,
+                            aborting
+                            <code class="font-mono">request().signal</code>
+                        </td>
+                        <td class="px-4 py-2 text-slate-500">none</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
 
-<section class="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5">
-    <h2 class="text-sm font-semibold">Try every rpc</h2>
-    <label class="block text-xs font-medium">
-        message
-        <input
-            bind:value={message}
-            class="block w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
-    </label>
-    <div class="flex flex-wrap gap-2 text-sm">
-        {#for call of calls by call.label}
-            <button
-                type="button"
-                class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
-                onclick={() => safeCall(call.label, call.run)}>
-                {call.label}
-            </button>
-        {/for}
-    </div>
-    {#if log.length > 0}
-        <ul class="flex flex-col gap-1 font-mono text-xs text-slate-700">
-            {#for entry of log by entry.id}
-                <li>{entry.rpc} →{entry.outcome}</li>
+    <section class="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5">
+        <h2 class="text-sm font-semibold">Try every rpc</h2>
+        <label class="block text-xs font-medium">
+            message
+            <input
+                bind:value={message}
+                class="block w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
+        </label>
+        <div class="flex flex-wrap gap-2 text-sm">
+            {#for call of calls by call.label}
+                <button
+                    type="button"
+                    class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+                    onclick={() => safeCall(call.label, call.run)}>
+                    {call.label}
+                </button>
             {/for}
-        </ul>
-    {/if}
+        </div>
+        {#if log.length > 0}
+            <ul class="flex flex-col gap-1 font-mono text-xs text-slate-700">
+                {#for entry of log by entry.id}
+                    <li>{entry.rpc} →{entry.outcome}</li>
+                {/for}
+            </ul>
+        {/if}
 
-    <CodeBlock title="src/server/rpc/*.ts — one rpc per file" code={`// getEcho.ts — inputSchema validates args and exposes the rpc to MCP + CLI
+        <CodeBlock title="src/server/rpc/*.ts — one rpc per file" code={`// getEcho.ts — inputSchema validates args and exposes the rpc to MCP + CLI
 import { GET } from '@abide/abide/server/GET'
 import { json } from '@abide/abide/server/json'
 import { z } from 'zod'
@@ -222,76 +230,78 @@ export const headEcho = HEAD(() =>
     new Response(undefined, { status: 204, headers: { 'x-echo': 'HEAD' } }),
 )`} />
 
-    <CodeBlock title="client — same call shape per rpc" code={`await getEcho({ message: 'hello' })       // typed { method: 'GET'; message: string }
+        <CodeBlock title="client — same call shape per rpc" code={`await getEcho({ message: 'hello' })       // typed { method: 'GET'; message: string }
 // headEcho and deleteEcho resolve to undefined (204); the rest resolve to the decoded body`} />
-</section>
+    </section>
 
-<section class="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5">
-    <h2 class="text-sm font-semibold">
-        <code class="font-mono">filesSchema</code> — multipart upload
-    </h2>
-    <p class="text-xs text-slate-500">
-        A body rpc accepts a <code class="font-mono">FormData</code> in place of typed args: text
-        fields validate against <code class="font-mono">inputSchema</code>,
-        <code class="font-mono">File</code> parts against
-        <code class="font-mono">filesSchema</code>, merged into the handler's args.
-    </p>
-    <form class="flex flex-wrap items-end gap-2 text-sm" onsubmit={async (event: SubmitEvent) => {
+    <section class="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5">
+        <h2 class="text-sm font-semibold">
+            <code class="font-mono">filesSchema</code> — multipart upload
+        </h2>
+        <p class="text-xs text-slate-500">
+            A body rpc accepts a <code class="font-mono">FormData</code> in place of typed args:
+            text fields validate against <code class="font-mono">inputSchema</code>,
+            <code class="font-mono">File</code> parts against
+            <code class="font-mono">filesSchema</code>, merged into the handler's args.
+        </p>
+        <form class="flex flex-wrap items-end gap-2 text-sm" onsubmit={async (event: SubmitEvent) => {
         event.preventDefault()
         const formData = new FormData(event.currentTarget as HTMLFormElement)
         await safeCall('upload', () => uploadNote(formData))
     }}>
-        <label class="flex flex-col gap-1 text-xs font-medium">
-            title
-            <input
-                name="title"
-                value="receipts"
-                class="block rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
-        </label>
-        <label class="flex flex-col gap-1 text-xs font-medium">
-            attachments
-            <input name="attachments" type="file" multiple class="block text-sm" />
-        </label>
-        <button
-            type="submit"
-            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100">
-            uploadNote(formData)
-        </button>
-    </form>
-</section>
+            <label class="flex flex-col gap-1 text-xs font-medium">
+                title
+                <input
+                    name="title"
+                    value="receipts"
+                    class="block rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
+            </label>
+            <label class="flex flex-col gap-1 text-xs font-medium">
+                attachments
+                <input name="attachments" type="file" multiple class="block text-sm" />
+            </label>
+            <button
+                type="submit"
+                class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100">
+                uploadNote(formData)
+            </button>
+        </form>
+    </section>
 
-<section class="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5">
-    <h2 class="text-sm font-semibold">
-        <code class="font-mono">withJsonSchema</code> — a non-native schema
-    </h2>
-    <p class="text-xs text-slate-500">
-        <code class="font-mono">convertTemp</code>'s <code class="font-mono">inputSchema</code> is
-        hand-rolled — the bare <code class="font-mono">~standard</code> contract, no schema library.
-        It carries no native <code class="font-mono">toJSONSchema()</code>, so
-        <code class="font-mono">withJsonSchema</code> attaches one; without it the rpc would still
-        validate but disappear from <a class="underline" href="/openapi.json">/openapi.json</a>,
-        <a class="underline" href="/mcp">/mcp</a>, and the CLI.
-    </p>
-    <div class="flex flex-wrap items-end gap-2 text-sm">
-        <label class="flex flex-col gap-1 text-xs font-medium">
-            celsius
-            <input
-                type="number"
-                bind:value={celsius}
-                class="block w-28 rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
-        </label>
-        <button
-            type="button"
-            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
-            onclick={convert}>
-            convertTemp(&#123; celsius &#125;)
-        </button>
-        <span class="font-mono text-xs text-slate-700">{converted}</span>
-    </div>
+    <section class="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5">
+        <h2 class="text-sm font-semibold">
+            <code class="font-mono">withJsonSchema</code> — a non-native schema
+        </h2>
+        <p class="text-xs text-slate-500">
+            <code class="font-mono">convertTemp</code>'s
+            <code class="font-mono">inputSchema</code> is hand-rolled — the bare
+            <code class="font-mono">~standard</code> contract, no schema library. It carries no
+            native <code class="font-mono">toJSONSchema()</code>, so
+            <code class="font-mono">withJsonSchema</code> attaches one; without it the rpc would
+            still validate but disappear from
+            <a class="underline" href="/openapi.json">/openapi.json</a>,
+            <a class="underline" href="/mcp">/mcp</a>, and the CLI.
+        </p>
+        <div class="flex flex-wrap items-end gap-2 text-sm">
+            <label class="flex flex-col gap-1 text-xs font-medium">
+                celsius
+                <input
+                    type="number"
+                    bind:value={celsius}
+                    class="block w-28 rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
+            </label>
+            <button
+                type="button"
+                class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+                onclick={convert}>
+                convertTemp(&#123; celsius &#125;)
+            </button>
+            <span class="font-mono text-xs text-slate-700">{converted}</span>
+        </div>
 
-    <CodeBlock
-        title="src/server/rpc/convertTemp.ts — wrap a schema that has no toJSONSchema()"
-        code={`import { withJsonSchema } from '@abide/abide/shared/withJsonSchema'
+        <CodeBlock
+            title="src/server/rpc/convertTemp.ts — wrap a schema that has no toJSONSchema()"
+            code={`import { withJsonSchema } from '@abide/abide/shared/withJsonSchema'
 // celsiusSchema is a bare Standard Schema: { '~standard': { version, vendor, validate } }
 const inputSchema = withJsonSchema(celsiusSchema, () => ({
     type: 'object',
@@ -300,5 +310,5 @@ const inputSchema = withJsonSchema(celsiusSchema, () => ({
 }))
 export const convertTemp = GET(({ celsius }) =>
     json({ celsius, fahrenheit: celsius * 1.8 + 32 }), { schemas: { input: inputSchema } })`} />
-</section>
+    </section>
 </div>

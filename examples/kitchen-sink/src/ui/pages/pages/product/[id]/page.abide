@@ -32,34 +32,35 @@ async function loadProduct(productId: string) {
         </nav>
         <h1 class="text-3xl font-bold">Product {id}</h1>
         <p class="text-slate-600">
-            Dynamic page segment <code class="font-mono">[id]</code> from the folder name. The cache key
-    folds in the call args, so each id gets its own entry; the await block re-runs on nav.
+            Dynamic page segment <code class="font-mono">[id]</code> from the folder name. The cache
+            key folds in the call args, so each id gets its own entry; the await block re-runs on
+            nav.
         </p>
     </div>
 
-<section class="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5">
-    {#await loadProduct(id)}
-    {:then product}
-        <div>
-            {#if product}
-                <p class="text-slate-700"><strong>{product.name}</strong> — €{product.price}</p>
-            {:else}
-                <p class="text-slate-500">No product with id {id}.</p>
-            {/if}
+    <section class="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5">
+        {#await loadProduct(id)}
+        {:then product}
+            <div>
+                {#if product}
+                    <p class="text-slate-700"><strong>{product.name}</strong> — €{product.price}</p>
+                {:else}
+                    <p class="text-slate-500">No product with id {id}.</p>
+                {/if}
+            </div>
+        {/await}
+        <div class="flex flex-wrap gap-2 text-sm">
+            {#for candidate of ['1', '2', '3'] by candidate}
+                <button
+                    type="button"
+                    class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+                    onclick={() => navigate(`/pages/product/${candidate}`)}>
+                    navigate to /product/{candidate}
+                </button>
+            {/for}
         </div>
-    {/await}
-    <div class="flex flex-wrap gap-2 text-sm">
-        {#for candidate of ['1', '2', '3'] by candidate}
-            <button
-                type="button"
-                class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
-                onclick={() => navigate(`/pages/product/${candidate}`)}>
-                navigate to /product/{candidate}
-            </button>
-        {/for}
-    </div>
 
-    <CodeBlock title="this page — [id] segment + per-id cache" code={`import { getProduct } from '$server/rpc/getProduct.ts'
+        <CodeBlock title="this page — [id] segment + per-id cache" code={`import { getProduct } from '$server/rpc/getProduct.ts'
 import { page } from '@abide/abide/shared/page'
 
 import { state } from '@abide/abide/ui/state'
@@ -68,5 +69,5 @@ const id = state.computed(() => page.params.id)    // typed via src/.abide/route
 {#await loadProduct(id)} {:then product}
     ...{product.name}...
 {/await}`} />
-</section>
+    </section>
 </div>

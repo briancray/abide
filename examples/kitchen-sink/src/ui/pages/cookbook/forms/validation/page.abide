@@ -6,42 +6,42 @@ const LIVE = '/rpc/errors'
 </script>
 
 <div class="flex flex-col gap-8">
-<div class="flex flex-col gap-2">
-<h1 class="text-3xl font-bold">validation</h1>
-<p class="text-slate-600">
-    An <code class="font-mono">inputSchema</code> validates args before the handler runs and types
-    them for you. A failure is a <code class="font-mono">422</code> the client narrows as
-    <code class="font-mono">kind: 'validation'</code>; declared errors add typed domain failures.
-</p>
-</div>
-<div class="flex flex-col gap-4">
-
-<Recipe
-    task="Validate args with a schema"
-    live={LIVE}
-    code={`import { z } from 'zod'
+    <div class="flex flex-col gap-2">
+        <h1 class="text-3xl font-bold">validation</h1>
+        <p class="text-slate-600">
+            An <code class="font-mono">inputSchema</code> validates args before the handler runs and
+            types them for you. A failure is a <code class="font-mono">422</code> the client narrows
+            as <code class="font-mono">kind: 'validation'</code>; declared errors add typed domain
+            failures.
+        </p>
+    </div>
+    <div class="flex flex-col gap-4">
+        <Recipe
+            task="Validate args with a schema"
+            live={LIVE}
+            code={`import { z } from 'zod'
 
 const inputSchema = z.object({ sku: z.string(), quantity: z.number().int().min(1) })
 export const checkout = POST(handler, { schemas: { input: inputSchema } })`}
-    note={'Any Standard Schema (zod, valibot, …) works. Invalid input is rejected with a 422 before the handler runs — the handler only ever sees valid, typed args.'} />
+            note={'Any Standard Schema (zod, valibot, …) works. Invalid input is rejected with a 422 before the handler runs — the handler only ever sees valid, typed args.'} />
 
-<Recipe
-    task="Infer arg and return types from the schema"
-    live={LIVE}
-    code={`const inputSchema = z.object({ celsius: z.coerce.number() })
+        <Recipe
+            task="Infer arg and return types from the schema"
+            live={LIVE}
+            code={`const inputSchema = z.object({ celsius: z.coerce.number() })
 export const convert = GET(({ celsius }) => json({ f: celsius * 9 / 5 + 32 }), { schemas: { input: inputSchema } })`}
-    note={"With `inputSchema` set, the handler's args infer from it — no explicit generics. The return type flows from what `json()` carries."} />
+            note={"With `inputSchema` set, the handler's args infer from it — no explicit generics. The return type flows from what `json()` carries."} />
 
-<Recipe
-    task="Coerce query-string args to numbers"
-    live={LIVE}
-    code={`const inputSchema = z.object({ page: z.coerce.number().int().min(1) })`}
-    note={"GET args arrive as strings; `z.coerce.number()` (the validate step) parses them so the handler gets a real number. The coercion is the schema's job."} />
+        <Recipe
+            task="Coerce query-string args to numbers"
+            live={LIVE}
+            code={`const inputSchema = z.object({ page: z.coerce.number().int().min(1) })`}
+            note={"GET args arrive as strings; `z.coerce.number()` (the validate step) parses them so the handler gets a real number. The coercion is the schema's job."} />
 
-<Recipe
-    task="Validate with a hand-rolled schema"
-    live={LIVE}
-    code={`const schema = {
+        <Recipe
+            task="Validate with a hand-rolled schema"
+            live={LIVE}
+            code={`const schema = {
     '~standard': {
         version: 1,
         vendor: 'app',
@@ -49,89 +49,93 @@ export const convert = GET(({ celsius }) => json({ f: celsius * 9 / 5 + 32 }), {
         types: undefined,
     },
 }`}
-    note={"You don't need a schema library — implement the `~standard` contract directly. `validate` returns `{ value }` or `{ issues }`, and is also where you coerce."} />
+            note={"You don't need a schema library — implement the `~standard` contract directly. `validate` returns `{ value }` or `{ issues }`, and is also where you coerce."} />
 
-<Recipe
-    task="Keep a hand-rolled schema in OpenAPI/MCP/CLI"
-    live={LIVE}
-    code={`import { withJsonSchema } from '@abide/abide/shared/withJsonSchema'
+        <Recipe
+            task="Keep a hand-rolled schema in OpenAPI/MCP/CLI"
+            live={LIVE}
+            code={`import { withJsonSchema } from '@abide/abide/shared/withJsonSchema'
 
 const inputSchema = withJsonSchema(schema, () => ({ type: 'object', properties: { … } }))`}
-    note={'A schema without a native `toJSONSchema()` still validates, but vanishes from `/openapi.json`, the MCP tool list, and CLI help. `withJsonSchema` attaches the projection so every surface sees it.'} />
+            note={'A schema without a native `toJSONSchema()` still validates, but vanishes from `/openapi.json`, the MCP tool list, and CLI help. `withJsonSchema` attaches the projection so every surface sees it.'} />
 
-<Recipe
-    task="Handle a validation failure on the client"
-    live={LIVE}
-    code={`try {
+        <Recipe
+            task="Handle a validation failure on the client"
+            live={LIVE}
+            code={`try {
     await checkout({ sku, quantity: 0 })
 } catch (err) {
     if (checkout.isError(err, 'validation')) {
         // err.data is ValidationErrorData
     }
 }`}
-    note={"`rpc.isError(err, 'validation')` narrows the caught error and types `err.data` as `ValidationErrorData` — no cast, no string-matching on messages."} />
+            note={"`rpc.isError(err, 'validation')` narrows the caught error and types `err.data` as `ValidationErrorData` — no cast, no string-matching on messages."} />
 
-<Recipe
-    task="Show a validation message under its field"
-    live={LIVE}
-    code={`if (checkout.isError(err, 'validation')) {
+        <Recipe
+            task="Show a validation message under its field"
+            live={LIVE}
+            code={`if (checkout.isError(err, 'validation')) {
     quantityError = err.data.fields.quantity
 }`}
-    note={"`err.data.fields` maps each failing field to its message, keyed by the schema's path — render it beside the input to build server-authoritative field errors."} />
+            note={"`err.data.fields` maps each failing field to its message, keyed by the schema's path — render it beside the input to build server-authoritative field errors."} />
 
-<Recipe task="Declare a typed error" live={LIVE} code={`const outOfStock = error.typed('outOfStock', 409, z.object({ sku: z.string(), available: z.number() }))
-export const checkout = POST(handler, { schemas: { input: inputSchema } })`} note={"`error.typed(name, status, schema?)` declares one reusable typed-error constructor at module scope. There's no `errors:` option — the rpc infers its error surface from whichever constructors the handler returns."} />
+        <Recipe
+            task="Declare a typed error"
+            live={LIVE}
+            code={`const outOfStock = error.typed('outOfStock', 409, z.object({ sku: z.string(), available: z.number() }))
+export const checkout = POST(handler, { schemas: { input: inputSchema } })`}
+            note={"`error.typed(name, status, schema?)` declares one reusable typed-error constructor at module scope. There's no `errors:` option — the rpc infers its error surface from whichever constructors the handler returns."} />
 
-<Recipe
-    task="Return a typed domain error"
-    live={LIVE}
-    code={`import { error } from '@abide/abide/server/error'
+        <Recipe
+            task="Return a typed domain error"
+            live={LIVE}
+            code={`import { error } from '@abide/abide/server/error'
 
 const outOfStock = error.typed('outOfStock', 409, z.object({ sku: z.string(), available: z.number() }))
 export const checkout = POST(({ sku, quantity }) => {
     if (quantity > stock(sku)) return outOfStock({ sku, available: stock(sku) })
     return json({ ok: true })
 }, { schemas: { input: inputSchema } })`}
-    note={"Returning the constructor IS the error — it sends the declared status with the typed data payload. No `ctx` param, no `errors:` option; the constructors the handler returns ARE the rpc's error surface."} />
+            note={"Returning the constructor IS the error — it sends the declared status with the typed data payload. No `ctx` param, no `errors:` option; the constructors the handler returns ARE the rpc's error surface."} />
 
-<Recipe
-    task="Narrow a typed error on the client"
-    live={LIVE}
-    code={`if (checkout.isError(err, 'outOfStock')) {
+        <Recipe
+            task="Narrow a typed error on the client"
+            live={LIVE}
+            code={`if (checkout.isError(err, 'outOfStock')) {
     show(\`\${err.data.sku}: \${err.data.available} left\`)  // typed, no cast
 }`}
-    note={"`isError(err, 'outOfStock')` narrows both `err.kind` and `err.data` — inferred from the `error.typed` constructor the handler returns, so the compiler knows the shape."} />
+            note={"`isError(err, 'outOfStock')` narrows both `err.kind` and `err.data` — inferred from the `error.typed` constructor the handler returns, so the compiler knows the shape."} />
 
-<Recipe
-    task="Throw a plain HTTP error"
-    live={LIVE}
-    code={`import { HttpError } from '@abide/abide/shared/HttpError'
+        <Recipe
+            task="Throw a plain HTTP error"
+            live={LIVE}
+            code={`import { HttpError } from '@abide/abide/shared/HttpError'
 
 if (!found) throw new HttpError(404, 'not found')`}
-    note={'For one-off failures without a declared spec, throw `HttpError(status, message)` — the client catches it as an `HttpError` instance with `.status` and `.response`.'} />
+            note={'For one-off failures without a declared spec, throw `HttpError(status, message)` — the client catches it as an `HttpError` instance with `.status` and `.response`.'} />
 
-<Recipe
-    task="Gate submit on client-side validity"
-    live={LIVE}
-    code={`const canSubmit = state.computed(() => quantity >= 1 && sku !== '')
+        <Recipe
+            task="Gate submit on client-side validity"
+            live={LIVE}
+            code={`const canSubmit = state.computed(() => quantity >= 1 && sku !== '')
 
 <button disabled={!canSubmit}>checkout</button>`}
-    note={'Mirror the rules in a computed for instant feedback — but the schema is the source of truth. Client checks are UX; the server still validates.'} />
+            note={'Mirror the rules in a computed for instant feedback — but the schema is the source of truth. Client checks are UX; the server still validates.'} />
 
-<Recipe
-    task="Handle a wrong-method request"
-    live={LIVE}
-    code={`const response = await fetch(getEcho.url, { method: 'POST' })
+        <Recipe
+            task="Handle a wrong-method request"
+            live={LIVE}
+            code={`const response = await fetch(getEcho.url, { method: 'POST' })
 // response.status === 405, response.headers.get('allow') lists the verbs`}
-    note={'Hitting an rpc with the wrong method returns 405 with an `Allow` header. The typed callable always uses the right verb; this only shows up with hand-rolled fetches.'} />
+            note={'Hitting an rpc with the wrong method returns 405 with an `Allow` header. The typed callable always uses the right verb; this only shows up with hand-rolled fetches.'} />
 
-<Recipe
-    task="Require fields and apply defaults"
-    live={LIVE}
-    code={`const inputSchema = z.object({
+        <Recipe
+            task="Require fields and apply defaults"
+            live={LIVE}
+            code={`const inputSchema = z.object({
     title: z.string().min(1),
     priority: z.number().default(3),
 })`}
-    note={'Schema constraints (`min`, `default`, `optional`) are enforced server-side and reflected in the generated OpenAPI/CLI — one declaration, every surface.'} />
-</div>
+            note={'Schema constraints (`min`, `default`, `optional`) are enforced server-side and reflected in the generated OpenAPI/CLI — one declaration, every surface.'} />
+    </div>
 </div>

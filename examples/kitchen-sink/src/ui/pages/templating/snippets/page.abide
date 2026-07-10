@@ -18,56 +18,56 @@ let count = state(3)
 </script>
 
 <div class="flex flex-col gap-8">
-<section class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-    <table class="w-full text-sm">
-        <thead class="border-b border-slate-200 bg-slate-50 text-left">
-            <tr>
-                <th class="px-4 py-2 font-mono font-medium">construct</th>
-                <th class="px-4 py-2 font-medium">is</th>
-            </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-100">
-            <tr>
-                <td class="px-4 py-2 font-mono">{'{#snippet name(args)}'}</td>
-                <td class="px-4 py-2 text-slate-600">
-                    a named builder, rendered like a function, closing over component scope
-                </td>
-            </tr>
-            <tr>
-                <td class="px-4 py-2 font-mono">Snippet&lt;Args&gt; (a value)</td>
-                <td class="px-4 py-2 text-slate-600">
-                    a snippet passes through props like any value; the child calls it
-                </td>
-            </tr>
-            <tr>
-                <td class="px-4 py-2 font-mono">&lt;Capitalized /&gt;</td>
-                <td class="px-4 py-2 text-slate-600">
-                    mounts a child component (imported); attributes are props
-                </td>
-            </tr>
-            <tr>
-                <td class="px-4 py-2 font-mono">{'{children()}'}</td>
-                <td class="px-4 py-2 text-slate-600">
-                    the child's single content slot; falsy when self-closing
-                </td>
-            </tr>
-            <tr>
-                <td class="px-4 py-2 font-mono">bind:prop={'{cell}'}</td>
-                <td class="px-4 py-2 text-slate-600">
-                    two-way component prop (usage-inferred, ADR-0027)
-                </td>
-            </tr>
-            <tr>
-                <td class="px-4 py-2 font-mono">&lt;style&gt;</td>
-                <td class="px-4 py-2 text-slate-600">
-                    component-scoped — rewritten with a hashed attribute so it can't leak
-                </td>
-            </tr>
-        </tbody>
-    </table>
-</section>
+    <section class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+        <table class="w-full text-sm">
+            <thead class="border-b border-slate-200 bg-slate-50 text-left">
+                <tr>
+                    <th class="px-4 py-2 font-mono font-medium">construct</th>
+                    <th class="px-4 py-2 font-medium">is</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                <tr>
+                    <td class="px-4 py-2 font-mono">{'{#snippet name(args)}'}</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        a named builder, rendered like a function, closing over component scope
+                    </td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">Snippet&lt;Args&gt; (a value)</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        a snippet passes through props like any value; the child calls it
+                    </td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">&lt;Capitalized /&gt;</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        mounts a child component (imported); attributes are props
+                    </td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">{'{children()}'}</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        the child's single content slot; falsy when self-closing
+                    </td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">bind:prop={'{cell}'}</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        two-way component prop (usage-inferred, ADR-0027)
+                    </td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">&lt;style&gt;</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        component-scoped — rewritten with a hashed attribute so it can't leak
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
 
-<Demo title={'{#snippet} — a reusable builder'} code={`<script>
+    <Demo title={'{#snippet} — a reusable builder'} code={`<script>
 import { state } from '@abide/abide/ui/state'
 let people = state(['ada', 'grace', 'linus'])
 const prefix = '• '                       // closed over by the snippet below
@@ -80,23 +80,23 @@ const prefix = '• '                       // closed over by the snippet below
 <ul class="mt-3 flex flex-col gap-1">
     {#for person of people by person} {row(person)} {/for}
 </ul>`}>
-    <p class="text-xs text-slate-500">
-        Declared once, rendered like a function. It closes over component scope (<code
-            class="font-mono"
-            >prefix</code
-        >) and takes args.
-    </p>
+        <p class="text-xs text-slate-500">
+            Declared once, rendered like a function. It closes over component scope (<code
+                class="font-mono"
+                >prefix</code
+            >) and takes args.
+        </p>
 
-    {#snippet row(label: string)}
-        <li class="font-mono text-sm">{prefix}{label}</li>
-    {/snippet}
+        {#snippet row(label: string)}
+            <li class="font-mono text-sm">{prefix}{label}</li>
+        {/snippet}
 
-    <ul class="flex flex-col gap-1">
-        {#for person of people by person} {row(person)} {/for}
-    </ul>
-</Demo>
+        <ul class="flex flex-col gap-1">
+            {#for person of people by person} {row(person)} {/for}
+        </ul>
+    </Demo>
 
-<Demo title="A snippet is a value — pass it to a child" code={`<!-- parent: the snippet closes over its own scope -->
+    <Demo title="A snippet is a value — pass it to a child" code={`<!-- parent: the snippet closes over its own scope -->
 {#snippet chip(label)}
     <li class="…">{prefix}{label}</li>
 {/snippet}
@@ -111,23 +111,23 @@ const { items, item } = props<{ items: string[]; item: Snippet<[string]> }>()
 <ul>
     {#for label of items by label} {item(label)} {/for}
 </ul>`}>
-    <p class="text-xs text-slate-500">
-        A snippet call returns a <code class="font-mono">Snippet</code> payload (the brand from
-        <code class="font-mono">@abide/abide/shared/snippet</code>) that a bare interpolation mounts
-        — so the function passes through props like any other value, and its body keeps reading
-        <em>this</em> component's scope (<code class="font-mono">prefix</code>).
-    </p>
+        <p class="text-xs text-slate-500">
+            A snippet call returns a <code class="font-mono">Snippet</code> payload (the brand from
+            <code class="font-mono">@abide/abide/shared/snippet</code>) that a bare interpolation
+            mounts — so the function passes through props like any other value, and its body keeps
+            reading <em>this</em> component's scope (<code class="font-mono">prefix</code>).
+        </p>
 
-    {#snippet chip(label: string)}
-        <li class="rounded-full bg-slate-100 px-2 py-0.5 font-mono text-xs">
-            {prefix}{label}
-        </li>
-    {/snippet}
+        {#snippet chip(label: string)}
+            <li class="rounded-full bg-slate-100 px-2 py-0.5 font-mono text-xs">
+                {prefix}{label}
+            </li>
+        {/snippet}
 
-    <SnippetRows items={people} item={chip} />
-</Demo>
+        <SnippetRows items={people} item={chip} />
+    </Demo>
 
-<Demo title={'Components & {children()}'} code={`<Card title="With children">
+    <Demo title={'Components & {children()}'} code={`<Card title="With children">
     <p>This paragraph is the child content.</p>
 </Card>
 <Card title="Empty" />
@@ -142,21 +142,21 @@ const { title = 'Card', children } = props<{ title?: string; children?: Snippet 
     <h3>{title}</h3>
     {#if children}{children()}{:else}<p>empty</p>{/if}
 </section>`}>
-    <p class="text-xs text-slate-500">
-        A capitalised tag mounts a child; its attributes are props and the nested content renders
-        where the child calls <code class="font-mono">{'{children()}'}</code>. An empty
-        <code class="font-mono">&lt;Card&gt;</code> shows the
-        <code class="font-mono">{'{:else}'}</code> fallback.
-    </p>
-    <div class="grid gap-4 sm:grid-cols-2">
-        <Card title="With children">
-            <p>This paragraph is the child content.</p>
-        </Card>
-        <Card title="Empty" />
-    </div>
-</Demo>
+        <p class="text-xs text-slate-500">
+            A capitalised tag mounts a child; its attributes are props and the nested content
+            renders where the child calls <code class="font-mono">{'{children()}'}</code>. An empty
+            <code class="font-mono">&lt;Card&gt;</code> shows the
+            <code class="font-mono">{'{:else}'}</code> fallback.
+        </p>
+        <div class="grid gap-4 sm:grid-cols-2">
+            <Card title="With children">
+                <p>This paragraph is the child content.</p>
+            </Card>
+            <Card title="Empty" />
+        </div>
+    </Demo>
 
-<Demo title={'Two-way bind:prop on a component — live'} code={`<!-- parent -->
+    <Demo title={'Two-way bind:prop on a component — live'} code={`<!-- parent -->
 <Stepper bind:value={count} />
 
 <!-- Stepper.abide — writes \`value\`, so the compiler infers it bindable -->
@@ -165,24 +165,24 @@ import { props } from '@abide/abide/ui/props'
 const { value } = props<{ value: number }>()
 </script>
 <button onclick={() => (value += 1)}>{value}</button>`}>
-    <p class="text-xs text-slate-500">
-        <code class="font-mono">bind:value={'{count}'}</code> hands the child a writable channel;
-        the Stepper writes <code class="font-mono">value</code> and it flows back to this page's
-        cell. Bindability is usage-inferred — no child-side marker (ADR-0027).
-    </p>
-    <div class="flex items-center gap-4">
-        <Stepper bind:value={count} />
-        <span class="font-mono text-xs text-slate-500">page count = {count}</span>
-        <button
-            type="button"
-            class="rounded-md border border-slate-300 px-2 py-1 text-xs hover:bg-slate-100"
-            onclick={() => (count = 0)}>
-            reset from parent
-        </button>
-    </div>
-</Demo>
+        <p class="text-xs text-slate-500">
+            <code class="font-mono">bind:value={'{count}'}</code> hands the child a writable
+            channel; the Stepper writes <code class="font-mono">value</code> and it flows back to
+            this page's cell. Bindability is usage-inferred — no child-side marker (ADR-0027).
+        </p>
+        <div class="flex items-center gap-4">
+            <Stepper bind:value={count} />
+            <span class="font-mono text-xs text-slate-500">page count = {count}</span>
+            <button
+                type="button"
+                class="rounded-md border border-slate-300 px-2 py-1 text-xs hover:bg-slate-100"
+                onclick={() => (count = 0)}>
+                reset from parent
+            </button>
+        </div>
+    </Demo>
 
-<Demo title={'Scoped <style> — live'} code={`<button type="button" class="cta-demo">scoped button</button>
+    <Demo title={'Scoped <style> — live'} code={`<button type="button" class="cta-demo">scoped button</button>
 
 <style>
 .cta-demo {
@@ -196,12 +196,13 @@ const { value } = props<{ value: number }>()
     background: #334155;
 }
 </style>`}>
-    <p class="text-sm text-slate-600">
-        This button is coloured by the component-scoped <code class="font-mono">&lt;style&gt;</code>
-        below; its class is rewritten with a hashed attribute so it can't leak.
-    </p>
-    <button type="button" class="cta-demo">scoped button</button>
-</Demo>
+        <p class="text-sm text-slate-600">
+            This button is coloured by the component-scoped
+            <code class="font-mono">&lt;style&gt;</code>
+            below; its class is rewritten with a hashed attribute so it can't leak.
+        </p>
+        <button type="button" class="cta-demo">scoped button</button>
+    </Demo>
 </div>
 
 <style>

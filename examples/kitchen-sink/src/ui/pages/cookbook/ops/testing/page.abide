@@ -6,83 +6,101 @@ const LIVE = '/build#testing'
 </script>
 
 <div class="flex flex-col gap-8">
-<div class="flex flex-col gap-2">
-<h1 class="text-3xl font-bold">testing</h1>
-<p class="text-slate-600">
-    <code class="font-mono">createTestApp()</code> boots the real app in-process on an ephemeral
-    port — the full pipeline (SSR, CSRF, cookies, base path) runs, not a fixture. The rpc/socket
-    surface is typed off your project.
-</p>
-</div>
-<div class="flex flex-col gap-4">
+    <div class="flex flex-col gap-2">
+        <h1 class="text-3xl font-bold">testing</h1>
+        <p class="text-slate-600">
+            <code class="font-mono">createTestApp()</code> boots the real app in-process on an
+            ephemeral port — the full pipeline (SSR, CSRF, cookies, base path) runs, not a fixture.
+            The rpc/socket surface is typed off your project.
+        </p>
+    </div>
+    <div class="flex flex-col gap-4">
+        <Recipe
+            task="Boot an app in a test"
+            live={LIVE}
+            code={`import { createTestApp } from '@abide/abide/test/createTestApp'
 
-<Recipe task="Boot an app in a test" live={LIVE} code={`import { createTestApp } from '@abide/abide/test/createTestApp'
+await using app = await createTestApp()   // await using → auto stop on scope exit`}
+            note={'`await using` disposes the app (and restores the client slot) when the block ends — no manual teardown. Or hold a handle and call `app.stop()` in `afterAll`.'} />
 
-await using app = await createTestApp()   // await using → auto stop on scope exit`} note={'`await using` disposes the app (and restores the client slot) when the block ends — no manual teardown. Or hold a handle and call `app.stop()` in `afterAll`.'} />
+        <Recipe
+            task="Call an rpc directly"
+            live={LIVE}
+            code={`const product = await app.rpc.getProduct({ id: '1' })
+expect(product.name).toBe('Stroopwafel')`}
+            note={'`app.rpc.<name>` is typed off your real surface and decodes the body — you test the handler through the full dispatch, validation included, not by importing it raw.'} />
 
-<Recipe task="Call an rpc directly" live={LIVE} code={`const product = await app.rpc.getProduct({ id: '1' })
-expect(product.name).toBe('Stroopwafel')`} note={'`app.rpc.<name>` is typed off your real surface and decodes the body — you test the handler through the full dispatch, validation included, not by importing it raw.'} />
+        <Recipe
+            task="Assert a route renders"
+            live={LIVE}
+            code={`const html = await (await app.fetch('/')).text()
+expect(html).toContain('<!doctype html>')`}
+            note={'`app.fetch(path)` hits any route and returns a `Response` — assert the SSR output, status, and headers of pages and endpoints.'} />
 
-<Recipe task="Assert a route renders" live={LIVE} code={`const html = await (await app.fetch('/')).text()
-expect(html).toContain('<!doctype html>')`} note={'`app.fetch(path)` hits any route and returns a `Response` — assert the SSR output, status, and headers of pages and endpoints.'} />
+        <Recipe
+            task="Assert an rpc rejects"
+            live={LIVE}
+            code={`import { HttpError } from '@abide/abide/shared/HttpError'
 
-<Recipe task="Assert an rpc rejects" live={LIVE} code={`import { HttpError } from '@abide/abide/shared/HttpError'
+expect(app.rpc.getProduct({ id: 'nope' })).rejects.toBeInstanceOf(HttpError)`}
+            note={'A failing call rejects with `HttpError` in tests exactly as in the browser — assert the failure path, not just the happy one.'} />
 
-expect(app.rpc.getProduct({ id: 'nope' })).rejects.toBeInstanceOf(HttpError)`} note={'A failing call rejects with `HttpError` in tests exactly as in the browser — assert the failure path, not just the happy one.'} />
-
-<Recipe
-    task="Inspect the raw response"
-    live={LIVE}
-    code={`const created = await app.rpc.createEcho.raw({ message: 'hi' })
+        <Recipe
+            task="Inspect the raw response"
+            live={LIVE}
+            code={`const created = await app.rpc.createEcho.raw({ message: 'hi' })
 expect(created.status).toBe(201)`}
-    note={'`.raw(args)` on the test client returns the `Response` — assert status codes and headers your handler set.'} />
+            note={'`.raw(args)` on the test client returns the `Response` — assert status codes and headers your handler set.'} />
 
-<Recipe task="Test a socket publish" live={LIVE} code={`await app.rpc.publishChat({ from: 'tester', text: 'hi' })
-expect(app.sockets.chat.peek()).toMatchObject({ text: 'hi' })`} note={'`app.sockets.<name>` is the live socket — publish through an rpc, then `peek()` reads the retained frame. For a running stream, `for await` it instead.'} />
+        <Recipe
+            task="Test a socket publish"
+            live={LIVE}
+            code={`await app.rpc.publishChat({ from: 'tester', text: 'hi' })
+expect(app.sockets.chat.peek()).toMatchObject({ text: 'hi' })`}
+            note={'`app.sockets.<name>` is the live socket — publish through an rpc, then `peek()` reads the retained frame. For a running stream, `for await` it instead.'} />
 
-<Recipe
-    task="Assert the health payload"
-    live={LIVE}
-    code={`expect(await app.health()).toMatchObject({ name: 'kitchen-sink' })`}
-    note={"`app.health()` returns the same typed payload the client's `health()` polls — assert your `health` hook's fields."} />
+        <Recipe
+            task="Assert the health payload"
+            live={LIVE}
+            code={`expect(await app.health()).toMatchObject({ name: 'kitchen-sink' })`}
+            note={"`app.health()` returns the same typed payload the client's `health()` polls — assert your `health` hook's fields."} />
 
-<Recipe
-    task="Test a validation failure"
-    live={LIVE}
-    code={`expect(app.rpc.checkout({ sku: 'x', quantity: 0 })).rejects.toMatchObject({ status: 422 })`}
-    note={"Schema rejections surface as a 422 `HttpError` — assert the status or narrow with `rpc.isError(err, 'validation')` to check the field map."} />
+        <Recipe
+            task="Test a validation failure"
+            live={LIVE}
+            code={`expect(app.rpc.checkout({ sku: 'x', quantity: 0 })).rejects.toMatchObject({ status: 422 })`}
+            note={"Schema rejections surface as a 422 `HttpError` — assert the status or narrow with `rpc.isError(err, 'validation')` to check the field map."} />
 
-<Recipe
-    task="Test the OpenAPI projection"
-    live={LIVE}
-    code={`const openapi = await (await app.fetch('/openapi.json')).json()
+        <Recipe
+            task="Test the OpenAPI projection"
+            live={LIVE}
+            code={`const openapi = await (await app.fetch('/openapi.json')).json()
 expect(openapi.paths['/rpc/getProduct']).toBeDefined()`}
-    note={'The generated OpenAPI document is a real route — assert that a schema-bearing rpc appears, so a dropped schema fails CI.'} />
+            note={'The generated OpenAPI document is a real route — assert that a schema-bearing rpc appears, so a dropped schema fails CI.'} />
 
-<Recipe
-    task="Register the compile preload"
-    live={LIVE}
-    code={`# bunfig.toml
+        <Recipe
+            task="Register the compile preload"
+            live={LIVE}
+            code={`# bunfig.toml
 [test]
 preload = ["@abide/abide/preload"]`}
-    lang="toml"
-    note={"The preload lets `.abide` components compile under `bun test` and resolves the project's virtual manifests. Without it, tests can't build the UI."} />
+            lang="toml"
+            note={"The preload lets `.abide` components compile under `bun test` and resolves the project's virtual manifests. Without it, tests can't build the UI."} />
 
-<Recipe
-    task="Pin the test discovery root"
-    live={LIVE}
-    code={`# bunfig.toml
+        <Recipe
+            task="Pin the test discovery root"
+            live={LIVE}
+            code={`# bunfig.toml
 [test]
 root = "tests"`}
-    lang="toml"
-    note={"Scope `bun test` to your tests dir so it doesn't try to build scaffold template files — deterministic discovery, no spurious virtual-module errors."} />
+            lang="toml"
+            note={"Scope `bun test` to your tests dir so it doesn't try to build scaffold template files — deterministic discovery, no spurious virtual-module errors."} />
 
-<Recipe
-    task="Test against the real surface, not mocks"
-    live={LIVE}
-    code={`// no fixtures, no manifests — createTestApp imports the project's own
+        <Recipe
+            task="Test against the real surface, not mocks"
+            live={LIVE}
+            code={`// no fixtures, no manifests — createTestApp imports the project's own
 // route/rpc registries via the abide preload`}
-    note={"There's nothing to mock: the test app is the app. You exercise SSR, rpc dispatch, the CSRF gate, and the health endpoint end-to-end, which is what actually breaks."} />
-
-</div>
+            note={"There's nothing to mock: the test app is the app. You exercise SSR, rpc dispatch, the CSRF gate, and the health endpoint end-to-end, which is what actually breaks."} />
+    </div>
 </div>

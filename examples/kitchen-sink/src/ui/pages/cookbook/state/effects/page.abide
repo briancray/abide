@@ -6,107 +6,109 @@ const LIVE = '/reactive-state'
 </script>
 
 <div class="flex flex-col gap-8">
-<div class="flex flex-col gap-2">
-<h1 class="text-3xl font-bold">watch</h1>
-<p class="text-slate-600">
-    <code class="font-mono">watch</code> is the single reaction. The 1-arg thunk form —
-    <code class="font-mono">watch(() =&gt; …)</code> — runs a side effect when the cells it reads
-    change; the 2-arg form <code class="font-mono">watch(source, handler)</code> names its trigger.
-    Watches are client-only — the SSR back-end strips them — and the thunk returns a cleanup
-    function.
-</p>
-</div>
-<div class="flex flex-col gap-4">
-
-<Recipe
-    task="Run a side effect when state changes"
-    live={LIVE}
-    code={`import { watch } from '@abide/abide/ui/watch'
+    <div class="flex flex-col gap-2">
+        <h1 class="text-3xl font-bold">watch</h1>
+        <p class="text-slate-600">
+            <code class="font-mono">watch</code> is the single reaction. The 1-arg thunk form —
+            <code class="font-mono">watch(() =&gt; …)</code> — runs a side effect when the cells it
+            reads change; the 2-arg form <code class="font-mono">watch(source, handler)</code> names
+            its trigger. Watches are client-only — the SSR back-end strips them — and the thunk
+            returns a cleanup function.
+        </p>
+    </div>
+    <div class="flex flex-col gap-4">
+        <Recipe
+            task="Run a side effect when state changes"
+            live={LIVE}
+            code={`import { watch } from '@abide/abide/ui/watch'
 watch(() => {
     document.title = \`\${unread} unread\`
 })`}
-    note={'The thunk re-runs whenever a cell it reads changes. It runs on the client only — SSR strips it, so `document` is always defined inside.'} />
+            note={'The thunk re-runs whenever a cell it reads changes. It runs on the client only — SSR strips it, so `document` is always defined inside.'} />
 
-<Recipe task="Clean up a watch" live={LIVE} code={`watch(() => {
+        <Recipe task="Clean up a watch" live={LIVE} code={`watch(() => {
     const handler = () => (width = window.innerWidth)
     window.addEventListener('resize', handler)
     return () => window.removeEventListener('resize', handler)
 })`} note={'Return a function and it runs before the next re-run and on unmount — the place to remove listeners, clear timers, close sockets.'} />
 
-<Recipe
-    task="Run an interval and clear it"
-    live={LIVE}
-    code={`let ticks = state(0)
+        <Recipe
+            task="Run an interval and clear it"
+            live={LIVE}
+            code={`let ticks = state(0)
 watch(() => {
     const id = setInterval(() => (ticks += 1), 1000)
     return () => clearInterval(id)
 })`}
-    note={'Set the timer inside the thunk, clear it in the returned cleanup — the interval lives exactly as long as the component.'} />
+            note={'Set the timer inside the thunk, clear it in the returned cleanup — the interval lives exactly as long as the component.'} />
 
-<Recipe
-    task="Name the trigger explicitly"
-    live={LIVE}
-    code={`// source form: no guessing what re-runs it
+        <Recipe
+            task="Name the trigger explicitly"
+            live={LIVE}
+            code={`// source form: no guessing what re-runs it
 watch(query, (q) => runSearch(q))
 watch([from, to], ([f, t]) => recompute(f, t))`}
-    note={'Pass a state cell (or an array of them) and a handler — the handler gets the new value, and the trigger is right there in the call, not inferred from what the body happens to read.'} />
+            note={'Pass a state cell (or an array of them) and a handler — the handler gets the new value, and the trigger is right there in the call, not inferred from what the body happens to read.'} />
 
-<Recipe
-    task="Subscribe to an external event source"
-    live={LIVE}
-    code={`watch(() => {
+        <Recipe
+            task="Subscribe to an external event source"
+            live={LIVE}
+            code={`watch(() => {
     const bc = new BroadcastChannel('prefs')
     bc.onmessage = (e) => (theme = e.data)
     return () => bc.close()
 })`}
-    note={'Any imperative subscription (BroadcastChannel, EventSource, a third-party client) belongs in a watch thunk with a matching teardown.'} />
+            note={'Any imperative subscription (BroadcastChannel, EventSource, a third-party client) belongs in a watch thunk with a matching teardown.'} />
 
-<Recipe
-    task="Keep a watch from running during SSR"
-    live={LIVE}
-    code={`watch(() => {
+        <Recipe
+            task="Keep a watch from running during SSR"
+            live={LIVE}
+            code={`watch(() => {
     localStorage.setItem('draft', draft)
 })`}
-    note={'Nothing to do — watches never run on the server. Browser-only APIs (`localStorage`, `window`, `document`) are safe to touch directly inside one.'} />
+            note={'Nothing to do — watches never run on the server. Browser-only APIs (`localStorage`, `window`, `document`) are safe to touch directly inside one.'} />
 
-<Recipe
-    task="Debounce state from an input"
-    live={LIVE}
-    code={`let query = state('')
+        <Recipe
+            task="Debounce state from an input"
+            live={LIVE}
+            code={`let query = state('')
 let debounced = state('')
 watch(query, (q) => {
     const id = setTimeout(() => (debounced = q), 300)
     return () => clearTimeout(id)
 })`}
-    note={'Watch the fast cell, schedule a write to the slow cell, and cancel the pending timer on each change — the classic debounce, cleanup-driven.'} />
+            note={'Watch the fast cell, schedule a write to the slow cell, and cancel the pending timer on each change — the classic debounce, cleanup-driven.'} />
 
-<Recipe task="React to a prop change" live={LIVE} code={`const { userId } = props()
+        <Recipe
+            task="React to a prop change"
+            live={LIVE}
+            code={`const { userId } = props()
 watch(() => {
     void userId // read to depend on it
     loadProfile(userId)
-})`} note={'Props are reactive reads, so a watch that reads a prop re-runs when the parent passes a new value — refetch on an id change this way.'} />
+})`}
+            note={'Props are reactive reads, so a watch that reads a prop re-runs when the parent passes a new value — refetch on an id change this way.'} />
 
-<Recipe
-    task="Send analytics on a change"
-    live={LIVE}
-    code={`watch(() => {
+        <Recipe
+            task="Send analytics on a change"
+            live={LIVE}
+            code={`watch(() => {
     trackPageview({ path: page.url.pathname })
 })`}
-    note={"A watch reading `page.url` fires on every SPA navigation. Keep watches pure of render output — they act, they don't return markup."} />
+            note={"A watch reading `page.url` fires on every SPA navigation. Keep watches pure of render output — they act, they don't return markup."} />
 
-<Recipe
-    task="Avoid a watch feedback loop"
-    live={LIVE}
-    code={`// loops forever: writes a cell it also reads
+        <Recipe
+            task="Avoid a watch feedback loop"
+            live={LIVE}
+            code={`// loops forever: writes a cell it also reads
 watch(() => (count = count + 1))`}
-    note={"Don't write a cell the same watch reads — it re-triggers itself. Derive with `computed` instead, or read one cell and write a different one."} />
+            note={"Don't write a cell the same watch reads — it re-triggers itself. Derive with `computed` instead, or read one cell and write a different one."} />
 
-<Recipe
-    task="Prefer attach over watch for a node ref"
-    live="/templating/bindings"
-    code={`// reach a specific element: use attach, not watch
+        <Recipe
+            task="Prefer attach over watch for a node ref"
+            live="/templating/bindings"
+            code={`// reach a specific element: use attach, not watch
 <input attach={(node) => node.focus()} />`}
-    note={'`attach={fn}` hands you the real element at mount and is the right tool for focus/measure/wire-a-library. Reserve `watch` for reacting to state.'} />
-
-</div>
+            note={'`attach={fn}` hands you the real element at mount and is the right tool for focus/measure/wire-a-library. Reserve `watch` for reacting to state.'} />
+    </div>
 </div>

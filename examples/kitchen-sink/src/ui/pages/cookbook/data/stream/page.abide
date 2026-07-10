@@ -7,72 +7,71 @@ const HTTP = '/rpc/streaming'
 </script>
 
 <div class="flex flex-col gap-8">
-<div class="flex flex-col gap-2">
-<h1 class="text-3xl font-bold">stream to the UI</h1>
-<p class="text-slate-600">
-    Anything streaming — a socket or a streaming rpc's bare call — is a
-    <code class="font-mono">NamedAsyncIterable</code>. Consume it with
-    <code class="font-mono">watch(source, frame =&gt; …)</code>,
-    <code class="font-mono">{'{#for await}'}</code>, or <code class="font-mono">for await</code>; seed
-    the latest retained frame with <code class="font-mono">peek(source)</code>. For plain HTTP, a
-    handler returns <code class="font-mono">sse()</code> or
-    <code class="font-mono">jsonl()</code> and the client reads it with native APIs.
-</p>
-</div>
-<div class="flex flex-col gap-4">
-
-<Recipe
-    task="Consume a stream reactively"
-    live={LIVE}
-    code={`import { peek } from '@abide/abide/shared/peek'
+    <div class="flex flex-col gap-2">
+        <h1 class="text-3xl font-bold">stream to the UI</h1>
+        <p class="text-slate-600">
+            Anything streaming — a socket or a streaming rpc's bare call — is a
+            <code class="font-mono">NamedAsyncIterable</code>. Consume it with
+            <code class="font-mono">watch(source, frame =&gt; …)</code>,
+            <code class="font-mono">{'{#for await}'}</code>, or <code class="font-mono">for await</code>;
+            seed the latest retained frame with <code class="font-mono">peek(source)</code>. For
+            plain HTTP, a handler returns <code class="font-mono">sse()</code> or
+            <code class="font-mono">jsonl()</code> and the client reads it with native APIs.
+        </p>
+    </div>
+    <div class="flex flex-col gap-4">
+        <Recipe
+            task="Consume a stream reactively"
+            live={LIVE}
+            code={`import { peek } from '@abide/abide/shared/peek'
 import { state } from '@abide/abide/ui/state'
 import { watch } from '@abide/abide/ui/watch'
 
 const stream = feed()
 let latest = state(peek(stream))        // seed from the retained frame
 watch(stream, (frame) => (latest = frame))`}
-    note={'`watch(source, handler)` fires per frame; seed with `peek(source)` for the last retained one. The watch is scope-tied — it opens on mount and disposes with the component, no manual unsubscribe.'} />
+            note={'`watch(source, handler)` fires per frame; seed with `peek(source)` for the last retained one. The watch is scope-tied — it opens on mount and disposes with the component, no manual unsubscribe.'} />
 
-<Recipe
-    task="Keep a rolling window of recent frames"
-    live={LIVE}
-    code={`let recent = state([])
+        <Recipe
+            task="Keep a rolling window of recent frames"
+            live={LIVE}
+            code={`let recent = state([])
 watch(chat, (message) => (recent = [...recent, message].slice(-5)))`}
-    note={'Fold each frame into a windowed `state` array instead of latest-wins — the feed/activity-list shape. Slice to cap the window.'} />
+            note={'Fold each frame into a windowed `state` array instead of latest-wins — the feed/activity-list shape. Slice to cap the window.'} />
 
-<Recipe
-    task="Show a stream's connection status"
-    live="/probes"
-    code={`const reconnecting = state.computed(() => chat.refreshing())
+        <Recipe
+            task="Show a stream's connection status"
+            live="/probes"
+            code={`const reconnecting = state.computed(() => chat.refreshing())
 
 <p>status: {reconnecting ? 'reconnecting…' : 'live'}</p>`}
-    note={'`chat.refreshing()` reports a held value being revalidated — e.g. across a reconnect gap. A dropped socket self-heals under backoff, so it never degrades to a hard error for a mere disconnect.'} />
+            note={'`chat.refreshing()` reports a held value being revalidated — e.g. across a reconnect gap. A dropped socket self-heals under backoff, so it never degrades to a hard error for a mere disconnect.'} />
 
-<Recipe
-    task="Surface a stream's terminal error"
-    live={HTTP}
-    code={`{#for await (const message of chat) by message.id}
+        <Recipe
+            task="Surface a stream's terminal error"
+            live={HTTP}
+            code={`{#for await (const message of chat) by message.id}
     <li><strong>{message.from}</strong>: {message.text}</li>
 {:catch err}
     <p class="text-rose-700">{err.message}</p>
 {/for}`}
-    note={'Application errors are terminal and surface through the block’s `{:catch}`; a transport disconnect does not — it retains the held value and reopens.'} />
+            note={'Application errors are terminal and surface through the block’s `{:catch}`; a transport disconnect does not — it retains the held value and reopens.'} />
 
-<Recipe
-    task="Render a live list from a stream"
-    live={LIVE}
-    code={`let recent = state([])
+        <Recipe
+            task="Render a live list from a stream"
+            live={LIVE}
+            code={`let recent = state([])
 watch(chat, (message) => (recent = [...recent, message].slice(-20)))
 
 {#for message of recent by message.id}
     <li><strong>{message.from}</strong>: {message.text}</li>
 {/for}`}
-    note={'Feed a keyed `{#for}` from a windowed cell — new frames append and the list patches in place. `watch` is a no-op on the server, so this is client-live.'} />
+            note={'Feed a keyed `{#for}` from a windowed cell — new frames append and the list patches in place. `watch` is a no-op on the server, so this is client-live.'} />
 
-<Recipe
-    task="Stream server output over SSE"
-    live={HTTP}
-    code={`import { GET } from '@abide/abide/server/GET'
+        <Recipe
+            task="Stream server output over SSE"
+            live={HTTP}
+            code={`import { GET } from '@abide/abide/server/GET'
 import { sse } from '@abide/abide/server/sse'
 
 export const tickFeed = GET(() =>
@@ -83,53 +82,53 @@ export const tickFeed = GET(() =>
         }
     }()),
 )`}
-    note={'Wrap an `AsyncIterable` in `sse()` — each yielded value becomes one `data:` event. This is HTTP streaming, distinct from pub/sub sockets (which fan out to many subscribers).'} />
+            note={'Wrap an `AsyncIterable` in `sse()` — each yielded value becomes one `data:` event. This is HTTP streaming, distinct from pub/sub sockets (which fan out to many subscribers).'} />
 
-<Recipe
-    task="Consume an SSE stream on the client"
-    live={HTTP}
-    code={`const source = new EventSource(tickFeed.url)
+        <Recipe
+            task="Consume an SSE stream on the client"
+            live={HTTP}
+            code={`const source = new EventSource(tickFeed.url)
 source.addEventListener('message', (event) => {
     frames = [...frames, JSON.parse(event.data)]
 })
 // source.close() when done`}
-    note={'`rpc.url` gives the endpoint; the native `EventSource` reconnects on its own. Close it when you have what you need.'} />
+            note={'`rpc.url` gives the endpoint; the native `EventSource` reconnects on its own. Close it when you have what you need.'} />
 
-<Recipe
-    task="Stream newline-delimited JSON"
-    live={HTTP}
-    code={`import { jsonl } from '@abide/abide/server/jsonl'
+        <Recipe
+            task="Stream newline-delimited JSON"
+            live={HTTP}
+            code={`import { jsonl } from '@abide/abide/server/jsonl'
 export const countLog = GET(({ to }: { to: number }) =>
     jsonl(async function* () {
         for (let n = 1; n <= to; n++) yield { n }
     }()),
 )`}
-    note={"`jsonl()` streams one JSON object per line — read `rpc.raw(args)`'s body with a `TextDecoderStream` and split on newlines. Lighter than SSE when you don't need event framing."} />
+            note={"`jsonl()` streams one JSON object per line — read `rpc.raw(args)`'s body with a `TextDecoderStream` and split on newlines. Lighter than SSE when you don't need event framing."} />
 
-<Recipe
-    task="Read a raw streaming Response body"
-    live={HTTP}
-    code={`const response = await countLog.raw({ to: 8 })
+        <Recipe
+            task="Read a raw streaming Response body"
+            live={HTTP}
+            code={`const response = await countLog.raw({ to: 8 })
 const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
 while (true) {
     const { value, done } = await reader.read()
     if (done) break
     // parse value…
 }`}
-    note={"`.raw(args)` returns the underlying `Response`, so you own the body stream, headers, and status — the escape hatch when the decoded return type isn't enough."} />
+            note={"`.raw(args)` returns the underlying `Response`, so you own the body stream, headers, and status — the escape hatch when the decoded return type isn't enough."} />
 
-<Recipe
-    task="Combine a stream with a loading probe"
-    live="/probes"
-    code={`const reconnecting = state.computed(() => chat.refreshing())`}
-    note={"`chat.refreshing()` is true while a held value is being revalidated — e.g. across a socket reconnect gap — so you can badge 'reconnecting…' without losing the last frame."} />
+        <Recipe
+            task="Combine a stream with a loading probe"
+            live="/probes"
+            code={`const reconnecting = state.computed(() => chat.refreshing())`}
+            note={"`chat.refreshing()` is true while a held value is being revalidated — e.g. across a socket reconnect gap — so you can badge 'reconnecting…' without losing the last frame."} />
 
-<Recipe
-    task="Drain a stream imperatively with for-await"
-    live={HTTP}
-    code={`for await (const frame of feed()) {
+        <Recipe
+            task="Drain a stream imperatively with for-await"
+            live={HTTP}
+            code={`for await (const frame of feed()) {
     handle(frame)
 }`}
-    note={'A streaming rpc call returns an `AsyncIterable` — drive it with `{#for await}` in markup, or `for await` in script when you need imperative control.'} />
-</div>
+            note={'A streaming rpc call returns an `AsyncIterable` — drive it with `{#for await}` in markup, or `for await` in script when you need imperative control.'} />
+    </div>
 </div>

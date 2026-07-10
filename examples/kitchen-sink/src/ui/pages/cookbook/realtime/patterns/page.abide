@@ -7,109 +7,128 @@ const STATE = '/reactive-state'
 </script>
 
 <div class="flex flex-col gap-8">
-<div class="flex flex-col gap-2">
-<h1 class="text-3xl font-bold">presence & patterns</h1>
-<p class="text-slate-600">
-    Common realtime shapes built on broadcast sockets — chat, presence, typing, live counters, job
-    progress — and the gaps where a single-process broadcast topic isn't enough. Consume every
-    socket with <code class="font-mono">watch(source, frame =&gt; …)</code>, folding frames into a
-    windowed <code class="font-mono">state</code> cell.
-</p>
-</div>
-<div class="flex flex-col gap-4">
-
-<Recipe task="Build a chat room" live={LIVE} code={`export const chat = socket({ schema, tail: 100 })
+    <div class="flex flex-col gap-2">
+        <h1 class="text-3xl font-bold">presence & patterns</h1>
+        <p class="text-slate-600">
+            Common realtime shapes built on broadcast sockets — chat, presence, typing, live
+            counters, job progress — and the gaps where a single-process broadcast topic isn't
+            enough. Consume every socket with
+            <code class="font-mono">watch(source, frame =&gt; …)</code>, folding frames into a
+            windowed <code class="font-mono">state</code> cell.
+        </p>
+    </div>
+    <div class="flex flex-col gap-4">
+        <Recipe task="Build a chat room" live={LIVE} code={`export const chat = socket({ schema, tail: 100 })
 // publish via a POST rpc; read with watch(chat, m => recent = [...recent, m].slice(-50))`} note={'A retained socket plus a publish rpc is the whole chat primitive — history for late joiners, live delivery, validated writes.'} />
 
-<Recipe task="Show a live counter" live={STATE} code={`export const votes = socket({ schema })
+        <Recipe
+            task="Show a live counter"
+            live={STATE}
+            code={`export const votes = socket({ schema })
 let count = state(0)
-watch(votes, (v) => (count = v.total))`} note={'Publish the new total on each change and watch the latest frame — a live vote count, viewer count, or gauge with no polling.'} />
+watch(votes, (v) => (count = v.total))`}
+            note={'Publish the new total on each change and watch the latest frame — a live vote count, viewer count, or gauge with no polling.'} />
 
-<Recipe task="Render an activity feed" live={STATE} code={`let recent = state([])
+        <Recipe
+            task="Render an activity feed"
+            live={STATE}
+            code={`let recent = state([])
 watch(activity, (event) => (recent = [...recent, event].slice(-30)))
 
 {#for event of recent by event.id}
     <li>{event.actor} {event.verb} {event.target}</li>
-{/for}`} note={'A windowed watch over an `activity` socket is an append-only feed — publish one frame per event from wherever they happen.'} />
+{/for}`}
+            note={'A windowed watch over an `activity` socket is an append-only feed — publish one frame per event from wherever they happen.'} />
 
-<Recipe
-    task="Track who's online (presence)"
-    live={LIVE}
-    code={`// publish a heartbeat every few seconds; window it and dedupe by user
+        <Recipe
+            task="Track who's online (presence)"
+            live={LIVE}
+            code={`// publish a heartbeat every few seconds; window it and dedupe by user
 export const presence = socket({ schema, tail: 200, ttl: 15_000 })
 let seen = state([])
 watch(presence, (p) => (seen = [...seen, p].slice(-200)))
 const online = state.computed(() => dedupeByUser(seen))`}
-    note={"Presence is a heartbeat pattern: clients publish periodically, a short `ttl` ages stragglers out, and you dedupe the window by user id on read. There's no dedicated presence primitive — this is the idiom."} />
+            note={"Presence is a heartbeat pattern: clients publish periodically, a short `ttl` ages stragglers out, and you dedupe the window by user id on read. There's no dedicated presence primitive — this is the idiom."} />
 
-<Recipe task="Show typing indicators" live={LIVE} code={`export const typing = socket({ schema, ttl: 4_000, clientPublish: true })
+        <Recipe
+            task="Show typing indicators"
+            live={LIVE}
+            code={`export const typing = socket({ schema, ttl: 4_000, clientPublish: true })
 let typers = state([])
-watch(typing, (t) => (typers = [...typers, t].slice(-10)))`} note={"Ephemeral, high-frequency, low-stakes — enable `clientPublish` and a short `ttl` so 'X is typing…' frames expire on their own without a stop event."} />
+watch(typing, (t) => (typers = [...typers, t].slice(-10)))`}
+            note={"Ephemeral, high-frequency, low-stakes — enable `clientPublish` and a short `ttl` so 'X is typing…' frames expire on their own without a stop event."} />
 
-<Recipe
-    task="Stream progress from a long job"
-    live={STATE}
-    code={`// server job
+        <Recipe
+            task="Stream progress from a long job"
+            live={STATE}
+            code={`// server job
 for (const step of steps) {
     await run(step)
     jobProgress.broadcast({ jobId, pct: done / total * 100 })
 }`}
-    note={'Publish progress frames from the job and watch them keyed by job id — a live progress bar or step list driven entirely by the server.'} />
+            note={'Publish progress frames from the job and watch them keyed by job id — a live progress bar or step list driven entirely by the server.'} />
 
-<Recipe
-    task="Push server notifications"
-    live={LIVE}
-    code={`export const alerts = socket({ schema, tail: 20 })
+        <Recipe
+            task="Push server notifications"
+            live={LIVE}
+            code={`export const alerts = socket({ schema, tail: 20 })
 // anywhere on the server: alerts.broadcast({ level, text })`}
-    note={'A retained `alerts` socket is a notification bus — broadcast from any handler or job, watch the latest into a toast area, seed the last few on load.'} />
+            note={'A retained `alerts` socket is a notification bus — broadcast from any handler or job, watch the latest into a toast area, seed the last few on load.'} />
 
-<Recipe
-    task="Scope frames to a room or user"
-    live={LIVE}
-    code={`// carry the room on the frame; filter on read
+        <Recipe
+            task="Scope frames to a room or user"
+            live={LIVE}
+            code={`// carry the room on the frame; filter on read
 let recent = state([])
 watch(chat, (m) => (recent = [...recent, m].slice(-100)))
 const roomMessages = state.computed(() => recent.filter((m) => m.room === roomId))`}
-    note={"Sockets are whole topics, not per-key channels — include a `room`/`userId` field on the frame and filter client-side. Every subscriber receives every frame, so don't put secrets on a shared topic; use separate socket files for hard isolation."} />
+            note={"Sockets are whole topics, not per-key channels — include a `room`/`userId` field on the frame and filter client-side. Every subscriber receives every frame, so don't put secrets on a shared topic; use separate socket files for hard isolation."} />
 
-<Recipe task="Gate a socket by auth" live="/security" code={`// browsers can't publish (clientPublish false) — the publish rpc authorises
+        <Recipe
+            task="Gate a socket by auth"
+            live="/security"
+            code={`// browsers can't publish (clientPublish false) — the publish rpc authorises
 export const feed = socket({ schema })
-export const publishFeed = POST(handler, { schemas: { input: inputSchema } })  // check identity here`} note={"Authorise writes in the publish rpc (the default read-only socket keeps browsers from publishing). Reads over the multiplexed socket carry the connection's auth; enforce there for read gating."} />
+export const publishFeed = POST(handler, { schemas: { input: inputSchema } })  // check identity here`}
+            note={"Authorise writes in the publish rpc (the default read-only socket keeps browsers from publishing). Reads over the multiplexed socket carry the connection's auth; enforce there for read gating."} />
 
-<Recipe task="Rate-limit publishes" gap={true} code={`// no built-in publish throttle — gate in the rpc
+        <Recipe
+            task="Rate-limit publishes"
+            gap={true}
+            code={`// no built-in publish throttle — gate in the rpc
 let last = 0
 export const ping = POST(() => {
     if (Date.now() - last < 1000) return error(429, 'slow down')
     last = Date.now()
     pings.broadcast({ at: Date.now() })
     return json({ ok: true })
-})`} note={"There's no per-topic rate limit. Throttle in the publish rpc yourself (a timestamp guard, a token bucket) — the socket fans out whatever you hand it."} />
+})`}
+            note={"There's no per-topic rate limit. Throttle in the publish rpc yourself (a timestamp guard, a token bucket) — the socket fans out whatever you hand it."} />
 
-<Recipe
-    task="Send a point-to-point message"
-    gap={true}
-    code={`// no per-connection channel — model it as a filtered broadcast
+        <Recipe
+            task="Send a point-to-point message"
+            gap={true}
+            code={`// no per-connection channel — model it as a filtered broadcast
 export const dm = socket({ schema })   // frame carries { toUserId }
 let recent = state([])
 watch(dm, (m) => (recent = [...recent, m].slice(-50)))
 const mine = state.computed(() => recent.filter((m) => m.toUserId === me))`}
-    note={"Sockets are broadcast-only — there's no addressed, per-connection delivery. Simulate DMs with a `toUserId` field and client-side filtering, but every subscriber still receives every frame, so it's not private. True 1:1 delivery isn't a first-class feature."} />
+            note={"Sockets are broadcast-only — there's no addressed, per-connection delivery. Simulate DMs with a `toUserId` field and client-side filtering, but every subscriber still receives every frame, so it's not private. True 1:1 delivery isn't a first-class feature."} />
 
-<Recipe
-    task="Guarantee delivery with acks"
-    gap={true}
-    code={`// no ack/at-least-once — persist, then reconcile with a read
+        <Recipe
+            task="Guarantee delivery with acks"
+            gap={true}
+            code={`// no ack/at-least-once — persist, then reconcile with a read
 recordMessage(m)      // durable source of truth
 chat.broadcast(m)       // best-effort live delivery
 // clients refetch from the store on reconnect to fill gaps`}
-    note={'Publish is best-effort fan-out with no per-frame acknowledgement or replay guarantee. For at-least-once, persist to a store and have clients reconcile from a read on reconnect — the socket is the fast path, the store is the truth.'} />
+            note={'Publish is best-effort fan-out with no per-frame acknowledgement or replay guarantee. For at-least-once, persist to a store and have clients reconcile from a read on reconnect — the socket is the fast path, the store is the truth.'} />
 
-<Recipe
-    task="Fan out across multiple server instances"
-    gap={true}
-    code={`// broadcast is in-process — a frame published on instance A
+        <Recipe
+            task="Fan out across multiple server instances"
+            gap={true}
+            code={`// broadcast is in-process — a frame published on instance A
 // does NOT reach a subscriber connected to instance B`}
-    note={"Sockets fan out within one process. Behind a multi-instance load balancer, publishes don't cross instances — you'd need an external broker (Redis pub/sub, a message bus) bridged to `broadcast()` yourself. Single-process and single-node deployments are unaffected."} />
-
-</div>
+            note={"Sockets fan out within one process. Behind a multi-instance load balancer, publishes don't cross instances — you'd need an external broker (Redis pub/sub, a message bus) bridged to `broadcast()` yourself. Single-process and single-node deployments are unaffected."} />
+    </div>
 </div>

@@ -3,90 +3,91 @@ import CodeBlock from '$ui/CodeBlock.abide'
 </script>
 
 <div class="flex flex-col gap-8">
-<div class="flex flex-col gap-2">
-<h2 class="text-xl font-semibold">the surface</h2>
-<p class="text-slate-600">
-    Every reactive name is a plain function, resolved by its import binding — no
-    <code class="font-mono">$state</code> / <code class="font-mono">$derived</code> runes, no
-    <code class="font-mono">scope()</code> destructure. See them live under
-    <a class="underline" href="/reactive-state/primitives">primitives</a> and
-    <a class="underline" href="/reactive-state/reactions">reactions</a>.
-</p>
-</div>
+    <div class="flex flex-col gap-2">
+        <h2 class="text-xl font-semibold">the surface</h2>
+        <p class="text-slate-600">
+            Every reactive name is a plain function, resolved by its import binding — no
+            <code class="font-mono">$state</code> / <code class="font-mono">$derived</code> runes,
+            no <code class="font-mono">scope()</code> destructure. See them live under
+            <a class="underline" href="/reactive-state/primitives">primitives</a> and
+            <a class="underline" href="/reactive-state/reactions">reactions</a>.
+        </p>
+    </div>
 
-<section class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-    <table class="w-full text-sm">
-        <thead class="border-b border-slate-200 bg-slate-50 text-left">
-            <tr>
-                <th class="px-4 py-2 font-mono font-medium">primitive</th>
-                <th class="px-4 py-2 font-medium">is</th>
-            </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-100">
-            <tr>
-                <td class="px-4 py-2 font-mono">state(value, transform?)</td>
-                <td class="px-4 py-2 text-slate-600">
-                    a writable cell — read/reassigned as a plain variable; optional
-                    <code class="font-mono">transform(next, prev)</code> coerces every write
-                </td>
-            </tr>
-            <tr>
-                <td class="px-4 py-2 font-mono">state.linked(fn, transform?)</td>
-                <td class="px-4 py-2 text-slate-600">
-                    a writable local draft seeded from upstream — reseeds when the source changes,
-                    edits stay local
-                </td>
-            </tr>
-            <tr>
-                <td class="px-4 py-2 font-mono">state.computed(fn)</td>
-                <td class="px-4 py-2 text-slate-600">
-                    a read-only value — re-runs when a cell it reads changes
-                </td>
-            </tr>
-            <tr>
-                <td class="px-4 py-2 font-mono">watch(source, handler?)</td>
-                <td class="px-4 py-2 text-slate-600">
-                    the single reaction — a state cell, <code class="font-mono">[cells]</code>, a
-                    socket/stream, or an rpc; the 1-arg thunk form is the auto-tracked side effect
-                    (client-only, cleanup on unmount)
-                </td>
-            </tr>
-            <tr>
-                <td class="px-4 py-2 font-mono">{'props()'}</td>
-                <td class="px-4 py-2 text-slate-600">
-                    destructure props — each binding is reactive and read-only, with optional
-                    <code class="font-mono">= default</code>
-                </td>
-            </tr>
-            <tr>
-                <td class="px-4 py-2 font-mono">state.share(key, value)</td>
-                <td class="px-4 py-2 text-slate-600">
-                    put a named value on the ambient scope — implicit context, no prop threading
-                </td>
-            </tr>
-            <tr>
-                <td class="px-4 py-2 font-mono">state.shared(key)</td>
-                <td class="px-4 py-2 text-slate-600">
-                    read the closest ancestor scope that shared <code class="font-mono">key</code>
-                </td>
-            </tr>
-        </tbody>
-    </table>
-</section>
+    <section class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+        <table class="w-full text-sm">
+            <thead class="border-b border-slate-200 bg-slate-50 text-left">
+                <tr>
+                    <th class="px-4 py-2 font-mono font-medium">primitive</th>
+                    <th class="px-4 py-2 font-medium">is</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                <tr>
+                    <td class="px-4 py-2 font-mono">state(value, transform?)</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        a writable cell — read/reassigned as a plain variable; optional
+                        <code class="font-mono">transform(next, prev)</code> coerces every write
+                    </td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">state.linked(fn, transform?)</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        a writable local draft seeded from upstream — reseeds when the source
+                        changes, edits stay local
+                    </td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">state.computed(fn)</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        a read-only value — re-runs when a cell it reads changes
+                    </td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">watch(source, handler?)</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        the single reaction — a state cell, <code class="font-mono">[cells]</code>,
+                        a socket/stream, or an rpc; the 1-arg thunk form is the auto-tracked side
+                        effect (client-only, cleanup on unmount)
+                    </td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">{'props()'}</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        destructure props — each binding is reactive and read-only, with optional
+                        <code class="font-mono">= default</code>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">state.share(key, value)</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        put a named value on the ambient scope — implicit context, no prop threading
+                    </td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">state.shared(key)</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        read the closest ancestor scope that shared
+                        <code class="font-mono">key</code>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
 
-<section class="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-5">
-    <h3 class="text-sm font-semibold">
-        Implicit context — <code class="font-mono">state.share</code> /
-        <code class="font-mono">state.shared</code>
-    </h3>
-    <p class="text-xs text-slate-500">
-        A parent puts a value on the ambient scope; any descendant reads the closest ancestor that
-        shared the key — no prop threading. Reads are reactive.
-    </p>
-    <CodeBlock code={`// a layout or ancestor component
+    <section class="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-5">
+        <h3 class="text-sm font-semibold">
+            Implicit context — <code class="font-mono">state.share</code> /
+            <code class="font-mono">state.shared</code>
+        </h3>
+        <p class="text-xs text-slate-500">
+            A parent puts a value on the ambient scope; any descendant reads the closest ancestor
+            that shared the key — no prop threading. Reads are reactive.
+        </p>
+        <CodeBlock code={`// a layout or ancestor component
 state.share('theme', theme)
 
 // any descendant, however deep
 const theme = state.shared<Theme>('theme')   // closest ancestor's value, or undefined`} />
-</section>
+    </section>
 </div>

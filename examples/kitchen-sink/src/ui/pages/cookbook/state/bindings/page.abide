@@ -6,32 +6,31 @@ const LIVE = '/reactive-state'
 </script>
 
 <div class="flex flex-col gap-8">
-<div class="flex flex-col gap-2">
-<h1 class="text-3xl font-bold">shared context</h1>
-<p class="text-slate-600">
-    Passing a value down the component tree without threading it through every prop.
-    <code class="font-mono">state.share(key, value)</code> puts a value on the ambient scope;
-    <code class="font-mono">state.shared(key)</code> reads the closest ancestor that shared it.
-    Context flows down only — it is not the reactive doc, which does not inherit.
-</p>
-</div>
-<div class="flex flex-col gap-4">
-
-<Recipe
-    task="Share a value down the tree"
-    live={LIVE}
-    code={`// in a layout / ancestor
+    <div class="flex flex-col gap-2">
+        <h1 class="text-3xl font-bold">shared context</h1>
+        <p class="text-slate-600">
+            Passing a value down the component tree without threading it through every prop.
+            <code class="font-mono">state.share(key, value)</code> puts a value on the ambient
+            scope; <code class="font-mono">state.shared(key)</code> reads the closest ancestor that
+            shared it. Context flows down only — it is not the reactive doc, which does not inherit.
+        </p>
+    </div>
+    <div class="flex flex-col gap-4">
+        <Recipe
+            task="Share a value down the tree"
+            live={LIVE}
+            code={`// in a layout / ancestor
 import { state } from '@abide/abide/ui/state'
 state.share('theme', 'dark')
 
 // in any descendant
 const theme = state.shared('theme')`}
-    note={'`state.share(key, value)` puts a value on this scope; `state.shared(key)` reads the closest ancestor that has it. Nothing is threaded through props.'} />
+            note={'`state.share(key, value)` puts a value on this scope; `state.shared(key)` reads the closest ancestor that has it. Nothing is threaded through props.'} />
 
-<Recipe
-    task="Share a reactive cell, not a snapshot"
-    live={LIVE}
-    code={`// ancestor — share the cell itself, so reads stay live
+        <Recipe
+            task="Share a reactive cell, not a snapshot"
+            live={LIVE}
+            code={`// ancestor — share the cell itself, so reads stay live
 import { state } from '@abide/abide/ui/state'
 let cart = state([])
 state.share('cart', () => cart)
@@ -39,36 +38,35 @@ state.share('cart', () => cart)
 // descendant — call the shared accessor to track updates
 const readCart = state.shared('cart')
 readCart()   // reactive — re-runs when the ancestor reassigns cart`}
-    note={'Context holds by reference. Share an accessor (a thunk over the cell) so descendants read live values; a plain snapshot would freeze at share time.'} />
+            note={'Context holds by reference. Share an accessor (a thunk over the cell) so descendants read live values; a plain snapshot would freeze at share time.'} />
 
-<Recipe
-    task="Provide app-wide context from the root layout"
-    live={LIVE}
-    code={`// src/ui/pages/layout.abide — the root layout
+        <Recipe
+            task="Provide app-wide context from the root layout"
+            live={LIVE}
+            code={`// src/ui/pages/layout.abide — the root layout
 import { state } from '@abide/abide/ui/state'
 state.share('app', { name: 'abide' })
 
 // any route below
 const app = state.shared('app')`}
-    note={'Share at the root layout and every route beneath reads it. Sharing in the top layout is the idiom for app-wide values (theme, current user, feature flags).'} />
+            note={'Share at the root layout and every route beneath reads it. Sharing in the top layout is the idiom for app-wide values (theme, current user, feature flags).'} />
 
-<Recipe
-    task="Default when no ancestor shared the key"
-    live={LIVE}
-    code={`import { state } from '@abide/abide/ui/state'
+        <Recipe
+            task="Default when no ancestor shared the key"
+            live={LIVE}
+            code={`import { state } from '@abide/abide/ui/state'
 const theme = state.shared('theme') ?? 'light'`}
-    note={'`state.shared(key)` returns `undefined` when no ancestor provided the key — coalesce to a default so a component works standalone.'} />
+            note={'`state.shared(key)` returns `undefined` when no ancestor provided the key — coalesce to a default so a component works standalone.'} />
 
-<Recipe
-    task="Share one store across every route"
-    gap={true}
-    code={`// no dedicated shared-store primitive — share from the root layout
+        <Recipe
+            task="Share one store across every route"
+            gap={true}
+            code={`// no dedicated shared-store primitive — share from the root layout
 // root layout:
 import { state } from '@abide/abide/ui/state'
 state.share('app', appStore)
 // anywhere:
 const app = state.shared('app')`}
-    note={"There's no standalone shared-store export. The idiom is a value shared from the root layout — app-wide and reactive when you share an accessor, but you wire it in the root layout yourself rather than importing a ready-made store."} />
-
-</div>
+            note={"There's no standalone shared-store export. The idiom is a value shared from the root layout — app-wide and reactive when you share an accessor, but you wire it in the root layout yourself rather than importing a ready-made store."} />
+    </div>
 </div>

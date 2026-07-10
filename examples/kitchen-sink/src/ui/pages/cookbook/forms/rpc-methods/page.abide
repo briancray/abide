@@ -6,93 +6,101 @@ const LIVE = '/rpc'
 </script>
 
 <div class="flex flex-col gap-8">
-<div class="flex flex-col gap-2">
-<h1 class="text-3xl font-bold">rpc methods</h1>
-<p class="text-slate-600">
-    One rpc per file under <code class="font-mono">src/server/rpc/</code>. The verb helper (<code
-        class="font-mono"
-        >GET</code
-    >
-    / <code class="font-mono">POST</code> / <code class="font-mono">PUT</code> /
-    <code class="font-mono">PATCH</code> / <code class="font-mono">DELETE</code> /
-    <code class="font-mono">HEAD</code>) sets the method; the schema projects the CLI, MCP, and
-    OpenAPI surfaces.
-</p>
-</div>
-<div class="flex flex-col gap-4">
-
-<Recipe task="Define a read" live={LIVE} code={`import { GET } from '@abide/abide/server/GET'
+    <div class="flex flex-col gap-2">
+        <h1 class="text-3xl font-bold">rpc methods</h1>
+        <p class="text-slate-600">
+            One rpc per file under <code class="font-mono">src/server/rpc/</code>. The verb helper
+            (<code class="font-mono">GET</code> / <code class="font-mono">POST</code> /
+            <code class="font-mono">PUT</code> / <code class="font-mono">PATCH</code> /
+            <code class="font-mono">DELETE</code> / <code class="font-mono">HEAD</code>) sets the
+            method; the schema projects the CLI, MCP, and OpenAPI surfaces.
+        </p>
+    </div>
+    <div class="flex flex-col gap-4">
+        <Recipe task="Define a read" live={LIVE} code={`import { GET } from '@abide/abide/server/GET'
 import { json } from '@abide/abide/server/json'
 
 export const getProduct = GET(({ id }: { id: string }) => json(lookup(id)))`} note={'`GET` args arrive from the query string. The export name is the rpc name; the file lives at `src/server/rpc/getProduct.ts` and the bundler binds it.'} />
 
-<Recipe task="Define a create" live={LIVE} code={`import { POST } from '@abide/abide/server/POST'
+        <Recipe task="Define a create" live={LIVE} code={`import { POST } from '@abide/abide/server/POST'
 
 export const createEcho = POST(({ message }) => json({ message }, { status: 201 }), { schemas: { input: inputSchema } })`} note={'`POST` args arrive in the JSON request body. Return `json(body, { status: 201 })` to signal creation.'} />
 
-<Recipe task="Define a replace" live={LIVE} code={`import { PUT } from '@abide/abide/server/PUT'
+        <Recipe task="Define a replace" live={LIVE} code={`import { PUT } from '@abide/abide/server/PUT'
 
 export const replaceEcho = PUT(({ id, message }) => json(save(id, message)), { schemas: { input: inputSchema } })`} note={'`PUT` replaces a resource wholesale — idempotent by intent. Mutating verbs are origin-gated against cross-site browsers by default.'} />
 
-<Recipe task="Define a partial update" live={LIVE} code={`import { PATCH } from '@abide/abide/server/PATCH'
+        <Recipe
+            task="Define a partial update"
+            live={LIVE}
+            code={`import { PATCH } from '@abide/abide/server/PATCH'
 
-export const patchEcho = PATCH(({ id, ...fields }) => json(update(id, fields)), { schemas: { input: inputSchema } })`} note={'`PATCH` merges a subset of fields. Same mutating-verb protections as PUT/POST/DELETE.'} />
+export const patchEcho = PATCH(({ id, ...fields }) => json(update(id, fields)), { schemas: { input: inputSchema } })`}
+            note={'`PATCH` merges a subset of fields. Same mutating-verb protections as PUT/POST/DELETE.'} />
 
-<Recipe task="Define a delete" live={LIVE} code={`import { DELETE } from '@abide/abide/server/DELETE'
+        <Recipe
+            task="Define a delete"
+            live={LIVE}
+            code={`import { DELETE } from '@abide/abide/server/DELETE'
 
-export const deleteEcho = DELETE(({ id }) => json({ deleted: id }))`} note={'`DELETE` removes a resource. Return the deleted id (or a 204 via `json(undefined, { status: 204 })`).'} />
+export const deleteEcho = DELETE(({ id }) => json({ deleted: id }))`}
+            note={'`DELETE` removes a resource. Return the deleted id (or a 204 via `json(undefined, { status: 204 })`).'} />
 
-<Recipe
-    task="Define a body-less read"
-    live={LIVE}
-    code={`import { HEAD } from '@abide/abide/server/HEAD'
+        <Recipe
+            task="Define a body-less read"
+            live={LIVE}
+            code={`import { HEAD } from '@abide/abide/server/HEAD'
 
 export const headEcho = HEAD(({ id }) => new Response(null, { headers: existsHeaders(id) }))`}
-    note={'`HEAD` returns headers with no body — existence checks, content-length probes. Like GET, it auto-exposes to MCP.'} />
+            note={'`HEAD` returns headers with no body — existence checks, content-length probes. Like GET, it auto-exposes to MCP.'} />
 
-<Recipe
-    task="Return JSON with a helper"
-    live={LIVE}
-    code={`import { json } from '@abide/abide/server/json'
+        <Recipe
+            task="Return JSON with a helper"
+            live={LIVE}
+            code={`import { json } from '@abide/abide/server/json'
 
 return json({ ok: true, id })`}
-    note={'`json()` sets content-type and carries the `TypedResponse<T>` brand, so the caller sees the decoded body type. A bare `Response.json` works too but loses the brand.'} />
+            note={'`json()` sets content-type and carries the `TypedResponse<T>` brand, so the caller sees the decoded body type. A bare `Response.json` works too but loses the brand.'} />
 
-<Recipe
-    task="Set a custom status code"
-    live={LIVE}
-    code={`return json(created, { status: 201 })
+        <Recipe
+            task="Set a custom status code"
+            live={LIVE}
+            code={`return json(created, { status: 201 })
 return json(undefined, { status: 204 })`}
-    note={'Pass `{ status }` as the second argument. Combine with headers for full control of the response line.'} />
+            note={'Pass `{ status }` as the second argument. Combine with headers for full control of the response line.'} />
 
-<Recipe task="Set response headers" live="/rpc/consume" code={`return json(report, {
+        <Recipe
+            task="Set response headers"
+            live="/rpc/consume"
+            code={`return json(report, {
     headers: { 'x-report-version': '7', 'Cache-Control': 'no-store' },
-})`} note={'Add headers in the response init. Read them on the client with `rpc.raw(args)`, which hands back the underlying `Response`.'} />
+})`}
+            note={'Add headers in the response init. Read them on the client with `rpc.raw(args)`, which hands back the underlying `Response`.'} />
 
-<Recipe
-    task="Read the request in a handler"
-    live="/rpc/request-scope"
-    code={`import { request } from '@abide/abide/server/request'
+        <Recipe
+            task="Read the request in a handler"
+            live="/rpc/request-scope"
+            code={`import { request } from '@abide/abide/server/request'
 
 export const whoAmI = GET(() => json({ ua: request().headers.get('user-agent') }))`}
-    note={'`request()` returns the current `Request` from request scope — headers, method, url — without threading it through every call.'} />
+            note={'`request()` returns the current `Request` from request scope — headers, method, url — without threading it through every call.'} />
 
-<Recipe
-    task="Submit a form to a POST rpc"
-    live={LIVE}
-    code={`async function onSubmit(event) {
+        <Recipe
+            task="Submit a form to a POST rpc"
+            live={LIVE}
+            code={`async function onSubmit(event) {
     event.preventDefault()
     const created = await createEcho({ message })
     result = created
 }
 
 <form onsubmit={onSubmit}>…</form>`}
-    note={"Call the rpc like a local function — the bundler swaps it for a typed fetch on the client. Always `preventDefault()` so the browser doesn't full-page-post."} />
+            note={"Call the rpc like a local function — the bundler swaps it for a typed fetch on the client. Always `preventDefault()` so the browser doesn't full-page-post."} />
 
-<Recipe
-    task="Disable the button while a submit is in flight"
-    live={LIVE}
-    code={`let saving = state(false)
+        <Recipe
+            task="Disable the button while a submit is in flight"
+            live={LIVE}
+            code={`let saving = state(false)
 async function submit() {
     saving = true
     try {
@@ -103,22 +111,26 @@ async function submit() {
 }
 
 <button disabled={saving}>save</button>`}
-    note={'Flip a `saving` cell around the await, clearing it in `finally` so an error still re-enables the button. Prevents double-submits and signals progress. For a zero-plumbing version, `disabled={createEcho.pending()}` reads the same in-flight state off the call registry (see errors › probes).'} />
+            note={'Flip a `saving` cell around the await, clearing it in `finally` so an error still re-enables the button. Prevents double-submits and signals progress. For a zero-plumbing version, `disabled={createEcho.pending()}` reads the same in-flight state off the call registry (see errors › probes).'} />
 
-<Recipe
-    task="Reset a form after a successful submit"
-    live={LIVE}
-    code={`await createEcho({ message })
+        <Recipe
+            task="Reset a form after a successful submit"
+            live={LIVE}
+            code={`await createEcho({ message })
 message = ''`}
-    note={"Clear the bound cells after the await resolves. Do it after, not before — so a failed submit keeps the user's input."} />
+            note={"Clear the bound cells after the await resolves. Do it after, not before — so a failed submit keeps the user's input."} />
 
-<Recipe
-    task="Read the raw Response for status and headers"
-    live="/rpc/consume"
-    code={`const response = await createEcho.raw({ message })
+        <Recipe
+            task="Read the raw Response for status and headers"
+            live="/rpc/consume"
+            code={`const response = await createEcho.raw({ message })
 console.log(response.status, response.headers.get('location'))`}
-    note={'`.raw(args)` returns the `Response` instead of the decoded body — the escape hatch when you need the status line or headers, not just the payload.'} />
+            note={'`.raw(args)` returns the `Response` instead of the decoded body — the escape hatch when you need the status line or headers, not just the payload.'} />
 
-<Recipe task="Expose a mutating rpc to MCP" live="/mcp" code={`export const createEcho = POST(handler, { schemas: { input: inputSchema }, clients: { mcp: true } })`} note={'GET/HEAD auto-expose to MCP; a mutating verb opts in with `clients: { mcp: true }` so a model can call it. An `inputSchema` also auto-exposes it to the CLI.'} />
-</div>
+        <Recipe
+            task="Expose a mutating rpc to MCP"
+            live="/mcp"
+            code={`export const createEcho = POST(handler, { schemas: { input: inputSchema }, clients: { mcp: true } })`}
+            note={'GET/HEAD auto-expose to MCP; a mutating verb opts in with `clients: { mcp: true }` so a model can call it. An `inputSchema` also auto-exposes it to the CLI.'} />
+    </div>
 </div>

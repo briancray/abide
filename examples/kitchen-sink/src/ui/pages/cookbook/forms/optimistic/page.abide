@@ -6,29 +6,28 @@ const LIVE = '/reactive-state'
 </script>
 
 <div class="flex flex-col gap-8">
-<div class="flex flex-col gap-2">
-<h1 class="text-3xl font-bold">optimistic updates & flows</h1>
-<p class="text-slate-600">
-    Mutation UX — apply the change before the server confirms, refresh the reads it touches, and the
-    common submit patterns: debounce, cancel, confirm, bulk, and retry.
-</p>
-</div>
-<div class="flex flex-col gap-4">
-
-<Recipe
-    task="Apply an optimistic update, then confirm"
-    live={LIVE}
-    code={`async function bump() {
+    <div class="flex flex-col gap-2">
+        <h1 class="text-3xl font-bold">optimistic updates & flows</h1>
+        <p class="text-slate-600">
+            Mutation UX — apply the change before the server confirms, refresh the reads it touches,
+            and the common submit patterns: debounce, cancel, confirm, bulk, and retry.
+        </p>
+    </div>
+    <div class="flex flex-col gap-4">
+        <Recipe
+            task="Apply an optimistic update, then confirm"
+            live={LIVE}
+            code={`async function bump() {
     getCount.patch((c) => ({ count: c.count + 1 }))   // apply the guess now
     await increment()
     getCount.refresh()                                // reconcile with the server
 }`}
-    note={'`getCount.patch(updater)` mutates the retained value reactively with no network — the first-class optimistic write; the rpc is the pre-bound selector. `getCount.refresh()` then reconciles against the confirmed value.'} />
+            note={'`getCount.patch(updater)` mutates the retained value reactively with no network — the first-class optimistic write; the rpc is the pre-bound selector. `getCount.refresh()` then reconciles against the confirmed value.'} />
 
-<Recipe
-    task="Roll back a failed optimistic update"
-    live={LIVE}
-    code={`async function bump() {
+        <Recipe
+            task="Roll back a failed optimistic update"
+            live={LIVE}
+            code={`async function bump() {
     getCount.patch((c) => ({ count: c.count + 1 }))
     try {
         await increment()
@@ -36,92 +35,95 @@ const LIVE = '/reactive-state'
         getCount.refresh()  // re-pull the confirmed value either way
     }
 }`}
-    note={"Refresh in `finally` so an error re-pulls the last confirmed value, dropping the guess. Surface the error separately (toast) so the user knows it didn't stick."} />
+            note={"Refresh in `finally` so an error re-pulls the last confirmed value, dropping the guess. Surface the error separately (toast) so the user knows it didn't stick."} />
 
-<Recipe
-    task="Refresh reads after a write"
-    live={LIVE}
-    code={`import { refresh } from '@abide/abide/shared/refresh'
+        <Recipe
+            task="Refresh reads after a write"
+            live={LIVE}
+            code={`import { refresh } from '@abide/abide/shared/refresh'
 await placeOrder(cart)
 refresh({ tags: ['orders'] })`}
-    note={'Tag the reads a mutation affects, then refresh the tag after it succeeds — every reactive read of that tag revalidates, keeping its stale value visible. The canonical write-then-refresh.'} />
+            note={'Tag the reads a mutation affects, then refresh the tag after it succeeds — every reactive read of that tag revalidates, keeping its stale value visible. The canonical write-then-refresh.'} />
 
-<Recipe
-    task="Show a success confirmation"
-    live={LIVE}
-    code={`let saved = state(false)
+        <Recipe
+            task="Show a success confirmation"
+            live={LIVE}
+            code={`let saved = state(false)
 async function submit() {
     await save(form)
     saved = true
     setTimeout(() => (saved = false), 2000)
 }`}
-    note={"Flip a transient flag after the await and clear it on a timer — a lightweight 'Saved ✓' without a toast library."} />
+            note={"Flip a transient flag after the await and clear it on a timer — a lightweight 'Saved ✓' without a toast library."} />
 
-<Recipe
-    task="Debounce search-as-you-type"
-    live={LIVE}
-    code={`let query = state('')
+        <Recipe
+            task="Debounce search-as-you-type"
+            live={LIVE}
+            code={`let query = state('')
 let results = state([])
 watch(query, (q) => {
     const id = setTimeout(async () => (results = await search({ q })), 250)
     return () => clearTimeout(id)
 })`}
-    note={'Schedule the rpc in a watch on the query cell and cancel the pending timer on each keystroke — the search fires once the typing settles, not per character.'} />
+            note={'Schedule the rpc in a watch on the query cell and cancel the pending timer on each keystroke — the search fires once the typing settles, not per character.'} />
 
-<Recipe
-    task="Cancel an in-flight request"
-    live={LIVE}
-    code={`let controller
+        <Recipe
+            task="Cancel an in-flight request"
+            live={LIVE}
+            code={`let controller
 async function run() {
     controller?.abort()
     controller = new AbortController()
     results = await search({ q }, { signal: controller.signal })
 }`}
-    note={"Every rpc call accepts `{ signal }`, merged with the scope's abort and the client timeout. Abort the previous controller before starting the next to drop stale flights."} />
+            note={"Every rpc call accepts `{ signal }`, merged with the scope's abort and the client timeout. Abort the previous controller before starting the next to drop stale flights."} />
 
-<Recipe
-    task="Ignore a stale response"
-    live={LIVE}
-    code={`let token = 0
+        <Recipe
+            task="Ignore a stale response"
+            live={LIVE}
+            code={`let token = 0
 async function run() {
     const mine = ++token
     const data = await search({ q })
     if (mine === token) results = data   // newest wins
 }`}
-    note={"A monotonic token discards out-of-order responses when you can't or don't want to abort — the last request issued is the only one allowed to write."} />
+            note={"A monotonic token discards out-of-order responses when you can't or don't want to abort — the last request issued is the only one allowed to write."} />
 
-<Recipe
-    task="Confirm before a destructive action"
-    live={LIVE}
-    code={`async function remove(id) {
+        <Recipe
+            task="Confirm before a destructive action"
+            live={LIVE}
+            code={`async function remove(id) {
     if (!confirm('Delete this item?')) return
     await deleteItem({ id })
     refresh({ tags: ['items'] })
 }`}
-    note={'Gate the mutation behind a confirmation, then refresh. Swap `confirm()` for your own modal cell when you want a styled dialog.'} />
+            note={'Gate the mutation behind a confirmation, then refresh. Swap `confirm()` for your own modal cell when you want a styled dialog.'} />
 
-<Recipe
-    task="Run a bulk action over a selection"
-    live={LIVE}
-    code={`async function archiveSelected() {
+        <Recipe
+            task="Run a bulk action over a selection"
+            live={LIVE}
+            code={`async function archiveSelected() {
     await Promise.all([...selected].map((id) => archive({ id })))
     selected = new Set()
     refresh({ tags: ['inbox'] })
 }`}
-    note={'Fan the selection set out over `Promise.all`, clear the selection, and refresh once. For very large sets, prefer a single batch rpc over N calls.'} />
+            note={'Fan the selection set out over `Promise.all`, clear the selection, and refresh once. For very large sets, prefer a single batch rpc over N calls.'} />
 
-<Recipe
-    task="Prevent a double submit"
-    live={LIVE}
-    code={`let submitting = state(false)
+        <Recipe
+            task="Prevent a double submit"
+            live={LIVE}
+            code={`let submitting = state(false)
 async function submit() {
     if (submitting) return
     submitting = true
     try { await save(form) } finally { submitting = false }
 }`}
-    note={"Guard on a flag at the top and clear it in `finally`. Pair with a `disabled` button so a fast double-click can't fire the mutation twice — or skip the flag entirely and read `save.pending()` (see errors › probes) when you just need the in-flight state."} />
+            note={"Guard on a flag at the top and clear it in `finally`. Pair with a `disabled` button so a fast double-click can't fire the mutation twice — or skip the flag entirely and read `save.pending()` (see errors › probes) when you just need the in-flight state."} />
 
-<Recipe task="Retry a failed submit" live={LIVE} code={`let error = state(undefined)
+        <Recipe
+            task="Retry a failed submit"
+            live={LIVE}
+            code={`let error = state(undefined)
 async function submit() {
     error = undefined
     try {
@@ -131,40 +133,41 @@ async function submit() {
     }
 }
 
-{#if error}<button onclick={submit}>retry</button>{/if}`} note={'Hold the error in a cell and show a retry that re-runs the same submit. For network-loss durability, declare the rpc `outbox: true` instead — see offline.'} />
+{#if error}<button onclick={submit}>retry</button>{/if}`}
+            note={'Hold the error in a cell and show a retry that re-runs the same submit. For network-loss durability, declare the rpc `outbox: true` instead — see offline.'} />
 
-<Recipe
-    task="Drive a multi-step form"
-    live={LIVE}
-    code={`let step = state(1)
+        <Recipe
+            task="Drive a multi-step form"
+            live={LIVE}
+            code={`let step = state(1)
 let form = state({ name: '', plan: '', card: '' })
 
 const next = () => (step += 1)
 const back = () => (step -= 1)`}
-    note={'Keep one form object and a step cell; render each step with `{#if step === n}`. Validate per step, submit the whole object at the end.'} />
+            note={'Keep one form object and a step cell; render each step with `{#if step === n}`. Validate per step, submit the whole object at the end.'} />
 
-<Recipe
-    task="Load dependent select options"
-    live={LIVE}
-    code={`let country = state('')
+        <Recipe
+            task="Load dependent select options"
+            live={LIVE}
+            code={`let country = state('')
 const cities = state.computed(() => country ? getCities({ country }) : [])`}
-    note={'Derive the dependent options from the parent cell with a guarded smart read — pick a country and the city list refetches, keyed on it.'} />
+            note={'Derive the dependent options from the parent cell with a guarded smart read — pick a country and the city list refetches, keyed on it.'} />
 
-<Recipe
-    task="Send a CSRF token with a mutation"
-    gap={true}
-    code={`// abide has no CSRF token — it uses an Origin gate instead
+        <Recipe
+            task="Send a CSRF token with a mutation"
+            gap={true}
+            code={`// abide has no CSRF token — it uses an Origin gate instead
 // mutating rpcs 403 a cross-origin browser before the handler runs
 export const transfer = POST(handler, { schemas: { input: inputSchema } })  // gated by default`}
-    note={"There's no CSRF token to mint or attach. Mutating rpcs reject a cross-origin browser `Origin` automatically (opt out per-rpc with `crossOrigin: true`). If your threat model needs token-based CSRF on top, you'd wire it yourself in middleware."} />
+            note={"There's no CSRF token to mint or attach. Mutating rpcs reject a cross-origin browser `Origin` automatically (opt out per-rpc with `crossOrigin: true`). If your threat model needs token-based CSRF on top, you'd wire it yourself in middleware."} />
 
-<Recipe
-    task="Report file-upload progress"
-    gap={true}
-    code={`// no progress events on the rpc fetch — use XMLHttpRequest for the bar
+        <Recipe
+            task="Report file-upload progress"
+            gap={true}
+            code={`// no progress events on the rpc fetch — use XMLHttpRequest for the bar
 const xhr = new XMLHttpRequest()
 xhr.upload.onprogress = (e) => (pct = e.loaded / e.total)
 xhr.open('POST', uploadNote.url)`}
-    note={'The typed rpc call is `fetch`-based and exposes no upload-progress events. For a progress bar, post to `rpc.url` with `XMLHttpRequest` (which does emit them) and forgo the typed wrapper for that one call.'} />
-</div>
+            note={'The typed rpc call is `fetch`-based and exposes no upload-progress events. For a progress bar, post to `rpc.url` with `XMLHttpRequest` (which does emit them) and forgo the typed wrapper for that one call.'} />
+    </div>
 </div>

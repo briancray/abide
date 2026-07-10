@@ -7,106 +7,110 @@ const PROBES = '/probes'
 </script>
 
 <div class="flex flex-col gap-8">
-<div class="flex flex-col gap-2">
-<h1 class="text-3xl font-bold">hydrate & fetch patterns</h1>
-<p class="text-slate-600">
-    Loading data on the client — on navigation, on demand, in parallel — and the
-    stale-while-revalidate and pagination shapes, including where abide leaves the last mile to you.
-</p>
-</div>
-<div class="flex flex-col gap-4">
+    <div class="flex flex-col gap-2">
+        <h1 class="text-3xl font-bold">hydrate & fetch patterns</h1>
+        <p class="text-slate-600">
+            Loading data on the client — on navigation, on demand, in parallel — and the
+            stale-while-revalidate and pagination shapes, including where abide leaves the last mile
+            to you.
+        </p>
+    </div>
+    <div class="flex flex-col gap-4">
+        <Recipe
+            task="Fetch on navigation"
+            live={LIVE}
+            code={`const { params } = page
+const user = state.computed(() => getUser({ id: params.id }))`}
+            note={'Read `page.params` in the call args and the read refetches when the route param changes on SPA navigation — the client router keeps the layout mounted, the cell re-derives.'} />
 
-<Recipe task="Fetch on navigation" live={LIVE} code={`const { params } = page
-const user = state.computed(() => getUser({ id: params.id }))`} note={'Read `page.params` in the call args and the read refetches when the route param changes on SPA navigation — the client router keeps the layout mounted, the cell re-derives.'} />
-
-<Recipe
-    task="Fetch on demand from an event"
-    live={LIVE}
-    code={`let query = state('')
+        <Recipe
+            task="Fetch on demand from an event"
+            live={LIVE}
+            code={`let query = state('')
 let results = state([])
 
 async function search() {
     results = await getResults.raw({ query }).then((r) => r.json())
 }`}
-    note={"For imperative fetches (a search button, a 'load more'), call `.raw` to bypass the cache and write the result into a cell. Use the bare smart call when you want coalescing or a snapshot instead."} />
+            note={"For imperative fetches (a search button, a 'load more'), call `.raw` to bypass the cache and write the result into a cell. Use the bare smart call when you want coalescing or a snapshot instead."} />
 
-<Recipe
-    task="Load several reads in parallel"
-    live={LIVE}
-    code={`const [user, orders, prefs] = await Promise.all([
+        <Recipe
+            task="Load several reads in parallel"
+            live={LIVE}
+            code={`const [user, orders, prefs] = await Promise.all([
     getUser(),
     getOrders(),
     getPrefs(),
 ])`}
-    note={'`Promise.all` fires the reads concurrently. Each bare call is the smart read, so if children also read them the whole page shares one flight per key.'} />
+            note={'`Promise.all` fires the reads concurrently. Each bare call is the smart read, so if children also read them the whole page shares one flight per key.'} />
 
-<Recipe
-    task="Show stale data while revalidating"
-    live={PROBES}
-    code={`const stale = state.computed(() => getRates.refreshing())
+        <Recipe
+            task="Show stale data while revalidating"
+            live={PROBES}
+            code={`const stale = state.computed(() => getRates.refreshing())
 
 <span class:opacity-50={stale}>{rates.usd}</span>`}
-    note={'`getRates.refreshing()` is true when a value is held but a fresher one is loading. Keep rendering the old value and dim it — the stale-while-revalidate UX, no flash of empty.'} />
+            note={'`getRates.refreshing()` is true when a value is held but a fresher one is loading. Keep rendering the old value and dim it — the stale-while-revalidate UX, no flash of empty.'} />
 
-<Recipe
-    task="Distinguish first-load from a refresh"
-    live={PROBES}
-    code={`const firstLoad = state.computed(() => getRates.pending() && !getRates.refreshing())`}
-    note={'`getRates.pending()` = no value yet (show a skeleton); `getRates.refreshing()` = value held, refetching (dim it). Together they separate the empty state from the background update.'} />
+        <Recipe
+            task="Distinguish first-load from a refresh"
+            live={PROBES}
+            code={`const firstLoad = state.computed(() => getRates.pending() && !getRates.refreshing())`}
+            note={'`getRates.pending()` = no value yet (show a skeleton); `getRates.refreshing()` = value held, refetching (dim it). Together they separate the empty state from the background update.'} />
 
-<Recipe
-    task="Refetch after a mutation"
-    live={LIVE}
-    code={`import { refresh } from '@abide/abide/shared/refresh'
+        <Recipe
+            task="Refetch after a mutation"
+            live={LIVE}
+            code={`import { refresh } from '@abide/abide/shared/refresh'
 await placeOrder(cart)
 refresh({ tags: ['orders'] })`}
-    note={'Mutate, then refresh the tag the reads share — the reactive reads revalidate, keeping the stale list visible until the fresh one lands. No manual re-assignment.'} />
+            note={'Mutate, then refresh the tag the reads share — the reactive reads revalidate, keeping the stale list visible until the fresh one lands. No manual re-assignment.'} />
 
-<Recipe
-    task="Deduplicate a read used across components"
-    live={LIVE}
-    code={`// the endpoint declares the tag: GET(handler, { cache: { tags: ['session'] } })
+        <Recipe
+            task="Deduplicate a read used across components"
+            live={LIVE}
+            code={`// the endpoint declares the tag: GET(handler, { cache: { tags: ['session'] } })
 // unrelated components, one request per render
 const me = () => getCurrentUser()`}
-    note={'Export a shared wrapper around the bare smart call and use it wherever you need the value — coalescing collapses the concurrent reads into one, and the endpoint tag lets you refresh them all on sign-out.'} />
+            note={'Export a shared wrapper around the bare smart call and use it wherever you need the value — coalescing collapses the concurrent reads into one, and the endpoint tag lets you refresh them all on sign-out.'} />
 
-<Recipe
-    task="Render a page shell before its data"
-    live={LIVE}
-    code={`<Header />                         <!-- instant -->
+        <Recipe
+            task="Render a page shell before its data"
+            live={LIVE}
+            code={`<Header />                         <!-- instant -->
 {#await getBody()}
     <Skeleton />
 {:then body}
     <Article body={body} />
 {/await}`}
-    note={'Streaming awaits let the shell paint immediately and the slow region fill in. Compose several to stream independent slots out of order as each resolves.'} />
+            note={'Streaming awaits let the shell paint immediately and the slow region fill in. Compose several to stream independent slots out of order as each resolves.'} />
 
-<Recipe task="Paginate a list" gap={true} code={`// no cursor/pagination helper — page it yourself
+        <Recipe task="Paginate a list" gap={true} code={`// no cursor/pagination helper — page it yourself
 let pageNum = state(1)
 const rows = state.computed(() => listRows({ page: pageNum, size: 20 }))
 
 <button onclick={() => (pageNum += 1)}>next</button>`} note={"There's no built-in cursor or infinite-scroll primitive. Take page/cursor as an rpc arg, key the call on it, and drive the offset with a cell — for infinite scroll, append results into a state array yourself."} />
 
-<Recipe
-    task="Optimistically update before the server confirms"
-    live={LIVE}
-    code={`async function bump() {
+        <Recipe
+            task="Optimistically update before the server confirms"
+            live={LIVE}
+            code={`async function bump() {
     getCount.patch((c) => ({ count: c.count + 1 }))   // apply the guess now
     await increment()
     getCount.refresh()                                // reconcile with the server
 }`}
-    note={'`getCount.patch(updater)` mutates the retained value reactively with no network — the first-class optimistic write. Apply the guess immediately, then `getCount.refresh()` to reconcile (or `patch` back on error to roll back).'} />
+            note={'`getCount.patch(updater)` mutates the retained value reactively with no network — the first-class optimistic write. Apply the guess immediately, then `getCount.refresh()` to reconcile (or `patch` back on error to roll back).'} />
 
-<Recipe
-    task="Refetch when the tab regains focus"
-    gap={true}
-    code={`import { refresh } from '@abide/abide/shared/refresh'
+        <Recipe
+            task="Refetch when the tab regains focus"
+            gap={true}
+            code={`import { refresh } from '@abide/abide/shared/refresh'
 import { watch } from '@abide/abide/ui/watch'
 watch(() => {
     const onFocus = () => refresh({ tags: ['session'] })
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
 })`}
-    note={"There's no refetch-on-focus option. Wire the `focus` (or `visibilitychange`) event in a watch thunk and refresh the tags you want revalidated when the user comes back."} />
-</div>
+            note={"There's no refetch-on-focus option. Wire the `focus` (or `visibilitychange`) event in a watch thunk and refresh the tags you want revalidated when the user comes back."} />
+    </div>
 </div>

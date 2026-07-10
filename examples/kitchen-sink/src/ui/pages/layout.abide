@@ -95,20 +95,22 @@ const groups = [
             <div class="flex flex-col gap-8">
                 <a href={url('/')} class="text-base font-semibold">abide kitchen-sink</a>
                 <nav class="flex flex-col gap-8 text-sm">
-                {#for group of groups by group.title}
-                    <div class="flex flex-col gap-2">
-                        <h2
-                            class="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                            {group.title}
-                        </h2>
-                        <ul class="flex flex-col gap-1">
-                            {#for link of group.links by link.href}
-                                <li><a href={url(link.href)} class={linkClass(link.href)}>{link.label}</a></li>
-                            {/for}
-                        </ul>
-                    </div>
-                {/for}
-            </nav>
+                    {#for group of groups by group.title}
+                        <div class="flex flex-col gap-2">
+                            <h2
+                                class="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                                {group.title}
+                            </h2>
+                            <ul class="flex flex-col gap-1">
+                                {#for link of group.links by link.href}
+                                    <li>
+                                        <a href={url(link.href)} class={linkClass(link.href)}>{link.label}</a>
+                                    </li>
+                                {/for}
+                            </ul>
+                        </div>
+                    {/for}
+                </nav>
             </div>
         </aside>
         <main class="min-w-0 flex-1 py-10">{children()}</main>

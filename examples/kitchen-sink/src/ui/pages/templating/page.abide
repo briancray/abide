@@ -30,85 +30,93 @@ const areas = [
 </script>
 
 <div class="flex flex-col gap-8">
-<section class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-    <table class="w-full text-sm">
-        <thead class="border-b border-slate-200 bg-slate-50 text-left">
-            <tr>
-                <th class="px-4 py-2 font-mono font-medium">grammar</th>
-                <th class="px-4 py-2 font-medium">form</th>
-            </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-100">
-            <tr>
-                <td class="px-4 py-2 font-mono">{'{expr}'} · {'{html(…)}'}</td>
-                <td class="px-4 py-2 text-slate-600">
-                    escaped text interpolation (a promise-typed read peeks);
-                    <code class="font-mono">html</code> brands trusted raw markup
-                </td>
-            </tr>
-            <tr>
-                <td class="px-4 py-2 font-mono">
-                    {'{#if}'} · {'{:else if}'} · {'{:else}'} · {'{#switch}'} · {'{#try}'}
-                </td>
-                <td class="px-4 py-2 text-slate-600">
-                    branching &amp; a synchronous error boundary —
-                    <a class="underline" href="/templating/control-flow">control flow</a>
-                </td>
-            </tr>
-            <tr>
-                <td class="px-4 py-2 font-mono">{'{#for x, i of list by k}'} · {'{#for await}'}</td>
-                <td class="px-4 py-2 text-slate-600">keyed list; the async form drains a stream</td>
-            </tr>
-            <tr>
-                <td class="px-4 py-2 font-mono">{'{#await}'} · bare peek · {'{await expr}'}</td>
-                <td class="px-4 py-2 text-slate-600">
-                    async data — a bare peek reads <code class="font-mono">undefined</code> while
-                    pending, <code class="font-mono">await</code> blocks SSR, the block adds
-                    branches (<a class="underline" href="/templating/async">async</a>)
-                </td>
-            </tr>
-            <tr>
-                <td class="px-4 py-2 font-mono">
-                    {'{expr}'} attrs · on* · bind: · class: · style: · attach · {'{...spread}'}
-                </td>
-                <td class="px-4 py-2 text-slate-600">
-                    bindings &amp; directives, incl. <code class="font-mono">{'bind:value={{ get, set }}'}</code> and
-                    component <code class="font-mono">bind:prop</code> (<a
-                        class="underline"
-                        href="/templating/bindings"
-                        >bindings</a
-                    >)
-                </td>
-            </tr>
-            <tr>
-                <td class="px-4 py-2 font-mono">
-                    {'{#snippet}'} · {'{children()}'} · &lt;Capitalized /&gt;
-                </td>
-                <td class="px-4 py-2 text-slate-600">
-                    reusable builders, child content, components &amp; scoped
-                    <code class="font-mono">&lt;style&gt;</code> (<a
-                        class="underline"
-                        href="/templating/snippets"
-                        >snippets</a
-                    >)
-                </td>
-            </tr>
-        </tbody>
-    </table>
-</section>
+    <section class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+        <table class="w-full text-sm">
+            <thead class="border-b border-slate-200 bg-slate-50 text-left">
+                <tr>
+                    <th class="px-4 py-2 font-mono font-medium">grammar</th>
+                    <th class="px-4 py-2 font-medium">form</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                <tr>
+                    <td class="px-4 py-2 font-mono">{'{expr}'} · {'{html(…)}'}</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        escaped text interpolation (a promise-typed read peeks);
+                        <code class="font-mono">html</code> brands trusted raw markup
+                    </td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">
+                        {'{#if}'} · {'{:else if}'} · {'{:else}'} · {'{#switch}'} · {'{#try}'}
+                    </td>
+                    <td class="px-4 py-2 text-slate-600">
+                        branching &amp; a synchronous error boundary —
+                        <a class="underline" href="/templating/control-flow">control flow</a>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">{'{#for x, i of list by k}'} · {'{#for await}'}</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        keyed list; the async form drains a stream
+                    </td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">{'{#await}'} · bare peek · {'{await expr}'}</td>
+                    <td class="px-4 py-2 text-slate-600">
+                        async data — a bare peek reads
+                        <code class="font-mono">undefined</code> while pending,
+                        <code class="font-mono">await</code> blocks SSR, the block adds branches (<a
+                            class="underline"
+                            href="/templating/async"
+                            >async</a
+                        >)
+                    </td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">
+                        {'{expr}'} attrs · on* · bind: · class: · style: · attach · {'{...spread}'}
+                    </td>
+                    <td class="px-4 py-2 text-slate-600">
+                        bindings &amp; directives, incl.
+                        <code class="font-mono">{'bind:value={{ get, set }}'}</code> and component
+                        <code class="font-mono">bind:prop</code> (<a
+                            class="underline"
+                            href="/templating/bindings"
+                            >bindings</a
+                        >)
+                    </td>
+                </tr>
+                <tr>
+                    <td class="px-4 py-2 font-mono">
+                        {'{#snippet}'} · {'{children()}'} · &lt;Capitalized /&gt;
+                    </td>
+                    <td class="px-4 py-2 text-slate-600">
+                        reusable builders, child content, components &amp; scoped
+                        <code class="font-mono">&lt;style&gt;</code> (<a
+                            class="underline"
+                            href="/templating/snippets"
+                            >snippets</a
+                        >)
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
 
-<section class="rounded-lg border border-slate-200 bg-white p-5">
-    <div class="flex flex-col gap-2">
-    <h2 class="text-sm font-semibold">Anatomy</h2>
-    <p class="text-sm text-slate-600">
-        One <code class="font-mono">&lt;script&gt;</code> (module scope; re-runs per render), markup
-        with <code class="font-mono">{'{#…}'}</code> blocks and
-        <code class="font-mono">{'{expr}'}</code> bindings, and an optional scoped
-        <code class="font-mono">&lt;style&gt;</code>. <code class="font-mono">props()</code> and
-        reactive primitives like <code class="font-mono">state</code> are both imported.
-    </p>
-    <div>
-        <CodeBlock title="Greeting.abide — the whole shape" code={`<script>
+    <section class="rounded-lg border border-slate-200 bg-white p-5">
+        <div class="flex flex-col gap-2">
+            <h2 class="text-sm font-semibold">Anatomy</h2>
+            <p class="text-sm text-slate-600">
+                One <code class="font-mono">&lt;script&gt;</code> (module scope; re-runs per
+                render), markup with <code class="font-mono">{'{#…}'}</code> blocks and
+                <code class="font-mono">{'{expr}'}</code> bindings, and an optional scoped
+                <code class="font-mono">&lt;style&gt;</code>.
+                <code class="font-mono">props()</code> and reactive primitives like
+                <code class="font-mono">state</code> are both imported.
+            </p>
+            <div>
+                <CodeBlock title="Greeting.abide — the whole shape" code={`<script>
     import { props } from '@abide/abide/ui/props'
     import { state } from '@abide/abide/ui/state'
     const { name = 'world' } = props()
@@ -120,21 +128,21 @@ const areas = [
 <style>
     button { font: inherit; }
 </style>`} />
-    </div>
-    </div>
-</section>
+            </div>
+        </div>
+    </section>
 
-<section class="flex flex-col gap-2">
-    <h2 class="text-sm font-semibold">The grammar, four ways</h2>
-    <div class="grid gap-4 sm:grid-cols-2">
-        {#for area of areas by area.href}
-            <a
-                href={area.href}
-                class="flex flex-col gap-1 rounded-lg border border-slate-200 bg-white p-5 hover:border-slate-400">
-                <h3 class="font-mono text-sm font-semibold">{area.title}</h3>
-                <p class="text-xs text-slate-600">{area.body}</p>
-            </a>
-        {/for}
-    </div>
-</section>
+    <section class="flex flex-col gap-2">
+        <h2 class="text-sm font-semibold">The grammar, four ways</h2>
+        <div class="grid gap-4 sm:grid-cols-2">
+            {#for area of areas by area.href}
+                <a
+                    href={area.href}
+                    class="flex flex-col gap-1 rounded-lg border border-slate-200 bg-white p-5 hover:border-slate-400">
+                    <h3 class="font-mono text-sm font-semibold">{area.title}</h3>
+                    <p class="text-xs text-slate-600">{area.body}</p>
+                </a>
+            {/for}
+        </div>
+    </section>
 </div>

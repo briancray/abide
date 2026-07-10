@@ -25,37 +25,37 @@ function renderGuarded() {
         <h1 class="text-3xl font-bold">Failure boundary</h1>
         <p class="text-slate-600">
             The guarded subtree below renders normally — until it throws. The nearest
-    <code class="font-mono">{'{#try}'}</code> catches it and renders its
-    <code class="font-mono">{'{:catch}'}</code> branch in place.
+            <code class="font-mono">{'{#try}'}</code> catches it and renders its
+            <code class="font-mono">{'{:catch}'}</code> branch in place.
         </p>
     </div>
 
-<Demo title={'{#try} / {:catch} — a lexical failure boundary'} code={`{#try}
+    <Demo title={'{#try} / {:catch} — a lexical failure boundary'} code={`{#try}
     <p>guarded content: {renderGuarded()}</p>
 {:catch error}
     <pre><code>{error.message}</code></pre>
 {/try}`}>
-    {#try}
-        <p class="text-slate-700">guarded content: {renderGuarded()}</p>
-    {:catch error}
-        <div class="flex flex-col gap-2">
-            <h2 class="text-xl font-bold text-red-700">caught</h2>
-            <pre
-                class="overflow-x-auto rounded-md border border-rose-200 bg-rose-50 p-4 text-xs leading-relaxed text-rose-700"><code>{error.message}</code></pre>
-        </div>
-    {/try}
+        {#try}
+            <p class="text-slate-700">guarded content: {renderGuarded()}</p>
+        {:catch error}
+            <div class="flex flex-col gap-2">
+                <h2 class="text-xl font-bold text-red-700">caught</h2>
+                <pre
+                    class="overflow-x-auto rounded-md border border-rose-200 bg-rose-50 p-4 text-xs leading-relaxed text-rose-700"><code>{error.message}</code></pre>
+            </div>
+        {/try}
 
-    <div class="flex flex-wrap gap-2 text-sm">
-        <a
-            href="/pages/boundary?explode=1"
-            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
-            >throw during render → caught by {'{#try}'}</a
-        >
-        <a
-            href="/pages/boundary"
-            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
-            >render normally</a
-        >
-    </div>
-</Demo>
+        <div class="flex flex-wrap gap-2 text-sm">
+            <a
+                href="/pages/boundary?explode=1"
+                class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+                >throw during render → caught by {'{#try}'}</a
+            >
+            <a
+                href="/pages/boundary"
+                class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+                >render normally</a
+            >
+        </div>
+    </Demo>
 </div>

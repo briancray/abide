@@ -6,31 +6,30 @@ const CONSUME = '/rpc/consume'
 </script>
 
 <div class="flex flex-col gap-8">
-<div class="flex flex-col gap-2">
-<h1 class="text-3xl font-bold">downloads & ranges</h1>
-<p class="text-slate-600">
-    Return bytes from a handler with the right content-type and disposition.
-    <code class="font-mono">Bun.file</code> handles range requests for free, so large files stream
-    and resume without extra code.
-</p>
-</div>
-<div class="flex flex-col gap-4">
-
-<Recipe task="Return a file from an rpc" code={`import { GET } from '@abide/abide/server/GET'
+    <div class="flex flex-col gap-2">
+        <h1 class="text-3xl font-bold">downloads & ranges</h1>
+        <p class="text-slate-600">
+            Return bytes from a handler with the right content-type and disposition.
+            <code class="font-mono">Bun.file</code> handles range requests for free, so large files
+            stream and resume without extra code.
+        </p>
+    </div>
+    <div class="flex flex-col gap-4">
+        <Recipe task="Return a file from an rpc" code={`import { GET } from '@abide/abide/server/GET'
 
 export const download = GET(({ id }) => new Response(Bun.file(pathFor(id))))`} note={"Return a raw `Response` wrapping `Bun.file(path)` — Bun sets content-type from the extension and streams the body. Use `GET` so it isn't origin-gated."} />
 
-<Recipe task="Force a download with a filename" code={`return new Response(Bun.file(path), {
+        <Recipe task="Force a download with a filename" code={`return new Response(Bun.file(path), {
     headers: { 'Content-Disposition': 'attachment; filename="report.pdf"' },
 })`} note={'`Content-Disposition: attachment` makes the browser save rather than display; `filename=` sets the suggested name. Drop `attachment` for inline viewing.'} />
 
-<Recipe task="Serve a byte range" code={`export const video = GET(({ id }) => new Response(Bun.file(videoPath(id))))`} note={'A `Bun.file` response honours the `Range` header automatically — seeking in a `<video>`, resuming a paused download, and partial reads all work with no extra handling.'} />
+        <Recipe task="Serve a byte range" code={`export const video = GET(({ id }) => new Response(Bun.file(videoPath(id))))`} note={'A `Bun.file` response honours the `Range` header automatically — seeking in a `<video>`, resuming a paused download, and partial reads all work with no extra handling.'} />
 
-<Recipe task="Stream a large file" code={`return new Response(Bun.file(bigPath))   // streamed, not buffered into memory`} note={'`Bun.file` streams from disk — a multi-gigabyte file never loads fully into memory. No manual chunking.'} />
+        <Recipe task="Stream a large file" code={`return new Response(Bun.file(bigPath))   // streamed, not buffered into memory`} note={'`Bun.file` streams from disk — a multi-gigabyte file never loads fully into memory. No manual chunking.'} />
 
-<Recipe task="Set the content type explicitly" code={`return new Response(csv, { headers: { 'Content-Type': 'text/csv; charset=utf-8' } })`} note={"For generated (non-file) bodies, set the type yourself. `Bun.file` infers it from the extension; a raw string or buffer doesn't."} />
+        <Recipe task="Set the content type explicitly" code={`return new Response(csv, { headers: { 'Content-Type': 'text/csv; charset=utf-8' } })`} note={"For generated (non-file) bodies, set the type yourself. `Bun.file` infers it from the extension; a raw string or buffer doesn't."} />
 
-<Recipe task="Generate a file on the fly" code={`export const exportCsv = GET(async () => {
+        <Recipe task="Generate a file on the fly" code={`export const exportCsv = GET(async () => {
     const rows = await allOrders()
     const csv = 'id,total\\n' + rows.map((o) => \`\${o.id},\${o.total}\`).join('\\n')
     return new Response(csv, {
@@ -38,26 +37,26 @@ export const download = GET(({ id }) => new Response(Bun.file(pathFor(id))))`} n
     })
 })`} note={'Build the body in the handler and return it with a download disposition — CSV exports, generated PDFs, receipts. No file on disk needed.'} />
 
-<Recipe task="Return JSON as a download" code={`return json(data, {
+        <Recipe task="Return JSON as a download" code={`return json(data, {
     headers: { 'Content-Disposition': 'attachment; filename="export.json"' },
 })`} note={'The `json()` helper plus a disposition header turns any payload into a downloadable file — a one-line data export.'} />
 
-<Recipe
-    task="Read a download on the client"
-    live={CONSUME}
-    code={`const response = await exportCsv.raw()
+        <Recipe
+            task="Read a download on the client"
+            live={CONSUME}
+            code={`const response = await exportCsv.raw()
 const blob = await response.blob()
 const url = URL.createObjectURL(blob)
 // assign to an <a download> and click it`}
-    note={"`.raw()` gives the streaming `Response`; turn it into a `Blob` and an object URL to save it from script (e.g. a custom 'Export' button)."} />
+            note={"`.raw()` gives the streaming `Response`; turn it into a `Blob` and an object URL to save it from script (e.g. a custom 'Export' button)."} />
 
-<Recipe task="Serve inline vs as an attachment" code={`// inline: browser displays it (PDF viewer, image)
+        <Recipe task="Serve inline vs as an attachment" code={`// inline: browser displays it (PDF viewer, image)
 headers: { 'Content-Disposition': 'inline' }
 // attachment: browser saves it
 headers: { 'Content-Disposition': 'attachment; filename="…"' }`} note={"`inline` displays in the tab, `attachment` saves. Choose per use case — a preview link is inline, a 'Download' button is attachment."} />
 
-<Recipe task="Set caching headers on a download" code={`return new Response(Bun.file(path), {
+        <Recipe task="Set caching headers on a download" code={`return new Response(Bun.file(path), {
     headers: { 'Cache-Control': 'public, max-age=31536000, immutable' },
 })`} note={'Content-addressed assets can cache forever (`immutable`); user-specific downloads should be `no-store`. `json()` defaults to `no-store` — override when a read is cacheable.'} />
-</div>
+    </div>
 </div>
