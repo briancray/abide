@@ -54,8 +54,13 @@ export function collectAbideDiagnostics(shadow: ShadowProgram): AbideDiagnostic[
         }
         /* The template boundary: a diagnostic mapping at/after it is a template expression, so
            eligible for the ADR-0032 bare-async-read suppression; anything before it is `<script>`
-           code, where a forgotten `await` must still surface. */
-        const templateStart = templateStartOffset(ts.sys.readFile(abidePath) ?? '')
+           code, where a forgotten `await` must still surface. If the source can't be read, DON'T
+           fall back to 0 — that treats the whole file (including `<script>`) as template and would
+           silently suppress a genuine forgotten-await error. Use +Infinity so nothing is eligible
+           for suppression and every real diagnostic surfaces (fail toward reporting). */
+        const abideSource = ts.sys.readFile(abidePath)
+        const templateStart =
+            abideSource === undefined ? Number.POSITIVE_INFINITY : templateStartOffset(abideSource)
         const raw = [
             ...program.getSyntacticDiagnostics(sourceFile),
             ...program.getSemanticDiagnostics(sourceFile),
