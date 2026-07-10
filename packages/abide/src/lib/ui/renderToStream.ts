@@ -8,8 +8,8 @@ Out-of-order SSR streaming. Yields the shell first (so the browser paints
 immediately), then one resolved fragment per STREAMING await block as its promise
 settles — in completion order, not source order, so a slow read never blocks a fast
 one. Each resolved fragment is a `<abide-resolve data-id="ID"><script
-type="application/json">…</script>…</abide-resolve>` that `applyResolved` swaps into
-the matching `<!--abide:await:ID-->` boundary; the leading script holds the
+type="application/json">…</script>…</abide-resolve>` that the inline swap script swaps
+into the matching `<!--abide:await:ID-->` boundary; the leading script holds the
 JSON-serialized value, registered for hydration so an `await` block adopts the
 resolved branch on resume instead of re-running.
 
@@ -71,7 +71,7 @@ export async function* renderToStream(
         inflight.delete(resolved.id)
         enqueueNew()
         /* An unserializable value (e.g. a cyclic media tree) streams its rendered HTML
-           with NO seed script: both swap consumers (SSR_SWAP_SCRIPT, applyResolved) skip
+           with NO seed script: the inline swap script (SSR_SWAP_SCRIPT) skips
            registration when the leading child isn't a parseable script, so hydration
            re-runs this one branch's promise — degrading to a refetch instead of aborting
            the whole stream. */
@@ -117,8 +117,8 @@ function settle(block: SsrAwait): Promise<Settled> {
    literal `</script>` from closing the block early — quotes stay raw, and the escape
    survives `decodeRefJson`'s inner JSON.parse since `<` only ever appears inside JSON
    strings. `tryEncodeResume` handles the serialize-or-refetch policy (undefined → no
-   script → the swap consumers skip registration → hydration re-runs that one promise).
-   `applyResolved`/the inline swap script store it via `.textContent`; `awaitBlock` decodes it. */
+   script → the inline swap script skips registration → hydration re-runs that one promise).
+   The inline swap script stores it via `.textContent`; `awaitBlock` decodes it. */
 function encodeStreamResume(resume: ResumeEntry, id: number): string | undefined {
     return tryEncodeResume(resume, id)?.replace(/</g, '\\u003c')
 }

@@ -17,7 +17,7 @@ import { router } from './router.ts'
 import { CELL_SEED } from './runtime/CELL_SEED.ts'
 import { clientPage } from './runtime/clientPage.ts'
 import type { RouteLoader } from './runtime/types/RouteLoader.ts'
-import { seedResolved } from './seedResolved.ts'
+import { seedStreamedResolution } from './seedStreamedResolution.ts'
 
 /*
 The official abide-ui client entry. Reads the server's `window.__SSR__` payload,
@@ -79,7 +79,7 @@ export function startClient(
     const streamed =
         (globalThis as { __abideResumeCache?: StreamedResolution[] }).__abideResumeCache ?? []
     for (const resolution of [...(ssr.cache ?? []), ...streamed]) {
-        seedResolved({ kind: 'cache', resolution })
+        seedStreamedResolution(resolution)
     }
     /* Seed the async-cell warm partition into `CELL_SEED` before mount: a hydrating
        `createAsyncCell` reads its render-path key here to adopt the SSR-resolved value warm
@@ -89,13 +89,12 @@ export function startClient(
         Object.assign(CELL_SEED, ssr.cells)
     }
     /* Keep the cache channel live past boot: replace the head's buffering collector with
-       the store-connected sink so a post-load resolution — streaming SPA navigation or a
-       socket-delivered SSR frame, both routed through applyResolved — seeds the store
-       directly instead of pushing to a buffer nothing drains again. The inline doc-stream
-       script only ever hands this a cache `StreamedResolution`, so wrap it as a cache frame
-       through the one intake seam. */
+       the store-connected sink so a post-boot resolution — the inline doc-stream cache
+       script — seeds the store through `seedStreamedResolution` directly instead of pushing
+       to a buffer nothing drains again. The inline doc-stream script only ever hands this a
+       cache `StreamedResolution`. */
     ;(globalThis as { __abideResolve?: (resolution: StreamedResolution) => void }).__abideResolve =
-        (resolution) => seedResolved({ kind: 'cache', resolution })
+        seedStreamedResolution
 
     return router(target, routes, layoutRoutes, probeNavigation)
 }

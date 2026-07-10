@@ -1,7 +1,7 @@
 /* The await-resume manifest: the resolved value (or error) of each streamed
    `await` block, keyed by its boundary id. The SSR stream serializes each entry
-   alongside its fragment; the client registers it (via `applyResolved` or the
-   inline swap script), and hydration reads it so an `await` block adopts the
+   alongside its fragment; the client registers it (via the inline swap script),
+   and hydration reads it so an `await` block adopts the
    resolved branch with the real value instead of re-running the promise.
 
    Each value is the ref-json-encoded ResumeEntry STRING, not the decoded object:

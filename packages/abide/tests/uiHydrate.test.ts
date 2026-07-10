@@ -5,7 +5,6 @@ import { compileSSR } from '../src/lib/ui/compile/compileSSR.ts'
 import { computed } from '../src/lib/ui/computed.ts'
 import { appendStatic } from '../src/lib/ui/dom/appendStatic.ts'
 import { appendText } from '../src/lib/ui/dom/appendText.ts'
-import { applyResolved } from '../src/lib/ui/dom/applyResolved.ts'
 import { attr } from '../src/lib/ui/dom/attr.ts'
 import { awaitBlock } from '../src/lib/ui/dom/awaitBlock.ts'
 import { cloneStatic } from '../src/lib/ui/dom/cloneStatic.ts'
@@ -16,7 +15,6 @@ import { skeleton } from '../src/lib/ui/dom/skeleton.ts'
 import { switchBlock } from '../src/lib/ui/dom/switchBlock.ts'
 import { when } from '../src/lib/ui/dom/when.ts'
 import { effect } from '../src/lib/ui/effect.ts'
-import { renderToStream } from '../src/lib/ui/renderToStream.ts'
 import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
 import { escapeKey } from '../src/lib/ui/runtime/escapeKey.ts'
 import { RESUME } from '../src/lib/ui/runtime/RESUME.ts'
@@ -646,86 +644,6 @@ let name = state('world')</script><div><Greeting label={name} /></div>`
         expect(div.childNodes.length).toBe(4)
         expect(div.childNodes[2]).toBe(spanBefore)
         expect(host.textContent).toBe('Hi world')
-    })
-
-    test('resumes a streamed await branch from the manifest (adopts in place, re-subscribes)', async () => {
-        // a call counter: once on the server, then once on resume to re-subscribe so the
-        // block stays reactive (cache-invalidate driven). A cache-backed await reads warm
-        // on that resume pass — no network re-fetch (see uiCache); this raw promise re-runs.
-        let calls = 0
-        ;(globalThis as { __fetchUsers?: () => Promise<string[]> }).__fetchUsers = () => {
-            calls += 1
-            return Promise.resolve(['ada', 'margaret'])
-        }
-        const source = `
-            <main>
-                {#await __fetchUsers()}
-                    <p>loading…</p>
-                    {:then users}
-                        <ul>{#for u of users by u}<li>{u}</li>{/for}</ul>
-                {/await}
-            </main>
-        `
-
-        // 1) server render → stream the pending shell, then the resolved fragment
-        const render = (): SsrRender =>
-            new Function('doc', 'state', 'computed', 'effect', compileSSR(source))(
-                doc,
-                state,
-                computed,
-                effect,
-            ) as SsrRender
-        const chunks: string[] = []
-        for await (const chunk of renderToStream(render)) {
-            chunks.push(chunk)
-        }
-        expect(calls).toBe(1) // awaited once, on the server
-        expect(chunks[0]).toContain('loading…') // pending shell painted first
-
-        // 2) apply the streamed frame: swaps the resolved branch in + registers resume
-        const host = document.createElement('div')
-        host.innerHTML = chunks[0]
-        for (const frame of chunks.slice(1)) {
-            applyResolved(host, frame)
-        }
-        // RESUME holds the ref-json-encoded entry string; decode to assert the value.
-        expect(decodeRefJson(RESUME[0])).toEqual({ ok: true, value: ['ada', 'margaret'] })
-        const ul = (host.childNodes[0] as unknown as { childNodes: unknown[] })
-            .childNodes[2] as unknown as { childNodes: { textContent: string }[] }
-        const firstRowBefore = ul.childNodes[0]
-        expect(ul.childNodes.map((row) => row.textContent).filter(Boolean)).toEqual([
-            'ada',
-            'margaret',
-        ])
-
-        // 3) hydrate — adopts the resolved branch from the manifest, no re-fetch
-        const runtime = {
-            doc,
-            state,
-            computed,
-            effect,
-            appendText,
-            appendStatic,
-            on,
-            when,
-            each,
-            awaitBlock,
-        }
-        const names = Object.keys(runtime)
-        const values = names.map((n) => runtime[n as keyof typeof runtime])
-        const body = compileComponent(source)
-        hydrate(host, (target) => {
-            new Function('host', ...names, body)(target, ...values)
-        })
-
-        expect(calls).toBe(2) // re-read once on resume to re-subscribe (raw promise re-runs; cache reads warm)
-        expect(ul.childNodes[0]).toBe(firstRowBefore) // rows adopted from the manifest, not recreated
-        expect(ul.childNodes.map((row) => row.textContent).filter(Boolean)).toEqual([
-            'ada',
-            'margaret',
-        ])
-
-        delete RESUME[0] // the manifest is process-global; don't leak into other tests
     })
 
     test('blocking {#await} with an interactive control hydrates live (no inert gap)', async () => {

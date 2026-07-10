@@ -16,7 +16,6 @@ import { compileSSR } from '../src/lib/ui/compile/compileSSR.ts'
 import { computed } from '../src/lib/ui/computed.ts'
 import { appendStatic } from '../src/lib/ui/dom/appendStatic.ts'
 import { appendText } from '../src/lib/ui/dom/appendText.ts'
-import { applyResolved } from '../src/lib/ui/dom/applyResolved.ts'
 import { awaitBlock } from '../src/lib/ui/dom/awaitBlock.ts'
 import { each } from '../src/lib/ui/dom/each.ts'
 import { hydrate } from '../src/lib/ui/dom/hydrate.ts'
@@ -27,15 +26,17 @@ import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
 import { RESUME } from '../src/lib/ui/runtime/RESUME.ts'
 import type { SsrRender } from '../src/lib/ui/runtime/types/SsrRender.ts'
 import { state } from '../src/lib/ui/state.ts'
-import { installMiniDom } from './support/installMiniDom.ts'
+import { installHappyDom } from './support/installHappyDom.ts'
+import { streamSwap } from './support/streamSwap.ts'
 
 const options = { logRequests: false }
 
 /* The whole loop, through abide's real machinery: a defineRpc remote read via
-   cache() inside a `<template await>`, server-rendered and streamed, its store
-   serialized by the actual serializeCacheSnapshot, seeded on a fresh client store,
-   then the page hydrated — adopting the SSR branch from the warm cache without re-
-   dispatching the rpc. The keyed counterpart to the positional resume manifest. */
+   cache() inside an `{#await}` block, server-rendered and streamed (the streamed
+   `<abide-resolve>` fragments swapped in by the REAL inline swap script, `streamSwap`),
+   its store serialized by the actual serializeCacheSnapshot, seeded on a fresh client
+   store, then the page hydrated — adopting the SSR branch from the warm cache without
+   re-dispatching the rpc. The keyed counterpart to the positional resume manifest. */
 let handlerCalls = 0
 const getUsers = defineRpc('GET', '/rpc/ui-users', () => {
     handlerCalls += 1
@@ -58,18 +59,23 @@ const SOURCE = `
    because the request-scoped ttl:0 keep never fires. */
 const unusedSharedStore = createCacheStore()
 
+let reset: () => void
 beforeAll(() => {
-    installMiniDom()
+    reset = installHappyDom()
     /* Server resolver: the request-scoped store, exactly as the server entry installs. */
     cacheStoreSlot.resolver = () => requestContext.getStore()?.cache
     sharedCacheStoreSlot.resolver = () => unusedSharedStore
 })
 afterAll(() => {
+    reset()
     cacheStoreSlot.resolver = undefined
     sharedCacheStoreSlot.resolver = undefined
 })
 afterEach(() => {
-    delete RESUME[0]
+    document.body.innerHTML = ''
+    for (const id of Object.keys(RESUME)) {
+        delete RESUME[Number(id)]
+    }
 })
 
 describe('cache() snapshot → UI hydration (full server→client loop)', () => {
@@ -113,15 +119,19 @@ describe('cache() snapshot → UI hydration (full server→client loop)', () => 
         expect(handlerCalls).toBe(1) // the rpc dispatched once, on the server
         expect(streamed).toHaveLength(1) // the mid-stream entry serialized post-drain
 
-        // 2) reconstruct the server DOM the browser received
+        // 2) reconstruct the server DOM the browser received — the pending shell, then the REAL
+        //    inline swap script folding each streamed `<abide-resolve>` fragment into its boundary
         const host = document.createElement('div')
+        document.body.appendChild(host)
         host.innerHTML = chunks[0]
         for (const frame of chunks.slice(1)) {
-            applyResolved(host, frame)
+            streamSwap(frame)
         }
-        const ul = (host.childNodes[0] as unknown as { childNodes: unknown[] })
-            .childNodes[2] as unknown as { childNodes: { textContent: string }[] }
-        const firstRowBefore = ul.childNodes[0]
+        const ul = host.querySelector('ul') as unknown as {
+            querySelector: (s: string) => unknown
+            querySelectorAll: (s: string) => Iterable<{ textContent: string }>
+        }
+        const firstRowBefore = ul.querySelector('li')
 
         // 3) client: a fresh store seeded from the streamed snapshot (warms post-hydration
         //    reads), then hydrate — the await block adopts the SSR DOM from the streamed
@@ -154,42 +164,11 @@ describe('cache() snapshot → UI hydration (full server→client loop)', () => 
             })
 
             expect(handlerCalls).toBe(1) // warm cache on the client — the rpc never re-ran
-            expect(ul.childNodes[0]).toBe(firstRowBefore) // SSR rows adopted, not recreated
-            expect(ul.childNodes.map((row) => row.textContent).filter(Boolean)).toEqual([
+            expect(ul.querySelector('li')).toBe(firstRowBefore) // SSR rows adopted, not recreated
+            expect([...ul.querySelectorAll('li')].map((row) => row.textContent)).toEqual([
                 'ada',
                 'margaret',
             ])
-        } finally {
-            cacheStoreSlot.resolver = () => requestContext.getStore()?.cache
-        }
-    })
-
-    /* The bundle-side stream consumer (streaming SPA nav / socket SSR): a script set via
-       innerHTML never runs, so the cache channel rides an `<abide-cache>` data frame that
-       applyResolved seeds — paired with the DOM swap so the reserved path can't adopt a
-       resolved branch while dropping its cache key (the asymmetry behind the refetch). */
-    test('applyResolved seeds the store from an <abide-cache> frame; a miss frame is a no-op', () => {
-        const store = createCacheStore()
-        cacheStoreSlot.resolver = () => store
-        try {
-            const host = document.createElement('div')
-            const snapshot = {
-                key: 'GET /rpc/streamed',
-                url: 'https://test.local/rpc/streamed',
-                method: 'GET' as const,
-                status: 200,
-                statusText: 'OK',
-                headers: [['content-type', 'application/json']] as Array<[string, string]>,
-                body: JSON.stringify(['ada']),
-            }
-            applyResolved(host, `<abide-cache>${JSON.stringify(snapshot)}</abide-cache>`)
-            expect(store.entries.get(snapshot.key)?.value).toEqual(['ada']) // warmed, no fetch
-
-            applyResolved(
-                host,
-                `<abide-cache>${JSON.stringify({ key: 'GET /rpc/miss', miss: true })}</abide-cache>`,
-            )
-            expect(store.entries.has('GET /rpc/miss')).toBe(false) // miss → left cold, re-fetches
         } finally {
             cacheStoreSlot.resolver = () => requestContext.getStore()?.cache
         }

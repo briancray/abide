@@ -9,9 +9,9 @@ so a `cache()` read resolves synchronously (no wire round-trip) and `<template a
 adopts without a refetch; a `{ key, miss }` marker — a body the server couldn't snapshot
 (binary / rejected / evicted) — is a no-op, so that read falls back to a live fetch.
 
-Shared by startClient's boot drain, the live `window.__abideResolve`, and applyResolved,
-so no resolved-frame consumer can swap DOM while silently dropping the cache channel —
-the asymmetry that made streamed reads cold-miss to the network.
+Shared by startClient's boot drain and the live `window.__abideResolve`, so no
+resolved-frame consumer can swap DOM while silently dropping the cache channel — the
+asymmetry that made streamed reads cold-miss to the network.
 */
 // @documentation plumbing
 export function seedStreamedResolution(resolution: StreamedResolution): void {

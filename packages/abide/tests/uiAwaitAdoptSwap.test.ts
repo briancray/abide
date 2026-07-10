@@ -1,26 +1,36 @@
-import { beforeAll, describe, expect, test } from 'bun:test'
+import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test'
 import { compileComponent } from '../src/lib/ui/compile/compileComponent.ts'
 import { compileSSR } from '../src/lib/ui/compile/compileSSR.ts'
 import { computed } from '../src/lib/ui/computed.ts'
 import { appendStatic } from '../src/lib/ui/dom/appendStatic.ts'
 import { appendText } from '../src/lib/ui/dom/appendText.ts'
-import { applyResolved } from '../src/lib/ui/dom/applyResolved.ts'
 import { attr } from '../src/lib/ui/dom/attr.ts'
 import { awaitBlock } from '../src/lib/ui/dom/awaitBlock.ts'
 import { each } from '../src/lib/ui/dom/each.ts'
 import { hydrate } from '../src/lib/ui/dom/hydrate.ts'
 import { mount } from '../src/lib/ui/dom/mount.ts'
-import { text } from '../src/lib/ui/dom/text.ts'
 import { when } from '../src/lib/ui/dom/when.ts'
 import { effect } from '../src/lib/ui/effect.ts'
 import { renderToStream } from '../src/lib/ui/renderToStream.ts'
 import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
+import { RESUME } from '../src/lib/ui/runtime/RESUME.ts'
 import type { SsrRender } from '../src/lib/ui/runtime/types/SsrRender.ts'
 import { state } from '../src/lib/ui/state.ts'
-import { installMiniDom } from './support/installMiniDom.ts'
+import { installHappyDom } from './support/installHappyDom.ts'
+import { text } from './support/reactiveText.ts'
+import { streamSwap } from './support/streamSwap.ts'
 
+let reset: () => void
 beforeAll(() => {
-    installMiniDom()
+    reset = installHappyDom()
+})
+afterAll(() => reset())
+afterEach(() => {
+    /* Reset the shared streamed-doc + resume manifest between tests. */
+    document.body.innerHTML = ''
+    for (const id of Object.keys(RESUME)) {
+        delete RESUME[Number(id)]
+    }
 })
 
 /*
@@ -66,26 +76,25 @@ function component(source: string, extra: Record<string, unknown> = {}) {
     return fn
 }
 
-const serialize = (host: unknown): string =>
-    (globalThis as unknown as { serializeMiniDom: (h: unknown) => string }).serializeMiniDom(host)
-
-/* Drive the streaming-await hydrate the way production does: parse the pending shell, then
-   `applyResolved` each streamed `<abide-resolve>` fragment (swapping pending→resolved in the
-   DOM and seeding `RESUME[id]`, exactly as the inline swap script does before the bundle
-   boots), then `hydrate` — so the block adopts the resolved branch via its resume path. A
-   desync throw fails the test loudly (the await boundary markers must line up). */
+/* Drive the streaming-await hydrate the way production does: parse the pending shell into a
+   host in document.body, then run the REAL inline swap script (`streamSwap` → `__abideSwap`)
+   for each streamed `<abide-resolve>` fragment — swapping pending→resolved in the DOM and
+   seeding `RESUME[id]` exactly as it does before the bundle boots — then `hydrate`, so the
+   block adopts the resolved branch via its resume path. A desync throw fails the test loudly
+   (the await boundary markers must line up). */
 async function hydrateStreamed(
     render: () => SsrRender | Promise<SsrRender>,
     build: (host: Element) => void,
 ): Promise<HTMLElement> {
     const host = document.createElement('div')
+    document.body.appendChild(host)
     let first = true
     for await (const chunk of renderToStream(render)) {
         if (first) {
             host.innerHTML = chunk
             first = false
         } else {
-            applyResolved(host, chunk)
+            streamSwap(chunk)
         }
     }
     hydrate(host, (target) => build(target))

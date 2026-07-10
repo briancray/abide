@@ -61,7 +61,7 @@ write-path microbench this runs ~20× faster than a deep-proxy signal baseline.
 
 - `compileSSR` renders to an HTML string (byte-identical to the client DOM).
 - `renderToStream` streams: pending shell first, then resolved `<template await>`
-  fragments out of order as their promises settle; `applyResolved` swaps them in.
+  fragments out of order as their promises settle; the inline swap script swaps them in.
 - `hydrate` adopts the server DOM in place (no re-render) for static-structure
   components — claims existing nodes, splits merged text, wires effects/listeners.
 
