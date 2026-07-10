@@ -212,19 +212,26 @@ export function createUiPageRenderer({
         /* Outermost layout → … → page: load every applicable layout chunk plus the
            page, then render the chain as one document (shared block-id pass). */
         const chainKeys = chainKeysForRoute(routeUrl)
-        const views = await Promise.all([
-            ...chainKeys.map((key) => layouts[key]?.().then((module) => module.default)),
-            loadPage().then((module) => module.default),
+        /* Resolve each view PAIRED with its render-path key (layouts then page), then filter the
+           pairs together. Zipping in one pass makes the key↔view alignment structural rather than
+           an asserted "no view is ever dropped" invariant: were a layout to resolve to no default
+           export, dropping it would otherwise shift every later key by one and mis-key the page's
+           cells (a silent warm-seed mismatch — the class this render-path id exists to kill). The
+           keys stay byte-identical to the client router's `chainKeys`/`pageKey`. */
+        const resolved = await Promise.all([
+            ...chainKeys.map((key) =>
+                layouts[key]?.().then((module) => ({ key, view: module.default })),
+            ),
+            loadPage().then((module) => ({ key: routeUrl, view: module.default })),
         ])
-        /* Route keys aligned 1:1 with `views` (layouts then page) — byte-identical to the client
-           router's `chainKeys`/`pageKey`, so a cell's render-path scope id matches across the
-           boundary for the warm-seed key. No layout view is ever dropped by the filter (every
-           `chainKeys[i]` resolves a real layout), so the keys stay index-aligned with it. */
-        const chainViewKeys = [...chainKeys, routeUrl]
+        const kept = resolved.filter(
+            (entry): entry is { key: string; view: UiComponent } =>
+                entry !== undefined && entry.view !== undefined,
+        )
         const ssr = await renderChain(
-            views.filter((view): view is UiComponent => view !== undefined),
+            kept.map((entry) => entry.view),
             params,
-            chainViewKeys,
+            kept.map((entry) => entry.key),
         )
 
         /* Snapshot the cache settled by render-return — top-level `await` reads and blocking
