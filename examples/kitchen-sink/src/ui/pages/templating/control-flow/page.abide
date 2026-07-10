@@ -42,44 +42,52 @@ function guarded(): string {
         <a class="underline" href="/templating/async">async</a>.
     </p>
 
-    <section class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-        <table class="w-full text-sm">
-            <thead class="border-b border-slate-200 bg-slate-50 text-left">
-                <tr>
-                    <th class="px-4 py-2 font-mono font-medium">block</th>
-                    <th class="px-4 py-2 font-medium">renders</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100">
-                <tr>
-                    <td class="px-4 py-2 font-mono">
-                        {'{#if c}'} · {'{:else if c}'} · {'{:else}'} · {'{/if}'}
-                    </td>
-                    <td class="px-4 py-2 text-slate-600">conditional with sibling branches</td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">{'{#for x, i of list by x.id}'} · {'{/for}'}</td>
-                    <td class="px-4 py-2 text-slate-600">keyed list with optional index and key</td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">
-                        {'{#switch s}'} · {'{:case v}'} · {'{:default}'} · {'{/switch}'}
-                    </td>
-                    <td class="px-4 py-2 text-slate-600">
-                        first matching <code class="font-mono">{':case'}</code>, else
-                        <code class="font-mono">{':default'}</code>
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">
-                        {'{#try}'} · {'{:catch e}'} · {'{:finally}'} · {'{/try}'}
-                    </td>
-                    <td class="px-4 py-2 text-slate-600">
-                        synchronous error boundary around its children
-                    </td>
-                </tr>
-            </tbody>
-        </table>
+    <section class="flex flex-col gap-2">
+        <h2 class="text-sm font-semibold">Blocks</h2>
+        <p class="text-xs text-slate-500">
+            The structural control-flow blocks, and what each one renders.
+        </p>
+        <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+            <table class="w-full text-sm">
+                <thead class="border-b border-slate-200 bg-slate-50 text-left">
+                    <tr>
+                        <th class="px-4 py-2 font-mono font-medium">block</th>
+                        <th class="px-4 py-2 font-medium">renders</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    <tr>
+                        <td class="px-4 py-2 font-mono">
+                            {'{#if c}'} · {'{:else if c}'} · {'{:else}'} · {'{/if}'}
+                        </td>
+                        <td class="px-4 py-2 text-slate-600">conditional with sibling branches</td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">{'{#for x, i of list by x.id}'} · {'{/for}'}</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            keyed list with optional index and key
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">
+                            {'{#switch s}'} · {'{:case v}'} · {'{:default}'} · {'{/switch}'}
+                        </td>
+                        <td class="px-4 py-2 text-slate-600">
+                            first matching <code class="font-mono">{':case'}</code>, else
+                            <code class="font-mono">{':default'}</code>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">
+                            {'{#try}'} · {'{:catch e}'} · {'{:finally}'} · {'{/try}'}
+                        </td>
+                        <td class="px-4 py-2 text-slate-600">
+                            synchronous error boundary around its children
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
     </section>
 
     <div class="grid gap-4 sm:grid-cols-2">

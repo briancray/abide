@@ -58,49 +58,56 @@ const snapshot = state.computed(() => getRates.peek({ base: 'USD' }))
         </p>
     </div>
 
-    <section class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-        <table class="w-full text-sm">
-            <thead class="border-b border-slate-200 bg-slate-50 text-left">
-                <tr>
-                    <th class="px-4 py-2 font-mono font-medium">probe</th>
-                    <th class="px-4 py-2 font-medium">means</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100">
-                <tr>
-                    <td class="px-4 py-2 font-mono">pending(selector?, args?)</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        no value yet (across calls, streams, tags, or a bare all-activity probe)
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">refreshing(selector?, args?)</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        a value is held while a fresher source is in flight (SWR)
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">peek(fn, args?) / peek(socket)</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        the retained value / latest frame, synchronously — no fetch, reactive in a
-                        tracking scope
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">done(subscribable)</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        true once a stream has closed (stream-only; a cached read's "done" is
-                        <code class="font-mono">!pending &amp;&amp; !refreshing</code>)
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">online()</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        reactive connectivity — browser online/offline; always true during SSR
-                    </td>
-                </tr>
-            </tbody>
-        </table>
+    <section class="flex flex-col gap-2">
+        <h2 class="text-sm font-semibold">Probes</h2>
+        <p class="text-xs text-slate-500">
+            Reactive readouts that work the same across cached rpc reads and socket streams — is it
+            loading, revalidating, closed, or online.
+        </p>
+        <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+            <table class="w-full text-sm">
+                <thead class="border-b border-slate-200 bg-slate-50 text-left">
+                    <tr>
+                        <th class="px-4 py-2 font-mono font-medium">probe</th>
+                        <th class="px-4 py-2 font-medium">means</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    <tr>
+                        <td class="px-4 py-2 font-mono">pending(selector?, args?)</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            no value yet (across calls, streams, tags, or a bare all-activity probe)
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">refreshing(selector?, args?)</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            a value is held while a fresher source is in flight (SWR)
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">peek(fn, args?) / peek(socket)</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            the retained value / latest frame, synchronously — no fetch, reactive in
+                            a tracking scope
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">done(subscribable)</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            true once a stream has closed (stream-only; a cached read's "done" is
+                            <code class="font-mono">!pending &amp;&amp; !refreshing</code>)
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">online()</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            reactive connectivity — browser online/offline; always true during SSR
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
     </section>
 
     <div>

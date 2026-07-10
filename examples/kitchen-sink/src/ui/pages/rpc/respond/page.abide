@@ -40,66 +40,71 @@ async function callRedirectFetch() {
         <h1 class="text-3xl font-bold">Response helpers</h1>
         <p class="text-slate-600">
             Response constructors with rpc-friendly defaults — all set
-    <code class="font-mono">Cache-Control: no-store</code> unless the caller overrides via
-    <code class="font-mono">init</code>.
+            <code class="font-mono">Cache-Control: no-store</code> unless the caller overrides via
+            <code class="font-mono">init</code>.
         </p>
     </div>
 
-<section>
-    <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-        <table class="w-full text-sm">
-            <thead class="border-b border-slate-200 bg-slate-50 text-left">
-                <tr>
-                    <th class="px-4 py-2 font-mono font-medium">helper</th>
-                    <th class="px-4 py-2 font-medium">content-type</th>
-                    <th class="px-4 py-2 font-medium">notes</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100">
-                <tr>
-                    <td class="px-4 py-2 font-mono">json(data, init?)</td>
-                    <td class="px-4 py-2 font-mono text-slate-500">application/json</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        thin wrapper over <code class="font-mono">Response.json</code>;
-                        <code class="font-mono">json(undefined)</code> emits 204
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">error(status, msg?)</td>
-                    <td class="px-4 py-2 font-mono text-slate-500">text/plain</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        message verbatim; status reason phrase if omitted
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">redirect(url, status?)</td>
-                    <td class="px-4 py-2 font-mono text-slate-500">Location header</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        defaults to 302; accepts relative URLs; 301/302/303/307/308 only
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">jsonl(iterable, init?)</td>
-                    <td class="px-4 py-2 font-mono text-slate-500">application/jsonl</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        one JSON object per line; see
-                        <a class="underline" href="/rpc/streaming">streaming</a>
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">sse(iterable, init?)</td>
-                    <td class="px-4 py-2 font-mono text-slate-500">text/event-stream</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        Server-Sent Events, 15s keepalive; see
-                        <a class="underline" href="/rpc/streaming">streaming</a>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-</section>
+    <section class="flex flex-col gap-2">
+        <h2 class="text-sm font-semibold">Helpers</h2>
+        <p class="text-xs text-slate-500">
+            One constructor per response kind, keyed by the Content-Type it sets — plus the default
+            status each applies.
+        </p>
+        <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+            <table class="w-full text-sm">
+                <thead class="border-b border-slate-200 bg-slate-50 text-left">
+                    <tr>
+                        <th class="px-4 py-2 font-mono font-medium">helper</th>
+                        <th class="px-4 py-2 font-medium">content-type</th>
+                        <th class="px-4 py-2 font-medium">notes</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    <tr>
+                        <td class="px-4 py-2 font-mono">json(data, init?)</td>
+                        <td class="px-4 py-2 font-mono text-slate-500">application/json</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            thin wrapper over <code class="font-mono">Response.json</code>;
+                            <code class="font-mono">json(undefined)</code> emits 204
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">error(status, msg?)</td>
+                        <td class="px-4 py-2 font-mono text-slate-500">text/plain</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            message verbatim; status reason phrase if omitted
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">redirect(url, status?)</td>
+                        <td class="px-4 py-2 font-mono text-slate-500">Location header</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            defaults to 302; accepts relative URLs; 301/302/303/307/308 only
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">jsonl(iterable, init?)</td>
+                        <td class="px-4 py-2 font-mono text-slate-500">application/jsonl</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            one JSON object per line; see
+                            <a class="underline" href="/rpc/streaming">streaming</a>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">sse(iterable, init?)</td>
+                        <td class="px-4 py-2 font-mono text-slate-500">text/event-stream</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            Server-Sent Events, 15s keepalive; see
+                            <a class="underline" href="/rpc/streaming">streaming</a>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
 
-<Demo title="json · error · redirect, live" code={`import { GET } from '@abide/abide/server/GET'
+    <Demo title="json · error · redirect, live" code={`import { GET } from '@abide/abide/server/GET'
 import { json } from '@abide/abide/server/json'
 import { error } from '@abide/abide/server/error'
 import { redirect } from '@abide/abide/server/redirect'
@@ -113,35 +118,35 @@ export const getProduct = GET(({ id }: { id: string }) => {
 })
 
 export const redirectExample = GET(() => redirect('/rpc'))`}>
-    <div class="flex flex-wrap gap-2 text-sm">
-        <button
-            type="button"
-            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
-            onclick={callJson}>
-            {"json — getEcho({ message: 'json()' })"}
-        </button>
-        <button
-            type="button"
-            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
-            onclick={callError}>
-            {"error — getProduct({ id: 'missing' })"}
-        </button>
-        <button
-            type="button"
-            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
-            onclick={callRedirectFetch}>
-            redirect — fetch(redirectExample.url)
-        </button>
-        <a
-            href={redirectExample.url}
-            class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
-            >redirect — navigate</a
-        >
-    </div>
-    <ul class="flex flex-col gap-1 font-mono text-xs text-slate-700">
-        <li>json:{jsonOutcome}</li>
-        <li>error:{errorOutcome}</li>
-        <li>redirect:{redirectOutcome}</li>
-    </ul>
-</Demo>
+        <div class="flex flex-wrap gap-2 text-sm">
+            <button
+                type="button"
+                class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+                onclick={callJson}>
+                {"json — getEcho({ message: 'json()' })"}
+            </button>
+            <button
+                type="button"
+                class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+                onclick={callError}>
+                {"error — getProduct({ id: 'missing' })"}
+            </button>
+            <button
+                type="button"
+                class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+                onclick={callRedirectFetch}>
+                redirect — fetch(redirectExample.url)
+            </button>
+            <a
+                href={redirectExample.url}
+                class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+                >redirect — navigate</a
+            >
+        </div>
+        <ul class="flex flex-col gap-1 font-mono text-xs text-slate-700">
+            <li>json:{jsonOutcome}</li>
+            <li>error:{errorOutcome}</li>
+            <li>redirect:{redirectOutcome}</li>
+        </ul>
+    </Demo>
 </div>

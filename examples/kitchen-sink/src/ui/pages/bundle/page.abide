@@ -16,55 +16,66 @@ import Demo from '$ui/Demo.abide'
         </p>
     </div>
 
-    <section class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-        <table class="w-full text-sm">
-            <thead class="border-b border-slate-200 bg-slate-50 text-left">
-                <tr>
-                    <th class="px-4 py-2 font-mono font-medium">export</th>
-                    <th class="px-4 py-2 font-medium">is</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100">
-                <tr>
-                    <td class="px-4 py-2 font-mono">BundleWindow</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        the native window config (title, size, the initial route)
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">BundleMenu</td>
-                    <td class="px-4 py-2 text-slate-600">the native menu tree (label + items)</td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">BundleMenuItem</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        a menu entry — a <code class="font-mono">separator</code>, an
-                        <code class="font-mono">emit</code> event, or a
-                        <code class="font-mono">navigate</code> target
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">onMenu(name, fn)</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        subscribe to an <code class="font-mono">emit</code> menu item (returns an
-                        unsubscribe — drop it in a <code class="font-mono">watch</code> thunk)
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">bundled()</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        true when running inside the native bundle (vs a plain browser tab / SSR)
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">appDataDir()</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        the per-user data dir, keyed by program name — where a bundle's DB/state
-                        belongs
-                    </td>
-                </tr>
-            </tbody>
-        </table>
+    <section class="flex flex-col gap-2">
+        <h2 class="text-sm font-semibold">Exports</h2>
+        <p class="text-xs text-slate-500">
+            The bundle namespace — the native window and menu config types plus the runtime probes a
+            desktop app calls.
+        </p>
+        <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+            <table class="w-full text-sm">
+                <thead class="border-b border-slate-200 bg-slate-50 text-left">
+                    <tr>
+                        <th class="px-4 py-2 font-mono font-medium">export</th>
+                        <th class="px-4 py-2 font-medium">is</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    <tr>
+                        <td class="px-4 py-2 font-mono">BundleWindow</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            the native window config (title, size, the initial route)
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">BundleMenu</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            the native menu tree (label + items)
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">BundleMenuItem</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            a menu entry — a <code class="font-mono">separator</code>, an
+                            <code class="font-mono">emit</code> event, or a
+                            <code class="font-mono">navigate</code> target
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">onMenu(name, fn)</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            subscribe to an <code class="font-mono">emit</code> menu item (returns
+                            an unsubscribe — drop it in a
+                            <code class="font-mono">watch</code> thunk)
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">bundled()</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            true when running inside the native bundle (vs a plain browser tab /
+                            SSR)
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">appDataDir()</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            the per-user data dir, keyed by program name — where a bundle's DB/state
+                            belongs
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
     </section>
 
     <section class="rounded-lg border border-slate-200 bg-white p-5">

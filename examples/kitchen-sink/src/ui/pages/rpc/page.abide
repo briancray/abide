@@ -53,6 +53,10 @@ const calls = [
 <div class="flex flex-col gap-8">
     <section class="flex flex-col gap-2">
         <h2 class="text-sm font-semibold">Options</h2>
+        <p class="text-xs text-slate-500">
+            The optional second argument to a method helper (GET/POST/…) — validation, caching,
+            client exposure, and per-rpc limits.
+        </p>
         <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
             <table class="w-full text-sm">
                 <thead class="border-b border-slate-200 bg-slate-50 text-left">
@@ -185,6 +189,98 @@ const calls = [
                             <code class="font-mono">request().signal</code>
                         </td>
                         <td class="px-4 py-2 text-slate-500">none</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="flex flex-col gap-2">
+        <h2 class="text-sm font-semibold">Methods</h2>
+        <p class="text-xs text-slate-500">
+            The bare call <code class="font-mono">fn(args)</code> is the smart read; these hang off
+            it, each keyed by the same <code class="font-mono">args</code>.
+        </p>
+        <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+            <table class="w-full text-sm">
+                <thead class="border-b border-slate-200 bg-slate-50 text-left">
+                    <tr>
+                        <th class="px-4 py-2 font-mono font-medium">method</th>
+                        <th class="px-4 py-2 font-medium">effect</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    <tr>
+                        <td class="px-4 py-2 font-mono">fn(args)</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            the smart read — cached, coalesced, reactive, stale-while-revalidate on
+                            GET/HEAD; a jsonl/sse handler returns a
+                            <code class="font-mono">NamedAsyncIterable</code>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">.raw(args?, init?)</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            the underlying <code class="font-mono">Response</code> — per-call
+                            transport (<code class="font-mono">signal</code>,
+                            <code class="font-mono">headers</code>,
+                            <code class="font-mono">keepalive</code>) lives here
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">.refresh(args?)</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            refetch, keeping the stale value visible until the fresh one swaps in
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">.patch(args?, updater)</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            mutate the retained value locally (absent on streaming rpcs)
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">.watch(args?, handler)</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            pipe each resolved value to a handler (client-only; SSR-inert)
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">.isError(e, kind?)</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            type-guard a caught error against the rpc's declared error kinds
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">.peek(args?)</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            read the retained value synchronously — no fetch
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">.pending(args?)</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            reactive probe — whether a first load is in flight
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">.refreshing(args?)</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            reactive probe — whether a background revalidation is in flight
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">.error(args?)</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            reactive probe — the rpc's last typed error
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">.outbox()</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            the durable rpc's parked-write queue (see
+                            <a class="underline" href="/outbox">outbox</a>)
+                        </td>
                     </tr>
                 </tbody>
             </table>

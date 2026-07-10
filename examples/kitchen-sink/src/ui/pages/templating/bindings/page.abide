@@ -31,99 +31,110 @@ const focusOnMount = (node: HTMLInputElement) => node.focus()
 </script>
 
 <div class="flex flex-col gap-8">
-    <section class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-        <table class="w-full text-sm">
-            <thead class="border-b border-slate-200 bg-slate-50 text-left">
-                <tr>
-                    <th class="px-4 py-2 font-mono font-medium">syntax</th>
-                    <th class="px-4 py-2 font-medium">binds</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100">
-                <tr>
-                    <td class="px-4 py-2 font-mono">{'{expr}'}</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        reactive text — HTML-escaped; a promise-typed read peeks (<code
-                            class="font-mono"
-                            >undefined</code
-                        >
-                        while pending, see
-                        <a class="underline" href="/templating/control-flow">control flow</a>)
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">name={'{expr}'}</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        dynamic attribute; a bare <code class="font-mono">name</code> is boolean
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">name="lit {'{expr}'}"</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        a literal attribute with interpolated
-                        <code class="font-mono">{'{expr}'}</code> parts
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">on&lt;event&gt;={'{fn}'}</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        event listener (<code class="font-mono">onclick</code>,
-                        <code class="font-mono">oninput</code>, …)
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">bind:value={'{cell}'}</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        two-way input/select/textarea; numeric inputs bind numbers,
-                        <code class="font-mono">multiple</code> select binds an array
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">bind:checked={'{cell}'}</td>
-                    <td class="px-4 py-2 text-slate-600">a checkbox boolean</td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">bind:group={'{cell}'}</td>
-                    <td class="px-4 py-2 text-slate-600">a radio-group value / checkbox-array</td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">{'bind:value={{ get, set }}'}</td>
-                    <td class="px-4 py-2 text-slate-600">an accessor-lens writable computed</td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">bind:&lt;prop&gt;={'{cell}'}</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        any writable property (e.g. <code class="font-mono">bind:open</code>)
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">class:name={'{c}'}</td>
-                    <td class="px-4 py-2 text-slate-600">toggle a single class</td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">style:prop={'{n}'}</td>
-                    <td class="px-4 py-2 text-slate-600">set a single style property</td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">attach={'{fn}'}</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        run <code class="font-mono">fn(node)</code> against the element at mount
-                        (client-only)
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">{'{...obj}'}</td>
-                    <td class="px-4 py-2 text-slate-600">spread an object's keys as attributes</td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">{'{html(markup)}'}</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        raw markup from <code class="font-mono">@abide/abide/ui/html</code> — call
-                        or tag (<code class="font-mono">html`…`</code>); plain strings stay escaped
-                    </td>
-                </tr>
-            </tbody>
-        </table>
+    <section class="flex flex-col gap-2">
+        <h2 class="text-sm font-semibold">Syntax</h2>
+        <p class="text-xs text-slate-500">
+            Every reactive attribute and directive form, and what each one binds.
+        </p>
+        <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+            <table class="w-full text-sm">
+                <thead class="border-b border-slate-200 bg-slate-50 text-left">
+                    <tr>
+                        <th class="px-4 py-2 font-mono font-medium">syntax</th>
+                        <th class="px-4 py-2 font-medium">binds</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    <tr>
+                        <td class="px-4 py-2 font-mono">{'{expr}'}</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            reactive text — HTML-escaped; a promise-typed read peeks (<code
+                                class="font-mono"
+                                >undefined</code
+                            >
+                            while pending, see
+                            <a class="underline" href="/templating/control-flow">control flow</a>)
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">name={'{expr}'}</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            dynamic attribute; a bare <code class="font-mono">name</code> is boolean
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">name="lit {'{expr}'}"</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            a literal attribute with interpolated
+                            <code class="font-mono">{'{expr}'}</code> parts
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">on&lt;event&gt;={'{fn}'}</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            event listener (<code class="font-mono">onclick</code>,
+                            <code class="font-mono">oninput</code>, …)
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">bind:value={'{cell}'}</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            two-way input/select/textarea; numeric inputs bind numbers,
+                            <code class="font-mono">multiple</code> select binds an array
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">bind:checked={'{cell}'}</td>
+                        <td class="px-4 py-2 text-slate-600">a checkbox boolean</td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">bind:group={'{cell}'}</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            a radio-group value / checkbox-array
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">{'bind:value={{ get, set }}'}</td>
+                        <td class="px-4 py-2 text-slate-600">an accessor-lens writable computed</td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">bind:&lt;prop&gt;={'{cell}'}</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            any writable property (e.g. <code class="font-mono">bind:open</code>)
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">class:name={'{c}'}</td>
+                        <td class="px-4 py-2 text-slate-600">toggle a single class</td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">style:prop={'{n}'}</td>
+                        <td class="px-4 py-2 text-slate-600">set a single style property</td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">attach={'{fn}'}</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            run <code class="font-mono">fn(node)</code> against the element at mount
+                            (client-only)
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">{'{...obj}'}</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            spread an object's keys as attributes
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">{'{html(markup)}'}</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            raw markup from <code class="font-mono">@abide/abide/ui/html</code> —
+                            call or tag (<code class="font-mono">html`…`</code>); plain strings stay
+                            escaped
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
     </section>
 
     <div class="grid gap-4 sm:grid-cols-2">

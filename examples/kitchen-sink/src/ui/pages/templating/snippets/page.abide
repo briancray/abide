@@ -18,53 +18,60 @@ let count = state(3)
 </script>
 
 <div class="flex flex-col gap-8">
-    <section class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-        <table class="w-full text-sm">
-            <thead class="border-b border-slate-200 bg-slate-50 text-left">
-                <tr>
-                    <th class="px-4 py-2 font-mono font-medium">construct</th>
-                    <th class="px-4 py-2 font-medium">is</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100">
-                <tr>
-                    <td class="px-4 py-2 font-mono">{'{#snippet name(args)}'}</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        a named builder, rendered like a function, closing over component scope
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">Snippet&lt;Args&gt; (a value)</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        a snippet passes through props like any value; the child calls it
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">&lt;Capitalized /&gt;</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        mounts a child component (imported); attributes are props
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">{'{children()}'}</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        the child's single content slot; falsy when self-closing
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">bind:prop={'{cell}'}</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        two-way component prop (usage-inferred, ADR-0027)
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">&lt;style&gt;</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        component-scoped — rewritten with a hashed attribute so it can't leak
-                    </td>
-                </tr>
-            </tbody>
-        </table>
+    <section class="flex flex-col gap-2">
+        <h2 class="text-sm font-semibold">Constructs</h2>
+        <p class="text-xs text-slate-500">
+            The building blocks for composing components — snippets, child mounts, slots, two-way
+            props, and scoped style.
+        </p>
+        <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+            <table class="w-full text-sm">
+                <thead class="border-b border-slate-200 bg-slate-50 text-left">
+                    <tr>
+                        <th class="px-4 py-2 font-mono font-medium">construct</th>
+                        <th class="px-4 py-2 font-medium">is</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    <tr>
+                        <td class="px-4 py-2 font-mono">{'{#snippet name(args)}'}</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            a named builder, rendered like a function, closing over component scope
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">Snippet&lt;Args&gt; (a value)</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            a snippet passes through props like any value; the child calls it
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">&lt;Capitalized /&gt;</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            mounts a child component (imported); attributes are props
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">{'{children()}'}</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            the child's single content slot; falsy when self-closing
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">bind:prop={'{cell}'}</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            two-way component prop (usage-inferred, ADR-0027)
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">&lt;style&gt;</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            component-scoped — rewritten with a hashed attribute so it can't leak
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
     </section>
 
     <Demo title={'{#snippet} — a reusable builder'} code={`<script>

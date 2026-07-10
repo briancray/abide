@@ -48,82 +48,93 @@ async function submit(event: SubmitEvent) {
 </script>
 
 <div class="flex flex-col gap-8">
-<div class="flex flex-col gap-2">
-<h1 class="text-3xl font-bold"><code class="font-mono">outbox: true</code></h1>
-<p class="text-slate-600">
-    The local-first half of "act now, sync later", built into the RPC. A mutating rpc declared
-    <code class="font-mono">{'{ outbox: true }'}</code> queues every call durably — persisted, so it survives
-    a reload — and returns the cancelable entry instead of fetching.
-    <code class="font-mono">saveMessage.outbox()</code> is this rpc's reactive queue;
-    <code class="font-mono">saveMessage.pending()</code> is true while anything is in flight
-    <em>or</em> queued. Delivery is at-least-once, so the handler is idempotent (keyed by id).
-</p>
-</div>
+    <div class="flex flex-col gap-2">
+        <h1 class="text-3xl font-bold"><code class="font-mono">outbox: true</code></h1>
+        <p class="text-slate-600">
+            The local-first half of "act now, sync later", built into the RPC. A mutating rpc
+            declared
+            <code class="font-mono">{'{ outbox: true }'}</code> queues every call durably — persisted, so it
+            survives a reload — and returns the cancelable entry instead of fetching.
+            <code class="font-mono">saveMessage.outbox()</code> is this rpc's reactive queue;
+            <code class="font-mono">saveMessage.pending()</code> is true while anything is in flight
+            <em>or</em> queued. Delivery is at-least-once, so the handler is idempotent (keyed by
+            id).
+        </p>
+    </div>
 
-<section class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-    <table class="w-full text-sm">
-        <thead class="border-b border-slate-200 bg-slate-50 text-left">
-            <tr>
-                <th class="px-4 py-2 font-mono font-medium">call / member</th>
-                <th class="px-4 py-2 font-medium">is</th>
-            </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-100">
-            <tr>
-                <td class="px-4 py-2 font-mono">saveMessage({'{ … }'})</td>
-                <td class="px-4 py-2 text-slate-600">
-                    a durable (<code class="font-mono">outbox: true</code>) call — queues
-                    persistently, returns the cancelable entry
-                </td>
-            </tr>
-            <tr>
-                <td class="px-4 py-2 font-mono">saveMessage.outbox()</td>
-                <td class="px-4 py-2 text-slate-600">
-                    this rpc's reactive queue of undelivered entries
-                </td>
-            </tr>
-            <tr>
-                <td class="px-4 py-2 font-mono">outbox()</td>
-                <td class="px-4 py-2 text-slate-600">
-                    the app-wide aggregate across every durable rpc (each entry tagged with its
-                    <code class="font-mono">rpc</code>)
-                </td>
-            </tr>
-            <tr>
-                <td class="px-4 py-2 font-mono">outbox.retry()</td>
-                <td class="px-4 py-2 text-slate-600">
-                    drain every queue now (also
-                    <code class="font-mono">saveMessage.outbox.retry()</code> /
-                    <code class="font-mono">entry.retry()</code>); auto-drains on reconnect
-                </td>
-            </tr>
-            <tr>
-                <td class="px-4 py-2 font-mono">saveMessage.pending()</td>
-                <td class="px-4 py-2 text-slate-600">
-                    true while a call is in flight <em>or</em> queued
-                </td>
-            </tr>
-            <tr>
-                <td class="px-4 py-2 font-mono">entry.controller.abort()</td>
-                <td class="px-4 py-2 text-slate-600">cancel a queued entry before it sends</td>
-            </tr>
-        </tbody>
-    </table>
-</section>
+    <section class="flex flex-col gap-2">
+        <h2 class="text-sm font-semibold">Methods</h2>
+        <p class="text-xs text-slate-500">
+            The durable rpc's call form plus the queue members that drive and drain it.
+        </p>
+        <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+            <table class="w-full text-sm">
+                <thead class="border-b border-slate-200 bg-slate-50 text-left">
+                    <tr>
+                        <th class="px-4 py-2 font-mono font-medium">call / member</th>
+                        <th class="px-4 py-2 font-medium">is</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    <tr>
+                        <td class="px-4 py-2 font-mono">saveMessage({'{ … }'})</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            a durable (<code class="font-mono">outbox: true</code>) call — queues
+                            persistently, returns the cancelable entry
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">saveMessage.outbox()</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            this rpc's reactive queue of undelivered entries
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">outbox()</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            the app-wide aggregate across every durable rpc (each entry tagged with
+                            its
+                            <code class="font-mono">rpc</code>)
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">outbox.retry()</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            drain every queue now (also
+                            <code class="font-mono">saveMessage.outbox.retry()</code> /
+                            <code class="font-mono">entry.retry()</code>); auto-drains on reconnect
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">saveMessage.pending()</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            true while a call is in flight <em>or</em> queued
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">entry.controller.abort()</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            cancel a queued entry before it sends
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
 
-<section class="flex flex-col gap-2">
-    <h2 class="text-sm font-semibold">Offline → online, and permanent failures</h2>
-    <p class="text-sm text-slate-600">
-        Go offline (DevTools → Network → Offline) and enqueue a few messages — they persist and
-        wait, visible in the queue with a cancel button. Back online, the queue drains head-first. A
-        message containing <code class="font-mono">fail</code> is a 422 while online: a permanent
-        rejection thrown at the call site (it never enters the queue), so the page catches it and
-        rolls the optimistic write back out.
-    </p>
-</section>
+    <section class="flex flex-col gap-2">
+        <h2 class="text-sm font-semibold">Offline → online, and permanent failures</h2>
+        <p class="text-sm text-slate-600">
+            Go offline (DevTools → Network → Offline) and enqueue a few messages — they persist and
+            wait, visible in the queue with a cancel button. Back online, the queue drains
+            head-first. A message containing <code class="font-mono">fail</code> is a 422 while
+            online: a permanent rejection thrown at the call site (it never enters the queue), so
+            the page catches it and rolls the optimistic write back out.
+        </p>
+    </section>
 
-<div>
-    <Demo title="Queue offline, sync later" code={`// src/server/rpc/saveMessage.ts
+    <div>
+        <Demo title="Queue offline, sync later" code={`// src/server/rpc/saveMessage.ts
 export const saveMessage = POST(handler, { schemas: { input: inputSchema }, outbox: true })
 
 // the page — one call form; it queues and returns the cancelable entry
@@ -135,70 +146,69 @@ saveMessage.pending()                         // true while in flight OR queued
 
 // cancel a queued entry (in the list, or after reload)
 entry.controller.abort()`}>
-        <button
-            type="button"
-            class="rounded-md border border-slate-300 px-2 py-1 text-xs hover:bg-slate-100 disabled:opacity-40"
-            disabled={outbox().length === 0}
-            onclick={() => outbox.retry()}>
-            retry all ({outbox().length})
-        </button>
-        <p class="font-mono text-xs text-slate-500">unsynced: {outbox().length}</p>
-        <form class="flex flex-wrap items-end gap-2" onsubmit={submit}>
-            <label class="flex flex-1 flex-col gap-1 text-xs font-medium">
-                message
-                <input
-                    bind:value={draft}
-                    class="block w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
-            </label>
             <button
-                type="submit"
-                class="rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100">
-                enqueue
+                type="button"
+                class="rounded-md border border-slate-300 px-2 py-1 text-xs hover:bg-slate-100 disabled:opacity-40"
+                disabled={outbox().length === 0}
+                onclick={() => outbox.retry()}>
+                retry all ({outbox().length})
             </button>
-        </form>
+            <p class="font-mono text-xs text-slate-500">unsynced: {outbox().length}</p>
+            <form class="flex flex-wrap items-end gap-2" onsubmit={submit}>
+                <label class="flex flex-1 flex-col gap-1 text-xs font-medium">
+                    message
+                    <input
+                        bind:value={draft}
+                        class="block w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
+                </label>
+                <button
+                    type="submit"
+                    class="rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100">
+                    enqueue
+                </button>
+            </form>
 
-        {#if queue.length > 0}
-            <p class="text-xs font-medium text-slate-500">
-                queue (cancel removes before send)
-            </p>
-            <ul class="flex flex-col gap-1">
-                {#for entry of queue by entry.id}
-                    <li
-                        class="flex items-center justify-between rounded-md bg-amber-50 px-3 py-1.5 font-mono text-xs text-amber-800">
-                        <span>{entry.args.text} · {entry.status}</span>
-                        <button
-                            type="button"
-                            class="rounded border border-amber-300 px-2 py-0.5 hover:bg-amber-100"
-                            onclick={() => entry.controller.abort()}>
-                            cancel
-                        </button>
-                    </li>
-                {/for}
-            </ul>
-        {/if}
-        {#if submitted.length > 0}
-            <p class="text-xs font-medium text-slate-500">
-                submitted (dropped entries removed)
-            </p>
-            <ul class="flex flex-col gap-1">
-                {#for message of submitted by message.id}
-                    <li
-                        class="rounded-md bg-slate-100 px-3 py-1.5 font-mono text-xs text-slate-700">
-                        {message.text}
-                    </li>
-                {/for}
-            </ul>
-        {/if}
-        {#if dropped.length > 0}
-            <p class="text-xs font-medium text-rose-600">dropped (rolled back on error)</p>
-            <ul class="flex flex-col gap-1">
-                {#for message of dropped by message.id}
-                    <li class="rounded-md bg-rose-50 px-3 py-1.5 font-mono text-xs text-rose-700">
-                        {message.text}
-                    </li>
-                {/for}
-            </ul>
-        {/if}
-    </Demo>
-</div>
+            {#if queue.length > 0}
+                <p class="text-xs font-medium text-slate-500">queue (cancel removes before send)</p>
+                <ul class="flex flex-col gap-1">
+                    {#for entry of queue by entry.id}
+                        <li
+                            class="flex items-center justify-between rounded-md bg-amber-50 px-3 py-1.5 font-mono text-xs text-amber-800">
+                            <span>{entry.args.text} · {entry.status}</span>
+                            <button
+                                type="button"
+                                class="rounded border border-amber-300 px-2 py-0.5 hover:bg-amber-100"
+                                onclick={() => entry.controller.abort()}>
+                                cancel
+                            </button>
+                        </li>
+                    {/for}
+                </ul>
+            {/if}
+            {#if submitted.length > 0}
+                <p class="text-xs font-medium text-slate-500">
+                    submitted (dropped entries removed)
+                </p>
+                <ul class="flex flex-col gap-1">
+                    {#for message of submitted by message.id}
+                        <li
+                            class="rounded-md bg-slate-100 px-3 py-1.5 font-mono text-xs text-slate-700">
+                            {message.text}
+                        </li>
+                    {/for}
+                </ul>
+            {/if}
+            {#if dropped.length > 0}
+                <p class="text-xs font-medium text-rose-600">dropped (rolled back on error)</p>
+                <ul class="flex flex-col gap-1">
+                    {#for message of dropped by message.id}
+                        <li
+                            class="rounded-md bg-rose-50 px-3 py-1.5 font-mono text-xs text-rose-700">
+                            {message.text}
+                        </li>
+                    {/for}
+                </ul>
+            {/if}
+        </Demo>
+    </div>
 </div>

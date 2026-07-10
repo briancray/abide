@@ -36,45 +36,54 @@ const chatLog = state.computed(() => getChatLog())
         </p>
     </div>
 
-    <section class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-        <table class="w-full text-sm">
-            <thead class="border-b border-slate-200 bg-slate-50 text-left">
-                <tr>
-                    <th class="px-4 py-2 font-mono font-medium">watch(source, handler?)</th>
-                    <th class="px-4 py-2 font-medium">handler fires</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100">
-                <tr>
-                    <td class="px-4 py-2 font-mono">watch(() =&gt; …)</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        auto-tracked effect — re-runs when any cell it reads changes (see
-                        <a class="underline" href="/reactive-state/primitives">primitives</a>)
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">watch(cell, handler)</td>
-                    <td class="px-4 py-2 text-slate-600">on each change of one state cell</td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">watch([a, b], handler)</td>
-                    <td class="px-4 py-2 text-slate-600">on a change of any cell in the array</td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">watch(socket, handler)</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        per frame (with reconnect replay) — demoed below
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">watch(fn, args?, handler)</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        runs the smart rpc read, <code class="font-mono">handler(value)</code> on
-                        each change
-                    </td>
-                </tr>
-            </tbody>
-        </table>
+    <section class="flex flex-col gap-2">
+        <h2 class="text-sm font-semibold">Overloads</h2>
+        <p class="text-xs text-slate-500">
+            Every <code class="font-mono">watch</code> form keyed by its source, and when the
+            handler fires.
+        </p>
+        <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+            <table class="w-full text-sm">
+                <thead class="border-b border-slate-200 bg-slate-50 text-left">
+                    <tr>
+                        <th class="px-4 py-2 font-mono font-medium">watch(source, handler?)</th>
+                        <th class="px-4 py-2 font-medium">handler fires</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    <tr>
+                        <td class="px-4 py-2 font-mono">watch(() =&gt; …)</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            auto-tracked effect — re-runs when any cell it reads changes (see
+                            <a class="underline" href="/reactive-state/primitives">primitives</a>)
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">watch(cell, handler)</td>
+                        <td class="px-4 py-2 text-slate-600">on each change of one state cell</td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">watch([a, b], handler)</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            on a change of any cell in the array
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">watch(socket, handler)</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            per frame (with reconnect replay) — demoed below
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">watch(fn, args?, handler)</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            runs the smart rpc read,
+                            <code class="font-mono">handler(value)</code> on each change
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
     </section>
 
     <Demo title="watch a socket, refresh + patch the reads" code={`import { watch } from '@abide/abide/ui/watch'

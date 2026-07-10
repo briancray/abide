@@ -13,7 +13,11 @@ import Demo from '$ui/Demo.abide'
         </p>
     </div>
 
-    <section>
+    <section class="flex flex-col gap-2">
+        <h2 class="text-sm font-semibold">Accessors</h2>
+        <p class="text-xs text-slate-500">
+            Per-request accessors you can reach from any scope inside a handler or SSR pass.
+        </p>
         <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
             <table class="w-full text-sm">
                 <thead class="border-b border-slate-200 bg-slate-50 text-left">

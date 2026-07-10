@@ -31,40 +31,46 @@ let nameDraft = state.linked(() => serverName)
 <div class="flex flex-col gap-8">
     <h2 class="text-xl font-semibold">cells, computed, linked</h2>
 
-    <section class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-        <table class="w-full text-sm">
-            <thead class="border-b border-slate-200 bg-slate-50 text-left">
-                <tr>
-                    <th class="px-4 py-2 font-mono font-medium">primitive</th>
-                    <th class="px-4 py-2 font-medium">demoed here</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100">
-                <tr>
-                    <td class="px-4 py-2 font-mono">state(v, transform?)</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        the count buttons + the clamped qty input
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">state.computed(fn)</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        read-only <code class="font-mono">doubled</code>
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">state.linked(fn, transform?)</td>
-                    <td class="px-4 py-2 text-slate-600">the reseeding name draft</td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">watch(() =&gt; …)</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        the ticking interval (thunk form; the sourced forms live under
-                        <a class="underline" href="/reactive-state/reactions">reactions</a>)
-                    </td>
-                </tr>
-            </tbody>
-        </table>
+    <section class="flex flex-col gap-2">
+        <h2 class="text-sm font-semibold">Primitives</h2>
+        <p class="text-xs text-slate-500">
+            The cell primitives shown live on this page, and which demo below exercises each.
+        </p>
+        <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+            <table class="w-full text-sm">
+                <thead class="border-b border-slate-200 bg-slate-50 text-left">
+                    <tr>
+                        <th class="px-4 py-2 font-mono font-medium">primitive</th>
+                        <th class="px-4 py-2 font-medium">demoed here</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    <tr>
+                        <td class="px-4 py-2 font-mono">state(v, transform?)</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            the count buttons + the clamped qty input
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">state.computed(fn)</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            read-only <code class="font-mono">doubled</code>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">state.linked(fn, transform?)</td>
+                        <td class="px-4 py-2 text-slate-600">the reseeding name draft</td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">watch(() =&gt; …)</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            the ticking interval (thunk form; the sourced forms live under
+                            <a class="underline" href="/reactive-state/reactions">reactions</a>)
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
     </section>
 
     <div class="rounded-lg border border-slate-200 bg-white p-5">

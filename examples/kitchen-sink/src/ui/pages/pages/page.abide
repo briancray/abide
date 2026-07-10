@@ -30,78 +30,132 @@ const externalHref = state.computed(() => url('https://bun.sh', { utm: 'abide' }
         </p>
     </div>
 
-    <section class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-        <table class="w-full text-sm">
-            <thead class="border-b border-slate-200 bg-slate-50 text-left">
-                <tr>
-                    <th class="px-4 py-2 font-mono font-medium">convention</th>
-                    <th class="px-4 py-2 font-medium">meaning</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100">
-                <tr>
-                    <td class="px-4 py-2 font-mono">page.abide</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        a folder with one is a route; the path is the folder path
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">[id]</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        a dynamic segment — typed onto <code class="font-mono">page.params</code>
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">[...rest]</td>
-                    <td class="px-4 py-2 text-slate-600">a catch-all segment</td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">[[optional]]</td>
-                    <td class="px-4 py-2 text-slate-600">an optional segment</td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">layout.abide</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        wraps pages beneath its folder at
-                        <code class="font-mono">{'{children()}'}</code>, chained outermost-first
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">{'{#try}{:catch}'}</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        a render error boundary (there is no separate error file)
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">page.route</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        the matched route pattern (reactive, reassigned on every SPA nav)
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">page.params</td>
-                    <td class="px-4 py-2 text-slate-600">the typed dynamic-segment values</td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">page.url</td>
-                    <td class="px-4 py-2 text-slate-600">the current URL (pathname, search, …)</td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">page.navigating</td>
-                    <td class="px-4 py-2 text-slate-600">true while a navigation is in flight</td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">navigate(url, {'{ replace, keepScroll }'})</td>
-                    <td class="px-4 py-2 text-slate-600">client-side navigation</td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">url(path)</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        build a URL honoring the app mount base
-                    </td>
-                </tr>
-            </tbody>
-        </table>
+    <section class="flex flex-col gap-2">
+        <h2 class="text-sm font-semibold">Conventions</h2>
+        <p class="text-xs text-slate-500">
+            The filesystem and template grammar that defines routes.
+        </p>
+        <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+            <table class="w-full text-sm">
+                <thead class="border-b border-slate-200 bg-slate-50 text-left">
+                    <tr>
+                        <th class="px-4 py-2 font-mono font-medium">convention</th>
+                        <th class="px-4 py-2 font-medium">meaning</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    <tr>
+                        <td class="px-4 py-2 font-mono">page.abide</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            a folder with one is a route; the path is the folder path
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">[id]</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            a dynamic segment — typed onto
+                            <code class="font-mono">page.params</code>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">[...rest]</td>
+                        <td class="px-4 py-2 text-slate-600">a catch-all segment</td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">[[optional]]</td>
+                        <td class="px-4 py-2 text-slate-600">an optional segment</td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">layout.abide</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            wraps pages beneath its folder at
+                            <code class="font-mono">{'{children()}'}</code>, chained outermost-first
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">{'{#try}{:catch}'}</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            a render error boundary (there is no separate error file)
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="flex flex-col gap-2">
+        <h2 class="text-sm font-semibold">Properties</h2>
+        <p class="text-xs text-slate-500">
+            Import the reactive <code class="font-mono">page</code> object, then read a field
+            directly (no call). Each is reassigned on every SPA nav, so reading one in a template or
+            computed re-runs it.
+        </p>
+        <CodeBlock title="import page, then read a field" code={`import { page } from '@abide/abide/shared/page'
+
+// directly in a template — re-renders on navigation
+<span>{page.url.pathname}</span>
+
+// or inside a computed
+const path = state.computed(() => page.url.pathname)`} />
+        <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+            <table class="w-full text-sm">
+                <thead class="border-b border-slate-200 bg-slate-50 text-left">
+                    <tr>
+                        <th class="px-4 py-2 font-mono font-medium">property</th>
+                        <th class="px-4 py-2 font-medium">meaning</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    <tr>
+                        <td class="px-4 py-2 font-mono">page.route</td>
+                        <td class="px-4 py-2 text-slate-600">the matched route pattern</td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">page.params</td>
+                        <td class="px-4 py-2 text-slate-600">the typed dynamic-segment values</td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">page.url</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            the current URL (pathname, search, …)
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">page.navigating</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            true while a navigation is in flight
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="flex flex-col gap-2">
+        <h2 class="text-sm font-semibold">Functions</h2>
+        <p class="text-xs text-slate-500">Standalone helpers for navigation and URL building.</p>
+        <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+            <table class="w-full text-sm">
+                <thead class="border-b border-slate-200 bg-slate-50 text-left">
+                    <tr>
+                        <th class="px-4 py-2 font-mono font-medium">function</th>
+                        <th class="px-4 py-2 font-medium">meaning</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    <tr>
+                        <td class="px-4 py-2 font-mono">navigate(url, {'{ replace, keepScroll }'})</td>
+                        <td class="px-4 py-2 text-slate-600">client-side navigation</td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">url(path)</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            build a URL honoring the app mount base
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
     </section>
 
     <section>

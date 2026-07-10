@@ -30,56 +30,63 @@ async function sendBeacon() {
         </p>
     </div>
 
-    <section class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-        <table class="w-full text-sm">
-            <thead class="border-b border-slate-200 bg-slate-50 text-left">
-                <tr>
-                    <th class="px-4 py-2 font-mono font-medium">mechanism</th>
-                    <th class="px-4 py-2 font-medium">what it does</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100">
-                <tr>
-                    <td class="px-4 py-2 font-mono">same-origin gate</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        a cross-origin browser <code class="font-mono">Origin</code> on
-                        POST/PUT/PATCH/DELETE 403s before the handler — no-preflight CSRF defense;
-                        reads/curl/CLI/MCP send no <code class="font-mono">Origin</code> and pass
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">crossOrigin: true</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        per-rpc opt-out for endpoints third parties may legitimately call
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">clientPublish (sockets)</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        a browser publish to
-                        <code class="font-mono">/__abide/sockets/&lt;name&gt;</code> gets the same
-                        Origin check (and is off by default — see
-                        <a class="underline" href="/sockets">sockets</a>)
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">app.handle (auth seam)</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        middleware for machine clients (e.g.
-                        <code class="font-mono">/__abide/mcp</code>); boot warns when MCP tools are
-                        exposed with no <code class="font-mono">app.handle</code>
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">forwardHeaders</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        which inbound headers cross into an in-process rpc's
-                        <code class="font-mono">request()</code> (see
-                        <a class="underline" href="/rpc/request-scope">request scope</a>)
-                    </td>
-                </tr>
-            </tbody>
-        </table>
+    <section class="flex flex-col gap-2">
+        <h2 class="text-sm font-semibold">Mechanisms</h2>
+        <p class="text-xs text-slate-500">
+            The defenses guarding mutations, socket publishes, and machine clients across the app.
+        </p>
+        <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+            <table class="w-full text-sm">
+                <thead class="border-b border-slate-200 bg-slate-50 text-left">
+                    <tr>
+                        <th class="px-4 py-2 font-mono font-medium">mechanism</th>
+                        <th class="px-4 py-2 font-medium">what it does</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    <tr>
+                        <td class="px-4 py-2 font-mono">same-origin gate</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            a cross-origin browser <code class="font-mono">Origin</code> on
+                            POST/PUT/PATCH/DELETE 403s before the handler — no-preflight CSRF
+                            defense; reads/curl/CLI/MCP send no
+                            <code class="font-mono">Origin</code> and pass
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">crossOrigin: true</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            per-rpc opt-out for endpoints third parties may legitimately call
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">clientPublish (sockets)</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            a browser publish to
+                            <code class="font-mono">/__abide/sockets/&lt;name&gt;</code> gets the
+                            same Origin check (and is off by default — see
+                            <a class="underline" href="/sockets">sockets</a>)
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">app.handle (auth seam)</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            middleware for machine clients (e.g.
+                            <code class="font-mono">/__abide/mcp</code>); boot warns when MCP tools
+                            are exposed with no <code class="font-mono">app.handle</code>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">forwardHeaders</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            which inbound headers cross into an in-process rpc's
+                            <code class="font-mono">request()</code> (see
+                            <a class="underline" href="/rpc/request-scope">request scope</a>)
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
     </section>
 
     <section class="rounded-lg border border-slate-200 bg-white p-5">

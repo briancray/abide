@@ -30,78 +30,82 @@ const areas = [
 </script>
 
 <div class="flex flex-col gap-8">
-    <section class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-        <table class="w-full text-sm">
-            <thead class="border-b border-slate-200 bg-slate-50 text-left">
-                <tr>
-                    <th class="px-4 py-2 font-mono font-medium">grammar</th>
-                    <th class="px-4 py-2 font-medium">form</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100">
-                <tr>
-                    <td class="px-4 py-2 font-mono">{'{expr}'} · {'{html(…)}'}</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        escaped text interpolation (a promise-typed read peeks);
-                        <code class="font-mono">html</code> brands trusted raw markup
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">
-                        {'{#if}'} · {'{:else if}'} · {'{:else}'} · {'{#switch}'} · {'{#try}'}
-                    </td>
-                    <td class="px-4 py-2 text-slate-600">
-                        branching &amp; a synchronous error boundary —
-                        <a class="underline" href="/templating/control-flow">control flow</a>
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">{'{#for x, i of list by k}'} · {'{#for await}'}</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        keyed list; the async form drains a stream
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">{'{#await}'} · bare peek · {'{await expr}'}</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        async data — a bare peek reads
-                        <code class="font-mono">undefined</code> while pending,
-                        <code class="font-mono">await</code> blocks SSR, the block adds branches (<a
-                            class="underline"
-                            href="/templating/async"
-                            >async</a
-                        >)
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">
-                        {'{expr}'} attrs · on* · bind: · class: · style: · attach · {'{...spread}'}
-                    </td>
-                    <td class="px-4 py-2 text-slate-600">
-                        bindings &amp; directives, incl.
-                        <code class="font-mono">{'bind:value={{ get, set }}'}</code> and component
-                        <code class="font-mono">bind:prop</code> (<a
-                            class="underline"
-                            href="/templating/bindings"
-                            >bindings</a
-                        >)
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">
-                        {'{#snippet}'} · {'{children()}'} · &lt;Capitalized /&gt;
-                    </td>
-                    <td class="px-4 py-2 text-slate-600">
-                        reusable builders, child content, components &amp; scoped
-                        <code class="font-mono">&lt;style&gt;</code> (<a
-                            class="underline"
-                            href="/templating/snippets"
-                            >snippets</a
-                        >)
-                    </td>
-                </tr>
-            </tbody>
-        </table>
+    <section class="flex flex-col gap-2">
+        <h2 class="text-sm font-semibold">Grammar</h2>
+        <p class="text-xs text-slate-500">
+            Every templating form at a glance, each linking out to the subpage where it lives.
+        </p>
+        <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+            <table class="w-full text-sm">
+                <thead class="border-b border-slate-200 bg-slate-50 text-left">
+                    <tr>
+                        <th class="px-4 py-2 font-mono font-medium">grammar</th>
+                        <th class="px-4 py-2 font-medium">form</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    <tr>
+                        <td class="px-4 py-2 font-mono">{'{expr}'} · {'{html(…)}'}</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            escaped text interpolation (a promise-typed read peeks);
+                            <code class="font-mono">html</code> brands trusted raw markup
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">
+                            {'{#if}'} · {'{:else if}'} · {'{:else}'} · {'{#switch}'} · {'{#try}'}
+                        </td>
+                        <td class="px-4 py-2 text-slate-600">
+                            branching &amp; a synchronous error boundary —
+                            <a class="underline" href="/templating/control-flow">control flow</a>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">{'{#for x, i of list by k}'} · {'{#for await}'}</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            keyed list; the async form drains a stream
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">{'{#await}'} · bare peek · {'{await expr}'}</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            async data — a bare peek reads
+                            <code class="font-mono">undefined</code> while pending,
+                            <code class="font-mono">await</code> blocks SSR, the block adds branches
+                            (<a class="underline" href="/templating/async">async</a>)
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">
+                            {'{expr}'} attrs · on* · bind: · class: · style: · attach ·
+                            {'{...spread}'}
+                        </td>
+                        <td class="px-4 py-2 text-slate-600">
+                            bindings &amp; directives, incl.
+                            <code class="font-mono">{'bind:value={{ get, set }}'}</code> and component
+                            <code class="font-mono">bind:prop</code> (<a
+                                class="underline"
+                                href="/templating/bindings"
+                                >bindings</a
+                            >)
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">
+                            {'{#snippet}'} · {'{children()}'} · &lt;Capitalized /&gt;
+                        </td>
+                        <td class="px-4 py-2 text-slate-600">
+                            reusable builders, child content, components &amp; scoped
+                            <code class="font-mono">&lt;style&gt;</code> (<a
+                                class="underline"
+                                href="/templating/snippets"
+                                >snippets</a
+                            >)
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
     </section>
 
     <section class="rounded-lg border border-slate-200 bg-white p-5">

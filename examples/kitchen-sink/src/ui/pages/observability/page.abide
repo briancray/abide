@@ -45,58 +45,65 @@ async function runTraced() {
         </p>
     </div>
 
-    <section class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-        <table class="w-full text-sm">
-            <thead class="border-b border-slate-200 bg-slate-50 text-left">
-                <tr>
-                    <th class="px-4 py-2 font-mono font-medium">callable</th>
-                    <th class="px-4 py-2 font-medium">is</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100">
-                <tr>
-                    <td class="px-4 py-2 font-mono">online()</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        reactive connectivity — browser online/offline, always true during SSR
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">await reachable(host?)</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        outbound reachability probe (both sides); warm after the first check, tuned
-                        by
-                        <code class="font-mono">ABIDE_REACHABLE_TTL/TIMEOUT</code>
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">health()</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        liveness + identity JSON (framework/app version + the app
-                        <code class="font-mono">health</code> hook)
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">log(…) · .warn · .error · .trace</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        the always-on logger — each record carries request-scope context (trace id,
-                        +elapsed, method+path)
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">log.channel(name)</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        the same logger on a DEBUG-gated diagnostic channel
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">trace()</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        elapsed ms + W3C <code class="font-mono">traceparent</code> for the current
-                        request
-                    </td>
-                </tr>
-            </tbody>
-        </table>
+    <section class="flex flex-col gap-2">
+        <h2 class="text-sm font-semibold">Callables</h2>
+        <p class="text-xs text-slate-500">
+            Reachability and connectivity checks, the request-context logger, and the current trace
+            — what each returns, same call on server and client.
+        </p>
+        <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+            <table class="w-full text-sm">
+                <thead class="border-b border-slate-200 bg-slate-50 text-left">
+                    <tr>
+                        <th class="px-4 py-2 font-mono font-medium">callable</th>
+                        <th class="px-4 py-2 font-medium">is</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    <tr>
+                        <td class="px-4 py-2 font-mono">online()</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            reactive connectivity — browser online/offline, always true during SSR
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">await reachable(host?)</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            outbound reachability probe (both sides); warm after the first check,
+                            tuned by
+                            <code class="font-mono">ABIDE_REACHABLE_TTL/TIMEOUT</code>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">health()</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            liveness + identity JSON (framework/app version + the app
+                            <code class="font-mono">health</code> hook)
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">log(…) · .warn · .error · .trace</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            the always-on logger — each record carries request-scope context (trace
+                            id, +elapsed, method+path)
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">log.channel(name)</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            the same logger on a DEBUG-gated diagnostic channel
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">trace()</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            elapsed ms + W3C <code class="font-mono">traceparent</code> for the
+                            current request
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
     </section>
 
     <section class="rounded-lg border border-slate-200 bg-white p-5">

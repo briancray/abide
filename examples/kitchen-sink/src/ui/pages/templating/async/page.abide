@@ -47,48 +47,54 @@ async function* ticker(): AsyncGenerator<number> {
         <code class="font-mono">{'{#for await}'}</code> drains a stream frame-by-frame.
     </p>
 
-    <section class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-        <table class="w-full text-sm">
-            <thead class="border-b border-slate-200 bg-slate-50 text-left">
-                <tr>
-                    <th class="px-4 py-2 font-mono font-medium">form</th>
-                    <th class="px-4 py-2 font-medium">use it when</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100">
-                <tr>
-                    <td class="px-4 py-2 font-mono">{'{getX()}'} · {'{getX() ?? …}'} · {'{getX()?.y}'}</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        pending is <code class="font-mono">undefined</code>, composing with
-                        <code class="font-mono">??</code> / <code class="font-mono">?.</code> /
-                        <code class="font-mono">{'{#if}'}</code> / attributes
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">{'{await getX()}'}</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        the same read, but <em>blocking</em> during SSR (rendered inline, warm
-                        hydrate); no <code class="font-mono">await</code> streams
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">
-                        {'{#await p}'} · {'{:then v}'} · {'{:catch e}'} · {'{:finally}'} · {'{/await}'}
-                    </td>
-                    <td class="px-4 py-2 text-slate-600">
-                        you want a distinct pending branch, a local
-                        <code class="font-mono">{':catch'}</code>, or
-                        <code class="font-mono">{':then'}</code> narrowing
-                    </td>
-                </tr>
-                <tr>
-                    <td class="px-4 py-2 font-mono">{'{#for await x of stream}'}</td>
-                    <td class="px-4 py-2 text-slate-600">
-                        drain an <code class="font-mono">AsyncIterable</code> frame-by-frame
-                    </td>
-                </tr>
-            </tbody>
-        </table>
+    <section class="flex flex-col gap-2">
+        <h2 class="text-sm font-semibold">Forms</h2>
+        <p class="text-xs text-slate-500">
+            The ways to read async data in a template, and when to reach for each.
+        </p>
+        <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+            <table class="w-full text-sm">
+                <thead class="border-b border-slate-200 bg-slate-50 text-left">
+                    <tr>
+                        <th class="px-4 py-2 font-mono font-medium">form</th>
+                        <th class="px-4 py-2 font-medium">use it when</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    <tr>
+                        <td class="px-4 py-2 font-mono">{'{getX()}'} · {'{getX() ?? …}'} · {'{getX()?.y}'}</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            pending is <code class="font-mono">undefined</code>, composing with
+                            <code class="font-mono">??</code> / <code class="font-mono">?.</code> /
+                            <code class="font-mono">{'{#if}'}</code> / attributes
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">{'{await getX()}'}</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            the same read, but <em>blocking</em> during SSR (rendered inline, warm
+                            hydrate); no <code class="font-mono">await</code> streams
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">
+                            {'{#await p}'} · {'{:then v}'} · {'{:catch e}'} · {'{:finally}'} · {'{/await}'}
+                        </td>
+                        <td class="px-4 py-2 text-slate-600">
+                            you want a distinct pending branch, a local
+                            <code class="font-mono">{':catch'}</code>, or
+                            <code class="font-mono">{':then'}</code> narrowing
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="px-4 py-2 font-mono">{'{#for await x of stream}'}</td>
+                        <td class="px-4 py-2 text-slate-600">
+                            drain an <code class="font-mono">AsyncIterable</code> frame-by-frame
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
     </section>
 
     <div class="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-5">
