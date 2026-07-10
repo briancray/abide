@@ -83,9 +83,10 @@ describe('cache() snapshot → UI hydration (full server→client loop)', () => 
         handlerCalls = 0
 
         // 1) server: mirror createUiPageRenderer's ordering. Render ONCE, snapshot the store
-        //    AT RENDER-RETURN (the {#await} thunk hasn't run, so the store is empty — this is
-        //    the timing the bug lived in), then drain the stream (which runs the thunk,
-        //    creating + settling the entry) and snapshot again to get the warm partition.
+        //    AT RENDER-RETURN — this top-level {#await} is HOISTED (ADR-0034), so its read fired in
+        //    the render prefix: the entry exists but is still in-flight (a sync render yields no
+        //    microtask), so the settled/replayable snapshot is empty. Then drain the stream
+        //    (settling the entry) and snapshot again to get the warm partition the client seeds from.
         //    (runWithRequestScope's callback returns a Response, so stash outputs.)
         let chunks: string[] = []
         let streamed: CacheSnapshotEntry[] = []
@@ -102,8 +103,8 @@ describe('cache() snapshot → UI hydration (full server→client loop)', () => 
             const store = requestContext.getStore()?.cache as CacheStore
 
             const atReturn = await serializeCacheSnapshot(store)
-            expect(atReturn).toHaveLength(0) // lazy {#await} read — not created yet
-            expect(store.entries.size).toBe(0)
+            expect(atReturn).toHaveLength(0) // hoisted read is in-flight at return — nothing shippable yet
+            expect(store.entries.size).toBe(1) // the hoisted {#await} flight created the entry in the prefix
 
             const collected: string[] = []
             for await (const chunk of renderToStream(() => ssr)) {
@@ -117,7 +118,7 @@ describe('cache() snapshot → UI hydration (full server→client loop)', () => 
             return json(null)
         })
         expect(handlerCalls).toBe(1) // the rpc dispatched once, on the server
-        expect(streamed).toHaveLength(1) // the mid-stream entry serialized post-drain
+        expect(streamed).toHaveLength(1) // the entry serialized post-drain, seeds the client warm
 
         // 2) reconstruct the server DOM the browser received — the pending shell, then the REAL
         //    inline swap script folding each streamed `<abide-resolve>` fragment into its boundary

@@ -36,7 +36,7 @@ test('build emits surgical classList.toggle / setProperty inside a watch (no re-
 
 test('SSR merges static class + class: directives into ONE class attribute', () => {
     const { nodes } = parseTemplate(`<div class="card" class:active={open}></div>`)
-    const ssr = generateSSR(nodes, STATE, EMPTY, EMPTY)
+    const { body: ssr } = generateSSR(nodes, STATE, EMPTY, EMPTY)
     // the static "card" and the truthy-gated "active" join into one class=""
     expect(ssr).toContain(`["card", ((`)
     expect(ssr).toContain(`].filter(Boolean).join(' ')`)
@@ -47,7 +47,7 @@ test('SSR merges static class + class: directives into ONE class attribute', () 
 
 test('SSR merges static style + style: directives into ONE style attribute', () => {
     const { nodes } = parseTemplate(`<div style="margin:0" style:--pct={ratio}></div>`)
-    const ssr = generateSSR(nodes, STATE, EMPTY, EMPTY)
+    const { body: ssr } = generateSSR(nodes, STATE, EMPTY, EMPTY)
     expect(ssr).toContain(`["margin:0", ("--pct:" + String(`)
     expect(ssr).toContain(`].filter(Boolean).join(';')`)
     expect(ssr).toContain(`' style="'`)
@@ -55,7 +55,7 @@ test('SSR merges static style + style: directives into ONE style attribute', () 
 
 test('class:/style: with no static counterpart still merge from scratch', () => {
     const { nodes } = parseTemplate(`<div class:on={open}></div>`)
-    const ssr = generateSSR(nodes, STATE, EMPTY, EMPTY)
+    const { body: ssr } = generateSSR(nodes, STATE, EMPTY, EMPTY)
     expect(ssr).toContain(`[((`)
     expect(ssr).toContain(`? "on" : "")].filter(Boolean).join(' ')`)
 })

@@ -31,7 +31,9 @@ type Fixture = {
     ssr: Side
     /* A lowered substring that must appear on every side that renders the fixture. */
     loweredBoth?: string
-    /* A lowered substring only the client build emits (SSR strips it). */
+    /* A lowered substring only the client build emits inline — the SSR body omits it because it
+       either strips the lowering (an event handler) or HOISTS it to a prefix flight const (a
+       top-level `{#await}` promise, ADR-0034). Asserted absent from the SSR node-walk body. */
     loweredBuildOnly?: string
 }
 
@@ -125,7 +127,9 @@ let stream = state([])</script>{#for await n of stream by n}<li>{n}</li>{/for}`,
 let p = state(Promise.resolve(1))</script>{#await p}<span>loading</span>{:then v}<b>{v}</b>{/await}`,
         build: 'render',
         ssr: 'render',
-        loweredBoth: 'model.read("p")',
+        /* Top-level hoistable await: the client awaits `p` inline; the SSR body references its
+           prefix flight const instead (the promise lowering lives in flightDecls). */
+        loweredBuildOnly: 'model.read("p")',
     },
     {
         name: 'await (blocking)',
@@ -133,7 +137,8 @@ let p = state(Promise.resolve(1))</script>{#await p}<span>loading</span>{:then v
 let p = state(Promise.resolve(1))</script>{#await p then v}<b>{v}</b>{/await}`,
         build: 'render',
         ssr: 'render',
-        loweredBoth: 'model.read("p")',
+        /* Top-level hoistable blocking await: promise lowering hoisted to a prefix flight const. */
+        loweredBuildOnly: 'model.read("p")',
     },
     {
         name: 'try / catch',
@@ -174,7 +179,7 @@ describe('generator parity — build ↔ SSR at the node-walk seam', () => {
                 fixture.source,
             )
             const build = generateBuild(nodes, 'host', stateNames, derivedNames, computedNames)
-            const ssr = generateSSR(nodes, stateNames, derivedNames, computedNames)
+            const { body: ssr } = generateSSR(nodes, stateNames, derivedNames, computedNames)
 
             // coverage: each generator emits iff it should render the kind
             expect(build.trim() !== '').toBe(fixture.build === 'render')
