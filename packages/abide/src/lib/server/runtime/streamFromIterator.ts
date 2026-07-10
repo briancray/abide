@@ -1,3 +1,4 @@
+import { abideLog } from '../../shared/abideLog.ts'
 import { messageFromError } from '../../shared/messageFromError.ts'
 
 /*
@@ -72,6 +73,10 @@ export function streamFromIterator<T>(
                 }
                 controller.enqueue(textEncoder.encode(encoder.encodeFrame(next.value)))
             } catch (error) {
+                /* Log the FULL error server-side (host/credentials/stack an operator needs) — the
+                   unary rpc path does the same, and the jsonl/sse docs promise it. Only the
+                   sanitized message crosses the wire in the sentinel error frame. */
+                abideLog.error(error)
                 const message = messageFromError(error)
                 controller.enqueue(textEncoder.encode(encoder.encodeError(message)))
                 stopKeepalive()
