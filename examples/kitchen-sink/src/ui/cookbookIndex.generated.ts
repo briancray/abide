@@ -1573,7 +1573,7 @@ export const cookbookIndex: CookbookIndexSection[] = [
     },
     {
         title: 'realtime',
-        blurb: 'Push live — broadcast sockets, broadcast(), retention, presence, self-healing reconnects.',
+        blurb: 'Push live — broadcast sockets, publish(), retention, presence, self-healing reconnects.',
         pages: [
             {
                 href: '/cookbook/realtime/sockets',

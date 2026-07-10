@@ -60,7 +60,7 @@ export const handle = async (request, next) => {
             code={`export const publishFeed = POST(async ({ text }) => {
     const user = await currentUser()
     if (!user) throw new HttpError(401, 'sign in')
-    feed.broadcast({ text, by: user.id })
+    feed.publish({ text, by: user.id })
     return json({ ok: true })
 }, { schemas: { input: inputSchema } })`}
             note={"Put the authorization in the publish rpc. It runs server-side under the origin gate, so it's the right place to check identity before fanning a frame out."} />
@@ -68,7 +68,7 @@ export const handle = async (request, next) => {
         <Recipe
             task="Validate every publish against the schema"
             live="/sockets"
-            code={`export const feed = socket({ schema })   // frames are shape-checked at broadcast()`}
+            code={`export const feed = socket({ schema })   // frames are shape-checked at publish()`}
             note={'The socket schema rejects malformed frames synchronously — a defence-in-depth layer under your rpc-level authorization.'} />
 
         <Recipe

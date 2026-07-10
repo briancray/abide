@@ -11,7 +11,7 @@ over the multiplexed ws channel). Both paths produce identical Socket
 shapes so user code reads the same on either side.
 
 The Socket surface — bare iteration as the live stream, `.tail(n)` seeded
-from the retained tail, `.broadcast` sending a server-validated `pub` frame —
+from the retained tail, `.publish` sending a server-validated `pub` frame —
 is built by buildSocketOverChannel over the page's lazily-opened singleton
 channel; this module only binds that builder to the browser channel so the
 test harness can reuse the identical surface over its own channel.

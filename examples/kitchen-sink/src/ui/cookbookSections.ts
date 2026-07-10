@@ -81,7 +81,7 @@ export const cookbookSections: CookbookSectionConfig[] = [
     },
     {
         title: 'realtime',
-        blurb: 'Push live — broadcast sockets, broadcast(), retention, presence, self-healing reconnects.',
+        blurb: 'Push live — broadcast sockets, publish(), retention, presence, self-healing reconnects.',
         pages: [
             { href: '/cookbook/realtime/sockets', label: 'sockets & broadcast' },
             { href: '/cookbook/realtime/patterns', label: 'presence & patterns' },

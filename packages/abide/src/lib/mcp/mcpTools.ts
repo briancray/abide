@@ -154,8 +154,8 @@ function callSocketTool(
         }
     }
     try {
-        // broadcast() validates the payload against the socket schema and throws on failure.
-        entry.socket.broadcast(args)
+        // publish() validates the payload against the socket schema and throws on failure.
+        entry.socket.publish(args)
     } catch (error) {
         return textResult(messageFromError(error), true)
     }

@@ -30,7 +30,7 @@ export const publishChat = POST(
             at: Date.now(),
         }
         recordChat(message)
-        chat.broadcast(message)
+        chat.publish(message)
         return json(message)
     },
     { schemas: { input: inputSchema } },

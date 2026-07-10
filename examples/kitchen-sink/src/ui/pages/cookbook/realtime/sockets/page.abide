@@ -11,7 +11,7 @@ const LIVE = '/sockets'
         <p class="text-slate-600">
             A <code class="font-mono">socket</code> is a broadcast topic — one export per file under
             <code class="font-mono">src/server/sockets/</code>.
-            <code class="font-mono">broadcast()</code> is isomorphic; retention defaults to the last
+            <code class="font-mono">publish()</code> is isomorphic; retention defaults to the last
             frame (<code class="font-mono">tail: 1</code>) and scales via
             <code class="font-mono">tail: n</code>.
         </p>
@@ -37,7 +37,7 @@ export const chat = socket({ schema })`}
             live={LIVE}
             code={`export const publishChat = POST(({ from, text }) => {
     const message = { id: crypto.randomUUID(), from, text, at: Date.now() }
-    chat.broadcast(message)
+    chat.publish(message)
     return json(message)
 }, { schemas: { input: inputSchema } })`}
             note={'Publishing flows through a server rpc that validates input, so every live reader — server `for await` or browser `watch(chat, …)` — receives the frame.'} />
@@ -64,7 +64,7 @@ export const chat = socket({ schema })`}
             task="Allow trusted clients to publish"
             live={LIVE}
             code={`export const cursors = socket({ schema, clientPublish: true })`}
-            note={'`clientPublish: true` lets a browser call `broadcast()` directly (and exposes a `-publish` MCP/CLI face) — for high-frequency, low-stakes frames like cursor positions.'} />
+            note={'`clientPublish: true` lets a browser call `publish()` directly (and exposes a `-publish` MCP/CLI face) — for high-frequency, low-stakes frames like cursor positions.'} />
 
         <Recipe
             task="Read the stream on the server"
@@ -91,15 +91,15 @@ const latest = peek(chat)   // or chat.peek() — undefined if nothing retained 
             task="Publish after recording to a store"
             live={LIVE}
             code={`recordChat(message)   // durable write first
-chat.broadcast(message)  // then fan out`}
+chat.publish(message)  // then fan out`}
             note={'Persist, then publish — so the retained/broadcast frame matches what a fresh read from the store would return. The rpc is the transaction boundary.'} />
 
         <Recipe
             task="Validate a publish against the schema"
             live={LIVE}
-            code={`// a frame that doesn't match the schema is rejected at broadcast()
-chat.broadcast({ from, text })   // missing id/at → throws`}
-            note={"The socket's schema checks every frame synchronously at `broadcast()`. Domain rules (trimming, non-empty) stay in the rpc; shape rules live in the schema."} />
+            code={`// a frame that doesn't match the schema is rejected at publish()
+chat.publish({ from, text })   // missing id/at → throws`}
+            note={"The socket's schema checks every frame synchronously at `publish()`. Domain rules (trimming, non-empty) stay in the rpc; shape rules live in the schema."} />
 
         <Recipe
             task="Multiplex many topics over one connection"
@@ -112,7 +112,7 @@ watch(online, (presence) => (roster = presence))`}
             task="Broadcast a server-side event with no rpc"
             live={LIVE}
             code={`// from a boot hook, a cron, or another handler
-deploys.broadcast({ version, at: Date.now() })`}
-            note={"`broadcast()` works anywhere on the server — a background job, a webhook handler, a timer — not only inside the topic's own rpc."} />
+deploys.publish({ version, at: Date.now() })`}
+            note={"`publish()` works anywhere on the server — a background job, a webhook handler, a timer — not only inside the topic's own rpc."} />
     </div>
 </div>

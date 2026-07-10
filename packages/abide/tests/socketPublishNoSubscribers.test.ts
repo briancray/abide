@@ -53,9 +53,9 @@ describe('socket publish with zero remote subscribers', () => {
         })()
         await settle()
 
-        feed.broadcast({ n: 1 })
-        feed.broadcast({ n: 2 })
-        feed.broadcast({ n: 3 })
+        feed.publish({ n: 1 })
+        feed.publish({ n: 2 })
+        feed.publish({ n: 3 })
         await reader
 
         // In-process delivery is unconditional.
@@ -75,8 +75,8 @@ describe('socket publish with zero remote subscribers', () => {
         serverSlot.active = server
         const feed = defineSocket<{ n: number }>('has-sub-fanout', {})
 
-        feed.broadcast({ n: 1 })
-        feed.broadcast({ n: 2 })
+        feed.publish({ n: 1 })
+        feed.publish({ n: 2 })
 
         // Both publishes cross the gate and reach native fan-out on the topic.
         expect(publishedTopics).toEqual(['socket:has-sub-fanout', 'socket:has-sub-fanout'])

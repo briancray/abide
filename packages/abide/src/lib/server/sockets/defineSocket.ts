@@ -24,8 +24,8 @@ is the live stream — no replay. `chat.tail(count)` opens a subscription
 seeded with the last `count` retained frames (no-arg = the whole
 retained tail, clamped to the declared `tail` size). When `ttl` is set,
 retained frames older than `ttl` ms are evicted lazily on every
-read/append — no timer runs in the background. `chat.broadcast(m)` is isomorphic —
-called server-side it both notifies in-process iterators and broadcasts
+read/append — no timer runs in the background. `chat.publish(m)` is isomorphic —
+called server-side it both notifies in-process iterators and fans out
 to remote subscribers; called client-side (via socketProxy) it sends a
 `pub` frame the dispatcher validates and forwards.
 */
@@ -178,8 +178,9 @@ export function defineSocket<T>(name: string, opts: SocketOptions = {}): Socket<
     const self = {
         name,
         clients,
-        /* `broadcast` is the public fan-out; `publish` remains the internal function name. */
-        broadcast: publish,
+        /* `publish` is the public fan-out (mirroring Bun's `server.publish()`); the internal
+           function shares the name. */
+        publish,
         tail: (count?: number, hooks?: TailHooks) => iterate(count ?? 'all', hooks),
         /* The latest retained frame (after ttl pruning), or undefined when none is held. */
         peek: () => {

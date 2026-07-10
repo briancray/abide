@@ -10,7 +10,7 @@ is the live stream — no replay. `.tail(count)` opens a subscription seeded
 with the last `count` frames of the retained tail (declared via
 `{ tail: n }`; no-arg = the whole retained tail) before going live — the
 optional NamedAsyncIterable retention capability a reactive `watch(socket, …)`
-seeds from. `broadcast` is isomorphic: server code broadcasts in-process
+seeds from. `publish` is isomorphic: server code publishes in-process
 and fans out to remote subscribers; client code sends a `pub` frame the
 dispatcher validates against the topic's `clientPublish` flag. `clients`
 exposes which adapter surfaces (browser / mcp / cli) advertise this
@@ -21,8 +21,8 @@ export interface Socket<T> extends AsyncIterable<T> {
     readonly clients: ClientFlags
     /* Send a frame to every subscriber (server always; client only when `clientPublish` is
        set). Isomorphic: server code fans out in-process + to remote subscribers; client code
-       sends a validated `pub` frame. */
-    broadcast(message: T): void
+       sends a validated `pub` frame. Mirrors Bun's `server.publish()`. */
+    publish(message: T): void
     tail(count?: number, hooks?: TailHooks): AsyncIterable<T>
     /* The latest retained frame, synchronously — `T | undefined` when none. The value
        member of the probe family for a stream; `peek(socket)` routes here. */

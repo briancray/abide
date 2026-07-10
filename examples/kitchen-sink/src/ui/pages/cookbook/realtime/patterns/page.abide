@@ -64,7 +64,7 @@ watch(typing, (t) => (typers = [...typers, t].slice(-10)))`}
             code={`// server job
 for (const step of steps) {
     await run(step)
-    jobProgress.broadcast({ jobId, pct: done / total * 100 })
+    jobProgress.publish({ jobId, pct: done / total * 100 })
 }`}
             note={'Publish progress frames from the job and watch them keyed by job id — a live progress bar or step list driven entirely by the server.'} />
 
@@ -72,7 +72,7 @@ for (const step of steps) {
             task="Push server notifications"
             live={LIVE}
             code={`export const alerts = socket({ schema, tail: 20 })
-// anywhere on the server: alerts.broadcast({ level, text })`}
+// anywhere on the server: alerts.publish({ level, text })`}
             note={'A retained `alerts` socket is a notification bus — broadcast from any handler or job, watch the latest into a toast area, seed the last few on load.'} />
 
         <Recipe
@@ -100,7 +100,7 @@ let last = 0
 export const ping = POST(() => {
     if (Date.now() - last < 1000) return error(429, 'slow down')
     last = Date.now()
-    pings.broadcast({ at: Date.now() })
+    pings.publish({ at: Date.now() })
     return json({ ok: true })
 })`}
             note={"There's no per-topic rate limit. Throttle in the publish rpc yourself (a timestamp guard, a token bucket) — the socket fans out whatever you hand it."} />
@@ -120,7 +120,7 @@ const mine = state.computed(() => recent.filter((m) => m.toUserId === me))`}
             gap={true}
             code={`// no ack/at-least-once — persist, then reconcile with a read
 recordMessage(m)      // durable source of truth
-chat.broadcast(m)       // best-effort live delivery
+chat.publish(m)       // best-effort live delivery
 // clients refetch from the store on reconnect to fill gaps`}
             note={'Publish is best-effort fan-out with no per-frame acknowledgement or replay guarantee. For at-least-once, persist to a store and have clients reconcile from a read on reconnect — the socket is the fast path, the store is the truth.'} />
 
@@ -129,6 +129,6 @@ chat.broadcast(m)       // best-effort live delivery
             gap={true}
             code={`// broadcast is in-process — a frame published on instance A
 // does NOT reach a subscriber connected to instance B`}
-            note={"Sockets fan out within one process. Behind a multi-instance load balancer, publishes don't cross instances — you'd need an external broker (Redis pub/sub, a message bus) bridged to `broadcast()` yourself. Single-process and single-node deployments are unaffected."} />
+            note={"Sockets fan out within one process. Behind a multi-instance load balancer, publishes don't cross instances — you'd need an external broker (Redis pub/sub, a message bus) bridged to `publish()` yourself. Single-process and single-node deployments are unaffected."} />
     </div>
 </div>

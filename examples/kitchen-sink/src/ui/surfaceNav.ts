@@ -50,7 +50,7 @@ export const surfaceNav: SurfaceGroup[] = [
             {
                 href: '/sockets',
                 label: 'sockets',
-                body: 'One broadcast topic per file under src/server/sockets/. broadcast() is isomorphic, retention defaults to the last frame (tail: 1) and scales via tail: n, and every browser subscription multiplexes one WebSocket.',
+                body: 'One broadcast topic per file under src/server/sockets/. publish() is isomorphic, retention defaults to the last frame (tail: 1) and scales via tail: n, and every browser subscription multiplexes one WebSocket.',
             },
             {
                 href: '/security',

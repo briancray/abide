@@ -245,7 +245,7 @@ export function createSocketDispatcher(sockets: SocketRoutes): SocketDispatcher 
         the process down.
         */
         try {
-            entry.socket.broadcast(frame.message)
+            entry.socket.publish(frame.message)
         } catch (publishError) {
             abideLog.error(publishError)
         }
@@ -309,7 +309,7 @@ export function createSocketDispatcher(sockets: SocketRoutes): SocketDispatcher 
             }
             try {
                 // publish() validates against the socket schema and throws on a bad payload.
-                entry.socket.broadcast(message)
+                entry.socket.publish(message)
             } catch (publishError) {
                 return error(422, messageFromError(publishError))
             }

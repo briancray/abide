@@ -37,8 +37,8 @@ function frame(value: SocketClientFrame): string {
 describe('socket ws multiplex happy path', () => {
     test('sub replays the retained tail to the subscribing ws and joins the bun topic', async () => {
         const room = defineSocket<{ text: string }>('ws-room', { tail: 10 })
-        room.broadcast({ text: 'one' })
-        room.broadcast({ text: 'two' })
+        room.publish({ text: 'one' })
+        room.publish({ text: 'two' })
         const dispatcher = createSocketDispatcher(routesFor('ws-room'))
         const { ws, sent, subscribed } = fakeSocket()
 
@@ -56,9 +56,9 @@ describe('socket ws multiplex happy path', () => {
 
     test('replay count caps how much of the retained tail a sub receives', async () => {
         const feed = defineSocket<number>('ws-capped', { tail: 10 })
-        feed.broadcast(1)
-        feed.broadcast(2)
-        feed.broadcast(3)
+        feed.publish(1)
+        feed.publish(2)
+        feed.publish(3)
         const dispatcher = createSocketDispatcher(routesFor('ws-capped'))
         const { ws, sent } = fakeSocket()
 

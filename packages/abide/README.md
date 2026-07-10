@@ -112,7 +112,7 @@ export const chat = socket({
 })
 ```
 
-`chat.broadcast(msg)` publishes from either side — schema-validated on the
+`chat.publish(msg)` publishes from either side — schema-validated on the
 server, and client publishes are gated by `clientPublish`. `for await (const
 msg of chat)` is the live stream; `chat.peek()` reads the latest retained
 frame; `chat.refresh()` re-pulls the server tail after a reconnect. A schema

@@ -63,9 +63,10 @@ export function buildSocketOverChannel<T>(
     const socket = {
         name,
         clients: browserClientFlags,
-        /* `broadcast` sends a server-validated `pub` frame (the dispatcher gates it on the
-           topic's `clientPublish`); `publish` is the internal channel-send function name. */
-        broadcast: publish,
+        /* `publish` sends a server-validated `pub` frame (the dispatcher gates it on the
+           topic's `clientPublish`), mirroring Bun's `server.publish()`; the internal
+           channel-send function shares the name. */
+        publish,
         tail: (count?: number, hooks?: TailHooks) => iterate(count, hooks),
         /* The latest frame this client has seen, synchronously. */
         peek: () => lastFrame,

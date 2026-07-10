@@ -146,8 +146,9 @@ infers and publishes validate). Options: `tail` (retained frames, default 1 —
 `clientPublish` (accept browser/HTTP publishes, off by default), `clients`
 (mcp/cli exposure; a schema flips both on by default). The socket IS the
 `AsyncIterable` — iterating is the live stream, no replay. Members:
-`broadcast(msg)` (isomorphic publish — server fans out in-process + to remote
-subscribers, client sends a validated `pub` frame), `tail(count?)` (a
+`publish(msg)` (isomorphic — mirrors Bun's `server.publish()`; server fans out
+in-process + to remote subscribers, client sends a validated `pub` frame),
+`tail(count?)` (a
 subscription seeded with retained frames), `peek()` (latest retained frame),
 `refresh()` (drop local frames and re-pull the server tail; server-side
 no-op), `watch(handler)` ≡ `watch(socket, handler)` (client-only, SSR-inert),

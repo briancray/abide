@@ -125,8 +125,8 @@ describe('socket .watch', () => {
             ran = true
         })
         expect(typeof stop).toBe('function')
-        sock.broadcast('a')
-        sock.broadcast('b')
+        sock.publish('a')
+        sock.publish('b')
         await tick()
         expect(ran).toBe(false) // reaction is client-only; the server stub is a no-op
         expect(() => stop()).not.toThrow()

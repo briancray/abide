@@ -121,7 +121,7 @@ async function tryRestPublish() {
                         </td>
                     </tr>
                     <tr>
-                        <td class="px-4 py-2 font-mono">broadcast(msg)</td>
+                        <td class="px-4 py-2 font-mono">publish(msg)</td>
                         <td class="px-4 py-2 text-slate-600">
                             isomorphic publish — fans out in-process and to remote subscribers
                         </td>
