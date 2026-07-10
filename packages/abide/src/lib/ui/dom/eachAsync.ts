@@ -102,6 +102,17 @@ export function eachAsync<T>(
         iterator?.return?.(undefined)?.catch(() => undefined) // close the superseded run's iterator before re-streaming
         iterator = undefined
         clearError() // a fresh run drops a prior error branch
+        /* A reseed streams a FRESH source (e.g. `room(newId)`), so the prior run's rows are stale.
+           Drop them now rather than relying on the drain's completion prune below — a never-
+           completing source (a socket) never reaches that prune, so a key the new stream doesn't
+           re-yield would otherwise leak in the DOM and the `rows` map forever (and mix the old
+           source's rows in with the new). Keys the new stream does re-yield rebuild fresh (the
+           block rebuilds on every re-yield regardless), so nothing reusable is lost. */
+        for (const [, row] of rows) {
+            row.dispose()
+            removeRange(row.start, row.end)
+        }
+        rows.clear()
         const iterable = items() // read (subscribe) synchronously
         const present = new Set<string>()
         let arrivals = 0 // stream arrival ordinal → each row's index
