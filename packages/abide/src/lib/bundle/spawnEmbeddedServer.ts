@@ -53,10 +53,19 @@ export async function spawnEmbeddedServer({
         env: { ...process.env, PORT: String(port), ABIDE_PARENT_PID: String(process.pid) },
         stdio: ['inherit', 'inherit', 'inherit'],
     })
-    const outcome = await Promise.race([
-        waitForServer(url, timeoutMs ? { timeoutMs } : undefined).then(() => undefined),
-        child.exited,
-    ])
+    let outcome: number | undefined
+    try {
+        outcome = await Promise.race([
+            waitForServer(url, timeoutMs ? { timeoutMs } : undefined).then(() => undefined),
+            child.exited,
+        ])
+    } catch (error) {
+        /* Readiness timed out (waitForServer threw) — reap the child we spawned so it doesn't
+           orphan and hold its fixed PORT, which would then fail the next spawn's bind. The caller
+           only owns the child once we successfully return it. */
+        child.kill()
+        throw error
+    }
     if (outcome !== undefined) {
         throw new Error(`[abide] embedded server exited (code ${outcome}) before binding`)
     }

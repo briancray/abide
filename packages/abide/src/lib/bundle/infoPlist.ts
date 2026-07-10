@@ -15,9 +15,15 @@ export function infoPlist({
     version: string
     icon?: string
 }): string {
+    /* Interpolated values ride inside plist `<string>` elements, so any `&`/`<`/`>` in a
+       project name would otherwise emit malformed XML that codesign/Gatekeeper reject. */
+    const escapeXml = (value: string): string =>
+        value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+    const safeName = escapeXml(name)
+    const safeVersion = escapeXml(version)
     const iconEntry = icon
         ? `    <key>CFBundleIconFile</key>
-    <string>${icon}</string>
+    <string>${escapeXml(icon)}</string>
 `
         : ''
     return `<?xml version="1.0" encoding="UTF-8"?>
@@ -25,17 +31,17 @@ export function infoPlist({
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>${name}</string>
+    <string>${safeName}</string>
     <key>CFBundleDisplayName</key>
-    <string>${name}</string>
+    <string>${safeName}</string>
     <key>CFBundleExecutable</key>
-    <string>${name}</string>
+    <string>${safeName}</string>
     <key>CFBundleIdentifier</key>
-    <string>com.abide.${name}</string>
+    <string>com.abide.${safeName}</string>
     <key>CFBundleVersion</key>
-    <string>${version}</string>
+    <string>${safeVersion}</string>
     <key>CFBundleShortVersionString</key>
-    <string>${version}</string>
+    <string>${safeVersion}</string>
 ${iconEntry}    <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>NSHighResolutionCapable</key>
