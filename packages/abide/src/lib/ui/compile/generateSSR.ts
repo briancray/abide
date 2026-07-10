@@ -13,6 +13,7 @@ import { composeProps } from './composeProps.ts'
 import { eachPlan } from './eachPlan.ts'
 import { elementPlan } from './elementPlan.ts'
 import { groupBindParts } from './groupBindParts.ts'
+import { hoistableAwaits } from './hoistableAwaits.ts'
 import { ifPlan } from './ifPlan.ts'
 import { interpolatedTemplateLiteral } from './interpolatedTemplateLiteral.ts'
 import { isAnchorPositioned } from './isAnchorPositioned.ts'
@@ -68,7 +69,7 @@ export function generateSSR(
     isLayout = false,
     /* `linked` / async `computed` names, lowered to `$$readCell(name)` in template exprs. */
     cellReadNames: ReadonlySet<string> = new Set(),
-): string {
+): { body: string; flightDecls: string } {
     /* Unique temp var names (child render results); runtime block ids are
        allocated separately at runtime via `$ctx.next++`. */
     const nextVar = makeVarNamer()
@@ -156,6 +157,17 @@ export function generateSSR(
        traversal from this tree — one decision site for the outlet, and the outlet emitted bare
        through the generic element path exactly as the client clones it. */
     const rootNodes = isLayout ? nodes.map(asOutlet) : nodes
+
+    /* ADR-0034: the await blocks whose promise-start hoists to the synchronous render prefix so
+       independent flights overlap instead of serializing. Server-only — this rewires only the SSR
+       promise SOURCE (a blocking `await $flightN`, a streaming `promise: () => $flightN`); the
+       block's markers, `$ctx.next++` id, RESUME wire, and the whole client build stay byte-identical.
+       The `flightDecls` are emitted by compileSSR after the lowered script and BEFORE the barrier, so
+       a hoisted flight is already in-flight while the barrier awaits any unrelated blocking cell. */
+    const flightNameByNode = new Map<TemplateNode, string>()
+    for (const flight of hoistableAwaits(rootNodes, cellReadNames)) {
+        flightNameByNode.set(flight.node, flight.name)
+    }
 
     /* A snippet name (any identifier, `$` included) interpolated into a RegExp must have its
        regex metacharacters escaped, or e.g. a trailing `$` would read as an end-anchor and the
@@ -768,10 +780,13 @@ export function generateSSR(
            `withBindings` shadow models, so a reference to the binding reads the plain
            local rather than the (unresolved) component signal it shadows. */
         const resolved = nextVar('$av')
+        /* ADR-0034: a hoisted block awaits the prefix flight const (already in-flight); a
+           non-hoisted block evaluates + awaits its promise inline as before. */
+        const hoistedPromise = flightNameByNode.get(node)
         let code = `const ${id} = $ctx.next++;\n`
         code += `${target}.push("<!--abide:await:" + ${id} + "-->");\n`
         code += `try {\n`
-        code += `const ${resolved} = await (${lowerExpression(node.promise)});\n`
+        code += `const ${resolved} = await (${hoistedPromise ?? lowerExpression(node.promise)});\n`
         code += `{\n`
         code += `const ${plan.resolvedAs} = ${resolved};\n`
         code += withBindings(withShadow, plan.resolvedBindings, ssrBindingKind, () =>
@@ -837,9 +852,13 @@ export function generateSSR(
         const catchProp = plan.surfaceRejection
             ? ''
             : `catch: ${settled(plan.catchAs, plan.catchBindings, plan.catchChildren)} `
+        /* ADR-0034: a hoisted streaming block's thunk returns the prefix flight const (started
+           in the prefix, so it overlaps a preceding blocking await); non-hoisted evaluates lazily
+           at drain time as before. */
+        const hoistedPromise = flightNameByNode.get(node)
         code +=
             `$awaits.push({ id: ${id}, ` +
-            `promise: () => (${lowerExpression(node.promise)}), ` +
+            `promise: () => (${hoistedPromise ?? lowerExpression(node.promise)}), ` +
             `then: ${settled(plan.resolvedAs, plan.resolvedBindings, plan.resolvedChildren)}, ` +
             `${catchProp}});\n`
         return code
@@ -880,5 +899,14 @@ export function generateSSR(
         return code
     }
 
-    return generateInto(rootNodes, '$out')
+    /* The body walk emits `await $flightN` / `promise: () => $flightN` for hoisted nodes; the
+       matching prefix declarations (lowered at component scope — hoisted promises reference only
+       component-scope names, never a branch shadow, so this lowering matches the body's) are
+       returned for compileSSR to place after the lowered script and before the barrier. */
+    const body = generateInto(rootNodes, '$out')
+    let flightDecls = ''
+    for (const [node, name] of flightNameByNode) {
+        flightDecls += `const ${name} = $$flight(() => (${lowerExpression(node.promise)}));\n`
+    }
+    return { body, flightDecls }
 }

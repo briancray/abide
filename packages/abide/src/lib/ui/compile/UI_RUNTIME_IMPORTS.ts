@@ -55,6 +55,7 @@ export const UI_RUNTIME_IMPORTS: { name: string; specifier: string; alias?: stri
     { name: 'cellPending', specifier: 'ui/dom/cellPending', alias: '$$cellPending' },
     { name: 'withPath', specifier: 'ui/runtime/withPath', alias: '$$withPath' },
     { name: 'settleAsyncCells', specifier: 'ui/settleAsyncCells', alias: '$$settleAsyncCells' },
+    { name: 'flight', specifier: 'ui/flight', alias: '$$flight' },
     {
         name: 'mutateDocContainer',
         specifier: 'ui/dom/mutateDocContainer',

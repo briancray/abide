@@ -61,7 +61,14 @@ export function compileSSR(
         cellReadNames,
         nodes,
     } = resolved
-    const ssr = generateSSR(nodes, stateNames, derivedNames, computedNames, isLayout, cellReadNames)
+    const { body: ssr, flightDecls } = generateSSR(
+        nodes,
+        stateNames,
+        derivedNames,
+        computedNames,
+        isLayout,
+        cellReadNames,
+    )
     /* The Tier-2 await-barrier (ADR-0019): between the lowered cell declarations and the
        template, drain + await every async cell's in-flight promise so the template's
        `$$readCell(name)` peeks the RESOLVED value and it bakes into the first-pass HTML —
@@ -75,8 +82,11 @@ export function compileSSR(
        elements still carry their `data-a-…` scopes via `generateSSR`. */
     /* `typeof model` guards a component with no reactive state (a pure-async or
        static component declares no `model`); its snapshot is then empty. */
+    /* ADR-0034 flight declarations sit AFTER the lowered script (so their promises can read the
+       component's signals) and BEFORE the barrier (so a hoisted flight is already in-flight while
+       the barrier awaits any unrelated blocking cell). Empty when nothing hoisted. */
     const body =
-        `const $scope = $$enterScope();\ntry {\n${lowered}\n${SSR_ESCAPE}\nconst $out = [];\nconst $awaits = [];\nconst $resume = {};\n${barrier}${ssr}` +
+        `const $scope = $$enterScope();\ntry {\n${lowered}\n${flightDecls}${SSR_ESCAPE}\nconst $out = [];\nconst $awaits = [];\nconst $resume = {};\n${barrier}${ssr}` +
         `return { html: $out.join(''), state: (typeof $$model !== 'undefined' ? $$model.snapshot() : {}), awaits: $awaits, resume: $resume };\n` +
         `} finally { $$exitScope($scope); }`
     /* An inline `await` — a blocking await block, a child render, a slot read, or a

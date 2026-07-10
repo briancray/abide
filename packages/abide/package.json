@@ -95,6 +95,7 @@
         "./ui/dom/cellPending": "./src/lib/ui/dom/cellPending.ts",
         "./ui/runtime/withPath": "./src/lib/ui/runtime/withPath.ts",
         "./ui/settleAsyncCells": "./src/lib/ui/settleAsyncCells.ts",
+        "./ui/flight": "./src/lib/ui/flight.ts",
         "./ui/dom/mutateDocContainer": "./src/lib/ui/dom/mutateDocContainer.ts",
         "./ui/dom/hydrate": "./src/lib/ui/dom/hydrate.ts",
         "./ui/dom/appendText": "./src/lib/ui/dom/appendText.ts",

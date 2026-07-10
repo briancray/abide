@@ -34,6 +34,7 @@ import { when } from './dom/when.ts'
 import { effect } from './effect.ts'
 import { enterScope } from './enterScope.ts'
 import { exitScope } from './exitScope.ts'
+import { flight } from './flight.ts'
 import { enterRenderPass } from './runtime/enterRenderPass.ts'
 import { escapeKey } from './runtime/escapeKey.ts'
 import { exitRenderPass } from './runtime/exitRenderPass.ts'
@@ -94,6 +95,7 @@ export function installHotBridge(): void {
         readCell,
         cellPending,
         settleAsyncCells,
+        flight,
         mutateDocContainer,
         hydrate,
         escapeKey,
