@@ -386,6 +386,13 @@ export function abideResolverPlugin({
                    program / unresolvable body / no structured field) bakes nothing — a response array
                    stays an array. */
                 const outputWirePlan = rpcServerProgram?.outputWirePlanForModule(args.path)
+                /* The handler's input args projected to JSON Schema, stamped as `inputJsonSchema` so the
+                   runtime OpenAPI parameters/body / MCP inputSchema / inspector input surface renders the
+                   real input shape (and the endpoint becomes advertisable) without an author-declared
+                   `schemas.input` — mirroring the `outputJsonSchema` output-side path (ADR-0030). A
+                   declared `schemas.input` VALIDATOR still overrides it at runtime. undefined (no program
+                   / unresolvable Args / File-only body) stamps nothing — the surface behaves as today. */
+                const inputSchema = rpcServerProgram?.inputSchemaForModule(args.path)
                 const prepared = prepareRpcModule(
                     source,
                     importName,
@@ -395,6 +402,7 @@ export function abideResolverPlugin({
                     returnBodySchema,
                     errorSchemas,
                     outputWirePlan,
+                    inputSchema,
                 )
                 if (!prepared) {
                     throw new Error(

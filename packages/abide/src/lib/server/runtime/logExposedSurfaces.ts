@@ -15,9 +15,10 @@ const redden = (text: string): string =>
     hasColor ? `${Bun.color('red', 'ansi-256')}${text}\x1b[39m` : text
 
 /*
-A declared inputSchema is what makes mcp/cli safe to advertise (see defineRpc /
-defineSocket), so a missing schema gets a red `·` to flag the declaration whose
-machine surfaces are gated behind it.
+A declared inputSchema — OR a build-projected input-type schema (ADR-0030 input
+side), which advertises the same shape — is what makes mcp/cli safe to advertise
+(see defineRpc / defineSocket), so a declaration with neither gets a red `·` to
+flag that its machine surfaces are gated behind a missing contract.
 */
 const schemaCell = (hasSchema: boolean): string => (hasSchema ? PRESENT : redden(ABSENT))
 const flag = (on: boolean): string => (on ? PRESENT : ABSENT)
@@ -133,7 +134,7 @@ export async function logExposedSurfaces(routing: { pages: Pages }): Promise<voi
 
     const rpcRows = Array.from(rpcRegistry.values(), (entry) => [
         withMethod(entry.remote.method, entry.remote.url),
-        schemaCell(Boolean(entry.inputSchema)),
+        schemaCell(entry.inputSchema !== undefined || entry.inputJsonSchema !== undefined),
         flag(entry.remote.clients.browser),
         flag(entry.remote.clients.mcp),
         flag(entry.remote.clients.cli),

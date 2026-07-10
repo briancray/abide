@@ -81,6 +81,13 @@ export function defineRpc<Args, Return>(
            typed value the input schema expects (ADR-0028). Bundler-stamped from the endpoint's
            `Args` type; absent on the fail-open path (a GET field then stays a string as before). */
         coerce?: InputCoercion
+        /* The handler's input args projected to JSON Schema (ADR-0030 input side). Bundler-stamped
+           from the endpoint's input-parameter type; feeds the OpenAPI parameters/body / MCP inputSchema
+           / inspector input surface when no `schemas.input` validator is declared (which still
+           overrides it), and makes the endpoint advertisable to MCP/CLI. A SHAPE description only —
+           never runtime-validated, so it can't produce a 422. Absent on the fail-open path — the
+           surface then omits the input schema exactly as before. */
+        inputJsonSchema?: Record<string, unknown>
         /* The handler's return type projected to JSON Schema (ADR-0030 D2). Bundler-stamped from the
            endpoint's success-body type; feeds the OpenAPI 200 / MCP outputSchema / inspector surface
            when no `schemas.output` validator is declared (which still overrides it). Absent on the
@@ -108,6 +115,7 @@ export function defineRpc<Args, Return>(
     }
     const timeout = opts?.timeout
     const inputSchema = opts?.schemas?.input
+    const inputJsonSchema = opts?.inputJsonSchema
     const outputSchema = opts?.schemas?.output
     const filesSchema = opts?.schemas?.files
     /*
@@ -117,8 +125,16 @@ export function defineRpc<Args, Return>(
     model shouldn't be able to mutate/delete just because the handler
     carries a schema, so mutating rpcs require an explicit clients.mcp.
     Explicit `clients` always wins.
+
+    A build-projected `inputJsonSchema` (ADR-0030 input side — the handler's
+    input parameter type projected to JSON Schema, present only when the type
+    resolved cleanly) counts as a machine-advertisable contract too, so a
+    plainly-typed handler auto-exposes without a hand-written `schemas.input`.
+    This is SHAPE-only: the projection describes the input, it is NEVER run as
+    runtime validation (no 422) — declaring `schemas.input` is still what adds
+    the runtime narrowing.
     */
-    const hasSchema = inputSchema !== undefined
+    const hasSchema = inputSchema !== undefined || inputJsonSchema !== undefined
     const clients = resolveClientFlags(opts?.clients, {
         mcp: hasSchema && isReadOnlyMethod(method),
         cli: hasSchema,
@@ -255,6 +271,7 @@ export function defineRpc<Args, Return>(
     registerRpc({
         remote: remote as RemoteFunction<unknown, unknown>,
         inputSchema,
+        inputJsonSchema,
         outputSchema,
         outputJsonSchema: opts?.outputJsonSchema,
         errorJsonSchemas: opts?.errorJsonSchemas,

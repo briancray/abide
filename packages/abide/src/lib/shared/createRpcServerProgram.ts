@@ -14,6 +14,8 @@ const NUMBER_FLAGS = ts.TypeFlags.Number | ts.TypeFlags.NumberLiteral
 const BOOLEAN_FLAGS = ts.TypeFlags.Boolean | ts.TypeFlags.BooleanLiteral
 const BIGINT_FLAGS = ts.TypeFlags.BigInt | ts.TypeFlags.BigIntLiteral
 const NULLISH_FLAGS = ts.TypeFlags.Undefined | ts.TypeFlags.Null | ts.TypeFlags.Void
+// Only `undefined`/`void` make a property OPTIONAL (a `T | null` is a required-but-nullable field).
+const OPTIONALITY_FLAGS = ts.TypeFlags.Undefined | ts.TypeFlags.Void
 
 export type RpcServerProgram = {
     /*
@@ -100,6 +102,22 @@ export type RpcServerProgram = {
     `defineRpc` call (like `outputJsonSchema`) so the runtime registry can carry it to OpenAPI.
     */
     errorSchemasForModule(modulePath: string): ErrorJsonSchemas | undefined
+    /*
+    The endpoint's INPUT args projected to JSON Schema (ADR-0030 input side — the input-surface
+    sibling of `returnBodySchemaForModule`), for the OpenAPI parameters/request body / MCP
+    inputSchema / inspector input surface when the author declared no `schemas.input` VALIDATOR.
+    Resolves the SAME wire `Args` bag `inputCoercionForModule` reads — the exported RemoteFunction's
+    first call-signature parameter, with the multipart `FormData` member dropped — then projects each
+    property through `jsonSchemaForType` into an object schema. File-typed properties are EXCLUDED
+    exactly as `filesSchema` keeps File parts out of the `inputSchema` projection (a File has no
+    honest JSON-Schema form). This is a SHAPE description only: it is never wired into runtime
+    validation, so it can never produce a 422 — an author who wants that still declares
+    `schemas.input`, which also OVERRIDES this projection on every surface. undefined when no call
+    signature / Args bag resolves or every property is excluded, so the surface behaves as today. The
+    build stamps the resolved schema into the server `defineRpc` call so the runtime registry carries
+    it.
+    */
+    inputSchemaForModule(modulePath: string): Record<string, unknown> | undefined
 }
 
 /*
@@ -164,6 +182,9 @@ export function createRpcServerProgram(cwd: string, rpcDir: string): RpcServerPr
         },
         errorSchemasForModule(modulePath) {
             return query(modulePath, (call) => errorBranchSchemas(checker, call.node))
+        },
+        inputSchemaForModule(modulePath) {
+            return query(modulePath, (call) => inputArgsJsonSchema(checker, call.node))
         },
     }
 }
@@ -672,6 +693,79 @@ function outputWirePlan(
         return undefined
     }
     return plan
+}
+
+/*
+The rpc export's INPUT args projected to JSON Schema (ADR-0030 input side) — the input-surface
+sibling of `returnBodyJsonSchema`. Resolves the SAME wire `Args` bag `inputCoercionPlan` reads (the
+exported RemoteFunction's first call-signature parameter, `FormData` dropped by `argsBagType`), then
+builds an object schema, projecting each property through `jsonSchemaForType`. A File-typed property
+is EXCLUDED exactly as `filesSchema` keeps File parts out of the `inputSchema` projection — a File has
+no honest JSON-Schema form, so the multipart body advertises binaries generically instead. A property
+is required unless it is `?` optional or its type bears `undefined`. This is purely a SHAPE
+description: the surfaces consume it for docs, never for runtime validation, so it can't cause a 422.
+undefined when no call signature / single-object Args bag resolves or every property is excluded, so
+the caller stamps nothing and the surface falls open to an author-declared `schemas.input`.
+*/
+function inputArgsJsonSchema(
+    checker: ts.TypeChecker,
+    call: ts.CallExpression,
+): Record<string, unknown> | undefined {
+    const signature = checker.getTypeAtLocation(call).getCallSignatures()[0]
+    if (signature === undefined) {
+        return undefined
+    }
+    const parameter = signature.getParameters()[0]
+    if (parameter === undefined) {
+        return undefined
+    }
+    const argsType = argsBagType(checker.getTypeOfSymbolAtLocation(parameter, call))
+    if (argsType === undefined) {
+        return undefined
+    }
+    const properties: Record<string, unknown> = {}
+    const required: string[] = []
+    for (const property of argsType.getProperties()) {
+        const propertyType = checker.getTypeOfSymbolAtLocation(property, call)
+        if (isFileType(propertyType)) {
+            continue
+        }
+        // jsonSchemaForType collapses a bare permissive projection to undefined; restore `{}` so an
+        // unprojectable property still appears as an "any JSON" field of the object.
+        properties[property.getName()] = jsonSchemaForType(checker, propertyType) ?? {}
+        const optional =
+            (property.flags & ts.SymbolFlags.Optional) !== 0 || bearsOptionality(propertyType)
+        if (!optional) {
+            required.push(property.getName())
+        }
+    }
+    if (Object.keys(properties).length === 0) {
+        return undefined
+    }
+    const schema: Record<string, unknown> = { type: 'object', properties }
+    if (required.length > 0) {
+        schema.required = required
+    }
+    return schema
+}
+
+/* True when a type is (or, across a union, contains) `File`/`Blob` — the multipart binary members
+   excluded from the input-schema projection, mirroring how `filesSchema` stays out of `inputSchema`. */
+function isFileType(type: ts.Type): boolean {
+    if (type.isUnion()) {
+        return type.types.some((member) => isFileType(member))
+    }
+    const name = type.getSymbol()?.name
+    return name === 'File' || name === 'Blob'
+}
+
+/* True when a property's type bears `undefined`/`void` — an implicit optional even without the `?`
+   modifier (mirrors jsonSchemaForType's own `bearsUndefined` so the two projections agree). */
+function bearsOptionality(type: ts.Type): boolean {
+    if (type.isUnion()) {
+        return type.types.some((member) => (member.flags & OPTIONALITY_FLAGS) !== 0)
+    }
+    return (type.flags & OPTIONALITY_FLAGS) !== 0
 }
 
 /*

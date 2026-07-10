@@ -24,6 +24,13 @@ multipart body advertises the file parts generically as binary.
 export type RpcRegistryEntry = {
     remote: RemoteFunction<unknown, unknown>
     inputSchema: StandardSchemaV1 | undefined
+    /* The handler's input args projected to JSON Schema at build time (ADR-0030 input side) — the
+       input surface's fallback when no `inputSchema` VALIDATOR is declared, mirroring how
+       `outputJsonSchema` backs the output surface. Already JSON Schema (not a validator), so surfaces
+       use it verbatim; `inputSchema`, when present, overrides it. It also makes the endpoint
+       advertisable (MCP/CLI) — the same role a declared `inputSchema` plays — but purely as a SHAPE
+       description: it is never run as runtime validation, so it can't produce a 422. */
+    inputJsonSchema: Record<string, unknown> | undefined
     outputSchema: StandardSchemaV1 | undefined
     /* The handler's return type projected to JSON Schema at build time (ADR-0030 D2) — the output
        surface's fallback when no `outputSchema` VALIDATOR is declared. Already JSON Schema (not a

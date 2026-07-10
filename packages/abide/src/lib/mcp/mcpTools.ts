@@ -63,7 +63,11 @@ from a write.
 */
 function describeTool(ref: McpToolRef): ToolDescriptor {
     if (ref.kind === 'rpc') {
-        const inputSchema = jsonSchemaForSchema(ref.entry.inputSchema)
+        // The declared inputSchema VALIDATOR overrides the build-projected input-type schema
+        // (ADR-0030 input side); with neither the tool advertises the opaque fallback, as before.
+        const inputSchema = ref.entry.inputSchema
+            ? jsonSchemaForSchema(ref.entry.inputSchema)
+            : (ref.entry.inputJsonSchema ?? jsonSchemaForSchema(undefined))
         const tool: ToolDescriptor = {
             name: ref.name,
             description:

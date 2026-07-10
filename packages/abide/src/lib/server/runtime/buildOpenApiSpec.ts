@@ -88,7 +88,15 @@ export function buildOpenApiSpec(info: {
     for (const entry of rpcRegistry.values()) {
         const url = entry.remote.url
         const method = entry.remote.method
-        const jsonSchema = jsonSchemaForSchema(entry.inputSchema)
+        /*
+        Describe the parameters/request body from the `inputSchema` VALIDATOR when declared, else from
+        the handler's input parameter type projected to JSON Schema at build time (ADR-0030 input side —
+        `entry.inputJsonSchema`); otherwise the opaque fallback. The validator overrides the projection
+        (a runtime narrowing the type can't express), mirroring the 200-body output path below.
+        */
+        const jsonSchema = entry.inputSchema
+            ? jsonSchemaForSchema(entry.inputSchema)
+            : (entry.inputJsonSchema ?? jsonSchemaForSchema(undefined))
         const description = jsonSchema.description as string | undefined
         /*
         Describe the 200 body from the `outputSchema` VALIDATOR when declared, else from the handler

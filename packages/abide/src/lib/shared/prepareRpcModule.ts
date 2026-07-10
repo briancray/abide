@@ -61,6 +61,7 @@ export function prepareRpcModule(
     outputSchema?: Record<string, unknown>,
     errorSchemas?: ErrorJsonSchemas,
     outputWirePlan?: OutputWirePlan,
+    inputSchema?: Record<string, unknown>,
 ): PreparedRpcModule | undefined {
     /*
     The "no barrels" surface places each method at its own path
@@ -103,17 +104,21 @@ export function prepareRpcModule(
             const binding = `__abideDefineRpc__(${JSON.stringify(method)}, ${JSON.stringify(url)}, `
             const head = stripped.slice(0, site.callStart) + binding
             /* Build-injected server opts: `streaming` (from the handler body / return type), the
-               `coerce` plan (numeric/boolean query fields → typed, ADR-0028), `outputJsonSchema` (the
-               handler return type projected to JSON Schema, ADR-0030 D2), and `errorJsonSchemas` (the
-               handler's typed-error branches as a status-keyed schema map, ADR-0030). All are stamped
-               into a fresh opts object that spreads the author's opts, so policy stays live. With none
-               present the original args pass through untouched. */
+               `coerce` plan (numeric/boolean query fields → typed, ADR-0028), `inputJsonSchema` (the
+               handler's input args projected to JSON Schema, ADR-0030 input side), `outputJsonSchema`
+               (the handler return type projected to JSON Schema, ADR-0030 D2), and `errorJsonSchemas`
+               (the handler's typed-error branches as a status-keyed schema map, ADR-0030). All are
+               stamped into a fresh opts object that spreads the author's opts, so policy stays live.
+               With none present the original args pass through untouched. */
             const injected: string[] = []
             if (streaming) {
                 injected.push('streaming: true')
             }
             if (coercion !== undefined) {
                 injected.push(`coerce: ${JSON.stringify(coercion)}`)
+            }
+            if (inputSchema !== undefined) {
+                injected.push(`inputJsonSchema: ${JSON.stringify(inputSchema)}`)
             }
             if (outputSchema !== undefined) {
                 injected.push(`outputJsonSchema: ${JSON.stringify(outputSchema)}`)

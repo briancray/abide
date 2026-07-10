@@ -350,6 +350,70 @@ describe('rpc output wire plan through the warm server program (ADR-0029 output 
     })
 })
 
+describe('rpc input-args JSON Schema projection through the warm server program (ADR-0030 input side)', () => {
+    const program = createRpcServerProgram(SERVER_CWD, SERVER_RPC_DIR)
+
+    test('a plainly-typed handler projects its input args to an object schema (no schemas.input)', () => {
+        /* `coerceArgs` is schemaless `GET((args: { id: number; active: boolean; name: string;
+           tags: number[]; page?: number }) => …)` — the Args bag projects to an object schema feeding
+           the OpenAPI parameters / MCP inputSchema when no `schemas.input` validator is declared. The
+           optional `page` is not required; every other field is. */
+        expect(program.inputSchemaForModule(serverModule('coerceArgs'))).toEqual({
+            type: 'object',
+            properties: {
+                id: { type: 'number' },
+                active: { type: 'boolean' },
+                name: { type: 'string' },
+                tags: { type: 'array', items: { type: 'number' } },
+                page: { type: 'number' },
+            },
+            required: ['id', 'active', 'name', 'tags'],
+        })
+    })
+
+    test('a File-typed member is excluded from the projection (mirrors the filesSchema separation)', () => {
+        /* `inputFiles` is `GET((args: { title: string; avatar: File }) => …)` — the File member has no
+           honest JSON-Schema form, so it is dropped exactly as `filesSchema` stays out of `inputSchema`;
+           only `title` survives. */
+        expect(program.inputSchemaForModule(serverModule('inputFiles'))).toEqual({
+            type: 'object',
+            properties: { title: { type: 'string' } },
+            required: ['title'],
+        })
+    })
+
+    test('an unknown module path fails open to undefined (surface defers to schemas.input)', () => {
+        expect(program.inputSchemaForModule(resolve(SERVER_RPC_DIR, 'missing.ts'))).toBeUndefined()
+    })
+
+    test('the projected schema is stamped into the server rewrite as an `inputJsonSchema` opt', () => {
+        const source = readFileSync(serverModule('coerceArgs'), 'utf8')
+        const schema = program.inputSchemaForModule(serverModule('coerceArgs'))
+        const rewritten = prepareRpcModule(
+            source,
+            '@abide/abide',
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            schema,
+        )?.rewriteForServer('/rpc/coerceArgs')
+        expect(rewritten).toContain('inputJsonSchema: {')
+        expect(rewritten).toContain('"active":{"type":"boolean"}')
+        expect(rewritten).toContain('__abideDefineRpc__("GET", "/rpc/coerceArgs", ')
+    })
+
+    test('no schema leaves the server rewrite free of an inputJsonSchema opt (fail-open)', () => {
+        const source = readFileSync(serverModule('coerceArgs'), 'utf8')
+        const rewritten = prepareRpcModule(source, '@abide/abide')?.rewriteForServer(
+            '/rpc/coerceArgs',
+        )
+        expect(rewritten).not.toContain('inputJsonSchema:')
+    })
+})
+
 /* Fail-open: with NO warm program (the override arguments absent), prepareRpcModule produces
    byte-identical output to today — streaming/durable verdicts come from the char-scan and the
    emitted client/server rewrites are unchanged. */

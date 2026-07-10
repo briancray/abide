@@ -136,6 +136,62 @@ describe('buildOpenApiSpec — build-projected output schema (ADR-0030 D2)', () 
     })
 })
 
+/* ADR-0030 input side: the handler's input parameter type, projected to JSON Schema at build time and
+   stamped as `inputJsonSchema`, drives the parameters/request body when no `schemas.input` VALIDATOR is
+   declared; a declared `schemas.input` still overrides it. */
+describe('buildOpenApiSpec — build-projected input schema (ADR-0030 input side)', () => {
+    const PROJECTED = {
+        type: 'object',
+        properties: { id: { type: 'string' } },
+        required: ['id'],
+    }
+
+    test('the projected inputJsonSchema drives GET query parameters when no schemas.input', () => {
+        defineRpc('GET', '/rpc/oa-in-projected', ({ id }: { id: string }) => json({ id }), {
+            inputJsonSchema: PROJECTED,
+        })
+        const paths = buildOpenApiSpec({ title: 'app', version: '1.0.0' }).paths as Record<
+            string,
+            Record<string, Operation>
+        >
+        expect(paths['/rpc/oa-in-projected'].get.parameters).toContainEqual({
+            name: 'id',
+            in: 'query',
+            required: true,
+            schema: { type: 'string' },
+        })
+    })
+
+    test('the projected inputJsonSchema drives a POST JSON request body when no schemas.input', () => {
+        defineRpc('POST', '/rpc/oa-in-body', ({ id }: { id: string }) => json({ id }), {
+            inputJsonSchema: PROJECTED,
+        })
+        const paths = buildOpenApiSpec({ title: 'app', version: '1.0.0' }).paths as Record<
+            string,
+            Record<string, Operation>
+        >
+        expect(
+            paths['/rpc/oa-in-body'].post.requestBody?.content['application/json'].schema,
+        ).toEqual(PROJECTED)
+    })
+
+    test('a declared schemas.input overrides the projected input schema', () => {
+        defineRpc('POST', '/rpc/oa-in-override', ({ name }: { name: string }) => json({ name }), {
+            schemas: {
+                input: testSchema({ type: 'object', properties: { name: { type: 'string' } } }),
+            },
+            inputJsonSchema: PROJECTED,
+        })
+        const paths = buildOpenApiSpec({ title: 'app', version: '1.0.0' }).paths as Record<
+            string,
+            Record<string, Operation>
+        >
+        expect(
+            paths['/rpc/oa-in-override'].post.requestBody?.content['application/json'].schema,
+        ).toMatchObject({ type: 'object', properties: { name: { type: 'string' } } })
+    })
+})
+
 /* ADR-0030: the handler's typed-error branches, baked as a status-keyed `errorJsonSchemas` map, add
    one `responses[status]` entry each — documenting each error's status + data payload alongside the
    200, all from the one handler return type. */

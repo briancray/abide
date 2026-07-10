@@ -18,7 +18,11 @@ export function buildInspectorSurface(): InspectorSurface {
         url: entry.remote.url,
         method: entry.remote.method,
         clients: { ...entry.remote.clients },
-        inputSchema: entry.inputSchema ? jsonSchemaForSchema(entry.inputSchema) : undefined,
+        // The declared inputSchema VALIDATOR wins; else the build-projected input-type schema
+        // (ADR-0030 input side); with neither the rpc advertises no input shape, as before.
+        inputSchema: entry.inputSchema
+            ? jsonSchemaForSchema(entry.inputSchema)
+            : entry.inputJsonSchema,
         outputSchema: entry.outputSchema
             ? jsonSchemaForSchema(entry.outputSchema)
             : entry.outputJsonSchema,
