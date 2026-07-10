@@ -273,6 +273,26 @@ export function generateSSR(
     const openRange = (target: string): string => push(target, RANGE_OPEN)
     const closeRange = (target: string): string => push(target, RANGE_CLOSE)
 
+    /* Wrap a control-flow branch/row body in the render-path segment the CLIENT pushes for it (the
+       `withPathFrom`/`withPath` call the `each`/`when`/`switchBlock` dom runtimes make), so a scope
+       created inside — a nested `<Child/>`, always an inline `await` in SSR — composes the SAME
+       serialization-stable id on both sides (the warm-seed key). Emitted ONLY when the subtree can
+       create such a scope: a component render is the sole scope-creating construct in a branch/row
+       and always lowers to an inline `await`, so `subtreeAwaits` is the gate. A purely-synchronous
+       branch creates no scope, so its segment is inert — skipping the wrap keeps the static render
+       synchronous (no per-row closure/await, matching today's output byte-for-byte). `segment` is a
+       JS expression (a literal branch key, or the each row's key/index); `$$withPath` escapes it,
+       exactly like the client. The row/branch RANGE markers stay OUTSIDE this call (they create no
+       scope), so only the content composes the path — mirroring the client, where the markers are
+       built outside `withPathFrom`. */
+    const withPathBranch = (segment: string, children: TemplateNode[], target: string): string => {
+        const content = branchContent(children, target)
+        if (!subtreeAwaits(children)) {
+            return content
+        }
+        return `await $$withPath(${segment}, async () => {\n${content}});\n`
+    }
+
     /* In a skeleton, a control-flow block or slot is positioned by an `<!--a-->` anchor
        (cloned into the located parent), so it can sit anywhere among static siblings.
        Emitted both sides in document order — the client's anchor scan lines up with it.
@@ -318,33 +338,59 @@ export function generateSSR(
                then the `$$readCell` truthy test — so sync and async branches interleave and each
                resolves at render time, mirroring the client `switchBlock` cond-chain. */
             const plan = ifPlan(node)
+            /* The client build lowers a simple `if`/`else` through `when` (branch keys `'then'` /
+               `'else'`) and an `if` with any `elseif` through `switchBlock` over `[then, ...branches]`
+               (branch key = the case's array index). Mirror whichever the client picks so a nested
+               `<Child/>`'s scope id composes identically. */
             const clauses: string[] = []
             const conditional = (
                 condition: string,
                 asyncSubject: boolean | undefined,
                 children: TemplateNode[],
+                segment: string,
             ): void => {
                 if (asyncSubject === true) {
                     const cell = condition.trim()
                     clauses.push(`($$cellPending(${cell})) {\n}`)
-                    clauses.push(`($$readCell(${cell})) {\n${branchContent(children, target)}}`)
+                    clauses.push(
+                        `($$readCell(${cell})) {\n${withPathBranch(segment, children, target)}}`,
+                    )
                 } else {
                     clauses.push(
-                        `(${lowerExpression(condition)}) {\n${branchContent(children, target)}}`,
+                        `(${lowerExpression(condition)}) {\n${withPathBranch(segment, children, target)}}`,
                     )
                 }
             }
-            conditional(node.condition, node.asyncSubject, plan.thenChildren)
-            for (const branch of plan.branches) {
+            /* `then` is the `when` `'then'` branch, or the `switchBlock` case at index 0. */
+            conditional(
+                node.condition,
+                node.asyncSubject,
+                plan.thenChildren,
+                JSON.stringify(plan.hasElseif ? '0' : 'then'),
+            )
+            for (let index = 0; index < plan.branches.length; index += 1) {
+                const branch = plan.branches[index] as Extract<TemplateNode, { kind: 'case' }>
                 if (branch.condition !== undefined) {
-                    conditional(branch.condition, branch.asyncSubject, branch.children)
+                    /* An `elseif` is the `switchBlock` case at `[then, ...branches]` index `index + 1`
+                       (a chain with any condition always lowers to `switchBlock`). */
+                    conditional(
+                        branch.condition,
+                        branch.asyncSubject,
+                        branch.children,
+                        JSON.stringify(String(index + 1)),
+                    )
                 }
             }
             let code = clauses
                 .map((clause, index) => `${index === 0 ? 'if' : ' else if'} ${clause}`)
                 .join('')
             if (plan.elseBranch !== undefined) {
-                code += ` else {\n${branchContent(plan.elseBranch.children, target)}}`
+                /* `else` is the `when` `'else'` branch, or (for a cond-chain) the `switchBlock`
+                   default at its own `[then, ...branches]` index. */
+                const elseSegment = plan.hasElseif
+                    ? String(plan.branches.indexOf(plan.elseBranch) + 1)
+                    : 'else'
+                code += ` else {\n${withPathBranch(JSON.stringify(elseSegment), plan.elseBranch.children, target)}}`
             }
             return `${anchor}${openRange(target)}${code}\n${closeRange(target)}`
         }
@@ -361,14 +407,18 @@ export function generateSSR(
                 code += `if (!$$cellPending(${node.subject.trim()})) {\n`
             }
             let started = false
-            for (const branch of plan.cases) {
+            /* The client `switchBlock` keys each branch by its index in `plan.cases` (source order,
+               the default at its own position); mirror that index so a nested `<Child/>` matches. */
+            for (let index = 0; index < plan.cases.length; index += 1) {
+                const branch = plan.cases[index] as Extract<TemplateNode, { kind: 'case' }>
                 if (branch.match !== undefined) {
-                    code += `${started ? 'else ' : ''}if ($s === (${lowerExpression(branch.match)})) {\n${branchContent(branch.children, target)}}\n`
+                    code += `${started ? 'else ' : ''}if ($s === (${lowerExpression(branch.match)})) {\n${withPathBranch(JSON.stringify(String(index)), branch.children, target)}}\n`
                     started = true
                 }
             }
             if (plan.fallback !== undefined) {
-                code += `${started ? 'else ' : ''}{\n${branchContent(plan.fallback.children, target)}}\n`
+                const fallbackSegment = String(plan.cases.indexOf(plan.fallback))
+                code += `${started ? 'else ' : ''}{\n${withPathBranch(JSON.stringify(fallbackSegment), plan.fallback.children, target)}}\n`
             }
             if (node.asyncSubject === true) {
                 code += `}\n`
@@ -413,19 +463,35 @@ export function generateSSR(
             if (plan.async) {
                 return anchor
             }
+            /* The client `each` pushes a render-path segment per row (keyed → the `by` key evaluated
+               on the raw item, exactly like its `keyOf`; keyless → the row position), so a nested
+               `<Child/>`'s scope id composes identically. Mirror it only when the row can create a
+               scope (`subtreeAwaits` — it holds a component); a static row needs no segment and stays
+               synchronous. A keyless row that needs its position reuses a bound `index`, else a
+               synthesized loop index — the same 0-based `entries()` position the client's row cell
+               carries, so the segments agree. */
+            const rowSegments = subtreeAwaits(plan.children)
+            const keylessIndex =
+                plan.key === undefined && plan.index === undefined && rowSegments
+                    ? nextVar('$i')
+                    : undefined
+            const indexBinding = plan.index ?? keylessIndex
             /* The row item (and index) are real `for`-loop locals, so the body must lower
                references to them as the bare identifier — `withBindings` registers the plan's
                row bindings (under `plain`, SSR's only kind) so a row binding that shadows a
                same-named component signal reads the loop value, not the (whole-list) signal it
                shadows. The names come straight from `plan.bindings` (the single source the
                client also reads); the items expression stays outside the shadow. */
-            const rowBody = withBindings(
-                withShadow,
-                plan.bindings,
-                ssrBindingKind,
-                () =>
-                    `${openRange(target)}${branchContent(plan.children, target)}${closeRange(target)}`,
-            )
+            const rowBody = withBindings(withShadow, plan.bindings, ssrBindingKind, () => {
+                /* The row's render-path segment, lowered inside the row's plain shadow so a keyed
+                   `by` reads the raw loop item exactly like the client `keyOf` (a keyless row uses
+                   its position). Unused when `rowSegments` is false — `withPathBranch` then skips it. */
+                const segment =
+                    plan.key === undefined
+                        ? (indexBinding ?? '0')
+                        : `(${lowerExpression(plan.key)})`
+                return `${openRange(target)}${withPathBranch(segment, plan.children, target)}${closeRange(target)}`
+            })
             /* `index="i"` binds the row position. SSR reads it as a plain number from
                `entries()` over a materialized array; the client reads the same number from a
                cell, so first paint is congruent. No index → a plain `for…of` over the items. */
@@ -433,9 +499,9 @@ export function generateSSR(
                whose lifted source peeks undefined while pending (ADR-0032 D3). Mirrors the
                client `each`'s undefined-as-empty guard. */
             const header =
-                plan.index === undefined
+                indexBinding === undefined
                     ? `for (const ${plan.as} of ((${lowerExpression(plan.items)}) ?? []))`
-                    : `for (const [${plan.index}, ${plan.as}] of [...((${lowerExpression(plan.items)}) ?? [])].entries())`
+                    : `for (const [${indexBinding}, ${plan.as}] of [...((${lowerExpression(plan.items)}) ?? [])].entries())`
             return `${anchor}${header} {\n${rowBody}}\n`
         }
         if (node.kind === 'await') {
