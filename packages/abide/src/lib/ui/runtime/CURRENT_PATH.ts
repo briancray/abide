@@ -16,17 +16,15 @@ Segments are joined with `/` and each is `escapeKey`-escaped (RFC 6901), so a se
 a `/` (a URL-shaped row key) stays one segment. `current` is `''` outside any render (a detached
 `scope()` then falls back to the counter for in-run uniqueness).
 
-`current` reads/writes through a SWAPPABLE backing (`ambientPathBacking`) rather than a raw field:
-the default is a module variable (correct on the client, one render tree), but the server installs
-an AsyncLocalStorage-backed holder so concurrent async SSR renders — which compose the path across
-inline `await`s (the cell barrier, child renders) — don't clobber one shared global. Mirrors
-`CURRENT_SCOPE`/`ambientScopeBacking`.
+`current` reads through a SWAPPABLE backing (`ambientPathBacking`) rather than a raw field, and is
+READ-ONLY: a segment is established only by `withPath`/`withPathFrom` calling the backing's `run`
+(ADR-0033 D1), never by assigning `current`. The default backing is a module variable (correct on
+the client, one render tree), but the server installs an AsyncLocalStorage-backed `run` so the
+composed path survives the inline `await`s an SSR render suspends on (the cell barrier, child
+renders) and stays isolated across concurrent requests. Mirrors `CURRENT_SCOPE`/`ambientScopeBacking`.
 */
-export const CURRENT_PATH: { current: string } = {
+export const CURRENT_PATH: { readonly current: string } = {
     get current(): string {
         return ambientPathBacking.active.get()
-    },
-    set current(value: string) {
-        ambientPathBacking.active.set(value)
     },
 }

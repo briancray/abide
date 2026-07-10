@@ -93,11 +93,4 @@ export type RequestStore = {
     one shared module global. Undefined until the render enters its first scope.
     */
     currentScope?: Scope
-    /*
-    The request's ambient RENDER-PATH during its SSR pass — the backing for
-    `CURRENT_PATH.current` (the serialization-stable lexical id the SSR pass composes
-    to key a cell's warm-seed value). Per-request for the same reason as `currentScope`:
-    a render awaits inline while its path is set. Undefined → the empty root.
-    */
-    currentPath?: string
 }
