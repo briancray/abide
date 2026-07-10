@@ -5,11 +5,11 @@ import { appendStatic } from '../src/lib/ui/dom/appendStatic.ts'
 import { appendText } from '../src/lib/ui/dom/appendText.ts'
 import { attr } from '../src/lib/ui/dom/attr.ts'
 import { each } from '../src/lib/ui/dom/each.ts'
-import { text } from '../src/lib/ui/dom/text.ts'
 import { effect } from '../src/lib/ui/effect.ts'
 import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
 import { state } from '../src/lib/ui/state.ts'
 import { installMiniDom } from './support/installMiniDom.ts'
+import { text } from './support/reactiveText.ts'
 
 beforeAll(() => {
     installMiniDom()

@@ -8,12 +8,12 @@ import { awaitBlock } from '../src/lib/ui/dom/awaitBlock.ts'
 import { each } from '../src/lib/ui/dom/each.ts'
 import { hydrate } from '../src/lib/ui/dom/hydrate.ts'
 import { mount } from '../src/lib/ui/dom/mount.ts'
-import { text } from '../src/lib/ui/dom/text.ts'
 import { when } from '../src/lib/ui/dom/when.ts'
 import { effect } from '../src/lib/ui/effect.ts'
 import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
 import { state } from '../src/lib/ui/state.ts'
 import { installHappyDom } from './support/installHappyDom.ts'
+import { text } from './support/reactiveText.ts'
 
 /*
 An await block whose enclosing scope is disposed while its promise is still in flight

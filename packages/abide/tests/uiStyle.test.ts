@@ -11,12 +11,12 @@ import { awaitBlock } from '../src/lib/ui/dom/awaitBlock.ts'
 import { each } from '../src/lib/ui/dom/each.ts'
 import { on } from '../src/lib/ui/dom/on.ts'
 import { switchBlock } from '../src/lib/ui/dom/switchBlock.ts'
-import { text } from '../src/lib/ui/dom/text.ts'
 import { when } from '../src/lib/ui/dom/when.ts'
 import { effect } from '../src/lib/ui/effect.ts'
 import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
 import { state } from '../src/lib/ui/state.ts'
 import { installMiniDom } from './support/installMiniDom.ts'
+import { text } from './support/reactiveText.ts'
 
 beforeAll(() => {
     installMiniDom()

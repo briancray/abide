@@ -6,12 +6,12 @@ import { appendText } from '../src/lib/ui/dom/appendText.ts'
 import { attr } from '../src/lib/ui/dom/attr.ts'
 import { on } from '../src/lib/ui/dom/on.ts'
 import { readCell } from '../src/lib/ui/dom/readCell.ts'
-import { text } from '../src/lib/ui/dom/text.ts'
 import { effect } from '../src/lib/ui/effect.ts'
 import { linked } from '../src/lib/ui/linked.ts'
 import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
 import { state } from '../src/lib/ui/state.ts'
 import { installMiniDom } from './support/installMiniDom.ts'
+import { text } from './support/reactiveText.ts'
 import { settle } from './support/settle.ts'
 
 beforeAll(() => {
