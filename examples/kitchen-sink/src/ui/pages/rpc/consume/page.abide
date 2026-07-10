@@ -133,13 +133,6 @@ const rawResponse = state.computed(() => getReport.raw({ id: 'r-1' }))
                             react to each change of the smart read
                         </td>
                     </tr>
-                    <tr>
-                        <td class="px-4 py-2 font-mono">fn.outbox()</td>
-                        <td class="px-4 py-2 text-slate-600">
-                            this rpc's durable queue (when
-                            <code class="font-mono">outbox: true</code>)
-                        </td>
-                    </tr>
                 </tbody>
             </table>
         </div>

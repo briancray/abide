@@ -155,12 +155,7 @@ export function createRemoteFunction<Args, Return>(opts: {
                 return reviveWireOutput(value, outputWirePlan) as Return
             },
             (error: unknown) => {
-                /* A parked durable write throws a `kind: 'queued'` sentinel — it's pending
-                   retry, not a failure. Don't record it, so fn.error() stays undefined for a
-                   merely-parked write (pending() already reflects it via the outbox). */
-                if (!(error instanceof HttpError && error.kind === 'queued')) {
-                    rpcErrorRegistry.record(key, error)
-                }
+                rpcErrorRegistry.record(key, error)
                 throw error
             },
         )

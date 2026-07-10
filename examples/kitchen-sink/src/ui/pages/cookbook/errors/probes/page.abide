@@ -116,7 +116,7 @@ const connected = state.computed(() => online())
             live={OBS}
             code={`import { health } from '@abide/abide/shared/health'
 const status = await health()   // typed, augmented from the app's health() hook`}
-            note={"`health()` probes `/__abide/health`. Its fields include whatever your app's `health()` boot hook returns — the signal a durable `outbox` drains on when the server recovers."} />
+            note={"`health()` probes `/__abide/health`. Its fields include whatever your app's `health()` boot hook returns — the signal to gate retries on when the server recovers."} />
 
         <Recipe
             task="Block an action while offline"
@@ -124,6 +124,6 @@ const status = await health()   // typed, augmented from the app's health() hook
             code={`<button disabled={!online()} onclick={submit}>
     {online() ? 'Save' : 'Offline'}
 </button>`}
-            note={'Gate a network action on `online()`. For work that should survive going offline and send later, declare the rpc `outbox: true` instead of blocking.'} />
+            note={'Gate a network action on `online()` — disable the control while offline so the call is never attempted against an unreachable server.'} />
     </div>
 </div>

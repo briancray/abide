@@ -2,7 +2,6 @@ import type { CachePolicy } from './CachePolicy.ts'
 import type { ClientFlags } from './ClientFlags.ts'
 import type { ErrorSpec } from './ErrorSpec.ts'
 import type { HttpMethod } from './HttpMethod.ts'
-import type { Outbox } from './Outbox.ts'
 import type { RawRemoteFunction } from './RawRemoteFunction.ts'
 import type { RemoteCallable } from './RemoteCallable.ts'
 import type { RpcError } from './RpcError.ts'
@@ -45,7 +44,6 @@ export type RemoteFunction<
     Args,
     Return,
     Errors extends ErrorSpec = Record<never, never>,
-    Durable extends boolean = false,
 > = RemoteCallable<Args, Return, never> & {
     readonly method: HttpMethod
     readonly url: string
@@ -60,9 +58,9 @@ export type RemoteFunction<
     readonly raw: RawRemoteFunction<Args>
     fetch(request: Request): Promise<Response>
     /* Type-guard a caught error against this rpc's declared `errors` (plus the framework
-       `'validation'` / `'queued'`): narrows `.kind` and, for a known kind, `.data` — the
-       per-rpc replacement for a global guard, since the error name → data type mapping
-       lives in the rpc's own spec. */
+       `'validation'`): narrows `.kind` and, for a known kind, `.data` — the per-rpc
+       replacement for a global guard, since the error name → data type mapping lives in
+       the rpc's own spec. */
     readonly isError: RpcErrorGuard<Errors>
     /* Pre-bound selector sugar: `fn.pending(args?)` ≡ `pending(fn, args?)`, and likewise for
        refreshing / refresh / peek — the rpc is the leading selector, bound in. The argument is
@@ -101,9 +99,4 @@ export type RemoteFunction<
         : {
               patch(args: Args | undefined, updater: (current: Return) => Return): void
               patch(updater: (current: Return) => Return): void
-          }) /* `outbox` presence follows the `outbox: true` opt: the mutating helper threads `Durable`
-     into the return type so a DURABLE rpc's `.outbox` is the required queue face (no optional
-     chain). A non-durable rpc keeps it optional — assignable to a durable one everywhere a
-     bare `RemoteFunction<Args, Return>` slot (cache selectors, registries) is expected, since
-     required→optional widens cleanly and no call site had to learn the `Durable` bit. */ &
-    (Durable extends true ? { readonly outbox: Outbox<Args> } : { readonly outbox?: Outbox<Args> })
+          })

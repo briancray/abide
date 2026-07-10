@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { history } from '../src/lib/ui/history.ts'
 import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
+import { PATCH_BUS } from '../src/lib/ui/runtime/PATCH_BUS.ts'
 
 describe('doc computed slots (derive) — the data-collapse spike', () => {
     test('a computed slot derives its value and tracks its deps', () => {
@@ -23,19 +23,19 @@ describe('doc computed slots (derive) — the data-collapse spike', () => {
         expect(d.snapshot()).toEqual({ count: 2 }) // no `doubled` in the truth
     })
 
-    test('a recompute never hits the patch bus — no spurious undo entries', () => {
+    test('a recompute never hits the patch bus — a derive emits no patch of its own', () => {
         const d = doc({ count: 0 })
         const doubled = d.derive('doubled', () => d.read<number>('count') * 2)
-        const past = history(d)
 
+        let patches = 0
+        const unsubscribe = PATCH_BUS.subscribe(() => {
+            patches += 1
+        })
         d.replace('count', 3)
-        expect(doubled()).toBe(6) // the computed followed
+        expect(doubled()).toBe(6) // the computed followed the source change
+        unsubscribe()
 
-        past.undo()
-        expect(d.read<number>('count')).toBe(0) // one stored change, one undo
-        expect(doubled()).toBe(0) // computed follows the undo
-        expect(past.canUndo()).toBe(false) // the recompute added NO entry of its own
-        past.dispose()
+        expect(patches).toBe(1) // only the `count` replace — the recompute added NO patch of its own
     })
 
     test('chained computeds recompute through the graph', () => {

@@ -33,9 +33,12 @@ export function extractTemplateAttrKinds(source: string): string[] {
         .filter((kind) => kind !== 'static')
 }
 
-/* Members of the REACTIVE_CALLEES `new Set([...])` literal. */
-export function extractReactiveCallees(source: string): string[] {
-    const body = source.match(/new Set\(\[([^\]]*)\]/s)?.[1] ?? ''
+/* The reactive primitive names from the `ReactivePrimitive` union in
+   `resolveReactiveExport.ts` — the compiler's own recognition vocabulary, so the grammar's
+   "primitives" bucket stays in sync with the language off the single source of truth (no
+   second hardcoded list). */
+export function extractReactivePrimitives(source: string): string[] {
+    const body = source.match(/type ReactivePrimitive\s*=([^\n]+)/)?.[1] ?? ''
     return [...body.matchAll(/'([^']+)'/g)].map((match) => match[1])
 }
 
@@ -55,7 +58,7 @@ export const GRAMMAR_BUCKETS: Record<
     'control-flow': { file: 'structuralBlockTokens.ts', extract: extractBlockKeywords },
     bindings: { file: 'types/TemplateAttr.ts', extract: extractTemplateAttrKinds },
     snippets: { file: 'types/TemplateNode.ts', extract: extractCompositionKinds },
-    primitives: { file: 'REACTIVE_CALLEES.ts', extract: extractReactiveCallees },
+    primitives: { file: 'resolveReactiveExport.ts', extract: extractReactivePrimitives },
 }
 
 /* The band a slug lands in: heavy if its weight crosses HEAVY_MIN or its page

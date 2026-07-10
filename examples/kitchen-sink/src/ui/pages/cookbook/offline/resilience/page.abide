@@ -4,16 +4,14 @@ import Recipe from '$ui/Recipe.abide'
 /* Cookbook · offline & local-first · offline resilience. */
 const OBS = '/observability'
 const STATE = '/reactive-state'
-const OUTBOX = '/outbox'
 </script>
 
 <div class="flex flex-col gap-8">
     <div class="flex flex-col gap-2">
         <h1 class="text-3xl font-bold">offline resilience</h1>
         <p class="text-slate-600">
-            Surviving a flaky network — reading connectivity, persisting local state, and the
-            durable outbox that queues writes offline and drains on reconnect, plus the gaps beyond
-            it.
+            Surviving a flaky network — reading connectivity, persisting local state, degrading
+            writes gracefully when the server is unreachable, and the gaps beyond it.
         </p>
     </div>
     <div class="flex flex-col gap-4">
@@ -24,14 +22,14 @@ const OUTBOX = '/outbox'
 const connected = state.computed(() => online())
 
 {#if !connected}<Banner>Offline — changes will sync when you reconnect</Banner>{/if}`}
-            note={'`online()` reactively reflects `navigator.onLine`. Pair it with durable rpcs so writes queue instead of failing while the banner shows.'} />
+            note={'`online()` reactively reflects `navigator.onLine`. Show the banner while offline so a write that fails is expected, and disable controls that need the network.'} />
 
         <Recipe
             task="Probe whether the server is reachable"
             live={OBS}
             code={`import { health } from '@abide/abide/shared/health'
 const up = await health()`}
-            note={"Being `online()` isn't the same as your server being up. `health()` polls `/__abide/health`; the outbox drains on this recovering, not just on `navigator.onLine`."} />
+            note={"Being `online()` isn't the same as your server being up. `health()` polls `/__abide/health` — gate retries on this recovering, not just on `navigator.onLine`."} />
 
         <Recipe
             task="Persist a form draft locally"
@@ -43,31 +41,34 @@ watch(() => localStorage.setItem('draft', draft))`}
             note={'Seed the cell from `localStorage` and mirror writes back in a watch — the draft survives a reload or an accidental close, no server involved.'} />
 
         <Recipe
-            task="Queue mutations while offline"
-            live={OUTBOX}
-            code={`export const addTodo = POST(handler, { schemas: { input: inputSchema }, outbox: true })
-// calls made offline park durably and drain on reconnect`}
-            note={'The outbox is the durable-write half of local-first. Declare `outbox: true` on the mutations that should survive going offline — see the outbox recipes.'} />
+            task="Retry a write when the network returns"
+            live={OBS}
+            code={`import { online } from '@abide/abide/shared/online'
+import { watch } from '@abide/abide/ui/watch'
+let pending = state([])
+// hold writes that fail offline; re-send them when online() flips back
+watch(() => { if (online() && pending.length) drain() })`}
+            note={'There is no built-in durable queue. Hold writes that fail while offline in a cell and re-send them from a `watch` when `online()` returns — a minimal local queue you clear as each confirms.'} />
 
         <Recipe
-            task="Reconcile optimistic state on drain"
-            live={OUTBOX}
-            code={`// keep local state authoritative until the queue confirms;
-// on a permanent rejection (not 'queued'), roll the entry back out`}
-            note={"Treat local state as the source of truth while writes are queued. Only reconcile — remove or correct — when a write permanently fails, not while it's parked."} />
+            task="Reconcile optimistic state on failure"
+            live={STATE}
+            code={`// keep local state authoritative until the write confirms;
+// on a permanent rejection, roll the entry back out`}
+            note={'Treat local state as the source of truth while a write is in flight. Only reconcile — remove or correct — when a write permanently fails, not while it is retrying.'} />
 
         <Recipe
             task="Dedupe replays with an idempotency key"
-            live={OUTBOX}
+            live={OBS}
             code={`const id = crypto.randomUUID()
 await saveMessage({ id, text })   // handler keys on id — replay is a no-op`}
-            note={'At-least-once delivery means a write can replay. Generate the id client-side and key the handler on it so a redelivered call overwrites instead of duplicating.'} />
+            note={'A retried write can arrive twice. Generate the id client-side and key the handler on it so a redelivered call overwrites instead of duplicating.'} />
 
         <Recipe
             task="Block a network action while offline"
             live={OBS}
             code={`<button disabled={!online()} onclick={publish}>Publish</button>`}
-            note={"For actions that shouldn't queue (a live publish, a payment), gate on `online()` and disable rather than parking them for later."} />
+            note={"For actions that shouldn't fire against an unreachable server (a live publish, a payment), gate on `online()` and disable rather than letting the call fail."} />
 
         <Recipe
             task="Restore local-first list edits"
@@ -76,22 +77,22 @@ await saveMessage({ id, text })   // handler keys on id — replay is a no-op`}
 import { watch } from '@abide/abide/ui/watch'
 let items = state(JSON.parse(localStorage.getItem('items') ?? '[]'))
 watch(() => localStorage.setItem('items', JSON.stringify(items)))
-// mutate items locally; sync each change through a durable rpc`}
-            note={'Keep the working list in local state mirrored to storage, and push each change through an `outbox: true` rpc — edits are instant offline and sync when the network returns.'} />
+// mutate items locally; push each change through an rpc when online`}
+            note={'Keep the working list in local state mirrored to storage, and push each change through an rpc when the network returns — edits are instant offline and sync on reconnect.'} />
 
         <Recipe
             task="Merge concurrent multiplayer edits"
             gap={true}
             code={`// no built-in CRDT / conflict-free merge yet
-// the outbox is last-write-wins on a conflict during drain`}
-            note={"There's no CRDT or automatic conflict resolution. The outbox is last-write-wins on drain — true multiplayer merge (the createDoc patch-bus arc) is on the roadmap, not shipped."} />
+// last-write-wins if two clients edit the same record`}
+            note={"There's no CRDT or automatic conflict resolution — last-write-wins when two clients edit the same record. True multiplayer merge (the createDoc patch-bus arc) is on the roadmap, not shipped."} />
 
         <Recipe
             task="Sync in the background with a service worker"
             gap={true}
-            code={`// no service-worker / Background Sync integration — the outbox drains
+            code={`// no service-worker / Background Sync integration — writes send
 // only while a tab is open and reconnects`}
-            note={"The outbox drains from an open tab on reconnect; there's no service-worker Background Sync that flushes writes with the app closed. Register your own service worker if you need true background delivery."} />
+            note={"Writes send from an open tab on reconnect; there's no service-worker Background Sync that flushes writes with the app closed. Register your own service worker if you need true background delivery."} />
 
         <Recipe
             task="Resolve per-field conflicts"

@@ -2,23 +2,12 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { createScope } from '../src/lib/ui/createScope.ts'
 import { CURRENT_SCOPE } from '../src/lib/ui/runtime/CURRENT_SCOPE.ts'
 import { scope } from '../src/lib/ui/scope.ts'
-import type { PersistenceStore } from '../src/lib/ui/types/PersistenceStore.ts'
 
 afterEach(() => {
     CURRENT_SCOPE.current = undefined
 })
 
-const memoryStore = (): PersistenceStore & { data: Map<string, unknown> } => {
-    const data = new Map<string, unknown>()
-    return {
-        data,
-        load: (key) => data.get(key),
-        save: (key, snapshot) => data.set(key, structuredClone(snapshot)),
-        remove: (key) => data.delete(key),
-    }
-}
-
-describe('scope — the lexical data + capability seam', () => {
+describe('scope — the lexical data seam', () => {
     test('a scope owns reactive data: stored slots and computed slots', () => {
         const s = createScope({ count: 2 })
         const doubled = s.derive('doubled', () => s.read<number>('count') * 2)
@@ -30,75 +19,40 @@ describe('scope — the lexical data + capability seam', () => {
         expect(s.snapshot()).toEqual({ count: 5 }) // computed not stored
     })
 
-    test('record() enables undo; undo/redo act on the scope', () => {
-        const s = createScope({ n: 0 })
-        s.record() // declare the capability
-
-        s.replace('n', 1)
-        s.replace('n', 2)
-        expect(s.canUndo()).toBe(true)
-        s.undo()
-        expect(s.read<number>('n')).toBe(1)
-        s.redo()
-        expect(s.read<number>('n')).toBe(2)
-    })
-
-    test('a scope without undoable() ignores undo (no journal, no cost)', () => {
-        const s = createScope({ n: 0 })
-        s.replace('n', 1)
-        expect(s.canUndo()).toBe(false)
-        expect(() => s.undo()).not.toThrow()
-        expect(s.read<number>('n')).toBe(1)
-    })
-
-    test('persist() makes the scope durable, defaulting its key to the scope id', () => {
-        const store = memoryStore()
-        const s = createScope({ title: '' })
-        s.persist() // key defaults to s.id
-        s.replace('title', 'kept')
-        // explicit store path: re-create and restore under the same id
-        const reloaded = createScope({ title: '' })
-        // (persist() uses the default localStorage store; here we assert the id is the key)
-        expect(typeof s.id).toBe('string')
-        expect(reloaded.id).not.toBe(s.id) // distinct scopes get distinct ids
-        void store
-    })
-
-    test('scopes nest: a child links to its parent and back to the root', () => {
+    test('scopes nest: a child links to its parent', () => {
         const root = createScope({ app: true })
-        const child = root.child({ local: 1 })
-        const grandchild = child.child({})
+        const child = createScope({ local: 1 }, root)
+        const grandchild = createScope({}, child)
 
         expect(child.parent).toBe(root)
-        expect(grandchild.root()).toBe(root)
-        expect(child.root()).toBe(root)
+        expect(grandchild.parent).toBe(child)
         expect(child.read<number>('local')).toBe(1)
     })
 
-    test('dispose tears down the whole subtree', () => {
-        const root = createScope({})
-        const child = root.child({})
-        child.record()
-        child.replace('x', 1)
-        expect(child.canUndo()).toBe(true)
+    test('dispose runs the scope’s registered teardowns', () => {
+        const s = createScope({})
+        let torn = false
+        s.own(() => {
+            torn = true
+        })
 
-        root.dispose() // cascades to the child
-        expect(child.canUndo()).toBe(false) // child history dropped
+        s.dispose()
+        expect(torn).toBe(true) // the registered teardown ran
     })
 
     test('scope() resolves the ambient current scope', () => {
         const root = createScope({})
-        const child = root.child({})
+        const child = createScope({}, root)
         CURRENT_SCOPE.current = child
 
         expect(scope()).toBe(child) // current
-        expect(child.root()).toBe(root) // root reached via the handle, not scope()
+        expect(child.parent).toBe(root) // parent reached via the handle
     })
 
     test('share/shared passes context down the tree to the closest ancestor', () => {
         const root = createScope({})
-        const child = root.child({})
-        const grandchild = child.child({})
+        const child = createScope({}, root)
+        const grandchild = createScope({}, child)
 
         root.share('theme', 'dark')
         expect(grandchild.shared<string>('theme')).toBe('dark') // walks up to root
@@ -111,14 +65,14 @@ describe('scope — the lexical data + capability seam', () => {
     })
 
     test('shared returns undefined when no ancestor provides the key', () => {
-        const child = createScope({}).child({})
+        const child = createScope({}, createScope({}))
         expect(child.shared('missing')).toBeUndefined()
     })
 
     test('a shared undefined shadows an ancestor (has check, not truthiness)', () => {
         const root = createScope({})
-        const child = root.child({})
-        const grandchild = child.child({})
+        const child = createScope({}, root)
+        const grandchild = createScope({}, child)
 
         root.share('flag', 'on')
         child.share('flag', undefined) // explicitly provided as undefined
@@ -127,7 +81,7 @@ describe('scope — the lexical data + capability seam', () => {
 
     test('reactive context: share a scope, descendants read live updates', () => {
         const root = createScope({ count: 0 })
-        const child = root.child({})
+        const child = createScope({}, root)
         root.share('app', root) // share the scope; its doc is reactive
 
         const app = child.shared<typeof root>('app')

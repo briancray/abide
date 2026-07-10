@@ -11,7 +11,7 @@ import { rpcServerForRoot } from '../src/lib/shared/rpcServerForRoot.ts'
 
 /* ADR-0025 D2: the rpc/socket build transforms resolve meaning through a warm server
    `ts.Program` (streaming from the handler's return type, method from the export helper's
-   symbol, `outbox` from the opts property's literal type) instead of scanning source text. The
+   symbol) instead of scanning source text. The
    fixtures live inside the repo so `@abide/abide/server/*` resolves through the workspace
    symlink and the checker sees the real helper types. Each query fails open to its
    char-scan/regex counterpart. */
@@ -76,38 +76,11 @@ describe('rpc method resolution through the warm server program (ADR-0025)', () 
     })
 
     test('a plainly-imported helper still resolves (POST)', () => {
-        expect(program.methodForModule(serverModule('importedOutbox'))).toBe('POST')
+        expect(program.methodForModule(serverModule('plainPost'))).toBe('POST')
     })
 
     test('an unknown module path fails open to undefined', () => {
         expect(program.methodForModule(resolve(SERVER_RPC_DIR, 'missing.ts'))).toBeUndefined()
-    })
-})
-
-describe('rpc outbox resolution through the warm server program (ADR-0025)', () => {
-    const program = createRpcServerProgram(SERVER_CWD, SERVER_RPC_DIR)
-
-    test('an imported-const outbox resolves to its literal where the regex would reject it', () => {
-        /* `{ outbox: OUTBOX_ENABLED }` — not an inline literal, so the scan (`detectDurable`)
-           throws "must be a literal". The property-type query resolves `OUTBOX_ENABLED` to `true`. */
-        const source = readFileSync(serverModule('importedOutbox'), 'utf8')
-        expect(() => prepareRpcModule(source, '@abide/abide')).toThrow(/must be a literal/)
-
-        expect(program.outboxForModule(serverModule('importedOutbox'))).toBe(true)
-
-        /* WITH the program's verdict threaded as the durable override, the imported-const rpc is
-           correctly emitted durable — lifting the "inline literal" restriction to "statically
-           known". */
-        expect(prepareRpcModule(source, '@abide/abide', undefined, true)?.durable).toBe(true)
-    })
-
-    test('a call with no opts arg resolves outbox false (not undefined)', () => {
-        /* aliasMethod has a single handler argument — a resolvable non-durable rpc. */
-        expect(program.outboxForModule(serverModule('aliasMethod'))).toBe(false)
-    })
-
-    test('an unknown module path fails open to undefined', () => {
-        expect(program.outboxForModule(resolve(SERVER_RPC_DIR, 'missing.ts'))).toBeUndefined()
     })
 })
 
@@ -138,7 +111,6 @@ describe('rpc input coercion plan through the warm server program (ADR-0028)', (
         const rewritten = prepareRpcModule(
             source,
             '@abide/abide',
-            undefined,
             undefined,
             plan,
         )?.rewriteForServer('/rpc/coerceArgs')
@@ -263,7 +235,6 @@ describe('rpc typed-error branch schemas through the warm server program (ADR-00
             undefined,
             undefined,
             undefined,
-            undefined,
             schemas,
         )?.rewriteForServer('/rpc/typedErrors')
         expect(rewritten).toContain('errorJsonSchemas: {')
@@ -293,7 +264,6 @@ describe('rpc structured wire-kind plan through the warm server program (ADR-002
         const rewritten = prepareRpcModule(
             source,
             '@abide/abide',
-            undefined,
             undefined,
             plan,
         )?.rewriteForServer('/rpc/wireCodec')
@@ -332,7 +302,6 @@ describe('rpc output wire plan through the warm server program (ADR-0029 output 
         const rewritten = prepareRpcModule(
             source,
             '@abide/abide',
-            undefined,
             undefined,
             undefined,
             undefined,
@@ -397,7 +366,6 @@ describe('rpc input-args JSON Schema projection through the warm server program 
             undefined,
             undefined,
             undefined,
-            undefined,
             schema,
         )?.rewriteForServer('/rpc/coerceArgs')
         expect(rewritten).toContain('inputJsonSchema: {')
@@ -448,15 +416,5 @@ describe('prepareRpcModule fail-open without a warm program (ADR-0025 D3)', () =
         expect(prepareRpcModule(streamMod, '@abide/abide', false)?.streaming).toBe(false)
         /* undefined override defers to the scan → streaming. */
         expect(prepareRpcModule(streamMod, '@abide/abide', undefined)?.streaming).toBe(true)
-    })
-
-    test('a durable override skips the scan but still enforces the mutating-method invariant', () => {
-        const getMod = `import { GET } from '@abide/abide/server/GET'\nexport const search = GET(async (a) => a)`
-        expect(() => prepareRpcModule(getMod, '@abide/abide', undefined, true)).toThrow(
-            /only valid on mutating RPCs/,
-        )
-        const postMod = `import { POST } from '@abide/abide/server/POST'\nexport const save = POST(async (a) => a)`
-        /* No inline outbox, but the override says durable — resolved as durable without the scan. */
-        expect(prepareRpcModule(postMod, '@abide/abide', undefined, true)?.durable).toBe(true)
     })
 })

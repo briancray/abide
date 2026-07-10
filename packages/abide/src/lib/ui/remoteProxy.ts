@@ -8,38 +8,26 @@ import { rpcTimeoutSlot } from '../shared/rpcTimeoutSlot.ts'
 import { trace } from '../shared/trace.ts'
 import type { CachePolicy } from '../shared/types/CachePolicy.ts'
 import type { HttpMethod } from '../shared/types/HttpMethod.ts'
-import type { Outbox } from '../shared/types/Outbox.ts'
 import type { OutputWirePlan } from '../shared/types/OutputWirePlan.ts'
 import type { RemoteFunction } from '../shared/types/RemoteFunction.ts'
 import type { RpcOptions } from '../shared/types/RpcOptions.ts'
 import type { StandardSchemaV1 } from '../shared/types/StandardSchemaV1.ts'
 import type { StreamPolicy } from '../shared/types/StreamPolicy.ts'
-import { UNREACHABLE_STATUSES } from '../shared/UNREACHABLE_STATUSES.ts'
 import { validationHttpError } from '../shared/validationHttpError.ts'
 import { withBase } from '../shared/withBase.ts'
-import { createOutboxQueue, type OutboxQueue } from './rpcOutbox/createOutboxQueue.ts'
-import { outboxRegistry } from './rpcOutbox/outboxRegistry.ts'
 import { currentAbortSignal } from './runtime/currentAbortSignal.ts'
 import { REQUEST_SUPERSEDED } from './runtime/REQUEST_SUPERSEDED.ts'
-import type { PersistenceStore } from './types/PersistenceStore.ts'
 import { watch } from './watch.ts'
-
-/* The framework-reserved `HttpError.kind` for a request the durable outbox parked because
-   the server was unreachable — distinct from a handler-declared error name. Lets a caller
-   branch with `error instanceof HttpError && error.kind === 'queued'`. */
-const QUEUED = 'queued'
 
 /* The proxy's third argument. ADR-0022 D2: the client rpc transform passes the endpoint's LIVE
    `opts` object here verbatim, so the type widens to the endpoint opts shape — remoteProxy reads
    only the keys below and IGNORES the rest (`crossOrigin` / `timeout` / `maxBodySize`), which ride
-   along harmlessly. `outbox: true` parks an unreachable call for replay; `streaming: true` (handler
-   returns jsonl()/sse(), build-injected) makes the bare call return the NamedAsyncIterable directly;
-   `cache` / `stream` carry the endpoint's declared policy (ADR-0020) so the client honours the ttl
-   (staleness/SWR), the refetch clock (throttle/debounce), and tags; `store` exists for testing
-   (production uses the default persistence store). `schemas` — its live `input` validator now reaches
-   the stub (ADR-0022 D2) — drives the ADR-0026 client-side pre-flight. */
-export type DurableOptions<Args = unknown> = {
-    outbox?: boolean
+   along harmlessly. `streaming: true` (handler returns jsonl()/sse(), build-injected) makes the
+   bare call return the NamedAsyncIterable directly; `cache` / `stream` carry the endpoint's declared
+   policy (ADR-0020) so the client honours the ttl (staleness/SWR), the refetch clock
+   (throttle/debounce), and tags. `schemas` — its live `input` validator now reaches the stub (ADR-0022
+   D2) — drives the ADR-0026 client-side pre-flight. */
+export type RemoteProxyOptions<Args = unknown> = {
     streaming?: boolean
     /* The client output wire codec plan (ADR-0029) the resolver plugin baked onto the stub — the
        handler's structured success fields, so the proxy revives a `Set`/`Map`/`bigint`/`Date` off a
@@ -47,7 +35,6 @@ export type DurableOptions<Args = unknown> = {
     outputWirePlan?: OutputWirePlan
     cache?: CachePolicy<Args>
     stream?: StreamPolicy
-    store?: PersistenceStore
     /* The endpoint's live schema group (ADR-0022 D2 forwards it verbatim). `input` is the
        Standard Schema the ADR-0026 pre-flight validates the typed args against. */
     schemas?: {
@@ -76,55 +63,33 @@ side.
 the query string (GET/DELETE/HEAD). Plain `fn(args)` decodes the Response
 by Content-Type and throws HttpError on non-2xx; `.raw(args)` is the
 escape hatch that returns the Response untouched.
-
-A durable (`outbox: true`) rpc is still a normal RemoteFunction — it fetches and
-throws exactly the same. The differences: when the server can't be reached
-(a transport failure, or a 502/503/504/52x), the request is `park`ed onto the
-RPC's app-owned outbox as a SIDE-EFFECT and the throw is a `kind: 'queued'`
-HttpError; and once a backlog exists, a fresh call parks straight to the TAIL
-(no fetch) so writes can't land out of order. The parked write waits for
-`rpc.outbox.retry()` (or the global `outbox.retry()`) — there is no auto-drain;
-the app owns when to replay. `rpc.outbox()` exposes the queue.
 */
 // @documentation plumbing
 export function remoteProxy<Args, Return>(
     method: HttpMethod,
     url: string,
-    durable: DurableOptions<Args> & { outbox: true },
-): RemoteFunction<Args, Return, Record<never, never>, true>
-export function remoteProxy<Args, Return>(
-    method: HttpMethod,
-    url: string,
-    durable?: DurableOptions<Args>,
-): RemoteFunction<Args, Return>
-export function remoteProxy<Args, Return>(
-    method: HttpMethod,
-    url: string,
-    durable?: DurableOptions<Args>,
-): RemoteFunction<Args, Return, Record<never, never>, boolean> {
-    /* Assigned after `createRemoteFunction` so the invoke closure (which runs later, per
-       call) parks through the shared queue; undefined leaves the plain fetch path. */
-    let queue: OutboxQueue<Args> | undefined
+    options?: RemoteProxyOptions<Args>,
+): RemoteFunction<Args, Return> {
     /* ADR-0026 client-side pre-flight: validate the typed args against the endpoint's input
        schema (forwarded to the stub, ADR-0022 D2) BEFORE the fetch whenever one is present — always
        on, no opt-in. This is a UX optimization ONLY: the server's unconditional inputSchema validate
        → 422 (defineRpc.ts `validateThenHandle`) stays the trust boundary, so a client that skips or
        fakes this check is still fully validated on the server. undefined here (no input schema)
        keeps today's behaviour — the client serializes and sends unvalidated. */
-    const preflightSchema = durable?.schemas?.input
+    const preflightSchema = options?.schemas?.input
     const fn = createRemoteFunction<Args, Return>({
         method,
         url,
         clients: browserClientFlags,
-        streaming: durable?.streaming ?? false,
+        streaming: options?.streaming ?? false,
         /* The client revives a decoded response's structured fields through this plan (ADR-0029
            output path); undefined leaves the honest-JSON body untouched. */
-        outputWirePlan: durable?.outputWirePlan,
+        outputWirePlan: options?.outputWirePlan,
         /* Endpoint policy the resolver plugin spliced onto the stub — governs client cache
            behaviour (ttl/staleness, refetch clock, tags). createRemoteFunction stamps it onto
            `fn.cache` / `fn.stream` so readThrough reads it as the bottom policy layer. */
-        cache: durable?.cache,
-        stream: durable?.stream,
+        cache: options?.cache,
+        stream: options?.stream,
         /*
         The Request URL carries the mount base so the fetch routes through the
         proxy (/v2/rpc/…); the cache key keeps the bare `url` (keyForRemoteCall
@@ -141,95 +106,44 @@ export function remoteProxy<Args, Return>(
         /*
         Forcing `getRequest()` once builds the Request and seeds the cache meta thunk in
         createRemoteFunction with the same instance, so cache() readers don't reconstruct
-        it. On a durable rpc, an unreachable result parks a pristine CLONE and throws a
-        `queued`-tagged HttpError — `fetch` consumes the original (its body stream is read
-        and locked), so parking that same instance would leave the queue a request a resend
-        can't reconstruct and a capture can't read. The clone is parked, the original is
-        sent. The throw lets the caller branch on `error.kind === 'queued'` (parked, will
-        retry) vs. a real server rejection; `error.data` is the parked entry, so a caller
-        can `await (error.data as OutboxEntry).settled` for the eventual outcome.
+        it.
         */
         invoke: (args, getRequest, opts) => {
             /* ADR-0026 D2/D3: an input schema present → validate the TYPED args (pre-serialization
                — NOT the string-shaped serialized form, which sidesteps parseArgs's query-coercion
-               gap) before any fetch or outbox park. The validate may return a Promise
-               (StandardSchemaV1), so await it (D3). On a returned failure throw an HttpError shaped
-               IDENTICALLY to the server's 422 (validationHttpError) and make NO fetch — saving the
-               round-trip. */
+               gap) before any fetch. The validate may return a Promise (StandardSchemaV1), so await
+               it (D3). On a returned failure throw an HttpError shaped IDENTICALLY to the server's
+               422 (validationHttpError) and make NO fetch — saving the round-trip. */
             if (preflightSchema !== undefined) {
-                return Promise.resolve()
-                    .then(() => preflightSchema['~standard'].validate(args))
-                    .then((result) => {
-                        if (result.issues) {
-                            throw validationHttpError(result.issues)
-                        }
-                        return dispatch(args, getRequest, opts)
-                    })
-                    .catch((error) => {
-                        /* Only a returned `issues` result — a definitive "this input is invalid" —
-                           blocks the call; rethrow that. Any OTHER throw means the validator itself
-                           could not run here (a non-portable / async-resource refinement), which is
-                           NOT a verdict on the input: fall through to the fetch and let the server
-                           (the authoritative validator) decide. So a schema can never break a call
-                           merely by failing to run client-side. */
-                        if (error instanceof HttpError && error.kind === 'validation') {
-                            throw error
-                        }
-                        return dispatch(args, getRequest, opts)
-                    })
+                return (
+                    Promise.resolve()
+                        .then(() => preflightSchema['~standard'].validate(args))
+                        .then(
+                            (result) => {
+                                /* A returned `issues` result is a definitive "this input is invalid" —
+                               throw the same 422-shaped HttpError the server would (validationHttpError)
+                               so it rejects the chain and makes NO fetch, saving the round-trip. */
+                                if (result.issues) {
+                                    throw validationHttpError(result.issues)
+                                }
+                            },
+                            () => {
+                                /* A validate REJECTION (not an `issues` verdict) means the validator itself
+                               could not run here (a non-portable / async-resource refinement), which is
+                               NOT a verdict on the input: swallow it and fall through to the fetch, letting
+                               the server (the authoritative validator) decide. So a schema can never break
+                               a call merely by failing to run client-side. */
+                            },
+                        )
+                        /* Fetch exactly ONCE, only after validation settles — outside the validate handlers
+                       so a fetch/timeout rejection propagates to the caller untouched rather than being
+                       mistaken for a "validator couldn't run" fall-through and resending the request. */
+                        .then(() => fetchWithTimeout(getRequest(), opts))
+                )
             }
-            return dispatch(args, getRequest, opts)
+            return fetchWithTimeout(getRequest(), opts)
         },
     })
-    /* The base send: outbox park-or-fetch. Split out of `invoke` so the ADR-0026 pre-flight can
-       gate it without duplicating the durable path. */
-    function dispatch(
-        args: Args | undefined,
-        getRequest: () => Request,
-        opts?: RpcOptions,
-    ): Promise<Response> {
-        if (queue === undefined) {
-            return fetchWithTimeout(getRequest(), opts)
-        }
-        /* A non-empty queue means an undelivered backlog: park this call at the TAIL
-           and throw, rather than let a live fetch leapfrog the older writes and land
-           out of order. `retry()` then flushes the whole queue FIFO. */
-        if (queue.size() > 0) {
-            return Promise.reject(
-                queuedThrow(
-                    queue,
-                    args as Args,
-                    getRequest().clone(),
-                    unreachableResponse(),
-                    undefined,
-                ),
-            )
-        }
-        const request = getRequest()
-        const parkable = request.clone()
-        return fetchWithTimeout(request, opts).then(
-            (response) => {
-                if (UNREACHABLE_STATUSES.has(response.status)) {
-                    throw queuedThrow(
-                        queue,
-                        args as Args,
-                        parkable,
-                        response,
-                        new HttpError(response.clone()),
-                    )
-                }
-                return response
-            },
-            (error: unknown) => {
-                if (shouldParkRejection(error)) {
-                    const response =
-                        error instanceof HttpError ? error.response : unreachableResponse()
-                    throw queuedThrow(queue, args as Args, parkable, response, error)
-                }
-                throw error
-            },
-        )
-    }
     /* Overwrite the inert `.watch` the shared attach bound: on the client the real reaction
        sugar routes to the `watch` ui primitive (`fn.watch(handler)` / `fn.watch(args, handler)`).
        Attached here — not in the shared attach — so `watch` never rides into a server bundle. */
@@ -241,78 +155,7 @@ export function remoteProxy<Args, Return>(
                 handler,
             ),
     })
-    if (durable?.outbox === true) {
-        queue = getOrCreateOutboxQueue<Args, Return>(url, fn, durable)
-        Object.assign(fn, { outbox: outboxFace(queue) })
-    }
     return fn
-}
-
-/* The synthetic "unreachable" Response a park reuses when there is no real one — a
-   transport failure (fetch rejected) or a backlog park that never fetched. */
-function unreachableResponse(): Response {
-    return new Response('queued', { status: 503, statusText: 'Service Unavailable' })
-}
-
-/* Park the unreachable request (`cause` becomes the entry's parked reason, `entry.error`)
-   and return the `kind: 'queued'` HttpError to throw — its `.data` is the parked entry, so
-   a caller can `await (error.data as OutboxEntry).settled` for the eventual delivered
-   result or server refusal. */
-function queuedThrow<Args>(
-    queue: OutboxQueue<Args> | undefined,
-    args: Args,
-    request: Request,
-    response: Response,
-    cause: unknown,
-): HttpError {
-    const entry = queue?.park(args, request, cause)
-    return new HttpError(response, QUEUED, entry)
-}
-
-/* A fetch REJECTION (no Response) the durable rpc should park: a transport failure or
-   the synthesized client-timeout 504. NOT a caller/scope abort — that's a deliberate
-   cancel, not the server being unreachable. (HTTP error STATUSES never reject — `fetch`
-   resolves with them — so 4xx/500 are classified on the response, not here.) */
-function shouldParkRejection(error: unknown): boolean {
-    if (error === REQUEST_SUPERSEDED) {
-        return false
-    }
-    if (error instanceof DOMException && error.name === 'AbortError') {
-        return false
-    }
-    if (error instanceof HttpError) {
-        return UNREACHABLE_STATUSES.has(error.response.status)
-    }
-    return true
-}
-
-/* The single app-owned queue for a durable RPC url — created + registered on first use
-   so every call site (and the global `outbox()`) shares one queue. The send is a plain
-   `fetch`; createOutboxQueue rides the entry's abort signal on the resent Request and
-   keeps scope-abort + the client timeout out. */
-function getOrCreateOutboxQueue<Args, Return>(
-    url: string,
-    rpc: RemoteFunction<Args, Return>,
-    durable: DurableOptions<Args>,
-): OutboxQueue<Args> {
-    const existing = outboxRegistry.get(url)
-    if (existing !== undefined) {
-        return existing as OutboxQueue<Args>
-    }
-    const queue = createOutboxQueue<Args>({
-        url,
-        send: (request) => fetch(request),
-        store: durable.store,
-    })
-    outboxRegistry.register(url, queue as OutboxQueue<unknown>, rpc)
-    return queue
-}
-
-/* The `.outbox` face: callable for the live entries, `retry()` to drain on demand. */
-function outboxFace<Args>(queue: OutboxQueue<Args>): Outbox<Args> {
-    const face = (() => queue.entries()) as Outbox<Args>
-    face.retry = () => queue.retry()
-    return face
 }
 
 /*

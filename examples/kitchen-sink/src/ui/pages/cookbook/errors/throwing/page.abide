@@ -101,7 +101,7 @@ async function run() {
 }
 
 {#if lastError}<button onclick={run}>retry</button>{/if}`}
-            note={'Keep the error in a cell and offer a retry that re-runs the same call. For transient network loss, prefer a durable `outbox` rpc (see offline).'} />
+            note={'Keep the error in a cell and offer a retry that re-runs the same call — pair it with `online()` so the retry waits for the network to return.'} />
 
         <Recipe
             task="Time out a slow call"

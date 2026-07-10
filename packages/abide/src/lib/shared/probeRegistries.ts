@@ -1,6 +1,5 @@
 import { cacheStores } from './cacheStores.ts'
 import { isSubscribable } from './isSubscribable.ts'
-import { outboxProbeSlot } from './outboxProbeSlot.ts'
 import { selectorMatcher } from './selectorMatcher.ts'
 import { selectorPrefix } from './selectorPrefix.ts'
 import { tailProbeSlot } from './tailProbeSlot.ts'
@@ -24,19 +23,8 @@ re-tracks narrowed. `matchesEntry` is the probe's cache-side question;
 `field` selects the stream-side answer; `unprobed` is the answer for a
 stream no prober can see (server, or tail never imported) — matching what
 tail() itself reports there. The bare form (no selector) spans every
-registry; fn/tag selectors are cache identities only (plus the parked-write
-queue a durable rpc selector narrows to). Outside a tracking scope the taps
-are no-ops and the current value returns.
-
-A parked durable (`outbox`) write has no value yet, so it counts as pending —
-but never refreshing (it's holding nothing to supersede), hence the term is
-guarded to `field === 'pending'`. The outbox prober (registered into
-outboxProbeSlot by browser/, empty on the server) reads its doc-backed queue,
-which is the term's own reactive tap. It sits last under `||`: when a matching
-cache call or stream already answers true the queue isn't read, but that's
-monotonic-safe — the parked write can't flip a true result, and the moment the
-cache/stream term falls back to false its lifecycle tap re-derives and the
-queue is read then.
+registry; fn/tag selectors are cache identities only. Outside a tracking scope
+the taps are no-ops and the current value returns.
 */
 export function probeRegistries<Args, Return>(
     arg: CacheSelector<Args, Return> | NamedAsyncIterable<unknown> | undefined,
@@ -58,8 +46,7 @@ export function probeRegistries<Args, Return>(
     const matches = selectorMatcher(arg, args, prefix)
     return (
         stores.some((store) => anyEntryMatches(store, matchesEntry, matches)) ||
-        streams?.[field] === true ||
-        (field === 'pending' && (outboxProbeSlot.probe?.(arg, args) ?? false))
+        streams?.[field] === true
     )
 }
 

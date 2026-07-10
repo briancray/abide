@@ -7,7 +7,7 @@ value only when the root itself is replaced). In-place is the deliberate choice:
 the patch path already names exactly what changed, so we never need copy-on-write
 to *detect* a change — and cloning the spine made every leaf write O(width) of
 the widest ancestor (a 5k-item list copied 50k times in the bench). Mutating is
-O(depth). History/undo is served by journalling patches (the change is a value),
+O(depth). Change detection is served by announcing patches (the change is a value),
 not by retaining old roots — which is cheaper anyway. The wake step in createDoc
 force-notifies ancestor readers from the path, since their container keeps its
 identity now.

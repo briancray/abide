@@ -2528,89 +2528,8 @@ export const cookbookIndex: CookbookIndexSection[] = [
     },
     {
         title: 'offline & local-first',
-        blurb: 'Survive the network — the durable outbox, retry(), health-driven drain, local persistence.',
+        blurb: 'Survive the network — online() vs health() reachability, degrade gracefully when the server is unreachable, and mirror working state to local storage.',
         pages: [
-            {
-                href: '/cookbook/offline/outbox',
-                label: 'outbox',
-                recipes: [
-                    {
-                        task: 'Make a write durable',
-                        anchor: 'make-a-write-durable',
-                        gap: false,
-                    },
-                    {
-                        task: 'Enqueue a write',
-                        anchor: 'enqueue-a-write',
-                        gap: false,
-                    },
-                    {
-                        task: 'Handle the parked call',
-                        anchor: 'handle-the-parked-call',
-                        gap: false,
-                    },
-                    {
-                        task: 'Render optimistically before it syncs',
-                        anchor: 'render-optimistically-before-it-syncs',
-                        gap: false,
-                    },
-                    {
-                        task: "Read this rpc's queue",
-                        anchor: 'read-this-rpc-s-queue',
-                        gap: false,
-                    },
-                    {
-                        task: 'Read the app-wide queue',
-                        anchor: 'read-the-app-wide-queue',
-                        gap: false,
-                    },
-                    {
-                        task: "Show each entry's status",
-                        anchor: 'show-each-entry-s-status',
-                        gap: false,
-                    },
-                    {
-                        task: 'Cancel a queued write',
-                        anchor: 'cancel-a-queued-write',
-                        gap: false,
-                    },
-                    {
-                        task: 'Drain the queue on demand',
-                        anchor: 'drain-the-queue-on-demand',
-                        gap: false,
-                    },
-                    {
-                        task: 'Probe queued and in-flight writes',
-                        anchor: 'probe-queued-and-in-flight-writes',
-                        gap: false,
-                    },
-                    {
-                        task: 'Keep the handler idempotent',
-                        anchor: 'keep-the-handler-idempotent',
-                        gap: false,
-                    },
-                    {
-                        task: 'Roll back a permanently rejected write',
-                        anchor: 'roll-back-a-permanently-rejected-write',
-                        gap: false,
-                    },
-                    {
-                        task: 'Survive a reload with pending writes',
-                        anchor: 'survive-a-reload-with-pending-writes',
-                        gap: false,
-                    },
-                    {
-                        task: 'Understand what counts as parkable',
-                        anchor: 'understand-what-counts-as-parkable',
-                        gap: false,
-                    },
-                    {
-                        task: 'Choose when the queue is durable',
-                        anchor: 'choose-when-the-queue-is-durable',
-                        gap: false,
-                    },
-                ],
-            },
             {
                 href: '/cookbook/offline/resilience',
                 label: 'offline resilience',
@@ -2631,13 +2550,13 @@ export const cookbookIndex: CookbookIndexSection[] = [
                         gap: false,
                     },
                     {
-                        task: 'Queue mutations while offline',
-                        anchor: 'queue-mutations-while-offline',
+                        task: 'Retry a write when the network returns',
+                        anchor: 'retry-a-write-when-the-network-returns',
                         gap: false,
                     },
                     {
-                        task: 'Reconcile optimistic state on drain',
-                        anchor: 'reconcile-optimistic-state-on-drain',
+                        task: 'Reconcile optimistic state on failure',
+                        anchor: 'reconcile-optimistic-state-on-failure',
                         gap: false,
                     },
                     {

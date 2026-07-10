@@ -31,14 +31,12 @@ function scopeNodes(): Array<{
     label: string | undefined
     parent: string | undefined
     state: unknown
-    recorded: boolean
 }> {
     return Array.from(liveScopes.scopes, (scope) => ({
         id: scope.id,
         label: scope.label,
         parent: scope.parent?.id,
         state: cloneable(scope.snapshot()),
-        recorded: scope.canUndo() || scope.canRedo(),
     }))
 }
 

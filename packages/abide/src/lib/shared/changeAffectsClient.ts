@@ -9,8 +9,8 @@ Server/MCP-only — client unaffected, skip the client rebuild:
                         path (rpc url) and the `<METHOD>(...)` wrapper, not the
                         handler body; the rpc manifest is server-only. A body
                         edit produces an identical stub. (Risk: changing the
-                        method, the export name, or `outbox: true` does change
-                        the stub — those need a manual full rebuild.)
+                        method or the export name does change the stub — those
+                        need a manual full rebuild.)
 - `server/sockets/**` — name-only `socketProxy` stubs derived from the file
                         path; socket opts are server-side. Body edits don't
                         change the stub.

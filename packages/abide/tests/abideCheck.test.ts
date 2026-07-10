@@ -562,13 +562,13 @@ describe('abide check', () => {
     })
 
     /* `scope()` is the internal lowering host — no longer an author reactive entry, but a
-       captured handle (`const s = scope()`) and its capability calls (`s.undo()`) are
+       captured handle (`const s = scope()`) and its method calls (`s.share(...)`) are
        emitted verbatim and must still resolve in the shadow. The imported reactive surface
        (`state`/`state.computed`) is projected to its value type. Regression for the shadow
        preamble missing the `scope` import after the doc→scope migration. */
-    test('scope() handle + capability calls and the imported reactive surface type-check', () => {
+    test('scope() handle + method calls and the imported reactive surface type-check', () => {
         const dir = project({
-            'scoped.abide': `<script>\nimport { state } from '@abide/abide/ui/state'\nconst s = scope()\nconst count = state(0)\nconst doubled = state.computed(() => count * 2)\nfunction undo() { s.undo() }\n</script>\n<button onclick={undo}>{count} {doubled}</button>\n`,
+            'scoped.abide': `<script>\nimport { state } from '@abide/abide/ui/state'\nconst s = scope()\nconst count = state(0)\nconst doubled = state.computed(() => count * 2)\nfunction tag() { s.share('count', count) }\n</script>\n<button onclick={tag}>{count} {doubled}</button>\n`,
         })
         expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
     })

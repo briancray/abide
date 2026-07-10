@@ -126,10 +126,7 @@ export const cookbookSections: CookbookSectionConfig[] = [
     },
     {
         title: 'offline & local-first',
-        blurb: 'Survive the network — the durable outbox, retry(), health-driven drain, local persistence.',
-        pages: [
-            { href: '/cookbook/offline/outbox', label: 'outbox' },
-            { href: '/cookbook/offline/resilience', label: 'offline resilience' },
-        ],
+        blurb: 'Survive the network — online() vs health() reachability, degrade gracefully when the server is unreachable, and mirror working state to local storage.',
+        pages: [{ href: '/cookbook/offline/resilience', label: 'offline resilience' }],
     },
 ]

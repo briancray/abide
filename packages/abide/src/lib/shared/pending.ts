@@ -17,12 +17,9 @@ tail registry (streams). Pending means "no value yet":
   pending(subscribable)  → that stream awaiting its first frame
                            (tail.status === 'pending'; true when nothing
                            is reading yet — there is no value either way)
-  pending(durableRpc)    → that durable rpc's parked writes (a parked write
-                           has no value yet); the bare form counts them too
 Probes report, never act: reading one opens no fetch and no stream. SSR
 loading state is driven by {#await}, not this. Scan semantics (tap order,
-selector grammar, registry spans, the parked-write term) live in
-probeRegistries.
+selector grammar, registry spans) live in probeRegistries.
 */
 // @documentation probes
 export function pending<Args, Return>(

@@ -84,19 +84,6 @@ describe('prepareRpcModule — client rpc transform (ADR-0022 D2)', () => {
         )
     })
 
-    test('a durable POST keeps outbox in the live opts (read at runtime, not build-injected)', () => {
-        const source =
-            `import { POST } from '@abide/abide/server/POST'\n` +
-            `export const save = POST((a) => a, { outbox: true, cache: { ttl: 0 } })`
-        const prepared = prepareRpcModule(source, '@abide/abide')
-        expect(prepared?.durable).toBe(true)
-        const out = prepared?.rewriteForClient('/rpc/save')
-        /* outbox rides the live opts verbatim; no separately-injected `outbox: true`. */
-        expect(out).toContain(
-            '__abideRemoteProxy__("POST", "/rpc/save", { outbox: true, cache: { ttl: 0 } })',
-        )
-    })
-
     test('a trailing comma after opts does not leak into the emitted call', () => {
         const out = clientRewrite(getMod('GET((a) => a, { cache: { ttl: 5 } },)'))
         expect(out).toContain('__abideRemoteProxy__("GET", "/rpc/rates", { cache: { ttl: 5 } })')

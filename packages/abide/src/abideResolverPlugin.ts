@@ -200,7 +200,7 @@ export function abideResolverPlugin({
     const formatChain = (chain: string[]): string => chain.map(showPath).join('\n  → ')
 
     /* Warm per-root rpc server program (ADR-0025 D1). Lives in the setup closure so one build
-       reuses a single `ts.Program` across every rpc transform (streaming/method/outbox queries);
+       reuses a single `ts.Program` across every rpc transform (streaming/method queries);
        built lazily on the first rpc onLoad (so a build with no rpc modules never pays for it) and
        failing open to undefined, in which case each query stays on its char-scan/regex. (The
        rpc.d.ts codegen builds its own program in generateDeclarations, owned by build().) */
@@ -356,13 +356,11 @@ export function abideResolverPlugin({
                 const url = rpcUrlForFile(relativePath)
                 const importName = await abideImportNameOnce()
                 /* Ask the warm server program for this handler's streaming verdict (return-type
-                   query — a stream returned via a wrapper function is seen) and its `outbox`
-                   durability (opts property-type query — an imported-const literal is read); each
-                   is undefined when no program built or the node didn't resolve, so prepareRpcModule
-                   falls open to its char-scan/regex (ADR-0025 D2/D3). One program, two queries. */
+                   query — a stream returned via a wrapper function is seen); undefined when no
+                   program built or the node didn't resolve, so prepareRpcModule falls open to its
+                   char-scan (ADR-0025 D2). */
                 const rpcServerProgram = rpcServerForRoot(rpcServerByRoot, cwd, rpcDir)
                 const streamingOverride = rpcServerProgram?.streamingForModule(args.path)
-                const durableOverride = rpcServerProgram?.outboxForModule(args.path)
                 /* The numeric/boolean input fields the server rewrite stamps as a `coerce` plan so
                    parseArgs turns a string query/form value into the typed value the schema
                    expects (ADR-0028). undefined (no program / unresolvable Args / no coercible
@@ -397,7 +395,6 @@ export function abideResolverPlugin({
                     source,
                     importName,
                     streamingOverride,
-                    durableOverride,
                     coercion,
                     returnBodySchema,
                     errorSchemas,

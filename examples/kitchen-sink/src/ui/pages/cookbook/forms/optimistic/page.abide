@@ -134,7 +134,7 @@ async function submit() {
 }
 
 {#if error}<button onclick={submit}>retry</button>{/if}`}
-            note={'Hold the error in a cell and show a retry that re-runs the same submit. For network-loss durability, declare the rpc `outbox: true` instead — see offline.'} />
+            note={'Hold the error in a cell and show a retry that re-runs the same submit — the optimistic write stays until the retry confirms or the user gives up.'} />
 
         <Recipe
             task="Drive a multi-step form"

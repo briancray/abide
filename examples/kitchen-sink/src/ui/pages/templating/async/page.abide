@@ -22,6 +22,16 @@ let attempt = state(0)
 let showId = state(true)
 const ROSTER = ['ada', 'grace', 'linus', 'edsger', 'barbara']
 
+// Both loaders fake a 400ms round-trip so the pending → resolved transition is
+// visible. Two of the reads below BLOCK the SSR flush: the leading {await} on the
+// bare-read card and the {#await} block. They resolve in SERIES, not parallel —
+// the leading {await} suspends the synchronous render walk for its 400ms, so the
+// {#await} block further down isn't reached (and loadNames' timer doesn't start)
+// until the first settles. That serial 400 + 400 is this page's ~800ms TTFB — a
+// property of demoing two blocking reads with the halting one first, not a
+// framework cost. In a real app, hoist concurrent flights above the first await
+// point so their timers overlap (can't do that here without severing the
+// attempt-driven revalidation each card exists to show).
 function loadProfile(attempt: number): Promise<{ name: string; color: string }> {
     const name = ROSTER[attempt % ROSTER.length]
     const color = ['#047857', '#7c3aed', '#0284c7'][attempt % 3]
@@ -164,7 +174,9 @@ function remountAwait(): void {
             title="attribute — the interpolated part is empty while pending"
             code={`<p style="color: {loadProfile(attempt)?.color}">`} />
 
-        <!-- leading await: blocking — the server resolves it before flush, no pending flash -->
+        <!-- leading await: blocking — the server resolves it before flush, no pending flash.
+             This also HALTS the render walk for its 400ms, serializing the {#await} block below
+             behind it (see the loaders comment up top — the source of the page's ~800ms TTFB). -->
         <p class="text-sm">blocking (SSR): {await loadProfile(attempt).then((p) => p.name)}</p>
         <CodeBlock title={'{await expr} — blocks SSR inline; no await streams the shell'} code={`{await loadProfile(attempt).then((p) => p.name)}`} />
     </div>

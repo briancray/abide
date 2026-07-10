@@ -137,14 +137,6 @@ const calls = [
                         <td class="px-4 py-2 text-slate-500">none</td>
                     </tr>
                     <tr>
-                        <td class="px-4 py-2 font-mono">outbox</td>
-                        <td class="px-4 py-2 text-slate-600">
-                            durable delivery on a mutating helper — queues offline, drains on
-                            reconnect (<a class="underline" href="/outbox">outbox</a>)
-                        </td>
-                        <td class="px-4 py-2 font-mono text-slate-500">false</td>
-                    </tr>
-                    <tr>
                         <td class="px-4 py-2 font-mono">clients.browser</td>
                         <td class="px-4 py-2 text-slate-600">expose to the browser bundle</td>
                         <td class="px-4 py-2 font-mono text-slate-500">true</td>
@@ -273,13 +265,6 @@ const calls = [
                         <td class="px-4 py-2 font-mono">.error(args?)</td>
                         <td class="px-4 py-2 text-slate-600">
                             reactive probe — the rpc's last typed error
-                        </td>
-                    </tr>
-                    <tr>
-                        <td class="px-4 py-2 font-mono">.outbox()</td>
-                        <td class="px-4 py-2 text-slate-600">
-                            the durable rpc's parked-write queue (see
-                            <a class="underline" href="/outbox">outbox</a>)
                         </td>
                     </tr>
                 </tbody>

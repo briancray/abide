@@ -36,16 +36,6 @@ export type RpcServerProgram = {
     */
     methodForModule(modulePath: string): HttpMethod | undefined
     /*
-    The `outbox` opt's statically-known boolean, read from the opts object's property TYPE
-    through the checker. `true`/`false` when the property resolves to a boolean literal —
-    including through an imported const (`outbox: OUTBOX_ENABLED` where `OUTBOX_ENABLED` is
-    `true`), which the `OUTBOX_OPT` regex (inline-literal only) can't read; `false` when the
-    call carries no opts or no `outbox` key. undefined when the export call can't be resolved
-    or the property's type isn't a boolean literal (a genuinely computed value), so the caller
-    fails open to `detectDurable` — which rejects a non-literal loudly.
-    */
-    outboxForModule(modulePath: string): boolean | undefined
-    /*
     The input-args wire codec plan (ADR-0028 scalars, ADR-0029 structured): the endpoint's wire
     `Args` type read off the exported RemoteFunction's call signature, projected to the
     number/boolean/date/bigint/set/map fields parseArgs revives a plain-JSON wire value into. Reads
@@ -165,9 +155,6 @@ export function createRpcServerProgram(cwd: string, rpcDir: string): RpcServerPr
         methodForModule(modulePath) {
             return query(modulePath, (call) => call.method)
         },
-        outboxForModule(modulePath) {
-            return query(modulePath, (call) => outboxLiteral(checker, call.node))
-        },
         inputCoercionForModule(modulePath) {
             return query(modulePath, (call) => inputCoercionPlan(checker, call.node))
         },
@@ -254,34 +241,6 @@ function methodOfCallee(checker: ts.TypeChecker, callee: ts.Expression): HttpMet
         return callee.text as HttpMethod
     }
     return undefined
-}
-
-/*
-The `outbox` opt's boolean value, read from the opts (second) argument's property type. `false`
-when the call has no opts arg or no `outbox` property (a resolvable non-durable rpc, so the
-caller doesn't needlessly defer to the scan). undefined when the property's type isn't a boolean
-literal — a genuinely computed value the caller must reject via the scan's literal check.
-*/
-function outboxLiteral(checker: ts.TypeChecker, call: ts.CallExpression): boolean | undefined {
-    const opts = call.arguments[1]
-    if (opts === undefined) {
-        return false
-    }
-    const property = checker.getTypeAtLocation(opts).getProperty('outbox')
-    if (property === undefined) {
-        return false
-    }
-    return booleanLiteral(checker, checker.getTypeOfSymbolAtLocation(property, opts))
-}
-
-/* A type's boolean-literal value (`true`/`false`), or undefined when it isn't a single boolean
-   literal (`boolean`, a widened value, or a non-boolean). typeToString renders a boolean literal
-   as exactly `'true'`/`'false'`. */
-function booleanLiteral(checker: ts.TypeChecker, type: ts.Type): boolean | undefined {
-    if ((type.flags & ts.TypeFlags.BooleanLiteral) === 0) {
-        return undefined
-    }
-    return checker.typeToString(type) === 'true'
 }
 
 /*

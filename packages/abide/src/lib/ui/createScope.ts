@@ -1,34 +1,28 @@
 import { computed } from './computed.ts'
 import { effect } from './effect.ts'
-import { history } from './history.ts'
 import { linked } from './linked.ts'
-import { persist as persistDoc } from './persist.ts'
 import { CURRENT_PATH } from './runtime/CURRENT_PATH.ts'
 import { createDoc } from './runtime/createDoc.ts'
 import { liveScopes } from './runtime/liveScopes.ts'
 import type { Cell } from './runtime/types/Cell.ts'
 import type { Doc } from './runtime/types/Doc.ts'
 import { state } from './state.ts'
-import { sync } from './sync.ts'
 import { trackedComputed } from './trackedComputed.ts'
-import type { History } from './types/History.ts'
-import type { PersistHandle } from './types/PersistHandle.ts'
 import type { Scope } from './types/Scope.ts'
 
 /* The counter fallback for a DETACHED scope — one created outside any render (a bare
-   `scope()` on first use, a `scope().child()`), where the ambient render-path is empty.
+   `scope()` on first use), where the ambient render-path is empty.
    A rendered scope instead takes the serialization-stable render-path id (`CURRENT_PATH`,
-   route + tree position), so `persist`/`broadcast` are stable across reloads/peers; only
-   the counter path remains merely run-unique. */
+   route + tree position), so an async cell's warm-seed key (`${scope.id}:${index}`) is
+   stable across the SSR→client handoff; only the counter path remains merely run-unique. */
 let nextId = 0
 
 /*
 Builds a lexical scope. Its data is a document — created eagerly from `initial`,
 or (when `awaiting`) ADOPTED from the first `doc()` a component body creates under
 it, so a scope can wrap the component's own model without changing the data
-lowering. Data methods mirror `Doc` and delegate to that document; capabilities
-are lazy (`record`/`persist` attach `history`/`persist` to it on first call);
-`child` nests; `dispose` tears the subtree down children-first.
+lowering. Data methods mirror `Doc` and delegate to that document; `child` nests;
+`dispose` tears the subtree down children-first.
 */
 export function createScope(
     initial: unknown = {},
@@ -51,17 +45,13 @@ export function createScope(
             : parent === undefined
               ? `scope-${nextId++}`
               : `${parent.id}.${nextId++}`
-    const children: Scope[] = []
     /* Adopted build teardowns (the reactivity stopper from the mount core). Disposed
-       first and in reverse on teardown, before children and capabilities — so the one
-       `dispose` runs the order the call sites hand-composed as `stop(); lexical.dispose()`. */
+       first and in reverse on teardown — so the one `dispose` runs the order the call sites
+       hand-composed as `stop(); lexical.dispose()`. */
     const owned: Array<() => void> = []
     /* Context values shared down the tree, held apart from the reactive doc (which
        a child does not inherit): keyed by name, read by the closest ancestor walk. */
     const shared = new Map<string, unknown>()
-    let past: History | undefined
-    let persistence: PersistHandle | undefined
-    let unsync: (() => void) | undefined
     /* Per-component monotonic index for the async cells constructed under this scope, in
        declaration order — the local half of a cell's serialization-stable warm-seed key
        (`${scope.id}:${index}`, see `createAsyncCell`). Per-scope (not global) so a client-only
@@ -97,12 +87,6 @@ export function createScope(
         own: (dispose) => {
             owned.push(dispose)
         },
-        child: (childInitial = {}) => {
-            const created = createScope(childInitial, self)
-            children.push(created)
-            return created
-        },
-        root: () => (parent === undefined ? self : parent.root()),
         /* Reference store — no tracking, so a lookup never subscribes; reactivity comes
            from what is shared (a scope, whose doc is reactive), not from the share. */
         share: (key, value) => {
@@ -113,40 +97,14 @@ export function createScope(
            `undefined` from "not provided"; undefined at the root means no provider. */
         shared: <T>(key: string): T | undefined =>
             shared.has(key) ? (shared.get(key) as T) : parent?.shared<T>(key),
-        record: (options) => {
-            past ??= history(data(), options)
-        },
-        persist: (key) => {
-            persistence ??= persistDoc(data(), key ?? id)
-        },
-        broadcast: (transport) => {
-            unsync ??= sync(data(), transport)
-        },
-        undo: () => past?.undo(),
-        redo: () => past?.redo(),
-        canUndo: () => past?.canUndo() ?? false,
-        canRedo: () => past?.canRedo() ?? false,
         dispose: () => {
-            /* Stop the build's reactivity first (reverse order), before tearing down nested
-               children and the boundary-crossing capabilities — the order the call sites
+            /* Stop the build's reactivity in reverse order — the order the call sites
                hand-composed as `stop(); lexical.dispose()`. */
             for (let index = owned.length - 1; index >= 0; index -= 1) {
                 owned[index]?.()
             }
             owned.length = 0
-            /* Children reverse too (last created first), so a later child that captured an
-               earlier sibling tears down before the sibling it depends on — LIFO like `owned`. */
-            for (let index = children.length - 1; index >= 0; index -= 1) {
-                children[index]?.dispose()
-            }
-            children.length = 0
             shared.clear()
-            past?.dispose()
-            past = undefined
-            persistence?.dispose()
-            persistence = undefined
-            unsync?.()
-            unsync = undefined
             if (liveScopes.enabled) {
                 liveScopes.scopes.delete(self)
             }

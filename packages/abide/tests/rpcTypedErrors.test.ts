@@ -10,7 +10,6 @@ import { runWithRequestScope } from '../src/lib/server/runtime/runWithRequestSco
 import { decodeResponse } from '../src/lib/shared/decodeResponse.ts'
 import { HttpError } from '../src/lib/shared/HttpError.ts'
 import { streamResponse } from '../src/lib/shared/streamResponse.ts'
-import type { OutboxEntry } from '../src/lib/shared/types/OutboxEntry.ts'
 import type { RemoteFunction } from '../src/lib/shared/types/RemoteFunction.ts'
 import type { StandardSchemaV1 } from '../src/lib/shared/types/StandardSchemaV1.ts'
 import type { ValidationErrorData } from '../src/lib/shared/types/ValidationErrorData.ts'
@@ -169,28 +168,6 @@ test('rpc.isError narrows by kind, typing validation data and rejecting non-matc
     expect(buy.isError(declaredErr, 'invalidCoupon')).toBe(true)
     expect(buy.isError(declaredErr, 'validation')).toBe(false)
     expect(buy.isError(new Error('plain'), 'invalidCoupon')).toBe(false)
-})
-
-/* The 'queued' overload narrows .data to the parked OutboxEntry (what remoteProxy lands
-   on a durable call parked because the server was unreachable). */
-test('rpc.isError narrows a queued error data to its OutboxEntry', () => {
-    const entry: OutboxEntry<unknown> = {
-        id: 'e1',
-        controller: new AbortController(),
-        request: new Request('https://test.local/rpc/x', { method: 'POST' }),
-        args: { x: 1 },
-        status: 'queued',
-        retry: () => Promise.resolve(),
-        settled: Promise.resolve('done'),
-    }
-    const queued = new HttpError(new Response('queued', { status: 503 }), 'queued', entry)
-    if (buy.isError(queued, 'queued')) {
-        /* .data is OutboxEntry here with no cast — the overload narrowed it. */
-        expect(queued.data.id).toBe('e1')
-        expect(queued.data.settled).toBeInstanceOf(Promise)
-    } else {
-        throw new Error('expected queued kind')
-    }
 })
 
 /* Compile-time: a rpc declared with an `errors` spec narrows isError's `.data` to that

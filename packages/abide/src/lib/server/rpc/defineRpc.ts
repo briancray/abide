@@ -68,11 +68,6 @@ export function defineRpc<Args, Return>(
         maxBodySize?: number
         /* Per-rpc handler deadline (ms): a 504 once exceeded, on every surface (SSR/MCP/CLI/network). */
         timeout?: number
-        /* Durable delivery: on an unreachable server (transport failure / 502/503/504/52x)
-           the client proxy parks the request for replay instead of just throwing. The
-           parked write drains on `rpc.outbox.retry()` (no auto-drain). Mutating methods
-           only. */
-        outbox?: boolean
         /* Handler returns jsonl()/sse(): the bare call returns the NamedAsyncIterable directly (for
            isomorphic `for await (… of fn(args))` in server code). Bundler-stamped; the router's
            wire path (.fetch) is unaffected. */
@@ -105,14 +100,6 @@ export function defineRpc<Args, Return>(
         stream?: StreamPolicy
     },
 ): RemoteFunction<Args, Return> {
-    /* `outbox: true` is a mutation contract — a read RPC has nothing to durably deliver,
-       so reject it at declaration rather than silently ignore. The server handler itself
-       is unaffected; durability is a client-proxy concern. */
-    if (opts?.outbox === true && isReadOnlyMethod(method)) {
-        throw new Error(
-            `[abide] outbox: true is only valid on mutating RPCs (POST/PUT/PATCH/DELETE), not ${method}`,
-        )
-    }
     const timeout = opts?.timeout
     const inputSchema = opts?.schemas?.input
     const inputJsonSchema = opts?.inputJsonSchema

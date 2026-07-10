@@ -86,9 +86,8 @@ cli }`; `crossOrigin` (exempts a mutating rpc from the same-origin CSRF gate);
 `timeout` (handler deadline in ms → 504 on every surface, composed into
 `request().signal`); `maxBodySize` (per-rpc 413 cap); on read helpers (GET/HEAD)
 `cache: { ttl, tags, throttle, debounce, shared }` (the endpoint's
-retention/refetch policy) and `stream: { n }` (replay depth); on mutating helpers
-`outbox` (durable delivery). Kind-scoped by type: `cache`/`stream` on a write, or
-`outbox` on a read, is a compile error. Query args on GET/HEAD/DELETE travel as
+retention/refetch policy) and `stream: { n }` (replay depth). Kind-scoped by type:
+`cache`/`stream` on a write is a compile error. Query args on GET/HEAD/DELETE travel as
 strings — coerce in the schema (`z.coerce.number()`). Beyond scalars, a
 type-directed wire codec (ADR-0028/0029) revives a top-level arg field into the
 runtime value its declared type names — a numeric string → `number`/`bigint`, a
@@ -121,7 +120,7 @@ it synchronously; `fn.pending(args?)` / `fn.refreshing(args?)` are reactive
 probes; `fn.error(args?)` is the rpc's last typed error; `fn.watch(args?,
 handler)` pipes each resolved value to a handler (client-only; SSR-inert);
 `fn.isError(e, kind?)` type-guards a caught error against the rpc's declared
-error kinds; `fn.outbox()` exposes a durable rpc's parked-write queue. A
+error kinds. A
 handler that returns `jsonl()`/`sse()` makes the bare call return a
 `NamedAsyncIterable` (`for await` it) — detected at build, nothing to declare;
 awaiting a streaming call is a compile error.
@@ -130,15 +129,7 @@ awaiting a streaming call is a compile error.
 `error.typed(name, status, schema?)` and `return` it from the handler; the
 client's `HttpError` then carries `kind` (the name) and `data` (the schema's
 payload), narrowed via `rpc.isError`. The framework reserves
-`kind: 'validation'` (422, `data: ValidationErrorData`) and `kind: 'queued'`
-(a durable call parked while unreachable; `data` is the parked `OutboxEntry`).
-
-**Durable outbox** — an `outbox: true` (mutating) rpc still fetches and throws
-normally, but an unreachable server (transport failure or 502/503/504/52x)
-parks the request for replay as a side-effect and throws `kind: 'queued'`;
-once a backlog exists new calls park straight to the tail so writes stay
-ordered. Nothing auto-drains: replay via `rpc.outbox.retry()` or the global
-`outbox.retry()`; cancel via an entry's `controller.abort()`.
+`kind: 'validation'` (422, `data: ValidationErrorData`).
 
 **Socket** — `socket<T>(opts)` or `socket({ schema, … })` (with a schema, `T`
 infers and publishes validate). Options: `tail` (retained frames, default 1 —
@@ -268,7 +259,7 @@ if/each/await/switch/…>` control flow (use `{#…}` blocks).
 ### RPC — `@documentation rpc`
 
 - `@abide/abide/server/GET` — GET rpc helper: `export const x = GET(handler, opts?)` inside `src/server/rpc/`; the bundler rewrites it to the server dispatcher or the browser proxy — calling it outside an rpc module throws.
-- `@abide/abide/server/POST` — POST rpc helper (mutating: accepts `outbox`, JSON/FormData body).
+- `@abide/abide/server/POST` — POST rpc helper (mutating: JSON/FormData body).
 - `@abide/abide/server/PUT` — PUT rpc helper (mutating).
 - `@abide/abide/server/PATCH` — PATCH rpc helper (mutating).
 - `@abide/abide/server/DELETE` — DELETE rpc helper (mutating; args travel in the query string).
@@ -320,7 +311,7 @@ if/each/await/switch/…>` control flow (use `{#…}` blocks).
 
 Probes report, never act — reading one opens no fetch and no stream.
 
-- `@abide/abide/shared/pending` — `pending(selector?, args?)`: reactive "no value yet" probe over calls and streams (global, per-rpc, per-call, tagged, per-subscribable; a durable rpc's parked writes count too).
+- `@abide/abide/shared/pending` — `pending(selector?, args?)`: reactive "no value yet" probe over calls and streams (global, per-rpc, per-call, tagged, per-subscribable).
 - `@abide/abide/shared/refreshing` — `refreshing(selector?, args?)`: "holding a value while a fresher one is in flight" — the SWR reload / stream-reconnect badge.
 - `@abide/abide/shared/peek` — `peek(fn, args?)` / `peek(socket)`: the retained value (or latest frame), synchronously, `T | undefined`; reactive inside a tracking scope.
 - `@abide/abide/shared/done` — `done(subscribable)`: true once a stream closed (stream-only; a cache read's "done" is `!pending && !refreshing`).
@@ -328,7 +319,7 @@ Probes report, never act — reading one opens no fetch and no stream.
 
 ### Errors — `@documentation response`
 
-- `@abide/abide/shared/HttpError` — thrown by rpc calls on non-2xx; carries `status`, `statusText`, the raw `response`, and — for typed/validation/queued errors — `kind` + `data`.
+- `@abide/abide/shared/HttpError` — thrown by rpc calls on non-2xx; carries `status`, `statusText`, the raw `response`, and — for typed/validation errors — `kind` + `data`.
 - `@abide/abide/shared/ValidationErrorData` — the `data` shape of a `kind: 'validation'` failure: the raw Standard Schema `issues` plus a `fields` (field → first message) map.
 
 ### Schema projection — `@documentation rpc`
@@ -374,10 +365,6 @@ Probes report, never act — reading one opens no fetch and no stream.
 
 - `@abide/abide/ui/navigate` — `navigate(path, params?, options?)`: typed programmatic navigation off the route map; params interpolate through `url()` (base-correct). Options `{ replace, keepScroll }`. The module also exports `navigatePath(path, options?)` (already-resolved paths — the router's own entry, no re-basing) and the `NavigateOptions` type.
 
-### Outbox — `@documentation ui`
-
-- `@abide/abide/ui/outbox` — the global reactive outbox: `outbox()` lists every durable rpc's undelivered entries (each tagged with its `rpc`), member `outbox.retry()` drains every queue. Empty list server-side. Types `GlobalOutbox`, `GlobalOutboxEntry`.
-
 ### UI plumbing — `@documentation plumbing`
 
 Compiler/runtime machinery — published so generated code, the type shadow, and
@@ -390,9 +377,10 @@ tests can import it, not for app code.
 - `@abide/abide/ui/router` — `router(...)`: the client router — fills layout/page chains into comment-marker outlet boundaries, intercepts in-app links, buckets/restores scroll per history entry.
 - `@abide/abide/ui/startClient` — `startClient(...)`: the client entry — reads every `__SSR__` field into its shared slot (cache seed, health seed, client timeout, resume manifest), hydrates the chain, starts the router.
 - `@abide/abide/ui/renderToStream` — `renderToStream(render)`: out-of-order SSR streaming — shell first, then one `<abide-resolve>` fragment per streaming await block in completion order; blocking (`then`-head) awaits render inline.
-- `@abide/abide/ui/remoteProxy` — `remoteProxy(method, url, opts?)`: the browser-side rpc stub the bundler emits (fetch, decode, HttpError, outbox parking, streaming); the `DurableOptions` type rides along.
+- `@abide/abide/ui/remoteProxy` — `remoteProxy(method, url, opts?)`: the browser-side rpc stub the bundler emits (fetch, decode, HttpError, streaming); the `RemoteProxyOptions` type rides along.
 - `@abide/abide/ui/socketProxy` — `socketProxy(name)`: the browser-side socket stub — the identical `Socket<T>` shape over the page's lazily-opened multiplexed ws channel.
 - `@abide/abide/ui/runtime/escapeKey` — JSON-Pointer-escapes one reactive-doc path key (`~`→`~0`, `/`→`~1`).
+- `@abide/abide/ui/runtime/withPath` — pushes one `escapeKey`-escaped render-path segment for the duration of a synchronous `build`, relative to the ambient path (the render-path identity a layout layer / child mount composes); restores after. A reactively-rebuilt block uses `withPathFrom` with a captured base instead.
 - `@abide/abide/ui/runtime/nextBlockId` — the next await/try block id in the current render pass (document order, shared across inlined children).
 - `@abide/abide/ui/runtime/enterRenderPass` — marks entry into a render/mount; the outermost resets the block-id counter.
 - `@abide/abide/ui/runtime/exitRenderPass` — unwinds `enterRenderPass`'s depth.
@@ -408,7 +396,6 @@ tests can import it, not for app code.
 - `@abide/abide/ui/dom/appendText` — a reactive `{expr}` text node under a parent.
 - `@abide/abide/ui/dom/appendTextAt` — a reactive text node mounted at a skeleton anchor (text interleaved with element siblings).
 - `@abide/abide/ui/dom/appendSnippet` — mounts a `{snippet(args)}` interpolation's builder into a marker-bounded range.
-- `@abide/abide/ui/dom/text` — a text node whose content tracks a reactive read.
 - `@abide/abide/ui/dom/attr` — binds an element attribute to a read (boolean true → bare attribute, false/nullish → removed).
 - `@abide/abide/ui/dom/on` — attaches an event listener whose removal is registered with the ownership scope.
 - `@abide/abide/ui/dom/attach` — runs an `attach={fn}` attachment and registers its optional teardown.
@@ -419,7 +406,6 @@ tests can import it, not for app code.
 - `@abide/abide/ui/dom/switchBlock` — `{#switch}` runtime (also `{#if}` chains with `{:else if}` branches).
 - `@abide/abide/ui/dom/awaitBlock` — `{#await}` runtime: pending → resolved/error branch swap, teardown-generation guarded.
 - `@abide/abide/ui/dom/tryBlock` — `{#try}` runtime: synchronous error boundary around a subtree build.
-- `@abide/abide/ui/dom/applyResolved` — consumes a streamed SSR `<abide-resolve>` chunk, swapping it into its await boundary (the bundle-side counterpart of the doc stream's inline scripts).
 - `@abide/abide/ui/dom/mergeProps` — composes a child's props from explicit thunk runs, spread layers, and the trailing children layer.
 - `@abide/abide/ui/dom/spreadProps` — wraps a `{...source}` spread layer so every key resolves to a live value thunk.
 - `@abide/abide/ui/dom/restProps` — the live unconsumed-props object behind `const { …, ...rest } = props()`.
@@ -429,6 +415,7 @@ tests can import it, not for app code.
 - `@abide/abide/ui/dom/mutateDocContainer` — the lowering for an in-place mutating container method on a reactive doc (`model.items.splice(…)`, `.sort()`, a Set `.add()`, a Map `.set()`, …): clones the array/Map/Set, applies the mutation to the copy, and writes it back through `replace` so a real patch fires (readers wake, undo/persistence/sync see it); returns the native method's result unchanged.
 - `@abide/abide/ui/dom/readCall` — guarded method call on a reactive-doc read (the `model.draft.trim()` lowering).
 - `@abide/abide/ui/dom/readCell` — unified read for a `linked`/async-`computed` reference (the `$$readCell(NAME)` lowering): peeks an async cell, reads `.value` off a sync one.
+- `@abide/abide/ui/dom/cellPending` — whether a control-flow subject (`{#if}`/`{#switch}`) is a still-loading async cell (no value, no error) so the block renders no branch while pending instead of flashing its `{:else}`; a plain/settled value is never pending.
 - `@abide/abide/ui/settleAsyncCells` — the SSR Tier-2 await-barrier (the `await $$settleAsyncCells()` lowering emitted between a component's cell declarations and its template): drains + awaits the request-scoped in-flight async-cell promises so their resolved values bake into the first-pass HTML.
 
 ## Build / tooling

@@ -51,13 +51,12 @@ type RpcArgs<F extends RpcFn> = Parameters<F> extends [infer Args, ...unknown[]]
 The RemoteFunction a bare overload produces from handler `F`. `SuccessBody`/`InferredErrors`
 run over `Awaited<ReturnType<F>>` INLINE (not via an intermediate `extends RpcFn`-constrained
 alias) — such an alias resolves `ReturnType` against the constraint bound and degrades the
-body to `any`. `Durable` threads the outbox bit through for the durable overloads.
+body to `any`.
 */
-type RpcOf<F extends RpcFn, Durable extends boolean = false> = RemoteFunction<
+type RpcOf<F extends RpcFn> = RemoteFunction<
     RpcArgs<F>,
     SuccessBody<Awaited<ReturnType<F>>>,
-    InferredErrors<Awaited<ReturnType<F>>>,
-    Durable
+    InferredErrors<Awaited<ReturnType<F>>>
 >
 
 /*
@@ -78,9 +77,9 @@ Options every rpc overload accepts: the `schemas` namespace, the `clients` surfa
 flags (browser/mcp/cli), the same-origin
 CSRF exemption (`crossOrigin`), the pre-parse body-byte ceiling
 (`maxBodySize`), and the per-surface handler `timeout` (ms). Read helpers add the
-endpoint `cache`/`stream` policy (ADR-0020); mutating helpers add `outbox` instead —
-the kind-scoping is what makes `POST(fn, { cache })` and `GET(fn, { outbox: true })`
-compile errors rather than silent no-ops. The single canonical source both `defineRpc`
+endpoint `cache`/`stream` policy (ADR-0020); mutating helpers add neither — a write has
+no replayable value to retain or stream. The kind-scoping is what makes `POST(fn, { cache })`
+a compile error rather than a silent no-op. The single canonical source both `defineRpc`
 and `RpcRegistryEntry` project from.
 */
 type RpcSharedOpts = {
@@ -95,7 +94,7 @@ type RpcSharedOpts = {
 Read-helper (GET/HEAD) options: the shared base plus the endpoint `cache` policy
 (`ttl`/`tags`/`throttle`/`debounce`/`shared`) and `stream` policy (`n`, replay depth).
 Generic over `Args` so `cache.tags`'s `(args) => string[]` form is typed against the
-rpc's own argument shape. No `outbox` — a read has nothing to durably deliver.
+rpc's own argument shape.
 */
 type RpcReadOpts<Args> = RpcSharedOpts & {
     cache?: CachePolicy<Args>
@@ -103,16 +102,11 @@ type RpcReadOpts<Args> = RpcSharedOpts & {
 }
 
 /*
-Mutating-helper (POST/PUT/PATCH/DELETE) options: the shared base plus durable delivery.
-No `cache`/`stream` — coalesce-only is the method default, and a write has no replayable
-value to retain or stream. `Args` is unused but kept parallel to RpcReadOpts.
+Mutating-helper (POST/PUT/PATCH/DELETE) options: the shared base only. No `cache`/`stream`
+— coalesce-only is the method default, and a write has no replayable value to retain or
+stream. `Args` is unused but kept parallel to RpcReadOpts.
 */
-type RpcMutatingOpts<_Args> = RpcSharedOpts & {
-    /* Durable delivery: on an unreachable server the call still throws, and the request is
-       parked for replay. Drains on `rpc.outbox.retry()` — no auto-drain. The call shape is
-       unchanged — `rpc.outbox` exposes the queue. */
-    outbox?: boolean
-}
+type RpcMutatingOpts<_Args> = RpcSharedOpts
 
 /*
 The read helpers (GET/HEAD). The handler's return type is inferred whole
@@ -160,57 +154,12 @@ export type RpcHelper = {
 }
 
 /*
-Durable-call overloads: an `outbox: true` opt returns a RemoteFunction whose `Durable` bit
-is set, so `rpc.outbox` is the queue face rather than optionally-undefined. Mirrors the
-opts-bearing base overloads (multipart-upload, schema'd, schemaless); the bare `Rpc(fn)`
-form has no opts to carry `outbox`, so it stays non-durable. Intersected AHEAD of the base
-set in MutatingRpcHelper so an `outbox: true` literal resolves here first.
+The mutating helpers (POST/PUT/PATCH/DELETE). The distinct opts base (no `cache`/`stream`)
+is what makes `cache`/`stream` a compile error here while they stay legal on the read
+helpers — the kind-scoping. Overloads mirror the read helpers by argument source
+(multipart-upload, schema'd, schemaless-with-opts, bare).
 */
-type DurableMutatingRpcHelper = {
-    <
-        R extends Response,
-        InputSchema extends StandardSchemaV1 = StandardSchemaV1,
-        FilesSchema extends StandardSchemaV1 = StandardSchemaV1,
-    >(
-        fn: (
-            args: StandardSchemaV1.InferOutput<InputSchema> &
-                StandardSchemaV1.InferOutput<FilesSchema>,
-        ) => R | Promise<R>,
-        opts: RpcMutatingOpts<StandardSchemaV1.InferInput<InputSchema>> & {
-            schemas: { input: InputSchema; files: FilesSchema; output?: StandardSchemaV1 }
-            outbox: true
-        },
-    ): RemoteFunction<
-        StandardSchemaV1.InferInput<InputSchema>,
-        SuccessBody<R>,
-        InferredErrors<R>,
-        true
-    >
-    <R extends Response, InputSchema extends StandardSchemaV1 = StandardSchemaV1>(
-        fn: (args: StandardSchemaV1.InferOutput<InputSchema>) => R | Promise<R>,
-        opts: RpcMutatingOpts<StandardSchemaV1.InferInput<InputSchema>> & {
-            schemas: { input: InputSchema; output?: StandardSchemaV1 }
-            outbox: true
-        },
-    ): RemoteFunction<
-        StandardSchemaV1.InferInput<InputSchema>,
-        SuccessBody<R>,
-        InferredErrors<R>,
-        true
-    >
-    <F extends RpcFn>(fn: F, opts: RpcMutatingOpts<RpcArgs<F>> & { outbox: true }): RpcOf<F, true>
-}
-
-/*
-The mutating helpers (POST/PUT/PATCH/DELETE). A durable (`outbox`) call is a normal
-RemoteFunction — it throws exactly like a non-durable one and only parks the request as a
-side-effect on an unreachable server — so there is no separate return shape; `outbox` rides
-RpcMutatingOpts and `rpc.outbox` exposes the queue. The distinct opts base is what makes
-`outbox` legal here and a compile error on the read helpers (and `cache`/`stream` a compile
-error here); the durable overloads then set the return type's `Durable` bit so `rpc.outbox`
-is present without an optional chain.
-*/
-type MutatingRpcHelperBase = {
+export type MutatingRpcHelper = {
     <
         R extends Response,
         InputSchema extends StandardSchemaV1 = StandardSchemaV1,
@@ -233,5 +182,3 @@ type MutatingRpcHelperBase = {
     <F extends RpcFn>(fn: F, opts: RpcMutatingOpts<RpcArgs<F>>): RpcOf<F>
     <F extends RpcFn>(fn: F): RpcOf<F>
 }
-
-export type MutatingRpcHelper = DurableMutatingRpcHelper & MutatingRpcHelperBase

@@ -39,24 +39,7 @@ describe('scope integration — scope() live in a mounted component', () => {
         dispose()
     })
 
-    test('scope().record() then undo, via the scope handle', () => {
-        let here: Scope | undefined
-        const host = document.createElement('div')
-
-        const dispose = mount(host, () => {
-            here = scope()
-            here.record()
-        })
-
-        here?.replace('n', 1)
-        here?.replace('n', 2)
-        expect(here?.canUndo()).toBe(true)
-        here?.undo()
-        expect(here?.read<number>('n')).toBe(1)
-        dispose()
-    })
-
-    test('on-capture: a handler calling ambient scope().undo() acts on the component', () => {
+    test('on-capture: a handler resolves ambient scope() to the component', () => {
         const host = document.createElement('div')
         let here: Scope | undefined
         let button: { dispatchEvent: (event: { type: string }) => void } | undefined
@@ -64,17 +47,14 @@ describe('scope integration — scope() live in a mounted component', () => {
         const dispose = mount(host, () => {
             here = scope()
             here.replace('n', 0)
-            here.record() // journal changes after the initial value
             const element = document.createElement('button')
-            on(element as unknown as Element, 'click', () => scope().undo())
+            on(element as unknown as Element, 'click', () => scope().replace('n', 99))
             button = element as unknown as typeof button
         })
 
-        here?.replace('n', 5)
-        expect(here?.read<number>('n')).toBe(5)
         // fires AFTER the build, when CURRENT_SCOPE has been restored to undefined
         button?.dispatchEvent({ type: 'click' })
-        expect(here?.read<number>('n')).toBe(0) // undo ran on the component scope
+        expect(here?.read<number>('n')).toBe(99) // scope() inside the handler resolved the component
         dispose()
     })
 

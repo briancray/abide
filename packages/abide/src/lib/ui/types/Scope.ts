@@ -4,7 +4,6 @@ import type { linked } from '../linked.ts'
 import type { Patch } from '../runtime/types/Patch.ts'
 import type { state } from '../state.ts'
 import type { trackedComputed } from '../trackedComputed.ts'
-import type { SyncTransport } from './SyncTransport.ts'
 
 /*
 A lexical scope: the unit that owns a region's reactive data, its lifetime, and
@@ -15,15 +14,11 @@ surface is the imported `state`/`state.linked`/`state.computed`/`effect` (see
 scope (`$$scope().derive`/`.linked`/`.effect`, `state.share`/`.shared` → `share`/
 `shared`). The data surface MIRRORS `Doc` (read/replace/add/remove/derive/apply/
 snapshot) so the compiler can target a scope as a component's data binding directly;
-it nests (`child`/`root`) and passes values down the tree as context (`share`/`shared`).
+it passes values down the tree as context (`share`/`shared`).
 
-The reactive primitives and capabilities remain on this internal shape because the
-lowered runtime calls them (`$$scope().linked(...)`, generated undo/persist) — they are
-withdrawn from the AUTHOR-facing public surface (docs/examples), not the runtime object.
-Capabilities route where the scope's changes go: `record()` to an undo journal,
-`persist()` to durable storage, `broadcast()` to peers — declared once, then `undo`/
-`redo` act on a recorded scope. The `history`/`persist`/`sync` helpers it composes are
-internal.
+The reactive primitives remain on this internal shape because the lowered runtime calls
+them (`$$scope().linked(...)`) — they are withdrawn from the AUTHOR-facing public surface
+(docs/examples), not the runtime object.
 */
 export type Scope = {
     readonly id: string
@@ -64,9 +59,6 @@ export type Scope = {
        Internal: the mount core registers the build's disposer here so a component has ONE
        teardown (`dispose`) rather than a separate stop + dispose composed at every site. */
     own: (dispose: () => void) => void
-    /* tree */
-    child: (initial?: unknown) => Scope
-    root: () => Scope
     /* context — values shared DOWN the tree (not in the reactive doc, which doesn't
        inherit): `share` puts a named value on this scope; `shared` reads the closest
        ancestor (self included) that has the key, undefined if none. The value is held
@@ -74,15 +66,6 @@ export type Scope = {
        plain object snapshot. */
     share: (key: string, value: unknown) => void
     shared: <T>(key: string) => T | undefined
-    /* capabilities — enable where the scope's changes go */
-    record: (options?: { limit?: number }) => void
-    persist: (key?: string) => void
-    broadcast: (transport: SyncTransport) => void
-    /* undo/redo — act on a recorded scope */
-    undo: () => void
-    redo: () => void
-    canUndo: () => boolean
-    canRedo: () => boolean
     /* lifetime */
     dispose: () => void
 }

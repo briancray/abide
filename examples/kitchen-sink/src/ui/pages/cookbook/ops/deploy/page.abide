@@ -72,7 +72,7 @@ const connected = state.computed(() => online())`}
             live={OBS}
             code={`import { health } from '@abide/abide/shared/health'
 const status = await health()`}
-            note={"`health()` polls `/__abide/health` and returns your `health` hook's fields, typed. A durable `outbox` drains on health recovery."} />
+            note={"`health()` polls `/__abide/health` and returns your `health` hook's fields, typed — use it to gate retries on the server recovering."} />
 
         <Recipe
             task="Log on the app channel"

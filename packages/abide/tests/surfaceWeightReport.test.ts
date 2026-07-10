@@ -14,6 +14,7 @@ test('readmeSurfaces emits weight + band per slug', async () => {
     expect(proc.exitCode).toBe(0)
     // templating owns the whole grammar → heavy, split into its three seams
     expect(out).toMatch(/templating:.*weight \d+ HEAVY → section: control-flow, bindings, snippets/)
-    // reactive-state is the imported `state`/`watch`/`props` primitives = 7 → heavy, own section
-    expect(out).toMatch(/reactive-state:.*weight 7 HEAVY → section: primitives/)
+    // reactive-state: 3 exports (`state`/`watch`/`props`) + the 6-member `ReactivePrimitive`
+    // recognizer vocabulary (primitives bucket) = 9 → heavy, own section
+    expect(out).toMatch(/reactive-state:.*weight 9 HEAVY → section: primitives/)
 })

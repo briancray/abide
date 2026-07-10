@@ -14,11 +14,7 @@ export class HttpError extends Error {
        payload it carried — parsed off the `{ $abideError, data }` body by decodeResponse.
        `data` is typed `unknown` (a throw can't carry the rpc's per-kind type to the
        catch); narrow it yourself — for `kind: 'validation'` the shape is the exported
-       `ValidationErrorData` (`{ issues, fields }`). Both undefined for a plain `error(status, text)`.
-       The framework also reserves `kind: 'queued'` for a durable (`outbox: true`) call
-       parked because the server was unreachable — `data` then holds the parked OutboxEntry,
-       so `(error.data as OutboxEntry).settled` awaits the eventual delivered result or
-       server refusal (the entry's own `error` carries the underlying cause). */
+       `ValidationErrorData` (`{ issues, fields }`). Both undefined for a plain `error(status, text)`. */
     readonly kind?: string
     readonly data?: unknown
 

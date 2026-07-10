@@ -274,12 +274,12 @@ async function rebuild(port: number, skipClientBuild = false): Promise<void> {
             await replaceServer(port, built.appDir)
         }
         /* A server/MCP-only change reuses the existing client bundle. That's correct for
-           an rpc/socket handler BODY edit, but changing an rpc's method, its export name,
-           or `outbox: true` changes the client proxy stub too — the stale bundle then
-           calls with the old shape (e.g. a 405). Flag the skip so that case isn't silent. */
+           an rpc/socket handler BODY edit, but changing an rpc's method or its export name
+           changes the client proxy stub too — the stale bundle then calls with the old shape
+           (e.g. a 405). Flag the skip so that case isn't silent. */
         if (skipClientBuild) {
             abideLog.info(
-                'server-only change — kept the existing client bundle; if you changed an rpc method, export name, or outbox, save a client file (or restart dev) for a full rebuild',
+                'server-only change — kept the existing client bundle; if you changed an rpc method or export name, save a client file (or restart dev) for a full rebuild',
             )
         }
     } finally {

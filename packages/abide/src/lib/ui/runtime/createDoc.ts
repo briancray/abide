@@ -60,10 +60,10 @@ export function createDoc(initial: unknown): Doc {
        them; their dirtiness is driven entirely by the deps they read (the signal
        graph), not by tree mutations. They are not in `tree`, so `snapshot` omits
        them, and they never pass through `apply`, so they never hit the patch bus —
-       a recompute is a downstream reaction, not a change to journal/persist/sync. */
+       a recompute is a downstream reaction, not a change to announce on the bus. */
     const computed = new Map<string, ReactiveNode>()
     /* Set to the returned document before any apply runs, so a PATCH_BUS event can
-       name the document it came from (reference identity, the undo/persistence key). */
+       name the document it came from (reference identity). */
     let self: Doc
 
     /* Links `path` into the trie under its parent and continues up the ancestor chain.
@@ -227,10 +227,6 @@ export function createDoc(initial: unknown): Doc {
         /* Segments index the tree, so they carry the REAL keys (unescaped); the path
            strings (parentPath, node-map keys) stay escaped, re-walked through walkPath. */
         const segments = patch.path === '' ? [] : pathSegments(patch.path)
-        /* Capture the pre-image only when a consumer is listening (the inverse's only
-           cost): a replace/remove inverts to the value it overwrote, an add to a
-           remove (computed post-apply, below, to resolve an array append's index). */
-        const before = PATCH_BUS.active ? walkPath(tree, patch.path) : undefined
         tree = applyPatchToTree(tree, patch, segments)
         const parentPath = parentPathOf(patch.path)
         const parentValue = walkPath(tree, parentPath).value
@@ -271,37 +267,12 @@ export function createDoc(initial: unknown): Doc {
                 wakeSubtree(parentPath, true, true)
             }
             /* Announce the change before effects flush, so a patch an effect emits in
-               reaction lands AFTER this one on the bus — the journal stays chronological.
+               reaction lands AFTER this one on the bus — the stream stays chronological.
                Emitting inside the batch keeps it ahead of the depth-0 flush on batch exit. */
             if (PATCH_BUS.active) {
-                PATCH_BUS.emit({ doc: self, patch, inverse: inverseOf(patch, before) })
+                PATCH_BUS.emit({ doc: self, patch })
             }
         })
-    }
-
-    /* The patch that undoes `patch`, from the pre-image `before` (a value the change
-       overwrote/removed) and the now-mutated tree. An add inverts to removing the slot
-       it created — resolving an array append (`-`) to the concrete last index it took.
-       A replace/remove of a path that held nothing inverts to remove/nothing. */
-    function inverseOf(
-        patch: Patch,
-        before: ReturnType<typeof walkPath> | undefined,
-    ): Patch | undefined {
-        if (patch.op === 'add') {
-            const parentPath = parentPathOf(patch.path)
-            const parent = walkPath(tree, parentPath).value
-            const resolved =
-                Array.isArray(parent) && patch.path.endsWith('/-')
-                    ? `${parentPath}/${parent.length - 1}`
-                    : patch.path
-            return { op: 'remove', path: resolved }
-        }
-        if (patch.op === 'replace') {
-            return before?.exists
-                ? { op: 'replace', path: patch.path, value: before.value }
-                : { op: 'remove', path: patch.path }
-        }
-        return before?.exists ? { op: 'add', path: patch.path, value: before.value } : undefined
     }
 
     /*

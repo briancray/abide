@@ -82,11 +82,6 @@ export const surfaceNav: SurfaceGroup[] = [
                 label: 'probes',
                 body: 'Standalone reactive probes over smart calls and streams — pending (no value yet), refreshing (value held, fresher source in flight), and peek (the retained value, synchronously). They report, never act.',
             },
-            {
-                href: '/outbox',
-                label: 'outbox',
-                body: 'Local-first durability per rpc — a call that parks on an unreachable server, persists, and drains when health() recovers; retry() and pending() span the queue.',
-            },
         ],
     },
     {
