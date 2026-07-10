@@ -121,7 +121,7 @@ async function getSummarizePrompt() {
     </table>
 </section>
 
-<Demo title="Try it" code={`curl -sX POST http://localhost:3000/__abide/mcp \\
+<Demo title="Call a tool over MCP" code={`curl -sX POST http://localhost:3000/__abide/mcp \\
   -H 'content-type: application/json' \\
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"getProduct","arguments":{"id":"1"}}}'`}>
     <p class="text-xs text-slate-500">

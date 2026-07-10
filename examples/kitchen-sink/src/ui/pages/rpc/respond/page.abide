@@ -99,7 +99,7 @@ async function callRedirectFetch() {
     </div>
 </section>
 
-<Demo title="Try it" code={`import { GET } from '@abide/abide/server/GET'
+<Demo title="json · error · redirect, live" code={`import { GET } from '@abide/abide/server/GET'
 import { json } from '@abide/abide/server/json'
 import { error } from '@abide/abide/server/error'
 import { redirect } from '@abide/abide/server/redirect'

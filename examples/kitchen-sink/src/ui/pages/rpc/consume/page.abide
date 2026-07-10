@@ -138,7 +138,7 @@ const rawResponse = state.computed(() => getReport.raw({ id: 'r-1' }))
     </div>
 </section>
 
-<Demo title="Try it" code={`const body = await getEcho({ message: 'hello' })       // decoded body, HttpError on non-2xx
+<Demo title="One rpc, four call forms" code={`const body = await getEcho({ message: 'hello' })       // decoded body, HttpError on non-2xx
 const response = await getReport.raw({ id: 'r-1' })    // full Response — headers, status
 for await (const frame of tickFeed()) { /* iterate jsonl/sse frames */ }`}>
     <div class="flex flex-wrap gap-2 text-sm">

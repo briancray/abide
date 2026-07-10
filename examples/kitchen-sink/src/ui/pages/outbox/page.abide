@@ -123,7 +123,7 @@ async function submit(event: SubmitEvent) {
 </section>
 
 <div>
-    <Demo title="Try it" code={`// src/server/rpc/saveMessage.ts
+    <Demo title="Queue offline, sync later" code={`// src/server/rpc/saveMessage.ts
 export const saveMessage = POST(handler, { schemas: { input: inputSchema }, outbox: true })
 
 // the page — one call form; it queues and returns the cancelable entry

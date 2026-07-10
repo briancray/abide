@@ -124,7 +124,7 @@ const closed = state.computed(() => done(feed))  // probe in script; read the bo
     </p>
 </Demo>
 
-<Demo title="SSE — try it" code={`import { GET } from '@abide/abide/server/GET'
+<Demo title="SSE stream, live" code={`import { GET } from '@abide/abide/server/GET'
 import { sse } from '@abide/abide/server/sse'
 
 export const tickFeed = GET(() =>
@@ -150,7 +150,7 @@ export const tickFeed = GET(() =>
     {/if}
 </Demo>
 
-<Demo title="JSONL — try it" code={`import { GET } from '@abide/abide/server/GET'
+<Demo title="JSONL stream, live" code={`import { GET } from '@abide/abide/server/GET'
 import { jsonl } from '@abide/abide/server/jsonl'
 
 export const countLog = GET(({ to }: { to: number }) =>

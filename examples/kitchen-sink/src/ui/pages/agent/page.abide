@@ -153,7 +153,7 @@ function apply(frame: AgentFrame | { $error: string }) {
     </table>
 </section>
 
-<Demo title="Chat — try it" code={`import { agent } from '@abide/abide/server/agent'
+<Demo title="Streaming chat, live" code={`import { agent } from '@abide/abide/server/agent'
 import { jsonl } from '@abide/abide/server/jsonl'
 import { POST } from '@abide/abide/server/POST'
 import { engine } from '@abide/claude-code'

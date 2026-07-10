@@ -139,7 +139,7 @@ async function tryRestPublish() {
 </section>
 
 <div>
-    <Demo title="Try it" code={`import { state } from '@abide/abide/ui/state'
+    <Demo title="Live socket feed" code={`import { state } from '@abide/abide/ui/state'
 import { watch } from '@abide/abide/ui/watch'
 import { chat } from '$server/sockets/chat.ts'
 
