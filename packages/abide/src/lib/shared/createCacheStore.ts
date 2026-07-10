@@ -74,9 +74,12 @@ export function createCacheStore(): CacheStore {
     /*
     Per-prefix channels arm fn-selector probes (pending(fn) / refreshing(fn))
     without waking them on unrelated cache events. Keyed by selector prefix
-    (method+url / producer reference id — see selectorPrefix), so the
-    population is bounded by probe call sites in code, not by data; a channel
-    whose last reader tore down is an inert closure, not a leak.
+    (method+url / producer reference id — see selectorPrefix). Probes carry the
+    FULL call key when args are given (pending(fn, args) / peek(fn, args)), so a
+    long session that probes many distinct ids would otherwise accrete one map
+    entry per id on the tab-scoped store forever and make markLifecycle's forEach
+    O(distinct-keys-ever-probed). Each channel evicts its own entry once its last
+    reader tears down (identity-guarded against a concurrent re-track).
     */
     const prefixLifecycles = new Map<string, ReturnType<typeof createLifecycleChannel>>()
 
@@ -87,7 +90,15 @@ export function createCacheStore(): CacheStore {
         }
         let channel = prefixLifecycles.get(keyPrefix)
         if (channel === undefined) {
-            channel = createLifecycleChannel()
+            const created = createLifecycleChannel(() => {
+                /* Drop the entry only if it's still THIS channel — a concurrent re-track may have
+                   replaced it, and createSubscriber's own reader-count guard means onIdle fires
+                   only when genuinely reader-less. */
+                if (prefixLifecycles.get(keyPrefix) === created) {
+                    prefixLifecycles.delete(keyPrefix)
+                }
+            })
+            channel = created
             prefixLifecycles.set(keyPrefix, channel)
         }
         channel.track()

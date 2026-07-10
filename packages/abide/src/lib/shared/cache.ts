@@ -11,6 +11,7 @@ import { keyForRemoteCall } from './keyForRemoteCall.ts'
 import { producerKey } from './producerKey.ts'
 import { REMOTE_FUNCTION } from './REMOTE_FUNCTION.ts'
 import { REPLAYABLE_METHODS } from './REPLAYABLE_METHODS.ts'
+import { reviveWireOutput } from './reviveWireOutput.ts'
 import { rpcErrorRegistry } from './rpcErrorRegistry.ts'
 import { SocketDisconnectedError } from './SocketDisconnectedError.ts'
 import { selectorMatcher } from './selectorMatcher.ts'
@@ -25,6 +26,7 @@ import type { CachePolicy } from './types/CachePolicy.ts'
 import type { CacheSelector } from './types/CacheSelector.ts'
 import type { CacheStore } from './types/CacheStore.ts'
 import type { NamedAsyncIterable } from './types/NamedAsyncIterable.ts'
+import type { OutputWirePlan } from './types/OutputWirePlan.ts'
 import type { RawRemoteFunction } from './types/RawRemoteFunction.ts'
 import type { RemoteFunction } from './types/RemoteFunction.ts'
 import { withCacheManaged } from './withCacheManaged.ts'
@@ -152,7 +154,19 @@ export function cache<Args, Return>(
     args?: Args,
     options?: CacheOptions,
 ): Promise<Return | Response> {
-    return readThrough(fn, args, options, false)
+    const result = readThrough(fn, args, options, false)
+    /* Revive the decoded body's structured fields (Set/Map/Date/bigint) so `cache(fn, args)`
+       matches the bare `fn(args)` read (createRemoteFunction.callable revives there) — without
+       this the two read APIs disagree for a typed field, and both violate the declared Return.
+       A producer / a raw `Response` carry no plan and pass through untouched; the decoded value is
+       call-private (fresh decode or cloned warm value), so revive mutates it in place. */
+    const plan = (fn as { outputWirePlan?: OutputWirePlan }).outputWirePlan
+    if (plan === undefined) {
+        return result
+    }
+    return result.then((value) =>
+        value instanceof Response ? value : (reviveWireOutput(value, plan) as Return),
+    )
 }
 
 /*
@@ -946,7 +960,15 @@ function peek<Args, Return>(
     if (hydratingSlot.active) {
         return undefined
     }
-    return cloneWarmValue(entry.value) as Return
+    /* Revive structured fields after cloning: the clone is the honest-JSON wire form, and revive
+       turns a wire array into its declared Set/Map and an ISO string into a Date — so peek matches
+       fn(args) / cache(fn, args). A raw or producer read carries no plan → the clone passes through
+       untouched (revive is a no-op on an undefined plan). */
+    const plan =
+        isRemote && 'raw' in fn
+            ? (fn as { outputWirePlan?: OutputWirePlan }).outputWirePlan
+            : undefined
+    return reviveWireOutput(cloneWarmValue(entry.value), plan) as Return
 }
 
 cache.peek = peek

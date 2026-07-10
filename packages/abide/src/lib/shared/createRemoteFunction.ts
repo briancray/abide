@@ -172,6 +172,12 @@ export function createRemoteFunction<Args, Return>(opts: {
     callable.cache = cachePolicy
     callable.stream = streamPolicy
     callable.raw = raw
+    /* Stamp the output wire codec plan (ADR-0029) so the public `cache(fn, args)` and
+       `cache.peek(fn, args)` can revive the decoded body's structured fields (Set/Map/Date/bigint)
+       exactly as the bare `fn(args)` read does above — otherwise those two read APIs return the raw
+       honest-JSON form and disagree with `fn(args)`. A runtime affordance, not on the RemoteFunction
+       surface (read via cast in cache.ts, like `settled`); undefined server-side / plan-less. */
+    ;(callable as { outputWirePlan?: OutputWirePlan }).outputWirePlan = outputWirePlan
     /* Uniform runtime guard for every rpc — the per-rpc data typing lives entirely in the
        RpcErrorGuard<Errors> signature RemoteFunction projects onto it (Errors flows from the
        rpc helper's declared type, not from here). */

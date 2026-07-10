@@ -21,7 +21,10 @@ writing the subscriber's version source throws state_unsafe_mutation. The
 probes scan the registry at re-derive time, so a deferred ping reads state
 that is already current; marks within one tick coalesce into one notify.
 */
-export function createLifecycleChannel(): { track: () => void; mark: () => void } {
+export function createLifecycleChannel(onIdle?: () => void): {
+    track: () => void
+    mark: () => void
+} {
     let notify: (() => void) | undefined
     let tracker: (() => void) | undefined
     let marked = false
@@ -35,6 +38,9 @@ export function createLifecycleChannel(): { track: () => void; mark: () => void 
                         if (tracker === created) {
                             tracker = undefined
                         }
+                        /* Last reader torn down — let an owner (the cache store's per-prefix map)
+                           evict this now-inert channel instead of retaining it for the tab's life. */
+                        onIdle?.()
                     }
                 })
                 tracker = created
