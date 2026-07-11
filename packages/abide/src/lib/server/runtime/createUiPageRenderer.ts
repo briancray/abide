@@ -2,7 +2,7 @@ import { appNameSlot } from '../../shared/appNameSlot.ts'
 import { SSR_CACHE_CONTROL } from '../../shared/CACHE_CONTROL_VALUES.ts'
 import { encodeRefJson } from '../../shared/encodeRefJson.ts'
 import { formatTraceparent } from '../../shared/formatTraceparent.ts'
-import { hasReplayableRequest } from '../../shared/hasReplayableRequest.ts'
+import { hasSeedableRequest } from '../../shared/hasSeedableRequest.ts'
 import { layoutChainForRoute } from '../../shared/layoutChainForRoute.ts'
 import { resolvedCellsSlot } from '../../shared/resolvedCellsSlot.ts'
 import { safeJsonForScript } from '../../shared/safeJsonForScript.ts'
@@ -245,14 +245,14 @@ export function createUiPageRenderer({
            the sync render leaves a still-pending replayable entry in the store at render-return
            — not yet settled, so it missed the inline snapshot above. Detecting one here is what
            opens the streaming gate for a page with no await block, so its value streams in
-           instead of shipping `undefined` buffered. `hasReplayableRequest` (the request half of
+           instead of shipping `undefined` buffered. `hasSeedableRequest` (the request half of
            shippability — not `snapshotShippable`, which also demands `settled`) is the gate: it
-           excludes producers, writes, and stream cells (a `NamedAsyncIterable` cell holds no
-           wire request), which must stay `peek()`-at-flush and buffered. `!inlinedKeys` drops
+           excludes producers and stream cells (a `NamedAsyncIterable` cell holds no wire
+           request), which must stay `peek()`-at-flush and buffered. `!inlinedKeys` drops
            anything already baked into `__SSR__` (a Tier-2 top-level `await`) so a value never
            double-ships. */
         const pendingBareReads = Array.from(store.cache.entries.values()).filter(
-            (entry) => hasReplayableRequest(entry) && !inlinedKeys.has(entry.key),
+            (entry) => hasSeedableRequest(entry) && !inlinedKeys.has(entry.key),
         )
 
         /* No STREAMING await blocks AND no triggered bare read pending → ship buffered exactly
@@ -325,9 +325,9 @@ export function createUiPageRenderer({
                         const streamedEntries: CacheEntry[] = Array.from(
                             store.cache.entries.values(),
                         ).filter(
-                            (entry) => hasReplayableRequest(entry) && !inlinedKeys.has(entry.key),
+                            (entry) => hasSeedableRequest(entry) && !inlinedKeys.has(entry.key),
                         )
-                        /* `hasReplayableRequest`, NOT `snapshotShippable`: a triggered bare read
+                        /* `hasSeedableRequest`, NOT `snapshotShippable`: a triggered bare read
                            (ADR-0024) is drained here still-pending (never awaited by an `{#await}`
                            thunk), so gating on `settled` up front would skip it — streamCacheResolutions
                            awaits each entry's body itself (see snapshotEntryFromCache). A pending read is

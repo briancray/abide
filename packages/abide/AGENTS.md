@@ -109,9 +109,10 @@ invalidate/refresh); a write coalesces only (ttl 0, the mutation idiom).
 explicit `ttl` bounds it) — for an external endpoint, never per-user data; on
 the client it is a no-op (one tab store). A read with no request in flight (e.g.
 a background job) resolves against the process-level store and coalesces only
-(so it can't leak forever). During SSR the same call resolves
-in-process and its value is baked into the HTML so hydration starts warm —
-there is no `cache()` wrapper; the bare call carries the caching. Around it:
+(so it can't leak forever). During SSR the same call — any method — resolves
+in-process and its value is baked into the HTML so hydration starts warm without
+a re-fetch (an inline write seeds too, ADR-0036; only unprompted refetch stays
+GET/HEAD) — there is no `cache()` wrapper; the bare call carries the caching. Around it:
 `fn.raw(args, init?)` returns the raw `Response` (per-call transport options —
 `signal`, `headers`, `keepalive`, … — live here); `fn.refresh(args?)`
 refetches keeping the stale value visible; `fn.patch(args?, updater)` mutates

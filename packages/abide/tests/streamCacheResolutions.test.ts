@@ -47,7 +47,7 @@ describe('serializeCacheSnapshot', () => {
         expect(inline[0].body).toBe(JSON.stringify({ a: 1 }))
     })
 
-    test('excludes non-GET/DELETE entries (a write must not replay from a snapshot)', async () => {
+    test('seeds a POST entry (an inline call hydrates warm regardless of method)', async () => {
         const post: CacheEntry = {
             key: 'p',
             promise: Promise.resolve(jsonResponse({ ok: true })),
@@ -57,7 +57,23 @@ describe('serializeCacheSnapshot', () => {
             settled: true,
         }
 
-        expect(await serializeCacheSnapshot(storeWith([post]))).toHaveLength(0)
+        const inline = await serializeCacheSnapshot(storeWith([post]))
+        expect(inline).toHaveLength(1)
+        expect(inline[0].method).toBe('POST')
+        expect(inline[0].body).toBe(JSON.stringify({ ok: true }))
+    })
+
+    test('skips a producer entry (no wire request to seed)', async () => {
+        const producer: CacheEntry = {
+            key: 'prod',
+            promise: Promise.resolve(jsonResponse({ ok: true })),
+            request: undefined,
+            ttl: undefined,
+            expiresAt: undefined,
+            settled: true,
+        }
+
+        expect(await serializeCacheSnapshot(storeWith([producer]))).toHaveLength(0)
     })
 })
 

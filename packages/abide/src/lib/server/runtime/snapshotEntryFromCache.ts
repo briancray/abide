@@ -1,20 +1,22 @@
 import { contentBodyKind } from '../../shared/contentBodyKind.ts'
 import { contentTypeOf } from '../../shared/contentTypeOf.ts'
-import { hasReplayableRequest } from '../../shared/hasReplayableRequest.ts'
+import { hasSeedableRequest } from '../../shared/hasSeedableRequest.ts'
 import { isStreamingResponse } from '../../shared/isStreamingResponse.ts'
 import type { CacheEntry } from '../../shared/types/CacheEntry.ts'
 import type { CacheSnapshotEntry } from '../../shared/types/CacheSnapshotEntry.ts'
 import type { CacheStore } from '../../shared/types/CacheStore.ts'
-import type { ReplayableMethod } from '../../shared/types/ReplayableMethod.ts'
+import type { HttpMethod } from '../../shared/types/HttpMethod.ts'
 
 /*
 Awaits one cache entry and turns it into a wire-safe snapshot, or undefined
 when it can't ship. Shared by the inline snapshot path (settled entries,
 resolves immediately) and the streaming drain (pending {#await} entries,
-resolves whenever the underlying fetch lands). Only replayable methods (see
-REPLAYABLE_METHODS) with a textual Content-Type survive — writes must not
-re-fire from a snapshot, body-carrying methods can't be replayed without the
-original request body, and binary bodies don't round-trip through JSON.
+resolves whenever the underlying fetch lands). Any entry carrying a wire request
+(any method — an inline POST seeds too, so it hydrates warm rather than re-firing
+after render) with a textual Content-Type survives; producers/stream cells (no
+request) and binary bodies (don't round-trip through JSON) drop out. Seeding is
+not replay: the seeded value is read warm once, never auto-re-fired (that stays
+GET-only — see REPLAYABLE_METHODS).
 
 Reads the body once and replaces the entry's promise with a string-bodied
 Response so later `shareable()` clones operate on a buffered body instead of
@@ -27,16 +29,14 @@ export async function snapshotEntryFromCache(
     store: CacheStore,
     entry: CacheEntry,
 ): Promise<CacheSnapshotEntry | undefined> {
-    /* The request half of the shared shippability gate: a replayable wire request.
-       Producer entries (no request) and non-replayable methods never snapshot — the
-       streaming-drain caller hands still-pending entries here, so `settled` is NOT gated
-       (the caller's snapshotShippable filter already required it for the entries it picks). */
-    if (!hasReplayableRequest(entry) || !entry.request) {
+    /* The request half of the shared shippability gate: a seedable wire request (any method).
+       Producer entries and stream cells (no request) never snapshot — the streaming-drain
+       caller hands still-pending entries here, so `settled` is NOT gated (the caller's
+       snapshotShippable filter already required it for the entries it picks). */
+    if (!hasSeedableRequest(entry) || !entry.request) {
         return undefined
     }
-    /* `hasReplayableRequest` already verified the uppercased method is replayable; assert it
-       for the snapshot's typed `method` field rather than re-running the same Set check. */
-    const method = entry.request.method.toUpperCase() as ReplayableMethod
+    const method = entry.request.method.toUpperCase() as HttpMethod
     const response = await readSettled(entry.promise as Promise<Response>)
     if (!response) {
         return undefined

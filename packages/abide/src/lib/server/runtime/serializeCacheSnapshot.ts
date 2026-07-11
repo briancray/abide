@@ -4,10 +4,12 @@ import type { CacheStore } from '../../shared/types/CacheStore.ts'
 import { snapshotEntryFromCache } from './snapshotEntryFromCache.ts'
 
 /*
-Snapshots the request-scoped cache for SSR at a single instant: every replayable
-(GET-only) entry settled by now, serialized to a wire-safe CacheSnapshotEntry the
-client seeds its store from. Unsettled and non-replayable entries are skipped; a body
-that can't ship (binary / streaming / rejected) drops out via snapshotEntryFromCache.
+Snapshots the request-scoped cache for SSR at a single instant: every entry
+(any method) called inline and settled by now, serialized to a wire-safe
+CacheSnapshotEntry the client seeds its store from — so an inline POST hydrates
+warm rather than re-firing after render. Unsettled entries and producers/stream
+cells (no wire request) are skipped; a body that can't ship (binary / streaming /
+rejected) drops out via snapshotEntryFromCache.
 
 Snapshots concurrently — the awaits are immediate (entries are already settled), but
 their body reads run in parallel. Never blocks on an unsettled entry.

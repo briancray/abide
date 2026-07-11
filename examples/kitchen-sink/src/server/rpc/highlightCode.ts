@@ -1,5 +1,5 @@
-import { GET } from '@abide/abide/server/GET'
 import { json } from '@abide/abide/server/json'
+import { POST } from '@abide/abide/server/POST'
 import type { HighlighterCore } from 'shiki/core'
 
 export type Lang = 'ts' | 'sh' | 'toml' | 'dockerfile' | 'text'
@@ -67,13 +67,13 @@ it as a bare smart read, so the SSR pass writes the highlighted HTML into
 the cache snapshot and the client hydrates without a second fetch. Same
 code+lang across pages share one cache entry.
 
-GET, not POST: highlighting is a pure read (no side effects), so its cache
-entry is REPLAYABLE — only GET entries ride the SSR warm snapshot
-(REPLAYABLE_METHODS), so the client's cold re-run reads the highlighted HTML
-warm instead of refetching every code block. `code`/`lang` ride the query
-string.
+POST so the `code` payload rides the request body, not a long query string.
+Any inline (bare smart read) call seeds the SSR warm snapshot regardless of
+method, so the client hydrates the highlighted HTML warm instead of refetching
+every code block — seeding, unlike unprompted replay (invalidate/refresh, still
+GET-only), doesn't need an idempotent verb.
 */
-export const highlightCode = GET(async ({ code, lang }: { code: string; lang: Lang }) => {
+export const highlightCode = POST(async ({ code, lang }: { code: string; lang: Lang }) => {
     const highlighter = await getHighlighter()
     const html = highlighter.codeToHtml(code, {
         lang: resolveLang(lang),
