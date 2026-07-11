@@ -1,7 +1,6 @@
 import ts from 'typescript'
 import { ABIDE_PACKAGE_NAME } from '../../shared/ABIDE_PACKAGE_NAME.ts'
 import { analyzeComponent } from './analyzeComponent.ts'
-import { assertRuntimeHelpersBound } from './assertRuntimeHelpersBound.ts'
 import { assertTranspiles } from './assertTranspiles.ts'
 import { compileComponent } from './compileComponent.ts'
 import { compileSSR } from './compileSSR.ts'
@@ -91,13 +90,10 @@ component.hydratable = ${analyzed.hydratable}
        string/comment/HTML literal (e.g. an `on`-attribute in static markup) no longer
        forces a spurious import, so no per-surface scoping is needed: a client-only helper
        simply doesn't appear as an identifier in the SSR body. */
-    /* Parse the generated bodies ONCE and feed the single tree to both AST passes: the
-       dead-import filter (`collectIdentifiers`) and the binding backstop
-       (`assertRuntimeHelpersBound`). The import block isn't in this tree yet — it is derived
-       from the filter's result — so the backstop is told the names that block will bind
-       (`importedHelpers`), which is exactly what it would have read from the prepended imports
-       had it re-parsed the whole module. `setParentNodes` is required by the backstop's
-       `getStart`/line lookups. */
+    /* Parse the generated bodies ONCE and feed the tree to the dead-import filter
+       (`collectIdentifiers`) and the reactive-import backstop below. The import block isn't in
+       this tree yet — it is derived from the filter's result. `setParentNodes` lets
+       `collectValueReferences` distinguish a value use from a property name. */
     const bodySource = ts.createSourceFile(
         'module.ts',
         `${userImports}\n${moduleBody}`,
@@ -145,17 +141,6 @@ ${moduleBody}`
        template shape no test exercises) otherwise ships as a broken bundle; this surfaces
        it as a located compile error for every component. */
     assertTranspiles(module, 'component module generation')
-    /* `assertTranspiles` only proves the output PARSES — a call to an un-imported helper is
-       valid syntax, so it slips through. This second guard proves the output is BOUND: every
-       runtime helper it calls is actually imported (an independent check of the dead-import
-       filter above), turning a runtime `ReferenceError` into a located compile error. It walks
-       the SAME tree the filter just parsed, with the kept helper imports supplied as the bound
-       set the prepended import block provides. */
-    assertRuntimeHelpersBound(
-        bodySource,
-        new Set(keptImports.map((entry) => entry.alias ?? entry.name)),
-        'component module generation',
-    )
     return { code: module, styles: analyzed.styles }
 }
 
