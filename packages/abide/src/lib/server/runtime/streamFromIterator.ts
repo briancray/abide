@@ -28,6 +28,11 @@ export function streamFromIterator<T>(
     const textEncoder = new TextEncoder()
     const iterator = iterable[Symbol.asyncIterator]()
     let keepalive: ReturnType<typeof setInterval> | undefined
+    /* Set once the stream closes or is cancelled. A `pull` parked on `iterator.next()`
+       resolves AFTER a client-disconnect `cancel()` has already closed the controller;
+       without this guard it would touch the dead controller and throw "Controller is
+       already closed" — noise on every mid-frame disconnect. */
+    let closed = false
 
     function stopKeepalive(): void {
         if (keepalive !== undefined) {
@@ -66,24 +71,42 @@ export function streamFromIterator<T>(
         async pull(controller) {
             try {
                 const next = await iterator.next()
+                /* Cancelled during the awaited next() — the controller is already closed,
+                   so any close/enqueue here would throw. Nothing left to do. */
+                if (closed) {
+                    return
+                }
                 if (next.done) {
+                    closed = true
                     stopKeepalive()
                     controller.close()
                     return
                 }
                 controller.enqueue(textEncoder.encode(encoder.encodeFrame(next.value)))
             } catch (error) {
+                /* A throw during cancellation unwinding (the generator's `finally` rejecting
+                   as `.return()` runs) is not a real stream error — the controller is gone. */
+                if (closed) {
+                    return
+                }
                 /* Log the FULL error server-side (host/credentials/stack an operator needs) — the
                    unary rpc path does the same, and the jsonl/sse docs promise it. Only the
                    sanitized message crosses the wire in the sentinel error frame. */
                 abideLog.error(error)
                 const message = messageFromError(error)
-                controller.enqueue(textEncoder.encode(encoder.encodeError(message)))
+                closed = true
                 stopKeepalive()
-                controller.close()
+                try {
+                    controller.enqueue(textEncoder.encode(encoder.encodeError(message)))
+                    controller.close()
+                } catch {
+                    /* Consumer vanished between the throw and the sentinel frame — the error
+                       frame never lands, but the connection is already closing regardless. */
+                }
             }
         },
         cancel(reason) {
+            closed = true
             stopKeepalive()
             /*
             Route cancel into the generator's normal exit, but swallow a
