@@ -5,13 +5,12 @@ import { classifyInterpolationType } from './classifyInterpolationType.ts'
 import type { ShadowProgram } from './createShadowProgram.ts'
 import { isSpuriousAsyncReadDiagnostic } from './isSpuriousAsyncReadDiagnostic.ts'
 import { nodeAtShadowOffset } from './nodeAtShadowOffset.ts'
-import { parseTemplate } from './parseTemplate.ts'
+import { parseTemplateRecovering } from './parseTemplateRecovering.ts'
 import { remapShadowDiagnostic } from './remapShadowDiagnostic.ts'
 import { sourceToShadowOffset } from './sourceToShadowOffset.ts'
 import { templateStartOffset } from './templateStartOffset.ts'
 import type { AbideDiagnostic } from './types/AbideDiagnostic.ts'
 import type { ShadowMapping } from './types/CompiledShadow.ts'
-import type { TemplateNode } from './types/TemplateNode.ts'
 
 /*
 Runs the shadow program's type-checker over every `.abide` shadow and relocates
@@ -129,11 +128,19 @@ function collectValuePositionDiagnostics(
     /* The template starts just past the leading `<script>` — the SAME base `compileShadow` parses
        from, so each interpolation's `loc` lines up with the shadow's source→shadow `mappings`. */
     const templateStart = templateStartOffset(source)
-    let nodes: TemplateNode[]
-    try {
-        nodes = parseTemplate(source.slice(templateStart), templateStart).nodes
-    } catch {
-        return
+    /* The recovering core never throws — it returns best-effort `nodes` PLUS every parse
+       diagnostic. Surface each with the `file` + `category` the parser can't know, so the LSP
+       reports parse errors from mid-edit source instead of fail-opening on the first throw. */
+    const parsed = parseTemplateRecovering(source.slice(templateStart), templateStart)
+    const nodes = parsed.nodes
+    for (const parseDiagnostic of parsed.diagnostics) {
+        diagnostics.push({
+            file: abidePath,
+            start: parseDiagnostic.start,
+            length: parseDiagnostic.length,
+            message: parseDiagnostic.message,
+            category: ts.DiagnosticCategory.Error,
+        })
     }
     for (const interpolation of asyncValuePositionInterpolations(nodes)) {
         const shadowOffset = sourceToShadowOffset(mappings, interpolation.loc)
