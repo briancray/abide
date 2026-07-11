@@ -55,7 +55,7 @@ export const GRAMMAR_BUCKETS: Record<
     string,
     { file: string; extract: (source: string) => string[] }
 > = {
-    'control-flow': { file: 'structuralBlockTokens.ts', extract: extractBlockKeywords },
+    'control-flow': { file: 'structuralHeadTokens.ts', extract: extractBlockKeywords },
     bindings: { file: 'types/TemplateAttr.ts', extract: extractTemplateAttrKinds },
     snippets: { file: 'types/TemplateNode.ts', extract: extractCompositionKinds },
     primitives: { file: 'resolveReactiveExport.ts', extract: extractReactivePrimitives },
