@@ -1,5 +1,5 @@
-import { claimChild } from '../runtime/claimChild.ts'
 import { CURRENT_PATH } from '../runtime/CURRENT_PATH.ts'
+import { claimChild } from '../runtime/claimChild.ts'
 import { OWNER } from '../runtime/OWNER.ts'
 import { RANGE_OPEN } from '../runtime/RANGE_MARKER.ts'
 import { RENDER } from '../runtime/RENDER.ts'

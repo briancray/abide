@@ -1,7 +1,7 @@
+import type { FlightPromise } from './flight.ts'
 import { RANGE_CLOSE, RANGE_OPEN } from './runtime/RANGE_MARKER.ts'
 import type { ResumeEntry } from './runtime/RESUME.ts'
 import type { SsrAwait, SsrRender } from './runtime/types/SsrRender.ts'
-import type { FlightPromise } from './flight.ts'
 
 /* Comment-wrapped range markers — imported from the shared constant (not a local literal) so the
    inline branch below can never drift from `generateSSR`'s own range emit. */
