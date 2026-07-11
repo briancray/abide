@@ -5,10 +5,10 @@ parallelism: [ADR-0037](0037-path-keyed-block-ids-enable-parallel-sibling-render
 [ADR-0038](0038-parallelize-the-ssr-layout-chain.md). Streaming: the server emit (per-render
 inline-vs-stream by flight settledness — `finalizeStreamedChildren`) and the dual-mode client adopter
 (`mountStreamedChild`) are implemented and verified (a slow hoistable child streams and hydrates with
-no desync — `uiParallelChildRenders`, `uiStreamedChildAdopt`, `uiComponentStreamSpike`). The one
-remaining refinement is warm-seeding a streamed child's LATE-resolving async **cells** (a streamed
-child with a blocking `{#await}` adopts via its RESUME delta today; one with an async cell would
-re-run until the `{cellSeed}` streamed-resolution path lands — see below). Builds on the render-path
+no desync — `uiParallelChildRenders`, `uiStreamedChildAdopt`, `uiComponentStreamSpike`). Warm-seeding
+a streamed child's LATE-resolving async **cells** is also done: a `{cellSeed}` streamed-resolution arm
+ships the child's post-head cell values into `CELL_SEED` before its deferred mount
+(`uiStreamedChildCellSeed`), so it constructs resolved rather than re-running. Builds on the render-path
 of [ADR-0033](0033-render-path-survives-a-renders-awaits.md), the async-cell barrier of
 [ADR-0019](0019-async-computeds-and-rpc-auto-reads.md), and the streamed-cell path of
 [ADR-0035](0035-render-path-streamed-resolution-for-streaming-cells.md).
@@ -81,11 +81,11 @@ not inference; it is left for a later ADR if an opt-in surface is ever wanted.
   range, claim the close). No hydration → a plain create-mode mount. This is the single place the
   streaming facet touches the client build — accepted because the same adopter is the prerequisite for
   future island hydration.
-- **Warm-seed of a streamed child's async CELLS — remaining.** A blocking `{#await}` inside a streamed
-  child adopts via its RESUME delta (shipped). But an async CELL resolves after the head
-  `__SSR__.cells` snapshot, so it must stream via a `{cellSeed}` streamed-resolution arm into
-  `CELL_SEED` (the ADR-0035 mechanism) or the cell re-runs on hydrate. This is the one refinement not
-  yet built.
+- **Warm-seed of a streamed child's async CELLS — DONE.** A blocking `{#await}` inside a streamed
+  child adopts via its RESUME delta; an async CELL resolves after the head `__SSR__.cells` snapshot, so
+  `createUiPageRenderer` ships the post-head delta from `store.resolvedCells` as `{cellSeed}` chunks
+  after the drain, and `seedStreamedResolution` seeds them into `CELL_SEED` — the same pre-mount warm
+  partition `__SSR__.cells` fills — so the deferred child's cell constructs resolved, no re-run.
 
 ## Consequences
 

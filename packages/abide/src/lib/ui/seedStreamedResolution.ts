@@ -2,6 +2,7 @@ import { activeCacheStore } from '../shared/activeCacheStore.ts'
 import { cacheEntryFromSnapshot } from '../shared/cacheEntryFromSnapshot.ts'
 import { decodeRefJson } from '../shared/decodeRefJson.ts'
 import type { StreamedResolution } from '../shared/types/StreamedResolution.ts'
+import { CELL_SEED } from './runtime/CELL_SEED.ts'
 import { receiveStreamedCell } from './runtime/STREAMED_CELLS.ts'
 
 /*
@@ -17,6 +18,14 @@ asymmetry that made streamed reads cold-miss to the network.
 */
 // @documentation plumbing
 export function seedStreamedResolution(resolution: StreamedResolution): void {
+    /* ADR-0039: a STREAMED CHILD's blocking async-cell value that resolved after the head snapshot.
+       Seed it into `CELL_SEED` (the same warm partition `__SSR__.cells` fills, storing the raw
+       ref-json string decoded at cell read) so the child's cell constructs RESOLVED when its
+       deferred mount runs — no flash, no re-run. Checked before `cellKey` (a distinct arm). */
+    if ('cellSeed' in resolution) {
+        CELL_SEED[resolution.cellSeed] = resolution.value
+        return
+    }
     /* ADR-0035: a streaming CELL's server-resolved value, keyed by render-path id. Route it to the
        mounted cell (or buffer until it registers) — decoded through the same ref-json codec the
        server encoded it with, so a Set/Map/Date/bigint/cyclic value survives. */

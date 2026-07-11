@@ -288,6 +288,11 @@ export function createUiPageRenderer({
         const head =
             `<script>${SSR_SWAP_SCRIPT}${CACHE_RESOLVE_SCRIPT}</script>` +
             `${await stateTag(routeUrl, params, store, inline)}`
+        /* ADR-0039: the async-cell keys already baked into the head `__SSR__.cells` snapshot. A
+           streamed child's render is deferred to the drain, so its BLOCKING cells resolve AFTER this
+           and must ship as post-body `{cellSeed}` chunks instead — the delta below is keys NOT here.
+           Read `store` directly (the stream body runs outside the request ALS). */
+        const seededCellKeys = new Set(store.resolvedCells.entries.map((entry) => entry.key))
         const filled = injectRoutePreloads(
             shell.replace(HEAD_STATE_MARKER, (_match, key: string) => (key === 'head' ? head : '')),
             routeUrl,
@@ -358,6 +363,24 @@ export function createUiPageRenderer({
                             }
                             controller.enqueue(
                                 encoder.encode(resolveChunk({ cellKey: key, value: encoded })),
+                            )
+                        }
+                        /* ADR-0039: a STREAMED CHILD's BLOCKING async cells resolved during this drain,
+                           after the head `__SSR__.cells` snapshot — ship the delta (keys not already
+                           seeded) as `{cellSeed}` chunks so startClient seeds CELL_SEED before the
+                           child's deferred mount and its cell constructs resolved (no flash/re-run). */
+                        for (const { key, value } of store.resolvedCells.entries) {
+                            if (seededCellKeys.has(key)) {
+                                continue
+                            }
+                            let encoded: string
+                            try {
+                                encoded = encodeRefJson(value)
+                            } catch {
+                                continue
+                            }
+                            controller.enqueue(
+                                encoder.encode(resolveChunk({ cellSeed: key, value: encoded })),
                             )
                         }
                         controller.enqueue(encoder.encode(after ?? ''))
