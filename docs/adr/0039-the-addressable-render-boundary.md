@@ -1,11 +1,15 @@
 # ADR-0039: The addressable render boundary (automatic isolation, parallelism, and streaming)
 
-**Status:** **proposed** (2026-07-11). Isolation and parallelism are **shipped**
-([ADR-0037](0037-path-keyed-block-ids-enable-parallel-sibling-renders.md),
-[ADR-0038](0038-parallelize-the-ssr-layout-chain.md)); the **streaming** facet's server half is
-**spiked + validated** (`renderToStream` `htmlOnly` boundary — `uiComponentStreamSpike.test.ts`),
-with the client adopter and the emitting codegen as the remaining implementation. Builds on the
-render-path of [ADR-0033](0033-render-path-survives-a-renders-awaits.md), the async-cell barrier of
+**Status:** **accepted — isolation, parallelism, and streaming shipped** (2026-07-11). Isolation and
+parallelism: [ADR-0037](0037-path-keyed-block-ids-enable-parallel-sibling-renders.md),
+[ADR-0038](0038-parallelize-the-ssr-layout-chain.md). Streaming: the server emit (per-render
+inline-vs-stream by flight settledness — `finalizeStreamedChildren`) and the dual-mode client adopter
+(`mountStreamedChild`) are implemented and verified (a slow hoistable child streams and hydrates with
+no desync — `uiParallelChildRenders`, `uiStreamedChildAdopt`, `uiComponentStreamSpike`). The one
+remaining refinement is warm-seeding a streamed child's LATE-resolving async **cells** (a streamed
+child with a blocking `{#await}` adopts via its RESUME delta today; one with an async cell would
+re-run until the `{cellSeed}` streamed-resolution path lands — see below). Builds on the render-path
+of [ADR-0033](0033-render-path-survives-a-renders-awaits.md), the async-cell barrier of
 [ADR-0019](0019-async-computeds-and-rpc-auto-reads.md), and the streamed-cell path of
 [ADR-0035](0035-render-path-streamed-resolution-for-streaming-cells.md).
 
@@ -62,18 +66,26 @@ not inference; it is left for a later ADR if an opt-in surface is ever wanted.
   flushes first, the fragment streams keyed by the child's path, and a nested `{#await}` inside the
   child composes through the same drain. This required only the additive `htmlOnly` flag on
   `SsrAwait` + a two-line `renderToStream` branch — the drain machinery is otherwise reused.
-- **Emitting codegen — remaining.** `generateSSR`'s component case (`await $renderSource`) gains a
-  streaming variant: emit the child's `<!--abide:await:ID-->…<!--/abide:await:ID-->` boundary and
-  push the `htmlOnly` `SsrAwait` onto `$awaits`, instead of awaiting inline.
-- **Client adopter — remaining, and the one real cost.** `mountChild` claims a synchronous, id-less
-  range and requires the child DOM present; a streamed boundary is pending at boot and wrapped in
-  `abide:await` markers. The streamed-child mount site must be re-generated in the **client build** as
-  an `awaitBlock`-style async adopter (claim the boundary, mount the child as its resolved branch).
-  This is the single place the streaming facet **forfeits the server-only property** ADR-0034/0037
-  prized — accepted because the same adopter is the prerequisite for future island hydration.
-- **Warm-seed — remaining.** A child rendered during the drain resolves its async cells after the
-  head `__SSR__.cells` snapshot, so those cells must stream via the ADR-0035 `streamedCells`
-  post-body path or they refetch/flash.
+- **Emitting codegen — DONE, and per-render.** `generateSSR`'s hoistable-child case no longer awaits
+  inline: it starts the isolated `$$flight` and RESERVES the child's output slot; after the walk,
+  `finalizeStreamedChildren` fills it — inline `<!--[-->html<!--]-->` if the flight already settled
+  (byte-identical to the old path, so an all-fast page is unchanged), or the empty
+  `<!--abide:await:CHILDPATH-->…<!--/abide:await:CHILDPATH-->` boundary + `htmlOnly` `SsrAwait` if
+  still pending. CHILDPATH is the child's render-path (`renderPath(ordinal)`), matching the client. A
+  single microtask drain settles sync children; one shared macrotask is paid only if some child is
+  genuinely pending.
+- **Client adopter — DONE, the one place streaming touches the client build.** `generateBuild` emits
+  `$$mountStreamedChild` for the SAME hoistable set. It is DUAL-MODE: it probes the hydration cursor —
+  a `[` (RANGE_OPEN) means the server inlined a fast child (adopt exactly as `mountChild`); an
+  `abide:await:CHILDPATH` comment means it streamed (claim the boundary, adopt the swapped-in inner
+  range, claim the close). No hydration → a plain create-mode mount. This is the single place the
+  streaming facet touches the client build — accepted because the same adopter is the prerequisite for
+  future island hydration.
+- **Warm-seed of a streamed child's async CELLS — remaining.** A blocking `{#await}` inside a streamed
+  child adopts via its RESUME delta (shipped). But an async CELL resolves after the head
+  `__SSR__.cells` snapshot, so it must stream via a `{cellSeed}` streamed-resolution arm into
+  `CELL_SEED` (the ADR-0035 mechanism) or the cell re-runs on hydrate. This is the one refinement not
+  yet built.
 
 ## Consequences
 

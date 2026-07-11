@@ -44,6 +44,11 @@ export const UI_RUNTIME_IMPORTS: { name: string; specifier: string; alias?: stri
     { name: 'mountSlot', specifier: 'ui/dom/mountSlot', alias: '$$mountSlot' },
     { name: 'outlet', specifier: 'ui/dom/outlet', alias: '$$outlet' },
     { name: 'mountChild', specifier: 'ui/dom/mountChild', alias: '$$mountChild' },
+    {
+        name: 'mountStreamedChild',
+        specifier: 'ui/dom/mountStreamedChild',
+        alias: '$$mountStreamedChild',
+    },
     { name: 'mergeProps', specifier: 'ui/dom/mergeProps', alias: '$$mergeProps' },
     { name: 'spreadProps', specifier: 'ui/dom/spreadProps', alias: '$$spreadProps' },
     { name: 'restProps', specifier: 'ui/dom/restProps', alias: '$$restProps' },
@@ -60,6 +65,12 @@ export const UI_RUNTIME_IMPORTS: { name: string; specifier: string; alias?: stri
         name: 'isolateCellBarrier',
         specifier: 'ui/isolateCellBarrier',
         alias: '$$isolateCellBarrier',
+    },
+    { name: 'renderPath', specifier: 'ui/runtime/renderPath', alias: '$$renderPath' },
+    {
+        name: 'finalizeStreamedChildren',
+        specifier: 'ui/finalizeStreamedChildren',
+        alias: '$$finalizeStreamedChildren',
     },
     {
         name: 'mutateDocContainer',

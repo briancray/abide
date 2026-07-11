@@ -70,7 +70,7 @@ export function generateSSR(
     isLayout = false,
     /* `linked` / async `computed` names, lowered to `$$readCell(name)` in template exprs. */
     cellReadNames: ReadonlySet<string> = new Set(),
-): { body: string; flightDecls: string } {
+): { body: string; flightDecls: string; hasStagedChildren: boolean } {
     /* Unique temp var names (child render results); runtime block ids are
        allocated separately at runtime via `$ctx.next++`. */
     const nextVar = makeVarNamer()
@@ -580,34 +580,41 @@ export function generateSSR(
                right boundaries. MERGE its streaming awaits into `$awaits` and its inline
                blocking values into `$resume`. ($awaits/$resume are captured from the
                enclosing render body, including from branch closures.) */
-            const result = nextVar('$child')
             /* The tag lowers like any reference (see generateBuild): a static import is left bare, a
                reactive/loop/await binding derefs — SSR registers such a binding as `plain`, so it
                reads the bare local holding the resolved component, keeping SSR and client congruent.
                Root the child's render-path at this mount site's source-order ordinal — the same
-               segment the client's `mountChild` pushes — so the child's cells (and now its block ids,
-               ADR-0037) get an id matching the client's. `$$withPath` sets the path across the child's
-               awaits (ALS on the server). */
+               segment the client's `mountChild` pushes — so the child's cells and block ids (ADR-0037)
+               get an id matching the client's. `$$withPath` sets the path across the child's awaits. */
             const ordinal = childOrdinal++
             const renderExpr = `$$withPath(${ordinal}, () => ${lowerExpression(node.name)}.render(${propsExpr}, $ctx))`
-            /* Hoistable (ADR-0037 Phase 2): start the render in the prefix as an isolated flight and
-               await the const here, so this child overlaps its siblings. Otherwise await the render
-               inline at its structural position (sequential, as before). Either way the html splices
-               and the awaits/resume merge at THIS position, so document order is preserved. */
-            let renderSource: string
             if (hoistableChildSet.has(node)) {
+                /* Hoistable (ADR-0037/0039): start the render as an isolated flight in the prefix, and
+                   RESERVE its output position rather than awaiting inline. After the walk,
+                   `finalizeStreamedChildren` fills the slot — inline `<!--[-->html<!--]-->` if the
+                   flight already settled (byte-identical to the old inline await), or a streaming
+                   `abide:await:CHILDPATH` boundary + html-only await if it is still pending. The
+                   boundary id is the child's render-path (`$$renderPath(ordinal)`), congruent with the
+                   client's `mountStreamedChild`. */
                 const flightName = `$cf${childFlightCounter++}`
                 childFlightDecls.push(
                     `const ${flightName} = $$flight(() => $$isolateCellBarrier(() => ${renderExpr}));`,
                 )
-                renderSource = flightName
-            } else {
-                renderSource = renderExpr
+                const slotVar = nextVar('$slot')
+                return (
+                    anchor +
+                    `${target}.push('');\n` +
+                    `const ${slotVar} = ${target}.length - 1;\n` +
+                    `$childSlots.push({ slot: ${slotVar}, out: ${target}, id: $$renderPath(${ordinal}), flight: ${flightName} });\n`
+                )
             }
+            /* Non-hoistable child (off the top-level spine): await inline at its structural position,
+               sequential, as before — never streams. */
+            const result = nextVar('$child')
             return (
                 anchor +
                 push(target, RANGE_OPEN) +
-                `const ${result} = await ${renderSource};\n` +
+                `const ${result} = await ${renderExpr};\n` +
                 `${target}.push(${result}.html);\n` +
                 `for (const $a of ${result}.awaits) { $awaits.push($a); }\n` +
                 `Object.assign($resume, ${result}.resume);\n` +
@@ -939,5 +946,9 @@ export function generateSSR(
     for (const decl of childFlightDecls) {
         flightDecls += `${decl}\n`
     }
-    return { body, flightDecls }
+    /* `hasStagedChildren` tells compileSSR to declare `$childSlots` and emit the post-walk
+       `$$finalizeStreamedChildren` await (ADR-0039); a component with no hoistable child stays
+       synchronous. Each hoistable child pushed one `childFlightDecls` entry, so its length is the
+       staged-child count. */
+    return { body, flightDecls, hasStagedChildren: childFlightDecls.length > 0 }
 }

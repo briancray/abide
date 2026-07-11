@@ -9,6 +9,7 @@ import { composeProps } from './composeProps.ts'
 import { eachPlan } from './eachPlan.ts'
 import { elementPlan } from './elementPlan.ts'
 import { groupBindParts } from './groupBindParts.ts'
+import { hoistableChildRenders } from './hoistableChildRenders.ts'
 import { ifPlan } from './ifPlan.ts'
 import { interpolatedTemplateLiteral } from './interpolatedTemplateLiteral.ts'
 import { isControlFlow } from './isControlFlow.ts'
@@ -83,6 +84,10 @@ export function generateBuild(
        ancestor pushes, this makes every mounted instance's id unique and stable (ADR render-path
        identity). Drawn in document-order walk, matching the SSR back-end's identical walk. */
     let childOrdinal = 0
+    /* ADR-0039: the SAME hoistable-child set the SSR back-end computes (identical inputs → identical
+       node identities), so the client emits the dual-mode `$$mountStreamedChild` for exactly the
+       children the server may stream. A non-hoistable child keeps the plain `$$mountChild`. */
+    const streamCapable = hoistableChildRenders(nodes, cellReadNames)
 
     /* In a layout, `<slot/>` outlets are rewritten to `OUTLET_TAG` elements up front
        (`asOutlet`) so the static-clone path carries them as ordinary structure. `asOutlet`
@@ -608,7 +613,11 @@ export function generateBuild(
            cell, so `<Icon>` from `{#for {icon: Icon} of …}` mounts the component the cell
            holds, not the cell object (whose `.build` is undefined → `build is not a
            function`). SSR emits the same lowering for congruence. */
-        return `$$mountChild(${parentVar}, ${lowerExpression(node.name)}, ${propsArg(node)}, ${before}, ${JSON.stringify(node.name)}, ${childOrdinal++});\n`
+        /* A hoistable child may have STREAMED (server chose per-render): emit the dual-mode adopter,
+           which probes the cursor to adopt an inlined `[ … ]` range OR a streamed `abide:await`
+           boundary (ADR-0039). Same args as mountChild. */
+        const mountFn = streamCapable.has(node) ? '$$mountStreamedChild' : '$$mountChild'
+        return `${mountFn}(${parentVar}, ${lowerExpression(node.name)}, ${propsArg(node)}, ${before}, ${JSON.stringify(node.name)}, ${childOrdinal++});\n`
     }
 
     /* An await block: pending → resolved(value) / error branches. Each branch is a

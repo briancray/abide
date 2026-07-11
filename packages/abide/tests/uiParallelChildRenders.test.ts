@@ -7,16 +7,18 @@ import { appendText } from '../src/lib/ui/dom/appendText.ts'
 import { awaitBlock } from '../src/lib/ui/dom/awaitBlock.ts'
 import { mount } from '../src/lib/ui/dom/mount.ts'
 import { effect } from '../src/lib/ui/effect.ts'
+import { renderToStream } from '../src/lib/ui/renderToStream.ts'
 import type { SsrRender } from '../src/lib/ui/runtime/types/SsrRender.ts'
 import { state } from '../src/lib/ui/state.ts'
 import { installMiniDom } from './support/installMiniDom.ts'
 
 /*
-ADR-0037 Phase 2 — sibling `<Card/>` renders START in the SSR prefix (as isolated flights) and are
-awaited at their positions, so their independent async work OVERLAPS instead of serializing behind
-each other's `await Card.render(...)`. Three cards each blocking on a ~40ms read render in ~max
-(one delay), not ~sum (three) — and each card's async cell drains in its own isolated barrier, so no
-sibling reads a still-pending value.
+ADR-0037 Phase 2 + ADR-0039 — sibling `<Card/>` renders START in the SSR prefix (as isolated
+flights), overlapping instead of serializing. A card still PENDING when the walk finishes STREAMS
+(ADR-0039): the shell flushes with an empty `abide:await:CHILDPATH` boundary, and the card's fragment
+streams when it settles. Three cards each blocking on a ~40ms read stream in ~max (one delay), not
+~sum (three) — proving the flights overlap. (A fast/settled child would instead inline byte-identical
+to the pre-ADR-0039 path — covered by uiComponentStreamSpike / the compile golden tests.)
 */
 
 beforeAll(() => {
@@ -50,21 +52,27 @@ describe('parallel sibling child renders (ADR-0037 Phase 2)', () => {
     `)
     const Parent = component(`<div><Card /><Card /><Card /></div>`, { Card })
 
-    test('three sibling cards render in ~max, not ~sum, of their latencies', async () => {
+    test('three sibling cards stream in ~max, not ~sum, of their latencies', async () => {
         const start = performance.now()
-        const { html, resume } = await Parent.render()
-        const elapsed = performance.now() - start
-
-        /* All three cards resolved server-side and inlined. */
-        expect(html.match(/card:C/g) ?? []).toHaveLength(3)
-        /* Overlapped: nowhere near 3×DELAY. Generous ceiling to stay non-flaky under load. */
-        expect(elapsed).toBeLessThan(DELAY * 2.4)
-
-        /* Each card's blocking value seeded under its OWN child-ordinal path (ADR-0037) — three
-           distinct, non-colliding resume keys, so hydration adopts each card's own value. */
-        expect(Object.keys(resume).sort()).toEqual(['0:0', '1:0', '2:0'])
-        for (const key of ['0:0', '1:0', '2:0']) {
-            expect(resume[key]).toEqual({ ok: true, value: 'C' })
+        const chunks: string[] = []
+        for await (const chunk of renderToStream(() => Parent.render())) {
+            chunks.push(chunk)
         }
+        const elapsed = performance.now() - start
+        const all = chunks.join('')
+
+        /* Shell flushed FIRST with three empty card boundaries (paths 0/1/2), no child html yet —
+           the slow cards stream rather than block the shell. */
+        for (const id of ['0', '1', '2']) {
+            expect(chunks[0]).toContain(`<!--abide:await:${id}-->`)
+        }
+        expect(chunks[0]).not.toContain('card:C')
+        /* All three cards streamed their resolved fragment, each keyed by its own child path. */
+        expect(all.match(/card:C/g) ?? []).toHaveLength(3)
+        for (const id of ['0', '1', '2']) {
+            expect(all).toContain(`data-id="${id}"`)
+        }
+        /* Overlapped: the three ~40ms cards settled concurrently — nowhere near 3×DELAY. */
+        expect(elapsed).toBeLessThan(DELAY * 2.4)
     })
 })

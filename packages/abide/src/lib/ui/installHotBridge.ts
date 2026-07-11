@@ -18,6 +18,7 @@ import { hydrate } from './dom/hydrate.ts'
 import { mergeProps } from './dom/mergeProps.ts'
 import { mount } from './dom/mount.ts'
 import { mountChild } from './dom/mountChild.ts'
+import { mountStreamedChild } from './dom/mountStreamedChild.ts'
 import { mountSlot } from './dom/mountSlot.ts'
 import { mutateDocContainer } from './dom/mutateDocContainer.ts'
 import { on } from './dom/on.ts'
@@ -34,8 +35,10 @@ import { when } from './dom/when.ts'
 import { effect } from './effect.ts'
 import { enterScope } from './enterScope.ts'
 import { exitScope } from './exitScope.ts'
+import { finalizeStreamedChildren } from './finalizeStreamedChildren.ts'
 import { flight } from './flight.ts'
 import { isolateCellBarrier } from './isolateCellBarrier.ts'
+import { renderPath } from './runtime/renderPath.ts'
 import { blockId } from './runtime/blockId.ts'
 import { enterRenderPass } from './runtime/enterRenderPass.ts'
 import { escapeKey } from './runtime/escapeKey.ts'
@@ -87,6 +90,7 @@ export function installHotBridge(): void {
         mountSlot,
         outlet,
         mountChild,
+        mountStreamedChild,
         mergeProps,
         spreadProps,
         restProps,
@@ -99,6 +103,8 @@ export function installHotBridge(): void {
         settleAsyncCells,
         flight,
         isolateCellBarrier,
+        renderPath,
+        finalizeStreamedChildren,
         mutateDocContainer,
         hydrate,
         escapeKey,

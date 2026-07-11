@@ -61,14 +61,20 @@ export function compileSSR(
         cellReadNames,
         nodes,
     } = resolved
-    const { body: ssr, flightDecls } = generateSSR(
-        nodes,
-        stateNames,
-        derivedNames,
-        computedNames,
-        isLayout,
-        cellReadNames,
-    )
+    const {
+        body: ssr,
+        flightDecls,
+        hasStagedChildren,
+    } = generateSSR(nodes, stateNames, derivedNames, computedNames, isLayout, cellReadNames)
+    /* ADR-0039: a component with hoistable children declares `$childSlots` (the body walk reserves an
+       output slot per child) and, after the walk, awaits `$$finalizeStreamedChildren` — which fills
+       each slot inline (settled child, byte-identical to the old inline await) or with a streaming
+       boundary (still-pending child). Empty for a component with no hoistable child, which stays
+       synchronous. */
+    const childSlotsDecl = hasStagedChildren ? 'const $childSlots = [];\n' : ''
+    const finalizeChildren = hasStagedChildren
+        ? 'await $$finalizeStreamedChildren($childSlots, $awaits, $resume);\n'
+        : ''
     /* The Tier-2 await-barrier (ADR-0019): between the lowered cell declarations and the
        template, drain + await every async cell's in-flight promise so the template's
        `$$readCell(name)` peeks the RESOLVED value and it bakes into the first-pass HTML —
@@ -86,7 +92,7 @@ export function compileSSR(
        component's signals) and BEFORE the barrier (so a hoisted flight is already in-flight while
        the barrier awaits any unrelated blocking cell). Empty when nothing hoisted. */
     const body =
-        `const $scope = $$enterScope();\ntry {\n${lowered}\n${flightDecls}${SSR_ESCAPE}\nconst $out = [];\nconst $awaits = [];\nconst $resume = {};\n${barrier}${ssr}` +
+        `const $scope = $$enterScope();\ntry {\n${lowered}\n${flightDecls}${SSR_ESCAPE}\nconst $out = [];\nconst $awaits = [];\n${childSlotsDecl}const $resume = {};\n${barrier}${ssr}${finalizeChildren}` +
         `return { html: $out.join(''), state: (typeof $$model !== 'undefined' ? $$model.snapshot() : {}), awaits: $awaits, resume: $resume };\n` +
         `} finally { $$exitScope($scope); }`
     /* An inline `await` — a blocking await block, a child render, a slot read, or a
@@ -96,6 +102,6 @@ export function compileSSR(
        top-level `await` in a non-async function (a SyntaxError). `(?!:)` excludes the
        `<!--abide:await:N-->` boundary-marker strings; `\b` excludes `$awaits`. A false
        positive (the token in author text) only costs a needless async wrapper, never a crash. */
-    const needsAsync = /\bawait\b(?!:)/.test(`${lowered}${ssr}${barrier}`)
+    const needsAsync = hasStagedChildren || /\bawait\b(?!:)/.test(`${lowered}${ssr}${barrier}`)
     return `var $ctx = $ctx || new Map();\n${needsAsync ? `return (async () => {\n${body}\n})();` : body}`
 }

@@ -21,13 +21,36 @@ Two behaviours the raw promise expression can't provide on its own:
   `.then(onValue, onError)` guard in `createAsyncCell`.
 */
 // @documentation plumbing
-export function flight(thunk: () => unknown): Promise<unknown> {
+export function flight(thunk: () => unknown): FlightPromise {
     let promise: Promise<unknown>
     try {
         promise = Promise.resolve(thunk())
     } catch (error) {
         promise = Promise.reject(error)
     }
+    /* Synchronous settledness signal (ADR-0039): the post-walk `finalizeStreamedChildren` reads
+       `.settled` to decide inline-vs-stream — a child flight that already resolved by finalize time
+       inlines its html into the shell (byte-identical to today), a still-pending one streams. Set
+       alongside the no-op keeper below, on the same settle. */
+    const flightPromise = promise as FlightPromise
+    flightPromise.settled = false
+    promise.then(
+        (value) => {
+            flightPromise.value = value
+            flightPromise.settled = true
+        },
+        (error) => {
+            flightPromise.error = error
+            flightPromise.settled = true
+        },
+    )
     promise.then(undefined, () => {})
-    return promise
+    return flightPromise
+}
+
+/* A flight promise carrying a synchronous settledness snapshot for `finalizeStreamedChildren`. */
+export type FlightPromise = Promise<unknown> & {
+    settled: boolean
+    value?: unknown
+    error?: unknown
 }
