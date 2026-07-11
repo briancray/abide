@@ -1,6 +1,7 @@
-/* The regex that isolates a `.abide` file's leading `<script>` block, capturing its body — the
-   same match `compileShadow` and the diagnostic collectors use to split script from template. */
-const LEADING_SCRIPT = /^\s*<script[^>]*>([\s\S]*?)<\/script>/
+/* The regex that isolates a `.abide` file's leading `<script>` block, capturing its body (`[1]`) —
+   the single source `analyzeComponent`, `compileShadow`, and `templateStartOffset` all match on to
+   split script from template, so the three can never drift. Stateless (no `/g`), safe to share. */
+export const LEADING_SCRIPT = /^\s*<script[^>]*>([\s\S]*?)<\/script>/
 
 /*
 The source offset where the template markup begins — just past the closing `</script>` of a

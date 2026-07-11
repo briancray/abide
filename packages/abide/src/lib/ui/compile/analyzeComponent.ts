@@ -2,6 +2,7 @@ import { lowerAsyncInterpolations } from './lowerAsyncInterpolations.ts'
 import { lowerScript } from './lowerScript.ts'
 import { parseTemplate } from './parseTemplate.ts'
 import { scopeCss } from './scopeCss.ts'
+import { LEADING_SCRIPT } from './templateStartOffset.ts'
 import type { AnalyzedComponent } from './types/AnalyzedComponent.ts'
 import type { InterpolationClassifier } from './types/InterpolationClassifier.ts'
 import type { SeedTypeClassifier } from './types/SeedTypeClassifier.ts'
@@ -38,7 +39,7 @@ export function analyzeComponent(
        template (scoped reactive blocks) survive into the parsed nodes. The `<style>`
        is left in the template for the parser to extract structurally (below), so a
        `<style>` quoted inside an expression is never mistaken for the component's. */
-    const scriptMatch = source.match(/^\s*<script[^>]*>([\s\S]*?)<\/script>/)
+    const scriptMatch = source.match(LEADING_SCRIPT)
     const rawScriptBody = scriptMatch?.[1] ?? ''
     const scriptBody = rawScriptBody.trim()
     /* Absolute `.abide` source offset where the TRIMMED `<script>` body begins — the base that

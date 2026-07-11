@@ -54,10 +54,7 @@ export async function finalizeStreamedChildren(
         if (staged.flight.settled && staged.flight.error === undefined) {
             const rendered = staged.flight.value as SsrRender
             staged.out[staged.slot] = OPEN + rendered.html + CLOSE
-            for (const nested of rendered.awaits) {
-                awaits.push(nested)
-            }
-            Object.assign(resume, rendered.resume)
+            mergeChildRender(rendered, awaits, resume)
         } else if (staged.flight.settled) {
             throw staged.flight.error
         } else {
@@ -68,13 +65,24 @@ export async function finalizeStreamedChildren(
                 htmlOnly: true,
                 promise: () => staged.flight,
                 then: async (rendered) => {
-                    for (const nested of (rendered as SsrRender).awaits) {
-                        awaits.push(nested)
-                    }
-                    Object.assign(resume, (rendered as SsrRender).resume)
+                    mergeChildRender(rendered as SsrRender, awaits, resume)
                     return (rendered as SsrRender).html
                 },
             })
         }
     }
+}
+
+/* Fold a child render's contribution (its nested awaits, its resume map) up into the parent's — the
+   single definition both the inlined-settled arm and the still-pending stream arm merge through, so
+   the two can never drift on what a child contributes upward. */
+function mergeChildRender(
+    rendered: SsrRender,
+    awaits: SsrAwait[],
+    resume: Record<string, ResumeEntry>,
+): void {
+    for (const nested of rendered.awaits) {
+        awaits.push(nested)
+    }
+    Object.assign(resume, rendered.resume)
 }

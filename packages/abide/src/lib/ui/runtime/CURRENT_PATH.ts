@@ -8,8 +8,7 @@ branch → child-component ordinal), and a lexical scope (`createScope`) snapsho
 value as its id (replacing the old process-local `scope-${n}` counter, which restarted every
 run and drifted on any SSR/client divergence). Because the path is built from compiler-stamped
 positions and runtime data keys — NOT a creation-order counter — it is order-independent
-(streaming can't shift it), reload-stable (persist finds its prior snapshot), and peer-stable
-(broadcast rendezvous), and it self-handles SSR/client branch divergence: different branches
+(streaming can't shift it), and it self-handles SSR/client branch divergence: different branches
 compose different paths, so a value keyed by one never mis-adopts under the other.
 
 Segments are joined with `/` and each is `escapeKey`-escaped (RFC 6901), so a segment holding

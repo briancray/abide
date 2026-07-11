@@ -102,13 +102,6 @@ type RpcReadOpts<Args> = RpcSharedOpts & {
 }
 
 /*
-Mutating-helper (POST/PUT/PATCH/DELETE) options: the shared base only. No `cache`/`stream`
-— coalesce-only is the method default, and a write has no replayable value to retain or
-stream. `Args` is unused but kept parallel to RpcReadOpts.
-*/
-type RpcMutatingOpts<_Args> = RpcSharedOpts
-
-/*
 The read helpers (GET/HEAD). The handler's return type is inferred whole
 (`Awaited<ReturnType<F>>`), then split: `SuccessBody` becomes the caller's `Return`,
 `InferredErrors` becomes the rpc's `Errors` (driving `isError`). Typed errors are raised
@@ -154,9 +147,10 @@ export type RpcHelper = {
 }
 
 /*
-The mutating helpers (POST/PUT/PATCH/DELETE). The distinct opts base (no `cache`/`stream`)
-is what makes `cache`/`stream` a compile error here while they stay legal on the read
-helpers — the kind-scoping. Overloads mirror the read helpers by argument source
+The mutating helpers (POST/PUT/PATCH/DELETE). The base opts is the shared `RpcSharedOpts`
+(no `cache`/`stream`) — coalesce-only is the method default and a write has no replayable
+value to retain or stream — which is what makes `cache`/`stream` a compile error here while
+they stay legal on the read helpers (`RpcReadOpts`) — the kind-scoping. Overloads mirror the read helpers by argument source
 (multipart-upload, schema'd, schemaless-with-opts, bare).
 */
 export type MutatingRpcHelper = {
@@ -169,16 +163,16 @@ export type MutatingRpcHelper = {
             args: StandardSchemaV1.InferOutput<InputSchema> &
                 StandardSchemaV1.InferOutput<FilesSchema>,
         ) => R | Promise<R>,
-        opts: RpcMutatingOpts<StandardSchemaV1.InferInput<InputSchema>> & {
+        opts: RpcSharedOpts & {
             schemas: { input: InputSchema; files: FilesSchema; output?: StandardSchemaV1 }
         },
     ): RemoteFunction<StandardSchemaV1.InferInput<InputSchema>, SuccessBody<R>, InferredErrors<R>>
     <R extends Response, InputSchema extends StandardSchemaV1 = StandardSchemaV1>(
         fn: (args: StandardSchemaV1.InferOutput<InputSchema>) => R | Promise<R>,
-        opts: RpcMutatingOpts<StandardSchemaV1.InferInput<InputSchema>> & {
+        opts: RpcSharedOpts & {
             schemas: { input: InputSchema; output?: StandardSchemaV1 }
         },
     ): RemoteFunction<StandardSchemaV1.InferInput<InputSchema>, SuccessBody<R>, InferredErrors<R>>
-    <F extends RpcFn>(fn: F, opts: RpcMutatingOpts<RpcArgs<F>>): RpcOf<F>
+    <F extends RpcFn>(fn: F, opts: RpcSharedOpts): RpcOf<F>
     <F extends RpcFn>(fn: F): RpcOf<F>
 }

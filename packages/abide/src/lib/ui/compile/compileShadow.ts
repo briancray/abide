@@ -10,6 +10,7 @@ import {
     resolveReactiveExport,
 } from './resolveReactiveExport.ts'
 import { signalCallee } from './signalCallee.ts'
+import { LEADING_SCRIPT } from './templateStartOffset.ts'
 import type { CompiledShadow, ShadowDiagnostic, ShadowMapping } from './types/CompiledShadow.ts'
 import type { InterpolationClassifier } from './types/InterpolationClassifier.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
@@ -78,7 +79,7 @@ export function compileShadow(
     classify?: InterpolationClassifier,
 ): CompiledShadow {
     const builder = createBuilder(classify)
-    const leadingScript = source.match(/^\s*<script[^>]*>([\s\S]*?)<\/script>/)
+    const leadingScript = source.match(LEADING_SCRIPT)
     const scriptBody = leadingScript?.[1] ?? ''
     /* Body starts just past the opening `<script …>`; template just past `</script>`. */
     const scriptStart = leadingScript ? source.indexOf('>', leadingScript.index) + 1 : 0

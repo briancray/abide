@@ -382,11 +382,14 @@ tests can import it, not for app code.
 - `@abide/abide/ui/socketProxy` — `socketProxy(name)`: the browser-side socket stub — the identical `Socket<T>` shape over the page's lazily-opened multiplexed ws channel.
 - `@abide/abide/ui/runtime/escapeKey` — JSON-Pointer-escapes one reactive-doc path key (`~`→`~0`, `/`→`~1`).
 - `@abide/abide/ui/runtime/withPath` — pushes one `escapeKey`-escaped render-path segment for the duration of a synchronous `build`, relative to the ambient path (the render-path identity a layout layer / child mount composes); restores after. A reactively-rebuilt block uses `withPathFrom` with a captured base instead.
+- `@abide/abide/ui/runtime/renderPath` — the render-path a `<Child/>` mounts under: composes a child's ordinal onto the ambient path (`withPath(ordinal, …)`) to produce the `abide:await:CHILDPATH` boundary id, computed identically on both sides so the streamed-child adopter never drifts. Server-emit-only.
+- `@abide/abide/ui/runtime/blockId` — allocates an await/try block id namespaced by the ambient render-path (`${path}:${n}`, per-path document-order counter), so sibling child renders can run concurrently during SSR without their block ids interleaving; the bare (`path === ''`) case keeps the plain `0,1,2…` form.
 - `@abide/abide/ui/runtime/nextBlockId` — the next await/try block id in the current render pass (document order, shared across inlined children).
 - `@abide/abide/ui/runtime/enterRenderPass` — marks entry into a render/mount; the outermost resets the block-id counter.
 - `@abide/abide/ui/runtime/exitRenderPass` — unwinds `enterRenderPass`'s depth.
 - `@abide/abide/ui/dom/mount` — mounts a top-level page/layout into a host under an ownership scope; returns the unmount.
 - `@abide/abide/ui/dom/mountChild` — mounts a nested child component as a comment-marker range (dev builds also register it with the hot bridge).
+- `@abide/abide/ui/dom/mountStreamedChild` — the client mount for a HOISTABLE child (ADR-0039): a dual-mode adopter that probes the hydration cursor to tell whether the server inlined the child (settled) or streamed it (`abide:await:CHILDPATH` boundary, already swapped in), then adopts the range in place — falling back to a create-mount on a client navigation or an unfilled boundary. Registers with the hot bridge like `mountChild`.
 - `@abide/abide/ui/dom/mountSlot` — mounts a component's passed-children content as a marker-bounded range.
 - `@abide/abide/ui/dom/outlet` — a layout's outlet: an empty `<!--abide:outlet-->…<!--/abide:outlet-->` boundary the router fills.
 - `@abide/abide/ui/dom/hydrate` — adopts server-rendered DOM instead of rebuilding: runs the build with a claim cursor over the existing nodes.
@@ -413,11 +416,14 @@ tests can import it, not for app code.
 - `@abide/abide/ui/dom/bindProp` — the parent half of a component `bind:prop`: annotates a prop's value thunk with a `set` write-back channel.
 - `@abide/abide/ui/dom/bindableProp` — the child half: the writable cell a component gets for a prop it writes or forwards (pass-through to the parent when bound, a local reseeding cell when not).
 - `@abide/abide/ui/dom/spreadAttrs` — spreads an object's keys onto a native element (`<div {...rest}>`), keys enumerated once.
-- `@abide/abide/ui/dom/mutateDocContainer` — the lowering for an in-place mutating container method on a reactive doc (`model.items.splice(…)`, `.sort()`, a Set `.add()`, a Map `.set()`, …): clones the array/Map/Set, applies the mutation to the copy, and writes it back through `replace` so a real patch fires (readers wake, undo/persistence/sync see it); returns the native method's result unchanged.
+- `@abide/abide/ui/dom/mutateDocContainer` — the lowering for an in-place mutating container method on a reactive doc (`model.items.splice(…)`, `.sort()`, a Set `.add()`, a Map `.set()`, …): clones the array/Map/Set, applies the mutation to the copy, and writes it back through `replace` so a real patch fires (readers wake, the render tree re-derives); returns the native method's result unchanged.
 - `@abide/abide/ui/dom/readCall` — guarded method call on a reactive-doc read (the `model.draft.trim()` lowering).
 - `@abide/abide/ui/dom/readCell` — unified read for a `linked`/async-`computed` reference (the `$$readCell(NAME)` lowering): peeks an async cell, reads `.value` off a sync one.
 - `@abide/abide/ui/dom/cellPending` — whether a control-flow subject (`{#if}`/`{#switch}`) is a still-loading async cell (no value, no error) so the block renders no branch while pending instead of flashing its `{:else}`; a plain/settled value is never pending.
 - `@abide/abide/ui/settleAsyncCells` — the SSR Tier-2 await-barrier (the `await $$settleAsyncCells()` lowering emitted between a component's cell declarations and its template): drains + awaits the request-scoped in-flight async-cell promises so their resolved values bake into the first-pass HTML.
+- `@abide/abide/ui/flight` — the SSR flight-starter (`$$flight(() => expr)`): hoists a hoistable await's promise into the synchronous render prefix so independent flights overlap instead of serializing; normalises a synchronous loader throw to a rejected promise and carries a synchronous `.settled` snapshot for `finalizeStreamedChildren`. Server-emit-only.
+- `@abide/abide/ui/isolateCellBarrier` — runs a hoisted child render (`$$isolateCellBarrier`) under its own async-cell barrier list (ALS-backed on the server) so its cell registrations and `$$settleAsyncCells` drain stay isolated from concurrent siblings and the page; an inert passthrough on the client. Server-emit-only.
+- `@abide/abide/ui/finalizeStreamedChildren` — the ADR-0039 when-to-stream decision run once after a component's body walk (`await $$finalizeStreamedChildren(...)`): fills each hoistable child's reserved output slot — inlining a settled flight byte-identically to the pre-ADR path, rethrowing a rejected one, or emitting an `abide:await:CHILDPATH` boundary + streaming `SsrAwait` for a still-pending one. Server-emit-only.
 
 ## Build / tooling
 

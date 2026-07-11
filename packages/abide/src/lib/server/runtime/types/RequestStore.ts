@@ -31,10 +31,13 @@ export type RequestStore = {
     */
     resolvedCells: ResolvedCells
     /*
-    STREAMING async-cell in-flight promises registered during this request's SSR pass, keyed by
-    render-path id (ADR-0035). A streaming cell ships pending in the shell; the page renderer drains
-    this after the shell, awaiting each and streaming an `__abideResolve({ cellKey, value })` chunk so
-    the client adopts the resolved value post-hydration. Per-request so concurrent renders never mix.
+    STREAMING async-cell settled VALUES recorded during this request's SSR pass, keyed by render-path
+    id (ADR-0035). A streaming cell ships pending in the shell; the page renderer drains this after the
+    shell and streams an `__abideResolve({ cellKey, value })` chunk for each so the client adopts the
+    resolved value post-hydration. These are already-settled values (pushed by `createAsyncCell`),
+    never awaited here — a cell that stays pending through the request is simply not recorded and the
+    client cold-runs it (awaiting one would hang the response). Per-request so concurrent renders never
+    mix. Sibling of `resolvedCells` (the blocking partition baked into the head snapshot).
     */
     streamedCells: StreamedCells
     /*
