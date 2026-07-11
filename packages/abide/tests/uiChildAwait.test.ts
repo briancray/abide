@@ -80,14 +80,14 @@ let top = state(Promise.resolve('T'))</script>
 
     test('the page and child awaits get distinct, non-colliding ids', async () => {
         const html = await streamToString(() => Parent.render())
-        const ids = [...html.matchAll(/<abide-resolve data-id="(\d+)"/g)].map((m) => m[1]).sort()
-        expect(ids).toEqual(['0', '1']) // two boundaries, unique ids — no RESUME collision
+        const ids = [...html.matchAll(/<abide-resolve data-id="([^"]+)"/g)].map((m) => m[1]).sort()
+        expect(ids).toEqual(['0', '0:0']) // two boundaries, unique ids — no RESUME collision
     })
 
     test('a second render pass resets the counter (ids start at 0 again)', async () => {
         await streamToString(() => Parent.render())
         const html = await streamToString(() => Parent.render())
-        const ids = [...html.matchAll(/<abide-resolve data-id="(\d+)"/g)].map((m) => m[1]).sort()
-        expect(ids).toEqual(['0', '1'])
+        const ids = [...html.matchAll(/<abide-resolve data-id="([^"]+)"/g)].map((m) => m[1]).sort()
+        expect(ids).toEqual(['0', '0:0'])
     })
 })

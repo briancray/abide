@@ -14,11 +14,12 @@ const OUTLET_PLACEHOLDER = `${OPEN}${CLOSE}`
 /*
 Server-renders a route's layout chain wrapped around its page into one SsrRender.
 `views` is ordered outermost layout → … → page. The whole chain shares ONE request-local
-block-id counter (`$ctx`): each `render()` is awaited sequentially (render is async), so
-every `await`/`try` block across all layers draws a unique id from the shared counter — in
-the same layer-sequential order the client hydrates them, keeping the streamed fragments
-and the resume manifest aligned. Sequential (not `Promise.all`) so the counter advances
-deterministically and the reactive scopes never interleave.
+block-id counter map (`$ctx`): each `await`/`try` block draws a path-namespaced id
+(`${render-path}:${n}`, ADR-0037), so ids stay unique across layers by path rather than by
+a shared sequential draw — keeping the streamed fragments and the resume manifest aligned
+with the client (which composes the same path-keyed ids). The chain is still rendered
+sequentially (not `Promise.all`) so the reactive scopes never interleave; the block ids no
+longer depend on that ordering.
 
 The html nests inner-to-outer: each parent layout's empty outlet boundary
 (`<!--abide:outlet--><!--/abide:outlet-->`) is filled with the accumulated child html —
@@ -36,7 +37,7 @@ export async function renderChain(
        render-path (`withPath`) so a cell's scope id matches the client's for the warm-seed key. */
     keys: string[] = [],
 ): Promise<SsrRender> {
-    const ctx: RenderContext = { next: 0 }
+    const ctx: RenderContext = new Map()
     const renders: SsrRender[] = []
     /* Route params as thunks (static server-side — only shape parity with the client so
        `props()` reads `$props["id"]?.()` resolve). A layout (every view but the last) also

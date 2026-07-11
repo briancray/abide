@@ -46,7 +46,7 @@ fresh.
 // @documentation plumbing
 export function tryBlock(
     parent: Node,
-    id: number,
+    id: string,
     renderTry: (parent: Node) => void,
     renderCatch?: (parent: Node, error: State<unknown>) => void,
     before: Node | null = null,

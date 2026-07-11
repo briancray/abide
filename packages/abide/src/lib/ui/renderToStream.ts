@@ -38,14 +38,13 @@ export async function* renderToStream(
        alongside each streamed fragment, so the client adopts the nested blocking branch
        instead of refetching. (`resume` is the render body's live object, so late writes
        appear here.) */
-    const seededResume = new Set<number>(Object.keys(resume).map(Number))
-    const resumeDelta = (): Record<number, ResumeEntry> => {
-        const delta: Record<number, ResumeEntry> = {}
+    const seededResume = new Set<string>(Object.keys(resume))
+    const resumeDelta = (): Record<string, ResumeEntry> => {
+        const delta: Record<string, ResumeEntry> = {}
         for (const [key, entry] of Object.entries(resume)) {
-            const id = Number(key)
-            if (!seededResume.has(id)) {
-                seededResume.add(id)
-                delta[id] = entry
+            if (!seededResume.has(key)) {
+                seededResume.add(key)
+                delta[key] = entry
             }
         }
         return delta
@@ -55,8 +54,8 @@ export async function* renderToStream(
        awaits — its `branchContent` runs `$awaits.push(...)` onto this same `awaits` array
        during `settle`, AFTER the initial scan. So re-scan for newly-appended blocks after
        every settle (tracking which ids are already enqueued), composing to any depth. */
-    const inflight = new Map<number, Promise<Settled>>()
-    const enqueued = new Set<number>()
+    const inflight = new Map<string, Promise<Settled>>()
+    const enqueued = new Set<string>()
     const enqueueNew = (): void => {
         for (const block of awaits) {
             if (!enqueued.has(block.id)) {
@@ -83,7 +82,7 @@ export async function* renderToStream(
     }
 }
 
-type Settled = { id: number; html: string; resume: ResumeEntry }
+type Settled = { id: string; html: string; resume: ResumeEntry }
 
 /* Awaits one streaming block's promise and renders the resolved or error branch to
    HTML (the renderers are async so a nested `await` block composes), capturing the
@@ -119,6 +118,6 @@ function settle(block: SsrAwait): Promise<Settled> {
    strings. `tryEncodeResume` handles the serialize-or-refetch policy (undefined → no
    script → the inline swap script skips registration → hydration re-runs that one promise).
    The inline swap script stores it via `.textContent`; `awaitBlock` decodes it. */
-function encodeStreamResume(resume: ResumeEntry, id: number): string | undefined {
+function encodeStreamResume(resume: ResumeEntry, id: string): string | undefined {
     return tryEncodeResume(resume, id)?.replace(/</g, '\\u003c')
 }

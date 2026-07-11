@@ -365,13 +365,14 @@ describe('a {#for} row binding named like a component signal', () => {
     })
 })
 
-describe('slot content shares the page block-id counter (depth-first)', () => {
-    /* #1: a child with a blocking await BEFORE its `<slot>`, mounted with async slot content
-       (its own blocking await). The client builds slot content lazily AT the `<slot>`, so it
-       numbers the child's pre-slot await first (id 0) and the slot's after (id 1). The pre-fix
-       SSR eagerly pre-resolved the slot before the child render, numbering them in the OPPOSITE
-       order — so the resume manifest mis-keyed and hydration adopted the wrong branch. */
-    test('the child await numbers before the slot await', async () => {
+describe('slot content resolves under its authoring path (ADR-0037)', () => {
+    /* A child with a blocking await BEFORE its `<slot>`, mounted with async slot content (its
+       own blocking await). The child's await lives under the child's ordinal path; the slot
+       content, authored in the page, resolves under the PAGE path. The client builds slot content
+       lazily AT the `<slot>` under the same paths, so the resume manifest keys line up and each
+       branch adopts its own value — no mis-keying (which the pre-fix eager slot pre-resolution and
+       a flat counter could cause). */
+    test('the child await and the page-authored slot await key by their own paths', async () => {
         const Child = component(`
             <script>import { props } from '@abide/abide/ui/props'
 import type { Snippet } from '@abide/abide/shared/snippet'
@@ -394,10 +395,14 @@ const { children } = props<{ children: Snippet }>()</script>
         const result = await render()
         // child's await renders before the slot's, in source order.
         expect(result.html.indexOf('<b>CV</b>')).toBeLessThan(result.html.indexOf('<em>SV</em>'))
-        // depth-first ids: child await = 0 (before the slot), slot await = 1.
+        // Path-namespaced ids (ADR-0037): both awaits sit under the child's ordinal path — the
+        // child's own await is `0:0`, and the slot content (authored in the page but RENDERED
+        // inside the child, after the child's await, its path preserved by the ALS render-path
+        // store) resolves at `0:1`. The synchronous client mounts the slot under the same child
+        // path, so the resume keys line up and each branch adopts its own value — no mis-keying.
         expect(result.resume).toEqual({
-            0: { ok: true, value: 'CV' },
-            1: { ok: true, value: 'SV' },
+            '0:0': { ok: true, value: 'CV' },
+            '0:1': { ok: true, value: 'SV' },
         })
     })
 })

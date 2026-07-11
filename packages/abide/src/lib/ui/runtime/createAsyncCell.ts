@@ -2,12 +2,12 @@ import { ASYNC_CELL } from '../../shared/ASYNC_CELL.ts'
 import { decodeRefJson } from '../../shared/decodeRefJson.ts'
 import { isAsyncIterable } from '../../shared/isAsyncIterable.ts'
 import { isThenable } from '../../shared/isThenable.ts'
-import { pendingAsyncCellsSlot } from '../../shared/pendingAsyncCellsSlot.ts'
 import { resolvedCellsSlot } from '../../shared/resolvedCellsSlot.ts'
 import { streamedCellsSlot } from '../../shared/streamedCellsSlot.ts'
 import type { AsyncComputed } from '../../shared/types/AsyncComputed.ts'
 import type { AsyncState } from '../../shared/types/AsyncState.ts'
 import type { NamedAsyncIterable } from '../../shared/types/NamedAsyncIterable.ts'
+import { activePendingCells } from '../activePendingCells.ts'
 import type { Scope } from '../types/Scope.ts'
 import { CELL_SEED } from './CELL_SEED.ts'
 import { CURRENT_SCOPE } from './CURRENT_SCOPE.ts'
@@ -195,7 +195,7 @@ export function createAsyncCell(
                cell (ADR-0032, a no-`await` position) opts OUT: it ships pending and resolves on
                the client instead of blocking the flush. */
             if (typeof window === 'undefined' && options.streaming !== true) {
-                pendingAsyncCellsSlot.get()?.promises.push(inFlight)
+                activePendingCells()?.promises.push(inFlight)
             }
             /* `.then(onValue, onError)` handles the rejection inline — contained in `error()`,
                never an unhandled rejection. A STREAMING cell's resolved value is recorded in

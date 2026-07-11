@@ -84,7 +84,7 @@ describe('createUiPageRenderer', () => {
                 html: '<main><!--abide:await:0-->loading<!--/abide:await:0--></main>',
                 awaits: [
                     {
-                        id: 0,
+                        id: '0',
                         promise: () => Promise.resolve('ada'),
                         then: async (value) => `<b>${value}</b>`,
                         catch: async () => '',
@@ -116,13 +116,13 @@ describe('createUiPageRenderer', () => {
                 '<!--abide:await:1-->loading<!--/abide:await:1--></main>',
             awaits: [
                 {
-                    id: 0,
+                    id: '0',
                     promise: () => usersRead(),
                     then: async (value) => `<b>${(value as string[]).join(',')}</b>`,
                     catch: async () => '',
                 },
                 {
-                    id: 1,
+                    id: '1',
                     promise: () => avatarRead().catch(() => undefined),
                     then: async () => '<img>',
                     catch: async () => '',

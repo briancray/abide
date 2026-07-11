@@ -1,3 +1,4 @@
+import { installAmbientScopeStore } from '../../src/lib/server/runtime/installAmbientScopeStore.ts'
 import { abideUiPlugin } from '../../src/lib/ui/compile/abideUiPlugin.ts'
 import { UI_RUNTIME_IMPORTS } from '../../src/lib/ui/compile/UI_RUNTIME_IMPORTS.ts'
 
@@ -8,6 +9,14 @@ is the only UI runtime, and the reactive test harnesses are plain `.ts` (abide-u
 effect/computed), needing no loader.
 */
 Bun.plugin(abideUiPlugin)
+
+/* Install the production SSR render-path backing (ADR-0033 D1 AsyncLocalStorage) for ALL tests, so
+   the path survives an async render's awaits exactly as it does under a booted server. Block ids are
+   path-keyed (ADR-0037), so without this a miniDom harness's async SSR render would allocate ids
+   under a stale/sync path — diverging from production AND from whichever test previously booted a
+   real server (createServer installs the same backing). Idempotent; for synchronous client mounts
+   the ALS `run` behaves like the sync save/restore it replaces, so congruence is unaffected. */
+installAmbientScopeStore()
 
 const globals = globalThis as Record<string, unknown>
 

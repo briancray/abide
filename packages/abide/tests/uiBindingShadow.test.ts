@@ -187,7 +187,7 @@ let item = state('OUTER')</script>
             'computed',
             'effect',
             compileSSR(source),
-        )(undefined, { next: 0 }, doc, state, computed, effect) as SsrRender | Promise<SsrRender>
+        )(undefined, new Map(), doc, state, computed, effect) as SsrRender | Promise<SsrRender>
         const server = (await render).html
         expect(visibleText(server)).toBe('LOCAL')
         expect(visibleText(server)).not.toContain('OUTER')

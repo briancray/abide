@@ -9,7 +9,7 @@ import type { ResumeEntry } from '../RESUME.ts'
    on the tag — never land here: they render inline during the async render pass and
    seed `SsrRender.resume`.) */
 export type SsrAwait = {
-    id: number
+    id: string
     promise: () => unknown
     then: (value: unknown) => Promise<string>
     catch?: (error: unknown) => Promise<string>
@@ -23,5 +23,5 @@ export type SsrRender = {
     html: string
     state: unknown
     awaits: SsrAwait[]
-    resume: Record<number, ResumeEntry>
+    resume: Record<string, ResumeEntry>
 }

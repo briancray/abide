@@ -11,7 +11,7 @@ import { tryEncodeResume } from './tryEncodeResume.ts'
    early or parse as a line terminator. Shared by the buffered (`createUiPageRenderer`)
    and streaming (`renderToStream`) paths. */
 // @documentation plumbing
-export function resumeSeedScript(resume: Record<number, ResumeEntry>): string {
+export function resumeSeedScript(resume: Record<string, ResumeEntry>): string {
     /* ref-json (not JSON) so a value carrying cycles or shared back-references — a
        media tree with parent↔child links — seeds instead of being dropped. `tryEncodeResume`
        drops just an unserializable entry (the client re-runs that one branch's promise),

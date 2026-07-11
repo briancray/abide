@@ -16,8 +16,8 @@
    same reference. */
 export type ResumeEntry = { ok: true; value: unknown } | { ok: false; error: unknown }
 
-const globalScope = globalThis as { __abideResume?: Record<number, string> }
+const globalScope = globalThis as { __abideResume?: Record<string, string> }
 globalScope.__abideResume ??= {}
 
 // @documentation plumbing
-export const RESUME: Record<number, string> = globalScope.__abideResume
+export const RESUME: Record<string, string> = globalScope.__abideResume

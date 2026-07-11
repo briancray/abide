@@ -20,12 +20,12 @@ Effects are stripped — they are client lifecycle and emit no HTML, so the serv
 render is a snapshot of the markup before any effect runs.
 
 Defines `$$model` via the lowered script; the reactive scope is entered via `$$enterScope`
-and exited in a `finally` block. The block-id counter is
-the request-local `$ctx` (threaded into child renders), not a module global — a blocking
-`await` block awaits its promise at its structural position and renders inline, so ids
-allocate depth-first like the client; render yields at that `await`, and a shared global
-counter would interleave across concurrent requests. `$ctx` defaults to a fresh counter
-when a caller (a test, a top-level render) omits it.
+and exited in a `finally` block. The block-id counter is the request-local `$ctx` — a
+per-render-path `Map` (ADR-0037), threaded into child renders — not a module global. Each
+`await`/`try` block draws `$$blockId($ctx)` = `${render-path}:${n}`, counting per path in
+document order; namespacing by path (rather than one flat counter) keeps ids congruent with
+the client even when sibling child renders run concurrently, and isolates concurrent requests.
+`$ctx` defaults to a fresh `Map` when a caller (a test, a top-level render) omits it.
 
 The body is wrapped in an ASYNC IIFE (returns `Promise<SsrRender>`) ONLY when it contains
 an inline `await` — a blocking `{#await … then}` block, a child-component render, a `<slot>`
@@ -97,5 +97,5 @@ export function compileSSR(
        `<!--abide:await:N-->` boundary-marker strings; `\b` excludes `$awaits`. A false
        positive (the token in author text) only costs a needless async wrapper, never a crash. */
     const needsAsync = /\bawait\b(?!:)/.test(`${lowered}${ssr}${barrier}`)
-    return `var $ctx = $ctx || { next: 0 };\n${needsAsync ? `return (async () => {\n${body}\n})();` : body}`
+    return `var $ctx = $ctx || new Map();\n${needsAsync ? `return (async () => {\n${body}\n})();` : body}`
 }

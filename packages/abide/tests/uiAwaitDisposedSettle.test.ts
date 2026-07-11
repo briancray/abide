@@ -137,7 +137,7 @@ let show = state(true)</script>
                text anchor in `target`. */
             awaitBlock(
                 target,
-                1,
+                '1',
                 () => new Promise<string>((resolve) => (resolveIt = resolve)),
                 undefined,
                 (parent, value) => {
@@ -188,7 +188,7 @@ let show = state(true)</script>
            `'V'` drives firstHydrate's adopt path; the build throws, so it recovers cold. */
         host.innerHTML = '<!--abide:await:1--><!--/abide:await:1-->'
         hydrate(host, (target) => {
-            awaitBlock(target, 1, () => 'V', undefined, renderThen as never, undefined, null)
+            awaitBlock(target, '1', () => 'V', undefined, renderThen as never, undefined, null)
         })
         await flush()
         expect(host.textContent).toContain('OK') // recovered via rebuildCold

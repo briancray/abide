@@ -40,7 +40,7 @@ parked just before the close marker.
 // @documentation plumbing
 export function awaitBlock(
     parent: Node,
-    id: number,
+    id: string,
     promiseThunk: () => unknown,
     renderPending: ((parent: Node) => void) | undefined,
     renderThen: (parent: Node, value: unknown) => void,

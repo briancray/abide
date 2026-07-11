@@ -14,6 +14,7 @@ import { eachPlan } from './eachPlan.ts'
 import { elementPlan } from './elementPlan.ts'
 import { groupBindParts } from './groupBindParts.ts'
 import { hoistableAwaits } from './hoistableAwaits.ts'
+import { hoistableChildRenders } from './hoistableChildRenders.ts'
 import { ifPlan } from './ifPlan.ts'
 import { interpolatedTemplateLiteral } from './interpolatedTemplateLiteral.ts'
 import { isAnchorPositioned } from './isAnchorPositioned.ts'
@@ -168,6 +169,17 @@ export function generateSSR(
     for (const flight of hoistableAwaits(rootNodes, cellReadNames)) {
         flightNameByNode.set(flight.node, flight.name)
     }
+
+    /* ADR-0037 Phase 2: the top-level-spine `<Child/>` renders whose start hoists to the prefix so
+       sibling renders overlap instead of serializing behind each other's `await`. The component walk
+       below emits each hoisted child's flight decl into `childFlightDecls` (with its childOrdinal and
+       lowered props computed at the SAME site as the body's `await`, so the two can't drift) and
+       awaits the flight const at the structural position. Each hoisted render starts under
+       `$$isolateCellBarrier` so its async cells drain in their own list, not a concurrent sibling's
+       (the request-scoped barrier is `splice(0)`-drained). */
+    const hoistableChildSet = hoistableChildRenders(rootNodes, cellReadNames)
+    const childFlightDecls: string[] = []
+    let childFlightCounter = 0
 
     /* A snippet name (any identifier, `$` included) interpolated into a RegExp must have its
        regex metacharacters escaped, or e.g. a trailing `$` would read as an end-anchor and the
@@ -569,19 +581,33 @@ export function generateSSR(
                blocking values into `$resume`. ($awaits/$resume are captured from the
                enclosing render body, including from branch closures.) */
             const result = nextVar('$child')
+            /* The tag lowers like any reference (see generateBuild): a static import is left bare, a
+               reactive/loop/await binding derefs — SSR registers such a binding as `plain`, so it
+               reads the bare local holding the resolved component, keeping SSR and client congruent.
+               Root the child's render-path at this mount site's source-order ordinal — the same
+               segment the client's `mountChild` pushes — so the child's cells (and now its block ids,
+               ADR-0037) get an id matching the client's. `$$withPath` sets the path across the child's
+               awaits (ALS on the server). */
+            const ordinal = childOrdinal++
+            const renderExpr = `$$withPath(${ordinal}, () => ${lowerExpression(node.name)}.render(${propsExpr}, $ctx))`
+            /* Hoistable (ADR-0037 Phase 2): start the render in the prefix as an isolated flight and
+               await the const here, so this child overlaps its siblings. Otherwise await the render
+               inline at its structural position (sequential, as before). Either way the html splices
+               and the awaits/resume merge at THIS position, so document order is preserved. */
+            let renderSource: string
+            if (hoistableChildSet.has(node)) {
+                const flightName = `$cf${childFlightCounter++}`
+                childFlightDecls.push(
+                    `const ${flightName} = $$flight(() => $$isolateCellBarrier(() => ${renderExpr}));`,
+                )
+                renderSource = flightName
+            } else {
+                renderSource = renderExpr
+            }
             return (
                 anchor +
                 push(target, RANGE_OPEN) +
-                /* The tag lowers like any reference (see generateBuild): a static import
-                   is left bare, a reactive/loop/await binding derefs — SSR registers such
-                   a binding as `plain`, so it reads the bare local holding the resolved
-                   component, keeping SSR and client congruent. */
-                /* Root the child's render-path at this mount site's source-order ordinal — the
-                   same segment the client's `mountChild` pushes — so the child's cells get a scope
-                   id matching the client's (the warm-seed key). `$$withPath` is synchronous; the
-                   child constructs its cells in its own synchronous prefix (before its barrier
-                   `await`) with the path set, then the pending promise is awaited outside. */
-                `const ${result} = await $$withPath(${childOrdinal++}, () => ${lowerExpression(node.name)}.render(${propsExpr}, $ctx));\n` +
+                `const ${result} = await ${renderSource};\n` +
                 `${target}.push(${result}.html);\n` +
                 `for (const $a of ${result}.awaits) { $awaits.push($a); }\n` +
                 `Object.assign($resume, ${result}.resume);\n` +
@@ -783,7 +809,7 @@ export function generateSSR(
         /* ADR-0034: a hoisted block awaits the prefix flight const (already in-flight); a
            non-hoisted block evaluates + awaits its promise inline as before. */
         const hoistedPromise = flightNameByNode.get(node)
-        let code = `const ${id} = $ctx.next++;\n`
+        let code = `const ${id} = $$blockId($ctx);\n`
         code += `${target}.push("<!--abide:await:" + ${id} + "-->");\n`
         code += `try {\n`
         code += `const ${resolved} = await (${hoistedPromise ?? lowerExpression(node.promise)});\n`
@@ -832,7 +858,7 @@ export function generateSSR(
     ): string {
         const plan = awaitPlan(node)
         const id = nextVar('$aid')
-        let code = `const ${id} = $ctx.next++;\n`
+        let code = `const ${id} = $$blockId($ctx);\n`
         code += `${target}.push("<!--abide:await:" + ${id} + "-->");\n`
         code += branchContent(plan.pending, target)
         code += `${target}.push("<!--/abide:await:" + ${id} + "-->");\n`
@@ -876,7 +902,7 @@ export function generateSSR(
         const plan = tryPlan(node)
         const id = nextVar('$tid')
         const mark = nextVar('$trim')
-        let code = `const ${id} = $ctx.next++;\n`
+        let code = `const ${id} = $$blockId($ctx);\n`
         code += `${target}.push("<!--abide:try:" + ${id} + "-->");\n`
         code += openRange(target)
         /* Truncate back to just after the range-open marker on a catch, so `[` survives. */
@@ -907,6 +933,11 @@ export function generateSSR(
     let flightDecls = ''
     for (const [node, name] of flightNameByNode) {
         flightDecls += `const ${name} = $$flight(() => (${lowerExpression(node.promise)}));\n`
+    }
+    /* Child-render flights emitted during the body walk above (ADR-0037 Phase 2) — appended after
+       the await flights; both are independent prefix promise-starts, so order between them is free. */
+    for (const decl of childFlightDecls) {
+        flightDecls += `${decl}\n`
     }
     return { body, flightDecls }
 }

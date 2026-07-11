@@ -57,6 +57,11 @@ export const UI_RUNTIME_IMPORTS: { name: string; specifier: string; alias?: stri
     { name: 'settleAsyncCells', specifier: 'ui/settleAsyncCells', alias: '$$settleAsyncCells' },
     { name: 'flight', specifier: 'ui/flight', alias: '$$flight' },
     {
+        name: 'isolateCellBarrier',
+        specifier: 'ui/isolateCellBarrier',
+        alias: '$$isolateCellBarrier',
+    },
+    {
         name: 'mutateDocContainer',
         specifier: 'ui/dom/mutateDocContainer',
         alias: '$$mutateDocContainer',
@@ -64,6 +69,7 @@ export const UI_RUNTIME_IMPORTS: { name: string; specifier: string; alias?: stri
     { name: 'hydrate', specifier: 'ui/dom/hydrate', alias: '$$hydrate' },
     { name: 'escapeKey', specifier: 'ui/runtime/escapeKey', alias: '$$escapeKey' },
     { name: 'nextBlockId', specifier: 'ui/runtime/nextBlockId', alias: '$$nextBlockId' },
+    { name: 'blockId', specifier: 'ui/runtime/blockId', alias: '$$blockId' },
     {
         name: 'enterRenderPass',
         specifier: 'ui/runtime/enterRenderPass',

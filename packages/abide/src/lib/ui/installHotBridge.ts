@@ -35,6 +35,8 @@ import { effect } from './effect.ts'
 import { enterScope } from './enterScope.ts'
 import { exitScope } from './exitScope.ts'
 import { flight } from './flight.ts'
+import { isolateCellBarrier } from './isolateCellBarrier.ts'
+import { blockId } from './runtime/blockId.ts'
 import { enterRenderPass } from './runtime/enterRenderPass.ts'
 import { escapeKey } from './runtime/escapeKey.ts'
 import { exitRenderPass } from './runtime/exitRenderPass.ts'
@@ -96,10 +98,12 @@ export function installHotBridge(): void {
         cellPending,
         settleAsyncCells,
         flight,
+        isolateCellBarrier,
         mutateDocContainer,
         hydrate,
         escapeKey,
         nextBlockId,
+        blockId,
         enterRenderPass,
         exitRenderPass,
         withPath,

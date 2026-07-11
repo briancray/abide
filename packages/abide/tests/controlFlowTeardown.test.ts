@@ -65,7 +65,7 @@ describe('control-flow blocks dispose mounted content with their owner', () => {
     })
 
     test('try (success path)', () => {
-        const p = probe((host, branch) => tryBlock(host, 1, () => branch()))
+        const p = probe((host, branch) => tryBlock(host, '1', () => branch()))
         expect(p.runs()).toBe(1)
         p.teardownThenPoke()
         expect(p.runs()).toBe(1)
@@ -90,7 +90,7 @@ describe('control-flow blocks dispose mounted content with their owner', () => {
         const p = probe((host, branch) =>
             awaitBlock(
                 host,
-                1,
+                '1',
                 () => resolved,
                 undefined,
                 () => branch(),

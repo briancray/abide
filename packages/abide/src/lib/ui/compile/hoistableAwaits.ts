@@ -1,4 +1,6 @@
 import ts from 'typescript'
+import { declaredNames } from './declaredNames.ts'
+import { expressionIsPrefixEvaluable } from './expressionIsPrefixEvaluable.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
 
 /* One hoistable await: the node whose promise-start moves to the SSR prefix, and the
@@ -151,85 +153,13 @@ function walkNode(
 }
 
 /* True when EVERY referenced identifier of `promise` is prefix-evaluable: none is a template-local
-   binder and none is an async-cell name. Over-collects identifiers, so any doubt fails closed. */
+   binder and none is an async-cell name. Delegates to the shared `expressionIsPrefixEvaluable`. */
 function promiseIsPrefixEvaluable(
     promise: string,
     binders: ReadonlySet<string>,
     cellReadNames: ReadonlySet<string>,
 ): boolean {
-    for (const name of referencedIdentifiers(promise)) {
-        if (binders.has(name) || cellReadNames.has(name)) {
-            return false
-        }
-    }
-    return true
-}
-
-/* Every identifier read as a value in `code` — excludes property member names (`.name`) and object
-   literal keys, which are not free variable references. Deliberately generous elsewhere: an inner
-   arrow's param is still collected, so a promise shadowing a binder name inside a callback is judged
-   NOT hoistable rather than risk a false hoist. */
-function referencedIdentifiers(code: string): Set<string> {
-    const names = new Set<string>()
-    let source: ts.SourceFile
-    try {
-        source = ts.createSourceFile('promise.ts', code, ts.ScriptTarget.Latest, true)
-    } catch {
-        /* Unparseable expression → treat as non-hoistable by returning a sentinel the caller's
-           binder check can never clear; simplest is a name no scope defines. */
-        return new Set(['\0unparseable'])
-    }
-    const visit = (node: ts.Node): void => {
-        if (ts.isPropertyAccessExpression(node)) {
-            visit(node.expression)
-            return
-        }
-        if (ts.isPropertyAssignment(node) && ts.isIdentifier(node.name)) {
-            visit(node.initializer)
-            return
-        }
-        if (ts.isIdentifier(node)) {
-            names.add(node.text)
-            return
-        }
-        ts.forEachChild(node, visit)
-    }
-    visit(source)
-    return names
-}
-
-/* Top-level declared names of a code block — a nested `<script>`'s locals, or a snippet's params
-   parsed as a destructuring pattern. Best-effort; on a parse miss returns empty (fail-open on the
-   binder side is safe here because a script's names only ADD conservatism when present). */
-function declaredNames(code: string): Set<string> {
-    const names = new Set<string>()
-    let source: ts.SourceFile
-    try {
-        source = ts.createSourceFile('script.ts', code, ts.ScriptTarget.Latest, true)
-    } catch {
-        return names
-    }
-    const collectBinding = (name: ts.BindingName): void => {
-        if (ts.isIdentifier(name)) {
-            names.add(name.text)
-            return
-        }
-        for (const element of name.elements) {
-            if (ts.isBindingElement(element)) {
-                collectBinding(element.name)
-            }
-        }
-    }
-    for (const statement of source.statements) {
-        if (ts.isVariableStatement(statement)) {
-            for (const declaration of statement.declarationList.declarations) {
-                collectBinding(declaration.name)
-            }
-        } else if (ts.isFunctionDeclaration(statement) && statement.name !== undefined) {
-            names.add(statement.name.text)
-        }
-    }
-    return names
+    return expressionIsPrefixEvaluable(promise, binders, cellReadNames)
 }
 
 /* A single-element array literal like `[remountKey]` — the only `{#for}` source that renders its

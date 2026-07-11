@@ -135,8 +135,9 @@ describe('nested blocking awaits render inline, depth-first, on SSR', () => {
 
         // C: both cards' inner awaits resolved server-side.
         expect(html.match(/card:CARD/g) ?? []).toHaveLength(2)
-        // A: four await boundaries (2 page + 2 card), all with distinct ids 0..3.
-        const ids = [...html.matchAll(/<!--abide:await:(\d+)-->/g)].map((m) => Number(m[1]))
+        // A: four await boundaries (2 page at the empty path, 2 card each under its own
+        // child-ordinal path), all with distinct path-namespaced ids (ADR-0037).
+        const ids = [...html.matchAll(/<!--abide:await:([^-]+)-->/g)].map((m) => m[1])
         expect(new Set(ids).size).toBe(ids.length)
         expect(ids.length).toBe(4)
         // every boundary has a resume value (none orphaned by a mid-settle push).

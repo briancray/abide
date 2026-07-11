@@ -9,6 +9,7 @@ import { outlet } from '../src/lib/ui/dom/outlet.ts'
 import { navigate } from '../src/lib/ui/navigate.ts'
 import { renderChain } from '../src/lib/ui/renderChain.ts'
 import { router } from '../src/lib/ui/router.ts'
+import { blockId } from '../src/lib/ui/runtime/blockId.ts'
 import { enterRenderPass } from '../src/lib/ui/runtime/enterRenderPass.ts'
 import { exitRenderPass } from '../src/lib/ui/runtime/exitRenderPass.ts'
 import { nextBlockId } from '../src/lib/ui/runtime/nextBlockId.ts'
@@ -172,15 +173,13 @@ describe('renderChain', () => {
     })
 
     test('shares one block-id pass so await ids stay unique across layers', async () => {
-        /* Stubs draw their id from the SHARED `$ctx` renderChain threads through each
-           layer — the real mechanism (no module-global counter), so the layer and page
-           get consecutive ids. */
+        /* Stubs draw their id from the SHARED `$ctx` map renderChain threads through each
+           layer via `blockId(ctx)` — the real mechanism (path-namespaced, no module-global
+           counter). With no route keys the layers share the empty path, so the ids are the
+           plain `0`,`1` form, consecutive in layer order. */
         const layerWithAwait = (tag: string): UiComponent =>
             view((_params, ctx) => {
-                const id = ctx?.next ?? 0
-                if (ctx) {
-                    ctx.next += 1
-                }
+                const id = ctx ? blockId(ctx) : '0'
                 return {
                     html: `<${tag}>${O}${C}<!--abide:await:${id}--></${tag}>`,
                     awaits: [{ id, promise: () => Promise.resolve(1), then: async () => '' }],
@@ -189,10 +188,7 @@ describe('renderChain', () => {
                 }
             })
         const page = view((_params, ctx) => {
-            const id = ctx?.next ?? 0
-            if (ctx) {
-                ctx.next += 1
-            }
+            const id = ctx ? blockId(ctx) : '0'
             return {
                 html: `<main><!--abide:await:${id}--></main>`,
                 awaits: [{ id, promise: () => Promise.resolve(2), then: async () => '' }],
@@ -201,7 +197,7 @@ describe('renderChain', () => {
             }
         })
         const ssr = await renderChain([layerWithAwait('div'), page], {})
-        expect(ssr.awaits.map((block) => block.id)).toEqual([0, 1]) // unique, layer order
+        expect(ssr.awaits.map((block) => block.id)).toEqual(['0', '1']) // unique, layer order
     })
 
     test('throws a clear error when a layout has no outlet', async () => {

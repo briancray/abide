@@ -1,4 +1,4 @@
-import { pendingAsyncCellsSlot } from '../shared/pendingAsyncCellsSlot.ts'
+import { activePendingCells } from './activePendingCells.ts'
 
 /*
 The SSR await-barrier the compiler lowers to `$$settleAsyncCells()` between a
@@ -13,7 +13,7 @@ server-side only), so the barrier is a no-op await.
 */
 // @documentation plumbing
 export async function settleAsyncCells(): Promise<void> {
-    const pending = pendingAsyncCellsSlot.get()
+    const pending = activePendingCells()
     if (pending === undefined) {
         return
     }
