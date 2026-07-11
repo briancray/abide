@@ -12,6 +12,11 @@ import { jsonSchemaForPromptArguments } from './lib/shared/jsonSchemaForPromptAr
 import { manifestModule } from './lib/shared/manifestModule.ts'
 import { pageUrlForFile } from './lib/shared/pageUrlForFile.ts'
 import { parsePromptMarkdown } from './lib/shared/parsePromptMarkdown.ts'
+import {
+    DEFINE_RPC_GLOBAL,
+    DEFINE_SOCKET_GLOBAL,
+    REMOTE_PROXY_GLOBAL,
+} from './lib/shared/RPC_SHIM_GLOBALS.ts'
 import { prepareRpcModule } from './lib/shared/prepareRpcModule.ts'
 import { prepareSocketModule } from './lib/shared/prepareSocketModule.ts'
 import { programNameForPackage } from './lib/shared/programNameForPackage.ts'
@@ -423,7 +428,7 @@ export function abideResolverPlugin({
                 longer a violation.
                 */
                 if (target === 'client') {
-                    const banner = `import { remoteProxy as __abideRemoteProxy__ } from '${importName}/ui/remoteProxy';
+                    const banner = `import { remoteProxy as ${REMOTE_PROXY_GLOBAL} } from '${importName}/ui/remoteProxy';
 `
                     return {
                         contents: `${banner}${prepared.rewriteForClient(url)}`,
@@ -440,7 +445,7 @@ export function abideResolverPlugin({
                 tokenizer-driven so `GET` mentions inside strings and
                 comments are left alone.
                 */
-                const banner = `import { defineRpc as __abideDefineRpc__ } from '${importName}/server/rpc/defineRpc';
+                const banner = `import { defineRpc as ${DEFINE_RPC_GLOBAL} } from '${importName}/server/rpc/defineRpc';
 `
                 return { contents: `${banner}${prepared.rewriteForServer(url)}`, loader: 'ts' }
             })
@@ -476,7 +481,7 @@ export const ${prepared.exportName} = __abideSocketProxy__(${JSON.stringify(name
 `
                     return { contents, loader: 'ts' }
                 }
-                const banner = `import { defineSocket as __abideDefineSocket__ } from '${importName}/server/sockets/defineSocket';
+                const banner = `import { defineSocket as ${DEFINE_SOCKET_GLOBAL} } from '${importName}/server/sockets/defineSocket';
 `
                 return {
                     contents: `${banner}${prepared.rewriteForServer(name)}`,

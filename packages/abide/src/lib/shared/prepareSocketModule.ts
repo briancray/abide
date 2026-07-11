@@ -1,4 +1,5 @@
 import { prepareRemoteExport } from './prepareRemoteExport.ts'
+import { DEFINE_SOCKET_GLOBAL } from './RPC_SHIM_GLOBALS.ts'
 
 const SINGLE_EXPORT_ERROR =
     '[abide] $sockets module contains more than one `socket(...)` export — each file must declare exactly one socket'
@@ -37,8 +38,8 @@ export function prepareSocketModule(
             const inner = stripped.slice(site.parenStart + 1, site.parenEnd).trim()
             const binding =
                 inner.length === 0
-                    ? `__abideDefineSocket__(${JSON.stringify(name)})`
-                    : `__abideDefineSocket__(${JSON.stringify(name)}, ${stripped.slice(site.parenStart + 1, site.parenEnd)})`
+                    ? `${DEFINE_SOCKET_GLOBAL}(${JSON.stringify(name)})`
+                    : `${DEFINE_SOCKET_GLOBAL}(${JSON.stringify(name)}, ${stripped.slice(site.parenStart + 1, site.parenEnd)})`
             return stripped.slice(0, site.callStart) + binding + stripped.slice(site.parenEnd + 1)
         },
     }

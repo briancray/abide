@@ -1,5 +1,6 @@
 import { HTTP_METHODS } from './HTTP_METHODS.ts'
 import { prepareRemoteExport } from './prepareRemoteExport.ts'
+import { DEFINE_RPC_GLOBAL, REMOTE_PROXY_GLOBAL } from './RPC_SHIM_GLOBALS.ts'
 import { skipNonCode } from './skipNonCode.ts'
 import type { ErrorJsonSchemas } from './types/ErrorJsonSchemas.ts'
 import type { HttpMethod } from './types/HttpMethod.ts'
@@ -76,7 +77,7 @@ export function prepareRpcModule(
         streaming,
         exportName: site.exportName,
         rewriteForServer(url: string): string {
-            const binding = `__abideDefineRpc__(${JSON.stringify(method)}, ${JSON.stringify(url)}, `
+            const binding = `${DEFINE_RPC_GLOBAL}(${JSON.stringify(method)}, ${JSON.stringify(url)}, `
             const head = stripped.slice(0, site.callStart) + binding
             /* Build-injected server opts: `streaming` (from the handler body / return type), the
                `coerce` plan (numeric/boolean query fields → typed, ADR-0028), `inputJsonSchema` (the
@@ -124,7 +125,7 @@ export function prepareRpcModule(
         remoteProxy reads only streaming/cache/stream off the opts and ignores the rest.
         */
         rewriteForClient(url: string): string {
-            const callHead = `${stripped.slice(0, site.callStart)}__abideRemoteProxy__(${JSON.stringify(method)}, ${JSON.stringify(url)}`
+            const callHead = `${stripped.slice(0, site.callStart)}${REMOTE_PROXY_GLOBAL}(${JSON.stringify(method)}, ${JSON.stringify(url)}`
             const opts = argParts[1]
             /* Build-injected CLIENT opts: `streaming` (build-derived from the elided handler body)
                and the `outputWirePlan` (the handler's structured success fields → the client revives
