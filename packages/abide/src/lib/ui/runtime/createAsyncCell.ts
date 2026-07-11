@@ -4,6 +4,7 @@ import { isAsyncIterable } from '../../shared/isAsyncIterable.ts'
 import { isThenable } from '../../shared/isThenable.ts'
 import { pendingAsyncCellsSlot } from '../../shared/pendingAsyncCellsSlot.ts'
 import { resolvedCellsSlot } from '../../shared/resolvedCellsSlot.ts'
+import { streamedCellsSlot } from '../../shared/streamedCellsSlot.ts'
 import type { AsyncComputed } from '../../shared/types/AsyncComputed.ts'
 import type { AsyncState } from '../../shared/types/AsyncState.ts'
 import type { NamedAsyncIterable } from '../../shared/types/NamedAsyncIterable.ts'
@@ -13,6 +14,7 @@ import { CURRENT_SCOPE } from './CURRENT_SCOPE.ts'
 import { createEffectNode } from './createEffectNode.ts'
 import { createSignalNode } from './createSignalNode.ts'
 import { readNode } from './readNode.ts'
+import { registerStreamedCell } from './STREAMED_CELLS.ts'
 import { writeNode } from './writeNode.ts'
 
 /* The seed's transform gate (mirrors `state`/`linked`): coerces every value entering
@@ -95,19 +97,21 @@ export function createAsyncCell(
         acceptValue(value)
         writeNode(errorNode, undefined)
         writeNode(inFlightNode, false)
-        /* Server-only: record the resolved value keyed by this cell's render-path id, so the page
-           renderer stamps it into `__SSR__.cells` and the client hydrates it warm (the `window`
-           guard keeps client settles from ever recording). BLOCKING cells only: the barrier awaits
-           them before the template peeks, so the resolved value is baked into the SSR HTML and a
-           warm client value MATCHES it (no pending flash, no orphaned-node duplication). A STREAMING
-           cell (ADR-0032, a no-`await` position) is EXCLUDED — it ships pending in the shell (its
-           promise never settles during the synchronous render, and it is off the barrier), so the
-           SSR HTML holds the pending state; warm-seeding its resolved value would diverge from that
-           pending markup and corrupt the claimed text/branch on hydrate. The streaming tier instead
-           resolves on the client (cold re-run against the cache snapshot, or the `__abideResolve`
-           stream chunk), which is congruent with the pending shell. */
-        if (warmKey !== undefined && typeof window === 'undefined' && options.streaming !== true) {
-            resolvedCellsSlot.get()?.entries.push({ key: warmKey, value })
+        /* Server-only: record the resolved value keyed by this cell's render-path id (the `window`
+           guard keeps client settles from ever recording). BLOCKING cells → `resolvedCells`: the
+           barrier awaits them before the template peeks, so the value bakes into the SSR HTML and
+           the page renderer stamps it into the PRE-mount `__SSR__.cells` warm-seed — a warm client
+           value MATCHES it (no flash, no duplication). STREAMING cells → `streamedCells` (ADR-0035):
+           they ship pending in the shell, so their value can't ride the pre-mount seed (it would
+           diverge from the pending markup); it's streamed AFTER the shell as an `__abideResolve`
+           chunk the client adopts POST-hydration. Recording a VALUE (not awaiting a promise) means a
+           cell that never settles this request is simply never recorded — no hang. */
+        if (warmKey !== undefined && typeof window === 'undefined') {
+            if (options.streaming === true) {
+                streamedCellsSlot.get()?.entries.push({ key: warmKey, value })
+            } else {
+                resolvedCellsSlot.get()?.entries.push({ key: warmKey, value })
+            }
         }
     }
 
@@ -193,7 +197,9 @@ export function createAsyncCell(
                 pendingAsyncCellsSlot.get()?.promises.push(inFlight)
             }
             /* `.then(onValue, onError)` handles the rejection inline — contained in `error()`,
-               never an unhandled rejection. */
+               never an unhandled rejection. A STREAMING cell's resolved value is recorded in
+               `settleValue` (ADR-0035), not here — awaiting the promise could hang if it never
+               settles this request. */
             ;(produced as PromiseLike<unknown>).then(
                 (value) => settleValue(myRun, value),
                 (error) => settleError(myRun, error),
@@ -239,6 +245,20 @@ export function createAsyncCell(
             }
         }
     })
+
+    /* Client-only, STREAMING cells (ADR-0035): a streaming cell ships pending and its value streams
+       in AFTER the shell. Register — AFTER the eager run above, so its `inFlight = true` is already
+       set — to receive that value by render-path id; when it lands, adopt it as a reactive update:
+       the value shows immediately (no `loading…` flash) and the in-flight cold seed run re-settles
+       the same value, superseded by the write latch. The streamed value only ever seeds the initial
+       render; a later dep-driven reseed is authoritative and runs the seed as usual. */
+    if (warmKey !== undefined && options.streaming === true && typeof window !== 'undefined') {
+        registerStreamedCell(warmKey, (value) => {
+            acceptValue(value)
+            writeNode(errorNode, undefined)
+            writeNode(inFlightNode, false)
+        })
+    }
 
     /* The shared read surface, identical for read-only and writable cells. */
     const readOnly: AsyncComputed<unknown> = {

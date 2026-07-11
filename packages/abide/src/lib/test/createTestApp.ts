@@ -43,6 +43,7 @@ import { pendingAsyncCellsSlot } from '../shared/pendingAsyncCellsSlot.ts'
 import { resolvedCellsSlot } from '../shared/resolvedCellsSlot.ts'
 import { SOCKETS_PATH } from '../shared/SOCKETS_PATH.ts'
 import { sharedCacheStoreSlot } from '../shared/sharedCacheStoreSlot.ts'
+import { streamedCellsSlot } from '../shared/streamedCellsSlot.ts'
 import type { RemoteFunction } from '../shared/types/RemoteFunction.ts'
 import type { Socket } from '../shared/types/Socket.ts'
 import { createTestSocketChannel } from './createTestSocketChannel.ts'
@@ -105,6 +106,7 @@ export async function createTestApp(): Promise<TestApp> {
         baseResolver: baseSlot.resolver,
         pendingAsyncCellsResolver: pendingAsyncCellsSlot.resolver,
         resolvedCellsResolver: resolvedCellsSlot.resolver,
+        streamedCellsResolver: streamedCellsSlot.resolver,
         activeServer: serverSlot.active,
     }
 
@@ -117,6 +119,9 @@ export async function createTestApp(): Promise<TestApp> {
     const sharedResolvedCells = { entries: [] }
     resolvedCellsSlot.resolver = () =>
         requestContext.getStore()?.resolvedCells ?? sharedResolvedCells
+    const sharedStreamedCells = { entries: [] }
+    streamedCellsSlot.resolver = () =>
+        requestContext.getStore()?.streamedCells ?? sharedStreamedCells
     pageSlot.resolver = resolvePageSnapshot
 
     /* Eager env validation, exactly as serverEntry: a top-level env(schema) in
@@ -200,6 +205,7 @@ export async function createTestApp(): Promise<TestApp> {
         baseSlot.resolver = previous.baseResolver
         pendingAsyncCellsSlot.resolver = previous.pendingAsyncCellsResolver
         resolvedCellsSlot.resolver = previous.resolvedCellsResolver
+        streamedCellsSlot.resolver = previous.streamedCellsResolver
         serverSlot.active = previous.activeServer
     }
 

@@ -340,6 +340,26 @@ export function createUiPageRenderer({
                         )) {
                             controller.enqueue(encoder.encode(resolveChunk(resolution)))
                         }
+                        /* ADR-0035: stream each STREAMING cell that SETTLED during this render as an
+                           `__abideResolve({ cellKey, value })` chunk (keyed by its render-path id),
+                           so the client adopts it post-hydration instead of only cold-re-running the
+                           seed — the flash the pre-mount `__SSR__.cells` warm-seed can't fix without
+                           diverging from the pending shell. These are already-settled VALUES
+                           (recorded in createAsyncCell.settleValue), never awaited here: a cell that
+                           stays pending through the request (`{#if getFoo()}` holds) is simply not
+                           streamed and the client cold-runs it. An unserializable value emits nothing.
+                           Read from `store` directly since the stream body runs outside the request ALS. */
+                        for (const { key, value } of store.streamedCells.entries) {
+                            let encoded: string
+                            try {
+                                encoded = encodeRefJson(value)
+                            } catch {
+                                continue
+                            }
+                            controller.enqueue(
+                                encoder.encode(resolveChunk({ cellKey: key, value: encoded })),
+                            )
+                        }
                         controller.enqueue(encoder.encode(after ?? ''))
                         controller.close()
                     } catch (streamError) {

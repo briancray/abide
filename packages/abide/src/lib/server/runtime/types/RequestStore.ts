@@ -1,6 +1,7 @@
 import type { CacheStore } from '../../../shared/types/CacheStore.ts'
 import type { PendingAsyncCells } from '../../../shared/types/PendingAsyncCells.ts'
 import type { ResolvedCells } from '../../../shared/types/ResolvedCells.ts'
+import type { StreamedCells } from '../../../shared/types/StreamedCells.ts'
 import type { TraceContext } from '../../../shared/types/TraceContext.ts'
 import type { Scope } from '../../../ui/types/Scope.ts'
 
@@ -29,6 +30,13 @@ export type RequestStore = {
     in-flight list) — this one holds settled VALUES, read at render-return, not awaited.
     */
     resolvedCells: ResolvedCells
+    /*
+    STREAMING async-cell in-flight promises registered during this request's SSR pass, keyed by
+    render-path id (ADR-0035). A streaming cell ships pending in the shell; the page renderer drains
+    this after the shell, awaiting each and streaming an `__abideResolve({ cellKey, value })` chunk so
+    the client adopts the resolved value post-hydration. Per-request so concurrent renders never mix.
+    */
+    streamedCells: StreamedCells
     /*
     W3C trace position: inbound `traceparent` continued (prefer-incoming) or a
     fresh sampled trace minted at the boundary. Read by trace()/log via the

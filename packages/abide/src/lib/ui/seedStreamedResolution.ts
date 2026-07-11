@@ -1,6 +1,8 @@
 import { activeCacheStore } from '../shared/activeCacheStore.ts'
 import { cacheEntryFromSnapshot } from '../shared/cacheEntryFromSnapshot.ts'
+import { decodeRefJson } from '../shared/decodeRefJson.ts'
 import type { StreamedResolution } from '../shared/types/StreamedResolution.ts'
+import { receiveStreamedCell } from './runtime/STREAMED_CELLS.ts'
 
 /*
 Seeds one streamed cache resolution into the active store — the single sink for the
@@ -15,6 +17,13 @@ asymmetry that made streamed reads cold-miss to the network.
 */
 // @documentation plumbing
 export function seedStreamedResolution(resolution: StreamedResolution): void {
+    /* ADR-0035: a streaming CELL's server-resolved value, keyed by render-path id. Route it to the
+       mounted cell (or buffer until it registers) — decoded through the same ref-json codec the
+       server encoded it with, so a Set/Map/Date/bigint/cyclic value survives. */
+    if ('cellKey' in resolution) {
+        receiveStreamedCell(resolution.cellKey, decodeRefJson(resolution.value))
+        return
+    }
     if ('miss' in resolution) {
         return
     }

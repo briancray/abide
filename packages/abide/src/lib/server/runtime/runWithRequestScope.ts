@@ -33,6 +33,7 @@ export function runWithRequestScope(
         cache: createCacheStore(),
         pendingAsyncCells: { promises: [] },
         resolvedCells: { entries: [] },
+        streamedCells: { entries: [] },
         trace: createTraceContext(req.headers.get('traceparent')),
         start: Bun.nanoseconds(),
     }

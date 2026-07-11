@@ -37,6 +37,7 @@ import { pendingAsyncCellsSlot } from './lib/shared/pendingAsyncCellsSlot.ts'
 import { resolvedCellsSlot } from './lib/shared/resolvedCellsSlot.ts'
 import { runningAsStandaloneBinary } from './lib/shared/runningAsStandaloneBinary.ts'
 import { sharedCacheStoreSlot } from './lib/shared/sharedCacheStoreSlot.ts'
+import { streamedCellsSlot } from './lib/shared/streamedCellsSlot.ts'
 
 /*
 Resolve config into process.env before anything reads it (createServer reads
@@ -86,6 +87,8 @@ pendingAsyncCellsSlot.resolver = () =>
     requestContext.getStore()?.pendingAsyncCells ?? sharedPendingAsyncCells
 const sharedResolvedCells = { entries: [] }
 resolvedCellsSlot.resolver = () => requestContext.getStore()?.resolvedCells ?? sharedResolvedCells
+const sharedStreamedCells = { entries: [] }
+streamedCellsSlot.resolver = () => requestContext.getStore()?.streamedCells ?? sharedStreamedCells
 
 pageSlot.resolver = resolvePageSnapshot
 

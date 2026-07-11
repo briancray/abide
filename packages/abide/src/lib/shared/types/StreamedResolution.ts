@@ -1,10 +1,18 @@
 import type { CacheSnapshotEntry } from './CacheSnapshotEntry.ts'
 
 /*
-Payload of one streamed `window.__abideResolve(...)` call. A full
-`CacheSnapshotEntry` settles the placeholder with warm data; a `{ key, miss }`
-marker means the server couldn't snapshot that body (binary, rejected, evicted)
-so the client settles the placeholder with a live re-fetch instead. Discriminate
-on the `miss` field.
+Payload of one streamed `window.__abideResolve(...)` call. Three arms:
+
+  - a full `CacheSnapshotEntry` (has `key` + body) settles a cache placeholder with warm data;
+  - a `{ key, miss }` marker means the server couldn't snapshot that cache body (binary, rejected,
+    evicted) so the client settles the placeholder with a live re-fetch instead;
+  - a `{ cellKey, value }` (ADR-0035) carries a STREAMING CELL's server-resolved value, keyed by its
+    render-path warm-key and `encodeRefJson`-encoded, applied post-hydration as a reactive update so
+    a non-cache peek stops flashing `loading…` on hydrate.
+
+Discriminate on `cellKey` (cell) then `miss` (cache miss) then default (cache entry).
 */
-export type StreamedResolution = CacheSnapshotEntry | { key: string; miss: true }
+export type StreamedResolution =
+    | CacheSnapshotEntry
+    | { key: string; miss: true }
+    | { cellKey: string; value: string }
