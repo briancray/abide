@@ -216,6 +216,37 @@ describe('renderChain', () => {
             ),
         ).rejects.toThrow('{children()} outlet')
     })
+
+    /* ADR-0038: a route's layout layers render in PARALLEL — three layers each blocking ~40ms
+       settle in ~max (one delay), not ~sum (three). Distinct route keys give each layer its own
+       path namespace so block ids stay congruent; the html still folds inner-to-outer correctly. */
+    test('layout layers render in parallel (~max, not ~sum of their latencies)', async () => {
+        const DELAY = 40
+        const layer = (tag: string, isLayout: boolean): UiComponent =>
+            Object.assign(() => () => undefined, {
+                render: async (): Promise<SsrRender> => {
+                    await new Promise((resolve) => setTimeout(resolve, DELAY))
+                    return {
+                        html: isLayout ? `<${tag}>${O}${C}</${tag}>` : `<${tag}>page</${tag}>`,
+                        awaits: [],
+                        state: {},
+                        resume: {},
+                    }
+                },
+            }) as unknown as UiComponent
+        const start = performance.now()
+        const ssr = await renderChain(
+            [layer('div', true), layer('section', true), layer('main', false)],
+            {},
+            ['/', '/dash', '/dash/page'],
+        )
+        const elapsed = performance.now() - start
+        expect(elapsed).toBeLessThan(DELAY * 2.4) // parallel ≈40ms; sequential ≈120ms would fail
+        // folded inner-to-outer, page innermost
+        expect(ssr.html).toContain('<div>')
+        expect(ssr.html).toContain('<section>')
+        expect(ssr.html).toContain('<main>page</main>')
+    })
 })
 
 describe('compiled layout round-trip', () => {

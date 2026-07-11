@@ -1,3 +1,4 @@
+import { isolateCellBarrier } from './isolateCellBarrier.ts'
 import { CHILD_PRESENT } from './runtime/CHILD_PRESENT.ts'
 import { OUTLET_CLOSE, OUTLET_OPEN } from './runtime/OUTLET_MARKER.ts'
 import type { RenderContext } from './runtime/types/RenderContext.ts'
@@ -17,9 +18,10 @@ Server-renders a route's layout chain wrapped around its page into one SsrRender
 block-id counter map (`$ctx`): each `await`/`try` block draws a path-namespaced id
 (`${render-path}:${n}`, ADR-0037), so ids stay unique across layers by path rather than by
 a shared sequential draw — keeping the streamed fragments and the resume manifest aligned
-with the client (which composes the same path-keyed ids). The chain is still rendered
-sequentially (not `Promise.all`) so the reactive scopes never interleave; the block ids no
-longer depend on that ordering.
+with the client (which composes the same path-keyed ids). The layers render IN PARALLEL
+(`Promise.all`, ADR-0038): each roots a distinct route-key path so their block ids never collide,
+and each runs under `isolateCellBarrier` so their async-cell barriers don't cross-drain — the html
+fold + state/awaits/resume aggregation below run after all settle and are order-independent.
 
 The html nests inner-to-outer: each parent layout's empty outlet boundary
 (`<!--abide:outlet--><!--/abide:outlet-->`) is filled with the accumulated child html —
@@ -49,21 +51,40 @@ export async function renderChain(
     for (const key of Object.keys(params)) {
         paramThunks[key] = () => params[key]
     }
-    for (let index = 0; index < views.length; index += 1) {
-        const view = views[index] as UiComponent
-        const hasChild = index < views.length - 1
-        const props: UiProps = hasChild
-            ? { ...paramThunks, children: () => CHILD_PRESENT }
-            : paramThunks
-        /* Root this layer's render-path at its route key. `withPath` is synchronous; the render's
-           cell/scope construction runs in its own SYNCHRONOUS prefix (before the barrier `await`),
-           so the path is set for that construction, then restored as the pending promise is
-           returned and awaited outside — mirroring the client's `withPath(key, () => build)`. */
-        const key = keys[index]
+    if (views.length > 1) {
+        /* ADR-0038: a route WITH layouts renders its layers IN PARALLEL. Block ids are path-keyed
+           (ADR-0037) and each layer roots a DISTINCT route-key path, so their id allocations never
+           collide even as the async continuations interleave; the fold + state/awaits/resume
+           aggregation below run AFTER all settle and are order-independent (keyed merges /
+           index-ordered). Each layer runs under `isolateCellBarrier` so its async-cell barrier drains
+           its OWN pending list — without it, two layers registering cells concurrently into the one
+           request-scoped list would splice-drain each other (the hazard ADR-0037 fixed for sibling
+           children). Scope needs no isolation: the shipped parallel child renders tolerate the
+           identical per-request CURRENT_SCOPE clobber (all scope-sensitive construction is
+           synchronous in each render's prefix). */
+        const collected = await Promise.all(
+            views.map((view, index) => {
+                const hasChild = index < views.length - 1
+                const props: UiProps = hasChild
+                    ? { ...paramThunks, children: () => CHILD_PRESENT }
+                    : paramThunks
+                const key = keys[index]
+                const run = () => isolateCellBarrier(() => view.render(props, ctx))
+                return key === undefined ? run() : withPath(key, run)
+            }),
+        )
+        renders.push(...collected)
+    } else if (views.length === 1) {
+        /* A lone page (no layouts) — the common case — renders DIRECTLY: no parallelism to gain, and
+           no `Promise.all`/`isolateCellBarrier` wrap, so its bare-read/settle timing is byte-identical
+           to the pre-ADR-0038 path (a fast in-process read stays pending → streams, rather than
+           slipping settled → inline behind an extra microtask). */
+        const view = views[0] as UiComponent
+        const key = keys[0]
         renders.push(
             key === undefined
-                ? await view.render(props, ctx)
-                : await withPath(key, () => view.render(props, ctx)),
+                ? await view.render(paramThunks, ctx)
+                : await withPath(key, () => view.render(paramThunks, ctx)),
         )
     }
     let html = renders[renders.length - 1]?.html ?? ''
