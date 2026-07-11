@@ -33,12 +33,11 @@ export function mountStreamedChild(
     factory: UiComponent,
     props: Parameters<UiComponent>[1],
     before: Node | null = null,
-    label?: string,
     ordinal?: number,
 ): void {
     const run = <T>(build: () => T): T => withOptionalPath(ordinal, build)
     const mount = (): { dispose: () => void } =>
-        run(() => mountRange(parent, factory.build, props, before, label))
+        run(() => mountRange(parent, factory.build, props, before))
 
     const hydration = RENDER.hydration
     if (hydration === undefined) {
@@ -79,7 +78,7 @@ export function mountStreamedChild(
        the child fresh at that position; its streamed cells resolve post-mount via receiveStreamedCell. */
     const after = discardBoundary(parent, open, `/abide:await:${childPath}`, hydration)
     const handle = withoutHydration(() =>
-        run(() => mountRange(parent, factory.build, props, after, label)),
+        run(() => mountRange(parent, factory.build, props, after)),
     )
     OWNER.current?.push(handle.dispose)
 }

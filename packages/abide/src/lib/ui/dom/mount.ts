@@ -1,5 +1,4 @@
 import { scope } from '../runtime/scope.ts'
-import { scopeLabel } from './scopeLabel.ts'
 import { withScope } from './withScope.ts'
 
 /*
@@ -23,7 +22,7 @@ export function mount(
     /* Establish this component's lexical scope (nested, `awaiting` so it adopts the model
        doc the build's first `doc()` creates) and render pass, run the build under it, and
        restore the previous scope — the shared mount core (see `withScope`). */
-    const { lexical } = withScope(scopeLabel(host), () => scope(() => build(host, props)))
+    const { lexical } = withScope(() => scope(() => build(host, props)))
     return () => {
         lexical.dispose()
         host.textContent = ''

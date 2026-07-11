@@ -27,7 +27,6 @@ export function createScope(
     initial: unknown = {},
     parent: Scope | undefined = undefined,
     awaiting = false,
-    label: string | undefined = undefined,
 ): Scope {
     /* Eager unless awaiting adoption; `data()` lazily mints an empty doc if a body
        never created one (a stateless component that still reaches for its scope). */
@@ -64,7 +63,6 @@ export function createScope(
     const self: Scope & { cell: <T>(path: string) => Cell<T>; nextCellIndex: () => number } = {
         id,
         nextCellIndex: () => cellIndex++,
-        label,
         parent,
         read: (path) => data().read(path),
         replace: (path, value) => data().replace(path, value),

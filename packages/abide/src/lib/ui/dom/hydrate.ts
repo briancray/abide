@@ -2,7 +2,6 @@ import { hydratingSlot } from '../../shared/hydratingSlot.ts'
 import { wakeHydrationPeeks } from '../../shared/wakeHydrationPeeks.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { scope } from '../runtime/scope.ts'
-import { scopeLabel } from './scopeLabel.ts'
 import { withScope } from './withScope.ts'
 
 /*
@@ -33,7 +32,7 @@ export function hydrate(
     try {
         /* Same shared mount core as `mount` (see `withScope`) — a hydrated component owns a
            scope too, adopting the model its build adopts — run with the claim cursor active. */
-        const { lexical } = withScope(scopeLabel(host), () => scope(() => build(host, props)))
+        const { lexical } = withScope(() => scope(() => build(host, props)))
         return () => lexical.dispose()
     } finally {
         RENDER.hydration = previous

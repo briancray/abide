@@ -22,9 +22,6 @@ them (`$$scope().linked(...)`) — they are withdrawn from the AUTHOR-facing pub
 */
 export type Scope = {
     readonly id: string
-    /* Dev-only display name (the host component/element it mounted into) for dev tooling;
-       undefined for SSR/detached/child scopes. Currently unconsumed — see `scopeLabel`. */
-    readonly label?: string
     readonly parent: Scope | undefined
     /* data — mirrors Doc */
     read: <T>(path: string) => T

@@ -15,9 +15,9 @@ build, so the restore is exact). `build` returns its reactivity stopper (from `s
 the caller wraps its own DOM teardown (clear host vs clear range) around one
 `lexical.dispose()`, no longer composing a separate `stop()` at every site.
 */
-export function withScope(label: string | undefined, build: () => () => void): { lexical: Scope } {
+export function withScope(build: () => () => void): { lexical: Scope } {
     const parentScope = CURRENT_SCOPE.current
-    const lexical = createScope({}, parentScope, true, label)
+    const lexical = createScope({}, parentScope, true)
     enterRenderPass()
     CURRENT_SCOPE.current = lexical
     try {

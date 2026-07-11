@@ -600,8 +600,7 @@ export function generateBuild(
        `before` (a skeleton anchor's `anchorCursor`, or `null` for a standalone child).
        `mountRange` opens the `[`/`]` markers and builds the child between them — no
        wrapper element — so the child's root is a true direct child of `parentVar`.
-       Hydration stays ambient, so the child claims its server range in place. The
-       component name passes as the scope label (the inspector's `<Counter>` name). */
+       Hydration stays ambient, so the child claims its server range in place. */
     function generateChildComponent(
         node: Extract<TemplateNode, { kind: 'component' }>,
         parentVar: string,
@@ -617,7 +616,7 @@ export function generateBuild(
            which probes the cursor to adopt an inlined `[ … ]` range OR a streamed `abide:await`
            boundary (ADR-0039). Same args as mountChild. */
         const mountFn = streamCapable.has(node) ? '$$mountStreamedChild' : '$$mountChild'
-        return `${mountFn}(${parentVar}, ${lowerExpression(node.name)}, ${propsArg(node)}, ${before}, ${JSON.stringify(node.name)}, ${childOrdinal++});\n`
+        return `${mountFn}(${parentVar}, ${lowerExpression(node.name)}, ${propsArg(node)}, ${before}, ${childOrdinal++});\n`
     }
 
     /* An await block: pending → resolved(value) / error branches. Each branch is a

@@ -24,15 +24,14 @@ export function fillBoundary(
     close: Comment,
     build: (host: Node, props?: UiProps) => void,
     props: UiProps | undefined,
-    label: string | undefined,
 ): { dispose: () => void } {
     const hydration = RENDER.hydration
     if (hydration === undefined) {
-        return fillRange(open, close, build, props, label)
+        return fillRange(open, close, build, props)
     }
     /* Hydrate: adopt the server content between the markers in place. */
     const parent = open.parentNode as Node
     hydration.next.set(parent, open.nextSibling)
-    const scoped = withScope(label, () => scope(() => build(parent, props)))
+    const scoped = withScope(() => scope(() => build(parent, props)))
     return { dispose: disposeRange(scoped, open, close) }
 }

@@ -15,15 +15,12 @@ export function mountChild(
     factory: UiComponent,
     props: Parameters<UiComponent>[1],
     before: Node | null = null,
-    label?: string,
     /* The compiler's source-order ordinal for this `<Child/>` mount site — pushed onto the render
        path so the child's scope (and its cells) get a serialization-stable id under this parent
        (two same-type siblings differ by ordinal; the same site across `{#each}` rows differs by the
        row key the each block already pushed). Absent (a non-compiled caller) → no path segment. */
     ordinal?: number,
 ): void {
-    const handle = withOptionalPath(ordinal, () =>
-        mountRange(parent, factory.build, props, before, label),
-    )
+    const handle = withOptionalPath(ordinal, () => mountRange(parent, factory.build, props, before))
     OWNER.current?.push(handle.dispose)
 }

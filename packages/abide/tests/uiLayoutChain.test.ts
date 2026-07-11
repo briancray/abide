@@ -59,7 +59,7 @@ function mountChain(host: Element, layers: UiComponent[], hydrating = false): vo
         let boundary = PENDING_OUTLET.current!
         layers.forEach((layer, index) => {
             PENDING_OUTLET.current = undefined
-            fillBoundary(boundary.open, boundary.close, layer.build, {}, undefined)
+            fillBoundary(boundary.open, boundary.close, layer.build, {})
             if (index < layers.length - 1) {
                 boundary = PENDING_OUTLET.current!
             }

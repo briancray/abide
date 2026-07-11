@@ -231,9 +231,6 @@ export function router(
                         view.build,
                         /* A layout always has a child below: a deeper layout, or the page. */
                         propsBag(depth < layoutViews.length - 1 || pageView !== undefined),
-                        /* The layout's route key names its scope for dev tooling (no host
-                           element to read a tag from — see `scopeLabel`). */
-                        chainKeys[depth],
                     ),
                 )
                 const slot = PENDING_OUTLET.current
@@ -256,8 +253,6 @@ export function router(
                     pageView.build,
                     /* A page is a leaf — no child layer. */
                     propsBag(false),
-                    /* The page's route key names its scope in the inspector (see above). */
-                    pageKey,
                 ),
             ).dispose
             mountedPageKey = pageKey

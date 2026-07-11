@@ -29,18 +29,17 @@ export function mountRange(
     build: (host: Node, props?: UiProps) => void,
     props: UiProps | undefined,
     before: Node | null = null,
-    label: string | undefined = undefined,
 ): { start: Comment; end: Comment; dispose: () => void } {
     const hydration = RENDER.hydration
     const start = openMarker(parent, RANGE_OPEN, before)
     if (hydration === undefined) {
         const end = openMarker(parent, RANGE_CLOSE, before)
-        return fillRange(start, end, build, props, label)
+        return fillRange(start, end, build, props)
     }
     /* Hydrate: adopt the server range in place. Establish the child's lexical scope
        and render pass (same as `fillRange`), build claiming the existing nodes, then
        claim the end marker the build's content stops before. */
-    const scoped = withScope(label, () => scope(() => build(parent, props)))
+    const scoped = withScope(() => scope(() => build(parent, props)))
     const end = openMarker(parent, RANGE_CLOSE)
     return { start, end, dispose: disposeRange(scoped, start, end) }
 }

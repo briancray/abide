@@ -24,8 +24,7 @@ export function fillRange(
     end: Comment,
     build: (host: Node, props?: UiProps) => void,
     props: UiProps | undefined,
-    label: string | undefined,
 ): { start: Comment; end: Comment; dispose: () => void } {
-    const scoped = withScope(label, () => fillBefore(end, (fragment) => build(fragment, props)))
+    const scoped = withScope(() => fillBefore(end, (fragment) => build(fragment, props)))
     return { start, end, dispose: disposeRange(scoped, start, end) }
 }
