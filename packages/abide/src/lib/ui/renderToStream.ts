@@ -74,7 +74,10 @@ export async function* renderToStream(
            registration when the leading child isn't a parseable script, so hydration
            re-runs this one branch's promise — degrading to a refetch instead of aborting
            the whole stream. */
-        const encoded = encodeStreamResume(resolved.resume, resolved.id)
+        const encoded =
+            resolved.resume === undefined
+                ? undefined
+                : encodeStreamResume(resolved.resume, resolved.id)
         yield resumeSeedScript(resumeDelta()) +
             `<abide-resolve data-id="${resolved.id}">` +
             (encoded === undefined ? '' : `<script type="application/json">${encoded}</script>`) +
@@ -82,7 +85,7 @@ export async function* renderToStream(
     }
 }
 
-type Settled = { id: string; html: string; resume: ResumeEntry }
+type Settled = { id: string; html: string; resume: ResumeEntry | undefined }
 
 /* Awaits one streaming block's promise and renders the resolved or error branch to
    HTML (the renderers are async so a nested `await` block composes), capturing the
@@ -94,7 +97,9 @@ function settle(block: SsrAwait): Promise<Settled> {
         async (value) => ({
             id: block.id,
             html: await block.then(value),
-            resume: { ok: true, value },
+            /* A standalone-unit (streamed component) boundary carries no resume value of its own —
+               its `then` already merged the child's nested awaits/resume for streaming composition. */
+            resume: block.htmlOnly === true ? undefined : { ok: true, value },
         }),
         async (error) => {
             /* No catch branch → surface the rejection (500 before the first flush,

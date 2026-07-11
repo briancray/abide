@@ -13,6 +13,13 @@ export type SsrAwait = {
     promise: () => unknown
     then: (value: unknown) => Promise<string>
     catch?: (error: unknown) => Promise<string>
+    /* ADR-0039 (spike): a STANDALONE-UNIT boundary — a streamed child COMPONENT — carries no
+       resume value of its own (its `then` returns the child's rendered html and merges the child's
+       own awaits/resume for nested composition; the child re-mounts client-side rather than
+       adopting a RESUME[id] value). Marks `settle` to emit an html-only fragment with no resume seed
+       script, so the client never tries to decode a whole SsrRender as an await value. Absent for a
+       normal await block (which seeds its resolved value). */
+    htmlOnly?: boolean
 }
 
 /* The result of a component's server `render()`: the pending-shell HTML, the
