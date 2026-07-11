@@ -2,9 +2,10 @@
 
 **Status:** **accepted — phase 1 shipped** (2026-07-10). Branch `feat/streamed-cell-resolution`.
 Phase 1 (kill the flash) is implemented + verified (the templating/async peek adopts its
-server-streamed value on hydrate with no `loading…` flash and no `assertClaimedText` desync). Phase
-2 (skip the redundant cold run via a `__SSR__` key manifest) is deferred. Completes the async-resolve
-story begun in
+server-streamed value on hydrate with no `loading…` flash and no `assertClaimedText` desync). A
+proposed phase 2 (skip the redundant client cold-run) was investigated and found **not feasible**
+without regressing reactive dep-tracking — see the phase-2 note. Completes the async-resolve story
+begun in
 [ADR-0019](0019-async-computeds-and-rpc-auto-reads.md) (async cells + the warm-seed),
 [ADR-0024](0024-ssr-auto-streaming-bare-reads.md) (auto-streaming bare reads + `__abideResolve`),
 and [ADR-0032](0032-async-value-positions.md) (the streaming tier). A client + wire change; it does
@@ -80,13 +81,11 @@ server ships only the settled _value_; the client's existing reactive graph pain
 ## Consequences (anticipated)
 
 - **The post-hydrate `loading…` flash disappears** for non-cache streaming peeks (the async
-  example's bare-read card resolves instantly on hydrate) — this is the **phase-1** win. Eliminating
-  the _redundant
-  client seed run itself_ (the non-cache cold re-execution, e.g. a second `loadProfile`) is
-  **phase 2** — it needs the cell to know at construction that a value is coming, so it can skip the
-  cold run and wait; that requires a small `__SSR__.streamingCells` key manifest (see plan). Phase 1
-  supersedes the cold run's _paint_ but still runs it; phase 2 skips it. (SWR revalidation on a later
-  dep change is unchanged and intended in both.)
+  example's bare-read card resolves instantly on hydrate). The client's cold seed run still executes
+  (its result re-settles the same value, superseded) — it is what subscribes the cell to its reactive
+  deps, and that subscription cannot be separated from executing the loader without regressing
+  auto-tracking (see the phase-2 note), so eliminating the double-execution is not feasible. A loader
+  with client-observable side effects should therefore not be a bare peek.
 - **Hydration stays congruent** — the value applies _after_ the pending shell is adopted, as a
   reactive update, so the streaming-cell warm-seed exclusion (`createAsyncCell.ts:109`) that ADR-0033
   documents is respected: we never seed a resolved value _before_ the pending markup is claimed.
@@ -141,11 +140,27 @@ type, and the render-path `__SSR__.cells` warm-seed (`createUiPageRenderer.ts:10
    mount tree, so hydration claims the pending markup first and the value lands as a plain reactive
    update.
 
-**Phase 2 — kill the redundant cold run (client only, additive).** 5. Add the settled/streamed cells' `warmKey`s to a `__SSR__.streamingCells` manifest at shell flush
-(the server knows them — they constructed during the sync render). At construction a streaming
-cell whose key is in the manifest **skips its cold seed run** and waits for `applyStreamed`; a
-`miss` (or a stream close with no value for that key) falls back to a cold run. Reactivity is
-unchanged — a later dep change reseeds as today.
+**Phase 2 — kill the redundant cold run. INVESTIGATED → NOT FEASIBLE (2026-07-10); do not attempt.**
+
+The plan was: a `__SSR__.streamingCells` key manifest lets an expected cell **skip its cold seed
+run** and wait for `applyStreamed`. Working it through against `createAsyncCell` shows it cannot
+preserve reactivity:
+
+- A cell subscribes to its reactive deps **by running the seed** — `createEffectNode(() =>
+run(true))` calls `seed()` (= `loadProfile(attempt)`), and the `attempt` signal is read _inside_
+  that call (auto-tracking). Subscription and loader-execution are the same act. Run it → you get
+  revalidation but also the double-execution you were trying to avoid; skip it → no execution but the
+  cell never subscribes, so `attempt` bumps stop revalidating. There is no runtime third option.
+- The compiler escape hatch — emit the referenced signals separately for subscription, then guard the
+  loader call — only captures deps passed as **arguments**. A signal read _inside_ the loader body is
+  invisible to static analysis and would be dropped, **regressing auto-tracking correctness** to save
+  one client execution. Bad trade.
+
+So the double-execution is essentially inherent to a reactive streaming cell: to stay reactive the
+client must run the loader once. Phase 1 already superseded its _paint_ (the real, visible win). The
+case phase 2 targeted — a **side-effecting loader inside a bare peek** — is an anti-pattern anyway
+(side effects belong in an action / `watch`, which run once by design). Recommendation: leave phase 1
+as the endpoint; a loader with client-observable side effects should not be a bare peek.
 
 ## Spike to run
 
