@@ -3,9 +3,10 @@
 **Status:** **accepted — phase 1 shipped** (2026-07-10). Branch `feat/streamed-cell-resolution`.
 Phase 1 (kill the flash) is implemented + verified (the templating/async peek adopts its
 server-streamed value on hydrate with no `loading…` flash and no `assertClaimedText` desync). A
-proposed phase 2 (skip the redundant client cold-run) was adversarially reviewed: **infeasible for
-opaque/local loaders, but a narrow RPC-only variant is feasible** (low-ROI — deferred) — see the
-phase-2 note. Completes the async-resolve story begun in
+proposed phase 2 (skip the redundant client cold-run) was investigated + adversarially reviewed and
+has **no worthwhile target**: a bare-RPC peek is a cache read (already warm on the client), and a
+local loader's cold-run is either cheap recompute or an infeasible-to-fix side-effect footgun — see
+the phase-2 note. Phase 1 is the endpoint. Completes the async-resolve story begun in
 [ADR-0019](0019-async-computeds-and-rpc-auto-reads.md) (async cells + the warm-seed),
 [ADR-0024](0024-ssr-auto-streaming-bare-reads.md) (auto-streaming bare reads + `__abideResolve`),
 and [ADR-0032](0032-async-value-positions.md) (the streaming tier). A client + wire change; it does
@@ -83,10 +84,11 @@ server ships only the settled _value_; the client's existing reactive graph pain
 - **The post-hydrate `loading…` flash disappears** for non-cache streaming peeks (the async
   example's bare-read card resolves instantly on hydrate). The client's cold seed run still executes
   (its result re-settles the same value, superseded) — it is what subscribes the cell to its reactive
-  deps. Eliminating that redundant execution is infeasible for an opaque/local loader but feasible
-  for an RPC loader (client proxy reads only its args); see the phase-2 note. So the residual cost is
-  one duplicate RPC + one side-effect double-fire per streamed RPC-peek at hydrate — dedupe I/O by
-  routing the read through `cache`.
+  deps. That redundant execution can't be eliminated (phase-2 note), but it costs little: a bare-RPC
+  peek is a cache read (`createRemoteFunction` → `cache.read`), so the cold-run hits the warm cache —
+  no second fetch, no handler re-invocation; only a pure LOCAL loader re-runs, which is cheap SWR
+  recompute. A local loader with side-effecting I/O is the one footgun — fix it by routing through
+  `cache` or a `watch`/action, not a bare peek.
 - **Hydration stays congruent** — the value applies _after_ the pending shell is adopted, as a
   reactive update, so the streaming-cell warm-seed exclusion (`createAsyncCell.ts:109`) that ADR-0033
   documents is respected: we never seed a resolved value _before_ the pending markup is claimed.
@@ -141,48 +143,44 @@ type, and the render-path `__SSR__.cells` warm-seed (`createUiPageRenderer.ts:10
    mount tree, so hydration claims the pending markup first and the value lands as a plain reactive
    update.
 
-**Phase 2 — kill the redundant cold run. INVESTIGATED (2026-07-10, adversarial review): infeasible
-for OPAQUE/LOCAL loaders; a narrow RPC-only variant is FEASIBLE but low-ROI — build only on evidence.**
+**Phase 2 — kill the redundant cold run. INVESTIGATED (2026-07-10, two rounds): NO worthwhile target
+exists. Leave phase 1 as the endpoint.**
 
 The plan was: a `__SSR__.streamingCells` key manifest lets an expected cell **skip its cold seed
-run** and wait for `applyStreamed`. Whether that preserves reactivity depends on the loader:
+run** and wait for `applyStreamed`. Two rounds of review closed it:
 
-- A cell subscribes to its reactive deps **by running the seed** — `createEffectNode(() => run(true))`
-  calls `seed()`, and the effect auto-tracks whatever signals `readNode` fires during that
-  synchronous window (`REACTIVE_CONTEXT.observer` is a bare module-global set in `runNode`, restored
-  synchronously — no async propagation). So subscription is co-extensive with executing the seed's
-  synchronous prefix. Skip it → the cell never subscribes → dep bumps stop revalidating.
-- **For an OPAQUE / LOCAL async loader** (the example's `loadProfile` is a local `setTimeout`
-  function), the compiler cannot separate dep-subscription from execution: signal reads and side
-  effects are interleaved plain JS with no static or dynamic seam. Emitting only the **argument**
-  signals for subscription would silently drop signals read _inside_ the loader body — a real
-  auto-tracking regression. Here the double-execution IS inherent.
-- **For an RPC loader, the objection is vacuous.** A client-side RPC call is a network proxy
-  (`createRemoteFunction` → `fetch`) whose body runs on the _server_; the client reads **no app
-  signals except its arguments**, which are statically visible at the call site (`$$read("attempt")`).
-  So for an RPC the arguments ARE the complete client dep set, and the compiler already knows a lifted
-  subexpression is an RPC (it lowered it). The "arguments-only" escape hatch is therefore **sound and
-  complete for RPC loaders**. (Note also: post-`await` in-body reads are never tracked today anyway, so
-  "complete tracking" is already scoped to the synchronous prefix.)
+Round 1 (reactivity): a cell subscribes to its deps **by running the seed** — `createEffectNode(() =>
+run(true))` calls `seed()`, and the effect auto-tracks whatever signals `readNode` fires in that
+synchronous window (`REACTIVE_CONTEXT.observer` is a bare module-global, restored synchronously). Skip
+the run → the cell never subscribes → dep bumps stop revalidating. For an **opaque/local** loader (the
+example's `loadProfile` `setTimeout`) reads and side effects interleave with no seam, so you cannot
+separate subscription from execution — the double-execution is inherent.
 
-So **"the double-execution is inherent" is overstated** — it holds for opaque/local loaders, not RPC
-ones. A sound **RPC-only cold-run elision** exists: gate strictly to RPC-lifted async subexpressions;
-the compiler emits an arg-subscription-only effect + a `__SSR__.streamingCells` expected-key manifest;
-the cell short-circuits the loader on the first run (adopting the streamed value via the existing
-`registerStreamedCell`/`applyStreamed` path) and does a real `run` on a later arg bump. **New risk:** a
-cell expected-but-never-streamed (phase-1's coverage gap — still pending at drain, or unserializable)
-must be cold-run when the resolve stream closes without its key, or it hangs pending forever — a
-fallback sweep to test hard. Ballpark a few hundred LOC + one new failure mode.
+Round 2 (adversarial) argued this was overstated for an "RPC loader" whose client dep set is just its
+args — but that argument **conflates the raw fetch path with the bare call, and the bare call is a
+cache read.** `createRemoteFunction`'s bare `callable` routes through `cache.read` (createRemoteFunction.ts:145,
+ADR-0019 rpc-auto-reads) — only `.raw` fetches directly, and a peek never uses `.raw`. So a bare-RPC
+streaming peek is **not** a non-cache read; it is the cache-peek tier (row 2 of the tier table above):
+the SSR handler runs once, the entry ships via `__abideResolve`, and the client cold-run does
+`getUser() → cache.read → warm hit` — **no second fetch, no handler re-invocation, no double side
+effect.** Already handled. The "RPC-only elision" therefore has **nothing to elide** — it is moot, not
+merely low-ROI.
 
-**Recommendation: leave phase 1 as the endpoint by default.** The residual cost is one duplicate RPC
+That leaves only two real cases, and phase 2 helps neither:
 
-- one side-effect double-fire per streamed RPC-peek at hydrate. Build RPC-only elision only if
-  profiling shows the duplicate hydrate RPCs matter. For the side-effect footgun specifically, prefer
-  the cheaper existing guard — route the read through `cache` (already dedups I/O, the cache-peek tier).
-  A benign-telemetry side effect riding an RPC read is **legitimate and common** (the server firing it
-  once during SSR is correct; only the client replay double-fires), so it is a framework footgun, not
-  purely user error — but a side-effecting _reactive_ read re-fires on every reseed regardless, so it
-  warrants a guard rail rather than fully-automatic invisibility.
+- **Local PURE loader** (`loadProfile` `setTimeout`): the cold-run just recomputes locally — SWR
+  revalidate-on-mount working as designed, no I/O, cheap. Nothing worth saving, and (opaque) infeasible
+  to skip anyway.
+- **Local SIDE-EFFECTING loader** (`function t(){ fetch('/beacon'); return d }`): the cold-run
+  double-fires the effect on hydrate — a genuine footgun, but **infeasible** to fix automatically
+  (opaque local loader). The correct fix is primitive choice, not framework magic: route the read
+  through `cache` (dedups I/O, handler runs once), or move the effect to a `watch`/action. A side
+  effect in a bare _reactive_ peek re-fires on **every** reseed regardless, so it never belonged there.
+
+**Recommendation: phase 1 is the endpoint — not because phase 2 is hard, but because there is no
+worthwhile + feasible target.** Bare RPC peeks are already cache-warm on the client; local pure loaders
+have nothing to save; local side-effecting loaders can't be skipped and shouldn't be bare peeks. The
+guidance for read-with-side-effect is "route through `cache`."
 
 ## Spike to run
 
