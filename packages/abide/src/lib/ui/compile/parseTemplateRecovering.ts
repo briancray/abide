@@ -2,7 +2,9 @@ import { BLOCK_CONNECTORS, BLOCK_OPENERS } from './BLOCK_KEYWORDS.ts'
 import { decodeHtmlEntities } from './decodeHtmlEntities.ts'
 import { interpolatedTemplateLiteral } from './interpolatedTemplateLiteral.ts'
 import { isWhitespaceText } from './isWhitespaceText.ts'
+import { structuralHeadTokens } from './structuralHeadTokens.ts'
 import type { ParseDiagnostic } from './types/ParseDiagnostic.ts'
+import type { SemanticToken } from './types/SemanticToken.ts'
 import type { TemplateAttr } from './types/TemplateAttr.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
 import type { TextPart } from './types/TextPart.ts'
@@ -14,6 +16,7 @@ const WHITESPACE = /\s/
 const WHITESPACE_OR_GT = /[\s>]/
 const ATTR_NAME_END = /[\s=>/]/
 const TAG_NAME_END = /[\s>/]/
+const TAG_NAME_START = /[A-Za-z]/
 const UPPERCASE_START = /^[A-Z]/
 const AWAIT_PREFIX = /^await\b/
 const LEADING_KEYWORD = /^\s*(\S+)/
@@ -63,7 +66,8 @@ type Braced = { code: string; loc: number }
 export function parseTemplateRecovering(
     source: string,
     baseOffset = 0,
-): { nodes: TemplateNode[]; diagnostics: ParseDiagnostic[] } {
+    collectTokens = false,
+): { nodes: TemplateNode[]; diagnostics: ParseDiagnostic[]; tokens: SemanticToken[] } {
     let cursor = 0
 
     /* Diagnostics accumulate in walk order; `report` pushes each malformed construct.
@@ -72,6 +76,20 @@ export function parseTemplateRecovering(
     const diagnostics: ParseDiagnostic[] = []
     function report(message: string, start: number, length = 0): void {
         diagnostics.push({ message, start, length })
+    }
+
+    /* Semantic-highlighting tokens, a disjoint side-channel that mirrors `diagnostics`:
+       each reader pushes a token as the walk passes its lexeme, so ONE grammar drives
+       both the tree and the LSP's markup/structural coloring. Off by default — the
+       compile path (SSR/client/type-check) passes `collectTokens = false`, so `emit`
+       early-returns and the hot walk allocates nothing here. Offsets are bare
+       source-local `cursor` values (the token entry parses at `baseOffset 0`). */
+    const tokens: SemanticToken[] = []
+    function emit(start: number, length: number, type: string): void {
+        if (!collectTokens || length <= 0) {
+            return
+        }
+        tokens.push({ start, length, type, modifiers: [] })
     }
 
     /* A per-parse counter minting the synthetic binding name for each `{await expr}`
@@ -167,8 +185,10 @@ export function parseTemplateRecovering(
     /* Skips an HTML comment starting at `cursor` (on `<!--`), advancing past its
        `-->`; an unterminated comment runs to the end of source. Emits no node. */
     function skipComment(): void {
+        const start = cursor
         const close = source.indexOf('-->', cursor)
         cursor = close === -1 ? source.length : close + '-->'.length
+        emit(start, cursor - start, 'comment')
     }
 
     /* True when `cursor` is on a `<style>` open tag — read raw (`readStyle`) so its
@@ -183,8 +203,22 @@ export function parseTemplateRecovering(
        unterminated block runs to end. The body is read raw (not parsed as markup) so
        CSS braces never misparse as `{expr}`. */
     function readStyle(): TemplateNode {
+        const styleLt = cursor // the `<` of `<style`
         const openEnd = source.indexOf('>', cursor)
         const close = source.indexOf('</style>', cursor)
+        /* `<style>` bypasses `readElement`, so color its open+close tags here. The open
+           `<`/`style`/`>` and, when present, the close `</`/`style`/`>` mirror the
+           element path a `<script>` takes through `readElement`. */
+        emit(styleLt, 1, 'operator')
+        emit(styleLt + 1, 'style'.length, 'tag')
+        if (openEnd !== -1) {
+            emit(openEnd, 1, 'operator')
+        }
+        if (close !== -1) {
+            emit(close, 2, 'operator')
+            emit(close + 2, 'style'.length, 'tag')
+            emit(close + 2 + 'style'.length, 1, 'operator')
+        }
         const css =
             openEnd !== -1 && (close === -1 || openEnd < close)
                 ? source.slice(openEnd + 1, close === -1 ? source.length : close).trim()
@@ -219,6 +253,7 @@ export function parseTemplateRecovering(
        the trimmed directive body WITHOUT the sigil, and the absolute loc of the body's
        first post-trim char. */
     function readBlockToken(): { sigil: '#' | ':' | '/'; body: string; loc: number } {
+        const braceStart = cursor // the `{` — anchor for the `{`+sigil operator token
         const sigil = source.charAt(cursor + 1) as '#' | ':' | '/'
         cursor += 2 // past `{` and the sigil
         const start = cursor
@@ -242,6 +277,14 @@ export function parseTemplateRecovering(
         }
         const raw = source.slice(start, cursor - 1)
         const leading = raw.length - raw.trimStart().length
+        /* Color the `{#…}`/`{:…}`/`{/…}` framing off the SAME reader that builds the block
+           tree — the walk only reaches a real head, so a `{#for}` inside a `{expr}`/string
+           is never miscolored (unlike the old raw-source regex). */
+        if (collectTokens) {
+            for (const token of structuralHeadTokens(source, braceStart, sigil, start + leading)) {
+                tokens.push(token)
+            }
+        }
         return { sigil, body: raw.trim(), loc: baseOffset + start + leading }
     }
 
@@ -646,11 +689,13 @@ export function parseTemplateRecovering(
                 continue
             }
             let name = ''
+            const nameStart = cursor // source-local offset of the attribute name token
             const nameLoc = baseOffset + cursor // absolute offset of the attribute name
             while (cursor < source.length && !ATTR_NAME_END.test(source.charAt(cursor))) {
                 name += source.charAt(cursor)
                 cursor += 1
             }
+            emit(nameStart, cursor - nameStart, 'attribute')
             while (WHITESPACE.test(source.charAt(cursor))) {
                 cursor += 1
             }
@@ -658,6 +703,7 @@ export function parseTemplateRecovering(
                 attrs.push({ kind: 'static', name, value: '', bare: true, nameLoc }) // boolean attribute
                 continue
             }
+            emit(cursor, 1, 'operator') // the `=`
             cursor += 1 // past '='
             while (WHITESPACE.test(source.charAt(cursor))) {
                 cursor += 1
@@ -679,26 +725,32 @@ export function parseTemplateRecovering(
                 }
             } else if (source.charAt(cursor) === '"' || source.charAt(cursor) === "'") {
                 const quote = source.charAt(cursor)
+                const openingQuoteOffset = cursor
                 cursor += 1
                 /* Scan the quoted span into static/`{expr}` parts (the text-node model),
                    reusing the brace/quote-aware expression reader so a `}` inside an
-                   expression doesn't close the value early. */
+                   expression doesn't close the value early. `string` tokens color the
+                   literal runs (delimiters included), split around each `{expr}`. */
                 const parts: TextPart[] = []
                 let literal = ''
+                let segmentStart = openingQuoteOffset
                 while (cursor < source.length && source.charAt(cursor) !== quote) {
                     if (source.charAt(cursor) === '{') {
                         if (literal !== '') {
                             parts.push({ kind: 'static', value: decodeHtmlEntities(literal) })
                             literal = ''
                         }
+                        emit(segmentStart, cursor - segmentStart, 'string')
                         const { code, loc } = readBracedExpression()
                         parts.push({ kind: 'expression', code, loc })
+                        segmentStart = cursor
                     } else {
                         literal += source.charAt(cursor)
                         cursor += 1
                     }
                 }
                 cursor += 1 // past closing quote
+                emit(segmentStart, cursor - segmentStart, 'string')
                 if (literal !== '') {
                     parts.push({ kind: 'static', value: decodeHtmlEntities(literal) })
                 }
@@ -716,6 +768,7 @@ export function parseTemplateRecovering(
             } else {
                 /* Unquoted value (`<input type=text>`): runs to the next whitespace or
                    `>`, per the HTML unquoted-attribute rule. No delimiter to consume. */
+                const valueStart = cursor
                 let value = ''
                 while (cursor < source.length && !WHITESPACE_OR_GT.test(source.charAt(cursor))) {
                     /* Stop before a `/` that closes the tag (`<Comp x=y/>`) so the value
@@ -727,6 +780,7 @@ export function parseTemplateRecovering(
                     value += source.charAt(cursor)
                     cursor += 1
                 }
+                emit(valueStart, cursor - valueStart, 'string')
                 /* Decode entities like the quoted path does — a real HTML parser decodes
                    unquoted attribute values too, so `value=a&amp;b` is the value `a&b`. */
                 attrs.push({ kind: 'static', name, value: decodeHtmlEntities(value) })
@@ -736,6 +790,7 @@ export function parseTemplateRecovering(
     }
 
     function readElement(): TemplateNode {
+        const ltOffset = cursor // the `<`
         cursor += 1 // past '<'
         let tag = ''
         const tagStart = cursor // absolute (baseOffset-relative) offset of the tag name
@@ -743,11 +798,26 @@ export function parseTemplateRecovering(
             tag += source.charAt(cursor)
             cursor += 1
         }
+        /* Color the `<` and the tag name only when a real name starts the tag (a bare
+           `<` in stray text is not an element) — a lowercase name is a `tag`, an
+           uppercase one a component `type`. */
+        if (tag.length > 0 && TAG_NAME_START.test(tag.charAt(0))) {
+            emit(ltOffset, 1, 'operator')
+            emit(tagStart, tag.length, UPPERCASE_START.test(tag) ? 'type' : 'tag')
+        }
         const attrs = readAttributes()
         let selfClosing = false
+        const closeMarkOffset = cursor
         if (source.charAt(cursor) === '/') {
             selfClosing = true
             cursor += 1
+        }
+        /* The tag's `>` (or `/>` self-close) operator; also the `>` of a `<script>`/
+           `<style>` open tag, since both flow through here. */
+        if (selfClosing) {
+            emit(closeMarkOffset, 2, 'operator')
+        } else if (source.charAt(cursor) === '>') {
+            emit(cursor, 1, 'operator')
         }
         cursor += 1 // past '>'
         /* A nested `<script>` is a scoped reactive block: its body is raw JS read
@@ -760,6 +830,13 @@ export function parseTemplateRecovering(
             const close = source.indexOf('</script>', cursor)
             const end = close === -1 ? source.length : close
             const code = source.slice(cursor, end)
+            /* The raw body is skipped (JS, not markup), but the `</script>` close tag is
+               colored like any element close: `</` + `script` + `>`. */
+            if (close !== -1) {
+                emit(close, 2, 'operator')
+                emit(close + 2, 'script'.length, 'tag')
+                emit(close + 2 + 'script'.length, 1, 'operator')
+            }
             cursor = close === -1 ? source.length : end + '</script>'.length
             /* A static `import` can't live here: a nested script compiles INTO the
                branch's render-function body, where an import is illegal — and an
@@ -828,6 +905,19 @@ export function parseTemplateRecovering(
         const nodes: TemplateNode[] = []
         while (cursor < source.length) {
             if (source.startsWith(`</${closeTag}`, cursor)) {
+                /* The close tag `</tag>`: `</` operator, the tag/type name, then `>`. */
+                if (closeTag.length > 0 && TAG_NAME_START.test(closeTag.charAt(0))) {
+                    const gtOffset = source.indexOf('>', cursor)
+                    emit(cursor, 2, 'operator')
+                    emit(
+                        cursor + 2,
+                        closeTag.length,
+                        UPPERCASE_START.test(closeTag) ? 'type' : 'tag',
+                    )
+                    if (gtOffset !== -1) {
+                        emit(gtOffset, 1, 'operator')
+                    }
+                }
                 cursor = source.indexOf('>', cursor) + 1
                 break
             }
@@ -871,7 +961,7 @@ export function parseTemplateRecovering(
         }
     }
     rejectStrayBranches(roots, undefined, report)
-    return { nodes: roots, diagnostics }
+    return { nodes: roots, diagnostics, tokens }
 }
 
 /* Finds the index of a ` <token> ` keyword (` of `, ` by `) at brace/paren/bracket

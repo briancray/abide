@@ -6,10 +6,9 @@ import type {
 } from './lib/ui/compile/createShadowLanguageService.ts'
 import { createShadowLanguageService } from './lib/ui/compile/createShadowLanguageService.ts'
 import { encodeSemanticTokens } from './lib/ui/compile/encodeSemanticTokens.ts'
-import { markupTokens } from './lib/ui/compile/markupTokens.ts'
 import { nearestProjectRoot } from './lib/ui/compile/nearestProjectRoot.ts'
 import { offsetToPosition } from './lib/ui/compile/offsetToPosition.ts'
-import { structuralBlockTokens } from './lib/ui/compile/structuralBlockTokens.ts'
+import { templateSemanticTokens } from './lib/ui/compile/templateSemanticTokens.ts'
 import type { AbideDiagnostic } from './lib/ui/compile/types/AbideDiagnostic.ts'
 
 /*
@@ -25,8 +24,9 @@ their own project — matching `abide check` run from that package.
 */
 /*
 The semantic-tokens `data` array for one component: the HTML markup structure and
-the structural `{#…}` framing merged with the shadow's type-aware expression
-tokens, encoded to the LSP wire format. The markup tokens make the LSP own the
+the structural `{#…}` framing — both driven by the ONE parse walk
+(`templateSemanticTokens`) — merged with the shadow's type-aware expression tokens,
+encoded to the LSP wire format. The markup tokens make the LSP own the
 element/attribute coloring too, so a tree-sitter parse desynced by an `attr={expr}`
 value can't bleed miscoloring below it. Never throws — on any internal failure it
 yields an empty stream so the editor falls back to tree-sitter highlighting.
@@ -38,8 +38,7 @@ export function componentSemanticTokens(
 ): number[] {
     try {
         const tokens = [
-            ...markupTokens(text),
-            ...structuralBlockTokens(text),
+            ...templateSemanticTokens(text),
             ...service.semanticClassifications(abidePath),
         ]
         return encodeSemanticTokens(text, tokens)

@@ -1,8 +1,8 @@
 /*
 The control-block vocabulary — the ONE source of truth shared by the parser
-(`parseTemplate`'s dispatch/error) and the LSP highlighter (`structuralBlockTokens`), so
-the keywords the highlighter colors can't drift from the blocks the parser accepts (the
-`{#snippet}` head once went uncolored because the highlighter's hand-copy omitted it).
+(`parseTemplate`'s dispatch/error) and the LSP highlighter (`structuralHeadTokens`, driven
+by the parse walk), so the keywords the highlighter colors can't drift from the blocks the
+parser accepts (the `{#snippet}` head once went uncolored because a hand-copy omitted it).
 
 `BLOCK_OPENERS` follow `{#`, `BLOCK_CONNECTORS` follow `{:`. `for await` is the async-each
 opener form the highlighter colors as one phrase (the parser reads the `await` inside a
