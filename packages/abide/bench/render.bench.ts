@@ -40,11 +40,14 @@ mount(host, (root) => {
         list,
         () => model.read<string[]>('order'),
         (key) => key,
-        (key) => {
+        (parent, item) => {
+            const key = item.value
             const li = document.createElement('li')
             appendText(li, () => model.read(`byId/${key}/n`))
-            return li
+            parent.appendChild(li)
         },
+        null,
+        true,
     )
     root.appendChild(list)
 })
