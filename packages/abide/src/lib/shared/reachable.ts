@@ -4,10 +4,10 @@ import { parseBoundedEnvInt } from './parseBoundedEnvInt.ts'
 /*
 Isomorphic outbound reachability. `await reachable(host)` HEADs the host's
 origin: the first call awaits a real probe (faithful — a down host costs the
-full timeout, an up host one handshake) and starts a background poll that
-re-probes every TTL, so every later call resolves instantly off the warm
-value, fresh within one TTL. A host going down is caught within ~failureLimit
-polls; recovery flips it back automatically.
+full timeout, an up host one handshake) and caches the verdict for one TTL, so
+every later call within the TTL resolves instantly off the cached value. The
+first call after the TTL expires re-probes; a host going down (or recovering) is
+noticed on the next read past its cached verdict, not continuously.
 
   if (!(await reachable('api.example.com'))) return error(503)
 
@@ -27,10 +27,10 @@ this is the honest way to fail a doomed outbound call fast — see online() for
 the inbound/client-reported counterpart. The browser probes no-cors (a
 completed opaque response proves connectivity without the host's CORS
 blessing) and composes navigator.onLine in at read time, so a lost network
-reports false instantly instead of waiting out the warm value — except for
+reports false instantly instead of waiting out the cached value — except for
 loopback hosts, which need no network.
 
-ABIDE_REACHABLE_TTL (poll cadence / freshness, ms) and ABIDE_REACHABLE_TIMEOUT
+ABIDE_REACHABLE_TTL (cache freshness, ms) and ABIDE_REACHABLE_TIMEOUT
 (per-HEAD bound, ms) tune the server defaults; the browser has no env, so it
 runs the defaults. The timeout is deliberately generous so a healthy-but-
 distant host over a slow link is not mis-read as down.
@@ -38,8 +38,6 @@ distant host over a slow link is not mis-read as down.
 const env = typeof process === 'undefined' ? undefined : process.env
 const TTL_MS = parseBoundedEnvInt(env?.ABIDE_REACHABLE_TTL, 1_000, 600_000) ?? 30_000
 const TIMEOUT_MS = parseBoundedEnvInt(env?.ABIDE_REACHABLE_TIMEOUT, 100, 60_000) ?? 3_000
-/* Stop polling a host nobody has read in a few TTLs; the next read restarts it cold. */
-const IDLE_MS = TTL_MS * 3
 
 /* Status-agnostic HEAD: a completed response proves connectivity; reject/timeout does not.
    The browser probes no-cors — an opaque response still completes, so a foreign origin
@@ -59,8 +57,7 @@ async function probeOrigin(origin: string): Promise<boolean> {
 
 const registry = createReachable({
     probe: probeOrigin,
-    intervalMs: TTL_MS,
-    idleMs: IDLE_MS,
+    ttlMs: TTL_MS,
 })
 
 /* Loopback = this machine: no network between, so no probe and no offline gate. */
