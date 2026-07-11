@@ -1,4 +1,5 @@
 import { abideLog } from '../../shared/abideLog.ts'
+import { MCP_PATH } from '../../shared/MCP_PATH.ts'
 import { rpcRegistry } from '../rpc/rpcRegistry.ts'
 import { socketRegistry } from '../sockets/socketRegistry.ts'
 import { ensureRegistriesLoaded } from './registryManifests.ts'
@@ -35,7 +36,7 @@ export async function warnUnguardedMcp(): Promise<void> {
         return
     }
     abideLog.warn(
-        `MCP endpoint /__abide/mcp exposes ${exposed} declaration${exposed === 1 ? '' : 's'} ` +
+        `MCP endpoint ${MCP_PATH} exposes ${exposed} declaration${exposed === 1 ? '' : 's'} ` +
             'with no auth guard — add an app.handle middleware in src/app.ts to ' +
             'authenticate machine clients, or set clients.mcp: false per declaration',
     )

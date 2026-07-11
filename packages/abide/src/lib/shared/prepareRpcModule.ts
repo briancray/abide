@@ -1,3 +1,4 @@
+import { HTTP_METHODS } from './HTTP_METHODS.ts'
 import { prepareRemoteExport } from './prepareRemoteExport.ts'
 import { skipNonCode } from './skipNonCode.ts'
 import type { ErrorJsonSchemas } from './types/ErrorJsonSchemas.ts'
@@ -5,7 +6,7 @@ import type { HttpMethod } from './types/HttpMethod.ts'
 import type { InputCoercion } from './types/InputCoercion.ts'
 import type { OutputWirePlan } from './types/OutputWirePlan.ts'
 
-const RPC_NAMES = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'] as const
+const RPC_NAMES = HTTP_METHODS
 const RPC_SET = new Set<string>(RPC_NAMES)
 
 const SINGLE_EXPORT_ERROR =

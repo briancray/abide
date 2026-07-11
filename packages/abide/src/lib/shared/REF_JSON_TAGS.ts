@@ -26,6 +26,18 @@ export const REF_JSON_TAGS = {
     BIGINT: '~g',
     // ['~u'] — undefined (and functions/symbols, folded to it).
     UNDEFINED: '~u',
-    // ['~n', token] — the numbers JSON flattens to null: 'NaN' | 'Infinity' | '-Infinity' | '-0'.
+    // ['~n', token] — the numbers JSON flattens to null; the token is one of REF_JSON_NUMBER_TOKENS.
     NUMBER: '~n',
+} as const
+
+/*
+The tokens carried by a `['~n', token]` tag — the numbers JSON can't represent. Shared by
+`encodeRefJson`'s `numberToken` (produces them) and `decodeRefJson`'s `decodeNumberToken`
+(parses them) so the wire form can't drift between the two ends.
+*/
+export const REF_JSON_NUMBER_TOKENS = {
+    NAN: 'NaN',
+    INFINITY: 'Infinity',
+    NEG_INFINITY: '-Infinity',
+    NEG_ZERO: '-0',
 } as const

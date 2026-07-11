@@ -1,5 +1,6 @@
 import { resolve } from 'node:path'
 import ts from 'typescript'
+import { HTTP_METHODS } from './HTTP_METHODS.ts'
 import { jsonSchemaForType } from './jsonSchemaForType.ts'
 import { loadProjectTsConfig } from './loadProjectTsConfig.ts'
 import type { ErrorJsonSchemas } from './types/ErrorJsonSchemas.ts'
@@ -9,7 +10,7 @@ import type { OutputWirePlan } from './types/OutputWirePlan.ts'
 import type { ReturnBody } from './types/ReturnBody.ts'
 import type { WireKind } from './types/WireKind.ts'
 
-const RPC_HELPERS = new Set<string>(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'])
+const RPC_HELPERS = new Set<string>(HTTP_METHODS)
 const NUMBER_FLAGS = ts.TypeFlags.Number | ts.TypeFlags.NumberLiteral
 const BOOLEAN_FLAGS = ts.TypeFlags.Boolean | ts.TypeFlags.BooleanLiteral
 const BIGINT_FLAGS = ts.TypeFlags.BigInt | ts.TypeFlags.BigIntLiteral

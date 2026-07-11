@@ -6,7 +6,7 @@ them. The shell must exist before its contents are filled so a back-reference to
 ancestor resolves to the already-allocated object — which is what reconnects a cycle.
 Inline primitives need no shell; they decode directly where they sit.
 */
-import { REF_JSON_TAGS } from './REF_JSON_TAGS.ts'
+import { REF_JSON_NUMBER_TOKENS, REF_JSON_TAGS } from './REF_JSON_TAGS.ts'
 import { setOwnProperty } from './setOwnProperty.ts'
 
 export function decodeRefJson(text: string): unknown {
@@ -99,13 +99,13 @@ function fillShell(slot: unknown, shell: unknown, shells: unknown[]): void {
 
 // Reverse of encodeRefJson's numberToken.
 function decodeNumberToken(token: string): number {
-    if (token === 'NaN') {
+    if (token === REF_JSON_NUMBER_TOKENS.NAN) {
         return Number.NaN
     }
-    if (token === 'Infinity') {
+    if (token === REF_JSON_NUMBER_TOKENS.INFINITY) {
         return Number.POSITIVE_INFINITY
     }
-    if (token === '-Infinity') {
+    if (token === REF_JSON_NUMBER_TOKENS.NEG_INFINITY) {
         return Number.NEGATIVE_INFINITY
     }
     return -0

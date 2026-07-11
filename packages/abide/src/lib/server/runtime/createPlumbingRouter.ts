@@ -2,8 +2,10 @@ import type { Server } from 'bun'
 import type { McpServer } from '../../mcp/types/McpServer.ts'
 import { NO_STORE } from '../../shared/CACHE_CONTROL_VALUES.ts'
 import { CLI_PATH } from '../../shared/CLI_PATH.ts'
+import { DEV_REBUILD_PATH } from '../../shared/DEV_REBUILD_PATH.ts'
 import { DEV_RELOAD_PATH } from '../../shared/DEV_RELOAD_PATH.ts'
 import { HEALTH_PATH } from '../../shared/HEALTH_PATH.ts'
+import { MCP_PATH } from '../../shared/MCP_PATH.ts'
 import { IDENTITY_PATH } from '../../shared/IDENTITY_PATH.ts'
 import { INSPECTOR_PATH } from '../../shared/INSPECTOR_PATH.ts'
 import { lenientDecode } from '../../shared/lenientDecode.ts'
@@ -23,10 +25,7 @@ import type { DevReloadStamp } from './types/DevReloadStamp.ts'
 import type { RequestStore } from './types/RequestStore.ts'
 
 const SOCKETS_REST_PREFIX = `${SOCKETS_PATH}/`
-const MCP_PATH = '/__abide/mcp'
 const CLI_DOWNLOAD_PREFIX = `${CLI_PATH}/`
-// Dev-only manual rebuild trigger; POSTing signals the orchestrator to rebuild + restart.
-const DEV_REBUILD_PATH = '/__abide/reload'
 
 /*
 Returned by the router when a request matches none of its framework routes, so

@@ -11,7 +11,7 @@ symbols can't be serialised and encode as undefined, matching JSON.stringify. Ou
 shape is `[rootValue, slots]`. Decode with decodeRefJson. Not streaming — the whole
 graph is walked up front.
 */
-import { REF_JSON_TAGS } from './REF_JSON_TAGS.ts'
+import { REF_JSON_NUMBER_TOKENS, REF_JSON_TAGS } from './REF_JSON_TAGS.ts'
 import { setOwnProperty } from './setOwnProperty.ts'
 
 export function encodeRefJson(value: unknown): string {
@@ -99,10 +99,10 @@ export function encodeRefJson(value: unknown): string {
 // Stable token for the numbers JSON can't carry.
 function numberToken(value: number): string {
     if (Object.is(value, -0)) {
-        return '-0'
+        return REF_JSON_NUMBER_TOKENS.NEG_ZERO
     }
     if (Number.isNaN(value)) {
-        return 'NaN'
+        return REF_JSON_NUMBER_TOKENS.NAN
     }
-    return value > 0 ? 'Infinity' : '-Infinity'
+    return value > 0 ? REF_JSON_NUMBER_TOKENS.INFINITY : REF_JSON_NUMBER_TOKENS.NEG_INFINITY
 }
