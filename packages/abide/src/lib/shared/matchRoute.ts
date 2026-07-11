@@ -1,3 +1,4 @@
+import { lenientDecode } from './lenientDecode.ts'
 import { normalizePathname } from './normalizePathname.ts'
 import type { RouteSegment } from './parseRouteSegments.ts'
 import { parseRouteSegments } from './parseRouteSegments.ts'
@@ -83,17 +84,6 @@ export function matchRoute(
     return best === undefined ? undefined : { route: best.route, params: best.params }
 }
 
-/* Percent-decodes a captured value. Lenient — a malformed sequence (`/%E0%A4%A`)
-   keeps the raw text rather than throwing, so a bad escape in a navigation or
-   request can't crash matching; the downstream lookup just misses naturally. */
-function decodeParam(value: string): string {
-    try {
-        return decodeURIComponent(value)
-    } catch {
-        return value
-    }
-}
-
 /* Matches one parsed pattern against the path's segments, capturing decoded
    params; undefined on mismatch. */
 function matchSegments(
@@ -129,7 +119,7 @@ function matchFrom(
         return false
     }
     if (segment.kind === 'param' && segment.catchAll) {
-        params[segment.name] = pathSegments.slice(pathIndex).map(decodeParam).join('/')
+        params[segment.name] = pathSegments.slice(pathIndex).map(lenientDecode).join('/')
         return true
     }
     const value = pathSegments[pathIndex]
@@ -145,7 +135,7 @@ function matchFrom(
            optional never captures an empty segment. */
         if (value !== undefined && value !== '') {
             const previous = params[segment.name]
-            params[segment.name] = decodeParam(value)
+            params[segment.name] = lenientDecode(value)
             if (matchFrom(segments, pathSegments, segmentIndex + 1, pathIndex + 1, params)) {
                 return true
             }
@@ -170,6 +160,6 @@ function matchFrom(
     if (value === undefined || value === '') {
         return false
     }
-    params[segment.name] = decodeParam(value)
+    params[segment.name] = lenientDecode(value)
     return matchFrom(segments, pathSegments, segmentIndex + 1, pathIndex + 1, params)
 }
