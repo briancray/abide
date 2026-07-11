@@ -1,13 +1,13 @@
 import { readdirSync, watch } from 'node:fs'
 import type { Subprocess } from 'bun'
 import { build } from './build.ts'
-import { DEV_REBUILD_PATH } from './lib/shared/DEV_REBUILD_PATH.ts'
 import { DEFAULT_PORT } from './lib/server/runtime/DEFAULT_PORT.ts'
 import { DEV_READY_MESSAGE } from './lib/server/runtime/DEV_READY_MESSAGE.ts'
 import { DEV_REBUILD_MESSAGE } from './lib/server/runtime/DEV_REBUILD_MESSAGE.ts'
 import { findOpenPort } from './lib/server/runtime/findOpenPort.ts'
 import { abideLog } from './lib/shared/abideLog.ts'
 import { changeAffectsClient } from './lib/shared/changeAffectsClient.ts'
+import { DEV_REBUILD_PATH } from './lib/shared/DEV_REBUILD_PATH.ts'
 
 /*
 Dev orchestrator. Replaces `bun --watch` (which only watches the import graph,

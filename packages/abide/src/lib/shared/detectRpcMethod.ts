@@ -17,9 +17,7 @@ warm server program is present the method is read off the export's helper SYMBOL
 only when no program built or the query didn't resolve. Byte-identical to the pre-ADR
 path when no program is present.
 */
-const RPC_EXPORT = new RegExp(
-    `export\\s+const\\s+\\w+\\s*=\\s*(${HTTP_METHODS.join('|')})\\s*[<(]`,
-)
+const RPC_EXPORT = new RegExp(`export\\s+const\\s+\\w+\\s*=\\s*(${HTTP_METHODS.join('|')})\\s*[<(]`)
 
 export function detectRpcMethod(source: string): HttpMethod | undefined {
     return (source.match(RPC_EXPORT)?.[1] as HttpMethod | undefined) ?? undefined

@@ -12,15 +12,15 @@ import { jsonSchemaForPromptArguments } from './lib/shared/jsonSchemaForPromptAr
 import { manifestModule } from './lib/shared/manifestModule.ts'
 import { pageUrlForFile } from './lib/shared/pageUrlForFile.ts'
 import { parsePromptMarkdown } from './lib/shared/parsePromptMarkdown.ts'
+import { prepareRpcModule } from './lib/shared/prepareRpcModule.ts'
+import { prepareSocketModule } from './lib/shared/prepareSocketModule.ts'
+import { programNameForPackage } from './lib/shared/programNameForPackage.ts'
+import { promptNameForFile } from './lib/shared/promptNameForFile.ts'
 import {
     DEFINE_RPC_GLOBAL,
     DEFINE_SOCKET_GLOBAL,
     REMOTE_PROXY_GLOBAL,
 } from './lib/shared/RPC_SHIM_GLOBALS.ts'
-import { prepareRpcModule } from './lib/shared/prepareRpcModule.ts'
-import { prepareSocketModule } from './lib/shared/prepareSocketModule.ts'
-import { programNameForPackage } from './lib/shared/programNameForPackage.ts'
-import { promptNameForFile } from './lib/shared/promptNameForFile.ts'
 import { readPackageJson } from './lib/shared/readPackageJson.ts'
 import { rpcServerForRoot } from './lib/shared/rpcServerForRoot.ts'
 import { rpcUrlForFile } from './lib/shared/rpcUrlForFile.ts'

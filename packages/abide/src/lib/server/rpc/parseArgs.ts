@@ -3,6 +3,7 @@ import { contentTypeOf } from '../../shared/contentTypeOf.ts'
 import { decodeRefJson } from '../../shared/decodeRefJson.ts'
 import { HttpError } from '../../shared/HttpError.ts'
 import { REF_JSON_HEADER } from '../../shared/REF_JSON_HEADER.ts'
+import { reviveWireField } from '../../shared/reviveWireField.ts'
 import type { HttpMethod } from '../../shared/types/HttpMethod.ts'
 import type { InputCoercion } from '../../shared/types/InputCoercion.ts'
 import type { WireKind } from '../../shared/types/WireKind.ts'
@@ -190,26 +191,23 @@ function applyCoercion(args: Record<string, unknown>, coerce: InputCoercion): vo
    array/object; the scalar kinds revive a string (or each string in a repeated-key array). An
    already-typed value (Set/Map/Date/bigint from the abide ref-json body) passes through. */
 function reviveValue(value: unknown, kind: WireKind): unknown {
-    if (kind === 'set') {
-        if (value instanceof Set) {
-            return value
-        }
-        /* Top-level only: array MEMBERS are not descended into (ADR-0029 defers nesting). */
-        return Array.isArray(value) ? new Set(value) : value
-    }
-    if (kind === 'map') {
-        if (value instanceof Map) {
-            return value
-        }
-        /* A JSON array of `[key, value]` entries, or a plain object's own entries. */
-        if (Array.isArray(value)) {
-            return new Map(value as [unknown, unknown][])
-        }
-        if (value !== null && typeof value === 'object') {
+    /* Container kinds (set/map) decode through the shared wire codec; the input side additionally
+       accepts a plain object as Map entries — a query/form body can't send a JSON entries array
+       (ADR-0029 defers descending into array MEMBERS). */
+    if (kind === 'set' || kind === 'map') {
+        if (
+            kind === 'map' &&
+            !(value instanceof Map) &&
+            !Array.isArray(value) &&
+            value !== null &&
+            typeof value === 'object'
+        ) {
             return new Map(Object.entries(value))
         }
-        return value
+        return reviveWireField(value, kind)
     }
+    /* Scalar kinds (number/boolean/date/bigint): query/form values arrive as strings — a lone
+       value, or each string in a repeated-key array. */
     if (typeof value === 'string') {
         return reviveScalar(value, kind)
     }
@@ -242,20 +240,7 @@ function reviveScalar(value: string, kind: WireKind): unknown {
         }
         return value
     }
-    if (kind === 'date') {
-        const date = new Date(value)
-        return Number.isNaN(date.getTime()) ? value : date
-    }
-    if (kind === 'bigint') {
-        if (value.trim() === '') {
-            return value
-        }
-        try {
-            return BigInt(value)
-        } catch {
-            /* A non-integer / malformed literal throws — keep the string for the schema to reject. */
-            return value
-        }
-    }
-    return value
+    /* date/bigint from a query/form string decode identically to the shared wire codec (ISO
+       string → Date, digit string → bigint), fail-open. */
+    return reviveWireField(value, kind)
 }
