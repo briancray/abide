@@ -6,6 +6,7 @@ import { getEcho } from '$server/rpc/getEcho.ts'
 import { getProduct } from '$server/rpc/getProduct.ts'
 import CodeBlock from '$ui/CodeBlock.abide'
 import Demo from '$ui/Demo.abide'
+import TypeDef from '$ui/TypeDef.abide'
 import { state } from '@abide/abide/ui/state'
 let outcome404 = state('(not triggered)')
 let outcome405 = state('(not triggered)')
@@ -263,5 +264,10 @@ export const checkout = POST(({ sku, quantity }) => {
     if (quantity > available) return outOfStock({ sku, available })
     return json({ ok: true, sku, quantity })
 }, { schemas: { input: inputSchema } })`} />
+
+        <TypeDef
+            module="@abide/abide/shared/ValidationErrorData"
+            name="ValidationErrorData"
+            title="ValidationErrorData — what err.data narrows to on a 422" />
     </Demo>
 </div>

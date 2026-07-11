@@ -3,6 +3,7 @@ import Demo from '$ui/Demo.abide'
 import Card from '$ui/Card.abide'
 import SnippetRows from '$ui/SnippetRows.abide'
 import Stepper from '$ui/Stepper.abide'
+import TypeDef from '$ui/TypeDef.abide'
 
 /*
 Snippets, components & scoped style. A {#snippet} is a named builder rendered
@@ -72,6 +73,27 @@ let count = state(3)
                 </tbody>
             </table>
         </div>
+    </section>
+
+    <section class="flex flex-col gap-4">
+        <div class="flex flex-col gap-2">
+            <h2 class="text-sm font-semibold">The Snippet type</h2>
+            <p class="text-xs text-slate-500">
+                What you type a render prop with, in full from
+                <code class="font-mono">@abide/abide/shared/snippet</code> — the side-specific
+                payload stays hidden behind <code class="font-mono">SnippetValue</code>.
+            </p>
+        </div>
+
+        <TypeDef
+            module="@abide/abide/shared/snippet"
+            name="Snippet"
+            title="Snippet<Args> — a builder invoked with its args" />
+
+        <TypeDef
+            module="@abide/abide/shared/snippet"
+            name="SnippetValue"
+            title="SnippetValue — the opaque, branded payload it yields" />
     </section>
 
     <Demo title={'{#snippet} — a reusable builder'} code={`<script>

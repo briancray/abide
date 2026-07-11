@@ -1,7 +1,9 @@
 <script>
 import type { AgentFrame } from '@abide/abide/server/agent'
 import { chat } from '$server/rpc/chat.ts'
+import CodeBlock from '$ui/CodeBlock.abide'
 import Demo from '$ui/Demo.abide'
+import TypeDef from '$ui/TypeDef.abide'
 
 // A rendered chat turn: the running transcript the page POSTs and displays.
 type ChatMessage = { id: string; role: 'user' | 'assistant'; text: string }
@@ -106,58 +108,34 @@ function apply(frame: AgentFrame | { $error: string }) {
         </p>
     </div>
 
-    <section class="flex flex-col gap-2">
-        <h2 class="text-sm font-semibold">Stream API</h2>
-        <p class="text-xs text-slate-500">
-            The callable you invoke, the message shape you post to it, and each kind of frame it
-            streams back.
-        </p>
-        <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-            <table class="w-full text-sm">
-                <thead class="border-b border-slate-200 bg-slate-50 text-left">
-                    <tr>
-                        <th class="px-4 py-2 font-mono font-medium">surface</th>
-                        <th class="px-4 py-2 font-medium">is</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-100">
-                    <tr>
-                        <td class="px-4 py-2 font-mono">agent(engine, messages)</td>
-                        <td class="px-4 py-2 text-slate-600">
-                            runs the engine over the app's gated MCP tools, streams
-                            <code class="font-mono">AgentFrame</code>s
-                        </td>
-                    </tr>
-                    <tr>
-                        <td class="px-4 py-2 font-mono">NeutralMessage</td>
-                        <td class="px-4 py-2 text-slate-600">
-                            the provider-neutral turn shape — <code class="font-mono">user</code> /
-                            <code class="font-mono">assistant</code> /
-                            <code class="font-mono">tool</code> roles; the engine is stateless per
-                            call, so you POST the running transcript
-                        </td>
-                    </tr>
-                    <tr>
-                        <td class="px-4 py-2 font-mono">AgentFrame: text</td>
-                        <td class="px-4 py-2 text-slate-600">an assistant text delta (append)</td>
-                    </tr>
-                    <tr>
-                        <td class="px-4 py-2 font-mono">AgentFrame: tool_use</td>
-                        <td class="px-4 py-2 text-slate-600">a tool call the agent made</td>
-                    </tr>
-                    <tr>
-                        <td class="px-4 py-2 font-mono">AgentFrame: tool_result</td>
-                        <td class="px-4 py-2 text-slate-600">the result returned to the agent</td>
-                    </tr>
-                    <tr>
-                        <td class="px-4 py-2 font-mono">AgentFrame: done</td>
-                        <td class="px-4 py-2 text-slate-600">
-                            the terminal frame — the turn ended, carrying the stop reason
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
+    <section class="flex flex-col gap-4">
+        <div class="flex flex-col gap-2">
+            <h2 class="text-sm font-semibold">Stream API</h2>
+            <p class="text-xs text-slate-500">
+                The callable you invoke, the message shape you post to it, and each kind of frame it
+                streams back — all public types from
+                <code class="font-mono">@abide/abide/server/agent</code>, shown in full.
+            </p>
         </div>
+
+        <CodeBlock
+            title="agent — runs the engine over the app's gated MCP tools, streams AgentFrames"
+            code={`function agent(engine: AgentEngine, messages: NeutralMessage[]): AsyncIterable<AgentFrame>`} />
+
+        <TypeDef
+            module="@abide/abide/server/agent"
+            name="NeutralMessage"
+            title="NeutralMessage — the turn shape you post" />
+
+        <TypeDef
+            module="@abide/abide/server/agent"
+            name="AgentFrame"
+            title="AgentFrame — each frame the stream yields" />
+
+        <TypeDef
+            module="@abide/abide/server/agent"
+            name="AgentEngine"
+            title="AgentEngine — the provider adapter you plug in" />
     </section>
 
     <Demo title="Streaming chat, live" code={`import { agent } from '@abide/abide/server/agent'
