@@ -102,7 +102,7 @@ test('marked streamed HTML flushes the head before a delayed later chunk', async
     /* Resolves only if compressed head bytes arrive while the tail is still held —
        a buffering compressor would leave this read pending until close. */
     const { value } = await reader.read()
-    expect(value && value.byteLength).toBeGreaterThan(0)
+    expect(value?.byteLength).toBeGreaterThan(0)
     /* Cancel while the tail is still parked, then release so the body's start() unwinds. */
     await reader.cancel()
     releaseTail()

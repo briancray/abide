@@ -36,7 +36,7 @@ the widest debugger support. Mutates and returns the same map.
 */
 export function markFrameworkSourcesIgnored(map: SourceMap): SourceMap {
     const ignored = (map.sources ?? []).reduce<number[]>((indices, source, index) => {
-        if (source !== null && source.includes(FRAMEWORK_LIB_PATH)) {
+        if (source?.includes(FRAMEWORK_LIB_PATH)) {
             indices.push(index)
         }
         return indices

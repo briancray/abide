@@ -937,7 +937,8 @@ function peek<Args, Return>(
           ? (fn as RemoteFunction<Args, Return>).raw
           : (fn as RawRemoteFunction<Args>)
     const key = isRemote
-        ? keyForRemoteCall(rawFn!.method, rawFn!.url, args)
+        ? // biome-ignore lint/style/noNonNullAssertion: rawFn is undefined only when !isRemote, so this branch has it
+          keyForRemoteCall(rawFn!.method, rawFn!.url, args)
         : producerKey(fn as Producer<Args, Return>, args)
     const active = activeCacheStore()
     active.subscribe(key)

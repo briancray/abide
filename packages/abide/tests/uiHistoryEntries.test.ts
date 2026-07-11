@@ -106,7 +106,7 @@ describe('historyEntries — manual scroll restoration buckets', () => {
     })
 
     test('discard drops the active entry bucket so restore lands at the top (a replace supersedes it)', () => {
-        const here = historyEntries.next()
+        const _here = historyEntries.next()
         view.scrollTo?.(0, 300)
         historyEntries.save() // bucket `here` → [0, 300]
         historyEntries.discard() // a replace lands fresh content over `here`

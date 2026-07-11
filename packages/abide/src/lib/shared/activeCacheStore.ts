@@ -7,5 +7,6 @@ lazily-created fallback when none is registered (so isolated tests work). The
 fallback creator guarantees a value, hence the non-null assertion.
 */
 export function activeCacheStore(): CacheStore {
+    // biome-ignore lint/style/noNonNullAssertion: the slot's lazy fallback creator always returns a store
     return cacheStoreSlot.get()!
 }

@@ -55,7 +55,7 @@
     "linter": {
         "enabled": true,
         "rules": {
-            "recommended": true,
+            "preset": "recommended",
             "suspicious": {
                 "noExplicitAny": "off"
             },
@@ -74,7 +74,11 @@
                         "noNonNullAssertion": "off"
                     },
                     "suspicious": {
-                        "noThenProperty": "off"
+                        "noThenProperty": "off",
+                        "noTemplateCurlyInString": "off"
+                    },
+                    "correctness": {
+                        "useYield": "off"
                     }
                 }
             }

@@ -37,7 +37,7 @@ describe('remoteProxy endpoint policy — client-side (ADR-0020)', () => {
 
     test('the proxy exposes the endpoint cache/stream policy on both variants', () => {
         const getRates = remoteProxy<{ base: string }, { rate: number }>('GET', '/rpc/rates', {
-            cache: { ttl: 20, tags: (args) => ['rates:' + args.base] },
+            cache: { ttl: 20, tags: (args) => [`rates:${args.base}`] },
             stream: { n: 5 },
         })
         expect(getRates.cache?.ttl).toBe(20)
@@ -56,7 +56,7 @@ describe('remoteProxy endpoint policy — client-side (ADR-0020)', () => {
         const ratePolicy = {
             ttl: RATE_TTL,
             debounce: 300,
-            tags: (args: { base?: string }) => ['rates:' + (args.base ?? 'USD')],
+            tags: (args: { base?: string }) => [`rates:${args.base ?? 'USD'}`],
         }
         const getRates = remoteProxy<{ base?: string }, { rate: number }>(
             'GET',
@@ -68,7 +68,7 @@ describe('remoteProxy endpoint policy — client-side (ADR-0020)', () => {
         expect(getRates.cache?.ttl).toBe(RATE_TTL)
         expect(getRates.cache?.debounce).toBe(300)
         expect(
-            (getRates.cache?.tags as (a: { base?: string }) => string[])({ base: 'EUR' }),
+            (getRates.cache!.tags as (a: { base?: string }) => string[])({ base: 'EUR' }),
         ).toEqual(['rates:EUR'])
         expect(getRates.raw.cache?.ttl).toBe(RATE_TTL)
     })

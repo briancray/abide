@@ -160,7 +160,7 @@ const boundaries: Array<{ name: string; wrap: (inner: Fragment) => Fragment }> =
     {
         name: 'switch-case',
         wrap: (inner) => ({
-            html: `{#switch label}{:case 'hi'}${inner.html}` + `{:default}<i>D</i>{/switch}`,
+            html: `{#switch label}{:case 'hi'}${inner.html}{:default}<i>D</i>{/switch}`,
             text: inner.text,
         }),
     },

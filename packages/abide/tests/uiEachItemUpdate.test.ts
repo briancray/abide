@@ -141,7 +141,7 @@ test('reactive index repaints a reordered row in place — same key, new positio
         { items },
     )
     expect(host.textContent).toBe('0:a1:b')
-    const firstSpan = find(host, 'span') // row id=1's span, at index 0
+    const _firstSpan = find(host, 'span') // row id=1's span, at index 0
     items.value = [
         { id: 2, label: 'b' }, // same objects, reversed order
         { id: 1, label: 'a' },

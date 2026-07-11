@@ -12,7 +12,10 @@ Payload of one streamed `window.__abideResolve(...)` call. Three arms:
 
 Discriminate on `cellKey` (cell) then `miss` (cache miss) then default (cache entry).
 */
-export type StreamedResolution =
-    | CacheSnapshotEntry
-    | { key: string; miss: true }
-    | { cellKey: string; value: string }
+
+/* The cache arms — a warm snapshot entry or a `{ key, miss }` marker. `streamCacheResolutions`
+   yields exactly these (never the cell arm), so its element type is `CacheResolution`, keeping a
+   `.key` access on its results well-typed. */
+export type CacheResolution = CacheSnapshotEntry | { key: string; miss: true }
+
+export type StreamedResolution = CacheResolution | { cellKey: string; value: string }

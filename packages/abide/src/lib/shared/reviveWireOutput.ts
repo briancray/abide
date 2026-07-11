@@ -26,10 +26,11 @@ export function reviveWireOutput(value: unknown, plan: OutputWirePlan | undefine
     }
     const record = value as Record<string, unknown>
     for (const key in plan) {
-        if (!(key in record)) {
+        const fieldPlan = plan[key]
+        if (fieldPlan === undefined || !(key in record)) {
             continue
         }
-        record[key] = reviveOutputField(record[key], plan[key])
+        record[key] = reviveOutputField(record[key], fieldPlan)
     }
     return value
 }

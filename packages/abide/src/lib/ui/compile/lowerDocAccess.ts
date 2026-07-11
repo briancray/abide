@@ -169,6 +169,7 @@ export function docAccessTransformer(docName: string): ts.TransformerFactory<ts.
                     )
                     /* `node.arguments.length > 0` above guarantees `adds` is non-empty, so the
                        single-element branch's `adds[0]` is defined. */
+                    // biome-ignore lint/style/noNonNullAssertion: length === 1 guarantees adds[0] is defined
                     return adds.length === 1 ? adds[0]! : ts.factory.createCommaListExpression(adds)
                 }
             }

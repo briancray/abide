@@ -108,7 +108,7 @@ function lowerList(
 function isBareLiftedCell(code: string, cells: InjectedCell[], lifted: number): boolean {
     const name = code.trim()
     for (let index = lifted; index < cells.length; index++) {
-        if (cells[index].name === name) {
+        if (cells[index]?.name === name) {
             return true
         }
     }

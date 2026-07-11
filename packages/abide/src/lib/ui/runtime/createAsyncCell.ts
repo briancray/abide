@@ -162,7 +162,8 @@ export function createAsyncCell(
     /* Run (or re-run) the seed. `reseed` marks a dependency-driven new source, which clears
        the write latch; a `refresh()` passes false so a held write and value survive. */
     const run = (reseed: boolean): void => {
-        const myRun = (runId += 1)
+        runId += 1
+        const myRun = runId
         if (cancelStream !== undefined) {
             cancelStream()
             cancelStream = undefined

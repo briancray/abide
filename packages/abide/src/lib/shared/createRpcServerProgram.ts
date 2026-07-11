@@ -362,7 +362,9 @@ function returnBodyJsonSchema(
     if (!resolved || schemas.length === 0) {
         return undefined
     }
-    const combined = schemas.length === 1 ? schemas[0] : { anyOf: schemas }
+    const [onlySchema] = schemas
+    const combined =
+        schemas.length === 1 && onlySchema !== undefined ? onlySchema : { anyOf: schemas }
     return Object.keys(combined).length === 0 ? undefined : combined
 }
 
@@ -482,8 +484,13 @@ function errorBranchSchemas(
     }
     const result: ErrorJsonSchemas = {}
     for (const [status, schemas] of byStatus) {
+        const [onlySchema] = schemas
         result[status] =
-            schemas.length === 0 ? {} : schemas.length === 1 ? schemas[0] : { anyOf: schemas }
+            schemas.length === 0
+                ? {}
+                : schemas.length === 1 && onlySchema !== undefined
+                  ? onlySchema
+                  : { anyOf: schemas }
     }
     return result
 }
@@ -542,7 +549,8 @@ function nonNullishType(type: ts.Type): ts.Type {
         return type
     }
     const kept = type.types.filter((member) => (member.flags & NULLISH_FLAGS) === 0)
-    return kept.length === 1 ? kept[0] : type
+    const [onlyKept] = kept
+    return kept.length === 1 && onlyKept !== undefined ? onlyKept : type
 }
 
 /* The non-nullish constituents of a body type — a single-element list for a non-union, else the
@@ -785,7 +793,8 @@ function unwrapOptional(type: ts.Type): ts.Type {
         return type
     }
     const kept = type.types.filter((member) => (member.flags & NULLISH_FLAGS) === 0)
-    return kept.length === 1 ? kept[0] : type
+    const [onlyKept] = kept
+    return kept.length === 1 && onlyKept !== undefined ? onlyKept : type
 }
 
 /* The element type of a `T[]`/`readonly T[]`, so a repeated query key (`?tag=1&tag=2`) coerces

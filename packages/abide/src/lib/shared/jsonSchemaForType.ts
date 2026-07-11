@@ -121,8 +121,9 @@ function projectUnion(
         const values = members.map((member) => (member as ts.StringLiteralType).value)
         return values.length === 1 ? { type: 'string', const: values[0] } : { enum: values }
     }
-    if (members.length === 1) {
-        return project(checker, members[0], seen)
+    const [onlyMember] = members
+    if (members.length === 1 && onlyMember !== undefined) {
+        return project(checker, onlyMember, seen)
     }
     seen.add(type)
     const anyOf = members.map((member) => project(checker, member, seen))

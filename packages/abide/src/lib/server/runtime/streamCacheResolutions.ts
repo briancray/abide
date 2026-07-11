@@ -1,21 +1,21 @@
 import type { CacheEntry } from '../../shared/types/CacheEntry.ts'
 import type { CacheSnapshotEntry } from '../../shared/types/CacheSnapshotEntry.ts'
 import type { CacheStore } from '../../shared/types/CacheStore.ts'
-import type { StreamedResolution } from '../../shared/types/StreamedResolution.ts'
+import type { CacheResolution } from '../../shared/types/StreamedResolution.ts'
 import { snapshotEntryFromCache } from './snapshotEntryFromCache.ts'
 
 /*
 Drains the pending ({#await}) cache entries in resolution order — whichever
 fetch lands next is yielded next, so a slow entry never blocks a fast one
-behind it. Yields exactly one StreamedResolution per entry: the snapshot when
+behind it. Yields exactly one CacheResolution per entry: the snapshot when
 serialization succeeds, or a `{ key, miss }` marker when the body can't ship so
 the client placeholder re-fetches instead of hanging on a deferred that never
-settles.
+settles. (Never the cell arm of StreamedResolution — that is emitted separately.)
 */
 export async function* streamCacheResolutions(
     store: CacheStore,
     pending: CacheEntry[],
-): AsyncIterable<StreamedResolution> {
+): AsyncIterable<CacheResolution> {
     /*
     Tag each pending serialization with its key so the loop can drop exactly
     the one that just settled. Deleting inside the `.then` instead would race

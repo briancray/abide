@@ -178,10 +178,11 @@ unrevivable value stays its JSON form so the schema surfaces an honest issue rat
 */
 function applyCoercion(args: Record<string, unknown>, coerce: InputCoercion): void {
     for (const key in coerce) {
-        if (!(key in args)) {
+        const kind = coerce[key]
+        if (kind === undefined || !(key in args)) {
             continue
         }
-        args[key] = reviveValue(args[key], coerce[key])
+        args[key] = reviveValue(args[key], kind)
     }
 }
 

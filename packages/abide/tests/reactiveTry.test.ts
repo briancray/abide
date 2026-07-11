@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { compileComponent } from '../src/lib/ui/compile/compileComponent.ts'
-import { createDoc } from '../src/lib/ui/runtime/createDoc.ts'
+import type { createDoc } from '../src/lib/ui/runtime/createDoc.ts'
 import { installMiniDom } from './support/installMiniDom.ts'
 import { settle } from './support/settle.ts'
 

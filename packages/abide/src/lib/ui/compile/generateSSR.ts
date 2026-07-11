@@ -164,7 +164,7 @@ export function generateSSR(
        block's markers, `$ctx.next++` id, RESUME wire, and the whole client build stay byte-identical.
        The `flightDecls` are emitted by compileSSR after the lowered script and BEFORE the barrier, so
        a hoisted flight is already in-flight while the barrier awaits any unrelated blocking cell. */
-    const flightNameByNode = new Map<TemplateNode, string>()
+    const flightNameByNode = new Map<Extract<TemplateNode, { kind: 'await' }>, string>()
     for (const flight of hoistableAwaits(rootNodes, cellReadNames)) {
         flightNameByNode.set(flight.node, flight.name)
     }

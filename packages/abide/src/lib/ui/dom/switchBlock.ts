@@ -29,7 +29,10 @@ export function switchBlock(
         let fallback = -1
         for (let index = 0; index < cases.length; index++) {
             const entry = cases[index]
-            if (entry.pending !== undefined && entry.pending()) {
+            if (entry === undefined) {
+                continue
+            }
+            if (entry.pending?.()) {
                 return -1
             }
             if (entry.match === undefined) {

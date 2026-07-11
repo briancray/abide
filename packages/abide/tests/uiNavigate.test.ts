@@ -8,7 +8,11 @@ import { runtimePath } from '../src/lib/ui/runtime/runtimePath.ts'
    router tests — which rely on `history` being undefined — are unaffected. */
 type EntryState = { abideEntry: number }
 const globals = globalThis as {
-    history?: { state: EntryState | null; pushState: Function; replaceState: Function }
+    history?: {
+        state: EntryState | null
+        pushState: (...args: any[]) => void
+        replaceState: (...args: any[]) => void
+    }
     scrollX?: number
     scrollY?: number
     scrollTo?: (x: number, y: number) => void
