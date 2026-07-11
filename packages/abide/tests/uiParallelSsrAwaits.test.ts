@@ -129,11 +129,15 @@ test('two independent blocking awaits render in ~max, not ~sum, of their latenci
 test('a hoisted streaming-only page stays a SYNCHRONOUS render (no first-byte regression)', () => {
     /* The flight decls carry no `await`, and a streaming block never awaits inline, so a
        pure-streaming page must not gain an async IIFE wrapper — its shell still flushes early. */
-    const streaming = compileSSR(`<main>{#await load()}<p>loading</p>{:then v}<b>{v}</b>{/await}</main>`)
+    const streaming = compileSSR(
+        `<main>{#await load()}<p>loading</p>{:then v}<b>{v}</b>{/await}</main>`,
+    )
     expect(streaming).toContain('$$flight') // the flight IS hoisted (starts early)
     expect(streaming).not.toContain('(async () =>') // but the render stays synchronous
     /* A blocking await still forces the async wrapper (it awaits the flight inline). */
-    expect(compileSSR(`<main>{#await load() then v}<b>{v}</b>{/await}</main>`)).toContain('(async () =>')
+    expect(compileSSR(`<main>{#await load() then v}<b>{v}</b>{/await}</main>`)).toContain(
+        '(async () =>',
+    )
 })
 
 test('a rejecting hoisted flight renders its {:catch}, no unhandled rejection', async () => {
