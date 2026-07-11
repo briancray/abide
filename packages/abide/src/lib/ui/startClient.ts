@@ -34,13 +34,6 @@ export function startClient(
     if (target === null) {
         throw new Error('[abide] startClient: missing #app target')
     }
-    /* Inspector only: the server injects `__abideInspect` when ABIDE_ENABLE_INSPECTOR is on,
-       so the scope/router bridge arms before the router builds any scope. A lazy chunk —
-       emitted but fetched only when the flag is set, never weighing down the default client
-       load. */
-    if ((globalThis as { __abideInspect?: boolean }).__abideInspect) {
-        import('./installInspectorBridge.ts').then((module) => module.installInspectorBridge())
-    }
     const ssr = (globalThis as { __SSR__?: Partial<SsrPayload> }).__SSR__ ?? {}
     /* Seed the per-page __SSR__ stamps into their shared slots before mount: the mount
        base, app name (default log channel), health payload (so health()'s first probe is

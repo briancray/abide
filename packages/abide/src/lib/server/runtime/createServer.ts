@@ -177,13 +177,6 @@ export async function createServer({
     // In dev, append the live-reload client to the shell so every rendered
     // page reconnects to /__abide/dev and reloads after a restart.
     const devShell = dev ? shell.replace('</body>', `${DEV_RELOAD_CLIENT_SCRIPT}</body>`) : shell
-    // When the inspector is enabled, flag the client so startClient installs the
-    // BroadcastChannel bridge that streams scope + router state to the inspector
-    // page. Independent of dev — the inspector can run on a build server too.
-    const inspectedShell =
-        process.env.ABIDE_ENABLE_INSPECTOR === 'true'
-            ? devShell.replace('</body>', `<script>window.__abideInspect=true</script></body>`)
-            : devShell
     /*
     Mount base from APP_URL's pathname (e.g. https://foo.com/v2 → /v2). Install
     the server-side resolver so url() prefixes SSR-generated links, and rewrite
@@ -195,9 +188,7 @@ export async function createServer({
     baseSlot.resolver = () => base
     // Rebase the shell's rooted `/_app/` entry refs onto the mount base, matching
     // either quote style so a custom app.html using single quotes still rewrites.
-    const activeShell = base
-        ? inspectedShell.replace(/(["'])\/_app\//g, `$1${base}/_app/`)
-        : inspectedShell
+    const activeShell = base ? devShell.replace(/(["'])\/_app\//g, `$1${base}/_app/`) : devShell
     /*
     The physical dir the `/_app/*` URLs map onto. Production reads the stable
     `dist/_app`; under `abide dev` the orchestrator serves each build generation from
