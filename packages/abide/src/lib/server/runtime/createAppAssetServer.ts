@@ -1,11 +1,10 @@
-import { NO_STORE } from '../../shared/CACHE_CONTROL_VALUES.ts'
-import { TEXT_PLAIN } from '../../shared/TEXT_PLAIN.ts'
 import { acceptsGzip } from './acceptsGzip.ts'
 import { cacheControlForAsset } from './cacheControlForAsset.ts'
 import { containsTraversal } from './containsTraversal.ts'
 import { createAssetHeaderCache } from './createAssetHeaderCache.ts'
 import { globToPathSet } from './globToPathSet.ts'
 import { respondWithEmbeddedAsset } from './respondWithEmbeddedAsset.ts'
+import { textResponse } from './textResponse.ts'
 import type { Assets } from './types/Assets.ts'
 
 /*
@@ -55,11 +54,7 @@ export async function createAppAssetServer({
     )
 
     // Fresh 404 per call — a Response body is single-use, so it can't be hoisted to a const.
-    const notFound = (): Response =>
-        new Response('Not Found', {
-            status: 404,
-            headers: { 'Content-Type': TEXT_PLAIN, 'Cache-Control': NO_STORE },
-        })
+    const notFound = (): Response => textResponse(404)
 
     return async function serveAppAsset(req, url) {
         if (containsTraversal(req.url)) {

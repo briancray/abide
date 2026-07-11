@@ -2,12 +2,12 @@ import { NO_STORE } from '../../shared/CACHE_CONTROL_VALUES.ts'
 import { memoizeByKey } from '../../shared/memoizeByKey.ts'
 import { NAV_HEADER } from '../../shared/NAV_HEADER.ts'
 import { REMOTE_FUNCTION } from '../../shared/REMOTE_FUNCTION.ts'
-import { TEXT_PLAIN } from '../../shared/TEXT_PLAIN.ts'
 import type { HttpMethod } from '../../shared/types/HttpMethod.ts'
 import type { RemoteFunction } from '../../shared/types/RemoteFunction.ts'
 import type { Pages } from '../../ui/types/Pages.ts'
 import type { RemoteRoutes } from '../rpc/types/RemoteRoutes.ts'
 import { crossOriginGate } from './crossOriginGate.ts'
+import { textResponse } from './textResponse.ts'
 import type { RequestStore } from './types/RequestStore.ts'
 
 type AnyRemoteFunction = RemoteFunction<unknown, unknown>
@@ -26,12 +26,9 @@ type RenderPage = (
     store: RequestStore,
 ) => Promise<Response>
 
-/* The framework's 405 — `Allow` names the permitted rpc(s), body and NO_STORE shared so the rpc and page branches can't drift. */
+/* The framework's 405 — `Allow` names the permitted rpc(s); body/headers come from the shared textResponse so the rpc and page branches can't drift. */
 function methodNotAllowed(allow: string): Response {
-    return new Response('Method Not Allowed', {
-        status: 405,
-        headers: { Allow: allow, 'Content-Type': TEXT_PLAIN, 'Cache-Control': NO_STORE },
-    })
+    return textResponse(405, undefined, { Allow: allow })
 }
 
 /*
@@ -118,10 +115,7 @@ export function createRouteDispatcher({
                 }
                 return renderPage(routeUrl, pathParams, store)
             }
-            return new Response('Not Found', {
-                status: 404,
-                headers: { 'Content-Type': TEXT_PLAIN, 'Cache-Control': NO_STORE },
-            })
+            return textResponse(404)
         }
     }
 }
