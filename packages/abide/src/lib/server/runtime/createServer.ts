@@ -6,14 +6,8 @@ import { abideLog } from '../../shared/abideLog.ts'
 import { basePathFromAppUrl } from '../../shared/basePathFromAppUrl.ts'
 import { baseSlot } from '../../shared/baseSlot.ts'
 import { NO_STORE } from '../../shared/CACHE_CONTROL_VALUES.ts'
-import { CLI_PATH } from '../../shared/CLI_PATH.ts'
-import { DEV_HOT_PREFIX } from '../../shared/DEV_HOT_PREFIX.ts'
-import { DEV_RELOAD_PATH } from '../../shared/DEV_RELOAD_PATH.ts'
 import { extraForwardHeaders } from '../../shared/extraForwardHeaders.ts'
-import { HEALTH_PATH } from '../../shared/HEALTH_PATH.ts'
 import { healthReadSlot } from '../../shared/healthReadSlot.ts'
-import { IDENTITY_PATH } from '../../shared/IDENTITY_PATH.ts'
-import { INSPECTOR_PATH } from '../../shared/INSPECTOR_PATH.ts'
 import { isDebugNegated } from '../../shared/isDebugNegated.ts'
 import { logClosingRecord } from '../../shared/logClosingRecord.ts'
 import { matchRoute } from '../../shared/matchRoute.ts'
@@ -22,14 +16,10 @@ import { OFFLINE_HEADER } from '../../shared/OFFLINE_HEADER.ts'
 import { parseBoundedEnvInt } from '../../shared/parseBoundedEnvInt.ts'
 import { parseRouteSegments } from '../../shared/parseRouteSegments.ts'
 import { requestScopeSlot } from '../../shared/requestScopeSlot.ts'
-import { SOCKETS_PATH } from '../../shared/SOCKETS_PATH.ts'
 import { setAppName } from '../../shared/setAppName.ts'
-import { TEXT_PLAIN } from '../../shared/TEXT_PLAIN.ts'
 import type { Layouts } from '../../ui/types/Layouts.ts'
 import type { Pages } from '../../ui/types/Pages.ts'
 import type { AppModule } from '../AppModule.ts'
-import { handleCliDownload } from '../cli/handleCliDownload.ts'
-import { handleCliInstall } from '../cli/handleCliInstall.ts'
 import type { PromptRoutes } from '../prompts/types/PromptRoutes.ts'
 import type { RemoteRoutes } from '../rpc/types/RemoteRoutes.ts'
 import { createSocketDispatcher } from '../sockets/createSocketDispatcher.ts'
@@ -38,20 +28,15 @@ import { buildHealthPayload } from './buildHealthPayload.ts'
 import { buildOpenApiSpec } from './buildOpenApiSpec.ts'
 import { buildPreloadManifest } from './buildPreloadManifest.ts'
 import { createAppAssetServer } from './createAppAssetServer.ts'
+import { createPlumbingRouter, PLUMBING_PASS } from './createPlumbingRouter.ts'
 import { createPublicAssetServer } from './createPublicAssetServer.ts'
 import { createRouteDispatcher } from './createRouteDispatcher.ts'
 import { createUiPageRenderer } from './createUiPageRenderer.ts'
-import { crossOriginGate } from './crossOriginGate.ts'
 import { DEFAULT_PORT } from './DEFAULT_PORT.ts'
 import { DEV_READY_MESSAGE } from './DEV_READY_MESSAGE.ts'
-import { DEV_REBUILD_MESSAGE } from './DEV_REBUILD_MESSAGE.ts'
 import { DEV_RELOAD_CLIENT_SCRIPT } from './DEV_RELOAD_CLIENT_SCRIPT.ts'
 import { devClientFingerprint } from './devClientFingerprint.ts'
-import { devHotModuleResponse } from './devHotModuleResponse.ts'
-import { devReloadResponse } from './devReloadResponse.ts'
-import { disableIdleTimeoutForStream } from './disableIdleTimeoutForStream.ts'
 import { finalizeResponse } from './finalizeResponse.ts'
-import { gzipResponse } from './gzipResponse.ts'
 import { installAmbientScopeStore } from './installAmbientScopeStore.ts'
 import { internalErrorResponse } from './internalErrorResponse.ts'
 import { listenOnOpenPort } from './listenOnOpenPort.ts'
@@ -63,15 +48,11 @@ import { ensureRegistriesLoaded, setRegistryManifests } from './registryManifest
 import { requestContext } from './requestContext.ts'
 import { runWithRequestScope } from './runWithRequestScope.ts'
 import { setActiveServer } from './setActiveServer.ts'
+import { textResponse } from './textResponse.ts'
 import type { Assets } from './types/Assets.ts'
 import type { RequestStore } from './types/RequestStore.ts'
 import { warnUnguardedMcp } from './warnUnguardedMcp.ts'
 
-const SOCKETS_REST_PREFIX = `${SOCKETS_PATH}/`
-const MCP_PATH = '/__abide/mcp'
-const CLI_DOWNLOAD_PREFIX = `${CLI_PATH}/`
-// Dev-only manual rebuild trigger; POSTing signals the orchestrator to rebuild + restart.
-const DEV_REBUILD_PATH = '/__abide/reload'
 /*
 Unlike the framework's own plumbing routes above (the socket multiplex, MCP
 endpoint, CLI download), the OpenAPI document describes the app's public HTTP
@@ -267,6 +248,10 @@ export async function createServer({
     const appVersion = appInfo?.version ?? '0.0.0'
     /* The app's default log channel — every unchanneled record speaks as [appName]. */
     setAppName(appName)
+    /* The single health-payload builder, bound to this app's identity — shared by the
+       /__abide/health probe and the renderer's __SSR__ seed so the wire and seed can't drift. */
+    const healthPayloadFor = (request: Request) =>
+        buildHealthPayload(request, { app, appName, appVersion })
     /*
     Opt-in inspector (ABIDE_ENABLE_INSPECTOR=true): a dynamically-imported
     `@abide/inspector` handler, or undefined when the flag is off / the package
@@ -326,7 +311,7 @@ export async function createServer({
         layouts,
         routePreloads,
         /* The wire payload, rebuilt per marked render — the __SSR__ health seed must match what /__abide/health serves. */
-        healthPayload: (request) => buildHealthPayload(request, { app, appName, appVersion }),
+        healthPayload: healthPayloadFor,
     })
 
     /*
@@ -398,6 +383,25 @@ export async function createServer({
     const socketDispatcher = createSocketDispatcher(sockets)
 
     /*
+    Framework HTTP surface — the health/identity probe, inspector, dev
+    channels, sockets upgrade + REST face, MCP, and CLI — resolved ahead of the
+    app's rpc/page routes. Returns PLUMBING_PASS for any path it doesn't own so
+    the fetch handler falls through to the app routes below.
+    */
+    const routePlumbing = createPlumbingRouter({
+        dev,
+        base,
+        clientFingerprint,
+        inspectorHandler,
+        socketDispatcher,
+        mcp,
+        cliName,
+        cliCwd,
+        healthPayload: healthPayloadFor,
+        dispatchRequest,
+    })
+
+    /*
     Bind the real server on `boundPort`. Only the port varies between scan
     attempts, so the rest of the config lives inline and just the port is spread
     in — passing the literal straight to Bun.serve keeps contextual typing of the
@@ -432,165 +436,17 @@ export async function createServer({
             async fetch(req, bunServer) {
                 const url = new URL(req.url)
                 /*
-                Health/identity probe — answered directly, ahead of any app.handle
-                middleware, so the bundle's connect screen, the CLI, and the client
-                health() can confirm a URL really is a live abide server even when
-                the app guards everything behind auth (reporting
-                `authenticated: false` requires exactly that). The app's optional
-                health hook contributes fields; the framework's identity keys win
-                on collision, and a thrown hook is logged and skipped so an app
-                bug can't masquerade as an unreachable server. IDENTITY_PATH is
-                the compatibility alias for the same payload.
+                Framework HTTP surface — the health/identity probe, inspector,
+                the dev live-reload/hot-module/rebuild channels, the sockets
+                upgrade and its SSE/JSON face, MCP, and CLI — resolved ahead of
+                the app's rpc/page routes (see createPlumbingRouter). Each answers
+                either directly (ahead of app.handle) or through dispatchRequest,
+                exactly as before. PLUMBING_PASS means the path is none of them, so
+                fall through to the app routes below.
                 */
-                if (url.pathname === HEALTH_PATH || url.pathname === IDENTITY_PATH) {
-                    const payload = await buildHealthPayload(req, { app, appName, appVersion })
-                    return gzipResponse(
-                        req,
-                        Response.json(
-                            /*
-                            The IDENTITY_PATH alias keeps the legacy `abide: true`
-                            shape: already-shipped probers check it with strict
-                            equality, and a version string would make them treat
-                            an upgraded healthy server as not-abide.
-                            */
-                            url.pathname === IDENTITY_PATH ? { ...payload, abide: true } : payload,
-                            { headers: { 'Cache-Control': NO_STORE } },
-                        ),
-                    )
-                }
-                /*
-                Inspector surface — answered directly, ahead of app.handle, since
-                it's privileged operator tooling gated by ABIDE_ENABLE_INSPECTOR
-                (not the app's user auth). Undefined handler = flag off, so the
-                whole block compiles out of the hot path when the inspector's off.
-                */
-                if (
-                    inspectorHandler &&
-                    (url.pathname === INSPECTOR_PATH ||
-                        url.pathname.startsWith(`${INSPECTOR_PATH}/`))
-                ) {
-                    // The events feed is long-lived SSE: opt it out of the idle
-                    // timeout, else Bun reaps it and the reconnect replays the
-                    // whole buffer (duplicate boot logs every ~10s).
-                    return disableIdleTimeoutForStream(
-                        bunServer,
-                        req,
-                        await inspectorHandler(req, url),
-                    )
-                }
-                /*
-                Dev live-reload channel — answered directly, ahead of app.handle,
-                so a restart-driven reconnect always lands even when the app guards
-                everything behind auth. Only mounted under `abide dev`.
-                */
-                if (clientFingerprint !== undefined && url.pathname === DEV_RELOAD_PATH) {
-                    // Long-lived SSE: opt out of the idle timeout, else Bun reaps
-                    // it and the reconnect triggers a spurious reload loop.
-                    return disableIdleTimeoutForStream(
-                        bunServer,
-                        req,
-                        devReloadResponse(clientFingerprint),
-                    )
-                }
-                /* Component hot module — the browser imports one edited `.abide`'s
-                   hot build here instead of reloading (dev component HMR). */
-                if (clientFingerprint !== undefined && url.pathname.startsWith(DEV_HOT_PREFIX)) {
-                    /* This endpoint serves `application/javascript` for the browser's
-                       `import()`. A TOP-LEVEL NAVIGATION to it — clicking the module link in a
-                       stack trace, or opening the URL — would DOWNLOAD the file, since browsers
-                       can't render JS as a document. A navigation sends `Accept: text/html`;
-                       `import()` sends a wildcard Accept. Redirect a navigation back to a real
-                       page (the referring page when same-origin, else the mount root) so the
-                       error surfaces in context as a normal render instead of saving a file. */
-                    if ((req.headers.get('accept') ?? '').includes('text/html')) {
-                        const referer = req.headers.get('referer')
-                        const page =
-                            referer !== null &&
-                            URL.canParse(referer) &&
-                            new URL(referer).origin === url.origin &&
-                            !new URL(referer).pathname.startsWith(DEV_HOT_PREFIX)
-                                ? referer
-                                : base || '/'
-                        return new Response(null, {
-                            status: 302,
-                            headers: { Location: page, 'Cache-Control': NO_STORE },
-                        })
-                    }
-                    return devHotModuleResponse(
-                        decodePathSegment(url.pathname.slice(DEV_HOT_PREFIX.length)),
-                    )
-                }
-                /*
-                Manual rebuild trigger: signal the orchestrator parent over IPC to
-                rebuild + restart. Same-origin sibling of the live-reload channel, so
-                a script refreshes on the app's own port. process.send exists only when
-                the dev orchestrator spawned us with ipc; the optional chain no-ops on a
-                bare server.
-                */
-                if (dev && req.method === 'POST' && url.pathname === DEV_REBUILD_PATH) {
-                    process.send?.(DEV_REBUILD_MESSAGE)
-                    return new Response('rebuilding\n', {
-                        headers: { 'Content-Type': TEXT_PLAIN },
-                    })
-                }
-                if (url.pathname === SOCKETS_PATH) {
-                    // Reject cross-origin upgrades (CSWSH) before handing off to Bun.
-                    const upgradeForbidden = crossOriginGate(req, url)
-                    if (upgradeForbidden) {
-                        return upgradeForbidden
-                    }
-                    if (bunServer.upgrade(req, { data: {} })) {
-                        return undefined as unknown as Response
-                    }
-                    return new Response('Upgrade failed', {
-                        status: 400,
-                        headers: { 'Content-Type': TEXT_PLAIN },
-                    })
-                }
-                /*
-                HTTP face of a socket (`/__abide/sockets/<name>`) — tail over
-                SSE / JSON and publish — for the CLI and MCP. Runs through
-                dispatchRequest so app.handle auth applies, like the rpc paths.
-                The socket name may contain `/` (nested files), so it's the
-                whole remaining pathname, percent-decoded.
-                */
-                if (url.pathname.startsWith(SOCKETS_REST_PREFIX)) {
-                    /*
-                    Gate cross-origin browser publishes (CSRF, see crossOriginGate).
-                    GET tail reads stay open cross-origin like rpc reads; only
-                    the mutating POST is gated.
-                    */
-                    const publishForbidden = crossOriginGate(req, url, { allowReadOnly: true })
-                    if (publishForbidden) {
-                        return publishForbidden
-                    }
-                    const name = decodePathSegment(url.pathname.slice(SOCKETS_REST_PREFIX.length))
-                    return dispatchRequest(
-                        req,
-                        {},
-                        async () => socketDispatcher.rest(req, name),
-                        url,
-                    )
-                }
-                if (url.pathname === MCP_PATH && mcp) {
-                    // Gate cross-site browser posts (CSRF, see crossOriginGate).
-                    const mcpForbidden = crossOriginGate(req, url)
-                    if (mcpForbidden) {
-                        return mcpForbidden
-                    }
-                    return dispatchRequest(req, {}, async () => mcp.handle(req), url)
-                }
-                if (url.pathname === CLI_PATH) {
-                    return dispatchRequest(req, {}, async () => handleCliInstall(req, cliName), url)
-                }
-                if (url.pathname.startsWith(CLI_DOWNLOAD_PREFIX)) {
-                    const platform = url.pathname.slice(CLI_DOWNLOAD_PREFIX.length)
-                    return dispatchRequest(
-                        req,
-                        {},
-                        async () => handleCliDownload(req, platform, cliName, cliCwd),
-                        url,
-                    )
+                const plumbed = routePlumbing(req, url, bunServer)
+                if (plumbed !== PLUMBING_PASS) {
+                    return plumbed
                 }
                 /*
                 App routes — rpc by flat lookup, pages through the shared
@@ -690,13 +546,7 @@ export async function createServer({
                     req,
                     {},
                     async (_req, _pathParams, store) => {
-                        return (
-                            (await renderError(404, 'Not Found', store)) ??
-                            new Response('Not Found', {
-                                status: 404,
-                                headers: { 'Content-Type': TEXT_PLAIN, 'Cache-Control': NO_STORE },
-                            })
-                        )
+                        return (await renderError(404, 'Not Found', store)) ?? textResponse(404)
                     },
                     url,
                 )
@@ -788,16 +638,4 @@ export async function createServer({
         }
     }
     return server
-}
-
-/* Lenient percent-decode for the internal-route names above (dev hot-module
-   paths, socket names) — the same leniency matchRoute applies to page params.
-   A malformed escape (`/%`) keeps the raw text so the downstream lookup misses
-   naturally instead of a URIError escaping the fetch handler as a 500. */
-function decodePathSegment(segment: string): string {
-    try {
-        return decodeURIComponent(segment)
-    } catch {
-        return segment
-    }
 }
