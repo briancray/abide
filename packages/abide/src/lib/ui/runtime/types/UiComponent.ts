@@ -18,11 +18,7 @@ export type UiComponent = ((host: Element, props?: UiProps) => () => void) & {
     hydrate?: (host: Element, props?: UiProps) => () => void
     /* The bare client build (`(host, props) => void`) — appends the component's nodes
        to `host`. A nested child mounts it into a marker range (`mountRange`/`mountChild`)
-       instead of the wrapped `mount`, and `hotReplace` re-fills a range with the new
-       module's `build` on edit. */
+       instead of the wrapped `mount`. */
     build: (host: Node, props?: UiProps) => void
     hydratable?: boolean
-    /* Stable module id (project-relative source path) stamped by `compileModule`,
-       keying the component in the hot-reload registry — see `mountChild`. */
-    __abideId?: string
 }

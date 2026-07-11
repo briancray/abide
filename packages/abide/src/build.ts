@@ -111,13 +111,6 @@ export async function build({
                     chunk: '[name]-[hash].[ext]',
                     asset: '[name].[ext]',
                 },
-                /* Build-time flag the client reads to fold away dev-only machinery: production
-                   (`dev: false`) defines it false so the hot-reload subtree — mountChild's
-                   record path, hotReplace, captureModelDoc — dead-code-eliminates instead of
-                   shipping behind a runtime flag the minifier can't prove. Dev defines it true
-                   to keep HMR. Under `bun test` no define applies; the source falls back to true
-                   so `hotReloadEnabled` alone governs (see startClient/mountChild). */
-                define: { __ABIDE_DEV__: dev ? 'true' : 'false' },
                 plugins,
             }),
             generateDeclarations({ cwd }),

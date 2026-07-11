@@ -12,8 +12,8 @@ import type { SeedTypeClassifier } from './types/SeedTypeClassifier.ts'
 /* The `abide/ui/*` modules the reactive surface is imported from. An author's import of
    one is compiler-recognised and lowered, so its binding is often fully consumed — a plain
    `state(...)` becomes `$$model`/`$$scope` with no `state` reference left. Such a dead
-   import is dropped from the emitted module (see `deadReactiveImport`) so the output has no
-   spurious static `@abide/ui` dependency — load-bearing for hot modules, which forbid one. */
+   import is dropped from the emitted module (see `deadReactiveImport`) so the output carries
+   no spurious static `@abide/ui` dependency — a dead import a bundler would still resolve. */
 const REACTIVE_IMPORT_SPECIFIERS = new Set([
     `${ABIDE_PACKAGE_NAME}/ui/state`,
     `${ABIDE_PACKAGE_NAME}/ui/effect`,

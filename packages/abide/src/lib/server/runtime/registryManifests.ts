@@ -52,7 +52,7 @@ export function ensureRegistriesLoaded(): Promise<void> {
             .then(() => undefined)
             /*
             Clear the memo on failure so a transient import error (a
-            module that throws at load, fixed by the next HMR pass)
+            module that throws at load, fixed by the next rebuild)
             doesn't poison every later enumeration request for the
             process lifetime. The rejection still propagates to this
             caller; the reset only affects subsequent calls.

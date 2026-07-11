@@ -390,7 +390,6 @@ export async function createServer({
     */
     const routePlumbing = createPlumbingRouter({
         dev,
-        base,
         clientFingerprint,
         inspectorHandler,
         socketDispatcher,
@@ -437,7 +436,7 @@ export async function createServer({
                 const url = new URL(req.url)
                 /*
                 Framework HTTP surface — the health/identity probe, inspector,
-                the dev live-reload/hot-module/rebuild channels, the sockets
+                the dev live-reload/rebuild channels, the sockets
                 upgrade and its SSE/JSON face, MCP, and CLI — resolved ahead of
                 the app's rpc/page routes (see createPlumbingRouter). Each answers
                 either directly (ahead of app.handle) or through dispatchRequest,

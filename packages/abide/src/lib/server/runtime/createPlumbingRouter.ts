@@ -2,7 +2,6 @@ import type { Server } from 'bun'
 import type { McpServer } from '../../mcp/types/McpServer.ts'
 import { NO_STORE } from '../../shared/CACHE_CONTROL_VALUES.ts'
 import { CLI_PATH } from '../../shared/CLI_PATH.ts'
-import { DEV_HOT_PREFIX } from '../../shared/DEV_HOT_PREFIX.ts'
 import { DEV_RELOAD_PATH } from '../../shared/DEV_RELOAD_PATH.ts'
 import { HEALTH_PATH } from '../../shared/HEALTH_PATH.ts'
 import { IDENTITY_PATH } from '../../shared/IDENTITY_PATH.ts'
@@ -16,7 +15,6 @@ import type { createSocketDispatcher } from '../sockets/createSocketDispatcher.t
 import type { buildHealthPayload } from './buildHealthPayload.ts'
 import { crossOriginGate } from './crossOriginGate.ts'
 import { DEV_REBUILD_MESSAGE } from './DEV_REBUILD_MESSAGE.ts'
-import { devHotModuleResponse } from './devHotModuleResponse.ts'
 import { devReloadResponse } from './devReloadResponse.ts'
 import { disableIdleTimeoutForStream } from './disableIdleTimeoutForStream.ts'
 import { gzipResponse } from './gzipResponse.ts'
@@ -59,7 +57,7 @@ type DispatchRequest = (
 
 /*
 The framework's own HTTP surface — health/identity probe, inspector, the dev
-live-reload + hot-module + rebuild channels, the sockets upgrade and its
+live-reload + rebuild channels, the sockets upgrade and its
 SSE/JSON HTTP face, the MCP endpoint, and CLI install/download — resolved ahead
 of the app's rpc/page routes. Extracted from createServer's fetch handler as a
 sibling of createRouteDispatcher: the app-route half already sat behind a seam,
@@ -72,7 +70,6 @@ the app routes.
 */
 export function createPlumbingRouter({
     dev,
-    base,
     clientFingerprint,
     inspectorHandler,
     socketDispatcher,
@@ -83,7 +80,6 @@ export function createPlumbingRouter({
     dispatchRequest,
 }: {
     dev: boolean
-    base: string
     clientFingerprint: DevReloadStamp | undefined
     inspectorHandler: ((request: Request, url: URL) => Promise<Response>) | undefined
     socketDispatcher: ReturnType<typeof createSocketDispatcher>
@@ -150,32 +146,6 @@ export function createPlumbingRouter({
             // Long-lived SSE: opt out of the idle timeout, else Bun reaps it and
             // the reconnect triggers a spurious reload loop.
             return disableIdleTimeoutForStream(bunServer, req, devReloadResponse(clientFingerprint))
-        }
-        /* Component hot module — the browser imports one edited `.abide`'s hot
-           build here instead of reloading (dev component HMR). */
-        if (clientFingerprint !== undefined && url.pathname.startsWith(DEV_HOT_PREFIX)) {
-            /* This endpoint serves `application/javascript` for the browser's
-               `import()`. A TOP-LEVEL NAVIGATION to it — clicking the module link in a
-               stack trace, or opening the URL — would DOWNLOAD the file, since browsers
-               can't render JS as a document. A navigation sends `Accept: text/html`;
-               `import()` sends a wildcard Accept. Redirect a navigation back to a real
-               page (the referring page when same-origin, else the mount root) so the
-               error surfaces in context as a normal render instead of saving a file. */
-            if ((req.headers.get('accept') ?? '').includes('text/html')) {
-                const referer = req.headers.get('referer')
-                const page =
-                    referer !== null &&
-                    URL.canParse(referer) &&
-                    new URL(referer).origin === url.origin &&
-                    !new URL(referer).pathname.startsWith(DEV_HOT_PREFIX)
-                        ? referer
-                        : base || '/'
-                return new Response(null, {
-                    status: 302,
-                    headers: { Location: page, 'Cache-Control': NO_STORE },
-                })
-            }
-            return devHotModuleResponse(lenientDecode(url.pathname.slice(DEV_HOT_PREFIX.length)))
         }
         /*
         Manual rebuild trigger: signal the orchestrator parent over IPC to

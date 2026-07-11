@@ -7,7 +7,7 @@ import type { UiComponent } from '../runtime/types/UiComponent.ts'
 import { withOptionalPath } from '../runtime/withOptionalPath.ts'
 import { withoutHydration } from '../runtime/withoutHydration.ts'
 import { discardBoundary } from './discardBoundary.ts'
-import { mountComponentRange } from './mountComponentRange.ts'
+import { mountRange } from './mountRange.ts'
 import { openMarker } from './openMarker.ts'
 
 /*
@@ -38,7 +38,7 @@ export function mountStreamedChild(
 ): void {
     const run = <T>(build: () => T): T => withOptionalPath(ordinal, build)
     const mount = (): { dispose: () => void } =>
-        run(() => mountComponentRange(parent, factory, props, before, label))
+        run(() => mountRange(parent, factory.build, props, before, label))
 
     const hydration = RENDER.hydration
     if (hydration === undefined) {
@@ -79,7 +79,7 @@ export function mountStreamedChild(
        the child fresh at that position; its streamed cells resolve post-mount via receiveStreamedCell. */
     const after = discardBoundary(parent, open, `/abide:await:${childPath}`, hydration)
     const handle = withoutHydration(() =>
-        run(() => mountComponentRange(parent, factory, props, after, label)),
+        run(() => mountRange(parent, factory.build, props, after, label)),
     )
     OWNER.current?.push(handle.dispose)
 }

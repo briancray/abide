@@ -61,8 +61,8 @@ Installs the client→inspector bridge: a BroadcastChannel the inspector page re
 to render its Reactive + Router tabs. Gated by `__abideInspect` (server-injected
 only when the inspector is enabled) and called from startClient before the router
 builds any scope — so registration is armed before the first scope exists. A
-no-op where BroadcastChannel is absent (SSR, old runtimes). Mirrors
-installHotBridge: dev instrumentation, not public surface.
+no-op where BroadcastChannel is absent (SSR, old runtimes). Dev instrumentation,
+not public surface.
 */
 export function installInspectorBridge(): void {
     /* No BroadcastChannel means no consumer for the scope registry — bail before

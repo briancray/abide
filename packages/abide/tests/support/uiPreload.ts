@@ -20,12 +20,6 @@ installAmbientScopeStore()
 
 const globals = globalThis as Record<string, unknown>
 
-/* The client gates its dev-only hot-reload machinery on the bare `__ABIDE_DEV__` flag,
-   which the production/dev bundles set via Bun.build's `define` (absent under `bun test`).
-   Set it true here so the bare reference resolves and the hot-replace path stays reachable —
-   `hotReloadEnabled` alone then governs, as the HMR suites expect. */
-globals.__ABIDE_DEV__ = true
-
 /*
 Compiled SSR/client bodies run via `new Function` in the unit harnesses reference the
 runtime helpers by name — `$$`-prefixed in the real emit (`$$mountChild`, `$$skeleton`,

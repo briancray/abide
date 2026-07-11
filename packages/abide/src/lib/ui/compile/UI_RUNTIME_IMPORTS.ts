@@ -1,15 +1,14 @@
 /*
 The abide-ui runtime names every compiled component module depends on, each
-paired with its package subpath (after the package name). One source of truth so
-three things can't drift: the normal module's import block (`compileModule`), the
-hot module's `window.__abide` destructure (dev component HMR), and the dev bridge
-that populates `window.__abide`. Order is the emit order.
+paired with its package subpath (after the package name). One source of truth for
+the import block `compileModule` emits at the head of every component module, so the
+emitted imports can't drift from the real package exports (a test checks each
+resolves). Order is the emit order.
 
 `alias` (when set) is the LOCAL name codegen emits — a `$$`-prefixed form reserved
 for the compiler so a user variable of the helper's bare name can never collide
-(`each as $$each`). It defaults to `name`; the dev bridge keys stay bare (the import
-source), so a hot module destructures `{ name: alias }`. As each helper's emit sites
-flip to its `$$` alias, set `alias` here in lockstep.
+(`each as $$each`). It defaults to `name`. As each helper's emit sites flip to its
+`$$` alias, set `alias` here in lockstep.
 */
 export const UI_RUNTIME_IMPORTS: { name: string; specifier: string; alias?: string }[] = [
     { name: 'snippet', specifier: 'shared/snippet', alias: '$$snippet' },

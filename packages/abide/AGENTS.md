@@ -470,7 +470,6 @@ tests can import it, not for app code.
 | `/__abide/sockets/<name>` | A socket's HTTP face: `GET` = retained tail as JSON (SSE stream under `Accept: text/event-stream`; `?tail=N` caps/seeds), `POST` = publish gated by `clientPublish`; 404 unless the socket is exposed to mcp/cli |
 | `/__abide/cli` | `GET` = shell install script; `/__abide/cli/<platform>` streams the thin-CLI tarball (cli + server binaries, `.env` baked with `ABIDE_APP_URL`/`ABIDE_APP_TOKEN`) |
 | `/__abide/inspector` | The `@abide/inspector` UI, mounted only under `ABIDE_ENABLE_INSPECTOR=true` |
-| `/__abide/hot/<moduleId>` | Dev-only component hot-module endpoint backing `.abide` HMR |
 
 ## Environment variables
 

@@ -21,11 +21,9 @@ slept still reloads it. The initial connect runs even when the page loads
 hidden (the baseline must be the serving worker's stamp, captured before a swap
 can replace it) and releases itself once that first event lands.
 */
-import { DEV_HOT_PREFIX } from '../../shared/DEV_HOT_PREFIX.ts'
 import { DEV_RELOAD_PATH } from '../../shared/DEV_RELOAD_PATH.ts'
 
 export const DEV_RELOAD_CLIENT_SCRIPT = `<script>
-window.__abideDev = true;
 ;(() => {
   let stamp
   let source
@@ -45,18 +43,6 @@ window.__abideDev = true;
       if (current.indexOf('/_app/') !== -1 && current.slice(-4) === '.css') {
         link.href = href
         return
-      }
-    }
-  }
-  function swapComponents(next, prev) {
-    const components = next.components || {}
-    const before = prev.components || {}
-    for (const id in components) {
-      if (components[id] !== before[id]) {
-        // The hot module sources its runtime from window.__abide and self-invokes
-        // hotReplace; a load/compile failure or a component with no live instance
-        // falls back to a reload.
-        import('${DEV_HOT_PREFIX}' + id + '?v=' + components[id]).catch(() => location.reload())
       }
     }
   }
@@ -84,7 +70,6 @@ window.__abideDev = true;
       if (next.cssHref && next.cssHref !== stamp.cssHref) {
         swapCss(next.cssHref)
       }
-      swapComponents(next, stamp)
       stamp = next
     }
     source.onerror = () => {
