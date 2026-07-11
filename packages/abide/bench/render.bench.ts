@@ -5,7 +5,7 @@ installMiniDom()
 const { createDoc: doc } = await import('../src/lib/ui/runtime/createDoc.ts')
 const { mount } = await import('../src/lib/ui/dom/mount.ts')
 const { each } = await import('../src/lib/ui/dom/each.ts')
-const { text } = await import('../src/lib/ui/dom/text.ts')
+const { appendText } = await import('../src/lib/ui/dom/appendText.ts')
 
 /*
 Render-layer benchmark (absolute, mini-DOM). Measures mounting a keyed list of N
@@ -42,7 +42,7 @@ mount(host, (root) => {
         (key) => key,
         (key) => {
             const li = document.createElement('li')
-            li.appendChild(text(() => model.read(`byId/${key}/n`)))
+            appendText(li, () => model.read(`byId/${key}/n`))
             return li
         },
     )
