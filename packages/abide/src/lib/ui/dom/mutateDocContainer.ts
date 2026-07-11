@@ -8,10 +8,9 @@ doc-access lowering rewrites e.g. `model.items.splice(i, 1)` to
 `$$readCall(model.read("items"), …)` it emits for non-mutating calls. The reason:
 `read` returns the live tree value by reference, so a bare `.splice()`/`.sort()`/
 `.add()`/`.set()`/… would mutate the document in place while never emitting a
-patch — so no reader would re-render and no PATCH_BUS consumer would see the change
-(`.push` is the one already-handled exception, lowered to `add` patches). Cloning the
-container, applying the mutation to the copy, and writing it back through `replace`
-emits a real patch: readers wake and the change is announced on the bus.
+patch — so no reader would re-render (`.push` is the one already-handled exception,
+lowered to `add` patches). Cloning the container, applying the mutation to the copy,
+and writing it back through `replace` emits a real patch: readers wake.
 
 Covers the three mutable containers the doc codec serializes (encodeRefJson):
 Array (cloned by `slice`), Map (`new Map`) and Set (`new Set`) — the mutating

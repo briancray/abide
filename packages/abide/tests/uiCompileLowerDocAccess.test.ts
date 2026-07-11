@@ -4,7 +4,6 @@ import { mutateDocContainer } from '../src/lib/ui/dom/mutateDocContainer.ts'
 import { readCall } from '../src/lib/ui/dom/readCall.ts'
 import { createDoc as doc } from '../src/lib/ui/runtime/createDoc.ts'
 import { escapeKey } from '../src/lib/ui/runtime/escapeKey.ts'
-import { PATCH_BUS } from '../src/lib/ui/runtime/PATCH_BUS.ts'
 import type { Doc } from '../src/lib/ui/runtime/types/Doc.ts'
 import { transformSource } from './support/transformSource.ts'
 
@@ -212,17 +211,19 @@ describe('lowerDocAccess — executed semantics', () => {
         expect(run(d, 'return model.modal?.close()')).toBe('closed')
     })
 
-    test('a mutating array method emits a patch and updates the tree', () => {
+    test('a mutating array method wakes readers and updates the tree', () => {
         // the critical bug: `.splice`/`.pop`/… mutated the live array by reference and
-        // emitted no patch, so readers never woke and undo/persistence never saw it.
+        // emitted no patch, so readers never woke. A derived reader over the array only
+        // recomputes if the mutation woke its dependency — `d.read` alone can't tell an
+        // in-place mutation (the bug) from a clone-apply (the fix), since both leave the
+        // same value behind.
         const d = doc({ todos: ['a', 'b', 'c'] })
-        const events: unknown[] = []
-        const off = PATCH_BUS.subscribe((e) => events.push(e))
+        const count = d.derive('count', () => d.read<string[]>('todos').length)
+        expect(count()).toBe(3) // prime the reader
         const removed = run(d, 'return model.todos.splice(1, 1)')
-        off()
         expect(removed).toEqual(['b']) // native return value preserved
         expect(d.read<string[]>('todos')).toEqual(['a', 'c']) // tree advanced
-        expect(events.length).toBe(1) // a real patch fired (readers wake, undo journals)
+        expect(count()).toBe(2) // the reader recomputed ⇒ the mutation woke it
     })
 
     test('pop/shift/unshift/sort/reverse all patch through the document', () => {
@@ -239,19 +240,19 @@ describe('lowerDocAccess — executed semantics', () => {
         expect(d.read<number[]>('nums')).toEqual([3, 1])
     })
 
-    test('a mutating Set method emits a patch and updates the tree', () => {
-        // a doc-held Set: `.add`/`.delete`/`.clear` must clone-apply-replace so a patch fires,
+    test('a mutating Set method wakes readers and updates the tree', () => {
+        // a doc-held Set: `.add`/`.delete`/`.clear` must clone-apply-replace so readers wake,
         // exactly like the array path — a bare in-place call mutated by reference, no re-render.
         const d = doc({ tags: new Set(['a', 'b']) })
-        const events: unknown[] = []
-        const off = PATCH_BUS.subscribe((e) => events.push(e))
+        const size = d.derive('size', () => d.read<Set<string>>('tags').size)
+        expect(size()).toBe(2)
         run(d, "model.tags.add('c')")
         expect([...d.read<Set<string>>('tags')]).toEqual(['a', 'b', 'c'])
+        expect(size()).toBe(3) // add woke the reader
         const deleted = run(d, "return model.tags.delete('a')")
-        off()
         expect(deleted).toBe(true) // native return value preserved
         expect([...d.read<Set<string>>('tags')]).toEqual(['b', 'c'])
-        expect(events.length).toBe(2) // one patch per mutation (readers wake, undo journals)
+        expect(size()).toBe(2) // delete woke the reader
     })
 
     test('a mutating Map method emits a patch and updates the tree', () => {

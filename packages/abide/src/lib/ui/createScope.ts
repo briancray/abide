@@ -3,7 +3,6 @@ import { effect } from './effect.ts'
 import { linked } from './linked.ts'
 import { CURRENT_PATH } from './runtime/CURRENT_PATH.ts'
 import { createDoc } from './runtime/createDoc.ts'
-import { liveScopes } from './runtime/liveScopes.ts'
 import type { Cell } from './runtime/types/Cell.ts'
 import type { Doc } from './runtime/types/Doc.ts'
 import { state } from './state.ts'
@@ -105,15 +104,7 @@ export function createScope(
             }
             owned.length = 0
             shared.clear()
-            if (liveScopes.enabled) {
-                liveScopes.scopes.delete(self)
-            }
         },
-    }
-    /* Dev-only: register for the inspector's scope-tree view. Gated, so production
-       never touches the set. */
-    if (liveScopes.enabled) {
-        liveScopes.scopes.add(self)
     }
     return self
 }

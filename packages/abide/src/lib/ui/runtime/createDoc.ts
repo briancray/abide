@@ -2,7 +2,6 @@ import { applyPatchToTree } from './applyPatchToTree.ts'
 import { batch } from './batch.ts'
 import { createComputedNode } from './createComputedNode.ts'
 import { createSignalNode } from './createSignalNode.ts'
-import { PATCH_BUS } from './PATCH_BUS.ts'
 import { pathSegments } from './pathSegments.ts'
 import { readNode } from './readNode.ts'
 import { trigger } from './trigger.ts'
@@ -59,12 +58,9 @@ export function createDoc(initial: unknown): Doc {
        truth. Held apart from `nodes` so the structural wake/eviction never touches
        them; their dirtiness is driven entirely by the deps they read (the signal
        graph), not by tree mutations. They are not in `tree`, so `snapshot` omits
-       them, and they never pass through `apply`, so they never hit the patch bus —
-       a recompute is a downstream reaction, not a change to announce on the bus. */
+       them, and they never pass through `apply` — a recompute is a downstream reaction
+       of the signal graph, not a tree change. */
     const computed = new Map<string, ReactiveNode>()
-    /* Set to the returned document before any apply runs, so a PATCH_BUS event can
-       name the document it came from (reference identity). */
-    let self: Doc
 
     /* Links `path` into the trie under its parent and continues up the ancestor chain.
        Stops at the first ancestor whose parent set already lists it — that link, and
@@ -266,12 +262,6 @@ export function createDoc(initial: unknown): Doc {
             } else {
                 wakeSubtree(parentPath, true, true)
             }
-            /* Announce the change before effects flush, so a patch an effect emits in
-               reaction lands AFTER this one on the bus — the stream stays chronological.
-               Emitting inside the batch keeps it ahead of the depth-0 flush on batch exit. */
-            if (PATCH_BUS.active) {
-                PATCH_BUS.emit({ doc: self, patch })
-            }
         })
     }
 
@@ -326,7 +316,7 @@ export function createDoc(initial: unknown): Doc {
         }
     }
 
-    self = {
+    const self: Doc = {
         read,
         cell,
         derive,
