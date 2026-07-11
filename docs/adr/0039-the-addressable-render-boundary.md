@@ -96,6 +96,34 @@ not inference; it is left for a later ADR if an opt-in surface is ever wanted.
 - The spiked `htmlOnly` boundary is inert until the codegen emits it, so it ships now as a safe
   foundation with a regression test.
 
+### On the downstream "unlocks" — optionality, not a roadmap
+
+This ADR's value is what shipped: parallel sibling/layout renders + out-of-order streaming, which
+flush the shell measurably earlier. The boundary also *affords* three further capabilities, but none
+has demonstrated product demand and none should be built speculatively. Recording them honestly so we
+don't over-promise:
+
+- **Islands / deferred hydration** — the client adopter (`mountStreamedChild`), the `renderPath`
+  address, and the `CELL_SEED` warm channel are the prerequisites, so the remaining work is only an
+  author opt-in directive (`client:visible`) guarding the existing mount. But the payoff is real
+  *only* when hydration cost is genuinely large (many interactive components, heavy client graph,
+  much below the fold). The strongest in-repo case is the kitchen-sink docs page (dozens of
+  interactive code samples, most off-screen). For a light-client-graph app it buys little. First to
+  revisit if a real case appears; cheap to pick up because the machinery exists.
+- **Server-pushed / targeted subtree re-render** — the `abide:await:PATH` boundary is a general
+  transport for "a subtree's html, later, by address." But this overlaps heavily with `socket` +
+  client `state`/`cache`, which already do live regions client-side. The only delta is letting the
+  *server* own the re-render (for server-held secrets / heavy data). Redundant absent that specific
+  need.
+- **Unit-level error boundaries** — *already shipped*, not an unlock: `{#await}…{:catch}` and
+  `{#try}…{:catch}` cover async and sync failures today, streaming or not. The only residual is a
+  streamed child whose own top-level flight rejects with no internal boundary (it 500s, matching the
+  inline "no catch → surface" behavior), and an author catches that by wrapping the child body in
+  `{#try}`. No new work warranted.
+
+Net: file these as "possible if a concrete use case shows up." The shipped streaming + parallelism
+stands on its own; the follow-ons are affordances, not committed direction.
+
 ## Rejected alternatives
 
 - **An authored `{#boundary}` / `<Suspense>` construct.** The component already *is* the boundary and
