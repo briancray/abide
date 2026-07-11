@@ -1,4 +1,8 @@
 import { dispatchRpcInProcess } from '../server/rpc/dispatchRpcInProcess.ts'
+import {
+    resolveInputJsonSchema,
+    resolveOutputJsonSchema,
+} from '../server/rpc/resolveRpcJsonSchema.ts'
 import { rpcRegistry } from '../server/rpc/rpcRegistry.ts'
 import type { RpcRegistryEntry } from '../server/rpc/types/RpcRegistryEntry.ts'
 import { socketOperations } from '../server/sockets/socketOperations.ts'
@@ -65,9 +69,7 @@ function describeTool(ref: McpToolRef): ToolDescriptor {
     if (ref.kind === 'rpc') {
         // The declared inputSchema VALIDATOR overrides the build-projected input-type schema
         // (ADR-0030 input side); with neither the tool advertises the opaque fallback, as before.
-        const inputSchema = ref.entry.inputSchema
-            ? jsonSchemaForSchema(ref.entry.inputSchema)
-            : (ref.entry.inputJsonSchema ?? jsonSchemaForSchema(undefined))
+        const inputSchema = resolveInputJsonSchema(ref.entry) ?? jsonSchemaForSchema(undefined)
         const tool: ToolDescriptor = {
             name: ref.name,
             description:
@@ -78,9 +80,7 @@ function describeTool(ref: McpToolRef): ToolDescriptor {
         }
         // The declared outputSchema VALIDATOR overrides the build-projected return-type schema
         // (ADR-0030 D2); with neither the tool advertises no outputSchema, exactly as before.
-        const outputSchema = ref.entry.outputSchema
-            ? jsonSchemaForSchema(ref.entry.outputSchema)
-            : ref.entry.outputJsonSchema
+        const outputSchema = resolveOutputJsonSchema(ref.entry)
         if (outputSchema) {
             tool.outputSchema = outputSchema
         }

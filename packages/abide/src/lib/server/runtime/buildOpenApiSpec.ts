@@ -2,6 +2,7 @@ import { carriesBodyArgs } from '../../shared/carriesBodyArgs.ts'
 import { commandNameForUrl } from '../../shared/commandNameForUrl.ts'
 import { jsonSchemaForSchema } from '../../shared/jsonSchemaForSchema.ts'
 import type { ErrorJsonSchemas } from '../../shared/types/ErrorJsonSchemas.ts'
+import { resolveInputJsonSchema, resolveOutputJsonSchema } from '../rpc/resolveRpcJsonSchema.ts'
 import { rpcRegistry } from '../rpc/rpcRegistry.ts'
 import { STATUS_TEXT } from './STATUS_TEXT.ts'
 
@@ -94,9 +95,7 @@ export function buildOpenApiSpec(info: {
         `entry.inputJsonSchema`); otherwise the opaque fallback. The validator overrides the projection
         (a runtime narrowing the type can't express), mirroring the 200-body output path below.
         */
-        const jsonSchema = entry.inputSchema
-            ? jsonSchemaForSchema(entry.inputSchema)
-            : (entry.inputJsonSchema ?? jsonSchemaForSchema(undefined))
+        const jsonSchema = resolveInputJsonSchema(entry) ?? jsonSchemaForSchema(undefined)
         const description = jsonSchema.description as string | undefined
         /*
         Describe the 200 body from the `outputSchema` VALIDATOR when declared, else from the handler
@@ -105,9 +104,7 @@ export function buildOpenApiSpec(info: {
         the type can't express).
         */
         const okResponse: Record<string, unknown> = { description: 'OK' }
-        const outputSchema = entry.outputSchema
-            ? jsonSchemaForSchema(entry.outputSchema)
-            : entry.outputJsonSchema
+        const outputSchema = resolveOutputJsonSchema(entry)
         if (outputSchema) {
             okResponse.content = { 'application/json': { schema: outputSchema } }
         }

@@ -1,5 +1,5 @@
-import { jsonSchemaForSchema } from '../../shared/jsonSchemaForSchema.ts'
 import { promptRegistry } from '../prompts/promptRegistry.ts'
+import { resolveInputJsonSchema, resolveOutputJsonSchema } from '../rpc/resolveRpcJsonSchema.ts'
 import { rpcRegistry } from '../rpc/rpcRegistry.ts'
 import { socketOperations } from '../sockets/socketOperations.ts'
 import { socketRegistry } from '../sockets/socketRegistry.ts'
@@ -20,12 +20,8 @@ export function buildInspectorSurface(): InspectorSurface {
         clients: { ...entry.remote.clients },
         // The declared inputSchema VALIDATOR wins; else the build-projected input-type schema
         // (ADR-0030 input side); with neither the rpc advertises no input shape, as before.
-        inputSchema: entry.inputSchema
-            ? jsonSchemaForSchema(entry.inputSchema)
-            : entry.inputJsonSchema,
-        outputSchema: entry.outputSchema
-            ? jsonSchemaForSchema(entry.outputSchema)
-            : entry.outputJsonSchema,
+        inputSchema: resolveInputJsonSchema(entry),
+        outputSchema: resolveOutputJsonSchema(entry),
         files: entry.filesSchema !== undefined,
         timeout: entry.timeout,
         maxBodySize: entry.maxBodySize,

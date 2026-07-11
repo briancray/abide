@@ -3,6 +3,7 @@ import { rpc } from './_virtual/rpc.ts'
 // @ts-expect-error virtual module resolved by abideResolverPlugin
 import { sockets } from './_virtual/sockets.ts'
 import type { CliManifestEntry } from './lib/cli/types/CliManifestEntry.ts'
+import { resolveInputJsonSchema } from './lib/server/rpc/resolveRpcJsonSchema.ts'
 import { rpcRegistry } from './lib/server/rpc/rpcRegistry.ts'
 import { socketOperations } from './lib/server/sockets/socketOperations.ts'
 import { socketRegistry } from './lib/server/sockets/socketRegistry.ts'
@@ -30,7 +31,7 @@ for (const entry of rpcRegistry.values()) {
     manifest[commandNameForUrl(entry.remote.url)] = {
         method: entry.remote.method,
         url: entry.remote.url,
-        jsonSchema: jsonSchemaForSchema(entry.inputSchema),
+        jsonSchema: resolveInputJsonSchema(entry) ?? jsonSchemaForSchema(undefined),
     }
 }
 
