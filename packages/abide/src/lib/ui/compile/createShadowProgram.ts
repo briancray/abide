@@ -2,11 +2,13 @@ import { resolve } from 'node:path'
 import ts from 'typescript'
 import { messageFromError } from '../../shared/messageFromError.ts'
 import { assetModulesFile } from './assetModulesFile.ts'
+import { cachedSourceFile } from './cachedSourceFile.ts'
 import { compileShadow } from './compileShadow.ts'
 import { loadShadowTsConfig } from './loadShadowTsConfig.ts'
 import { pagePropsType } from './pagePropsType.ts'
 import { resolveAbideImports } from './resolveAbideImports.ts'
 import { shadowNaming } from './shadowNaming.ts'
+import { sourceFileOptionsSignature } from './sourceFileOptionsSignature.ts'
 import type { CompiledShadow } from './types/CompiledShadow.ts'
 import type { InterpolationClassifier } from './types/InterpolationClassifier.ts'
 
@@ -75,22 +77,35 @@ export function createShadowProgram(
     /* Ambient declarations for bundler-handled asset imports (`*.css`, …). */
     const assets = assetModulesFile(cwd)
 
+    /* The parse/bind-affecting options are identical for every source in a program, so compute
+       the cache signature once and reuse it for every file (see `cachedSourceFile`). */
+    const signature = sourceFileOptionsSignature(options)
+
     const host = ts.createCompilerHost(options, true)
     const originalGetSourceFile = host.getSourceFile.bind(host)
     host.getSourceFile = (fileName, languageVersionOrOptions, onError, shouldCreate) => {
         if (fileName === assets.path) {
-            return ts.createSourceFile(fileName, assets.content, languageVersionOrOptions, true)
+            return cachedSourceFile(fileName, assets.content, languageVersionOrOptions, signature)
         }
         if (isShadow(fileName)) {
-            return ts.createSourceFile(
+            /* `shadowText` populates the per-program `shadows`/`parseErrors` maps as a side effect,
+               so it must run on every call — only its expensive TS parse is memoised by `cachedSourceFile`. */
+            return cachedSourceFile(
                 fileName,
                 shadowText(sourceOf(fileName)),
                 languageVersionOrOptions,
-                true,
+                signature,
                 ts.ScriptKind.TS,
             )
         }
-        return originalGetSourceFile(fileName, languageVersionOrOptions, onError, shouldCreate)
+        /* Real `.ts`/`.d.ts` inputs (the ~3MB of default libs plus resolved dependencies) — read the
+           text and reuse the parsed file across programs when it is byte-identical. Fall back to the
+           default host on a read failure so its missing-file / `onError` handling is preserved. */
+        const text = ts.sys.readFile(fileName)
+        if (text === undefined) {
+            return originalGetSourceFile(fileName, languageVersionOrOptions, onError, shouldCreate)
+        }
+        return cachedSourceFile(fileName, text, languageVersionOrOptions, signature)
     }
     host.fileExists = (fileName) =>
         fileName === assets.path ||
