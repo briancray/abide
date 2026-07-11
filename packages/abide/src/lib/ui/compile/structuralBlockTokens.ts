@@ -1,3 +1,4 @@
+import { BLOCK_CONNECTORS, BLOCK_OPENERS } from './BLOCK_KEYWORDS.ts'
 import type { SemanticToken } from './types/SemanticToken.ts'
 
 /*
@@ -8,23 +9,14 @@ an `operator` token for the `{`+sigil opener and a `keyword` token for the block
 word, plus the `of`/`by` connectors inside a `{#for …}` head. Expression interiors
 and bare `{expr}` interpolations are NOT touched here — those are the shadow's job.
 A keyword allowlist after the sigil prevents matching arbitrary `{:foo}` text.
-Longest phrases first so `for await` beats `for` and `else if` beats `else`.
 */
-const BLOCK_KEYWORDS = [
-    'for await',
-    'else if',
-    'if',
-    'for',
-    'await',
-    'switch',
-    'case',
-    'default',
-    'try',
-    'catch',
-    'finally',
-    'then',
-    'else',
-]
+/* The scan vocabulary, derived from the shared BLOCK_KEYWORDS source of truth (plus the
+   `for await` async-each phrase) so it can't drift from the parser. Sorted longest-first so
+   the regex alternation matches the whole phrase — `for await` beats `for`, `else if` beats
+   `else` — since a shorter prefix listed first would win otherwise. */
+const BLOCK_KEYWORDS = [...BLOCK_OPENERS, ...BLOCK_CONNECTORS, 'for await'].sort(
+    (a, b) => b.length - a.length,
+)
 
 const BLOCK_HEAD = new RegExp(`\\{([#:/])\\s*(${BLOCK_KEYWORDS.join('|')})\\b`, 'g')
 

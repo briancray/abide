@@ -1,4 +1,5 @@
 import { AbideCompileError } from './AbideCompileError.ts'
+import { BLOCK_OPENERS } from './BLOCK_KEYWORDS.ts'
 import { decodeHtmlEntities } from './decodeHtmlEntities.ts'
 import { interpolatedTemplateLiteral } from './interpolatedTemplateLiteral.ts'
 import { isWhitespaceText } from './isWhitespaceText.ts'
@@ -320,7 +321,7 @@ export function parseTemplate(source: string, baseOffset = 0): { nodes: Template
             }
         }
         throw new Error(
-            `[abide] unknown control block {#${keyword}} — expected if/for/await/switch/try/snippet`,
+            `[abide] unknown control block {#${keyword}} — expected ${BLOCK_OPENERS.join('/')}`,
         )
     }
 
