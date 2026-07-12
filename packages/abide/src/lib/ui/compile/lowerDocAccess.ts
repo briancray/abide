@@ -1,5 +1,6 @@
 import ts from 'typescript'
 import { escapeKey } from '../runtime/escapeKey.ts'
+import { COMPOUND_ASSIGNMENT_OPERATORS } from './COMPOUND_ASSIGNMENT_OPERATORS.ts'
 
 /*
 The linchpin compiler pass. Rewrites idiomatic data access on a reactive document
@@ -30,9 +31,6 @@ used as an index lowers too. Exposed as `docAccessTransformer` (a
 /* A path segment is either a literal key or a runtime expression (a dynamic index). */
 type Segment = { kind: 'literal'; value: string } | { kind: 'expression'; node: ts.Expression }
 
-/* Maps a compound-assignment operator to its plain binary counterpart. Logical
-   assignments (`||=`/`&&=`/`??=`) lower to an unconditional replace of the
-   combined value — consistent with how `+=` lowers (the patch always writes). */
 /* Methods that mutate a doc-rooted container in place — Array, Map and Set (the three
    mutable containers the doc codec serializes). Called on a doc value these can't lower to
    a bare `readCall` (which would mutate the live tree by reference and never emit a patch —
@@ -55,16 +53,6 @@ const MUTATING_CONTAINER_METHODS = new Set([
     'add',
     'delete',
     'clear',
-])
-
-const COMPOUND_OPERATORS = new Map<ts.SyntaxKind, ts.BinaryOperator>([
-    [ts.SyntaxKind.PlusEqualsToken, ts.SyntaxKind.PlusToken],
-    [ts.SyntaxKind.MinusEqualsToken, ts.SyntaxKind.MinusToken],
-    [ts.SyntaxKind.AsteriskEqualsToken, ts.SyntaxKind.AsteriskToken],
-    [ts.SyntaxKind.SlashEqualsToken, ts.SyntaxKind.SlashToken],
-    [ts.SyntaxKind.BarBarEqualsToken, ts.SyntaxKind.BarBarToken],
-    [ts.SyntaxKind.AmpersandAmpersandEqualsToken, ts.SyntaxKind.AmpersandAmpersandToken],
-    [ts.SyntaxKind.QuestionQuestionEqualsToken, ts.SyntaxKind.QuestionQuestionToken],
 ])
 
 export function docAccessTransformer(docName: string): ts.TransformerFactory<ts.SourceFile> {
@@ -114,7 +102,7 @@ export function docAccessTransformer(docName: string): ts.TransformerFactory<ts.
                             ts.visitNode(node.right, visit) as ts.Expression,
                         ])
                     }
-                    const binary = COMPOUND_OPERATORS.get(operator)
+                    const binary = COMPOUND_ASSIGNMENT_OPERATORS.get(operator)
                     if (binary) {
                         const next = ts.factory.createBinaryExpression(
                             docCall(docName, 'read', [buildPath(segments)]),

@@ -1,4 +1,5 @@
 import ts from 'typescript'
+import { COMPOUND_ASSIGNMENT_OPERATORS } from './COMPOUND_ASSIGNMENT_OPERATORS.ts'
 
 /*
 Rewrites references to a component's signal bindings into the document form the
@@ -21,19 +22,6 @@ Exposed as a `ts.TransformerFactory`, so the script pipeline can chain it with
 `docAccessTransformer` over a SINGLE parsed tree (see `lowerScript`) instead of
 print-then-reparse between passes.
 */
-/* Compound-assignment operator → its plain binary counterpart, for lowering a `linked`
-   `draft += x` into `$$writeCell(draft, $$readCell(draft) + x)`. Mirrors the same map in
-   `lowerDocAccess` (the `$$model` write path): logical assignments write unconditionally. */
-const CELL_COMPOUND_OPERATORS = new Map<ts.SyntaxKind, ts.BinaryOperator>([
-    [ts.SyntaxKind.PlusEqualsToken, ts.SyntaxKind.PlusToken],
-    [ts.SyntaxKind.MinusEqualsToken, ts.SyntaxKind.MinusToken],
-    [ts.SyntaxKind.AsteriskEqualsToken, ts.SyntaxKind.AsteriskToken],
-    [ts.SyntaxKind.SlashEqualsToken, ts.SyntaxKind.SlashToken],
-    [ts.SyntaxKind.BarBarEqualsToken, ts.SyntaxKind.BarBarToken],
-    [ts.SyntaxKind.AmpersandAmpersandEqualsToken, ts.SyntaxKind.AmpersandAmpersandToken],
-    [ts.SyntaxKind.QuestionQuestionEqualsToken, ts.SyntaxKind.QuestionQuestionToken],
-])
-
 /* `$$readCell(name)` — the unified cell read (peek async / `.value` sync). */
 function cellReadCall(name: string): ts.Expression {
     return ts.factory.createCallExpression(ts.factory.createIdentifier('$$readCell'), undefined, [
@@ -132,7 +120,7 @@ export function signalRefsTransformer(
                     if (node.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
                         return writeCellCall(target, right)
                     }
-                    const binary = CELL_COMPOUND_OPERATORS.get(node.operatorToken.kind)
+                    const binary = COMPOUND_ASSIGNMENT_OPERATORS.get(node.operatorToken.kind)
                     if (binary !== undefined) {
                         return writeCellCall(
                             target,

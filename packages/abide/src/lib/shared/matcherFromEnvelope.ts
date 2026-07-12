@@ -1,4 +1,5 @@
 import { keyMatchesPrefix } from './keyMatchesPrefix.ts'
+import { setsIntersect } from './setsIntersect.ts'
 import { toTagSet } from './toTagSet.ts'
 import type { CacheEntry } from './types/CacheEntry.ts'
 import type { CacheStalenessFrame } from './types/CacheStalenessFrame.ts'
@@ -26,16 +27,5 @@ export function matcherFromEnvelope(frame: CacheStalenessFrame): (entry: CacheEn
         return (entry) => keyMatchesPrefix(entry.key, prefix)
     }
     const requestedTags = toTagSet(frame.tags)
-    return (entry) => entry.tags !== undefined && intersects(entry.tags, requestedTags)
-}
-
-/* True when an entry's tags and the requested tags overlap on any tag (mirrors
-   selectorMatcher's private intersects — a plain for-of, no Iterator Helpers). */
-function intersects(entryTags: Set<string>, requestedTags: Set<string>): boolean {
-    for (const tag of requestedTags) {
-        if (entryTags.has(tag)) {
-            return true
-        }
-    }
-    return false
+    return (entry) => entry.tags !== undefined && setsIntersect(requestedTags, entry.tags)
 }

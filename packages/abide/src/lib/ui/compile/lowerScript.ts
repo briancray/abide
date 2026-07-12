@@ -117,9 +117,14 @@ export function lowerScript(
         ...computedNames,
         ...cellReadNames,
     ])
+    /* `wrapReactionCellSources` only folds `watch(cell, …)` calls, so it's a pure
+       identity walk when the script imports no `watch` (the common case) — skip the
+       extra full-tree pass entirely then. */
+    const reactionTransforms =
+        watchLocalNames.size > 0 ? [wrapReactionCellSources(cellNames, watchLocalNames)] : []
     const result = ts.transform(source, [
         transformer,
-        wrapReactionCellSources(cellNames, watchLocalNames),
+        ...reactionTransforms,
         signalRefsTransformer(
             stateNames,
             derivedNames,
