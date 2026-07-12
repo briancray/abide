@@ -1,7 +1,6 @@
-import { hydratingSlot } from '../shared/hydratingSlot.ts'
+import { hydrationWindow } from '../shared/hydrationWindow.ts'
 import { layoutChainForRoute } from '../shared/layoutChainForRoute.ts'
 import { matchRoute } from '../shared/matchRoute.ts'
-import { wakeHydrationPeeks } from '../shared/wakeHydrationPeeks.ts'
 import { fillBoundary } from './dom/fillBoundary.ts'
 import { outlet } from './dom/outlet.ts'
 import { effect } from './effect.ts'
@@ -259,21 +258,17 @@ export function router(
         }
         if (hydrating) {
             const previous = RENDER.hydration
-            const previousHydrating = hydratingSlot.active
             RENDER.hydration = { next: new Map() }
-            hydratingSlot.active = true
+            hydrationWindow.enter()
             enterRenderPass()
             try {
                 run()
             } finally {
                 exitRenderPass()
                 RENDER.hydration = previous
-                hydratingSlot.active = previousHydrating
-                /* Wake the peeks this pass withheld for SSR congruence, now that the pass is
-                   over and the warm value is congruent to show. Only on the outermost unwind. */
-                if (!previousHydrating) {
-                    wakeHydrationPeeks()
-                }
+                /* Outermost exit clears the window and wakes the peeks this pass withheld
+                   for SSR congruence, now that the warm value is congruent to show. */
+                hydrationWindow.exit()
             }
             return
         }

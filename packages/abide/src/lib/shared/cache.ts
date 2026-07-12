@@ -4,7 +4,7 @@ import { cacheStores } from './cacheStores.ts'
 import { decodeResponse } from './decodeResponse.ts'
 import { getRemoteMeta } from './getRemoteMeta.ts'
 import { HttpError } from './HttpError.ts'
-import { hydratingSlot } from './hydratingSlot.ts'
+import { hydrationWindow } from './hydrationWindow.ts'
 import { invalidateEvent } from './invalidateEvent.ts'
 import { invalidateTripwire } from './invalidateTripwire.ts'
 import { keyForRemoteCall } from './keyForRemoteCall.ts'
@@ -957,8 +957,8 @@ function peek<Args, Return>(
        uniformly undefined and the SSR render shows the fallback. Returning a snapshot-
        seeded warm value here — mid-hydration — would diverge from that server text and
        corrupt the claimed text node. Withhold it until the pass ends; the trackLifecycle
-       tap above lets wakeHydrationPeeks re-run this scope on the congruent value. */
-    if (hydratingSlot.active) {
+       tap above lets hydrationWindow.wake re-run this scope on the congruent value. */
+    if (hydrationWindow.active) {
         return undefined
     }
     /* Revive structured fields after cloning: the clone is the honest-JSON wire form, and revive

@@ -2,11 +2,10 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { cacheStoreSlot } from '../src/lib/shared/cacheStoreSlot.ts'
 import { createCacheStore } from '../src/lib/shared/createCacheStore.ts'
 import { createRemoteFunction } from '../src/lib/shared/createRemoteFunction.ts'
-import { hydratingSlot } from '../src/lib/shared/hydratingSlot.ts'
+import { hydrationWindow } from '../src/lib/shared/hydrationWindow.ts'
 import { patch } from '../src/lib/shared/patch.ts'
 import { peek } from '../src/lib/shared/peek.ts'
 import { refresh } from '../src/lib/shared/refresh.ts'
-import { wakeHydrationPeeks } from '../src/lib/shared/wakeHydrationPeeks.ts'
 import { state } from '../src/lib/ui/state.ts'
 import { settle } from './support/settle.ts'
 
@@ -26,7 +25,7 @@ describe('peek()', () => {
     afterEach(() => {
         cacheStoreSlot.resolver = undefined
         cacheStoreSlot.fallback = undefined
-        hydratingSlot.active = false
+        hydrationWindow.active = false
     })
 
     test('undefined before any read, the value after a settled read, no invoke', async () => {
@@ -122,7 +121,7 @@ describe('peek()', () => {
 
     /* Candidate A: during the hydration pass peek withholds the warm value (the server
        rendered the fallback — its entry.value is never materialized server-side), so the
-       client's first paint stays congruent with the SSR text. wakeHydrationPeeks re-runs the
+       client's first paint stays congruent with the SSR text. hydrationWindow.wake re-runs the
        scope once the pass ends, swapping in the now-congruent retained value. */
     test('withholds the warm value while hydrating, then wakes the scope when the pass ends', async () => {
         const globals = globalThis as Record<string, unknown>
@@ -143,15 +142,15 @@ describe('peek()', () => {
 
             /* Enter the hydration pass: peek is withheld (server-congruent undefined), so a
                tracking scope reads undefined and the SSR text is preserved. */
-            hydratingSlot.active = true
+            hydrationWindow.active = true
             const snapshot = state.computed(() => peek(getThing))
             expect(snapshot.value).toBeUndefined()
             expect(peek(getThing)).toBeUndefined()
 
             /* Pass ends: wake re-runs the scope on the now-congruent retained value (the
                lifecycle mark defers one microtask, so drain it before asserting). */
-            hydratingSlot.active = false
-            wakeHydrationPeeks()
+            hydrationWindow.active = false
+            hydrationWindow.wake()
             await settle()
             expect(snapshot.value).toEqual({ id: '1' })
         } finally {

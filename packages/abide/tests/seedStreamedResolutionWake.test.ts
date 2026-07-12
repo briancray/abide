@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { cacheStoreSlot } from '../src/lib/shared/cacheStoreSlot.ts'
 import { createCacheStore } from '../src/lib/shared/createCacheStore.ts'
 import { createRemoteFunction } from '../src/lib/shared/createRemoteFunction.ts'
-import { hydratingSlot } from '../src/lib/shared/hydratingSlot.ts'
+import { hydrationWindow } from '../src/lib/shared/hydrationWindow.ts'
 import { keyForRemoteCall } from '../src/lib/shared/keyForRemoteCall.ts'
 import { peek } from '../src/lib/shared/peek.ts'
 import type { CacheSnapshotEntry } from '../src/lib/shared/types/CacheSnapshotEntry.ts'
@@ -49,12 +49,12 @@ describe('seedStreamedResolution wakes a subscribed peek (ADR-0024 D3)', () => {
     beforeEach(() => {
         cacheStoreSlot.resolver = () => cacheStoreSlot.fallback
         cacheStoreSlot.fallback = createCacheStore()
-        hydratingSlot.active = false
+        hydrationWindow.active = false
     })
     afterEach(() => {
         cacheStoreSlot.resolver = undefined
         cacheStoreSlot.fallback = undefined
-        hydratingSlot.active = false
+        hydrationWindow.active = false
     })
 
     test('a streamed resolution re-runs the peek scope and surfaces the value', async () => {
