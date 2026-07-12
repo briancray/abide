@@ -1,4 +1,5 @@
-import { type LiftPosition, liftAsyncSubExpressions } from './liftAsyncSubExpressions.ts'
+import { asyncInterpolationFields } from './asyncInterpolationFields.ts'
+import { liftAsyncSubExpressions } from './liftAsyncSubExpressions.ts'
 import type { InterpolationClassifier } from './types/InterpolationClassifier.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
 
@@ -40,8 +41,11 @@ export function lowerAsyncInterpolations(
     return { nodes, cells }
 }
 
-/* Lifts every async (sub)expression in a sibling list — content text parts and the node's own
-   value-position expressions — rewriting each field in place, then recurses into children. */
+/* Lifts every async (sub)expression in a sibling list, then recurses into children. Each node's
+   async-liftable fields come from the shared `asyncInterpolationFields` plan (the single reading the
+   shadow front-end also drives from), so the two can't disagree on which interpolations are async;
+   this side owns the RENDERING — lift the field to a peek-cell, write the `__vN` reference back, and
+   for a control-flow subject that collapsed to one bare cell mark `asyncSubject`. */
 function lowerList(
     nodes: TemplateNode[],
     classify: InterpolationClassifier | undefined,
@@ -49,50 +53,22 @@ function lowerList(
     cells: InjectedCell[],
 ): void {
     for (const node of nodes) {
-        if (node.kind === 'text') {
-            for (const part of node.parts) {
-                if (part.kind === 'expression' && part.loc !== undefined) {
-                    part.code = rewrite(part.code, part.loc, classify, mint, cells, 'content')
-                }
+        for (const field of asyncInterpolationFields(node)) {
+            const lifted = cells.length
+            const result = liftAsyncSubExpressions(
+                field.code,
+                field.loc,
+                classify,
+                mint,
+                field.position,
+            )
+            for (const lift of result.lifts) {
+                cells.push(lift)
             }
-        } else if (node.kind === 'element') {
-            for (const attr of node.attrs) {
-                if (attr.kind === 'expression' && attr.loc !== undefined) {
-                    attr.code = rewrite(attr.code, attr.loc, classify, mint, cells, 'attribute')
-                } else if (attr.kind === 'interpolated') {
-                    for (const part of attr.parts) {
-                        if (part.kind === 'expression' && part.loc !== undefined) {
-                            part.code = rewrite(
-                                part.code,
-                                part.loc,
-                                classify,
-                                mint,
-                                cells,
-                                'attribute',
-                            )
-                        }
-                    }
-                }
+            field.write(result.code)
+            if (field.subject) {
+                field.setAsyncSubject(isBareLiftedCell(result.code, cells, lifted))
             }
-        } else if (node.kind === 'if' && node.loc !== undefined) {
-            const lifted = cells.length
-            node.condition = rewrite(node.condition, node.loc, classify, mint, cells, 'if')
-            node.asyncSubject = isBareLiftedCell(node.condition, cells, lifted)
-        } else if (node.kind === 'switch' && node.loc !== undefined) {
-            const lifted = cells.length
-            node.subject = rewrite(node.subject, node.loc, classify, mint, cells, 'switch')
-            node.asyncSubject = isBareLiftedCell(node.subject, cells, lifted)
-        } else if (node.kind === 'case' && node.condition !== undefined && node.loc !== undefined) {
-            /* An `{:elseif}` condition — a truthy-tested control-flow subject, lifted like an
-               `{#if}` head so a bare async `{:elseif}` holds the cond-chain while it loads. */
-            const lifted = cells.length
-            node.condition = rewrite(node.condition, node.loc, classify, mint, cells, 'if')
-            node.asyncSubject = isBareLiftedCell(node.condition, cells, lifted)
-        } else if (node.kind === 'each' && node.loc !== undefined && !node.async) {
-            /* A plain `{#for}` source lifts (a promise-of-iterable → empty while pending); a
-               `{#for await}` source is the sanctioned `AsyncIterable`, drained by `eachAsync`
-               unchanged — never lifted. */
-            node.items = rewrite(node.items, node.loc, classify, mint, cells, 'each')
         }
         if ('children' in node) {
             lowerList(node.children, classify, mint, cells)
@@ -113,20 +89,4 @@ function isBareLiftedCell(code: string, cells: InjectedCell[], lifted: number): 
         }
     }
     return false
-}
-
-/* Walks one interpolation field, appends any lifted cells, and returns the rewritten expression. */
-function rewrite(
-    code: string,
-    loc: number,
-    classify: InterpolationClassifier | undefined,
-    mint: () => string,
-    cells: InjectedCell[],
-    position: LiftPosition,
-): string {
-    const result = liftAsyncSubExpressions(code, loc, classify, mint, position)
-    for (const lift of result.lifts) {
-        cells.push(lift)
-    }
-    return result.code
 }

@@ -1,5 +1,6 @@
 import ts from 'typescript'
 import { ABIDE_PACKAGE_NAME } from '../../shared/ABIDE_PACKAGE_NAME.ts'
+import { attrLiftPosition } from './attrLiftPosition.ts'
 import { isWhitespaceText } from './isWhitespaceText.ts'
 import { type LiftPosition, liftAsyncSubExpressions } from './liftAsyncSubExpressions.ts'
 import { parseTemplate } from './parseTemplate.ts'
@@ -715,8 +716,18 @@ function emitNode(node: TemplateNode, builder: Builder): void {
                         }
                     }
                 } else if (attr.kind !== 'static') {
-                    /* Every other dynamic attribute checks its single `code`. */
-                    builder.asyncStmt(attr.code, attr.loc, 'attribute')
+                    /* Every other dynamic attribute checks its single `code`. `attrLiftPosition` —
+                       the shared gate the runtime front-end lifts through — decides whether the
+                       value is async-liftable: only `name={code}` peek-wraps (its promise/stream
+                       sub-expressions project to their resolved type), while a directive
+                       (`on*`/`bind:`/`class:`/`style:`/`{...}`) checks its code verbatim, matching
+                       that the runtime never injects a cell for it. */
+                    const position = attrLiftPosition(attr)
+                    if (position !== undefined) {
+                        builder.asyncStmt(attr.code, attr.loc, position)
+                    } else {
+                        builder.stmt(attr.code, attr.loc)
+                    }
                 }
             }
             emitNodes(node.children, builder)
