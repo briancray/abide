@@ -290,9 +290,18 @@ function buildRequest(span, recs) {
     method: (closing && closing.method) || (recs[0] && recs[0].method),
     path: (closing && closing.path) || (recs[0] && recs[0].path),
     status: closing ? closing.status : undefined,
+    cache: closing ? closing.cache : undefined,
     total,
     spans,
   }
+}
+
+// The request's cache tally as a badge (⚡ hits/misses/coalesced), or empty when
+// the request read nothing cached. Same shape/label as the Logs-row badge.
+function cacheBadge(cache) {
+  if (!cache || cache.hits + cache.misses + cache.coalesced === 0) return ''
+  return '<span class="cache" title="cache hits/misses/coalesced">⚡ ' +
+    cache.hits + '/' + cache.misses + '/' + cache.coalesced + '</span>'
 }
 
 function traceHtml(id, recs) {
@@ -339,6 +348,7 @@ function requestHtml(q, childrenOf, depth) {
     '<span class="method ' + esc(q.method || '') + '">' + esc(q.method || '') + '</span>' +
     '<span class="qpath">' + esc(q.path || q.span.slice(0, 8)) + '</span>' +
     (q.status !== undefined ? '<span class="status s' + String(q.status)[0] + '">' + q.status + '</span>' : '<span class="ms">…</span>') +
+    cacheBadge(q.cache) +
     '<span class="ms">' + q.total.toFixed(1) + 'ms</span>' +
     '</div>'
   const bars = '<div ' + pad + '>' +
