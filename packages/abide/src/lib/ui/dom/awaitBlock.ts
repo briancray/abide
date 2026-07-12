@@ -7,14 +7,12 @@ import { RANGE_CLOSE, RANGE_OPEN } from '../runtime/RANGE_MARKER.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import type { ResumeEntry } from '../runtime/RESUME.ts'
 import { RESUME } from '../runtime/RESUME.ts'
-import { scope } from '../runtime/scope.ts'
 import { scopeGroup } from '../runtime/scopeGroup.ts'
 import type { State } from '../runtime/types/State.ts'
 import { withoutHydration } from '../runtime/withoutHydration.ts'
 import { state } from '../state.ts'
-import { buildDetachedRange } from './buildDetachedRange.ts'
+import { anchoredBranch } from './anchoredBranch.ts'
 import { discardBoundary } from './discardBoundary.ts'
-import { removeRange } from './removeRange.ts'
 
 /*
 Async binding — the runtime for `<template await>`. Renders the pending branch,
@@ -61,8 +59,9 @@ export function awaitBlock(
     /* The live branch's scope, registered with the owner so it disposes on owner
        teardown — not only when a settle/re-run swaps branches via detach. */
     const group = scopeGroup()
-    let active: { start: Comment; end: Comment; dispose: () => void } | undefined
-    let anchor: Node | undefined
+    /* The single active branch mounted before an anchor — owns `active`/`detach`/`place`/
+       adopt-strand guard (shared with `tryBlock`); this block keeps its bespoke settlement. */
+    const branch = anchoredBranch(parent, group)
     let first = true
     /* Bumped each run so a prior run's in-flight promise can't clobber a newer one, AND on
        owner teardown so an in-flight promise that settles AFTER the enclosing `{#if}`/
@@ -79,43 +78,6 @@ export function awaitBlock(
        place (then→then) or must build a fresh branch. */
     let activeKind: 'pending' | 'then' | 'catch' | undefined
 
-    const detach = (): void => {
-        if (active !== undefined) {
-            active.dispose()
-            /* `removeRange` evicts the markers AND everything between them via the end
-               marker's LIVE parent — not the captured `parent`, which (when this await is a
-               bare child of a control-flow branch) is the branch's build fragment, emptied
-               into the document once the enclosing block placed it. */
-            removeRange(active.start, active.end)
-            active = undefined
-        }
-    }
-
-    /* Replace the current content with a freshly-built branch, before the anchor. The branch
-       builds into a detached `[`…`]`-bracketed fragment (so any content — components, text,
-       nested blocks — appends freely), the same create primitive the keyed-list runtimes use,
-       which lands as a marker-bounded range the next swap detaches with `removeRange`. */
-    const place = (build: (parent: Node) => void): void => {
-        /* Backstop for a settle whose anchor has been detached from the tree. The
-           generationGuard is the PRIMARY defense — it drops a late settle after the owner
-           tears down — but it only covers teardowns that dispose THIS block's scope. A
-           gap (e.g. a nested hydration `adopt` that aborts to `rebuildCold`, leaving the
-           inner block's range removed while its guard stays live) can still route a late
-           settle here with `anchor` already pulled out of the DOM. Inserting before a
-           node that is no longer a child of any parent throws a `NotFoundError` from
-           `insertBefore` — surfacing as a process-fatal unhandled rejection under Bun. A
-           detached anchor unambiguously means the block is gone, so drop the settle. */
-        if (anchor !== undefined && anchor.parentNode === null) {
-            return
-        }
-        detach()
-        const namespaceParent = anchor?.parentNode ?? parent
-        const { start, end, fragment, dispose } = buildDetachedRange(namespaceParent, build)
-        const tracked = group.track(dispose)
-        namespaceParent.insertBefore(fragment, anchor ?? null)
-        active = { start, end, dispose: tracked }
-    }
-
     /* Settle to a resolved value. then→then updates the cell in place — the branch and its
        inner each survive (no flash); any other prior kind builds a fresh then-branch around
        a new cell. renderThen receives the CELL (not the raw value), so the branch reads it
@@ -127,7 +89,7 @@ export function awaitBlock(
         }
         const cell = state(value)
         valueCell = cell
-        place((host) => renderThen(host, cell))
+        branch.place((host) => renderThen(host, cell))
         activeKind = 'then'
     }
 
@@ -143,7 +105,7 @@ export function awaitBlock(
             throw error
         }
         valueCell = undefined
-        place((host) => renderCatch(host, error))
+        branch.place((host) => renderCatch(host, error))
         activeKind = 'catch'
     }
 
@@ -160,10 +122,10 @@ export function awaitBlock(
            shows the pending branch (or detaches) while the promise is in flight. */
         if (activeKind !== 'then') {
             if (renderPending !== undefined) {
-                place((host) => renderPending(host))
+                branch.place((host) => renderPending(host))
                 activeKind = 'pending'
             } else {
-                detach()
+                branch.detach()
                 activeKind = undefined
             }
         }
@@ -186,37 +148,14 @@ export function awaitBlock(
        marker for later swaps. The adopted content is everything the build claimed between
        the open and close markers; bracketing it makes the adopted branch a marker-bounded
        range identical to a freshly-`place`d one, so the FIRST swap detaches it with
-       `removeRange` like every later swap (no node-array special case). */
+       `removeRange` like every later swap (no node-array special case). `adoptStrand` carries
+       the shared strand-dispose guard; the `afterBuild` closure below is await's bespoke
+       bracketing — it runs only after a clean build. */
     const adopt = (open: Node | null, build: (parent: Node) => void): void => {
         const cursor = hydration as NonNullable<typeof hydration>
         const firstAdopted = open?.nextSibling ?? null
         cursor.next.set(parent, firstAdopted)
-        /* Adoption is guarded (see firstHydrate): a build that can't claim the server
-           markup — a resume value that didn't round-trip, a nested-adopt claim desync —
-           throws, and the caller recovers via `rebuildCold`. But the partial build may have
-           already created a live sub-scope (an inner `await`'s effect/guard, a subscription)
-           before it threw; letting the throw escape `scope()` would strand that scope's
-           disposer (unreachable → never disposed), leaking the effect AND leaving its guard
-           un-bumped so a late settle stays "live". So capture the build's error, ALWAYS take
-           the returned disposer, and dispose it on ANY failure before rethrowing — `rebuildCold`
-           then starts from a clean slate. */
-        let dispose: (() => void) | undefined
-        try {
-            let buildFailed = false
-            let buildError: unknown
-            dispose = group.track(
-                scope(() => {
-                    try {
-                        build(parent)
-                    } catch (error) {
-                        buildFailed = true
-                        buildError = error
-                    }
-                }),
-            )
-            if (buildFailed) {
-                throw buildError
-            }
+        branch.adoptStrand(build, () => {
             /* A guaranteed control-flow marker — claimExpected throws on a desync (caught by
                firstHydrate's adopt try/catch → rebuildCold) instead of silently claiming null
                and over-clearing the parent. */
@@ -228,22 +167,17 @@ export function awaitBlock(
             parent.insertBefore(start, firstAdopted ?? close)
             const end = document.createComment(RANGE_CLOSE)
             parent.insertBefore(end, close)
-            anchor = document.createTextNode('')
-            parent.insertBefore(anchor, close)
-            active = { start, end, dispose }
-        } catch (error) {
-            /* `dispose` (the group-tracked wrapper) is idempotent; running it here tears the
-               partial branch scope down and drops it from the group so `rebuildCold` doesn't
-               inherit a stranded scope, then the caller's `catch` falls back to a cold build. */
-            dispose?.()
-            throw error
-        }
+            const anchorNode = document.createTextNode('')
+            parent.insertBefore(anchorNode, close)
+            branch.anchor = anchorNode
+            return { start, end }
+        })
     }
 
     /* Discard the SSR boundary and (re)build the block from the live promise, fresh
        (hydration off) — the recovery path when adoption can't use the server markup. */
     const rebuildCold = (open: Node | null): void => {
-        detach()
+        branch.detach()
         /* Insert at the node AFTER the discarded boundary (its return) — NOT the captured
            `before`, which for a skeleton-anchored block is the open boundary itself and is
            removed here, so reusing it throws `NotFoundError` in a strict DOM. */
@@ -253,8 +187,9 @@ export function awaitBlock(
             `/abide:await:${id}`,
             hydration as NonNullable<typeof hydration>,
         )
-        anchor = document.createTextNode('')
-        parent.insertBefore(anchor, after)
+        const anchorNode = document.createTextNode('')
+        branch.anchor = anchorNode
+        parent.insertBefore(anchorNode, after)
         withoutHydration(() => render(promiseThunk()))
     }
 
@@ -336,8 +271,9 @@ export function awaitBlock(
         }
         /* Insert at the node after the discarded boundary (see `rebuildCold`). */
         const after = discardBoundary(parent, open, `/abide:await:${id}`, cursor)
-        anchor = document.createTextNode('')
-        parent.insertBefore(anchor, after)
+        const anchorNode = document.createTextNode('')
+        branch.anchor = anchorNode
+        parent.insertBefore(anchorNode, after)
         /* The boundary's server nodes are gone, so the pending branch builds FRESH — clear
            the claim cursor (see withoutHydration) so its `cloneStatic`/text don't try to
            claim discarded nodes and silently render nothing. */
@@ -354,8 +290,9 @@ export function awaitBlock(
                 firstHydrate()
                 return
             }
-            anchor = document.createTextNode('')
-            parent.insertBefore(anchor, before)
+            const anchorNode = document.createTextNode('')
+            branch.anchor = anchorNode
+            parent.insertBefore(anchorNode, before)
         }
         /* Read the promise every subsequent run so an invalidate re-runs the block. ONLY this
            read is tracked (the branch builds untracked via `scope`), so the block re-runs only

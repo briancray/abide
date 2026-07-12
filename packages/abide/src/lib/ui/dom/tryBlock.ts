@@ -4,15 +4,13 @@ import { CURRENT_BOUNDARY } from '../runtime/CURRENT_BOUNDARY.ts'
 import { claimExpected } from '../runtime/claimExpected.ts'
 import { OWNER } from '../runtime/OWNER.ts'
 import { RENDER } from '../runtime/RENDER.ts'
-import { scope } from '../runtime/scope.ts'
 import { scopeGroup } from '../runtime/scopeGroup.ts'
 import type { Boundary } from '../runtime/types/Boundary.ts'
 import type { State } from '../runtime/types/State.ts'
 import { withoutHydration } from '../runtime/withoutHydration.ts'
 import { state } from '../state.ts'
-import { buildDetachedRange } from './buildDetachedRange.ts'
+import { anchoredBranch } from './anchoredBranch.ts'
 import { discardBoundary } from './discardBoundary.ts'
-import { removeRange } from './removeRange.ts'
 
 /*
 Reactive error boundary — the runtime for `<template try>` (ADR-0019 D3). Unlike the old
@@ -59,8 +57,10 @@ export function tryBlock(
        throw, so its guarded effects must inherit the ENCLOSING boundary (a nested throw then
        propagates outward) and an initial throw rethrows. */
     const hasCatch = renderCatch !== undefined
-    let active: { start: Comment; end: Comment; dispose: () => void } | undefined
-    let anchor: Node | undefined
+    /* The single active branch mounted before an anchor — owns `active`/`detach`/`place`/
+       adopt-strand guard (shared with `awaitBlock`); this block keeps its bespoke boundary
+       recovery. */
+    const branch = anchoredBranch(parent, group)
     /* The keep-the-watch subscription on the throwing cell, live while the catch branch is
        shown (async-cell errors only); disposed on recover / swap / teardown. */
     let watchDispose: (() => void) | undefined
@@ -72,15 +72,6 @@ export function tryBlock(
 
     const boundary: Boundary = { handle: (error) => showCatch(error) }
 
-    const detach = (): void => {
-        if (active !== undefined) {
-            active.dispose()
-            /* Evict via the end marker's LIVE parent (see `awaitBlock`/`removeRange`). */
-            removeRange(active.start, active.end)
-            active = undefined
-        }
-    }
-
     const disposeWatch = (): void => {
         if (watchDispose !== undefined) {
             watchDispose()
@@ -88,33 +79,18 @@ export function tryBlock(
         }
     }
 
-    /* Replace the current content with a freshly-built branch, before the anchor. The branch
-       builds into a detached `[`…`]`-bracketed fragment, the same primitive the keyed-list
-       and await runtimes use. `underBoundary` installs this boundary as the ambient one for
-       the build (guarded branch) so its effects associate for later-throw routing; the catch
-       branch builds WITHOUT it, so a throw in catch content propagates to the enclosing
-       boundary rather than back to this one. */
-    const place = (build: (host: Node) => void, underBoundary: boolean): void => {
-        /* Backstop: a swap scheduled after the block's anchor was pulled from the tree (an
-           enclosing block tore it out) would `insertBefore` a detached node — drop it. */
-        if (anchor !== undefined && anchor.parentNode === null) {
-            return
-        }
-        detach()
-        const namespaceParent = anchor?.parentNode ?? parent
+    /* Install this boundary as the ambient one around the guarded branch's build (passed as
+       `place`'s `wrapBuild`) so its effects associate for later-throw routing; the catch branch
+       builds WITHOUT it, so a throw in catch content propagates to the enclosing boundary rather
+       than back to this one. */
+    const withBoundary = (run: () => void): void => {
         const previousBoundary = CURRENT_BOUNDARY.current
-        if (underBoundary) {
-            CURRENT_BOUNDARY.current = boundary
-        }
-        let built: ReturnType<typeof buildDetachedRange>
+        CURRENT_BOUNDARY.current = boundary
         try {
-            built = buildDetachedRange(namespaceParent, build)
+            run()
         } finally {
             CURRENT_BOUNDARY.current = previousBoundary
         }
-        const tracked = group.track(built.dispose)
-        namespaceParent.insertBefore(built.fragment, anchor ?? null)
-        active = { start: built.start, end: built.end, dispose: tracked }
     }
 
     /* Build (or rebuild) the guarded branch. A SYNCHRONOUS throw during the build — an
@@ -124,7 +100,7 @@ export function tryBlock(
     const showTry = (): void => {
         disposeWatch()
         try {
-            place((host) => renderTry(host), hasCatch)
+            branch.place((host) => renderTry(host), hasCatch ? withBoundary : undefined)
             activeKind = 'try'
             errorCell = undefined
         } catch (error) {
@@ -148,7 +124,7 @@ export function tryBlock(
         }
         const cell = state<unknown>(error)
         errorCell = cell
-        place((host) => (renderCatch as NonNullable<typeof renderCatch>)(host, cell), false)
+        branch.place((host) => (renderCatch as NonNullable<typeof renderCatch>)(host, cell))
         activeKind = 'catch'
         rewatch(error)
     }
@@ -205,8 +181,9 @@ export function tryBlock(
         firstHydrate()
         return
     }
-    anchor = document.createTextNode('')
-    parent.insertBefore(anchor, before)
+    const anchorNode = document.createTextNode('')
+    branch.anchor = anchorNode
+    parent.insertBefore(anchorNode, before)
     showTry()
 
     /* The first run when hydrating: claim the boundary's open marker, adopt the guarded
@@ -235,42 +212,33 @@ export function tryBlock(
            range start, then advance the cursor to the first content node. */
         const start = claimExpected(cursor, parent, `abide:try:${id} range-open marker`) as Comment
         cursor.next.set(parent, start.nextSibling ?? null)
+        /* Install the boundary around the whole adopt (build + marker claims); the shared
+           strand-dispose guard in `adoptStrand` disposes the partial scope and rethrows on any
+           failure, and this `finally` restores the boundary before the rethrow reaches
+           `firstHydrate`. */
         const previousBoundary = CURRENT_BOUNDARY.current
         if (hasCatch) {
             CURRENT_BOUNDARY.current = boundary
         }
-        let dispose: (() => void) | undefined
         try {
-            let buildFailed = false
-            let buildError: unknown
-            dispose = group.track(
-                scope(() => {
-                    try {
-                        renderTry(parent)
-                    } catch (error) {
-                        buildFailed = true
-                        buildError = error
-                    }
-                }),
+            branch.adoptStrand(
+                (host) => renderTry(host),
+                () => {
+                    const end = claimExpected(
+                        cursor,
+                        parent,
+                        `abide:try:${id} range-close marker`,
+                    ) as Comment
+                    cursor.next.set(parent, end.nextSibling ?? null)
+                    const close = claimExpected(cursor, parent, `/abide:try:${id} close marker`)
+                    cursor.next.set(parent, close.nextSibling ?? null)
+                    const anchorNode = document.createTextNode('')
+                    parent.insertBefore(anchorNode, close)
+                    branch.anchor = anchorNode
+                    return { start, end }
+                },
             )
-            if (buildFailed) {
-                throw buildError
-            }
-            const end = claimExpected(
-                cursor,
-                parent,
-                `abide:try:${id} range-close marker`,
-            ) as Comment
-            cursor.next.set(parent, end.nextSibling ?? null)
-            const close = claimExpected(cursor, parent, `/abide:try:${id} close marker`)
-            cursor.next.set(parent, close.nextSibling ?? null)
-            anchor = document.createTextNode('')
-            parent.insertBefore(anchor, close)
-            active = { start, end, dispose }
             activeKind = 'try'
-        } catch (error) {
-            dispose?.()
-            throw error
         } finally {
             CURRENT_BOUNDARY.current = previousBoundary
         }
@@ -279,7 +247,7 @@ export function tryBlock(
     /* Discard the SSR boundary and build the catch branch fresh in its place (hydration off).
        No catch → rethrow (the throw surfaces past the boundary, as the sync version did). */
     function rebuildCold(open: Node, error: unknown): void {
-        detach()
+        branch.detach()
         const after = discardBoundary(
             parent,
             open,
@@ -289,8 +257,9 @@ export function tryBlock(
         if (!hasCatch) {
             throw error
         }
-        anchor = document.createTextNode('')
-        parent.insertBefore(anchor, after)
+        const anchorNode = document.createTextNode('')
+        branch.anchor = anchorNode
+        parent.insertBefore(anchorNode, after)
         withoutHydration(() => showCatch(error))
     }
 }
