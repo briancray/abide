@@ -64,15 +64,60 @@ function collectByProject(cwd: string): { diagnostics: AbideDiagnostic[]; checke
        WHICH sub-expressions are async must read un-wrapped shadows — so it rides a separate verbatim
        program, built (and reused) here per root. */
     const classifierCache = new Map<string, ShadowProgram | undefined>()
-    const diagnostics = [...byProject].flatMap(([root, paths]) =>
-        collectAbideDiagnostics(
-            createShadowProgram(root, paths, (abidePath) =>
-                interpolationClassifierForRoot(classifierCache, root, abidePath),
-            ),
-        ),
-    )
+    const diagnostics = [...byProject].flatMap(([root, paths]) => {
+        const shadow = createShadowProgram(root, paths, (abidePath) =>
+            interpolationClassifierForRoot(classifierCache, root, abidePath),
+        )
+        /* The shadow program already holds the project's real `.ts` files (loaded so the
+           components' imports/types resolve), but `collectAbideDiagnostics` only reports the
+           `.abide` shadows. Report the `.ts` files too, so a mistyped `navigate`/`url`/`patch`
+           call — or any type error — in an rpc handler, `app.ts`, or a `$shared` helper fails
+           `abide check` instead of only surfacing under a separately-run `tsc`. */
+        return [...collectAbideDiagnostics(shadow), ...collectTsDiagnostics(shadow.program)]
+    })
     const checked = [...byProject.values()].reduce((total, paths) => total + paths.length, 0)
     return { diagnostics, checked }
+}
+
+/* Syntactic + semantic diagnostics for the project's own `.ts` files already in the shadow
+   program. Iterating the ROOT file names (the project's tsconfig inputs) — not every loaded
+   source — scopes this to the project itself: an on-demand-resolved import from node_modules or a
+   monorepo sibling is in the program but never a root, so its errors aren't attributed here.
+   `fileExists` drops the virtual `.abide.ts` shadows and the synthetic asset-modules file (neither
+   is on disk), `isDeclarationFile` drops the default libs and the generated `src/.abide/*.d.ts`,
+   and the `.ts`/`.tsx` guard drops raw `.abide` root entries. Real source coordinates — no remap. */
+function collectTsDiagnostics(program: ts.Program): AbideDiagnostic[] {
+    const diagnostics: AbideDiagnostic[] = []
+    for (const rootName of program.getRootFileNames()) {
+        if (
+            (!rootName.endsWith('.ts') && !rootName.endsWith('.tsx')) ||
+            rootName.includes('/node_modules/') ||
+            !ts.sys.fileExists(rootName)
+        ) {
+            continue
+        }
+        const sourceFile = program.getSourceFile(rootName)
+        if (sourceFile === undefined || sourceFile.isDeclarationFile) {
+            continue
+        }
+        const raw = [
+            ...program.getSyntacticDiagnostics(sourceFile),
+            ...program.getSemanticDiagnostics(sourceFile),
+        ]
+        for (const diagnostic of raw) {
+            if (diagnostic.start === undefined) {
+                continue
+            }
+            diagnostics.push({
+                file: sourceFile.fileName,
+                start: diagnostic.start,
+                length: diagnostic.length ?? 0,
+                message: ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'),
+                category: diagnostic.category,
+            })
+        }
+    }
+    return diagnostics
 }
 
 /* Renders one diagnostic as `path:line:col severity message` plus the offending

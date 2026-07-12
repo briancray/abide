@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
+import { checkAbide } from '../src/checkAbide.ts'
 import { collectAbideDiagnostics } from '../src/lib/ui/compile/collectAbideDiagnostics.ts'
 import {
     createShadowProgram,
@@ -871,5 +872,29 @@ describe('abide check', () => {
             'widget.abide': `<my-widget attach={(node) => { node.tagName }} />\n`,
         })
         expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
+    })
+
+    /* A type error in a plain `.ts` file (an rpc handler, `app.ts`, a `$shared` helper — here a
+       mistyped assignment stands in) fails `abide check`, not only errors inside `.abide`
+       templates. The `.ts` files are already in the shadow program for resolution; check now
+       reports them too. A `.abide` file is present to root the project. */
+    test('a type error in a .ts file fails abide check, not just .abide templates', async () => {
+        const dir = project({
+            'ok.abide': `<h1>hi</h1>\n`,
+            'handler.ts': `export const port: number = 'not a number'\n`,
+        })
+        const errors = await checkAbide({ cwd: dir })
+        expect(errors).toBeGreaterThanOrEqual(1)
+    })
+
+    /* The complement: a project whose `.ts` files are clean passes (the new `.ts` pass doesn't
+       manufacture false errors under the shadow tsconfig's relaxed options). */
+    test('a project with clean .ts files still passes abide check', async () => {
+        const dir = project({
+            'ok.abide': `<h1>hi</h1>\n`,
+            'handler.ts': `export const port: number = 3000\n`,
+        })
+        const errors = await checkAbide({ cwd: dir })
+        expect(errors).toBe(0)
     })
 })
