@@ -80,7 +80,10 @@ The artifacts argue; prose doesn't.
   the URL, the schema validates args and projects the MCP tool, CLI flags, and
   OpenAPI operation. Standard Schema is the contract (zod / valibot / arktype,
   unadapted).
-* One `GET` example (a `getMessages`-style RPC with an `inputSchema`).
+* One `GET` example (a `getMessages`-style RPC with a `schemas.input`). The opts
+  shape is the `schemas` namespace — `{ schemas: { input?, output?, files? } }`
+  (ADR-0020), NOT a flat `inputSchema`/`outputSchema`/`filesSchema`. Re-confirm
+  against `RpcHelper.ts` before writing.
 * The **fan-out diagram** — one declared RPC branching to: SSR call (the bare
   call — the smart read, resolved in-process), browser fetch (typed proxy), MCP
   tool, CLI subcommand, OpenAPI op. This diagram is the whole premise; keep it.
@@ -94,8 +97,12 @@ The artifacts argue; prose doesn't.
   `.error()`, and a streaming handler (`jsonl`/`sse`) makes the bare call return
   a `Subscribable`. (There is no `cache()` wrapper — it was removed; the bare
   call carries the caching.)
-* `> ` warning: query args travel as strings — use `z.coerce.*`. The per-RPC
-  `timeout` (504, every surface) is distinct from `ABIDE_CLIENT_TIMEOUT`.
+* `> ` warning: query/path/form args auto-coerce from the endpoint's typed shape
+  (the ADR-0028 build-time coercion plan) — a numeric/boolean/date field arrives
+  already typed, so NO `z.coerce` is needed (a value that won't parse stays a
+  string so the schema raises an honest 422). The per-RPC `timeout` (504, every
+  surface) is distinct from `ABIDE_CLIENT_TIMEOUT`. Confirm against
+  `parseArgs.ts` before writing.
 
 ### 3. Sockets
 
@@ -184,17 +191,22 @@ is the editorial layer):
 * **The premise** — the fan-out diagram + the schema-gating sentence (same
   facts as README §2; AGENTS.md keeps its own copy).
 * **File-based conventions** — table (path → meaning) for every bundler-read
-  path: `src/server/rpc|sockets/<name>`, prompts, `config.ts`, `app.ts`,
-  `bundle/window.ts`, `page.abide`/`layout.abide`, `src/.abide/*.d.ts`,
-  `public/`, `dist/`.
+  path: `src/server/rpc|sockets/<name>`, `src/mcp/prompts/<name>.md` (Markdown
+  prompts, NOT `src/server/prompts/*.ts`), `src/server/config.ts`, `src/app.ts`,
+  `src/bundle/window.ts`, `page.abide`/`layout.abide`, `src/.abide/*.d.ts`,
+  `src/ui/public/` (static assets — NOT a top-level `public/`), `dist/`. Confirm
+  each path against the resolver (`abideResolverPlugin.ts`) — several drifted.
 * **CLI** — table (command → does) for every `abide <cmd>`; the `bun test`
   preload line.
 * **Authoring contracts** — the shape of the code each convention path holds and
-  the contract enforced: the RPC (handler receives `InferOutput<inputSchema>`,
-  reads `request()`/`cookies()`, returns `json`/`jsonl`/`sse`/`error`/`redirect`/raw
-  `Response`; the `opts` fields incl. `clients: { browser, mcp, cli }`,
-  `crossOrigin`, `timeout`, `maxBodySize`, `filesSchema`, `outbox`; the `z.coerce`
-  query-arg rule; the consume forms — the bare call is the smart read, plus
+  the contract enforced: the RPC (handler receives
+  `InferOutput<schemas.input>`, reads `request()`/`cookies()`, returns
+  `json`/`jsonl`/`sse`/`error`/`redirect`/raw `Response`; the `opts` fields incl.
+  the `schemas: { input?, output?, files? }` namespace (NOT flat
+  `inputSchema`/`filesSchema`; there is NO `outbox` field — removed),
+  `clients: { browser, mcp, cli }`, `crossOrigin`, `timeout`, `maxBodySize`; the
+  auto-coercion query-arg rule (typed-shape coercion, no `z.coerce`); the consume
+  forms — the bare call is the smart read, plus
   `fn.raw(args, init?)`, the `refresh`/`patch`/`peek`/`pending`/`refreshing`/
   `error` members, and a streaming handler making the bare call a `Subscribable`),
   the socket, page/layout (`[id]` → `page.params`, layout outlet,
