@@ -24,18 +24,20 @@ kitchen-sink `.abide` files (every one must appear ≥1×) and each forbidden to
 */
 
 const ROOT = new URL('../', import.meta.url).pathname
-const PARSER = `${ROOT}src/lib/ui/compile/parseTemplate.ts`
+const PARSER = `${ROOT}src/lib/ui/compile/parseTemplateRecovering.ts`
 
 const source = await Bun.file(PARSER).text()
 
 /* The body of a named inner function, from its `function <name>(` to the matching
-   close at column 4 (`    }`) — the indentation `parseTemplate`'s inner functions
-   sit at. Scopes a dispatch search to one function so `keyword === 'else'` in
-   `readBranch` doesn't bleed into `readBlock`. */
+   close at column 4 (`    }`) — the indentation `parseTemplateRecovering`'s inner
+   functions sit at. Scopes a dispatch search to one function so `keyword === 'else'`
+   in `readBranch` doesn't bleed into `readBlock`. */
 function functionBody(name: string): string {
     const start = source.indexOf(`function ${name}(`)
     if (start === -1) {
-        throw new Error(`[grammarTokens] inner function ${name} not found in parseTemplate.ts`)
+        throw new Error(
+            `[grammarTokens] inner function ${name} not found in parseTemplateRecovering.ts`,
+        )
     }
     const end = source.indexOf('\n    }', start)
     return source.slice(start, end === -1 ? undefined : end)
