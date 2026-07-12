@@ -70,6 +70,7 @@ export function printTopLevelHelp(
     console.log(`  ${programName} /start           start a local instance`)
     console.log(`  ${programName} /disconnect      forget the saved connection`)
     console.log(`  ${programName}                  resume the saved connection (session)`)
+    console.log(`  ${programName} /completions <bash|zsh|fish>   print a shell completion script`)
     console.log(`\n  --help, -h           show this help`)
     console.log(`  <command> --help     show help for a specific command`)
     console.log(`\nenv:`)

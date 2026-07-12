@@ -1,12 +1,14 @@
 import { clearLastConnection } from '../shared/clearLastConnection.ts'
 import { loadEnvFromDataDir } from '../shared/loadEnvFromDataDir.ts'
 import { messageFromError } from '../shared/messageFromError.ts'
+import { completeCli } from './completeCli.ts'
 import { connectToServer } from './connectToServer.ts'
 import { dispatchCommand } from './dispatchCommand.ts'
 import { loadEnvFromBinaryDir } from './loadEnvFromBinaryDir.ts'
 import { printCommandHelp } from './printCommandHelp.ts'
 import { printTopLevelHelp } from './printTopLevelHelp.ts'
 import { printTrimmed } from './printTrimmed.ts'
+import { renderCliCompletions } from './renderCliCompletions.ts'
 import { resolveCliTarget } from './resolveCliTarget.ts'
 import { runSession } from './runSession.ts'
 import { startLocalInstance } from './startLocalInstance.ts'
@@ -51,6 +53,7 @@ a bare word runs a command:
   /connect <url>                  → connect to a remote server, open a session
   /start                          → boot a local instance, open a session
   /disconnect                     → forget the saved connection, exit
+  /completions <shell>            → print a bash/zsh/fish completion script (local, no connection)
   <cmd> [--flags]                 → one-shot RPC against the resumed target
 
 The connection rpcs are `/`-prefixed only — no bare aliases — so a bare word is
@@ -90,6 +93,30 @@ export async function runCli({
     }
     if (first && commandArgvRequestsHelp(argv.slice(1), manifest[first]?.jsonSchema)) {
         printCommandHelp(programName, first, manifest)
+        return 0
+    }
+
+    // Shell completion: `--query` answers a live tab (candidates from the baked
+    // manifest, no server needed), otherwise emit the wrapper script for a shell.
+    if (first === '/completions') {
+        if (argv[1] === '--query') {
+            const cword = Number(argv[2] ?? '1')
+            const command = argv[3]
+            for (const candidate of completeCli(
+                manifest,
+                Number.isNaN(cword) ? 1 : cword,
+                command,
+            )) {
+                console.log(candidate)
+            }
+            return 0
+        }
+        const script = renderCliCompletions(programName, argv[1])
+        if (!script) {
+            console.error(`${programName}: /completions requires a shell — bash, zsh, or fish`)
+            return 1
+        }
+        process.stdout.write(script)
         return 0
     }
 
