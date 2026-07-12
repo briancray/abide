@@ -1,5 +1,7 @@
+import { CURRENT_PATH } from './CURRENT_PATH.ts'
 import { claimChild } from './claimChild.ts'
 import type { RENDER } from './RENDER.ts'
+import { reportHydrationDivergence } from './reportHydrationDivergence.ts'
 
 /*
 A hydration claim that MUST succeed. Like `claimChild`, but throws a structural error
@@ -18,8 +20,11 @@ export function claimExpected(
 ): Node {
     const node = claimChild(hydration, parent)
     if (node === null) {
+        /* Name where first on the `hydrate` channel (return ignored — a missing structural node
+           desyncs the claim cursor, so unlike a text miss this can't safely continue) then throw. */
+        reportHydrationDivergence('structure desync', { expected })
         throw new Error(
-            `[abide] hydration desync: expected ${expected} here, but the server DOM had no matching node — SSR markup and the client build disagree on structure at this position.`,
+            `[abide] hydration desync at ${CURRENT_PATH.current || '(root)'}: expected ${expected} here, but the server DOM had no matching node — SSR markup and the client build disagree on structure at this position.`,
         )
     }
     return node
