@@ -5,16 +5,12 @@ import type { McpServer } from '../../mcp/types/McpServer.ts'
 import { abideLog } from '../../shared/abideLog.ts'
 import { basePathFromAppUrl } from '../../shared/basePathFromAppUrl.ts'
 import { baseSlot } from '../../shared/baseSlot.ts'
-import { NO_STORE } from '../../shared/CACHE_CONTROL_VALUES.ts'
 import { extraForwardHeaders } from '../../shared/extraForwardHeaders.ts'
 import { healthReadSlot } from '../../shared/healthReadSlot.ts'
 import { isDebugNegated } from '../../shared/isDebugNegated.ts'
 import { logClosingRecord } from '../../shared/logClosingRecord.ts'
-import { matchRoute } from '../../shared/matchRoute.ts'
-import { normalizePathname } from '../../shared/normalizePathname.ts'
 import { OFFLINE_HEADER } from '../../shared/OFFLINE_HEADER.ts'
 import { parseBoundedEnvInt } from '../../shared/parseBoundedEnvInt.ts'
-import { parseRouteSegments } from '../../shared/parseRouteSegments.ts'
 import { requestScopeSlot } from '../../shared/requestScopeSlot.ts'
 import { setAppName } from '../../shared/setAppName.ts'
 import type { Layouts } from '../../ui/types/Layouts.ts'
@@ -28,6 +24,7 @@ import { buildHealthPayload } from './buildHealthPayload.ts'
 import { buildOpenApiSpec } from './buildOpenApiSpec.ts'
 import { buildPreloadManifest } from './buildPreloadManifest.ts'
 import { createAppAssetServer } from './createAppAssetServer.ts'
+import { createAppRouteResolver } from './createAppRouteResolver.ts'
 import { createPlumbingRouter, PLUMBING_PASS } from './createPlumbingRouter.ts'
 import { createPublicAssetServer } from './createPublicAssetServer.ts'
 import { createRouteDispatcher } from './createRouteDispatcher.ts'
@@ -249,11 +246,6 @@ export async function createServer({
     isn't installed. Resolved at boot so the fetch route below can branch on it.
     */
     const inspectorHandler = await maybeMountInspector({ name: appName, version: appVersion })
-    /* Built on first request, then reused — the rpc registry is frozen after load.
-       Memoised as a promise so two concurrent cold requests share one build instead
-       of both building (the second otherwise clobbering the first). A rejected build
-       clears the memo so the next request retries rather than caching the failure. */
-    let openApiSpec: Promise<ReturnType<typeof buildOpenApiSpec>> | undefined
     const cliCwd = process.cwd()
 
     /* Request closing records are on by default — DEBUG=-abide is the off switch (negation, like the abide channel itself). */
@@ -316,32 +308,25 @@ export async function createServer({
     const buildRouteHandler = createRouteDispatcher({ pages, rpc, renderPage })
 
     /*
-    Handlers pre-bound per registered URL. rpc URLs are flat literals (always
-    `/rpc/...`), so they dispatch by direct lookup; page URLs carry `[name]` /
-    `[[name]]` / `[...rest]` segments and resolve through matchRoute. Page and
-    rpc URLs are disjoint by construction, so a request lands in exactly one.
+    URL-shape resolution — canonical-slash 308s, the openapi doc's build + memo,
+    and asset precedence (page routes shadow same-path public files; `/_app/`
+    before public/) — lives behind createAppRouteResolver. It composes the
+    dispatcher's per-URL handlers and returns a data-only decision the fetch
+    closure wires to its effect (ALS dispatch, asset serve, 404 render), so those
+    URL-shape decisions stay testable without booting Bun.serve. The openapi doc
+    is built from the frozen rpc registry, memoised across concurrent cold
+    requests, and cleared on a failed build so a later request retries.
     */
-    const rpcHandlers = new Map<string, ReturnType<typeof buildRouteHandler>>()
-    for (const routeUrl of Object.keys(rpc)) {
-        rpcHandlers.set(routeUrl, buildRouteHandler(routeUrl))
-    }
-    const pageHandlers = new Map<string, ReturnType<typeof buildRouteHandler>>()
-    for (const routeUrl of Object.keys(pages)) {
-        /* A `[...rest]` consumes every remaining segment, so segments after it
-           can never constrain matching — the route would silently serve paths
-           it shouldn't. Fail at boot instead. */
-        const segments = parseRouteSegments(routeUrl)
-        const catchAllIndex = segments.findIndex(
-            (segment) => segment.kind === 'param' && segment.catchAll,
-        )
-        if (catchAllIndex !== -1 && catchAllIndex !== segments.length - 1) {
-            throw new Error(
-                `[abide] invalid page route ${routeUrl}: a [...name] catch-all must be the last segment`,
-            )
-        }
-        pageHandlers.set(routeUrl, buildRouteHandler(routeUrl))
-    }
-    const pageRouteUrls = Object.keys(pages)
+    const resolveAppRoute = createAppRouteResolver({
+        pages,
+        rpc,
+        buildRouteHandler,
+        openApiPath: OPENAPI_PATH,
+        buildOpenApiDocument: () =>
+            ensureRegistriesLoaded().then(() =>
+                buildOpenApiSpec({ title: appName, version: appVersion }),
+            ),
+    })
 
     function dispatchRequest(
         req: Request,
@@ -439,72 +424,18 @@ export async function createServer({
                     return plumbed
                 }
                 /*
-                App routes — rpc by flat lookup, pages through the shared
-                matcher (the client router runs the same one). Matched AFTER
-                the `/__abide/*` plumbing above (a reserved namespace no app
-                route occupies) and BEFORE the root-level framework surfaces
-                (/openapi.json, /_app/, public/ files), so a page route
-                shadows a same-path public file — the precedence the Bun
-                routes table used to impose implicitly, now pinned here.
+                App routes — the rpc-vs-page-vs-308-vs-asset URL-shape decision
+                lives behind createAppRouteResolver, resolved AFTER the `/__abide/*`
+                plumbing above (a reserved namespace no app route occupies). It
+                returns a data-only decision; the closure below is the thin wiring
+                that applies each to its effect.
                 */
-                const rpcHandler = rpcHandlers.get(url.pathname)
-                if (rpcHandler) {
-                    return dispatchRequest(req, {}, rpcHandler, url)
+                const resolution = resolveAppRoute(req, url)
+                if (resolution.kind === 'handler') {
+                    return dispatchRequest(req, resolution.params, resolution.handler, url)
                 }
-                /*
-                Pages match only in canonical slash form; a non-canonical
-                request (`/admin/`, `//admin`) that would match is 308'd to the
-                canonical URL instead of served. Serving it directly would hand
-                app.handle — the auth seam — a pathname the matcher silently
-                normalized away, so an exact-match guard on `/admin` never sees
-                the request it's guarding (the old Bun routes table 404'd these
-                forms; the redirect keeps the guard sound AND the URL friendly).
-                rpc URLs stay exact-match strict, as they always were.
-                */
-                const canonicalPathname = normalizePathname(url.pathname)
-                if (canonicalPathname !== url.pathname) {
-                    if (matchRoute(pageRouteUrls, canonicalPathname)) {
-                        return new Response(null, {
-                            status: 308,
-                            headers: {
-                                Location: `${canonicalPathname}${url.search}`,
-                                'Cache-Control': NO_STORE,
-                            },
-                        })
-                    }
-                } else {
-                    const matchedPage = matchRoute(pageRouteUrls, url.pathname)
-                    if (matchedPage) {
-                        const pageHandler = pageHandlers.get(matchedPage.route)
-                        if (pageHandler) {
-                            return dispatchRequest(req, matchedPage.params, pageHandler, url)
-                        }
-                    }
-                }
-                if (url.pathname === OPENAPI_PATH) {
-                    return dispatchRequest(
-                        req,
-                        {},
-                        async () => {
-                            openApiSpec ??= ensureRegistriesLoaded()
-                                .then(() =>
-                                    buildOpenApiSpec({
-                                        title: appName,
-                                        version: appVersion,
-                                    }),
-                                )
-                                .catch((error) => {
-                                    // Don't cache a failed build — clear the memo so a
-                                    // later request retries instead of 500-ing forever.
-                                    openApiSpec = undefined
-                                    throw error
-                                })
-                            return Response.json(await openApiSpec, {
-                                headers: { 'Cache-Control': NO_STORE },
-                            })
-                        },
-                        url,
-                    )
+                if (resolution.kind === 'redirect') {
+                    return resolution.response
                 }
                 /*
                 Static assets sidestep ALS + the per-request CacheStore + the
@@ -513,7 +444,7 @@ export async function createServer({
                 dozens of chunks. The global server.error() handler still
                 catches anything that goes wrong inside serveAppAsset.
                 */
-                if (url.pathname.startsWith('/_app/')) {
+                if (resolution.kind === 'appAsset') {
                     return timedServe(() => serveAppAsset(req, url), req, url)
                 }
                 /*
