@@ -358,6 +358,75 @@ describe('rpc input-args JSON Schema projection through the warm server program 
     })
 })
 
+/* Client keep-plan (ADR-0022 addendum): the warm program resolves which top-level statements the
+   live `opts` reaches through the binder/checker, so the client rewrite emits ONLY those plus the
+   `remoteProxy` export — the handler and its server-only imports are never emitted. Supersedes the
+   keep-the-file "trust DCE" bet, which loads server modules before shaking them (fatal for a Bun
+   builtin like `bun:sqlite` on a browser target). */
+describe('rpc client keep-plan through the warm server program (ADR-0022 addendum)', () => {
+    const program = createRpcServerProgram(SERVER_CWD, SERVER_RPC_DIR)
+
+    test('keeps only what opts reaches; drops the handler and its imports', () => {
+        /* `clientKeep.ts`: `opts` is `{ crossOrigin: allowed }`; `allowed` is a module-level const
+           built from the imported `allowCrossOrigin`. So the plan is that const plus its import —
+           and nothing else. `json` / `serverOnly` (handler-only imports) and the module-level
+           `cache` (handler-only) are absent. */
+        expect(program.clientKeepForModule(serverModule('clientKeep'))).toEqual([
+            "import { allowCrossOrigin } from '../lib/policy.ts'",
+            "const allowed = allowCrossOrigin('similar')",
+        ])
+    })
+
+    test('an endpoint with no opts keeps nothing (the client needs only the bare call)', () => {
+        expect(program.clientKeepForModule(serverModule('noOpts'))).toEqual([])
+    })
+
+    test('a shorthand opts property keeps its (aliased) import — the unsafe-drop direction', () => {
+        /* `clientKeepShorthand.ts` has opts `{ crossOrigin }`; a plain identifier scan of a
+           shorthand resolves to the object property symbol, so the value symbol is read explicitly,
+           else the referenced import is wrongly dropped. */
+        expect(program.clientKeepForModule(serverModule('clientKeepShorthand'))).toEqual([
+            "import { crossOriginEnabled as crossOrigin } from '../lib/policy.ts'",
+        ])
+    })
+
+    test('an unknown module path fails open to undefined (keep-the-file fallback)', () => {
+        expect(program.clientKeepForModule(resolve(SERVER_RPC_DIR, 'missing.ts'))).toBeUndefined()
+    })
+
+    test('the plan drives a MINIMAL client rewrite — only remoteProxy + opts-reachable code', () => {
+        const source = readFileSync(serverModule('clientKeep'), 'utf8')
+        const clientKeep = program.clientKeepForModule(serverModule('clientKeep'))
+        const rewritten = prepareRpcModule(source, '@abide/abide', {
+            clientKeep,
+        })?.rewriteForClient('/rpc/clientKeep')
+        /* The opts-reachable const + its import survive; the export is the live-opts remoteProxy. */
+        expect(rewritten).toContain("import { allowCrossOrigin } from '../lib/policy.ts'")
+        expect(rewritten).toContain("const allowed = allowCrossOrigin('similar')")
+        expect(rewritten).toContain(
+            '__abideRemoteProxy__("GET", "/rpc/clientKeep", { crossOrigin: allowed })',
+        )
+        /* The handler and its server-only support are GONE — nothing to load or tree-shake. */
+        expect(rewritten).not.toContain('serverOnly')
+        expect(rewritten).not.toContain('cache')
+        expect(rewritten).not.toContain('=>')
+        /* No leftover import of the handler-only json helper. */
+        expect(rewritten).not.toContain('server/json')
+    })
+
+    test('an empty plan emits the bare remoteProxy call alone', () => {
+        const source = readFileSync(serverModule('noOpts'), 'utf8')
+        const rewritten = prepareRpcModule(source, '@abide/abide', {
+            clientKeep: [],
+        })?.rewriteForClient('/rpc/noOpts')
+        expect(rewritten).toContain(
+            'export const noOpts = __abideRemoteProxy__("GET", "/rpc/noOpts")',
+        )
+        expect(rewritten).not.toContain('server/json')
+        expect(rewritten).not.toContain('=>')
+    })
+})
+
 /* Fail-open: with NO warm program (the override arguments absent), prepareRpcModule produces
    byte-identical output to today — streaming/durable verdicts come from the char-scan and the
    emitted client/server rewrites are unchanged. */

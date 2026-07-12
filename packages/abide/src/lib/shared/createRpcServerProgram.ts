@@ -109,6 +109,20 @@ export type RpcServerProgram = {
     it.
     */
     inputSchemaForModule(modulePath: string): Record<string, unknown> | undefined
+    /*
+    The top-level statements the CLIENT rpc module must retain — reachability rooted at the endpoint
+    `opts` argument, resolved through the binder/checker rather than by scanning source text. On the
+    client an rpc is only a `remoteProxy` fetch, so the handler and every declaration/import only it
+    reaches is dead; but `opts` (schemas/cache/stream) is a LIVE expression that may reference
+    imported values and module-level consts (e.g. a `const inputSchema = z.object(...)` under
+    `schemas.input`), so those — and what THEY reach — must survive. Returns each kept statement's
+    source text in source order (imports + declarations transitively reachable from `opts`),
+    EXCLUDING the exported rpc statement itself (it becomes the `remoteProxy` line) and, naturally,
+    the rpc-helper import (`opts` never names it). An endpoint with no `opts` returns `[]` — a bare
+    `remoteProxy` needs nothing. undefined when the module or its rpc call can't be resolved, so the
+    caller falls open to the keep-the-file char-scan rewrite (ADR-0022 D2 legacy path).
+    */
+    clientKeepForModule(modulePath: string): string[] | undefined
 }
 
 /*
@@ -174,7 +188,180 @@ export function createRpcServerProgram(cwd: string, rpcDir: string): RpcServerPr
         inputSchemaForModule(modulePath) {
             return query(modulePath, (call) => inputArgsJsonSchema(checker, call.node))
         },
+        clientKeepForModule(modulePath) {
+            /* Needs the SourceFile alongside the call (statement walk), so it resolves both itself
+               rather than going through `query` (which yields only the call). Same fail-open
+               contract: an unresolved module / any checker throw yields undefined. */
+            try {
+                const sourceFile = program.getSourceFile(modulePath)
+                if (sourceFile === undefined) {
+                    return undefined
+                }
+                const call = resolveRpcCall(checker, sourceFile)
+                if (call === undefined) {
+                    return undefined
+                }
+                return clientKeepStatements(checker, sourceFile, call.node)
+            } catch {
+                return undefined
+            }
+        },
     }
+}
+
+/*
+The top-level statements the client rpc module retains, rooted at the endpoint `opts` argument
+(ADR-0022 addendum). Builds a reachability graph over the module's top-level bindings — each binding
+symbol → its declaring statement, plus which top-level symbols each statement references — then
+marks every statement reachable from `opts` and returns the marked ones' source text in source
+order. The exported rpc statement is excluded (it becomes the `remoteProxy` line); everything the
+handler alone reaches is simply never marked, so it drops out.
+*/
+function clientKeepStatements(
+    checker: ts.TypeChecker,
+    sourceFile: ts.SourceFile,
+    call: ts.CallExpression,
+): string[] {
+    const opts = call.arguments[1]
+    // No opts → the client module needs nothing but the bare remoteProxy call.
+    if (opts === undefined) {
+        return []
+    }
+    // The exported rpc statement becomes the remoteProxy line, so it is never a retained statement.
+    const exportStatement = enclosingTopLevelStatement(call, sourceFile)
+    // Every top-level binding symbol → the statement that declares it (the export statement's own
+    // bindings excluded so a self-reference can't re-admit it).
+    const declaringStatement = new Map<ts.Symbol, ts.Statement>()
+    for (const statement of sourceFile.statements) {
+        if (statement === exportStatement) {
+            continue
+        }
+        for (const symbol of topLevelBindingSymbols(checker, statement)) {
+            declaringStatement.set(symbol, statement)
+        }
+    }
+    // Mark from opts outward: a statement is kept once any of its bindings is referenced by opts or
+    // by an already-kept statement (transitive closure via the work queue).
+    const kept = new Set<ts.Statement>()
+    const queue: ts.Node[] = [opts]
+    while (queue.length > 0) {
+        const node = queue.pop() as ts.Node
+        for (const symbol of referencedTopLevelSymbols(checker, node, declaringStatement)) {
+            const statement = declaringStatement.get(symbol)
+            if (statement !== undefined && !kept.has(statement)) {
+                kept.add(statement)
+                queue.push(statement)
+            }
+        }
+    }
+    const texts: string[] = []
+    for (const statement of sourceFile.statements) {
+        if (kept.has(statement)) {
+            texts.push(statement.getText(sourceFile))
+        }
+    }
+    return texts
+}
+
+/* The top-level statement enclosing `node` — walk parents until the one whose parent is the source
+   file. */
+function enclosingTopLevelStatement(node: ts.Node, sourceFile: ts.SourceFile): ts.Statement {
+    let current: ts.Node = node
+    while (current.parent !== undefined && current.parent !== sourceFile) {
+        current = current.parent
+    }
+    return current as ts.Statement
+}
+
+/*
+The binding symbols a top-level statement introduces — an import's clause names (default /
+namespace / each named element), a variable statement's declaration names (destructuring patterns
+walked to their leaves), and a function/class declaration's name. A statement that binds nothing
+(a bare side-effect `import './x'`, an expression statement) contributes no symbol and so is never
+reachable from opts — exactly the server-only setup the client drops.
+*/
+function topLevelBindingSymbols(checker: ts.TypeChecker, statement: ts.Statement): ts.Symbol[] {
+    const names: ts.Node[] = []
+    if (ts.isImportDeclaration(statement)) {
+        const clause = statement.importClause
+        if (clause?.name !== undefined) {
+            names.push(clause.name)
+        }
+        const bindings = clause?.namedBindings
+        if (bindings !== undefined) {
+            if (ts.isNamespaceImport(bindings)) {
+                names.push(bindings.name)
+            } else {
+                for (const element of bindings.elements) {
+                    names.push(element.name)
+                }
+            }
+        }
+    } else if (ts.isVariableStatement(statement)) {
+        for (const declaration of statement.declarationList.declarations) {
+            collectBindingNames(declaration.name, names)
+        }
+    } else if (
+        (ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement)) &&
+        statement.name !== undefined
+    ) {
+        names.push(statement.name)
+    }
+    const symbols: ts.Symbol[] = []
+    for (const name of names) {
+        const symbol = checker.getSymbolAtLocation(name)
+        if (symbol !== undefined) {
+            symbols.push(symbol)
+        }
+    }
+    return symbols
+}
+
+/* The leaf identifiers of a binding name — a plain identifier is itself; a destructuring pattern
+   (`{ a, b: { c } }`, `[x, ...rest]`) descends to each bound identifier. */
+function collectBindingNames(name: ts.BindingName, out: ts.Node[]): void {
+    if (ts.isIdentifier(name)) {
+        out.push(name)
+        return
+    }
+    for (const element of name.elements) {
+        if (ts.isBindingElement(element)) {
+            collectBindingNames(element.name, out)
+        }
+    }
+}
+
+/*
+The top-level binding symbols referenced within `node` — every identifier in the subtree whose
+resolved symbol is a known top-level binding. An import alias resolves to the same local symbol at
+its use site and its declaration, so uses match declarations; a property name (`obj.map`) resolves
+to a property symbol, not a top-level one, so it can't false-match. Over-inclusion is safe (it only
+keeps more), so a bare identifier scan needs no scope analysis.
+*/
+function referencedTopLevelSymbols(
+    checker: ts.TypeChecker,
+    node: ts.Node,
+    declaringStatement: Map<ts.Symbol, ts.Statement>,
+): ts.Symbol[] {
+    const found: ts.Symbol[] = []
+    const consider = (symbol: ts.Symbol | undefined): void => {
+        if (symbol !== undefined && declaringStatement.has(symbol)) {
+            found.push(symbol)
+        }
+    }
+    const visit = (current: ts.Node): void => {
+        // A shorthand `{ schemas }` resolves to the object PROPERTY symbol at its location, not the
+        // referenced binding — so read the value symbol explicitly, else the used import is missed
+        // (the one unsafe direction: a dropped-but-needed statement).
+        if (ts.isShorthandPropertyAssignment(current)) {
+            consider(checker.getShorthandAssignmentValueSymbol(current))
+        } else if (ts.isIdentifier(current)) {
+            consider(checker.getSymbolAtLocation(current))
+        }
+        ts.forEachChild(current, visit)
+    }
+    visit(node)
+    return found
 }
 
 type ResolvedRpcCall = {

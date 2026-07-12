@@ -396,6 +396,17 @@ export function abideResolverPlugin({
                    program / unresolvable body / no structured field) bakes nothing — a response array
                    stays an array. */
                 const outputWirePlan = rpcServerProgram?.outputWirePlanForModule(args.path)
+                /* The client-only reachability plan: the top-level statements the emitted client
+                   module retains, rooted at the endpoint `opts` (imports + declarations opts
+                   transitively needs). Present → rewriteForClient emits a MINIMAL module so the
+                   handler and its server-only imports are never emitted — nothing server-side loads
+                   or trips the reachability guard (ADR-0022 addendum). Only the client target needs
+                   it; the server rewrite keeps the whole handler. undefined (no warm program /
+                   unresolvable call) falls open to the keep-the-file rewrite. */
+                const clientKeep =
+                    target === 'client'
+                        ? rpcServerProgram?.clientKeepForModule(args.path)
+                        : undefined
                 /* The handler's input args projected to JSON Schema, stamped as `inputJsonSchema` so the
                    runtime OpenAPI parameters/body / MCP inputSchema / inspector input surface renders the
                    real input shape (and the endpoint becomes advertisable) without an author-declared
@@ -410,6 +421,7 @@ export function abideResolverPlugin({
                     outputSchema: returnBodySchema,
                     errorSchemas,
                     outputWirePlan,
+                    clientKeep,
                 })
                 if (!prepared) {
                     throw new Error(

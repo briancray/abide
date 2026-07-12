@@ -118,7 +118,6 @@ export function prepareRpcModule(
         remoteProxy reads only streaming/cache/stream off the opts and ignores the rest.
         */
         rewriteForClient(url: string): string {
-            const callHead = `${stripped.slice(0, site.callStart)}${REMOTE_PROXY_GLOBAL}(${JSON.stringify(method)}, ${JSON.stringify(url)}`
             const opts = argParts[1]
             /* Build-injected CLIENT opts: `streaming` (build-derived from the elided handler body)
                and the `outputWirePlan` (the handler's structured success fields → the client revives
@@ -142,8 +141,28 @@ export function prepareRpcModule(
                         ? `, { ${injectedText} }`
                         : `, { ${injectedText}, ...(${opts}) }`
             }
-            /* Keep everything from the call's closing paren onward (same slicing discipline as
-               rewriteForServer) so any trailing content after the call survives. */
+            const remoteCall = `${REMOTE_PROXY_GLOBAL}(${JSON.stringify(method)}, ${JSON.stringify(url)}${argsText})`
+            /*
+            Minimal emit (ADR-0022 addendum): the warm program resolved which top-level statements
+            the live `opts` actually reaches, so emit ONLY those plus the `remoteProxy` export. The
+            handler and every declaration/import only it used are never emitted — nothing server-side
+            is loaded, tree-shaken, or flagged, matching "the client is only ever a fetch". An empty
+            plan (no opts, or opts references nothing top-level) emits the bare call alone.
+            */
+            const clientKeep = stamps.clientKeep
+            if (clientKeep !== undefined) {
+                const exportLine = `export const ${site.exportName} = ${remoteCall}`
+                return clientKeep.length > 0
+                    ? `${clientKeep.join('\n')}\n${exportLine}\n`
+                    : `${exportLine}\n`
+            }
+            /*
+            Fallback (no warm program): keep the real module, swap the METHOD( call for the
+            remoteProxy( call, and elide the handler argument — leaning on the bundler's DCE to drop
+            the dead server imports. `stripped.slice(0, site.callStart)` keeps the imports + the
+            `export const <name> = ` head; `stripped.slice(site.parenEnd)` keeps any trailing content.
+            */
+            const callHead = `${stripped.slice(0, site.callStart)}${REMOTE_PROXY_GLOBAL}(${JSON.stringify(method)}, ${JSON.stringify(url)}`
             return `${callHead}${argsText}${stripped.slice(site.parenEnd)}`
         },
     }

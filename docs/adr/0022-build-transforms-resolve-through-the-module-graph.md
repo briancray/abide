@@ -192,3 +192,65 @@ form is removed.)
   client-reaches-server edge reachability-based. The post-DCE-metafile prerequisite is
   **confirmed** (Bun 1.3.14, see D3), so no fallback is required.
 - D4 landed independently (a one-line `?? declaration.type` in `compileShadow.ts` + regression tests).
+
+## Addendum (2026-07-12): the client rpc transform emits a minimal module, not the whole file
+
+**Status:** accepted. Refines D2's emit and retires D3's reliance on DCE *for the rpc client path*
+(the reachability guard itself stays — it remains the authority for every other client-reaches-server
+edge).
+
+### The leak D3's DCE bet left open
+
+D2 keeps the real rpc module on the client and elides only the *handler argument*, betting the
+bundler tree-shakes the now-dead server imports. D3 documented the risk ("DCE correctness now matters
+for correctness") and validated on Bun 1.3.14 that an unused import is absent from `metafile.inputs`.
+That validation held only for the case it tested — a handler whose server imports are referenced
+**solely inside the (elided) handler body**. Two facts break it in practice:
+
+1. **Handler-elision drops the argument, not the module-level statements that support it.** The
+   ubiquitous drizzle shape puts the server handle at module scope:
+   ```ts
+   import { getDb } from '$server/lib/getDb'   // getDb → import 'bun:sqlite'
+   const db = getDb()                          // ← survives elision; keeps getDb LIVE
+   export const getSimilar = GET((a) => db.query(a), { schemas: { input } })
+   ```
+   `const db = getDb()` is not the handler argument, so it stays — `getDb` is genuinely reachable.
+2. **The bundler loads before it shakes.** Bun resolves and parses every statically-reachable module
+   to build the graph. For `bun:sqlite` on a `target: 'browser'` build that load is *fatal*
+   (`Browser build cannot import Bun builtin: "bun:sqlite"`), and it throws *before* the `onEnd`
+   reachability guard runs — so the author gets a raw bundler error instead of abide's "move it to
+   `shared/` or behind an rpc" chain. (Reproduced against the real resolver plugin; the pure
+   handler-only case still tree-shakes clean, matching D3's original validation.)
+
+### Decision — root the client emit at `opts`, through the compiler
+
+The client rewrite no longer keeps-and-shakes. It emits a **minimal module**: the single
+`export const <name> = remoteProxy("M", "/url", opts)` plus **only the top-level statements the live
+`opts` transitively reaches**. Everything else — the handler, its module-level support (`const db =
+…`), and every import only they used — is never emitted, so nothing server-side is loaded,
+tree-shaken, or flagged. This is what the mental model always was: *on the client an rpc is only a
+fetch.* It also makes rpc consistent with sockets, which already emit a name-only client stub rather
+than keeping the file.
+
+Reachability is computed **through the warm `ts.Program`** (ADR-0025 D1), not a source-text scan: the
+binder/checker resolves which of the module's top-level bindings `opts` uses (an import alias resolves
+to the same local symbol at use and declaration, so uses match declarations), then a transitive
+closure keeps their declaring statements. `opts` referencing a module-level const
+(`schemas: { input: inputSchema }` where `const inputSchema = z.object(...)`) keeps that const *and*
+its `import { z }`; a handler-only `import`/const is simply never marked. The plan
+(`RpcServerProgram.clientKeepForModule`) is threaded to `prepareRpcModule` as the `clientKeep` stamp,
+which assembles `kept statements + remoteProxy(opts)`.
+
+- **Fail-open unchanged.** No warm program / an unresolvable rpc call ⇒ `clientKeep` is undefined and
+  the rewrite falls back to D2's keep-the-file emit (ADR-0025 D3 discipline: a type hiccup never
+  breaks a build).
+- **The guard still stands.** The `onEnd` metafile reachability check (D3) is untouched — it remains
+  the sole authority for every *other* client-reaches-server edge (a page/policy that live-references
+  server state). The addendum only removes the rpc client path's *dependence* on DCE by not emitting
+  the dead code in the first place; a genuine `opts`→server reference is still emitted, still
+  reachable, and still flagged with its chain.
+- **A genuine opts→server crossing is preserved, not masked.** Because `opts`-reached imports are
+  *kept*, an author who really does reference server-only state from a policy still trips the guard
+  (the honest error), rather than being silently stubbed — which is why the resolver-stub alternative
+  (return an empty `$server/*` module for proxied importers) was rejected: it would convert that build
+  error into a client runtime crash (`undefined()` at module load) and only covers `$server/*`.
