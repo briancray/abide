@@ -1,5 +1,15 @@
 # abide
 
+## 0.51.0
+
+### Minor Changes
+
+- aec503f: make watch(cell, handler) reactive ([`4db4e3d`](https://github.com/briancray/abide/commit/4db4e3d21cb04dcad5463831621140ec00ccbbe2))
+
+### Patch Changes
+
+- aec503f: correct README/AGENTS and lead the async story with the bare call ([`c96e936`](https://github.com/briancray/abide/commit/c96e93682cc8e05762bcde7bb808850dfdb40b6f))
+
 ## 0.50.1
 
 ### Patch Changes
