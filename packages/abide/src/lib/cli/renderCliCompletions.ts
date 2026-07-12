@@ -23,6 +23,9 @@ One wrapper per shell. Each forwards the tokens typed so far — the cursor
 index and the command word (`words[1]`) — to `\0 /completions --query`,
 then lets the shell filter the newline-separated candidates by the current
 prefix. `2>/dev/null` keeps a connection error off the completion output.
+The index is normalised to bash's 0-based `COMP_CWORD` convention (program =
+0, first positional = 1) that `completeCli` expects: zsh's `$CURRENT` is
+1-based (`words[1]` is the program), so it forwards `CURRENT - 1`.
 */
 const SCRIPTS: Record<string, string> = {
     bash: `_\0_complete() {
@@ -38,7 +41,7 @@ complete -F _\0_complete \0
 _\0() {
   local cmd="\${words[2]}"
   local -a candidates
-  candidates=("\${(@f)$(\0 /completions --query "\${CURRENT}" "\${cmd}" 2>/dev/null)}")
+  candidates=("\${(@f)$(\0 /completions --query "\$((CURRENT - 1))" "\${cmd}" 2>/dev/null)}")
   compadd -- "\${candidates[@]}"
 }
 compdef _\0 \0
