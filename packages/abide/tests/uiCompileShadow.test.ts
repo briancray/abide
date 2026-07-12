@@ -34,7 +34,7 @@ describe('compileShadow', () => {
 
     test('reconstructs the scope with value types', () => {
         expect(code).toContain('let count = (0);')
-        expect(code).toContain('const doubled = (() => count * 2)();')
+        expect(code).toContain('const doubled = $$cellValue(() => count * 2);')
         /* A `props()` destructure projects verbatim against the typed `props()`, as a `let`
            so a prop written back through a two-way `bind:prop` isn't a spurious const-assign. */
         expect(code).toContain('let { title } = props<{ title: string }>();')
@@ -44,9 +44,9 @@ describe('compileShadow', () => {
         /* `linked` is a writable `State<T>` at runtime (it reseeds AND takes `.value =`
            writes), so reassigning it must not false-positive `abide check` with
            "Cannot assign to 'x' because it is a constant." `computed` stays `const`. */
-        expect(code).toContain('let start = (() => title)();')
-        expect(code).toContain('let offset: number = (() => count)();')
-        expect(code).toContain('const doubled = (() => count * 2)();')
+        expect(code).toContain('let start = $$cellValue(() => title);')
+        expect(code).toContain('let offset: number = $$cellValue(() => count);')
+        expect(code).toContain('const doubled = $$cellValue(() => count * 2);')
         /* The reassignment in bump() is legal against a `let` binding. */
         expect(code).not.toContain('const start =')
         expect(code).not.toContain('const offset')
@@ -55,7 +55,54 @@ describe('compileShadow', () => {
     test('carries an explicit type argument onto the value binding', () => {
         /* Without the annotation the empty initial infers `any[]` — the squiggle bug. */
         expect(code).toContain('let todos: string[] = ([]);')
-        expect(code).toContain('const label: string = (() => String(count))();')
+        expect(code).toContain('const label: string = $$cellValue(() => String(count));')
+    })
+
+    test('an async computed seed projects its RESOLVED value and is not flagged as top-level await', () => {
+        /* `computed(await load())` / `computed(async () => …)` route through `wrapSeed` to an
+           async cell at runtime; the shadow must agree — no spurious top-level-await diagnostic,
+           and the binding reads as the awaited value (not a raw `Promise`) so downstream reads
+           don't need `as unknown as Awaited<…>` casts (the reported regression). */
+        const { code, diagnostics } = compileShadow(`<script>
+import { state } from '@abide/abide/ui/state'
+async function getSession() { return { userId: 1 } }
+let session = state.computed(await getSession())
+let grid = state.computed(async () => await getSession())
+</script>
+<p>{session}{grid}</p>`)
+        expect(diagnostics).toEqual([])
+        /* A bare-await seed is wrapped async; a literal async thunk passes through — both go
+           through `$$cellValue`, which unwraps the promise to the resolved value. */
+        expect(code).toContain('const session = $$cellValue(async () => (await getSession()));')
+        expect(code).toContain('const grid = $$cellValue(async () => await getSession());')
+    })
+
+    test('a bare non-thunk computed seed is wrapped rather than called as a value', () => {
+        /* A member/call seed (`computed(obj.stream)`) is not a thunk — the old `(seed)()` called
+           the value itself. It is now normalised to `() => (seed)` so `$$cellValue` reads a stream
+           as its frame and a smart-read call as its return, never invoking the value. */
+        const { code, diagnostics } = compileShadow(`<script>
+import { state } from '@abide/abide/ui/state'
+const obj = { stream: (async function* () { yield 'x' })() as AsyncIterable<string> }
+let frames = state.computed(obj.stream)
+</script>
+<p>{frames}</p>`)
+        expect(diagnostics).toEqual([])
+        expect(code).toContain('const frames = $$cellValue(() => (obj.stream));')
+    })
+
+    test('a top-level await OUTSIDE a computed/linked seed is still flagged', () => {
+        /* The exemption is scoped to the seed argument — a bare `state(await …)` (no `wrapSeed`)
+           or a loose statement-level await still breaks the sync build and must be caught. */
+        const diagnostics =
+            compileShadow(`<script>
+import { state } from '@abide/abide/ui/state'
+async function load() { return 1 }
+let n = state(await load())
+</script>
+<p>{n}</p>`).diagnostics ?? []
+        expect(diagnostics.length).toBe(1)
+        expect(diagnostics[0]?.message).toContain('top-level `await` is not allowed')
     })
 
     test('maps the import statement so hover resolves on imported names', () => {
@@ -213,7 +260,7 @@ let ready = state(false)
         /* Reactive decls projected to value types; the plain const stays verbatim. */
         expect(code).toContain('const upper = loaded.toUpperCase()')
         expect(code).toContain('let layout = (upper);')
-        expect(code).toContain("const label = (() => layout + '!')();")
+        expect(code).toContain("const label = $$cellValue(() => layout + '!');")
         /* No raw `computed(` call survives into the nested branch body. */
         expect(code).not.toContain("let label = computed(() => layout + '!')")
     })

@@ -94,6 +94,14 @@ export function compileShadow(
         watchLocalName,
     } = analyzeScript(scriptBody, scriptStart)
     builder.raw(shadowPreamble(importedReactives))
+    /* Every `computed`/`linked` scope line reads through this: it invokes the seed thunk and
+       unwraps a promise/stream to the value a BARE cell read peeks (ADR-0019/0032) — so an async
+       `computed(await …)` / stream `computed(src)` type-checks as its resolved value, and a sync
+       seed keeps its return type (`Awaited` is identity on a non-thenable). Reserved `$$` name so
+       it can never collide with an author binding; `declare`-only, so it carries no runtime. */
+    builder.raw(
+        'declare function $$cellValue<R>(seed: () => R): R extends AsyncIterable<infer F> ? F : Awaited<R>\n',
+    )
     /* The peek helpers the async-interpolation wrap targets (ADR-0032): `$$peek` unwraps a promise
        sub-expression to its resolved value (`undefined` while pending) and `$$peekStream` reads an
        async iterable's latest frame, so `getFoo()?.name`/`{#if getFoo()}` type-check against the
@@ -395,26 +403,37 @@ function collectReservedNameDiagnostics(
    top-level await transpiles to `await` in a non-async function and breaks the bundle; the
    shadow's render fn is async, so `tsc` alone never flags it (a check/runtime parity gap).
    Stops descending at function boundaries — their own async-ness is the author's concern —
-   and catches both `await expr` and `for await (… of …)`, flagging the `await` keyword. */
+   and catches both `await expr` and `for await (… of …)`, flagging the `await` keyword. A
+   `computed`/`linked` SEED argument is exempt: `wrapSeed` (desugarSignals) lowers a top-level
+   `await` there into an async thunk (`computed(await load())` → `async () => await load()`), so
+   its await runs off the sync build — flagging it would be a false positive. */
 function collectTopLevelAwaitDiagnostics(
     file: ts.SourceFile,
     scriptStart: number,
     diagnostics: ShadowDiagnostic[],
+    bindings: ReactiveImportBindings,
 ): void {
     const message =
         'top-level `await` is not allowed in a `<script>` — the component build runs synchronously. Use `{#await expr}…{:then value}…{/await}` markup for blocking data, or `await` inside an async event handler.'
     const visit = (node: ts.Node): void => {
         /* A nested function introduces its own (possibly async) scope; its awaits are legal. */
-        if (
-            ts.isFunctionDeclaration(node) ||
-            ts.isFunctionExpression(node) ||
-            ts.isArrowFunction(node) ||
-            ts.isMethodDeclaration(node) ||
-            ts.isGetAccessorDeclaration(node) ||
-            ts.isSetAccessorDeclaration(node) ||
-            ts.isConstructorDeclaration(node)
-        ) {
+        if (isFunctionScopeBoundary(node)) {
             return
+        }
+        /* A `computed`/`linked` seed becomes an async thunk (`wrapSeed`), so an await in it is
+           legal — visit the callee and any trailing args, but skip the seed (`arguments[0]`). */
+        if (ts.isCallExpression(node) && node.arguments.length > 0) {
+            const callee = resolveReactiveExport(node.expression, bindings)
+            if (callee === 'computed' || callee === 'linked') {
+                visit(node.expression)
+                for (let index = 1; index < node.arguments.length; index++) {
+                    const argument = node.arguments[index]
+                    if (argument !== undefined) {
+                        visit(argument)
+                    }
+                }
+                return
+            }
         }
         /* The `await` keyword token: the AwaitExpression's first child, or a `for await`'s
            await modifier. */
@@ -449,7 +468,8 @@ function collectNestedScriptAwaitDiagnostics(
         }
         if (node.kind === 'script' && node.loc !== undefined) {
             const file = ts.createSourceFile('nested.ts', node.code, ts.ScriptTarget.Latest, true)
-            collectTopLevelAwaitDiagnostics(file, node.loc, diagnostics)
+            /* A nested script inherits the surface by canonical name (no imports of its own). */
+            collectTopLevelAwaitDiagnostics(file, node.loc, diagnostics, NESTED_REACTIVE_BINDINGS)
         }
         if ('children' in node) {
             collectNestedScriptAwaitDiagnostics(node.children, diagnostics)
@@ -503,7 +523,7 @@ function analyzeScript(scriptBody: string, scriptStart: number): ScriptAnalysis 
     collectReservedNameDiagnostics(file, scriptStart, diagnostics)
     /* The leading script runs in the synchronous `build()`, so a top-level await breaks the
        bundle — catch it here with a legible message instead of an opaque transpile error. */
-    collectTopLevelAwaitDiagnostics(file, scriptStart, diagnostics)
+    collectTopLevelAwaitDiagnostics(file, scriptStart, diagnostics, bindings)
     /* A verbatim span: original text + the segment mapping it back, relative to the
        line start (the caller rebases shadowStart onto the running shadow length). */
     const span = (node: ts.Node, prefixLength: number): ScopeLine['segments'][number] => ({
@@ -683,11 +703,69 @@ function scopeLineFor(
             segments: [span(declaration.name, keywordOffset)],
         })
     }
-    const prefix = `${keyword} ${name}${annotation} = (`
+    /* Mirror `wrapSeed` (desugarSignals): a bare (non-thunk) seed is normalised to `() => (seed)`,
+       made ASYNC when it carries a top-level `await` — so `computed(await load())` projects as a
+       legal async thunk instead of a raw top-level await (`(await load())()` — a build-breaker that
+       also mis-called the resolved value). A literal thunk passes through unchanged. `$$cellValue`
+       then invokes it and unwraps a promise/stream to the value a bare read peeks, so an async or
+       stream seed types as its RESOLVED value (`Promise<T>` → `T`) rather than the raw promise. */
+    const fnIsThunk = ts.isArrowFunction(fn) || ts.isFunctionExpression(fn)
+    const wrapPrefix = fnIsThunk ? '' : seedIsAsync(fn) ? 'async () => (' : '() => ('
+    const wrapSuffix = fnIsThunk ? '' : ')'
+    const prefix = `${keyword} ${name}${annotation} = $$cellValue(${wrapPrefix}`
     return withCalleeRef({
-        text: `${prefix}${verbatim(fn)})();`,
+        text: `${prefix}${verbatim(fn)}${wrapSuffix});`,
         segments: [span(declaration.name, keywordOffset), span(fn, prefix.length)],
     })
+}
+
+/* True for a `computed`/`linked` seed that `wrapSeed` (desugarSignals) turns into an ASYNC thunk —
+   a thunk the author wrote `async`, or a bare seed carrying a top-level `await` (`computed(await
+   x)`). The shadow must agree so it unwraps the promise to the resolved value AND so the top-level
+   await scan spares the seed. Stops at function boundaries — an inner `async` callback is its own
+   scope, mirroring `hasTopLevelAwait`. */
+function seedIsAsync(seed: ts.Expression): boolean {
+    if (ts.isArrowFunction(seed) || ts.isFunctionExpression(seed)) {
+        return (
+            ts
+                .getModifiers(seed)
+                ?.some((modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword) ?? false
+        )
+    }
+    return expressionHasTopLevelAwait(seed)
+}
+
+/* True when `node` contains an `await` at its own top level — not nested inside a function. The
+   seed-classification counterpart to `collectTopLevelAwaitDiagnostics`' walk; kept local so the
+   shadow doesn't reach into `desugarSignals`' private `hasTopLevelAwait`. */
+function expressionHasTopLevelAwait(node: ts.Node): boolean {
+    let found = false
+    const visit = (child: ts.Node): void => {
+        if (found || isFunctionScopeBoundary(child)) {
+            return
+        }
+        if (ts.isAwaitExpression(child)) {
+            found = true
+            return
+        }
+        ts.forEachChild(child, visit)
+    }
+    visit(node)
+    return found
+}
+
+/* A node that opens its own (possibly async) function scope — awaits inside it are the author's
+   concern, so both the top-level-await walk and the seed classifier stop descending here. */
+function isFunctionScopeBoundary(node: ts.Node): boolean {
+    return (
+        ts.isFunctionDeclaration(node) ||
+        ts.isFunctionExpression(node) ||
+        ts.isArrowFunction(node) ||
+        ts.isMethodDeclaration(node) ||
+        ts.isGetAccessorDeclaration(node) ||
+        ts.isSetAccessorDeclaration(node) ||
+        ts.isConstructorDeclaration(node)
+    )
 }
 
 /* Whether any ELEMENT in the tree carries an `attach` — gates emitting the DOM-typed
