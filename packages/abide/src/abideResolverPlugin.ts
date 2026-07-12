@@ -10,6 +10,7 @@ import { escapeRegex } from './lib/shared/escapeRegex.ts'
 import { fileStem } from './lib/shared/fileStem.ts'
 import { jsonSchemaForPromptArguments } from './lib/shared/jsonSchemaForPromptArguments.ts'
 import { manifestModule } from './lib/shared/manifestModule.ts'
+import { PROXIED_SERVER_SUBDIRS } from './lib/shared/PROXIED_SERVER_SUBDIRS.ts'
 import { pageUrlForFile } from './lib/shared/pageUrlForFile.ts'
 import { parsePromptMarkdown } from './lib/shared/parsePromptMarkdown.ts'
 import { prepareRpcModule } from './lib/shared/prepareRpcModule.ts'
@@ -193,8 +194,14 @@ export function abideResolverPlugin({
     see them; the kept rpc module (proxied) is exempted so its dead handler imports don't
     reject before DCE.
     */
+    /* Absolute proxied-server dirs, derived from the shared PROXIED_SERVER_SUBDIRS authority so this
+       resolver and the dev orchestrator's changeAffectsClient classify the same set — adding a
+       proxied dir is one edit there, not a silent lockstep across both. */
+    const proxiedServerDirPrefixes = PROXIED_SERVER_SUBDIRS.map(
+        (subdir) => `${serverDir}/${subdir}/`,
+    )
     const isProxiedServerModule = (path: string): boolean =>
-        path.startsWith(`${rpcDir}/`) || path.startsWith(`${socketsDir}/`)
+        proxiedServerDirPrefixes.some((prefix) => path.startsWith(prefix))
     const isServerOnlyModule = (path: string): boolean =>
         path.startsWith(`${serverDir}/`) && !isProxiedServerModule(path)
     const showPath = (path: string): string =>

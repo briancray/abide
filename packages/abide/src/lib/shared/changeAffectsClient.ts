@@ -1,3 +1,5 @@
+import { PROXIED_SERVER_SUBDIRS } from './PROXIED_SERVER_SUBDIRS.ts'
+
 /*
 Classifies a watcher change (a path relative to the project's `src/`, with
 either OS separator) by whether it can alter the client bundle. The dev
@@ -26,10 +28,13 @@ full rebuild rather than risking a stale client.
 */
 export function changeAffectsClient(relativePath: string): boolean {
     const path = relativePath.split('\\').join('/')
-    const serverOnly =
-        path.startsWith('server/rpc/') ||
-        path.startsWith('server/sockets/') ||
-        path.startsWith('mcp/') ||
-        path === 'server/config.ts'
+    /* The proxied server dirs (rpc/sockets) ship path-derived stubs, so a body edit can't change the
+       client bundle. Read from the shared PROXIED_SERVER_SUBDIRS authority so this stays in lockstep
+       with the resolver's side-classifier. mcp/** and server/config.ts are additional server-only
+       skips specific to this classifier (not proxied — never imported by the client at all). */
+    const proxiedServerOnly = PROXIED_SERVER_SUBDIRS.some((subdir) =>
+        path.startsWith(`server/${subdir}/`),
+    )
+    const serverOnly = proxiedServerOnly || path.startsWith('mcp/') || path === 'server/config.ts'
     return !serverOnly
 }
