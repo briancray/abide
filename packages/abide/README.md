@@ -34,17 +34,14 @@ import { json } from '@abide/abide/server/json'
 import { z } from 'zod'
 import { load } from '$server/db.ts'
 
-export const getMessages = GET(
-    (args) => json(load(args.channel, args.limit)),
-    {
-        schemas: {
-            input: z.object({
-                channel: z.string().default('general'),
-                limit: z.number().max(100).default(20),
-            }),
-        },
+export const getMessages = GET((args) => json(load(args.channel, args.limit)), {
+    schemas: {
+        input: z.object({
+            channel: z.string().default('general'),
+            limit: z.number().max(100).default(20),
+        }),
     },
-)
+})
 ```
 
 One declaration, five surfaces:
@@ -56,10 +53,10 @@ One declaration, five surfaces:
     ▼           ▼              ▼              ▼             ▼
  SSR call   browser fetch   MCP tool      CLI subcmd   OpenAPI op
  (bare,     (same call,     (read-only    abide-cli    /openapi.json
-  in-proc)   swap to fetch)  from schema)  getMessages
+  in-proc)   swap to fetch)  from type)    getMessages
 ```
 
-A schema unlocks the CLI on any RPC, and MCP for read-only methods (`GET`/`HEAD`). A mutating method never auto-exposes to MCP — it opts in explicitly:
+A typed input unlocks the CLI on any RPC, and MCP for read-only methods (`GET`/`HEAD`) — the handler's input type is projected to JSON Schema at build (ADR-0030), so a plainly-typed handler auto-exposes with no hand-written `schemas.input` (declaring one adds runtime validation on top, it isn't what flips the surfaces on). A mutating method never auto-exposes to MCP — it opts in explicitly:
 
 ```ts
 // src/server/rpc/sendMessage.ts
@@ -68,13 +65,10 @@ import { json } from '@abide/abide/server/json'
 import { z } from 'zod'
 import { append } from '$server/db.ts'
 
-export const sendMessage = POST(
-    (args) => json(append(args.channel, args.body)),
-    {
-        schemas: { input: z.object({ channel: z.string(), body: z.string() }) },
-        clients: { mcp: true }, // a mutating RPC must opt into MCP by hand
-    },
-)
+export const sendMessage = POST((args) => json(append(args.channel, args.body)), {
+    schemas: { input: z.object({ channel: z.string(), body: z.string() }) },
+    clients: { mcp: true }, // a mutating RPC must opt into MCP by hand
+})
 ```
 
 Consume forms are isomorphic. The **bare call `fn(args)` is the smart read** — cached, coalesced, reactive, resolved in-process during SSR and over `fetch` in the browser (there is no `cache()` wrapper; the bare call carries the caching). Alongside it: `fn.raw(args, init?)` for the raw `Response`, and the mutators/probes `fn.refresh()`, `fn.patch(...)`, `fn.peek()`, `fn.pending()`, `fn.refreshing()`, and `fn.error()`. A streaming handler (`jsonl`/`sse`) makes the bare call return a `Subscribable` you iterate.
@@ -101,7 +95,9 @@ Publish with `chat.publish(frame)`; seed a late reader with `chat.tail(count)`. 
 
 ## Components
 
-A `.abide` component is HTML with a leading `<script>`. The example below is one page that imports the RPC and socket above and exercises the whole template grammar. Reactive primitives are imported by their own module paths and called bare: `state(0)` is a writable cell (read/write via `.value`), `state.computed(fn)` is read-only derived, `state.linked(fn)` is writable and reseeded from a thunk. `watch(source, handler)` is the single reaction primitive — over a cell, a socket, or an RPC. `props()` is the ambient prop reader (no import).
+A `.abide` component is HTML with a leading `<script>`. The example below is one page that imports the RPC and socket above and exercises the whole template grammar. Reactive primitives are imported by their own module paths and called bare: `state(0)` is a writable cell you read and reassign as a plain variable (`count`, `count += 1`) — the compiler desugars those to the cell's `.value`; `state.computed(fn)` is read-only derived, `state.linked(fn)` is writable and reseeded from a thunk. `watch(source, handler)` is the single reaction primitive — over a cell, a socket, or an RPC. `props()` is the prop reader, imported from `abide/ui/props`.
+
+Async data has no ceremony: **the bare call in an interpolation — `{getMessages({ limit })}` — is the way to read it.** It's a _peek_ that reads `undefined` while pending (and auto-streams on SSR), so it composes with `?? fallback`, `?.`, `{#if}`, and attributes with no wrapping block; pair it with the `.pending()` / `.error()` probes for loading and error affordances, and use `{await getMessages(...)}` to block SSR until the value is in the initial HTML. The `{#await}…{:then}…{:catch}…{:finally}…{/await}` block is the explicit opt-in — reach for it only when you want a distinct pending branch, a local `{:catch}`, or `{:then}` type-narrowing.
 
 ```html
 <script>
@@ -112,32 +108,35 @@ import MessageCard from '$ui/components/MessageCard.abide'
 import { state } from '@abide/abide/ui/state'
 import { watch } from '@abide/abide/ui/watch'
 import { html } from '@abide/abide/ui/html'
+import { props } from '@abide/abide/ui/props'
 
 const { title = 'Chat', ...rest } = props()
+
+type Message = { id: string; author: string; body: string }
 
 let channel = state('general')
 let draft = state('')
 let pinned = state(false)
 let limit = state(20)
 
-let trimmed = state.computed(() => draft.value.trim())
-let live = state.linked(() => limit.value)
+let trimmed = state.computed(() => draft.trim())
+let live = state.linked(() => limit)
 
 const badge = html`<sup class="ml-1 text-xs text-emerald-600">live</sup>`
 
 watch(trimmed, (value) => console.log('draft is now', value))
 watch(chat, (frame) => {
-    live.value = live.value + 1
+    live = live + 1
 })
 
-async function submit(event) {
+async function submit(event: SubmitEvent) {
     event.preventDefault()
-    if (trimmed.value === '') return
-    await sendMessage({ channel: channel.value, body: trimmed.value })
-    draft.value = ''
+    if (trimmed === '') return
+    await sendMessage({ channel, body: trimmed })
+    draft = ''
 }
 
-function autofocus(node) {
+function autofocus(node: HTMLInputElement) {
     node.focus()
     return () => {}
 }
@@ -145,11 +144,11 @@ function autofocus(node) {
 const rowProps = { class: 'flex gap-2' }
 
 // Derived two-way binding: read a string, coerce writes back into the numeric cell.
-const get = () => String(limit.value)
-const set = (next) => (limit.value = Number(next))
+const get = () => String(limit)
+const set = (next: string) => (limit = Number(next))
 </script>
 
-<section {...rest} class:pinned={pinned.value} style:opacity={pinned.value ? '1' : '0.85'}>
+<section {...rest} class:pinned={pinned} style:opacity={pinned ? '1' : '0.85'}>
     <h1>{title} {badge}</h1>
 
     <form onsubmit={submit}>
@@ -161,28 +160,39 @@ const set = (next) => (limit.value = Number(next))
         <button type="submit">Send</button>
     </form>
 
-    {#snippet row(message, index)}
+    {#snippet row(message: Message, index: number)}
         <MessageCard {...rowProps} name={message.author} onclick={() => console.log(index)}>
             <p>{message.body}</p>
         </MessageCard>
     {/snippet}
 
-    {#if live.value > 100}
+    {#if live > 100}
         <p>Busy channel</p>
-    {:else if live.value > 0}
-        <p>{live.value} updates</p>
+    {:else if live > 0}
+        <p>{live} updates</p>
     {:else}
         <script>
             let seenAt = state(Date.now())
-            let ageLabel = state.computed(() => `waiting since ${seenAt.value}`)
+            let ageLabel = state.computed(() => `waiting since ${seenAt}`)
         </script>
         <style>
             p { color: gray; }
         </style>
-        <p>{ageLabel.value}</p>
+        <p>{ageLabel}</p>
     {/if}
 
-    {#await getMessages({ limit: limit.value })}
+    <!-- The default: a bare peek — `undefined` while pending, composes with `?.`/`??`; probes for affordances. -->
+    <p>
+        {getMessages({ limit })?.length ?? 0} messages
+        {#if getMessages.pending({ limit })} · loading…{/if}
+        {#if getMessages.error({ limit })} · failed{/if}
+    </p>
+
+    <!-- {await fn()} blocks SSR so the value is in the initial HTML (no streamed/pending pass). -->
+    <p>newest: {await getMessages({ limit }).then((list) => list.at(-1)?.author ?? '—')}</p>
+
+    <!-- The explicit opt-in: a distinct pending branch, a local {:catch}, and {:then} narrowing. -->
+    {#await getMessages({ limit })}
         <p>Loading…</p>
     {:then messages}
         {#for message, i of messages by message.id}
@@ -198,7 +208,7 @@ const set = (next) => (limit.value = Number(next))
         <p class="text-sm opacity-70">{frame.author}: {frame.body}</p>
     {/for}
 
-    {#switch channel.value}
+    {#switch channel}
         {:case 'general'}
             <span>General channel</span>
         {:case 'random'}
@@ -230,15 +240,15 @@ The capitalised `MessageCard` renders its passed content where it calls `{childr
 
 ```html
 <script>
-const { name, ...rest } = props()
+    import { props } from '@abide/abide/ui/props'
+    import type { Snippet } from '@abide/abide/shared/snippet'
+    const { name, children, ...rest } = props<{ name: string; children?: Snippet }>()
 </script>
 
 <article {...rest}>
     <strong>{name}</strong>
-    {#if children}
-        {children()}
-    {:else}
-        <em>No content</em>
+    {#if children} {children()} {:else}
+    <em>No content</em>
     {/if}
 </article>
 ```
