@@ -25,7 +25,8 @@ const LEADING_KEYWORD = /^\s*(\S+)/
    literally cannot accept a keyword the vocabulary omits (closing the `{#snippet}`-style
    drift class). A `{:` connector keys off its first word (`else if` → `else`). */
 const OPENER_SET = new Set<string>(BLOCK_OPENERS)
-const CONNECTOR_SET = new Set<string>(BLOCK_CONNECTORS.map((connector) => connector.split(' ')[0]))
+// biome-ignore lint/style/noNonNullAssertion: every BLOCK_CONNECTORS entry is a non-empty string, so split(' ')[0] is defined
+const CONNECTOR_SET = new Set<string>(BLOCK_CONNECTORS.map((connector) => connector.split(' ')[0]!))
 
 /* The reporter each module-level helper receives so it can record a diagnostic against
    the closure's accumulator instead of throwing. */

@@ -17,7 +17,8 @@ unchanged — no caller/type ripple, and the golden corpus stays byte-identical.
 export function parseTemplate(source: string, baseOffset = 0): { nodes: TemplateNode[] } {
     const { nodes, diagnostics } = parseTemplateRecovering(source, baseOffset)
     if (diagnostics.length > 0) {
-        const first = diagnostics[0]
+        // biome-ignore lint/style/noNonNullAssertion: length > 0 guarantees diagnostics[0] is defined
+        const first = diagnostics[0]!
         throw new AbideCompileError(first.message, first.start)
     }
     return { nodes }
