@@ -1,5 +1,11 @@
 # abide
 
+## 0.50.1
+
+### Patch Changes
+
+- ef143f5: regenerate README + AGENTS surface map ([`8665efa`](https://github.com/briancray/abide/commit/8665efa7eb9f4106882cf246738c08e465d7e8d7))
+
 ## 0.50.0
 
 ### Minor Changes
