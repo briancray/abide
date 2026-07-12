@@ -1,103 +1,89 @@
 # abide
 
-**One typed declaration, every surface: an RPC you write once fans out to HTTP,
-a CLI, an MCP tool, and an OpenAPI operation — and the same callable runs
-in-process on the server and over fetch in the browser.**
+**One typed declaration, every surface: SSR, browser fetch, MCP, CLI, and OpenAPI from a single Bun runtime.**
 
-abide is an isomorphic multimodal HTTP framework built for humans and machines
-in a single Bun runtime: file-path routing, Standard Schema validation, and a
-compiled `.abide` UI layer that server-renders, streams, and hydrates the same
-components. The bundler swaps each callable's runtime per side — same name,
-same behavior, no client/server forks in app code.
+abide is an isomorphic HTTP framework where a typed RPC you declare once fans out to an in-process SSR call, a browser fetch, an MCP tool, a CLI subcommand, and an OpenAPI operation — the bundler swaps the runtime per side, so the same callable behaves the same in-process on the server and over `fetch` in the browser. It is built for humans and machines: the same schema that types your code projects the tool, the flag, and the spec.
 
-- One direct dependency (TypeScript). One runtime (Bun ≥ 1.3).
+- One direct dependency (TypeScript), one runtime (Bun ≥ 1.3.0).
+- No barrels — every public name is its own module path (`@abide/abide/server/GET`, `@abide/abide/ui/state`, …). The namespace marks the side: `server/*` runs server-side, `ui/*` client-side, `shared/*` isomorphic.
 
 ## Quick start
 
 ```sh
-bunx abide scaffold my-app   # scaffolds, installs, and starts the dev server
+# Scaffold a project from the bundled template, install it, and start dev.
+bunx abide scaffold my-app
 ```
 
-Or run the kitchen-sink example, which demos the full surface:
+Or clone the kitchen-sink example, which exercises the whole surface:
 
 ```sh
 git clone https://github.com/briancray/abide
-cd abide && bun install
-cd examples/kitchen-sink && bun run dev
+cd abide/examples/kitchen-sink
+bun install
+bun run dev
 ```
 
 ## RPCs
 
-An RPC is one exported handler per file under `src/server/rpc/` — the file path
-is the URL. The export wraps the handler in an HTTP-method helper (`GET`,
-`POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`); a Standard Schema `schemas.input`
-(zod, valibot, arktype — no adapter) validates the args and projects the CLI
-flags, the MCP tool, and the OpenAPI operation from the one declaration.
+An RPC is one export per file under `src/server/rpc/`. The file path is the URL; the declared method helper (`GET`/`POST`/`PUT`/`PATCH`/`DELETE`/`HEAD`) picks the verb. Attach a `schemas.input` (any Standard Schema — zod, valibot, or arktype, unadapted) and the same schema validates the args and projects the MCP tool, the CLI flags, and the OpenAPI operation.
 
 ```ts
 // src/server/rpc/getMessages.ts
 import { GET } from '@abide/abide/server/GET'
 import { json } from '@abide/abide/server/json'
 import { z } from 'zod'
-import { listMessages } from '$server/store'
+import { load } from '$server/db.ts'
 
 export const getMessages = GET(
-    async ({ room, limit }) => json(await listMessages(room, limit)),
+    (args) => json(load(args.channel, args.limit)),
     {
         schemas: {
             input: z.object({
-                room: z.string(),
-                limit: z.coerce.number().default(50),
+                channel: z.string().default('general'),
+                limit: z.number().max(100).default(20),
             }),
         },
     },
 )
 ```
 
-That one file fans out:
+One declaration, five surfaces:
 
 ```text
-src/server/rpc/getMessages.ts
-      │
-      ├─ SSR / server   await getMessages({ room })  in-process, no HTTP
-      ├─ browser        await getMessages({ room })   typed fetch proxy
-      ├─ HTTP           GET /rpc/getMessages?room=…
-      ├─ CLI            my-app get-messages --room …
-      ├─ MCP            tool: get-messages
-      └─ OpenAPI        operation in /openapi.json
+            export const getMessages = GET(fn, { schemas })
+                               │
+    ┌───────────┬──────────────┼──────────────┬─────────────┐
+    ▼           ▼              ▼              ▼             ▼
+ SSR call   browser fetch   MCP tool      CLI subcmd   OpenAPI op
+ (bare,     (same call,     (read-only    abide-cli    /openapi.json
+  in-proc)   swap to fetch)  from schema)  getMessages
 ```
 
-A schema is the gate: it unlocks the CLI, and — for read-only methods
-(GET/HEAD) — the MCP tool. A mutating method (POST/PUT/PATCH/DELETE) never
-auto-exposes to MCP; it needs an explicit `clients: { mcp: true }`.
+A schema unlocks the CLI on any RPC, and MCP for read-only methods (`GET`/`HEAD`). A mutating method never auto-exposes to MCP — it opts in explicitly:
 
-The bare call **is** the smart read — cached, coalesced, reactive,
-stale-while-revalidate — and it is isomorphic: the same callable resolves
-in-process during SSR (its value baked into the HTML for warm hydration) and
-over `fetch` in the browser. Around it:
+```ts
+// src/server/rpc/sendMessage.ts
+import { POST } from '@abide/abide/server/POST'
+import { json } from '@abide/abide/server/json'
+import { z } from 'zod'
+import { append } from '$server/db.ts'
 
-- `getMessages.raw(args, init?)` — the raw `Response`; per-call transport
-  options (`signal`, `headers`, …) live here
-- `getMessages.refresh(args?)` — refetch, keeping the stale value visible
-- `getMessages.patch(args?, updater)` — mutate the retained value locally,
-  no network
-- `getMessages.peek(args?)` — read the retained value synchronously
-- `getMessages.pending(args?)` / `.refreshing(args?)` / `.error(args?)` —
-  reactive probes
-- a handler that returns `jsonl()`/`sse()` makes the bare call return a
-  `NamedAsyncIterable` you `for await` — detected at build time, nothing to declare
+export const sendMessage = POST(
+    (args) => json(append(args.channel, args.body)),
+    {
+        schemas: { input: z.object({ channel: z.string(), body: z.string() }) },
+        clients: { mcp: true }, // a mutating RPC must opt into MCP by hand
+    },
+)
+```
 
-> Query args travel as strings — use `z.coerce.*` for numbers and booleans on
-> GET/HEAD. The per-RPC `timeout` option is a server-side handler deadline
-> (504, enforced on every surface); `ABIDE_CLIENT_TIMEOUT` bounds browser calls
-> and is separate.
+Consume forms are isomorphic. The **bare call `fn(args)` is the smart read** — cached, coalesced, reactive, resolved in-process during SSR and over `fetch` in the browser (there is no `cache()` wrapper; the bare call carries the caching). Alongside it: `fn.raw(args, init?)` for the raw `Response`, and the mutators/probes `fn.refresh()`, `fn.patch(...)`, `fn.peek()`, `fn.pending()`, `fn.refreshing()`, and `fn.error()`. A streaming handler (`jsonl`/`sse`) makes the bare call return a `Subscribable` you iterate.
+
+> Query and path args auto-coerce from the endpoint's typed shape — a numeric field arrives as a number, no `z.coerce` needed. The per-RPC `timeout` (a 504 on every surface) is distinct from the client-wide `ABIDE_CLIENT_TIMEOUT`.
 
 ## Sockets
 
-A socket is one broadcast topic per file under `src/server/sockets/` — the
-export name is the topic. A `Socket<T>` is an isomorphic `AsyncIterable<T>`:
-server code iterates and broadcasts in-process; browser code gets the same
-shape over one multiplexed WebSocket at `/__abide/sockets`.
+A socket is one broadcast topic per file under `src/server/sockets/`. A `Socket<T>` is an isomorphic `AsyncIterable<T>` — the same value you `for await` on both sides — and every socket multiplexes onto one WebSocket at `/__abide/sockets`.
 
 ```ts
 // src/server/sockets/chat.ts
@@ -105,184 +91,156 @@ import { socket } from '@abide/abide/server/socket'
 import { z } from 'zod'
 
 export const chat = socket({
-    schema: z.object({ author: z.string(), text: z.string() }),
-    tail: 50, // retain the last 50 frames for late joiners (default 1)
-    ttl: 60_000, // retained frames expire after a minute
-    clientPublish: true, // allow browser publishes (off by default)
+    schema: z.object({ author: z.string(), body: z.string() }),
+    tail: 20, // retain the last 20 frames for late joiners and reconnects
+    ttl: 60_000, // evict retained frames older than 60s
 })
 ```
 
-`chat.publish(msg)` publishes from either side — schema-validated on the
-server, and client publishes are gated by `clientPublish`. `for await (const
-msg of chat)` is the live stream; `chat.peek()` reads the latest retained
-frame; `chat.refresh()` re-pulls the server tail after a reconnect. A schema
-also advertises the topic to MCP and the CLI.
-
-Every exposed socket has an HTTP face at `/__abide/sockets/<name>`: `GET`
-returns the retained tail as JSON (or a live SSE stream under
-`Accept: text/event-stream`), `POST` publishes — gated by `clientPublish`.
+Publish with `chat.publish(frame)`; seed a late reader with `chat.tail(count)`. Each socket also has an HTTP face at `/__abide/sockets/<name>`: `GET` returns the retained tail, and `POST` publishes when `clientPublish` is set.
 
 ## Components
 
-Pages are `.abide` single-file components under `src/ui/pages/` (`page.abide` /
-`layout.abide`; a `[id]` folder becomes a route param read via `props()`). A
-component is HTML plus `{expr}` bindings and `{#…}` control-flow blocks.
-Reactive state comes from imported primitives the compiler lowers, so inside a
-component you read and write state as plain variables. The same file renders on
-the server — blocking awaits inline, streaming awaits out of order, cached
-reads seeded warm — and hydrates in the browser.
-
-Nested content becomes the component's `children` prop — an ordinary declared
-prop of type `Snippet` — and renders wherever the component calls
-`{children()}`:
+A `.abide` component is HTML with a leading `<script>`. The example below is one page that imports the RPC and socket above and exercises the whole template grammar. Reactive primitives are imported by their own module paths and called bare: `state(0)` is a writable cell (read/write via `.value`), `state.computed(fn)` is read-only derived, `state.linked(fn)` is writable and reseeded from a thunk. `watch(source, handler)` is the single reaction primitive — over a cell, a socket, or an RPC. `props()` is the ambient prop reader (no import).
 
 ```html
 <script>
-    import { props } from '@abide/abide/ui/props'
-    import type { Snippet } from '@abide/abide/shared/snippet'
+import { getMessages } from '$server/rpc/getMessages.ts'
+import { sendMessage } from '$server/rpc/sendMessage.ts'
+import { chat } from '$server/sockets/chat.ts'
+import MessageCard from '$ui/components/MessageCard.abide'
+import { state } from '@abide/abide/ui/state'
+import { watch } from '@abide/abide/ui/watch'
+import { html } from '@abide/abide/ui/html'
 
-    const { title, children } = props<{ title: string; children?: Snippet }>()
+const { title = 'Chat', ...rest } = props()
+
+let channel = state('general')
+let draft = state('')
+let pinned = state(false)
+let limit = state(20)
+
+let trimmed = state.computed(() => draft.value.trim())
+let live = state.linked(() => limit.value)
+
+const badge = html`<sup class="ml-1 text-xs text-emerald-600">live</sup>`
+
+watch(trimmed, (value) => console.log('draft is now', value))
+watch(chat, (frame) => {
+    live.value = live.value + 1
+})
+
+async function submit(event) {
+    event.preventDefault()
+    if (trimmed.value === '') return
+    await sendMessage({ channel: channel.value, body: trimmed.value })
+    draft.value = ''
+}
+
+function autofocus(node) {
+    node.focus()
+    return () => {}
+}
+
+const rowProps = { class: 'flex gap-2' }
+
+// Derived two-way binding: read a string, coerce writes back into the numeric cell.
+const get = () => String(limit.value)
+const set = (next) => (limit.value = Number(next))
 </script>
 
-<section>
-    <h2>{title}</h2>
-    {#if children}{children()}{:else}<p>Nothing here yet.</p>{/if}
+<section {...rest} class:pinned={pinned.value} style:opacity={pinned.value ? '1' : '0.85'}>
+    <h1>{title} {badge}</h1>
+
+    <form onsubmit={submit}>
+        <input bind:value={draft} attach={autofocus} placeholder="Say something" />
+        <label><input type="checkbox" bind:checked={pinned} /> pin</label>
+        <label><input type="radio" bind:group={channel} value="general" /> general</label>
+        <label><input type="radio" bind:group={channel} value="random" /> random</label>
+        <input bind:value={{ get, set }} />
+        <button type="submit">Send</button>
+    </form>
+
+    {#snippet row(message, index)}
+        <MessageCard {...rowProps} name={message.author} onclick={() => console.log(index)}>
+            <p>{message.body}</p>
+        </MessageCard>
+    {/snippet}
+
+    {#if live.value > 100}
+        <p>Busy channel</p>
+    {:else if live.value > 0}
+        <p>{live.value} updates</p>
+    {:else}
+        <script>
+            let seenAt = state(Date.now())
+            let ageLabel = state.computed(() => `waiting since ${seenAt.value}`)
+        </script>
+        <style>
+            p { color: gray; }
+        </style>
+        <p>{ageLabel.value}</p>
+    {/if}
+
+    {#await getMessages({ limit: limit.value })}
+        <p>Loading…</p>
+    {:then messages}
+        {#for message, i of messages by message.id}
+            {row(message, i)}
+        {/for}
+    {:catch problem}
+        <p>Failed: {problem.message}</p>
+    {:finally}
+        <hr />
+    {/await}
+
+    {#for await frame of chat}
+        <p class="text-sm opacity-70">{frame.author}: {frame.body}</p>
+    {/for}
+
+    {#switch channel.value}
+        {:case 'general'}
+            <span>General channel</span>
+        {:case 'random'}
+            <span>Random channel</span>
+        {:default}
+            <span>Unknown channel</span>
+    {/switch}
+
+    {#try}
+        <MessageCard name="system">
+            <p>System notice</p>
+        </MessageCard>
+    {:catch}
+        <p>Card crashed</p>
+    {:finally}
+        <span class="sr-only">done</span>
+    {/try}
 </section>
 
 <style>
     section {
-        border: 1px solid gray;
+        display: grid;
+        gap: 0.5rem;
     }
 </style>
 ```
 
-And one page tying together the RPC from above, the socket, and the whole
-template grammar:
+The capitalised `MessageCard` renders its passed content where it calls `{children()}`. The `<slot>` element was removed — `{children()}` is the single fill point, and `{#if children}{children()}{:else}…{/if}` is the fallback form.
 
 ```html
 <script>
-    import { getMessages } from '$server/rpc/getMessages'
-    import { sendMessage } from '$server/rpc/sendMessage' // POST, declared like getMessages
-    import { chat } from '$server/sockets/chat'
-    import { state } from '@abide/abide/ui/state'
-    import { watch } from '@abide/abide/ui/watch'
-    import { html } from '@abide/abide/ui/html'
-    import { props } from '@abide/abide/ui/props'
-    import Panel from '$ui/components/Panel.abide'
-
-    const { room = 'lobby' } = props<{ room?: string }>()
-
-    let draft = state('')
-    let author = state('anon')
-    let tone = state('friendly')
-    let notify = state(true)
-    let volume = state(5, (next, previous) => (Number.isFinite(next) ? next : previous))
-    let shout = state.computed(() => draft.toUpperCase())
-    let roomDraft = state.linked(() => room)
-
-    // watch is the one reaction primitive: a socket, an rpc, or a tracked thunk.
-    watch(chat, () => getMessages.refresh({ room }))
-    watch(() => console.log(author, tone))
-
-    // a writable computed lives at the binding: bind:value={{ get, set }}
-    const get = () => draft.trim()
-    const set = (next) => (draft = next)
-
-    const focus = (element) => element.focus()
-    const panelProps = { title: 'Live feed' }
-    const draftAttrs = { placeholder: 'say something', autocomplete: 'off' }
-
-    async function send() {
-        await sendMessage({ room: roomDraft, author, text: draft })
-        draft = ''
-    }
+const { name, ...rest } = props()
 </script>
 
-{#snippet line(message)}
-    <li>{message.author}: {message.text}</li>
-{/snippet}
-
-<Panel {...panelProps}>
-    <h1 class:muted={!notify} style:opacity={notify ? '1' : '0.6'}>
-        {room} — {shout}
-    </h1>
-
-    <!-- {await expr} awaits inline (blocking); a Promise-typed {expr} would stream -->
-    <p>total messages: {await getMessages({ room }).then((all) => all.length)}</p>
-
-    {#await getMessages({ room })}
-        <p>loading…</p>
-    {:then messages}
-        {#if messages.length === 0}
-            <p>No messages yet.</p>
-        {:else if messages.length < 100}
-            <ul>
-                {#for message, i of messages by message.id}
-                    {line(message)}
-                {/for}
-            </ul>
-        {:else}
-            <script>
-                // branch-local state, re-seeded each time this branch mounts
-                let offset = state(0)
-            </script>
-            <p>huge room — showing from {offset}</p>
-            <button onclick={() => (offset = offset + 100)}>next</button>
-            <style>
-                p {
-                    font-variant-numeric: tabular-nums;
-                }
-            </style>
-        {/if}
-    {:catch error}
-        <p>failed to load: {error.message}</p>
-    {:finally}
-        <p>checked just now</p>
-    {/await}
-
-    <ol>
-        {#for await message of chat}
-            {line(message)}
-        {/for}
-    </ol>
-
-    {#switch tone}
-        {:case 'friendly'}
-            <p>{html`<em>be&nbsp;kind</em>`}</p>
-        {:default}
-            <p>say anything</p>
-    {/switch}
-
-    {#try}
-        <p>{JSON.parse(draft).summary}</p>
-    {:catch}
-        <p>draft isn't JSON yet</p>
-    {/try}
-
-    <form onsubmit={(event) => { event.preventDefault(); send() }}>
-        <input attach={focus} bind:value={draft} {...draftAttrs} />
-        <input bind:value={{ get, set }} />
-        <label><input type="checkbox" bind:checked={notify} /> notify</label>
-        <label><input type="radio" bind:group={tone} value="friendly" /> friendly</label>
-        <label><input type="radio" bind:group={tone} value="blunt" /> blunt</label>
-        <input type="range" bind:value={volume} min="0" max="10" />
-        <select bind:value={author}>
-            <option>anon</option>
-            <option>me</option>
-        </select>
-        <button disabled={draft === ''}>send</button>
-    </form>
-</Panel>
-
-<style>
-    form {
-        display: flex;
-        gap: 0.5rem;
-    }
-    .muted {
-        color: gray;
-    }
-</style>
+<article {...rest}>
+    <strong>{name}</strong>
+    {#if children}
+        {children()}
+    {:else}
+        <em>No content</em>
+    {/if}
+</article>
 ```
 
 MIT
