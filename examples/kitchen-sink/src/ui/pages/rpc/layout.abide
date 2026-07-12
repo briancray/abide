@@ -16,6 +16,7 @@ const subpages = [
     { href: '/rpc/respond', label: 'response helpers' },
     { href: '/rpc/streaming', label: 'jsonl / sse' },
     { href: '/rpc/request-scope', label: 'request scope' },
+    { href: '/rpc/render', label: 'render' },
 ]
 
 const pillClass = (href: string) =>

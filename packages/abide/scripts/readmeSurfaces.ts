@@ -50,7 +50,7 @@ const INTERNAL_ROUTES = new Set([
    reported as ungrouped. */
 const SECTION_GROUPS: Record<string, string[]> = {
     'beyond the browser': ['agent', 'bundle', 'cli', 'mcp'],
-    'build the server': ['configuration', 'request-scope', 'response', 'rpc', 'sockets'],
+    'build the server': ['configuration', 'request-scope', 'response', 'render', 'rpc', 'sockets'],
     'build the ui': [
         'templating',
         'cache',

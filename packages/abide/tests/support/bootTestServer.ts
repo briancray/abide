@@ -3,6 +3,7 @@ import type { McpServer } from '../../src/lib/mcp/types/McpServer.ts'
 import type { AppModule } from '../../src/lib/server/AppModule.ts'
 import type { RemoteRoutes } from '../../src/lib/server/rpc/types/RemoteRoutes.ts'
 import { createServer } from '../../src/lib/server/runtime/createServer.ts'
+import { pageRenderSlot } from '../../src/lib/server/runtime/pageRenderSlot.ts'
 import { requestContext } from '../../src/lib/server/runtime/requestContext.ts'
 import { resolvePageSnapshot } from '../../src/lib/server/runtime/resolvePageSnapshot.ts'
 import { serverSlot } from '../../src/lib/server/runtime/serverSlot.ts'
@@ -46,6 +47,7 @@ export async function bootTestServer(manifests: {
         pageResolver: pageSlot.resolver,
         baseResolver: baseSlot.resolver,
         activeServer: serverSlot.active,
+        pageRender: pageRenderSlot.render,
     }
 
     cacheStoreSlot.resolver = () => requestContext.getStore()?.cache
@@ -78,6 +80,7 @@ export async function bootTestServer(manifests: {
         pageSlot.resolver = previous.pageResolver
         baseSlot.resolver = previous.baseResolver
         serverSlot.active = previous.activeServer
+        pageRenderSlot.render = previous.pageRender
     }
 
     return { origin: `http://localhost:${server.port}`, server, stop }

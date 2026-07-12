@@ -45,6 +45,7 @@
         "./server/sse": "./src/lib/server/sse.ts",
         "./server/error": "./src/lib/server/error.ts",
         "./server/redirect": "./src/lib/server/redirect.ts",
+        "./server/render": "./src/lib/server/render.ts",
         "./server/request": "./src/lib/server/request.ts",
         "./server/cookies": "./src/lib/server/cookies.ts",
         "./server/env": "./src/lib/server/env.ts",

@@ -39,6 +39,7 @@ import { internalErrorResponse } from './internalErrorResponse.ts'
 import { listenOnOpenPort } from './listenOnOpenPort.ts'
 import { logExposedSurfaces } from './logExposedSurfaces.ts'
 import { maybeMountInspector } from './maybeMountInspector.ts'
+import { pageRenderSlot } from './pageRenderSlot.ts'
 import { parseIdleTimeout } from './parseIdleTimeout.ts'
 import { parsePort } from './parsePort.ts'
 import { ensureRegistriesLoaded, setRegistryManifests } from './registryManifests.ts'
@@ -345,6 +346,30 @@ export async function createServer({
             /* Wire handling — classify once, mark the stream monitor, exempt
                streams from the idle timeout, gzip — lives in finalizeResponse. */
             return finalizeResponse(req, response, store, () => server.timeout(req, 0))
+        })
+    }
+
+    /*
+    Publish the in-process page-render seam for the public `render()`. It resolves
+    a synthetic GET request the same way the fetch handler resolves live app routes
+    (matchRoute → page handler / 308 redirect), then runs the matched handler
+    directly under runWithRequestScope — the page analogue of dispatchRpcInProcess,
+    so it skips app.handle middleware and wire finalization (gzip) exactly as the
+    in-process rpc seam does. A URL that resolves to no page renders the framework
+    404, matching the fetch fallback.
+    */
+    pageRenderSlot.render = (request, url) => {
+        const resolution = resolveAppRoute(request, url)
+        if (resolution.kind === 'redirect') {
+            return Promise.resolve(resolution.response)
+        }
+        if (resolution.kind === 'handler') {
+            return runWithRequestScope(request, { app, logRequests: false, url }, (store) =>
+                resolution.handler(request, resolution.params, store),
+            )
+        }
+        return runWithRequestScope(request, { app, logRequests: false, url }, async (store) => {
+            return (await renderError(404, 'Not Found', store)) ?? textResponse(404)
         })
     }
 

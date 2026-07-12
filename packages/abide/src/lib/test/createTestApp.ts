@@ -27,6 +27,7 @@ import { shell } from '../../_virtual/shell.ts'
 import { sockets } from '../../_virtual/sockets.ts'
 import { rpcRegistry } from '../server/rpc/rpcRegistry.ts'
 import { createServer } from '../server/runtime/createServer.ts'
+import { pageRenderSlot } from '../server/runtime/pageRenderSlot.ts'
 import { ensureRegistriesLoaded } from '../server/runtime/registryManifests.ts'
 import { requestContext } from '../server/runtime/requestContext.ts'
 import { resolvePageSnapshot } from '../server/runtime/resolvePageSnapshot.ts'
@@ -108,6 +109,7 @@ export async function createTestApp(): Promise<TestApp> {
         resolvedCellsResolver: resolvedCellsSlot.resolver,
         streamedCellsResolver: streamedCellsSlot.resolver,
         activeServer: serverSlot.active,
+        pageRender: pageRenderSlot.render,
     }
 
     const sharedStore = createCacheStore()
@@ -207,6 +209,7 @@ export async function createTestApp(): Promise<TestApp> {
         resolvedCellsSlot.resolver = previous.resolvedCellsResolver
         streamedCellsSlot.resolver = previous.streamedCellsResolver
         serverSlot.active = previous.activeServer
+        pageRenderSlot.render = previous.pageRender
     }
 
     return {

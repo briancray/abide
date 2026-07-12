@@ -252,6 +252,20 @@ error. The branch keyword is `{:else if}` (a space).
   `TypedResponse<never>`, accepts relative URLs, `no-store`, status restricted to
   301/302/303/307/308.
 
+### Render — @documentation render
+
+- `@abide/abide/server/render` — `render(path, params?, query?): Promise<string>` —
+  renders a page route to its HTML string in-process, through the same pipeline
+  (app.html shell, layout chain, params, inline rpc reads) an HTTP GET of that URL
+  runs, so a page stays directly linkable and its emailed form is one call away.
+  Arg shape mirrors `url()`/`navigate`: a `[name]` route takes its params first,
+  then optional query; a paramless route takes optional query directly. Renders in
+  a fresh nested request scope like an in-process rpc call — `app.handle` middleware
+  and gzip are not applied. A page baking content inline (top-level `await` /
+  blocking `{#await expr then value}`) returns complete, self-contained HTML; a
+  streaming `{#await}` page returns the shell plus trailing `<abide-resolve>`
+  fragments a browser reassembles, so use blocking awaits for a no-JS surface (email).
+
 ### Request scope — @documentation request-scope
 
 - `@abide/abide/server/request` — `request(): Request` — the in-flight inbound

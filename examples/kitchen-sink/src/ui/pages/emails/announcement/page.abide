@@ -1,0 +1,27 @@
+<script>
+import { getRelease } from '$server/rpc/getRelease.ts'
+
+/*
+A page that is both directly linkable (/emails/announcement) and rendered to a
+self-contained HTML string on the server by render() — the body you hand to an
+email sender. A blocking {#await … then} bakes its result inline during SSR, so
+the rendered string is complete with no client JS (the shape an email needs);
+a streaming {#await} (no `then`) would leave a fragment only a browser reassembles.
+*/
+</script>
+
+<div class="mx-auto flex max-w-md flex-col gap-4 rounded-lg border border-slate-200 bg-white p-8">
+    {#await getRelease() then release}
+        <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">{release.date}</p>
+        <h1 class="text-2xl font-bold text-slate-900">{release.headline}</h1>
+        <p class="text-slate-600">
+            abide <span class="font-mono">{release.version}</span> is out. Streaming cells resolve over
+            SSR with no post-hydrate flash, and independent awaits render in parallel.
+        </p>
+        <a
+            href="/templating"
+            class="mt-2 self-start rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white"
+            >Read the notes</a
+        >
+    {/await}
+</div>
