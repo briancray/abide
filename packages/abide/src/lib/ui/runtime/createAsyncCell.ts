@@ -7,6 +7,7 @@ import { streamedCellsSlot } from '../../shared/streamedCellsSlot.ts'
 import type { AsyncComputed } from '../../shared/types/AsyncComputed.ts'
 import type { AsyncState } from '../../shared/types/AsyncState.ts'
 import type { NamedAsyncIterable } from '../../shared/types/NamedAsyncIterable.ts'
+import { warmSeedKey } from '../../shared/warmSeedKey.ts'
 import { activePendingCells } from '../activePendingCells.ts'
 import type { Scope } from '../types/Scope.ts'
 import { CELL_SEED } from './CELL_SEED.ts'
@@ -64,10 +65,13 @@ export function createAsyncCell(
     const hasValueNode = createSignalNode(false)
 
     /* This cell's serialization-stable warm-seed key: its scope's render-path id + a per-scope
-       index, drawn at construction (in declaration order) so SSR and client agree on it. Undefined
-       for a detached cell (no scope) — such a cell never crosses SSR→client, so never warm-seeds. */
+       index, drawn at construction (in declaration order) so SSR and client agree on it. Minted
+       through the shared `warmSeedKey` so BOTH sides of the handoff (this same isomorphic call,
+       server-side keying `resolvedCells`/`streamedCells` and client-side reading `CELL_SEED`) form
+       the identical string from one definition. Undefined for a detached cell (no scope) — such a
+       cell never crosses SSR→client, so never warm-seeds. */
     const scope = CURRENT_SCOPE.current as (Scope & { nextCellIndex: () => number }) | undefined
-    const warmKey = scope !== undefined ? `${scope.id}:${scope.nextCellIndex()}` : undefined
+    const warmKey = scope !== undefined ? warmSeedKey(scope.id, scope.nextCellIndex()) : undefined
 
     /* `linked` write latch: a local `set()` holds the cell until the next reseed, so an
        arriving frame / settling promise never clobbers an in-progress edit. Cleared on reseed. */
