@@ -1,6 +1,6 @@
 import type { ServerWebSocket } from 'bun'
 import { abideLog } from '../../shared/abideLog.ts'
-import { decodeRefJson } from '../../shared/decodeRefJson.ts'
+import { decodeWireBody } from '../../shared/decodeWireBody.ts'
 import { encodeRefJson } from '../../shared/encodeRefJson.ts'
 import { memoizeByKey } from '../../shared/memoizeByKey.ts'
 import { messageFromError } from '../../shared/messageFromError.ts'
@@ -338,14 +338,12 @@ export function createSocketDispatcher(sockets: SocketRoutes): SocketDispatcher 
             const text = typeof data === 'string' ? data : textDecoder.decode(data)
             let frame: SocketClientFrame
             try {
-                /* ref-json from abide's own client; a non-abide client sends a plain-JSON
-                   frame, which decodeRefJson rejects (a frame is always an object, never the
-                   `[rootValue, slots]` envelope) — fall back to JSON.parse so raw WS clients work. */
-                try {
-                    frame = decodeRefJson(text) as SocketClientFrame
-                } catch {
-                    frame = JSON.parse(text) as SocketClientFrame
-                }
+                /* No header rides a ws frame, so decodeWireBody sniffs: ref-json from abide's
+                   own client, else a non-abide client's plain-JSON frame (which decodeRefJson
+                   rejects — a frame is always an object, never the `[rootValue, slots]`
+                   envelope — so it falls back to JSON.parse). A frame malformed under both
+                   codecs throws here and is dropped. */
+                frame = decodeWireBody(text, undefined) as SocketClientFrame
             } catch {
                 return
             }

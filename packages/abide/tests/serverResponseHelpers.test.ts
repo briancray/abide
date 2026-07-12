@@ -15,6 +15,7 @@ import { socket } from '../src/lib/server/socket.ts'
 import { sse } from '../src/lib/server/sse.ts'
 import { decodeResponse } from '../src/lib/shared/decodeResponse.ts'
 import { HttpError } from '../src/lib/shared/HttpError.ts'
+import { streamResponse } from '../src/lib/shared/streamResponse.ts'
 
 describe('json', () => {
     test('serializes the body with no-store by default', async () => {
@@ -136,6 +137,20 @@ describe('sse', () => {
         }
         const body = await sse(frames()).text()
         expect(body).toBe('data: {"n":1}\n\nevent: error\ndata: {"message":"boom"}\n\n')
+    })
+
+    // Regression: a frame carrying a Set/Map/bigint used to stringify to `{}` (Set/Map) or throw
+    // (bigint) over the SSE face while surviving the ws and json() paths. The shared honest-JSON
+    // encoder now crosses them losslessly, and parseSse's JSON.parse reads them back unchanged.
+    test('carries a Set/Map/bigint frame losslessly through the round-trip', async () => {
+        async function* frames() {
+            yield { tags: new Set([1, 2]), pairs: new Map([['a', 1]]), big: 10n }
+        }
+        const received: unknown[] = []
+        for await (const frame of streamResponse<unknown>(sse(frames()))) {
+            received.push(frame)
+        }
+        expect(received).toEqual([{ tags: [1, 2], pairs: [['a', 1]], big: '10' }])
     })
 })
 

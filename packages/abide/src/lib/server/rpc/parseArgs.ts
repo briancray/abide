@@ -1,6 +1,6 @@
 import { carriesBodyArgs } from '../../shared/carriesBodyArgs.ts'
 import { contentTypeOf } from '../../shared/contentTypeOf.ts'
-import { decodeRefJson } from '../../shared/decodeRefJson.ts'
+import { decodeWireBody } from '../../shared/decodeWireBody.ts'
 import { HttpError } from '../../shared/HttpError.ts'
 import { REF_JSON_HEADER } from '../../shared/REF_JSON_HEADER.ts'
 import { reviveWireField } from '../../shared/reviveWireField.ts'
@@ -103,9 +103,7 @@ export async function parseArgs(
                        OpenAPI SDK) omits it and sends ordinary JSON — read with plain
                        JSON.parse, since the ref-json envelope is ambiguous with a 2-element
                        array body. */
-                    body = bounded.headers.has(REF_JSON_HEADER)
-                        ? decodeRefJson(text)
-                        : JSON.parse(text)
+                    body = decodeWireBody(text, bounded.headers.has(REF_JSON_HEADER))
                 }
             } else if (
                 contentType.includes('application/x-www-form-urlencoded') ||

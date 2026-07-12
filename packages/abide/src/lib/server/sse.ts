@@ -24,6 +24,7 @@ EventSource surfaces this via its `error` listener and `tail()`
 maps it to the entry's `error` field.
 */
 import { NO_STORE } from '../shared/CACHE_CONTROL_VALUES.ts'
+import { encodeWireBody } from '../shared/encodeWireBody.ts'
 import { sseErrorFrame } from '../shared/sseErrorFrame.ts'
 import type { TypedResponse } from './rpc/types/TypedResponse.ts'
 import { streamFromIterator } from './runtime/streamFromIterator.ts'
@@ -37,7 +38,10 @@ export function sse<Frame>(
     init?: ResponseInit,
 ): TypedResponse<AsyncIterable<Frame>> {
     const body = streamFromIterator(iterable, {
-        encodeFrame: (value) => `data: ${JSON.stringify(value)}\n\n`,
+        /* Honest-JSON encode (same encoder as `json()`) so a frame carrying a Set/Map/bigint
+           crosses losslessly instead of the silent `{}` / bigint-throw plain JSON.stringify gave
+           — parseSse's JSON.parse reads it unchanged since the wire stays honest JSON. */
+        encodeFrame: (value) => `data: ${encodeWireBody(value)}\n\n`,
         encodeError: (message) => sseErrorFrame.encode(message),
         keepaliveMs: KEEPALIVE_INTERVAL_MS,
         keepalivePayload: ': keepalive\n\n',
