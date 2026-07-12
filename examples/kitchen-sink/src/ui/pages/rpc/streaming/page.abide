@@ -24,7 +24,7 @@ watch(feed, (frame) => {
 // Probe the stream in script — done(stream) needs the subscribable itself, so it
 // can't sit in a template interpolation (a streaming call there peek-lifts to a
 // frame value). Reading the boolean computed in markup is a plain, safe read.
-const streamClosed = state.computed(() => done(feed))
+const streamClosed = state.computed(done(feed))
 
 function runSse() {
     sseFrames = []
@@ -111,7 +111,7 @@ const feed = countLog({ to: 5 })                 // the bare call IS the stream
 watch(feed, (frame) => {                          // one shared fetch per distinct args
     watchedFrames = [...watchedFrames, frame.n]
 })
-const closed = state.computed(() => done(feed))  // probe in script; read the boolean in markup`}>
+const closed = state.computed(done(feed))  // probe in script; read the boolean in markup`}>
         <p class="text-xs text-slate-500">
             A streaming handler makes the bare call return the stream itself — consume it with
             <code class="font-mono">watch(source, handler)</code> (or a

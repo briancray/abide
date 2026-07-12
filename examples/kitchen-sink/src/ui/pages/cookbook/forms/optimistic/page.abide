@@ -150,7 +150,7 @@ const back = () => (step -= 1)`}
             task="Load dependent select options"
             live={LIVE}
             code={`let country = state('')
-const cities = state.computed(() => country ? getCities({ country }) : [])`}
+const cities = state.computed(country ? getCities({ country }) : [])`}
             note={'Derive the dependent options from the parent cell with a guarded smart read — pick a country and the city list refetches, keyed on it.'} />
 
         <Recipe

@@ -22,7 +22,7 @@ const LIVE = '/reactive-state'
             live={LIVE}
             code={`import { state } from '@abide/abide/ui/state'
 
-const user = state.computed(() => getUser())`}
+const user = state.computed(getUser())`}
             note={'The bare `fn(args)` memoises by method + url + args, captures the SSR result into the page snapshot, and is reactive — one line, both sides, warm hydration for free.'} />
 
         <Recipe
@@ -101,7 +101,7 @@ export const getRates = GET(async ({ base = 'USD' }) => {
         <Recipe
             task="Show a cached read is fetching"
             live="/probes"
-            code={`const loading = state.computed(() => getCounter.pending())`}
+            code={`const loading = state.computed(getCounter.pending())`}
             note={'`getCounter.pending()` is a standalone reactive probe of the smart-call/stream registries — true while the read is in flight, without threading a loading flag through the call.'} />
 
         <Recipe

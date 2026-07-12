@@ -19,7 +19,7 @@ const STATE = '/reactive-state'
             task="Detect that the browser went offline"
             live={OBS}
             code={`import { online } from '@abide/abide/shared/online'
-const connected = state.computed(() => online())
+const connected = state.computed(online())
 
 {#if !connected}<Banner>Offline — changes will sync when you reconnect</Banner>{/if}`}
             note={'`online()` reactively reflects `navigator.onLine`. Show the banner while offline so a write that fails is expected, and disable controls that need the network.'} />

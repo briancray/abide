@@ -47,7 +47,7 @@ watch(activity, (event) => (recent = [...recent, event].slice(-30)))
 export const presence = socket({ schema, tail: 200, ttl: 15_000 })
 let seen = state([])
 watch(presence, (p) => (seen = [...seen, p].slice(-200)))
-const online = state.computed(() => dedupeByUser(seen))`}
+const online = state.computed(dedupeByUser(seen))`}
             note={"Presence is a heartbeat pattern: clients publish periodically, a short `ttl` ages stragglers out, and you dedupe the window by user id on read. There's no dedicated presence primitive — this is the idiom."} />
 
         <Recipe
@@ -81,7 +81,7 @@ for (const step of steps) {
             code={`// carry the room on the frame; filter on read
 let recent = state([])
 watch(chat, (m) => (recent = [...recent, m].slice(-100)))
-const roomMessages = state.computed(() => recent.filter((m) => m.room === roomId))`}
+const roomMessages = state.computed(recent.filter((m) => m.room === roomId))`}
             note={"Sockets are whole topics, not per-key channels — include a `room`/`userId` field on the frame and filter client-side. Every subscriber receives every frame, so don't put secrets on a shared topic; use separate socket files for hard isolation."} />
 
         <Recipe
@@ -112,7 +112,7 @@ export const ping = POST(() => {
 export const dm = socket({ schema })   // frame carries { toUserId }
 let recent = state([])
 watch(dm, (m) => (recent = [...recent, m].slice(-50)))
-const mine = state.computed(() => recent.filter((m) => m.toUserId === me))`}
+const mine = state.computed(recent.filter((m) => m.toUserId === me))`}
             note={"Sockets are broadcast-only — there's no addressed, per-connection delivery. Simulate DMs with a `toUserId` field and client-side filtering, but every subscriber still receives every frame, so it's not private. True 1:1 delivery isn't a first-class feature."} />
 
         <Recipe

@@ -25,28 +25,28 @@ const OBS = '/observability'
             task="Show that anything is loading"
             live={LIVE}
             code={`import { pending } from '@abide/abide/shared/pending'
-const busy = state.computed(() => pending())`}
+const busy = state.computed(pending())`}
             note={'Bare `pending()` is true while any smart call or stream is in flight — a global activity indicator with no wiring.'} />
 
         <Recipe
             task="Show a specific read is loading"
             live={LIVE}
-            code={`const loadingUser = state.computed(() => pending(getUser))`}
+            code={`const loadingUser = state.computed(pending(getUser))`}
             note={"`pending(fn)` scopes the probe to one function's calls — no loading flag threaded through the call site."} />
 
         <Recipe
             task="Probe a specific call by args"
             live={LIVE}
-            code={`const loadingThis = state.computed(() => pending(getUser, { id }))`}
+            code={`const loadingThis = state.computed(pending(getUser, { id }))`}
             note={'`pending(fn, args)` narrows to one keyed entry — useful when the same rpc is in flight for several ids at once.'} />
 
         <Recipe
             task="Use the probe attached to the rpc"
             live={LIVE}
             code={`// fn.X(args?) ≡ X(fn, args?) — read straight off the rpc value
-const loading = state.computed(() => getUser.pending({ id }))
-const stale = state.computed(() => getUser.refreshing({ id }))
-const failure = state.computed(() => getUser.error({ id }))
+const loading = state.computed(getUser.pending({ id }))
+const stale = state.computed(getUser.refreshing({ id }))
+const failure = state.computed(getUser.error({ id }))
 const warm = getUser.peek({ id })          // retained value, synchronous
 getUser.refresh({ id })                    // revalidate; stale value stays visible`}
             note={'Every rpc carries its own `.pending` / `.refreshing` / `.error` / `.peek` / `.refresh` / `.patch` — the same selector grammar as the standalone probes, scoped to that rpc with no import. Prefer this instance form for a single rpc (better-typed on its args); the standalone probes earn their keep on bare all-activity and `{ tags }` selection.'} />
@@ -54,21 +54,21 @@ getUser.refresh({ id })                    // revalidate; stale value stays visi
         <Recipe
             task="Probe a group by tag"
             live={LIVE}
-            code={`const savingOrders = state.computed(() => pending({ tags: ['orders'] }))`}
+            code={`const savingOrders = state.computed(pending({ tags: ['orders'] }))`}
             note={"`pending({ tags })` covers every entry sharing the tag — one probe for a whole feature's in-flight work."} />
 
         <Recipe
             task="Show a background refresh"
             live={LIVE}
             code={`import { refreshing } from '@abide/abide/shared/refreshing'
-const updating = state.computed(() => refreshing(getRates, { base: 'USD' }))`}
+const updating = state.computed(refreshing(getRates, { base: 'USD' }))`}
             note={'`refreshing` is true when a value is held and a fresher one is loading — the stale-while-revalidate signal, same selector grammar as `pending`.'} />
 
         <Recipe
             task="Separate first-load from refresh"
             live={LIVE}
-            code={`const skeleton = state.computed(() => getRates.pending())
-const dim = state.computed(() => getRates.refreshing())`}
+            code={`const skeleton = state.computed(getRates.pending())
+const dim = state.computed(getRates.refreshing())`}
             note={'Show a skeleton on `pending` (nothing to show yet) and dim on `refreshing` (old value present). Together they cover both loading modes cleanly.'} />
 
         <Recipe
@@ -99,14 +99,14 @@ const dim = state.computed(() => getRates.refreshing())`}
             task="Coalesce background revalidations"
             live={LIVE}
             code={`// the endpoint sets the window: GET(handler, { cache: { debounce: 300 } })
-const rates = state.computed(() => getRates({ base: 'USD' }))`}
+const rates = state.computed(getRates({ base: 'USD' }))`}
             note={"SWR is always on for a replayable read, so the stale value stays on screen while `refreshing()` is true. The endpoint's `cache.debounce` (or `throttle`) window coalesces a burst of refreshes into one background revalidation."} />
 
         <Recipe
             task="Detect that the browser is offline"
             live={OBS}
             code={`import { online } from '@abide/abide/shared/online'
-const connected = state.computed(() => online())
+const connected = state.computed(online())
 
 {#if !connected}<Banner>You're offline</Banner>{/if}`}
             note={'`online()` is a reactive probe over `navigator.onLine` — offline-reliable, isomorphic (always true on the server). Drives an offline banner or a disabled state.'} />

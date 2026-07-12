@@ -249,7 +249,7 @@ function remountAwait(): void {
                 <script>
                 // `names` (the resolved value) is in lexical scope here; branch-local, re-seeded each reload.
                 // `state` is imported in the leading <script>; nested scripts share module scope.
-                let total = state.computed(() => names.length)
+                let total = state.computed(names.length)
                 </script>
                 <p class="resolved text-sm">{total} names: {names.join(', ')}</p>
                 <style>
@@ -270,7 +270,7 @@ function remountAwait(): void {
 {:then names}
     <script>
         // \`names\` is in scope; branch-local, re-seeded each mount. \`state\` is imported up top.
-        let total = state.computed(() => names.length)
+        let total = state.computed(names.length)
     </script>
     <p class="resolved">{total} names: {names.join(', ')}</p>
     <style>.resolved { font-weight: 600 }</style>   <!-- scoped to this branch alone -->

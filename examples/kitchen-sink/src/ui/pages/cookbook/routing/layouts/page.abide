@@ -78,7 +78,7 @@ const org = state.shared('org')`}
             task="Load shared data once per section"
             live={LIVE}
             code={`// in the layout — children reuse the same entry
-const org = state.computed(() => getOrg({ id: page.params.org }))`}
+const org = state.computed(getOrg({ id: page.params.org }))`}
             note={'A smart read in the layout is shared by every page under it (same key, one flight) — the layout is the natural home for section-wide data.'} />
 
         <Recipe
@@ -112,7 +112,7 @@ src/ui/pages/app/layout.abide         // sidebar + topbar`}
             task="Load route data with a loader convention"
             gap={true}
             code={`// no loader/getServerSideProps file — read in the page or layout
-const data = state.computed(() => getData())   // bare smart read — no loader file
+const data = state.computed(getData())   // bare smart read — no loader file
 // {#await getData()} when you want a distinct pending / :catch branch`}
             note={"There's no separate data-loader module per route. Data-fetching lives in the page/layout itself — a bare smart read is colocated, isomorphic, and warm-hydrated; `{#await}` just adds a pending or `{:catch}` branch when you need one. Not a distinct loader lifecycle."} />
     </div>

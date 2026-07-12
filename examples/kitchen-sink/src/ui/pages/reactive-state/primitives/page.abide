@@ -6,11 +6,14 @@ import Demo from '$ui/Demo.abide'
 /*
 The cell primitives, live. `state` is a writable cell; `state.computed` derives a
 read-only value; `state.linked` seeds a local draft from upstream; a `transform`
-coerces every write. The 1-arg `watch(thunk)` form is the auto-tracked side effect.
+coerces every write. Pass the seed expression to `computed`/`linked` directly —
+`state.computed(count * 2)`, not `() => count * 2`; reach for `() => { … }` only
+when the derivation needs a multi-line body. The 1-arg `watch(thunk)` form is the
+auto-tracked side effect.
 */
 
 let count = state(0)
-const doubled = state.computed(() => count * 2)
+const doubled = state.computed(count * 2)
 
 // watch(thunk): a client-only reaction, stripped from SSR; return a cleanup.
 let ticks = state(0)
@@ -24,7 +27,7 @@ let qty = state(1, (n) => Math.max(1, Math.min(99, Math.round(Number(n) || 0))))
 
 // linked: a local draft seeded from upstream; reseeds when the source changes
 let serverName = state('ada')
-let nameDraft = state.linked(() => serverName)
+let nameDraft = state.linked(serverName)
 </script>
 
 <div class="flex flex-col gap-8">
@@ -76,7 +79,7 @@ let nameDraft = state.linked(() => serverName)
     import { state } from '@abide/abide/ui/state'   // state.computed / state.linked attached
     import { watch } from '@abide/abide/ui/watch'
     let count = state(0)                            // writable cell — the +/− buttons
-    const doubled = state.computed(() => count * 2)       // recomputes when count changes
+    const doubled = state.computed(count * 2)       // recomputes when count changes
     let ticks = state(0)
     watch(() => {                                   // thunk form: client-only, cleanup on unmount
         const id = setInterval(() => (ticks = ticks + 1), 1000)
@@ -116,7 +119,7 @@ let qty = state(1, (n) => Math.max(1, Math.min(99, Math.round(Number(n) || 0))))
         </Demo>
 
         <Demo title="state.linked(fn) — draft" code={`let serverName = state('ada')
-let nameDraft = state.linked(() => serverName)   // reseeds when serverName changes
+let nameDraft = state.linked(serverName)   // reseeds when serverName changes
 
 <input bind:value={nameDraft} />`}>
             <p class="text-xs text-slate-500">Edit the draft; "pull" reseeds it from the source.</p>

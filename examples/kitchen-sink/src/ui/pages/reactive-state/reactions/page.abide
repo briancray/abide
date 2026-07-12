@@ -17,8 +17,8 @@ watch(chat, (message) => {
     getChatCount.refresh()
     getChatLog.patch((log) => ({ messages: [...log.messages, message].slice(-20) }))
 })
-const chatCount = state.computed(() => getChatCount())
-const chatLog = state.computed(() => getChatLog())
+const chatCount = state.computed(getChatCount())
+const chatLog = state.computed(getChatLog())
 </script>
 
 <div class="flex flex-col gap-8">
@@ -93,8 +93,8 @@ watch(chat, (message) => {
     getChatCount.refresh()                                         // revalidate; stale total stays visible
     getChatLog.patch((log) => ({ messages: [...log.messages, message].slice(-20) }))  // fold in, no refetch
 })
-const chatCount = state.computed(() => getChatCount())   // the bare call IS the smart cached read
-const chatLog = state.computed(() => getChatLog())
+const chatCount = state.computed(getChatCount())   // the bare call IS the smart cached read
+const chatLog = state.computed(getChatLog())
 
 <!-- read them bare — undefined while pending, no {#await} block -->
 <p>{chatCount?.published ?? '—'}</p>

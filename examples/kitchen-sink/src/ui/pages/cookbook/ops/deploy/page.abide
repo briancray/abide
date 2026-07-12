@@ -64,7 +64,7 @@ getRates({ base: 'USD' })   // endpoint declares cache: { ttl: 60_000 }`}
             task="Check connectivity from the client"
             live={OBS}
             code={`import { online } from '@abide/abide/shared/online'
-const connected = state.computed(() => online())`}
+const connected = state.computed(online())`}
             note={"`online()` reflects `navigator.onLine` reactively. Pair with `health()` for actual server reachability — the browser being online doesn't mean your server is up."} />
 
         <Recipe

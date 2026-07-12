@@ -42,7 +42,7 @@ watch(chat, (message) => (recent = [...recent, message].slice(-5)))`}
         <Recipe
             task="Show a stream's connection status"
             live="/probes"
-            code={`const reconnecting = state.computed(() => chat.refreshing())
+            code={`const reconnecting = state.computed(chat.refreshing())
 
 <p>status: {reconnecting ? 'reconnecting…' : 'live'}</p>`}
             note={'`chat.refreshing()` reports a held value being revalidated — e.g. across a reconnect gap. A dropped socket self-heals under backoff, so it never degrades to a hard error for a mere disconnect.'} />
@@ -120,7 +120,7 @@ while (true) {
         <Recipe
             task="Combine a stream with a loading probe"
             live="/probes"
-            code={`const reconnecting = state.computed(() => chat.refreshing())`}
+            code={`const reconnecting = state.computed(chat.refreshing())`}
             note={"`chat.refreshing()` is true while a held value is being revalidated — e.g. across a socket reconnect gap — so you can badge 'reconnecting…' without losing the last frame."} />
 
         <Recipe

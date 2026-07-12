@@ -95,7 +95,7 @@ Publish with `chat.publish(frame)`; seed a late reader with `chat.tail(count)`. 
 
 ## Components
 
-A `.abide` component is HTML with a leading `<script>`. The example below is one page that imports the RPC and socket above and exercises the whole template grammar. Reactive primitives are imported by their own module paths and called bare: `state(0)` is a writable cell you read and reassign as a plain variable (`count`, `count += 1`) — the compiler desugars those to the cell's `.value`; `state.computed(fn)` is read-only derived, `state.linked(fn)` is writable and reseeded from a thunk. `watch(source, handler)` is the single reaction primitive — over a cell, a socket, or an RPC. `props()` is the prop reader, imported from `abide/ui/props`.
+A `.abide` component is HTML with a leading `<script>`. The example below is one page that imports the RPC and socket above and exercises the whole template grammar. Reactive primitives are imported by their own module paths and called bare: `state(0)` is a writable cell you read and reassign as a plain variable (`count`, `count += 1`) — the compiler desugars those to the cell's `.value`; `state.computed(seed)` is read-only derived, `state.linked(seed)` is writable and reseeded from its source. Pass the seed expression directly — `state.computed(count * 2)`, not `() => count * 2`; the compiler wraps it, so `() => { … }` is only for a multi-line body. `watch(source, handler)` is the single reaction primitive — over a cell, a socket, or an RPC. `props()` is the prop reader, imported from `abide/ui/props`.
 
 Async data has no ceremony: **the bare call in an interpolation — `{getMessages({ limit })}` — is the way to read it.** It's a _peek_ that reads `undefined` while pending (and auto-streams on SSR), so it composes with `?? fallback`, `?.`, `{#if}`, and attributes with no wrapping block; pair it with the `.pending()` / `.error()` probes for loading and error affordances, and use `{await getMessages(...)}` to block SSR until the value is in the initial HTML. The `{#await}…{:then}…{:catch}…{:finally}…{/await}` block is the explicit opt-in — reach for it only when you want a distinct pending branch, a local `{:catch}`, or `{:then}` type-narrowing.
 
@@ -119,8 +119,8 @@ let draft = state('')
 let pinned = state(false)
 let limit = state(20)
 
-let trimmed = state.computed(() => draft.trim())
-let live = state.linked(() => limit)
+let trimmed = state.computed(draft.trim())
+let live = state.linked(limit)
 
 const badge = html`<sup class="ml-1 text-xs text-emerald-600">live</sup>`
 
@@ -173,7 +173,7 @@ const set = (next: string) => (limit = Number(next))
     {:else}
         <script>
             let seenAt = state(Date.now())
-            let ageLabel = state.computed(() => `waiting since ${seenAt}`)
+            let ageLabel = state.computed(`waiting since ${seenAt}`)
         </script>
         <style>
             p { color: gray; }

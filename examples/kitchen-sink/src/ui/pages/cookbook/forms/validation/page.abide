@@ -117,7 +117,7 @@ if (!found) return error(404, 'not found')`}
         <Recipe
             task="Gate submit on client-side validity"
             live={LIVE}
-            code={`const canSubmit = state.computed(() => quantity >= 1 && sku !== '')
+            code={`const canSubmit = state.computed(quantity >= 1 && sku !== '')
 
 <button disabled={!canSubmit}>checkout</button>`}
             note={'Mirror the rules in a computed for instant feedback — but the schema is the source of truth. Client checks are UX; the server still validates.'} />

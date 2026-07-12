@@ -31,15 +31,15 @@ src/ui/pages/settings/page.abide   →  /settings`} note={'The folder path is th
             code={`import { page } from '@abide/abide/shared/page'
 import { state } from '@abide/abide/ui/state'
 
-const id = state.computed(() => page.params.id)`}
+const id = state.computed(page.params.id)`}
             note={'Params arrive as plain values on `page.params`, reactive across navigation — read them in a computed so the page updates when the segment changes without remounting.'} />
 
         <Recipe
             task="Read several params"
             live={LIVE}
             code={`// pages/org/[org]/repo/[repo]/page.abide
-const org = state.computed(() => page.params.org)
-const repo = state.computed(() => page.params.repo)`}
+const org = state.computed(page.params.org)
+const repo = state.computed(page.params.repo)`}
             note={'Every dynamic segment in the path contributes a key to `page.params`, named after its folder.'} />
 
         <Recipe
@@ -52,25 +52,25 @@ const repo = state.computed(() => page.params.repo)`}
         <Recipe
             task="Read a query-string parameter"
             live={LIVE}
-            code={`const query = state.computed(() => page.url.searchParams.get('q') ?? '')`}
+            code={`const query = state.computed(page.url.searchParams.get('q') ?? '')`}
             note={'`page.url` is a real `URL`, reassigned on every navigation — read `searchParams` in a computed and it tracks query changes too.'} />
 
         <Recipe
             task="React when a param changes"
             live="/pages/product/1"
-            code={`const product = state.computed(() => getProduct({ id: page.params.id }))`}
+            code={`const product = state.computed(getProduct({ id: page.params.id }))`}
             note={'Put the param in the call args and the read refetches when the segment changes — the client router keeps the page mounted and re-derives just the cell.'} />
 
         <Recipe
             task="Get the current path"
             live={LIVE}
-            code={`const path = state.computed(() => page.url.pathname)`}
+            code={`const path = state.computed(page.url.pathname)`}
             note={"`page.url.pathname` is browser-space on both sides. Compare it against `url('/x')` output so it stays correct under an `APP_URL` subpath."} />
 
         <Recipe
             task="Know when a navigation is in flight"
             live={LIVE}
-            code={`const busy = state.computed(() => page.navigating)
+            code={`const busy = state.computed(page.navigating)
 
 {#if busy}<TopProgressBar />{/if}`}
             note={'`page.navigating` is true while an SPA navigation resolves — drive a top progress bar or disable the nav during the transition.'} />

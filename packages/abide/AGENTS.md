@@ -177,8 +177,8 @@ Reactive state:
 | Form                           | Meaning                                                                                                                                           |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `state(initial, transform?)`   | Writable cell; read/write via `.value`; `transform(next, prev)` gates writes.                                                                     |
-| `state.computed(fn)`           | Read-only cell derived from other cells (lazy, never serialized).                                                                                 |
-| `state.linked(fn, transform?)` | Writable cell reseeded when the thunk's deps change.                                                                                              |
+| `state.computed(seed)`         | Read-only cell derived from other cells (lazy, never serialized). Pass the seed expression directly (`state.computed(a * 2)`); `() => { … }` is only for a multi-line body. |
+| `state.linked(seed, transform?)` | Writable cell reseeded when the seed's deps change.                                                                                            |
 | `watch(source, handler)`       | The single reaction primitive: over a cell, a cell array, a socket/stream, or an RPC; bare `watch(thunk)` is an auto-tracked effect. Client-only. |
 | `props()`                      | Ambient prop reader: `const { name = fallback, ...rest } = props()`.                                                                              |
 
@@ -402,9 +402,10 @@ updater)`: reactively mutate the retained value of matching cached reads in
 ### Reactive state — @documentation reactive-state
 
 - `@abide/abide/ui/state` — `state(initial, transform?)` writable cell (read/reassigned as a plain variable; compiler desugars to `.value`);
-  members `state.computed(fn)` (read-only derived), `state.linked(fn, transform?)`
-  (writable, reseeded from a thunk), `state.share(key, value)` / `state.shared(key)`
-  (ambient scope context).
+  members `state.computed(seed)` (read-only derived), `state.linked(seed, transform?)`
+  (writable, reseeded from its source) — pass the seed expression directly, the compiler
+  wraps it (`() => { … }` is only for a multi-line body); `state.share(key, value)` /
+  `state.shared(key)` (ambient scope context).
 - `@abide/abide/ui/watch` — `watch(source, handler)` the single reaction primitive
   (cell / cell array / socket-stream / RPC); bare `watch(thunk)` is an auto-tracked
   effect; returns a scope-tied disposer; SSR-inert.

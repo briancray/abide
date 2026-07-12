@@ -37,16 +37,19 @@ import CodeBlock from '$ui/CodeBlock.abide'
                         </td>
                     </tr>
                     <tr>
-                        <td class="px-4 py-2 font-mono">state.linked(fn, transform?)</td>
+                        <td class="px-4 py-2 font-mono">state.linked(seed, transform?)</td>
                         <td class="px-4 py-2 text-slate-600">
                             a writable local draft seeded from upstream — reseeds when the source
                             changes, edits stay local
                         </td>
                     </tr>
                     <tr>
-                        <td class="px-4 py-2 font-mono">state.computed(fn)</td>
+                        <td class="px-4 py-2 font-mono">state.computed(seed)</td>
                         <td class="px-4 py-2 text-slate-600">
-                            a read-only value — re-runs when a cell it reads changes
+                            a read-only value — re-runs when a cell it reads changes. Pass the seed
+                            expression directly (<code class="font-mono">state.computed(a * 2)</code
+                            >); reach for a <code class="font-mono">{'() => { … }'}</code> arrow only
+                            when the body needs multiple statements
                         </td>
                     </tr>
                     <tr>

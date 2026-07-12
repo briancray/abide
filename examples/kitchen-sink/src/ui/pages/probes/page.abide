@@ -8,8 +8,8 @@ import Demo from '$ui/Demo.abide'
 
 /* online() is a reactive connectivity probe (browser online/offline events;
    always true during SSR). done(subscribable) is true once a stream has closed. */
-const connected = state.computed(() => online())
-const chatClosed = state.computed(() => chat.done())
+const connected = state.computed(online())
+const chatClosed = state.computed(chat.done())
 
 /* Mutation idiom: a write is coalesce-only by default (retains nothing), so the
    bare call buys double-submit coalescing plus probe visibility —
@@ -22,17 +22,17 @@ async function send() {
     const result = await submit({ message })
     echoed = result.message
 }
-const submitting = state.computed(() => createEcho.pending())
+const submitting = state.computed(createEcho.pending())
 
 /* The bare call IS the smart read: cached, coalesced, SWR always on. getRates
    declares { debounce: 300 } on its endpoint, so a burst of background
    revalidations coalesces — the stale rates stay on screen while
    getRates.refreshing(...) is true. */
-const rates = state.computed(() => getRates({ base: 'USD' }))
-const updating = state.computed(() => getRates.refreshing({ base: 'USD' }))
+const rates = state.computed(getRates({ base: 'USD' }))
+const updating = state.computed(getRates.refreshing({ base: 'USD' }))
 /* peek reads the currently-retained value synchronously — no fetch, no await;
    reactive here, so it re-renders when a refresh lands. */
-const snapshot = state.computed(() => getRates.peek({ base: 'USD' }))
+const snapshot = state.computed(getRates.peek({ base: 'USD' }))
 </script>
 
 <div class="flex flex-col gap-8">
@@ -112,7 +112,7 @@ const snapshot = state.computed(() => getRates.peek({ base: 'USD' }))
 
     <div>
         <Demo title="The mutation idiom — coalesce-only" code={`const submit = (args) => createEcho(args)   // a write coalesces double-submits, retains nothing
-const submitting = state.computed(() => createEcho.pending())`}>
+const submitting = state.computed(createEcho.pending())`}>
             <span class={`rounded-full px-2 py-0.5 text-xs ${submitting ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-400'}`}>{submitting ? 'submitting…' : 'idle'}</span>
             <p class="text-xs text-slate-500">
                 {'createEcho(args)'} coalesces identical in-flight submits and retains nothing once settled
@@ -142,9 +142,9 @@ const submitting = state.computed(() => createEcho.pending())`}>
 
     <div>
         <Demo title="Refresh, observed" code={`// getRates declares cache: { debounce: 300 } on its endpoint definition
-const rates = state.computed(() => getRates({ base: 'USD' }))
-const updating = state.computed(() => getRates.refreshing({ base: 'USD' }))
-const snapshot = state.computed(() => getRates.peek({ base: 'USD' }))   // retained value, no fetch`}>
+const rates = state.computed(getRates({ base: 'USD' }))
+const updating = state.computed(getRates.refreshing({ base: 'USD' }))
+const snapshot = state.computed(getRates.peek({ base: 'USD' }))   // retained value, no fetch`}>
             <span class={`rounded-full px-2 py-0.5 text-xs ${updating ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-400'}`}>{updating ? 'updating…' : 'fresh'}</span>
             <p class="text-xs text-slate-500">
                 The endpoint declares {'cache: { debounce: 300 }'}, so a burst of refreshes coalesces into one
@@ -178,8 +178,8 @@ const snapshot = state.computed(() => getRates.peek({ base: 'USD' }))   // retai
         <Demo title="online() · done()" code={`import { online } from '@abide/abide/shared/online'
 import { done } from '@abide/abide/shared/done'
 
-const connected = state.computed(() => online())        // browser online/offline, SSR-true
-const closed = state.computed(() => done(someStream))    // true once the stream ends`}>
+const connected = state.computed(online())        // browser online/offline, SSR-true
+const closed = state.computed(done(someStream))    // true once the stream ends`}>
             <p class="text-xs text-slate-500">
                 <code class="font-mono">online()</code> tracks connectivity reactively — toggle your
                 network (or DevTools offline) and the badge flips.

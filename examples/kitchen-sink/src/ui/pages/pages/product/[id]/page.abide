@@ -7,7 +7,7 @@ import CodeBlock from '$ui/CodeBlock.abide'
 
 /* Dynamic route params arrive on the page proxy (plain values), reactive across nav. */
 import { state } from '@abide/abide/ui/state'
-const id = state.computed(() => page.params.id)
+const id = state.computed(page.params.id)
 
 /* The bare smart call returns warm values synchronously, so handle errors with
    try/catch in the await form (no .catch on a warm hit). */
@@ -64,7 +64,7 @@ async function loadProduct(productId: string) {
 import { page } from '@abide/abide/shared/page'
 
 import { state } from '@abide/abide/ui/state'
-const id = state.computed(() => page.params.id)    // typed via src/.abide/routes.d.ts
+const id = state.computed(page.params.id)    // typed via src/.abide/routes.d.ts
 
 {#await loadProduct(id)} {:then product}
     ...{product.name}...

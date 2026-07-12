@@ -20,22 +20,22 @@ const LIVE = '/reactive-state'
             live={LIVE}
             code={`import { state } from '@abide/abide/ui/state'
 let count = state(0)
-const doubled = state.computed(() => count * 2)`}
+const doubled = state.computed(count * 2)`}
             note={'`state.computed` re-runs only when a cell it read changes, and caches otherwise. Read it bare in markup — it is always read-only.'} />
 
         <Recipe
             task="Derive from multiple sources"
             live={LIVE}
-            code={`const total = state.computed(() => price * quantity - discount)`}
+            code={`const total = state.computed(price * quantity - discount)`}
             note={'A computed tracks every cell it touches — change any of price, quantity, or discount and it recomputes.'} />
 
-        <Recipe task="Chain computeds" live={LIVE} code={`const subtotal = state.computed(() => sum(lineItems))
-const withTax = state.computed(() => subtotal * (1 + taxRate))`} note={'Computeds can read other computeds. The graph recomputes lazily along the dependency chain — no manual ordering.'} />
+        <Recipe task="Chain computeds" live={LIVE} code={`const subtotal = state.computed(sum(lineItems))
+const withTax = state.computed(subtotal * (1 + taxRate))`} note={'Computeds can read other computeds. The graph recomputes lazily along the dependency chain — no manual ordering.'} />
 
         <Recipe
             task="Compute a filtered, sorted view of a list"
             live={LIVE}
-            code={`const visible = state.computed(() =>
+            code={`const visible = state.computed(
     todos.filter((t) => !t.done).sort((a, b) => a.order - b.order),
 )`}
             note={"Derive the view instead of storing it — the source list stays the single source of truth and the view can't drift."} />
@@ -43,20 +43,20 @@ const withTax = state.computed(() => subtotal * (1 + taxRate))`} note={'Computed
         <Recipe
             task="Aggregate over a list"
             live={LIVE}
-            code={`const remaining = state.computed(() => todos.filter((t) => !t.done).length)`}
+            code={`const remaining = state.computed(todos.filter((t) => !t.done).length)`}
             note={'Counts, sums, and any/every reads all belong in a computed — they stay correct as the list changes with zero bookkeeping.'} />
 
         <Recipe
             task="Derive UI flags"
             live={LIVE}
-            code={`const isEmpty = state.computed(() => items.length === 0)
-const canSubmit = state.computed(() => name.trim() !== '' && !saving)`}
+            code={`const isEmpty = state.computed(items.length === 0)
+const canSubmit = state.computed(name.trim() !== '' && !saving)`}
             note={'Name the boolean once and read it in `class:`, `disabled`, and `{#if}` — the intent lives in one place.'} />
 
         <Recipe
             task="Validate a field with a computed"
             live={LIVE}
-            code={`const emailError = state.computed(() =>
+            code={`const emailError = state.computed(
     /.+@.+/.test(email) ? '' : 'enter a valid email',
 )`}
             note={'Validation is derived state: a computed returning an error string (empty when valid). Render it under the field and gate submit on it.'} />
@@ -64,7 +64,7 @@ const canSubmit = state.computed(() => name.trim() !== '' && !saving)`}
         <Recipe
             task="Track dirty vs pristine"
             live={LIVE}
-            code={`const dirty = state.computed(() => JSON.stringify(form) !== JSON.stringify(original))`}
+            code={`const dirty = state.computed(JSON.stringify(form) !== JSON.stringify(original))`}
             note={'Compare the live cell against a snapshot of the loaded value. Drives an unsaved-changes banner or a disabled save button.'} />
 
         <Recipe
@@ -72,7 +72,7 @@ const canSubmit = state.computed(() => name.trim() !== '' && !saving)`}
             live={LIVE}
             code={`import { state } from '@abide/abide/ui/state'
 let serverName = state('ada')
-let nameDraft = state.linked(() => serverName)`}
+let nameDraft = state.linked(serverName)`}
             note={"`state.linked(fn)` is a writable cell seeded from `fn`'s result; edits stay local, but when the upstream source changes it reseeds. The editable-copy-of-server-data pattern."} />
 
         <Recipe
@@ -85,7 +85,7 @@ serverName = 'grace'   // nameDraft snaps to 'grace'`}
         <Recipe
             task="Coerce a linked draft on write"
             live={LIVE}
-            code={`let priceDraft = state.linked(() => product.price, (next) => Number(next) || 0)`}
+            code={`let priceDraft = state.linked(product.price, (next) => Number(next) || 0)`}
             note={'`linked` takes the same transform second argument as `state` — the seed comes from upstream, every edit is coerced.'} />
 
         <Recipe

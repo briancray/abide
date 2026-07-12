@@ -20,7 +20,7 @@ const PROBES = '/probes'
             task="Fetch on navigation"
             live={LIVE}
             code={`const { params } = page
-const user = state.computed(() => getUser({ id: params.id }))`}
+const user = state.computed(getUser({ id: params.id }))`}
             note={'Read `page.params` in the call args and the read refetches when the route param changes on SPA navigation — the client router keeps the layout mounted, the cell re-derives.'} />
 
         <Recipe
@@ -47,7 +47,7 @@ async function search() {
         <Recipe
             task="Show stale data while revalidating"
             live={PROBES}
-            code={`const stale = state.computed(() => getRates.refreshing())
+            code={`const stale = state.computed(getRates.refreshing())
 
 <span class:opacity-50={stale}>{rates.usd}</span>`}
             note={'`getRates.refreshing()` is true when a value is held but a fresher one is loading. Keep rendering the old value and dim it — the stale-while-revalidate UX, no flash of empty.'} />
@@ -55,7 +55,7 @@ async function search() {
         <Recipe
             task="Distinguish first-load from a refresh"
             live={PROBES}
-            code={`const firstLoad = state.computed(() => getRates.pending() && !getRates.refreshing())`}
+            code={`const firstLoad = state.computed(getRates.pending() && !getRates.refreshing())`}
             note={'`getRates.pending()` = no value yet (show a skeleton); `getRates.refreshing()` = value held, refetching (dim it). Together they separate the empty state from the background update.'} />
 
         <Recipe
@@ -87,7 +87,7 @@ const me = () => getCurrentUser()`}
 
         <Recipe task="Paginate a list" gap={true} code={`// no cursor/pagination helper — page it yourself
 let pageNum = state(1)
-const rows = state.computed(() => listRows({ page: pageNum, size: 20 }))
+const rows = state.computed(listRows({ page: pageNum, size: 20 }))
 
 <button onclick={() => (pageNum += 1)}>next</button>`} note={"There's no built-in cursor or infinite-scroll primitive. Take page/cursor as an rpc arg, key the call on it, and drive the offset with a cell — for infinite scroll, append results into a state array yourself."} />
 
