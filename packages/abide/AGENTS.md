@@ -65,19 +65,19 @@ The bundler and route resolver read these paths by convention (dir aliases
 
 `abide <command>` (the `abide` bin):
 
-| Command                                                  | Does                                                                                                                                               |
-| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `abide scaffold <name> [--no-install] [--no-dev]`        | Scaffold a project from the bundled template, install it, and (TTY only) start dev.                                                                |
-| `abide dev`                                              | Dev orchestrator: build client, spawn the server child, watch `src/`, rebuild + restart on change, browser live-reload.                            |
-| `abide build`                                            | Single client build into `dist/_app/`, no server (CI / static deploys).                                                                            |
-| `abide start`                                            | Run the production server against an already-built `dist/`.                                                                                        |
-| `abide run <file> [args...]`                             | Run an arbitrary script under the abide preload (same runtime as the server); argv after the file is forwarded verbatim.                           |
-| `abide compile [--target=<bun-…>] [--out=<path>]`        | Build a standalone server executable.                                                                                                              |
-| `abide cli [--target=…] [--out=…] [--platforms=<a,b,c>]` | Build the thin CLI binary (manifest baked in, ships the compiled server beside it); `--platforms` cross-compiles into `dist/cli-thin/<platform>/`. |
-| `abide bundle`                                           | Assemble a self-contained desktop app bundle for the host platform (`.app` on macOS), unsigned.                                                    |
+| Command                                                  | Does                                                                                                                                                   |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `abide scaffold <name> [--no-install] [--no-dev]`        | Scaffold a project from the bundled template, install it, and (TTY only) start dev.                                                                    |
+| `abide dev`                                              | Dev orchestrator: build client, spawn the server child, watch `src/`, rebuild + restart on change, browser live-reload.                                |
+| `abide build`                                            | Single client build into `dist/_app/`, no server (CI / static deploys).                                                                                |
+| `abide start`                                            | Run the production server against an already-built `dist/`.                                                                                            |
+| `abide run <file> [args...]`                             | Run an arbitrary script under the abide preload (same runtime as the server); argv after the file is forwarded verbatim.                               |
+| `abide compile [--target=<bun-…>] [--out=<path>]`        | Build a standalone server executable.                                                                                                                  |
+| `abide cli [--target=…] [--out=…] [--platforms=<a,b,c>]` | Build the thin CLI binary (manifest baked in, ships the compiled server beside it); `--platforms` cross-compiles into `dist/cli-thin/<platform>/`.     |
+| `abide bundle`                                           | Assemble a self-contained desktop app bundle for the host platform (`.app` on macOS), unsigned.                                                        |
 | `abide check`                                            | Type-check the project: every `.abide` component's template + props through its shadow program, plus the project's own `.ts` files; non-zero on error. |
-| `abide lsp`                                              | Run the `.abide` language server over stdio (JSON-RPC) for editor diagnostics.                                                                     |
-| `abide init-agent`                                       | Write/refresh the abide agent-guide pointer in the project root `CLAUDE.md`.                                                                       |
+| `abide lsp`                                              | Run the `.abide` language server over stdio (JSON-RPC) for editor diagnostics.                                                                         |
+| `abide init-agent`                                       | Write/refresh the abide agent-guide pointer in the project root `CLAUDE.md`.                                                                           |
 
 For tests, add `preload = ["@abide/abide/preload"]` under `[test]` in
 `bunfig.toml` and run `bun test`.
@@ -174,13 +174,13 @@ a missing one surfaces as `Cannot find name '…'`.
 
 Reactive state:
 
-| Form                           | Meaning                                                                                                                                           |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `state(initial, transform?)`   | Writable cell; read/write via `.value`; `transform(next, prev)` gates writes.                                                                     |
-| `state.computed(seed)`         | Read-only cell derived from other cells (lazy, never serialized). Pass the seed expression directly (`state.computed(a * 2)`); `() => { … }` is only for a multi-line body. |
-| `state.linked(seed, transform?)` | Writable cell reseeded when the seed's deps change.                                                                                            |
-| `watch(source, handler)`       | The single reaction primitive: over a cell, a cell array, a socket/stream, or an RPC; bare `watch(thunk)` is an auto-tracked effect. Client-only. |
-| `props()`                      | Ambient prop reader: `const { name = fallback, ...rest } = props()`.                                                                              |
+| Form                             | Meaning                                                                                                                                                                     |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `state(initial, transform?)`     | Writable cell; read/write via `.value`; `transform(next, prev)` gates writes.                                                                                               |
+| `state.computed(seed)`           | Read-only cell derived from other cells (lazy, never serialized). Pass the seed expression directly (`state.computed(a * 2)`); `() => { … }` is only for a multi-line body. |
+| `state.linked(seed, transform?)` | Writable cell reseeded when the seed's deps change.                                                                                                                         |
+| `watch(source, handler)`         | The single reaction primitive: over a cell, a cell array, a socket/stream, or an RPC; bare `watch(thunk)` is an auto-tracked effect. Client-only.                           |
+| `props()`                        | Ambient prop reader: `const { name = fallback, ...rest } = props()`.                                                                                                        |
 
 Bindings and directives (attribute kinds `event` / `bind` / `class` / `style` /
 `attach` / spread, plus plain `expression` / static):
@@ -491,6 +491,9 @@ updater)`: reactively mutate the retained value of matching cached reads in
   so throws name the authored scope path.
 - `@abide/abide/ui/dom/readCell` — unified read for a `computed`/`linked`
   reference (async peek / derive call / sync `.value`).
+- `@abide/abide/ui/dom/writeCell` — unified write for a `linked` assignment
+  (`draft = …` / `+=` / `++`): `.value =` for a sync `State`, `.set(...)` for an
+  async `AsyncState`.
 - `@abide/abide/ui/dom/cellPending` — whether a `{#if}`/`{#switch}` async subject
   is still loading (render no branch while pending).
 - `@abide/abide/ui/dom/mutateDocContainer` — in-place container mutation lowered to
@@ -618,21 +621,21 @@ Runtime routes the framework serves:
 
 ## Environment variables
 
-| Variable                      | Effect                                                                                       |
-| ----------------------------- | -------------------------------------------------------------------------------------------- |
-| `PORT`                        | Exact TCP port to bind; unset/invalid scans from 3000.                                       |
-| `APP_URL`                     | Derives the server's mount base path from its pathname (e.g. `/v2`).                         |
-| `ABIDE_APP_URL`               | Default server URL the CLI connects to; its pathname sets the mount base.                    |
-| `ABIDE_APP_TOKEN`             | Sent as `Authorization: Bearer <value>` on CLI→server requests.                              |
-| `ABIDE_APP_DIR`               | Overrides the dir the server serves chunks/shell/assets from (set per dev build generation). |
-| `ABIDE_DATA_DIR`              | Overrides the app data directory on all platforms, used as-is (no program-name suffix).      |
-| `ABIDE_CLIENT_TIMEOUT`        | RPC client timeout in ms (1–600000), shipped to the browser transport.                       |
-| `ABIDE_MAX_REQUEST_BODY_SIZE` | Server-wide max request body size.                                                           |
-| `ABIDE_IDLE_TIMEOUT`          | Bun per-connection idle timeout in seconds (default 10).                                     |
-| `ABIDE_LOG_FORMAT`            | `json` renders log records as JSON instead of TSV.                                           |
-| `ABIDE_ENABLE_INSPECTOR`      | `true` mounts the opt-in operator inspector UI/routes.                                       |
-| `ABIDE_INSPECT`               | Enables webview devtools/inspect for desktop bundles.                                        |
-| `ABIDE_DEV_SURFACE`           | `1` forces the worker to print its surface map (set by the dev orchestrator).                |
+| Variable                      | Effect                                                                                                                                                                                                                  |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PORT`                        | Exact TCP port to bind; unset/invalid scans from 3000.                                                                                                                                                                  |
+| `APP_URL`                     | Derives the server's mount base path from its pathname (e.g. `/v2`).                                                                                                                                                    |
+| `ABIDE_APP_URL`               | Default server URL the CLI connects to; its pathname sets the mount base.                                                                                                                                               |
+| `ABIDE_APP_TOKEN`             | Sent as `Authorization: Bearer <value>` on CLI→server requests.                                                                                                                                                         |
+| `ABIDE_APP_DIR`               | Overrides the dir the server serves chunks/shell/assets from (set per dev build generation).                                                                                                                            |
+| `ABIDE_DATA_DIR`              | Overrides the app data directory on all platforms, used as-is (no program-name suffix).                                                                                                                                 |
+| `ABIDE_CLIENT_TIMEOUT`        | RPC client timeout in ms (1–600000), shipped to the browser transport.                                                                                                                                                  |
+| `ABIDE_MAX_REQUEST_BODY_SIZE` | Server-wide max request body size.                                                                                                                                                                                      |
+| `ABIDE_IDLE_TIMEOUT`          | Bun per-connection idle timeout in seconds (default 10).                                                                                                                                                                |
+| `ABIDE_LOG_FORMAT`            | `json` renders log records as JSON instead of TSV.                                                                                                                                                                      |
+| `ABIDE_ENABLE_INSPECTOR`      | `true` mounts the opt-in operator inspector UI/routes.                                                                                                                                                                  |
+| `ABIDE_INSPECT`               | Enables webview devtools/inspect for desktop bundles.                                                                                                                                                                   |
+| `ABIDE_DEV_SURFACE`           | `1` forces the worker to print its surface map (set by the dev orchestrator).                                                                                                                                           |
 | `DEBUG`                       | npm-debug-style channel gate for diagnostic log channels (e.g. `abide:cache`, `hydrate`, `-abide`); `hydrate` reports SSR↔client hydration divergences with their render-path (browser: `localStorage['abide-debug']`). |
 
 ---

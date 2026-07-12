@@ -21,6 +21,34 @@ Exposed as a `ts.TransformerFactory`, so the script pipeline can chain it with
 `docAccessTransformer` over a SINGLE parsed tree (see `lowerScript`) instead of
 print-then-reparse between passes.
 */
+/* Compound-assignment operator → its plain binary counterpart, for lowering a `linked`
+   `draft += x` into `$$writeCell(draft, $$readCell(draft) + x)`. Mirrors the same map in
+   `lowerDocAccess` (the `$$model` write path): logical assignments write unconditionally. */
+const CELL_COMPOUND_OPERATORS = new Map<ts.SyntaxKind, ts.BinaryOperator>([
+    [ts.SyntaxKind.PlusEqualsToken, ts.SyntaxKind.PlusToken],
+    [ts.SyntaxKind.MinusEqualsToken, ts.SyntaxKind.MinusToken],
+    [ts.SyntaxKind.AsteriskEqualsToken, ts.SyntaxKind.AsteriskToken],
+    [ts.SyntaxKind.SlashEqualsToken, ts.SyntaxKind.SlashToken],
+    [ts.SyntaxKind.BarBarEqualsToken, ts.SyntaxKind.BarBarToken],
+    [ts.SyntaxKind.AmpersandAmpersandEqualsToken, ts.SyntaxKind.AmpersandAmpersandToken],
+    [ts.SyntaxKind.QuestionQuestionEqualsToken, ts.SyntaxKind.QuestionQuestionToken],
+])
+
+/* `$$readCell(name)` — the unified cell read (peek async / `.value` sync). */
+function cellReadCall(name: string): ts.Expression {
+    return ts.factory.createCallExpression(ts.factory.createIdentifier('$$readCell'), undefined, [
+        ts.factory.createIdentifier(name),
+    ])
+}
+
+/* `$$writeCell(name, value)` — the unified cell write (`.value =` sync / `.set(...)` async). */
+function writeCellCall(name: string, value: ts.Expression): ts.Expression {
+    return ts.factory.createCallExpression(ts.factory.createIdentifier('$$writeCell'), undefined, [
+        ts.factory.createIdentifier(name),
+        value,
+    ])
+}
+
 export function signalRefsTransformer(
     stateNames: ReadonlySet<string>,
     derivedNames: ReadonlySet<string>,
@@ -86,6 +114,55 @@ export function signalRefsTransformer(
                    the declaration. Leave the whole subtree untouched. */
                 if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
                     return node
+                }
+                /* An assignment to a `linked` cell (a `cellReadNames` name) — its read form
+                   is `$$readCell(name)`, a call, so it can't sit on an assignment's left.
+                   Lower the write to `$$writeCell(name, value)`, which dispatches `.value =`
+                   (sync `State`) vs `.set(...)` (async `AsyncState`). A compound/logical
+                   assignment folds the current value in through the read form. `state` and
+                   `derived` writes stay on their own paths (`$$model.replace` / `.value =`). */
+                if (
+                    ts.isBinaryExpression(node) &&
+                    ts.isIdentifier(node.left) &&
+                    cellReadNames.has(node.left.text) &&
+                    !shadowed.has(node.left.text)
+                ) {
+                    const target = node.left.text
+                    const right = ts.visitNode(node.right, visit) as ts.Expression
+                    if (node.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+                        return writeCellCall(target, right)
+                    }
+                    const binary = CELL_COMPOUND_OPERATORS.get(node.operatorToken.kind)
+                    if (binary !== undefined) {
+                        return writeCellCall(
+                            target,
+                            ts.factory.createBinaryExpression(cellReadCall(target), binary, right),
+                        )
+                    }
+                }
+                /* `draft++` / `++draft` / `draft--` on a `linked` cell → a `$$writeCell` of the
+                   stepped value, mirroring the `+= 1` shape (the bare `++` would otherwise land
+                   on `$$readCell(draft)`, an invalid lvalue). */
+                if (
+                    (ts.isPostfixUnaryExpression(node) || ts.isPrefixUnaryExpression(node)) &&
+                    (node.operator === ts.SyntaxKind.PlusPlusToken ||
+                        node.operator === ts.SyntaxKind.MinusMinusToken) &&
+                    ts.isIdentifier(node.operand) &&
+                    cellReadNames.has(node.operand.text) &&
+                    !shadowed.has(node.operand.text)
+                ) {
+                    const step =
+                        node.operator === ts.SyntaxKind.PlusPlusToken
+                            ? ts.SyntaxKind.PlusToken
+                            : ts.SyntaxKind.MinusToken
+                    return writeCellCall(
+                        node.operand.text,
+                        ts.factory.createBinaryExpression(
+                            cellReadCall(node.operand.text),
+                            step,
+                            ts.factory.createNumericLiteral(1),
+                        ),
+                    )
                 }
                 /* Shorthand `{ count }` → `{ count: $$model.count }` / `{ total: total.value }`,
                    unless a nearer scope shadows the name. */

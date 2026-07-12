@@ -64,6 +64,21 @@ function firstInput(node: HTMLElement): HTMLInputElement | undefined {
     return undefined
 }
 
+/* First descendant element with the given (lowercase) tag name — a recursive walk over
+   the mini-dom's `childNodes`, mirroring `firstInput`. */
+function firstByTag(node: HTMLElement, tag: string): HTMLElement | undefined {
+    for (const child of (node as unknown as { childNodes: HTMLElement[] }).childNodes ?? []) {
+        if ((child as unknown as { tagName?: string }).tagName === tag) {
+            return child
+        }
+        const nested = firstByTag(child, tag)
+        if (nested !== undefined) {
+            return nested
+        }
+    }
+    return undefined
+}
+
 describe('desugar — state(transform) / linked cells; computed doc slot', () => {
     test('plain state + computed are doc slots; transform/linked stay runtime .value cells', () => {
         const body = compileComponent(`
@@ -90,6 +105,25 @@ describe('desugar — state(transform) / linked cells; computed doc slot', () =>
             'const doubled = $$scope().derive("doubled", () => $$model.read("source") * 2)',
         )
         expect(body).toContain('doubled()')
+    })
+
+    test('a write to a linked cell lowers through $$writeCell (not an invalid $$readCell lvalue)', () => {
+        const body = compileComponent(`
+            <script>
+                import { state } from '@abide/abide/ui/state'
+                let source = state(10)
+                let draft = state.linked(() => source)
+                function edit() { draft = 5; draft += 2; draft++ }
+            </script>
+            <p>{draft}</p>
+        `)
+        // plain assignment → unified cell write; the RHS still reads through $$readCell
+        expect(body).toContain('$$writeCell(draft, 5)')
+        expect(body).toContain('$$writeCell(draft, $$readCell(draft) + 2)')
+        // ++ folds to the += 1 shape
+        expect(body).toContain('$$writeCell(draft, $$readCell(draft) + 1)')
+        // the retired invalid form (assign to a call) must never be emitted
+        expect(body).not.toContain('$$readCell(draft) =')
     })
 
     test('SSR serializes only doc slots, not transform/linked cells', () => {
@@ -123,6 +157,24 @@ describe('runtime behavior in a compiled component', () => {
         expect(host.textContent).toContain('a') // seeded from upstream
         $$model.replace('source', 'b') // upstream change reseeds the draft
         expect(host.textContent).toContain('b')
+    })
+
+    test('a script assignment writes through to the linked cell and re-renders', () => {
+        const { host } = mountClient(`
+            <script>
+                import { state } from '@abide/abide/ui/state'
+                let source = state(1)
+                let draft = state.linked(() => source)
+                function bump() { draft = draft + 10 }
+            </script>
+            <button onclick={bump}>{draft}</button>
+        `)
+        expect(host.textContent).toContain('1') // seeded from upstream
+        const button = firstByTag(host, 'button') as unknown as {
+            dispatchEvent: (e: { type: string }) => void
+        }
+        button.dispatchEvent({ type: 'click' })
+        expect(host.textContent).toContain('11') // local write latched onto the draft
     })
 
     test('a bound input writes through state(transform), clamping the value', () => {

@@ -56,6 +56,7 @@ export const UI_RUNTIME_IMPORTS: { name: string; specifier: string; alias?: stri
     { name: 'spreadAttrs', specifier: 'ui/dom/spreadAttrs', alias: '$$spreadAttrs' },
     { name: 'readCall', specifier: 'ui/dom/readCall', alias: '$$readCall' },
     { name: 'readCell', specifier: 'ui/dom/readCell', alias: '$$readCell' },
+    { name: 'writeCell', specifier: 'ui/dom/writeCell', alias: '$$writeCell' },
     { name: 'cellPending', specifier: 'ui/dom/cellPending', alias: '$$cellPending' },
     { name: 'withPath', specifier: 'ui/runtime/withPath', alias: '$$withPath' },
     { name: 'settleAsyncCells', specifier: 'ui/settleAsyncCells', alias: '$$settleAsyncCells' },
