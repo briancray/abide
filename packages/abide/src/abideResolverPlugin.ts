@@ -396,16 +396,14 @@ export function abideResolverPlugin({
                    declared `schemas.input` VALIDATOR still overrides it at runtime. undefined (no program
                    / unresolvable Args / File-only body) stamps nothing — the surface behaves as today. */
                 const inputSchema = rpcServerProgram?.inputSchemaForModule(args.path)
-                const prepared = prepareRpcModule(
-                    source,
-                    importName,
-                    streamingOverride,
+                const prepared = prepareRpcModule(source, importName, {
+                    streaming: streamingOverride,
                     coercion,
-                    returnBodySchema,
+                    inputSchema,
+                    outputSchema: returnBodySchema,
                     errorSchemas,
                     outputWirePlan,
-                    inputSchema,
-                )
+                })
                 if (!prepared) {
                     throw new Error(
                         `[abide] src/server/rpc/${relativePath} has no \`export const <name> = <METHOD>(...)\` — every $rpc module must declare exactly one remote function`,

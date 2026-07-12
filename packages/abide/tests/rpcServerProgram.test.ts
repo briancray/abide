@@ -108,12 +108,9 @@ describe('rpc input coercion plan through the warm server program (ADR-0028)', (
     test('the plan is stamped into the server rewrite as a `coerce` opt', () => {
         const source = readFileSync(serverModule('coerceArgs'), 'utf8')
         const plan = program.inputCoercionForModule(serverModule('coerceArgs'))
-        const rewritten = prepareRpcModule(
-            source,
-            '@abide/abide',
-            undefined,
-            plan,
-        )?.rewriteForServer('/rpc/coerceArgs')
+        const rewritten = prepareRpcModule(source, '@abide/abide', {
+            coercion: plan,
+        })?.rewriteForServer('/rpc/coerceArgs')
         expect(rewritten).toContain('coerce: {')
         expect(rewritten).toContain('"active":"boolean"')
         /* No author opts, so the injected object is the whole second argument. */
@@ -229,14 +226,9 @@ describe('rpc typed-error branch schemas through the warm server program (ADR-00
     test('the error-schema map is stamped into the server rewrite as an `errorJsonSchemas` opt', () => {
         const source = readFileSync(streamModule('typedErrors'), 'utf8')
         const schemas = program.errorSchemasForModule(streamModule('typedErrors'))
-        const rewritten = prepareRpcModule(
-            source,
-            '@abide/abide',
-            undefined,
-            undefined,
-            undefined,
-            schemas,
-        )?.rewriteForServer('/rpc/typedErrors')
+        const rewritten = prepareRpcModule(source, '@abide/abide', {
+            errorSchemas: schemas,
+        })?.rewriteForServer('/rpc/typedErrors')
         expect(rewritten).toContain('errorJsonSchemas: {')
         expect(rewritten).toContain('"409"')
         expect(rewritten).toContain('"anyOf"')
@@ -261,12 +253,9 @@ describe('rpc structured wire-kind plan through the warm server program (ADR-002
     test('the structured plan is stamped into the server rewrite as a `coerce` opt', () => {
         const source = readFileSync(serverModule('wireCodec'), 'utf8')
         const plan = program.inputCoercionForModule(serverModule('wireCodec'))
-        const rewritten = prepareRpcModule(
-            source,
-            '@abide/abide',
-            undefined,
-            plan,
-        )?.rewriteForServer('/rpc/wireCodec')
+        const rewritten = prepareRpcModule(source, '@abide/abide', {
+            coercion: plan,
+        })?.rewriteForServer('/rpc/wireCodec')
         expect(rewritten).toContain('coerce: {')
         expect(rewritten).toContain('"when":"date"')
         expect(rewritten).toContain('"ids":"set"')
@@ -299,15 +288,9 @@ describe('rpc output wire plan through the warm server program (ADR-0029 output 
     test('the output plan is baked onto the CLIENT rewrite as an `outputWirePlan` opt', () => {
         const source = readFileSync(serverModule('wireCodec'), 'utf8')
         const plan = program.outputWirePlanForModule(serverModule('wireCodec'))
-        const rewritten = prepareRpcModule(
-            source,
-            '@abide/abide',
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            plan,
-        )?.rewriteForClient('/rpc/wireCodec')
+        const rewritten = prepareRpcModule(source, '@abide/abide', {
+            outputWirePlan: plan,
+        })?.rewriteForClient('/rpc/wireCodec')
         expect(rewritten).toContain('__abideRemoteProxy__(')
         expect(rewritten).toContain('outputWirePlan: {')
         expect(rewritten).toContain('"when":"date"')
@@ -358,16 +341,9 @@ describe('rpc input-args JSON Schema projection through the warm server program 
     test('the projected schema is stamped into the server rewrite as an `inputJsonSchema` opt', () => {
         const source = readFileSync(serverModule('coerceArgs'), 'utf8')
         const schema = program.inputSchemaForModule(serverModule('coerceArgs'))
-        const rewritten = prepareRpcModule(
-            source,
-            '@abide/abide',
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            schema,
-        )?.rewriteForServer('/rpc/coerceArgs')
+        const rewritten = prepareRpcModule(source, '@abide/abide', {
+            inputSchema: schema,
+        })?.rewriteForServer('/rpc/coerceArgs')
         expect(rewritten).toContain('inputJsonSchema: {')
         expect(rewritten).toContain('"active":{"type":"boolean"}')
         expect(rewritten).toContain('__abideDefineRpc__("GET", "/rpc/coerceArgs", ')
@@ -413,8 +389,12 @@ describe('prepareRpcModule fail-open without a warm program (ADR-0025 D3)', () =
 
     test('an explicit false streaming override forces non-streaming even when the scan would see jsonl(', () => {
         /* The override is authoritative: a resolved `false` skips the scan entirely. */
-        expect(prepareRpcModule(streamMod, '@abide/abide', false)?.streaming).toBe(false)
+        expect(prepareRpcModule(streamMod, '@abide/abide', { streaming: false })?.streaming).toBe(
+            false,
+        )
         /* undefined override defers to the scan → streaming. */
-        expect(prepareRpcModule(streamMod, '@abide/abide', undefined)?.streaming).toBe(true)
+        expect(
+            prepareRpcModule(streamMod, '@abide/abide', { streaming: undefined })?.streaming,
+        ).toBe(true)
     })
 })

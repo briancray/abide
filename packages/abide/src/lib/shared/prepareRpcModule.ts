@@ -2,10 +2,8 @@ import { HTTP_METHODS } from './HTTP_METHODS.ts'
 import { prepareRemoteExport } from './prepareRemoteExport.ts'
 import { DEFINE_RPC_GLOBAL, REMOTE_PROXY_GLOBAL } from './RPC_SHIM_GLOBALS.ts'
 import { skipNonCode } from './skipNonCode.ts'
-import type { ErrorJsonSchemas } from './types/ErrorJsonSchemas.ts'
 import type { HttpMethod } from './types/HttpMethod.ts'
-import type { InputCoercion } from './types/InputCoercion.ts'
-import type { OutputWirePlan } from './types/OutputWirePlan.ts'
+import type { RpcBuildStamps } from './types/RpcBuildStamps.ts'
 
 const RPC_NAMES = HTTP_METHODS
 const RPC_SET = new Set<string>(RPC_NAMES)
@@ -38,12 +36,7 @@ nested generics like `GET<Map<K, V>>(`.
 export function prepareRpcModule(
     source: string,
     importName: string,
-    streamingOverride?: boolean,
-    coercion?: InputCoercion,
-    outputSchema?: Record<string, unknown>,
-    errorSchemas?: ErrorJsonSchemas,
-    outputWirePlan?: OutputWirePlan,
-    inputSchema?: Record<string, unknown>,
+    stamps: RpcBuildStamps = {},
 ): PreparedRpcModule | undefined {
     /*
     The "no barrels" surface places each method at its own path
@@ -66,7 +59,7 @@ export function prepareRpcModule(
     /* Streaming is decided by the warm server program's return-type query when it resolved a
        verdict (ADR-0025 D2 — it sees the wrapper-indirection case the scan misses); undefined
        (no warm program / unresolvable node) falls open to the char-scan, byte-identical to before. */
-    const streaming = streamingOverride ?? detectStreaming(stripped, site.parenStart, site.parenEnd)
+    const streaming = stamps.streaming ?? detectStreaming(stripped, site.parenStart, site.parenEnd)
     /* The call's top-level args (handler + optional opts), dropping a trailing-comma empty
        part. The handler is elided on the client; `opts` (schemas/cache/stream) rides through as
        a LIVE expression in the kept module (ADR-0022 D2) — evaluated in its real scope, so it can
@@ -90,17 +83,17 @@ export function prepareRpcModule(
             if (streaming) {
                 injected.push('streaming: true')
             }
-            if (coercion !== undefined) {
-                injected.push(`coerce: ${JSON.stringify(coercion)}`)
+            if (stamps.coercion !== undefined) {
+                injected.push(`coerce: ${JSON.stringify(stamps.coercion)}`)
             }
-            if (inputSchema !== undefined) {
-                injected.push(`inputJsonSchema: ${JSON.stringify(inputSchema)}`)
+            if (stamps.inputSchema !== undefined) {
+                injected.push(`inputJsonSchema: ${JSON.stringify(stamps.inputSchema)}`)
             }
-            if (outputSchema !== undefined) {
-                injected.push(`outputJsonSchema: ${JSON.stringify(outputSchema)}`)
+            if (stamps.outputSchema !== undefined) {
+                injected.push(`outputJsonSchema: ${JSON.stringify(stamps.outputSchema)}`)
             }
-            if (errorSchemas !== undefined) {
-                injected.push(`errorJsonSchemas: ${JSON.stringify(errorSchemas)}`)
+            if (stamps.errorSchemas !== undefined) {
+                injected.push(`errorJsonSchemas: ${JSON.stringify(stamps.errorSchemas)}`)
             }
             if (injected.length === 0) {
                 return head + stripped.slice(site.parenStart + 1)
@@ -136,8 +129,8 @@ export function prepareRpcModule(
             if (streaming) {
                 injected.push('streaming: true')
             }
-            if (outputWirePlan !== undefined) {
-                injected.push(`outputWirePlan: ${JSON.stringify(outputWirePlan)}`)
+            if (stamps.outputWirePlan !== undefined) {
+                injected.push(`outputWirePlan: ${JSON.stringify(stamps.outputWirePlan)}`)
             }
             let argsText: string
             if (injected.length === 0) {
