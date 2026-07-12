@@ -93,10 +93,7 @@ const externalHref = state.computed(() => url('https://bun.sh', { utm: 'abide' }
         <CodeBlock title="import page, then read a field" code={`import { page } from '@abide/abide/shared/page'
 
 // directly in a template — re-renders on navigation
-<span>{page.url.pathname}</span>
-
-// or inside a computed
-const path = state.computed(() => page.url.pathname)`} />
+<span>{page.url.pathname}</span>`} />
         <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
             <table class="w-full text-sm">
                 <thead class="border-b border-slate-200 bg-slate-50 text-left">
@@ -131,67 +128,13 @@ const path = state.computed(() => page.url.pathname)`} />
         </div>
     </section>
 
-    <section class="flex flex-col gap-2">
-        <h2 class="text-sm font-semibold">Functions</h2>
-        <p class="text-xs text-slate-500">Standalone helpers for navigation and URL building.</p>
-        <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-            <table class="w-full text-sm">
-                <thead class="border-b border-slate-200 bg-slate-50 text-left">
-                    <tr>
-                        <th class="px-4 py-2 font-mono font-medium">function</th>
-                        <th class="px-4 py-2 font-medium">meaning</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-100">
-                    <tr>
-                        <td class="px-4 py-2 font-mono">navigate(url, {'{ replace, keepScroll }'})</td>
-                        <td class="px-4 py-2 text-slate-600">client-side navigation</td>
-                    </tr>
-                    <tr>
-                        <td class="px-4 py-2 font-mono">url(path)</td>
-                        <td class="px-4 py-2 text-slate-600">
-                            build a URL honoring the app mount base
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    </section>
-
-    <section>
-        <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-            <table class="w-full text-sm">
-                <thead class="border-b border-slate-200 bg-slate-50 text-left">
-                    <tr>
-                        <th class="px-4 py-2 font-medium">demo</th>
-                        <th class="px-4 py-2 font-medium">shows</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-100">
-                    <tr>
-                        <td class="px-4 py-2">
-                            <a class="underline" href="/pages/product/1">/pages/product/[id]</a>
-                        </td>
-                        <td class="px-4 py-2 text-slate-600">
-                            a dynamic <code class="font-mono">[id]</code> segment, typed via the
-                            generated <code class="font-mono">Routes</code> interface
-                        </td>
-                    </tr>
-                    <tr>
-                        <td class="px-4 py-2">
-                            <a class="underline" href="/pages/boundary?explode=1"
-                                >/pages/boundary?explode=1</a
-                            >
-                        </td>
-                        <td class="px-4 py-2 text-slate-600">
-                            <code class="font-mono">{'{#try}'}</code> catching a render throw and
-                            rendering its <code class="font-mono">{'{:catch}'}</code>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    </section>
+    <p class="text-xs text-slate-500">
+        Live subroutes: <a class="underline" href="/pages/product/1">/pages/product/[id]</a> — a
+        dynamic segment typed via the generated <code class="font-mono">Routes</code> interface; and
+        <a class="underline" href="/pages/boundary?explode=1">/pages/boundary?explode=1</a> —
+        <code class="font-mono">{'{#try}'}</code> catching a render throw into its
+        <code class="font-mono">{'{:catch}'}</code>.
+    </p>
 
     <section class="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5">
         <h2 class="text-sm font-semibold">

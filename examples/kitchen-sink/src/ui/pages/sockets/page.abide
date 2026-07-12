@@ -151,20 +151,13 @@ async function tryRestPublish() {
                         </td>
                     </tr>
                     <tr>
-                        <td class="px-4 py-2 font-mono">pending()</td>
-                        <td class="px-4 py-2 text-slate-600">no frame retained yet</td>
-                    </tr>
-                    <tr>
-                        <td class="px-4 py-2 font-mono">refreshing()</td>
-                        <td class="px-4 py-2 text-slate-600">a held frame while reconnecting</td>
-                    </tr>
-                    <tr>
-                        <td class="px-4 py-2 font-mono">done()</td>
-                        <td class="px-4 py-2 text-slate-600">the stream has closed</td>
-                    </tr>
-                    <tr>
-                        <td class="px-4 py-2 font-mono">error()</td>
-                        <td class="px-4 py-2 text-slate-600">the stream's terminal error</td>
+                        <td class="px-4 py-2 font-mono">
+                            pending() · refreshing() · done() · error()
+                        </td>
+                        <td class="px-4 py-2 text-slate-600">
+                            reactive stream <a class="underline" href="/probes">probes</a> — no
+                            frame yet, held while reconnecting, closed, terminal error
+                        </td>
                     </tr>
                 </tbody>
             </table>

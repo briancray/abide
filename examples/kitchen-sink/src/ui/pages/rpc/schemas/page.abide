@@ -1,0 +1,119 @@
+<script>
+import { HttpError } from '@abide/abide/shared/HttpError'
+import { convertTemp } from '$server/rpc/convertTemp.ts'
+import { uploadNote } from '$server/rpc/uploadNote.ts'
+import CodeBlock from '$ui/CodeBlock.abide'
+import { state } from '@abide/abide/ui/state'
+
+/*
+Declaration-time schemas. `schemas.files` validates the `File` parts of a
+multipart body; `withJsonSchema` attaches an OpenAPI/MCP JSON Schema to a bare
+Standard Schema that carries no native `toJSONSchema()`.
+*/
+let celsius = state(100)
+let converted = state('(not called)')
+let uploadOutcome = state('(not called)')
+
+async function convert() {
+    const result = await convertTemp({ celsius: Number(celsius) })
+    converted = `${result.celsius}°C = ${result.fahrenheit}°F`
+}
+
+async function upload(event: SubmitEvent) {
+    event.preventDefault()
+    const formData = new FormData(event.currentTarget as HTMLFormElement)
+    try {
+        uploadOutcome = JSON.stringify(await uploadNote(formData))
+    } catch (err) {
+        uploadOutcome =
+            err instanceof HttpError ? `error: ${err.status} ${err.statusText}` : String(err)
+    }
+}
+</script>
+
+<div class="flex flex-col gap-8">
+    <div class="flex flex-col gap-2">
+        <h1 class="text-3xl font-bold">Schemas &amp; validation</h1>
+        <p class="text-slate-600">
+            The <code class="font-mono">schemas</code> option validates and projects an rpc's
+            inputs. Two cases beyond a plain <code class="font-mono">schemas.input</code>:
+            validating uploaded files, and giving a hand-rolled schema the JSON Schema the OpenAPI /
+            MCP / CLI surfaces need.
+        </p>
+    </div>
+
+    <section class="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5">
+        <h2 class="text-sm font-semibold">
+            <code class="font-mono">filesSchema</code> — multipart upload
+        </h2>
+        <p class="text-xs text-slate-500">
+            A body rpc accepts a <code class="font-mono">FormData</code> in place of typed args:
+            text fields validate against <code class="font-mono">inputSchema</code>,
+            <code class="font-mono">File</code> parts against
+            <code class="font-mono">filesSchema</code>, merged into the handler's args.
+        </p>
+        <form class="flex flex-wrap items-end gap-2 text-sm" onsubmit={upload}>
+            <label class="flex flex-col gap-1 text-xs font-medium">
+                title
+                <input
+                    name="title"
+                    value="receipts"
+                    class="block rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
+            </label>
+            <label class="flex flex-col gap-1 text-xs font-medium">
+                attachments
+                <input name="attachments" type="file" multiple class="block text-sm" />
+            </label>
+            <button
+                type="submit"
+                class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100">
+                uploadNote(formData)
+            </button>
+        </form>
+        <span class="font-mono text-xs text-slate-700">{uploadOutcome}</span>
+    </section>
+
+    <section class="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-5">
+        <h2 class="text-sm font-semibold">
+            <code class="font-mono">withJsonSchema</code> — a non-native schema
+        </h2>
+        <p class="text-xs text-slate-500">
+            <code class="font-mono">convertTemp</code>'s
+            <code class="font-mono">inputSchema</code> is hand-rolled — the bare
+            <code class="font-mono">~standard</code> contract, no schema library. It carries no
+            native <code class="font-mono">toJSONSchema()</code>, so
+            <code class="font-mono">withJsonSchema</code> attaches one; without it the rpc would
+            still validate but disappear from
+            <a class="underline" href="/openapi.json">/openapi.json</a>,
+            <a class="underline" href="/mcp">/mcp</a>, and the CLI.
+        </p>
+        <div class="flex flex-wrap items-end gap-2 text-sm">
+            <label class="flex flex-col gap-1 text-xs font-medium">
+                celsius
+                <input
+                    type="number"
+                    bind:value={celsius}
+                    class="block w-28 rounded-md border border-slate-300 px-3 py-1.5 text-sm" />
+            </label>
+            <button
+                type="button"
+                class="rounded-md border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+                onclick={convert}>
+                convertTemp(&#123; celsius &#125;)
+            </button>
+            <span class="font-mono text-xs text-slate-700">{converted}</span>
+        </div>
+
+        <CodeBlock
+            title="src/server/rpc/convertTemp.ts — wrap a schema that has no toJSONSchema()"
+            code={`import { withJsonSchema } from '@abide/abide/shared/withJsonSchema'
+// celsiusSchema is a bare Standard Schema: { '~standard': { version, vendor, validate } }
+const inputSchema = withJsonSchema(celsiusSchema, () => ({
+    type: 'object',
+    properties: { celsius: { type: 'number' } },
+    required: ['celsius'],
+}))
+export const convertTemp = GET(({ celsius }) =>
+    json({ celsius, fahrenheit: celsius * 1.8 + 32 }), { schemas: { input: inputSchema } })`} />
+    </section>
+</div>

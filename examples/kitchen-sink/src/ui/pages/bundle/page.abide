@@ -18,10 +18,11 @@ import TypeDef from '$ui/TypeDef.abide'
     </div>
 
     <section class="flex flex-col gap-2">
-        <h2 class="text-sm font-semibold">Exports</h2>
+        <h2 class="text-sm font-semibold">Runtime helpers</h2>
         <p class="text-xs text-slate-500">
-            The bundle namespace — the native window and menu config types plus the runtime probes a
-            desktop app calls.
+            The bundle namespace's runtime surface a desktop app calls. The three config types
+            (<code class="font-mono">BundleWindow</code>, <code class="font-mono">BundleMenu</code>,
+            <code class="font-mono">BundleMenuItem</code>) are shown in full below.
         </p>
         <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
             <table class="w-full text-sm">
@@ -32,26 +33,6 @@ import TypeDef from '$ui/TypeDef.abide'
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
-                    <tr>
-                        <td class="px-4 py-2 font-mono">BundleWindow</td>
-                        <td class="px-4 py-2 text-slate-600">
-                            the native window config (title, size, the initial route)
-                        </td>
-                    </tr>
-                    <tr>
-                        <td class="px-4 py-2 font-mono">BundleMenu</td>
-                        <td class="px-4 py-2 text-slate-600">
-                            the native menu tree (label + items)
-                        </td>
-                    </tr>
-                    <tr>
-                        <td class="px-4 py-2 font-mono">BundleMenuItem</td>
-                        <td class="px-4 py-2 text-slate-600">
-                            a menu entry — a <code class="font-mono">separator</code>, an
-                            <code class="font-mono">emit</code> event, or a
-                            <code class="font-mono">navigate</code> target
-                        </td>
-                    </tr>
                     <tr>
                         <td class="px-4 py-2 font-mono">onMenu(name, fn)</td>
                         <td class="px-4 py-2 text-slate-600">
@@ -70,8 +51,7 @@ import TypeDef from '$ui/TypeDef.abide'
                     <tr>
                         <td class="px-4 py-2 font-mono">appDataDir()</td>
                         <td class="px-4 py-2 text-slate-600">
-                            the per-user data dir, keyed by program name — where a bundle's DB/state
-                            belongs
+                            the per-user data dir, keyed by program name — a bundle's DB/state home
                         </td>
                     </tr>
                 </tbody>

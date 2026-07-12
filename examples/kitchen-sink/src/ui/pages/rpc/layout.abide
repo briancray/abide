@@ -10,6 +10,7 @@ SPA nav.
 */
 const subpages = [
     { href: '/rpc', label: 'overview' },
+    { href: '/rpc/schemas', label: 'schemas' },
     { href: '/rpc/consume', label: 'consume' },
     { href: '/rpc/errors', label: 'HttpError' },
     { href: '/rpc/respond', label: 'response helpers' },
