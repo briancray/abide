@@ -39,9 +39,6 @@ function shadowPreamble(importedReactives: ReadonlySet<string>): string {
         importedReactives.has('effect')
             ? undefined
             : `import { effect } from '${ABIDE_PACKAGE_NAME}/ui/effect'`,
-        importedReactives.has('watch')
-            ? undefined
-            : `import { watch } from '${ABIDE_PACKAGE_NAME}/ui/watch'`,
         `import { snippet } from '${ABIDE_PACKAGE_NAME}/shared/snippet'`,
         `import { scope } from '${ABIDE_PACKAGE_NAME}/ui/currentScope'`,
         importedReactives.has('state')
@@ -86,8 +83,16 @@ export function compileShadow(
     const scriptStart = leadingScript ? source.indexOf('>', leadingScript.index) + 1 : 0
     const templateStart = leadingScript ? (leadingScript.index ?? 0) + leadingScript[0].length : 0
 
-    const { imports, types, scope, propsShapes, diagnostics, importedReactives, propsLocalName } =
-        analyzeScript(scriptBody, scriptStart)
+    const {
+        imports,
+        types,
+        scope,
+        propsShapes,
+        diagnostics,
+        importedReactives,
+        propsLocalName,
+        watchLocalName,
+    } = analyzeScript(scriptBody, scriptStart)
     builder.raw(shadowPreamble(importedReactives))
     /* The peek helpers the async-interpolation wrap targets (ADR-0032): `$$peek` unwraps a promise
        sub-expression to its resolved value (`undefined` while pending) and `$$peekStream` reads an
@@ -112,15 +117,30 @@ export function compileShadow(
     if (propsLocalName !== undefined) {
         builder.raw(`declare function ${propsLocalName}<T = {}>(): (${propsType}) & T\n`)
     }
+    /* `watch` is re-typed with a trailing value-source overload: the real overloads
+       (`State`/socket/rpc/thunk) intersected with `<T>(source: T, handler: (value: T) => void)`.
+       A `watch(cell, handler)` source is projected to the cell's VALUE type (like every read),
+       so it never matches the real `State<T>` overload — the value-source form catches it and
+       types `handler`'s parameter as that value. Ordered after the real overloads (intersection
+       left-to-right), so a socket/rpc source still resolves to its specific frame/return type.
+       The real type is referenced through `typeof import(...)` (no value import to keep live), and
+       the binding uses the author's local alias — or the `watch` fallback for a bare/nested use
+       that isn't author-imported. */
+    const watchSpecifier = `${ABIDE_PACKAGE_NAME}/ui/watch`
+    builder.raw(
+        `declare const ${watchLocalName ?? 'watch'}: typeof import('${watchSpecifier}').watch & (<__WatchT>(source: __WatchT, handler: (value: __WatchT) => void) => () => void)\n`,
+    )
     const propsSpecifier = `${ABIDE_PACKAGE_NAME}/ui/props`
     for (const line of imports) {
-        /* The `props` import is replaced by the contextual `declare function` above;
-           emitting it too would be a duplicate-identifier error. Matched by EXACT specifier
+        /* The `props`/`watch` imports are replaced by the contextual declarations above;
+           emitting one too would be a duplicate-identifier error. Matched by EXACT specifier
            (either quote style, not a loose suffix match) so an unrelated user module merely
-           named `.../ui/props` survives verbatim. */
+           named `.../ui/props` (or `.../ui/watch`) survives verbatim. */
         if (
             line.text.includes(`from '${propsSpecifier}'`) ||
-            line.text.includes(`from "${propsSpecifier}"`)
+            line.text.includes(`from "${propsSpecifier}"`) ||
+            line.text.includes(`from '${watchSpecifier}'`) ||
+            line.text.includes(`from "${watchSpecifier}"`)
         ) {
             continue
         }
@@ -331,6 +351,11 @@ type ScriptAnalysis = {
        for the canonical import, `p` for `props as p`), or undefined when not imported. The
        `declare function` for `props` must target this name, not the canonical `'props'`. */
     propsLocalName: string | undefined
+    /* The LOCAL binding name the author's `watch` import is bound to (alias-safe), or undefined
+       when not imported. The shadow re-types `watch` under this name with a value-source
+       overload so the `watch(cell, handler)` form type-checks (the cell is projected to its
+       value, so the real State/socket/rpc overloads never match it). */
+    watchLocalName: string | undefined
 }
 
 /* Pushes a diagnostic for every author binding whose name starts with the reserved `$$`
@@ -451,6 +476,7 @@ function analyzeScript(scriptBody: string, scriptStart: number): ScriptAnalysis 
             diagnostics,
             importedReactives: new Set(),
             propsLocalName: undefined,
+            watchLocalName: undefined,
         }
     }
     const file = ts.createSourceFile('script.ts', scriptBody, ts.ScriptTarget.Latest, true)
@@ -462,10 +488,13 @@ function analyzeScript(scriptBody: string, scriptStart: number): ScriptAnalysis 
     /* The local name bound to `props` (alias-safe): the key whose value is the canonical
        `'props'`. At most one — a file imports `props` from one specifier. */
     let propsLocalName: string | undefined
+    let watchLocalName: string | undefined
     for (const [local, canonical] of bindings.direct) {
         if (canonical === 'props') {
             propsLocalName = local
-            break
+        }
+        if (canonical === 'watch') {
+            watchLocalName = local
         }
     }
     /* The `$$` prefix is reserved for the compiler's injected runtime (`$$each`, `$$model`,
@@ -507,7 +536,16 @@ function analyzeScript(scriptBody: string, scriptStart: number): ScriptAnalysis 
             scope.push(scopeLineFor(declaration, propsShapes, verbatim, span, bindings))
         }
     }
-    return { imports, types, scope, propsShapes, diagnostics, importedReactives, propsLocalName }
+    return {
+        imports,
+        types,
+        scope,
+        propsShapes,
+        diagnostics,
+        importedReactives,
+        propsLocalName,
+        watchLocalName,
+    }
 }
 
 /* Value-projects a nested control-flow `<script>` body the way `analyzeScript`

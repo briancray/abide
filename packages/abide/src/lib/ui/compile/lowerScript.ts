@@ -5,9 +5,11 @@ import { desugarSignals } from './desugarSignals.ts'
 import { identifierReferencePattern } from './identifierReferencePattern.ts'
 import { docAccessTransformer } from './lowerDocAccess.ts'
 import { signalRefsTransformer } from './renameSignalRefs.ts'
+import { reactiveImportBindings } from './resolveReactiveExport.ts'
 import { stripEffectsTransformer } from './stripEffects.ts'
 import { TS_PRINTER } from './TS_PRINTER.ts'
 import type { SeedTypeClassifier } from './types/SeedTypeClassifier.ts'
+import { wrapReactionCellSources } from './wrapReactionCellSources.ts'
 
 /* The `abide/ui/*` modules the reactive surface is imported from. An author's import of
    one is compiler-recognised and lowered, so its binding is often fully consumed — a plain
@@ -100,8 +102,24 @@ export function lowerScript(
         seedClassify,
         scriptBase,
     )
+    /* The local names bound to `watch` (alias-safe), and the full set of read-rewritten cell
+       names — together they let `wrapReactionCellSources` fold a `watch(cell, handler)` into
+       the thunk form BEFORE the read-lowering turns the cell reference into a value read. */
+    const watchLocalNames = new Set<string>()
+    for (const [local, canonical] of reactiveImportBindings(source).direct) {
+        if (canonical === 'watch') {
+            watchLocalNames.add(local)
+        }
+    }
+    const cellNames = new Set<string>([
+        ...stateNames,
+        ...derivedNames,
+        ...computedNames,
+        ...cellReadNames,
+    ])
     const result = ts.transform(source, [
         transformer,
+        wrapReactionCellSources(cellNames, watchLocalNames),
         signalRefsTransformer(
             stateNames,
             derivedNames,
