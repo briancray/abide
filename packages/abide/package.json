@@ -59,6 +59,7 @@
         "./server/prompts/definePrompt": "./src/lib/server/prompts/definePrompt.ts",
         "./ui/watch": "./src/lib/ui/watch.ts",
         "./shared/pending": "./src/lib/shared/pending.ts",
+        "./shared/invalidate": "./src/lib/shared/invalidate.ts",
         "./shared/patch": "./src/lib/shared/patch.ts",
         "./shared/peek": "./src/lib/shared/peek.ts",
         "./shared/refresh": "./src/lib/shared/refresh.ts",

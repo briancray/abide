@@ -63,17 +63,20 @@ export type RemoteFunction<
        the rpc's own spec. */
     readonly isError: RpcErrorGuard<Errors>
     /* Pre-bound selector sugar: `fn.pending(args?)` ≡ `pending(fn, args?)`, and likewise for
-       refreshing / refresh / peek — the rpc is the leading selector, bound in. The argument is
-       this rpc's typed `Args` (the by-args refinement); tags / cross-cutting selection stay on
-       the globals. The bare call `fn(args)` IS the cached read (was `fn.cache`) — all cache
-       policy lives on the definition, so there is no second options argument, and
-       `refresh(args?)` refetches keeping the stale value visible (was `invalidate`, which
-       dropped). `peek(args?)` reads the retained value synchronously (a streaming rpc peeks its
-       latest frame). `patch` is fetch-only, so it is omitted for a streaming rpc (a stream isn't
-       a memoized value) via the intersection below. */
+       refreshing / refresh / invalidate / peek — the rpc is the leading selector, bound in. The
+       argument is this rpc's typed `Args` (the by-args refinement); tags / cross-cutting selection
+       stay on the globals. The bare call `fn(args)` IS the cached read (was `fn.cache`) — all cache
+       policy lives on the definition, so there is no second options argument. The two staleness
+       verbs are distinct again (ADR-0041): `invalidate(args?)` DROPS the entry so the next read
+       reloads lazily, while `refresh(args?)` REFETCHES now keeping the stale value visible — both
+       apply locally on the client and broadcast to every connected client from the server.
+       `peek(args?)` reads the retained value synchronously (a streaming rpc peeks its latest
+       frame). `patch` is fetch-only, so it is omitted for a streaming rpc (a stream isn't a
+       memoized value) via the intersection below. */
     pending(args?: Args): boolean
     refreshing(args?: Args): boolean
     refresh(args?: Args): void
+    invalidate(args?: Args): void
     peek(args?: Args): ([Return] extends [AsyncIterable<infer Frame>] ? Frame : Return) | undefined
     /* This rpc's last error, typed off `Errors` (a discriminated union already narrowed on
        `.kind`/`.data`). `args` scopes to one call; omitted aggregates the most-recent across

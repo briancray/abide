@@ -112,9 +112,10 @@ not parse stays a string so the schema raises an honest 422.
 Consume forms (`RemoteFunction`): the bare `fn(args)` **is** the smart read —
 cached, coalesced, SWR-reactive; decodes by Content-Type, throws `HttpError` on
 non-2xx. There is no call-site options argument on the bare call. Members:
-`fn.raw(args, opts?)` (raw `Response`, no decode/throw), `fn.refresh(args?)`
-(refetch keeping the stale value visible), `fn.patch(...)` (in-place cache
-mutation; fetch-only, absent on streaming RPCs), `fn.peek(args?)` (retained value,
+`fn.raw(args, opts?)` (raw `Response`, no decode/throw), `fn.invalidate(args?)`
+(drop so the next read reloads), `fn.refresh(args?)` (refetch keeping the stale
+value visible), `fn.patch(...)` (in-place cache mutation; fetch-only, absent on
+streaming RPCs), `fn.peek(args?)` (retained value,
 sync), `fn.pending(args?)`, `fn.refreshing(args?)`, `fn.error(args?)` (this RPC's
 last typed error), `fn.isError(caught, 'name')` (typed guard), and client-only
 `fn.watch(handler)` / `fn.watch(args, handler)`. A streaming handler
@@ -336,9 +337,14 @@ error. The branch keyword is `{:else if}` (a space).
 - `@abide/abide/shared/patch` — `patch(fn, args?, updater)` / `patch({tags},
 updater)`: reactively mutate the retained value of matching cached reads in
   place, no network — the optimistic-update / real-time primitive.
-- `@abide/abide/shared/refresh` — `refresh(selector?, args?)`: refetch every
-  matching cached read, keeping the stale value visible (`refreshing()` true)
-  until fresh swaps in.
+- `@abide/abide/shared/invalidate` — `invalidate(selector?, args?)`: DROP every
+  matching cached read so the next read reloads lazily (a mounted retained reader
+  revalidates stale-in-place). Isomorphic (ADR-0041): applied locally on the
+  client, broadcast to every connected client from the server.
+- `@abide/abide/shared/refresh` — `refresh(selector?, args?)`: REFETCH every
+  matching cached read now, keeping the stale value visible (`refreshing()` true)
+  until fresh swaps in. Isomorphic (ADR-0041): applied locally on the client,
+  broadcast to every connected client from the server.
 
 ### Page — @documentation page
 

@@ -26,6 +26,7 @@ import { shell } from '../../_virtual/shell.ts'
 // @ts-expect-error virtual module resolved by abideResolverPlugin
 import { sockets } from '../../_virtual/sockets.ts'
 import { rpcRegistry } from '../server/rpc/rpcRegistry.ts'
+import { broadcastCacheStaleness } from '../server/runtime/cacheStalenessBroadcaster.ts'
 import { createServer } from '../server/runtime/createServer.ts'
 import { pageRenderSlot } from '../server/runtime/pageRenderSlot.ts'
 import { ensureRegistriesLoaded } from '../server/runtime/registryManifests.ts'
@@ -35,6 +36,7 @@ import { serverSlot } from '../server/runtime/serverSlot.ts'
 import { baseSlot } from '../shared/baseSlot.ts'
 import { buildRpcProxy } from '../shared/buildRpcProxy.ts'
 import { buildRpcRequest } from '../shared/buildRpcRequest.ts'
+import { cacheStalenessSlot } from '../shared/cacheStalenessSlot.ts'
 import { cacheStoreSlot } from '../shared/cacheStoreSlot.ts'
 import { commandNameForUrl } from '../shared/commandNameForUrl.ts'
 import { createCacheStore } from '../shared/createCacheStore.ts'
@@ -112,6 +114,7 @@ export async function createTestApp(): Promise<TestApp> {
         docSnapshotsResolver: docSnapshotsSlot.resolver,
         activeServer: serverSlot.active,
         pageRender: pageRenderSlot.render,
+        stalenessResolver: cacheStalenessSlot.resolver,
     }
 
     const sharedStore = createCacheStore()
@@ -129,6 +132,9 @@ export async function createTestApp(): Promise<TestApp> {
     const sharedDocSnapshots = { entries: [] }
     docSnapshotsSlot.resolver = () => requestContext.getStore()?.docSnapshots ?? sharedDocSnapshots
     pageSlot.resolver = resolvePageSnapshot
+    /* Server-side invalidate()/refresh() broadcast over the reserved socket (ADR-0041),
+       exactly as serverEntry installs it. */
+    cacheStalenessSlot.resolver = () => broadcastCacheStaleness
 
     /* Eager env validation, exactly as serverEntry: a top-level env(schema) in
        src/server/config.ts fails the boot loudly here rather than lazily. No-op
@@ -215,6 +221,7 @@ export async function createTestApp(): Promise<TestApp> {
         docSnapshotsSlot.resolver = previous.docSnapshotsResolver
         serverSlot.active = previous.activeServer
         pageRenderSlot.render = previous.pageRender
+        cacheStalenessSlot.resolver = previous.stalenessResolver
     }
 
     return {

@@ -5,12 +5,14 @@ import type { McpServer } from '../../mcp/types/McpServer.ts'
 import { abideLog } from '../../shared/abideLog.ts'
 import { basePathFromAppUrl } from '../../shared/basePathFromAppUrl.ts'
 import { baseSlot } from '../../shared/baseSlot.ts'
+import { CACHE_STALENESS_SOCKET } from '../../shared/CACHE_STALENESS_SOCKET.ts'
 import { extraForwardHeaders } from '../../shared/extraForwardHeaders.ts'
 import { healthReadSlot } from '../../shared/healthReadSlot.ts'
 import { isDebugNegated } from '../../shared/isDebugNegated.ts'
 import { logClosingRecord } from '../../shared/logClosingRecord.ts'
 import { OFFLINE_HEADER } from '../../shared/OFFLINE_HEADER.ts'
 import { parseBoundedEnvInt } from '../../shared/parseBoundedEnvInt.ts'
+import { RESERVED_SOCKET_PREFIX } from '../../shared/RESERVED_SOCKET_PREFIX.ts'
 import { requestScopeSlot } from '../../shared/requestScopeSlot.ts'
 import { setAppName } from '../../shared/setAppName.ts'
 import type { Layouts } from '../../ui/types/Layouts.ts'
@@ -19,6 +21,7 @@ import type { AppModule } from '../AppModule.ts'
 import type { PromptRoutes } from '../prompts/types/PromptRoutes.ts'
 import type { RemoteRoutes } from '../rpc/types/RemoteRoutes.ts'
 import { createSocketDispatcher } from '../sockets/createSocketDispatcher.ts'
+import { defineSocket } from '../sockets/defineSocket.ts'
 import type { SocketRoutes } from '../sockets/types/SocketRoutes.ts'
 import { buildHealthPayload } from './buildHealthPayload.ts'
 import { buildOpenApiSpec } from './buildOpenApiSpec.ts'
@@ -381,6 +384,21 @@ export async function createServer({
     lifecycle. Steady-state fan-out rides Bun's native server.publish so
     a busy socket doesn't iterate JS per subscriber per message.
     */
+    /* Reserve the `__abide/` socket namespace: a user socket file whose name lands there
+       would shadow a framework-minted internal topic (the cache-staleness pipe below), so
+       fail the boot loudly rather than let it silently override. */
+    for (const name of Object.keys(sockets)) {
+        if (name.startsWith(RESERVED_SOCKET_PREFIX)) {
+            throw new Error(
+                `[abide] socket name "${name}" is reserved — the "${RESERVED_SOCKET_PREFIX}" namespace is framework-internal. Rename the file under src/server/sockets.`,
+            )
+        }
+    }
+    /* Mint the reserved cache-staleness topic (ADR-0041): server-publish-only, no retention
+       tail (a pure live pipe). defineSocket registers it in socketRegistry, where the
+       broadcaster and the dispatcher's reserved-name path both resolve it. */
+    defineSocket(CACHE_STALENESS_SOCKET, { tail: 0, clientPublish: false })
+
     const socketDispatcher = createSocketDispatcher(sockets)
 
     /*

@@ -4,6 +4,7 @@ import { decodeWireBody } from '../../shared/decodeWireBody.ts'
 import { encodeRefJson } from '../../shared/encodeRefJson.ts'
 import { memoizeByKey } from '../../shared/memoizeByKey.ts'
 import { messageFromError } from '../../shared/messageFromError.ts'
+import { RESERVED_SOCKET_PREFIX } from '../../shared/RESERVED_SOCKET_PREFIX.ts'
 import type { SocketClientFrame } from '../../shared/types/SocketClientFrame.ts'
 import type { SocketServerFrame } from '../../shared/types/SocketServerFrame.ts'
 import { error } from '../error.ts'
@@ -86,6 +87,14 @@ export function createSocketDispatcher(sockets: SocketRoutes): SocketDispatcher 
         | { entry: SocketRegistryEntry }
         | { failure: 'unregistered' | 'load-failed' | 'no-export'; message: string }
     > {
+        /* A reserved `__abide/` topic has no user module to load — it is minted at boot into
+           the registry (ADR-0041), so skip the loader and read it straight from there. */
+        if (name.startsWith(RESERVED_SOCKET_PREFIX)) {
+            const reserved = lookupSocket(name)
+            return reserved
+                ? { entry: reserved }
+                : { failure: 'unregistered', message: `[abide] no socket registered at ${name}` }
+        }
         const loader = ensureLoaded(name)
         if (!loader) {
             return { failure: 'unregistered', message: `[abide] no socket registered at ${name}` }

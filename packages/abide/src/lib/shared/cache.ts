@@ -758,8 +758,22 @@ cache; the lifecycle ping still fires but recomputes pending() to the same value
 function invalidate<Args, Return>(arg?: CacheSelector<Args, Return>, args?: Args): void {
     /* Resolve the fn-selector prefix once; the matcher and the label both consume it. */
     const prefix = selectorPrefix(arg, args)
-    const matches = selectorMatcher(arg, args, prefix)
-    invalidateTripwire(selectorLabel(arg, args, prefix))
+    invalidateMatching(selectorMatcher(arg, args, prefix), selectorLabel(arg, args, prefix), prefix)
+}
+
+/*
+The store-loop body of invalidate(), driven by a raw entry predicate rather than a
+selector — the single apply-by-matcher seam so a local invalidate() and a
+wire-driven one (a server broadcast decoded via matcherFromEnvelope) run the EXACT
+same drop loop and can't diverge (ADR-0041). `label` feeds the cycle tripwire;
+`prefix` (undefined for a tag selector) resets recorded rpc errors for the selector.
+*/
+function invalidateMatching(
+    matches: (entry: CacheEntry) => boolean,
+    label: string,
+    prefix: string | undefined,
+): void {
+    invalidateTripwire(label)
     /* Reset any recorded rpc errors for this selector too (independent of cache entries — a
        bare call that errored never became one). Only fn selectors resolve a prefix. */
     if (prefix !== undefined) {
@@ -814,6 +828,7 @@ function selectorLabel<Args, Return>(
 }
 
 cache.invalidate = invalidate
+cache.invalidateMatching = invalidateMatching
 
 /*
 The smart-call refetch: refetches every entry matching the selector, keeping the
@@ -836,8 +851,20 @@ way to re-run, so it drops (the next read reloads) — the invalidate fallback.
 */
 function refresh<Args, Return>(arg?: CacheSelector<Args, Return>, args?: Args): void {
     const prefix = selectorPrefix(arg, args)
-    const matches = selectorMatcher(arg, args, prefix)
-    invalidateTripwire(selectorLabel(arg, args, prefix))
+    refreshMatching(selectorMatcher(arg, args, prefix), selectorLabel(arg, args, prefix), prefix)
+}
+
+/*
+The store-loop body of refresh(), driven by a raw entry predicate — the refetch
+analogue of invalidateMatching, so a local refresh() and a wire-driven one share
+one refetch loop (ADR-0041).
+*/
+function refreshMatching(
+    matches: (entry: CacheEntry) => boolean,
+    label: string,
+    prefix: string | undefined,
+): void {
+    invalidateTripwire(label)
     if (prefix !== undefined) {
         rpcErrorRegistry.clearMatching(prefix)
     }
@@ -883,6 +910,7 @@ function refresh<Args, Return>(arg?: CacheSelector<Args, Return>, args?: Args): 
 }
 
 cache.refresh = refresh
+cache.refreshMatching = refreshMatching
 
 /*
 Local value mutation: replaces the retained value of every entry matching the

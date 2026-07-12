@@ -1,3 +1,5 @@
+import { applyCacheStalenessLocally } from '../shared/applyCacheStalenessLocally.ts'
+import { cacheStalenessSlot } from '../shared/cacheStalenessSlot.ts'
 import { cacheStoreSlot } from '../shared/cacheStoreSlot.ts'
 import { createCacheStore } from '../shared/createCacheStore.ts'
 import { pageSlot } from '../shared/pageSlot.ts'
@@ -12,6 +14,7 @@ import { DOC_SEED } from './runtime/DOC_SEED.ts'
 import type { RouteLoader } from './runtime/types/RouteLoader.ts'
 import { seedBootState } from './seedBootState.ts'
 import { seedStreamedResolution } from './seedStreamedResolution.ts'
+import { subscribeCacheStaleness } from './subscribeCacheStaleness.ts'
 
 /*
 The official abide-ui client entry. Reads the server's `window.__SSR__` payload,
@@ -50,6 +53,10 @@ export function startClient(
     cacheStoreSlot.resolver = () => store
     /* One tab store: cache(fn, { shared: true }) shares it, so shared is a no-op here. */
     sharedCacheStoreSlot.resolver = () => store
+    /* invalidate()/refresh() apply to THIS tab's cache (the server entry installs a
+       broadcaster instead — the ADR-0041 side-swap). Same function as the slot fallback so
+       the local-apply path can't diverge. */
+    cacheStalenessSlot.resolver = () => applyCacheStalenessLocally
     /* Seed both SSR cache partitions through the one streamed-resolution sink: `ssr.cache`
        (inline — reads settled at render-return, in __SSR__) and `__abideResumeCache` (pending
        {#await} reads whose `__abideResolve(...)` chunks the stream pushed during parse, before
@@ -81,5 +88,12 @@ export function startClient(
     ;(globalThis as { __abideResolve?: (resolution: StreamedResolution) => void }).__abideResolve =
         seedStreamedResolution
 
-    return router(target, routes, layoutRoutes, probeNavigation)
+    /* Subscribe to the reserved cache-staleness pipe (ADR-0041) AFTER seeding, so a server
+       broadcast drops/refetches this tab's freshly-hydrated cache — live-only, never replay. */
+    const disposeStaleness = subscribeCacheStaleness()
+    const disposeRouter = router(target, routes, layoutRoutes, probeNavigation)
+    return () => {
+        disposeStaleness()
+        disposeRouter()
+    }
 }

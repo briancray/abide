@@ -26,9 +26,11 @@ import { shell } from './_virtual/shell.ts'
 import { sockets } from './_virtual/sockets.ts'
 import { exitWithParent } from './lib/bundle/exitWithParent.ts'
 import { loadEnvFromBinaryDir } from './lib/cli/loadEnvFromBinaryDir.ts'
+import { broadcastCacheStaleness } from './lib/server/runtime/cacheStalenessBroadcaster.ts'
 import { createServer } from './lib/server/runtime/createServer.ts'
 import { requestContext } from './lib/server/runtime/requestContext.ts'
 import { resolvePageSnapshot } from './lib/server/runtime/resolvePageSnapshot.ts'
+import { cacheStalenessSlot } from './lib/shared/cacheStalenessSlot.ts'
 import { cacheStoreSlot } from './lib/shared/cacheStoreSlot.ts'
 import { createCacheStore } from './lib/shared/createCacheStore.ts'
 import { docSnapshotsSlot } from './lib/shared/docSnapshotsSlot.ts'
@@ -79,6 +81,13 @@ const sharedCacheStore = createCacheStore()
 sharedCacheStoreSlot.resolver = () => sharedCacheStore
 
 cacheStoreSlot.resolver = () => requestContext.getStore()?.cache ?? sharedCacheStore
+
+/*
+Server-side invalidate()/refresh() broadcast to every connected client instead of
+mutating a throwaway request store (ADR-0041). The broadcaster is imported ONLY here
+so its server socket code never enters the client reachability graph.
+*/
+cacheStalenessSlot.resolver = () => broadcastCacheStaleness
 
 /* One process-wide fallback list for reads with no request in flight (boot/cron/socket) —
    real requests each carry their own `pendingAsyncCells`, so the SSR barrier drains a

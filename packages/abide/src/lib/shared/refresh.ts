@@ -1,4 +1,4 @@
-import { cache } from './cache.ts'
+import { cacheStalenessSlot } from './cacheStalenessSlot.ts'
 import { isAsyncCell } from './isAsyncCell.ts'
 import type { AsyncComputed } from './types/AsyncComputed.ts'
 import type { CacheSelector } from './types/CacheSelector.ts'
@@ -17,6 +17,12 @@ pending blank. Follows the shared selector grammar:
 
 Instance sugar `getFoo.refresh(args?)` ≡ `refresh(getFoo, args?)`. Reports, never
 retains a spinner — pair with `refreshing()` to surface the in-flight reload.
+
+Isomorphic (ADR-0041): applied LOCALLY on the client, and on the SERVER it now
+broadcasts to every connected client (each refetches eagerly) instead of mutating a
+throwaway request store that reached no browser. The side-swap rides the
+cacheStalenessSlot resolver — this source is byte-identical on both sides. The
+paired drop verb is `invalidate`.
 */
 // @documentation cache
 export function refresh<Args, Return>(
@@ -28,5 +34,6 @@ export function refresh<Args, Return>(
         arg.refresh()
         return
     }
-    cache.refresh(arg as CacheSelector<Args, Return>, args)
+    /* Side-swap: the client entry applies locally; the server entry broadcasts. */
+    cacheStalenessSlot.get()?.('refresh', arg as CacheSelector<Args, Return>, args)
 }
