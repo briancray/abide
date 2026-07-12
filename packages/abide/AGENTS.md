@@ -75,7 +75,7 @@ The bundler and route resolver read these paths by convention (dir aliases
 | `abide compile [--target=<bun-…>] [--out=<path>]`        | Build a standalone server executable.                                                                                                              |
 | `abide cli [--target=…] [--out=…] [--platforms=<a,b,c>]` | Build the thin CLI binary (manifest baked in, ships the compiled server beside it); `--platforms` cross-compiles into `dist/cli-thin/<platform>/`. |
 | `abide bundle`                                           | Assemble a self-contained desktop app bundle for the host platform (`.app` on macOS), unsigned.                                                    |
-| `abide check`                                            | Type-check every `.abide` component's template + props through its shadow program; non-zero on error.                                              |
+| `abide check`                                            | Type-check the project: every `.abide` component's template + props through its shadow program, plus the project's own `.ts` files; non-zero on error. |
 | `abide lsp`                                              | Run the `.abide` language server over stdio (JSON-RPC) for editor diagnostics.                                                                     |
 | `abide init-agent`                                       | Write/refresh the abide agent-guide pointer in the project root `CLAUDE.md`.                                                                       |
 
@@ -151,7 +151,11 @@ read inline during SSR is captured in the per-request cache; the runtime
 snapshots each settled entry into a wire-safe form serialized into the HTML, and
 the client seeds its store from it on hydration — the same call hydrates warm
 instead of re-firing. Streaming reads are snapshotted again after the stream
-drains and seeded over the wire.
+drains and seeded over the wire. Plain `state(initial)` rides the same move: each
+rendered scope's document snapshot is serialized into `__SSR__.docs` keyed by its
+render-path id, and on hydration the first write to each slot adopts the server
+value — so a nondeterministic init (`state(crypto.randomUUID())`, `state(Date.now())`)
+carries the server's value through instead of recomputing a divergent one client-side.
 
 ## .abide template grammar
 
@@ -622,7 +626,7 @@ Runtime routes the framework serves:
 | `ABIDE_ENABLE_INSPECTOR`      | `true` mounts the opt-in operator inspector UI/routes.                                       |
 | `ABIDE_INSPECT`               | Enables webview devtools/inspect for desktop bundles.                                        |
 | `ABIDE_DEV_SURFACE`           | `1` forces the worker to print its surface map (set by the dev orchestrator).                |
-| `DEBUG`                       | npm-debug-style channel gate for diagnostic log channels (e.g. `abide:cache`, `-abide`).     |
+| `DEBUG`                       | npm-debug-style channel gate for diagnostic log channels (e.g. `abide:cache`, `hydrate`, `-abide`); `hydrate` reports SSR↔client hydration divergences with their render-path (browser: `localStorage['abide-debug']`). |
 
 ---
 
