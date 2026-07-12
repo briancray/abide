@@ -66,9 +66,10 @@ return json(data, { headers: { 'Access-Control-Allow-Origin': '*' } })`}
             task="Verify the request's origin yourself"
             live={LIVE}
             code={`import { request } from '@abide/abide/server/request'
+import { error } from '@abide/abide/server/error'
 
 const origin = request().headers.get('origin')
-if (origin && !ALLOWED.has(origin)) throw new HttpError(403, 'origin not allowed')`}
+if (origin && !ALLOWED.has(origin)) return error(403, 'origin not allowed')`}
             note={'For an allowlist finer than the built-in gate, read `Origin` off `request()` and enforce your own policy — layer it on top of, not instead of, the default.'} />
 
         <Recipe

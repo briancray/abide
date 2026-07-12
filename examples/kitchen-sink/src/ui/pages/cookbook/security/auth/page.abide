@@ -76,10 +76,10 @@ export async function currentUser() {
             live={SEC}
             code={`export const deletePost = DELETE(async ({ id }) => {
     const user = await currentUser()
-    if (user?.role !== 'admin') throw new HttpError(403, 'admins only')
+    if (user?.role !== 'admin') return error(403, 'admins only')
     return json(await remove(id))
 })`}
-            note={'For per-action authorization, resolve the user and throw `HttpError(403)` — the client catches it like any typed failure.'} />
+            note={'For per-action authorization, resolve the user and `return error(403)` — the client catches it as an `HttpError` like any typed failure.'} />
 
         <Recipe
             task="Gate a route in its layout"

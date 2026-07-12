@@ -107,12 +107,12 @@ export const checkout = POST(({ sku, quantity }) => {
             note={"`isError(err, 'outOfStock')` narrows both `err.kind` and `err.data` — inferred from the `error.typed` constructor the handler returns, so the compiler knows the shape."} />
 
         <Recipe
-            task="Throw a plain HTTP error"
+            task="Return a plain HTTP error"
             live={LIVE}
-            code={`import { HttpError } from '@abide/abide/shared/HttpError'
+            code={`import { error } from '@abide/abide/server/error'
 
-if (!found) throw new HttpError(404, 'not found')`}
-            note={'For one-off failures without a declared spec, throw `HttpError(status, message)` — the client catches it as an `HttpError` instance with `.status` and `.response`.'} />
+if (!found) return error(404, 'not found')`}
+            note={'For one-off failures without a declared spec, `return error(status, message?)` — the client catches it as an `HttpError` instance with `.status` and `.response`.'} />
 
         <Recipe
             task="Gate submit on client-side validity"

@@ -1,6 +1,6 @@
+import { error } from '@abide/abide/server/error'
 import { json } from '@abide/abide/server/json'
 import { POST } from '@abide/abide/server/POST'
-import { HttpError } from '@abide/abide/shared/HttpError'
 import ts from 'typescript'
 import { getHighlighter } from '../getHighlighter.ts'
 
@@ -21,7 +21,7 @@ export const typeSource = POST(async ({ module, name }: { module: string; name: 
     // Only public abide surface — the specifier is resolved against the filesystem,
     // so fence it to the package instead of resolving an arbitrary path.
     if (!module.startsWith('@abide/')) {
-        throw new HttpError(400, `typeSource only reads @abide/* modules, got ${module}`)
+        return error(400, `typeSource only reads @abide/* modules, got ${module}`)
     }
     const path = Bun.fileURLToPath(import.meta.resolve(module))
     const text = await Bun.file(path).text()
@@ -39,7 +39,7 @@ export const typeSource = POST(async ({ module, name }: { module: string; name: 
         }
     }
     if (!declaration) {
-        throw new HttpError(404, `no exported type ${name} in ${module}`)
+        return error(404, `no exported type ${name} in ${module}`)
     }
 
     const highlighter = await getHighlighter()

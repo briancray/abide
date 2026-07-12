@@ -11,18 +11,20 @@ const LIVE = '/rpc/errors'
         <p class="text-slate-600">
             A non-2xx remote call rejects with an <code class="font-mono">HttpError</code> carrying
             the raw <code class="font-mono">Response</code> plus
-            <code class="font-mono">kind</code>/<code class="font-mono">data</code>. Throw one on
-            the server, narrow it on the client.
+            <code class="font-mono">kind</code>/<code class="font-mono">data</code>. Return (or
+            throw) an error on the server, narrow the <code class="font-mono">HttpError</code> on
+            the client.
         </p>
     </div>
     <div class="flex flex-col gap-4">
         <Recipe
-            task="Throw a typed HTTP error"
+            task="Throw an HTTP error to short-circuit"
             live={LIVE}
             code={`import { HttpError } from '@abide/abide/shared/HttpError'
+import { error } from '@abide/abide/server/error'
 
-if (!product) throw new HttpError(404, 'product not found')`}
-            note={'`HttpError(status, message)` is isomorphic — throw it in a handler and the client rejects with the same instance (`.status`, `.message`, `.response`).'} />
+if (!product) throw new HttpError(error(404, 'product not found'))`}
+            note={'`error()` builds the Response, `HttpError` wraps it so `app.handleError` catches the throw and the client rejects with an `HttpError` (`.status`, `.message`, `.response`). Prefer `return error(...)` (below) when you can return instead of throw.'} />
 
         <Recipe
             task="Return a plain error Response"
@@ -36,10 +38,10 @@ return error(400, 'bad cursor')`}
         <Recipe
             task="Signal common statuses"
             live={LIVE}
-            code={`throw new HttpError(400, 'missing field')
-throw new HttpError(401, 'sign in')
-throw new HttpError(403, 'forbidden')
-throw new HttpError(404, 'not found')`}
+            code={`return error(400, 'missing field')
+return error(401, 'sign in')
+return error(403, 'forbidden')
+return error(404, 'not found')`}
             note={'Pick the status that matches the failure — the client can branch on `err.status`, and it flows into logs and the OpenAPI error responses.'} />
 
         <Recipe
@@ -122,7 +124,7 @@ try { await risky() } catch (err) { log.error('risky failed', err); throw err }`
             live="/observability"
             code={`import { trace } from '@abide/abide/shared/trace'
 
-throw new HttpError(500, \`failed (trace \${trace()})\`)`}
+return error(500, \`failed (trace \${trace()})\`)`}
             note={"`trace()` is the current request's W3C traceparent — include it in the message or a header so a user's error report maps to the exact server span."} />
 
         <Recipe

@@ -107,7 +107,7 @@ describe('createTestApp', () => {
         ['/cookbook/forms/rpc-methods', 'Define a create'],
         ['/cookbook/forms/validation', 'Declare a typed error'],
         ['/cookbook/forms/optimistic', 'Cancel an in-flight request'],
-        ['/cookbook/errors/throwing', 'Throw a typed HTTP error'],
+        ['/cookbook/errors/throwing', 'Throw an HTTP error to short-circuit'],
         ['/cookbook/errors/boundaries', 'Add a synchronous error boundary'],
         ['/cookbook/errors/probes', 'Detect that the browser is offline'],
         ['/cookbook/realtime/sockets', 'Declare a broadcast topic'],

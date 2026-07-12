@@ -59,7 +59,7 @@ export const handle = async (request, next) => {
             live="/sockets"
             code={`export const publishFeed = POST(async ({ text }) => {
     const user = await currentUser()
-    if (!user) throw new HttpError(401, 'sign in')
+    if (!user) return error(401, 'sign in')
     feed.publish({ text, by: user.id })
     return json({ ok: true })
 }, { schemas: { input: inputSchema } })`}
