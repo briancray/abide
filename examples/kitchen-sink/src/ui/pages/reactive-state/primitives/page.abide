@@ -54,13 +54,13 @@ let nameDraft = state.linked(serverName)
                         </td>
                     </tr>
                     <tr>
-                        <td class="px-4 py-2 font-mono">state.computed(fn)</td>
+                        <td class="px-4 py-2 font-mono">state.computed(seed)</td>
                         <td class="px-4 py-2 text-slate-600">
                             read-only <code class="font-mono">doubled</code>
                         </td>
                     </tr>
                     <tr>
-                        <td class="px-4 py-2 font-mono">state.linked(fn, transform?)</td>
+                        <td class="px-4 py-2 font-mono">state.linked(seed, transform?)</td>
                         <td class="px-4 py-2 text-slate-600">the reseeding name draft</td>
                     </tr>
                     <tr>

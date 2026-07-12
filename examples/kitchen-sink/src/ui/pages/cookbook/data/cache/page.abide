@@ -12,8 +12,10 @@ const LIVE = '/reactive-state'
             The bare rpc call IS the smart read — coalesced, retained (SWR always on), reactive,
             with an SSR snapshot — the same line on server and client.
             <code class="font-mono">.raw</code> is the uncached transport escape hatch;
-            <code class="font-mono">refresh</code> and <code class="font-mono">patch</code> drive
-            the retained value.
+            <code class="font-mono">refresh</code>, <code class="font-mono">invalidate</code>, and
+            <code class="font-mono">patch</code> drive the retained value — and
+            <code class="font-mono">refresh</code>/<code class="font-mono">invalidate</code> called
+            server-side broadcast to every connected client (ADR-0041).
         </p>
     </div>
     <div class="flex flex-col gap-4">
@@ -71,6 +73,22 @@ getCounter.refresh()   // revalidate; stale value stays visible`}
             live={LIVE}
             code={`refresh({ tags: ['orders'] })`}
             note={'Revalidate every entry sharing the tag — after a mutation that touches several reads, refresh the group instead of naming each function.'} />
+
+        <Recipe
+            task="Drop a cached read instead of refetching now"
+            live={LIVE}
+            code={`import { invalidate } from '@abide/abide/shared/invalidate'
+invalidate(getCounter)            // every args-variant; or getCounter.invalidate(args)
+invalidate({ tags: ['orders'] })  // every entry sharing a tag`}
+            note={'`invalidate` is the drop verb — it marks entries stale so the NEXT read reloads them lazily, versus `refresh`, which refetches immediately with the stale value held. A mounted retained reader still revalidates stale-in-place; a background entry is dropped and refetches only when re-read.'} />
+
+        <Recipe
+            task="Fan a refresh out to every connected client"
+            live={LIVE}
+            code={`// inside a server rpc, after the write lands
+await saveOrder(order)
+refresh({ tags: ['orders'] })     // or invalidate(...) — same reach`}
+            note={'`invalidate` / `refresh` are isomorphic (ADR-0041): called on the client they apply locally; called on the SERVER they broadcast to every connected client, which each revalidates its own reads. One server call reconciles every open tab — no socket plumbing.'} />
 
         <Recipe
             task="Refresh when a socket frame arrives"
