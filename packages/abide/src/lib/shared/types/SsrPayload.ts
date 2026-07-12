@@ -22,4 +22,9 @@ export type SsrPayload = SsrBootState & {
     /* Async-cell values that resolved during SSR, keyed by render-path id → ref-json string.
        `startClient` seeds these into `CELL_SEED`; a hydrating cell reads its key to warm-hydrate. */
     cells?: Record<string, string>
+    /* Reactive-document snapshots that carried synchronous `state` during SSR, keyed by render-path
+       id → ref-json string. `startClient` seeds these into `DOC_SEED`; a hydrating scope's first
+       write to each slot adopts the server value, so a plain `state(uuid())`/`state(Date.now())`
+       keeps the SSR value instead of recomputing a divergent one. */
+    docs?: Record<string, string>
 }

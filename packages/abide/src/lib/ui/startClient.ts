@@ -8,6 +8,7 @@ import { probeNavigation } from './probeNavigation.ts'
 import { router } from './router.ts'
 import { CELL_SEED } from './runtime/CELL_SEED.ts'
 import { clientPage } from './runtime/clientPage.ts'
+import { DOC_SEED } from './runtime/DOC_SEED.ts'
 import type { RouteLoader } from './runtime/types/RouteLoader.ts'
 import { seedBootState } from './seedBootState.ts'
 import { seedStreamedResolution } from './seedStreamedResolution.ts'
@@ -65,6 +66,12 @@ export function startClient(
        already populated `__abideCells` isn't clobbered). */
     if (ssr.cells !== undefined) {
         Object.assign(CELL_SEED, ssr.cells)
+    }
+    /* Seed the doc-state warm partition into DOC_SEED before mount: a hydrating `createScope` reads
+       its render-path key to adopt the SSR doc snapshot, so a plain `state(initial)` keeps the server
+       value (the consume-once swap in `scope.replace`) instead of re-running a divergent init. */
+    if (ssr.docs !== undefined) {
+        Object.assign(DOC_SEED, ssr.docs)
     }
     /* Keep the cache channel live past boot: replace the head's buffering collector with
        the store-connected sink so a post-boot resolution — the inline doc-stream cache

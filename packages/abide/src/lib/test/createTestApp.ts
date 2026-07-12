@@ -38,6 +38,7 @@ import { buildRpcRequest } from '../shared/buildRpcRequest.ts'
 import { cacheStoreSlot } from '../shared/cacheStoreSlot.ts'
 import { commandNameForUrl } from '../shared/commandNameForUrl.ts'
 import { createCacheStore } from '../shared/createCacheStore.ts'
+import { docSnapshotsSlot } from '../shared/docSnapshotsSlot.ts'
 import { HEALTH_PATH } from '../shared/HEALTH_PATH.ts'
 import { pageSlot } from '../shared/pageSlot.ts'
 import { pendingAsyncCellsSlot } from '../shared/pendingAsyncCellsSlot.ts'
@@ -108,6 +109,7 @@ export async function createTestApp(): Promise<TestApp> {
         pendingAsyncCellsResolver: pendingAsyncCellsSlot.resolver,
         resolvedCellsResolver: resolvedCellsSlot.resolver,
         streamedCellsResolver: streamedCellsSlot.resolver,
+        docSnapshotsResolver: docSnapshotsSlot.resolver,
         activeServer: serverSlot.active,
         pageRender: pageRenderSlot.render,
     }
@@ -124,6 +126,8 @@ export async function createTestApp(): Promise<TestApp> {
     const sharedStreamedCells = { entries: [] }
     streamedCellsSlot.resolver = () =>
         requestContext.getStore()?.streamedCells ?? sharedStreamedCells
+    const sharedDocSnapshots = { entries: [] }
+    docSnapshotsSlot.resolver = () => requestContext.getStore()?.docSnapshots ?? sharedDocSnapshots
     pageSlot.resolver = resolvePageSnapshot
 
     /* Eager env validation, exactly as serverEntry: a top-level env(schema) in
@@ -208,6 +212,7 @@ export async function createTestApp(): Promise<TestApp> {
         pendingAsyncCellsSlot.resolver = previous.pendingAsyncCellsResolver
         resolvedCellsSlot.resolver = previous.resolvedCellsResolver
         streamedCellsSlot.resolver = previous.streamedCellsResolver
+        docSnapshotsSlot.resolver = previous.docSnapshotsResolver
         serverSlot.active = previous.activeServer
         pageRenderSlot.render = previous.pageRender
     }

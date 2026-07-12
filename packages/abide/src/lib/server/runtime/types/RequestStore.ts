@@ -1,4 +1,5 @@
 import type { CacheStore } from '../../../shared/types/CacheStore.ts'
+import type { DocSnapshots } from '../../../shared/types/DocSnapshots.ts'
 import type { PendingAsyncCells } from '../../../shared/types/PendingAsyncCells.ts'
 import type { ResolvedCells } from '../../../shared/types/ResolvedCells.ts'
 import type { StreamedCells } from '../../../shared/types/StreamedCells.ts'
@@ -40,6 +41,14 @@ export type RequestStore = {
     mix. Sibling of `resolvedCells` (the blocking partition baked into the head snapshot).
     */
     streamedCells: StreamedCells
+    /*
+    Reactive-document snapshots captured during this request's SSR pass, keyed by render-path id.
+    `createScope` registers a lazy `take` for each rendered scope; the page renderer stamps the
+    non-empty ones into `__SSR__.docs` (ref-json) so the client seeds a plain `state(initial)` to
+    the server value rather than re-running a divergent init. Sibling of `resolvedCells` — this holds
+    synchronous document state, taken at render-return rather than at settle.
+    */
+    docSnapshots: DocSnapshots
     /*
     W3C trace position: inbound `traceparent` continued (prefer-incoming) or a
     fresh sampled trace minted at the boundary. Read by trace()/log via the

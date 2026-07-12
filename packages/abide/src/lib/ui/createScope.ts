@@ -1,8 +1,11 @@
+import { decodeRefJson } from '../shared/decodeRefJson.ts'
+import { docSnapshotsSlot } from '../shared/docSnapshotsSlot.ts'
 import { computed } from './computed.ts'
 import { effect } from './effect.ts'
 import { linked } from './linked.ts'
 import { CURRENT_PATH } from './runtime/CURRENT_PATH.ts'
 import { createDoc } from './runtime/createDoc.ts'
+import { DOC_SEED } from './runtime/DOC_SEED.ts'
 import type { Cell } from './runtime/types/Cell.ts'
 import type { Doc } from './runtime/types/Doc.ts'
 import { state } from './state.ts'
@@ -43,6 +46,33 @@ export function createScope(
             : parent === undefined
               ? `scope-${nextId++}`
               : `${parent.id}.${nextId++}`
+    /* Doc-state warm-seed (client hydration only): a plain `state(initial)` re-runs its initializer
+       on the client, so a uuid/timestamp/random would diverge from the SSR HTML. The server snapshot
+       for this scope's render-path id is decoded here and consumed by `replace` on each slot's FIRST
+       write (the eager init), keeping the server value while the throwaway init is discarded. One-shot
+       — deleted on read so an SPA re-nav to the same path re-inits fresh; empty on the server. */
+    let pendingSeed: Map<string, unknown> | undefined
+    /* `DOC_SEED` is populated only on the client by `startClient` (empty on the server), so the read
+       needs no window guard — it mirrors the async-cell warm read. */
+    const encodedSeed = DOC_SEED[id]
+    if (encodedSeed !== undefined) {
+        delete DOC_SEED[id]
+        try {
+            pendingSeed = new Map(
+                Object.entries(decodeRefJson(encodedSeed) as Record<string, unknown>),
+            )
+        } catch {
+            /* A corrupt seed falls back to a cold init — the same failure mode as a warm cell. */
+        }
+    }
+    /* Server: register this scope's doc snapshot for the `__SSR__.docs` warm-seed, keyed by its
+       render-path id. Lazy — taken at render-return, after the synchronous state inits have run.
+       Only a rendered scope (stable render-path id) registers; a detached scope (counter id) and the
+       client never do. An empty/unused doc is dropped at the stamp, so a stateless scope costs only
+       the push. */
+    if (typeof window === 'undefined' && renderPath !== '') {
+        docSnapshotsSlot.get()?.entries.push({ id, take: () => document?.snapshot() })
+    }
     /* Adopted build teardowns (the reactivity stopper from the mount core). Disposed
        first and in reverse on teardown — so the one `dispose` runs the order the call sites
        hand-composed as `stop(); lexical.dispose()`. */
@@ -65,7 +95,18 @@ export function createScope(
         nextCellIndex: () => cellIndex++,
         parent,
         read: (path) => data().read(path),
-        replace: (path, value) => data().replace(path, value),
+        /* Consume-once seed adoption: on the client's hydrating build, the FIRST write to each seeded
+           slot is the eager `state(initial)` init — swap in the server value and drop the seed, so a
+           `state(uuid())` keeps the SSR value while its throwaway fresh init is discarded. Every later
+           write (a real reassignment) and every non-seeded path passes straight through. */
+        replace: (path, value) => {
+            if (pendingSeed?.has(path)) {
+                const seeded = pendingSeed.get(path)
+                pendingSeed.delete(path)
+                return data().replace(path, seeded)
+            }
+            return data().replace(path, value)
+        },
         add: (path, value) => data().add(path, value),
         remove: (path) => data().remove(path),
         apply: (patch) => data().apply(patch),

@@ -1,5 +1,6 @@
 import { appNameSlot } from '../../shared/appNameSlot.ts'
 import { SSR_CACHE_CONTROL } from '../../shared/CACHE_CONTROL_VALUES.ts'
+import { docSnapshotsSlot } from '../../shared/docSnapshotsSlot.ts'
 import { encodeRefJson } from '../../shared/encodeRefJson.ts'
 import { formatTraceparent } from '../../shared/formatTraceparent.ts'
 import { hasSeedableRequest } from '../../shared/hasSeedableRequest.ts'
@@ -125,6 +126,41 @@ export function createUiPageRenderer({
         return Object.keys(cells).length > 0 ? cells : undefined
     }
 
+    /* The `docs` partition of __SSR__: each rendered scope's reactive-document snapshot (drained from
+       the request-scoped `docSnapshotsSlot` populated by `createScope`), keyed by its render-path id,
+       ref-json-encoded. A scope that used no state snapshots to `{}` and is dropped; an unserializable
+       doc value is dropped with the cell falling back to a client re-init. Undefined when no scope
+       carried seedable synchronous state (the common cell-only or static page). */
+    function docSeedSnapshots(): Record<string, string> | undefined {
+        const entries = docSnapshotsSlot.get()?.entries ?? []
+        if (entries.length === 0) {
+            return undefined
+        }
+        const docs: Record<string, string> = {}
+        for (const { id, take } of entries) {
+            let snapshot: unknown
+            try {
+                snapshot = take()
+            } catch {
+                continue
+            }
+            if (
+                snapshot === null ||
+                typeof snapshot !== 'object' ||
+                Object.keys(snapshot).length === 0
+            ) {
+                continue
+            }
+            try {
+                docs[id] = encodeRefJson(snapshot)
+            } catch {
+                /* Unserializable synchronous state (a function/class instance) — the client re-inits
+                   it cold rather than blanking the payload. */
+            }
+        }
+        return Object.keys(docs).length > 0 ? docs : undefined
+    }
+
     /* Build the __SSR__ <script> the client (startClient) reads on boot. The inline
        (settled) cache partition is computed once by the caller and threaded in, so the
        streaming branch can also drain the pending partition over the same render. */
@@ -140,6 +176,7 @@ export function createUiPageRenderer({
             params,
             cache: inline,
             cells: resolvedCellCells(),
+            docs: docSeedSnapshots(),
             base: base || undefined,
             trace: formatTraceparent(store.trace),
             app: appNameSlot.name,
