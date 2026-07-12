@@ -7,8 +7,8 @@
 * keep the api surface small, based on standards, and ergonomic
 * maintain high visibility into the stack for debugging
 * maintain a consistent runtime between all modes (dev and build)
-* isomorphism by default — same callable, same name, same behavior on both sides; the bundler swaps the runtime
-* no barrels. Every public name has its own module path: `abide/server/GET`, `abide/server/socket`, `abide/server/json`, `abide/shared/cache`, `abide/shared/HttpError`, `abide/ui/state`, …. `abide/server`, `abide/ui`, and `abide/shared` are namespaces — there is no umbrella `index.ts`, so importing a single name never drags side-effecting siblings into the bundle. The namespace marks the side a name runs on: `abide/server/*` server-side, `abide/ui/*` client-side, `abide/shared/*` isomorphic (same callable, same behaviour on both sides — e.g. `cache`, `HttpError`).
+* isomorphism by default — same callable, same name, same *intent* on both sides; the bundler (or an entry-installed resolver slot) swaps the runtime. Usually that means identical behaviour both sides; for a few names the runtime is genuinely side-swapped behind one intent (e.g. `cache` swaps its store per side; `invalidate`/`refresh` apply locally on the client but broadcast to clients from the server — ADR-0041)
+* no barrels. Every public name has its own module path: `abide/server/GET`, `abide/server/socket`, `abide/server/json`, `abide/shared/cache`, `abide/shared/HttpError`, `abide/ui/state`, …. `abide/server`, `abide/ui`, and `abide/shared` are namespaces — there is no umbrella `index.ts`, so importing a single name never drags side-effecting siblings into the bundle. The namespace marks the side a name runs on: `abide/server/*` server-side, `abide/ui/*` client-side, `abide/shared/*` isomorphic (same callable, same intent on both sides — usually identical behaviour, e.g. `HttpError`; sometimes a side-swapped runtime behind one intent, e.g. `cache`, `invalidate`, `refresh`).
 * value performance when all other conditions are met
 
 # coding guidelines
