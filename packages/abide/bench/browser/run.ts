@@ -41,7 +41,12 @@ if (!build.success) {
     }
     process.exit(1)
 }
-const bundle = await build.outputs[0]!.text()
+const [bundleArtifact] = build.outputs
+if (!bundleArtifact) {
+    console.error('build produced no output artifact')
+    process.exit(1)
+}
+const bundle = await bundleArtifact.text()
 const indexHtml = await file(`${HERE}index.html`).text()
 
 /* Serve the page + bundle on an ephemeral port. */

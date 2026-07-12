@@ -1,6 +1,6 @@
 import { describe, expect, spyOn, test } from 'bun:test'
-import { abideLog } from '../src/lib/shared/abideLog.ts'
 import { streamFromIterator } from '../src/lib/server/runtime/streamFromIterator.ts'
+import { abideLog } from '../src/lib/shared/abideLog.ts'
 
 /*
 Cancelling the response stream (a client disconnect) routes into the generator's

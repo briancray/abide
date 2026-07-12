@@ -1,4 +1,4 @@
-import ts from 'typescript'
+import type ts from 'typescript'
 
 /* The compiler-option fields that change how a source file parses or binds — the only inputs
    (besides the text) that make two parses of the same path differ, so the `cachedSourceFile`

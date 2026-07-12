@@ -64,6 +64,7 @@ export async function finalizeStreamedChildren(
                 id: staged.id,
                 htmlOnly: true,
                 promise: () => staged.flight,
+                // biome-ignore lint/suspicious/noThenProperty: `then` is the SsrAwait renderer callback the stream drain invokes explicitly with the resolved value — this object is stored in `awaits[]`, never awaited as a thenable
                 then: async (rendered) => {
                     mergeChildRender(rendered as SsrRender, awaits, resume)
                     return (rendered as SsrRender).html
