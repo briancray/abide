@@ -46,6 +46,23 @@ export function wrapReactionCellSources(
         return false
     }
 
+    /* The inert footgun: a member access (`s.foo`, `s['foo']`) whose base is a known cell.
+       abide has no per-property cells — the whole object lives in the one cell — so a member
+       expression is read ONCE as a plain value (outside any tracking scope) and handed to the
+       runtime as a dead value: nothing subscribes, the reaction never fires. It can't be folded
+       like a bare cell (a member access isn't a whole-cell subscription), so return the base
+       name to warn on and leave the source for the author to rewrite. */
+    function cellMemberBase(source: ts.Expression): string | undefined {
+        if (
+            (ts.isPropertyAccessExpression(source) || ts.isElementAccessExpression(source)) &&
+            ts.isIdentifier(source.expression) &&
+            cellNames.has(source.expression.text)
+        ) {
+            return source.expression.text
+        }
+        return undefined
+    }
+
     return (context) => (root) => {
         function visit(node: ts.Node): ts.Node {
             const [sourceArg, handlerArg] = ts.isCallExpression(node) ? node.arguments : []
@@ -77,6 +94,21 @@ export function wrapReactionCellSources(
                     call,
                 )
                 return ts.factory.createCallExpression(node.expression, undefined, [thunk])
+            }
+            /* Warn on the inert member-expression form `watch(s.foo, handler)` — it looks valid but
+               subscribes to nothing (see `cellMemberBase`). Not foldable; the fix is the author's. */
+            if (
+                ts.isCallExpression(node) &&
+                ts.isIdentifier(node.expression) &&
+                watchLocalNames.has(node.expression.text) &&
+                node.arguments.length === 2 &&
+                sourceArg !== undefined &&
+                cellMemberBase(sourceArg) !== undefined
+            ) {
+                const sourceText = sourceArg.getText(root)
+                console.warn(
+                    `[abide] \`watch(${sourceText}, …)\` does not track \`${sourceText}\` — a member access on a cell is read once as a plain value (abide has no per-property cells), so the reaction is inert. Wrap it in a thunk (\`watch(() => …(${sourceText}))\`) or watch the whole cell (\`watch(${cellMemberBase(sourceArg)}, v => …)\`).`,
+                )
             }
             return ts.visitEachChild(node, visit, context)
         }
