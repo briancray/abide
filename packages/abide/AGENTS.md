@@ -176,13 +176,19 @@ Mustache `{#…}` blocks, not `<template>`. The rendered blocks are
 | `{#try}` / `{:catch}` / `{:finally}` / `{/try}` | Render error boundary. |
 | `{#snippet name(args)}…{/snippet}` | Reusable builder; called `{name(args)}`. |
 
-Async reads have no ceremony: the **bare call in an interpolation**
-(`{getMessages({ limit })}`) is the documented default — a peek that reads
-`undefined` while pending (auto-streaming on SSR), composing with `?? fallback`,
-`?.`, `{#if}`, and attributes; pair it with `.pending(...)` / `.error(...)`
-probes. `{await fn()}` is an inline read that blocks SSR until the value is in the
-HTML. `{#await}` is the opt-in for branch structure and `{:then}` narrowing — not
-the default.
+Async reads have no ceremony, and `await` is the marker that picks the mode
+(ADR-0042). A **bare call in an interpolation** (`{getMessages({ limit })}`)
+*streams*: a peek that reads `undefined` while pending (typed `T | undefined`,
+auto-streaming on SSR), composing with `?? fallback`, `?.`, `{#if}`, and
+attributes; pair it with `.pending(...)` / `.error(...)` probes. `{await fn()}`
+means *resolved*: the server blocks the flush AND the client **suspends** the
+reading region (renders nothing) until it settles, so the value is never pending
+at the read — `{(await fn()).field}` needs no `?.` and never derefs a pending
+`undefined`. A refetch never re-suspends (stale-while-revalidate); warm-seed keeps
+a hydrating read `refreshing()`, so no flash. (Consequently a no-`await` `async`
+thunk — `computed(async () => getFoo())` — is a *streaming* cell, not blocking;
+`await` is the sole blocking marker.) `{#await}` is the opt-in for branch structure
+and `{:then}` narrowing — not the default.
 
 Components are capitalised tags; the content nested in a component renders where
 it calls `{children()}` (`{#if children}{children()}{:else}…{/if}` is the
@@ -444,6 +450,9 @@ Compiler-emitted; an author never imports these directly.
   read, with legible authored-scope errors.
 - `abide/ui/dom/readCell` — unified read of a `computed`/`linked`/derive reference
   (async → throwing peek, function → call, sync → `.value`).
+- `abide/ui/dom/readCellBlocking` — the blocking (`await`) variant of `readCell`: on a
+  pending cell it throws a suspense signal so the reading region withholds until the
+  value resolves, rather than reading `undefined` (client template lowering; ADR-0042).
 - `abide/ui/dom/writeCell` — unified write of a `linked` reference from an author
   assignment (async → `.set`, sync → `.value =`).
 - `abide/ui/dom/cellPending` — whether a control-flow subject is a still-loading async

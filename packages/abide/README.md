@@ -124,14 +124,16 @@ async function send() {
 <section class="chat" class:empty={limit === 0} style:--rows={shown} {...rootAttrs}>
     <h1>{title}</h1>
 
-    <!-- Async reads have no ceremony: the bare call is the way. It peeks
-         `undefined` while pending, so it composes with `??` and the probes. -->
+    <!-- A bare read STREAMS: it peeks `undefined` while pending, so it composes
+         with `??` and the probes. `await` is the marker for the other mode. -->
     <p class:loading={getMessages.pending({ limit })}>
         {getMessages({ limit })?.length ?? 0} messages
         {#if getMessages.error({ limit })}<span>failed to load</span>{/if}
     </p>
 
-    <!-- `{await}` is an inline read: it blocks SSR until the value is in the HTML. -->
+    <!-- `{await}` means RESOLVED: the server blocks the flush and the client suspends
+         this region until it settles, so the value is never pending at the read (no `?.`)
+         — the region just shows nothing, then reveals. -->
     <small>today: {await countToday()}</small>
 
     <!-- `{#await}` is the explicit opt-in — a distinct pending branch and `{:then}` narrowing. -->
