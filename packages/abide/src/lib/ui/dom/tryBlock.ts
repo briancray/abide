@@ -5,6 +5,7 @@ import { claimExpected } from '../runtime/claimExpected.ts'
 import { OWNER } from '../runtime/OWNER.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { scopeGroup } from '../runtime/scopeGroup.ts'
+import { SuspenseSignal } from '../runtime/SuspenseSignal.ts'
 import type { Boundary } from '../runtime/types/Boundary.ts'
 import type { State } from '../runtime/types/State.ts'
 import { withoutHydration } from '../runtime/withoutHydration.ts'
@@ -104,6 +105,15 @@ export function tryBlock(
             activeKind = 'try'
             errorCell = undefined
         } catch (error) {
+            /* A `SuspenseSignal` is "value pending", not an error, and must NEVER render `{:catch}`
+               (ADR-0042 D3, mirroring `flushEffects`, which refuses to route it to a boundary) — that
+               would flash the author's catch during loading and, since `rewatch` only arms on an
+               `AsyncCellError`, stick there forever. Every reading region withholds its own suspend
+               locally (post-ADR-0042 the `{#await}`/`{#each await}` subjects included), so this is
+               unreachable in a compiled template; rethrow defensively rather than mislabel it. */
+            if (error instanceof SuspenseSignal) {
+                throw error
+            }
             if (!hasCatch) {
                 throw error
             }

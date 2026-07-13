@@ -231,4 +231,55 @@ describe('blocking await cell — client suspense (ADR-0042)', () => {
         expect(host.textContent).toContain('has 3')
         expect(host.textContent).not.toContain('empty')
     })
+
+    /* A blocking read embedded in an `{#await}` SUBJECT (`Promise.resolve(user.id)`) lowers to
+       `$$readCellBlocking(user).id` — an unguarded synchronous read in awaitBlock's first effect run
+       at build. It must withhold to the pending branch while the cell is pending instead of throwing
+       the SuspenseSignal out of the (cold-render) build, then reveal `then` on settle. */
+    test('a pending blocking read in an {#await} subject withholds to the pending branch, then resolves', async () => {
+        const { host } = mountClient(`
+            <script>
+                import { state } from '@abide/abide/ui/state'
+                const user = state.computed(await new Promise((resolve) => { globalThis.__resolveAwaitUser = resolve }))
+            </script>
+            {#await Promise.resolve(user.id)}
+                <p>loading…</p>
+            {:then id}
+                <p>id {id}</p>
+            {/await}
+        `)
+        /* Mounting did not throw (the bug crashed the build on the escaped SuspenseSignal); the
+           pending branch shows while the blocking subject read is pending. */
+        expect(host.textContent).toContain('loading')
+        expect(host.textContent).not.toContain('id ')
+        ;(globalThis as { __resolveAwaitUser?: (value: unknown) => void }).__resolveAwaitUser?.({
+            id: 42,
+        })
+        await settle()
+        expect(host.textContent).toContain('id 42')
+        expect(host.textContent).not.toContain('loading')
+    })
+
+    /* A blocking read in an `{#for await}` SOURCE lowers to `$$readCellBlocking(user).id` — an
+       unguarded synchronous read in eachAsync's driving effect at build. It must withhold (render no
+       rows) while pending instead of throwing out of the build, then stream once it settles. */
+    test('a pending blocking read in an {#for await} source withholds, then streams', async () => {
+        const { host } = mountClient(`
+            <script>
+                import { state } from '@abide/abide/ui/state'
+                const user = state.computed(await new Promise((resolve) => { globalThis.__resolveEachUser = resolve }))
+                async function* rowsFor(id) { yield 'row-' + id }
+            </script>
+            {#for await row of rowsFor(user.id) by row}
+                <p>{row}</p>
+            {/for}
+        `)
+        /* Mounting did not throw; no rows while the source's blocking read is pending. */
+        expect(host.textContent).not.toContain('row-')
+        ;(globalThis as { __resolveEachUser?: (value: unknown) => void }).__resolveEachUser?.({
+            id: 7,
+        })
+        await settle()
+        expect(host.textContent).toContain('row-7')
+    })
 })

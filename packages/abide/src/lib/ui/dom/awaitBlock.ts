@@ -8,6 +8,7 @@ import { RENDER } from '../runtime/RENDER.ts'
 import type { ResumeEntry } from '../runtime/RESUME.ts'
 import { RESUME } from '../runtime/RESUME.ts'
 import { scopeGroup } from '../runtime/scopeGroup.ts'
+import { SuspenseSignal } from '../runtime/SuspenseSignal.ts'
 import type { State } from '../runtime/types/State.ts'
 import { withoutHydration } from '../runtime/withoutHydration.ts'
 import { state } from '../state.ts'
@@ -109,17 +110,10 @@ export function awaitBlock(
         activeKind = 'catch'
     }
 
-    /* Render a settled-or-pending result into the current generation. */
-    const render = (result: unknown): void => {
-        const gen = guard.token()
-        if (!isThenable(result)) {
-            settleThen(result) // warm-sync → resolved now, no flash
-            return
-        }
-        /* A then-branch is already mounted (a revalidation): keep it visible and update in
-           place when the new value settles, instead of blanking to pending and rebuilding —
-           this is the no-flash live-update path. A first load (or a prior pending/catch)
-           shows the pending branch (or detaches) while the promise is in flight. */
+    /* Show the pending branch (or detach when there is none), UNLESS a then-branch is already
+       mounted — a revalidation keeps it visible and updates in place when the new value settles
+       (the no-flash live-update path). Shared by an in-flight promise and a suspended subject read. */
+    const showPending = (): void => {
         if (activeKind !== 'then') {
             if (renderPending !== undefined) {
                 branch.place((host) => renderPending(host))
@@ -129,6 +123,18 @@ export function awaitBlock(
                 activeKind = undefined
             }
         }
+    }
+
+    /* Render a settled-or-pending result into the current generation. */
+    const render = (result: unknown): void => {
+        const gen = guard.token()
+        if (!isThenable(result)) {
+            settleThen(result) // warm-sync → resolved now, no flash
+            return
+        }
+        /* A first load (or a prior pending/catch) shows the pending branch while the promise is in
+           flight; a live then-branch stays put (see `showPending`). */
+        showPending()
         result.then(
             (value) => {
                 if (guard.live(gen)) {
@@ -296,8 +302,23 @@ export function awaitBlock(
         }
         /* Read the promise every subsequent run so an invalidate re-runs the block. ONLY this
            read is tracked (the branch builds untracked via `scope`), so the block re-runs only
-           when its promise source does, not on any branch-state change. */
-        render(promiseThunk())
+           when its promise source does, not on any branch-state change. A blocking `await` cell
+           embedded in the subject (`{#await loadMore(user.id)}` where `user` is an `await` cell)
+           throws a `SuspenseSignal` while pending (ADR-0042) — on a COLD client render the read
+           runs synchronously here, so withhold to the pending branch until it settles (mirroring
+           the local suspense withhold every other reading region does), rather than letting the
+           throw escape the build. The read tracked its cell, so this effect re-runs on resolve. */
+        let result: unknown
+        try {
+            result = promiseThunk()
+        } catch (signal) {
+            if (!(signal instanceof SuspenseSignal)) {
+                throw signal
+            }
+            showPending()
+            return
+        }
+        render(result)
     })
 }
 

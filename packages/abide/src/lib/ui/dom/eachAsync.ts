@@ -11,6 +11,7 @@ import { state } from '../state.ts'
 import { buildDetachedRange } from './buildDetachedRange.ts'
 import { removeRange } from './removeRange.ts'
 import type { EachRow } from './types/EachRow.ts'
+import { withSuspense } from './withSuspense.ts'
 
 /*
 Async keyed list — the runtime for `<template each await key=>`. Like `each`, but
@@ -113,7 +114,14 @@ export function eachAsync<T>(
             removeRange(row.start, row.end)
         }
         rows.clear()
-        const iterable = items() // read (subscribe) synchronously
+        /* Read (subscribe) the source synchronously, tolerating a pending blocking `await` read
+           embedded in it (a SuspenseSignal, ADR-0042): withhold — render no rows until it resolves,
+           exactly as sync `each` does. On a cold client render the read runs here at build; the
+           read tracked its cell, so this effect re-runs on settle. */
+        const iterable = withSuspense<AsyncIterable<T> | undefined>(items, undefined)
+        if (iterable === undefined) {
+            return
+        }
         const present = new Set<string>()
         let arrivals = 0 // stream arrival ordinal → each row's index
         const drain = async (): Promise<void> => {
