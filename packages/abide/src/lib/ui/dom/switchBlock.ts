@@ -1,3 +1,4 @@
+import { SuspenseSignal } from '../runtime/SuspenseSignal.ts'
 import { mountSwappableRange } from './mountSwappableRange.ts'
 import type { SwitchCase } from './types/SwitchCase.ts'
 
@@ -47,8 +48,24 @@ export function switchBlock(
         parent,
         /* A pending bare async subject (compiler-supplied `isPending`) selects no case — not
            even the default — so the block renders nothing until the cell settles, rather than
-           conflating "still loading" with a subject that matched the default. */
-        () => (isPending?.() === true ? -1 : select(subject())),
+           conflating "still loading" with a subject that matched the default. A blocking `await`
+           cell embedded in the subject or a `match` (a member access / compound the `isPending`
+           gate doesn't cover) throws a `SuspenseSignal` while pending (ADR-0042); select no case
+           until it settles, exactly as a bare async subject holds — the read tracked its cell, so
+           the swap effect re-runs on resolve. */
+        () => {
+            if (isPending?.() === true) {
+                return -1
+            }
+            try {
+                return select(subject())
+            } catch (signal) {
+                if (!(signal instanceof SuspenseSignal)) {
+                    throw signal
+                }
+                return -1
+            }
+        },
         (index) => {
             const chosen = index === -1 ? undefined : cases[index]
             return chosen && ((p) => chosen.render(p))

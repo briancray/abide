@@ -6,6 +6,7 @@ import { SuspenseSignal } from '../runtime/SuspenseSignal.ts'
 import { appendSnippet } from './appendSnippet.ts'
 import { appendText } from './appendText.ts'
 import { parseRawNodes } from './parseRawNodes.ts'
+import { readTextOrSuspend } from './readTextOrSuspend.ts'
 
 /*
 A reactive `{expr}` interpolation mounted at a skeleton anchor comment (`<!--a-->`), used
@@ -75,16 +76,11 @@ export function appendTextAt(anchor: Node, read: () => unknown): void {
     }
     const node = document.createTextNode('')
     parent.insertBefore(node, anchor.nextSibling)
+    /* Text/suspend handling shared with `appendText`'s bind via `readTextOrSuspend`: stringify the
+       value, show '' while a blocking read is pending (re-running on settle, since the read tracked
+       its cell), and coerce nullish to '' (never the literal "undefined") — keeping this create path
+       congruent with the hydrate path above, which delegates to `appendText`. */
     effect(() => {
-        try {
-            node.data = String(read())
-        } catch (signal) {
-            /* A pending blocking read suspends: show empty until it resolves (the read tracked
-               its cell, so this effect re-runs on settle). */
-            if (!(signal instanceof SuspenseSignal)) {
-                throw signal
-            }
-            node.data = ''
-        }
+        node.data = readTextOrSuspend(read)
     })
 }

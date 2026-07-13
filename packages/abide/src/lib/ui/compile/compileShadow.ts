@@ -1,6 +1,8 @@
 import ts from 'typescript'
 import { ABIDE_PACKAGE_NAME } from '../../shared/ABIDE_PACKAGE_NAME.ts'
 import { attrLiftPosition } from './attrLiftPosition.ts'
+import { hasTopLevelAwait } from './hasTopLevelAwait.ts'
+import { isFunctionScopeBoundary } from './isFunctionScopeBoundary.ts'
 import { isWhitespaceText } from './isWhitespaceText.ts'
 import { type LiftPosition, liftAsyncSubExpressions } from './liftAsyncSubExpressions.ts'
 import { parseTemplate } from './parseTemplate.ts'
@@ -747,53 +749,20 @@ function seedIsAsync(seed: ts.Expression): boolean {
                 ?.some((modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword) ?? false
         )
     }
-    return expressionHasTopLevelAwait(seed)
+    return hasTopLevelAwait(seed)
 }
 
 /* True for a BLOCKING async cell (ADR-0042 D6): an async thunk whose BODY has a top-level `await`
    (`computed(async () => await X)`), or a bare seed carrying a top-level `await` (`computed(await
    X)` — wrapSeed makes it an async thunk over that await). An async thunk with NO await
-   (`computed(async () => getFoo())`) is STREAMING, not blocking. Mirrors desugarSignals'
-   `isBlockingSeed` so the shadow type (`$$cellValue` vs `$$cellValuePending`) agrees with the
-   runtime's blocking flag — the "one predicate" ADR-0042 D5 requires. */
+   (`computed(async () => getFoo())`) is STREAMING, not blocking. Shares `hasTopLevelAwait` with
+   desugarSignals' `isBlockingSeed` so the shadow type (`$$cellValue` vs `$$cellValuePending`) agrees
+   with the runtime's blocking flag — the "one predicate" ADR-0042 D5 requires. */
 function seedIsBlocking(seed: ts.Expression): boolean {
     if (ts.isArrowFunction(seed) || ts.isFunctionExpression(seed)) {
-        return seedIsAsync(seed) && expressionHasTopLevelAwait(seed.body)
+        return seedIsAsync(seed) && hasTopLevelAwait(seed.body)
     }
-    return expressionHasTopLevelAwait(seed)
-}
-
-/* True when `node` contains an `await` at its own top level — not nested inside a function. The
-   seed-classification counterpart to `collectTopLevelAwaitDiagnostics`' walk; kept local so the
-   shadow doesn't reach into `desugarSignals`' private `hasTopLevelAwait`. */
-function expressionHasTopLevelAwait(node: ts.Node): boolean {
-    let found = false
-    const visit = (child: ts.Node): void => {
-        if (found || isFunctionScopeBoundary(child)) {
-            return
-        }
-        if (ts.isAwaitExpression(child)) {
-            found = true
-            return
-        }
-        ts.forEachChild(child, visit)
-    }
-    visit(node)
-    return found
-}
-
-/* A node that opens its own (possibly async) function scope — awaits inside it are the author's
-   concern, so both the top-level-await walk and the seed classifier stop descending here. */
-function isFunctionScopeBoundary(node: ts.Node): boolean {
-    return (
-        ts.isFunctionDeclaration(node) ||
-        ts.isFunctionExpression(node) ||
-        ts.isArrowFunction(node) ||
-        ts.isMethodDeclaration(node) ||
-        ts.isGetAccessorDeclaration(node) ||
-        ts.isSetAccessorDeclaration(node) ||
-        ts.isConstructorDeclaration(node)
-    )
+    return hasTopLevelAwait(seed)
 }
 
 /* Whether any ELEMENT in the tree carries an `attach` — gates emitting the DOM-typed

@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { compileComponent } from '../src/lib/ui/compile/compileComponent.ts'
 import { compileShadow } from '../src/lib/ui/compile/compileShadow.ts'
 
 const SOURCE = `<script>import { state } from '@abide/abide/ui/state'
@@ -75,6 +76,59 @@ let grid = state.computed(async () => await getSession())
            through `$$cellValue`, which unwraps the promise to the resolved value. */
         expect(code).toContain('const session = $$cellValue(async () => (await getSession()));')
         expect(code).toContain('const grid = $$cellValue(async () => await getSession());')
+    })
+
+    /* ADR-0042 D5 "one predicate": the shadow's blocking classifier (`$$cellValue` → `T` vs
+       `$$cellValuePending` → `T | undefined`) and the runtime blocking flag (`trackedComputed(…,
+       false|true)` + `$$readCellBlocking`/`$$readCell`) now share ONE `hasTopLevelAwait` walk, so
+       they can never disagree on whether a seed is `await`-marked. */
+    test('shadow type and runtime blocking flag agree on await-marking (D5 one predicate)', () => {
+        /* (a) async modifier, NO top-level await → STREAMING on both sides (typed `| undefined`). */
+        const streaming = `<script>
+import { state } from '@abide/abide/ui/state'
+async function getFoo() { return 1 }
+const foo = state.computed(async () => getFoo())
+</script>
+<p>{foo}</p>`
+        expect(compileShadow(streaming).code).toContain(
+            'const foo = $$cellValuePending(async () => getFoo());',
+        )
+        const streamingRuntime = compileComponent(streaming)
+        expect(streamingRuntime).toContain('$$scope().trackedComputed(async () => getFoo(), true)')
+        expect(streamingRuntime).toContain('$$readCell(foo)')
+        expect(streamingRuntime).not.toContain('$$readCellBlocking')
+
+        /* (b) top-level `await` → BLOCKING on both sides (resolved `T`, suspends its region). */
+        const blocking = `<script>
+import { state } from '@abide/abide/ui/state'
+async function getFoo() { return 1 }
+const foo = state.computed(async () => await getFoo())
+</script>
+<p>{foo}</p>`
+        expect(compileShadow(blocking).code).toContain(
+            'const foo = $$cellValue(async () => await getFoo());',
+        )
+        const blockingRuntime = compileComponent(blocking)
+        expect(blockingRuntime).toContain(
+            '$$scope().trackedComputed(async () => await getFoo(), false)',
+        )
+        expect(blockingRuntime).toContain('$$readCellBlocking(foo)')
+
+        /* (c) the divergence the shared walk CLOSES: an `await` nested in a METHOD of the seed body
+           is not top-level, so the seed stays STREAMING on both sides. Before unification the
+           runtime walk (function/arrow-only boundaries) descended into the method and mis-classified
+           this as blocking, while the shadow (method-aware boundaries) typed it streaming. */
+        const nested = `<script>
+import { state } from '@abide/abide/ui/state'
+async function load() { return 1 }
+const foo = state.computed(async () => { const o = { async m() { return await load() } }; return o.m() })
+</script>
+<p>{foo}</p>`
+        expect(compileShadow(nested).code).toContain('const foo = $$cellValuePending(')
+        const nestedRuntime = compileComponent(nested)
+        expect(nestedRuntime).toContain(', true)')
+        expect(nestedRuntime).toContain('$$readCell(foo)')
+        expect(nestedRuntime).not.toContain('$$readCellBlocking')
     })
 
     test('a bare non-thunk computed seed is wrapped rather than called as a value', () => {

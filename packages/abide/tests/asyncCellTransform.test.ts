@@ -203,4 +203,32 @@ describe('blocking await cell — client suspense (ADR-0042)', () => {
         /* Resolved: the region reveals with the real value — `.length` now reads the array. */
         expect(host.textContent).toContain('3 items')
     })
+
+    /* A blocking read embedded in an `{#if}` CONDITION via member access (`{#if items.length}`) is
+       NOT the bare-await-subject form, so it lowers to `$$readCellBlocking(items).length` with no
+       `$$cellPending` gate — the condition runs synchronously at `mountSwappableRange` build. The
+       block must withhold (render NEITHER branch, never flashing `{:else}`) while pending instead of
+       throwing the SuspenseSignal out of the build, then reveal the matched branch on settle. */
+    test('a pending blocking read in an {#if} condition withholds both branches, then reveals', async () => {
+        const { host } = mountClient(`
+            <script>
+                import { state } from '@abide/abide/ui/state'
+                const items = state.computed(await new Promise((resolve) => { globalThis.__resolveIfItems = resolve }))
+            </script>
+            {#if items.length}<p>has {items.length}</p>{:else}<p>empty</p>{/if}
+        `)
+        /* Mounting did not throw, and while pending neither branch renders — the `{:else}` is not
+           conflated with "still loading". */
+        expect(host.textContent).not.toContain('has')
+        expect(host.textContent).not.toContain('empty')
+        ;(globalThis as { __resolveIfItems?: (value: unknown) => void }).__resolveIfItems?.([
+            'a',
+            'b',
+            'c',
+        ])
+        await settle()
+        /* Resolved truthy: the `then` branch reveals with the real value. */
+        expect(host.textContent).toContain('has 3')
+        expect(host.textContent).not.toContain('empty')
+    })
 })

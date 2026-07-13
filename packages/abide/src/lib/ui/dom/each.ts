@@ -4,7 +4,6 @@ import { claimChild } from '../runtime/claimChild.ts'
 import { claimExpected } from '../runtime/claimExpected.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { scope } from '../runtime/scope.ts'
-import { SuspenseSignal } from '../runtime/SuspenseSignal.ts'
 import { scopeGroup } from '../runtime/scopeGroup.ts'
 import type { State } from '../runtime/types/State.ts'
 import { withoutHydration } from '../runtime/withoutHydration.ts'
@@ -14,6 +13,7 @@ import { buildDetachedRange } from './buildDetachedRange.ts'
 import { moveRange } from './moveRange.ts'
 import { removeRange } from './removeRange.ts'
 import type { EachRow } from './types/EachRow.ts'
+import { withSuspense } from './withSuspense.ts'
 
 /*
 Keyed list binding — the runtime for `<template each key=>`. Each row is a content
@@ -124,16 +124,8 @@ export function each<T>(
        suspend as an empty list — identical to the undefined-while-pending peek (ADR-0032 D3) — so
        the each renders no rows until the source resolves. The read still tracked its cell, so the
        driving effect re-runs on settle. */
-    const readSource = (): Iterable<T> | undefined => {
-        try {
-            return items()
-        } catch (signal) {
-            if (!(signal instanceof SuspenseSignal)) {
-                throw signal
-            }
-            return undefined
-        }
-    }
+    const readSource = (): Iterable<T> | undefined =>
+        withSuspense<Iterable<T> | undefined>(items, undefined)
 
     let anchor: Node
     /* When hydrating, the first effect run must NOT reconcile — the rows it would

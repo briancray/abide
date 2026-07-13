@@ -3,13 +3,15 @@ import type { AsyncComputed } from '../../shared/types/AsyncComputed.ts'
 /*
 The sentinel a compiled blocking read (`$$readCellBlocking`, an `await`-marked cell) raises
 when the cell has no value *yet* — "not resolved," not an error (ADR-0042 D3). It is a sibling
-of `AsyncCellError` but a DISTINCT class: the client suspense boundary discriminates the two by
-`instanceof`, routing a `SuspenseSignal` through the `CURRENT_SUSPENSE` slot (withhold + keep the
-watch) and letting an `AsyncCellError` pass through to the author's `{#try}`. A suspend must never
-reach a `{:catch}` branch, or loading would flash as an error. It carries the originating cell so
-the boundary can subscribe to that cell and reveal the region once it settles. Extends `Error`
-only to satisfy throw-an-Error lint and match `AsyncCellError`; it carries no `cause` — there is
-nothing wrong, the value is simply pending.
+of `AsyncCellError` but a DISTINCT class so the two are told apart by `instanceof`: a suspend is
+caught LOCALLY by the reading region — each DOM primitive (`appendText`, `attr`, `each`,
+`spreadAttrs`, `watch`, and the `when`/`switchBlock` condition) swallows it and withholds to an
+empty fallback, re-running on settle because the throwing read already subscribed the region's
+effect to the cell. It must never be handled as an error: `flushEffects` refuses to route a
+`SuspenseSignal` to a reactive `{#try}` (that would flash the author's `{:catch}` during loading),
+while an `AsyncCellError` still passes through. It carries the originating cell for diagnostics.
+Extends `Error` only to satisfy throw-an-Error lint and match `AsyncCellError`; it carries no
+`cause` — there is nothing wrong, the value is simply pending.
 */
 export class SuspenseSignal extends Error {
     readonly cell: AsyncComputed<unknown>

@@ -101,8 +101,8 @@ export function liftAsyncSubExpressions(
         /* A nested function is its own evaluation scope — an async (sub)expression inside a callback
            (`items.map(x => fetchName(x))`, `items.map(async x => await load(x))`) must NOT be hoisted
            to a top-level cell: its parameters/closure vars would become free identifiers, and it
-           would run once instead of per row. Stop at the boundary, mirroring
-           `desugarSignals.hasTopLevelAwait`. */
+           would run once instead of per row. Stop at the boundary, mirroring the shared
+           `hasTopLevelAwait` walk. */
         if (
             ts.isArrowFunction(node) ||
             ts.isFunctionExpression(node) ||

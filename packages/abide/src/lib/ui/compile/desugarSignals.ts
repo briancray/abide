@@ -1,5 +1,6 @@
 import ts from 'typescript'
 import { assignmentTargetNames } from './assignmentTargetNames.ts'
+import { hasTopLevelAwait } from './hasTopLevelAwait.ts'
 import { type ReactiveImportBindings, reactiveImportBindings } from './resolveReactiveExport.ts'
 import { signalCallee } from './signalCallee.ts'
 import type { InterpolationKind } from './types/InterpolationKind.ts'
@@ -12,34 +13,6 @@ import type { SeedTypeClassifier } from './types/SeedTypeClassifier.ts'
 type EagerStreamPredicate = (declaration: ts.VariableDeclaration) => boolean
 
 const factory = ts.factory
-
-/* True when `node` holds an `await` that runs at the seed's own top level — one NOT nested
-   inside a further function. The walk stops at every nested function boundary, so an
-   `await` in an inner callback (`items.map(async (x) => await f(x))`) does not count: only
-   a top-level `await` marks the seed itself as an async thunk the async-cell path unwraps. */
-function hasTopLevelAwait(node: ts.Node): boolean {
-    let found = false
-    const visit = (child: ts.Node): void => {
-        if (found) {
-            return
-        }
-        /* A nested function is its own await scope — don't descend into it. */
-        if (
-            ts.isFunctionDeclaration(child) ||
-            ts.isFunctionExpression(child) ||
-            ts.isArrowFunction(child)
-        ) {
-            return
-        }
-        if (ts.isAwaitExpression(child)) {
-            found = true
-            return
-        }
-        ts.forEachChild(child, visit)
-    }
-    visit(node)
-    return found
-}
 
 /* Normalises a `computed`/`linked` argument into a seed THUNK: a literal `() => …` /
    `function` argument passes through unchanged (the author already wrote the thunk), any

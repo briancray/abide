@@ -1,3 +1,4 @@
+import { SuspenseSignal } from '../runtime/SuspenseSignal.ts'
 import { mountSwappableRange } from './mountSwappableRange.ts'
 
 /*
@@ -26,7 +27,24 @@ export function when(
 ): void {
     mountSwappableRange(
         parent,
-        () => (isPending?.() === true ? 'pending' : condition() ? 'then' : 'else'),
+        () => {
+            if (isPending?.() === true) {
+                return 'pending'
+            }
+            /* A blocking `await` cell embedded in the condition — a member access or compound the
+               whole-subject `isPending` gate doesn't cover (`{#if !sources.length}`, `{#if user &&
+               await load()}`) — throws a `SuspenseSignal` while pending (ADR-0042). Withhold the
+               block (render neither branch) until it settles, exactly as a bare async subject holds;
+               the read tracked its cell, so the swap effect re-runs on resolve. */
+            try {
+                return condition() ? 'then' : 'else'
+            } catch (signal) {
+                if (!(signal instanceof SuspenseSignal)) {
+                    throw signal
+                }
+                return 'pending'
+            }
+        },
         (branch) => (branch === 'then' ? render : branch === 'else' ? renderElse : undefined),
         before,
         /* An async subject (compiler supplies `isPending`) can render a different branch on the

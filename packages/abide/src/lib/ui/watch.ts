@@ -3,9 +3,9 @@ import { REMOTE_FUNCTION } from '../shared/REMOTE_FUNCTION.ts'
 import type { CacheOnContext } from '../shared/types/CacheOnContext.ts'
 import type { NamedAsyncIterable } from '../shared/types/NamedAsyncIterable.ts'
 import type { RemoteFunction } from '../shared/types/RemoteFunction.ts'
+import { withSuspense } from './dom/withSuspense.ts'
 import { effect } from './effect.ts'
 import { generationGuard } from './runtime/generationGuard.ts'
-import { SuspenseSignal } from './runtime/SuspenseSignal.ts'
 import type { EffectResult } from './runtime/types/EffectResult.ts'
 import type { State } from './runtime/types/State.ts'
 
@@ -68,16 +68,7 @@ export function watch(
        its cell, so the effect re-runs on settle. Rethrows any real error. */
     if (argsOrHandler === undefined) {
         const thunk = source as () => EffectResult
-        return effect(() => {
-            try {
-                return thunk()
-            } catch (signal) {
-                if (!(signal instanceof SuspenseSignal)) {
-                    throw signal
-                }
-                return undefined
-            }
-        })
+        return effect(() => withSuspense<EffectResult>(thunk, undefined))
     }
     /* watch(fn, args, handler): an rpc selector with explicit args. */
     if (maybeHandler !== undefined) {

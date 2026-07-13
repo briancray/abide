@@ -1,3 +1,4 @@
+import { effect } from '../effect.ts'
 import { SuspenseSignal } from '../runtime/SuspenseSignal.ts'
 import { attr } from './attr.ts'
 import { on } from './on.ts'
@@ -20,18 +21,51 @@ export function spreadAttrs(
     exclude: string[] = [],
 ): void {
     const skip = new Set(exclude)
-    /* Key enumeration is build-once (the attribute set is fixed at build). A spread over a pending
-       blocking `await` read throws a `SuspenseSignal` here (ADR-0042) — swallow it and spread no
-       keys for now; the per-value `attr` binds below re-read reactively and fill in on settle. */
     let object: Record<string, unknown>
     try {
         object = source()
     } catch (signal) {
+        /* A spread over a PENDING blocking `await` read throws a `SuspenseSignal` here (ADR-0042):
+           its keys can't be enumerated yet. Binding the empty object now would create no `attr`/`on`
+           effects, so the attributes would never appear after the cell resolves — instead defer the
+           enumeration into a one-shot effect that re-runs on settle (the read tracked its cell). The
+           effect is pinned to this build's scope, so the `attr` binds it creates own their lifetime
+           correctly; a `spread` flag makes the enumeration fire exactly once (later value changes
+           re-read per key via `attr`, never re-enumerate). */
         if (!(signal instanceof SuspenseSignal)) {
             throw signal
         }
-        object = {}
+        let spread = false
+        effect(() => {
+            let resolved: Record<string, unknown>
+            try {
+                resolved = source()
+            } catch (retry) {
+                if (!(retry instanceof SuspenseSignal)) {
+                    throw retry
+                }
+                return
+            }
+            if (spread) {
+                return
+            }
+            spread = true
+            bindKeys(element, source, resolved, skip)
+        })
+        return
     }
+    bindKeys(element, source, object, skip)
+}
+
+/* Binds each own key of `object` onto `element`: an `on<event>` function attaches as a listener,
+   any other non-function value binds as a reactive attribute re-reading `source()[key]` per change.
+   A key in `skip` is left to its explicit binding. */
+function bindKeys(
+    element: Element,
+    source: () => Record<string, unknown>,
+    object: Record<string, unknown>,
+    skip: Set<string>,
+): void {
     for (const key in object) {
         if (skip.has(key)) {
             continue

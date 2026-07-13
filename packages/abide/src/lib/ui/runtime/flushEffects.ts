@@ -2,7 +2,6 @@ import { boundaryFor } from './boundaryFor.ts'
 import { NODE_STATE } from './NODE_STATE.ts'
 import { REACTIVE_CONTEXT } from './REACTIVE_CONTEXT.ts'
 import { SuspenseSignal } from './SuspenseSignal.ts'
-import { suspenseFor } from './suspenseFor.ts'
 import type { ReactiveNode } from './types/ReactiveNode.ts'
 import { updateIfNecessary } from './updateIfNecessary.ts'
 
@@ -52,24 +51,17 @@ function drain(): void {
             try {
                 updateIfNecessary(node)
             } catch (error) {
-                /* A `SuspenseSignal` is "no value yet", not an error — route it to the node's
-                   nearest client suspense boundary (withhold + keep-the-watch), NEVER to a
-                   `{#try}` (that would flash the author's `{:catch}` during loading, ADR-0042
-                   D3). A suspend with no suspense boundary falls through to the error collector
-                   rather than leaking to a boundary. */
-                if (error instanceof SuspenseSignal) {
-                    const suspense = suspenseFor.get(node)
-                    if (suspense !== undefined) {
-                        suspense.suspend(error)
-                        node.status = NODE_STATE.CLEAN
-                        continue
-                    }
-                } else {
-                    /* A node built inside a reactive `{#try}` routes its throw to that boundary
-                       (swap the guarded content to the catch branch) instead of the rethrow
-                       fallback — this is the "later re-run throw" the sync boundary could not
-                       catch. Reset it CLEAN either way so a later write to its deps can re-queue
-                       it (otherwise `mark`'s CLEAN→dirty gate leaves it permanently inert). */
+                /* A `SuspenseSignal` is "no value yet", not an error, and must NEVER route to a
+                   reactive `{#try}` (that would flash the author's `{:catch}` during loading,
+                   ADR-0042 D3). Every reading region catches its own suspend locally and re-runs on
+                   settle (the throwing read subscribed its cell), so a `SuspenseSignal` reaches here
+                   only if it escaped an unguarded read — surface it via the error collector below
+                   rather than leaking it to a boundary. A normal error routes to the node's nearest
+                   `{#try}` boundary: swap the guarded content to the catch branch instead of the
+                   rethrow fallback — the "later re-run throw" the sync boundary could not catch.
+                   Reset it CLEAN either way so a later write to its deps can re-queue it (otherwise
+                   `mark`'s CLEAN→dirty gate leaves it permanently inert). */
+                if (!(error instanceof SuspenseSignal)) {
                     const boundary = boundaryFor.get(node)
                     if (boundary !== undefined) {
                         boundary.handle(error)
