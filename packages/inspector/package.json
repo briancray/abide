@@ -1,6 +1,6 @@
 {
     "name": "@abide/inspector",
-    "version": "0.3.4",
+    "version": "0.3.5",
     "type": "module",
     "description": "Opt-in inspector for abide — a live view of your app's machine surface and request traffic, activated by ABIDE_ENABLE_INSPECTOR=true",
     "license": "MIT",

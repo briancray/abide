@@ -1,5 +1,0 @@
----
-"@abide/abide": patch
----
-
-The client build of an `$rpc` module now emits a minimal module — the `remoteProxy` fetch plus only the top-level statements the endpoint `opts` transitively reaches — instead of keeping the whole handler file and trusting tree-shaking to drop the server bits. Previously, server code reachable from module-level handler support (the common `const db = getDb()` shape, where `getDb` imports `bun:sqlite`) survived handler-elision and was *loaded* on the browser target, failing the build with a raw `Browser build cannot import Bun builtin: "bun:sqlite"` before abide's own reachability guard could give a guided message. Reachability is resolved through the warm rpc `ts.Program` (binder/checker), so an `opts` value built from a module-level const — `schemas: { input: inputSchema }` where `const inputSchema = z.object(...)` — keeps that const and its imports, while anything only the handler touches is never emitted. No public API change; the reachability guard for every other client-reaches-server edge is unchanged, and builds with no warm program fall back to the previous keep-the-file transform.
