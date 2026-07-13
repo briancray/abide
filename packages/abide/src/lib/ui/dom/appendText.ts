@@ -3,6 +3,7 @@ import { snippetPayload } from '../../shared/snippet.ts'
 import { effect } from '../effect.ts'
 import { claimChild } from '../runtime/claimChild.ts'
 import { RENDER } from '../runtime/RENDER.ts'
+import { SuspenseSignal } from '../runtime/SuspenseSignal.ts'
 import { appendSnippet } from './appendSnippet.ts'
 import { assertClaimedText } from './assertClaimedText.ts'
 import { isComment } from './isComment.ts'
@@ -22,16 +23,36 @@ its parsed nodes go between an anchor (create), or the server-rendered nodes
 between `<!--abide:html-->`/`<!--/abide:html-->` markers are adopted (hydrate), and
 a change re-parses and swaps. A binding is text or raw for its lifetime (decided by
 its first value), so plain text — the common case — stays a cheap single node.
+
+A blocking `await` read that is pending throws a `SuspenseSignal` (ADR-0042): the
+interpolation SUSPENDS — it renders empty and withholds until the value resolves,
+never evaluating the surrounding expression against a pending `undefined`. The read
+tracked the cell, so the bind effect re-runs on settle. A suspend can only occur on a
+cold client render (on hydrate the warm-seed makes the cell `refreshing()`, not
+`pending()`, D4), and a suspended value is treated as text — its snippet/html shape is
+decided from the first resolved value.
 */
 // @documentation plumbing
 export function appendText(parent: Node, read: () => unknown, splitAlways = false): void {
+    /* Probe the first value once, tolerating a suspend (a pending blocking read) — a suspended
+       interpolation skips snippet/html detection and takes the text path, starting empty. */
+    let probe: unknown
+    let suspended = false
+    try {
+        probe = read()
+    } catch (signal) {
+        if (!(signal instanceof SuspenseSignal)) {
+            throw signal
+        }
+        suspended = true
+    }
     /* A snippet call (`{row(args)}`) mounts its builder; a `html\`\`` value inserts
        raw markup; everything else is escaped text — decided by the first value. */
-    if (typeof snippetPayload(read()) === 'function') {
+    if (!suspended && typeof snippetPayload(probe) === 'function') {
         appendSnippet(parent, read)
         return
     }
-    if (rawHtmlString(read()) !== undefined) {
+    if (!suspended && rawHtmlString(probe) !== undefined) {
         appendRawHtml(parent, read)
         return
     }
@@ -39,8 +60,9 @@ export function appendText(parent: Node, read: () => unknown, splitAlways = fals
     if (hydration !== undefined) {
         const claimed = claimChild(hydration, parent)
         /* Nullish reads render as empty text, never the literal `"undefined"` — so a
-           pending async read (undefined-while-pending, ADR-0032 D3) shows nothing. */
-        const firstValue = read()
+           pending async read (undefined-while-pending, ADR-0032 D3) shows nothing. A blocking
+           read never suspends here (warm-seeded → `refreshing()`), so `probe` holds its value. */
+        const firstValue = probe
         const value = firstValue == null ? '' : String(firstValue)
         /* A value that first rendered empty produced NO server text node, so the cursor
            points at the following node (an element/comment) or past the end (null) — not a
@@ -77,17 +99,30 @@ export function appendText(parent: Node, read: () => unknown, splitAlways = fals
            at the end). */
         hydration.next.set(parent, isText ? node.nextSibling : claimed)
         effect(() => {
-            const next = read()
-            node.data = next == null ? '' : String(next)
+            node.data = readTextOrSuspend(read)
         })
         return
     }
     const node = document.createTextNode('')
     parent.appendChild(node)
     effect(() => {
-        const next = read()
-        node.data = next == null ? '' : String(next)
+        node.data = readTextOrSuspend(read)
     })
+}
+
+/* The bind effect's read: the stringified value, or `''` while a blocking read is pending
+   (suspend). The suspending read still tracked its cell, so the effect re-runs on settle. */
+function readTextOrSuspend(read: () => unknown): string {
+    let next: unknown
+    try {
+        next = read()
+    } catch (signal) {
+        if (!(signal instanceof SuspenseSignal)) {
+            throw signal
+        }
+        return ''
+    }
+    return next == null ? '' : String(next)
 }
 
 /* Raw-markup interpolation: parse the branded string into nodes behind an anchor,
