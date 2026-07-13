@@ -1044,7 +1044,11 @@ function emitNode(node: TemplateNode, builder: Builder): void {
                 } else if (branch.branch === 'catch' && branch.as !== undefined) {
                     builder.raw('const ')
                     builder.mapped(branch.as, branch.asLoc)
-                    builder.raw(' = undefined as any;\n')
+                    /* `unknown`, not `any` — a `catch` error is statically unknowable, and this
+                       matches what strict-mode plain TS gives a real `catch (err)`
+                       (`useUnknownInCatchVariables`), so the author must narrow before dereferencing
+                       (`err instanceof Error ? … : …`) exactly as outside a template (ADR-0042 fidelity). */
+                    builder.raw(' = undefined as unknown;\n')
                 }
                 emitNodes(branch.children, builder)
                 builder.raw('}\n')
@@ -1090,7 +1094,9 @@ function emitNode(node: TemplateNode, builder: Builder): void {
                handlers consume their own branches inline and never route through this case. */
             builder.raw('{\n')
             if (node.as !== undefined) {
-                builder.raw(`const ${node.as} = undefined as any;\n`)
+                /* `unknown`, not `any` — see the await-`catch` binding above (matches strict TS's
+                   `catch (err)`, forcing the author to narrow). */
+                builder.raw(`const ${node.as} = undefined as unknown;\n`)
             }
             emitNodes(node.children, builder)
             builder.raw('}\n')

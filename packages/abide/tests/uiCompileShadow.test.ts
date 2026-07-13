@@ -159,6 +159,26 @@ let n = state(await load())
         expect(diagnostics[0]?.message).toContain('top-level `await` is not allowed')
     })
 
+    /* ADR-0042 TS-fidelity: a `{:catch}` binding projects as `unknown`, NOT `any` — matching
+       strict-mode plain TS's `catch (err)` (`useUnknownInCatchVariables`). Both the `{#await}`
+       catch and the `{#try}` catch. (The behavioural "un-narrowed access is flagged" assertion
+       lives in abideCheck.test.ts, which runs the full type program.) */
+    test('a {:catch} binding projects as unknown, not any', () => {
+        const awaitCatch = compileShadow(`<script>
+async function load(): Promise<string> { return 'x' }
+</script>
+{#await load()}<p>loading</p>{:catch err}<p>{String(err)}</p>{/await}`).code
+        expect(awaitCatch).toContain('= undefined as unknown;')
+        expect(awaitCatch).not.toContain('= undefined as any;')
+
+        const tryCatch = compileShadow(`<script>
+function boom(): string { throw new Error('x') }
+</script>
+{#try}<p>{boom()}</p>{:catch e}<p>{String(e)}</p>{/try}`).code
+        expect(tryCatch).toContain('= undefined as unknown;')
+        expect(tryCatch).not.toContain('= undefined as any;')
+    })
+
     test('maps the import statement so hover resolves on imported names', () => {
         const importLoc = SOURCE.indexOf("import Child from './Child.abide'")
         const mapping = mappings.find((entry) => entry.sourceStart === importLoc)

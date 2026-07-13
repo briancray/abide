@@ -95,6 +95,22 @@ describe('abide check', () => {
         expect('count.toUpperCase()').toContain(span)
     })
 
+    test('a {:catch} error is `unknown`, so an un-narrowed member access is flagged (ADR-0042 fidelity)', () => {
+        /* The shadow types a catch binding as `unknown` (not `any`), matching strict TS's real
+           `catch (err)` — so `{err.message}` without a narrow is an error inside the template
+           exactly as it is outside one. */
+        const source = `<script>\nasync function load(): Promise<string> { return 'x' }\n</script>\n{#await load()}<p>loading</p>{:catch err}<p>{err.message}</p>{/await}\n`
+        const diagnostics = collectAbideDiagnostics(createShadowProgram(project({ 'catch.abide': source })))
+        expect(diagnostics).toHaveLength(1)
+        expect(diagnostics[0]!.message).toContain("of type 'unknown'")
+
+        /* Narrowing before the access clears it — the faithful pattern TS asks for. */
+        const narrowed = `<script>\nasync function load(): Promise<string> { return 'x' }\n</script>\n{#await load()}<p>loading</p>{:catch err}<p>{err instanceof Error ? err.message : String(err)}</p>{/await}\n`
+        expect(
+            collectAbideDiagnostics(createShadowProgram(project({ 'catch.abide': narrowed }))),
+        ).toHaveLength(0)
+    })
+
     test('a wrong prop type on a child component is caught in the parent', () => {
         const dir = project({
             'child.abide': `<script>\nimport { props } from '@abide/abide/ui/props'\nconst { label } = props<{ label: string }>()\n</script>\n<span>{label}</span>\n`,

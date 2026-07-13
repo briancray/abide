@@ -152,7 +152,7 @@ async function send() {
             <p>raise the limit</p>
         {/if}
     {:catch err}
-        <p>{err.message}</p>
+        <p>{err instanceof Error ? err.message : String(err)}</p>
     {:finally}
         <hr />
     {/await}
@@ -173,7 +173,7 @@ async function send() {
     {#try}
         <p>{risky()}</p>
     {:catch e}
-        <p>widget crashed: {e.message}</p>
+        <p>widget crashed: {e instanceof Error ? e.message : String(e)}</p>
     {:finally}
         <span>rendered</span>
     {/try}

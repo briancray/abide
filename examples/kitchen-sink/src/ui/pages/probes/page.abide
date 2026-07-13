@@ -161,7 +161,7 @@ const snapshot = state.computed(getRates.peek({ base: 'USD' }))   // retained va
                         <span class="text-slate-400">({data.date})</span>
                     </p>
                 {:catch err}
-                    <p class="font-mono text-sm text-red-600">{err.message}</p>
+                    <p class="font-mono text-sm text-red-600">{err instanceof Error ? err.message : String(err)}</p>
                 {/await}
             </div>
             <p class="font-mono text-xs text-slate-500">peek (no await): {snapshot ? `${snapshot.rates.EUR} EUR` : 'nothing retained yet'}</p>

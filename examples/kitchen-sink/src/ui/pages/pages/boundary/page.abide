@@ -41,7 +41,7 @@ function renderGuarded() {
             <div class="flex flex-col gap-2">
                 <h2 class="text-xl font-bold text-red-700">caught</h2>
                 <pre
-                    class="overflow-x-auto rounded-md border border-rose-200 bg-rose-50 p-4 text-xs leading-relaxed text-rose-700"><code>{error.message}</code></pre>
+                    class="overflow-x-auto rounded-md border border-rose-200 bg-rose-50 p-4 text-xs leading-relaxed text-rose-700"><code>{error instanceof Error ? error.message : String(error)}</code></pre>
             </div>
         {/try}
 

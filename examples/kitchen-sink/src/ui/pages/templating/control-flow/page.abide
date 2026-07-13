@@ -194,7 +194,7 @@ function guarded(): string {
             {#try}
                 <p class="text-sm text-slate-700">guarded: {guarded()}</p>
             {:catch error}
-                <p class="text-sm text-rose-700">caught: {error.message}</p>
+                <p class="text-sm text-rose-700">caught: {error instanceof Error ? error.message : String(error)}</p>
             {:finally}
                 <p class="text-xs text-slate-400">boundary settled</p>
             {/try}

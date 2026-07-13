@@ -276,7 +276,7 @@ function remountAwait(): void {
                 }
                 </style>
             {:catch error}
-                <p class="text-sm text-rose-700">failed: {error.message}</p>
+                <p class="text-sm text-rose-700">failed: {error instanceof Error ? error.message : String(error)}</p>
             {:finally}
                 <hr class="border-slate-200" />
             {/await}
