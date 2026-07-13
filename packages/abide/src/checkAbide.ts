@@ -1,5 +1,6 @@
 import { resolve } from 'node:path'
 import ts from 'typescript'
+import { generateDeclarations } from './lib/shared/generateDeclarations.ts'
 import { collectAbideDiagnostics } from './lib/ui/compile/collectAbideDiagnostics.ts'
 import { createShadowProgram, type ShadowProgram } from './lib/ui/compile/createShadowProgram.ts'
 import { interpolationClassifierForRoot } from './lib/ui/compile/interpolationClassifierForRoot.ts'
@@ -15,6 +16,13 @@ the same as each package checked on its own — and the same as the LSP. Returns
 the error count so the CLI can set its exit code.
 */
 export async function checkAbide({ cwd }: { cwd: string }): Promise<number> {
+    /* Materialize the project's generated augmentations (src/.abide/*.d.ts) first: since the
+       check pass now type-checks the project's `.ts` files too (rpc handlers, app.ts, tests),
+       those resolve `app.rpc.<name>` / typed `url('/rpc/…')` off the build-written RpcClient /
+       RpcRoutes augmentations. Without this, a cold `abide check` (CI, fresh clone — `.abide` is
+       gitignored, generated only by dev/build) reports every augmented member as missing. Fails
+       open, so a codegen hiccup degrades to the pre-`.ts`-check behaviour rather than aborting. */
+    await generateDeclarations({ cwd })
     const { diagnostics, checked } = collectByProject(cwd)
     const byFile = new Map<string, AbideDiagnostic[]>()
     for (const diagnostic of diagnostics) {
