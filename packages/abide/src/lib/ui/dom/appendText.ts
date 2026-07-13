@@ -8,6 +8,7 @@ import { appendSnippet } from './appendSnippet.ts'
 import { assertClaimedText } from './assertClaimedText.ts'
 import { isComment } from './isComment.ts'
 import { parseRawNodes } from './parseRawNodes.ts'
+import { readTextOrSuspend } from './readTextOrSuspend.ts'
 
 const CLOSE = '/abide:html'
 
@@ -108,21 +109,6 @@ export function appendText(parent: Node, read: () => unknown, splitAlways = fals
     effect(() => {
         node.data = readTextOrSuspend(read)
     })
-}
-
-/* The bind effect's read: the stringified value, or `''` while a blocking read is pending
-   (suspend). The suspending read still tracked its cell, so the effect re-runs on settle. */
-function readTextOrSuspend(read: () => unknown): string {
-    let next: unknown
-    try {
-        next = read()
-    } catch (signal) {
-        if (!(signal instanceof SuspenseSignal)) {
-            throw signal
-        }
-        return ''
-    }
-    return next == null ? '' : String(next)
 }
 
 /* Raw-markup interpolation: parse the branded string into nodes behind an anchor,

@@ -1,3 +1,4 @@
+import { SuspenseSignal } from '../runtime/SuspenseSignal.ts'
 import { attr } from './attr.ts'
 import { on } from './on.ts'
 
@@ -19,7 +20,18 @@ export function spreadAttrs(
     exclude: string[] = [],
 ): void {
     const skip = new Set(exclude)
-    const object = source()
+    /* Key enumeration is build-once (the attribute set is fixed at build). A spread over a pending
+       blocking `await` read throws a `SuspenseSignal` here (ADR-0042) — swallow it and spread no
+       keys for now; the per-value `attr` binds below re-read reactively and fill in on settle. */
+    let object: Record<string, unknown>
+    try {
+        object = source()
+    } catch (signal) {
+        if (!(signal instanceof SuspenseSignal)) {
+            throw signal
+        }
+        object = {}
+    }
     for (const key in object) {
         if (skip.has(key)) {
             continue

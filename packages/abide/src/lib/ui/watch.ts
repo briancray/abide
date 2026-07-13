@@ -5,6 +5,7 @@ import type { NamedAsyncIterable } from '../shared/types/NamedAsyncIterable.ts'
 import type { RemoteFunction } from '../shared/types/RemoteFunction.ts'
 import { effect } from './effect.ts'
 import { generationGuard } from './runtime/generationGuard.ts'
+import { SuspenseSignal } from './runtime/SuspenseSignal.ts'
 import type { EffectResult } from './runtime/types/EffectResult.ts'
 import type { State } from './runtime/types/State.ts'
 
@@ -61,9 +62,22 @@ export function watch(
        also silence the compiler's generated bindings, which build on the client where the test
        DOM sets no global `window`). SSR-safety comes from the compiler stripping author
        `watch(...)` calls, and the subscribable branch's own server guard (cache.on). */
-    /* Compiler binding form watch(thunk): a bare auto-tracked effect (== today's $$effect). */
+    /* Compiler binding form watch(thunk): a bare auto-tracked effect (== today's $$effect). A
+       pending blocking `await` read throws a `SuspenseSignal` (ADR-0042) — withhold this reaction
+       (e.g. leave a `class:`/`style:` binding untouched) until the value resolves; the read tracked
+       its cell, so the effect re-runs on settle. Rethrows any real error. */
     if (argsOrHandler === undefined) {
-        return effect(source as () => EffectResult)
+        const thunk = source as () => EffectResult
+        return effect(() => {
+            try {
+                return thunk()
+            } catch (signal) {
+                if (!(signal instanceof SuspenseSignal)) {
+                    throw signal
+                }
+                return undefined
+            }
+        })
     }
     /* watch(fn, args, handler): an rpc selector with explicit args. */
     if (maybeHandler !== undefined) {

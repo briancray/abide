@@ -2,6 +2,7 @@ import { rawHtmlString } from '../../shared/html.ts'
 import { snippetPayload } from '../../shared/snippet.ts'
 import { effect } from '../effect.ts'
 import { RENDER } from '../runtime/RENDER.ts'
+import { SuspenseSignal } from '../runtime/SuspenseSignal.ts'
 import { appendSnippet } from './appendSnippet.ts'
 import { appendText } from './appendText.ts'
 import { parseRawNodes } from './parseRawNodes.ts'
@@ -39,14 +40,25 @@ export function appendTextAt(anchor: Node, read: () => unknown): void {
         return
     }
 
-    const first = read()
-    if (typeof snippetPayload(first) === 'function') {
+    /* Probe once, tolerating a suspend (a pending blocking read): a suspended interpolation skips
+       snippet/html detection and takes the text path, starting empty until the value resolves. */
+    let first: unknown
+    let suspended = false
+    try {
+        first = read()
+    } catch (signal) {
+        if (!(signal instanceof SuspenseSignal)) {
+            throw signal
+        }
+        suspended = true
+    }
+    if (!suspended && typeof snippetPayload(first) === 'function') {
         const fragment = document.createDocumentFragment()
         appendSnippet(fragment, read)
         parent.insertBefore(fragment, anchor.nextSibling)
         return
     }
-    if (rawHtmlString(first) !== undefined) {
+    if (!suspended && rawHtmlString(first) !== undefined) {
         let nodes: Node[] = []
         effect(() => {
             for (const node of nodes) {
@@ -64,6 +76,15 @@ export function appendTextAt(anchor: Node, read: () => unknown): void {
     const node = document.createTextNode('')
     parent.insertBefore(node, anchor.nextSibling)
     effect(() => {
-        node.data = String(read())
+        try {
+            node.data = String(read())
+        } catch (signal) {
+            /* A pending blocking read suspends: show empty until it resolves (the read tracked
+               its cell, so this effect re-runs on settle). */
+            if (!(signal instanceof SuspenseSignal)) {
+                throw signal
+            }
+            node.data = ''
+        }
     })
 }
