@@ -1,5 +1,30 @@
 # abide
 
+## 0.53.0
+
+### Minor Changes
+
+- shadow narrows streaming cells to T|undefined + D7 barrier tripwire (ADR-0042 D5.2/D7) ([`034a384`](https://github.com/briancray/abide/commit/034a384bdfb5b482f818de757e10c2e2e88ac52c))
+- suspend interpolations/attributes on a pending blocking read (ADR-0042) ([`88da27c`](https://github.com/briancray/abide/commit/88da27c998666b7cca9149effd5f171f3adca8d1))
+- flip async-thunk blocking marker + emit $$readCellBlocking on the client (ADR-0042 D5/D6) ([`a3468fe`](https://github.com/briancray/abide/commit/a3468feacbb67ac9cd337ffa2e220b10af309324))
+- dormant client-suspense foundation for await-means-resolved (ADR-0042) ([`b5f6104`](https://github.com/briancray/abide/commit/b5f6104c41ea1d57d3347ae007cdb1b316a09784))
+- complete the client suspense withhold surface across all template effects (ADR-0042) ([`c5db314`](https://github.com/briancray/abide/commit/c5db314fa3e0ce18294f609be5fb43e5128970d0))
+- fa7bfed: `await` now means "resolved" for a cell and its dependents, with the client suspending to mirror the server flush barrier (ADR-0042). A blocking `await` read (`{await foo()}`, `const x = state.computed(await …)`, `{#if await …}`) reads as a resolved value on both sides: the server already blocks the flush until it settles, and the client now **withholds the reading region** (interpolation, attribute, `{#if}`/`{#each}`/`{#switch}` block) until the value resolves rather than rendering against a pending `undefined`. So `{sources.length}` on an `await` binding no longer needs `?.` and no longer crashes while pending — the region simply shows nothing until it settles, then reveals. After the first resolution a refetch never re-suspends (stale-while-revalidate); on hydrate the warm-seed keeps the read `refreshing()`, never `pending()`, so there is no flash.
+
+    **Breaking:**
+
+    - **The async modifier alone is no longer a blocking marker — `await` is.** `computed(async () => getFoo())` (an `async` thunk with no top-level `await`) now creates a **streaming** cell (ships pending, resolves on the client) instead of a blocking one. Add `await` — `computed(async () => await getFoo())` — to keep the blocking/inline-SSR behavior. `computed(await …)` and `computed(async () => await …)` are unchanged (blocking).
+    - **A streaming (no-`await`) async `computed`/`linked` now types as `T | undefined`.** Its read is honestly pending-able, so guard it with `?.`/`??` (matching the runtime). A blocking `await` binding stays `T`.
+
+    No new public API — the change is in how `await` lowers and types.
+
+### Patch Changes
+
+- document await-means-resolved (ADR-0042) ([`16ec341`](https://github.com/briancray/abide/commit/16ec341a6ea7da509919b37a1cdcc2f237e04c1c))
+- close await-suspense gaps and simplify the boundary (ADR-0042 review) ([`7f9fcbb`](https://github.com/briancray/abide/commit/7f9fcbbec862eba6da3103a6aca77d505ef6f58d))
+- type {:catch} bindings as unknown, not any (ADR-0042) ([`9a91522`](https://github.com/briancray/abide/commit/9a915229caf92914b5bcd9e5625153831783049d))
+- withhold pending blocking reads in {#await}/{#for await} subjects (ADR-0042) ([`e58b538`](https://github.com/briancray/abide/commit/e58b538f477c2bfcec654fd1a7aab65466cc956c))
+
 ## 0.52.0
 
 ### Minor Changes
