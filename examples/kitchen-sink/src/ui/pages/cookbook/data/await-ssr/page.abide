@@ -9,16 +9,18 @@ const LIVE = '/reactive-state'
     <div class="flex flex-col gap-2">
         <h1 class="text-3xl font-bold">async reads & SSR</h1>
         <p class="text-slate-600">
-            A promise-typed read is a peek in every template position:
-            <code class="font-mono">undefined</code> while pending, the resolved value once it
-            settles — so it composes with <code class="font-mono">??</code>,
-            <code class="font-mono">?.</code>, <code class="font-mono">{'{#if}'}</code>, and
-            attributes with no <code class="font-mono">{'{#await}'}</code> block. A leading
-            <code class="font-mono">await</code> blocks the SSR stream (rendered inline, warm
-            hydrate); no <code class="font-mono">await</code> streams the shell and resolves on the
-            client. Reach for <code class="font-mono">{'{#await}'}</code> only for distinct pending
-            markup, a local <code class="font-mono">{':catch'}</code>, or
-            <code class="font-mono">{':then'}</code> narrowing.
+            <code class="font-mono">await</code> is the marker (ADR-0042). A <strong>bare</strong>
+            promise-typed read <em>streams</em>: a peek that is
+            <code class="font-mono">undefined</code> while pending (typed
+            <code class="font-mono">T | undefined</code>), composing with
+            <code class="font-mono">??</code>, <code class="font-mono">?.</code>, and attributes with
+            no block — ships a pending shell, fills on the client. Writing
+            <code class="font-mono">await</code> means <strong>resolved</strong>: the server blocks
+            the flush AND the client <em>suspends</em> the reading region until it settles, so the
+            value is never pending at the read (no <code class="font-mono">?.</code>). Reach for
+            <code class="font-mono">{'{#await}'}</code> only for distinct pending markup, a local
+            <code class="font-mono">{':catch'}</code>, or <code class="font-mono">{':then'}</code>
+            narrowing.
         </p>
     </div>
     <div class="flex flex-col gap-4">
@@ -44,14 +46,14 @@ const LIVE = '/reactive-state'
 {/if}
 
 <a href={getUser()?.profileUrl}>profile</a>`}
-            note={'Pending is falsy, so an `{#if}` shows its `{:else}` first; a whole-value `undefined` unsets an attribute (here `href`); a promise of a list renders an empty `{#for}` until it resolves. No value position has a pending slot — distinguish loading from a settled falsy value with `??`, a probe, or `{#await}`.'} />
+            note={'A bare async `{#if}` subject HOLDS while pending — it renders neither branch until the value settles, so the `{:else}` is never conflated with "still loading". A whole-value `undefined` unsets an attribute (here `href`); a promise of a list renders an empty `{#for}` until it resolves. Distinguish a settled falsy value from loading with `??`, a probe, or `{#await}`.'} />
 
         <Recipe
-            task="Block SSR with await, stream without"
+            task="Resolve with await, stream without"
             live={LIVE}
-            code={`<h1>{await getTitle()}</h1>   <!-- blocks SSR: rendered inline, warm hydrate -->
-<p>{getBody()?.text}</p>       <!-- streams: pending on first paint, fills on the client -->`}
-            note={'A leading `await` joins the SSR blocking barrier — the server resolves it before flush. No `await` streams the shell immediately and the read resolves after hydration. For a bare read the `await` keyword picks the tier (the `{#await … then}` head form blocks too); either way the resolved value is the same.'} />
+            code={`<h1>{await getTitle()}</h1>   <!-- resolved: server blocks flush, client suspends the region -->
+<p>{getBody()?.text}</p>       <!-- streams: undefined while pending, fills on the client -->`}
+            note={'`await` means resolved on BOTH sides — the server joins the SSR blocking barrier (resolves before flush, warm hydrate) and the client suspends the reading region until it settles, so the value is never pending at the read (no `?.`). A bare read streams instead: `undefined` while pending, resolving after hydration. The `{#await … then}` head form is the block equivalent of `await`.'} />
 
         <Recipe
             task="Await data so it renders on the server"

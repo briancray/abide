@@ -2,12 +2,16 @@
 import CodeBlock from '$ui/CodeBlock.abide'
 
 /*
-Async data in templates. A promise/iterable-typed {expr} reads as a peek —
-`undefined` while pending — in a value/content/attribute position, so it composes
-with ?? / ?. with no block. A bare async {#if}/{#switch} subject instead HOLDS
-while pending: it renders no branch until the value settles, so the else/default
-never conflates with "still loading". Reach for {#await} when you want a distinct
-pending branch, a local {:catch}, or {:then} narrowing.
+Async data in templates. Two modes, one marker — `await` (ADR-0042). A BARE
+promise-typed {expr} STREAMS: it reads as a peek — `undefined` while pending
+(typed `T | undefined`) — so it composes with ?? / ?. with no block, ships a
+pending shell, and fills on the client. Writing `await` instead means RESOLVED:
+the server blocks the flush until it settles AND the client SUSPENDS the reading
+region (renders nothing) until the value exists — so `{(await getX()).name}`
+needs no `?.` and never derefs a pending undefined; the region just shows nothing,
+then reveals. A bare async {#if}/{#switch} subject HOLDS the same way (no branch
+while pending). Reach for {#await} when you want a distinct pending branch, a local
+{:catch}, or {:then} narrowing.
 */
 import { state } from '@abide/abide/ui/state'
 
@@ -62,11 +66,15 @@ function remountAwait(): void {
 
 <div class="flex flex-col gap-8">
     <p class="text-sm text-slate-600">
-        Async data needs no ceremony: a promise-typed
-        <code class="font-mono">{'{expr}'}</code> reads as a peek —
-        <code class="font-mono">undefined</code> while pending, the resolved value once it settles —
-        in every position, no block. The <code class="font-mono">{'{#await}'}</code> block is there
-        for when a bare read's <code class="font-mono">undefined</code> isn't enough, and
+        Async data needs no ceremony, and <code class="font-mono">await</code> is the one marker
+        that decides the mode. A <strong>bare</strong> promise-typed
+        <code class="font-mono">{'{expr}'}</code> <em>streams</em> — a peek that is
+        <code class="font-mono">undefined</code> while pending (so it composes with
+        <code class="font-mono">??</code> / <code class="font-mono">?.</code>) and fills on the
+        client. Writing <code class="font-mono">await</code> means <em>resolved</em>: the server
+        blocks the flush and the client <em>suspends</em> the region until it settles — no
+        <code class="font-mono">?.</code>, no pending <code class="font-mono">undefined</code>. The
+        <code class="font-mono">{'{#await}'}</code> block is there for a distinct pending branch, and
         <code class="font-mono">{'{#for await}'}</code> drains a stream frame-by-frame.
     </p>
 
@@ -87,9 +95,11 @@ function remountAwait(): void {
                     <tr>
                         <td class="px-4 py-2 font-mono">{'{getX()}'} · {'{getX() ?? …}'} · {'{getX()?.y}'}</td>
                         <td class="px-4 py-2 text-slate-600">
-                            pending is <code class="font-mono">undefined</code>, composing with
+                            <strong>streaming</strong> — pending is
+                            <code class="font-mono">undefined</code> (typed
+                            <code class="font-mono">T | undefined</code>), composing with
                             <code class="font-mono">??</code> / <code class="font-mono">?.</code> /
-                            attributes
+                            attributes; ships a pending shell, fills on the client
                         </td>
                     </tr>
                     <tr>
@@ -101,10 +111,12 @@ function remountAwait(): void {
                         </td>
                     </tr>
                     <tr>
-                        <td class="px-4 py-2 font-mono">{'{await getX()}'}</td>
+                        <td class="px-4 py-2 font-mono">{'{await getX()}'} · {'{(await getX()).y}'}</td>
                         <td class="px-4 py-2 text-slate-600">
-                            the same read, but <em>blocking</em> during SSR (rendered inline, warm
-                            hydrate); no <code class="font-mono">await</code> streams
+                            <strong>resolved</strong> — the server blocks the flush and the client
+                            <em>suspends</em> the region until it settles, so the value is never
+                            pending at the read: no <code class="font-mono">?.</code> needed, and
+                            member access never derefs an <code class="font-mono">undefined</code>
                         </td>
                     </tr>
                     <tr>
@@ -130,14 +142,17 @@ function remountAwait(): void {
 
     <div class="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-5">
         <h3 class="text-xs font-semibold text-slate-500">
-            a bare read — <code class="font-mono">undefined</code> while pending, in every position
+            stream (bare) vs resolve (<code class="font-mono">await</code>)
         </h3>
         <p class="text-xs text-slate-500">
-            A promise-typed read is a peek: <code class="font-mono">undefined</code> while pending,
-            the resolved value once it settles. No block — it composes with
-            <code class="font-mono">??</code>, <code class="font-mono">?.</code>, and attributes. A
-            bare <code class="font-mono">{'{#if}'}</code> subject is the exception: it
-            <em>holds</em> while pending (no branch) rather than reading the peek as falsy.
+            A <strong>bare</strong> read is a streaming peek: <code class="font-mono">undefined</code>
+            while pending, the resolved value once it settles — composing with
+            <code class="font-mono">??</code>, <code class="font-mono">?.</code>, and attributes.
+            Add <code class="font-mono">await</code> and the read is <strong>resolved</strong>: the
+            region <em>suspends</em> (shows nothing) until it settles, so a member access needs no
+            <code class="font-mono">?.</code> and never derefs a pending
+            <code class="font-mono">undefined</code>. A bare <code class="font-mono">{'{#if}'}</code>
+            subject <em>holds</em> the same way (no branch while pending).
         </p>
         <button
             type="button"
@@ -169,11 +184,13 @@ function remountAwait(): void {
             title="attribute — the interpolated part is empty while pending"
             code={`<p style="color: {loadProfile(attempt)?.color}">`} />
 
-        <!-- leading await: blocking — the server resolves it before flush, no pending flash. Its
-             flight is auto-hoisted to the render prefix (ADR-0034), so it overlaps the {#await}
-             block below instead of serializing (see the loaders comment up top). -->
-        <p class="text-sm">blocking (SSR): {await loadProfile(attempt).then((p) => p.name)}</p>
-        <CodeBlock title={'{await expr} — blocks SSR inline; no await streams the shell'} code={`{await loadProfile(attempt).then((p) => p.name)}`} />
+        <!-- leading await: RESOLVED. The member access has no `?.` — while pending the region
+             suspends (renders nothing), so `.name` never derefs an undefined; on settle it reveals.
+             The server blocks the flush (warm hydrate, no client flash); its flight is auto-hoisted
+             to the render prefix (ADR-0034), overlapping the {#await} block below (see the loaders
+             comment up top). On a cold client nav the region withholds until it resolves. -->
+        <p class="text-sm">resolved (await): {(await loadProfile(attempt)).name}</p>
+        <CodeBlock title={'{await expr} — resolved: no ?., the region suspends until it settles (ADR-0042)'} code={`{(await loadProfile(attempt)).name}   <!-- no ?. — await means resolved; the region suspends while pending -->`} />
     </div>
 
     <div class="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-5">
