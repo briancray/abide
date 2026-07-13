@@ -176,3 +176,31 @@ describe('async-cell wrap transform — runtime behavior', () => {
         expect(host.textContent).toContain('12') // 10 + 2
     })
 })
+
+/* The client-suspense behaviour of a BLOCKING `await` cell (ADR-0042): a member access on a
+   still-pending read must not crash (the motivating bug — `{sources.length}` derefing a pending
+   `undefined`); the region withholds (empty) while pending, then fills on settle. */
+describe('blocking await cell — client suspense (ADR-0042)', () => {
+    test('a member access on a pending blocking read withholds instead of crashing, then fills', async () => {
+        /* A DEFERRED promise so the cell is genuinely pending at mount — the read throws a
+           SuspenseSignal the interpolation catches, rather than evaluating `.length` on undefined. */
+        const { host } = mountClient(`
+            <script>
+                import { state } from '@abide/abide/ui/state'
+                const items = state.computed(await new Promise((resolve) => { globalThis.__resolveItems = resolve }))
+            </script>
+            <p>{items.length} items</p>
+        `)
+        /* Mounting did not throw (the old bug crashed here on \`undefined.length\`), and the
+           suspended interpolation renders empty — no digit yet, only the static text. */
+        expect(host.textContent).not.toMatch(/\d/)
+        ;(globalThis as { __resolveItems?: (value: unknown) => void }).__resolveItems?.([
+            'a',
+            'b',
+            'c',
+        ])
+        await settle()
+        /* Resolved: the region reveals with the real value — `.length` now reads the array. */
+        expect(host.textContent).toContain('3 items')
+    })
+})
