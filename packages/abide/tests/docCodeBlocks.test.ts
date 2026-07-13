@@ -60,11 +60,14 @@ function fencedBlocks(doc: string): Block[] {
    throwaway project — point them at the local stubs below so the block still resolves. */
 function normalizeAliases(code: string): string {
     return code
-        .replace("'$server/rpc/getMessages.ts'", "'./getMessages.ts'")
-        .replace("'$server/rpc/sendMessage.ts'", "'./sendMessage.ts'")
-        .replace("'$server/sockets/chat.ts'", "'./chat.ts'")
-        .replace("'$ui/components/MessageCard.abide'", "'./MessageCard.abide'")
-        .replace("'$server/db.ts'", "'./db.ts'")
+        .replace("'$server/rpc/getMessages'", "'./getMessages.ts'")
+        .replace("'$server/rpc/sendMessage'", "'./sendMessage.ts'")
+        .replace("'$server/rpc/countToday'", "'./countToday.ts'")
+        .replace("'$server/sockets/chat'", "'./chat.ts'")
+        .replace("'$ui/Card.abide'", "'./Card.abide'")
+        .replace("'$ui/Avatar.abide'", "'./Avatar.abide'")
+        .replace("'$ui/Message.abide'", "'./Message.abide'")
+        .replace("'../db.ts'", "'./db.ts'")
 }
 
 /* Loose stubs for the app-shell modules the `.abide` blocks import — the shapes they read, no
@@ -72,28 +75,45 @@ function normalizeAliases(code: string): string {
 const ABIDE_STUBS: Record<string, string> = {
     'getMessages.ts': `import { GET } from '@abide/abide/server/GET'
 import { json } from '@abide/abide/server/json'
-type Message = { id: string; author: string; body: string }
+type Message = { id: string; user: string; text: string }
 // A real RemoteFunction so the bare call carries the smart-read probes (.pending / .error / …).
 export const getMessages = GET((args: { limit: number }) => json([] as Message[]))
 `,
-    'sendMessage.ts': `export const sendMessage = (args: { channel: string; body: string }): Promise<void> => Promise.resolve()
+    'sendMessage.ts': `export const sendMessage = (args: { text: string }): Promise<void> => Promise.resolve()
 `,
-    'chat.ts': `import type { NamedAsyncIterable } from '@abide/abide/shared/types/NamedAsyncIterable.ts'
-export const chat = null as unknown as NamedAsyncIterable<{ author: string; body: string }>
+    'countToday.ts': `import { GET } from '@abide/abide/server/GET'
+import { json } from '@abide/abide/server/json'
+export const countToday = GET(() => json(0))
 `,
-    'MessageCard.abide': `<script>
+    'chat.ts': `import { socket } from '@abide/abide/server/socket'
+// The real Socket<T> so the client import carries the stream probes (.pending / .done / …).
+export const chat = socket<{ user: string; text: string }>()
+`,
+    'Card.abide': `<script>
 import { props } from '@abide/abide/ui/props'
 import type { Snippet } from '@abide/abide/shared/snippet'
-const { name, children } = props<{ name: string; class?: string; onclick?: (event: MouseEvent) => void; children?: Snippet }>()
+const { children } = props<{ children?: Snippet }>()
 </script>
-<article>{name}{#if children}{children()}{/if}</article>
+<div>{#if children}{children()}{/if}</div>
+`,
+    'Avatar.abide': `<script>
+import { props } from '@abide/abide/ui/props'
+const { alt } = props<{ alt: string }>()
+</script>
+<img alt={alt} />
+`,
+    'Message.abide': `<script>
+import { props } from '@abide/abide/ui/props'
+import type { Snippet } from '@abide/abide/shared/snippet'
+const { message, children } = props<{ message: { id: string; user: string; text: string }; ondelete?: () => void; compact?: boolean; children?: Snippet }>()
+</script>
+<article>{message.text}{#if children}{children()}{/if}</article>
 `,
 }
 
-/* A loose `$server/db.ts` for the ts blocks (`load`/`append`) — the RPC helpers under test are
+/* A loose `../db.ts` for the ts blocks (`recentMessages`) — the RPC helpers under test are
    real; only the app's own data layer is stubbed. */
-const DB_STUB = `export const load = (channel: string, limit: number) => [] as Array<{ id: string; author: string; body: string }>
-export const append = (channel: string, body: string) => ({ id: '1', author: 'a', body })
+const DB_STUB = `export const recentMessages = (limit: number): Promise<Array<{ id: string; user: string; text: string }>> => Promise.resolve([])
 `
 
 /* A throwaway project holding `files`, with the real strict app config (`@abide/abide/tsconfig`)

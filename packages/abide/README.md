@@ -105,15 +105,15 @@ const shown = state.linked(() => limit)                // writable, reseeded whe
 const rootAttrs = { role: 'log' }
 const extra = { compact: true }
 const get = () => draft.toUpperCase()
-const set = (next) => { draft = next }
+const set = (next: string) => { draft = next }
 
 // watch — the single reaction primitive: over a cell, then over a live socket.
 watch(limit, (n) => console.log('limit is now', n))
 watch(chat, (frame) => console.log('new message', frame.text))
 
-function focus(node) { node.focus() }
+function focus(node: HTMLElement) { node.focus() }
 function connection() { return chat.pending() ? 'connecting' : 'open' }
-function risky() { return draft.at(999).length }
+function risky() { return draft.at(999)!.length }
 
 async function send() {
     await sendMessage({ text: trimmed })       // a mutating RPC from an event handler
@@ -184,7 +184,7 @@ async function send() {
         <button attach={focus}>send</button>
     </form>
 
-    {#snippet stat(label, value)}
+    {#snippet stat(label: string, value: number)}
         <dd>{label}: {value}</dd>
     {/snippet}
     <dl>{stat('shown', limit)}</dl>
