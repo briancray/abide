@@ -66,6 +66,18 @@ export function compileSSR(
         flightDecls,
         hasStagedChildren,
     } = generateSSR(nodes, stateNames, derivedNames, computedNames, isLayout, cellReadNames)
+    /* ADR-0042 D7 (barrier completeness): every async cell — and so every BLOCKING (`await`) cell —
+       is declared in the lowered script (`lowered`), which the body below emits BEFORE the
+       `$$settleAsyncCells` barrier; the template back-end (`ssr`) constructs no cells. A blocking
+       cell built AFTER its barrier would ship an unresolved value the client then SUSPENDS against,
+       desyncing hydration. The invariant holds by construction today (cells are a script-block
+       construct); assert it as a tripwire so a future template lowering that emits a cell
+       construction fails the build LOUDLY here instead of as a runtime hydration desync. */
+    if (/\$\$scope\(\)\.(trackedComputed|computed|linked)\(/.test(ssr)) {
+        throw new Error(
+            '[abide] a reactive cell is constructed in template output, after the async-cell barrier (ADR-0042 D7) — cells must be declared in the component script so they settle before the SSR flush.',
+        )
+    }
     /* ADR-0039: a component with hoistable children declares `$childSlots` (the body walk reserves an
        output slot per child) and, after the walk, awaits `$$finalizeStreamedChildren` — which fills
        each slot inline (settled child, byte-identical to the old inline await) or with a streaming

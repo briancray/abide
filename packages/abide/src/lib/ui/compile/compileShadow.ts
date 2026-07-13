@@ -102,6 +102,15 @@ export function compileShadow(
     builder.raw(
         'declare function $$cellValue<R>(seed: () => R): R extends AsyncIterable<infer F> ? F : Awaited<R>\n',
     )
+    /* The STREAMING sibling (ADR-0042): a no-`await` async `computed`/`linked` cell reads
+       `undefined`-while-pending, so its shadow type is the resolved value UNIONED with `undefined` —
+       the author must guard it (`?.`/`??`), exactly the runtime. A BLOCKING (`await`) cell uses
+       `$$cellValue` above (resolved `T`, never pending — its render region suspends). Selected in
+       `scopeLineFor` by the syntactic blocking bit. Unconditional (a named cell can occur with no
+       classifier), matching `$$cellValue`. */
+    builder.raw(
+        'declare function $$cellValuePending<R>(seed: () => R): (R extends AsyncIterable<infer F> ? F : Awaited<R>) | undefined\n',
+    )
     /* The peek helpers the async-interpolation wrap targets (ADR-0032): `$$peek` unwraps a promise
        sub-expression to its resolved value (`undefined` while pending) and `$$peekStream` reads an
        async iterable's latest frame, so `getFoo()?.name`/`{#if getFoo()}` type-check against the
@@ -712,7 +721,13 @@ function scopeLineFor(
     const fnIsThunk = ts.isArrowFunction(fn) || ts.isFunctionExpression(fn)
     const wrapPrefix = fnIsThunk ? '' : seedIsAsync(fn) ? 'async () => (' : '() => ('
     const wrapSuffix = fnIsThunk ? '' : ')'
-    const prefix = `${keyword} ${name}${annotation} = $$cellValue(${wrapPrefix}`
+    /* ADR-0042: a STREAMING promise cell (async seed, no top-level `await`) reads
+       `undefined`-while-pending → `$$cellValuePending` (resolved `T | undefined`). A BLOCKING
+       (`await`) cell suspends its region so it is always resolved, and a sync cell is never pending
+       → `$$cellValue` (resolved `T`). (A bare stream seed keeps `$$cellValue`'s frame type — the
+       pre-existing type-directed case, unchanged here.) */
+    const helper = seedIsAsync(fn) && !seedIsBlocking(fn) ? '$$cellValuePending' : '$$cellValue'
+    const prefix = `${keyword} ${name}${annotation} = ${helper}(${wrapPrefix}`
     return withCalleeRef({
         text: `${prefix}${verbatim(fn)}${wrapSuffix});`,
         segments: [span(declaration.name, keywordOffset), span(fn, prefix.length)],
@@ -731,6 +746,19 @@ function seedIsAsync(seed: ts.Expression): boolean {
                 .getModifiers(seed)
                 ?.some((modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword) ?? false
         )
+    }
+    return expressionHasTopLevelAwait(seed)
+}
+
+/* True for a BLOCKING async cell (ADR-0042 D6): an async thunk whose BODY has a top-level `await`
+   (`computed(async () => await X)`), or a bare seed carrying a top-level `await` (`computed(await
+   X)` — wrapSeed makes it an async thunk over that await). An async thunk with NO await
+   (`computed(async () => getFoo())`) is STREAMING, not blocking. Mirrors desugarSignals'
+   `isBlockingSeed` so the shadow type (`$$cellValue` vs `$$cellValuePending`) agrees with the
+   runtime's blocking flag — the "one predicate" ADR-0042 D5 requires. */
+function seedIsBlocking(seed: ts.Expression): boolean {
+    if (ts.isArrowFunction(seed) || ts.isFunctionExpression(seed)) {
+        return seedIsAsync(seed) && expressionHasTopLevelAwait(seed.body)
     }
     return expressionHasTopLevelAwait(seed)
 }
