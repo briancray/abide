@@ -29,7 +29,8 @@ export function compileComponent(
        a direct caller (tests) omits it and the front-end runs here — threading `classify` and
        `seedClassify` so type-directed interpolation + cell lowering happen on this path too. */
     const resolved = analyzed ?? analyzeComponent(source, scopeSeed, classify, seedClassify)
-    const { script, stateNames, derivedNames, computedNames, cellReadNames, nodes } = resolved
+    const { script, stateNames, derivedNames, computedNames, cellReadNames, blockingCellNames, nodes } =
+        resolved
     const build = generateBuild(
         nodes,
         'host',
@@ -38,6 +39,7 @@ export function compileComponent(
         computedNames,
         isLayout,
         cellReadNames,
+        blockingCellNames,
     )
     /* The scoped CSS is bundled into the entry stylesheet (see `abideUiPlugin`), not
        injected at runtime; the build only needs the `data-a-…` scope attributes on

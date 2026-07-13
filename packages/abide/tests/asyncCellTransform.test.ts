@@ -63,10 +63,13 @@ describe('async-cell wrap transform — lowering forms', () => {
             </script>
             <p>{v}</p>
         `)
-        // the bare `await` expr is wrapped as an async thunk and routed to the primitive
-        expect(body).toContain('const v = $$scope().computed(async () => await Promise.resolve(1))')
-        // read through the unified cell read, NOT the lazy `v()` derive reader
-        expect(body).toContain('$$readCell(v)')
+        // the bare `await` expr is wrapped as an async thunk, routed to the eager async cell with
+        // the BLOCKING tier flag (ADR-0042 D6: `await` present → `, false`)
+        expect(body).toContain(
+            'const v = $$scope().trackedComputed(async () => await Promise.resolve(1), false)',
+        )
+        // a blocking cell reads through the SUSPENDING cell read, NOT the lazy `v()` derive reader
+        expect(body).toContain('$$readCellBlocking(v)')
         expect(body).not.toContain('v()')
     })
 
@@ -128,7 +131,8 @@ describe('async-cell wrap transform — lowering forms', () => {
             <p>{s}</p>
         `)
         expect(body).toContain("const s = $$scope().linked(async () => await Promise.resolve('x'))")
-        expect(body).toContain('$$readCell(s)')
+        // a blocking `await` linked reads through the suspending cell read (ADR-0042)
+        expect(body).toContain('$$readCellBlocking(s)')
     })
 })
 

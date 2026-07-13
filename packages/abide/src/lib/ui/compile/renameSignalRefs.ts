@@ -55,6 +55,10 @@ export function signalRefsTransformer(
        `computed` (see `desugarSignals`). A nearer lexical binding of the same name shadows
        them like any other signal. */
     cellReadNames: ReadonlySet<string> = new Set(),
+    /* The subset of `cellReadNames` that are BLOCKING `await` cells (ADR-0042), read through
+       `$$readCellBlocking(name)` (suspend-on-pending) instead of `$$readCell`. Non-empty only on
+       the CLIENT template lowering; the script pass and SSR keep it empty (`$$readCell`). */
+    blockingCellNames: ReadonlySet<string> = new Set(),
 ): ts.TransformerFactory<ts.SourceFile> {
     /* The signal names that a nested binding can shadow — only these matter for
        scope tracking, so we ignore every other local binding. */
@@ -162,6 +166,7 @@ export function signalRefsTransformer(
                         computedNames,
                         blockLocal,
                         cellReadNames,
+                        blockingCellNames,
                     )
                     if (replacement !== undefined) {
                         return ts.factory.createPropertyAssignment(node.name.text, replacement)
@@ -175,6 +180,7 @@ export function signalRefsTransformer(
                         computedNames,
                         blockLocal,
                         cellReadNames,
+                        blockingCellNames,
                     )
                     if (replacement !== undefined) {
                         return replacement
@@ -393,6 +399,7 @@ function referenceFor(
     computedNames: ReadonlySet<string>,
     blockLocal: ReadonlySet<string> = new Set(),
     cellReadNames: ReadonlySet<string> = new Set(),
+    blockingCellNames: ReadonlySet<string> = new Set(),
 ): ts.Expression | undefined {
     if (blockLocal.has(name)) {
         return ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier(name), 'value')
@@ -401,6 +408,17 @@ function referenceFor(
        value read only — a `.scope` member or a shadowing local is never reached here). */
     if (name === 'scope') {
         return ts.factory.createIdentifier('$$scope')
+    }
+    /* A BLOCKING `await` cell → `$$readCellBlocking(name)` (ADR-0042): the throwing peek that
+       SUSPENDS the render region while pending, so an `await` binding reads as a resolved value
+       and its region withholds until it settles. Client template lowering only — `blockingCellNames`
+       is empty in the script pass and SSR, which keep the plain `$$readCell` peek below. */
+    if (blockingCellNames.has(name)) {
+        return ts.factory.createCallExpression(
+            ts.factory.createIdentifier('$$readCellBlocking'),
+            undefined,
+            [ts.factory.createIdentifier(name)],
+        )
     }
     /* A `linked` / async `computed` cell → `$$readCell(name)`: one read shape that peeks an
        async cell and reads `.value` off a sync one. */

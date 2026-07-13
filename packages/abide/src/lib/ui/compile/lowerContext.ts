@@ -27,6 +27,9 @@ export function lowerContext(
     computedNames: ReadonlySet<string> = new Set(),
     /* `linked` / async `computed` names, read through `$$readCell(name)`. */
     cellReadNames: ReadonlySet<string> = new Set(),
+    /* The subset that are BLOCKING `await` cells (ADR-0042), read through `$$readCellBlocking(name)`
+       (suspend-on-pending). Passed only by the CLIENT back-end; SSR leaves it empty. */
+    blockingCellNames: ReadonlySet<string> = new Set(),
 ) {
     /* The typed branch-local shadow stack: one auto-popping value owning both kinds.
        `derived` names deref to `.value` like a `computed` (block value params the client
@@ -51,6 +54,7 @@ export function lowerContext(
                 new Set(scope.names('derived')),
                 new Set(scope.names('plain')),
                 cellReadNames,
+                blockingCellNames,
             ),
             docAccessTransformer('$$model'),
         ])

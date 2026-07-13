@@ -106,6 +106,23 @@ function isBareCallComputed(declaration: ts.VariableDeclaration): boolean {
     return ts.isCallExpression(argument) || ts.isIdentifier(argument)
 }
 
+/* True when a `computed`/`linked` seed is a BLOCKING async cell (ADR-0042 D6): its wrapped seed
+   is an async thunk whose BODY has a top-level `await` — `computed(await X)` (wrapSeed makes it
+   `async () => await X`) or `computed(async () => await X)`. An async thunk with NO await
+   (`computed(async () => getFoo())`) is STREAMING — `await` is the sole blocking marker. A
+   sync/stream seed is not blocking. The read of a blocking cell suspends its render region until
+   the value resolves; a streaming cell reads `undefined`-while-pending. Reuses `hasTopLevelAwait`
+   applied to the thunk BODY (not the arrow), so the walk descends exactly one function level. */
+function isBlockingSeed(argument: ts.Expression): boolean {
+    const wrapped = wrapSeed(argument)
+    if (!isAsyncSeed(wrapped)) {
+        return false
+    }
+    const body =
+        ts.isArrowFunction(wrapped) || ts.isFunctionExpression(wrapped) ? wrapped.body : wrapped
+    return hasTopLevelAwait(body)
+}
+
 /* Emits a compile WARNING (best-effort, never fatal) when a signal read appears AFTER the
    first top-level `await` in an async seed — a value read there is no longer tracked, so the
    cell won't reseed when it changes. Detection only: reads before the await (or with no
@@ -223,6 +240,10 @@ export function desugarSignals(
     derivedNames: Set<string>
     computedNames: Set<string>
     cellReadNames: Set<string>
+    /* The full BLOCKING cell set (ADR-0042): the template-injected `await` cells passed in, unioned
+       with the script-level `await` computeds/linked collected here. The client template lowering
+       reads these via `$$readCellBlocking` (suspend-on-pending). */
+    blockingCellNames: Set<string>
 } {
     assertNoRemovedReaders(source)
     /* The full set of names written anywhere (this script + the template). A prop in this set
@@ -241,6 +262,10 @@ export function desugarSignals(
        One read shape covers both — `$$readCell` peeks an async cell and reads `.value` off a
        sync one — so `linked(getStream())` auto-tracks with no read-site branching. */
     const cellReadNames = new Set<string>()
+    /* Script-level BLOCKING cell names (ADR-0042 D6): a `computed`/`linked` whose seed carries a
+       top-level `await`. Unioned with the template-injected `blockingCellNames` and returned so the
+       CLIENT template lowering reads them via `$$readCellBlocking` (suspend-on-pending). */
+    const scriptBlockingNames = new Set<string>()
     /* A `props()` destructure must be lowered even when it declares no reactive binding
        (a rest-only `const { ...rest } = props()`), so track its presence on its own. */
     let hasPropsDestructure = false
@@ -325,6 +350,11 @@ export function desugarSignals(
                    or its seed type resolves to a stream (`isEagerStreamComputed`, ADR-0023). */
                 if (isAsyncComputed(declaration) || isEagerStreamComputed(declaration)) {
                     cellReadNames.add(declaration.name.text)
+                    /* A blocking async computed (author `await`) reads suspend-on-pending. */
+                    const argument = seedArgument(declaration)
+                    if (argument !== undefined && isBlockingSeed(argument)) {
+                        scriptBlockingNames.add(declaration.name.text)
+                    }
                 } else {
                     computedNames.add(declaration.name.text)
                 }
@@ -333,6 +363,11 @@ export function desugarSignals(
                    is synchronous, an `AsyncState` when it tracks a promise/stream — one read
                    shape auto-tracks whichever source the runtime primitive resolved to. */
                 cellReadNames.add(declaration.name.text)
+                /* A blocking async linked (author `await`) reads suspend-on-pending, like computed. */
+                const argument = seedArgument(declaration)
+                if (argument !== undefined && isBlockingSeed(argument)) {
+                    scriptBlockingNames.add(declaration.name.text)
+                }
             } else if (callee === 'state') {
                 /* `state(initial, transform)` → a `.value` cell (its write-coercion transform
                    forces a local store); referenced as `name.value`, unchanged. */
@@ -387,7 +422,14 @@ export function desugarSignals(
         return factory.updateSourceFile(root, statements)
     }
 
-    return { transformer, stateNames, derivedNames, computedNames, cellReadNames }
+    return {
+        transformer,
+        stateNames,
+        derivedNames,
+        computedNames,
+        cellReadNames,
+        blockingCellNames: new Set([...blockingCellNames, ...scriptBlockingNames]),
+    }
 }
 
 /* The lowered form of a top-level statement: state slots → `model.x = init`
@@ -627,10 +669,23 @@ function computedStatements(
                   )
                 : wrapSeed(argument)
         if (isAsyncSeed(wrapped)) {
-            /* Async seed → the eager `computed` primitive (an `AsyncComputed` cell, read via
-               `$$readCell`); the runtime unwraps the promise. */
+            /* Async seed → the eager async cell (`AsyncComputed`, read via `$$readCell`), the
+               runtime unwraps the promise. `await` in the thunk body → BLOCKING (joins the SSR
+               barrier, resolves inline, client suspends its render region); async modifier with NO
+               await → STREAMING (ships pending, resolves on the client) — ADR-0042 D6. Routed
+               through `trackedComputed(thunk, streaming)` (same createAsyncCell for an async thunk)
+               to carry the flag, matching the template-injected path. */
             warnPostAwaitReads(wrapped, signalNames)
-            statements.push(constDeclaration(name, scopeMethodCall('computed', [wrapped])))
+            const streaming = argument === undefined || !isBlockingSeed(argument)
+            statements.push(
+                constDeclaration(
+                    name,
+                    scopeMethodCall('trackedComputed', [
+                        wrapped,
+                        streaming ? factory.createTrue() : factory.createFalse(),
+                    ]),
+                ),
+            )
         } else if (isEagerStreamComputed(declaration)) {
             /* Stream seed → the eager `trackedComputed`, which probes the seed and auto-tracks a
                stream (`AsyncComputed`) or falls back to a lazy computed; read via `$$readCell`.

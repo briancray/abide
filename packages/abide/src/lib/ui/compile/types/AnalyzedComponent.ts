@@ -28,6 +28,10 @@ export type AnalyzedComponent = {
        `computed`. Threaded to both back-ends so a template reference (`{draft}`) lowers to
        the unified cell read consistently on client and server. */
     cellReadNames: Set<string>
+    /* The subset of `cellReadNames` that are BLOCKING `await` cells (ADR-0042): a template-injected
+       `{await X}` cell or a script `computed(await …)`. The CLIENT back-end reads these via
+       `$$readCellBlocking` (suspend-on-pending) rather than `$$readCell`. */
+    blockingCellNames: Set<string>
     nodes: TemplateNode[]
     /* One entry per non-empty `<style>` in the template (in source order): the scope
        attribute its covered elements carry (annotated onto `nodes`) and the scoped

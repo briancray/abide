@@ -99,13 +99,14 @@ describe('{await expr} value-position lift (blocking)', () => {
         const lowered = compileComponent('<div class={await foo()}></div>')
         expect(lowered).toContain('$$scope().trackedComputed(async () => await (foo()), false)')
         expect(lowered).toContain('$$attr(el1, "class"')
-        expect(lowered).toContain('$$readCell(__v0)')
+        // a blocking cell in an attribute reads through the SUSPENDING read (ADR-0042)
+        expect(lowered).toContain('$$readCellBlocking(__v0)')
     })
 
     test('a leading await in a quoted attribute value lifts to a blocking peek-cell', () => {
         const lowered = compileComponent('<div class="{await foo()}"></div>')
         expect(lowered).toContain('$$scope().trackedComputed(async () => await (foo()), false)')
-        expect(lowered).toContain('$$readCell(__v0)')
+        expect(lowered).toContain('$$readCellBlocking(__v0)')
     })
 
     test('a leading await in an {#if} head lifts to a blocking peek-cell', () => {
@@ -117,7 +118,9 @@ describe('{await expr} value-position lift (blocking)', () => {
     test('a leading await in a {#for} iterable lifts to a blocking peek-cell', () => {
         const lowered = compileComponent('{#for x of await list()}<p>{x}</p>{/for}')
         expect(lowered).toContain('$$scope().trackedComputed(async () => await (list()), false)')
-        expect(lowered).toContain('$$each(host, () => ($$readCell(__v0))')
+        // a blocking cell as the {#for} source reads through the suspending read (the each treats
+        // a pending suspend as an empty list, ADR-0042)
+        expect(lowered).toContain('$$each(host, () => ($$readCellBlocking(__v0))')
     })
 
     test('a leading await in a {#switch} subject lifts to a blocking peek-cell', () => {

@@ -174,9 +174,9 @@ const v = state.computed(await Promise.resolve(1))
 `
         const typed = compileTyped(source)
         expect(typed).toContain(
-            'const v = $$scope().computed(async () => await Promise.resolve(1))',
+            'const v = $$scope().trackedComputed(async () => await Promise.resolve(1), false)',
         )
-        expect(typed).toContain('$$readCell(v)')
+        expect(typed).toContain('$$readCellBlocking(v)')
         expect(typed).not.toContain('v()')
     })
 

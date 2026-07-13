@@ -4,6 +4,7 @@ import { claimChild } from '../runtime/claimChild.ts'
 import { claimExpected } from '../runtime/claimExpected.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { scope } from '../runtime/scope.ts'
+import { SuspenseSignal } from '../runtime/SuspenseSignal.ts'
 import { scopeGroup } from '../runtime/scopeGroup.ts'
 import type { State } from '../runtime/types/State.ts'
 import { withoutHydration } from '../runtime/withoutHydration.ts'
@@ -119,6 +120,21 @@ export function each<T>(
         }
     }
 
+    /* Read the source, tolerating a pending blocking `await` read (a SuspenseSignal): treat a
+       suspend as an empty list — identical to the undefined-while-pending peek (ADR-0032 D3) — so
+       the each renders no rows until the source resolves. The read still tracked its cell, so the
+       driving effect re-runs on settle. */
+    const readSource = (): Iterable<T> | undefined => {
+        try {
+            return items()
+        } catch (signal) {
+            if (!(signal instanceof SuspenseSignal)) {
+                throw signal
+            }
+            return undefined
+        }
+    }
+
     let anchor: Node
     /* When hydrating, the first effect run must NOT reconcile — the rows it would
        build are already adopted in place below. */
@@ -128,7 +144,7 @@ export function each<T>(
         let position = 0
         /* An undefined source renders an empty list, not a throw — a `{#for x in promise}`
            whose lifted source peeks undefined while pending (ADR-0032 D3). */
-        for (const item of items() ?? []) {
+        for (const item of readSource() ?? []) {
             const key = keyOf(item)
             const row = buildRow(item, position) // claims the SSR row where it sits
             if (rows.has(key)) {
@@ -156,7 +172,7 @@ export function each<T>(
     effect(() => {
         /* Read (subscribe) every run, including the adopting one. Materialize a
            non-array iterable to an array so a generator yields fresh each run. */
-        const source = items()
+        const source = readSource()
         if (adopting) {
             adopting = false // rows already adopted in document order; nothing to move
             return
