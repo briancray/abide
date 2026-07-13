@@ -307,6 +307,23 @@ describe('type-directed interpolation lowering — async value-position lift (AD
         expect(ssr).toMatch(/else \{[\s\S]*"c"/)
     })
 
+    /* The "pending halts the cond-chain" rule is implemented INDEPENDENTLY on each side — SSR emits
+       an empty `$$cellPending` guard clause that stops the `if/else-if` chain, the client emits a
+       per-case `pending` probe that `switchBlock.select` reads to hold the chain (return -1). They
+       must stay in lockstep or a still-pending client and the settled server pick DIFFERENT branches
+       → hydration divergence. This co-located test pins BOTH from one fixture, so dropping the gate
+       on either side fails here (not just in a same-side test elsewhere in this file). */
+    test('an async cond-chain gates on pending on BOTH client and SSR (kept in lockstep)', () => {
+        const source = `<script>\nasync function getPromise(): Promise<boolean> { return true }\n</script>\n{#if false}<p>a</p>{:else if getPromise()}<p>b</p>{:else}<p>c</p>{/if}\n`
+        const classify = makeClassifier(source)
+        const client = compileComponent(source, false, undefined, undefined, classify)
+        const ssr = compileSSR(source, false, undefined, undefined, classify)
+        /* Client: the async case carries a pending probe the select loop consults. */
+        expect(client).toContain('pending: () => $$cellPending(__v0)')
+        /* SSR: the matching empty guard clause halts the else-if chain while pending. */
+        expect(ssr).toContain('else if ($$cellPending(__v0)) {')
+    })
+
     test('a promise in a {#switch} head lifts to a peek-cell, pending-aware (matches no case)', () => {
         const source = `<script>\nasync function getPromise(): Promise<string> { return 'a' }\n</script>\n{#switch getPromise()}{:case 'a'}<p>a</p>{/switch}\n`
         const lowered = compileClassified(source)
