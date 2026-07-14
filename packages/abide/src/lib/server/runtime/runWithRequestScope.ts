@@ -34,6 +34,7 @@ export function runWithRequestScope(
         pendingAsyncCells: { promises: [] },
         resolvedCells: { entries: [] },
         streamedCells: { entries: [] },
+        socketTails: { entries: [] },
         docSnapshots: { entries: [] },
         trace: createTraceContext(req.headers.get('traceparent')),
         start: Bun.nanoseconds(),

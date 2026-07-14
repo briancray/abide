@@ -47,6 +47,7 @@ import { pendingAsyncCellsSlot } from '../shared/pendingAsyncCellsSlot.ts'
 import { resolvedCellsSlot } from '../shared/resolvedCellsSlot.ts'
 import { SOCKETS_PATH } from '../shared/SOCKETS_PATH.ts'
 import { sharedCacheStoreSlot } from '../shared/sharedCacheStoreSlot.ts'
+import { socketTailsSlot } from '../shared/socketTailsSlot.ts'
 import { streamedCellsSlot } from '../shared/streamedCellsSlot.ts'
 import type { RemoteFunction } from '../shared/types/RemoteFunction.ts'
 import type { Socket } from '../shared/types/Socket.ts'
@@ -111,6 +112,7 @@ export async function createTestApp(): Promise<TestApp> {
         pendingAsyncCellsResolver: pendingAsyncCellsSlot.resolver,
         resolvedCellsResolver: resolvedCellsSlot.resolver,
         streamedCellsResolver: streamedCellsSlot.resolver,
+        socketTailsResolver: socketTailsSlot.resolver,
         docSnapshotsResolver: docSnapshotsSlot.resolver,
         activeServer: serverSlot.active,
         pageRender: pageRenderSlot.render,
@@ -129,6 +131,9 @@ export async function createTestApp(): Promise<TestApp> {
     const sharedStreamedCells = { entries: [] }
     streamedCellsSlot.resolver = () =>
         requestContext.getStore()?.streamedCells ?? sharedStreamedCells
+    /* No shared fallback — mirrors serverEntry: `defineSocket.peek` records off-request too, so a
+       fallback would leak. Off-request this resolves undefined and the record is skipped. */
+    socketTailsSlot.resolver = () => requestContext.getStore()?.socketTails
     const sharedDocSnapshots = { entries: [] }
     docSnapshotsSlot.resolver = () => requestContext.getStore()?.docSnapshots ?? sharedDocSnapshots
     pageSlot.resolver = resolvePageSnapshot
@@ -218,6 +223,7 @@ export async function createTestApp(): Promise<TestApp> {
         pendingAsyncCellsSlot.resolver = previous.pendingAsyncCellsResolver
         resolvedCellsSlot.resolver = previous.resolvedCellsResolver
         streamedCellsSlot.resolver = previous.streamedCellsResolver
+        socketTailsSlot.resolver = previous.socketTailsResolver
         docSnapshotsSlot.resolver = previous.docSnapshotsResolver
         serverSlot.active = previous.activeServer
         pageRenderSlot.render = previous.pageRender

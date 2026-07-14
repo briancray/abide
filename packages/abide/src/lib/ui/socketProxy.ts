@@ -1,4 +1,6 @@
 import { buildSocketOverChannel } from '../shared/buildSocketOverChannel.ts'
+import { decodeRefJson } from '../shared/decodeRefJson.ts'
+import { SOCKET_SEED } from '../shared/SOCKET_SEED.ts'
 import type { Socket } from '../shared/types/Socket.ts'
 import { getSocketChannel } from './socketChannel.ts'
 import { watch } from './watch.ts'
@@ -22,7 +24,21 @@ socketProxy API, not the wire layer.
 */
 // @documentation plumbing
 export function socketProxy<T>(name: string): Socket<T> {
-    const socket = buildSocketOverChannel<T>(name, getSocketChannel)
+    /* Warm-seed from the server's retained frame (shipped in `__SSR__.sockets`, drained into
+       SOCKET_SEED by startClient before mount) so `peek(socket)` returns the SAME value the SSR
+       render committed to instead of undefined on this not-yet-connected client — otherwise the two
+       disagree and hydration discards the server markup. A frame that failed to serialize server-side
+       simply isn't present, and the socket falls back to a cold peek. */
+    const seeded = SOCKET_SEED[name]
+    let initialFrame: T | undefined
+    if (seeded !== undefined) {
+        try {
+            initialFrame = decodeRefJson(seeded) as T
+        } catch {
+            initialFrame = undefined
+        }
+    }
+    const socket = buildSocketOverChannel<T>(name, getSocketChannel, initialFrame)
     /* Overwrite the shared builder's inert `.watch` with the real reaction sugar
        (`socket.watch(handler)` ≡ `watch(socket, handler)`). Attached here so the ui-only
        `watch` primitive never rides into a server bundle. */

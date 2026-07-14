@@ -2,6 +2,7 @@ import { attachSocketSelectorMethods } from '../../shared/attachSocketSelectorMe
 import { createPushIterator } from '../../shared/createPushIterator.ts'
 import { encodeRefJson } from '../../shared/encodeRefJson.ts'
 import { resolveClientFlags } from '../../shared/resolveClientFlags.ts'
+import { socketTailsSlot } from '../../shared/socketTailsSlot.ts'
 import { socketTapSlot } from '../../shared/socketTapSlot.ts'
 import type { Socket } from '../../shared/types/Socket.ts'
 import type { SocketServerFrame } from '../../shared/types/SocketServerFrame.ts'
@@ -185,7 +186,16 @@ export function defineSocket<T>(name: string, opts: SocketOptions = {}): Socket<
         /* The latest retained frame (after ttl pruning), or undefined when none is held. */
         peek: () => {
             pruneExpired(Date.now())
-            return buffer.length > 0 ? (buffer[buffer.length - 1] as BufferEntry).value : undefined
+            const value =
+                buffer.length > 0 ? (buffer[buffer.length - 1] as BufferEntry).value : undefined
+            /* Record the retained frame this SSR render read so the page renderer can ship it in
+               `__SSR__.sockets` — the client seeds `peek()` to the same value instead of undefined,
+               keeping hydration congruent. `get()` is undefined off-request (ws/boot), so this is a
+               no-op outside an SSR render; a `tail: 0` socket holds no frame and records nothing. */
+            if (value !== undefined) {
+                socketTailsSlot.get()?.entries.push({ name, value })
+            }
+            return value
         },
         /* No-op on the server: it is the source of truth, so there is nothing to re-pull. */
         refresh: () => undefined,

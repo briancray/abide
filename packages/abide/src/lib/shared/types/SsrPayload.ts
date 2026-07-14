@@ -27,4 +27,10 @@ export type SsrPayload = SsrBootState & {
        write to each slot adopts the server value, so a plain `state(uuid())`/`state(Date.now())`
        keeps the SSR value instead of recomputing a divergent one. */
     docs?: Record<string, string>
+    /* Retained socket frames read via `peek(socket)` during SSR, keyed by socket name → ref-json
+       string. `startClient` seeds these into `SOCKET_SEED`; a hydrating `socketProxy` adopts the frame
+       as its `lastFrame` so `peek(socket)` returns the SAME retained value the server rendered instead
+       of `undefined` on the not-yet-connected client — otherwise the two disagree and hydration
+       discards the server markup. */
+    sockets?: Record<string, string>
 }

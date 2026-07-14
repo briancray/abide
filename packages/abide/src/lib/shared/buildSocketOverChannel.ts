@@ -22,15 +22,22 @@ Bare iteration is the live stream (replay 0); `.tail(n)` seeds from the
 retained tail (no-arg = the whole tail). Each iterator mints its own sub id for
 lifecycle routing (end/err), and `hooks.replayed` fires in-band after the
 replay batch so a window reader commits its seed strictly before any live frame.
+
+`initialFrame` warm-seeds `lastFrame` at construction (socketProxy passes the
+server's retained frame from `__SSR__.sockets`) so `peek()` returns the SSR value
+at hydration instead of undefined — congruent with the server HTML until the ws
+delivers its own replay of the same frame.
 */
 export function buildSocketOverChannel<T>(
     name: string,
     resolveChannel: () => SocketChannel,
+    initialFrame?: T,
 ): Socket<T> {
     /* The latest frame seen across every iterator of this socket — what peek() returns and
        what refresh() re-seeds from the server tail. A plain slot (not reactive): peek(socket)
-       is a synchronous snapshot; live reactivity is the for-await / watch(socket) path. */
-    let lastFrame: T | undefined
+       is a synchronous snapshot; live reactivity is the for-await / watch(socket) path. Seeded
+       from the SSR-retained frame so a not-yet-connected client's peek matches the server. */
+    let lastFrame: T | undefined = initialFrame
     function iterate(replay: number | undefined, hooks?: TailHooks): AsyncIterable<T> {
         return {
             [Symbol.asyncIterator](): AsyncIterator<T, void, undefined> {

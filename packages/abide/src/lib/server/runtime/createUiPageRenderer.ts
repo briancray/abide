@@ -7,6 +7,7 @@ import { hasSeedableRequest } from '../../shared/hasSeedableRequest.ts'
 import { layoutChainForRoute } from '../../shared/layoutChainForRoute.ts'
 import { resolvedCellsSlot } from '../../shared/resolvedCellsSlot.ts'
 import { safeJsonForScript } from '../../shared/safeJsonForScript.ts'
+import { socketTailsSlot } from '../../shared/socketTailsSlot.ts'
 import type { CacheEntry } from '../../shared/types/CacheEntry.ts'
 import type { CacheSnapshotEntry } from '../../shared/types/CacheSnapshotEntry.ts'
 import type { SsrPayload } from '../../shared/types/SsrPayload.ts'
@@ -161,6 +162,30 @@ export function createUiPageRenderer({
         return Object.keys(docs).length > 0 ? docs : undefined
     }
 
+    /* The `sockets` partition of __SSR__: each socket whose retained frame this render read via
+       `peek(socket)` (drained from the request-scoped `socketTailsSlot` populated by
+       `defineSocket.peek`), keyed by socket NAME, ref-json-encoded. Last write per name wins — a
+       socket peeked twice ships its latest read. An unserializable frame is dropped (a warn): that
+       socket falls back to a cold client peek (undefined) rather than blanking the payload. Undefined
+       when no socket was peeked during the render (the common page). */
+    function socketTailSnapshots(): Record<string, string> | undefined {
+        const entries = socketTailsSlot.get()?.entries ?? []
+        if (entries.length === 0) {
+            return undefined
+        }
+        const sockets: Record<string, string> = {}
+        for (const { name, value } of entries) {
+            try {
+                sockets[name] = encodeRefJson(value)
+            } catch {
+                console.warn(
+                    `[abide] socket "${name}" retained frame is unserializable — its client peek() will read undefined at hydration instead of the server value.`,
+                )
+            }
+        }
+        return Object.keys(sockets).length > 0 ? sockets : undefined
+    }
+
     /* Build the __SSR__ <script> the client (startClient) reads on boot. The inline
        (settled) cache partition is computed once by the caller and threaded in, so the
        streaming branch can also drain the pending partition over the same render. */
@@ -177,6 +202,7 @@ export function createUiPageRenderer({
             cache: inline,
             cells: resolvedCellCells(),
             docs: docSeedSnapshots(),
+            sockets: socketTailSnapshots(),
             base: base || undefined,
             trace: formatTraceparent(store.trace),
             app: appNameSlot.name,

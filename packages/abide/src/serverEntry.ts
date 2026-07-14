@@ -40,6 +40,7 @@ import { pendingAsyncCellsSlot } from './lib/shared/pendingAsyncCellsSlot.ts'
 import { resolvedCellsSlot } from './lib/shared/resolvedCellsSlot.ts'
 import { runningAsStandaloneBinary } from './lib/shared/runningAsStandaloneBinary.ts'
 import { sharedCacheStoreSlot } from './lib/shared/sharedCacheStoreSlot.ts'
+import { socketTailsSlot } from './lib/shared/socketTailsSlot.ts'
 import { streamedCellsSlot } from './lib/shared/streamedCellsSlot.ts'
 
 /*
@@ -99,6 +100,10 @@ const sharedResolvedCells = { entries: [] }
 resolvedCellsSlot.resolver = () => requestContext.getStore()?.resolvedCells ?? sharedResolvedCells
 const sharedStreamedCells = { entries: [] }
 streamedCellsSlot.resolver = () => requestContext.getStore()?.streamedCells ?? sharedStreamedCells
+/* No shared fallback: `defineSocket.peek` records into this on every retained-frame read, including
+   reads outside any request (ws handlers, boot) — a fallback list would accumulate entries no render
+   ever drains. Off-request this resolves undefined and the record is skipped (see socketTailsSlot). */
+socketTailsSlot.resolver = () => requestContext.getStore()?.socketTails
 const sharedDocSnapshots = { entries: [] }
 docSnapshotsSlot.resolver = () => requestContext.getStore()?.docSnapshots ?? sharedDocSnapshots
 

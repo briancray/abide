@@ -2,6 +2,7 @@ import type { CacheStore } from '../../../shared/types/CacheStore.ts'
 import type { DocSnapshots } from '../../../shared/types/DocSnapshots.ts'
 import type { PendingAsyncCells } from '../../../shared/types/PendingAsyncCells.ts'
 import type { ResolvedCells } from '../../../shared/types/ResolvedCells.ts'
+import type { SocketTails } from '../../../shared/types/SocketTails.ts'
 import type { StreamedCells } from '../../../shared/types/StreamedCells.ts'
 import type { TraceContext } from '../../../shared/types/TraceContext.ts'
 import type { Scope } from '../../../ui/types/Scope.ts'
@@ -41,6 +42,14 @@ export type RequestStore = {
     mix. Sibling of `resolvedCells` (the blocking partition baked into the head snapshot).
     */
     streamedCells: StreamedCells
+    /*
+    Retained socket frames read via `peek(socket)` during this request's SSR pass, keyed by socket
+    name. `defineSocket`'s server `peek()` pushes each read; the page renderer stamps them into
+    `__SSR__.sockets` (ref-json) so the client seeds `peek(socket)` to the SAME retained value the
+    server rendered instead of `undefined` on the not-yet-connected client. Sibling of `resolvedCells`
+    — a server value carried forward, read at render-return, not awaited.
+    */
+    socketTails: SocketTails
     /*
     Reactive-document snapshots captured during this request's SSR pass, keyed by render-path id.
     `createScope` registers a lazy `take` for each rendered scope; the page renderer stamps the
