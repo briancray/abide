@@ -8,6 +8,7 @@ import { effect } from './effect.ts'
 import { generationGuard } from './runtime/generationGuard.ts'
 import type { EffectResult } from './runtime/types/EffectResult.ts'
 import type { State } from './runtime/types/State.ts'
+import { untrack } from './runtime/untrack.ts'
 
 /*
 The single reaction primitive: `watch(source, handler)` names its trigger and runs
@@ -24,6 +25,14 @@ method is client-attached (socketProxy / remoteProxy) so this ui primitive never
 into a server bundle; server-side it is an inert no-op. Unlike bare `watch(…)` — which
 the SSR back-end strips — a `.watch(…)` member call survives to the server and relies on
 that inert stub.
+
+Tracking contract (ADR-0044): the named source(s) are the sole triggers — the handler
+is a sink, run untracked, so a reactive read in its body never becomes an accidental
+extra trigger. Only the bare `watch(thunk)` form auto-tracks everything it reads (that
+IS its job — it is the compiler binding). This makes all explicit-source forms uniform:
+the subscribable (cache.on, per-frame) and rpc (handler in a .then microtask) branches
+already ran their handlers out of the tracking window; the two synchronous cell branches
+now match by wrapping the handler in `untrack`.
 
 Sources (discriminated at runtime, monomorphic per branch):
   watch(thunk)                       // compiler binding form — auto-tracked, == effect(thunk)
@@ -93,18 +102,22 @@ export function watch(
     ) {
         return reactToRpc(source, undefined, handler)
     }
-    /* Multiple cells → fire on any change; hand the handler the current values. */
+    /* Multiple cells → fire on any change; hand the handler the current values. Read every
+       cell (the tracked triggers), then run the handler untracked so a reactive read in its
+       body is not captured as an extra trigger (ADR-0044). */
     if (Array.isArray(source)) {
         const cells = source as ReadonlyArray<State<unknown>>
         return effect(() => {
             const values = cells.map((cell) => cell.value)
-            handler(values)
+            untrack(() => handler(values))
         })
     }
-    /* A single state cell → handler(newValue) on change. */
+    /* A single state cell → handler(newValue) on change. The cell read is the tracked
+       trigger; the handler is a sink, run untracked (ADR-0044). */
     const cell = source as State<unknown>
     return effect(() => {
-        handler(cell.value)
+        const value = cell.value
+        untrack(() => handler(value))
     })
 }
 

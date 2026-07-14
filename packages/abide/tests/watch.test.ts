@@ -56,6 +56,34 @@ describe('watch()', () => {
         stop()
     })
 
+    test('watch(cell, handler): a reactive read in the handler body is not a trigger (ADR-0044)', () => {
+        const source = state(0)
+        const other = state('a')
+        const seen: string[] = []
+        const stop = watch(source, () => seen.push(other.value))
+        expect(seen).toEqual(['a'])
+        /* Mutating `other` — read inside the handler — must NOT re-run the watch. */
+        other.value = 'b'
+        expect(seen).toEqual(['a'])
+        /* The named source still triggers, and sees `other`'s current value. */
+        source.value = 1
+        expect(seen).toEqual(['a', 'b'])
+        stop()
+    })
+
+    test('watch([a, b], handler): a reactive read in the handler body is not a trigger (ADR-0044)', () => {
+        const a = state(1)
+        const other = state('x')
+        const runs: string[] = []
+        const stop = watch([a], () => runs.push(other.value))
+        expect(runs).toEqual(['x'])
+        other.value = 'y'
+        expect(runs).toEqual(['x'])
+        a.value = 2
+        expect(runs).toEqual(['x', 'y'])
+        stop()
+    })
+
     test('watch(subscribable, handler) runs per frame until done', async () => {
         const frames = [1, 2, 3]
         const sub = {
