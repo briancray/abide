@@ -115,10 +115,13 @@ const total = state.computed(add(1, 2))
         expect(shapeHeuristic).toContain('$$scope().trackedComputed(() => add(1, 2))')
     })
 
-    /* ADR-0019 D1 table: a bare PROMISE seed (no `await` marker) is held opaque on the lazy
-       `derive` slot under type-direction. This is the routing SHIFT the brief calls out — today
-       a bare-call promise lands in `trackedComputed`/`cellReadNames` via the syntax heuristic. */
-    test('a bare promise seed is held opaque on the lazy derive (routing shift from the heuristic)', () => {
+    /* ADR-0043: a bare PROMISE seed (no `await` marker) routes to a STREAMING eager async cell —
+       `state.computed(getFoo())` unwraps the resolved value and reactively re-resolves, rather than
+       being held opaque on the lazy `derive` (the superseded ADR-0019 D1 routing). It is wrapped
+       `async () => await (seed)` so createAsyncCell unwraps the promise, with `streaming: true`
+       (the trailing `true`) so it ships pending in the SSR shell and resolves on the client — no
+       author `await` = don't block the barrier. `await getFoo()` stays the BLOCKING form. */
+    test('a bare promise seed routes to a streaming trackedComputed async cell (ADR-0043)', () => {
         const source = `<script>
 import { state } from '@abide/abide/ui/state'
 async function load(): Promise<number> { return 1 }
@@ -127,12 +130,14 @@ const v = state.computed(load())
 <p>{v}</p>
 `
         const typed = compileTyped(source)
-        expect(typed).toContain('const v = $$scope().derive("v", () => load())')
-        expect(typed).toContain('v()')
-        expect(typed).not.toContain('trackedComputed')
-        expect(typed).not.toContain('$$readCell(v)')
+        expect(typed).toContain(
+            'const v = $$scope().trackedComputed(async () => await (load()), true)',
+        )
+        expect(typed).toContain('$$readCell(v)')
+        expect(typed).not.toContain('derive("v"')
 
-        /* Fail-open (no classifier) reproduces today's routing: a bare call → trackedComputed. */
+        /* Fail-open (no classifier) reproduces the syntax-heuristic routing: a bare call →
+           trackedComputed with a plain probe thunk (no promise-unwrap wrapping). */
         const shapeHeuristic = compileComponent(source)
         expect(shapeHeuristic).toContain('$$scope().trackedComputed(() => load())')
         expect(shapeHeuristic).toContain('$$readCell(v)')

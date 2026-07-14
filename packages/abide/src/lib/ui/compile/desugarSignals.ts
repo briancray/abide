@@ -36,6 +36,24 @@ function wrapSeed(argument: ts.Expression): ts.Expression {
     )
 }
 
+/* Wraps a seed expression as an async unwrapping thunk `async () => await (arg)` — for a
+   type-directed PROMISE seed (ADR-0023/0043) the author wrote WITHOUT `await`
+   (`state.computed(getFoo())`). The `async`+`await` makes createAsyncCell unwrap the resolved
+   value; a plain `() => getFoo()` thunk would fall to trackedComputed's lazy opaque path (its
+   probe self-identifies only a stream, never a promise). The parens keep a comma/ternary seed
+   a single await operand. Distinct from `wrapSeed`, which only makes the arrow async when the
+   arg already carries a top-level `await`. */
+function wrapAwaitSeed(argument: ts.Expression): ts.Expression {
+    return factory.createArrowFunction(
+        [factory.createModifier(ts.SyntaxKind.AsyncKeyword)],
+        undefined,
+        [],
+        undefined,
+        factory.createToken(ts.SyntaxKind.EqualsGreaterThanToken),
+        factory.createAwaitExpression(factory.createParenthesizedExpression(argument)),
+    )
+}
+
 /* True for an async seed thunk — an arrow/function carrying the `async` modifier, whether
    from `wrapSeed`'s `await` lowering or a passthrough `async () => …` literal the author
    wrote. The routing signal: an async seed becomes an async cell (read via `$$readCell`),
@@ -275,6 +293,21 @@ export function desugarSignals(
         }
         return isBareCallComputed(declaration)
     }
+    /* A type-directed PROMISE seed (ADR-0023/0043): a no-`await` `state.computed(getFoo())` whose
+       seed's checker type resolves to a promise. Routed to an eager STREAMING async cell that
+       unwraps the resolved value and reactively re-resolves when its tracked deps change — the
+       script-level twin of a bare async interpolation (ADR-0032). Only fires with a warm classifier
+       ('promise'); fail-open (no program) leaves it to `isEagerStreamComputed`'s bare-call probe,
+       and the `await`-marker seed is excluded (its wrapped thunk is already async). Kept separate
+       from `isEagerStreamComputed` so `computedStatements` can wrap it as `async () => await (seed)`
+       (a stream seed stays a bare probe thunk). */
+    const isPromiseComputed: EagerStreamPredicate = (declaration) => {
+        const argument = seedArgument(declaration)
+        if (argument === undefined || isAsyncSeed(wrapSeed(argument))) {
+            return false
+        }
+        return seedKind(argument) === 'promise'
+    }
     for (const statement of source.statements) {
         if (!ts.isVariableStatement(statement)) {
             continue
@@ -321,9 +354,15 @@ export function desugarSignals(
                    `name()` (a sync/promise seed), or an eager cell read via `$$readCell(name)`
                    when the wrapped seed is async (an `await`-lowered / passthrough-`async` thunk)
                    or its seed type resolves to a stream (`isEagerStreamComputed`, ADR-0023). */
-                if (isAsyncComputed(declaration) || isEagerStreamComputed(declaration)) {
+                if (
+                    isAsyncComputed(declaration) ||
+                    isEagerStreamComputed(declaration) ||
+                    isPromiseComputed(declaration)
+                ) {
                     cellReadNames.add(declaration.name.text)
-                    /* A blocking async computed (author `await`) reads suspend-on-pending. */
+                    /* A blocking async computed (author `await`) reads suspend-on-pending; a bare
+                       promise (isPromiseComputed) carries no `await` → streaming, so isBlockingSeed
+                       is false and it never joins this set. */
                     const argument = seedArgument(declaration)
                     if (argument !== undefined && isBlockingSeed(argument)) {
                         scriptBlockingNames.add(declaration.name.text)
@@ -389,6 +428,7 @@ export function desugarSignals(
                     blockingCellNames,
                     writtenNames,
                     isEagerStreamComputed,
+                    isPromiseComputed,
                 ),
             )
         }
@@ -417,12 +457,19 @@ function loweredStatement(
     blockingCellNames: ReadonlySet<string>,
     writtenNames: ReadonlySet<string>,
     isEagerStreamComputed: EagerStreamPredicate,
+    isPromiseComputed: EagerStreamPredicate,
 ): ts.Statement[] {
     rejectMixedDeclaration(statement, bindings)
     return (
         injectedComputedStatements(statement, injectedCellNames, blockingCellNames) ??
         stateAssignmentStatements(statement, bindings) ??
-        computedStatements(statement, bindings, signalNames, isEagerStreamComputed) ??
+        computedStatements(
+            statement,
+            bindings,
+            signalNames,
+            isEagerStreamComputed,
+            isPromiseComputed,
+        ) ??
         propsStatements(statement, bindings, writtenNames) ??
         cellStatements(statement, bindings, signalNames) ?? [statement]
     )
@@ -613,6 +660,7 @@ function computedStatements(
     bindings: ReactiveImportBindings,
     signalNames: ReadonlySet<string>,
     isEagerStreamComputed: EagerStreamPredicate,
+    isPromiseComputed: EagerStreamPredicate,
 ): ts.Statement[] | undefined {
     if (!ts.isVariableStatement(statement)) {
         return undefined
@@ -656,6 +704,23 @@ function computedStatements(
                     scopeMethodCall('trackedComputed', [
                         wrapped,
                         streaming ? factory.createTrue() : factory.createFalse(),
+                    ]),
+                ),
+            )
+        } else if (argument !== undefined && isPromiseComputed(declaration)) {
+            /* Type-directed PROMISE seed (ADR-0023/0043): a bare `state.computed(getFoo())` whose
+               seed resolves to a promise. Wrap it as `async () => await (seed)` so createAsyncCell
+               unwraps the resolved value — a plain `() => getFoo()` thunk would fall to
+               trackedComputed's lazy opaque path (its probe self-identifies only a stream). Passed
+               `streaming: true` (the `true` arg): no author `await` → it does NOT join the SSR
+               blocking barrier — the shell ships pending and the client resolves + reactively
+               re-resolves, the ADR-0032 no-await tier. `await getFoo()` stays the BLOCKING form. */
+            statements.push(
+                constDeclaration(
+                    name,
+                    scopeMethodCall('trackedComputed', [
+                        wrapAwaitSeed(argument),
+                        factory.createTrue(),
                     ]),
                 ),
             )
