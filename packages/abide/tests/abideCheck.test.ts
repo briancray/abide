@@ -100,7 +100,9 @@ describe('abide check', () => {
            `catch (err)` — so `{err.message}` without a narrow is an error inside the template
            exactly as it is outside one. */
         const source = `<script>\nasync function load(): Promise<string> { return 'x' }\n</script>\n{#await load()}<p>loading</p>{:catch err}<p>{err.message}</p>{/await}\n`
-        const diagnostics = collectAbideDiagnostics(createShadowProgram(project({ 'catch.abide': source })))
+        const diagnostics = collectAbideDiagnostics(
+            createShadowProgram(project({ 'catch.abide': source })),
+        )
         expect(diagnostics).toHaveLength(1)
         expect(diagnostics[0]!.message).toContain("of type 'unknown'")
 

@@ -9,17 +9,18 @@ const LIVE = '/reactive-state'
     <div class="flex flex-col gap-2">
         <h1 class="text-3xl font-bold">async reads & SSR</h1>
         <p class="text-slate-600">
-            <code class="font-mono">await</code> is the marker (ADR-0042). A <strong>bare</strong>
-            promise-typed read <em>streams</em>: a peek that is
+            <code class="font-mono">await</code> is the marker (ADR-0042). A
+            <strong>bare</strong> promise-typed read <em>streams</em>: a peek that is
             <code class="font-mono">undefined</code> while pending (typed
             <code class="font-mono">T | undefined</code>), composing with
-            <code class="font-mono">??</code>, <code class="font-mono">?.</code>, and attributes with
-            no block — ships a pending shell, fills on the client. Writing
+            <code class="font-mono">??</code>, <code class="font-mono">?.</code>, and attributes
+            with no block — ships a pending shell, fills on the client. Writing
             <code class="font-mono">await</code> means <strong>resolved</strong>: the server blocks
             the flush AND the client <em>suspends</em> the reading region until it settles, so the
             value is never pending at the read (no <code class="font-mono">?.</code>). Reach for
             <code class="font-mono">{'{#await}'}</code> only for distinct pending markup, a local
-            <code class="font-mono">{':catch'}</code>, or <code class="font-mono">{':then'}</code>
+            <code class="font-mono">{':catch'}</code>, or
+            <code class="font-mono">{':then'}</code>
             narrowing.
         </p>
     </div>

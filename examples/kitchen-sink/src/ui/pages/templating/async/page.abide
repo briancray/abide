@@ -145,14 +145,16 @@ function remountAwait(): void {
             stream (bare) vs resolve (<code class="font-mono">await</code>)
         </h3>
         <p class="text-xs text-slate-500">
-            A <strong>bare</strong> read is a streaming peek: <code class="font-mono">undefined</code>
+            A <strong>bare</strong> read is a streaming peek:
+            <code class="font-mono">undefined</code>
             while pending, the resolved value once it settles — composing with
             <code class="font-mono">??</code>, <code class="font-mono">?.</code>, and attributes.
             Add <code class="font-mono">await</code> and the read is <strong>resolved</strong>: the
             region <em>suspends</em> (shows nothing) until it settles, so a member access needs no
             <code class="font-mono">?.</code> and never derefs a pending
-            <code class="font-mono">undefined</code>. A bare <code class="font-mono">{'{#if}'}</code>
-            subject <em>holds</em> the same way (no branch while pending).
+            <code class="font-mono">undefined</code>. A bare
+            <code class="font-mono">{'{#if}'}</code> subject <em>holds</em> the same way (no
+            branch while pending).
         </p>
         <button
             type="button"
