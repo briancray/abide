@@ -12,6 +12,7 @@ const subpages = [
     { href: '/reactive-state', label: 'overview' },
     { href: '/reactive-state/primitives', label: 'primitives' },
     { href: '/reactive-state/reactions', label: 'reactions' },
+    { href: '/reactive-state/push', label: 'server push' },
 ]
 
 const pillClass = (href: string) =>

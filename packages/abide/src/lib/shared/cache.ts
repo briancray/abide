@@ -927,13 +927,14 @@ function amend<Args, Return>(
     arg: CacheSelector<Args, Return>,
     args: Args | undefined,
     updater: (current: Return) => Return,
+    isValue: boolean,
 ): void {
     const prefix = selectorPrefix(arg, args)
     const matches = selectorMatcher(arg, args, prefix)
     for (const store of cacheStores()) {
         for (const entry of store.entries.values()) {
             if (matches(entry)) {
-                applyAmend(store, entry, updater as (current: unknown) => unknown)
+                applyAmend(store, entry, updater as (current: unknown) => unknown, isValue)
             }
         }
     }
@@ -1012,12 +1013,17 @@ function applyAmend(
     store: CacheStore,
     entry: CacheEntry,
     updater: (current: unknown) => unknown,
+    isValue: boolean,
 ): void {
     function apply(current: unknown): void {
         entry.value = updater(current)
         notify(store, [entry.key], [entry.key])
     }
-    if (entry.value !== undefined) {
+    /* A value-form amend is current-independent (its updater ignores the argument), so set it
+       directly and synchronously like the wire path (amendByKey) — never defer to the in-flight
+       promise. Deferring would drop the value if that fetch rejects (the reject handler below
+       swallows it), diverging local value-amend from the broadcast receive path. */
+    if (isValue || entry.value !== undefined) {
         apply(entry.value)
         return
     }
@@ -1029,6 +1035,25 @@ function applyAmend(
             : (entry.promise as Promise<unknown>)
     currentValue.then(apply, () => undefined)
 }
+
+/*
+Wire-driven value apply (ADR-0043): set the retained value of the entry at an exact
+cache key and re-render its readers — the receive half of a server amend broadcast. A
+direct set, not the applyAmend materialize-current dance: the frame carries the
+authoritative value now, and the receiving subscriber is by construction reading this
+key. A key with no local entry is a no-op (nothing to amend).
+*/
+function amendByKey(key: string, value: unknown): void {
+    for (const store of cacheStores()) {
+        const entry = store.entries.get(key)
+        if (entry !== undefined) {
+            entry.value = value
+            notify(store, [entry.key], [entry.key])
+        }
+    }
+}
+
+cache.amendByKey = amendByKey
 
 /*
 Event-driven cache maintenance: subscribes to a NamedAsyncIterable (socket or rpc

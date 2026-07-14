@@ -291,9 +291,13 @@ from the server.
 - `abide/shared/invalidate` — `invalidate(selector?, args?)`: the drop verb — drop
   matching cached reads so the next read reloads lazily. Selector grammar:
   `(fn, args)` / `(fn)` / `({ tags })` / `()`.
-- `abide/shared/amend` — `amend(fn, args?, updater)` / `amend({ tags }, updater)`:
-  mutate the retained value of matching reads in place, reactive, no network (the
-  optimistic-update / socket-frame primitive).
+- `abide/shared/amend` — `amend(fn, args?, value | updater)` / `amend({ tags }, …)`:
+  set the retained value of matching reads in place (a concrete `Return`) or transform
+  it (`updater`), reactive, no network — the optimistic-update / socket-frame primitive.
+  Isomorphic like `invalidate`/`refresh` (ADR-0043): the value form applies locally on
+  the client but from the server broadcasts the keyed value to every client reading that
+  exact call (a push-refresh — zero refetches); the updater form is client-local (a
+  closure can't broadcast). For a no-input rpc the args collapse (`fn.amend(value)`).
 - `abide/shared/refresh` — `refresh(selector?, args?)`: refetch matching reads now,
   keeping the stale value visible (`refreshing()` true) until the fresh one swaps in.
 

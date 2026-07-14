@@ -780,6 +780,11 @@ export const cookbookIndex: CookbookIndexSection[] = [
                         gap: false,
                     },
                     {
+                        task: 'Push a new value to every connected client',
+                        anchor: 'push-a-new-value-to-every-connected-client',
+                        gap: false,
+                    },
+                    {
                         task: 'Refresh when a socket frame arrives',
                         anchor: 'refresh-when-a-socket-frame-arrives',
                         gap: false,

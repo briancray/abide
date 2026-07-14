@@ -68,4 +68,46 @@ describe('amend()', () => {
         await settle()
         expect(await getCount()).toEqual({ n: 11 })
     })
+
+    /* The ADR-0043 value form: a concrete Return replaces the retained value (folded to an
+       updater that ignores current), reactive, still no network. This is what a server-side
+       amend(args, value) will broadcast in phase 2. */
+    test('value form replaces the retained value with no refetch', async () => {
+        let invokes = 0
+        const getList = createRemoteFunction<undefined, string[]>({
+            method: 'GET',
+            url: '/rpc/list',
+            clients: BROWSER_ONLY,
+            buildRequest: () => new Request('http://x/rpc/list'),
+            invoke: async () => {
+                invokes += 1
+                return jsonResponse(['a'])
+            },
+        })
+        expect(await getList()).toEqual(['a'])
+        expect(invokes).toBe(1)
+
+        amend(getList, undefined, ['x', 'y'])
+        await settle()
+
+        expect(await getList()).toEqual(['x', 'y'])
+        expect(invokes).toBe(1)
+    })
+
+    /* Instance sugar, no-input rpc: the args key collapses away so amend takes the value
+       directly (getList.amend(value)) — the RemoteFunction type drops the args parameter for
+       `undefined extends Args`. */
+    test('instance value form on a no-input rpc takes the value directly', async () => {
+        const getList = createRemoteFunction<undefined, string[]>({
+            method: 'GET',
+            url: '/rpc/list2',
+            clients: BROWSER_ONLY,
+            buildRequest: () => new Request('http://x/rpc/list2'),
+            invoke: async () => jsonResponse(['a']),
+        })
+        expect(await getList()).toEqual(['a'])
+        getList.amend(['z'])
+        await settle()
+        expect(await getList()).toEqual(['z'])
+    })
 })

@@ -84,22 +84,33 @@ export type RemoteFunction<
        shadow the server `error()` thrower). Reads the rpc error registry captured at the call
        boundary; the cache is untouched. */
     error(args?: Args): RpcError<Errors> | undefined
-    /* Client-only reaction sugar: `fn.watch(handler)` / `fn.watch(args, handler)` ≡
-       `watch(fn, …)` — runs the smart read reactively and pipes each resolved value to the
-       handler, returning a scope-tied disposer. Reaction is a client concern (`watch` is a ui
-       primitive), so this is an inert no-op server-side; an author `fn.watch(…)` surviving the
-       SSR effect-strip (which leaves member calls intact) is a safe no-op there. The real method
-       is attached client-side by remoteProxy. */
-    watch(handler: (value: Return) => void): () => void
-    watch(args: Args, handler: (value: Return) => void): () => void
-} /* `amend` is fetch-only: a streaming rpc has no single memoized value to mutate, so the
-     method is present only when `Return` is not an AsyncIterable. Two signatures: with args
-     (`amend(args, updater)`) and without (`amend(updater)` — every args-variant). Tuple-wrapped
-     so the conditional doesn't distribute over a `never` Return (an error-only rpc). */ & ([
-        Return,
-    ] extends [AsyncIterable<unknown>]
-        ? Record<never, never>
+} /* Client-only reaction sugar: `fn.watch(handler)` / `fn.watch(args, handler)` ≡ `watch(fn, …)`
+     — runs the smart read reactively and pipes each resolved value to the handler, returning a
+     scope-tied disposer. Inert no-op server-side (reaction is a ui concern; the real method is
+     attached client-side by remoteProxy). The keyed overload collapses away for a no-input rpc
+     (`undefined extends Args`) — there is no key to scope to (ADR-0043 §5, type-only). */ & (undefined extends Args
+        ? {
+              watch(handler: (value: Return) => void): () => void
+          }
         : {
-              amend(args: Args | undefined, updater: (current: Return) => Return): void
-              amend(updater: (current: Return) => Return): void
-          })
+              watch(handler: (value: Return) => void): () => void
+              watch(args: Args, handler: (value: Return) => void): () => void
+          }) /* `amend` is fetch-only: a streaming rpc has no single memoized value to mutate, so the
+     method is present only when `Return` is not an AsyncIterable. The last argument is a
+     replacement `Return` value (broadcastable — ADR-0043) or an updater `(current) => Return`
+     (a local closure). For a keyed rpc the value/updater takes the args key first; the bare
+     `amend(updater)` covers every args-variant (local-only). For a no-input rpc the key
+     collapses away (`amend(value)` / `amend(updater)`). Tuple-wrapped so the conditional
+     doesn't distribute over a `never` Return (an error-only rpc). */ &
+    ([Return] extends [AsyncIterable<unknown>]
+        ? Record<never, never>
+        : undefined extends Args
+          ? {
+                amend(value: Return): void
+                amend(updater: (current: Return) => Return): void
+            }
+          : {
+                amend(args: Args, value: Return): void
+                amend(args: Args, updater: (current: Return) => Return): void
+                amend(updater: (current: Return) => Return): void
+            })

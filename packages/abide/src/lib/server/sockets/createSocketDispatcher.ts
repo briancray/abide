@@ -1,4 +1,5 @@
 import type { ServerWebSocket } from 'bun'
+import { AMEND_TOPIC_PREFIX } from '../../shared/AMEND_TOPIC_PREFIX.ts'
 import { abideLog } from '../../shared/abideLog.ts'
 import { decodeWireBody } from '../../shared/decodeWireBody.ts'
 import { encodeRefJson } from '../../shared/encodeRefJson.ts'
@@ -10,6 +11,7 @@ import type { SocketServerFrame } from '../../shared/types/SocketServerFrame.ts'
 import { error } from '../error.ts'
 import { json } from '../json.ts'
 import { sse } from '../sse.ts'
+import { amendFamilyEntry } from './amendFamilyEntry.ts'
 import { lookupSocket } from './lookupSocket.ts'
 import type { SocketRegistryEntry } from './types/SocketRegistryEntry.ts'
 import type { SocketRoutes } from './types/SocketRoutes.ts'
@@ -87,6 +89,13 @@ export function createSocketDispatcher(sockets: SocketRoutes): SocketDispatcher 
         | { entry: SocketRegistryEntry }
         | { failure: 'unregistered' | 'load-failed' | 'no-export'; message: string }
     > {
+        /* The amend value channel (ADR-0043) is a per-call reserved topic family: one synthetic,
+           subscribe-only entry serves every `__abide/amend/<key>` topic — the per-key Bun topic is
+           the sub frame's own name, and there is no module to load or tail to replay. Checked
+           before the generic reserved lookup, which would miss (no per-key registry entry). */
+        if (name.startsWith(AMEND_TOPIC_PREFIX)) {
+            return { entry: amendFamilyEntry }
+        }
         /* A reserved `__abide/` topic has no user module to load — it is minted at boot into
            the registry (ADR-0041), so skip the loader and read it straight from there. */
         if (name.startsWith(RESERVED_SOCKET_PREFIX)) {

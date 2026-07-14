@@ -1,4 +1,7 @@
+import { amendBroadcastSlot } from '../shared/amendBroadcastSlot.ts'
+import { applyAmendLocally } from '../shared/applyAmendLocally.ts'
 import { applyCacheStalenessLocally } from '../shared/applyCacheStalenessLocally.ts'
+import { cacheReaderSocketSlot } from '../shared/cacheReaderSocketSlot.ts'
 import { cacheStalenessSlot } from '../shared/cacheStalenessSlot.ts'
 import { cacheStoreSlot } from '../shared/cacheStoreSlot.ts'
 import { createCacheStore } from '../shared/createCacheStore.ts'
@@ -7,6 +10,7 @@ import { SOCKET_SEED } from '../shared/SOCKET_SEED.ts'
 import { sharedCacheStoreSlot } from '../shared/sharedCacheStoreSlot.ts'
 import type { SsrPayload } from '../shared/types/SsrPayload.ts'
 import type { StreamedResolution } from '../shared/types/StreamedResolution.ts'
+import { createAmendReaderHook } from './amendReaderHook.ts'
 import { probeNavigation } from './probeNavigation.ts'
 import { router } from './router.ts'
 import { CELL_SEED } from './runtime/CELL_SEED.ts'
@@ -59,6 +63,13 @@ export function startClient(
        broadcaster instead — the ADR-0041 side-swap). Same function as the slot fallback so
        the local-apply path can't diverge. */
     cacheStalenessSlot.resolver = () => applyCacheStalenessLocally
+    /* amend(args, value) applies to THIS tab's cache too — the server entry broadcasts instead
+       (the ADR-0043 side-swap). Same function as the slot fallback for the same reason. */
+    amendBroadcastSlot.resolver = () => applyAmendLocally
+    /* Open/close a per-call amend value subscription as reactive readers of a key come and go
+       (ADR-0043), so a server amend(args, value) push lands on keys this tab is reading. */
+    const amendReader = createAmendReaderHook()
+    cacheReaderSocketSlot.resolver = () => amendReader.hook
     /* Seed both SSR cache partitions through the one streamed-resolution sink: `ssr.cache`
        (inline — reads settled at render-return, in __SSR__) and `__abideResumeCache` (pending
        {#await} reads whose `__abideResolve(...)` chunks the stream pushed during parse, before
@@ -108,6 +119,11 @@ export function startClient(
     const disposeRouter = router(target, routes, layoutRoutes, probeNavigation)
     return () => {
         disposeStaleness()
+        amendReader.dispose()
+        /* Clear the reader hook so a post-teardown cache read doesn't re-open amend subscriptions
+           — unlike the staleness/store slots (whose leaked resolver stays benign), a live hook on
+           the read path must not outlive the client it belongs to. */
+        cacheReaderSocketSlot.resolver = undefined
         disposeRouter()
     }
 }

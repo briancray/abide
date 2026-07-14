@@ -12,7 +12,7 @@ import type { RemoteFunction } from './types/RemoteFunction.ts'
 /*
 Attaches the pre-bound selector sugar onto an assembled RemoteFunction:
 `fn.pending(args?)` ≡ `pending(fn, args?)`, likewise refreshing / refresh / invalidate / peek,
-`fn.amend(args?, updater)` ≡ `amend(fn, args, updater)`, and `fn.error(args?)` — the typed
+`fn.amend(args?, value | updater)` ≡ `amend(fn, args, …)`, and `fn.error(args?)` — the typed
 last error from the rpc error registry (most-recent across the rpc when args omitted, that
 exact call when given). The cached read is the bare call `fn(args, opts)` itself; refetch is
 `fn.refresh(args?)`. The methods only reference the globals at call time, so the shared import

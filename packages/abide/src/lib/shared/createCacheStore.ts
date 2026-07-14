@@ -1,4 +1,5 @@
 import { REACTIVE_CONTEXT } from '../ui/runtime/REACTIVE_CONTEXT.ts'
+import { cacheReaderSocketSlot } from './cacheReaderSocketSlot.ts'
 import { createLifecycleChannel } from './createLifecycleChannel.ts'
 import { createSubscriber } from './createSubscriber.ts'
 import { keyMatchesPrefix } from './keyMatchesPrefix.ts'
@@ -62,10 +63,17 @@ export function createCacheStore(): CacheStore {
                        Drop the marker so the tab-scoped store can't accrete one per
                        invalidated-but-never-reread key over a session. */
                     pendingRefresh.delete(key)
+                    /* Last reader gone: close any per-key amend subscription opened on engage
+                       (ADR-0043). Inert unless the client entry installed the hook. */
+                    cacheReaderSocketSlot.get()?.disengage(key)
                 }
             }
         })
         subscribers.set(key, registered)
+        /* First reader for this key: open a per-key amend value subscription (ADR-0043), so a
+           server amend(args, value) push lands on a key this tab is actually reading. Inert on
+           the server / in unit tests (slot unresolved). Paired with disengage in the cleanup. */
+        cacheReaderSocketSlot.get()?.engage(key)
         registered()
     }
 

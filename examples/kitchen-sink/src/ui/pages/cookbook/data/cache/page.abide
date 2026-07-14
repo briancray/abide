@@ -91,6 +91,14 @@ refresh({ tags: ['orders'] })     // or invalidate(...) — same reach`}
             note={'`invalidate` / `refresh` are isomorphic (ADR-0041): called on the client they apply locally; called on the SERVER they broadcast to every connected client, which each revalidates its own reads. One server call reconciles every open tab — no socket plumbing.'} />
 
         <Recipe
+            task="Push a new value to every connected client"
+            live="/reactive-state/push"
+            code={`// inside a server rpc, after the write lands
+await saveOrder(order)
+amend(getOrder, { id: order.id }, order)   // a VALUE, not an updater`}
+            note={'`amend` is isomorphic like refresh (ADR-0043): on the client it mutates the local value, but called on the SERVER with a concrete value it broadcasts that value to every client reading the call — a push-refresh with zero refetches. Pass a value, not an updater (a closure has no wire form and throws); only clients already reading that keyed call receive it.'} />
+
+        <Recipe
             task="Refresh when a socket frame arrives"
             live={LIVE}
             code={`import { watch } from '@abide/abide/ui/watch'
