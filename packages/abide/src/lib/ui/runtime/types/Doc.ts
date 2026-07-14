@@ -15,7 +15,9 @@ export type Doc = {
        stored/serialized/journalled) and returns a string-free reader bound to it. */
     derive: <T>(path: string, compute: () => T) => () => T
     apply: (patch: Patch) => void
-    replace: (path: string, value: unknown) => void
+    /* Returns the written value so a lowered assignment/`++` evaluates to it in
+       expression position (mirrored by `Scope.replace` and `Cell.set`). */
+    replace: (path: string, value: unknown) => unknown
     add: (path: string, value: unknown) => void
     remove: (path: string) => void
     snapshot: () => unknown

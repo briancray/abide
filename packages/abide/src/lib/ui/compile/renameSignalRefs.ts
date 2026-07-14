@@ -1,5 +1,6 @@
 import ts from 'typescript'
-import { COMPOUND_ASSIGNMENT_OPERATORS } from './COMPOUND_ASSIGNMENT_OPERATORS.ts'
+import { lowerCompoundAssignment } from './lowerCompoundAssignment.ts'
+import { lowerUpdateExpression } from './lowerUpdateExpression.ts'
 
 /*
 Rewrites references to a component's signal bindings into the document form the
@@ -120,21 +121,19 @@ export function signalRefsTransformer(
                     !shadowed.has(node.left.text)
                 ) {
                     const target = node.left.text
-                    const right = ts.visitNode(node.right, visit) as ts.Expression
-                    if (node.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
-                        return writeCellCall(target, right)
-                    }
-                    const binary = COMPOUND_ASSIGNMENT_OPERATORS.get(node.operatorToken.kind)
-                    if (binary !== undefined) {
-                        return writeCellCall(
-                            target,
-                            ts.factory.createBinaryExpression(cellReadCall(target), binary, right),
-                        )
+                    const lowered = lowerCompoundAssignment(
+                        node.operatorToken.kind,
+                        () => cellReadCall(target),
+                        ts.visitNode(node.right, visit) as ts.Expression,
+                        (value) => writeCellCall(target, value),
+                    )
+                    if (lowered !== undefined) {
+                        return lowered
                     }
                 }
                 /* `draft++` / `++draft` / `draft--` on a `linked` cell → a `$$writeCell` of the
-                   stepped value, mirroring the `+= 1` shape (the bare `++` would otherwise land
-                   on `$$readCell(draft)`, an invalid lvalue). */
+                   stepped value (the bare `++` would otherwise land on `$$readCell(draft)`, an
+                   invalid lvalue). */
                 if (
                     (ts.isPostfixUnaryExpression(node) || ts.isPrefixUnaryExpression(node)) &&
                     (node.operator === ts.SyntaxKind.PlusPlusToken ||
@@ -143,17 +142,12 @@ export function signalRefsTransformer(
                     cellReadNames.has(node.operand.text) &&
                     !shadowed.has(node.operand.text)
                 ) {
-                    const step =
-                        node.operator === ts.SyntaxKind.PlusPlusToken
-                            ? ts.SyntaxKind.PlusToken
-                            : ts.SyntaxKind.MinusToken
-                    return writeCellCall(
-                        node.operand.text,
-                        ts.factory.createBinaryExpression(
-                            cellReadCall(node.operand.text),
-                            step,
-                            ts.factory.createNumericLiteral(1),
-                        ),
+                    const target = node.operand.text
+                    return lowerUpdateExpression(
+                        ts.isPostfixUnaryExpression(node),
+                        node.operator === ts.SyntaxKind.PlusPlusToken,
+                        () => cellReadCall(target),
+                        (value) => writeCellCall(target, value),
                     )
                 }
                 /* Shorthand `{ count }` → `{ count: $$model.count }` / `{ total: total.value }`,

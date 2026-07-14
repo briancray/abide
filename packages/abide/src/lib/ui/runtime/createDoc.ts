@@ -312,6 +312,7 @@ export function createDoc(initial: unknown): Doc {
                 parent ??= resolveParent()
                 parent[leafKey] = value
                 writeNode(node, value)
+                return value
             },
         }
     }
@@ -321,7 +322,10 @@ export function createDoc(initial: unknown): Doc {
         cell,
         derive,
         apply,
-        replace: (path, value) => apply({ op: 'replace', path, value }),
+        replace: (path, value) => {
+            apply({ op: 'replace', path, value })
+            return value
+        },
         add: (path, value) => apply({ op: 'add', path, value }),
         remove: (path) => apply({ op: 'remove', path }),
         snapshot: () => tree,

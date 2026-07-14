@@ -1,6 +1,7 @@
 import ts from 'typescript'
 import { escapeKey } from '../runtime/escapeKey.ts'
-import { COMPOUND_ASSIGNMENT_OPERATORS } from './COMPOUND_ASSIGNMENT_OPERATORS.ts'
+import { lowerCompoundAssignment } from './lowerCompoundAssignment.ts'
+import { lowerUpdateExpression } from './lowerUpdateExpression.ts'
 
 /*
 The linchpin compiler pass. Rewrites idiomatic data access on a reactive document
@@ -91,33 +92,24 @@ export function docAccessTransformer(docName: string): ts.TransformerFactory<ts.
         }
 
         function visit(node: ts.Node): ts.Node {
-            /* Assignment (plain or compound) to a doc path → replace patch. */
+            /* Assignment (plain, compound, or logical) to a doc path → replace patch. */
             if (ts.isBinaryExpression(node)) {
                 const segments = pathSegments(node.left as ts.Expression)
                 if (segments) {
-                    const operator = node.operatorToken.kind
-                    if (operator === ts.SyntaxKind.EqualsToken) {
-                        return docCall(docName, 'replace', [
-                            buildPath(segments),
-                            ts.visitNode(node.right, visit) as ts.Expression,
-                        ])
-                    }
-                    const binary = COMPOUND_ASSIGNMENT_OPERATORS.get(operator)
-                    if (binary) {
-                        const next = ts.factory.createBinaryExpression(
-                            docCall(docName, 'read', [buildPath(segments)]),
-                            binary,
-                            ts.visitNode(node.right, visit) as ts.Expression,
-                        )
-                        return docCall(docName, 'replace', [buildPath(segments), next])
+                    const lowered = lowerCompoundAssignment(
+                        node.operatorToken.kind,
+                        () => docCall(docName, 'read', [buildPath(segments)]),
+                        ts.visitNode(node.right, visit) as ts.Expression,
+                        (value) => docCall(docName, 'replace', [buildPath(segments), value]),
+                    )
+                    if (lowered !== undefined) {
+                        return lowered
                     }
                 }
             }
-            /* `path++` / `++path` / `path--` on a doc path → a replace patch (the same
-               shape as `+= 1`). A bare `++` would otherwise survive onto the lowered read
-               (`model.read("n")++` / `cell.get()++`) — invalid, since a call result is not
-               an lvalue. abide handlers are statements, so the postfix/prefix value is
-               discarded and both lower identically. Only `++`/`--` are handled here; other
+            /* `path++` / `++path` / `path--` on a doc path → a replace patch. A bare `++`
+               would otherwise survive onto the lowered read (`model.read("n")++`) — invalid,
+               since a call result is not an lvalue. Only `++`/`--` are handled here; other
                unary operators (`!path`, `-path`) fall through so their operand lowers as a
                normal read. */
             if (
@@ -127,16 +119,12 @@ export function docAccessTransformer(docName: string): ts.TransformerFactory<ts.
             ) {
                 const segments = pathSegments(node.operand)
                 if (segments) {
-                    const step =
-                        node.operator === ts.SyntaxKind.PlusPlusToken
-                            ? ts.SyntaxKind.PlusToken
-                            : ts.SyntaxKind.MinusToken
-                    const next = ts.factory.createBinaryExpression(
-                        docCall(docName, 'read', [buildPath(segments)]),
-                        step,
-                        ts.factory.createNumericLiteral(1),
+                    return lowerUpdateExpression(
+                        ts.isPostfixUnaryExpression(node),
+                        node.operator === ts.SyntaxKind.PlusPlusToken,
+                        () => docCall(docName, 'read', [buildPath(segments)]),
+                        (value) => docCall(docName, 'replace', [buildPath(segments), value]),
                     )
-                    return docCall(docName, 'replace', [buildPath(segments), next])
                 }
             }
             /* doc array `.push(a, b, …)` → one `add` patch per argument at the array's `-`

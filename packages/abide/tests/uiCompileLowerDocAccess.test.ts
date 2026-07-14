@@ -18,11 +18,12 @@ describe('lowerDocAccess — emitted shape', () => {
     })
 
     test('increment/decrement on a doc path becomes a replace patch', () => {
-        /* `n++` would otherwise leave `model.read("n")++` (or `cell.get()++`) — invalid,
-           a call result is not an lvalue. Postfix and prefix lower identically. */
-        expect(lower('model.n++')).toContain('model.replace("n", model.read("n") + 1)')
+        /* `n++` would otherwise leave `model.read("n")++` — invalid, a call result is not
+           an lvalue. Prefix evaluates to the new value (the replace's return); postfix
+           evaluates to the PREVIOUS value, so it is corrected back by the opposite step. */
         expect(lower('++model.n')).toContain('model.replace("n", model.read("n") + 1)')
-        expect(lower('model.n--')).toContain('model.replace("n", model.read("n") - 1)')
+        expect(lower('model.n++')).toContain('model.replace("n", model.read("n") + 1) - 1')
+        expect(lower('model.n--')).toContain('model.replace("n", model.read("n") - 1) + 1')
     })
 
     test('a non-inc/dec unary operator lowers its operand as a normal read', () => {
@@ -52,15 +53,17 @@ describe('lowerDocAccess — emitted shape', () => {
         )
     })
 
-    test('logical assignment reads then replaces with the combined value', () => {
+    test('logical assignment short-circuits — the write fires only when the guard passes', () => {
+        // `x ??= v` is `x ?? (x = v)`: the replace sits on the RIGHT of the guard, so a
+        // non-nullish/truthy/falsy read never writes (no needless patch or cell reseed).
         expect(lower("model.text ||= 'x'")).toContain(
-            'model.replace("text", model.read("text") || \'x\')',
+            'model.read("text") || model.replace("text", \'x\')',
         )
         expect(lower('model.count ??= 0')).toContain(
-            'model.replace("count", model.read("count") ?? 0)',
+            'model.read("count") ?? model.replace("count", 0)',
         )
         expect(lower('model.flag &&= false')).toContain(
-            'model.replace("flag", model.read("flag") && false)',
+            'model.read("flag") && model.replace("flag", false)',
         )
     })
 
@@ -181,6 +184,35 @@ describe('lowerDocAccess — executed semantics', () => {
         expect(d.read<number>('count')).toBe(5)
         run(d, "model.lines.push('b')")
         expect(d.read<string[]>('lines')).toEqual(['a', 'b'])
+    })
+
+    test('postfix ++/-- evaluates to the previous value, prefix to the new one', () => {
+        // JS semantics through a doc slot: `n++` returns the pre-step value, `++n` the
+        // stepped one — the write still lands in both cases.
+        const d = doc({ n: 5 })
+        expect(run(d, 'return model.n++')).toBe(5)
+        expect(d.read<number>('n')).toBe(6)
+        expect(run(d, 'return ++model.n')).toBe(7)
+        expect(d.read<number>('n')).toBe(7)
+        expect(run(d, 'return model.n--')).toBe(7)
+        expect(d.read<number>('n')).toBe(6)
+    })
+
+    test('a logical-assignment guard that fails fires no write', () => {
+        // `text ??= v` with a non-nullish `text` must NOT patch — a needless replace would
+        // wake readers and reseed. A derived reader proves it stayed asleep.
+        const d = doc({ text: 'set' })
+        let recomputes = 0
+        const view = d.derive('view', () => {
+            recomputes++
+            return d.read<string>('text')
+        })
+        expect(view()).toBe('set') // prime the reader
+        expect(run(d, "return model.text ??= 'fallback'")).toBe('set') // guard fails → no write
+        expect(view()).toBe('set')
+        expect(recomputes).toBe(1) // never recomputed ⇒ no write fired
+        run(d, 'model.text &&= null') // guard passes (truthy) → writes
+        expect(d.read<string | null>('text')).toBeNull()
     })
 
     test('lowered dynamic-index read resolves through the path', () => {

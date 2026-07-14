@@ -25,7 +25,7 @@ export type Scope = {
     readonly parent: Scope | undefined
     /* data — mirrors Doc */
     read: <T>(path: string) => T
-    replace: (path: string, value: unknown) => void
+    replace: (path: string, value: unknown) => unknown
     add: (path: string, value: unknown) => void
     remove: (path: string) => void
     apply: (patch: Patch) => void
