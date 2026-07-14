@@ -53,7 +53,7 @@ One declaration branches to every surface:
 
 A **typed handler input** is what flips those surfaces on: the input type is projected to JSON Schema at build, so a plainly-typed handler auto-exposes to the CLI and — for read-only methods (`GET`/`HEAD`) — MCP with no hand-written `schemas.input` (a declared `schemas.input` adds runtime validation on top). A mutating method (`POST`/`PUT`/`PATCH`/`DELETE`) never auto-exposes to MCP; opt it in with `clients: { mcp: true }`.
 
-Consume it by importing the export. The **bare call `getMessages(args)` is the smart read** — cached, coalesced, reactive, isomorphic (in-process on the server, `fetch` in the browser). Around it sit `getMessages.raw(args, opts?)` for the raw `Response`, the mutators/probes `.refresh()` / `.invalidate()` / `.patch(...)` / `.peek()` / `.pending()` / `.refreshing()` / `.error()`, and — when the handler streams (`jsonl`/`sse`) — a bare call that returns an `AsyncIterable`.
+Consume it by importing the export. The **bare call `getMessages(args)` is the smart read** — cached, coalesced, reactive, isomorphic (in-process on the server, `fetch` in the browser). Around it sit `getMessages.raw(args, opts?)` for the raw `Response`, the mutators/probes `.refresh()` / `.invalidate()` / `.amend(...)` / `.peek()` / `.pending()` / `.refreshing()` / `.error()`, and — when the handler streams (`jsonl`/`sse`) — a bare call that returns an `AsyncIterable`.
 
 > Query, path, and form args auto-coerce from the endpoint's typed shape at build, so a numeric/boolean/date field arrives already typed — no `z.coerce` (a value that won't parse stays a string, so the schema raises an honest 422). The per-RPC `timeout` (504 on every surface) is distinct from the client transport ceiling `ABIDE_CLIENT_TIMEOUT`.
 

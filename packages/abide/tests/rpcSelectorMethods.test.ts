@@ -72,9 +72,9 @@ describe('rpc instance selector methods', () => {
     })
 })
 
-/* refresh / patch / peek instance methods mirror their globals. Driven client-side
+/* refresh / amend / peek instance methods mirror their globals. Driven client-side
    (window defined) so a retained read materializes its value for peek(). */
-describe('fn.refresh / fn.patch / fn.peek instance methods', () => {
+describe('fn.refresh / fn.amend / fn.peek instance methods', () => {
     const globals = globalThis as Record<string, unknown>
     let realWindow: unknown
 
@@ -96,7 +96,7 @@ describe('fn.refresh / fn.patch / fn.peek instance methods', () => {
         })
     }
 
-    test('peek/patch/refresh exist and mirror the global selectors', async () => {
+    test('peek/amend/refresh exist and mirror the global selectors', async () => {
         let invokes = 0
         const getList = createRemoteFunction<undefined, string[]>({
             method: 'GET',
@@ -109,7 +109,7 @@ describe('fn.refresh / fn.patch / fn.peek instance methods', () => {
             },
         })
         expect(typeof getList.peek).toBe('function')
-        expect(typeof getList.patch).toBe('function')
+        expect(typeof getList.amend).toBe('function')
         expect(typeof getList.refresh).toBe('function')
 
         /* peek mirrors the standalone function: undefined before a read, the value after. */
@@ -120,8 +120,8 @@ describe('fn.refresh / fn.patch / fn.peek instance methods', () => {
         expect(getList.peek()).toEqual(['a'])
         expect(getList.peek()).toEqual(peek(getList))
 
-        /* patch instance mutates locally, no network. */
-        getList.patch((list) => [...list, 'b'])
+        /* amend instance mutates locally, no network. */
+        getList.amend((list) => [...list, 'b'])
         await settle()
         expect(getList.peek()).toEqual(['a', 'b'])
         expect(invokes).toBe(1)

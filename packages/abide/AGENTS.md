@@ -100,11 +100,11 @@ For tests, add `preload = ["@abide/abide/preload"]` under `[test]` in
 - **Consume forms** — the **bare call `fn(args)` is the smart read** (cached,
   coalesced, reactive; in-process during SSR and baked into the HTML for warm
   hydration — there is no `cache()` wrapper). Around it: `fn.raw(args, opts?)`
-  (raw `Response`), `fn.refresh` / `fn.invalidate` / `fn.patch` / `fn.peek` /
+  (raw `Response`), `fn.refresh` / `fn.invalidate` / `fn.amend` / `fn.peek` /
   `fn.pending` / `fn.refreshing` / `fn.error` / `fn.watch` / `fn.isError`. A
   streaming handler (`jsonl`/`sse`) makes the bare call return a
   `NamedAsyncIterable<Frame>` (the iterable IS the value; `await`-ing it is a
-  compile error; `patch` is dropped).
+  compile error; `amend` is dropped).
 - **Socket** (`src/server/sockets/<name>.ts`) — `export const x =
   socket<T>(opts?)`. `opts`: `tail` (retention depth; defaults to keeping the last
   frame), `ttl` (per-frame eviction ms), `clientPublish` (accept `pub` frames from
@@ -291,7 +291,7 @@ from the server.
 - `abide/shared/invalidate` — `invalidate(selector?, args?)`: the drop verb — drop
   matching cached reads so the next read reloads lazily. Selector grammar:
   `(fn, args)` / `(fn)` / `({ tags })` / `()`.
-- `abide/shared/patch` — `patch(fn, args?, updater)` / `patch({ tags }, updater)`:
+- `abide/shared/amend` — `amend(fn, args?, updater)` / `amend({ tags }, updater)`:
   mutate the retained value of matching reads in place, reactive, no network (the
   optimistic-update / socket-frame primitive).
 - `abide/shared/refresh` — `refresh(selector?, args?)`: refetch matching reads now,

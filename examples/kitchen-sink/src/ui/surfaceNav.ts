@@ -75,7 +75,7 @@ export const surfaceNav: SurfaceGroup[] = [
             {
                 href: '/reactive-state',
                 label: 'reactive state',
-                body: 'state / state.computed / state.linked and watch are imported from abide/ui and called bare; transforms coerce writes, watch names a reaction, and refresh / patch drive cached reads.',
+                body: 'state / state.computed / state.linked and watch are imported from abide/ui and called bare; transforms coerce writes, watch names a reaction, and refresh / amend drive cached reads.',
             },
             {
                 href: '/probes',

@@ -95,11 +95,11 @@ const rows = state.computed(listRows({ page: pageNum, size: 20 }))
             task="Optimistically update before the server confirms"
             live={LIVE}
             code={`async function bump() {
-    getCount.patch((c) => ({ count: c.count + 1 }))   // apply the guess now
+    getCount.amend((c) => ({ count: c.count + 1 }))   // apply the guess now
     await increment()
     getCount.refresh()                                // reconcile with the server
 }`}
-            note={'`getCount.patch(updater)` mutates the retained value reactively with no network — the first-class optimistic write. Apply the guess immediately, then `getCount.refresh()` to reconcile (or `patch` back on error to roll back).'} />
+            note={'`getCount.amend(updater)` mutates the retained value reactively with no network — the first-class optimistic write. Apply the guess immediately, then `getCount.refresh()` to reconcile (or `amend` back on error to roll back).'} />
 
         <Recipe
             task="Refetch when the tab regains focus"

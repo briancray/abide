@@ -603,8 +603,8 @@ export const cookbookIndex: CookbookIndexSection[] = [
                         gap: false,
                     },
                     {
-                        task: 'Block SSR with await, stream without',
-                        anchor: 'block-ssr-with-await-stream-without',
+                        task: 'Resolve with await, stream without',
+                        anchor: 'resolve-with-await-stream-without',
                         gap: false,
                     },
                     {
@@ -770,13 +770,23 @@ export const cookbookIndex: CookbookIndexSection[] = [
                         gap: false,
                     },
                     {
+                        task: 'Drop a cached read instead of refetching now',
+                        anchor: 'drop-a-cached-read-instead-of-refetching-now',
+                        gap: false,
+                    },
+                    {
+                        task: 'Fan a refresh out to every connected client',
+                        anchor: 'fan-a-refresh-out-to-every-connected-client',
+                        gap: false,
+                    },
+                    {
                         task: 'Refresh when a socket frame arrives',
                         anchor: 'refresh-when-a-socket-frame-arrives',
                         gap: false,
                     },
                     {
-                        task: 'Patch a cached read in place, no refetch',
-                        anchor: 'patch-a-cached-read-in-place-no-refetch',
+                        task: 'Amend a cached read in place, no refetch',
+                        anchor: 'amend-a-cached-read-in-place-no-refetch',
                         gap: false,
                     },
                     {
@@ -1238,8 +1248,8 @@ export const cookbookIndex: CookbookIndexSection[] = [
                         gap: false,
                     },
                     {
-                        task: 'Throw a plain HTTP error',
-                        anchor: 'throw-a-plain-http-error',
+                        task: 'Return a plain HTTP error',
+                        anchor: 'return-a-plain-http-error',
                         gap: false,
                     },
                     {
@@ -1351,8 +1361,8 @@ export const cookbookIndex: CookbookIndexSection[] = [
                 label: 'throwing & catching',
                 recipes: [
                     {
-                        task: 'Throw a typed HTTP error',
-                        anchor: 'throw-a-typed-http-error',
+                        task: 'Throw an HTTP error to short-circuit',
+                        anchor: 'throw-an-http-error-to-short-circuit',
                         gap: false,
                     },
                     {

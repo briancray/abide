@@ -95,9 +95,9 @@ describe('watch()', () => {
     })
 })
 
-/* The design's real-time pattern: watch(socket, frame => rpc.patch(...)) folds live frames
+/* The design's real-time pattern: watch(socket, frame => rpc.amend(...)) folds live frames
    into a cached read with no refetch — the unification of socket.on + cache.on under watch. */
-describe('watch — real-time socket → patch', () => {
+describe('watch — real-time socket → amend', () => {
     const globals = globalThis as Record<string, unknown>
     let realWindow: unknown
 
@@ -113,7 +113,7 @@ describe('watch — real-time socket → patch', () => {
         globals.window = realWindow
     })
 
-    test('folds socket frames into a cached list via patch', async () => {
+    test('folds socket frames into a cached list via amend', async () => {
         const getList = createRemoteFunction<undefined, string[]>({
             method: 'GET',
             url: '/rpc/watchList',
@@ -135,7 +135,7 @@ describe('watch — real-time socket → patch', () => {
             },
         }
         const stop = watch(chat as never, (message) => {
-            getList.patch((list) => [...list, message as string])
+            getList.amend((list) => [...list, message as string])
         })
         await new Promise((resolve) => setTimeout(resolve, 10))
         await settle()

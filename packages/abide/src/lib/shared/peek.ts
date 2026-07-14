@@ -8,7 +8,7 @@ import type { Socket } from './types/Socket.ts'
 The value member of the probe family: the currently-retained value, synchronously,
 without triggering anything — `T | undefined` (undefined when nothing is retained
 yet). For a cached read it is the retained cache value (reactive in a tracking
-scope — re-runs when a refresh lands or a patch mutates it; a one-shot snapshot
+scope — re-runs when a refresh lands or an amend mutates it; a one-shot snapshot
 otherwise). For a subscribable (socket / stream) it is the latest frame, read off
 the source's own `.peek()`. Instance sugar `getFoo.peek(args?)` ≡ `peek(getFoo,
 args?)`, `socket.peek()` ≡ `peek(socket)`.

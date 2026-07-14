@@ -49,7 +49,7 @@ const stale = state.computed(getUser.refreshing({ id }))
 const failure = state.computed(getUser.error({ id }))
 const warm = getUser.peek({ id })          // retained value, synchronous
 getUser.refresh({ id })                    // revalidate; stale value stays visible`}
-            note={'Every rpc carries its own `.pending` / `.refreshing` / `.error` / `.peek` / `.refresh` / `.patch` — the same selector grammar as the standalone probes, scoped to that rpc with no import. Prefer this instance form for a single rpc (better-typed on its args); the standalone probes earn their keep on bare all-activity and `{ tags }` selection.'} />
+            note={'Every rpc carries its own `.pending` / `.refreshing` / `.error` / `.peek` / `.refresh` / `.amend` — the same selector grammar as the standalone probes, scoped to that rpc with no import. Prefer this instance form for a single rpc (better-typed on its args); the standalone probes earn their keep on bare all-activity and `{ tags }` selection.'} />
 
         <Recipe
             task="Probe a group by tag"

@@ -57,16 +57,16 @@ describe('rpc .watch — client', () => {
         expect(viaMethod).toEqual([['a']])
         expect(viaMethod).toEqual(viaGlobal)
 
-        /* A local patch re-runs the reactive read → the handler fires again. */
-        getList.patch((list) => [...list, 'b'])
+        /* A local amend re-runs the reactive read → the handler fires again. */
+        getList.amend((list) => [...list, 'b'])
         await settle()
         expect(peek(getList)).toEqual(['a', 'b'])
         expect(viaMethod[viaMethod.length - 1]).toEqual(['a', 'b'])
 
-        /* The disposer stops it: a later patch no longer reaches the handler. */
+        /* The disposer stops it: a later amend no longer reaches the handler. */
         stopMethod()
         const before = viaMethod.length
-        getList.patch((list) => [...list, 'c'])
+        getList.amend((list) => [...list, 'c'])
         await settle()
         expect(viaMethod).toHaveLength(before)
         stopGlobal()

@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { amend } from '../src/lib/shared/amend.ts'
 import { cacheStoreSlot } from '../src/lib/shared/cacheStoreSlot.ts'
 import { createCacheStore } from '../src/lib/shared/createCacheStore.ts'
 import { createRemoteFunction } from '../src/lib/shared/createRemoteFunction.ts'
-import { patch } from '../src/lib/shared/patch.ts'
 import { sharedCacheStoreSlot } from '../src/lib/shared/sharedCacheStoreSlot.ts'
 import { settle } from './support/settle.ts'
 
@@ -20,7 +20,7 @@ function jsonResponse(value: unknown): Response {
    evict on settle. */
 const unusedSharedStore = createCacheStore()
 
-describe('patch()', () => {
+describe('amend()', () => {
     beforeEach(() => {
         cacheStoreSlot.resolver = () => cacheStoreSlot.fallback
         cacheStoreSlot.fallback = createCacheStore()
@@ -47,7 +47,7 @@ describe('patch()', () => {
         expect(await getList()).toEqual(['a'])
         expect(invokes).toBe(1)
 
-        patch(getList, undefined, (list) => [...list, 'b'])
+        amend(getList, undefined, (list) => [...list, 'b'])
         await settle()
 
         expect(await getList()).toEqual(['a', 'b'])
@@ -55,7 +55,7 @@ describe('patch()', () => {
         expect(invokes).toBe(1)
     })
 
-    test('two-arg form patches every variant (no args)', async () => {
+    test('two-arg form amends every variant (no args)', async () => {
         const getCount = createRemoteFunction<undefined, { n: number }>({
             method: 'GET',
             url: '/rpc/count',
@@ -64,7 +64,7 @@ describe('patch()', () => {
             invoke: async () => jsonResponse({ n: 1 }),
         })
         expect(await getCount()).toEqual({ n: 1 })
-        patch(getCount, (current) => ({ n: current.n + 10 }))
+        amend(getCount, (current) => ({ n: current.n + 10 }))
         await settle()
         expect(await getCount()).toEqual({ n: 11 })
     })

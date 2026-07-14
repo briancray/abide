@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { amend } from '../src/lib/shared/amend.ts'
 import { cacheStoreSlot } from '../src/lib/shared/cacheStoreSlot.ts'
 import { createCacheStore } from '../src/lib/shared/createCacheStore.ts'
 import { createRemoteFunction } from '../src/lib/shared/createRemoteFunction.ts'
 import { hydrationWindow } from '../src/lib/shared/hydrationWindow.ts'
-import { patch } from '../src/lib/shared/patch.ts'
 import { peek } from '../src/lib/shared/peek.ts'
 import { refresh } from '../src/lib/shared/refresh.ts'
 import { state } from '../src/lib/ui/state.ts'
@@ -58,7 +58,7 @@ describe('peek()', () => {
         }
     })
 
-    test('reflects a patch without a network round-trip', async () => {
+    test('reflects an amend without a network round-trip', async () => {
         const globals = globalThis as Record<string, unknown>
         const realWindow = globals.window
         globals.window = { location: { href: 'http://x/' } }
@@ -74,7 +74,7 @@ describe('peek()', () => {
             await settle()
             expect(peek(getList)).toEqual(['a'])
 
-            patch(getList, (list) => [...list, 'b'])
+            amend(getList, (list) => [...list, 'b'])
             await settle()
             expect(peek(getList)).toEqual(['a', 'b'])
         } finally {

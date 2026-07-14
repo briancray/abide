@@ -71,7 +71,7 @@ export type RemoteFunction<
        reloads lazily, while `refresh(args?)` REFETCHES now keeping the stale value visible — both
        apply locally on the client and broadcast to every connected client from the server.
        `peek(args?)` reads the retained value synchronously (a streaming rpc peeks its latest
-       frame). `patch` is fetch-only, so it is omitted for a streaming rpc (a stream isn't a
+       frame). `amend` is fetch-only, so it is omitted for a streaming rpc (a stream isn't a
        memoized value) via the intersection below. */
     pending(args?: Args): boolean
     refreshing(args?: Args): boolean
@@ -92,14 +92,14 @@ export type RemoteFunction<
        is attached client-side by remoteProxy. */
     watch(handler: (value: Return) => void): () => void
     watch(args: Args, handler: (value: Return) => void): () => void
-} /* `patch` is fetch-only: a streaming rpc has no single memoized value to mutate, so the
+} /* `amend` is fetch-only: a streaming rpc has no single memoized value to mutate, so the
      method is present only when `Return` is not an AsyncIterable. Two signatures: with args
-     (`patch(args, updater)`) and without (`patch(updater)` — every args-variant). Tuple-wrapped
+     (`amend(args, updater)`) and without (`amend(updater)` — every args-variant). Tuple-wrapped
      so the conditional doesn't distribute over a `never` Return (an error-only rpc). */ & ([
         Return,
     ] extends [AsyncIterable<unknown>]
         ? Record<never, never>
         : {
-              patch(args: Args | undefined, updater: (current: Return) => Return): void
-              patch(updater: (current: Return) => Return): void
+              amend(args: Args | undefined, updater: (current: Return) => Return): void
+              amend(updater: (current: Return) => Return): void
           })

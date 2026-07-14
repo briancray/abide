@@ -18,17 +18,17 @@ const LIVE = '/reactive-state'
             task="Apply an optimistic update, then confirm"
             live={LIVE}
             code={`async function bump() {
-    getCount.patch((c) => ({ count: c.count + 1 }))   // apply the guess now
+    getCount.amend((c) => ({ count: c.count + 1 }))   // apply the guess now
     await increment()
     getCount.refresh()                                // reconcile with the server
 }`}
-            note={'`getCount.patch(updater)` mutates the retained value reactively with no network — the first-class optimistic write; the rpc is the pre-bound selector. `getCount.refresh()` then reconciles against the confirmed value.'} />
+            note={'`getCount.amend(updater)` mutates the retained value reactively with no network — the first-class optimistic write; the rpc is the pre-bound selector. `getCount.refresh()` then reconciles against the confirmed value.'} />
 
         <Recipe
             task="Roll back a failed optimistic update"
             live={LIVE}
             code={`async function bump() {
-    getCount.patch((c) => ({ count: c.count + 1 }))
+    getCount.amend((c) => ({ count: c.count + 1 }))
     try {
         await increment()
     } finally {

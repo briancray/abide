@@ -920,10 +920,10 @@ cached list). The next value is stored onto `entry.value`, which the read path
 serves warm (cloned per read), so it persists across reads until a refresh /
 invalidate replaces the entry. `current` comes from `entry.value` when already
 materialized, else decoded from the settled/in-flight promise (async — readers
-re-render when the patch lands). Follows the selector grammar, but only fn / args
-/ tags select a value to mutate; a not-yet-read key has nothing to patch.
+re-render when the amend lands). Follows the selector grammar, but only fn / args
+/ tags select a value to mutate; a not-yet-read key has nothing to amend.
 */
-function patch<Args, Return>(
+function amend<Args, Return>(
     arg: CacheSelector<Args, Return>,
     args: Args | undefined,
     updater: (current: Return) => Return,
@@ -933,13 +933,13 @@ function patch<Args, Return>(
     for (const store of cacheStores()) {
         for (const entry of store.entries.values()) {
             if (matches(entry)) {
-                applyPatch(store, entry, updater as (current: unknown) => unknown)
+                applyAmend(store, entry, updater as (current: unknown) => unknown)
             }
         }
     }
 }
 
-cache.patch = patch
+cache.amend = amend
 
 /*
 Synchronous, non-triggering value probe: returns the currently-retained value for
@@ -947,7 +947,7 @@ a call, or undefined when nothing is retained (no entry, or not yet settled). Ne
 invokes — reading it opens no fetch. Reactive: it subscribes the key AND taps the
 key's lifecycle channel (the exact key is a one-entry prefix, same as
 pending(fn, args)) so a state.computed / on / template scope re-runs both when the
-value changes (invalidate, patch) and when a retained value lands —
+value changes (invalidate, amend) and when a retained value lands —
 materializeRetained's async decode signals only markLifecycle, no invalidate event,
 so without the lifecycle tap a scope that read undefined would never see the value
 arrive. Outside a tracking scope it is a one-shot snapshot. Returns a clone (like
@@ -1003,12 +1003,12 @@ function peek<Args, Return>(
 cache.peek = peek
 
 /*
-Applies one entry's patch: materialize the current decoded value (warm value if
+Applies one entry's amend: materialize the current decoded value (warm value if
 present, else decode the promise — a Response for a remote entry, cloned so the
 readers' own clones still succeed), run the updater, store it warm, and emit so
-readers re-read. Fire-and-forget on the async branch: patch() stays sync-return.
+readers re-read. Fire-and-forget on the async branch: amend() stays sync-return.
 */
-function applyPatch(
+function applyAmend(
     store: CacheStore,
     entry: CacheEntry,
     updater: (current: unknown) => unknown,

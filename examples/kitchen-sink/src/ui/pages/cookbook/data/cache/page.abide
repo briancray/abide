@@ -13,7 +13,7 @@ const LIVE = '/reactive-state'
             with an SSR snapshot — the same line on server and client.
             <code class="font-mono">.raw</code> is the uncached transport escape hatch;
             <code class="font-mono">refresh</code>, <code class="font-mono">invalidate</code>, and
-            <code class="font-mono">patch</code> drive the retained value — and
+            <code class="font-mono">amend</code> drive the retained value — and
             <code class="font-mono">refresh</code>/<code class="font-mono">invalidate</code> called
             server-side broadcast to every connected client (ADR-0041).
         </p>
@@ -98,12 +98,12 @@ watch(chat, () => getChatCount.refresh())`}
             note={'`watch(source, handler)` runs once per socket/stream frame; call `getChatCount.refresh()` inside to revalidate a read. The watch is scope-tied, so it disposes with the component.'} />
 
         <Recipe
-            task="Patch a cached read in place, no refetch"
+            task="Amend a cached read in place, no refetch"
             live={LIVE}
             code={`import { watch } from '@abide/abide/ui/watch'
 watch(chat, (message) =>
-    getChatLog.patch((log) => ({ messages: [...log.messages, message] })))`}
-            note={'When the frame IS the new data, fold it into the retained value directly — `getChatLog.patch(updater)` mutates the cache reactively with no network round-trip. The optimistic-update primitive.'} />
+    getChatLog.amend((log) => ({ messages: [...log.messages, message] })))`}
+            note={'When the frame IS the new data, fold it into the retained value directly — `getChatLog.amend(updater)` mutates the cache reactively with no network round-trip. The optimistic-update primitive.'} />
 
         <Recipe
             task="Front an external fetch as a GET rpc"

@@ -78,7 +78,7 @@ function collectByProject(cwd: string): { diagnostics: AbideDiagnostic[]; checke
         )
         /* The shadow program already holds the project's real `.ts` files (loaded so the
            components' imports/types resolve), but `collectAbideDiagnostics` only reports the
-           `.abide` shadows. Report the `.ts` files too, so a mistyped `navigate`/`url`/`patch`
+           `.abide` shadows. Report the `.ts` files too, so a mistyped `navigate`/`url`/`amend`
            call — or any type error — in an rpc handler, `app.ts`, or a `$shared` helper fails
            `abide check` instead of only surfacing under a separately-run `tsc`. */
         return [...collectAbideDiagnostics(shadow), ...collectTsDiagnostics(shadow.program)]

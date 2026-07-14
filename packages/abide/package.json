@@ -60,7 +60,7 @@
         "./ui/watch": "./src/lib/ui/watch.ts",
         "./shared/pending": "./src/lib/shared/pending.ts",
         "./shared/invalidate": "./src/lib/shared/invalidate.ts",
-        "./shared/patch": "./src/lib/shared/patch.ts",
+        "./shared/amend": "./src/lib/shared/amend.ts",
         "./shared/peek": "./src/lib/shared/peek.ts",
         "./shared/refresh": "./src/lib/shared/refresh.ts",
         "./shared/refreshing": "./src/lib/shared/refreshing.ts",

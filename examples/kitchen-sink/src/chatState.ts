@@ -6,7 +6,7 @@ is a running total; `recent` keeps the last messages published. The
 reactive-state page drives this two ways off a `watch(chat, …)`:
 getChatCount reads `published` and is refreshed per frame (stale count
 stays visible, revalidates), while getChatLog reads `recent` and is
-patched — the frame's own payload folded into the cached value with no
+amended — the frame's own payload folded into the cached value with no
 refetch.
 */
 const RECENT_LIMIT = 20

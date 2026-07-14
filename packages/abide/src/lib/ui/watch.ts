@@ -120,7 +120,7 @@ function isSubscribable(source: unknown): boolean {
 /*
 Reacts to an rpc's cached value: an effect that runs the smart read (subscribing
 its key synchronously, so the effect re-runs when the value changes — a refresh,
-a patch, an invalidate) and pipes the resolved value to the handler. Triggers the
+an amend, an invalidate) and pipes the resolved value to the handler. Triggers the
 read, unlike peek: `watch` observes a live query, so it keeps it flowing.
 */
 function reactToRpc(fn: unknown, args: unknown, handler: (value: unknown) => void): () => void {

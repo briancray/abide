@@ -10,12 +10,12 @@ import Demo from '$ui/Demo.abide'
 /*
 watch(source, handler) names its trigger. A chat frame drives two reactions on
 cached reads: `refresh` revalidates a count in the background (the stale value
-stays visible) while `patch` folds the frame's own payload into a cached list
+stays visible) while `amend` folds the frame's own payload into a cached list
 with no refetch. The bare rpc call IS the smart cached read.
 */
 watch(chat, (message) => {
     getChatCount.refresh()
-    getChatLog.patch((log) => ({ messages: [...log.messages, message].slice(-20) }))
+    getChatLog.amend((log) => ({ messages: [...log.messages, message].slice(-20) }))
 })
 const chatCount = state.computed(getChatCount())
 const chatLog = state.computed(getChatLog())
@@ -25,13 +25,13 @@ const chatLog = state.computed(getChatLog())
     <div class="flex flex-col gap-2">
         <h2 class="text-xl font-semibold">
             <code class="font-mono">watch</code> a source · <code class="font-mono">refresh</code> /
-            <code class="font-mono">patch</code> a cached read
+            <code class="font-mono">amend</code> a cached read
         </h2>
         <p class="text-slate-600">
             <code class="font-mono">watch(source, handler)</code> names its trigger. Here a chat
             frame drives two reactions on cached reads:
             <code class="font-mono">refresh</code> revalidates a count in the background (the stale
-            value stays visible, never blanks) while <code class="font-mono">patch</code> folds the
+            value stays visible, never blanks) while <code class="font-mono">amend</code> folds the
             frame's own payload into a cached list with no refetch.
         </p>
     </div>
@@ -86,12 +86,12 @@ const chatLog = state.computed(getChatLog())
         </div>
     </section>
 
-    <Demo title="watch a socket, refresh + patch the reads" code={`import { watch } from '@abide/abide/ui/watch'
+    <Demo title="watch a socket, refresh + amend the reads" code={`import { watch } from '@abide/abide/ui/watch'
 
 // one reaction, named by its source — no hand-rolled subscribe/teardown
 watch(chat, (message) => {
     getChatCount.refresh()                                         // revalidate; stale total stays visible
-    getChatLog.patch((log) => ({ messages: [...log.messages, message].slice(-20) }))  // fold in, no refetch
+    getChatLog.amend((log) => ({ messages: [...log.messages, message].slice(-20) }))  // fold in, no refetch
 })
 const chatCount = state.computed(getChatCount())   // the bare call IS the smart cached read
 const chatLog = state.computed(getChatLog())
@@ -107,7 +107,7 @@ const chatLog = state.computed(getChatLog())
                 <p class="font-mono text-3xl text-slate-900">{chatCount?.published ?? '—'}</p>
             </div>
             <div class="flex flex-col gap-1 rounded-md border border-slate-200 p-3">
-                <p class="text-xs text-slate-500">recent — <code class="font-mono">patch</code></p>
+                <p class="text-xs text-slate-500">recent — <code class="font-mono">amend</code></p>
                 {#if chatLog?.messages?.length}
                     <ul class="flex flex-col gap-0.5 text-sm text-slate-700">
                         {#for message of chatLog?.messages?.slice(-5) ?? [] by message.id}

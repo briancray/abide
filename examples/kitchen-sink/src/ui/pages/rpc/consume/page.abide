@@ -101,7 +101,7 @@ const rawResponse = state.computed(getReport.raw({ id: 'r-1' }))
                         <td class="px-4 py-2 text-slate-600">revalidate the cached entry</td>
                     </tr>
                     <tr>
-                        <td class="px-4 py-2 font-mono">fn.patch(args?, updater)</td>
+                        <td class="px-4 py-2 font-mono">fn.amend(args?, updater)</td>
                         <td class="px-4 py-2 text-slate-600">
                             fold a value into the retained entry with no refetch
                         </td>

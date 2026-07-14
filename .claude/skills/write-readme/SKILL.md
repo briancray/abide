@@ -97,7 +97,7 @@ The artifacts argue; prose doesn't.
   `fn(args)` IS the smart read** (cached, coalesced, reactive; isomorphic — same
   callable in-process on the server and swapped to `fetch` in the browser),
   `fn.raw(args, init?)` for the raw `Response`, the mutators/probes
-  `fn.refresh()` / `.patch(...)` / `.peek()` / `.pending()` / `.refreshing()` /
+  `fn.refresh()` / `.amend(...)` / `.peek()` / `.pending()` / `.refreshing()` /
   `.error()`, and a streaming handler (`jsonl`/`sse`) makes the bare call return
   a `Subscribable`. (There is no `cache()` wrapper — it was removed; the bare
   call carries the caching.)
