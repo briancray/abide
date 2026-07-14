@@ -1,4 +1,5 @@
-import { createShadowProgram, type ShadowProgram } from './createShadowProgram.ts'
+import { cachedShadowProgram } from './cachedShadowProgram.ts'
+import type { ShadowProgram } from './createShadowProgram.ts'
 import { shadowInterpolationClassifier } from './shadowInterpolationClassifier.ts'
 import type { InterpolationClassifier } from './types/InterpolationClassifier.ts'
 
@@ -12,24 +13,18 @@ The incremental `createShadowLanguageService` does not expose the checker, shado
 `ts.SourceFile`, or per-file mappings publicly, so v1 uses the one-shot
 `createShadowProgram` (reused per root) rather than the LS overlay path.
 
-FAIL-OPEN throughout: if the program can't be built, or the file has no shadow, the
-classifier is absent (→ today's plain-value binding); and the returned closure wraps
-its whole body so ANY throw (resolution failure, missing node, checker hiccup) returns
-`'sync'`. A type-resolution problem degrades to today's behavior, never breaks the build.
+FAIL-OPEN throughout: if the program can't be built (warned once per root by
+`cachedShadowProgram`), or the file has no shadow, the classifier is absent (→ today's
+plain-value binding); and the returned closure wraps its whole body so ANY throw
+(resolution failure, missing node, checker hiccup) returns `'sync'`. A type-resolution
+problem degrades to today's behavior, never breaks the build.
 */
 export function interpolationClassifierForRoot(
     cache: Map<string, ShadowProgram | undefined>,
     root: string,
     abidePath: string,
 ): InterpolationClassifier | undefined {
-    if (!cache.has(root)) {
-        try {
-            cache.set(root, createShadowProgram(root))
-        } catch {
-            cache.set(root, undefined)
-        }
-    }
-    const shadowProgram = cache.get(root)
+    const shadowProgram = cachedShadowProgram(cache, root)
     if (shadowProgram === undefined) {
         return undefined
     }

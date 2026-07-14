@@ -1,5 +1,6 @@
+import { cachedShadowProgram } from './cachedShadowProgram.ts'
 import { classifyInterpolationType } from './classifyInterpolationType.ts'
-import { createShadowProgram, type ShadowProgram } from './createShadowProgram.ts'
+import type { ShadowProgram } from './createShadowProgram.ts'
 import { nodeAtShadowOffset } from './nodeAtShadowOffset.ts'
 import { shadowNaming } from './shadowNaming.ts'
 import { sourceToShadowOffset } from './sourceToShadowOffset.ts'
@@ -18,25 +19,19 @@ as `state.computed` — either way the seed sub-expression maps back to source a
 own type), so the identical `sourceToShadowOffset → nodeAtShadowOffset → classifyInterpolation
 Type` pipeline the interpolation half uses resolves a seed with no node-finder variant.
 
-FAIL-OPEN, but NOT to `'sync'`: if the program can't build, the file has no shadow, the seed's
-location doesn't map, no node is found, or the checker throws, the classifier is absent /
-returns `undefined` — the signal the caller reads as "degrade to `isBareCallComputed`", NOT as
-"the seed is sync". Collapsing failure to `'sync'` (as the interpolation classifier does) would
-mis-route a failed stream seed to the lazy `derive` slot instead of today's syntax heuristic.
+FAIL-OPEN, but NOT to `'sync'`: if the program can't build (warned once per root by
+`cachedShadowProgram`), the file has no shadow, the seed's location doesn't map, no node is
+found, or the checker throws, the classifier is absent / returns `undefined` — the signal the
+caller reads as "degrade to `isBareCallComputed`", NOT as "the seed is sync". Collapsing failure
+to `'sync'` (as the interpolation classifier does) would mis-route a failed stream seed to the
+lazy `derive` slot instead of today's syntax heuristic.
 */
 export function seedTypeClassifierForRoot(
     cache: Map<string, ShadowProgram | undefined>,
     root: string,
     abidePath: string,
 ): SeedTypeClassifier | undefined {
-    if (!cache.has(root)) {
-        try {
-            cache.set(root, createShadowProgram(root))
-        } catch {
-            cache.set(root, undefined)
-        }
-    }
-    const shadowProgram = cache.get(root)
+    const shadowProgram = cachedShadowProgram(cache, root)
     if (shadowProgram === undefined) {
         return undefined
     }
