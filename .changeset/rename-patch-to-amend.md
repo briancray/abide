@@ -1,5 +1,5 @@
 ---
-"@abide/abide": major
+"@abide/abide": minor
 ---
 
 Rename the cache-mutation verb `patch` → `amend`. The word "patch" collided with the HTTP `PATCH` method (`abide/server/PATCH`) and the internal DOM-tree `Patch` type; `amend` names the same intent — mutate the retained value of matching cached reads in place, reactive, no network — without the overload.
