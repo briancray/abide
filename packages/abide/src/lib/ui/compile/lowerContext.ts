@@ -6,6 +6,7 @@ import { signalRefsTransformer } from './renameSignalRefs.ts'
 import { TS_PRINTER } from './TS_PRINTER.ts'
 import type { TemplateNode } from './types/TemplateNode.ts'
 import { unwrapParens } from './unwrapParens.ts'
+import { wrapReactiveSeedsTransformer } from './wrapReactiveSeeds.ts'
 
 /* Compiled once — strips the trailing `;` off every lowered expression. */
 const TRAILING_SEMICOLON = /;$/
@@ -43,9 +44,13 @@ export function lowerContext(
        one tree — the two string passes would each parse + reprint. `localDerived` is
        snapshotted per call (as the transformer's block-local shadow set) so a binding
        pushed mid-compile is honoured AND shadows a same-named component signal. */
-    function lowerOnce(code: string): string {
+    function lowerOnce(
+        code: string,
+        leadingTransformers: ts.TransformerFactory<ts.SourceFile>[] = [],
+    ): string {
         const source = ts.createSourceFile('expr.ts', code, ts.ScriptTarget.Latest, true)
         const result = ts.transform(source, [
+            ...leadingTransformers,
             signalRefsTransformer(
                 stateNames,
                 derivedNames,
@@ -71,6 +76,16 @@ export function lowerContext(
     /* As above but keeps the trailing `;` for a statement/handler body. */
     function statement(code: string): string {
         return lowerOnce(code)
+    }
+
+    /* A nested branch `<script>` body. Same lowering as `statement`, but first normalises its
+       literal `state.computed`/`state.linked` seeds into thunks (`wrapReactiveSeeds`) so a bare-
+       value seed (`state.computed(a * 2)`) matches the top-level desugar rather than reaching the
+       runtime primitive un-thunked (which would call the value as the compute function and crash).
+       The wrap runs BEFORE the reference rename so it wraps the raw seed and the renamed refs land
+       inside the thunk. */
+    function script(code: string): string {
+        return lowerOnce(code, [wrapReactiveSeedsTransformer()])
     }
 
     /* A two-way bind target is either an LVALUE (`count`, `model.lines[i]`) — reads as
@@ -134,6 +149,7 @@ export function lowerContext(
     return {
         expression,
         statement,
+        script,
         withNestedScripts,
         /* The raw branch-local shadow registration both back-ends drive `withBindings`
            through: a block's bindings flow to a `ShadowKind` only via that one shared loop,
