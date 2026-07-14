@@ -129,17 +129,11 @@ watch(count, (n) => console.log(n.toUpperCase()))
     })
 
     /* The inert member-expression form `watch(s.foo, handler)` isn't foldable (abide has no
-       per-property cells), so it compiles unchanged AND emits a compile warning naming the base
-       cell and the corrective forms — the footgun is loud rather than silent. */
-    test('a member-access source on a cell warns and is left unfolded', () => {
-        const warnings: string[] = []
-        const originalWarn = console.warn
-        console.warn = (...args: unknown[]) => {
-            warnings.push(args.map(String).join(' '))
-        }
-        let code = ''
-        try {
-            ;({ code } = compileModule(
+       per-property cells) and would silently never fire, so it is a COMPILE ERROR naming the base
+       cell and the corrective forms — the footgun is caught, not silently shipped. */
+    test('a member-access source on a cell is a compile error', () => {
+        const compile = () =>
+            compileModule(
                 `<script>
 import { state } from '@abide/abide/ui/state'
 import { watch } from '@abide/abide/ui/watch'
@@ -149,27 +143,15 @@ watch(s.foo, (foo) => console.log(foo))
 <p>{s}</p>
 `,
                 {},
-            ))
-        } finally {
-            console.warn = originalWarn
-        }
-        /* Not folded — the member source flows through to the read-lowering untouched. */
-        expect(code).not.toContain('watch(() =>')
-        /* A warning fired, naming the offending source and the base cell. */
-        const watchWarning = warnings.find((warning) => warning.includes('does not track'))
-        expect(watchWarning).toBeDefined()
-        expect(watchWarning).toContain('watch(s.foo, …)')
-        expect(watchWarning).toContain('watch(s, v => …)')
+            )
+        expect(compile).toThrow('does not track')
+        expect(compile).toThrow('watch(s.foo, …)')
+        expect(compile).toThrow('watch(s, v => …)')
     })
 
-    /* A bare cell source must NOT trip the member-expression warning — only member access does. */
-    test('a bare cell source does not warn', () => {
-        const warnings: string[] = []
-        const originalWarn = console.warn
-        console.warn = (...args: unknown[]) => {
-            warnings.push(args.map(String).join(' '))
-        }
-        try {
+    /* A bare cell source must NOT trip the member-expression error — only member access does. */
+    test('a bare cell source compiles without error', () => {
+        expect(() =>
             compileModule(
                 `<script>
 import { state } from '@abide/abide/ui/state'
@@ -180,11 +162,8 @@ watch(count, (n) => console.log(n))
 <p>{count}</p>
 `,
                 {},
-            )
-        } finally {
-            console.warn = originalWarn
-        }
-        expect(warnings.some((warning) => warning.includes('does not track'))).toBe(false)
+            ),
+        ).not.toThrow()
     })
 
     /* End-to-end: the shape the compiler now emits (`watch(() => (handler)(<cell read>))`) is an
