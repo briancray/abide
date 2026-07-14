@@ -6,7 +6,7 @@ installMiniDom()
 const { createDoc: doc } = await import('../src/lib/ui/runtime/createDoc.ts')
 const { mount } = await import('../src/lib/ui/dom/mount.ts')
 const { each } = await import('../src/lib/ui/dom/each.ts')
-const { text } = await import('../src/lib/ui/dom/text.ts')
+const { appendText } = await import('../src/lib/ui/dom/appendText.ts')
 
 /*
 List-reconcile churn benchmark (mini-DOM). render.bench measures a field edit
@@ -54,7 +54,7 @@ function mountList(rows: number) {
                and the createDoc descend scan over the minted-node registry. */
             (parent, item) => {
                 const li = document.createElement('li')
-                li.appendChild(text(() => model.read(`byId/${item.value}/n`)))
+                appendText(li, () => model.read(`byId/${item.value}/n`))
                 parent.appendChild(li)
             },
         )

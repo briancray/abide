@@ -7,7 +7,7 @@ const { state } = await import('../src/lib/ui/state.ts')
 const { effect } = await import('../src/lib/ui/effect.ts')
 const { scope } = await import('../src/lib/ui/runtime/scope.ts')
 const { when } = await import('../src/lib/ui/dom/when.ts')
-const { text } = await import('../src/lib/ui/dom/text.ts')
+const { appendText } = await import('../src/lib/ui/dom/appendText.ts')
 
 /*
 Control-flow build / swap / teardown benchmark (mini-DOM). The render benches measure
@@ -46,7 +46,7 @@ function mountToggle(condition: { value: boolean }): Element {
         host,
         () => condition.value,
         (parent) => {
-            parent.appendChild(text(() => label.value))
+            appendText(parent, () => label.value)
             effect(() => void label.value)
         },
     )
