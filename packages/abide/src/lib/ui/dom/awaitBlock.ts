@@ -1,6 +1,7 @@
 import { decodeRefJson } from '../../shared/decodeRefJson.ts'
 import { isThenable } from '../../shared/isThenable.ts'
 import { effect } from '../effect.ts'
+import { advanceClaim } from '../runtime/advanceClaim.ts'
 import { CURRENT_BOUNDARY } from '../runtime/CURRENT_BOUNDARY.ts'
 import { claimExpected } from '../runtime/claimExpected.ts'
 import { generationGuard } from '../runtime/generationGuard.ts'
@@ -161,22 +162,20 @@ export function awaitBlock(
     const adopt = (open: Node | null, build: (parent: Node) => void): void => {
         const cursor = hydration as NonNullable<typeof hydration>
         const firstAdopted = open?.nextSibling ?? null
-        cursor.next.set(parent, firstAdopted)
+        advanceClaim(cursor, parent, open)
         branch.adoptStrand(build, () => {
             /* A guaranteed control-flow marker — claimExpected throws on a desync (caught by
                firstHydrate's adopt try/catch → rebuildCold) instead of silently claiming null
                and over-clearing the parent. */
             const close = claimExpected(cursor, parent, `/abide:await:${id} close marker`)
-            cursor.next.set(parent, close.nextSibling ?? null)
+            advanceClaim(cursor, parent, close)
             /* Bracket the adopted nodes: `[` before the first claimed node (or before `close`
                for an empty branch), `]` then the anchor just before `close`. */
             const start = document.createComment(RANGE_OPEN)
             parent.insertBefore(start, firstAdopted ?? close)
             const end = document.createComment(RANGE_CLOSE)
             parent.insertBefore(end, close)
-            const anchorNode = document.createTextNode('')
-            parent.insertBefore(anchorNode, close)
-            branch.anchor = anchorNode
+            branch.parkAnchor(close)
             return { start, end }
         })
     }
@@ -194,9 +193,7 @@ export function awaitBlock(
             `/abide:await:${id}`,
             hydration as NonNullable<typeof hydration>,
         )
-        const anchorNode = document.createTextNode('')
-        branch.anchor = anchorNode
-        parent.insertBefore(anchorNode, after)
+        branch.parkAnchor(after)
         withoutHydration(() => render(promiseThunk()))
     }
 
@@ -278,9 +275,7 @@ export function awaitBlock(
         }
         /* Insert at the node after the discarded boundary (see `rebuildCold`). */
         const after = discardBoundary(parent, open, `/abide:await:${id}`, cursor)
-        const anchorNode = document.createTextNode('')
-        branch.anchor = anchorNode
-        parent.insertBefore(anchorNode, after)
+        branch.parkAnchor(after)
         /* The boundary's server nodes are gone, so the pending branch builds FRESH — clear
            the claim cursor (see withoutHydration) so its `cloneStatic`/text don't try to
            claim discarded nodes and silently render nothing. */
@@ -297,9 +292,7 @@ export function awaitBlock(
                 firstHydrate()
                 return
             }
-            const anchorNode = document.createTextNode('')
-            branch.anchor = anchorNode
-            parent.insertBefore(anchorNode, before)
+            branch.parkAnchor(before)
         }
         /* Read the promise every subsequent run so an invalidate re-runs the block. ONLY this
            read is tracked (the branch builds untracked via `scope`), so the block re-runs only

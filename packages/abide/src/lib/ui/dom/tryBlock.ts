@@ -1,5 +1,6 @@
 import { effect } from '../effect.ts'
 import { AsyncCellError } from '../runtime/AsyncCellError.ts'
+import { advanceClaim } from '../runtime/advanceClaim.ts'
 import { CURRENT_BOUNDARY } from '../runtime/CURRENT_BOUNDARY.ts'
 import { claimExpected } from '../runtime/claimExpected.ts'
 import { OWNER } from '../runtime/OWNER.ts'
@@ -191,9 +192,7 @@ export function tryBlock(
         firstHydrate()
         return
     }
-    const anchorNode = document.createTextNode('')
-    branch.anchor = anchorNode
-    parent.insertBefore(anchorNode, before)
+    branch.parkAnchor(before)
     showTry()
 
     /* The first run when hydrating: claim the boundary's open marker, adopt the guarded
@@ -217,11 +216,11 @@ export function tryBlock(
        `firstHydrate` rebuilds cold. */
     function adopt(open: Node): void {
         const cursor = hydration as NonNullable<typeof hydration>
-        cursor.next.set(parent, open.nextSibling ?? null)
+        advanceClaim(cursor, parent, open)
         /* The server emits the `[ … ]` range inside the boundary — claim `[` as the live
            range start, then advance the cursor to the first content node. */
         const start = claimExpected(cursor, parent, `abide:try:${id} range-open marker`) as Comment
-        cursor.next.set(parent, start.nextSibling ?? null)
+        advanceClaim(cursor, parent, start)
         /* Install the boundary around the whole adopt (build + marker claims); the shared
            strand-dispose guard in `adoptStrand` disposes the partial scope and rethrows on any
            failure, and this `finally` restores the boundary before the rethrow reaches
@@ -239,12 +238,10 @@ export function tryBlock(
                         parent,
                         `abide:try:${id} range-close marker`,
                     ) as Comment
-                    cursor.next.set(parent, end.nextSibling ?? null)
+                    advanceClaim(cursor, parent, end)
                     const close = claimExpected(cursor, parent, `/abide:try:${id} close marker`)
-                    cursor.next.set(parent, close.nextSibling ?? null)
-                    const anchorNode = document.createTextNode('')
-                    parent.insertBefore(anchorNode, close)
-                    branch.anchor = anchorNode
+                    advanceClaim(cursor, parent, close)
+                    branch.parkAnchor(close)
                     return { start, end }
                 },
             )
@@ -267,9 +264,7 @@ export function tryBlock(
         if (!hasCatch) {
             throw error
         }
-        const anchorNode = document.createTextNode('')
-        branch.anchor = anchorNode
-        parent.insertBefore(anchorNode, after)
+        branch.parkAnchor(after)
         withoutHydration(() => showCatch(error))
     }
 }

@@ -19,9 +19,10 @@ the accidental copy-paste, notably its two subtle guards:
      rethrowing, so the caller's cold rebuild starts clean).
 
 `anchor` is a mutable field: each block parks its own anchor text node at create /
-hydrate / rebuild time (placement is bespoke), and `place` reads it. The block owns its
-`scopeGroup`; each built branch's disposer is tracked in it so it disposes on owner
-teardown, not only on a swap.
+hydrate / rebuild time via `parkAnchor` (WHERE it parks is bespoke — before the boundary
+close, after a discarded boundary, at the create-mode `before`), and `place` reads it. The
+block owns its `scopeGroup`; each built branch's disposer is tracked in it so it disposes
+on owner teardown, not only on a swap.
 */
 export function anchoredBranch(
     parent: Node,
@@ -29,6 +30,7 @@ export function anchoredBranch(
 ): {
     anchor: Node | undefined
     detach: () => void
+    parkAnchor: (before: Node | null) => void
     place: (build: (host: Node) => void, wrapBuild?: (run: () => void) => void) => void
     adoptStrand: (
         build: (host: Node) => void,
@@ -128,6 +130,14 @@ export function anchoredBranch(
         }
     }
 
+    /* Park a fresh empty text node as the branch's swap anchor at `before` (null appends) —
+       the create/hydrate/rebuild triple every block repeated by hand. */
+    const parkAnchor = (before: Node | null): void => {
+        const node = document.createTextNode('')
+        anchor = node
+        parent.insertBefore(node, before)
+    }
+
     return {
         get anchor(): Node | undefined {
             return anchor
@@ -136,6 +146,7 @@ export function anchoredBranch(
             anchor = node
         },
         detach,
+        parkAnchor,
         place,
         adoptStrand,
     }
