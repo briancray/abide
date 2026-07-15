@@ -1,5 +1,62 @@
 # abide
 
+## 0.54.0
+
+### Minor Changes
+
+- 7cd75d7: `amend` is now isomorphic like `invalidate`/`refresh` (ADR-0043): called on the client it mutates the local cache, but called on the **server** with a concrete value it broadcasts that value to every client reading the call — a push-refresh with zero refetches.
+
+    `amend` gains a value form alongside the updater form. The last argument may be a concrete `Return` (set it) or an updater `(current) => Return` (transform it); for a no-input rpc the args collapse (`getFoo.amend(value)`), matching how `fn()` vs `fn(args)` already read. From the server, only the value form broadcasts — an updater is a closure with no wire form and throws, and the value must target a keyed remote call (a producer/`{ tags }` selector throws). Delivery is confined to clients already reading that exact call (over a per-call reserved `__abide/amend/<key>` topic), so a pushed value reaches only readers already authorized for that key; a dropped frame heals on the next reconnect refresh. The updater form and client-side `amend` are unchanged.
+
+- 42354ba: A bare `state.computed(getFoo())` over an rpc now unwraps to the resolved value, so `{foo?.field}` renders and reactively updates — the pattern the docs and examples already teach.
+
+    Previously a no-`await` `state.computed(getFoo())` was classified as an opaque `Computed<Promise>` (ADR-0023 routing), so a template read like `{foo?.messages}` read `.messages` off a Promise and always showed `undefined`, with no cache reactivity reaching it. Now `getFoo()` and `await getFoo()` inside `state.computed(...)` differ only by SSR tier and are both unwrapped value cells (ADR-0045):
+
+    - `state.computed(getFoo())` — **streaming**: SSR ships the pending branch, the client resolves after hydration.
+    - `state.computed(await getFoo())` — **blocking**: SSR waits and bakes the value into the HTML (warm hydrate, never pending).
+
+    **Breaking behavior change:** `foo` is now a reactive value cell in both forms, never a `Promise`. Code that treated the bare binding as a thenable — `state.computed(getFoo()).then(…)` or `await foo` — no longer gets the fetch promise (it gets the unwrapped value, or `undefined` while pending). For an imperative one-off, call `await getFoo()` directly (cached/coalesced); to render with an await block use `{#await getFoo()}` inline; for a genuinely opaque `Computed<Promise>` binding use an explicit thunk, `state.computed(() => getFoo())`. `{#await foo}` on a bare computed still works (it reads the async-cell subject reactively).
+
+- 7bc2bfb: Rename the cache-mutation verb `patch` → `amend`. The word "patch" collided with the HTTP `PATCH` method (`abide/server/PATCH`) and the internal DOM-tree `Patch` type; `amend` names the same intent — mutate the retained value of matching cached reads in place, reactive, no network — without the overload.
+
+    **Breaking:**
+
+    - **`abide/shared/patch` is now `abide/shared/amend`.** The standalone `patch(fn, args?, updater)` / `patch({ tags }, updater)` is now `amend(...)` with identical signatures.
+    - **The rpc selector method `fn.patch(...)` is now `fn.amend(...)`.** `fn.amend(args?, updater)` ≡ `amend(fn, args, updater)`. Still fetch-only (omitted for a streaming rpc).
+
+    Mechanical rename — no behavior change. Update imports (`abide/shared/patch` → `abide/shared/amend`) and call sites (`.patch(` → `.amend(`). The HTTP `PATCH` method export is unaffected.
+
+- 88959d7: `watch(source, handler)` now runs the handler untracked — the named source(s) are the sole triggers (ADR-0044).
+
+    Previously the two cell forms (`watch(cell, h)` / `watch([a, b], h)`) wrapped the handler in an effect that captured _every_ reactive read in the handler body, so `watch(foo, () => { id = bar.id })` silently re-ran on `bar.id` as well as `foo`. The handler is now a sink: reactive reads inside it no longer become extra triggers. This makes the cell forms match the socket and rpc forms, whose handlers already ran outside the tracking window. Only the bare `watch(() => …)` binding form still auto-tracks everything it reads. If you relied on a handler-body read re-triggering the watch, name it as a source instead (`watch([foo, bar], …)`) or use the auto-track form (`watch(() => { id = bar.id })`).
+
+### Patch Changes
+
+- dc4ddfc: normalize pre-existing format drift ([`757f142`](https://github.com/briancray/abide/commit/757f1420b4e37064da1b5048d2f5d3b1a556b6fe))
+- 11965e9: Fix the JS semantics of reactive-state mutation expressions so `{ }` code behaves like plain TypeScript.
+
+    - **Logical assignments now short-circuit.** `count ??= 5` / `x ||= v` / `x &&= v` on reactive state (`state` slot or `linked` cell) now write **only when the guard passes** — `count ??= 5` no longer fires a redundant patch (and reseed) when `count` is already non-nullish. Previously every logical assignment lowered to an unconditional write.
+    - **Postfix `x++` / `x--` now evaluates to the previous value** (and prefix `++x` to the new value), matching JS. Previously postfix returned the stepped value.
+    - As a consequence, reactive writes now evaluate to the written value, so chained assignment (`a = b = count`) through a state slot works too.
+
+    Internally, `Cell.set` and `Doc.replace` now return the written value, and the two lowering sites share `lowerCompoundAssignment` / `lowerUpdateExpression` helpers so they can't drift.
+
+- 9773885: Warn when the type program for a project can't be built, instead of silently disabling async detection.
+
+    The type-directed async lowering (deciding whether `{getFoo()}` is a promise/stream and streaming it) depends on a warm shadow program built once per project root. If that program failed to build (e.g. a broken `tsconfig`), the failure was swallowed and **every** async interpolation in the project silently degraded to plain text — a bare `{getFoo()}` shipping as the literal `[object Promise]` with no signal. It now emits a one-time `console.warn` per root naming the cause, so a build with async detection disabled is visible. Behavior is otherwise unchanged (the build still never breaks on a program-build failure).
+
+- 0d9316e: `watch(cell.foo, handler)` is now a compile error instead of a silent no-op.
+
+    abide has no per-property cells — a member access on a cell is read once as a plain value, so `watch(s.foo, handler)` subscribed to nothing and the handler silently never fired. It was only flagged by a `console.warn` (easily lost in build output). It now fails compilation with a message pointing at the corrective forms: wrap it in a thunk (`watch(() => …(s.foo))`) or watch the whole cell (`watch(s, v => …)`). A member of a cell is never itself a cell, so this can never reject a valid `watch`.
+
+- 66e5d3b: Fix a hydration desync (and the dead page it could cascade into) when a render reads a `tail`-retaining socket's `peek(socket)`. At SSR the server holds the socket's retained frame so `peek` returns it; a not-yet-connected client's `peek` returned `undefined`, so any markup derived from it (e.g. `state.computed(() => peek(refreshStatus))`) disagreed with the server HTML and tripped a hydration mismatch — which discards the server markup and cold-renders.
+
+    Sockets now warm-seed their retained frame across SSR→client like async cells do: the server records each frame read via `peek(socket)` during the render, ships it in `__SSR__.sockets` keyed by socket name, and the client seeds the socket's latest frame before mount so `peek(socket)` returns the same value the server rendered. (Contrast `cache.peek`, which withholds on the client because the server materializes no cache value — sockets carry a real server value forward, so they seed instead.)
+
+    Also hardens the hydration-desync recovery: the discard→cold-rebuild path now re-primes the async-cell and doc-state warm-seed manifests the failed hydration pass consumed, so the cold rebuild re-adopts the SSR-resolved values instead of refetching. A cold refetch left blocking `await` cells pending, and a top-level blocking read sits in no suspense region, so its `SuspenseSignal` escaped the rebuild and killed the mount ("page threw while mounting"). The rebuild now reads settled — a live page with real data, no loading flash.
+
+    No public API change.
+
 ## 0.53.0
 
 ### Minor Changes
