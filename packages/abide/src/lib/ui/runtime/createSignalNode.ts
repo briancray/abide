@@ -13,6 +13,7 @@ export function createSignalNode(value: unknown): ReactiveNode {
         subsHead: undefined,
         subsTail: undefined,
         status: NODE_STATE.CLEAN,
+        thrown: undefined,
         isEffect: false,
     }
 }

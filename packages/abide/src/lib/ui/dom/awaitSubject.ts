@@ -1,5 +1,7 @@
 import { isAsyncCell } from '../../shared/isAsyncCell.ts'
 import type { AsyncComputed } from '../../shared/types/AsyncComputed.ts'
+import { createEffectNode } from '../runtime/createEffectNode.ts'
+import { SuspenseSignal } from '../runtime/SuspenseSignal.ts'
 import { readCell } from './readCell.ts'
 
 /*
@@ -40,21 +42,39 @@ export function awaitSubject(subject: unknown): unknown {
        refreshing cell reads its retained value now (SWR). The read subscribes the caller. */
     if (cell.pending()) {
         const inFlight = cell.settled?.()
-        /* Await the in-flight settle, then read the freshly-stored value (a `settled` cell
-           writes its value before this `.then` runs — it registered its handler first); a throw
-           there rejects this promise → `{:catch}`. A cell reported pending with no in-flight
-           promise resolves on the next tick. */
-        return (inFlight ?? Promise.resolve()).then(() => settledValue(cell))
+        if (inFlight !== undefined) {
+            /* Await the in-flight settle, then read the freshly-stored value (a `settled` cell
+               writes its value before this `.then` runs — it registered its handler first); an
+               error there rejects this promise → `{:catch}`. EXCEPT a `SuspenseSignal`
+               rejection, which is a PAUSE, not a failure (an async seed's sync prefix read a
+               pending blocking dep — the cell swallows it and stays pending, reseeding once the
+               dep settles); rejecting would render `{:catch SuspenseSignal}`, so keep waiting
+               for the real settle instead. */
+            return inFlight.then(
+                () => settledValue(cell),
+                (error) => {
+                    if (error instanceof SuspenseSignal) {
+                        return whenSettled(cell)
+                    }
+                    throw error
+                },
+            )
+        }
+        /* Pending with NO in-flight promise — a stream before its first frame, or a
+           `SuspenseSignal`-paused seed (both leave `pending()` true with `settled()` cleared).
+           Resolving now would read `undefined` into `{:then}` — the exact flash ADR-0047 kills;
+           wait for the cell to actually settle. */
+        return whenSettled(cell)
     }
     /* Settled: an error with no retained value becomes a REJECTED promise (never a synchronous
        throw), so `awaitBlock`/`renderToStream` route it to `{:catch}` rather than letting it
-       escape the block; otherwise the retained value now. */
-    const error = cell.error()
-    const value = cell.peek()
-    if (value === undefined && error !== undefined) {
+       escape the block; otherwise the retained value now. `settledValue` is the ONE statement
+       of the value-else-error rule for both the settled and the just-settled arms. */
+    try {
+        return settledValue(cell)
+    } catch (error) {
         return Promise.reject(error)
     }
-    return value
 }
 
 /* The value of an in-flight cell once it settles: its retained value, or a throw when it holds
@@ -68,4 +88,31 @@ function settledValue(cell: AsyncComputed<unknown>): unknown {
         }
     }
     return value
+}
+
+/* A promise for the cell's NEXT settle, driven by the graph: an effect watches `pending()` and
+   resolves with the settled value (or rejects with its error) the moment it flips false — the
+   waiter for the states that hold no in-flight promise to chain on. The write that settles the
+   cell flushes effects synchronously (client and SSR alike), so this needs no polling; the
+   effect disposes itself on a microtask once done. */
+function whenSettled(cell: AsyncComputed<unknown>): Promise<unknown> {
+    return new Promise((resolve, reject) => {
+        let done = false
+        let dispose: (() => void) | undefined
+        const settle = (): void => {
+            if (done || cell.pending()) {
+                return
+            }
+            done = true
+            try {
+                resolve(settledValue(cell))
+            } catch (error) {
+                reject(error)
+            }
+            /* Deferred: disposing mid-run would unlink the node while `runNode` is still
+               tracking it. */
+            queueMicrotask(() => dispose?.())
+        }
+        dispose = createEffectNode(settle)
+    })
 }

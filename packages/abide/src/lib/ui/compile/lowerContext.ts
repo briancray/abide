@@ -155,6 +155,12 @@ export function lowerContext(
            through: a block's bindings flow to a `ShadowKind` only via that one shared loop,
            never through a per-block `scope.withShadow` call here. */
         withShadow: scope.withShadow,
+        /* Whether `name` is currently shadowed by a block binding (either kind) at this point
+           of the walk — the live query classification sites (e.g. `awaitSubjectExpr`) consult
+           so a binder that shadows a component cell name is lowered as the local it is, never
+           wrapped as the cell it hides. */
+        isShadowed: (name: string): boolean =>
+            scope.names('plain').has(name) || scope.names('derived').has(name),
         bindRead,
         bindWrite,
     }

@@ -9,8 +9,12 @@ each generator's own EMISSION order — an order that could silently diverge (bu
 component's slot content before taking its own ordinal; SSR emits a switch's default case
 after later cases). Numbering from the tree, not the emission, makes SSR↔client ordinal
 congruence hold by construction.
+
+Returns the lookup, not the map, so the missing-entry policy lives here too: a miss means a
+back-end reached a mount site the shared walk didn't number — a structural divergence,
+surfaced loudly at compile time rather than as a runtime warm-seed/boundary desync.
 */
-export function componentOrdinals(nodes: TemplateNode[]): WeakMap<TemplateNode, number> {
+export function componentOrdinals(nodes: TemplateNode[]): (node: TemplateNode) => number {
     const ordinals = new WeakMap<TemplateNode, number>()
     let next = 0
     const walk = (children: TemplateNode[]): void => {
@@ -25,5 +29,11 @@ export function componentOrdinals(nodes: TemplateNode[]): WeakMap<TemplateNode, 
         }
     }
     walk(nodes)
-    return ordinals
+    return (node: TemplateNode): number => {
+        const ordinal = ordinals.get(node)
+        if (ordinal === undefined) {
+            throw new Error('[abide] component mount site not numbered by the shared ordinal walk')
+        }
+        return ordinal
+    }
 }

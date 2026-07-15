@@ -29,7 +29,7 @@ export function appendTextAt(anchor: Node, read: () => unknown): void {
         parkCursor(hydration, parent, anchor.nextSibling)
         appendText(parent, read)
         if (had) {
-            hydration.next.set(parent, saved ?? null)
+            parkCursor(hydration, parent, saved ?? null)
         } else {
             hydration.next.delete(parent)
         }

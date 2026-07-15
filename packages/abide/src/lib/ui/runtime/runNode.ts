@@ -52,6 +52,7 @@ export function runNode(node: ReactiveNode): unknown {
             }
         }
         node.status = NODE_STATE.CLEAN
+        node.thrown = undefined
         return node.value
     } catch (error) {
         /* The compute threw — commonly a `SuspenseSignal` from a pending blocking cell it read,
@@ -59,9 +60,12 @@ export function runNode(node: ReactiveNode): unknown {
            stale) so a later change to the deps it DID track before throwing re-marks it DIRTY and
            re-propagates to its subscribers; left DIRTY, `mark`'s status gate would take the
            settle's CLEAN→DIRTY edge as already-dirty and leave the node permanently inert — the
-           same reset `flushEffects` applies to a thrown effect. The throw still reaches the reader
-           (a region that catches it and withholds, re-running when the branch resolves). */
+           same reset `flushEffects` applies to a thrown effect. The throw is also RETAINED on the
+           node: a CLEAN settle memoises, so without it only this first reader would observe the
+           pause/error and every later reader would silently get the stale value — `readNode`
+           rethrows the retained throw until the next successful run clears it. */
         node.status = NODE_STATE.CLEAN
+        node.thrown = error
         throw error
     } finally {
         REACTIVE_CONTEXT.observer = previous

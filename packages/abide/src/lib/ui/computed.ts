@@ -1,5 +1,3 @@
-import { isAsyncIterable } from '../shared/isAsyncIterable.ts'
-import { isThenable } from '../shared/isThenable.ts'
 import type { AsyncComputed } from '../shared/types/AsyncComputed.ts'
 import type { NamedAsyncIterable } from '../shared/types/NamedAsyncIterable.ts'
 import { createAsyncCell } from './runtime/createAsyncCell.ts'
@@ -7,6 +5,7 @@ import { createComputedNode } from './runtime/createComputedNode.ts'
 import { isAsyncFunction } from './runtime/isAsyncFunction.ts'
 import { OWNER } from './runtime/OWNER.ts'
 import { readNode } from './runtime/readNode.ts'
+import { routeBareSeed } from './runtime/routeBareSeed.ts'
 import type { Computed } from './runtime/types/Computed.ts'
 import { unlinkDeps } from './runtime/unlinkDeps.ts'
 
@@ -37,20 +36,15 @@ export function computed<T>(
     /* A BARE seed that reached the runtime literally — a branch-nested `<script>` (which
        keeps its `state.computed(...)` calls literal; see lowerScript) or a direct JS caller.
        The compile-time `wrapSeed` normalization only covers the leading script, so honor the
-       same authored contract (ADR-0045: a bare seed behaves like its thunk form) by VALUE:
-       a promise → a streaming unwrapped value cell, a stream → a frame cell, any other
-       value → a constant computed over it. Without this a raw value lands as `node.compute`
-       and the first read calls it (`node.compute is 3` — a dead render mid-stream). */
+       same authored contract (ADR-0045: a bare seed behaves like its thunk form) by VALUE via
+       the shared `routeBareSeed`; a non-async value becomes a constant computed over it.
+       Without this a raw value lands as `node.compute` and the first read calls it
+       (`node.compute is 3` — a dead render mid-stream). */
     if (typeof compute !== 'function') {
         const seed: unknown = compute
-        if (isThenable(seed)) {
-            return createAsyncCell(() => seed, {
-                writable: false,
-                streaming: true,
-            }) as AsyncComputed<T>
-        }
-        if (isAsyncIterable(seed)) {
-            return createAsyncCell(() => seed, { writable: false }) as AsyncComputed<T>
+        const cell = routeBareSeed(seed, false)
+        if (cell !== undefined) {
+            return cell as AsyncComputed<T>
         }
         compute = () => seed as T
     }

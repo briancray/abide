@@ -13,6 +13,7 @@ export function createComputedNode(compute: () => unknown): ReactiveNode {
         subsHead: undefined,
         subsTail: undefined,
         status: NODE_STATE.DIRTY,
+        thrown: undefined,
         isEffect: false,
     }
 }

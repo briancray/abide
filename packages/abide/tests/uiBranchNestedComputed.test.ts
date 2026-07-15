@@ -38,7 +38,8 @@ function component(source: string, extra: Record<string, unknown> = {}) {
         new Function('host', '$props', ...names, clientBody)(host, props, ...values)
     fn.render = (props?: unknown, ctx?: unknown): SsrRender | Promise<SsrRender> =>
         new Function('$props', '$ctx', ...names, ssrBody)(props, ctx, ...values) as
-            SsrRender | Promise<SsrRender>
+            | SsrRender
+            | Promise<SsrRender>
     return Object.assign(fn, { build: fn })
 }
 

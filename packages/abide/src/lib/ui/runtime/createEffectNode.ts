@@ -52,6 +52,7 @@ export function createEffectNode(fn: () => EffectResult): () => void {
         subsTail: undefined,
         /* Born DIRTY; the immediate `runNode` below captures deps and settles it CLEAN. */
         status: NODE_STATE.DIRTY,
+        thrown: undefined,
         isEffect: true,
     }
     runNode(node)

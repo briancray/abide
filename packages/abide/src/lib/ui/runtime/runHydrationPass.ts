@@ -9,30 +9,51 @@ The one owner of a hydration pass's lifecycle. A pass is four lifetimes that mus
 and close together — the claim cursor (`RENDER.hydration`), the cache-withhold window
 (`hydrationWindow`, which `cache.peek` reads), the block-id render pass
 (`enterRenderPass`), and the two-phase seed consume (`SEED_MARKS`/`consumeSeed`,
-ADR-0048): the seeds a pass adopts are only MARKED while it runs, deleted on a CLEAN
-exit, and left in place on a throw — so the caller's discard→cold-rebuild recovery
-re-adopts the SSR-resolved values instead of refetching (a cold refetch would leave
-blocking `await` cells pending and escape as an uncaught SuspenseSignal at mount).
+ADR-0048): the seeds a pass adopts are only MARKED while it runs, deleted on the
+OUTERMOST clean exit, and left in place on a throw — so the caller's
+discard→cold-rebuild recovery re-adopts the SSR-resolved values instead of refetching
+(a cold refetch would leave blocking `await` cells pending and escape as an uncaught
+SuspenseSignal at mount).
 
 Both entry points (`hydrate`, the router's hydrating first mount) run through here, so
 the bracket order and the throw semantics can't drift between them. Nesting is safe:
-the cursor and marks save/restore, and the window/render-pass are depth-counted — a
-nested pass raises and lowers without ending the outer one.
+the cursor saves/restores, the window/render-pass are depth-counted, and a nested
+clean exit hands its marks to the enclosing pass rather than committing — if the outer
+pass later throws, the nested pass's seeds are still in place for the recovery rebuild.
 */
 export function runHydrationPass<T>(run: () => T): T {
     const previous = RENDER.hydration
     const previousMarks = SEED_MARKS.current
     RENDER.hydration = { next: new Map() }
-    SEED_MARKS.current = []
+    SEED_MARKS.current = new Map()
     try {
         hydrationWindow.enter()
         enterRenderPass()
         try {
             const result = run()
-            /* Clean pass: spend the adopted seeds, preserving the one-shot contract (a
-               later mount at the same render-path re-inits fresh, never a stale snapshot). */
-            for (const mark of SEED_MARKS.current) {
-                delete mark.store[mark.key]
+            const marks = SEED_MARKS.current
+            if (previousMarks === undefined) {
+                /* Outermost clean pass: spend the adopted seeds, preserving the one-shot
+                   contract (a later mount at the same render-path re-inits fresh, never a
+                   stale snapshot). */
+                for (const [store, keys] of marks) {
+                    for (const key of keys) {
+                        delete store[key]
+                    }
+                }
+            } else {
+                /* Nested clean pass: merge the marks upward — only the outermost owner
+                   commits, so an outer throw still leaves every value in place. */
+                for (const [store, keys] of marks) {
+                    let outerKeys = previousMarks.get(store)
+                    if (outerKeys === undefined) {
+                        outerKeys = new Set()
+                        previousMarks.set(store, outerKeys)
+                    }
+                    for (const key of keys) {
+                        outerKeys.add(key)
+                    }
+                }
             }
             return result
         } finally {

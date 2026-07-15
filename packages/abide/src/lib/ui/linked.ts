@@ -1,10 +1,10 @@
 import { isAsyncIterable } from '../shared/isAsyncIterable.ts'
-import { isThenable } from '../shared/isThenable.ts'
 import type { AsyncState } from '../shared/types/AsyncState.ts'
 import type { NamedAsyncIterable } from '../shared/types/NamedAsyncIterable.ts'
 import { createAsyncCell } from './runtime/createAsyncCell.ts'
 import { createEffectNode } from './runtime/createEffectNode.ts'
 import { isAsyncFunction } from './runtime/isAsyncFunction.ts'
+import { routeBareSeed } from './runtime/routeBareSeed.ts'
 import type { State } from './runtime/types/State.ts'
 import { state } from './state.ts'
 
@@ -44,24 +44,14 @@ export function linked<T>(
     const coerce = transform as ((next: unknown, previous: unknown) => unknown) | undefined
     /* A BARE seed that reached the runtime literally (a branch-nested `<script>`, a direct
        JS caller) — the compile-time `wrapSeed` normalization only covers the leading script,
-       so honor the authored contract (ADR-0045) by VALUE, exactly as `computed` does: a
-       promise → a streaming writable cell, a stream → a frame cell, any other value → a
-       constant seed thunk (reseeds never fire — nothing tracked — matching the wrapped
-       `() => value` form). */
+       so honor the authored contract (ADR-0045) by VALUE via the shared `routeBareSeed`,
+       exactly as `computed` does; a non-async value becomes a constant seed thunk (reseeds
+       never fire — nothing tracked — matching the wrapped `() => value` form). */
     if (typeof seed !== 'function') {
         const value: unknown = seed
-        if (isThenable(value)) {
-            return createAsyncCell(() => value, {
-                writable: true,
-                transform: coerce,
-                streaming: true,
-            }) as AsyncState<T>
-        }
-        if (isAsyncIterable(value)) {
-            return createAsyncCell(() => value, {
-                writable: true,
-                transform: coerce,
-            }) as AsyncState<T>
+        const cell = routeBareSeed(value, true, coerce)
+        if (cell !== undefined) {
+            return cell as AsyncState<T>
         }
         seed = () => value as T
     }

@@ -90,6 +90,7 @@ export function generateSSR(
         script,
         withNestedScripts,
         withShadow,
+        isShadowed,
         bindRead,
         bindWrite,
     } = lowerContext(stateNames, derivedNames, computedNames, cellReadNames)
@@ -161,15 +162,9 @@ export function generateSSR(
     /* Each `<Child/>` render site's render-path ordinal, from the ONE shared document-order
        walk the client back-end also reads (`componentOrdinals`) — so both compose the same
        cell scope ids and streamed-boundary ids regardless of either back-end's emission
-       order. A missing entry is a structural divergence, surfaced loudly at compile time. */
-    const childOrdinals = componentOrdinals(rootNodes)
-    function childOrdinal(node: TemplateNode): number {
-        const ordinal = childOrdinals.get(node)
-        if (ordinal === undefined) {
-            throw new Error('[abide] component mount site not numbered by the shared ordinal walk')
-        }
-        return ordinal
-    }
+       order. The returned lookup throws on a miss (a structural divergence from the shared
+       walk), surfaced loudly at compile time. */
+    const childOrdinal = componentOrdinals(rootNodes)
 
     /* ADR-0034: the await blocks whose promise-start hoists to the synchronous render prefix so
        independent flights overlap instead of serializing. Server-only — this rewires only the SSR
@@ -803,7 +798,7 @@ export function generateSSR(
        bare-cell classification can't drift from the client back-end's. Used by the
        blocking, streaming, and flight-hoist emit sites. */
     const subjectExprFor = (promiseCode: string): string =>
-        awaitSubjectExpr(promiseCode, cellReadNames, lowerExpression)
+        awaitSubjectExpr(promiseCode, cellReadNames, isShadowed, lowerExpression)
 
     /*
     A blocking await — `await`ed at its structural position in the async render pass and

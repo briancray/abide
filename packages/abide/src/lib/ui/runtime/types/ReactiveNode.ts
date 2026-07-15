@@ -24,5 +24,10 @@ export type ReactiveNode = {
        NODE_STATE). A signal is always CLEAN (no compute); a computed is born DIRTY and
        cycles CLEAN→CHECK/DIRTY→CLEAN as deps change and reads settle it. */
     status: number
+    /* Throw memoisation: what the last compute threw (commonly a `SuspenseSignal`
+       pause), retained while the node sits CLEAN so EVERY reader observes the pause or
+       error — not just the one whose read ran the compute. Cleared by the next
+       successful run; undefined on a signal (no compute to throw). */
+    thrown: unknown
     isEffect: boolean
 }

@@ -97,8 +97,9 @@ export function generateBuild(
 
     /* Each `<Child/>` mount site's render-path ordinal, from the ONE shared document-order
        walk the SSR back-end also reads (`componentOrdinals`) — so two same-type siblings get
-       distinct, SSR-congruent segments regardless of either back-end's emission order. */
-    const childOrdinals = componentOrdinals(rootNodes)
+       distinct, SSR-congruent segments regardless of either back-end's emission order. The
+       returned lookup throws on a miss (a structural divergence from the shared walk). */
+    const childOrdinal = componentOrdinals(rootNodes)
 
     /* The hole's index, assigned by the shared skeletonContext walk — the sole numberer. A
        missing entry means this back-end reached a hole the shared walk didn't number: a
@@ -112,17 +113,6 @@ export function generateBuild(
         return index
     }
 
-    /* A component's ordinal from the shared walk — a missing entry means this back-end
-       reached a mount site the walk didn't number: a structural divergence, surfaced loudly
-       at compile time rather than as a runtime warm-seed/boundary desync. */
-    function childOrdinal(node: TemplateNode): number {
-        const ordinal = childOrdinals.get(node)
-        if (ordinal === undefined) {
-            throw new Error('[abide] component mount site not numbered by the shared ordinal walk')
-        }
-        return ordinal
-    }
-
     /* The shared signal→`model` lowering + branch-scoped nested-script deref scope. */
     const {
         expression: lowerExpression,
@@ -130,6 +120,7 @@ export function generateBuild(
         script: lowerScript,
         withNestedScripts,
         withShadow,
+        isShadowed,
         bindRead,
         bindWrite,
     } = lowerContext(stateNames, derivedNames, computedNames, cellReadNames)
@@ -658,7 +649,7 @@ export function generateBuild(
             : 'undefined'
         /* The subject lowers through the ONE shared ADR-0047 decision site (`awaitSubjectExpr`),
            so the bare-cell classification can't drift from the SSR back-end's. */
-        const subject = awaitSubjectExpr(node.promise, cellReadNames, lowerExpression)
+        const subject = awaitSubjectExpr(node.promise, cellReadNames, isShadowed, lowerExpression)
         return (
             `$$awaitBlock(${parentVar}, $$nextBlockId(), () => (${subject}), ` +
             `${pendingThunk}, ` +

@@ -19,14 +19,33 @@ dependency settles inside this await, the reactive flush is synchronous, so the
 dependent's seed re-runs and registers ITS promise before the loop re-checks — the
 whole chain resolves in order. The per-render list isolation (`isolateCellBarrier`)
 keeps the loop draining only this render's cascade, never a concurrent sibling's.
+
+The round cap bounds a pathological feedback edge — a cell whose settle writes a
+signal its own seed reads re-registers a fresh promise every round, and an
+unbounded fixpoint would hang the SSR request forever. Legitimate chains resolve
+one dependency level per round, so the cap is far above any real graph; hitting
+it renders with whatever settled (the old snapshot-drain behavior) and warns.
 */
+const MAX_SETTLE_ROUNDS = 1000
+
 // @documentation plumbing
 export async function settleAsyncCells(): Promise<void> {
     const pending = activePendingCells()
     if (pending === undefined) {
         return
     }
+    let rounds = 0
     while (pending.promises.length > 0) {
+        if (rounds >= MAX_SETTLE_ROUNDS) {
+            console.warn(
+                '[abide] settleAsyncCells did not reach a fixpoint after ' +
+                    `${MAX_SETTLE_ROUNDS} rounds — an async cell is re-registering ` +
+                    'a promise on every settle (a seed that reads state its own ' +
+                    'resolution writes). Rendering with the values settled so far.',
+            )
+            break
+        }
+        rounds += 1
         await Promise.allSettled(pending.promises.splice(0))
     }
 }

@@ -35,12 +35,47 @@ describe('consumeSeed two-phase adoption', () => {
         expect(store['untouched']).toBe('w')
     })
 
-    test('a repeat read within one pass misses (one adoption per seed)', () => {
+    test('a repeat read within one pass re-adopts (idempotent until pass exit)', () => {
+        /* The repeat is a block-level cold rebuild reconstructing the same render-path
+           inside the live pass (its first construction marked the key, then the adopt
+           desynced) — it must re-adopt the SSR value, not cold-refetch. The one-shot
+           half is enforced at pass exit, not per read. */
         const store: Record<string, string> = { 'a:0': 'v' }
         runHydrationPass(() => {
             expect(consumeSeed(store, 'a:0')).toBe('v')
-            expect(consumeSeed(store, 'a:0')).toBeUndefined()
+            expect(consumeSeed(store, 'a:0')).toBe('v')
         })
+        expect(store['a:0']).toBeUndefined()
+    })
+
+    test('a nested clean pass hands its marks to the outer pass instead of committing', () => {
+        /* Only the outermost owner spends seeds: if the outer pass throws AFTER a nested
+           pass exited cleanly, the nested pass's seeds must still be in place for the
+           router's discard→cold-rebuild recovery to re-adopt. */
+        const store: Record<string, string> = { nested: 'v', outer: 'w' }
+        expect(() =>
+            runHydrationPass(() => {
+                runHydrationPass(() => {
+                    expect(consumeSeed(store, 'nested')).toBe('v')
+                })
+                /* Nested pass exited cleanly — its seed survives while the outer runs. */
+                expect(store['nested']).toBe('v')
+                consumeSeed(store, 'outer')
+                throw new Error('hydration desync')
+            }),
+        ).toThrow('hydration desync')
+        expect(store['nested']).toBe('v')
+        expect(store['outer']).toBe('w')
+
+        /* And on a clean outer exit, the outermost commit spends both. */
+        runHydrationPass(() => {
+            runHydrationPass(() => {
+                expect(consumeSeed(store, 'nested')).toBe('v')
+            })
+            expect(consumeSeed(store, 'outer')).toBe('w')
+        })
+        expect(store['nested']).toBeUndefined()
+        expect(store['outer']).toBeUndefined()
     })
 
     test('a throwing pass leaves every seed in place for the cold rebuild', () => {

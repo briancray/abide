@@ -246,13 +246,17 @@ function readThrough<Args, Return>(
     - a read that resolved to the process store WITHOUT `shared` — a server read outside any
       request scope, where activeCacheStore() falls back to the shared store. Nothing bounds
       its lifetime there, so retaining it would leak forever.
-    Both apply on either side and however the call is made.
+    Both apply on either side and however the call is made. An explicit `shared` defeats both:
+    it is a deliberate "memoise this across requests" opt-in (a POST that is a pure function
+    of its args, using the body only to carry a large payload — highlightCode), so it retains
+    in the process store with the default Infinity ttl rather than dropping on settle. An
+    explicit `ttl` already defeats them via the `ttl === undefined` guard above.
     */
     const coalesceOnly =
         isRemote &&
         policy?.ttl === undefined &&
-        (!replayable ||
-            (!policy?.shared && typeof window === 'undefined' && store === sharedCacheStore()))
+        !policy?.shared &&
+        (!replayable || (typeof window === 'undefined' && store === sharedCacheStore()))
     const effectiveOptions = coalesceOnly ? { ...policy, ttl: 0 } : policy
     if (!isRemote) {
         warnAnonymousProducer(fn as Producer<Args, Return>)
@@ -795,6 +799,34 @@ function exactSelectorKey<Args, Return>(
 }
 
 /*
+The ONE per-store selection dispatch every selector-driven verb runs through: an exact
+key (a fn + args selector, from exactSelectorKey) picks its single candidate via a
+direct Map.get instead of scanning; any other selector scans the store against
+`matches`. Shared so the fast path and the scan can't diverge across
+invalidate / refresh / amend (ADR-0041).
+*/
+function applyToMatching(
+    store: CacheStore,
+    exactKey: string | undefined,
+    matches: (entry: CacheEntry) => boolean,
+    apply: (entry: CacheEntry) => void,
+): void {
+    if (exactKey !== undefined) {
+        const entry = store.entries.get(exactKey)
+        if (entry !== undefined) {
+            apply(entry)
+        }
+        return
+    }
+    /* Deleting the current entry mid-iteration is spec-safe on a Map; no snapshot needed. */
+    for (const entry of store.entries.values()) {
+        if (matches(entry)) {
+            apply(entry)
+        }
+    }
+}
+
+/*
 The per-entry drop/refetch decision of invalidate() — the single seam so the full
 scan and the exact-key fast path can't diverge (ADR-0041). A refetch-policy entry is
 kept and its refetch coalesced; every other match is dropped so the next read reloads.
@@ -844,21 +876,9 @@ function invalidateMatching(
     for (const store of cacheStores()) {
         const matched: string[] = []
         const affected: string[] = []
-        if (exactKey !== undefined) {
-            /* Exact-key selector (fn + args): the one candidate is a direct Map.get, so
-               skip scanning every entry — the matcher would accept only this key anyway. */
-            const entry = store.entries.get(exactKey)
-            if (entry !== undefined) {
-                invalidateEntry(store, entry, matched, affected)
-            }
-        } else {
-            /* Deleting the current entry mid-iteration is spec-safe on a Map; no snapshot needed. */
-            for (const entry of store.entries.values()) {
-                if (matches(entry)) {
-                    invalidateEntry(store, entry, matched, affected)
-                }
-            }
-        }
+        applyToMatching(store, exactKey, matches, (entry) =>
+            invalidateEntry(store, entry, matched, affected),
+        )
         /* Every match changed state (probes re-derive); only the dropped subset
            changed its visible value (readers re-read) — swr matches stay put. */
         notify(store, matched, affected)
@@ -976,19 +996,9 @@ function refreshMatching(
     for (const store of cacheStores()) {
         const matched: string[] = []
         const affected: string[] = []
-        if (exactKey !== undefined) {
-            /* Exact-key selector (fn + args): one candidate via direct Map.get, no scan. */
-            const entry = store.entries.get(exactKey)
-            if (entry !== undefined) {
-                refreshEntry(store, entry, matched, affected)
-            }
-        } else {
-            for (const entry of store.entries.values()) {
-                if (matches(entry)) {
-                    refreshEntry(store, entry, matched, affected)
-                }
-            }
-        }
+        applyToMatching(store, exactKey, matches, (entry) =>
+            refreshEntry(store, entry, matched, affected),
+        )
         /* Mark the whole match set (probes re-derive); emit only the dropped subset — the
            refetched entries emit when their fresh value lands (fireRefetch). */
         notify(store, matched, affected)
@@ -1018,21 +1028,12 @@ function amend<Args, Return>(
     const prefix = selectorPrefix(arg, args)
     const exactKey = exactSelectorKey(arg, args, prefix)
     const matches = selectorMatcher(arg, args, prefix)
+    /* The exact-key arm is the optimistic-update / socket-frame path, potentially once
+       per frame — a direct Map.get through the shared dispatch, no scan. */
     for (const store of cacheStores()) {
-        if (exactKey !== undefined) {
-            /* Exact-key selector (fn + args): mutate the one entry via direct Map.get — the
-               optimistic-update / socket-frame path, potentially once per frame, no scan. */
-            const entry = store.entries.get(exactKey)
-            if (entry !== undefined) {
-                applyAmend(store, entry, updater as (current: unknown) => unknown, isValue)
-            }
-        } else {
-            for (const entry of store.entries.values()) {
-                if (matches(entry)) {
-                    applyAmend(store, entry, updater as (current: unknown) => unknown, isValue)
-                }
-            }
-        }
+        applyToMatching(store, exactKey, matches, (entry) =>
+            applyAmend(store, entry, updater as (current: unknown) => unknown, isValue),
+        )
     }
 }
 

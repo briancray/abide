@@ -21,6 +21,13 @@ export function readNode(node: ReactiveNode): unknown {
     if (node.compute !== undefined) {
         try {
             updateIfNecessary(node)
+            /* Throw memoisation: a paused/erroring compute settled CLEAN with its throw
+               retained (`runNode`'s catch) — rethrow it so EVERY reader observes the
+               pause/error, not just the one whose read ran the compute. Cleared by the
+               next successful run once a dep change re-dirties the node. */
+            if (node.thrown !== undefined) {
+                throw node.thrown
+            }
         } finally {
             track(node)
         }
