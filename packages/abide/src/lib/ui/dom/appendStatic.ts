@@ -1,3 +1,4 @@
+import { advanceClaim } from '../runtime/advanceClaim.ts'
 import { claimChild } from '../runtime/claimChild.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { assertClaimedText } from './assertClaimedText.ts'
@@ -28,7 +29,7 @@ export function appendStatic(parent: Node, value: string, splitAlways = false): 
         ) {
             node.splitText(value.length)
         }
-        hydration.next.set(parent, node === null ? null : node.nextSibling)
+        advanceClaim(hydration, parent, node)
         return
     }
     parent.appendChild(document.createTextNode(value))

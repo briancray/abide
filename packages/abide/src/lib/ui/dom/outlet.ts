@@ -1,3 +1,4 @@
+import { advanceClaim } from '../runtime/advanceClaim.ts'
 import { claimExpected } from '../runtime/claimExpected.ts'
 import { OUTLET_CLOSE, OUTLET_OPEN } from '../runtime/OUTLET_MARKER.ts'
 import { PENDING_OUTLET } from '../runtime/PENDING_OUTLET.ts'
@@ -56,7 +57,7 @@ export function outlet(
         )
     }
     const close = node as Comment
-    hydration.next.set(parent, close.nextSibling)
+    advanceClaim(hydration, parent, close)
     PENDING_OUTLET.current = { open, close }
     return { open, close }
 }

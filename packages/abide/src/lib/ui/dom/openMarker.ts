@@ -1,3 +1,4 @@
+import { advanceClaim } from '../runtime/advanceClaim.ts'
 import { claimExpected } from '../runtime/claimExpected.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 
@@ -13,7 +14,7 @@ export function openMarker(parent: Node, data: string, before: Node | null = nul
     const hydration = RENDER.hydration
     if (hydration !== undefined) {
         const node = claimExpected(hydration, parent, `control-flow marker "${data}"`) as Comment
-        hydration.next.set(parent, node.nextSibling)
+        advanceClaim(hydration, parent, node)
         return node
     }
     const node = document.createComment(data)
