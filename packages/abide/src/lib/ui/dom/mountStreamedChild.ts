@@ -1,6 +1,5 @@
 import { CURRENT_PATH } from '../runtime/CURRENT_PATH.ts'
 import { claimChild } from '../runtime/claimChild.ts'
-import { OWNER } from '../runtime/OWNER.ts'
 import { RANGE_OPEN } from '../runtime/RANGE_MARKER.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import type { UiComponent } from '../runtime/types/UiComponent.ts'
@@ -8,7 +7,7 @@ import { withOptionalPath } from '../runtime/withOptionalPath.ts'
 import { withoutHydration } from '../runtime/withoutHydration.ts'
 import { commentData } from './commentData.ts'
 import { discardBoundary } from './discardBoundary.ts'
-import { mountRange } from './mountRange.ts'
+import { mountChild } from './mountChild.ts'
 import { openMarker } from './openMarker.ts'
 
 /*
@@ -36,28 +35,21 @@ export function mountStreamedChild(
     before: Node | null = null,
     ordinal?: number,
 ): void {
-    const run = <T>(build: () => T): T => withOptionalPath(ordinal, build)
-    const mount = (): { dispose: () => void } =>
-        run(() => mountRange(parent, factory.build, props, before))
-
     const hydration = RENDER.hydration
     if (hydration === undefined) {
-        /* Call mount() first, THEN register its dispose — `OWNER.current?.push(mount())` would
-           short-circuit the whole expression (never mounting) when there is no owner. */
-        const handle = mount()
-        OWNER.current?.push(handle.dispose)
+        /* A client-side navigation — a plain create-mode mount. */
+        mountChild(parent, factory, props, before, ordinal)
         return
     }
 
     /* Probe the cursor without consuming it. Streamed iff the next node is this child's boundary. */
-    const childPath = run(() => CURRENT_PATH.current)
+    const childPath = withOptionalPath(ordinal, () => CURRENT_PATH.current)
     const cursor = claimChild(hydration, parent)
     const streamed = cursor !== null && commentData(cursor) === `abide:await:${childPath}`
 
     if (!streamed) {
         /* INLINE — the server inlined a settled child; adopt its `[ … ]` range in place. */
-        const handle = mount()
-        OWNER.current?.push(handle.dispose)
+        mountChild(parent, factory, props, before, ordinal)
         return
     }
 
@@ -66,17 +58,13 @@ export function mountStreamedChild(
     const inner = claimChild(hydration, parent)
     const warm = inner !== null && commentData(inner) === RANGE_OPEN
     if (warm) {
-        const handle = mount()
+        mountChild(parent, factory, props, before, ordinal)
         openMarker(parent, `/abide:await:${childPath}`)
-        OWNER.current?.push(handle.dispose)
         return
     }
     /* COLD (defensive — renderToStream drains every await before closing, so a warm boundary is the
        deterministic path). The fragment never arrived: discard the empty boundary and create-mount
        the child fresh at that position; its streamed cells resolve post-mount via receiveStreamedCell. */
     const after = discardBoundary(parent, open, `/abide:await:${childPath}`, hydration)
-    const handle = withoutHydration(() =>
-        run(() => mountRange(parent, factory.build, props, after)),
-    )
-    OWNER.current?.push(handle.dispose)
+    withoutHydration(() => mountChild(parent, factory, props, after, ordinal))
 }
