@@ -16,7 +16,7 @@
     "dependencies": {
         "@abide/abide": "workspace:*",
         "@abide/claude-code": "workspace:*",
-        "shiki": "^4.0.0",
+        "sugar-high": "^1.2.1",
         "typescript": "^6.0.3",
         "zod": "^4.0.0"
     },

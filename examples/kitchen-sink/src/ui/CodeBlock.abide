@@ -1,14 +1,13 @@
 <script>
 import { html } from '@abide/abide/ui/html'
 import { props } from '@abide/abide/ui/props'
-import { highlightCode, type Lang } from '$server/rpc/highlightCode.ts'
+import { highlightCode, type Lang } from '$ui/highlightCode.ts'
 
 /*
-Reusable code-snippet card. Highlighting runs on the server via the highlightCode
-rpc (shiki never reaches the browser bundle); the bare smart call captures the
-rendered HTML into the SSR snapshot, and the await block streams it — a child
-component's awaits join the page's SSR stream. `title` is optional; `lang`
-defaults to ts.
+Reusable code-snippet card. Highlighting is a plain synchronous call (sugar-high,
+~1 KiB isomorphic) rendered inline: the highlighted markup bakes into the SSR shell
+with no rpc round-trip and no streaming placeholder, and the same function is on the
+client for any dynamically-mounted code. `title` is optional; `lang` defaults to ts.
 */
 const {
     title,
@@ -25,5 +24,5 @@ const {
 {/if}
 <div
     class="codeblock {flush ? '' : (title ? 'mt-1' : 'mt-3')} overflow-x-auto rounded-md text-xs leading-relaxed">
-    <div class="contents">{html(highlightCode({ code, lang })?.html)}</div>
+    <div class="contents">{html(highlightCode(code, lang))}</div>
 </div>

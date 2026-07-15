@@ -1,6 +1,6 @@
 <script>
 import { props } from '@abide/abide/ui/props'
-import { type Lang } from '$server/rpc/highlightCode.ts'
+import { type Lang } from '$ui/highlightCode.ts'
 import CodeBlock from '$ui/CodeBlock.abide'
 import type { Snippet } from '@abide/abide/shared/snippet'
 

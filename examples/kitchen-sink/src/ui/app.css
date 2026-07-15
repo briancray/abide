@@ -1,28 +1,42 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
-/* CodeBlock: shiki output is injected as raw markup (global, unscoped). The
-   github-light theme paints a white background that would vanish on the white
-   cards, so the container carries a tinted, bordered surface and the shiki pre
-   stays transparent to show it through. */
+/* CodeBlock: sugar-high output is injected as raw markup (global, unscoped). Its
+   token spans reference these CSS variables (a github-light-ish palette that reads
+   on the tinted card); an unhighlighted lang inherits the pre's slate text colour.
+   sugar-high paints no background, so the container's tinted surface shows through. */
+:root {
+    --sh-identifier: #24292e;
+    --sh-keyword: #d73a49;
+    --sh-string: #032f62;
+    --sh-class: #6f42c1;
+    --sh-property: #005cc5;
+    --sh-entity: #6f42c1;
+    --sh-jsxliterals: #e36209;
+    --sh-sign: #6a737d;
+    --sh-comment: #6a737d;
+}
 .codeblock {
     border: 1px solid var(--color-slate-200);
     background: var(--color-slate-50);
 }
-.codeblock pre.shiki {
+.codeblock pre.sh {
     padding: 1rem;
     margin: 0;
-    background: transparent !important;
+    color: var(--color-slate-700);
+}
+.codeblock pre.sh code {
+    white-space: pre;
 }
 
 /* Bindings demo (templating/bindings): an interpolated `class="badge tone-{tone}"`
    and a `data-tone={tone}` attribute drive a live badge colour, so "swap tone"
    visibly toggles the badge sky ↔ rose. */
-.badge[data-tone="sky"],
+.badge[data-tone='sky'],
 .tone-sky {
     background: var(--color-sky-500);
     color: white;
 }
-.badge[data-tone="rose"],
+.badge[data-tone='rose'],
 .tone-rose {
     background: var(--color-rose-500);
     color: white;

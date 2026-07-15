@@ -2,20 +2,21 @@ import { error } from '@abide/abide/server/error'
 import { json } from '@abide/abide/server/json'
 import { POST } from '@abide/abide/server/POST'
 import ts from 'typescript'
-import { getHighlighter } from '../getHighlighter.ts'
 
 /*
-Renders a public abide type straight from its shipped source, so the docs can
+Returns a public abide type straight from its shipped source, so the docs can
 never drift from the real definition. `module` is a package export specifier
 (e.g. `@abide/abide/server/agent`); `import.meta.resolve` maps it through the
 package's `exports` map to the actual `.ts` the consumer imports, and the TS
 compiler pulls out the exact `type`/`interface` declaration text for `name`.
 
-Server-only, exactly like highlightCode: the client build elides this handler,
-so neither the TypeScript compiler nor shiki reaches the browser bundle. A
-CodeBlock-style bare smart read seeds the highlighted HTML into the SSR snapshot,
-so the client hydrates warm with no refetch, and every page asking for the same
-(module, name) shares one cache entry.
+Genuinely server-only: it reads shipped source off disk and runs the TypeScript
+compiler, so unlike CodeBlock this can't collapse to an inline call — the client
+build elides the handler, keeping the compiler out of the browser bundle. It hands
+back the raw declaration text (not highlighted HTML); TypeDef runs the shared
+`highlightCode` inline, exactly like CodeBlock. A bare smart read seeds the source
+into the SSR snapshot so the client hydrates warm with no refetch, and every page
+asking for the same (module, name) shares one cache entry.
 */
 export const typeSource = POST(async ({ module, name }: { module: string; name: string }) => {
     // Only public abide surface — the specifier is resolved against the filesystem,
@@ -42,7 +43,5 @@ export const typeSource = POST(async ({ module, name }: { module: string; name: 
         return error(404, `no exported type ${name} in ${module}`)
     }
 
-    const highlighter = await getHighlighter()
-    const html = highlighter.codeToHtml(declaration, { lang: 'typescript', theme: 'github-light' })
-    return json({ html })
+    return json({ code: declaration })
 })

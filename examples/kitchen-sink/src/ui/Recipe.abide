@@ -3,7 +3,7 @@ import { url } from '@abide/abide/shared/url'
 import { props } from '@abide/abide/ui/props'
 import CodeBlock from '$ui/CodeBlock.abide'
 import { slugifyTask } from '$ui/slugifyTask.ts'
-import { type Lang } from '$server/rpc/highlightCode.ts'
+import { type Lang } from '$ui/highlightCode.ts'
 
 /*
 One cookbook recipe: an imperative task statement, the accurate snippet, the

@@ -2,15 +2,17 @@
 import { html } from '@abide/abide/ui/html'
 import { props } from '@abide/abide/ui/props'
 import { typeSource } from '$server/rpc/typeSource.ts'
+import { highlightCode } from '$ui/highlightCode.ts'
 
 /*
 Renders a public abide type from its shipped source — the docs show the exact
 `type`/`interface` definition the consumer imports, never a hand-copied paraphrase
 that can rot. `module` is the package export specifier, `name` the exported type;
-the typeSource rpc resolves, extracts, and highlights it server-side (TypeScript +
-shiki never reach the browser bundle), and the bare smart read seeds the HTML into
-the SSR snapshot so the client hydrates warm. `title` is optional; matches
-CodeBlock's spacing (`flush` when a gap-based container owns the rhythm).
+the typeSource rpc resolves and extracts the declaration server-side (the TypeScript
+compiler never reaches the browser bundle), and the bare smart read seeds that source
+into the SSR snapshot so the client hydrates warm. Highlighting is the same inline
+`highlightCode` CodeBlock uses. `title` is optional; matches CodeBlock's spacing
+(`flush` when a gap-based container owns the rhythm).
 */
 const { module, name, title, flush } = props<{
     module: string
@@ -25,5 +27,5 @@ const { module, name, title, flush } = props<{
 {/if}
 <div
     class="codeblock {flush ? '' : (title ? 'mt-1' : 'mt-3')} overflow-x-auto rounded-md text-xs leading-relaxed">
-    <div class="contents">{html(typeSource({ module, name })?.html)}</div>
+    <div class="contents">{html(highlightCode(typeSource({ module, name })?.code ?? '', 'ts'))}</div>
 </div>
