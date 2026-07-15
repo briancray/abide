@@ -1,8 +1,8 @@
 import type { AsyncComputed } from '../../shared/types/AsyncComputed.ts'
 
 /*
-The sentinel a compiled blocking read (`$$readCellBlocking`, an `await`-marked cell) raises
-when the cell has no value *yet* — "not resolved," not an error (ADR-0042 D3). It is a sibling
+The sentinel `readCell` raises when a BLOCKING cell (`cell.blocking` — an `await`-marked cell)
+has no value *yet* — "not resolved," not an error (ADR-0042 D3). It is a sibling
 of `AsyncCellError` but a DISTINCT class so the two are told apart by `instanceof`: a suspend is
 caught LOCALLY by the reading region — each DOM primitive (`appendText`, `attr`, `each`,
 `spreadAttrs`, `watch`, and the `when`/`switchBlock` condition) swallows it and withholds to an

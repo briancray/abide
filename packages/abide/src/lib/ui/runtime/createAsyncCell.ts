@@ -16,6 +16,7 @@ import { createEffectNode } from './createEffectNode.ts'
 import { createSignalNode } from './createSignalNode.ts'
 import { readNode } from './readNode.ts'
 import { registerStreamedCell } from './STREAMED_CELLS.ts'
+import { SuspenseSignal } from './SuspenseSignal.ts'
 import { writeNode } from './writeNode.ts'
 
 /* The seed's transform gate (mirrors `state`/`linked`): coerces every value entering
@@ -83,6 +84,14 @@ export function createAsyncCell(
     let inFlight: Promise<unknown> | undefined
     /* Cancels the active stream subscription (a reseed, refresh, or dispose supersedes it). */
     let cancelStream: (() => void) | undefined
+    /* Whether a pending read of this cell PAUSES its reader (ADR-0046). True only for a
+       BLOCKING source — a settling PROMISE the cell would join the SSR barrier for (author
+       `await`, or a fail-open bare-call that registers): `streaming !== true` AND the seed
+       produced a thenable. A STREAM (`isAsyncIterable`) never settles and always peeks, so it
+       is NOT blocking even though it carries the same default `streaming` flag; `run` clears
+       this when it sees a stream. Resolved from the produced source, not the flag alone, so
+       `streaming: false` cannot conflate "author `await`" with "stream". */
+    let blockingSource = false
 
     /* Store a produced value, honouring the write latch and the transform gate. */
     const acceptValue = (value: unknown): void => {
@@ -126,6 +135,16 @@ export function createAsyncCell(
             return
         }
         inFlight = undefined
+        /* A `SuspenseSignal` is a PAUSE, not a failure — the same as the synchronous case in
+           `run`, but arriving through a REJECTION: an async seed (`computed(await f(dep))`) reads a
+           pending blocking `dep` in its synchronous prefix, and the throw becomes the thunk's
+           rejection rather than a sync throw. Stay pending (leave `inFlightNode` true, hold no
+           error); the throwing read subscribed this seed's effect to `dep` during that prefix, so
+           it re-runs and produces the real source once `dep` settles. */
+        if (error instanceof SuspenseSignal) {
+            writeNode(errorNode, undefined)
+            return
+        }
         writeNode(errorNode, error)
         writeNode(inFlightNode, false)
     }
@@ -181,15 +200,35 @@ export function createAsyncCell(
         try {
             produced = seed()
         } catch (error) {
+            /* A `SuspenseSignal` is a PAUSE, not a failure: this seed read a blocking
+               dependency that has no value yet, so this cell's branch pauses too. Stay
+               pending — leave `inFlightNode` true, hold no value, carry no error — rather
+               than latching the pause into `error()`. The throwing read already subscribed
+               this seed's effect to the pending dependency, so when it settles the effect
+               re-runs the seed, which now reads a value and produces the real source. No
+               promise is registered (there is none), so the SSR barrier's fixpoint drain
+               picks this cell up on that re-run instead. */
+            if (error instanceof SuspenseSignal) {
+                if (myRun === runId) {
+                    inFlight = undefined
+                    writeNode(errorNode, undefined)
+                }
+                return
+            }
             settleError(myRun, error)
             return
         }
 
         if (isAsyncIterable(produced)) {
+            /* A stream never settles — it PEEKS `undefined` until its first frame, never pauses. */
+            blockingSource = false
             consumeStream(myRun, produced as NamedAsyncIterable<unknown>)
             return
         }
         if (isThenable(produced)) {
+            /* A settling promise the cell would join the SSR barrier for (author `await`, or a
+               fail-open bare-call) PAUSES a pending read; a `streaming` promise peeks. */
+            blockingSource = options.streaming !== true
             inFlight = produced as Promise<unknown>
             /* Server-only: register the in-flight promise on the request-scoped pending list so
                the SSR barrier (`$$settleAsyncCells`) awaits it before the template peeks the
@@ -279,6 +318,14 @@ export function createAsyncCell(
         /* The current in-flight promise (undefined once settled / not-a-promise) — an internal
            runtime affordance the SSR barrier reads structurally; not on the public cell types. */
         settled: () => inFlight,
+        /* Whether a pending read of this cell PAUSES its reader (ADR-0046) — true only for a
+           blocking source (a barrier-joining settling promise), resolved from what the seed
+           produced (`blockingSource`) so a stream (which shares the default `streaming` flag)
+           is correctly NON-blocking. A getter, since the seed's eager run sets it. `readCell`
+           consults it; an internal affordance, not on the public cell type. */
+        get blocking(): boolean {
+            return blockingSource
+        },
     } as AsyncComputed<unknown>
     if (!options.writable) {
         return readOnly

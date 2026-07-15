@@ -75,12 +75,10 @@ export function generateBuild(
     derivedNames: ReadonlySet<string>,
     computedNames: ReadonlySet<string>,
     isLayout = false,
-    /* `linked` / async `computed` names, lowered to `$$readCell(name)` in template exprs. */
+    /* `linked` / async `computed` names, lowered to `$$readCell(name)` in template exprs — one
+       read form whose pause-vs-peek (a blocking `await` cell suspends the region; a streaming
+       cell peeks `undefined`) is decided at runtime by the cell's own `blocking` bit (ADR-0042). */
     cellReadNames: ReadonlySet<string> = new Set(),
-    /* The subset that are BLOCKING `await` cells (ADR-0042), lowered to `$$readCellBlocking(name)`
-       on the CLIENT so a pending read suspends its render region. Server keeps `$$readCell` (the
-       SSR barrier resolves blocking cells before the template, so the read never suspends). */
-    blockingCellNames: ReadonlySet<string> = new Set(),
 ): string {
     const nextVar = makeVarNamer()
     /* A per-body source-order ordinal for each `<Child/>` mount site, so two same-type siblings
@@ -125,7 +123,7 @@ export function generateBuild(
         withShadow,
         bindRead,
         bindWrite,
-    } = lowerContext(stateNames, derivedNames, computedNames, cellReadNames, blockingCellNames)
+    } = lowerContext(stateNames, derivedNames, computedNames, cellReadNames)
 
     /* Maps a plan `Binding`'s classification to the client `ShadowKind`: a `reactive` value
        derefs as a `.value` cell (`derived`), a `plain` value as the bare local (`plain`). The

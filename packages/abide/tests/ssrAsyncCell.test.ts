@@ -84,6 +84,29 @@ describe('SSR Tier-2 barrier bakes resolved async-cell values into the HTML', ()
         expect(templateAt).toBeGreaterThan(barrierAt)
     })
 
+    /* Chained blocking cells: cell `b`'s `await` seed reads cell `a`. On SSR, `b`'s seed reads a
+       still-pending `a` in its synchronous prefix and PAUSES (the read throws, propagating pending
+       down the edge), so `b` registers no real promise on the first pass. When `a` settles inside
+       the barrier, the synchronous reactive flush re-runs `b`'s seed with `a` RESOLVED, which
+       registers `b`'s promise — and the barrier's fixpoint drain awaits that too, resolving the
+       whole chain in order. Before pending propagated, `b` read `a` as `undefined` and baked the
+       wrong value; here it bakes `A->B`. */
+    test('a chain of blocking cells resolves in order (barrier drains to a fixpoint)', async () => {
+        const first = () => new Promise((resolve) => setTimeout(() => resolve('A'), 0))
+        const second = (upstream: string) =>
+            new Promise((resolve) => setTimeout(() => resolve(`${upstream}_then_B`), 0))
+        const { html } = await render(
+            `
+            <script>import { state } from '@abide/abide/ui/state'
+            const a = state.computed(await first())
+            const b = state.computed(await second(a))</script>
+            <div>{b}</div>
+        `,
+            { first, second },
+        )
+        expect(html).toBe('<div>A_then_B</div>')
+    })
+
     /* Goal 2 companion: a rejected cell settles into `error()` (allSettled never rejects the
        render), and the read-site surfaces it through the nearest `{#try}` catch rather than
        crashing the whole render. */

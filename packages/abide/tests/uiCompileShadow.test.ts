@@ -80,8 +80,10 @@ let grid = state.computed(async () => await getSession())
 
     /* ADR-0042 D5 "one predicate": the shadow's blocking classifier (`$$cellValue` → `T` vs
        `$$cellValuePending` → `T | undefined`) and the runtime blocking flag (`trackedComputed(…,
-       false|true)` + `$$readCellBlocking`/`$$readCell`) now share ONE `hasTopLevelAwait` walk, so
-       they can never disagree on whether a seed is `await`-marked. */
+       false|true)`, which sets the constructed cell's `blocking` bit) share ONE `hasTopLevelAwait`
+       walk, so they can never disagree on whether a seed is `await`-marked. The READ form is now
+       uniform (`$$readCell` for both tiers) — a pending read pauses or peeks off the cell's own
+       bit — so the runtime tier shows only in the construction flag. */
     test('shadow type and runtime blocking flag agree on await-marking (D5 one predicate)', () => {
         /* (a) async modifier, NO top-level await → STREAMING on both sides (typed `| undefined`). */
         const streaming = `<script>
@@ -94,9 +96,9 @@ const foo = state.computed(async () => getFoo())
             'const foo = $$cellValuePending(async () => getFoo());',
         )
         const streamingRuntime = compileComponent(streaming)
+        // STREAMING tier is the `, true` construction flag (blocking bit off → a pending read peeks)
         expect(streamingRuntime).toContain('$$scope().trackedComputed(async () => getFoo(), true)')
         expect(streamingRuntime).toContain('$$readCell(foo)')
-        expect(streamingRuntime).not.toContain('$$readCellBlocking')
 
         /* (b) top-level `await` → BLOCKING on both sides (resolved `T`, suspends its region). */
         const blocking = `<script>
@@ -109,10 +111,11 @@ const foo = state.computed(async () => await getFoo())
             'const foo = $$cellValue(async () => await getFoo());',
         )
         const blockingRuntime = compileComponent(blocking)
+        // BLOCKING tier is the `, false` construction flag (blocking bit on → a pending read suspends)
         expect(blockingRuntime).toContain(
             '$$scope().trackedComputed(async () => await getFoo(), false)',
         )
-        expect(blockingRuntime).toContain('$$readCellBlocking(foo)')
+        expect(blockingRuntime).toContain('$$readCell(foo)')
 
         /* (c) the divergence the shared walk CLOSES: an `await` nested in a METHOD of the seed body
            is not top-level, so the seed stays STREAMING on both sides. Before unification the
@@ -128,7 +131,6 @@ const foo = state.computed(async () => { const o = { async m() { return await lo
         const nestedRuntime = compileComponent(nested)
         expect(nestedRuntime).toContain(', true)')
         expect(nestedRuntime).toContain('$$readCell(foo)')
-        expect(nestedRuntime).not.toContain('$$readCellBlocking')
     })
 
     test('a bare non-thunk computed seed is wrapped rather than called as a value', () => {

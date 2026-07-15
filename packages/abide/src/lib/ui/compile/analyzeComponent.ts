@@ -120,7 +120,6 @@ export function analyzeComponent(
         derivedNames,
         computedNames,
         cellReadNames,
-        blockingCellNames: allBlockingCellNames,
         droppedReactiveImports,
     } = lowerScript(
         fullScriptBody,
@@ -143,7 +142,6 @@ export function analyzeComponent(
         derivedNames,
         computedNames,
         cellReadNames,
-        blockingCellNames: allBlockingCellNames,
         nodes,
         styles,
         /* Hydration adopts every block in place — including `await`, which resumes

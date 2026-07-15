@@ -95,7 +95,6 @@
         "./ui/dom/spreadAttrs": "./src/lib/ui/dom/spreadAttrs.ts",
         "./ui/dom/readCall": "./src/lib/ui/dom/readCall.ts",
         "./ui/dom/readCell": "./src/lib/ui/dom/readCell.ts",
-        "./ui/dom/readCellBlocking": "./src/lib/ui/dom/readCellBlocking.ts",
         "./ui/dom/writeCell": "./src/lib/ui/dom/writeCell.ts",
         "./ui/dom/cellPending": "./src/lib/ui/dom/cellPending.ts",
         "./ui/runtime/withPath": "./src/lib/ui/runtime/withPath.ts",

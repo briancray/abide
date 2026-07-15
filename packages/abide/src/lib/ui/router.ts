@@ -570,7 +570,7 @@ export function router(
                             /* Re-seed the cell/doc warm partitions the failed hydration pass consumed,
                                so the cold rebuild re-adopts the SSR-resolved values instead of
                                refetching — a cold refetch leaves blocking `await` cells pending, and a
-                               top-level `$$readCellBlocking` sits in no suspense region, so its
+                               top-level `$$readCell` of one sits in no suspense region, so its
                                SuspenseSignal would escape this rebuild (it runs inside the catch, past
                                the try) and kill the mount. Restored, the rebuild reads settled. */
                             restoreWarmSeeds()
