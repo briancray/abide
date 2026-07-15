@@ -22,10 +22,15 @@ per-kind global manifest. Today that is **three id grammars** and **six stores**
 Three problems are structural, not incidental:
 
 1. **The grammar is convention, not construction.** `escapeKey` escapes only `~` and `/`; `:` —
-   the delimiter of both the cell and block grammars — passes through unescaped. Collision
-   avoidance rests on a comment ("a child path never carries a `:`") and on cell/block ids
-   living in different stores despite sharing a format. A route or row key containing `:` can
-   shift or collide a warm-seed key today.
+   the delimiter of both the cell and block grammars — passes through unescaped. On tracing:
+   actual collisions are NOT constructible today, because every `:`-suffix is a digit-only
+   counter/index, so any composed id parses uniquely from the right, and the formats that do
+   overlap live in different stores. But that safety is an emergent property of three modules
+   plus a comment ("a child path never carries a `:`" — which a `by`-key containing `:` makes
+   false, harmlessly only because of the digit-terminal rule). Nothing enforces it when the
+   next id kind is added. Note: `escapeKey` is shared with the reactive-document pointer
+   grammar (`lowerDocAccess`/`walkPath`), so the fix must NOT widen its escape set — the
+   address module owns its own delimiter discipline instead.
 2. **Consume-once deletes force a shadow store.** `CELL_SEED[key]` is deleted on adoption and
    `DOC_SEED[id]` on read, so a FAILED hydration pass has already drained them —
    `warmSeedBackup`/`restoreWarmSeeds` exists only to undo that for the cold rebuild. The
@@ -37,10 +42,10 @@ Three problems are structural, not incidental:
 
 ## Decision (sketch)
 
-1. **One address module.** `seedAddress(kind, path, ordinal)` composes every wire id; `escapeKey`
-   grows `:` (or the kind becomes a typed prefix outside the escaped segment space). The three
-   existing grammars become three kinds of one address; `warmSeedKey`/`blockId`/`renderPath` stay
-   as thin callers so call sites don't churn.
+1. **One address module.** `seedAddress(kind, path, ordinal)` composes every wire id, owning the
+   digit-terminal rule the three grammars implicitly rely on (`escapeKey` stays untouched — it is
+   shared with the doc-pointer grammar). The three existing grammars become three kinds of one
+   address; `warmSeedKey`/`blockId`/`renderPath` stay as thin callers so call sites don't churn.
 2. **One seed manifest.** A single `__abideSeeds` store of kind-tagged entries replaces the
    per-kind globals. The per-phase APPLY timing (streamed-cell microtask defer, arrival mark,
    adopt-ttl eviction) stays exactly where ADR-0040 put it — only storage, lookup, and the

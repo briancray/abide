@@ -1,7 +1,7 @@
 import { appNameSlot } from '../../shared/appNameSlot.ts'
 import { SSR_CACHE_CONTROL } from '../../shared/CACHE_CONTROL_VALUES.ts'
 import { docSnapshotsSlot } from '../../shared/docSnapshotsSlot.ts'
-import { encodeRefJson } from '../../shared/encodeRefJson.ts'
+import { encodeSeedValue } from '../../shared/encodeSeedValue.ts'
 import { formatTraceparent } from '../../shared/formatTraceparent.ts'
 import { hasSeedableRequest } from '../../shared/hasSeedableRequest.ts'
 import { layoutChainForRoute } from '../../shared/layoutChainForRoute.ts'
@@ -116,12 +116,13 @@ export function createUiPageRenderer({
         }
         const cells: Record<string, string> = {}
         for (const { key, value } of entries) {
-            try {
-                cells[key] = encodeRefJson(value)
-            } catch {
-                console.warn(
-                    `[abide] async cell "${key}" resolved to an unserializable value — it will re-run on the client instead of hydrating warm.`,
-                )
+            const encoded = encodeSeedValue(
+                value,
+                `async cell "${key}" resolved value`,
+                'it will re-run on the client instead of hydrating warm',
+            )
+            if (encoded !== undefined) {
+                cells[key] = encoded
             }
         }
         return Object.keys(cells).length > 0 ? cells : undefined
@@ -152,11 +153,13 @@ export function createUiPageRenderer({
             ) {
                 continue
             }
-            try {
-                docs[id] = encodeRefJson(snapshot)
-            } catch {
-                /* Unserializable synchronous state (a function/class instance) — the client re-inits
-                   it cold rather than blanking the payload. */
+            const encoded = encodeSeedValue(
+                snapshot,
+                `scope "${id}" state snapshot`,
+                'the client re-inits its state cold',
+            )
+            if (encoded !== undefined) {
+                docs[id] = encoded
             }
         }
         return Object.keys(docs).length > 0 ? docs : undefined
@@ -175,12 +178,13 @@ export function createUiPageRenderer({
         }
         const sockets: Record<string, string> = {}
         for (const { name, value } of entries) {
-            try {
-                sockets[name] = encodeRefJson(value)
-            } catch {
-                console.warn(
-                    `[abide] socket "${name}" retained frame is unserializable — its client peek() will read undefined at hydration instead of the server value.`,
-                )
+            const encoded = encodeSeedValue(
+                value,
+                `socket "${name}" retained frame`,
+                'its client peek() reads undefined at hydration instead of the server value',
+            )
+            if (encoded !== undefined) {
+                sockets[name] = encoded
             }
         }
         return Object.keys(sockets).length > 0 ? sockets : undefined
@@ -418,10 +422,12 @@ export function createUiPageRenderer({
                            streamed and the client cold-runs it. An unserializable value emits nothing.
                            Read from `store` directly since the stream body runs outside the request ALS. */
                         for (const { key, value } of store.streamedCells.entries) {
-                            let encoded: string
-                            try {
-                                encoded = encodeRefJson(value)
-                            } catch {
+                            const encoded = encodeSeedValue(
+                                value,
+                                `streaming cell "${key}" settled value`,
+                                'the client cold-runs its seed instead of adopting the streamed value',
+                            )
+                            if (encoded === undefined) {
                                 continue
                             }
                             controller.enqueue(
@@ -436,10 +442,12 @@ export function createUiPageRenderer({
                             if (seededCellKeys.has(key)) {
                                 continue
                             }
-                            let encoded: string
-                            try {
-                                encoded = encodeRefJson(value)
-                            } catch {
+                            const encoded = encodeSeedValue(
+                                value,
+                                `streamed child's async cell "${key}" resolved value`,
+                                'it will re-run on the client instead of hydrating warm',
+                            )
+                            if (encoded === undefined) {
                                 continue
                             }
                             controller.enqueue(
