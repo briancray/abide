@@ -1,18 +1,16 @@
 import { effect } from '../effect.ts'
 import { AsyncCellError } from '../runtime/AsyncCellError.ts'
-import { advanceClaim } from '../runtime/advanceClaim.ts'
 import { CURRENT_BOUNDARY } from '../runtime/CURRENT_BOUNDARY.ts'
-import { claimExpected } from '../runtime/claimExpected.ts'
+import { claimMarker } from '../runtime/claimMarker.ts'
 import { OWNER } from '../runtime/OWNER.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { SuspenseSignal } from '../runtime/SuspenseSignal.ts'
 import { scopeGroup } from '../runtime/scopeGroup.ts'
 import type { Boundary } from '../runtime/types/Boundary.ts'
 import type { State } from '../runtime/types/State.ts'
-import { withoutHydration } from '../runtime/withoutHydration.ts'
 import { state } from '../state.ts'
 import { anchoredBranch } from './anchoredBranch.ts'
-import { discardBoundary } from './discardBoundary.ts'
+import { discardAndRebuild } from './discardAndRebuild.ts'
 
 /*
 Reactive error boundary — the runtime for `<template try>` (ADR-0019 D3). Unlike the old
@@ -201,26 +199,25 @@ export function tryBlock(
        throws too) discards the boundary and builds the catch fresh. */
     function firstHydrate(): void {
         const cursor = hydration as NonNullable<typeof hydration>
-        const open = claimExpected(cursor, parent, `abide:try:${id} open marker`)
+        const open = claimMarker(cursor, parent, `abide:try:${id} open marker`)
         try {
-            adopt(open)
+            adopt()
         } catch (error) {
             rebuildCold(open, error)
         }
     }
 
-    /* Adopt the guarded branch in place: claim the server's `[` range-open marker, build the
-       guarded content (which claims its nodes) under the boundary, then claim the `]`
-       range-close and the boundary close, parking an anchor so a later swap detaches this
-       range like any other. A build throw disposes the partial scope and rethrows so
-       `firstHydrate` rebuilds cold. */
-    function adopt(open: Node): void {
+    /* Adopt the guarded branch in place — the cursor already sits past the boundary open
+       (claiming it advanced): claim the server's `[` range-open marker, build the guarded
+       content (which claims its nodes) under the boundary, then claim the `]` range-close
+       and the boundary close, parking an anchor so a later swap detaches this range like
+       any other. A build throw disposes the partial scope and rethrows so `firstHydrate`
+       rebuilds cold. */
+    function adopt(): void {
         const cursor = hydration as NonNullable<typeof hydration>
-        advanceClaim(cursor, parent, open)
         /* The server emits the `[ … ]` range inside the boundary — claim `[` as the live
-           range start, then advance the cursor to the first content node. */
-        const start = claimExpected(cursor, parent, `abide:try:${id} range-open marker`) as Comment
-        advanceClaim(cursor, parent, start)
+           range start, advancing the cursor to the first content node. */
+        const start = claimMarker(cursor, parent, `abide:try:${id} range-open marker`)
         /* Install the boundary around the whole adopt (build + marker claims); the shared
            strand-dispose guard in `adoptStrand` disposes the partial scope and rethrows on any
            failure, and this `finally` restores the boundary before the rethrow reaches
@@ -233,14 +230,8 @@ export function tryBlock(
             branch.adoptStrand(
                 (host) => renderTry(host),
                 () => {
-                    const end = claimExpected(
-                        cursor,
-                        parent,
-                        `abide:try:${id} range-close marker`,
-                    ) as Comment
-                    advanceClaim(cursor, parent, end)
-                    const close = claimExpected(cursor, parent, `/abide:try:${id} close marker`)
-                    advanceClaim(cursor, parent, close)
+                    const end = claimMarker(cursor, parent, `abide:try:${id} range-close marker`)
+                    const close = claimMarker(cursor, parent, `/abide:try:${id} close marker`)
                     branch.parkAnchor(close)
                     return { start, end }
                 },
@@ -255,16 +246,18 @@ export function tryBlock(
        No catch → rethrow (the throw surfaces past the boundary, as the sync version did). */
     function rebuildCold(open: Node, error: unknown): void {
         branch.detach()
-        const after = discardBoundary(
+        discardAndRebuild(
+            hydration as NonNullable<typeof hydration>,
             parent,
             open,
             `/abide:try:${id}`,
-            hydration as NonNullable<typeof hydration>,
+            (after) => {
+                if (!hasCatch) {
+                    throw error
+                }
+                branch.parkAnchor(after)
+                showCatch(error)
+            },
         )
-        if (!hasCatch) {
-            throw error
-        }
-        branch.parkAnchor(after)
-        withoutHydration(() => showCatch(error))
     }
 }

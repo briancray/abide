@@ -17,7 +17,6 @@ import { CELL_SEED } from './runtime/CELL_SEED.ts'
 import { clientPage } from './runtime/clientPage.ts'
 import { DOC_SEED } from './runtime/DOC_SEED.ts'
 import type { RouteLoader } from './runtime/types/RouteLoader.ts'
-import { warmSeedBackup } from './runtime/warmSeedBackup.ts'
 import { seedBootState } from './seedBootState.ts'
 import { seedStreamedResolution } from './seedStreamedResolution.ts'
 import { subscribeCacheStaleness } from './subscribeCacheStaleness.ts'
@@ -99,12 +98,6 @@ export function startClient(
     if (ssr.sockets !== undefined) {
         Object.assign(SOCKET_SEED, ssr.sockets)
     }
-    /* Stash the pristine cell/doc manifests for the router's hydration-desync recovery: the hydration
-       pass consumes CELL_SEED/DOC_SEED (each adopted key is deleted), so a discard→cold-rebuild would
-       otherwise refetch every blocking cell — leaving it pending and throwing an uncaught
-       SuspenseSignal at mount. `restoreWarmSeeds` re-seeds from these before the cold rebuild. */
-    warmSeedBackup.cells = ssr.cells
-    warmSeedBackup.docs = ssr.docs
     /* Keep the cache channel live past boot: replace the head's buffering collector with
        the store-connected sink so a post-boot resolution — the inline doc-stream cache
        script — seeds the store through `seedStreamedResolution` directly instead of pushing

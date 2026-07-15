@@ -433,9 +433,8 @@ Compiler-emitted; an author never imports these directly.
 - `abide/ui/dom/mount` — mount a top-level page/layout into a host under an ownership
   scope + render pass; returns a disposer.
 - `abide/ui/dom/mountChild` — mount a child component as a marker-bounded range (no
-  wrapper), filing its dispose with the owner.
-- `abide/ui/dom/mountStreamedChild` — dual-mode adopter for a hoistable child: adopt an
-  inlined range, claim a streamed boundary, or create-mount fresh.
+  wrapper), filing its dispose with the owner; dual-mode on hydrate — adopt an inlined
+  range, claim a streamed boundary, or create-mount fresh.
 - `abide/ui/dom/mountSlot` — mount a component's slot content as a marker-bounded range
   (create fills, hydrate adopts); runs once.
 - `abide/ui/dom/mergeProps` — compose a child's props from ordered layers (runs,

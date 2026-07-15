@@ -1,9 +1,8 @@
 import { decodeRefJson } from '../../shared/decodeRefJson.ts'
 import { isThenable } from '../../shared/isThenable.ts'
 import { effect } from '../effect.ts'
-import { advanceClaim } from '../runtime/advanceClaim.ts'
 import { CURRENT_BOUNDARY } from '../runtime/CURRENT_BOUNDARY.ts'
-import { claimExpected } from '../runtime/claimExpected.ts'
+import { claimMarker } from '../runtime/claimMarker.ts'
 import { generationGuard } from '../runtime/generationGuard.ts'
 import { RANGE_CLOSE, RANGE_OPEN } from '../runtime/RANGE_MARKER.ts'
 import { RENDER } from '../runtime/RENDER.ts'
@@ -12,10 +11,9 @@ import { RESUME } from '../runtime/RESUME.ts'
 import { SuspenseSignal } from '../runtime/SuspenseSignal.ts'
 import { scopeGroup } from '../runtime/scopeGroup.ts'
 import type { State } from '../runtime/types/State.ts'
-import { withoutHydration } from '../runtime/withoutHydration.ts'
 import { state } from '../state.ts'
 import { anchoredBranch } from './anchoredBranch.ts'
-import { discardBoundary } from './discardBoundary.ts'
+import { discardAndRebuild } from './discardAndRebuild.ts'
 
 /*
 Async binding — the runtime for `<template await>`. Renders the pending branch,
@@ -161,14 +159,14 @@ export function awaitBlock(
        bracketing — it runs only after a clean build. */
     const adopt = (open: Node | null, build: (parent: Node) => void): void => {
         const cursor = hydration as NonNullable<typeof hydration>
+        /* The cursor already sits here (claiming `open` advanced past it); kept for the
+           bracketing below. */
         const firstAdopted = open?.nextSibling ?? null
-        advanceClaim(cursor, parent, open)
         branch.adoptStrand(build, () => {
-            /* A guaranteed control-flow marker — claimExpected throws on a desync (caught by
+            /* A guaranteed control-flow marker — the claim throws on a desync (caught by
                firstHydrate's adopt try/catch → rebuildCold) instead of silently claiming null
                and over-clearing the parent. */
-            const close = claimExpected(cursor, parent, `/abide:await:${id} close marker`)
-            advanceClaim(cursor, parent, close)
+            const close = claimMarker(cursor, parent, `/abide:await:${id} close marker`)
             /* Bracket the adopted nodes: `[` before the first claimed node (or before `close`
                for an empty branch), `]` then the anchor just before `close`. */
             const start = document.createComment(RANGE_OPEN)
@@ -180,21 +178,23 @@ export function awaitBlock(
         })
     }
 
-    /* Discard the SSR boundary and (re)build the block from the live promise, fresh
-       (hydration off) — the recovery path when adoption can't use the server markup. */
-    const rebuildCold = (open: Node | null): void => {
+    /* Discard the SSR boundary and (re)build the block from `result`, fresh (hydration
+       off) — the recovery path when adoption can't use the server markup. Insert the
+       anchor at the node AFTER the discarded boundary — NOT the captured `before`, which
+       for a skeleton-anchored block is the open boundary itself and is removed here, so
+       reusing it throws `NotFoundError` in a strict DOM. */
+    const rebuildCold = (open: Node | null, result: () => unknown): void => {
         branch.detach()
-        /* Insert at the node AFTER the discarded boundary (its return) — NOT the captured
-           `before`, which for a skeleton-anchored block is the open boundary itself and is
-           removed here, so reusing it throws `NotFoundError` in a strict DOM. */
-        const after = discardBoundary(
+        discardAndRebuild(
+            hydration as NonNullable<typeof hydration>,
             parent,
             open,
             `/abide:await:${id}`,
-            hydration as NonNullable<typeof hydration>,
+            (after) => {
+                branch.parkAnchor(after)
+                render(result())
+            },
         )
-        branch.parkAnchor(after)
-        withoutHydration(() => render(promiseThunk()))
     }
 
     /* The first run when hydrating: adopt by precedence (resume / warm-sync), else
@@ -204,9 +204,9 @@ export function awaitBlock(
        warm cache (or re-fetches) instead of crashing hydration. */
     const firstHydrate = (): void => {
         const cursor = hydration as NonNullable<typeof hydration>
-        /* The await block's open marker is compiler-guaranteed — claimExpected throws a
+        /* The await block's open marker is compiler-guaranteed — the claim throws a
            legible desync here rather than propagating a null that over-clears the parent. */
-        const open = claimExpected(cursor, parent, `abide:await:${id} open marker`)
+        const open = claimMarker(cursor, parent, `abide:await:${id} open marker`)
         /* RESUME holds the ref-json-encoded entry STRING; decode here, where the codec
            lives. A decode failure (malformed/absent payload) reads as "no resume" — fall
            through to the live promise rather than crash hydration. */
@@ -258,7 +258,7 @@ export function awaitBlock(
                 valueCell = cell
                 activeKind = kind
             } catch {
-                rebuildCold(open)
+                rebuildCold(open, promiseThunk)
             }
             return
         }
@@ -269,17 +269,14 @@ export function awaitBlock(
                 valueCell = cell
                 activeKind = 'then'
             } catch {
-                rebuildCold(open)
+                rebuildCold(open, promiseThunk)
             }
             return
         }
-        /* Insert at the node after the discarded boundary (see `rebuildCold`). */
-        const after = discardBoundary(parent, open, `/abide:await:${id}`, cursor)
-        branch.parkAnchor(after)
-        /* The boundary's server nodes are gone, so the pending branch builds FRESH — clear
-           the claim cursor (see withoutHydration) so its `cloneStatic`/text don't try to
-           claim discarded nodes and silently render nothing. */
-        withoutHydration(() => render(result))
+        /* Genuinely pending — no resume, not warm: the boundary's server nodes can't be
+           adopted, so discard them and build the pending branch fresh from the already-read
+           promise (nothing was placed yet; the detach inside is a no-op). */
+        rebuildCold(open, () => result)
     }
 
     effect(() => {

@@ -1,4 +1,5 @@
-import type { RENDER } from '../runtime/RENDER.ts'
+import { parkCursor } from '../runtime/parkCursor.ts'
+import type { HydrationCursor } from '../runtime/types/HydrationCursor.ts'
 
 /* Remove an SSR boundary — open marker through close marker (inclusive) — and park
    the hydration cursor on the node after it, returning that node. A fresh run then
@@ -8,11 +9,11 @@ export function discardBoundary(
     parent: Node,
     open: Node | null,
     closeData: string,
-    hydration: NonNullable<(typeof RENDER)['hydration']>,
+    hydration: HydrationCursor,
 ): Node | null {
     /* Nothing to discard (no open marker) — park the cursor and return, as before. */
     if (open === null) {
-        hydration.next.set(parent, null)
+        parkCursor(hydration, parent, null)
         return null
     }
     /* Locate the close marker WITHOUT mutating first. Removing as we walk would, on a
@@ -40,6 +41,6 @@ export function discardBoundary(
         }
         node = next
     }
-    hydration.next.set(parent, after)
+    parkCursor(hydration, parent, after)
     return after
 }

@@ -1,4 +1,4 @@
-import { advanceClaim } from '../runtime/advanceClaim.ts'
+import { parkCursor } from '../runtime/parkCursor.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { scope } from '../runtime/scope.ts'
 import type { UiProps } from '../runtime/types/UiProps.ts'
@@ -32,7 +32,7 @@ export function fillBoundary(
     }
     /* Hydrate: adopt the server content between the markers in place. */
     const parent = open.parentNode as Node
-    advanceClaim(hydration, parent, open)
+    parkCursor(hydration, parent, open.nextSibling)
     const scoped = withScope(() => scope(() => build(parent, props)))
     return { dispose: disposeRange(scoped, open, close) }
 }

@@ -1,4 +1,3 @@
-import { hydrationWindow } from '../shared/hydrationWindow.ts'
 import { layoutChainForRoute } from '../shared/layoutChainForRoute.ts'
 import { matchRoute } from '../shared/matchRoute.ts'
 import { fillBoundary } from './dom/fillBoundary.ts'
@@ -7,12 +6,10 @@ import { effect } from './effect.ts'
 import { navigatePath } from './navigate.ts'
 import { CHILD_PRESENT } from './runtime/CHILD_PRESENT.ts'
 import { clientPage } from './runtime/clientPage.ts'
-import { enterRenderPass } from './runtime/enterRenderPass.ts'
-import { exitRenderPass } from './runtime/exitRenderPass.ts'
 import { historyEntries } from './runtime/historyEntries.ts'
 import { PENDING_OUTLET } from './runtime/PENDING_OUTLET.ts'
 import { RENDER } from './runtime/RENDER.ts'
-import { restoreWarmSeeds } from './runtime/restoreWarmSeeds.ts'
+import { runHydrationPass } from './runtime/runHydrationPass.ts'
 import { runtimePath } from './runtime/runtimePath.ts'
 import type { AbideHistoryState } from './runtime/types/AbideHistoryState.ts'
 import type { NavVerdict } from './runtime/types/NavVerdict.ts'
@@ -258,19 +255,10 @@ export function router(
             mountedPageKey = pageKey
         }
         if (hydrating) {
-            const previous = RENDER.hydration
-            RENDER.hydration = { next: new Map() }
-            hydrationWindow.enter()
-            enterRenderPass()
-            try {
-                run()
-            } finally {
-                exitRenderPass()
-                RENDER.hydration = previous
-                /* Outermost exit clears the window and wakes the peeks this pass withheld
-                   for SSR congruence, now that the warm value is congruent to show. */
-                hydrationWindow.exit()
-            }
+            /* The pass lifecycle (claim cursor, withhold window, render pass, and the
+               warm-seed restore a throwing pass owes its cold rebuild) is owned by
+               `runHydrationPass` — the same bracket `hydrate` runs. */
+            runHydrationPass(run)
             return
         }
         run()
@@ -567,13 +555,13 @@ export function router(
                             disposeFrom(0)
                             rootBoundary = undefined
                             mountedPageKey = undefined
-                            /* Re-seed the cell/doc warm partitions the failed hydration pass consumed,
-                               so the cold rebuild re-adopts the SSR-resolved values instead of
-                               refetching — a cold refetch leaves blocking `await` cells pending, and a
-                               top-level `$$readCell` of one sits in no suspense region, so its
-                               SuspenseSignal would escape this rebuild (it runs inside the catch, past
-                               the try) and kill the mount. Restored, the rebuild reads settled. */
-                            restoreWarmSeeds()
+                            /* The cell/doc warm seeds the failed pass adopted are still in place —
+                               a pass only MARKS them, deleting on a clean exit (`consumeSeed`,
+                               ADR-0048) — so this cold rebuild re-adopts the SSR-resolved values
+                               instead of refetching (a cold refetch would leave blocking `await`
+                               cells pending, and a top-level `$$readCell` of one sits in no suspense
+                               region — its SuspenseSignal would escape this rebuild and kill the
+                               mount). */
                             buildFrom(0, chainKeys, layoutViews, pageView, key, params, false)
                         }
                         /* Reapply the destination entry's scroll once its DOM exists — a

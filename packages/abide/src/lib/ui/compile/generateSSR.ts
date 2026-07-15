@@ -1,5 +1,6 @@
 import { assertExhaustive } from '../../shared/assertExhaustive.ts'
 import { escapeRegex } from '../../shared/escapeRegex.ts'
+import { caseSegment, ELSE_SEGMENT, THEN_SEGMENT } from '../runtime/BRANCH_SEGMENT.ts'
 import { OUTLET_CLOSE, OUTLET_OPEN } from '../runtime/OUTLET_MARKER.ts'
 import { OUTLET_TAG } from '../runtime/OUTLET_TAG.ts'
 import {
@@ -9,6 +10,8 @@ import {
 } from '../runtime/RANGE_MARKER.ts'
 import { asOutlet } from './asOutlet.ts'
 import { awaitPlan } from './awaitPlan.ts'
+import { awaitSubjectExpr } from './awaitSubjectExpr.ts'
+import { componentOrdinals } from './componentOrdinals.ts'
 import { composeProps } from './composeProps.ts'
 import { eachPlan } from './eachPlan.ts'
 import { elementPlan } from './elementPlan.ts'
@@ -74,10 +77,6 @@ export function generateSSR(
     /* Unique temp var names (child render results); runtime block ids are
        allocated separately at runtime via `$ctx.next++`. */
     const nextVar = makeVarNamer()
-    /* A per-body source-order ordinal for each `<Child/>` render site — the render-path segment the
-       child roots under, matching the client `mountChild`'s `childOrdinal` (`generateBuild`) drawn
-       in the identical document-order walk, so both compose the same cell scope ids. */
-    let childOrdinal = 0
 
     /* The enclosing `<select bind:value>`s, innermost last: each carries the JS var holding
        its bound value and whether it's a `multiple` (array) select, so an `<option>` rendered
@@ -158,6 +157,19 @@ export function generateSSR(
        traversal from this tree — one decision site for the outlet, and the outlet emitted bare
        through the generic element path exactly as the client clones it. */
     const rootNodes = isLayout ? nodes.map(asOutlet) : nodes
+
+    /* Each `<Child/>` render site's render-path ordinal, from the ONE shared document-order
+       walk the client back-end also reads (`componentOrdinals`) — so both compose the same
+       cell scope ids and streamed-boundary ids regardless of either back-end's emission
+       order. A missing entry is a structural divergence, surfaced loudly at compile time. */
+    const childOrdinals = componentOrdinals(rootNodes)
+    function childOrdinal(node: TemplateNode): number {
+        const ordinal = childOrdinals.get(node)
+        if (ordinal === undefined) {
+            throw new Error('[abide] component mount site not numbered by the shared ordinal walk')
+        }
+        return ordinal
+    }
 
     /* ADR-0034: the await blocks whose promise-start hoists to the synchronous render prefix so
        independent flights overlap instead of serializing. Server-only — this rewires only the SSR
@@ -362,10 +374,10 @@ export function generateSSR(
                then the `$$readCell` truthy test — so sync and async branches interleave and each
                resolves at render time, mirroring the client `switchBlock` cond-chain. */
             const plan = ifPlan(node)
-            /* The client build lowers a simple `if`/`else` through `when` (branch keys `'then'` /
-               `'else'`) and an `if` with any `elseif` through `switchBlock` over `[then, ...branches]`
-               (branch key = the case's array index). Mirror whichever the client picks so a nested
-               `<Child/>`'s scope id composes identically. */
+            /* The client build lowers a simple `if`/`else` through `when` and an `if` with any
+               `elseif` through `switchBlock` over `[then, ...branches]`. Segments come from the
+               SAME alphabet those runtimes key their branches with (`BRANCH_SEGMENT`), so a
+               nested `<Child/>`'s scope id composes identically — no literal to drift. */
             const clauses: string[] = []
             const conditional = (
                 condition: string,
@@ -385,12 +397,12 @@ export function generateSSR(
                     )
                 }
             }
-            /* `then` is the `when` `'then'` branch, or the `switchBlock` case at index 0. */
+            /* `then` is the `when` then-branch, or the `switchBlock` case at index 0. */
             conditional(
                 node.condition,
                 node.asyncSubject,
                 plan.thenChildren,
-                JSON.stringify(plan.hasElseif ? '0' : 'then'),
+                JSON.stringify(plan.hasElseif ? caseSegment(0) : THEN_SEGMENT),
             )
             for (let index = 0; index < plan.branches.length; index += 1) {
                 const branch = plan.branches[index] as Extract<TemplateNode, { kind: 'case' }>
@@ -401,7 +413,7 @@ export function generateSSR(
                         branch.condition,
                         branch.asyncSubject,
                         branch.children,
-                        JSON.stringify(String(index + 1)),
+                        JSON.stringify(caseSegment(index + 1)),
                     )
                 }
             }
@@ -409,11 +421,11 @@ export function generateSSR(
                 .map((clause, index) => `${index === 0 ? 'if' : ' else if'} ${clause}`)
                 .join('')
             if (plan.elseBranch !== undefined) {
-                /* `else` is the `when` `'else'` branch, or (for a cond-chain) the `switchBlock`
+                /* `else` is the `when` else-branch, or (for a cond-chain) the `switchBlock`
                    default at its own `[then, ...branches]` index. */
                 const elseSegment = plan.hasElseif
-                    ? String(plan.branches.indexOf(plan.elseBranch) + 1)
-                    : 'else'
+                    ? caseSegment(plan.branches.indexOf(plan.elseBranch) + 1)
+                    : ELSE_SEGMENT
                 code += ` else {\n${withPathBranch(JSON.stringify(elseSegment), plan.elseBranch.children, target)}}`
             }
             return `${anchor}${openRange(target)}${code}\n${closeRange(target)}`
@@ -436,12 +448,12 @@ export function generateSSR(
             for (let index = 0; index < plan.cases.length; index += 1) {
                 const branch = plan.cases[index] as Extract<TemplateNode, { kind: 'case' }>
                 if (branch.match !== undefined) {
-                    code += `${started ? 'else ' : ''}if ($s === (${lowerExpression(branch.match)})) {\n${withPathBranch(JSON.stringify(String(index)), branch.children, target)}}\n`
+                    code += `${started ? 'else ' : ''}if ($s === (${lowerExpression(branch.match)})) {\n${withPathBranch(JSON.stringify(caseSegment(index)), branch.children, target)}}\n`
                     started = true
                 }
             }
             if (plan.fallback !== undefined) {
-                const fallbackSegment = String(plan.cases.indexOf(plan.fallback))
+                const fallbackSegment = caseSegment(plan.cases.indexOf(plan.fallback))
                 code += `${started ? 'else ' : ''}{\n${withPathBranch(JSON.stringify(fallbackSegment), plan.fallback.children, target)}}\n`
             }
             if (node.asyncSubject === true) {
@@ -583,10 +595,10 @@ export function generateSSR(
             /* The tag lowers like any reference (see generateBuild): a static import is left bare, a
                reactive/loop/await binding derefs — SSR registers such a binding as `plain`, so it
                reads the bare local holding the resolved component, keeping SSR and client congruent.
-               Root the child's render-path at this mount site's source-order ordinal — the same
+               Root the child's render-path at this mount site's shared-walk ordinal — the same
                segment the client's `mountChild` pushes — so the child's cells and block ids (ADR-0037)
                get an id matching the client's. `$$withPath` sets the path across the child's awaits. */
-            const ordinal = childOrdinal++
+            const ordinal = childOrdinal(node)
             const renderExpr = `$$withPath(${ordinal}, () => ${lowerExpression(node.name)}.render(${propsExpr}, $ctx))`
             if (hoistableChildSet.has(node)) {
                 /* Hoistable (ADR-0037/0039): start the render as an isolated flight in the prefix, and
@@ -595,7 +607,7 @@ export function generateSSR(
                    flight already settled (byte-identical to the old inline await), or a streaming
                    `abide:await:CHILDPATH` boundary + html-only await if it is still pending. The
                    boundary id is the child's render-path (`$$renderPath(ordinal)`), congruent with the
-                   client's `mountStreamedChild`. */
+                   client's dual-mode `mountChild`. */
                 const flightName = `$cf${childFlightCounter++}`
                 childFlightDecls.push(
                     `const ${flightName} = $$flight(() => $$isolateCellBarrier(() => ${renderExpr}));`,
@@ -787,16 +799,11 @@ export function generateSSR(
             : generateStreamingAwait(node, target)
     }
 
-    /* The lowered `{#await X}` subject, normalised so a cell subject AWAITS its resolution
-       (ADR-0047): a BARE async-cell reference is passed RAW (not peeked to `$$readCell(cell)`)
-       and every subject is wrapped in `$$awaitSubject(...)`, which resolves a cell to a
-       promise-of-its-value and returns a plain promise/value unchanged — so the server awaits a
-       cell's settle and bakes the resolved `{:then}` into the stream, while `{#await getFoo()}`
-       stays byte-identical. Shared by the blocking, streaming, and flight-hoist emit sites. */
-    function awaitSubjectExpr(promiseCode: string): string {
-        const bare = promiseCode.trim()
-        return cellReadNames.has(bare) ? `$$awaitSubject(${bare})` : lowerExpression(promiseCode)
-    }
+    /* The lowered `{#await X}` subject (ADR-0047) — the ONE shared decision site, so the
+       bare-cell classification can't drift from the client back-end's. Used by the
+       blocking, streaming, and flight-hoist emit sites. */
+    const subjectExprFor = (promiseCode: string): string =>
+        awaitSubjectExpr(promiseCode, cellReadNames, lowerExpression)
 
     /*
     A blocking await — `await`ed at its structural position in the async render pass and
@@ -830,7 +837,7 @@ export function generateSSR(
         let code = `const ${id} = $$blockId($ctx);\n`
         code += `${target}.push("<!--abide:await:" + ${id} + "-->");\n`
         code += `try {\n`
-        code += `const ${resolved} = await (${hoistedPromise ?? awaitSubjectExpr(node.promise)});\n`
+        code += `const ${resolved} = await (${hoistedPromise ?? subjectExprFor(node.promise)});\n`
         code += `{\n`
         code += `const ${plan.resolvedAs} = ${resolved};\n`
         code += withBindings(withShadow, plan.resolvedBindings, ssrBindingKind, () =>
@@ -902,7 +909,7 @@ export function generateSSR(
         const hoistedPromise = flightNameByNode.get(node)
         code +=
             `$awaits.push({ id: ${id}, ` +
-            `promise: () => (${hoistedPromise ?? awaitSubjectExpr(node.promise)}), ` +
+            `promise: () => (${hoistedPromise ?? subjectExprFor(node.promise)}), ` +
             `then: ${settled(plan.resolvedAs, plan.resolvedBindings, plan.resolvedChildren)}, ` +
             `${catchProp}});\n`
         return code
@@ -950,7 +957,7 @@ export function generateSSR(
     const body = generateInto(rootNodes, '$out')
     let flightDecls = ''
     for (const [node, name] of flightNameByNode) {
-        flightDecls += `const ${name} = $$flight(() => (${awaitSubjectExpr(node.promise)}));\n`
+        flightDecls += `const ${name} = $$flight(() => (${subjectExprFor(node.promise)}));\n`
     }
     /* Child-render flights emitted during the body walk above (ADR-0037 Phase 2) — appended after
        the await flights; both are independent prefix promise-starts, so order between them is free. */

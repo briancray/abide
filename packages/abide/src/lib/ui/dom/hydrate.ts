@@ -1,5 +1,4 @@
-import { hydrationWindow } from '../../shared/hydrationWindow.ts'
-import { RENDER } from '../runtime/RENDER.ts'
+import { runHydrationPass } from '../runtime/runHydrationPass.ts'
 import { scope } from '../runtime/scope.ts'
 import { withScope } from './withScope.ts'
 
@@ -24,18 +23,12 @@ export function hydrate(
     build: (host: Element, props: unknown) => void,
     props?: unknown,
 ): () => void {
-    const previous = RENDER.hydration
-    RENDER.hydration = { next: new Map() }
-    hydrationWindow.enter()
-    try {
+    /* The pass lifecycle (claim cursor, withhold window, render pass, restore-on-throw)
+       is owned by `runHydrationPass` — the same bracket the router's hydrating mount runs. */
+    return runHydrationPass(() => {
         /* Same shared mount core as `mount` (see `withScope`) — a hydrated component owns a
            scope too, adopting the model its build adopts — run with the claim cursor active. */
         const { lexical } = withScope(() => scope(() => build(host, props)))
         return () => lexical.dispose()
-    } finally {
-        RENDER.hydration = previous
-        /* Outermost exit clears the window and wakes the peeks this pass withheld; a nested
-           child hydrate raises/lowers the depth without firing it early. */
-        hydrationWindow.exit()
-    }
+    })
 }

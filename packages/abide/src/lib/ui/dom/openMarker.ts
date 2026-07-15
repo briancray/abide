@@ -1,5 +1,4 @@
-import { advanceClaim } from '../runtime/advanceClaim.ts'
-import { claimExpected } from '../runtime/claimExpected.ts'
+import { claimMarker } from '../runtime/claimMarker.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 
 /*
@@ -13,9 +12,7 @@ rather than a list of single nodes.
 export function openMarker(parent: Node, data: string, before: Node | null = null): Comment {
     const hydration = RENDER.hydration
     if (hydration !== undefined) {
-        const node = claimExpected(hydration, parent, `control-flow marker "${data}"`) as Comment
-        advanceClaim(hydration, parent, node)
-        return node
+        return claimMarker(hydration, parent, `control-flow marker "${data}"`)
     }
     const node = document.createComment(data)
     /* `before` (a node already in `parent`) places the block among static siblings —

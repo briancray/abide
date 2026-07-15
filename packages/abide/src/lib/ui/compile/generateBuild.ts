@@ -4,12 +4,13 @@ import { OUTLET_TAG } from '../runtime/OUTLET_TAG.ts'
 import { ANCHOR } from '../runtime/RANGE_MARKER.ts'
 import { asOutlet } from './asOutlet.ts'
 import { awaitPlan } from './awaitPlan.ts'
+import { awaitSubjectExpr } from './awaitSubjectExpr.ts'
 import { bindListenEvent } from './bindListenEvent.ts'
+import { componentOrdinals } from './componentOrdinals.ts'
 import { composeProps } from './composeProps.ts'
 import { eachPlan } from './eachPlan.ts'
 import { elementPlan } from './elementPlan.ts'
 import { groupBindParts } from './groupBindParts.ts'
-import { hoistableChildRenders } from './hoistableChildRenders.ts'
 import { ifPlan } from './ifPlan.ts'
 import { interpolatedTemplateLiteral } from './interpolatedTemplateLiteral.ts'
 import { isControlFlow } from './isControlFlow.ts'
@@ -81,15 +82,6 @@ export function generateBuild(
     cellReadNames: ReadonlySet<string> = new Set(),
 ): string {
     const nextVar = makeVarNamer()
-    /* A per-body source-order ordinal for each `<Child/>` mount site, so two same-type siblings
-       get distinct render-path segments. Combined with the ambient branch/row path a control-flow
-       ancestor pushes, this makes every mounted instance's id unique and stable (ADR render-path
-       identity). Drawn in document-order walk, matching the SSR back-end's identical walk. */
-    let childOrdinal = 0
-    /* ADR-0039: the SAME hoistable-child set the SSR back-end computes (identical inputs → identical
-       node identities), so the client emits the dual-mode `$$mountStreamedChild` for exactly the
-       children the server may stream. A non-hoistable child keeps the plain `$$mountChild`. */
-    const streamCapable = hoistableChildRenders(nodes, cellReadNames)
 
     /* In a layout, `<slot/>` outlets are rewritten to `OUTLET_TAG` elements up front
        (`asOutlet`) so the static-clone path carries them as ordinary structure. `asOutlet`
@@ -103,6 +95,11 @@ export function generateBuild(
        position structurally (the drift the shared context exists to prevent). */
     const { markText, elIndex, anIndex } = skeletonContext(rootNodes)
 
+    /* Each `<Child/>` mount site's render-path ordinal, from the ONE shared document-order
+       walk the SSR back-end also reads (`componentOrdinals`) — so two same-type siblings get
+       distinct, SSR-congruent segments regardless of either back-end's emission order. */
+    const childOrdinals = componentOrdinals(rootNodes)
+
     /* The hole's index, assigned by the shared skeletonContext walk — the sole numberer. A
        missing entry means this back-end reached a hole the shared walk didn't number: a
        structural divergence between the two, surfaced loudly at compile time rather than as a
@@ -113,6 +110,17 @@ export function generateBuild(
             throw new Error('[abide] skeleton hole not numbered by the shared positional walk')
         }
         return index
+    }
+
+    /* A component's ordinal from the shared walk — a missing entry means this back-end
+       reached a mount site the walk didn't number: a structural divergence, surfaced loudly
+       at compile time rather than as a runtime warm-seed/boundary desync. */
+    function childOrdinal(node: TemplateNode): number {
+        const ordinal = childOrdinals.get(node)
+        if (ordinal === undefined) {
+            throw new Error('[abide] component mount site not numbered by the shared ordinal walk')
+        }
+        return ordinal
     }
 
     /* The shared signal→`model` lowering + branch-scoped nested-script deref scope. */
@@ -614,11 +622,11 @@ export function generateBuild(
            cell, so `<Icon>` from `{#for {icon: Icon} of …}` mounts the component the cell
            holds, not the cell object (whose `.build` is undefined → `build is not a
            function`). SSR emits the same lowering for congruence. */
-        /* A hoistable child may have STREAMED (server chose per-render): emit the dual-mode adopter,
-           which probes the cursor to adopt an inlined `[ … ]` range OR a streamed `abide:await`
-           boundary (ADR-0039). Same args as mountChild. */
-        const mountFn = streamCapable.has(node) ? '$$mountStreamedChild' : '$$mountChild'
-        return `${mountFn}(${parentVar}, ${lowerExpression(node.name)}, ${propsArg(node)}, ${before}, ${childOrdinal++});\n`
+        /* `mountChild` is dual-mode (ADR-0039): on hydrate it probes the cursor to adopt an
+           inlined `[ … ]` range OR a streamed `abide:await` boundary, so the client build
+           needs no hoistable-child knowledge — inline-vs-stream is decided server-side per
+           render, and the adopter reads which happened off the markup. */
+        return `$$mountChild(${parentVar}, ${lowerExpression(node.name)}, ${propsArg(node)}, ${before}, ${childOrdinal(node)});\n`
     }
 
     /* An await block: pending → resolved(value) / error branches. Each branch is a
@@ -647,22 +655,15 @@ export function generateBuild(
         const pendingThunk = hasRenderableContent(plan.pending)
             ? branchThunk(plan.pending)
             : 'undefined'
+        /* The subject lowers through the ONE shared ADR-0047 decision site (`awaitSubjectExpr`),
+           so the bare-cell classification can't drift from the SSR back-end's. */
+        const subject = awaitSubjectExpr(node.promise, cellReadNames, lowerExpression)
         return (
-            `$$awaitBlock(${parentVar}, $$nextBlockId(), () => (${awaitSubjectExpr(node.promise)}), ` +
+            `$$awaitBlock(${parentVar}, $$nextBlockId(), () => (${subject}), ` +
             `${pendingThunk}, ` +
             `${thenThunk}, ` +
             `${catchThunk}, ${before});\n`
         )
-    }
-
-    /* The lowered `{#await X}` subject, normalised so a cell subject AWAITS its resolution
-       (ADR-0047): a BARE async-cell reference is passed RAW (not peeked to `$$readCell(cell)`),
-       and every subject is wrapped in `$$awaitSubject(...)` — which resolves a cell to a
-       promise-of-its-value and returns a plain promise/value unchanged. So `{#await rates}`
-       (a cell) shows pending then the value, while `{#await getFoo()}` (a promise) is untouched. */
-    function awaitSubjectExpr(promiseCode: string): string {
-        const bare = promiseCode.trim()
-        return cellReadNames.has(bare) ? `$$awaitSubject(${bare})` : lowerExpression(promiseCode)
     }
 
     /* A branch's content as a void render thunk `(parent[, value]) => void` that

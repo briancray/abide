@@ -1,4 +1,4 @@
-import { advanceClaim } from '../runtime/advanceClaim.ts'
+import { parkCursor } from '../runtime/parkCursor.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { appendText } from './appendText.ts'
 
@@ -26,7 +26,7 @@ export function appendTextAt(anchor: Node, read: () => unknown): void {
     if (hydration !== undefined) {
         const had = hydration.next.has(parent)
         const saved = hydration.next.get(parent)
-        advanceClaim(hydration, parent, anchor)
+        parkCursor(hydration, parent, anchor.nextSibling)
         appendText(parent, read)
         if (had) {
             hydration.next.set(parent, saved ?? null)

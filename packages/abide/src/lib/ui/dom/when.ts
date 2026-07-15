@@ -1,3 +1,4 @@
+import { ELSE_SEGMENT, THEN_SEGMENT } from '../runtime/BRANCH_SEGMENT.ts'
 import { SuspenseSignal } from '../runtime/SuspenseSignal.ts'
 import { mountSwappableRange } from './mountSwappableRange.ts'
 
@@ -37,7 +38,9 @@ export function when(
                block (render neither branch) until it settles, exactly as a bare async subject holds;
                the read tracked its cell, so the swap effect re-runs on resolve. */
             try {
-                return condition() ? 'then' : 'else'
+                /* The branch key doubles as the branch's render-path segment (see
+                   BRANCH_SEGMENT), so it is sourced from the shared alphabet SSR also emits. */
+                return condition() ? THEN_SEGMENT : ELSE_SEGMENT
             } catch (signal) {
                 if (!(signal instanceof SuspenseSignal)) {
                     throw signal
@@ -45,7 +48,8 @@ export function when(
                 return 'pending'
             }
         },
-        (branch) => (branch === 'then' ? render : branch === 'else' ? renderElse : undefined),
+        (branch) =>
+            branch === THEN_SEGMENT ? render : branch === ELSE_SEGMENT ? renderElse : undefined,
         before,
         /* An async subject (compiler supplies `isPending`) can render a different branch on the
            server than the pending client, so hydration must not adopt the SSR range in place. */

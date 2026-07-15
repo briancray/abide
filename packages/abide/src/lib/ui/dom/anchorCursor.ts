@@ -1,3 +1,4 @@
+import { parkCursor } from '../runtime/parkCursor.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 
 /*
@@ -18,7 +19,7 @@ export function anchorCursor(anchor: Node): Node | null {
     const reference = anchor.nextSibling
     const hydration = RENDER.hydration
     if (hydration !== undefined) {
-        hydration.next.set(anchor.parentNode as Node, reference)
+        parkCursor(hydration, anchor.parentNode as Node, reference)
     }
     return reference
 }

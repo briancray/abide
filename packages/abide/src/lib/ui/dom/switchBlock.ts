@@ -11,7 +11,8 @@ to the default (`match` undefined); the chosen case's content lives in a RANGE
 bounded by two comment markers, so a case holds any content. Staying on the same
 case across a subject change leaves it mounted; switching clears the range and
 builds the new case fresh. See `mountSwappableRange` for the shared
-hydrate/swap/teardown semantics — the case index is the swap key.
+hydrate/swap/teardown semantics — the case index is the swap key, which doubles as
+the case's render-path segment (`caseSegment` — the alphabet SSR also emits).
 */
 // @documentation plumbing
 export function switchBlock(
