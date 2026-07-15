@@ -1,5 +1,54 @@
 # abide
 
+## 0.55.0
+
+### Minor Changes
+
+- b000b40: accept a cache policy on mutating helpers ([`4ddc496`](https://github.com/briancray/abide/commit/4ddc496a1a4c9250f83d6dcbb8711be96f1aeded))
+- dcf9868: Hydration internals consolidated — one pass owner, shared claim verbs, one recovery dance, one child adopter.
+
+    - `runHydrationPass` now owns the hydration pass lifecycle (claim cursor, cache-withhold window, render pass, and the two-phase seed consume) — both entry sites (`hydrate`, the router's hydrating first mount) run the same bracket.
+    - The claim-cursor mechanics live in four verbs (`claimMarker`, `claimRun`, `claimText`, `parkCursor`) instead of ~15 hand-rolled advance sites across the dom helpers; helpers keep their hydrate-vs-create branch and divergence policy.
+    - `discardAndRebuild` carries the shared divergence-recovery dance (remove the SSR boundary, build fresh with the cursor cleared) for the await/try blocks and the child adopter.
+    - **Removed export:** `abide/ui/dom/mountStreamedChild` — `abide/ui/dom/mountChild` is now the single dual-mode child adopter (it probes the markup for inlined vs streamed, so the client build needs no hoistable-child knowledge). Both are compiler-emitted plumbing an author never imports; compiled output now always emits `$$mountChild`.
+    - Congruence decisions once mirrored by hand across the two compiler back-ends are now single shared sites: the branch render-path segment alphabet (`BRANCH_SEGMENT`), the `{#await}` bare-cell subject classification (`awaitSubjectExpr`), and `<Child/>` render-path ordinals (`componentOrdinals`, one document-order walk — fixing a latent SSR↔client ordinal desync for a `{:default}` case that isn't last and for components in slot content).
+    - Warm-seed adoption is two-phase (ADR-0048 first slice): a hydration pass marks the `CELL_SEED`/`DOC_SEED` entries it adopts and deletes them only on a clean exit, so a desync throw hands the seeds to the cold rebuild directly — the `warmSeedBackup`/`restoreWarmSeeds` shadow-copy recovery is deleted.
+
+    Server markup and authored APIs are untouched (the `__abideSeeds` wire-global change ships separately).
+
+- f1e925e: `await` now blocks a **script** read the same way it blocks a template read — pending propagates through the whole dependency graph (ADR-0046).
+
+    Previously only _template_ reads of an `await`-marked `computed`/`linked` cell suspended; a _script_ read (a `computed`/derive seed like `computed(() => result.root)` over a blocking `result`) peeked `undefined` while pending, so on a cold client navigation a downstream script derivation dereferenced `undefined` and crashed. Now a read of a pending blocking cell suspends its reader wherever it happens: a derive over it withholds and re-runs on settle, an async seed that reads a pending blocking dependency stays pending (not error), and the SSR barrier drains to a fixpoint so chained blocking cells resolve in order and bake correct values into the first-pass HTML.
+
+    Whether a read pauses is now a property of the **cell** (its `blocking`/`await` bit — the same one that decides SSR-barrier registration), not of the read site: there is one read callee, `$$readCell`, script and template, client and server. The separate `$$readCellBlocking` codegen path and the `abide/ui/dom/readCellBlocking` export are removed; bare/streaming reads (no `await`) are unchanged.
+
+    **Breaking:** a script read of an `await` cell now suspends where it previously returned `undefined` while pending. Read a blocking cell inside a `computed`/derive or the template — a plain top-level `const x = cell.field` cannot pause (it is not a graph node) and is fatal at mount, exactly as `undefined.field` already was.
+
+### Patch Changes
+
+- b000b40: runHydrationPass owns the hydration pass lifecycle ([`0ede531`](https://github.com/briancray/abide/commit/0ede531971e6c351397c2c8c4eea248c37bdd399))
+- b000b40: abide check reads a bare async {#for} source as its resolved peek ([`10b78cf`](https://github.com/briancray/abide/commit/10b78cfe46ef5c6719087ed29f6238ed0d91f348))
+- b000b40: code-review fixes across the reactive core, hydration seeds, and {#await} ([`1d91f49`](https://github.com/briancray/abide/commit/1d91f491bc16f3120f1e513a0db0a6e2e225c77f))
+- b000b40: anchoredBranch owns anchor parking; await/try use advanceClaim ([`473f289`](https://github.com/briancray/abide/commit/473f2894ae02bcbcd67c4ca5d6b45b7de9b1439c))
+- b000b40: name the hydration-cursor advance (advanceClaim) ([`50a2d3d`](https://github.com/briancray/abide/commit/50a2d3d69cfbd82effb2980ba53e58011928dc47))
+- b000b40: consolidate simplify cleanups across shared/ui ([`5956928`](https://github.com/briancray/abide/commit/595692861152619c95a8a7eb83f48fd6d016ec37))
+- b000b40: two-phase warm-seed consume replaces the shadow-copy recovery ([`5b07997`](https://github.com/briancray/abide/commit/5b07997bb7cd01112161f5e67f698e438a96ce1b))
+- b000b40: one degradation site for every hydration seed ([`5bb7fd4`](https://github.com/briancray/abide/commit/5bb7fd490ba2b401cf5c88d616b5ba6c1e420aa5))
+- b000b40: branch segments, await subjects, and child ordinals decided once ([`6f2981d`](https://github.com/briancray/abide/commit/6f2981d5ac49c14b693228c41c14dc54e92a3367))
+- b000b40: appendTextAt's create path delegates to appendText ([`a178acd`](https://github.com/briancray/abide/commit/a178acd4a2dc21477b722a95da99c63d77b794bd))
+- b000b40: hydration claim verbs own the cursor mechanics ([`a624939`](https://github.com/briancray/abide/commit/a624939eb2ff625e4a52c06bf324c45b02ec6d51))
+- b000b40: auto-wrap nested-<script> state.computed/linked bare seeds ([`c4aa0eb`](https://github.com/briancray/abide/commit/c4aa0ebb686875236ba945c15de88278098b10b8))
+- b000b40: mountStreamedChild delegates every mount to mountChild ([`d794580`](https://github.com/briancray/abide/commit/d794580572610304019b698340b5477b7a326241))
+- b000b40: regenerate AGENTS.md + README for amend and cache-on-mutating surface ([`ddef71c`](https://github.com/briancray/abide/commit/ddef71c8ffceab01dcea2a2e49397df29795be2e))
+- 856901e: `{#await <cell>}` now awaits an async cell's resolution instead of peeking its `undefined`-while-pending value (ADR-0047).
+
+    `{#await rates}` where `const rates = state.computed(getRates(...))` used to lower its subject to `$$readCell(rates)` — a peek — so a pending cell read `undefined`, fired `{:then}` immediately, and `{:then data}` crashed dereferencing `data.foo` on `undefined`. (`{#if}`/`{#switch}` cell subjects already avoided this with a `cellPending` guard; `{#await}` never got the equivalent, so it regressed the day a `computed`/`linked` of an async source became a peek-cell.) A bare cell subject is now passed raw and normalised by `$$awaitSubject`, which resolves an async cell to a promise-of-its-value (showing the pending branch until it settles, then `{:then}`, or `{:catch}` on error — SWR on a refresh) and unwraps a lazy `computed(promise)` to its held promise. `{#await getFoo()}` (a plain promise) is byte-identical, on the client, on hydrate, and in the SSR stream.
+
+- d33ed87: `computed`/`linked` now honor the bare-seed contract (ADR-0045) when a bare seed reaches the runtime literally — a branch-nested `<script>` (`{:then names}` + `let total = state.computed(names.length)`) or a direct JS caller. The compile-time `wrapSeed` normalization only covers a component's leading script; a nested branch script keeps its calls literal, so the raw value hit the primitive: `computed(3)` stored `3` as the node's compute and the first read crashed (`node.compute is not a function`), killing the SSR stream mid-drain — a blank page after the shell. Both primitives now route a non-function seed by value: a promise → a streaming async cell, a stream → a frame cell, any other value → a constant seed. Regression-tested against the kitchen-sink templating/async live demo shape.
+- f4e98bd: A bare rpc read (`fn(args)`) no longer derives its cache key twice. The callable already computes `keyForRemoteCall(method, url, args)` to tag its rpc-error registry entries, then `readThrough` re-derived the identical string (`callable.raw` carries the same method/url) on every read — a query-string encode for GET/DELETE or a canonical-JSON stringify for body methods, warm cache hits included. The callable now threads its key into `cache.read` and `readThrough` reuses it; the public `cache()` and raw paths still derive their own. Behavior is unchanged — the two keys were provably identical — this just removes the duplicate work from the framework's primary read path.
+- e8f2144: `invalidate(fn, args)`, `refresh(fn, args)`, and `amend(fn, args)` now resolve their target entry with a direct store lookup instead of scanning every cache entry in every store. A `fn + args` selector identifies exactly one key, so the full-store scan it previously ran was O(total cache entries) work to act on a single known key — noticeable for `amend`, which the real-time path can fire once per incoming socket frame. Behavior is unchanged (the scan is still used for bare-fn, tag, and wire-driven selectors that can match many entries); this is purely a hot-path optimization.
+- 171fdee: One hydration seed manifest: the four passive warm-seed globals (`__abideResume`, `__abideCells`, `__abideDocs`, `__abideSockets`) collapse into one kind-partitioned `window.__abideSeeds` (ADR-0048). The in-bundle names (`RESUME`, `CELL_SEED`, `DOC_SEED`, `SOCKET_SEED`) stay as views onto its partitions, so consumers are unchanged; the inline SSR swap/seed scripts write the `resume` partition. Each partition self-initializes, so the vanilla scripts and the bundle compose in either run order. The live streamed-cell machinery and the head collector buffer stay separate — they are apply-timing phases (ADR-0040), not passive manifests. Internal wire-shape change only; `__SSR__` and all authored APIs are untouched.
+
 ## 0.54.0
 
 ### Minor Changes
