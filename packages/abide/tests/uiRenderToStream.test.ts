@@ -15,7 +15,7 @@ function frameData(entry: unknown): string {
     return encodeRefJson(entry).replace(/</g, '\\u003c')
 }
 
-/* The inline `__abideResume` seed-map literal for a single id — matches
+/* The inline `__abideSeeds.resume` seed-map literal for a single id — matches
    resumeSeedScript: the ref-json-encoded entry as the value, wrapped for inlining. */
 function seedMap(id: number, entry: unknown): string {
     return safeJsonForScript({ [id]: encodeRefJson(entry) })
@@ -115,7 +115,7 @@ let name = state('ada')</script>
         expect(chunks).toHaveLength(1)
         expect(chunks[0]).toBe(
             '<div><!--a--><!--abide:await:0--><span>VAL</span><!--/abide:await:0--></div>' +
-                '<script>Object.assign(window.__abideResume=window.__abideResume||{},' +
+                '<script>Object.assign((window.__abideSeeds=window.__abideSeeds||{}).resume=window.__abideSeeds.resume||{},' +
                 `${seedMap(0, { ok: true, value: 'VAL' })})</script>`,
         )
     })

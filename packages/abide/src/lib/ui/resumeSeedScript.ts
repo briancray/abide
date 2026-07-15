@@ -23,5 +23,5 @@ export function resumeSeedScript(resume: Record<string, ResumeEntry>): string {
     if (encoded.length === 0) {
         return ''
     }
-    return `<script>Object.assign(window.__abideResume=window.__abideResume||{},${safeJsonForScript(Object.fromEntries(encoded))})</script>`
+    return `<script>Object.assign((window.__abideSeeds=window.__abideSeeds||{}).resume=window.__abideSeeds.resume||{},${safeJsonForScript(Object.fromEntries(encoded))})</script>`
 }

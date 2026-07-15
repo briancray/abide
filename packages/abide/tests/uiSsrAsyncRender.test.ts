@@ -60,13 +60,13 @@ async function streamToString(render: () => SsrRender | Promise<SsrRender>): Pro
     return html
 }
 
-/* Merge every inline `__abideResume` seed script in the streamed HTML (the shell seed
+/* Merge every inline `__abideSeeds.resume` seed script in the streamed HTML (the shell seed
    plus each fragment's delta) into one id → value manifest. Each seeded entry is a
    ref-json string, so decode it back to the ResumeEntry the manifest carries. */
 function resumeManifest(html: string): Record<string, ResumeEntry> {
     const merged: Record<string, ResumeEntry> = {}
     for (const match of html.matchAll(
-        /window\.__abideResume\|\|\{\},(\{[\s\S]*?\})\)<\/script>/g,
+        /window\.__abideSeeds\.resume\|\|\{\},(\{[\s\S]*?\})\)<\/script>/g,
     )) {
         const encoded = JSON.parse(match[1]) as Record<string, string>
         for (const [id, entry] of Object.entries(encoded)) {
@@ -188,7 +188,7 @@ describe('blocking await nested in a streaming branch seeds its resume', () => {
         const html = await streamToString(() => render())
         expect(html).toContain('<span>IN</span>')
         const manifest = resumeManifest(html)
-        // outer is streaming (id 0, in the fragment's own data block, not __abideResume);
+        // outer is streaming (id 0, in the fragment's own data block, not the resume seed);
         // inner is the blocking await (id 1), seeded via the fragment's resume delta.
         expect(manifest[1]).toEqual({ ok: true, value: 'IN' })
     })

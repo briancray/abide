@@ -61,11 +61,11 @@ async function streamToString(render: () => SsrRender | Promise<SsrRender>): Pro
     return html
 }
 
-/* The blocking-resume manifest the inline `__abideResume` seed script carries, keyed by
+/* The blocking-resume manifest the inline `__abideSeeds.resume` seed script carries, keyed by
    boundary id. Parsed from the streamed HTML so a test can assert id → value alignment.
    Each seeded entry is a ref-json string, decoded back to its ResumeEntry. */
 function resumeManifest(html: string): Record<string, ResumeEntry> {
-    const match = html.match(/window\.__abideResume\|\|\{\},(\{.*?\})\)<\/script>/)
+    const match = html.match(/window\.__abideSeeds\.resume\|\|\{\},(\{.*?\})\)<\/script>/)
     if (!match) {
         return {}
     }
