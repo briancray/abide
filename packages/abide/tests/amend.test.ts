@@ -69,6 +69,26 @@ describe('amend()', () => {
         expect(await getCount()).toEqual({ n: 11 })
     })
 
+    /* fn + args is the exact-key tier: the amend targets that one call's entry via a direct
+       store lookup (no full-store scan), leaving sibling args variants warm and untouched. */
+    test('three-arg form amends only the matching args variant', async () => {
+        const getItem = createRemoteFunction<{ id: number }, { n: number }>({
+            method: 'GET',
+            url: '/rpc/item',
+            clients: BROWSER_ONLY,
+            buildRequest: (args) => new Request(`http://x/rpc/item?id=${args?.id ?? 0}`),
+            invoke: async () => jsonResponse({ n: 1 }),
+        })
+        expect(await getItem({ id: 1 })).toEqual({ n: 1 })
+        expect(await getItem({ id: 2 })).toEqual({ n: 1 })
+
+        amend(getItem, { id: 1 }, (current) => ({ n: current.n + 10 }))
+        await settle()
+
+        expect(await getItem({ id: 1 })).toEqual({ n: 11 })
+        expect(await getItem({ id: 2 })).toEqual({ n: 1 })
+    })
+
     /* The ADR-0043 value form: a concrete Return replaces the retained value (folded to an
        updater that ignores current), reactive, still no network. This is what a server-side
        amend(args, value) will broadcast in phase 2. */

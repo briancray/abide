@@ -756,22 +756,72 @@ rather than a first-ever load. An empty or unmatched selector is a no-op on the
 cache; the lifecycle ping still fires but recomputes pending() to the same value.
 */
 function invalidate<Args, Return>(arg?: CacheSelector<Args, Return>, args?: Args): void {
-    /* Resolve the fn-selector prefix once; the matcher and the label both consume it. */
+    /* Resolve the fn-selector prefix once; the matcher, the label, and the exact-key
+       fast path all consume it. */
     const prefix = selectorPrefix(arg, args)
-    invalidateMatching(selectorMatcher(arg, args, prefix), selectorLabel(arg, args, prefix), prefix)
+    invalidateMatching(
+        selectorMatcher(arg, args, prefix),
+        selectorLabel(arg, args, prefix),
+        prefix,
+        exactSelectorKey(arg, args, prefix),
+    )
+}
+
+/*
+The single entry key a `fn + args` selector targets: args narrows the match to one
+call, so the resolved prefix IS the exact key — the apply loops can `Map.get` it
+directly instead of scanning every store. undefined for an all / bare-fn-prefix /
+tag selector (which may match many entries) so those still scan, and for a producer
+never cached (prefix undefined) whose scan matches nothing anyway.
+*/
+function exactSelectorKey<Args, Return>(
+    arg: CacheSelector<Args, Return> | undefined,
+    args: Args | undefined,
+    prefix: string | undefined,
+): string | undefined {
+    return typeof arg === 'function' && args !== undefined ? prefix : undefined
+}
+
+/*
+The per-entry drop/refetch decision of invalidate() — the single seam so the full
+scan and the exact-key fast path can't diverge (ADR-0041). A refetch-policy entry is
+kept and its refetch coalesced; every other match is dropped so the next read reloads.
+*/
+function invalidateEntry(
+    store: CacheStore,
+    entry: CacheEntry,
+    matched: string[],
+    affected: string[],
+): void {
+    matched.push(entry.key)
+    if (entry.invalidation) {
+        scheduleInvalidationRefetch(store, entry)
+    } else {
+        store.entries.delete(entry.key)
+        /* Flag the next read a reload (refreshing()) — but only if a reader is
+           holding the value now; with none on screen the next read is a first
+           load, and an ungated add would linger forever on the tab store. */
+        if (store.hasReader(entry.key)) {
+            store.pendingRefresh.add(entry.key)
+        }
+        affected.push(entry.key)
+    }
 }
 
 /*
 The store-loop body of invalidate(), driven by a raw entry predicate rather than a
-selector — the single apply-by-matcher seam so a local invalidate() and a
-wire-driven one (a server broadcast decoded via matcherFromEnvelope) run the EXACT
-same drop loop and can't diverge (ADR-0041). `label` feeds the cycle tripwire;
-`prefix` (undefined for a tag selector) resets recorded rpc errors for the selector.
+selector — a local invalidate() and a wire-driven one (a server broadcast decoded via
+matcherFromEnvelope) share the per-entry `invalidateEntry` seam and can't diverge
+(ADR-0041). `label` feeds the cycle tripwire; `prefix` (undefined for a tag selector)
+resets recorded rpc errors for the selector. `exactKey` (a fn + args selector's one
+key, from exactSelectorKey) picks that entry directly instead of scanning; the
+wire-driven path passes none and scans as before.
 */
 function invalidateMatching(
     matches: (entry: CacheEntry) => boolean,
     label: string,
     prefix: string | undefined,
+    exactKey?: string,
 ): void {
     invalidateTripwire(label)
     /* Reset any recorded rpc errors for this selector too (independent of cache entries — a
@@ -782,23 +832,19 @@ function invalidateMatching(
     for (const store of cacheStores()) {
         const matched: string[] = []
         const affected: string[] = []
-        /* Deleting the current entry mid-iteration is spec-safe on a Map; no snapshot needed. */
-        for (const entry of store.entries.values()) {
-            if (!matches(entry)) {
-                continue
+        if (exactKey !== undefined) {
+            /* Exact-key selector (fn + args): the one candidate is a direct Map.get, so
+               skip scanning every entry — the matcher would accept only this key anyway. */
+            const entry = store.entries.get(exactKey)
+            if (entry !== undefined) {
+                invalidateEntry(store, entry, matched, affected)
             }
-            matched.push(entry.key)
-            if (entry.invalidation) {
-                scheduleInvalidationRefetch(store, entry)
-            } else {
-                store.entries.delete(entry.key)
-                /* Flag the next read a reload (refreshing()) — but only if a reader is
-                   holding the value now; with none on screen the next read is a first
-                   load, and an ungated add would linger forever on the tab store. */
-                if (store.hasReader(entry.key)) {
-                    store.pendingRefresh.add(entry.key)
+        } else {
+            /* Deleting the current entry mid-iteration is spec-safe on a Map; no snapshot needed. */
+            for (const entry of store.entries.values()) {
+                if (matches(entry)) {
+                    invalidateEntry(store, entry, matched, affected)
                 }
-                affected.push(entry.key)
             }
         }
         /* Every match changed state (probes re-derive); only the dropped subset
@@ -851,18 +897,65 @@ way to re-run, so it drops (the next read reloads) — the invalidate fallback.
 */
 function refresh<Args, Return>(arg?: CacheSelector<Args, Return>, args?: Args): void {
     const prefix = selectorPrefix(arg, args)
-    refreshMatching(selectorMatcher(arg, args, prefix), selectorLabel(arg, args, prefix), prefix)
+    refreshMatching(
+        selectorMatcher(arg, args, prefix),
+        selectorLabel(arg, args, prefix),
+        prefix,
+        exactSelectorKey(arg, args, prefix),
+    )
+}
+
+/*
+The per-entry refetch/drop decision of refresh() — the single seam shared by the full
+scan and the exact-key fast path (ADR-0041). Only a match with a live reader refetches;
+a reader-less match drops so the next read reloads.
+*/
+function refreshEntry(
+    store: CacheStore,
+    entry: CacheEntry,
+    matched: string[],
+    affected: string[],
+): void {
+    matched.push(entry.key)
+    /* No live reader is holding this key — its reactive scope has torn down (or
+       it was never read reactively and already dropped). A refresh has no
+       on-screen value to keep-stale-and-swap, so firing the network now is
+       wasted work that may be stale again before anything shows it. Drop the
+       entry so the next read reloads fresh instead — the same lazy path a
+       reader-less invalidate() takes. */
+    if (!store.hasReader(entry.key)) {
+        store.entries.delete(entry.key)
+        return
+    }
+    /* Arm a refetch on the fly for a policy-less remote entry by replaying its
+       stored Request — so a refresh always refetches-and-swaps, never blanks. */
+    if (entry.invalidation === undefined && entry.request !== undefined) {
+        const request = entry.request
+        entry.invalidation = { refetch: () => fetch(request.clone()) }
+    }
+    if (entry.invalidation !== undefined) {
+        scheduleInvalidationRefetch(store, entry)
+    } else {
+        /* No policy, no request (a producer never cached with a refetch window): drop so the
+           next read reloads. A reader is holding it (checked above), so flag the
+           next read a reload (refreshing()). */
+        store.entries.delete(entry.key)
+        store.pendingRefresh.add(entry.key)
+        affected.push(entry.key)
+    }
 }
 
 /*
 The store-loop body of refresh(), driven by a raw entry predicate — the refetch
-analogue of invalidateMatching, so a local refresh() and a wire-driven one share
-one refetch loop (ADR-0041).
+analogue of invalidateMatching, so a local refresh() and a wire-driven one share the
+per-entry `refreshEntry` seam (ADR-0041). `exactKey` (a fn + args selector's one key)
+picks that entry directly instead of scanning; the wire-driven path passes none.
 */
 function refreshMatching(
     matches: (entry: CacheEntry) => boolean,
     label: string,
     prefix: string | undefined,
+    exactKey?: string,
 ): void {
     invalidateTripwire(label)
     if (prefix !== undefined) {
@@ -871,36 +964,17 @@ function refreshMatching(
     for (const store of cacheStores()) {
         const matched: string[] = []
         const affected: string[] = []
-        for (const entry of store.entries.values()) {
-            if (!matches(entry)) {
-                continue
+        if (exactKey !== undefined) {
+            /* Exact-key selector (fn + args): one candidate via direct Map.get, no scan. */
+            const entry = store.entries.get(exactKey)
+            if (entry !== undefined) {
+                refreshEntry(store, entry, matched, affected)
             }
-            matched.push(entry.key)
-            /* No live reader is holding this key — its reactive scope has torn down (or
-               it was never read reactively and already dropped). A refresh has no
-               on-screen value to keep-stale-and-swap, so firing the network now is
-               wasted work that may be stale again before anything shows it. Drop the
-               entry so the next read reloads fresh instead — the same lazy path a
-               reader-less invalidate() takes. */
-            if (!store.hasReader(entry.key)) {
-                store.entries.delete(entry.key)
-                continue
-            }
-            /* Arm a refetch on the fly for a policy-less remote entry by replaying its
-               stored Request — so a refresh always refetches-and-swaps, never blanks. */
-            if (entry.invalidation === undefined && entry.request !== undefined) {
-                const request = entry.request
-                entry.invalidation = { refetch: () => fetch(request.clone()) }
-            }
-            if (entry.invalidation !== undefined) {
-                scheduleInvalidationRefetch(store, entry)
-            } else {
-                /* No policy, no request (a producer never cached with a refetch window): drop so the
-                   next read reloads. A reader is holding it (checked above), so flag the
-                   next read a reload (refreshing()). */
-                store.entries.delete(entry.key)
-                store.pendingRefresh.add(entry.key)
-                affected.push(entry.key)
+        } else {
+            for (const entry of store.entries.values()) {
+                if (matches(entry)) {
+                    refreshEntry(store, entry, matched, affected)
+                }
             }
         }
         /* Mark the whole match set (probes re-derive); emit only the dropped subset — the
@@ -930,11 +1004,21 @@ function amend<Args, Return>(
     isValue: boolean,
 ): void {
     const prefix = selectorPrefix(arg, args)
+    const exactKey = exactSelectorKey(arg, args, prefix)
     const matches = selectorMatcher(arg, args, prefix)
     for (const store of cacheStores()) {
-        for (const entry of store.entries.values()) {
-            if (matches(entry)) {
+        if (exactKey !== undefined) {
+            /* Exact-key selector (fn + args): mutate the one entry via direct Map.get — the
+               optimistic-update / socket-frame path, potentially once per frame, no scan. */
+            const entry = store.entries.get(exactKey)
+            if (entry !== undefined) {
                 applyAmend(store, entry, updater as (current: unknown) => unknown, isValue)
+            }
+        } else {
+            for (const entry of store.entries.values()) {
+                if (matches(entry)) {
+                    applyAmend(store, entry, updater as (current: unknown) => unknown, isValue)
+                }
             }
         }
     }

@@ -57,7 +57,7 @@ export function createAmendReaderHook(
                     /* Transport loss: reconcile the possibly-missed value against server truth,
                        then re-open a fresh LIVE subscription (no replay) and keep going. */
                     if (error instanceof SocketDisconnectedError) {
-                        cache.refreshMatching((entry) => entry.key === key, key, undefined)
+                        cache.refreshMatching((entry) => entry.key === key, key, undefined, key)
                         try {
                             iterator = socket[Symbol.asyncIterator]()
                         } catch (reopenError) {
