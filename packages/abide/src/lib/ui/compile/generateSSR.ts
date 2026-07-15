@@ -87,7 +87,7 @@ export function generateSSR(
     /* The shared signal→`model` lowering + branch-scoped nested-script deref scope. */
     const {
         expression: lowerExpression,
-        statement,
+        script,
         withNestedScripts,
         withShadow,
         bindRead,
@@ -101,7 +101,7 @@ export function generateSSR(
 
     /* A scoped-script body for SSR: the shared lowering, then strip effects
        (client-only lifecycle that emits no HTML) — the one SSR-side asymmetry. */
-    const lowerScript = (code: string): string => stripEffects(statement(code))
+    const lowerScript = (code: string): string => stripEffects(script(code))
 
     function push(target: string, literal: string): string {
         return `${target}.push(${JSON.stringify(literal)});\n`

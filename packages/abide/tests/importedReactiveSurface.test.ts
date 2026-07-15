@@ -67,6 +67,39 @@ describe('imported reactive surface — bare state()/state.computed/state.linked
         expect(code).not.toContain(`from '${PKG}/ui/state'`)
     })
 
+    /* A nested branch `<script>` keeps `state.computed`/`state.linked` literal (it is not
+       desugared to the doc), so a BARE-VALUE seed must be wrapped into a thunk the same way the
+       top-level desugar does — else the runtime primitive stores the value as its compute function
+       and calls it on read (`... is not a function`, a runtime crash). Regression for the
+       nested-vs-top-level auto-wrap inconsistency. */
+    test('a nested-script bare-value state.computed is wrapped into a seed thunk', () => {
+        const { code } = compileModule(
+            `<script>import { state } from '${PKG}/ui/state'\nlet n = state(0)</script>\n{#if n > 0}\n<script>let doubled = state.computed(n * 2)</script>\n<p>{doubled}</p>\n{/if}`,
+            { moduleId: 'page.abide' },
+        )
+        expect(code).toContain('state.computed(() => $$model.read("n") * 2)') // wrapped seed
+        expect(code).not.toMatch(/state\.computed\(\$\$model\.read\("n"\) \* 2\)/) // never bare
+    })
+
+    test('a nested-script bare-value state.linked is wrapped into a seed thunk', () => {
+        const { code } = compileModule(
+            `<script>import { state } from '${PKG}/ui/state'\nlet n = state(0)</script>\n{#if n > 0}\n<script>let mirror = state.linked(n)</script>\n<p>{mirror}</p>\n{/if}`,
+            { moduleId: 'page.abide' },
+        )
+        expect(code).toContain('state.linked(() => $$model.read("n"))') // wrapped seed
+    })
+
+    /* The wrap is a no-op on the thunk form the author usually writes — an already-thunked seed
+       passes through unchanged (no double-wrap). */
+    test('a nested-script thunk-form state.computed is not double-wrapped', () => {
+        const { code } = compileModule(
+            `<script>import { state } from '${PKG}/ui/state'\nlet n = state(0)</script>\n{#if n > 0}\n<script>let doubled = state.computed(() => n * 2)</script>\n<p>{doubled}</p>\n{/if}`,
+            { moduleId: 'page.abide' },
+        )
+        expect(code).toContain('state.computed(() => $$model.read("n") * 2)')
+        expect(code).not.toContain('state.computed(() => () =>') // not double-wrapped
+    })
+
     test('an imported bare effect stays a runtime call and lowers its reads', () => {
         const body = compileComponent(
             `<script>import { state } from '${PKG}/ui/state'\nimport { effect } from '${PKG}/ui/effect'\nlet count = state(0)\neffect(() => console.log(count))</script><p>{count}</p>`,

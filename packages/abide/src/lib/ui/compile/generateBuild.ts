@@ -127,6 +127,7 @@ export function generateBuild(
     const {
         expression: lowerExpression,
         statement: lowerStatement,
+        script: lowerScript,
         withNestedScripts,
         withShadow,
         bindRead,
@@ -291,7 +292,7 @@ export function generateBuild(
                runs as a bind, in document order, so its signals are declared before the later
                siblings that deref them (the enclosing `withNestedScripts` puts those names in
                scope). */
-            binds.push(`${lowerStatement(node.code)}\n`)
+            binds.push(`${lowerScript(node.code)}\n`)
             return ''
         }
         if (node.kind === 'snippet') {
@@ -425,7 +426,7 @@ export function generateBuild(
     /* Emits code appending `node` to `parentVar`. */
     function generateChild(node: TemplateNode, parentVar: string, before = 'null'): string {
         if (node.kind === 'script') {
-            return `${lowerStatement(node.code)}\n`
+            return `${lowerScript(node.code)}\n`
         }
         /* A `<style>` emits no DOM — its CSS is bundled and its scope attribute is
            already stamped onto the elements it covers (see `staticHtml`/`skeletonMarkup`). */

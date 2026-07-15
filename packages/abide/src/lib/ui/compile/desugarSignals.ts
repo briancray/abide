@@ -5,6 +5,7 @@ import { type ReactiveImportBindings, reactiveImportBindings } from './resolveRe
 import { signalCallee } from './signalCallee.ts'
 import type { InterpolationKind } from './types/InterpolationKind.ts'
 import type { SeedTypeClassifier } from './types/SeedTypeClassifier.ts'
+import { wrapSeed } from './wrapSeed.ts'
 
 /* The routing decision for a no-marker `computed(seed)`: `true` routes to the eager
    `trackedComputed` stream cell (read via `$$readCell`, the `cellReadNames` bucket), `false`
@@ -13,28 +14,6 @@ import type { SeedTypeClassifier } from './types/SeedTypeClassifier.ts'
 type EagerStreamPredicate = (declaration: ts.VariableDeclaration) => boolean
 
 const factory = ts.factory
-
-/* Normalises a `computed`/`linked` argument into a seed THUNK: a literal `() => …` /
-   `function` argument passes through unchanged (the author already wrote the thunk), any
-   other expression is wrapped as `() => arg`. The wrapper arrow is made ASYNC when the
-   expression contains a top-level `await` (`computed(await load())` → `async () => await
-   load()`), which is exactly the marker the runtime primitive uses to route to an async cell. */
-function wrapSeed(argument: ts.Expression): ts.Expression {
-    if (ts.isArrowFunction(argument) || ts.isFunctionExpression(argument)) {
-        return argument
-    }
-    const modifiers = hasTopLevelAwait(argument)
-        ? [factory.createModifier(ts.SyntaxKind.AsyncKeyword)]
-        : undefined
-    return factory.createArrowFunction(
-        modifiers,
-        undefined,
-        [],
-        undefined,
-        factory.createToken(ts.SyntaxKind.EqualsGreaterThanToken),
-        argument,
-    )
-}
 
 /* Wraps a seed expression as an async unwrapping thunk `async () => await (arg)` — for a
    type-directed PROMISE seed (ADR-0023/0043) the author wrote WITHOUT `await`
