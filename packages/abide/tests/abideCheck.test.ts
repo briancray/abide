@@ -343,6 +343,28 @@ describe('abide check', () => {
         expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
     })
 
+    /* ADR-0032: a bare async read as a plain `{#for}` SOURCE lifts to a peek-cell reading the
+       resolved collection (empty while pending), so iterating it type-checks clean — the raw
+       `Promise` shadow's "not iterable" (2488) diagnostic is suppressed. The valid counterpart to
+       the D4a AsyncIterable error above: a promise-OF-iterable drives a plain `{#for}`, a raw
+       AsyncIterable does not. The `?? []` / `by row.id` mirror the README's feed loop. */
+    test('a bare async promise-of-iterable as a plain {#for} source type-checks clean', () => {
+        const dir = project({
+            'feed.abide': `<script>\nimport { props } from '@abide/abide/ui/props'\nconst { rows } = props<{ rows: Promise<{ id: string }[]> }>()\n</script>\n<ul>{#for row, i of rows ?? [] by row.id}<li>{i}: {row.id}</li>{/for}</ul>\n`,
+        })
+        expect(collectAbideDiagnostics(createShadowProgram(dir))).toHaveLength(0)
+    })
+
+    /* The suppression is scoped to a promise whose AWAITED type is itself iterable — a
+       `Promise<number>` source's peek (a number) still can't iterate, so it stays a real error. */
+    test('a bare async {#for} source whose resolved value is not iterable stays an error', () => {
+        const dir = project({
+            'scalar.abide': `<script>\nimport { props } from '@abide/abide/ui/props'\nconst { count } = props<{ count: Promise<number> }>()\n</script>\n{#for n of count}<p>{n}</p>{/for}\n`,
+        })
+        const diagnostics = collectAbideDiagnostics(createShadowProgram(dir))
+        expect(diagnostics.some((diagnostic) => diagnostic.message.includes('iterator'))).toBe(true)
+    })
+
     /* ADR-0032: a bare async read is a peek at the RESOLVED value (`undefined` while pending), so
        an optional read of a real member composes with `?.`/`??` and type-checks clean — the raw
        `Promise` shadow's "property missing" / "always defined" diagnostics are suppressed. */

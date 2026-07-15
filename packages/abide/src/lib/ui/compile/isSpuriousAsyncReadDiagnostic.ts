@@ -1,12 +1,14 @@
 import ts from 'typescript'
 import { classifyInterpolationType } from './classifyInterpolationType.ts'
 
-/* The two TypeScript diagnostics a bare async read (ADR-0032) raises spuriously in a template.
+/* The three TypeScript diagnostics a bare async read (ADR-0032) raises spuriously in a template.
    2339 — a property "missing" on the un-awaited `Promise`/`AsyncIterable`; 2801 — a condition the
-   raw promise makes "always defined". Both are correct against the raw type but wrong against the
-   runtime PEEK (the resolved value, `undefined` while pending), which the shadow can't see. */
+   raw promise makes "always defined"; 2488 — a promise source "not iterable" in a plain `{#for}`.
+   All are correct against the raw type but wrong against the runtime PEEK (the resolved value,
+   `undefined` while pending), which the shadow can't see. */
 const PROPERTY_DOES_NOT_EXIST = 2339
 const CONDITION_ALWAYS_DEFINED = 2801
+const SOURCE_NOT_ITERABLE = 2488
 
 /*
 Whether a shadow diagnostic is one the ADR-0032 bare-async-read peek makes spurious. The runtime
@@ -20,11 +22,16 @@ caller can drop them:
     property EXISTS on the awaited (promise) or frame (iterable) type — the peek's real member.
   - 2801 (always-defined condition): the flagged subject itself classifies as a promise/iterable —
     the peek is genuinely nullable (pending → `undefined`), so it is not always-defined.
+  - 2488 (source not iterable): a plain `{#for}` source classifies as a promise whose AWAITED type
+    is itself iterable — the runtime lifts it to a peek-cell reading the resolved collection (empty
+    while pending), so iterating it is valid (matches `typeDirectedInterpolation`'s peek-cell lift).
 
-Deliberately narrow so it never hides a real mistake: only these two codes; 2339 only via `?.`
+Deliberately narrow so it never hides a real mistake: only these three codes; 2339 only via `?.`
 (a bare `.name` on a promise stays an error, nudging toward the `?.` the peek needs) and only when
 the property resolves on the awaited/frame type (a typo `?.namex` stays); 2801 only when the
-subject is actually async (a bare `{#if someFn}` — a forgotten call — stays). Callers additionally
+subject is actually async (a bare `{#if someFn}` — a forgotten call — stays); 2488 only for a
+PROMISE whose awaited type is iterable (a raw `AsyncIterable` source stays the sanctioned D4a error,
+and a `Promise<number>` source stays a real mistake the peek can't rescue). Callers additionally
 gate on the diagnostic mapping into the template region, so `<script>` code (where a forgotten
 `await` must surface) is never touched.
 */
@@ -40,6 +47,40 @@ export function isSpuriousAsyncReadDiagnostic(
     }
     if (code === CONDITION_ALWAYS_DEFINED) {
         return isAsyncSubject(shadowFile, checker, start, length)
+    }
+    if (code === SOURCE_NOT_ITERABLE) {
+        return isResolvedIterableAsyncSource(shadowFile, checker, start, length)
+    }
+    return false
+}
+
+/* A 2488 on a plain `{#for}` source whose expression classifies as a PROMISE and whose awaited
+   type is itself iterable — the ADR-0032 peek lifts it to the resolved collection, not an error.
+   Excludes a raw `AsyncIterable` (kind `asyncIterable`, the D4a error) and a promise of a
+   non-iterable (the peek would still not iterate). */
+function isResolvedIterableAsyncSource(
+    shadowFile: ts.SourceFile,
+    checker: ts.TypeChecker,
+    start: number,
+    length: number,
+): boolean {
+    const source = deepestNodeAt(shadowFile, start, length)
+    const sourceType = checker.getTypeAtLocation(source)
+    if (classifyInterpolationType(sourceType, source, checker) !== 'promise') {
+        return false
+    }
+    const awaited = checker.getAwaitedType(sourceType)
+    return awaited !== undefined && hasSyncIterator(awaited, checker)
+}
+
+/* Whether a type is synchronously iterable — an array/tuple or anything carrying the well-known
+   `Symbol.iterator` member (mangled to `__@iterator@<id>`, matched by prefix like
+   `classifyInterpolationType`'s async twin). */
+function hasSyncIterator(type: ts.Type, checker: ts.TypeChecker): boolean {
+    for (const property of checker.getPropertiesOfType(type)) {
+        if ((property.escapedName as string).startsWith('__@iterator')) {
+            return true
+        }
     }
     return false
 }
