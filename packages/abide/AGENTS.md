@@ -498,6 +498,9 @@ Compiler-emitted; an author never imports these directly.
   tracking `condition()`, with an optional pending state for a bare async subject.
 - `abide/ui/dom/awaitBlock` — `{#await}` runtime: render pending then swap to
   resolved/error; reactive re-runs on cache invalidation; hydration resumes or rebuilds.
+- `abide/ui/dom/awaitSubject` — normalises an `{#await <cell>}` subject so the block AWAITS the
+  cell's resolution (pending branch until it settles, then `{:then}`/`{:catch}`) instead of
+  peeking its `undefined`-while-pending value; a plain-promise subject passes through (ADR-0047).
 - `abide/ui/dom/tryBlock` — `{#try}` reactive error-boundary runtime: catch build /
   read / re-run throws, swap to the catch branch, re-arm on recovery.
 - `abide/ui/dom/switchBlock` — `{#switch}` / `{:else if}` runtime: a swappable range

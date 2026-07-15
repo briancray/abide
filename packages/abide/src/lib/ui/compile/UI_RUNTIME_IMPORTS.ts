@@ -38,6 +38,7 @@ export const UI_RUNTIME_IMPORTS: { name: string; specifier: string; alias?: stri
     { name: 'eachAsync', specifier: 'ui/dom/eachAsync', alias: '$$eachAsync' },
     { name: 'when', specifier: 'ui/dom/when', alias: '$$when' },
     { name: 'awaitBlock', specifier: 'ui/dom/awaitBlock', alias: '$$awaitBlock' },
+    { name: 'awaitSubject', specifier: 'ui/dom/awaitSubject', alias: '$$awaitSubject' },
     { name: 'tryBlock', specifier: 'ui/dom/tryBlock', alias: '$$tryBlock' },
     { name: 'switchBlock', specifier: 'ui/dom/switchBlock', alias: '$$switchBlock' },
     { name: 'mountSlot', specifier: 'ui/dom/mountSlot', alias: '$$mountSlot' },
