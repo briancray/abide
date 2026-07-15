@@ -231,10 +231,6 @@ export function desugarSignals(
     derivedNames: Set<string>
     computedNames: Set<string>
     cellReadNames: Set<string>
-    /* The full BLOCKING cell set (ADR-0042): the template-injected `await` cells passed in, unioned
-       with the script-level `await` computeds/linked collected here. The client template lowering
-       reads these via `$$readCellBlocking` (suspend-on-pending). */
-    blockingCellNames: Set<string>
 } {
     assertNoRemovedReaders(source)
     /* The full set of names written anywhere (this script + the template). A prop in this set
@@ -253,10 +249,6 @@ export function desugarSignals(
        One read shape covers both — `$$readCell` peeks an async cell and reads `.value` off a
        sync one — so `linked(getStream())` auto-tracks with no read-site branching. */
     const cellReadNames = new Set<string>()
-    /* Script-level BLOCKING cell names (ADR-0042 D6): a `computed`/`linked` whose seed carries a
-       top-level `await`. Unioned with the template-injected `blockingCellNames` and returned so the
-       CLIENT template lowering reads them via `$$readCellBlocking` (suspend-on-pending). */
-    const scriptBlockingNames = new Set<string>()
     /* A `props()` destructure must be lowered even when it declares no reactive binding
        (a rest-only `const { ...rest } = props()`), so track its presence on its own. */
     let hasPropsDestructure = false
@@ -359,27 +351,21 @@ export function desugarSignals(
                     isEagerStreamComputed(declaration) ||
                     isPromiseComputed(declaration)
                 ) {
+                    /* Async `computed` (author `await`), an eager stream, or a promise seed — all
+                       read via `$$readCell(name)`. Whether a pending read PAUSES (author `await`,
+                       a blocking cell) or peeks `undefined` (streaming) is carried by the cell
+                       itself at construction (the `trackedComputed(thunk, streaming)` flag), so the
+                       read form is uniform and nothing blocking-specific is collected here. */
                     cellReadNames.add(declaration.name.text)
-                    /* A blocking async computed (author `await`) reads suspend-on-pending; a bare
-                       promise (isPromiseComputed) carries no `await` → streaming, so isBlockingSeed
-                       is false and it never joins this set. */
-                    const argument = seedArgument(declaration)
-                    if (argument !== undefined && isBlockingSeed(argument)) {
-                        scriptBlockingNames.add(declaration.name.text)
-                    }
                 } else {
                     computedNames.add(declaration.name.text)
                 }
             } else if (callee === 'linked') {
                 /* `linked` → a cell read via `$$readCell(name)`: a plain `State` when the seed
                    is synchronous, an `AsyncState` when it tracks a promise/stream — one read
-                   shape auto-tracks whichever source the runtime primitive resolved to. */
+                   shape auto-tracks whichever source the runtime primitive resolved to. Its
+                   blocking-ness (author `await`) likewise rides on the constructed cell. */
                 cellReadNames.add(declaration.name.text)
-                /* A blocking async linked (author `await`) reads suspend-on-pending, like computed. */
-                const argument = seedArgument(declaration)
-                if (argument !== undefined && isBlockingSeed(argument)) {
-                    scriptBlockingNames.add(declaration.name.text)
-                }
             } else if (callee === 'state') {
                 /* `state(initial, transform)` → a `.value` cell (its write-coercion transform
                    forces a local store); referenced as `name.value`, unchanged. */
@@ -441,7 +427,6 @@ export function desugarSignals(
         derivedNames,
         computedNames,
         cellReadNames,
-        blockingCellNames: new Set([...blockingCellNames, ...scriptBlockingNames]),
     }
 }
 

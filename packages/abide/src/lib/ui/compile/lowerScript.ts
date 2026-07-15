@@ -91,19 +91,10 @@ export function lowerScript(
     derivedNames: Set<string>
     computedNames: Set<string>
     cellReadNames: Set<string>
-    /* Template-injected + script-level `await` cells (ADR-0042), read via `$$readCellBlocking`. */
-    blockingCellNames: Set<string>
     droppedReactiveImports: Set<string>
 } {
     const source = ts.createSourceFile('component.ts', scriptBody, ts.ScriptTarget.Latest, true)
-    const {
-        transformer,
-        stateNames,
-        derivedNames,
-        computedNames,
-        cellReadNames,
-        blockingCellNames: allBlockingNames,
-    } = desugarSignals(
+    const { transformer, stateNames, derivedNames, computedNames, cellReadNames } = desugarSignals(
         source,
         injectedCellNames,
         blockingCellNames,
@@ -194,7 +185,6 @@ export function lowerScript(
         derivedNames,
         computedNames,
         cellReadNames,
-        blockingCellNames: allBlockingNames,
         droppedReactiveImports,
     }
 }

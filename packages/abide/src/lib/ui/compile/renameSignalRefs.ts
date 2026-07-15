@@ -54,12 +54,10 @@ export function signalRefsTransformer(
     blockLocalPlain: ReadonlySet<string> = new Set(),
     /* Component signals read through `$$readCell(name)` — every `linked` and every async
        `computed` (see `desugarSignals`). A nearer lexical binding of the same name shadows
-       them like any other signal. */
+       them like any other signal. Whether a read PAUSES (blocking `await` cell) or peeks
+       (streaming) is decided at runtime by the cell itself (`readCell` consults `cell.blocking`),
+       so there is one read form here for every cell and nothing site-specific to thread. */
     cellReadNames: ReadonlySet<string> = new Set(),
-    /* The subset of `cellReadNames` that are BLOCKING `await` cells (ADR-0042), read through
-       `$$readCellBlocking(name)` (suspend-on-pending) instead of `$$readCell`. Non-empty only on
-       the CLIENT template lowering; the script pass and SSR keep it empty (`$$readCell`). */
-    blockingCellNames: ReadonlySet<string> = new Set(),
 ): ts.TransformerFactory<ts.SourceFile> {
     /* The signal names that a nested binding can shadow — only these matter for
        scope tracking, so we ignore every other local binding. */
@@ -160,7 +158,6 @@ export function signalRefsTransformer(
                         computedNames,
                         blockLocal,
                         cellReadNames,
-                        blockingCellNames,
                     )
                     if (replacement !== undefined) {
                         return ts.factory.createPropertyAssignment(node.name.text, replacement)
@@ -174,7 +171,6 @@ export function signalRefsTransformer(
                         computedNames,
                         blockLocal,
                         cellReadNames,
-                        blockingCellNames,
                     )
                     if (replacement !== undefined) {
                         return replacement
@@ -393,7 +389,6 @@ function referenceFor(
     computedNames: ReadonlySet<string>,
     blockLocal: ReadonlySet<string> = new Set(),
     cellReadNames: ReadonlySet<string> = new Set(),
-    blockingCellNames: ReadonlySet<string> = new Set(),
 ): ts.Expression | undefined {
     if (blockLocal.has(name)) {
         return ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier(name), 'value')
@@ -403,19 +398,10 @@ function referenceFor(
     if (name === 'scope') {
         return ts.factory.createIdentifier('$$scope')
     }
-    /* A BLOCKING `await` cell → `$$readCellBlocking(name)` (ADR-0042): the throwing peek that
-       SUSPENDS the render region while pending, so an `await` binding reads as a resolved value
-       and its region withholds until it settles. Client template lowering only — `blockingCellNames`
-       is empty in the script pass and SSR, which keep the plain `$$readCell` peek below. */
-    if (blockingCellNames.has(name)) {
-        return ts.factory.createCallExpression(
-            ts.factory.createIdentifier('$$readCellBlocking'),
-            undefined,
-            [ts.factory.createIdentifier(name)],
-        )
-    }
-    /* A `linked` / async `computed` cell → `$$readCell(name)`: one read shape that peeks an
-       async cell and reads `.value` off a sync one. */
+    /* A `linked` / async `computed` cell → `$$readCell(name)`: ONE read shape for every cell,
+       script and template. It peeks a sync cell's `.value`, and for an async cell decides at
+       runtime whether to pause (blocking `await`) or peek `undefined` (streaming) by the cell's
+       own `blocking` bit — so no blocking/streaming distinction is threaded through codegen. */
     if (cellReadNames.has(name)) {
         return ts.factory.createCallExpression(
             ts.factory.createIdentifier('$$readCell'),

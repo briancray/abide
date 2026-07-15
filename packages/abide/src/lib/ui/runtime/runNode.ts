@@ -53,6 +53,16 @@ export function runNode(node: ReactiveNode): unknown {
         }
         node.status = NODE_STATE.CLEAN
         return node.value
+    } catch (error) {
+        /* The compute threw — commonly a `SuspenseSignal` from a pending blocking cell it read,
+           propagating the pause down this edge. Settle the node CLEAN anyway (its value is left
+           stale) so a later change to the deps it DID track before throwing re-marks it DIRTY and
+           re-propagates to its subscribers; left DIRTY, `mark`'s status gate would take the
+           settle's CLEAN→DIRTY edge as already-dirty and leave the node permanently inert — the
+           same reset `flushEffects` applies to a thrown effect. The throw still reaches the reader
+           (a region that catches it and withholds, re-running when the branch resolves). */
+        node.status = NODE_STATE.CLEAN
+        throw error
     } finally {
         REACTIVE_CONTEXT.observer = previous
         /* Drop the edges `track` didn't reuse — last run's now-stale dependencies. */

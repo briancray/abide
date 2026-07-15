@@ -68,8 +68,9 @@ describe('async-cell wrap transform — lowering forms', () => {
         expect(body).toContain(
             'const v = $$scope().trackedComputed(async () => await Promise.resolve(1), false)',
         )
-        // a blocking cell reads through the SUSPENDING cell read, NOT the lazy `v()` derive reader
-        expect(body).toContain('$$readCellBlocking(v)')
+        // reads through the unified cell read, NOT the lazy `v()` derive reader; the `, false`
+        // construction flag above (not the read form) is what makes a pending read SUSPEND
+        expect(body).toContain('$$readCell(v)')
         expect(body).not.toContain('v()')
     })
 
@@ -131,8 +132,9 @@ describe('async-cell wrap transform — lowering forms', () => {
             <p>{s}</p>
         `)
         expect(body).toContain("const s = $$scope().linked(async () => await Promise.resolve('x'))")
-        // a blocking `await` linked reads through the suspending cell read (ADR-0042)
-        expect(body).toContain('$$readCellBlocking(s)')
+        // reads through the unified cell read; its blocking-ness (a pending read suspends) rides on
+        // the constructed async `linked` cell, not on the read form (ADR-0042)
+        expect(body).toContain('$$readCell(s)')
     })
 })
 
@@ -204,8 +206,35 @@ describe('blocking await cell — client suspense (ADR-0042)', () => {
         expect(host.textContent).toContain('3 items')
     })
 
+    /* The motivating `~/code/media` crash, in SCRIPT position (not a template lift): a sync
+       `computed` derives off a blocking `await` cell. On a cold mount the blocking cell is pending,
+       so the derive's `$$readCell(result)` throws a SuspenseSignal that propagates OUT of the derive
+       (a pause is a value that flows down the dependency edge) to the interpolation, which withholds
+       — instead of the derive evaluating `.root` on `undefined` and crashing the mount. The region
+       re-runs and fills once the branch resolves (the throwing read left the derive, and the region
+       through it, subscribed to the pending cell). */
+    test('a SCRIPT derive over a pending blocking cell withholds instead of crashing, then fills', async () => {
+        const { host } = mountClient(`
+            <script>
+                import { state } from '@abide/abide/ui/state'
+                const result = state.computed(await new Promise((resolve) => { globalThis.__resolveDerived = resolve }))
+                const root = state.computed(() => result.root)
+            </script>
+            <p>root is {root}</p>
+        `)
+        /* Mounting did not throw on \`undefined.root\`, and the derived interpolation withholds. */
+        expect(host.textContent).toContain('root is')
+        expect(host.textContent).not.toContain('deep')
+        ;(globalThis as { __resolveDerived?: (value: unknown) => void }).__resolveDerived?.({
+            root: 'deep',
+        })
+        await settle()
+        /* Resolved: the pause lifted, the derive recomputed, and the region revealed its value. */
+        expect(host.textContent).toContain('root is deep')
+    })
+
     /* A blocking read embedded in an `{#if}` CONDITION via member access (`{#if items.length}`) is
-       NOT the bare-await-subject form, so it lowers to `$$readCellBlocking(items).length` with no
+       NOT the bare-await-subject form, so it lowers to `$$readCell(items).length` with no
        `$$cellPending` gate — the condition runs synchronously at `mountSwappableRange` build. The
        block must withhold (render NEITHER branch, never flashing `{:else}`) while pending instead of
        throwing the SuspenseSignal out of the build, then reveal the matched branch on settle. */
@@ -233,7 +262,7 @@ describe('blocking await cell — client suspense (ADR-0042)', () => {
     })
 
     /* A blocking read embedded in an `{#await}` SUBJECT (`Promise.resolve(user.id)`) lowers to
-       `$$readCellBlocking(user).id` — an unguarded synchronous read in awaitBlock's first effect run
+       `$$readCell(user).id` — an unguarded synchronous read in awaitBlock's first effect run
        at build. It must withhold to the pending branch while the cell is pending instead of throwing
        the SuspenseSignal out of the (cold-render) build, then reveal `then` on settle. */
     test('a pending blocking read in an {#await} subject withholds to the pending branch, then resolves', async () => {
@@ -260,7 +289,7 @@ describe('blocking await cell — client suspense (ADR-0042)', () => {
         expect(host.textContent).not.toContain('loading')
     })
 
-    /* A blocking read in an `{#for await}` SOURCE lowers to `$$readCellBlocking(user).id` — an
+    /* A blocking read in an `{#for await}` SOURCE lowers to `$$readCell(user).id` — an
        unguarded synchronous read in eachAsync's driving effect at build. It must withhold (render no
        rows) while pending instead of throwing out of the build, then stream once it settles. */
     test('a pending blocking read in an {#for await} source withholds, then streams', async () => {

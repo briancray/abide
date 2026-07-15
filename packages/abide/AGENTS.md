@@ -452,11 +452,12 @@ Compiler-emitted; an author never imports these directly.
   listeners, others → reactive attributes); `exclude` skips explicit attrs.
 - `abide/ui/dom/readCall` — guarded non-optional method call on a reactive-document
   read, with legible authored-scope errors.
-- `abide/ui/dom/readCell` — unified read of a `computed`/`linked`/derive reference
-  (async → throwing peek, function → call, sync → `.value`).
-- `abide/ui/dom/readCellBlocking` — the blocking (`await`) variant of `readCell`: on a
-  pending cell it throws a suspense signal so the reading region withholds until the
-  value resolves, rather than reading `undefined` (client template lowering; ADR-0042).
+- `abide/ui/dom/readCell` — the one read of a `computed`/`linked`/derive reference,
+  script and template (async → throwing peek, function → call, sync → `.value`). A
+  pending BLOCKING (`await`) cell throws a suspense signal so the reading region — or a
+  derive over it — withholds until it resolves; a pending streaming cell peeks
+  `undefined`. Pause-vs-peek is the cell's own `blocking` bit, not the read site
+  (ADR-0046).
 - `abide/ui/dom/writeCell` — unified write of a `linked` reference from an author
   assignment (async → `.set`, sync → `.value =`).
 - `abide/ui/dom/cellPending` — whether a control-flow subject is a still-loading async

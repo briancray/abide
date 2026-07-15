@@ -441,7 +441,7 @@ describe('ADR-0032 async sub-expression lift — composition & tiers', () => {
         expect(lowered).toContain('$$scope().trackedComputed(async () => await (url()), false)')
         expect(lowered).toContain('$$attr(el1, "src"')
         // a blocking cell in an attribute reads through the SUSPENDING read (ADR-0042)
-        expect(lowered).toContain('$$readCellBlocking(__v0)')
+        expect(lowered).toContain('$$readCell(__v0)')
     })
 
     test('the no-`await` forms stay STREAMING (`, true`)', () => {
