@@ -1,7 +1,7 @@
 import { CURRENT_PATH } from './CURRENT_PATH.ts'
 import { claimChild } from './claimChild.ts'
-import type { RENDER } from './RENDER.ts'
 import { reportHydrationDivergence } from './reportHydrationDivergence.ts'
+import type { HydrationCursor } from './types/HydrationCursor.ts'
 
 /*
 A hydration claim that MUST succeed. Like `claimChild`, but throws a structural error
@@ -13,11 +13,7 @@ invariant from a compile-time-only parity test into a runtime guard. Use only wh
 compiled skeleton GUARANTEES a node — control-flow range markers, keyed-row boundaries —
 never where an end-of-list null is legitimate (e.g. a trailing reactive text binding).
 */
-export function claimExpected(
-    hydration: NonNullable<(typeof RENDER)['hydration']>,
-    parent: Node,
-    expected: string,
-): Node {
+export function claimExpected(hydration: HydrationCursor, parent: Node, expected: string): Node {
     const node = claimChild(hydration, parent)
     if (node === null) {
         /* Name where first on the `hydrate` channel (return ignored — a missing structural node

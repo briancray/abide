@@ -2,10 +2,11 @@ import { rawHtmlString } from '../../shared/html.ts'
 import { snippetPayload } from '../../shared/snippet.ts'
 import { effect } from '../effect.ts'
 import { claimChild } from '../runtime/claimChild.ts'
+import { parkCursor } from '../runtime/parkCursor.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { SuspenseSignal } from '../runtime/SuspenseSignal.ts'
 import { appendSnippet } from './appendSnippet.ts'
-import { assertClaimedText } from './assertClaimedText.ts'
+import { claimText } from './claimText.ts'
 import { isComment } from './isComment.ts'
 import { parseRawNodes } from './parseRawNodes.ts'
 import { readTextOrSuspend } from './readTextOrSuspend.ts'
@@ -59,48 +60,29 @@ export function appendText(parent: Node, read: () => unknown, splitAlways = fals
     }
     const hydration = RENDER.hydration
     if (hydration !== undefined) {
-        const claimed = claimChild(hydration, parent)
         /* Nullish reads render as empty text, never the literal `"undefined"` — so a
            pending async read (undefined-while-pending, ADR-0032 D3) shows nothing. A blocking
            read never suspends here (warm-seeded → `refreshing()`), so `probe` holds its value. */
         const firstValue = probe
         const value = firstValue == null ? '' : String(firstValue)
-        /* A value that first rendered empty produced NO server text node, so the cursor
-           points at the following node (an element/comment) or past the end (null) — not a
-           text node to claim. Bind to a Text node either way: claim the merged SSR node when
-           one is here, else synthesize an empty one at the cursor and leave the claimed node
-           for the next consumer (a following element hole, a sibling binding, or nothing).
-           Without this the bind effect below derefs a null/element `node`. A text node is
-           detected by `splitText` (not `nodeType`), so the test mini-dom is covered too. */
-        const isText = claimed !== null && typeof (claimed as Text).splitText === 'function'
-        const node = (
-            isText ? claimed : parent.insertBefore(document.createTextNode(''), claimed)
-        ) as Text
-        /* The claimed SSR node must begin with this binding's value, or the split below
-           lands mid-run and orphans the tail — throw legibly at the divergence instead. A
-           synthesized empty node is this binding's own, so there's nothing to disagree. */
-        if (isText) {
-            assertClaimedText(node, value)
+        /* Claim this binding's portion of the merged SSR text node (assert + split +
+           advance — see `claimText`). A value that first rendered empty produced NO server
+           text node, so the cursor points at the following node (an element/comment) or past
+           the end — the miss arm: bind a synthesized empty Text at the cursor and leave the
+           unclaimed node for the next consumer (a following element hole, a sibling binding,
+           or nothing). Without it the bind effect below derefs a null/element node. */
+        let node = claimText(hydration, parent, value, splitAlways)
+        if (node === undefined) {
+            const unclaimed = claimChild(hydration, parent)
+            node = parent.insertBefore(document.createTextNode(''), unclaimed)
+            /* Pin the cursor on the still-unclaimed node — the synthesized node is this
+               binding's own, and an unset cursor would default back to the (now synthesized)
+               first child. */
+            parkCursor(hydration, parent, unclaimed)
         }
-        /* Peel this binding's text off the merged SSR node. A non-final binding in a
-           run (`splitAlways`) splits even when it consumes the whole node, leaving an
-           empty node for the next binding — otherwise an interpolation that renders to
-           empty string (or whose followers do) has no node and the next claim grabs the
-           wrong sibling. The final binding keeps `<` so it doesn't leave a stray node a
-           following element would claim. A synthesized node is already this binding's own,
-           so it never splits. */
-        if (
-            isText &&
-            (splitAlways ? value.length <= node.data.length : value.length < node.data.length)
-        ) {
-            node.splitText(value.length)
-        }
-        /* Advance past the claimed text node; for a synthesized node leave the cursor on the
-           still-unclaimed `claimed` node it was inserted before (an element/comment, or null
-           at the end). */
-        hydration.next.set(parent, isText ? node.nextSibling : claimed)
+        const bound = node
         effect(() => {
-            node.data = readTextOrSuspend(read)
+            bound.data = readTextOrSuspend(read)
         })
         return
     }
@@ -141,7 +123,7 @@ function appendRawHtml(parent: Node, read: () => unknown): void {
             nodes.push(node)
             node = node.nextSibling
         }
-        hydration.next.set(parent, node === null ? null : node.nextSibling)
+        parkCursor(hydration, parent, node === null ? null : node.nextSibling)
         parent.insertBefore(anchor, node)
         let first = true
         effect(() => {

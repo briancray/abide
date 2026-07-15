@@ -2,7 +2,7 @@ import { decodeRefJson } from '../../shared/decodeRefJson.ts'
 import { isThenable } from '../../shared/isThenable.ts'
 import { effect } from '../effect.ts'
 import { CURRENT_BOUNDARY } from '../runtime/CURRENT_BOUNDARY.ts'
-import { claimExpected } from '../runtime/claimExpected.ts'
+import { claimMarker } from '../runtime/claimMarker.ts'
 import { generationGuard } from '../runtime/generationGuard.ts'
 import { RANGE_CLOSE, RANGE_OPEN } from '../runtime/RANGE_MARKER.ts'
 import { RENDER } from '../runtime/RENDER.ts'
@@ -160,14 +160,14 @@ export function awaitBlock(
        bracketing — it runs only after a clean build. */
     const adopt = (open: Node | null, build: (parent: Node) => void): void => {
         const cursor = hydration as NonNullable<typeof hydration>
+        /* The cursor already sits here (claiming `open` advanced past it); kept for the
+           bracketing below. */
         const firstAdopted = open?.nextSibling ?? null
-        cursor.next.set(parent, firstAdopted)
         branch.adoptStrand(build, () => {
-            /* A guaranteed control-flow marker — claimExpected throws on a desync (caught by
+            /* A guaranteed control-flow marker — the claim throws on a desync (caught by
                firstHydrate's adopt try/catch → rebuildCold) instead of silently claiming null
                and over-clearing the parent. */
-            const close = claimExpected(cursor, parent, `/abide:await:${id} close marker`)
-            cursor.next.set(parent, close.nextSibling ?? null)
+            const close = claimMarker(cursor, parent, `/abide:await:${id} close marker`)
             /* Bracket the adopted nodes: `[` before the first claimed node (or before `close`
                for an empty branch), `]` then the anchor just before `close`. */
             const start = document.createComment(RANGE_OPEN)
@@ -207,9 +207,9 @@ export function awaitBlock(
        warm cache (or re-fetches) instead of crashing hydration. */
     const firstHydrate = (): void => {
         const cursor = hydration as NonNullable<typeof hydration>
-        /* The await block's open marker is compiler-guaranteed — claimExpected throws a
+        /* The await block's open marker is compiler-guaranteed — the claim throws a
            legible desync here rather than propagating a null that over-clears the parent. */
-        const open = claimExpected(cursor, parent, `abide:await:${id} open marker`)
+        const open = claimMarker(cursor, parent, `abide:await:${id} open marker`)
         /* RESUME holds the ref-json-encoded entry STRING; decode here, where the codec
            lives. A decode failure (malformed/absent payload) reads as "no resume" — fall
            through to the live promise rather than crash hydration. */

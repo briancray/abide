@@ -1,6 +1,7 @@
-import { claimExpected } from '../runtime/claimExpected.ts'
+import { claimMarker } from '../runtime/claimMarker.ts'
 import { OUTLET_CLOSE, OUTLET_OPEN } from '../runtime/OUTLET_MARKER.ts'
 import { PENDING_OUTLET } from '../runtime/PENDING_OUTLET.ts'
+import { parkCursor } from '../runtime/parkCursor.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { commentData } from './commentData.ts'
 
@@ -30,7 +31,7 @@ export function outlet(
         PENDING_OUTLET.current = { open, close }
         return { open, close }
     }
-    const open = claimExpected(hydration, parent, 'outlet open marker') as Comment
+    const open = claimMarker(hydration, parent, 'outlet open marker')
     /* Skip to the matching close: depth-count outlet markers (nested child-layer slots
        are balanced), so a layout wrapping another layout skips its WHOLE subtree. */
     let depth = 1
@@ -56,7 +57,7 @@ export function outlet(
         )
     }
     const close = node as Comment
-    hydration.next.set(parent, close.nextSibling)
+    parkCursor(hydration, parent, close.nextSibling)
     PENDING_OUTLET.current = { open, close }
     return { open, close }
 }

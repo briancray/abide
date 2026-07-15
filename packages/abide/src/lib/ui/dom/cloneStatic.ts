@@ -1,4 +1,4 @@
-import { claimChild } from '../runtime/claimChild.ts'
+import { claimRun } from '../runtime/claimRun.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { foreignWrapperTag } from './foreignWrapperTag.ts'
 import { templateFor } from './templateFor.ts'
@@ -29,13 +29,7 @@ export function cloneStatic(parent: Node, html: string): void {
     const source = wrapper === undefined ? template.content : (template.content.firstChild as Node)
     const hydration = RENDER.hydration
     if (hydration !== undefined) {
-        let node = claimChild(hydration, parent)
-        let remaining = source.childNodes.length
-        while (remaining > 0 && node !== null) {
-            node = node.nextSibling
-            remaining -= 1
-        }
-        hydration.next.set(parent, node)
+        claimRun(hydration, parent, source.childNodes.length)
         return
     }
     for (const child of source.childNodes) {

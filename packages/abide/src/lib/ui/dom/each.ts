@@ -1,7 +1,7 @@
 import { effect } from '../effect.ts'
 import { CURRENT_PATH } from '../runtime/CURRENT_PATH.ts'
 import { claimChild } from '../runtime/claimChild.ts'
-import { claimExpected } from '../runtime/claimExpected.ts'
+import { claimMarker } from '../runtime/claimMarker.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { scope } from '../runtime/scope.ts'
 import { scopeGroup } from '../runtime/scopeGroup.ts'
@@ -82,8 +82,7 @@ export function each<T>(
         const segment = keyed ? keyOf(item) : position
         const hydration = RENDER.hydration
         if (hydration !== undefined) {
-            const start = claimExpected(hydration, parent, 'each row start marker')
-            hydration.next.set(parent, start.nextSibling)
+            const start = claimMarker(hydration, parent, 'each row start marker')
             const dispose = group.track(
                 scope(() =>
                     withPathFrom(basePath, segment, () =>
@@ -91,8 +90,7 @@ export function each<T>(
                     ),
                 ),
             )
-            const end = claimExpected(hydration, parent, 'each row end marker')
-            hydration.next.set(parent, end.nextSibling)
+            const end = claimMarker(hydration, parent, 'each row end marker')
             return { start, end, dispose, cell, indexCell }
         }
         /* Shared detached-range create primitive: a `[ … ]` fragment built under `parent`'s

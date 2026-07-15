@@ -1,7 +1,7 @@
 import { effect } from '../effect.ts'
 import { AsyncCellError } from '../runtime/AsyncCellError.ts'
 import { CURRENT_BOUNDARY } from '../runtime/CURRENT_BOUNDARY.ts'
-import { claimExpected } from '../runtime/claimExpected.ts'
+import { claimMarker } from '../runtime/claimMarker.ts'
 import { OWNER } from '../runtime/OWNER.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { SuspenseSignal } from '../runtime/SuspenseSignal.ts'
@@ -202,7 +202,7 @@ export function tryBlock(
        throws too) discards the boundary and builds the catch fresh. */
     function firstHydrate(): void {
         const cursor = hydration as NonNullable<typeof hydration>
-        const open = claimExpected(cursor, parent, `abide:try:${id} open marker`)
+        const open = claimMarker(cursor, parent, `abide:try:${id} open marker`)
         try {
             adopt(open)
         } catch (error) {
@@ -217,11 +217,10 @@ export function tryBlock(
        `firstHydrate` rebuilds cold. */
     function adopt(open: Node): void {
         const cursor = hydration as NonNullable<typeof hydration>
-        cursor.next.set(parent, open.nextSibling ?? null)
-        /* The server emits the `[ … ]` range inside the boundary — claim `[` as the live
-           range start, then advance the cursor to the first content node. */
-        const start = claimExpected(cursor, parent, `abide:try:${id} range-open marker`) as Comment
-        cursor.next.set(parent, start.nextSibling ?? null)
+        /* The cursor already sits past `open` (claiming it advanced). The server emits the
+           `[ … ]` range inside the boundary — claim `[` as the live range start, advancing
+           the cursor to the first content node. */
+        const start = claimMarker(cursor, parent, `abide:try:${id} range-open marker`)
         /* Install the boundary around the whole adopt (build + marker claims); the shared
            strand-dispose guard in `adoptStrand` disposes the partial scope and rethrows on any
            failure, and this `finally` restores the boundary before the rethrow reaches
@@ -234,14 +233,8 @@ export function tryBlock(
             branch.adoptStrand(
                 (host) => renderTry(host),
                 () => {
-                    const end = claimExpected(
-                        cursor,
-                        parent,
-                        `abide:try:${id} range-close marker`,
-                    ) as Comment
-                    cursor.next.set(parent, end.nextSibling ?? null)
-                    const close = claimExpected(cursor, parent, `/abide:try:${id} close marker`)
-                    cursor.next.set(parent, close.nextSibling ?? null)
+                    const end = claimMarker(cursor, parent, `abide:try:${id} range-close marker`)
+                    const close = claimMarker(cursor, parent, `/abide:try:${id} close marker`)
                     const anchorNode = document.createTextNode('')
                     parent.insertBefore(anchorNode, close)
                     branch.anchor = anchorNode

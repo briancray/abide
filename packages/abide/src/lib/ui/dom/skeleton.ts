@@ -1,6 +1,6 @@
 import { walkAnchorOrder } from '../compile/walkAnchorOrder.ts'
 import { walkElementOrder } from '../compile/walkElementOrder.ts'
-import { claimChild } from '../runtime/claimChild.ts'
+import { claimRun } from '../runtime/claimRun.ts'
 import { HOLE_ATTRIBUTE } from '../runtime/HOLE_ATTRIBUTE.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { commentData } from './commentData.ts'
@@ -121,12 +121,7 @@ export function skeleton(parent: Node, html: string): SkeletonHoles {
     const hydration = RENDER.hydration
     const topLevel: Node[] = []
     if (hydration !== undefined) {
-        let node = claimChild(hydration, parent)
-        for (let count = 0; count < topLevelCount && node !== null; count += 1) {
-            topLevel.push(node)
-            node = node.nextSibling
-        }
-        hydration.next.set(parent, node)
+        claimRun(hydration, parent, topLevelCount, topLevel)
     } else {
         const children = source.childNodes
         /* Stage clones in a fragment ONLY for a live (connected) parent, where one

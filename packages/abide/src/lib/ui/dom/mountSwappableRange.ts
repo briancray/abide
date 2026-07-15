@@ -1,5 +1,6 @@
 import { effect } from '../effect.ts'
 import { CURRENT_PATH } from '../runtime/CURRENT_PATH.ts'
+import { parkCursor } from '../runtime/parkCursor.ts'
 import { RANGE_CLOSE, RANGE_OPEN } from '../runtime/RANGE_MARKER.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { scope } from '../runtime/scope.ts'
@@ -82,7 +83,7 @@ export function mountSwappableRange<Key>(
         const chosen = chosenFor(activeKey)
         const matchedEnd = matchingRangeClose(start)
         clearBetween(start, matchedEnd)
-        hydration.next.set(parent, matchedEnd)
+        parkCursor(hydration, parent, matchedEnd)
         end = openMarker(parent, RANGE_CLOSE)
         if (chosen !== undefined) {
             dispose = group.track(fillBefore(end, chosen))

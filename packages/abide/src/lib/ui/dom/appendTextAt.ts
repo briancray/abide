@@ -1,6 +1,7 @@
 import { rawHtmlString } from '../../shared/html.ts'
 import { snippetPayload } from '../../shared/snippet.ts'
 import { effect } from '../effect.ts'
+import { parkCursor } from '../runtime/parkCursor.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { SuspenseSignal } from '../runtime/SuspenseSignal.ts'
 import { appendSnippet } from './appendSnippet.ts'
@@ -31,7 +32,7 @@ export function appendTextAt(anchor: Node, read: () => unknown): void {
         const hydration = RENDER.hydration
         const had = hydration.next.has(parent)
         const saved = hydration.next.get(parent)
-        hydration.next.set(parent, anchor.nextSibling)
+        parkCursor(hydration, parent, anchor.nextSibling)
         appendText(parent, read)
         if (had) {
             hydration.next.set(parent, saved ?? null)
