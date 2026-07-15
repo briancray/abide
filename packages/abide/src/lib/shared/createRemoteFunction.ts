@@ -142,7 +142,10 @@ export function createRemoteFunction<Args, Return>(opts: {
            `raw`. There is no call-site options argument any more — all cache policy is read
            from the endpoint (`callable.cache`); per-call transport options live on `.raw`. */
         const key = keyForRemoteCall(method, url, args)
-        return cache.read(callable as RemoteFunction<Args, Return>, args as Args).then(
+        /* Thread the derived key into the smart read so readThrough reuses it rather than
+           re-deriving the identical string (callable.raw carries the same method/url); the
+           key already tags the rpc-error registry entries in the handlers below. */
+        return cache.read(callable as RemoteFunction<Args, Return>, args as Args, key).then(
             /* Capture the rejection into the rpc error registry (design Part 4) keyed by call
                identity, and clear it on success — the reactive `fn.error()` probe reads it. */
             (value) => {

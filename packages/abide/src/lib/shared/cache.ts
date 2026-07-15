@@ -176,10 +176,16 @@ its value is kept for display regardless of ttl, and ttl marks a staleness
 deadline (the next read past it revalidates in the background) instead of driving
 eviction. No call-site options (ADR-0020): all policy is read off the endpoint
 (fn.cache). Always a decoded RemoteFunction read (the callable carries .raw), so
-it returns Promise<Return>.
+it returns Promise<Return>. `key` is the caller's already-derived cache key (the
+callable keys its rpc-error registry with it) — threaded through so readThrough
+reuses it instead of re-deriving the identical string; omitted, readThrough derives.
 */
-function smartRead<Args, Return>(fn: RemoteFunction<Args, Return>, args?: Args): Promise<Return> {
-    return readThrough(fn, args, undefined, true) as Promise<Return>
+function smartRead<Args, Return>(
+    fn: RemoteFunction<Args, Return>,
+    args?: Args,
+    key?: string,
+): Promise<Return> {
+    return readThrough(fn, args, undefined, true, key) as Promise<Return>
 }
 cache.read = smartRead
 
@@ -196,6 +202,7 @@ function readThrough<Args, Return>(
     args: Args | undefined,
     options: CacheOptions | undefined,
     smart: boolean,
+    precomputedKey?: string,
 ): Promise<Return | Response> {
     /*
     A remote function carries the REMOTE_FUNCTION brand (set by
@@ -254,7 +261,12 @@ function readThrough<Args, Return>(
         return invokeProducer(store, fn as Producer<Args, Return>, args, effectiveOptions)
     }
     const remote = rawFn as RawRemoteFunction<Args>
-    const key = keyForRemoteCall(remote.method, remote.url, args)
+    /* Reuse the caller's derived key when it threaded one (the smart bare call already
+       computes it for its rpc-error registry, and remote is that callable's .raw — same
+       method/url, so the string is identical). Otherwise derive it — the public cache()
+       and the raw path pass none. Saves a query-encode / canonical-json stringify per read,
+       warm hits included. */
+    const key = precomputedKey ?? keyForRemoteCall(remote.method, remote.url, args)
     if (
         !effectiveOptions?.shared &&
         effectiveOptions?.ttl !== undefined &&
