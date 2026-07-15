@@ -125,6 +125,54 @@ describe('SSR Tier-2 barrier bakes resolved async-cell values into the HTML', ()
     })
 })
 
+/* ADR-0047: `{#await <asyncCell>}` awaits the cell's RESOLUTION instead of peeking its
+   `undefined`-while-pending value. The subject is passed raw and normalised by `$$awaitSubject`,
+   so a streaming `computed(getFoo())` cell shows its pending branch on SSR and its `{:then}` value
+   is baked into the stream — not `then(undefined)` (the probes `{#await rates}` crash). */
+describe('{#await <cell>} awaits the cell, not its peek (ADR-0047)', () => {
+    test('a streaming computed cell resolves into the {:then} branch on SSR', async () => {
+        const getFoo = () => new Promise((resolve) => setTimeout(() => resolve({ base: 'USD' }), 0))
+        const result = (await render(
+            `
+            <script>import { state } from '@abide/abide/ui/state'
+            const rates = state.computed(getFoo({ base: 'USD' }))</script>
+            {#await rates}<p>loading…</p>{:then data}<p>base {data.base}</p>{:catch e}<p>err</p>{/await}
+        `,
+            { getFoo },
+        )) as SsrRender
+        /* The shell ships the pending branch; the resolved value streams via the await entry. */
+        expect(result.html).toContain('loading…')
+        expect(result.awaits.length).toBe(1)
+        const entry = result.awaits[0] as NonNullable<(typeof result.awaits)[number]>
+        const value = await Promise.resolve(entry.promise())
+        const thenHtml = await entry.then(value)
+        expect(thenHtml).toContain('base USD') // NOT `base ` with undefined
+    })
+
+    test('an errored cell subject routes to the {:catch} branch, not a crash', async () => {
+        /* An `await` async cell (no trackedComputed promise-probe) so the rejection lands cleanly
+           in the cell's `error()` — the barrier settles it, then the await subject rejects. */
+        const boom = () => Promise.reject(new Error('down'))
+        const result = (await render(
+            `
+            <script>import { state } from '@abide/abide/ui/state'
+            const rates = state.computed(await boom())</script>
+            {#await rates}<p>loading…</p>{:then data}<p>{data.base}</p>{:catch e}<p>err {e.message}</p>{/await}
+        `,
+            { boom },
+        )) as SsrRender
+        const entry = result.awaits[0] as NonNullable<(typeof result.awaits)[number]>
+        let caught: unknown
+        try {
+            await Promise.resolve(entry.promise())
+        } catch (error) {
+            caught = error
+        }
+        const catchHtml = await entry.catch?.(caught)
+        expect(catchHtml).toContain('err down')
+    })
+})
+
 describe('SSR barrier is inert for components with no async cells', () => {
     /* Goal 3 regression: a component that declares no cell emits no barrier and stays a plain
        synchronous render (no spurious `await`, no async wrapper). */

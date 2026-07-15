@@ -94,6 +94,7 @@
         "./ui/dom/bindableProp": "./src/lib/ui/dom/bindableProp.ts",
         "./ui/dom/spreadAttrs": "./src/lib/ui/dom/spreadAttrs.ts",
         "./ui/dom/readCall": "./src/lib/ui/dom/readCall.ts",
+        "./ui/dom/awaitSubject": "./src/lib/ui/dom/awaitSubject.ts",
         "./ui/dom/readCell": "./src/lib/ui/dom/readCell.ts",
         "./ui/dom/writeCell": "./src/lib/ui/dom/writeCell.ts",
         "./ui/dom/cellPending": "./src/lib/ui/dom/cellPending.ts",

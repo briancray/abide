@@ -787,6 +787,17 @@ export function generateSSR(
             : generateStreamingAwait(node, target)
     }
 
+    /* The lowered `{#await X}` subject, normalised so a cell subject AWAITS its resolution
+       (ADR-0047): a BARE async-cell reference is passed RAW (not peeked to `$$readCell(cell)`)
+       and every subject is wrapped in `$$awaitSubject(...)`, which resolves a cell to a
+       promise-of-its-value and returns a plain promise/value unchanged — so the server awaits a
+       cell's settle and bakes the resolved `{:then}` into the stream, while `{#await getFoo()}`
+       stays byte-identical. Shared by the blocking, streaming, and flight-hoist emit sites. */
+    function awaitSubjectExpr(promiseCode: string): string {
+        const bare = promiseCode.trim()
+        return cellReadNames.has(bare) ? `$$awaitSubject(${bare})` : lowerExpression(promiseCode)
+    }
+
     /*
     A blocking await — `await`ed at its structural position in the async render pass and
     its resolved branch rendered INLINE into `target`, between the boundary markers. This
@@ -819,7 +830,7 @@ export function generateSSR(
         let code = `const ${id} = $$blockId($ctx);\n`
         code += `${target}.push("<!--abide:await:" + ${id} + "-->");\n`
         code += `try {\n`
-        code += `const ${resolved} = await (${hoistedPromise ?? lowerExpression(node.promise)});\n`
+        code += `const ${resolved} = await (${hoistedPromise ?? awaitSubjectExpr(node.promise)});\n`
         code += `{\n`
         code += `const ${plan.resolvedAs} = ${resolved};\n`
         code += withBindings(withShadow, plan.resolvedBindings, ssrBindingKind, () =>
@@ -891,7 +902,7 @@ export function generateSSR(
         const hoistedPromise = flightNameByNode.get(node)
         code +=
             `$awaits.push({ id: ${id}, ` +
-            `promise: () => (${hoistedPromise ?? lowerExpression(node.promise)}), ` +
+            `promise: () => (${hoistedPromise ?? awaitSubjectExpr(node.promise)}), ` +
             `then: ${settled(plan.resolvedAs, plan.resolvedBindings, plan.resolvedChildren)}, ` +
             `${catchProp}});\n`
         return code
@@ -939,7 +950,7 @@ export function generateSSR(
     const body = generateInto(rootNodes, '$out')
     let flightDecls = ''
     for (const [node, name] of flightNameByNode) {
-        flightDecls += `const ${name} = $$flight(() => (${lowerExpression(node.promise)}));\n`
+        flightDecls += `const ${name} = $$flight(() => (${awaitSubjectExpr(node.promise)}));\n`
     }
     /* Child-render flights emitted during the body walk above (ADR-0037 Phase 2) — appended after
        the await flights; both are independent prefix promise-starts, so order between them is free. */

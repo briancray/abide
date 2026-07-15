@@ -648,11 +648,21 @@ export function generateBuild(
             ? branchThunk(plan.pending)
             : 'undefined'
         return (
-            `$$awaitBlock(${parentVar}, $$nextBlockId(), () => (${lowerExpression(node.promise)}), ` +
+            `$$awaitBlock(${parentVar}, $$nextBlockId(), () => (${awaitSubjectExpr(node.promise)}), ` +
             `${pendingThunk}, ` +
             `${thenThunk}, ` +
             `${catchThunk}, ${before});\n`
         )
+    }
+
+    /* The lowered `{#await X}` subject, normalised so a cell subject AWAITS its resolution
+       (ADR-0047): a BARE async-cell reference is passed RAW (not peeked to `$$readCell(cell)`),
+       and every subject is wrapped in `$$awaitSubject(...)` — which resolves a cell to a
+       promise-of-its-value and returns a plain promise/value unchanged. So `{#await rates}`
+       (a cell) shows pending then the value, while `{#await getFoo()}` (a promise) is untouched. */
+    function awaitSubjectExpr(promiseCode: string): string {
+        const bare = promiseCode.trim()
+        return cellReadNames.has(bare) ? `$$awaitSubject(${bare})` : lowerExpression(promiseCode)
     }
 
     /* A branch's content as a void render thunk `(parent[, value]) => void` that
