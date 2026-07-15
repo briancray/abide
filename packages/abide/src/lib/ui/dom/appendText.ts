@@ -35,7 +35,15 @@ cold client render (on hydrate the warm-seed makes the cell `refreshing()`, not
 decided from the first resolved value.
 */
 // @documentation plumbing
-export function appendText(parent: Node, read: () => unknown, splitAlways = false): void {
+export function appendText(
+    parent: Node,
+    read: () => unknown,
+    splitAlways = false,
+    /* Create-mode insertion reference: content lands before this node instead of at the end of
+       `parent` (`null` appends). Lets `appendTextAt` mount at a skeleton anchor through this one
+       create path. Ignored on hydrate, where the cursor decides position. */
+    before: Node | null = null,
+): void {
     /* Probe the first value once, tolerating a suspend (a pending blocking read) — a suspended
        interpolation skips snippet/html detection and takes the text path, starting empty. */
     let probe: unknown
@@ -51,11 +59,19 @@ export function appendText(parent: Node, read: () => unknown, splitAlways = fals
     /* A snippet call (`{row(args)}`) mounts its builder; a `html\`\`` value inserts
        raw markup; everything else is escaped text — decided by the first value. */
     if (!suspended && typeof snippetPayload(probe) === 'function') {
-        appendSnippet(parent, read)
+        if (before === null) {
+            appendSnippet(parent, read)
+            return
+        }
+        /* Positioned mount: buffer the snippet in a fragment, then splice it in at `before` —
+           `appendSnippet` itself only appends, and its markers track position from then on. */
+        const fragment = document.createDocumentFragment()
+        appendSnippet(fragment, read)
+        parent.insertBefore(fragment, before)
         return
     }
     if (!suspended && rawHtmlString(probe) !== undefined) {
-        appendRawHtml(parent, read)
+        appendRawHtml(parent, read, before)
         return
     }
     const hydration = RENDER.hydration
@@ -87,7 +103,7 @@ export function appendText(parent: Node, read: () => unknown, splitAlways = fals
         return
     }
     const node = document.createTextNode('')
-    parent.appendChild(node)
+    parent.insertBefore(node, before)
     effect(() => {
         node.data = readTextOrSuspend(read)
     })
@@ -95,7 +111,7 @@ export function appendText(parent: Node, read: () => unknown, splitAlways = fals
 
 /* Raw-markup interpolation: parse the branded string into nodes behind an anchor,
    re-parsing on change; on hydrate adopt the server markup between its markers. */
-function appendRawHtml(parent: Node, read: () => unknown): void {
+function appendRawHtml(parent: Node, read: () => unknown, before: Node | null): void {
     const hydration = RENDER.hydration
     const markup = (): string => rawHtmlString(read()) ?? ''
     const anchor = document.createTextNode('')
@@ -137,7 +153,7 @@ function appendRawHtml(parent: Node, read: () => unknown): void {
         return
     }
 
-    parent.appendChild(anchor)
+    parent.insertBefore(anchor, before)
     effect(() => {
         set(markup())
     })

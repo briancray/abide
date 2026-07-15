@@ -190,9 +190,7 @@ export function tryBlock(
         firstHydrate()
         return
     }
-    const anchorNode = document.createTextNode('')
-    branch.anchor = anchorNode
-    parent.insertBefore(anchorNode, before)
+    branch.parkAnchor(before)
     showTry()
 
     /* The first run when hydrating: claim the boundary's open marker, adopt the guarded
@@ -234,9 +232,7 @@ export function tryBlock(
                 () => {
                     const end = claimMarker(cursor, parent, `abide:try:${id} range-close marker`)
                     const close = claimMarker(cursor, parent, `/abide:try:${id} close marker`)
-                    const anchorNode = document.createTextNode('')
-                    parent.insertBefore(anchorNode, close)
-                    branch.anchor = anchorNode
+                    branch.parkAnchor(close)
                     return { start, end }
                 },
             )
@@ -259,9 +255,7 @@ export function tryBlock(
                 if (!hasCatch) {
                     throw error
                 }
-                const anchorNode = document.createTextNode('')
-                branch.anchor = anchorNode
-                parent.insertBefore(anchorNode, after)
+                branch.parkAnchor(after)
                 showCatch(error)
             },
         )

@@ -173,9 +173,7 @@ export function awaitBlock(
             parent.insertBefore(start, firstAdopted ?? close)
             const end = document.createComment(RANGE_CLOSE)
             parent.insertBefore(end, close)
-            const anchorNode = document.createTextNode('')
-            parent.insertBefore(anchorNode, close)
-            branch.anchor = anchorNode
+            branch.parkAnchor(close)
             return { start, end }
         })
     }
@@ -193,9 +191,7 @@ export function awaitBlock(
             open,
             `/abide:await:${id}`,
             (after) => {
-                const anchorNode = document.createTextNode('')
-                branch.anchor = anchorNode
-                parent.insertBefore(anchorNode, after)
+                branch.parkAnchor(after)
                 render(result())
             },
         )
@@ -293,9 +289,7 @@ export function awaitBlock(
                 firstHydrate()
                 return
             }
-            const anchorNode = document.createTextNode('')
-            branch.anchor = anchorNode
-            parent.insertBefore(anchorNode, before)
+            branch.parkAnchor(before)
         }
         /* Read the promise every subsequent run so an invalidate re-runs the block. ONLY this
            read is tracked (the branch builds untracked via `scope`), so the block re-runs only
