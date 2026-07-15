@@ -22,20 +22,26 @@ Highlights a source snippet via shiki and returns the rendered HTML.
 Server-only — the bundler swaps the import on the client to a remote
 proxy, so the shiki runtime never ships to the browser. CodeBlock calls
 it as a bare smart read, so the SSR pass writes the highlighted HTML into
-the cache snapshot and the client hydrates without a second fetch. Same
-code+lang across pages share one cache entry.
+the cache snapshot and the client hydrates without a second fetch.
 
-POST so the `code` payload rides the request body, not a long query string.
-Any inline (bare smart read) call seeds the SSR warm snapshot regardless of
-method, so the client hydrates the highlighted HTML warm instead of refetching
-every code block — seeding, unlike unprompted replay (invalidate/refresh, still
-GET-only), doesn't need an idempotent verb.
+POST so the `code` payload rides the request body, not a long query string —
+the method is a transport choice, not a mutation: highlighting is a pure
+function of (code, lang). A mutating rpc still accepts a `cache` policy, so
+`shared` memoises the rendered HTML in the process store — same code+lang
+across every page share one entry, and shiki runs once per snippet rather than
+once per request. Any inline (bare smart read) call also seeds the SSR warm
+snapshot regardless of method, so the client hydrates the highlighted HTML warm
+instead of refetching every code block — seeding, unlike unprompted replay
+(invalidate/refresh, still GET-only), doesn't need an idempotent verb.
 */
-export const highlightCode = POST(async ({ code, lang }: { code: string; lang: Lang }) => {
-    const highlighter = await getHighlighter()
-    const html = highlighter.codeToHtml(code, {
-        lang: resolveLang(lang),
-        theme: 'github-light',
-    })
-    return json({ html })
-})
+export const highlightCode = POST(
+    async ({ code, lang }: { code: string; lang: Lang }) => {
+        const highlighter = await getHighlighter()
+        const html = highlighter.codeToHtml(code, {
+            lang: resolveLang(lang),
+            theme: 'github-light',
+        })
+        return json({ html })
+    },
+    { cache: { shared: true } },
+)

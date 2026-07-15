@@ -94,7 +94,8 @@ export function defineRpc<Args, Return>(
            alongside the 200. Absent on the fail-open path — the surface then omits the error
            responses exactly as before. */
         errorJsonSchemas?: ErrorJsonSchemas
-        /* Endpoint cache policy (ADR-0020) — read helpers only; readThrough's bottom layer. */
+        /* Endpoint cache policy (ADR-0020) — any method (a mutating rpc may cache too);
+           readThrough's bottom layer. */
         cache?: CachePolicy<Args>
         /* Endpoint stream policy (ADR-0020) — streaming read helpers only; replay depth `n`. */
         stream?: StreamPolicy

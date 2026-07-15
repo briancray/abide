@@ -74,30 +74,33 @@ type RpcSchemas = {
 
 /*
 Options every rpc overload accepts: the `schemas` namespace, the `clients` surface
-flags (browser/mcp/cli), the same-origin
-CSRF exemption (`crossOrigin`), the pre-parse body-byte ceiling
-(`maxBodySize`), and the per-surface handler `timeout` (ms). Read helpers add the
-endpoint `cache`/`stream` policy (ADR-0020); mutating helpers add neither — a write has
-no replayable value to retain or stream. The kind-scoping is what makes `POST(fn, { cache })`
-a compile error rather than a silent no-op. The single canonical source both `defineRpc`
-and `RpcRegistryEntry` project from.
+flags (browser/mcp/cli), the same-origin CSRF exemption (`crossOrigin`), the pre-parse
+body-byte ceiling (`maxBodySize`), the per-surface handler `timeout` (ms), and the
+endpoint `cache` policy (ADR-0020). `cache` is shared by both kinds: a mutating rpc
+whose method is a transport choice (a POST that carries a large `code` payload in its
+body yet is a pure function of its args) still coalesces/memoises like a read — the
+runtime already routes `fn.cache` through `readThrough` regardless of method. What stays
+read-only is `stream` (`RpcReadOpts`) — a write has no replayable value to stream.
+Generic over `Args` so `cache.tags`'s `(args) => string[]` form is typed against the
+rpc's own argument shape. The single canonical source both `defineRpc` and
+`RpcRegistryEntry` project from.
 */
-type RpcSharedOpts = {
+type RpcSharedOpts<Args> = {
     schemas?: RpcSchemas
     clients?: Partial<ClientFlags>
     crossOrigin?: boolean
     maxBodySize?: number
     timeout?: number
+    cache?: CachePolicy<Args>
 }
 
 /*
-Read-helper (GET/HEAD) options: the shared base plus the endpoint `cache` policy
-(`ttl`/`tags`/`throttle`/`debounce`/`shared`) and `stream` policy (`n`, replay depth).
-Generic over `Args` so `cache.tags`'s `(args) => string[]` form is typed against the
-rpc's own argument shape.
+Read-helper (GET/HEAD) options: the shared base (including `cache`) plus the endpoint
+`stream` policy (`n`, replay depth) — the one option kind-scoped to replayable reads,
+since a write has no replayable stream. Generic over `Args`, threaded into the shared
+base so `cache.tags`'s `(args) => string[]` form is typed against the rpc's own args.
 */
-type RpcReadOpts<Args> = RpcSharedOpts & {
-    cache?: CachePolicy<Args>
+type RpcReadOpts<Args> = RpcSharedOpts<Args> & {
     stream?: StreamPolicy
 }
 
@@ -147,11 +150,15 @@ export type RpcHelper = {
 }
 
 /*
-The mutating helpers (POST/PUT/PATCH/DELETE). The base opts is the shared `RpcSharedOpts`
-(no `cache`/`stream`) — coalesce-only is the method default and a write has no replayable
-value to retain or stream — which is what makes `cache`/`stream` a compile error here while
-they stay legal on the read helpers (`RpcReadOpts`) — the kind-scoping. Overloads mirror the read helpers by argument source
-(multipart-upload, schema'd, schemaless-with-opts, bare).
+The mutating helpers (POST/PUT/PATCH/DELETE). The base opts is the shared `RpcSharedOpts`,
+which carries `cache` — a mutating rpc still accepts a cache policy (a POST that is a pure
+function of its args, using the body only to carry a large payload, coalesces/memoises like
+a read; the runtime honours `fn.cache` regardless of method). Note the method default for a
+write stays coalesce-only: a no-ttl write is dropped on settle (the mutation idiom), so
+retention across the in-flight window needs an explicit `cache.ttl` (or `shared`). Only
+`stream` stays read-only (`RpcReadOpts`) — a write has no replayable stream — so `POST(fn,
+{ stream })` remains a compile error while `POST(fn, { cache })` is legal. Overloads mirror
+the read helpers by argument source (multipart-upload, schema'd, schemaless-with-opts, bare).
 */
 export type MutatingRpcHelper = {
     <
@@ -163,16 +170,16 @@ export type MutatingRpcHelper = {
             args: StandardSchemaV1.InferOutput<InputSchema> &
                 StandardSchemaV1.InferOutput<FilesSchema>,
         ) => R | Promise<R>,
-        opts: RpcSharedOpts & {
+        opts: RpcSharedOpts<StandardSchemaV1.InferInput<InputSchema>> & {
             schemas: { input: InputSchema; files: FilesSchema; output?: StandardSchemaV1 }
         },
     ): RemoteFunction<StandardSchemaV1.InferInput<InputSchema>, SuccessBody<R>, InferredErrors<R>>
     <R extends Response, InputSchema extends StandardSchemaV1 = StandardSchemaV1>(
         fn: (args: StandardSchemaV1.InferOutput<InputSchema>) => R | Promise<R>,
-        opts: RpcSharedOpts & {
+        opts: RpcSharedOpts<StandardSchemaV1.InferInput<InputSchema>> & {
             schemas: { input: InputSchema; output?: StandardSchemaV1 }
         },
     ): RemoteFunction<StandardSchemaV1.InferInput<InputSchema>, SuccessBody<R>, InferredErrors<R>>
-    <F extends RpcFn>(fn: F, opts: RpcSharedOpts): RpcOf<F>
+    <F extends RpcFn>(fn: F, opts: RpcSharedOpts<RpcArgs<F>>): RpcOf<F>
     <F extends RpcFn>(fn: F): RpcOf<F>
 }

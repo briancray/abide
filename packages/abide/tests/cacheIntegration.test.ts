@@ -105,3 +105,59 @@ describe('cache() over a real rpc in a request scope', () => {
         expect(status).toBe(200)
     })
 })
+
+/*
+A mutating rpc still accepts a `cache` policy (the method is a transport choice — a POST that
+carries a large body yet is a pure function of its args). An explicit `shared` is a deliberate
+"memoise across requests" opt-in that defeats the write's coalesce-only default (drop-on-settle,
+the mutation idiom), so the entry lives in the process store with the default Infinity ttl. A
+write with NO policy stays coalesce-only, so a fresh request re-runs the handler.
+*/
+describe('a mutating rpc with cache: { shared } memoises across requests', () => {
+    const persistentSharedStore = createCacheStore()
+    let sharedCalls = 0
+    let plainCalls = 0
+    const highlightShared = defineRpc(
+        'POST',
+        '/rpc/highlight-shared',
+        () => json({ n: ++sharedCalls }),
+        { cache: { shared: true } },
+    )
+    const highlightPlain = defineRpc('POST', '/rpc/highlight-plain', () =>
+        json({ n: ++plainCalls }),
+    )
+
+    beforeAll(() => {
+        cacheStoreSlot.resolver = () => requestContext.getStore()?.cache
+        sharedCacheStoreSlot.resolver = () => persistentSharedStore
+    })
+    afterAll(() => {
+        cacheStoreSlot.resolver = undefined
+        sharedCacheStoreSlot.resolver = undefined
+    })
+
+    test('shared: true keeps the entry across requests — the handler runs once', async () => {
+        sharedCalls = 0
+        const readOnce = (req: Request) =>
+            runWithRequestScope(req, options, async () => json(await cache(highlightShared))).then(
+                (response) => response.json(),
+            )
+
+        expect(await readOnce(new Request('https://test.local/a'))).toEqual({ n: 1 })
+        // Second, separate request reads the process-store entry warm — no re-run.
+        expect(await readOnce(new Request('https://test.local/b'))).toEqual({ n: 1 })
+        expect(sharedCalls).toBe(1)
+    })
+
+    test('a write with no cache policy stays coalesce-only — re-runs per request', async () => {
+        plainCalls = 0
+        const readOnce = (req: Request) =>
+            runWithRequestScope(req, options, async () => json(await cache(highlightPlain))).then(
+                (response) => response.json(),
+            )
+
+        expect(await readOnce(new Request('https://test.local/a'))).toEqual({ n: 1 })
+        expect(await readOnce(new Request('https://test.local/b'))).toEqual({ n: 2 })
+        expect(plainCalls).toBe(2)
+    })
+})

@@ -204,8 +204,8 @@ removed form throws a migration error.
 - `abide/server/GET` — read helper; `export const x = GET(fn, opts?)`. Adds
   `cache`/`stream` opts. Read-only, so a typed input auto-exposes it to MCP + CLI.
 - `abide/server/HEAD` — read helper, same shape as `GET` (headers only, no body).
-- `abide/server/POST` — mutating helper; `RpcSharedOpts` only (`cache`/`stream`
-  are a compile error). Never auto-exposes to MCP.
+- `abide/server/POST` — mutating helper; accepts `cache` (a body-carrying-but-pure
+  rpc caches like a read), but `stream` is a compile error. Never auto-exposes to MCP.
 - `abide/server/PUT` — mutating helper (idempotent replace); as `POST`.
 - `abide/server/PATCH` — mutating helper (partial update); as `POST`.
 - `abide/server/DELETE` — mutating helper (removal); as `POST`.
