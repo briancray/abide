@@ -1,12 +1,6 @@
-import { rawHtmlString } from '../../shared/html.ts'
-import { snippetPayload } from '../../shared/snippet.ts'
-import { effect } from '../effect.ts'
+import { advanceClaim } from '../runtime/advanceClaim.ts'
 import { RENDER } from '../runtime/RENDER.ts'
-import { SuspenseSignal } from '../runtime/SuspenseSignal.ts'
-import { appendSnippet } from './appendSnippet.ts'
 import { appendText } from './appendText.ts'
-import { parseRawNodes } from './parseRawNodes.ts'
-import { readTextOrSuspend } from './readTextOrSuspend.ts'
 
 /*
 A reactive `{expr}` interpolation mounted at a skeleton anchor comment (`<!--a-->`), used
@@ -20,18 +14,19 @@ The anchor is KEPT (in both the SSR markup and the client DOM, like control flow
 `<!--[-->` range markers), so server and client render identical markup — `appendTextAt`
 never strips it.
 
-Hydrate delegates to `appendText` with the cursor temporarily pointed at the anchor's
-content (the server rendered `<!--a-->value`, so the value is the anchor's next sibling),
-reusing its text-split / snippet / raw-html claiming.
+Both paths delegate to `appendText`: hydrate with the cursor temporarily pointed at the
+anchor's content (the server rendered `<!--a-->value`, so the value is the anchor's next
+sibling), create with the anchor's next sibling as the insertion reference — one
+text-split / snippet / raw-html implementation, positioned two ways.
 */
 // @documentation plumbing
 export function appendTextAt(anchor: Node, read: () => unknown): void {
     const parent = anchor.parentNode as Node
-    if (RENDER.hydration !== undefined) {
-        const hydration = RENDER.hydration
+    const hydration = RENDER.hydration
+    if (hydration !== undefined) {
         const had = hydration.next.has(parent)
         const saved = hydration.next.get(parent)
-        hydration.next.set(parent, anchor.nextSibling)
+        advanceClaim(hydration, parent, anchor)
         appendText(parent, read)
         if (had) {
             hydration.next.set(parent, saved ?? null)
@@ -40,47 +35,5 @@ export function appendTextAt(anchor: Node, read: () => unknown): void {
         }
         return
     }
-
-    /* Probe once, tolerating a suspend (a pending blocking read): a suspended interpolation skips
-       snippet/html detection and takes the text path, starting empty until the value resolves. */
-    let first: unknown
-    let suspended = false
-    try {
-        first = read()
-    } catch (signal) {
-        if (!(signal instanceof SuspenseSignal)) {
-            throw signal
-        }
-        suspended = true
-    }
-    if (!suspended && typeof snippetPayload(first) === 'function') {
-        const fragment = document.createDocumentFragment()
-        appendSnippet(fragment, read)
-        parent.insertBefore(fragment, anchor.nextSibling)
-        return
-    }
-    if (!suspended && rawHtmlString(first) !== undefined) {
-        let nodes: Node[] = []
-        effect(() => {
-            for (const node of nodes) {
-                parent.removeChild(node)
-            }
-            nodes = parseRawNodes(parent, rawHtmlString(read()) ?? '')
-            /* Insert the fresh markup just after the anchor (its live re-insertion point). */
-            const after = anchor.nextSibling
-            for (const node of nodes) {
-                parent.insertBefore(node, after)
-            }
-        })
-        return
-    }
-    const node = document.createTextNode('')
-    parent.insertBefore(node, anchor.nextSibling)
-    /* Text/suspend handling shared with `appendText`'s bind via `readTextOrSuspend`: stringify the
-       value, show '' while a blocking read is pending (re-running on settle, since the read tracked
-       its cell), and coerce nullish to '' (never the literal "undefined") — keeping this create path
-       congruent with the hydrate path above, which delegates to `appendText`. */
-    effect(() => {
-        node.data = readTextOrSuspend(read)
-    })
+    appendText(parent, read, false, anchor.nextSibling)
 }
