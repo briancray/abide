@@ -13,8 +13,9 @@ const chatClosed = state.computed(chat.done())
 
 /* Mutation idiom: a write is coalesce-only by default (retains nothing), so the
    bare call buys double-submit coalescing plus probe visibility —
-   createEcho.pending() is true from anywhere while in flight. No call options
-   (ADR-0020): a POST carries no cache policy at all. */
+   createEcho.pending() is true from anywhere while in flight, with no cache
+   policy declared. A POST may still opt into one (ADR-0020) when it is a pure
+   function of its args; createEcho isn't, so it stays coalesce-only. */
 const submit = (args: { message: string }) => createEcho(args)
 let message = state('hello probes')
 let echoed = state('')
