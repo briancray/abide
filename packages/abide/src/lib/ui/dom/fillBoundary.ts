@@ -1,3 +1,4 @@
+import { advanceClaim } from '../runtime/advanceClaim.ts'
 import { RENDER } from '../runtime/RENDER.ts'
 import { scope } from '../runtime/scope.ts'
 import type { UiProps } from '../runtime/types/UiProps.ts'
@@ -31,7 +32,7 @@ export function fillBoundary(
     }
     /* Hydrate: adopt the server content between the markers in place. */
     const parent = open.parentNode as Node
-    hydration.next.set(parent, open.nextSibling)
+    advanceClaim(hydration, parent, open)
     const scoped = withScope(() => scope(() => build(parent, props)))
     return { dispose: disposeRange(scoped, open, close) }
 }

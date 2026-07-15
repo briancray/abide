@@ -1,4 +1,5 @@
 import { effect } from '../effect.ts'
+import { advanceClaim } from '../runtime/advanceClaim.ts'
 import { CURRENT_PATH } from '../runtime/CURRENT_PATH.ts'
 import { claimChild } from '../runtime/claimChild.ts'
 import { claimExpected } from '../runtime/claimExpected.ts'
@@ -83,7 +84,7 @@ export function each<T>(
         const hydration = RENDER.hydration
         if (hydration !== undefined) {
             const start = claimExpected(hydration, parent, 'each row start marker')
-            hydration.next.set(parent, start.nextSibling)
+            advanceClaim(hydration, parent, start)
             const dispose = group.track(
                 scope(() =>
                     withPathFrom(basePath, segment, () =>
@@ -92,7 +93,7 @@ export function each<T>(
                 ),
             )
             const end = claimExpected(hydration, parent, 'each row end marker')
-            hydration.next.set(parent, end.nextSibling)
+            advanceClaim(hydration, parent, end)
             return { start, end, dispose, cell, indexCell }
         }
         /* Shared detached-range create primitive: a `[ … ]` fragment built under `parent`'s
