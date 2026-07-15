@@ -555,12 +555,13 @@ export function router(
                             disposeFrom(0)
                             rootBoundary = undefined
                             mountedPageKey = undefined
-                            /* The cell/doc warm partitions the failed pass consumed are already
-                               restored — `runHydrationPass` re-seeds them on a throw — so this cold
-                               rebuild re-adopts the SSR-resolved values instead of refetching (a cold
-                               refetch would leave blocking `await` cells pending, and a top-level
-                               `$$readCell` of one sits in no suspense region — its SuspenseSignal
-                               would escape this rebuild and kill the mount). */
+                            /* The cell/doc warm seeds the failed pass adopted are still in place —
+                               a pass only MARKS them, deleting on a clean exit (`consumeSeed`,
+                               ADR-0048) — so this cold rebuild re-adopts the SSR-resolved values
+                               instead of refetching (a cold refetch would leave blocking `await`
+                               cells pending, and a top-level `$$readCell` of one sits in no suspense
+                               region — its SuspenseSignal would escape this rebuild and kill the
+                               mount). */
                             buildFrom(0, chainKeys, layoutViews, pageView, key, params, false)
                         }
                         /* Reapply the destination entry's scroll once its DOM exists — a

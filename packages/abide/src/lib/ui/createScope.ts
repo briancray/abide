@@ -4,6 +4,7 @@ import { computed } from './computed.ts'
 import { effect } from './effect.ts'
 import { linked } from './linked.ts'
 import { CURRENT_PATH } from './runtime/CURRENT_PATH.ts'
+import { consumeSeed } from './runtime/consumeSeed.ts'
 import { createDoc } from './runtime/createDoc.ts'
 import { DOC_SEED } from './runtime/DOC_SEED.ts'
 import type { Cell } from './runtime/types/Cell.ts'
@@ -50,13 +51,13 @@ export function createScope(
        on the client, so a uuid/timestamp/random would diverge from the SSR HTML. The server snapshot
        for this scope's render-path id is decoded here and consumed by `replace` on each slot's FIRST
        write (the eager init), keeping the server value while the throwaway init is discarded. One-shot
-       — deleted on read so an SPA re-nav to the same path re-inits fresh; empty on the server. */
+       via `consumeSeed` (two-phase, ADR-0048) — an SPA re-nav to the same path re-inits fresh, and a
+       hydration-desync throw hands the seed to the cold rebuild; empty on the server. */
     let pendingSeed: Map<string, unknown> | undefined
     /* `DOC_SEED` is populated only on the client by `startClient` (empty on the server), so the read
        needs no window guard — it mirrors the async-cell warm read. */
-    const encodedSeed = DOC_SEED[id]
+    const encodedSeed = consumeSeed(DOC_SEED, id)
     if (encodedSeed !== undefined) {
-        delete DOC_SEED[id]
         try {
             pendingSeed = new Map(
                 Object.entries(decodeRefJson(encodedSeed) as Record<string, unknown>),

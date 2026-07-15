@@ -12,6 +12,7 @@ import { activePendingCells } from '../activePendingCells.ts'
 import type { Scope } from '../types/Scope.ts'
 import { CELL_SEED } from './CELL_SEED.ts'
 import { CURRENT_SCOPE } from './CURRENT_SCOPE.ts'
+import { consumeSeed } from './consumeSeed.ts'
 import { createEffectNode } from './createEffectNode.ts'
 import { createSignalNode } from './createSignalNode.ts'
 import { readNode } from './readNode.ts'
@@ -261,15 +262,15 @@ export function createAsyncCell(
        only in effect (the store is only ever populated by `startClient`, so it's empty on the
        server — no `window` sniff needed); a decode failure falls through to a cold run. */
     if (warmKey !== undefined) {
-        const seeded = CELL_SEED[warmKey]
+        /* One-shot via `consumeSeed` (two-phase, ADR-0048): a LATER fresh mount at the same
+           render-path can't warm-adopt this boot-time snapshot. `scope.id` is the route PATTERN
+           (params-independent), so an SPA navigation `/products/42`→`/products/99` — or a
+           back-nav that rebuilds the SSR page — recomputes the identical warmKey; unconsumed,
+           the new cell would render `/products/42`'s stale value until revalidation. During a
+           hydration pass the consume only MARKS, so a desync throw hands the seed to the cold
+           rebuild instead of losing it. */
+        const seeded = consumeSeed(CELL_SEED, warmKey)
         if (seeded !== undefined) {
-            /* One-shot: consume the seed so a LATER fresh mount at the same render-path can't
-               warm-adopt this boot-time snapshot. `scope.id` is the route PATTERN (params-
-               independent), so an SPA navigation `/products/42`→`/products/99` — or a back-nav
-               that rebuilds the SSR page — recomputes the identical warmKey; without deleting,
-               the new cell would render `/products/42`'s stale value until revalidation. The seed
-               only ever hydrates the initial SSR render, where each cell is constructed once. */
-            delete CELL_SEED[warmKey]
             try {
                 acceptValue(decodeRefJson(seeded))
             } catch {
