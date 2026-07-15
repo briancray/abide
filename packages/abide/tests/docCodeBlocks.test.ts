@@ -60,10 +60,10 @@ function fencedBlocks(doc: string): Block[] {
    throwaway project — point them at the local stubs below so the block still resolves. */
 function normalizeAliases(code: string): string {
     return code
-        .replace("'$server/rpc/getMessages'", "'./getMessages.ts'")
-        .replace("'$server/rpc/sendMessage'", "'./sendMessage.ts'")
-        .replace("'$server/rpc/countToday'", "'./countToday.ts'")
-        .replace("'$server/sockets/chat'", "'./chat.ts'")
+        .replace(/'\$server\/rpc\/getMessages(?:\.ts)?'/g, "'./getMessages.ts'")
+        .replace(/'\$server\/rpc\/sendMessage(?:\.ts)?'/g, "'./sendMessage.ts'")
+        .replace(/'\$server\/rpc\/countToday(?:\.ts)?'/g, "'./countToday.ts'")
+        .replace(/'\$server\/sockets\/chat(?:\.ts)?'/g, "'./chat.ts'")
         .replace("'$ui/Card.abide'", "'./Card.abide'")
         .replace("'$ui/Avatar.abide'", "'./Avatar.abide'")
         .replace("'$ui/Message.abide'", "'./Message.abide'")
@@ -92,9 +92,9 @@ export const chat = socket<{ user: string; text: string }>()
     'Card.abide': `<script>
 import { props } from '@abide/abide/ui/props'
 import type { Snippet } from '@abide/abide/shared/snippet'
-const { children } = props<{ children?: Snippet }>()
+const { tone = 'plain', children } = props<{ tone?: string; children?: Snippet }>()
 </script>
-<div>{#if children}{children()}{/if}</div>
+<div class:accent={tone === 'accent'}>{#if children}{children()}{/if}</div>
 `,
     'Avatar.abide': `<script>
 import { props } from '@abide/abide/ui/props'
@@ -111,9 +111,11 @@ const { message, children } = props<{ message: { id: string; user: string; text:
 `,
 }
 
-/* A loose `../db.ts` for the ts blocks (`recentMessages`) — the RPC helpers under test are
-   real; only the app's own data layer is stubbed. */
-const DB_STUB = `export const recentMessages = (limit: number): Promise<Array<{ id: string; user: string; text: string }>> => Promise.resolve([])
+/* A loose `../db.ts` for the ts blocks (`listMessages` / `appendMessage`) — the RPC helpers
+   under test are real; only the app's own data layer is stubbed. */
+const DB_STUB = `type Message = { id: string; user: string; text: string }
+export const listMessages = (limit: number): Promise<Message[]> => Promise.resolve([])
+export const appendMessage = (text: string): Promise<Message> => Promise.resolve({ id: '', user: '', text })
 `
 
 /* A throwaway project holding `files`, with the real strict app config (`@abide/abide/tsconfig`)

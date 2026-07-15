@@ -125,14 +125,14 @@ async function send() {
 }
 
 // an attach directive: run against the element, return a teardown
-function autofocus(node) {
+function autofocus(node: HTMLElement) {
   node.focus()
   return () => {}
 }
 
 // the get/set pair for a derived two-way binding
 function get() { return draft.toUpperCase() }
-function set(next) { draft = next }
+function set(next: string) { draft = next }
 </script>
 
 <header class="row" class:live={live} style:opacity={live ? 1 : 0.5} {...{ id: 'top' }}>
@@ -180,7 +180,7 @@ function set(next) { draft = next }
 {:then messages}
   <p>{messages.length} messages</p>
 {:catch failure}
-  <p>{failure.message}</p>
+  <p>{failure instanceof Error ? failure.message : String(failure)}</p>
 {:finally}
   <hr />
 {/await}
@@ -200,7 +200,7 @@ function set(next) { draft = next }
     {#for await frame of chat}
       <li>{frame.text}</li>
     {:catch streamError}
-      <li>{streamError.message}</li>
+      <li>{streamError instanceof Error ? streamError.message : String(streamError)}</li>
     {/for}
   </ul>
 {:else if unread > 0}
@@ -214,12 +214,12 @@ function set(next) { draft = next }
     <p>{html('<em>trusted</em>')}</p>
   </Card>
 {:catch renderError}
-  <p>card failed: {renderError.message}</p>
+  <p>card failed: {renderError instanceof Error ? renderError.message : String(renderError)}</p>
 {:finally}
   <footer>room {room}</footer>
 {/try}
 
-{#snippet row(message)}
+{#snippet row(message: { id: string; text: string })}
   <li data-id={message.id}>{message.text}</li>
 {/snippet}
 <ul>{#if getMessages({ limit })}{row({ id: '0', text: 'pinned' })}{/if}</ul>
@@ -235,7 +235,8 @@ The child component renders its passed content at `{children()}`, with a fallbac
 ```html
 <script>
 import { props } from '@abide/abide/ui/props'
-const { tone = 'plain' } = props()
+import type { Snippet } from '@abide/abide/shared/snippet'
+const { tone = 'plain', children } = props<{ tone?: string; children?: Snippet }>()
 </script>
 
 <section class:accent={tone === 'accent'}>
