@@ -1,3 +1,5 @@
+import { SEEDS } from '../../shared/SEEDS.ts'
+
 /* The await-resume manifest: the resolved value (or error) of each streamed
    `await` block, keyed by its boundary id. The SSR stream serializes each entry
    alongside its fragment; the client registers it (via the inline swap script),
@@ -11,13 +13,9 @@
    stream-swap script — vanilla, running before the bundle and the codec load — able
    to register an entry without the decoder.
 
-   Backed by `globalThis.__abideResume` so the inline stream-swap script and the
-   framework share one store: whoever runs first creates it, the other adopts the
-   same reference. */
+   The `resume` partition of the one `__abideSeeds` manifest (ADR-0048, see SEEDS) —
+   the inline scripts and the framework share the same reference. */
 export type ResumeEntry = { ok: true; value: unknown } | { ok: false; error: unknown }
 
-const globalScope = globalThis as { __abideResume?: Record<string, string> }
-globalScope.__abideResume ??= {}
-
 // @documentation plumbing
-export const RESUME: Record<string, string> = globalScope.__abideResume
+export const RESUME: Record<string, string> = SEEDS.resume

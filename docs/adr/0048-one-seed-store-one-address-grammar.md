@@ -1,7 +1,14 @@
 # ADR-0048: One hydration seed store, one address grammar, two-phase consume
 
-**Status:** proposed (2026-07-15). Follows the hydration-pass consolidation (runHydrationPass /
-claim verbs / discardAndRebuild / sole `mountChild` adopter, branch `refactor/hydration-pass`).
+**Status:** accepted — shipped in three slices (2026-07-15): two-phase consume
+(`consumeSeed`/`SEED_MARKS`, `warmSeedBackup` deleted), one degradation site
+(`encodeSeedValue`), and the one kind-partitioned `__abideSeeds` manifest (`SEEDS`, the four
+passive globals collapsed; the per-kind module names stay as partition views). The address
+module was NOT built: tracing showed the three id grammars are right-parse-unique today
+(digit-terminal counters) and kind partitions remove the cross-kind namespace entirely, so a
+grammar module would add a layer without deleting one — revisit only if a new id kind must
+share a partition. Follows the hydration-pass consolidation (runHydrationPass / claim verbs /
+discardAndRebuild / sole `mountChild` adopter).
 Depends on the render-path identity of [ADR-0033](0033-render-path-survives-a-renders-awaits.md);
 respects the two-codec split of [ADR-0011](0011-warm-seed-uses-two-codecs.md) and the per-phase
 timing guards of [ADR-0040](0040-hydration-timing-guards-stay-distinct-by-phase.md).
