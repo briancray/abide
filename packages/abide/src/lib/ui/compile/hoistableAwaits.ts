@@ -78,7 +78,7 @@ function walkNode(
         if (
             !conditional &&
             !multiRow &&
-            promiseIsPrefixEvaluable(node.promise, binders, cellReadNames)
+            expressionIsPrefixEvaluable(node.promise, binders, cellReadNames)
         ) {
             flights.push({ node, name: `$flight${counter.next++}` })
         }
@@ -150,16 +150,6 @@ function walkNode(
     if (node.kind === 'element' && 'children' in node) {
         walkList(node.children, binders, conditional, multiRow, cellReadNames, flights, counter)
     }
-}
-
-/* True when EVERY referenced identifier of `promise` is prefix-evaluable: none is a template-local
-   binder and none is an async-cell name. Delegates to the shared `expressionIsPrefixEvaluable`. */
-function promiseIsPrefixEvaluable(
-    promise: string,
-    binders: ReadonlySet<string>,
-    cellReadNames: ReadonlySet<string>,
-): boolean {
-    return expressionIsPrefixEvaluable(promise, binders, cellReadNames)
 }
 
 /* A single-element array literal like `[remountKey]` — the only `{#for}` source that renders its

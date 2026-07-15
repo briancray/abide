@@ -1,3 +1,4 @@
+import { messageFromError } from '../../shared/messageFromError.ts'
 import { createShadowProgram, type ShadowProgram } from './createShadowProgram.ts'
 
 /*
@@ -26,7 +27,7 @@ export function cachedShadowProgram(
             cache.set(root, build(root))
         } catch (error) {
             cache.set(root, undefined)
-            const detail = error instanceof Error ? error.message : String(error)
+            const detail = messageFromError(error)
             console.warn(
                 `[abide] couldn't build the type program for ${root}: ${detail}\n` +
                     '  type-directed async detection is disabled for this project — a bare promise/stream\n' +

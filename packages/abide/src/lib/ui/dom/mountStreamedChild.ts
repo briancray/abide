@@ -6,6 +6,7 @@ import { RENDER } from '../runtime/RENDER.ts'
 import type { UiComponent } from '../runtime/types/UiComponent.ts'
 import { withOptionalPath } from '../runtime/withOptionalPath.ts'
 import { withoutHydration } from '../runtime/withoutHydration.ts'
+import { commentData } from './commentData.ts'
 import { discardBoundary } from './discardBoundary.ts'
 import { mountRange } from './mountRange.ts'
 import { openMarker } from './openMarker.ts'
@@ -51,10 +52,7 @@ export function mountStreamedChild(
     /* Probe the cursor without consuming it. Streamed iff the next node is this child's boundary. */
     const childPath = run(() => CURRENT_PATH.current)
     const cursor = claimChild(hydration, parent)
-    const streamed =
-        cursor !== null &&
-        cursor.nodeType === 8 &&
-        (cursor as Comment).data === `abide:await:${childPath}`
+    const streamed = cursor !== null && commentData(cursor) === `abide:await:${childPath}`
 
     if (!streamed) {
         /* INLINE — the server inlined a settled child; adopt its `[ … ]` range in place. */
@@ -66,7 +64,7 @@ export function mountStreamedChild(
     /* STREAMED — claim the boundary open (advances the cursor to the swapped-in `[`). */
     const open = openMarker(parent, `abide:await:${childPath}`)
     const inner = claimChild(hydration, parent)
-    const warm = inner !== null && inner.nodeType === 8 && (inner as Comment).data === RANGE_OPEN
+    const warm = inner !== null && commentData(inner) === RANGE_OPEN
     if (warm) {
         const handle = mount()
         openMarker(parent, `/abide:await:${childPath}`)

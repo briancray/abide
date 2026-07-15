@@ -1,4 +1,5 @@
 import { cache } from '../shared/cache.ts'
+import { isAsyncIterable } from '../shared/isAsyncIterable.ts'
 import { REMOTE_FUNCTION } from '../shared/REMOTE_FUNCTION.ts'
 import type { CacheOnContext } from '../shared/types/CacheOnContext.ts'
 import type { NamedAsyncIterable } from '../shared/types/NamedAsyncIterable.ts'
@@ -86,7 +87,7 @@ export function watch(
     const handler = argsOrHandler as (value: unknown, context?: CacheOnContext) => void
     /* A subscribable (socket / stream): per-frame delivery with reconnect-replay — the
        existing cache.on loop is the single implementation this branch delegates to. */
-    if (isSubscribable(source)) {
+    if (isAsyncIterable(source)) {
         return cache.on(
             source as NamedAsyncIterable<unknown>,
             handler as (frame: unknown, context: CacheOnContext) => void | Promise<void>,
@@ -94,7 +95,7 @@ export function watch(
     }
     /* An rpc without args → run the smart read reactively, pipe its value to the handler. A
        RemoteFunction is a callable, so accept `function` too — a state cell is a branded-free
-       object and never matches, and a streaming rpc was already caught by isSubscribable above. */
+       object and never matches, and a streaming rpc was already caught by isAsyncIterable above. */
     if (
         source !== null &&
         (typeof source === 'object' || typeof source === 'function') &&
@@ -119,15 +120,6 @@ export function watch(
         const value = cell.value
         untrack(() => handler(value))
     })
-}
-
-/* True for a socket / rpc stream — anything async-iterable. */
-function isSubscribable(source: unknown): boolean {
-    return (
-        source !== null &&
-        (typeof source === 'object' || typeof source === 'function') &&
-        typeof (source as { [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator] === 'function'
-    )
 }
 
 /*

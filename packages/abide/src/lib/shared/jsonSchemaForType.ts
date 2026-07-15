@@ -85,7 +85,7 @@ function project(
     // A `Set`/`Map` rides the wire as a JSON array (ADR-0029 output encode), so the projected schema
     // MUST agree with those bytes — a `Set<T>` is `T[]`, a `Map<K,V>` is `[K,V][]` entries.
     if (symbolName === 'Set' || symbolName === 'ReadonlySet') {
-        return projectSet(checker, type, seen)
+        return projectArray(checker, type, seen)
     }
     if (symbolName === 'Map' || symbolName === 'ReadonlyMap') {
         return projectMap(checker, type, seen)
@@ -131,22 +131,9 @@ function projectUnion(
     return { anyOf }
 }
 
-/* `T[]`/`readonly T[]` → `{ type: 'array', items: project(T) }`. */
+/* `T[]`/`readonly T[]` → `{ type: 'array', items: project(T) }`. Also serves `Set<T>`, which
+   rides the wire as `[...set]` (ADR-0029) — the same `T[]` shape. */
 function projectArray(
-    checker: ts.TypeChecker,
-    type: ts.Type,
-    seen: Set<ts.Type>,
-): Record<string, unknown> {
-    const element = checker.getTypeArguments(type as ts.TypeReference)[0]
-    seen.add(type)
-    const items = element === undefined ? {} : project(checker, element, seen)
-    seen.delete(type)
-    return { type: 'array', items }
-}
-
-/* `Set<T>`/`readonly Set<T>` → `{ type: 'array', items: project(T) }` — congruent with the
-   `wireJsonReplacer` encode (`[...set]`). */
-function projectSet(
     checker: ts.TypeChecker,
     type: ts.Type,
     seen: Set<ts.Type>,

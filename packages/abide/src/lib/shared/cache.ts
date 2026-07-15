@@ -1378,8 +1378,5 @@ function notify(store: CacheStore, marked: string[], emitted: string[]): void {
 }
 
 function emit(store: CacheStore, keys: string[]): void {
-    if (keys.length === 0) {
-        return
-    }
     store.events.dispatchEvent(invalidateEvent(keys))
 }

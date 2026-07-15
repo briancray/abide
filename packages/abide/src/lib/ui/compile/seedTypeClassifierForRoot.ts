@@ -41,9 +41,9 @@ export function seedTypeClassifierForRoot(
         return undefined
     }
     const checker = program.getTypeChecker()
+    const mappings = shadows.get(abidePath)?.mappings ?? []
     return (loc, code) => {
         try {
-            const mappings = shadows.get(abidePath)?.mappings ?? []
             const offset = sourceToShadowOffset(mappings, loc)
             if (offset === undefined) {
                 return undefined

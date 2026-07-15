@@ -1,3 +1,4 @@
+import { messageFromError } from '../../shared/messageFromError.ts'
 import type { AsyncComputed } from '../../shared/types/AsyncComputed.ts'
 
 /*
@@ -13,7 +14,7 @@ export class AsyncCellError extends Error {
     readonly cell: AsyncComputed<unknown>
 
     constructor(cell: AsyncComputed<unknown>, cause: unknown) {
-        super(cause instanceof Error ? cause.message : String(cause), { cause })
+        super(messageFromError(cause), { cause })
         this.name = 'AsyncCellError'
         this.cell = cell
     }

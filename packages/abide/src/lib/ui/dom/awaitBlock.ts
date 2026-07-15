@@ -1,4 +1,5 @@
 import { decodeRefJson } from '../../shared/decodeRefJson.ts'
+import { isThenable } from '../../shared/isThenable.ts'
 import { effect } from '../effect.ts'
 import { CURRENT_BOUNDARY } from '../runtime/CURRENT_BOUNDARY.ts'
 import { claimExpected } from '../runtime/claimExpected.ts'
@@ -233,7 +234,7 @@ export function awaitBlock(
                would otherwise surface as an unhandledrejection at boot (process-fatal under
                Bun) instead of being harmlessly dropped. */
             if (isThenable(result)) {
-                void (result as PromiseLike<unknown>).then(undefined, () => undefined)
+                void result.then(undefined, () => undefined)
             }
             /* Build the adopted branch around a value CELL (then) so a later re-run updates
                it in place, exactly like a fresh mount. The `throw` for a catch-less rejection
@@ -320,9 +321,4 @@ export function awaitBlock(
         }
         render(result)
     })
-}
-
-/* Whether a value is Promise-like (the cold path); a non-thenable is warm-sync. */
-function isThenable(value: unknown): value is Promise<unknown> {
-    return value !== null && typeof (value as { then?: unknown })?.then === 'function'
 }

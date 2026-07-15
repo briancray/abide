@@ -1,5 +1,6 @@
 import { cache } from './cache.ts'
 import { isAsyncCell } from './isAsyncCell.ts'
+import { isAsyncIterable } from './isAsyncIterable.ts'
 import type { AsyncComputed } from './types/AsyncComputed.ts'
 import type { RemoteFunction } from './types/RemoteFunction.ts'
 import type { Socket } from './types/Socket.ts'
@@ -38,12 +39,8 @@ export function peek(source: unknown, args?: unknown): unknown {
     /* A subscribable (socket/stream) carries its own latest-frame probe; an rpc does not
        have Symbol.asyncIterator, so this cleanly splits the two even though both expose a
        `.peek` method. */
-    if (
-        source !== null &&
-        typeof source === 'object' &&
-        typeof (source as { [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator] === 'function'
-    ) {
-        return (source as { peek: () => unknown }).peek()
+    if (isAsyncIterable(source)) {
+        return (source as unknown as { peek: () => unknown }).peek()
     }
     return cache.peek(source as RemoteFunction<unknown, unknown>, args as never)
 }
