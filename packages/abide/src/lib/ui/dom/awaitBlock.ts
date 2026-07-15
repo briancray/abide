@@ -11,10 +11,9 @@ import { RESUME } from '../runtime/RESUME.ts'
 import { SuspenseSignal } from '../runtime/SuspenseSignal.ts'
 import { scopeGroup } from '../runtime/scopeGroup.ts'
 import type { State } from '../runtime/types/State.ts'
-import { withoutHydration } from '../runtime/withoutHydration.ts'
 import { state } from '../state.ts'
 import { anchoredBranch } from './anchoredBranch.ts'
-import { discardBoundary } from './discardBoundary.ts'
+import { discardAndRebuild } from './discardAndRebuild.ts'
 
 /*
 Async binding — the runtime for `<template await>`. Renders the pending branch,
@@ -181,23 +180,25 @@ export function awaitBlock(
         })
     }
 
-    /* Discard the SSR boundary and (re)build the block from the live promise, fresh
-       (hydration off) — the recovery path when adoption can't use the server markup. */
-    const rebuildCold = (open: Node | null): void => {
+    /* Discard the SSR boundary and (re)build the block from `result`, fresh (hydration
+       off) — the recovery path when adoption can't use the server markup. Insert the
+       anchor at the node AFTER the discarded boundary — NOT the captured `before`, which
+       for a skeleton-anchored block is the open boundary itself and is removed here, so
+       reusing it throws `NotFoundError` in a strict DOM. */
+    const rebuildCold = (open: Node | null, result: () => unknown): void => {
         branch.detach()
-        /* Insert at the node AFTER the discarded boundary (its return) — NOT the captured
-           `before`, which for a skeleton-anchored block is the open boundary itself and is
-           removed here, so reusing it throws `NotFoundError` in a strict DOM. */
-        const after = discardBoundary(
+        discardAndRebuild(
+            hydration as NonNullable<typeof hydration>,
             parent,
             open,
             `/abide:await:${id}`,
-            hydration as NonNullable<typeof hydration>,
+            (after) => {
+                const anchorNode = document.createTextNode('')
+                branch.anchor = anchorNode
+                parent.insertBefore(anchorNode, after)
+                render(result())
+            },
         )
-        const anchorNode = document.createTextNode('')
-        branch.anchor = anchorNode
-        parent.insertBefore(anchorNode, after)
-        withoutHydration(() => render(promiseThunk()))
     }
 
     /* The first run when hydrating: adopt by precedence (resume / warm-sync), else
@@ -261,7 +262,7 @@ export function awaitBlock(
                 valueCell = cell
                 activeKind = kind
             } catch {
-                rebuildCold(open)
+                rebuildCold(open, promiseThunk)
             }
             return
         }
@@ -272,19 +273,14 @@ export function awaitBlock(
                 valueCell = cell
                 activeKind = 'then'
             } catch {
-                rebuildCold(open)
+                rebuildCold(open, promiseThunk)
             }
             return
         }
-        /* Insert at the node after the discarded boundary (see `rebuildCold`). */
-        const after = discardBoundary(parent, open, `/abide:await:${id}`, cursor)
-        const anchorNode = document.createTextNode('')
-        branch.anchor = anchorNode
-        parent.insertBefore(anchorNode, after)
-        /* The boundary's server nodes are gone, so the pending branch builds FRESH — clear
-           the claim cursor (see withoutHydration) so its `cloneStatic`/text don't try to
-           claim discarded nodes and silently render nothing. */
-        withoutHydration(() => render(result))
+        /* Genuinely pending — no resume, not warm: the boundary's server nodes can't be
+           adopted, so discard them and build the pending branch fresh from the already-read
+           promise (nothing was placed yet; the detach inside is a no-op). */
+        rebuildCold(open, () => result)
     }
 
     effect(() => {

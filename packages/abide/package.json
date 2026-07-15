@@ -86,7 +86,6 @@
         "./ui/exitRenderScope": "./src/lib/ui/exitScope.ts",
         "./ui/dom/mount": "./src/lib/ui/dom/mount.ts",
         "./ui/dom/mountChild": "./src/lib/ui/dom/mountChild.ts",
-        "./ui/dom/mountStreamedChild": "./src/lib/ui/dom/mountStreamedChild.ts",
         "./ui/dom/mergeProps": "./src/lib/ui/dom/mergeProps.ts",
         "./ui/dom/spreadProps": "./src/lib/ui/dom/spreadProps.ts",
         "./ui/dom/restProps": "./src/lib/ui/dom/restProps.ts",

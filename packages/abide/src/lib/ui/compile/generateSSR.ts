@@ -595,7 +595,7 @@ export function generateSSR(
                    flight already settled (byte-identical to the old inline await), or a streaming
                    `abide:await:CHILDPATH` boundary + html-only await if it is still pending. The
                    boundary id is the child's render-path (`$$renderPath(ordinal)`), congruent with the
-                   client's `mountStreamedChild`. */
+                   client's dual-mode `mountChild`. */
                 const flightName = `$cf${childFlightCounter++}`
                 childFlightDecls.push(
                     `const ${flightName} = $$flight(() => $$isolateCellBarrier(() => ${renderExpr}));`,

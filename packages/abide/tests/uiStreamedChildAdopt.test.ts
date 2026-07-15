@@ -19,7 +19,7 @@ import { streamSwap } from './support/streamSwap.ts'
 /*
 ADR-0039 — a STREAMED child component's HYDRATE-ADOPT (the cross-half proof). A slow hoistable
 `<Child/>` streams (empty `abide:await:CHILDPATH` boundary in the shell; the child's `[ … ]` range
-swapped in by `__abideSwap`), and on hydrate the dual-mode `mountStreamedChild` adopts it: no desync
+swapped in by `__abideSwap`), and on hydrate the dual-mode `mountChild` adopts it: no desync
 crash, the child's value present exactly once (no double-mount).
 */
 
