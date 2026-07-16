@@ -62,6 +62,19 @@ function find(node: DomLike, tag: string): DomLike | undefined {
     return undefined
 }
 
+/* Count all descendant elements with the given tag name. */
+function count(node: DomLike, tag: string): number {
+    let total = 0
+    for (let index = 0; index < node.childNodes.length; index += 1) {
+        const child = node.childNodes[index] as DomLike
+        if (child.tagName === tag.toUpperCase() || child.tagName === tag) {
+            total += 1
+        }
+        total += count(child, tag)
+    }
+    return total
+}
+
 test('keyed each updates a changed item in place — same key, new object, same row DOM', () => {
     // The grid replaces a changed root with a NEW object under the SAME key (foldMediaGridDelta).
     // The keyed each must repaint that row's content WITHOUT rebuilding it: the row's <span> keeps
@@ -149,6 +162,77 @@ test('reactive index repaints a reordered row in place — same key, new positio
     expect(host.textContent).toBe('0:b1:a') // indices repainted to new positions
     // row id=1 moved 0 -> 1; its span is reused (no rebuild) and now reads index 1
     expect(find(host, 'span')?.textContent).toBe('0:b')
+})
+
+test('reused reconcile scratch stays correct across grow → shrink → grow + reorder', () => {
+    // The reconcile keys/resolved buffers are reused across passes and their stale tail is
+    // cleared on shrink. Drive the list wide, then narrow (triggering the tail clear), then
+    // wide again to a fresh key set, then reorder — the reused buffers must never resurrect a
+    // stale row or misresolve a key. A key present every pass keeps its ONE row (no rebuild).
+    const items = state([
+        { id: 1, label: 'a' },
+        { id: 2, label: 'b' },
+        { id: 3, label: 'c' },
+    ])
+    const host = run(
+        `
+        <script></script>
+        {#for item of items.value by item.id}<span>{item.label}</span>{/for}
+    `,
+        { items },
+    )
+    expect(host.textContent).toBe('abc')
+    const rowOne = find(host, 'span') // id=1's span — survives every pass below
+
+    // Shrink 3 -> 1: exercises the tail clear (keys.length = count). id=1 kept in place.
+    items.value = [{ id: 1, label: 'a' }]
+    expect(host.textContent).toBe('a')
+    expect(count(host, 'span')).toBe(1)
+    expect(find(host, 'span')).toBe(rowOne)
+
+    // Grow 1 -> 3 with a FRESH key set: reused buffers must not resurrect the pruned id=2/id=3.
+    items.value = [
+        { id: 1, label: 'a' },
+        { id: 4, label: 'd' },
+        { id: 5, label: 'e' },
+    ]
+    expect(host.textContent).toBe('ade')
+    expect(count(host, 'span')).toBe(3)
+    expect(find(host, 'span')).toBe(rowOne) // id=1 reused, not rebuilt
+
+    // Reverse: id=1 rides to the tail; its span is reused (still reads 'a').
+    items.value = [
+        { id: 5, label: 'e' },
+        { id: 4, label: 'd' },
+        { id: 1, label: 'a' },
+    ]
+    expect(host.textContent).toBe('eda')
+    expect(count(host, 'span')).toBe(3)
+    expect(rowOne?.textContent).toBe('a') // same node, moved, not rebuilt
+})
+
+test('duplicate keys within a list collapse to one row, then reconcile cleanly', () => {
+    // The duplicate-key branch reads keys[index] out of the reused scratch. Two items sharing a
+    // key collapse to a single row (no orphan, no throw); a later pass with distinct keys then
+    // reconciles normally against the reused buffers.
+    const items = state([
+        { id: 1, label: 'a' },
+        { id: 1, label: 'b' }, // duplicate key
+    ])
+    const host = run(
+        `
+        <script></script>
+        {#for item of items.value by item.id}<span>{item.label}</span>{/for}
+    `,
+        { items },
+    )
+    expect(count(host, 'span')).toBe(1) // collapsed to one row, not orphaned
+    items.value = [
+        { id: 1, label: 'x' },
+        { id: 2, label: 'y' },
+    ]
+    expect(host.textContent).toBe('xy')
+    expect(count(host, 'span')).toBe(2)
 })
 
 test('index="i" composes with a destructured as binding', () => {
