@@ -41,6 +41,13 @@ export async function snapshotEntryFromCache(
     if (!response) {
         return undefined
     }
+    /* A failed load never seeds the client: negative caching (errorTtl) can leave an
+       error-status entry in the store at snapshot time, but shipping it would warm-hydrate
+       a poisoned entry. Skip it — the client live-fetches on the miss and runs its own
+       negative cache. (Before errorTtl, errors evicted at settle and never reached here.) */
+    if (!response.ok) {
+        return undefined
+    }
     if (store.entries.get(entry.key) !== entry) {
         return undefined
     }

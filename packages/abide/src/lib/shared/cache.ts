@@ -280,8 +280,28 @@ function readThrough<Args, Return>(
         warnEphemeralTtl(key)
     }
     store.subscribe(key)
-    const existing = store.entries.get(key)
+    let existing = store.entries.get(key)
     recordRead(effectiveOptions?.shared ? activeCacheStore() : store, key, existing)
+    /*
+    Negative-cache short-circuit: a prior failed load retained under errorTtl
+    re-surfaces the same failure with no network until its window elapses — a
+    Response is re-served (raw) or re-decoded to throw the same HttpError, a
+    network Error is re-rejected. Past the deadline (the sweep may not have fired
+    yet) evict it here so the read below is a clean miss that retries.
+    */
+    if (existing?.errorResult !== undefined) {
+        if (existing.expiresAt !== undefined && existing.expiresAt > Date.now()) {
+            const failure = existing.errorResult
+            if (failure instanceof Response) {
+                return isRaw
+                    ? (Promise.resolve(failure.clone()) as Promise<Return | Response>)
+                    : (decodeResponse(failure.clone()) as Promise<Return | Response>)
+            }
+            return Promise.reject(failure)
+        }
+        evictIfCurrent(store, existing)
+        existing = undefined
+    }
     if (existing) {
         tagEntry(existing, effectiveOptions?.tags)
         attachPolicy(existing, effectiveOptions, () => remote(args as Args), retain)
@@ -380,6 +400,7 @@ function resolveEndpointCache<Args, Return>(
         shared: policy.shared,
         throttle: policy.throttle,
         debounce: policy.debounce,
+        errorTtl: policy.errorTtl,
     }
 }
 
@@ -565,61 +586,76 @@ function registerEntry(
     function deleteIfCurrent() {
         evictIfCurrent(store, entry)
     }
-    promise.then((result) => {
-        /*
+    promise.then(
+        (result) => {
+            /*
         Mark settled so SSR snapshot serialization can tell awaited entries
         (resolved by the time render() returns → inline) from {#await} ones
         (still pending → stream). Set before the ttl branches below since a
         ttl=0 server entry stays in the store for the snapshot.
         */
-        entry.settled = true
-        /* The reload finished — this entry now holds fresh data, no longer refreshing. */
-        entry.refreshing = false
-        store.markLifecycle(key)
-        /*
+            entry.settled = true
+            /* The reload finished — this entry now holds fresh data, no longer refreshing. */
+            entry.refreshing = false
+            store.markLifecycle(key)
+            /*
         An error-status Response is a failed load, not a value to retain: fetch
         resolves (it only rejects on a network fault) on a 4xx/5xx, so without
         this the entry would be served as a hit for the whole ttl, even after the
-        backend recovers. Evict it so the next read retries — mirroring fireRefetch,
-        which already guards revalidation results with the same `!result.ok` check.
+        backend recovers. Evict it so the next read retries — unless the endpoint
+        opted into the negative cache (errorTtl), which retains the failure for a
+        bounded window (see retainErroredEntry). Mirrors fireRefetch, which guards
+        revalidation results with the same `!result.ok` check.
         */
-        if (result instanceof Response && !result.ok) {
-            deleteIfCurrent()
-            return
-        }
-        /*
+            if (result instanceof Response && !result.ok) {
+                retainErroredEntry(store, entry, options, result.status, result)
+                return
+            }
+            /*
         A post-invalidate reload registers with refreshing=true; an invalidation
         firing while it was in flight parked its refetch on policy.pending
         (fireRefetch bails when refreshing). This settle path — not fireRefetch —
         cleared the flag, so drain the parked refetch here or it's lost and the
         entry keeps data that predates the invalidation.
         */
-        if (entry.invalidation?.pending) {
-            reschedulePendingRefetch(store, entry, entry.invalidation)
-        }
-        /*
+            if (entry.invalidation?.pending) {
+                reschedulePendingRefetch(store, entry, entry.invalidation)
+            }
+            /*
         Smart retained read: the display value is kept unconditionally — never
         hard-evicted on settle. ttl marks a staleness deadline (the next read past
         it revalidates in the background, stale stays visible, refreshing() true)
         instead of eviction; ttl 0/undefined retain with no staleness clock.
         */
-        if (entry.retain) {
-            materializeRetained(store, entry, result)
-            if (ttl !== undefined && ttl > 0) {
-                stampStaleDeadline(entry, ttl)
+            if (entry.retain) {
+                materializeRetained(store, entry, result)
+                if (ttl !== undefined && ttl > 0) {
+                    stampStaleDeadline(entry, ttl)
+                }
+                return
             }
-            return
-        }
-        if (ttl === 0) {
-            if (!keepZeroTtlForRequest) {
-                deleteIfCurrent()
+            if (ttl === 0) {
+                if (!keepZeroTtlForRequest) {
+                    deleteIfCurrent()
+                }
+                return
             }
-            return
-        }
-        if (ttl !== undefined) {
-            armTtlExpiry(store, entry, ttl)
-        }
-    }, deleteIfCurrent)
+            if (ttl !== undefined) {
+                armTtlExpiry(store, entry, ttl)
+            }
+        },
+        (error) => {
+            /* A network-level fault (fetch rejects — no Response, so no status/Retry-After):
+           negative-cache it under the status-0 window if opted in, else evict-and-retry. */
+            retainErroredEntry(
+                store,
+                entry,
+                options,
+                0,
+                error instanceof Error ? error : new Error(String(error)),
+            )
+        },
+    )
     return entry
 }
 
@@ -634,6 +670,75 @@ function evictIfCurrent(store: CacheStore, entry: CacheEntry): void {
         store.entries.delete(entry.key)
         store.markLifecycle(entry.key)
     }
+}
+
+/*
+A failed load is retained (negative cache), not evicted, only when the endpoint
+opted in with `errorTtl` for this status — otherwise it evicts so the next read
+retries (the default). With a window the failure is buffered so reads within it
+re-surface it with no network: a Response is stored as a pristine clone the read
+path re-clones per serve (never consuming errorResult itself), a network Error is
+stored as-is and re-rejected. `armTtlExpiry` hard-evicts at the deadline, so the
+next read retries. A `Retry-After` header overrides the configured window as the
+authoritative delay.
+*/
+function retainErroredEntry(
+    store: CacheStore,
+    entry: CacheEntry,
+    options: CacheOptions | undefined,
+    status: number,
+    failure: Response | Error,
+): void {
+    const configured = errorTtlFor(options, status)
+    /* Not opted in for this status → default evict-and-retry (Retry-After is honoured
+       only under an explicit errorTtl, so no existing endpoint's behaviour shifts). */
+    if (configured === undefined) {
+        evictIfCurrent(store, entry)
+        return
+    }
+    const window =
+        failure instanceof Response ? (retryAfterMs(failure.headers) ?? configured) : configured
+    if (window <= 0) {
+        evictIfCurrent(store, entry)
+        return
+    }
+    if (store.entries.get(entry.key) !== entry) {
+        return
+    }
+    entry.errorResult = failure instanceof Response ? failure.clone() : failure
+    entry.settled = true
+    armTtlExpiry(store, entry, window)
+}
+
+/* Resolves the endpoint's `errorTtl` against a failed status: a number applies to
+   any status, a function returns a per-status window (or undefined to keep the
+   immediate-retry default for that status). `status` is 0 for a network fault. */
+function errorTtlFor(options: CacheOptions | undefined, status: number): number | undefined {
+    const policy = options?.errorTtl
+    if (typeof policy === 'function') {
+        return policy(status)
+    }
+    return policy
+}
+
+/* Parses a `Retry-After` header to ms — a delta-seconds integer or an HTTP-date —
+   clamped to >= 0. Returns undefined when absent or unparseable so the caller falls
+   back to the configured errorTtl. */
+function retryAfterMs(headers: Headers): number | undefined {
+    const value = headers.get('retry-after')
+    if (value === null) {
+        return undefined
+    }
+    const seconds = Number(value)
+    if (Number.isFinite(seconds)) {
+        return seconds > 0 ? seconds * 1000 : 0
+    }
+    const when = Date.parse(value)
+    if (Number.isNaN(when)) {
+        return undefined
+    }
+    const delta = when - Date.now()
+    return delta > 0 ? delta : 0
 }
 
 /* Arms the ttl > 0 expiry sweep; `expiresAt` re-checks at fire time so a refreshed deadline survives. */

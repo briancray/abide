@@ -31,6 +31,17 @@ and coalesces a background refetch (leading-edge-then-coalesce, or
 fire-after-quiet respectively) instead of dropping the entry. Set one, not both.
 SWR is otherwise unconditional for replayable remote reads; there is no `swr`
 toggle.
+
+`errorTtl` opts a failed load into the negative cache: without it a failure
+evicts immediately so the next read retries (the default); with it, the failure
+is retained for that many ms — reads within the window re-surface the same
+rejection with no network round-trip, backing off a failing/rate-limited backend
+instead of hammering it — then hard-evicts so the next read retries. A function
+form receives the failed response's HTTP status (0 for a network-level fault with
+no response) and returns a per-status window, or `undefined` to fall back to the
+immediate-retry default for that status (e.g. back off a 429/503, retry a 500 at
+once). A `Retry-After` header on the response overrides the number as the
+authoritative delay. Off (evict-and-retry) when unset.
 */
 export type CacheOptions = {
     ttl?: number
@@ -38,4 +49,5 @@ export type CacheOptions = {
     shared?: boolean
     throttle?: number
     debounce?: number
+    errorTtl?: number | ((status: number) => number | undefined)
 }

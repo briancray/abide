@@ -77,6 +77,74 @@ const errorStatusRemote = defineRpc(
     { cache: { ttl: 60000, shared: true } },
 )
 
+/* Negative cache (errorTtl): a failed load is retained for the window instead of the
+   default evict-and-retry. First call errors, later calls succeed — the counter proves
+   the retained failure re-serves WITHOUT re-invoking the handler. */
+let errorTtlCalls = 0
+const errorTtlRemote = defineRpc(
+    'GET',
+    '/rpc/error-ttl',
+    () => {
+        errorTtlCalls += 1
+        return json({ hit: errorTtlCalls }, errorTtlCalls === 1 ? { status: 500 } : {})
+    },
+    { cache: { errorTtl: 30 } },
+)
+
+/* Function form: retain a 503, but keep the immediate-retry default for a 500 (undefined). */
+let errorTtl503Calls = 0
+const errorTtl503Remote = defineRpc(
+    'GET',
+    '/rpc/error-ttl-503',
+    () => {
+        errorTtl503Calls += 1
+        return json({ hit: errorTtl503Calls }, errorTtl503Calls === 1 ? { status: 503 } : {})
+    },
+    { cache: { errorTtl: (status) => (status === 503 ? 30 : undefined) } },
+)
+let errorTtl500Calls = 0
+const errorTtl500Remote = defineRpc(
+    'GET',
+    '/rpc/error-ttl-500',
+    () => {
+        errorTtl500Calls += 1
+        return json({ hit: errorTtl500Calls }, errorTtl500Calls === 1 ? { status: 500 } : {})
+    },
+    { cache: { errorTtl: (status) => (status === 503 ? 30 : undefined) } },
+)
+
+/* Retry-After: header wins over the configured window — a 0 collapses the 60s errorTtl
+   to an immediate retry, proving the override without a timing-sensitive assertion. */
+let retryAfterCalls = 0
+const retryAfterRemote = defineRpc(
+    'GET',
+    '/rpc/error-ttl-retry-after',
+    () => {
+        retryAfterCalls += 1
+        return json(
+            { hit: retryAfterCalls },
+            retryAfterCalls === 1 ? { status: 503, headers: { 'retry-after': '0' } } : {},
+        )
+    },
+    { cache: { errorTtl: 60000 } },
+)
+
+/* A thrown handler rejects the flight (a network-level fault, no Response) — negative-cached
+   under the status-0 window. */
+let throwErrorTtlCalls = 0
+const throwErrorTtlRemote = defineRpc(
+    'GET',
+    '/rpc/error-ttl-throw',
+    () => {
+        throwErrorTtlCalls += 1
+        if (throwErrorTtlCalls === 1) {
+            throw new Error('boom')
+        }
+        return json({ hit: throwErrorTtlCalls })
+    },
+    { cache: { errorTtl: (status) => (status === 0 ? 30 : undefined) } },
+)
+
 /* ttl/retention now rides the endpoint (ADR-0020), so dedicated remotes declare the
    policy the retention tests below exercise — countedRemote stays coalesce-only. */
 let retainedCalls = 0
@@ -218,6 +286,82 @@ describe('rejection', () => {
             expect(store.entries.size).toBe(0)
             /* Within the ttl window, the next read retries rather than serving the cached 500. */
             expect(await cache(errorStatusRemote)).toEqual({ hit: 2 })
+        })
+    })
+})
+
+describe('negative cache (errorTtl)', () => {
+    test('retains a failed load, re-serving it within the window then retrying after', async () => {
+        errorTtlCalls = 0
+        await inServerScope(async (store) => {
+            await expect(cache(errorTtlRemote)).rejects.toThrow()
+            await Bun.sleep(1)
+            /* Opted in → retained, not evicted. */
+            expect(store.entries.size).toBe(1)
+            /* A second read inside the window re-surfaces the failure with NO handler re-call. */
+            await expect(cache(errorTtlRemote)).rejects.toThrow()
+            expect(errorTtlCalls).toBe(1)
+            /* Past the window the entry evicts and the next read retries (now succeeds). */
+            await Bun.sleep(40)
+            expect(await cache(errorTtlRemote)).toEqual({ hit: 2 })
+            expect(errorTtlCalls).toBe(2)
+        })
+    })
+
+    test('function form retains a matching status', async () => {
+        errorTtl503Calls = 0
+        await inServerScope(async (store) => {
+            await expect(cache(errorTtl503Remote)).rejects.toThrow()
+            await Bun.sleep(1)
+            expect(store.entries.size).toBe(1)
+            await expect(cache(errorTtl503Remote)).rejects.toThrow()
+            expect(errorTtl503Calls).toBe(1)
+        })
+    })
+
+    test('function form returning undefined keeps the evict-and-retry default', async () => {
+        errorTtl500Calls = 0
+        await inServerScope(async (store) => {
+            /* 500 → fn returned undefined → not negative-cached, evicts as before. */
+            await expect(cache(errorTtl500Remote)).rejects.toThrow()
+            await Bun.sleep(1)
+            expect(store.entries.size).toBe(0)
+            expect(await cache(errorTtl500Remote)).toEqual({ hit: 2 })
+        })
+    })
+
+    test('a Retry-After header overrides the configured window', async () => {
+        retryAfterCalls = 0
+        await inServerScope(async (store) => {
+            /* Retry-After: 0 collapses the 60s errorTtl → immediate evict-and-retry. */
+            await expect(cache(retryAfterRemote)).rejects.toThrow()
+            await Bun.sleep(1)
+            expect(store.entries.size).toBe(0)
+            expect(await cache(retryAfterRemote)).toEqual({ hit: 2 })
+        })
+    })
+
+    test('negative-caches a network fault under status 0', async () => {
+        throwErrorTtlCalls = 0
+        await inServerScope(async (store) => {
+            await expect(cache(throwErrorTtlRemote)).rejects.toThrow()
+            await Bun.sleep(1)
+            expect(store.entries.size).toBe(1)
+            await expect(cache(throwErrorTtlRemote)).rejects.toThrow()
+            expect(throwErrorTtlCalls).toBe(1)
+        })
+    })
+
+    test('a retained error is never shipped in the SSR snapshot', async () => {
+        errorTtlCalls = 0
+        await inServerScope(async (store) => {
+            await expect(cache(errorTtlRemote)).rejects.toThrow()
+            await Bun.sleep(1)
+            /* Retained in the store... */
+            expect(store.entries.size).toBe(1)
+            /* ...but not shipped: shipping it would warm-hydrate a poisoned client entry. */
+            const inline = await serializeCacheSnapshot(store)
+            expect(inline).toHaveLength(0)
         })
     })
 })

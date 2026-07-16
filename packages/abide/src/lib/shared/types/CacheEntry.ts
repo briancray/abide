@@ -73,6 +73,15 @@ export type CacheEntry = {
     its drop-on-ttl / drop-on-invalidate behaviour.
     */
     retain?: boolean
+    /*
+    A retained failed load (negative cache — opt in with `errorTtl`). Holds a
+    pristine Response clone (re-served per read by cloning it, never consumed) or
+    the network Error, so reads within the window re-surface the same failure with
+    no network round-trip. `expiresAt` (armed via the ttl sweep) hard-evicts it when
+    the window elapses, so the next read retries. Unset on a successful entry; its
+    presence is what the read path checks to short-circuit to the retained error.
+    */
+    errorResult?: Response | Error
 }
 
 /* Per-key invalidate coalescing: the throttle/debounce policy plus the timer/in-flight state. */
