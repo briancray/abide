@@ -1,6 +1,53 @@
 import { describe, expect, test } from 'bun:test'
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { classifyInterpolationType } from '../src/lib/ui/compile/classifyInterpolationType.ts'
 import { compileComponent } from '../src/lib/ui/compile/compileComponent.ts'
 import { compileShadow } from '../src/lib/ui/compile/compileShadow.ts'
+import { createShadowProgram } from '../src/lib/ui/compile/createShadowProgram.ts'
+import { nodeAtShadowOffset } from '../src/lib/ui/compile/nodeAtShadowOffset.ts'
+import { shadowNaming } from '../src/lib/ui/compile/shadowNaming.ts'
+import { sourceToShadowOffset } from '../src/lib/ui/compile/sourceToShadowOffset.ts'
+import type { InterpolationClassifier } from '../src/lib/ui/compile/types/InterpolationClassifier.ts'
+
+/* Builds a shadow-backed interpolation classifier over a component written to a throwaway on-disk
+   project — the same wiring `checkAbide`/the LSP feed `compileShadow` (a SEPARATE verbatim program,
+   so it never reads the peek-wrapped shadows it informs). Lets a shadow test exercise the
+   type-directed seed typing (`$$cellValuePending` for a bare promise/stream seed) the way the real
+   pipeline does, rather than the classifier-absent fail-open path the inline fixtures cover. */
+function makeClassifier(source: string): InterpolationClassifier {
+    const dir = mkdtempSync(join(tmpdir(), 'abide-shadow-'))
+    writeFileSync(
+        join(dir, 'tsconfig.json'),
+        JSON.stringify({
+            compilerOptions: {
+                strict: true,
+                module: 'esnext',
+                moduleResolution: 'bundler',
+                target: 'esnext',
+                lib: ['esnext', 'dom'],
+            },
+        }),
+    )
+    const abidePath = join(dir, 'Component.abide')
+    writeFileSync(abidePath, source)
+    const { program, shadows } = createShadowProgram(dir, [abidePath])
+    const checker = program.getTypeChecker()
+    const shadow = shadows.get(abidePath)!
+    const shadowFile = program.getSourceFile(shadowNaming.suffixed(abidePath))!
+    return (loc, code) => {
+        const offset = sourceToShadowOffset(shadow.mappings, loc)
+        if (offset === undefined) {
+            return 'sync'
+        }
+        const node = nodeAtShadowOffset(shadowFile, offset, code.length)
+        if (node === undefined) {
+            return 'sync'
+        }
+        return classifyInterpolationType(checker.getTypeAtLocation(node), node, checker)
+    }
+}
 
 const SOURCE = `<script>import { state } from '@abide/abide/ui/state'
 import { props } from '@abide/abide/ui/props'
@@ -131,6 +178,58 @@ const foo = state.computed(async () => { const o = { async m() { return await lo
         const nestedRuntime = compileComponent(nested)
         expect(nestedRuntime).toContain(', true)')
         expect(nestedRuntime).toContain('$$readCell(foo)')
+    })
+
+    /* ADR-0043 parity: a bare no-`await` `state.computed(getFoo())` whose seed resolves to a
+       promise/stream routes to a STREAMING `trackedComputed(…, true)` at runtime (`isPromiseComputed`
+       / `isEagerStreamComputed`) — it peeks `undefined` while pending. With a warm classifier the
+       shadow must type it `$$cellValuePending` (`T | undefined`), not `$$cellValue` (`T`); the
+       semantically identical `async () => getFoo()` form already does. Fail-open (no classifier)
+       keeps `$$cellValue`, unchanged. */
+    test('a bare no-await promise/stream seed types as pending (T | undefined), matching the streaming runtime cell', () => {
+        const source = `<script>
+import { state } from '@abide/abide/ui/state'
+async function getFoo(): Promise<number> { return 1 }
+async function* getStream(): AsyncGenerator<string> { yield 'x' }
+const foo = state.computed(getFoo())
+const frames = state.computed(getStream())
+</script>
+<p>{foo}{frames}</p>`
+        const classify = makeClassifier(source)
+        const classifiedCode = compileShadow(source, 'Record<string, any>', classify).code
+        expect(classifiedCode).toContain('const foo = $$cellValuePending(() => (getFoo()));')
+        expect(classifiedCode).toContain('const frames = $$cellValuePending(() => (getStream()));')
+        /* The runtime cell streams too (promise → `async () => await`, `, true`), so the shadow
+           type and the runtime cell now agree. `classify` doubles as the seed classifier here. */
+        const runtime = compileComponent(source, false, undefined, undefined, classify, classify)
+        expect(runtime).toContain('$$scope().trackedComputed(async () => await (getFoo()), true)')
+        expect(runtime).toContain('$$readCell(foo)')
+        /* Without a classifier the bare seed keeps `$$cellValue` (resolved) — the fail-open path. */
+        expect(compileShadow(source).code).toContain('const foo = $$cellValue(() => (getFoo()));')
+    })
+
+    /* ADR-0047: `{#await <pendingCell>}` awaits the cell — it shows pending then binds the RESOLVED
+       value, never the pending `undefined`. So a bare pending-cell subject's `:then` binding must
+       strip the `| undefined` the `$$cellValuePending` peek carries (`$$awaitCell`), while a plain
+       promise / blocking subject stays a normal `await`. Without this the streaming-cell typing above
+       would poison every `{#await cell}{:then data}` in a page (the reported regression). */
+    test('a bare {#await pendingCell} strips the pending undefined for its resolved binding', () => {
+        const source = `<script>
+import { state } from '@abide/abide/ui/state'
+async function getFoo(): Promise<number> { return 1 }
+async function getBar(): Promise<number> { return 2 }
+const foo = state.computed(getFoo())
+</script>
+{#await foo}<p>pending</p>{:then data}<p>{data.toFixed(2)}</p>{/await}
+{#await getBar()}<p>pending</p>{:then plain}<p>{plain.toFixed(2)}</p>{/await}`
+        const code = compileShadow(source, 'Record<string, any>', makeClassifier(source)).code
+        /* The pending cell is declared streaming and its await strips the pending `undefined`… */
+        expect(code).toContain('const foo = $$cellValuePending(() => (getFoo()));')
+        expect(code).toContain('declare function $$awaitCell<V>(v: V): Exclude<V, undefined>')
+        expect(code).toContain('$$awaitCell((foo))')
+        /* …while a plain-promise subject stays a normal `await`, not wrapped. */
+        expect(code).toContain('await (getBar())')
+        expect(code).not.toContain('$$awaitCell((getBar()))')
     })
 
     test('a bare non-thunk computed seed is wrapped rather than called as a value', () => {

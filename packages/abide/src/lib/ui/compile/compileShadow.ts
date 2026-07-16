@@ -82,7 +82,6 @@ export function compileShadow(
     propsType = 'Record<string, any>',
     classify?: InterpolationClassifier,
 ): CompiledShadow {
-    const builder = createBuilder(classify)
     const leadingScript = source.match(LEADING_SCRIPT)
     const scriptBody = leadingScript?.[1] ?? ''
     /* Body starts just past the opening `<script …>`; template just past `</script>`. */
@@ -98,7 +97,12 @@ export function compileShadow(
         importedReactives,
         propsLocalName,
         watchLocalName,
+        pendingCellNames,
     } = analyzeScript(scriptBody, scriptStart, classify)
+    /* Built AFTER the script analysis so the `pendingCellNames` set (the `$$cellValuePending`
+       cells) can ride onto the builder — the `{#await}` emit reads it to strip a bare
+       pending-cell subject's pending `undefined` off its resolved binding (ADR-0047 fidelity). */
+    const builder = createBuilder(classify, pendingCellNames)
     builder.raw(shadowPreamble(importedReactives))
     /* Every `computed`/`linked` scope line reads through this: it invokes the seed thunk and
        unwraps a promise/stream to the value a BARE cell read peeks (ADR-0019/0032) — so an async
@@ -117,6 +121,14 @@ export function compileShadow(
     builder.raw(
         'declare function $$cellValuePending<R>(seed: () => R): (R extends AsyncIterable<infer F> ? F : Awaited<R>) | undefined\n',
     )
+    /* `{#await <pendingCell>}` awaits the CELL (ADR-0047 `$$awaitSubject`) — it shows pending then
+       binds the RESOLVED value, never the pending `undefined`. So a bare pending-cell subject's
+       resolved/`:then` binding must drop the `| undefined` the `$$cellValuePending` peek carries;
+       `$$awaitCell` strips exactly `undefined` (`Exclude`, so a genuine `null` in the value survives).
+       Emitted only when a pending cell exists (else the `{#await}` emit never references it). */
+    if (pendingCellNames.size > 0) {
+        builder.raw('declare function $$awaitCell<V>(v: V): Exclude<V, undefined>\n')
+    }
     /* The peek helpers the async-interpolation wrap targets (ADR-0032): `$$peek` unwraps a promise
        sub-expression to its resolved value (`undefined` while pending) and `$$peekStream` reads an
        async iterable's latest frame, so `getFoo()?.name`/`{#if getFoo()}` type-check against the
@@ -245,6 +257,9 @@ type Builder = {
     /* A fresh shadow-local binding name (`__<base>_<n>`) — for synthesised bindings
        like an await's resolved value, kept distinct so nested blocks never collide. */
     unique: (base: string) => string
+    /* The `$$cellValuePending` (STREAMING) cells declared in the leading script — a bare
+       `{#await <name>}` over one strips the pending `undefined` off its resolved binding. */
+    pendingCellNames: ReadonlySet<string>
     result: () => CompiledShadow
 }
 
@@ -252,7 +267,10 @@ type Builder = {
    emitted verbatim from the original script), offset-relative to the line start. */
 type ScopeLine = { text: string; segments: ShadowMapping[] }
 
-function createBuilder(classify?: InterpolationClassifier): Builder {
+function createBuilder(
+    classify?: InterpolationClassifier,
+    pendingCellNames: ReadonlySet<string> = new Set(),
+): Builder {
     let code = ''
     let uniqueCounter = 0
     const mappings: ShadowMapping[] = []
@@ -302,6 +320,7 @@ function createBuilder(classify?: InterpolationClassifier): Builder {
         }
     }
     const builder: Builder = {
+        pendingCellNames,
         unique(base) {
             return `__${base}_${uniqueCounter++}`
         },
@@ -379,6 +398,9 @@ type ScriptAnalysis = {
        overload so the `watch(cell, handler)` form type-checks (the cell is projected to its
        value, so the real State/socket/rpc overloads never match it). */
     watchLocalName: string | undefined
+    /* The STREAMING (`$$cellValuePending`) cell names — a bare `{#await <name>}` over one awaits
+       the cell and strips its pending `undefined` for the resolved binding (ADR-0047). */
+    pendingCellNames: Set<string>
 }
 
 /* Pushes a diagnostic for every author binding whose name starts with the reserved `$$`
@@ -506,6 +528,7 @@ function analyzeScript(
     const scope: ScopeLine[] = []
     const propsShapes: string[] = []
     const diagnostics: ShadowDiagnostic[] = []
+    const pendingCellNames = new Set<string>()
     if (scriptBody.trim() === '') {
         return {
             imports,
@@ -516,6 +539,7 @@ function analyzeScript(
             importedReactives: new Set(),
             propsLocalName: undefined,
             watchLocalName: undefined,
+            pendingCellNames,
         }
     }
     const file = ts.createSourceFile('script.ts', scriptBody, ts.ScriptTarget.Latest, true)
@@ -572,7 +596,17 @@ function analyzeScript(
             continue
         }
         for (const declaration of reactive) {
-            scope.push(scopeLineFor(declaration, propsShapes, verbatim, span, bindings, classify))
+            scope.push(
+                scopeLineFor(
+                    declaration,
+                    propsShapes,
+                    verbatim,
+                    span,
+                    bindings,
+                    classify,
+                    pendingCellNames,
+                ),
+            )
         }
     }
     return {
@@ -584,6 +618,7 @@ function analyzeScript(
         importedReactives,
         propsLocalName,
         watchLocalName,
+        pendingCellNames,
     }
 }
 
@@ -710,6 +745,9 @@ function scopeLineFor(
     span: (node: ts.Node, prefixLength: number) => ShadowMapping,
     bindings: ReactiveImportBindings,
     classify?: InterpolationClassifier,
+    /* Collects the names that project through `$$cellValuePending` (STREAMING cells) so the
+       `{#await}` emit can strip their pending `undefined`. Absent for nested scripts. */
+    pendingCellNames?: Set<string>,
 ): ScopeLine {
     const name = ts.isIdentifier(declaration.name) ? declaration.name.text : '_'
     const call = declaration.initializer as ts.CallExpression
@@ -807,12 +845,21 @@ function scopeLineFor(
     const fnIsThunk = ts.isArrowFunction(fn) || ts.isFunctionExpression(fn)
     const wrapPrefix = fnIsThunk ? '' : seedIsAsync(fn) ? 'async () => (' : '() => ('
     const wrapSuffix = fnIsThunk ? '' : ')'
-    /* ADR-0042: a STREAMING promise cell (async seed, no top-level `await`) reads
-       `undefined`-while-pending → `$$cellValuePending` (resolved `T | undefined`). A BLOCKING
-       (`await`) cell suspends its region so it is always resolved, and a sync cell is never pending
-       → `$$cellValue` (resolved `T`). (A bare stream seed keeps `$$cellValue`'s frame type — the
-       pre-existing type-directed case, unchanged here.) */
-    const helper = seedIsAsync(fn) && !seedIsBlocking(fn) ? '$$cellValuePending' : '$$cellValue'
+    /* ADR-0042/0043: a STREAMING cell reads `undefined`-while-pending → `$$cellValuePending`
+       (resolved `T | undefined`). Two seed shapes stream: a no-`await` async thunk (`async () =>
+       x`), and a bare call/identifier whose type resolves to a promise/stream — the latter is what
+       desugarSignals routes to `trackedComputed(…, streaming)` (`isPromiseComputed` /
+       `isEagerStreamComputed`), so the shadow must agree or a `state.computed(getFoo())` reads as
+       non-optional `T` while the runtime peeks `undefined`. A BLOCKING (`await`) cell suspends its
+       region so it is always resolved, and a genuinely sync seed is never pending → `$$cellValue`
+       (resolved `T`). The bare-seed arm needs the warm classifier; fail-open keeps `$$cellValue`. */
+    const streamingSeed =
+        (seedIsAsync(fn) && !seedIsBlocking(fn)) || bareSeedStreams(fn, span, verbatim, classify)
+    const helper = streamingSeed ? '$$cellValuePending' : '$$cellValue'
+    /* Record the pending cell so `{#await <name>}` strips its pending `undefined` (ADR-0047). */
+    if (streamingSeed && ts.isIdentifier(declaration.name)) {
+        pendingCellNames?.add(name)
+    }
     const prefix = `${keyword} ${name}${annotation} = ${helper}(${wrapPrefix}`
     /* Peek-wrap any buried async sub-expression in the seed (ADR-0032, script side) so a bare
        `getSession()?.x ?? []` types as its resolved value — matching the `desugarSignals` lift.
@@ -868,6 +915,31 @@ function seedIsBlocking(seed: ts.Expression): boolean {
         return seedIsAsync(seed) && hasTopLevelAwait(seed.body)
     }
     return hasTopLevelAwait(seed)
+}
+
+/* True for a bare (non-thunk, no-`await`) call/identifier seed whose checker type resolves to a
+   promise or async iterable — the STREAMING cell desugarSignals routes to `trackedComputed(…,
+   streaming)` (`isPromiseComputed` / `isEagerStreamComputed`). Such a cell peeks `undefined` while
+   pending, so its shadow type must be `$$cellValuePending` (resolved `T | undefined`), matching the
+   `async () => x` streaming form. Restricted to a bare CALL/IDENTIFIER seed — the whole-seed shape,
+   mirroring desugarSignals' bare-seed routing; a compound seed's buried async sub-expression is
+   peek-wrapped separately. Needs the warm classifier — absent (or on a resolution throw) it returns
+   false, keeping today's `$$cellValue`. */
+function bareSeedStreams(
+    seed: ts.Expression,
+    span: (node: ts.Node, prefixLength: number) => ShadowMapping,
+    verbatim: (node: ts.Node) => string,
+    classify: InterpolationClassifier | undefined,
+): boolean {
+    if (classify === undefined || (!ts.isCallExpression(seed) && !ts.isIdentifier(seed))) {
+        return false
+    }
+    try {
+        const kind = classify(span(seed, 0).sourceStart, verbatim(seed))
+        return kind === 'promise' || kind === 'asyncIterable'
+    } catch {
+        return false
+    }
 }
 
 /* Whether any ELEMENT in the tree carries an `attach` — gates emitting the DOM-typed
@@ -1123,9 +1195,17 @@ function emitNode(node: TemplateNode, builder: Builder): void {
                they're the pending content, checked without the resolved value. */
             const resolved = builder.unique('awaited')
             builder.raw('{\n')
-            builder.raw(`const ${resolved} = await `)
+            /* A bare `{#await <pendingCell>}` awaits the CELL (ADR-0047 `$$awaitSubject`): it shows
+               pending then binds the RESOLVED value, never the pending `undefined` the
+               `$$cellValuePending` peek carries. So strip that `undefined` with `$$awaitCell` — the
+               resolved/`:then` bindings all derive from `resolved`, so one strip covers every one.
+               Only a whole-subject bare pending-cell reference qualifies (mirrors the runtime
+               `awaitSubjectExpr` classification); any other subject (a plain promise, a blocking
+               cell, a compound expression) stays a plain `await`. */
+            const subjectIsPendingCell = builder.pendingCellNames.has(node.promise.trim())
+            builder.raw(`const ${resolved} = ${subjectIsPendingCell ? '$$awaitCell(' : 'await '}`)
             builder.expr(node.promise, node.loc)
-            builder.raw(`;\nvoid ${resolved};\n`)
+            builder.raw(`${subjectIsPendingCell ? ')' : ''};\nvoid ${resolved};\n`)
             const pending = node.children.filter((child) => child.kind !== 'branch')
             const branches = node.children.filter((child) => child.kind === 'branch')
             if (node.blocking && node.as !== undefined) {
