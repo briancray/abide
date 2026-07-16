@@ -8,8 +8,10 @@ import type { AsyncComputed } from '../src/lib/shared/types/AsyncComputed.ts'
 import type { AsyncState } from '../src/lib/shared/types/AsyncState.ts'
 import type { NamedAsyncIterable } from '../src/lib/shared/types/NamedAsyncIterable.ts'
 import { computed } from '../src/lib/ui/computed.ts'
+import { readCell } from '../src/lib/ui/dom/readCell.ts'
 import { linked } from '../src/lib/ui/linked.ts'
 import { createAsyncCell } from '../src/lib/ui/runtime/createAsyncCell.ts'
+import { SuspenseSignal } from '../src/lib/ui/runtime/SuspenseSignal.ts'
 import { state } from '../src/lib/ui/state.ts'
 import { trackedComputed } from '../src/lib/ui/trackedComputed.ts'
 import { settle } from './support/settle.ts'
@@ -223,6 +225,53 @@ describe('writable async cell — linked(await …) / linked(getStream())', () =
         second.push('two')
         await settle()
         expect(cell.peek()).toBe('two')
+    })
+})
+
+describe('linked whose seed reads a pending BLOCKING cell (Path B)', () => {
+    /* A controllable blocking async cell — `computed(async () => await …)` is blocking (author
+       `await`), so a pending read of it throws `SuspenseSignal`, exactly as a compiled
+       `$$readCell` would. The `linked` seed reads it the way the compiler emits the read. */
+    function blockingSource<T>(): { cell: AsyncComputed<T>; resolve: (value: T) => void } {
+        let resolve: (value: T) => void = () => {}
+        const promise = new Promise<T>((r) => {
+            resolve = r
+        })
+        return { cell: computed(async () => await promise) as AsyncComputed<T>, resolve }
+    }
+
+    test('construction does NOT throw the suspend — it becomes a pending blocking AsyncState', async () => {
+        const source = blockingSource<{ items: number[] }>()
+        // Before Path B this threw a SuspenseSignal out of `linked()` at construction.
+        let cell: AsyncState<number[]> | undefined
+        expect(() => {
+            cell = linked(
+                () => (readCell(source.cell) as { items: number[] } | undefined)?.items ?? [],
+            ) as AsyncState<number[]>
+        }).not.toThrow()
+
+        // It routed to an async cell (not the sync `state` path) and is pending…
+        expect(isAsyncCell(cell)).toBe(true)
+        expect(pending(cell as AsyncState<number[]>)).toBe(true)
+        // …and BLOCKING: its own reads suspend too, like a lazy `computed(() => blockingCell)`.
+        expect(() => readCell(cell as AsyncState<number[]>)).toThrow(SuspenseSignal)
+
+        // Once the blocking source settles, the reseed re-runs and the `?? []` fallback is moot.
+        source.resolve({ items: [1, 2, 3] })
+        await settle()
+        expect(pending(cell as AsyncState<number[]>)).toBe(false)
+        expect(peek(cell as AsyncState<number[]>)).toEqual([1, 2, 3])
+        expect(readCell(cell as AsyncState<number[]>)).toEqual([1, 2, 3])
+    })
+
+    test('a non-suspense throw keeps the plain sync fall-through', () => {
+        // A seed that throws a real error (not a suspend) must NOT become an async cell — it
+        // stays the sync `state` path (whose eager reseed effect surfaces the throw as before).
+        expect(() =>
+            linked(() => {
+                throw new Error('boom')
+            }),
+        ).toThrow('boom')
     })
 })
 

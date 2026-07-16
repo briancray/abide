@@ -210,6 +210,16 @@ export function createAsyncCell(
                promise is registered (there is none), so the SSR barrier's fixpoint drain
                picks this cell up on that re-run instead. */
             if (error instanceof SuspenseSignal) {
+                /* This cell's pending reads must PAUSE too — the seed derives from a blocking
+                   source, so a reader peeking `undefined` (the streaming default) would race the
+                   dependency instead of waiting for it. Mark blocking from the SUSPEND itself,
+                   since a synchronously-suspending seed produces no promise for the `isThenable`
+                   branch to read it from; honour a `streaming` opt-out for symmetry with that
+                   branch. Once the seed re-runs and settles a value this flag is moot (a retained
+                   value is returned before `blocking` is ever consulted). */
+                if (options.streaming !== true) {
+                    blockingSource = true
+                }
                 if (myRun === runId) {
                     inFlight = undefined
                     writeNode(errorNode, undefined)

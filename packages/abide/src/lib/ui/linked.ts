@@ -5,6 +5,7 @@ import { createAsyncCell } from './runtime/createAsyncCell.ts'
 import { createEffectNode } from './runtime/createEffectNode.ts'
 import { isAsyncFunction } from './runtime/isAsyncFunction.ts'
 import { routeBareSeed } from './runtime/routeBareSeed.ts'
+import { SuspenseSignal } from './runtime/SuspenseSignal.ts'
 import type { State } from './runtime/types/State.ts'
 import { state } from './state.ts'
 
@@ -67,10 +68,26 @@ export function linked<T>(
        non-stream value falls through to the plain synchronous cell. */
     let probe: unknown
     let threw = false
+    let suspended = false
     try {
         probe = seed()
-    } catch {
+    } catch (error) {
         threw = true
+        suspended = error instanceof SuspenseSignal
+    }
+    /* The seed SUSPENDED — it read a pending BLOCKING cell (`await`-marked). A sync `state`
+       here would hold `undefined` while the reseed effect re-threw the suspend, letting it
+       escape at construction. Route to the eager async cell instead: `createAsyncCell` already
+       treats a synchronously-suspending seed as "pending" — it stays in flight, the throwing
+       read subscribed its effect to the blocking dependency, and it re-runs on settle — and it
+       marks the cell BLOCKING so its own reads pause too, matching a lazy `computed(() =>
+       blockingCell)`. This makes a blocking read behave the same in a `linked` seed as in a
+       `computed` seed or a template. A real (non-suspense) throw keeps the sync fall-through. */
+    if (suspended) {
+        return createAsyncCell(seed as () => unknown, {
+            writable: true,
+            transform: coerce,
+        }) as AsyncState<T>
     }
     if (!threw && isAsyncIterable(probe)) {
         return createAsyncCell(seed as () => unknown, {
