@@ -52,7 +52,16 @@ function readSsrPayload(): Partial<SsrPayload> {
     if (!text) {
         return {}
     }
-    const parsed = JSON.parse(text) as Partial<SsrPayload>
+    /* Degrade a mangled payload to a cold boot rather than throwing out of startClient (a
+       proxy/extension could corrupt the script text). The old inline `window.__SSR__ = {…}`
+       statement failed the same way — its throw left the global undefined and the `?? {}`
+       fallback booted cold — so keep that resilience instead of failing the whole mount. */
+    let parsed: Partial<SsrPayload>
+    try {
+        parsed = JSON.parse(text) as Partial<SsrPayload>
+    } catch {
+        return {}
+    }
     globalScope.__SSR__ = parsed
     return parsed
 }
