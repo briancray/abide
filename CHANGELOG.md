@@ -5,7 +5,6 @@
 ### Patch Changes
 
 - 866c96d: degrade a mangled **SSR** payload to a cold boot (ADR-0051) ([`adfee02`](https://github.com/briancray/abide/commit/adfee024d570e8bf46230fac1fa2521fcaae056f))
-- reuse reconcile scratch arrays across passes ([`b695e2d`](https://github.com/briancray/abide/commit/b695e2dc59bcf07b8c1d6e01763e4d492bbe3dd3))
 - 1abc943: Reuse the keyed-list (`{#for}`) reconcile scratch across passes so a steady-state reconcile allocates nothing
 
     Each `each` reconcile built two fresh arrays per list change — `list.map(keyOf)` for the desired keys and `new Array(n)` for the resolved rows — then threw them away. On a list re-reconciled per keystroke that churn showed up as avoidable minor-GC pressure mid-interaction. The two buffers are now hoisted into persistent per-`each` scratch, reused every pass and cleared down to the live length on shrink (so no disposed-row references are retained). The `keyOf` pass is fused into the resolve loop — still exactly one `keyOf` call per item. Behaviour is unchanged: keyed diffing, in-place row updates, duplicate-key collapse, and prune-before-place all resolve identically; only the per-pass allocation is gone. The `[...source]` materialization for non-array iterables (generators must be drained) is unchanged.
