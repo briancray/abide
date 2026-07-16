@@ -62,6 +62,12 @@ export function each<T>(
     /* Each row's scope, registered with the owner so every live row disposes on owner
        teardown (the effect's own disposer only unsubscribes it from `items()`). */
     const group = scopeGroup()
+    /* Persistent reconcile scratch, reused across passes so a steady-state reconcile
+       allocates nothing: `keys` holds each desired key (one `keyOf` call per item), `resolved`
+       its surviving row (or undefined → build). Both are sized to the current list each pass
+       and their stale tail is cleared, so a shrinking list retains no disposed-row refs. */
+    const keys: string[] = []
+    const resolved: (EachRow | undefined)[] = []
 
     /* Build a row's range. Hydrate mode (only while the claim cursor is active —
        read fresh, since a row built by a post-hydration reconcile must create, not
@@ -177,21 +183,29 @@ export function each<T>(
         withoutHydration(() => {
             /* Undefined source → empty list (see the hydration loop, ADR-0032 D3). */
             const list = source == null ? [] : Array.isArray(source) ? source : [...source]
-            const keys = list.map(keyOf)
+            const count = list.length
             generation += 1
             const pass = generation
-            /* Resolve each desired key to its surviving row once, here, stamping it with
-               this pass — so prune below is an int compare (no `Set`) and the placement
-               walk reuses the resolved row instead of a second `rows.get`. Halving the map
-               lookups per reconcile is a real win once the harness's O(n) `nextSibling` no
-               longer swamps it. `undefined` marks a key with no surviving row — a build. */
-            const resolved: (EachRow | undefined)[] = new Array(keys.length)
-            for (let index = 0; index < keys.length; index += 1) {
-                const row = rows.get(keys[index] as string)
+            /* Fill the reused scratch and resolve each desired key to its surviving row once,
+               here, stamping it with this pass — so prune below is an int compare (no `Set`)
+               and the placement walk reuses the resolved row instead of a second `rows.get`.
+               Halving the map lookups per reconcile is a real win once the harness's O(n)
+               `nextSibling` no longer swamps it. `undefined` marks a key with no surviving row
+               — a build. One `keyOf` call per item, cached in `keys` for the placement walk. */
+            for (let index = 0; index < count; index += 1) {
+                const key = keyOf(list[index] as T)
+                keys[index] = key
+                const row = rows.get(key)
                 if (row !== undefined) {
                     row.gen = pass
                 }
                 resolved[index] = row
+            }
+            /* Drop the previous pass's longer tail so a shrunk list retains no disposed-row
+               refs and the scratch stays sized to the live list. */
+            if (keys.length > count) {
+                keys.length = count
+                resolved.length = count
             }
             /* Prune departed rows first (those the resolve loop didn't reach this pass) so
                their ranges don't sit between survivors and throw off the in-place sibling
