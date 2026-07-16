@@ -1,5 +1,19 @@
 # abide
 
+## 0.56.0
+
+### Minor Changes
+
+- lift buried async sub-expressions in state/linked/computed seeds (ADR-0032, script side) ([`6b269f4`](https://github.com/briancray/abide/commit/6b269f45d8ab2e117d62684620542cfd1199631e))
+- a linked seed that reads a pending blocking cell becomes a blocking AsyncState ([`8329365`](https://github.com/briancray/abide/commit/83293652689d6a95c8cf4ffe66722e33be1aa63b))
+- a034b2d: `linked` seed that reads a pending blocking cell becomes a blocking `AsyncState`
+
+    A `linked()` whose seed transitively reads a blocking (`await`-marked) async cell used to throw a `SuspenseSignal` out of its eager reseed effect at construction — the effect is a leaf with no reader to swallow the suspend, so it escaped to the caller. The classification probe now routes a seed that suspends to a writable async cell, and that cell marks itself blocking when its seed synchronously suspends, so its own reads pause too. A blocking read now behaves the same inside a `linked` seed as it does in a `computed` seed or a template binding.
+
+- a034b2d: Lift buried async sub-expressions in `state` / `state.linked` / `state.computed` seeds
+
+    A script seed whose argument buries a promise/stream call — `state.linked(getSession()?.filteredSources ?? [])` — now lifts that call to an injected streaming peek-cell, exactly as a `{#if getSession()?.x}` template position already does. It reads `undefined` while pending (composing with `?.`/`??`) instead of type-erroring on `Promise.filteredSources`, and reseeds when the source resolves. A bare whole-seed call/identifier (`state.computed(getRates())`, `chat.done()`) is unchanged — only a compound seed that buries an async call is lifted. This closes the gap where the script side was less forgiving than the template side.
+
 ## 0.55.0
 
 ### Minor Changes
