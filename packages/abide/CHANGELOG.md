@@ -1,5 +1,25 @@
 # abide
 
+## 0.57.0
+
+### Minor Changes
+
+- d09e821: `errorTtl` — opt a failed RPC load into the negative cache
+
+    By default a failed load evicts immediately so the next read retries. Setting `errorTtl` on an endpoint's `cache` policy (or a producer's `cache()` options) retains the failure for that many milliseconds instead: reads within the window re-surface the same rejection with no network round-trip — backing off a failing or rate-limited backend rather than hammering it — then the entry hard-evicts and the next read retries. The function form `errorTtl: (status) => number | undefined` returns a per-status window (`status` is `0` for a network-level fault), or `undefined` to keep the immediate-retry default for that status (e.g. back off a 429/503, retry a 500 at once). A `Retry-After` response header overrides the configured window as the authoritative delay. A negative-cached error is never shipped in the SSR snapshot, so it can't warm-hydrate a poisoned client entry.
+
+### Patch Changes
+
+- 3ce8963: Fix an async-cell warm-seed ordering bug where a `linked` cell reading a blocking dependency could desync SSR and client
+
+    An async cell's warm-seed key is `${scope.id}:${index}`, where `index` is a per-scope counter drawn in construction order. Only a cell that actually becomes async draws one — and a `linked` seed becomes async (drawing an index) only when it _suspends_ by reading a still-pending blocking dependency, otherwise it resolves synchronously to a plain `state` and drew none. Because a blocking dependency is typically in flight on the server (the `linked` suspends → index drawn) but already warm-adopted on the client (the `linked` resolves synchronously → no index), every async cell declared _after_ the `linked` in the same scope keyed off-by-one across the handoff and warm-adopted the wrong cell's value (e.g. a grid cell rendering the layout string it followed). `linked` now reserves its ordinal on the synchronous path too, so it always occupies exactly one index — the same invariant `computed` already has from its static `async`-function routing — and downstream keys line up on both sides.
+
+- e8fb019: Type a bare no-`await` promise/stream `state.computed` seed as pending (`T | undefined`)
+
+    `state.computed(getRates())` (no `await`) routes to a STREAMING cell at runtime — it peeks `undefined` while pending — but the type-check shadow projected it as the resolved `T`, so an unguarded read (`rates.map(...)`) type-checked yet could hit `undefined` at first paint. It now projects through `$$cellValuePending` (`T | undefined`), matching the runtime and the semantically identical `state.computed(async () => getRates())` form. A blocking `state.computed(await getRates())` (suspends until resolved) and a genuinely sync seed are unchanged.
+
+    Consuming such a cell with `{#await rates}{:then data}` still binds `data` as the RESOLVED value: the shadow's `{#await}` lowering now strips the pending `undefined` off a bare pending-cell subject (mirroring the runtime's `$$awaitSubject`, ADR-0047), so the idiomatic await/then path stays free of `| undefined` noise. Direct reads should guard with `?.`/`??`.
+
 ## 0.56.0
 
 ### Minor Changes
