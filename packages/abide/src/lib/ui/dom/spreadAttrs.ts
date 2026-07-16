@@ -70,7 +70,22 @@ function bindKeys(
         if (skip.has(key)) {
             continue
         }
-        const value = object[key]
+        /* Reading the value can itself throw a `SuspenseSignal`: when `source()` is a
+           restProps proxy (the `<Button {...rest}>` case), its `get` invokes the underlying
+           prop thunk, so a key whose expression reads a still-pending blocking `await` suspends
+           HERE — after the `source()` enumeration guard already passed. Classify it as an
+           attribute; `attr`'s own effect swallows the suspend and fills the value in on settle.
+           An event handler never suspends — its thunk returns a function without reading a cell. */
+        let value: unknown
+        try {
+            value = object[key]
+        } catch (signal) {
+            if (!(signal instanceof SuspenseSignal)) {
+                throw signal
+            }
+            attr(element, key, () => source()[key])
+            continue
+        }
         if (key.startsWith('on') && typeof value === 'function') {
             on(element, key.slice(2), value as EventListener)
         } else if (typeof value !== 'function') {
