@@ -1,6 +1,7 @@
 import { isAsyncIterable } from '../shared/isAsyncIterable.ts'
 import type { AsyncState } from '../shared/types/AsyncState.ts'
 import type { NamedAsyncIterable } from '../shared/types/NamedAsyncIterable.ts'
+import { CURRENT_SCOPE } from './runtime/CURRENT_SCOPE.ts'
 import { createAsyncCell } from './runtime/createAsyncCell.ts'
 import { createEffectNode } from './runtime/createEffectNode.ts'
 import { isAsyncFunction } from './runtime/isAsyncFunction.ts'
@@ -8,6 +9,7 @@ import { routeBareSeed } from './runtime/routeBareSeed.ts'
 import { SuspenseSignal } from './runtime/SuspenseSignal.ts'
 import type { State } from './runtime/types/State.ts'
 import { state } from './state.ts'
+import type { Scope } from './types/Scope.ts'
 
 /*
 A writable cell seeded reactively from upstream — the abide form of Angular's
@@ -95,6 +97,19 @@ export function linked<T>(
             transform: coerce,
         }) as AsyncState<T>
     }
+    /* Reserve this cell's async-cell ordinal even though the seed resolved synchronously to a
+       plain `state`. Whether a `linked` seed suspends (→ `createAsyncCell`, which draws a
+       `nextCellIndex()` for its warm-seed key) or resolves synchronously (→ this plain `state`,
+       drawing none) is DATA-dependent, and that data can differ across the SSR→client handoff: a
+       blocking dependency still in flight on the server (→ suspend → async cell → index drawn) is
+       already warm-adopted on the warm client (→ sync resolve → plain state → no index). Without
+       this reserve, every async cell declared AFTER a `linked` in the same scope would key
+       off-by-one between sides and adopt the wrong warm seed. Drawing the index here makes a
+       `linked` ALWAYS occupy exactly one ordinal — the invariant `computed` gets for free from its
+       static `isAsyncFunction` routing — so downstream keys align regardless of which path ran. A
+       detached cell (no scope) never warm-seeds, so it draws nothing, mirroring `createAsyncCell`. */
+    const scope = CURRENT_SCOPE.current as (Scope & { nextCellIndex: () => number }) | undefined
+    scope?.nextCellIndex()
     /* The cell is a plain `state` — same store, same write path, so `transform` gates
        reseeds and explicit writes identically. */
     const cell = state<T>(undefined as T, transform)

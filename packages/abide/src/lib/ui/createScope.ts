@@ -85,7 +85,14 @@ export function createScope(
        declaration order — the local half of a cell's serialization-stable warm-seed key
        (`${scope.id}:${index}`, see `createAsyncCell`). Per-scope (not global) so a client-only
        sibling component can't shift another component's cell keys: divergence stays local. Both
-       SSR and client construct a component's cells in the same order, so the indices agree. */
+       SSR and client construct a component's cells in the same order, so the indices agree — but
+       ONLY because every cell that CAN become async draws exactly one index per construction,
+       independent of whether it materializes as async on a given render. `computed` gets this from
+       its static `isAsyncFunction` routing; `linked` decides at runtime (it draws in
+       `createAsyncCell` when its seed suspends, else RESERVES the index in its plain-`state`
+       fall-through), so a `linked` whose blocking dep is in flight on the server but warm on the
+       client still occupies its one slot on both sides. Break that "exactly one per construction"
+       rule and every downstream cell keys off-by-one across the handoff. */
     let cellIndex = 0
 
     /* `cell` and `nextCellIndex` are not on the public `Scope` type — `cell` is the compiler-only
