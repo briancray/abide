@@ -7,6 +7,7 @@ import { cacheStoreSlot } from '../shared/cacheStoreSlot.ts'
 import { createCacheStore } from '../shared/createCacheStore.ts'
 import { pageSlot } from '../shared/pageSlot.ts'
 import { SOCKET_SEED } from '../shared/SOCKET_SEED.ts'
+import { SSR_SCRIPT_ID } from '../shared/SSR_SCRIPT_ID.ts'
 import { sharedCacheStoreSlot } from '../shared/sharedCacheStoreSlot.ts'
 import type { SsrPayload } from '../shared/types/SsrPayload.ts'
 import type { StreamedResolution } from '../shared/types/StreamedResolution.ts'
@@ -32,6 +33,30 @@ navigation — importing each further page's chunk on first visit and probing th
 destination through the server's app.handle so auth/redirect gating still applies.
 Returns a disposer. `target` defaults to `#app`; pass one explicitly in tests.
 */
+/*
+Reads the server's SSR payload. Production ships it as an inert `<script
+type="application/json">` (ADR-0051) parsed once here in the deferred bundle — off the
+critical path, and through the fast JSON grammar rather than a compiled multi-MB JS object
+literal. A pre-set `globalThis.__SSR__` wins first: the uiStartClient tests stamp it
+directly, and it preserves any pre-bundle inline stamp. The parsed payload is republished
+onto `globalThis.__SSR__` for devtools / inspector visibility.
+*/
+function readSsrPayload(): Partial<SsrPayload> {
+    const globalScope = globalThis as { __SSR__?: Partial<SsrPayload> }
+    const preset = globalScope.__SSR__
+    if (preset !== undefined) {
+        return preset
+    }
+    const element = typeof document !== 'undefined' ? document.getElementById(SSR_SCRIPT_ID) : null
+    const text = element?.textContent
+    if (!text) {
+        return {}
+    }
+    const parsed = JSON.parse(text) as Partial<SsrPayload>
+    globalScope.__SSR__ = parsed
+    return parsed
+}
+
 // @documentation plumbing
 export function startClient(
     routes: Record<string, RouteLoader>,
@@ -43,7 +68,7 @@ export function startClient(
     if (target === null) {
         throw new Error('[abide] startClient: missing #app target')
     }
-    const ssr = (globalThis as { __SSR__?: Partial<SsrPayload> }).__SSR__ ?? {}
+    const ssr = readSsrPayload()
     /* Seed the per-page __SSR__ stamps into their shared slots before mount: the mount
        base, app name (default log channel), health payload (so health()'s first probe is
        warm), and the env-configured RPC timeout (ABIDE_CLIENT_TIMEOUT, shipped per

@@ -6,6 +6,7 @@ import { formatTraceparent } from '../../shared/formatTraceparent.ts'
 import { hasSeedableRequest } from '../../shared/hasSeedableRequest.ts'
 import { layoutChainForRoute } from '../../shared/layoutChainForRoute.ts'
 import { resolvedCellsSlot } from '../../shared/resolvedCellsSlot.ts'
+import { SSR_SCRIPT_ID } from '../../shared/SSR_SCRIPT_ID.ts'
 import { safeJsonForScript } from '../../shared/safeJsonForScript.ts'
 import { socketTailsSlot } from '../../shared/socketTailsSlot.ts'
 import type { CacheEntry } from '../../shared/types/CacheEntry.ts'
@@ -213,7 +214,11 @@ export function createUiPageRenderer({
             health,
             clientTimeout,
         } satisfies SsrPayload)
-        return `<script>window.__SSR__ = ${payload};</script>`
+        /* Inert JSON data, NOT a `window.__SSR__ = {…}` statement (ADR-0051): the browser never
+           compiles this multi-MB payload as JavaScript on the critical path — the deferred bundle
+           reads it with one `JSON.parse`. `safeJsonForScript` has already `<`-escaped every
+           `<`, so an embedded `</script>` can't close the tag early. */
+        return `<script type="application/json" id="${SSR_SCRIPT_ID}">${payload}</script>`
     }
 
     /* Per-route `<link rel=modulepreload>`s for the route's page + layout-chain chunks

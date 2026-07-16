@@ -90,9 +90,9 @@ describe('ADR-0024 bare-read auto-streaming', () => {
         expect(html).toContain('<main>shell</main>') // shell flushed
         expect(html).toContain('__abideResolve(') // streamed seed chunk
         expect(html).toContain('GET /rpc/bare-users') // the entry key
-        expect(html).toContain('"body":"[\\"ada\\"]"') // its warm snapshot body
+        expect(html).toContain('"data":["ada"]') // its warm snapshot body — json ships parsed (ADR-0051), single-encoded
         expect(html).toContain('"cache":[]') // render-return snapshot empty — the read was pending
-        expect(html).toContain('window.__SSR__ =')
+        expect(html).toContain('id="abide-ssr"')
     })
 
     /* Done-criteria #2 (option a — the endpoint timeout bounds the stream, no separate SSR deadline):
@@ -123,7 +123,7 @@ describe('ADR-0024 bare-read auto-streaming', () => {
             page(() => ({ html: '<main>static</main>', awaits: [], state: undefined, resume: {} })),
         )
         expect(html).toContain('<main>static</main>')
-        expect(html).toContain('window.__SSR__ =')
+        expect(html).toContain('id="abide-ssr"')
         expect(html).not.toContain('window.__abideResolve=function') // no streaming machinery
         expect(html).not.toContain('__abideSwap') // buffered, not streamed
     })

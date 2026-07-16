@@ -44,7 +44,9 @@ describe('serializeCacheSnapshot', () => {
         const inline = await serializeCacheSnapshot(store)
 
         expect(inline.map((item) => item.key)).toEqual(['a'])
-        expect(inline[0].body).toBe(JSON.stringify({ a: 1 }))
+        /* A json body ships PARSED as `data` (ADR-0051), single-encoded — not a re-escaped string. */
+        expect(inline[0].data).toEqual({ a: 1 })
+        expect(inline[0].body).toBeUndefined()
     })
 
     test('seeds a POST entry (an inline call hydrates warm regardless of method)', async () => {
@@ -60,7 +62,7 @@ describe('serializeCacheSnapshot', () => {
         const inline = await serializeCacheSnapshot(storeWith([post]))
         expect(inline).toHaveLength(1)
         expect(inline[0].method).toBe('POST')
-        expect(inline[0].body).toBe(JSON.stringify({ ok: true }))
+        expect(inline[0].data).toEqual({ ok: true })
     })
 
     test('skips a producer entry (no wire request to seed)', async () => {

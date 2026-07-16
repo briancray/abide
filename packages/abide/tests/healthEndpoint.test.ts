@@ -123,9 +123,10 @@ describe('health endpoint', () => {
     })
 })
 
-/* Pulls the parsed `window.__SSR__` state object out of a rendered document. */
+/* Pulls the parsed `window.__SSR__` state object out of a rendered document — now an inert
+   JSON `<script id="abide-ssr">` (ADR-0051) rather than a `window.__SSR__ = {…};` statement. */
 function ssrState(html: string): Record<string, unknown> | undefined {
-    const match = html.match(/window\.__SSR__ = (.+?);<\/script>/)
+    const match = html.match(/<script type="application\/json" id="abide-ssr">(.+?)<\/script>/)
     return match ? JSON.parse(match[1]) : undefined
 }
 

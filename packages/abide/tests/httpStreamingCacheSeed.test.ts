@@ -27,7 +27,7 @@ const rpc: RemoteRoutes = {
 }
 
 function ssrState(html: string): Record<string, unknown> {
-    const match = html.match(/window\.__SSR__ = (.+?);<\/script>/)
+    const match = html.match(/<script type="application\/json" id="abide-ssr">(.+?)<\/script>/)
     return JSON.parse(match?.[1] ?? '{}')
 }
 
@@ -54,13 +54,13 @@ describe('streaming {#await cache()} over the real HTTP entrypoint', () => {
             // the {#await} read is lazy — created mid-stream, so __SSR__.cache is empty
             expect(ssrState(html).cache).toEqual([])
 
-            // …and its warm snapshot ships over the stream for the client to adopt. The
-            // cached value rides the __abideResolve seed as the response body string (JSON,
-            // escaped); the resume frame now ref-json-encodes its value with slot indices,
-            // so the literal `n:1` lives only in the seed body.
+            // …and its warm snapshot ships over the stream for the client to adopt. A json
+            // body now rides the __abideResolve seed PARSED as `data` (ADR-0051) — single-
+            // encoded, not a re-escaped body string; the resume frame ref-json-encodes its
+            // value with slot indices, so the literal `n:1` lives only in the seed `data`.
             expect(html).toContain('__abideResolve(')
             expect(html).toContain('http-slow')
-            expect(html).toContain('{\\"n\\":1}')
+            expect(html).toContain('"data":{"n":1}')
 
             // the rpc dispatched exactly once on the server (the seed is reused, not refetched)
             expect(slowGate.calls).toBe(1)

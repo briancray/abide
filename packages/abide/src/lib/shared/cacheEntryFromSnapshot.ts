@@ -15,7 +15,12 @@ the first cache() read adopts its call site's ttl (see CacheEntry).
 */
 export function cacheEntryFromSnapshot(entry: CacheSnapshotEntry): CacheEntry {
     const headers = new Headers(entry.headers)
-    const response = new Response(entry.body, {
+    /* Body text for async readers / shareable clones. A json body arrives PARSED as `data`
+       (ADR-0051): re-stringify it (compact JSON — value-identical to the server body, whose
+       `json()` also emits compact JSON) so a later `.json()`/`.text()`/`.clone()` still works.
+       A text (or parse-failed json) body arrives raw as `body`. */
+    const bodyText = 'data' in entry ? JSON.stringify(entry.data) : (entry.body ?? '')
+    const response = new Response(bodyText, {
         status: entry.status,
         statusText: entry.statusText,
         headers,
@@ -26,7 +31,7 @@ export function cacheEntryFromSnapshot(entry: CacheSnapshotEntry): CacheEntry {
         request: new Request(entry.url, { method: entry.method }),
         ttl: undefined,
         expiresAt: undefined,
-        value: warmValueFromSnapshot(entry.status, headers, entry.body),
+        value: warmValueFromSnapshot(entry, headers, bodyText),
         settled: true,
         hydrated: true,
     }
@@ -42,19 +47,23 @@ non-2xx, 204 (the status gate below), streaming, binary (the DEFER sentinel) —
 yields no warm value and defers to the async path, which throws HttpError /
 returns the streaming error / blobs exactly as a live call would.
 */
-function warmValueFromSnapshot(status: number, headers: Headers, body: string): unknown {
+function warmValueFromSnapshot(entry: CacheSnapshotEntry, headers: Headers, body: string): unknown {
     /* Status gate is side-specific: an error/204 has no warm value here, but the live
        read throws HttpError / returns undefined for the same status — so it stays out of
        the shared kind mapping. */
-    if (status === 204 || status < 200 || status >= 300) {
+    if (entry.status === 204 || entry.status < 200 || entry.status >= 300) {
         return undefined
     }
     const kind = contentBodyKind(contentTypeOf(headers))
     const value = bodyValueForKind(
         kind,
-        /* The body may still be malformed JSON; fall back to the async path rather than
-           throwing a SyntaxError synchronously during hydration. */
+        /* Pre-parsed json body (`data`, ADR-0051) IS the value — no second parse. A raw json
+           body may still be malformed; fall back to the async path rather than throwing a
+           SyntaxError synchronously during hydration. */
         () => {
+            if ('data' in entry) {
+                return entry.data
+            }
             try {
                 return JSON.parse(body)
             } catch {

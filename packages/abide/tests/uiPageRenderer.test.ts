@@ -73,7 +73,7 @@ describe('createUiPageRenderer', () => {
         expect(html).toContain(
             '<div id="app"><!--abide:outlet--><main>hi</main><!--/abide:outlet--></div>',
         )
-        expect(html).toContain('window.__SSR__ =')
+        expect(html).toContain('id="abide-ssr"')
         expect(html).toContain('"route":"/"')
         expect(html).not.toContain('__abideSwap') // no streaming for a static page
     })
@@ -100,7 +100,7 @@ describe('createUiPageRenderer', () => {
         expect(html).toContain('<abide-resolve data-id="0"><script type="application/json">')
         expect(html).toContain('<b>ada</b>')
         expect(html).toContain('__abideSwap()') // swap script invoked per fragment
-        expect(html).toContain('window.__SSR__ =') // state shipped in the streamed head
+        expect(html).toContain('id="abide-ssr"') // state shipped in the streamed head
     })
 
     test('seeds a {#await cache()} read created mid-stream via __abideResolve; a miss marker for an unshippable body', async () => {
@@ -137,7 +137,7 @@ describe('createUiPageRenderer', () => {
         expect(html).toContain('"cache":[]') // render-return snapshot empty — reads are lazy
         expect(html).toContain('__abideResolve(') // post-stream seed shipped
         expect(html).toContain('GET /rpc/page-users') // the warm entry's key
-        expect(html).toContain('"body":"[\\"ada\\"]"') // its snapshot body
+        expect(html).toContain('"data":["ada"]') // its snapshot body — json ships parsed (ADR-0051)
         expect(html).toContain('GET /rpc/page-avatar') // the unshippable entry
         expect(html).toContain('"miss":true') // streamed as a miss marker
     })

@@ -87,15 +87,29 @@ export async function snapshotEntryFromCache(
             headers: response.headers,
         }),
     )
-    return {
+    const wire: CacheSnapshotEntry = {
         key: entry.key,
         url: entry.request.url,
         method,
         status: response.status,
         statusText: response.statusText,
         headers: Array.from(response.headers.entries()),
-        body,
     }
+    /* Ship a json body PARSED so it single-encodes in the payload rather than nesting a
+       re-escaped JSON string (ADR-0051 — the double-encoding that ~2.35×'d the wire). On a
+       parse failure ship the raw string under `body`: the client decodes it async exactly as
+       before (warmValueFromSnapshot's own try/catch), so a malformed-but-json-typed body still
+       round-trips rather than throwing here. A text body always ships raw. */
+    if (kind === 'json') {
+        try {
+            wire.data = JSON.parse(body)
+            return wire
+        } catch {
+            /* fall through to the raw-string form */
+        }
+    }
+    wire.body = body
+    return wire
 }
 
 async function readSettled(promise: Promise<Response>): Promise<Response | undefined> {

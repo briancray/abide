@@ -20,7 +20,7 @@ const pages: Pages = {
 }
 
 function ssrState(html: string): Record<string, unknown> {
-    const match = html.match(/window\.__SSR__ = (.+?);<\/script>/)
+    const match = html.match(/<script type="application\/json" id="abide-ssr">(.+?)<\/script>/)
     return JSON.parse(match?.[1] ?? '{}')
 }
 

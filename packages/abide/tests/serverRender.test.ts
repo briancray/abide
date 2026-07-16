@@ -70,7 +70,7 @@ describe('render()', () => {
            document an HTTP GET of the route would return. */
         expect(html).toContain('<main>New release is live.</main>')
         expect(html).toContain('<!DOCTYPE html>')
-        expect(html).toContain('window.__SSR__ =')
+        expect(html).toContain('id="abide-ssr"')
         expect(html).toContain('"route":"/emails/announcement"')
         /* No streaming scaffolding on the buffered branch. */
         expect(html).not.toContain('__abideSwap')
