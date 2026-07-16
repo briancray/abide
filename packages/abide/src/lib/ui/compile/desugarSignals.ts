@@ -1,8 +1,11 @@
 import ts from 'typescript'
 import { assignmentTargetNames } from './assignmentTargetNames.ts'
 import { hasTopLevelAwait } from './hasTopLevelAwait.ts'
+import { liftScriptSeed, type ScriptSeedLift } from './liftScriptSeed.ts'
+import type { InjectedCell } from './lowerAsyncInterpolations.ts'
 import { type ReactiveImportBindings, reactiveImportBindings } from './resolveReactiveExport.ts'
 import { signalCallee } from './signalCallee.ts'
+import type { InterpolationClassifier } from './types/InterpolationClassifier.ts'
 import type { InterpolationKind } from './types/InterpolationKind.ts'
 import type { SeedTypeClassifier } from './types/SeedTypeClassifier.ts'
 import { wrapSeed } from './wrapSeed.ts'
@@ -279,6 +282,77 @@ export function desugarSignals(
         }
         return seedKind(argument) === 'promise'
     }
+    /* ADR-0032 (script side): a `state`/`linked`/`computed` seed whose ARGUMENT buries a
+       promise/stream sub-expression (`getSession()?.filteredSources ?? []`) — not the whole seed
+       — gets that sub-expression lifted to an injected streaming peek-cell, exactly as a template
+       interpolation does, so it reads `undefined` while pending and composes with `?.`/`??`. The
+       lift runs on the seed's checker type via the SAME classifier the whole-seed routing uses,
+       bridged to the interpolation shape (its `undefined` failure sentinel folds to `sync`, safe
+       because the walk only branches on `promise`/`asyncIterable`). Cached per declaration so the
+       shared `__vs` mint stays consistent between the name-collection pass and the transform. */
+    const liftClassify: InterpolationClassifier | undefined =
+        seedClassify === undefined ? undefined : (loc, code) => seedClassify(loc, code) ?? 'sync'
+    let scriptSeedCounter = 0
+    const mintScriptSeed = (): string => `__vs${scriptSeedCounter++}`
+    const seedLifts = new Map<ts.VariableDeclaration, ScriptSeedLift | undefined>()
+    const seedLiftFor = (declaration: ts.VariableDeclaration): ScriptSeedLift | undefined => {
+        if (seedLifts.has(declaration)) {
+            return seedLifts.get(declaration)
+        }
+        const lift = computeSeedLift(declaration)
+        seedLifts.set(declaration, lift)
+        return lift
+    }
+    /* Applies the per-callee gate then runs the lift. A seed the WHOLE-seed classification already
+       claims — an author `await` (blocking), a bare promise/stream call — is left untouched so the
+       existing routing (or the runtime probe) owns it and nothing double-wraps; only a buried
+       sub-expression in an otherwise-sync seed lifts. */
+    function computeSeedLift(declaration: ts.VariableDeclaration): ScriptSeedLift | undefined {
+        if (liftClassify === undefined) {
+            return undefined
+        }
+        /* Only a single-declaration statement lifts: the injected peek-cells are emitted before the
+           owning statement, which can't split a `let a = …, b = …` list cleanly — and a
+           `rejectMixedDeclaration`-legal same-kind multi-declaration seed-lift is vanishingly rare.
+           Leaving it unlifted degrades to the pre-lift behavior (no injected orphan cell). */
+        const list = declaration.parent
+        if (!ts.isVariableDeclarationList(list) || list.declarations.length !== 1) {
+            return undefined
+        }
+        const callee = signalCallee(declaration, bindings)
+        if (callee === 'computed') {
+            if (
+                !isComputedSlot(declaration, bindings) ||
+                isAsyncComputed(declaration) ||
+                isEagerStreamComputed(declaration) ||
+                isPromiseComputed(declaration)
+            ) {
+                return undefined
+            }
+        } else if (callee === 'linked' || callee === 'state') {
+            const argument = seedArgument(declaration)
+            if (argument === undefined || isAsyncSeed(wrapSeed(argument))) {
+                return undefined
+            }
+        } else {
+            return undefined
+        }
+        const argument = seedArgument(declaration)
+        if (argument === undefined) {
+            return undefined
+        }
+        /* A bare CALL or IDENTIFIER seed is the whole-seed case (`computed(getRates())`,
+           `linked(chat.done())`, `state.computed(getRates.refreshing({...}))`) — the existing
+           whole-seed routing / runtime probe owns it, and descending into it would lift a probe
+           RECEIVER (`chat` out of `chat.done()`), breaking the call. Only a COMPOUND seed — a
+           member/binary/etc. that BURIES an async call — lifts. Mirrors `isBareCallComputed`. */
+        if (ts.isCallExpression(argument) || ts.isIdentifier(argument)) {
+            return undefined
+        }
+        const start = argument.getStart(source)
+        const seedText = source.text.slice(start, argument.getEnd())
+        return liftScriptSeed(seedText, scriptBase + start, liftClassify, mintScriptSeed)
+    }
     for (const statement of source.statements) {
         if (!ts.isVariableStatement(statement)) {
             continue
@@ -316,6 +390,16 @@ export function desugarSignals(
                    injected name since `computed` is unimported here. */
                 cellReadNames.add(declaration.name.text)
                 continue
+            }
+            /* Register any injected `__vsN` peek-cell a buried async seed sub-expression lifts, so
+               the reference-lowering emits `$$readCell(__vsN)` for its reads. The owning
+               declaration keeps its own bucket (a lifted computed's seed is now SYNC — a lazy
+               `derive` — while a lifted `linked`/`state` stays its usual cell). */
+            const seedLift = seedLiftFor(declaration)
+            if (seedLift !== undefined) {
+                for (const cell of seedLift.cells) {
+                    cellReadNames.add(cell.name)
+                }
             }
             if (isPlainStateSlot(declaration, bindings)) {
                 /* Plain `state(initial)` → a serializable `model` doc slot. */
@@ -394,6 +478,7 @@ export function desugarSignals(
                     writtenNames,
                     isEagerStreamComputed,
                     isPromiseComputed,
+                    seedLiftFor,
                 ),
             )
         }
@@ -422,9 +507,11 @@ function loweredStatement(
     writtenNames: ReadonlySet<string>,
     isEagerStreamComputed: EagerStreamPredicate,
     isPromiseComputed: EagerStreamPredicate,
+    seedLiftFor: (declaration: ts.VariableDeclaration) => ScriptSeedLift | undefined,
 ): ts.Statement[] {
     rejectMixedDeclaration(statement, bindings)
     return (
+        liftedSeedStatements(statement, bindings, seedLiftFor) ??
         injectedComputedStatements(statement, injectedCellNames, blockingCellNames) ??
         stateAssignmentStatements(statement, bindings) ??
         computedStatements(
@@ -437,6 +524,106 @@ function loweredStatement(
         propsStatements(statement, bindings, writtenNames) ??
         cellStatements(statement, bindings, signalNames) ?? [statement]
     )
+}
+
+/* Parses a lifted seed fragment (`getSession()` / `__vs0?.filteredSources ?? []`) back into an
+   expression node. Wrapped in parens so an object-literal or comma seed parses as an expression;
+   the node is synthetic (mini-parse positions), safe because every downstream pass — reference
+   renaming, doc-access lowering — is position-independent. */
+function parseSeedExpression(code: string): ts.Expression {
+    const file = ts.createSourceFile('__seed.ts', `(${code})`, ts.ScriptTarget.Latest, true)
+    const statement = file.statements[0]
+    if (statement !== undefined && ts.isExpressionStatement(statement)) {
+        const expression = statement.expression
+        return ts.isParenthesizedExpression(expression) ? expression.expression : expression
+    }
+    throw new Error(`abide: could not parse lifted seed expression: ${code}`)
+}
+
+/* `() => (<expr>)` — the bare thunk an injected STREAM peek-cell wraps its source in (byte-mirrors
+   an explicit `state.computed(getStream())`). */
+function bareThunk(expression: ts.Expression): ts.Expression {
+    return factory.createArrowFunction(
+        undefined,
+        undefined,
+        [],
+        undefined,
+        factory.createToken(ts.SyntaxKind.EqualsGreaterThanToken),
+        factory.createParenthesizedExpression(expression),
+    )
+}
+
+/* The injected `const __vsN = scope().trackedComputed(...)` cell for one lifted sub-expression —
+   the script-side twin of `injectedComputedStatements`: a PROMISE sub-expression becomes an async
+   unwrapping thunk carrying the streaming flag (`!blocking`), a STREAM stays a bare probe thunk. */
+function injectedSeedCell(cell: InjectedCell): ts.Statement {
+    const source = parseSeedExpression(cell.code)
+    const args =
+        cell.kind === 'promise'
+            ? [wrapAwaitSeed(source), cell.blocking ? factory.createFalse() : factory.createTrue()]
+            : [bareThunk(source)]
+    return constDeclaration(cell.name, scopeMethodCall('trackedComputed', args))
+}
+
+/* If any declaration in `statement` carries a script-seed lift (ADR-0032), lowers the whole
+   statement HERE: each lifted declaration emits its injected `__vsN` peek-cells FIRST (declared
+   before the owning statement — the seed runs eagerly at construction, so an appended cell would
+   be a TDZ reference), then the owning declaration lowered over its now-SYNC rewritten seed (a
+   lifted `computed` is a lazy `derive`; a `linked`/`state` keeps its cell). A non-lifted sibling
+   in the same (same-kind) statement re-enters the normal lowering as its own single declaration.
+   Returns undefined when no declaration lifts, so the standard dispatch runs. */
+function liftedSeedStatements(
+    statement: ts.Statement,
+    bindings: ReactiveImportBindings,
+    seedLiftFor: (declaration: ts.VariableDeclaration) => ScriptSeedLift | undefined,
+): ts.Statement[] | undefined {
+    if (!ts.isVariableStatement(statement) || statement.declarationList.declarations.length !== 1) {
+        return undefined
+    }
+    const declaration = statement.declarationList.declarations[0]!
+    const lift = seedLiftFor(declaration)
+    if (lift === undefined || !ts.isIdentifier(declaration.name)) {
+        return undefined
+    }
+    const output: ts.Statement[] = []
+    {
+        for (const cell of lift.cells) {
+            output.push(injectedSeedCell(cell))
+        }
+        const name = declaration.name.text
+        const seed = parseSeedExpression(lift.rewrittenSeedText)
+        const callee = signalCallee(declaration, bindings)
+        const rest = (declaration.initializer as ts.CallExpression).arguments.slice(1)
+        if (callee === 'computed') {
+            /* The rewritten seed is SYNC (it reads the peek-cells), so the computed is a lazy
+               `derive` doc slot read as `name()` — recomputes when a peek-cell reseeds. */
+            output.push(
+                constDeclaration(
+                    name,
+                    scopeMethodCall('derive', [factory.createStringLiteral(name), wrapSeed(seed)]),
+                ),
+            )
+        } else if (callee === 'linked') {
+            output.push(
+                constDeclaration(name, scopeMethodCall('linked', [wrapSeed(seed), ...rest])),
+            )
+        } else if (isPlainStateSlot(declaration, bindings)) {
+            output.push(
+                factory.createExpressionStatement(
+                    factory.createAssignment(
+                        factory.createPropertyAccessExpression(
+                            factory.createIdentifier('$$model'),
+                            name,
+                        ),
+                        seed,
+                    ),
+                ),
+            )
+        } else {
+            output.push(constDeclaration(name, scopeMethodCall('state', [seed, ...rest])))
+        }
+    }
+    return output
 }
 
 /* Lowers a synthetic `const __vN = computed(<seed>)` (an async (sub)expression peek-cell

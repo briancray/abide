@@ -937,4 +937,38 @@ describe('abide check', () => {
         const errors = await checkAbide({ cwd: dir })
         expect(errors).toBe(0)
     })
+
+    /* ADR-0032, script side: a buried async sub-expression in a `state`/`linked`/`computed` seed
+       peek-wraps in the shadow (`$$peek(getSession())?.items`), so `getSession()?.items ?? []`
+       type-checks against the RESOLVED value — the same forgiveness a `{#if getSession()?.x}`
+       template position already gets. */
+    test('a buried async seed sub-expression type-checks via the seed peek-wrap', () => {
+        const source = `<script>
+import { state } from '@abide/abide/ui/state'
+async function getSession(): Promise<{ items: number[] }> { return { items: [] } }
+const filtered = state.computed(getSession()?.items ?? [])
+</script>
+<p>{filtered.length}</p>
+`
+        const dir = project({ 'seed.abide': source })
+        /* Two-pass (classifier → peek-wrapped): the seed types as its resolved value → clean. */
+        expect(wrappedDiagnostics(dir)).toHaveLength(0)
+        /* Without the classifier (verbatim), the raw `Promise.items` error the user hit surfaces —
+           proving the clean result above is the peek-wrap, not a blanket suppression. */
+        const raw = collectAbideDiagnostics(createShadowProgram(dir))
+        expect(raw.some((diagnostic) => diagnostic.message.includes('items'))).toBe(true)
+    })
+
+    /* The same forgiveness inside a writable `linked` seed. */
+    test('a buried async sub-expression in a linked seed type-checks', () => {
+        const source = `<script>
+import { state } from '@abide/abide/ui/state'
+async function getSession(): Promise<{ items: number[] }> { return { items: [] } }
+let filtered = state.linked<number[]>(getSession()?.items ?? [])
+</script>
+<p>{filtered.length}</p>
+`
+        const dir = project({ 'seed.abide': source })
+        expect(wrappedDiagnostics(dir)).toHaveLength(0)
+    })
 })

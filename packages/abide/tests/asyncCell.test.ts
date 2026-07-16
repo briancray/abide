@@ -245,9 +245,11 @@ describe('linked whose seed reads a pending BLOCKING cell (Path B)', () => {
         // Before Path B this threw a SuspenseSignal out of `linked()` at construction.
         let cell: AsyncState<number[]> | undefined
         expect(() => {
+            // The seed returns `number[]` synchronously, so the STATIC type is `State<number[]>`;
+            // Path B swaps the runtime to an `AsyncState` when the read suspends (see assertions).
             cell = linked(
                 () => (readCell(source.cell) as { items: number[] } | undefined)?.items ?? [],
-            ) as AsyncState<number[]>
+            ) as unknown as AsyncState<number[]>
         }).not.toThrow()
 
         // It routed to an async cell (not the sync `state` path) and is pending…

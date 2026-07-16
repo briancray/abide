@@ -253,3 +253,59 @@ const frames = state.computed(obj.stream)
         expect(host.textContent).toContain('last')
     })
 })
+
+describe('script-seed sub-expression lift (ADR-0032, script side)', () => {
+    /* The headline: a BURIED promise call in an otherwise-sync seed lifts to an injected
+       streaming peek-cell, so `getSession()?.items ?? []` reads `[]` while pending instead of
+       type-erroring on `Promise.items` — the script twin of `{#if getSession()?.x}`. */
+    test('a buried promise sub-expression in a computed seed lifts to a peek-cell', () => {
+        const source = `<script>
+import { state } from '@abide/abide/ui/state'
+async function getSession(): Promise<{ items: number[] }> { return { items: [] } }
+const filtered = state.computed(getSession()?.items ?? [])
+</script>
+<p>{filtered.length}</p>
+`
+        const typed = compileTyped(source)
+        // getSession() hoisted to a streaming peek-cell (async-unwrap thunk, streaming `true`)
+        expect(typed).toContain(
+            '__vs0 = $$scope().trackedComputed(async () => await (getSession())',
+        )
+        expect(typed).toContain('true')
+        // the owning computed is now SYNC — a lazy derive reading the peek-cell
+        expect(typed).toContain('$$readCell(__vs0)')
+        expect(typed).toMatch(/derive\("filtered"/)
+    })
+
+    /* Same lift inside a `linked` seed — stays a writable cell, just no longer suspends/errors. */
+    test('a buried promise sub-expression in a linked seed lifts to a peek-cell', () => {
+        const source = `<script>
+import { state } from '@abide/abide/ui/state'
+async function getSession(): Promise<{ items: number[] }> { return { items: [] } }
+let filtered = state.linked<number[]>(getSession()?.items ?? [])
+</script>
+<p>{filtered.length}</p>
+`
+        const typed = compileTyped(source)
+        expect(typed).toContain(
+            '__vs0 = $$scope().trackedComputed(async () => await (getSession())',
+        )
+        expect(typed).toContain('$$scope().linked(')
+        expect(typed).toContain('$$readCell(__vs0)')
+    })
+
+    /* The whole-seed case is NOT double-wrapped: `computed(getSession())` keeps the existing
+       promise-seed routing (one trackedComputed, no `__vs`). */
+    test('a whole-seed promise call is left to the existing routing (no __vs peek-cell)', () => {
+        const source = `<script>
+import { state } from '@abide/abide/ui/state'
+async function getSession(): Promise<number[]> { return [] }
+const items = state.computed(getSession())
+</script>
+<p>{items}</p>
+`
+        const typed = compileTyped(source)
+        expect(typed).not.toContain('__vs')
+        expect(typed).toContain('trackedComputed')
+    })
+})

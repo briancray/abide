@@ -4,7 +4,11 @@ import { attrLiftPosition } from './attrLiftPosition.ts'
 import { hasTopLevelAwait } from './hasTopLevelAwait.ts'
 import { isFunctionScopeBoundary } from './isFunctionScopeBoundary.ts'
 import { isWhitespaceText } from './isWhitespaceText.ts'
-import { type LiftPosition, liftAsyncSubExpressions } from './liftAsyncSubExpressions.ts'
+import {
+    type LiftPosition,
+    type LiftSpan,
+    liftAsyncSubExpressions,
+} from './liftAsyncSubExpressions.ts'
 import { parseTemplate } from './parseTemplate.ts'
 import {
     NESTED_REACTIVE_BINDINGS,
@@ -94,7 +98,7 @@ export function compileShadow(
         importedReactives,
         propsLocalName,
         watchLocalName,
-    } = analyzeScript(scriptBody, scriptStart)
+    } = analyzeScript(scriptBody, scriptStart, classify)
     builder.raw(shadowPreamble(importedReactives))
     /* Every `computed`/`linked` scope line reads through this: it invokes the seed thunk and
        unwraps a promise/stream to the value a BARE cell read peeks (ADR-0019/0032) — so an async
@@ -492,7 +496,11 @@ function collectNestedScriptAwaitDiagnostics(
    module-scope type declarations, the value-typed scope lines, and the `props<Shape>()`
    prop shapes. `scriptStart` is the body's absolute offset in the source, so verbatim
    spans map back exactly. */
-function analyzeScript(scriptBody: string, scriptStart: number): ScriptAnalysis {
+function analyzeScript(
+    scriptBody: string,
+    scriptStart: number,
+    classify?: InterpolationClassifier,
+): ScriptAnalysis {
     const imports: ScopeLine[] = []
     const types: ScopeLine[] = []
     const scope: ScopeLine[] = []
@@ -564,7 +572,7 @@ function analyzeScript(scriptBody: string, scriptStart: number): ScriptAnalysis 
             continue
         }
         for (const declaration of reactive) {
-            scope.push(scopeLineFor(declaration, propsShapes, verbatim, span, bindings))
+            scope.push(scopeLineFor(declaration, propsShapes, verbatim, span, bindings, classify))
         }
     }
     return {
@@ -623,12 +631,85 @@ function reactiveDeclarations(
 
 /* Builds one scope line for a reactive declaration, projecting it to its value
    type. A `props()` destructure contributes its whole shape (pushed into `propsShapes`). */
+/* Splits a SEED's source text so each buried async sub-expression is wrapped in its shadow peek
+   helper (`$$peek`/`$$peekStream`) — the script-seed twin of the builder's `emitPeeked` (ADR-0032),
+   but returning a mapped `{ text, segments }` for a scope line rather than driving the builder. So a
+   bare `state.linked(getSession()?.x ?? [])` shadow-types via `$$peek(getSession())?.x ?? []` (the
+   RESOLVED value, `?.`/`??` compose) instead of erroring on `Promise.x` — mirroring exactly what the
+   `desugarSignals` lift builds. Fail-open: no classifier, a thunk seed (the walk stops at function
+   boundaries — matching the build, which also leaves a `() => …` seed unlifted), or an unparseable
+   span → the seed emits verbatim as one span. Every original char keeps its true source offset; the
+   inserted wrapper chars are unmapped, so diagnostics land precisely. */
+function peekWrappedSeed(
+    seedText: string,
+    sourceStart: number,
+    prefixLength: number,
+    classify: InterpolationClassifier | undefined,
+): { text: string; segments: ShadowMapping[] } {
+    const verbatimResult = {
+        text: seedText,
+        segments: [{ shadowStart: prefixLength, sourceStart, length: seedText.length }],
+    }
+    if (classify === undefined) {
+        return verbatimResult
+    }
+    let spans: LiftSpan[]
+    try {
+        let counter = 0
+        spans = liftAsyncSubExpressions(
+            seedText,
+            sourceStart,
+            classify,
+            () => `__v${counter++}`,
+            'content',
+        ).spans.filter((span) => !span.blocking)
+    } catch {
+        return verbatimResult
+    }
+    if (spans.length === 0) {
+        return verbatimResult
+    }
+    /* A single span covering the WHOLE seed is the whole-seed case (`computed(getRates())`): the
+       `$$cellValue`/`$$cellValuePending` wrapper the caller already applies unwraps it, so peek-
+       wrapping it here would double-unwrap (`T` → `T | undefined`). Skip it — only PROPER sub-
+       expressions wrap, matching `liftScriptSeed`'s identical whole-seed skip on the build side. */
+    const only = spans.length === 1 ? spans[0] : undefined
+    if (only !== undefined && seedText.slice(only.start, only.end).trim() === seedText.trim()) {
+        return verbatimResult
+    }
+    let text = ''
+    const segments: ShadowMapping[] = []
+    const pushMapped = (chunk: string, chunkSource: number): void => {
+        segments.push({
+            shadowStart: prefixLength + text.length,
+            sourceStart: chunkSource,
+            length: chunk.length,
+        })
+        text += chunk
+    }
+    let cursor = 0
+    for (const span of spans) {
+        if (span.start > cursor) {
+            pushMapped(seedText.slice(cursor, span.start), sourceStart + cursor)
+        }
+        text += span.kind === 'asyncIterable' ? '$$peekStream(' : '$$peek('
+        pushMapped(seedText.slice(span.start, span.end), sourceStart + span.start)
+        text += ')'
+        cursor = span.end
+    }
+    if (cursor < seedText.length) {
+        pushMapped(seedText.slice(cursor), sourceStart + cursor)
+    }
+    return { text, segments }
+}
+
 function scopeLineFor(
     declaration: ts.VariableDeclaration,
     propsShapes: string[],
     verbatim: (node: ts.Node) => string,
     span: (node: ts.Node, prefixLength: number) => ShadowMapping,
     bindings: ReactiveImportBindings,
+    classify?: InterpolationClassifier,
 ): ScopeLine {
     const name = ts.isIdentifier(declaration.name) ? declaration.name.text : '_'
     const call = declaration.initializer as ts.CallExpression
@@ -689,9 +770,12 @@ function scopeLineFor(
             })
         }
         const prefix = `let ${name}${annotation} = (`
+        /* Peek-wrap a buried async sub-expression in the initial too (the `desugarSignals` lift
+           runs on `state` seeds), so `state(getSession()?.x ?? [])` type-checks. */
+        const seed = seedPeekWrap(init, verbatim, span, prefix.length, classify)
         return withCalleeRef({
-            text: `${prefix}${verbatim(init)});`,
-            segments: [span(declaration.name, 4), span(init, prefix.length)],
+            text: `${prefix}${seed.text});`,
+            segments: [span(declaration.name, 4), ...seed.segments],
         })
     }
     /* computed<T>(compute) / linked<T>(seed) — the only callees left: T is the value
@@ -730,10 +814,31 @@ function scopeLineFor(
        pre-existing type-directed case, unchanged here.) */
     const helper = seedIsAsync(fn) && !seedIsBlocking(fn) ? '$$cellValuePending' : '$$cellValue'
     const prefix = `${keyword} ${name}${annotation} = ${helper}(${wrapPrefix}`
+    /* Peek-wrap any buried async sub-expression in the seed (ADR-0032, script side) so a bare
+       `getSession()?.x ?? []` types as its resolved value — matching the `desugarSignals` lift.
+       A whole-seed async call / a thunk seed yields no wrap (verbatim), exactly as the build. */
+    const seed = seedPeekWrap(fn, verbatim, span, prefix.length, classify)
     return withCalleeRef({
-        text: `${prefix}${verbatim(fn)}${wrapSuffix});`,
-        segments: [span(declaration.name, keywordOffset), span(fn, prefix.length)],
+        text: `${prefix}${seed.text}${wrapSuffix});`,
+        segments: [span(declaration.name, keywordOffset), ...seed.segments],
     })
+}
+
+/* The seed peek-wrap as a scope line contributes it: a bare CALL or IDENTIFIER seed (the whole-seed
+   / probe case — `getRates()`, `chat.done()`) stays verbatim so the `$$cellValue` wrapper unwraps it
+   and no probe receiver is lifted, mirroring `desugarSignals`'s bare-seed skip; every other seed
+   descends into `peekWrappedSeed`. */
+function seedPeekWrap(
+    seed: ts.Expression,
+    verbatim: (node: ts.Node) => string,
+    span: (node: ts.Node, prefixLength: number) => ShadowMapping,
+    prefixLength: number,
+    classify: InterpolationClassifier | undefined,
+): { text: string; segments: ShadowMapping[] } {
+    if (ts.isCallExpression(seed) || ts.isIdentifier(seed)) {
+        return { text: verbatim(seed), segments: [span(seed, prefixLength)] }
+    }
+    return peekWrappedSeed(verbatim(seed), span(seed, 0).sourceStart, prefixLength, classify)
 }
 
 /* True for a `computed`/`linked` seed that `wrapSeed` (desugarSignals) turns into an ASYNC thunk —
