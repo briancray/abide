@@ -238,20 +238,20 @@ let prefix = state('•')</script>
         const host = document.createElement('div')
         component(parent, { List: component(List) })(host)
         expect(serialize(host)).toBe(
-            '<!--[--><ul>' +
+            '<!--abide:c:0--><ul>' +
                 '<!--abide:snippet--><li>•x</li><!--/abide:snippet-->' +
                 '<!--abide:snippet--><li>•y</li><!--/abide:snippet-->' +
-                '</ul><!--]-->',
+                '</ul><!--/abide:c:0-->',
         )
     })
 
     test('SSR: identical, snippet rendered inside the child', async () => {
         const html = (await component(parent, { List: component(List) }).render()).html
         expect(html).toBe(
-            '<!--[--><ul>' +
+            '<!--abide:c:0--><ul>' +
                 '<!--abide:snippet--><li>•x</li><!--/abide:snippet-->' +
                 '<!--abide:snippet--><li>•y</li><!--/abide:snippet-->' +
-                '</ul><!--]-->',
+                '</ul><!--/abide:c:0-->',
         )
     })
 })

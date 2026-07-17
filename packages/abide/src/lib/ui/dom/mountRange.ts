@@ -1,11 +1,9 @@
 import { RANGE_CLOSE, RANGE_OPEN } from '../runtime/RANGE_MARKER.ts'
 import { RENDER } from '../runtime/RENDER.ts'
-import { scope } from '../runtime/scope.ts'
 import type { UiProps } from '../runtime/types/UiProps.ts'
-import { disposeRange } from './disposeRange.ts'
+import { adoptRange } from './adoptRange.ts'
 import { fillRange } from './fillRange.ts'
 import { openMarker } from './openMarker.ts'
-import { withScope } from './withScope.ts'
 
 /*
 Mounts a nested child component as a marker-bounded range — the wrapper-free
@@ -22,6 +20,12 @@ marker — mirrors `mountSlot`/`when`). `before` (a skeleton-located node, the b
 `anchorCursor`) places the range among static siblings on create; hydrate ignores it
 (the claim cursor drives placement). Returns the markers + a disposer so the hot path
 can rebuild in place.
+
+`bracket` names the range's boundary markers. It defaults to the anonymous `[`/`]` a
+control-flow re-fill and the swapped-in inner range of a streamed child use; `mountChild`
+passes the ADDRESSED `abide:c:PATH` pair (ADR-0049) so a component's range carries its own
+render-path — the same markers on create and SSR (congruent) and a named close a desync can
+discard to.
 */
 // @documentation plumbing
 export function mountRange(
@@ -29,17 +33,16 @@ export function mountRange(
     build: (host: Node, props?: UiProps) => void,
     props: UiProps | undefined,
     before: Node | null = null,
+    bracket: { open: string; close: string } = DEFAULT_BRACKET,
 ): { start: Comment; end: Comment; dispose: () => void } {
     const hydration = RENDER.hydration
-    const start = openMarker(parent, RANGE_OPEN, before)
+    const start = openMarker(parent, bracket.open, before)
     if (hydration === undefined) {
-        const end = openMarker(parent, RANGE_CLOSE, before)
+        const end = openMarker(parent, bracket.close, before)
         return fillRange(start, end, build, props)
     }
-    /* Hydrate: adopt the server range in place. Establish the child's lexical scope
-       and render pass (same as `fillRange`), build claiming the existing nodes, then
-       claim the end marker the build's content stops before. */
-    const scoped = withScope(() => scope(() => build(parent, props)))
-    const end = openMarker(parent, RANGE_CLOSE)
-    return { start, end, dispose: disposeRange(scoped, start, end) }
+    /* Hydrate: adopt the server range in place, claiming `bracket.close` as the end marker. */
+    return adoptRange(parent, build, props, start, bracket.close)
 }
+
+const DEFAULT_BRACKET = { open: RANGE_OPEN, close: RANGE_CLOSE }

@@ -1,12 +1,6 @@
 import type { FlightPromise } from './flight.ts'
-import { RANGE_CLOSE, RANGE_OPEN } from './runtime/RANGE_MARKER.ts'
 import type { ResumeEntry } from './runtime/RESUME.ts'
 import type { SsrAwait, SsrRender } from './runtime/types/SsrRender.ts'
-
-/* Comment-wrapped range markers — imported from the shared constant (not a local literal) so the
-   inline branch below can never drift from `generateSSR`'s own range emit. */
-const OPEN = `<!--${RANGE_OPEN}-->`
-const CLOSE = `<!--${RANGE_CLOSE}-->`
 
 /* One hoistable child render staged by generateSSR: the reserved index in its output array, the
    array itself, the child's render-path (the streamed boundary id), and its in-flight render. */
@@ -24,9 +18,9 @@ hoistable child was started as an isolated `$$flight` in the prefix and its outp
 (an empty `$out` slot); here we fill that slot per child:
 
 - A flight that has already SETTLED (a synchronous / warm-cache child, or a fast read) inlines its
-  html into the reserved slot as `<!--[-->…<!--]-->` — BYTE-IDENTICAL to the pre-ADR-0039 inline
-  `await Child.render()` path, so an all-fast page's wire and hydration are unchanged. Its awaits /
-  resume merge exactly as the inline path did.
+  html into the reserved slot in the child's addressed `abide:c:CHILDPATH` boundary (ADR-0049) —
+  the same shape `generateSSR`'s non-hoistable inline path emits, so an all-fast page adopts and
+  recovers uniformly. Its awaits / resume merge exactly as the inline path did.
 - A flight settled REJECTED rethrows here — same as a rejecting inline await (500 before flush).
 - A still-PENDING flight (genuine I/O) STREAMS: the slot gets an empty `abide:await:CHILDPATH`
   boundary, and an html-only SsrAwait is pushed so `renderToStream` flushes the shell now and streams
@@ -53,7 +47,12 @@ export async function finalizeStreamedChildren(
     for (const staged of slots) {
         if (staged.flight.settled && staged.flight.error === undefined) {
             const rendered = staged.flight.value as SsrRender
-            staged.out[staged.slot] = OPEN + rendered.html + CLOSE
+            /* Inline the settled html in the child's ADDRESSED boundary (ADR-0049) — the same
+               `abide:c:CHILDPATH` shape `generateSSR`'s non-hoistable path emits, so the client's
+               `mountChild` adopts a hoistable-settled and a non-hoistable child identically (it can't
+               know which the server chose) and either recovers at this boundary on a desync. */
+            staged.out[staged.slot] =
+                `<!--abide:c:${staged.id}-->${rendered.html}<!--/abide:c:${staged.id}-->`
             mergeChildRender(rendered, awaits, resume)
         } else if (staged.flight.settled) {
             throw staged.flight.error

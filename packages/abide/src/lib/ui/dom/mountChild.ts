@@ -3,8 +3,10 @@ import { claimChild } from '../runtime/claimChild.ts'
 import { OWNER } from '../runtime/OWNER.ts'
 import { RANGE_OPEN } from '../runtime/RANGE_MARKER.ts'
 import { RENDER } from '../runtime/RENDER.ts'
+import { reportHydrationDivergence } from '../runtime/reportHydrationDivergence.ts'
 import type { UiComponent } from '../runtime/types/UiComponent.ts'
 import { withOptionalPath } from '../runtime/withOptionalPath.ts'
+import { adoptRange } from './adoptRange.ts'
 import { commentData } from './commentData.ts'
 import { discardAndRebuild } from './discardAndRebuild.ts'
 import { mountRange } from './mountRange.ts'
@@ -20,8 +22,12 @@ The server decides per render whether a HOISTABLE child (ADR-0039) inlined (fast
 streamed (still-pending), and the client build can't know which — nor whether this child was
 hoistable at all — so hydrate mode probes the cursor:
 
-  - `<!--[-->` (RANGE_OPEN) next → the server INLINED the child (every non-hoistable child,
-    and a hoistable one whose flight settled); adopt its range in place.
+  - `<!--abide:c:CHILDPATH-->` next → the server INLINED the child in its ADDRESSED boundary
+    (ADR-0049 — every non-streamed child); claim the boundary open, adopt the range in place,
+    claim the close. A structural desync INSIDE the child (a client-true / server-false `{#if}`
+    gating an element's presence) throws through the build — recover by discarding just this
+    boundary and remounting the child fresh (`discardAndRebuild`), so the desync costs one
+    component instead of reaching the router and discarding the whole page.
   - `<!--abide:await:CHILDPATH-->` next → the server STREAMED it; `__abideSwap` has already
     spliced the child's `<!--[-->…<!--]-->` between the boundary markers before the bundle
     ran, so claim the boundary open, adopt the inner range in place, claim the boundary close.
@@ -46,27 +52,56 @@ export function mountChild(
     ordinal?: number,
 ): void {
     const run = <T>(build: () => T): T => withOptionalPath(ordinal, build)
-    const mount = (): { dispose: () => void } =>
-        run(() => mountRange(parent, factory.build, props, before))
+    /* Both boundary ids are the child's render-path, computed here exactly as the server wrote it
+       (`renderPath(ordinal)`), so SSR and client agree with no counter. */
+    const childPath = run(() => CURRENT_PATH.current)
+    const addressed = { open: `abide:c:${childPath}`, close: `/abide:c:${childPath}` }
+    /* Mount the child's range in its ADDRESSED boundary (ADR-0049) — the create path and the
+       inline-recovery rebuild, so a client-only mount is byte-congruent with the SSR markup and a
+       desync has a named close to discard to. */
+    const mountAddressed = (where: Node | null): { dispose: () => void } =>
+        run(() => mountRange(parent, factory.build, props, where, addressed))
+    /* Mount into an anonymous `[ … ]` range — the swapped-in inner range of a STREAMED child, whose
+       own address is the outer `abide:await` pair. */
+    const mountAnon = (where: Node | null): { dispose: () => void } =>
+        run(() => mountRange(parent, factory.build, props, where))
 
     const hydration = RENDER.hydration
     if (hydration === undefined) {
-        /* Call mount() first, THEN register its dispose — `OWNER.current?.push(mount())` would
-           short-circuit the whole expression (never mounting) when there is no owner. */
-        const handle = mount()
+        /* Call mountAddressed() first, THEN register its dispose — pushing the call result inline
+           would short-circuit (never mounting) when there is no owner. */
+        const handle = mountAddressed(before)
         OWNER.current?.push(handle.dispose)
         return
     }
 
-    /* Probe the cursor without consuming it. Streamed iff the next node is this child's boundary. */
-    const childPath = run(() => CURRENT_PATH.current)
+    /* Probe the cursor without consuming it, and classify what the server emitted here by the
+       marker data. */
     const cursor = claimChild(hydration, parent)
-    const streamed = cursor !== null && commentData(cursor) === `abide:await:${childPath}`
+    const marker = cursor !== null ? commentData(cursor) : undefined
 
-    if (!streamed) {
-        /* INLINE — the server inlined the child's `[ … ]` range; adopt it in place. */
-        const handle = mount()
-        OWNER.current?.push(handle.dispose)
+    if (marker !== `abide:await:${childPath}`) {
+        /* INLINE (ADR-0049) — claim the addressed open, adopt the child's range in place. A
+           structural desync inside the child throws through the build; recover by discarding just
+           THIS boundary and remounting fresh, so the desync costs one component, not the page. The
+           partial scope a throwing build stranded is already disposed (`withScope`/`scope`), so the
+           cold rebuild starts clean. */
+        const open = openMarker(parent, addressed.open)
+        try {
+            const handle = run(() =>
+                adoptRange(parent, factory.build, props, open, addressed.close),
+            )
+            OWNER.current?.push(handle.dispose)
+        } catch (error) {
+            reportHydrationDivergence('component boundary recovered — remounting', {
+                path: childPath,
+                error,
+            })
+            const handle = discardAndRebuild(hydration, parent, open, addressed.close, (after) =>
+                mountAddressed(after),
+            )
+            OWNER.current?.push(handle.dispose)
+        }
         return
     }
 
@@ -75,7 +110,7 @@ export function mountChild(
     const inner = claimChild(hydration, parent)
     const warm = inner !== null && commentData(inner) === RANGE_OPEN
     if (warm) {
-        const handle = mount()
+        const handle = mountAnon(before)
         openMarker(parent, `/abide:await:${childPath}`)
         OWNER.current?.push(handle.dispose)
         return
@@ -88,7 +123,7 @@ export function mountChild(
         parent,
         open,
         `/abide:await:${childPath}`,
-        (after) => run(() => mountRange(parent, factory.build, props, after)),
+        (after) => mountAnon(after),
     )
     OWNER.current?.push(handle.dispose)
 }

@@ -627,13 +627,15 @@ let name = state('world')</script><div><Greeting label={name} /></div>`
             'Greeting',
             compileSSR(parentSource),
         )(doc, state, computed, effect, Greeting)) as SsrRender
-        expect(server.html).toBe('<div><!--a--><!--[--><span>Hi world</span><!--]--></div>')
+        expect(server.html).toBe(
+            '<div><!--a--><!--abide:c:0--><span>Hi world</span><!--/abide:c:0--></div>',
+        )
 
         // parse + hydrate
         const host = document.createElement('div')
         host.innerHTML = server.html
         const div = host.childNodes[0] as unknown as { childNodes: unknown[] }
-        // the child mounts as a marker range: <!--a-->, <!--[-->, <span>, <!--]-->
+        // the child mounts as an addressed range: <!--a-->, <!--abide:c:0-->, <span>, <!--/abide:c:0-->
         const spanBefore = div.childNodes[2]
         const parentBody = compileComponent(parentSource)
         hydrate(host, (target) => {

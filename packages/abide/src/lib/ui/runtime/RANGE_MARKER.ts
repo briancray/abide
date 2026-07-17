@@ -7,7 +7,9 @@
 
    A control-flow block's rendered content sits between an OPEN (`[`) and CLOSE (`]`)
    comment; a snippet interpolation between `abide:snippet` / `/abide:snippet` (matching
-   `skeleton`'s `abide:` / `/abide:` named-boundary convention, like `OUTLET_MARKER`).
+   `skeleton`'s `abide:` / `/abide:` named-boundary convention, like `OUTLET_MARKER`); a
+   component mount between the ADDRESSED pair `abide:c:PATH` / `/abide:c:PATH` (PATH the
+   child's render-path — ADR-0049 — so a desync inside recovers at that one boundary).
    The skeleton's own positioning anchor (`a`) sits OUTSIDE any such range. */
 export const RANGE_OPEN = '['
 export const RANGE_CLOSE = ']'

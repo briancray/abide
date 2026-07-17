@@ -1,5 +1,7 @@
+import { CURRENT_PATH } from '../runtime/CURRENT_PATH.ts'
 import { claimRun } from '../runtime/claimRun.ts'
 import { RENDER } from '../runtime/RENDER.ts'
+import { reportHydrationDivergence } from '../runtime/reportHydrationDivergence.ts'
 import { foreignWrapperTag } from './foreignWrapperTag.ts'
 import { templateFor } from './templateFor.ts'
 
@@ -29,10 +31,39 @@ export function cloneStatic(parent: Node, html: string): void {
     const source = wrapper === undefined ? template.content : (template.content.firstChild as Node)
     const hydration = RENDER.hydration
     if (hydration !== undefined) {
-        claimRun(hydration, parent, source.childNodes.length)
+        /* Claim the run AND verify its top-level shape. A static clone is byte-identical to the
+           server markup, so it can only DIVERGE when a client-asymmetric gate above it (a sync
+           `{#if}`/`{#switch}` whose condition differs SSR↔client — `{#if pending()}`) rendered a
+           different branch on the server, leaving the claim cursor on foreign nodes. Unverified,
+           `claimRun` would SILENTLY adopt them — wrong nodes wired, cursor desynced for every later
+           sibling; assert the node names instead and throw the standard structural desync (like
+           `claimExpected`) so an addressed component boundary (ADR-0049) recovers locally. */
+        const claimed: Node[] = []
+        claimRun(hydration, parent, source.childNodes.length, claimed)
+        assertStaticRun(claimed, source.childNodes)
         return
     }
     for (const child of source.childNodes) {
         parent.appendChild(child.cloneNode(true))
+    }
+}
+
+/* Throw a structural hydration desync when a claimed static run doesn't match its template's
+   top-level nodes (a short run, or a differing node at any position — an element vs the comment
+   marker of a diverged branch). Named on the `hydrate` channel first, then thrown so the nearest
+   addressed boundary can discard-and-rebuild. */
+function assertStaticRun(claimed: Node[], expected: NodeListOf<ChildNode>): void {
+    const short = claimed.length !== expected.length
+    for (let index = 0; index < expected.length; index += 1) {
+        const want = (expected[index] as Node).nodeName
+        if (short || (claimed[index] as Node).nodeName !== want) {
+            reportHydrationDivergence('static structure desync', {
+                expected: want,
+                got: short ? '(missing)' : (claimed[index] as Node).nodeName,
+            })
+            throw new Error(
+                `[abide] hydration desync at ${CURRENT_PATH.current || '(root)'}: expected a static ${want} node here, but the server DOM had a different node — SSR markup and the client build disagree on structure at this position.`,
+            )
+        }
     }
 }

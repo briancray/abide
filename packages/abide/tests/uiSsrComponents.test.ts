@@ -75,7 +75,9 @@ let name = state('world')</script>
 
         // server render — child rendered server-side, inlined in its marker range
         const server = await component(parentSource, { Greeting }).render()
-        expect(server.html).toBe('<div><!--a--><!--[--><span>Hi world</span><!--]--></div>')
+        expect(server.html).toBe(
+            '<div><!--a--><!--abide:c:0--><span>Hi world</span><!--/abide:c:0--></div>',
+        )
 
         // client render — should produce the identical tree
         const host = document.createElement('div')
@@ -139,7 +141,9 @@ let q = state('hi')</script>
         `
 
         const server = await component(parentSource, { Input }).render()
-        expect(server.html).toBe('<div><!--a--><!--[--><input value="hi"><!--]--></div>')
+        expect(server.html).toBe(
+            '<div><!--a--><!--abide:c:0--><input value="hi"><!--/abide:c:0--></div>',
+        )
 
         const host = document.createElement('div')
         component(parentSource, { Input })(host)
@@ -163,7 +167,7 @@ let q = state('hi')</script>
 
         const server = await component(parentSource, { Card }).render()
         expect(server.html).toBe(
-            '<div><!--a--><!--[--><article>Hi: explicit</article><!--]--></div>',
+            '<div><!--a--><!--abide:c:0--><article>Hi: explicit</article><!--/abide:c:0--></div>',
         )
 
         const host = document.createElement('div')
@@ -186,7 +190,7 @@ let q = state('hi')</script>
         const server = await component(parentSource, { Field }).render()
         /* The explicit `type="text"` wins; the spread skips it (no duplicate `type` attr). */
         expect(server.html).toBe(
-            '<div><!--a--><!--[--><input type="text" placeholder="x"><!--]--></div>',
+            '<div><!--a--><!--abide:c:0--><input type="text" placeholder="x"><!--/abide:c:0--></div>',
         )
 
         const host = document.createElement('div')
@@ -208,7 +212,7 @@ let q = state('hi')</script>
         const server = await component(parentSource, { Field }).render()
         /* The consumed `label` is dropped; the rest render as element attributes. */
         expect(server.html).toBe(
-            '<div><!--a--><!--[--><input type="email" placeholder="x"><!--]--></div>',
+            '<div><!--a--><!--abide:c:0--><input type="email" placeholder="x"><!--/abide:c:0--></div>',
         )
 
         const host = document.createElement('div')

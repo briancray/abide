@@ -141,9 +141,11 @@ describe('multi-root branches', () => {
     test('a component is a valid branch root: SSR, mount, and hydrate agree', async () => {
         const SRC = `<main>{#if $$model.on}<Button label="hi"/>{/if}</main>`
         // a component renders as a marker range (no wrapper element), both server and
-        // client; the inner `[`…`]` is the component, the outer is the if-branch range
+        // client; the inner `abide:c:PATH` addressed pair (ADR-0049) is the component — its
+        // render-path `then/0` composes the if-branch key + mount ordinal — and the outer
+        // `[`…`]` is the if-branch range
         expect((await ssr(SRC, doc({ on: true }))).html).toBe(
-            '<main><!--a--><!--[--><!--[--><span>hi</span><!--]--><!--]--></main>',
+            '<main><!--a--><!--[--><!--abide:c:then/0--><span>hi</span><!--/abide:c:then/0--><!--]--></main>',
         )
         expect((await ssr(SRC, doc({ on: false }))).html).toBe(
             '<main><!--a--><!--[--><!--]--></main>',
@@ -174,7 +176,7 @@ describe('multi-root branches', () => {
     test('a component is a valid each row', async () => {
         const SRC = `<ul>{#for i of $$model.items by i}<Button label={i}/>{/for}</ul>`
         expect((await ssr(SRC, doc({ items: ['a', 'b'] }))).html).toBe(
-            '<ul><!--a--><!--[--><!--[--><span>a</span><!--]--><!--]--><!--[--><!--[--><span>b</span><!--]--><!--]--></ul>',
+            '<ul><!--a--><!--[--><!--abide:c:a/0--><span>a</span><!--/abide:c:a/0--><!--]--><!--[--><!--abide:c:b/0--><span>b</span><!--/abide:c:b/0--><!--]--></ul>',
         )
         const $$model = doc({ items: ['a', 'b'] })
         const host = document.createElement('div')

@@ -82,9 +82,9 @@ let name = state('world')</script>
             globalThis as unknown as { serializeMiniDom: (h: unknown) => string }
         ).serializeMiniDom(host)
         expect(html).toBe(
-            '<!--[--><div class="card"><!--a-->' +
+            '<!--abide:c:0--><div class="card"><!--a-->' +
                 '<!--[--><!--abide:snippet-->Hello world!<!--/abide:snippet--><!--]-->' +
-                '</div><!--]-->',
+                '</div><!--/abide:c:0-->',
         )
     })
 
@@ -92,9 +92,9 @@ let name = state('world')</script>
         const CardComponent = component(Card)
         const server = await component(parent, { Card: CardComponent }).render()
         expect(server.html).toBe(
-            '<!--[--><div class="card"><!--a-->' +
+            '<!--abide:c:0--><div class="card"><!--a-->' +
                 '<!--[--><!--abide:snippet-->Hello world!<!--/abide:snippet--><!--]-->' +
-                '</div><!--]-->',
+                '</div><!--/abide:c:0-->',
         )
     })
 
@@ -183,9 +183,9 @@ const { children } = props<{ children: Snippet }>()
         // the hydration guarantee: same markers, same order, both sides
         expect(client).toBe(server.html)
         expect(server.html).toBe(
-            '<!--[--><div class="card"><!--a-->' +
+            '<!--abide:c:0--><div class="card"><!--a-->' +
                 '<!--[--><!--abide:snippet-->hello<!--/abide:snippet--><!--]-->' +
-                '</div><!--]-->',
+                '</div><!--/abide:c:0-->',
         )
     })
 })

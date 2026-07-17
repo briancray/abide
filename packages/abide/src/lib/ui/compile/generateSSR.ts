@@ -616,16 +616,22 @@ export function generateSSR(
                 )
             }
             /* Non-hoistable child (off the top-level spine): await inline at its structural position,
-               sequential, as before — never streams. */
+               sequential, as before — never streams. Bracket its html in the ADDRESSED boundary
+               (ADR-0049) `abide:c:CHILDPATH` in place of the anonymous `[`/`]` — CHILDPATH is the
+               child's render-path (`$$renderPath(ordinal)`), the same id the client's `mountChild`
+               composes — so a hydration desync inside the child recovers AT this boundary instead of
+               reaching the router and discarding the whole page. */
             const result = nextVar('$child')
+            const childPath = nextVar('$cpath')
             return (
                 anchor +
-                push(target, RANGE_OPEN) +
+                `const ${childPath} = $$renderPath(${ordinal});\n` +
+                `${target}.push('<!--abide:c:' + ${childPath} + '-->');\n` +
                 `const ${result} = await ${renderExpr};\n` +
                 `${target}.push(${result}.html);\n` +
                 `for (const $a of ${result}.awaits) { $awaits.push($a); }\n` +
                 `Object.assign($resume, ${result}.resume);\n` +
-                push(target, RANGE_CLOSE)
+                `${target}.push('<!--/abide:c:' + ${childPath} + '-->');\n`
             )
         }
         if (node.kind === 'element' && node.tag === OUTLET_TAG) {
