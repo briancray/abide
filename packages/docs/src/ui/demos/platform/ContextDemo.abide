@@ -1,0 +1,15 @@
+<script>
+  import platformContext from "../../../server/rpc/platformContext"
+
+  // No input — a per-RPC middleware stamps context(), the handler reads it back. The button re-runs it.
+  function read() { platformContext.refresh() }
+</script>
+
+<button id="read-context-btn" onclick={read}>Read context()</button>
+
+{#await platformContext()}
+  <p id="context-block">reading…</p>
+{:then scope}
+  <pre class="out" id="context-block">context.stampedBy = {scope?.stampedBy ?? "(none)"}
+context.stampedAt = {scope?.stampedAt ?? "(none)"}</pre>
+{/await}

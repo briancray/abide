@@ -1,0 +1,11 @@
+<script>
+  // Each link resolves the same `[slug]` page with a different captured value; the segment lands in
+  // route().params.slug on the destination page.
+  const topics = ["isomorphism", "cells", "hello"]
+</script>
+
+<ul class="topics">
+  {#for topic of topics}
+    <li><a href={"/topics/" + topic}>/topics/{topic}</a></li>
+  {/for}
+</ul>

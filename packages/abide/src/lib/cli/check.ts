@@ -157,7 +157,7 @@ export async function check(dir: string): Promise<CheckResult> {
 // File discovery
 // ---------------------------------------------------------------------------
 
-function findAbideFiles(dir: string): string[] {
+export function findAbideFiles(dir: string): string[] {
     const found: string[] = []
     const walk = (current: string): void => {
         let entries: Dirent[]
@@ -204,7 +204,10 @@ function buildGenerated(abidePath: string, source: string, root: Root): Generate
 // Offset mapping
 // ---------------------------------------------------------------------------
 
-function offsetToLineColumn(source: string, offset: number): { line: number; column: number } {
+export function offsetToLineColumn(
+    source: string,
+    offset: number,
+): { line: number; column: number } {
     let line = 1
     let column = 1
     const limit = Math.min(offset, source.length)

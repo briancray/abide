@@ -2,6 +2,7 @@ import { afterAll, describe, expect, test } from 'bun:test'
 import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { loadClientBuild } from '../server/internal/clientBundle.ts'
 import { build, scaffold } from './main.ts'
 import { type ServeResult, serve } from './serve.ts'
 
@@ -94,18 +95,53 @@ describe('scaffold — writes a minimal starter project', () => {
     })
 })
 
-describe('build — content-addressed client bundle', () => {
-    test('writes a bundle into dist/_app/<hash>/', async () => {
+describe('build — content-addressed split client', () => {
+    test('writes every hashed chunk + a manifest into dist/_app/<hash>/', async () => {
         const outDir = await build(FIXTURE_DIR)
         expect(outDir).toContain(join('dist', '_app'))
 
-        const bundle = Bun.file(join(outDir, 'client.js'))
-        expect(await bundle.exists()).toBe(true)
-        expect((await bundle.text()).length).toBeGreaterThan(0)
-
+        // The manifest names the content-hashed loader entry + every emitted file.
         const index = await Bun.file(join(outDir, 'index.json')).json()
-        expect(index.entry).toBe('client.js')
         expect(typeof index.hash).toBe('string')
         expect(index.hash.length).toBeGreaterThan(0)
+        expect(index.entry).toMatch(/^loader-[a-z0-9]+\.js$/)
+        expect(Array.isArray(index.files)).toBe(true)
+        expect(index.files).toContain(index.entry)
+
+        // Every manifest-listed file was written to disk, non-empty. There is more than one file (the
+        // loader entry + at least one code-split page chunk) — proof the app actually split.
+        for (const name of index.files as string[]) {
+            const file = Bun.file(join(outDir, name))
+            expect(await file.exists()).toBe(true)
+            expect((await file.text()).length).toBeGreaterThan(0)
+        }
+        expect((index.files as string[]).length).toBeGreaterThan(1)
+
+        // A stable top-level pointer for `abide start` mirrors the per-build record (incl. chunkByPattern).
+        const manifest = await Bun.file(join(FIXTURE_DIR, 'dist', 'manifest.json')).json()
+        expect(manifest.hash).toBe(index.hash)
+        expect(manifest.entry).toBe(index.entry)
+        expect(typeof manifest.chunkByPattern).toBe('object')
+    })
+
+    test('abide start SERVES the pre-built dist artifacts (no rebuild)', async () => {
+        await build(FIXTURE_DIR)
+        const manifest = await Bun.file(join(FIXTURE_DIR, 'dist', 'manifest.json')).json()
+        // Tamper the built loader on disk with a sentinel. A prebuilt serve must return THIS exact file,
+        // proving it reads the `abide build` artifacts rather than re-running the bundler at boot (a
+        // rebuild — deterministic — would produce the clean, sentinel-free output).
+        const loaderPath = join(FIXTURE_DIR, 'dist', '_app', manifest.hash, manifest.entry)
+        const sentinel = '/*ABIDE_PREBUILT_SENTINEL*/'
+        await Bun.write(loaderPath, sentinel + (await Bun.file(loaderPath).text()))
+
+        const clientBuild = await loadClientBuild(FIXTURE_DIR)
+        if (clientBuild === undefined) throw new Error('expected a loaded client build')
+        const app = await serve(FIXTURE_DIR, { dev: false, port: 0, clientBuild })
+        running.push(app)
+
+        const served = await (await fetch(`${app.url}/__abide/chunk/${manifest.entry}`)).text()
+        expect(served).toContain(sentinel) // came from the dist file on disk, not a fresh build
+        const doc = await (await fetch(`${app.url}/`)).text()
+        expect(doc).toContain(`<script type="module" src="/__abide/chunk/${manifest.entry}">`)
     })
 })

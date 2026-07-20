@@ -1,0 +1,8 @@
+<script>
+  import hello from "../../../server/rpc/hello"
+
+  // The non-blocking snapshot `fn.peek(args)`. On the server it lands the value; in the browser it
+  // is `undefined` while pending (it subscribes and kicks the coalesced load), the value once loaded.
+</script>
+
+<p class="say" data-testid="peek-read">{hello.peek({ who: "peek" })}</p>

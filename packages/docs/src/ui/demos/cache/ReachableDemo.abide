@@ -1,0 +1,19 @@
+<script>
+  import { state } from "abide/ui/state"
+  import cacheReachable from "../../../server/rpc/cacheReachable"
+
+  // reachable(host) actively probes a host: the app's own origin answers (true), a dead local port
+  // is refused (false).
+  let reachStarted = state(false)
+  const reachSelf = state.computed(() => (reachStarted ? String(cacheReachable.peek({})?.self ?? "…") : "idle"))
+  const reachDead = state.computed(() => (reachStarted ? String(cacheReachable.peek({})?.dead ?? "…") : "idle"))
+  function startReach() { reachStarted = true }
+</script>
+
+<ul class="grid">
+  <li>reachable(self): <strong data-testid="reach-self">{reachSelf}</strong></li>
+  <li>reachable(dead): <strong data-testid="reach-dead">{reachDead}</strong></li>
+</ul>
+<div class="row">
+  <button data-testid="reach-start" onclick={startReach}>Probe</button>
+</div>

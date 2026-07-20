@@ -12,7 +12,7 @@ import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { BundleWindow } from '../bundle/BundleWindow.ts'
-import { buildClientBundle } from '../server/internal/clientBundle.ts'
+import { buildClient, type ClientBuild, loadClientBuild } from '../server/internal/clientBundle.ts'
 import { loadApp } from '../server/internal/loadApp.ts'
 import { bundleLauncher } from './bundleLauncher.ts'
 import { check } from './check.ts'
@@ -69,22 +69,48 @@ async function runStep(command: string[], cwd: string): Promise<boolean> {
     }
 }
 
-// Build the client bundle and write it, content-addressed, to dist/_app/<hash>/ (BP1.3). Returns
-// the absolute output dir. The hash is a deterministic digest of the bundle text, so the same
-// source yields the same dir (immutable long-cache, reproducible builds).
+// Build the code-split client and write every content-hashed file (loader entry + per-route chunks +
+// shared chunks + CSS), plus a manifest, into dist/_app/<hash>/ (BP1.3, TODO #6). Returns the absolute
+// output dir. The outer hash is a deterministic digest of the manifest (entry + sorted filenames), so
+// the same source yields the same dir (immutable long-cache, reproducible builds).
 export async function build(dir: string): Promise<string> {
     const config = await loadApp(dir)
     config.dev = false // production build → minify the client bundle (TODO #6).
-    const bundle = await buildClientBundle(config)
-    const hash = new Bun.CryptoHasher('sha256').update(bundle).digest('hex').slice(0, 16)
+    const built = await buildClient(config)
+    const names = [...built.files.keys()].sort()
+    const manifest = {
+        entry: built.entry,
+        css: built.cssFile ?? null,
+        files: names,
+        chunkByPattern: Object.fromEntries(built.chunkByPattern),
+    }
+    const hash = new Bun.CryptoHasher('sha256')
+        .update(JSON.stringify(manifest))
+        .digest('hex')
+        .slice(0, 16)
     const outDir = join(dir, 'dist', '_app', hash)
     await mkdir(outDir, { recursive: true })
-    await Bun.write(join(outDir, 'client.js'), bundle)
-    await Bun.write(
-        join(outDir, 'index.json'),
-        JSON.stringify({ hash, entry: 'client.js' }, null, 2),
-    )
+    for (const name of names) {
+        const content = built.files.get(name)
+        if (content !== undefined) await Bun.write(join(outDir, name), content)
+    }
+    const record = JSON.stringify({ hash, ...manifest }, null, 2)
+    await Bun.write(join(outDir, 'index.json'), record)
+    // Stable top-level pointer so `abide start` finds the current build without scanning hash dirs.
+    await Bun.write(join(dir, 'dist', 'manifest.json'), record)
     return outDir
+}
+
+// Ensure a production client build exists on disk (build it if missing) and load it for serving, so
+// `abide start` serves the EXACT `abide build` artifacts with no bundler at boot.
+async function ensureClientBuild(dir: string): Promise<ClientBuild> {
+    let built = await loadClientBuild(dir)
+    if (built === undefined) {
+        await build(dir)
+        built = await loadClientBuild(dir)
+    }
+    if (built === undefined) throw new Error('abide start: failed to produce a client build')
+    return built
 }
 
 // Read the optional declarative window config (BU3) from `src/bundle/window.ts` if present. Returns
@@ -220,7 +246,10 @@ export async function main(argv: string[]): Promise<ServeResult | undefined> {
     }
 
     if (command === 'start') {
-        const running = await serve(cwd, { dev: false, port: parsePort(rest) })
+        // Serve the client artifacts produced by `abide build` (building them if absent) — no bundler
+        // runs at request time.
+        const clientBuild = await ensureClientBuild(cwd)
+        const running = await serve(cwd, { dev: false, port: parsePort(rest), clientBuild })
         console.info(`abide start — ${running.url}`)
         return running
     }

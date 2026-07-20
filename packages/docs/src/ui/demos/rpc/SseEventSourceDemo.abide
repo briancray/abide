@@ -1,0 +1,30 @@
+<script>
+  import { state } from "abide/ui/state"
+
+  // The native DOM API for `text/event-stream`: `EventSource`. Same bytes on the wire as the callable
+  // AsyncIterable form — this is the raw-DOM alternative (native frame parsing, auto-reconnect). We
+  // close on the final frame so it doesn't reconnect, and on restart.
+  let frames = state([])
+  let source: EventSource | null = null
+
+  function start() {
+    if (source !== null) source.close()
+    frames = []
+    source = new EventSource("/rpc/rpcEvents?args=" + encodeURIComponent(JSON.stringify({ count: 3 })))
+    source.onmessage = (event) => {
+      const frame = JSON.parse(event.data)
+      frames = [...frames, frame]
+      if (frame.kind === "final" && source !== null) { source.close(); source = null }
+    }
+    source.onerror = () => { if (source !== null) { source.close(); source = null } }
+  }
+</script>
+
+<button data-testid="es-btn" onclick={start}>{frames.length ? "Restart" : "Start"} via EventSource</button>
+{#if frames.length}
+  <ul class="stream" data-testid="es-list">
+    {#for frame of frames by frame.seq}
+      <li>#{frame.seq} — {frame.kind}</li>
+    {/for}
+  </ul>
+{/if}

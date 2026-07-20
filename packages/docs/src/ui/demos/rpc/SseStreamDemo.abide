@@ -1,0 +1,24 @@
+<script>
+  import { state } from "abide/ui/state"
+  import rpcEvents from "../../../server/rpc/rpcEvents"
+
+  // An `sse(iterable)` read is consumed on the client the SAME way as jsonl — the RPC callable is an
+  // AsyncIterable of the decoded `data:` frames, iterated by `{#for await}`. The transport differs
+  // (text/event-stream vs application/jsonl); the consumption does not. `.refresh()` re-runs it.
+  let started = state(false)
+  function run() {
+    if (started) rpcEvents.refresh({ count: 3 })
+    else started = true
+  }
+</script>
+
+<button data-testid="sse-btn" onclick={run}>{started ? "Restart" : "Start"} SSE stream</button>
+{#if started}
+  <ul class="stream" data-testid="sse-list">
+    {#for await frame of rpcEvents({ count: 3 })}
+      <li>#{frame.seq} — {frame.kind}</li>
+    {:catch}
+      <li>stream failed</li>
+    {/for}
+  </ul>
+{/if}

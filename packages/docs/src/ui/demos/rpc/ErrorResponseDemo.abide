@@ -1,0 +1,22 @@
+<script>
+  import { state } from "abide/ui/state"
+  import rpcBoom from "../../../server/rpc/rpcBoom"
+
+  // A handler that returns `error(status, message)` surfaces in the browser as a thrown HttpError —
+  // the caller catches it and reads `status`/`message`.
+  let plainError = state(null)
+
+  async function callBoom() {
+    try {
+      await rpcBoom({ ok: false })
+      plainError = { message: "(no error)" }
+    } catch (caught) {
+      plainError = { status: caught.status, message: caught.message }
+    }
+  }
+</script>
+
+<button data-testid="error-btn" onclick={callBoom}>Trigger 422</button>
+{#if plainError}
+  <p class="err" data-testid="error-result">{plainError.status} — {plainError.message}</p>
+{/if}

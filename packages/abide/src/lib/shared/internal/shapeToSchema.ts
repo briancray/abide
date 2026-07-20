@@ -11,7 +11,6 @@
 //     UNCHANGED. Truncating a value we cannot fully describe would be worse than over-returning, so
 //     shaping only ever removes fields it is certain are undeclared.
 
-import type { StandardSchemaV1 } from '../StandardSchema.ts'
 import type { JSONSchema } from './jsonSchema.ts'
 
 // The JSON Schema keywords abide emits. A value carrying any of these (and NOT a `~standard` marker)
@@ -30,9 +29,7 @@ const JSON_SCHEMA_KEYWORDS = [
 
 // Return the value as a shapeable JSONSchema, or undefined when it is a Standard Schema / not a
 // schema at all (both cases: pass the value through unshaped).
-export function jsonSchemaOf(
-    schema: StandardSchemaV1 | JSONSchema | undefined,
-): JSONSchema | undefined {
+export function jsonSchemaOf(schema: unknown): JSONSchema | undefined {
     if (typeof schema !== 'object' || schema === null) return undefined
     if ('~standard' in schema) return undefined
     for (const keyword of JSON_SCHEMA_KEYWORDS) {

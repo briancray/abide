@@ -140,7 +140,11 @@ describe('sse', () => {
         const response = sse(source())
         expect(response.headers.get('content-type')).toBe('text/event-stream')
         const text = await drain(response)
-        const frames = text.split('\n\n').filter((frame) => frame.length > 0)
+        // The `:ok` prelude comment (flushed on connect so onopen fires immediately) is ignored — keep
+        // only the `data:` frames.
+        const frames = text
+            .split('\n\n')
+            .filter((frame) => frame.length > 0 && !frame.startsWith(':'))
         expect(frames.length).toBe(2)
         expect(frames[0]).toBe(`data: ${JSON.stringify({ tick: 1 })}`)
         expect(frames[1]).toBe(`data: ${JSON.stringify({ tick: 2 })}`)
@@ -149,7 +153,9 @@ describe('sse', () => {
     test('emits frames from a sync iterable', async () => {
         const response = sse(['a', 'b', 'c'])
         const text = await drain(response)
-        const frames = text.split('\n\n').filter((frame) => frame.length > 0)
+        const frames = text
+            .split('\n\n')
+            .filter((frame) => frame.length > 0 && !frame.startsWith(':'))
         expect(frames.length).toBe(3)
         expect(frames.map((frame) => JSON.parse(frame.replace(/^data: /, '')))).toEqual([
             'a',

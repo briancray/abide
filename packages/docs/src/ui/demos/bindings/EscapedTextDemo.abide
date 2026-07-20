@@ -1,0 +1,10 @@
+<script>
+  import { state } from "abide/ui/state"
+
+  // {expr} escaped text — user input echoed as text, never parsed as HTML.
+  let escaped = state("<b>not bold</b>")
+  const escapedBind = { get: () => escaped, set: (next) => { escaped = next } }
+</script>
+
+<input id="escaped-input" bind:value={escapedBind} />
+<p>Rendered as text: <span id="escaped-out">{escaped}</span></p>

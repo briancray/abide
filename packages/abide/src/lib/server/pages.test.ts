@@ -20,8 +20,23 @@ test('documentHead + inner + documentTail is byte-identical to renderDocument ac
     const cases: Array<{ inner: string; opts?: RenderDocumentOptions }> = [
         { inner: '<h1>plain</h1>' },
         { inner: '<p>seeded</p>', opts: { seed } },
-        { inner: '<p>styled</p>', opts: { styles: true, seed } },
-        { inner: '<p>dev</p>', opts: { devReloadScript: 'console.log(1)', seed, styles: true } },
+        {
+            inner: '<p>styled</p>',
+            opts: {
+                cssHref: '/__abide/chunk/style-abc.css',
+                clientHref: '/__abide/chunk/loader-x.js',
+                seed,
+            },
+        },
+        {
+            inner: '<p>dev</p>',
+            opts: {
+                devReloadScript: 'console.log(1)',
+                seed,
+                cssHref: '/__abide/chunk/style-abc.css',
+                clientHref: '/__abide/chunk/loader-x.js',
+            },
+        },
         { inner: '<p>t</p>', opts: { title: 'Title & <thing>' } },
     ]
     for (const { inner, opts } of cases) {

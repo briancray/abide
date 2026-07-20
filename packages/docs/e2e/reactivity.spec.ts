@@ -8,7 +8,7 @@ const PAGE = '/reactivity/demo'
 test('props() reader renders the fallback heading', async ({ page }) => {
     await page.goto(PAGE)
     // A page's props are empty, so the destructuring fallback from props() is what renders.
-    await expect(page.locator('h1')).toHaveText('Reactivity playground')
+    await expect(page.locator('h1')).toHaveText('Reactive primitives')
 })
 
 test('state(v) counter increments, decrements, and clamps via its transform', async ({ page }) => {

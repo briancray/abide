@@ -1,0 +1,18 @@
+<script>
+  import { state } from "abide/ui/state"
+
+  // Browser-only: fetch the framework health endpoint directly and render its JSON.
+  let health = state(null)
+
+  async function loadHealth() {
+    const response = await fetch("/__abide/health")
+    health = await response.json()
+  }
+</script>
+
+<button id="health-btn" onclick={loadHealth}>Fetch /__abide/health</button>
+{#if health}
+  <pre class="out" id="health-block">reachable = {health.reachable ? "true" : "false"}</pre>
+{:else}
+  <p id="health-block">not fetched yet</p>
+{/if}

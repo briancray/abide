@@ -1,0 +1,13 @@
+<script>
+  import { url } from "abide/shared/url"
+
+  // url(path, params?, query?) resolves an in-app href, filling `[name]` segments. One file
+  // `routing-demo/[slug]/page.abide` serves every slug below.
+  const slugs = ["alpha", "beta", "gamma"]
+</script>
+
+<ul class="links">
+  {#for slug of slugs}
+    <li><a data-testid={"slug-link-" + slug} href={url("/routing-demo/[slug]", { slug })}>{url("/routing-demo/[slug]", { slug })}</a></li>
+  {/for}
+</ul>

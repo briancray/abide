@@ -29,22 +29,31 @@ test('identity(): login promotes the principal and it persists across reads', as
     await expect(page.locator('#identity-auth')).toHaveText('anonymous')
 })
 
-test('cookies() + context(): an RPC reads the browser cookie and middleware-stamped bag', async ({
+test('cookies(): an RPC reads a browser-set cookie back through the request scope', async ({
     page,
 }) => {
     await page.goto('/platform/scope')
-    // The SSR/in-proc seed has no cookie and no middleware stamp.
-    await expect(page.locator('#scope-block')).toContainText('(unset)')
+    // The SSR/in-proc seed has no cookie yet.
+    await expect(page.locator('#cookie-block')).toContainText('(unset)')
 
     await page.locator('#cookie-input').fill('midnight')
     await page.locator('#set-cookie-btn').click()
 
-    // A real browser fetch now runs through the router + per-RPC middleware.
-    await expect(page.locator('#scope-block')).toContainText('cookie platform_pref = midnight')
-    await expect(page.locator('#scope-block')).toContainText(
-        'context.stampedBy = platformScope.middleware',
+    // A real browser fetch now runs through the router; the handler reads it via cookies().
+    await expect(page.locator('#cookie-block')).toContainText('cookie platform_pref = midnight')
+})
+
+test('context(): a per-RPC middleware stamps the carrier bag the handler reads back', async ({
+    page,
+}) => {
+    await page.goto('/platform/scope')
+    // A real browser fetch runs through the router + per-RPC middleware (SSR in-proc reads bypass it),
+    // which stamps the carrier bag the handler returns.
+    await page.locator('#read-context-btn').click()
+    await expect(page.locator('#context-block')).toContainText(
+        'context.stampedBy = platformContext.middleware',
     )
-    await expect(page.locator('#scope-block')).toContainText('context.stampedAt = 2026')
+    await expect(page.locator('#context-block')).toContainText('context.stampedAt = 2026')
 })
 
 test('env(): a typed config value is coerced and rendered', async ({ page }) => {

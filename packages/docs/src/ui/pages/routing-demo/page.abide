@@ -1,11 +1,9 @@
 <script module>
-  import Sample from "../../components/Sample.abide"
-  import { route } from "abide/shared/route"
-  import { url } from "abide/shared/url"
-  import { navigate } from "abide/ui/navigate"
-
-  const PAGE = "src/ui/pages/routing-demo/page.abide"
-  const slugs = ["alpha", "beta", "gamma"]
+  import Demo from "../../components/Demo.abide"
+  import RouteReadoutDemo from "../../demos/routing/RouteReadoutDemo.abide"
+  import SlugLinksDemo from "../../demos/routing/SlugLinksDemo.abide"
+  import QueryLinksDemo from "../../demos/routing/QueryLinksDemo.abide"
+  import NavigateDemo from "../../demos/routing/NavigateDemo.abide"
 </script>
 
 
@@ -13,35 +11,22 @@
   <h1>Routing demo</h1>
   <p class="lead">Every page here is a file under <code>src/ui/pages/routing-demo/</code> and the folder chain is the URL. This hub is <code>routing-demo/page.abide</code> served at <code>/routing-demo</code>. Links and <code>navigate()</code> perform soft client-side navigation: the content swaps in place with no full document reload.</p>
 
-  <Sample page={PAGE} id="route-readout" title="Current route" client="route-readout">
-    <!-- #demo route-readout -->
-    <dl class="route">
-      <dt>route().name</dt><dd data-testid="route-name">{route().name}</dd>
-      <dt>route().kind</dt><dd data-testid="route-kind">{route().kind}</dd>
-      <dt>route().url.pathname</dt><dd data-testid="route-url">{route().url.pathname}</dd>
-      <dt>route().params</dt><dd data-testid="route-params">{JSON.stringify(route().params)}</dd>
-    </dl>
-    <!-- #enddemo -->
-  </Sample>
+  <Demo id="route-readout" title="Current route" client="src/ui/demos/routing/RouteReadoutDemo.abide" tab="client">
+    <RouteReadoutDemo />
+  </Demo>
 
-  <Sample page={PAGE} id="slug-links" title="Param routes — <code>[slug]</code>" client="slug-links">
-    <p>Each href is built with <code>url("/routing-demo/[slug]", &#123; slug &#125;)</code>, filling the dynamic segment. The one file <code>routing-demo/[slug]/page.abide</code> serves them all.</p>
-    <!-- #demo slug-links -->
-    <ul class="links">
-      {#for slug of slugs}
-        <li><a data-testid={"slug-link-" + slug} href={url("/routing-demo/[slug]", { slug })}>{url("/routing-demo/[slug]", { slug })}</a></li>
-      {/for}
-    </ul>
-    <!-- #enddemo -->
-  </Sample>
+  <p>Each href is built with <code>url("/routing-demo/[slug]", &#123; slug &#125;)</code>, filling the dynamic segment. The one file <code>routing-demo/[slug]/page.abide</code> serves them all.</p>
+  <Demo id="slug-links" title="Param routes — <code>[slug]</code>" client="src/ui/demos/routing/SlugLinksDemo.abide" tab="client">
+    <SlugLinksDemo />
+  </Demo>
 
-  <Sample page={PAGE} id="navigate" title="Programmatic navigation — <code>navigate()</code>" client="navigate">
-    <p>A sibling static route. Exact routes win over the <code>[slug]</code> param route, so this resolves to the dedicated page.</p>
-    <!-- #demo navigate -->
-    <div class="row">
-      <a data-testid="details-link" href="/routing-demo/details">Details (link)</a>
-      <button data-testid="navigate-details" onclick={() => navigate("/routing-demo/details")}>navigate("/routing-demo/details")</button>
-    </div>
-    <!-- #enddemo -->
-  </Sample>
+  <p><code>url("/routing-demo/[slug]", &#123; slug &#125;, &#123; ref, page &#125;)</code> also appends a query string; with no <code>[name]</code> segments it collapses to <code>url(path, query)</code>. <code>navigate</code> takes an already-resolved href, so compose the two — <code>navigate(url(&hellip;))</code>.</p>
+  <Demo id="query-links" title="Query strings + <code>navigate(url(…))</code>" client="src/ui/demos/routing/QueryLinksDemo.abide" tab="client">
+    <QueryLinksDemo />
+  </Demo>
+
+  <p>A sibling static route. Exact routes win over the <code>[slug]</code> param route, so this resolves to the dedicated page.</p>
+  <Demo id="navigate" title="Programmatic navigation — <code>navigate()</code>" client="src/ui/demos/routing/NavigateDemo.abide" tab="client">
+    <NavigateDemo />
+  </Demo>
 </main>

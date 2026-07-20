@@ -1,88 +1,32 @@
 <script module>
-  import Sample from "../../../components/Sample.abide"
-
-  const PAGE = "src/ui/pages/control/components/page.abide"
+  import Demo from "../../../components/Demo.abide"
+  import CardDemo from "../../../demos/control/CardDemo.abide"
+  import ChipDemo from "../../../demos/control/ChipDemo.abide"
+  import RenderPropDemo from "../../../demos/control/RenderPropDemo.abide"
+  import SpreadPropsDemo from "../../../demos/control/SpreadPropsDemo.abide"
 </script>
-
-<script>
-  import { state } from "abide/ui/state"
-
-  let title = state("Original title")
-  let count = state(0)
-
-  function rename() {
-    title = "Renamed title"
-  }
-
-  // A plain object spread into a child component's props with `{...obj}` — every key becomes a prop.
-  const chipProps = { kind: "metric", label: "Requests", value: 42 }
-
-  // A component is a capitalised `{#snippet}` taking (props, children): `{props.x}` reads a prop and
-  // `{children()}` renders the single slot passed between the tags. Snippets are the reusable builder
-  // primitive — callable inline as `{name(args)}` and passable as a render-prop. Both work the same
-  // during SSR and after hydration.
-</script>
-
 
 <main class="page">
   <h1>Components & snippets</h1>
   <p class="lead">A component is a capitalised <code>&#123;#snippet&#125;</code> taking <code>(props, children)</code>. Snippets are the reusable builder primitive — callable inline as <code>&#123;name(args)&#125;</code> and passable as a render-prop — and behave the same during SSR and after hydration.</p>
 
-  <Sample page={PAGE} id="card" title="Component with <code>&#123;children()&#125;</code>" client="card">
-    <p>The <code>&lt;Card&gt;</code> component receives a reactive <code>title</code> prop and renders whatever sits between its tags as its single slot. Both the prop and the slot stay live after hydration.</p>
-    <!-- #demo card -->
-    {#snippet Card(props, children)}
-      <section data-testid="card" class="card">
-        <h3 data-testid="card-title">{props.title}</h3>
-        <div class="card-body">{children()}</div>
-      </section>
-    {/snippet}
+  <p>The <code>&lt;Card&gt;</code> component receives a reactive <code>title</code> prop and renders whatever sits between its tags as its single slot. Both the prop and the slot stay live after hydration.</p>
+  <Demo id="card" title="Component with <code>&#123;children()&#125;</code>" client="src/ui/demos/control/CardDemo.abide">
+    <CardDemo />
+  </Demo>
 
-    <div class="controls">
-      <button data-testid="rename" onclick={rename}>Rename card</button>
-      <button data-testid="inc" onclick={() => count++}>Increment count</button>
-    </div>
+  <p>A snippet is a reusable builder. Call it inline for repeated markup.</p>
+  <Demo id="chip" title="Snippets — <code>&#123;#snippet&#125;</code> called as <code>&#123;name(args)&#125;</code>" client="src/ui/demos/control/ChipDemo.abide">
+    <ChipDemo />
+  </Demo>
 
-    <Card title={title}>
-      This body is the slot. It reads the live count: <strong data-testid="card-count">{count}</strong>.
-    </Card>
-    <!-- #enddemo -->
-  </Sample>
+  <p>Snippets are first-class: pass one as a component prop and let the component call it.</p>
+  <Demo id="render-prop" title="Snippet passed as a render-prop" client="src/ui/demos/control/RenderPropDemo.abide">
+    <RenderPropDemo />
+  </Demo>
 
-  <Sample page={PAGE} id="chip" title="Snippets — <code>&#123;#snippet&#125;</code> called as <code>&#123;name(args)&#125;</code>" client="chip">
-    <p>A snippet is a reusable builder. Call it inline for repeated markup.</p>
-    <!-- #demo chip -->
-    {#snippet chip(text)}
-      <span data-testid="chip" class="chip">{text}</span>
-    {/snippet}
-
-    <p class="chips">{chip("alpha")}{chip("beta")}{chip("gamma")}</p>
-    <!-- #enddemo -->
-  </Sample>
-
-  <Sample page={PAGE} id="render-prop" title="Snippet passed as a render-prop" client="render-prop">
-    <p>Snippets are first-class: pass one as a component prop and let the component call it.</p>
-    <!-- #demo render-prop -->
-    {#snippet loud(text)}
-      <b data-testid="loud">{text.toUpperCase()}</b>
-    {/snippet}
-
-    {#snippet Framed(props)}
-      <div data-testid="framed" class="framed">{props.render("rendered via prop")}</div>
-    {/snippet}
-
-    <Framed render={loud}/>
-    <!-- #enddemo -->
-  </Sample>
-
-  <Sample page={PAGE} id="spread-props" title="<code>&#123;...obj&#125;</code> — spread into a child component's props" client="spread-props">
-    <p>Spreading an object into a component with <code>&#123;...obj&#125;</code> hands every key to the child as a prop — the same object-to-props flow as writing each <code>name=&#123;value&#125;</code> by hand. (Element spread sets attributes instead; see <a href="/bindings#spread">bindings</a>.)</p>
-    <!-- #demo spread-props -->
-    {#snippet Labelled(props)}
-      <span data-testid="spread-child" data-kind={props.kind}>{props.label}: <b>{props.value}</b></span>
-    {/snippet}
-
-    <Labelled {...chipProps}/>
-    <!-- #enddemo -->
-  </Sample>
+  <p>Spreading an object into a component with <code>&#123;...obj&#125;</code> hands every key to the child as a prop — the same object-to-props flow as writing each <code>name=&#123;value&#125;</code> by hand. (Element spread sets attributes instead; see <a href="/bindings#spread">bindings</a>.)</p>
+  <Demo id="spread-props" title="<code>&#123;...obj&#125;</code> — spread into a child component's props" client="src/ui/demos/control/SpreadPropsDemo.abide">
+    <SpreadPropsDemo />
+  </Demo>
 </main>

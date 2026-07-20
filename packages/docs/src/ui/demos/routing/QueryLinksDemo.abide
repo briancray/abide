@@ -1,0 +1,21 @@
+<script>
+  import { url } from "abide/shared/url"
+  import { navigate } from "abide/ui/navigate"
+
+  // url(path, params?, query?) fills [name] segments AND appends a query string. With no dynamic
+  // segments it collapses to url(path, query?). Compose the built href straight into navigate —
+  // navigate(url(...)) — for a soft nav to a params + query target.
+  const slug = "alpha"
+</script>
+
+<dl class="route">
+  <dt>url(path, params, query)</dt>
+  <dd data-testid="url-params-query">{url("/routing-demo/[slug]", { slug }, { ref: "docs", page: 2 })}</dd>
+  <dt>url(path, query)</dt>
+  <dd data-testid="url-query-only">{url("/routing-demo", { tab: "links" })}</dd>
+</dl>
+
+<div class="row">
+  <a data-testid="query-link" href={url("/routing-demo/[slug]", { slug }, { ref: "docs", page: 2 })}>open ?ref=docs&amp;page=2</a>
+  <button data-testid="navigate-query" onclick={() => navigate(url("/routing-demo/[slug]", { slug }, { ref: "nav", page: 3 }))}>navigate(url(...))</button>
+</div>

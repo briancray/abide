@@ -12,7 +12,7 @@
 // Diagnostics for OPEN documents (their errors, or empty to clear). The transport is injected
 // (`read`/`write`) so the loop is drivable; the node entry at the bottom wires real stdio.
 
-import { type Dirent, readdirSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { Readable } from 'node:stream'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -33,7 +33,7 @@ import {
     type Segment,
 } from '../ui/internal/emitCheck.ts'
 import { parse } from '../ui/internal/parse.ts'
-import { CHECK_SUPPRESSED_CODES, overlayFs } from './check.ts'
+import { CHECK_SUPPRESSED_CODES, findAbideFiles, offsetToLineColumn, overlayFs } from './check.ts'
 
 export interface LspServerOptions {
     projectRoot: string
@@ -86,35 +86,6 @@ interface LoweredProject {
 // Lowering (node-side, buffer-aware — mirrors `check`'s in-memory overlay build)
 // ---------------------------------------------------------------------------
 
-function findAbideFiles(dir: string): string[] {
-    const found: string[] = []
-    const walk = (current: string): void => {
-        let entries: Dirent[]
-        try {
-            entries = readdirSync(current, { withFileTypes: true })
-        } catch {
-            return
-        }
-        for (const dirent of entries) {
-            const full = join(current, dirent.name)
-            if (dirent.isDirectory()) {
-                if (
-                    dirent.name === 'node_modules' ||
-                    dirent.name === 'dist' ||
-                    dirent.name.startsWith('.')
-                )
-                    continue
-                walk(full)
-            } else if (dirent.isFile() && dirent.name.endsWith('.abide')) {
-                found.push(full)
-            }
-        }
-    }
-    walk(dir)
-    found.sort()
-    return found
-}
-
 // 0-based LSP (line, character) → absolute offset in `source`.
 function lineColumnToOffset(source: string, line: number, character: number): number {
     let offset = 0
@@ -124,21 +95,6 @@ function lineColumnToOffset(source: string, line: number, character: number): nu
         offset++
     }
     return Math.min(offset + character, source.length)
-}
-
-function offsetToLineColumn(source: string, offset: number): { line: number; column: number } {
-    let line = 1
-    let column = 1
-    const limit = Math.min(offset, source.length)
-    for (let index = 0; index < limit; index++) {
-        if (source.charCodeAt(index) === 10) {
-            line++
-            column = 1
-        } else {
-            column++
-        }
-    }
-    return { line, column }
 }
 
 // Lower every `.abide` under `dir` into virtual files (generated modules + `.d.ts` companions) served

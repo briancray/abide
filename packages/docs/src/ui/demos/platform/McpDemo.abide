@@ -1,0 +1,28 @@
+<script>
+  import { state } from "abide/ui/state"
+
+  // Call the MCP endpoint (JSON-RPC 2.0 over HTTP POST) with tools/list and render the tool names.
+  // Every RPC reachable by machines is projected as an MCP tool.
+  let tools = state(null)
+
+  async function loadTools() {
+    const response = await fetch("/__abide/mcp", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+    })
+    const reply = await response.json()
+    tools = (reply.result?.tools ?? []).map((tool) => ({ name: tool.name, readOnly: tool.annotations?.readOnlyHint === true }))
+  }
+</script>
+
+<button id="mcp-btn" onclick={loadTools}>List MCP tools</button>
+{#if tools}
+  <ul id="mcp-tools" class="list">
+    {#for tool of tools}
+      <li><strong>{tool.name}</strong> — {tool.readOnly ? "read-only" : "mutating"}</li>
+    {/for}
+  </ul>
+{:else}
+  <p id="mcp-empty">not fetched yet</p>
+{/if}

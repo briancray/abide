@@ -1,0 +1,49 @@
+<script>
+  import { state } from "abide/ui/state"
+  import rpcCreateNote from "../../../server/rpc/rpcCreateNote"
+  import rpcReplaceNote from "../../../server/rpc/rpcReplaceNote"
+  import rpcPatchNote from "../../../server/rpc/rpcPatchNote"
+  import rpcDeleteNote from "../../../server/rpc/rpcDeleteNote"
+
+  // Four mutations over one shared, two-way-bound text field — `bind:value={text}` syncs both ways.
+  // Each runs its server handler on every click (mutations never cache); args ride in the JSON body.
+  let text = state("first draft")
+  let postResult = state(null)
+  let putResult = state(null)
+  let patchResult = state(null)
+  let deleteResult = state(null)
+
+  async function post() { postResult = await rpcCreateNote({ text }) }
+  async function put() { putResult = await rpcReplaceNote({ id: "n1", text }) }
+  async function patch() { patchResult = await rpcPatchNote({ id: "n1", text }) }
+  async function del() { deleteResult = await rpcDeleteNote({ id: "n1" }) }
+</script>
+
+<label class="verb-text">Shared note text: <input data-testid="verb-input" bind:value={text} /></label>
+
+<button data-testid="post-btn" onclick={post}>POST rpcCreateNote</button>
+{#if postResult}
+  <pre class="out" data-testid="post-result">verb: {postResult.verb}
+id: {postResult.id}
+text: {postResult.text ?? "(none)"}</pre>
+{/if}
+
+<button data-testid="put-btn" onclick={put}>PUT rpcReplaceNote</button>
+{#if putResult}
+  <pre class="out" data-testid="put-result">verb: {putResult.verb}
+id: {putResult.id}
+text: {putResult.text ?? "(none)"}</pre>
+{/if}
+
+<button data-testid="patch-btn" onclick={patch}>PATCH rpcPatchNote</button>
+{#if patchResult}
+  <pre class="out" data-testid="patch-result">verb: {patchResult.verb}
+id: {patchResult.id}
+text: {patchResult.text ?? "(none)"}</pre>
+{/if}
+
+<button data-testid="delete-btn" onclick={del}>DELETE rpcDeleteNote</button>
+{#if deleteResult}
+  <pre class="out" data-testid="delete-result">verb: {deleteResult.verb}
+id: {deleteResult.id}</pre>
+{/if}

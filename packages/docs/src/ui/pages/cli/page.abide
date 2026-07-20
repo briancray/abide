@@ -1,0 +1,44 @@
+<main class="page">
+  <h1>CLI</h1>
+  <p class="lead">One binary, <code>abide</code>, drives the whole lifecycle — scaffold, develop, type-check, build, serve, and package. Every command runs the SAME Bun pipeline (no divergent dev runtime), so what you see in <code>abide dev</code> is what ships.</p>
+
+  <h2 id="scaffold">Create a project</h2>
+  <p><code>scaffold</code> writes a minimal, representative starter — one type-derived RPC, one page reading it, the middleware/lifecycle module, a config stub — then runs <code>git init</code>, <code>bun install</code>, and <code>abide dev</code> for you.</p>
+  <pre class="code" data-lang="bash"><code>abide scaffold my-app
+# writes a starter project, then: git init + bun install + abide dev
+# skip any step: --no-git / --no-install / --no-dev</code></pre>
+
+  <h2 id="dev">Develop</h2>
+  <p><code>dev</code> serves the app with a filesystem watch: on any change it rebuilds (Bun is fast) and signals a live-reload over the socket mux — a fast full reload, not stateful HMR (which would be a runtime that diverges from production).</p>
+  <pre class="code" data-lang="bash"><code>abide dev            # watch + rebuild + full live-reload (over the socket mux)
+abide dev --port 4321</code></pre>
+
+  <h2 id="check">Type-check</h2>
+  <p><code>check</code> type-checks <code>.abide</code> files — script bodies, template expressions, and cross-file component props — by lowering to TypeScript and mapping diagnostics back. <code>lsp</code> exposes the same engine to editors (diagnostics, hover, go-to-definition, completion, signature help, references).</p>
+  <pre class="code" data-lang="bash"><code>abide check           # type-check .abide (template + cross-file component props)
+abide lsp             # .abide language server over stdio (editors)</code></pre>
+
+  <h2 id="build">Build</h2>
+  <p><code>build</code> produces the production client: a code-split, content-hashed bundle written to <code>dist/_app/&lt;hash&gt;/</code> with a stable <code>manifest.json</code> pointer. See <a href="/deploy">Build &amp; deploy</a> for the output layout and how <code>start</code> serves it.</p>
+  <pre class="code" data-lang="bash"><code>abide build          # code-split client → dist/_app/&lt;hash&gt;/</code></pre>
+
+  <h2 id="start">Serve</h2>
+  <p><code>start</code> serves the artifacts <code>build</code> produced — no bundler runs at boot. If no build exists yet, it builds once, then serves.</p>
+  <pre class="code" data-lang="bash"><code>abide start          # serve the built dist (no bundler at boot)
+abide start --port 8080</code></pre>
+
+  <h2 id="run">Run a script</h2>
+  <p><code>run</code> executes a one-off script under the abide runtime — no HTTP server, but the app's <code>onStart</code>/<code>onStop</code> lifecycle hooks fire, so migrations and seeds get the same environment as the server.</p>
+  <pre class="code" data-lang="bash"><code>abide run scripts/seed.ts arg1 arg2
+# runs under the abide runtime (no HTTP; onStart / onStop still fire)</code></pre>
+
+  <h2 id="package">Package a standalone binary</h2>
+  <p><code>compile</code> emits a single self-contained server executable (app + client assets embedded, no external <code>dist/</code>). <code>cli</code> emits a dual-mode binary that either self-hosts or targets a remote app URL. <code>bundle</code> builds a desktop launcher.</p>
+  <pre class="code" data-lang="bash"><code>abide compile --target bun-linux-x64 --out ./server
+# one standalone executable — embeds the app + client assets, self-serves
+
+abide cli --platforms bun-linux-x64,bun-darwin-arm64
+# a dual-mode binary: self-hosts, or targets a remote app via ABIDE_APP_URL
+
+abide bundle         # desktop launcher (host platform; embeds assets)</code></pre>
+</main>

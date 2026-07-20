@@ -1,0 +1,28 @@
+<script>
+  import { state } from "abide/ui/state"
+  import cacheFlaky from "../../../server/rpc/cacheFlaky"
+
+  // A read that fails returns a 400; the `error` probe holds it as an HttpError.
+  function errorText(value: unknown) {
+    if (value === undefined || value === null) return "none"
+    if (value instanceof Error) return value.message
+    if (typeof value === "object" && "message" in value) return String(value.message)
+    return String(value)
+  }
+
+  let flakyStarted = state(false)
+  const flakyError = state.computed(() => (flakyStarted ? errorText(cacheFlaky.error({ fail: true })) : "idle"))
+  function startFlaky() {
+    flakyStarted = true
+    cacheFlaky({ fail: true }).catch(() => {}) // bare call kicks the failing load; error lands on the slot
+  }
+  function clearFlaky() { cacheFlaky.invalidate({ fail: true }); flakyStarted = false }
+</script>
+
+<ul class="grid">
+  <li>error: <strong data-testid="flaky-error">{flakyError}</strong></li>
+</ul>
+<div class="row">
+  <button data-testid="flaky-start" onclick={startFlaky}>Trigger failure</button>
+  <button data-testid="flaky-clear" onclick={clearFlaky}>Clear</button>
+</div>

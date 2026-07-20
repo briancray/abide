@@ -1,0 +1,14 @@
+<script>
+  // Snippets are first-class: pass one as a component prop and let the component call it as a
+  // render-prop.
+</script>
+
+{#snippet loud(text)}
+  <b data-testid="loud">{text.toUpperCase()}</b>
+{/snippet}
+
+{#snippet Framed(props)}
+  <div data-testid="framed" class="framed">{props.render("rendered via prop")}</div>
+{/snippet}
+
+<Framed render={loud}/>

@@ -1,0 +1,8 @@
+<script>
+  import { route } from "abide/shared/route"
+
+  // The [slug] segment is captured from the URL and exposed isomorphically via route().params.
+  // Reading it here reflects the same value SSR rendered into the initial HTML.
+</script>
+
+<p>The <code>[slug]</code> segment captured from the URL is <strong>{route().params.slug}</strong>.</p>

@@ -3,11 +3,8 @@
 // so reading it inside a reactive context re-runs on connectivity change. On the server there is
 // no browser connectivity notion, so it is always true.
 
+import { isBrowser } from './internal/isBrowser.ts'
 import { type Signal, signal } from './internal/reactive.ts'
-
-const isBrowser =
-    typeof globalThis !== 'undefined' &&
-    typeof (globalThis as { window?: unknown }).window !== 'undefined'
 
 let onlineSignal: Signal<boolean> | undefined
 

@@ -1,0 +1,11 @@
+<script>
+  // Spreading an object into a component with `{...obj}` hands every key to the child as a prop — the
+  // same object-to-props flow as writing each `name={value}` by hand.
+  const chipProps = { kind: "metric", label: "Requests", value: 42 }
+</script>
+
+{#snippet Labelled(props)}
+  <span data-testid="spread-child" data-kind={props.kind}>{props.label}: <b>{props.value}</b></span>
+{/snippet}
+
+<Labelled {...chipProps}/>

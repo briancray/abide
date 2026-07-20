@@ -24,6 +24,8 @@ import { registerTaggedCell } from '../server/internal/cacheTags.ts'
 import { currentScope, runOutsideScope } from '../server/internal/scope.ts'
 import { canonicalKey } from './internal/codec.ts'
 import { getContext, serverDefaultCache } from './internal/context.ts'
+import { isBrowser } from './internal/isBrowser.ts'
+import { positiveEnvBytes } from './internal/positiveEnvBytes.ts'
 import { effect, type Signal, signal, untrack } from './internal/reactive.ts'
 import { ReplayableStream } from './internal/replayableStream.ts'
 import { responseSourceOf, tagStreamEncoding } from './internal/responseSource.ts'
@@ -37,12 +39,8 @@ import {
     sharedStore,
 } from './internal/sharedCache.ts'
 
-// Side detection mirrors shared/internal/context.ts: `shared` is a SERVER concept (cross-request
-// store + scope isolation). On the client a shared-flagged cell behaves like a normal client cell,
-// so every shared-only branch below is gated on `!isBrowser`.
-const isBrowser =
-    typeof globalThis !== 'undefined' &&
-    typeof (globalThis as { window?: unknown }).window !== 'undefined'
+// `shared` is a SERVER concept (cross-request store + scope isolation). On the client a shared-flagged
+// cell behaves like a normal client cell, so every shared-only branch below is gated on `!isBrowser`.
 
 // "stream" is the streaming-read slot (replayable-streams.md §4): the resolved value is not a scalar
 // but a ReplayableStream the read fans out via `consume()`. Scalar (`value`) and stream slots stay
@@ -162,10 +160,7 @@ function idleState<T>(): SlotState<T> {
 // the env var is the operator mitigation. When set, a stream exceeding it OVERFLOWs (bounded memory,
 // no post-close replay) rather than growing unbounded.
 function streamBufferCap(): number {
-    const raw = Bun.env.ABIDE_MAX_STREAM_BUFFER_SIZE
-    if (raw === undefined || raw === '') return Infinity
-    const bytes = Number(raw)
-    return Number.isFinite(bytes) && bytes > 0 ? bytes : Infinity
+    return positiveEnvBytes('ABIDE_MAX_STREAM_BUFFER_SIZE')
 }
 
 // Byte measure for LRU accounting: the settled value's JSON length. Unrepresentable values
@@ -646,7 +641,12 @@ export function cell<Args, T>(
             !isExpired(slot)
         ) {
             touchOnRead(slot)
-            return { cursor: state.stream.consume(from), fresh: false }
+            const cursor = state.stream.consume(from)
+            // Stamp the wire encoding (as a fresh consume does) so the router re-serves a `?from=` resume
+            // in the handler's ORIGINAL encoding (sse resumes as sse, jsonl as jsonl).
+            if (state.stream.encoding !== undefined)
+                tagStreamEncoding(cursor, state.stream.encoding)
+            return { cursor, fresh: false }
         }
         return { cursor: undefined, fresh: true } // slot gone/evicted → caller runs fresh from 0
     }
@@ -725,13 +725,21 @@ export function cell<Args, T>(
     c.watch = (args: Args, handler: (value: T | undefined) => void): (() => void) => {
         const slot = ensureSlot(args)
         let first = true
+        let last: T | undefined
         return effect(() => {
             const state = slot.signal()
+            const value = state.value
+            // Fire ONLY on an actual value change — not on non-value transitions (e.g. `refresh` flips
+            // the `refreshing` flag on over the retained value, then settles the new one: the flag flip
+            // isn't a value change, so a refresh that lands one new value fires the handler once).
             if (first) {
                 first = false
+                last = value
                 return
             }
-            untrack(() => handler(state.value))
+            if (value === last) return
+            last = value
+            untrack(() => handler(value))
         })
     }
 

@@ -1,8 +1,6 @@
 <script module>
-  import Sample from "../../../components/Sample.abide"
-  import platformConfig from "../../../../server/rpc/platformConfig"
-
-  const PAGE = "src/ui/pages/platform/config/page.abide"
+  import Demo from "../../../components/Demo.abide"
+  import ConfigDemo from "../../../demos/platform/ConfigDemo.abide"
 </script>
 
 
@@ -10,15 +8,40 @@
   <h1>Config</h1>
   <p class="lead"><code>env(schema)</code> reads typed, boot-validated config from the environment. Strings are coerced by the schema (<code>"25"</code> → number, <code>"true"</code> → boolean), schema defaults fill missing keys, and it fails fast if a required var is missing or invalid. Below is a live read of an <code>env()</code>-backed RPC.</p>
 
-  <Sample page={PAGE} id="config" title="Live config value" client="config" server="src/server/rpc/platformConfig.ts">
-    <!-- #demo config -->
-    {#await platformConfig()}
-      <p id="config-block">reading…</p>
-    {:then config}
-      <pre class="out" id="config-block">appName        = {config.appName}
-maxItems       = {config.maxItems}  (coerced to {config.maxItemsType})
-featureMachines = {config.featureMachines ? "on" : "off"}</pre>
-    {/await}
-    <!-- #enddemo -->
-  </Sample>
+  <Demo id="config" title="Live config value" server="src/server/rpc/platformConfig.ts" client="src/ui/demos/platform/ConfigDemo.abide" tab="server" replayable={true}>
+    <ConfigDemo sampleId="config" />
+  </Demo>
+
+  <h2 id="env">Environment variables</h2>
+  <p>Beyond your own <code>env()</code> schema, abide reads these built-in variables from the environment. Set them in your process manager or container (see <a href="/deploy">Build &amp; deploy</a>). The one production requirement is <code>ABIDE_IDENTITY_SECRET</code> — without it, authenticated identity does not survive a restart.</p>
+  <table class="envtable">
+    <thead><tr><th>Variable</th><th>Effect</th></tr></thead>
+    <tbody>
+      <tr><td><code>PORT</code></td><td>Listen port (default: ephemeral).</td></tr>
+      <tr><td><code>APP_URL</code></td><td>Public app URL → the mount base, and the allowed Origin for the CSRF check.</td></tr>
+      <tr><td><code>ABIDE_APP_DIR</code></td><td>Override the built app directory served in production.</td></tr>
+      <tr><td><code>ABIDE_DATA_DIR</code></td><td>Per-user data directory (backs <code>appDataDir()</code>).</td></tr>
+      <tr><td><code>ABIDE_IDENTITY_SECRET</code></td><td><strong>Required in production.</strong> Seals the <code>abide-identity</code> cookie + tokens so authenticated <code>identity.set()</code> survives restarts and is stable across instances.</td></tr>
+      <tr><td><code>ABIDE_IDENTITY_TTL</code></td><td>Identity cookie/token TTL in ms (default 30 days, rolling).</td></tr>
+      <tr><td><code>ABIDE_APP_TOKEN</code></td><td>Bearer token a remote CLI / desktop bundle uses to reach the app.</td></tr>
+      <tr><td><code>ABIDE_APP_URL</code></td><td>App URL a remote CLI / bundle targets.</td></tr>
+      <tr><td><code>ABIDE_MAX_SHARED_CACHE_SIZE</code></td><td>Byte ceiling (LRU) for the shared + default-context cache (default: no limit).</td></tr>
+      <tr><td><code>ABIDE_MAX_STREAM_BUFFER_SIZE</code></td><td>Per-stream replay-buffer cap in bytes (default: no limit; exceeding it overflows → no replay).</td></tr>
+      <tr><td><code>ABIDE_RPC_TIMEOUT</code></td><td>Default bilateral RPC timeout in ms; a per-RPC <code>timeout</code> overrides it.</td></tr>
+      <tr><td><code>ABIDE_SOCKET_TIMEOUT</code></td><td>Socket (WebSocket) idle / connection timeout.</td></tr>
+      <tr><td><code>ABIDE_MAX_REQUEST_BODY_SIZE</code></td><td>Default maximum request body size.</td></tr>
+      <tr><td><code>ABIDE_LOG_FORMAT</code></td><td>Log format — <code>json</code> for structured logs.</td></tr>
+      <tr><td><code>DEBUG</code></td><td>Enables gated log channels (<code>log.channel(name)</code>).</td></tr>
+      <tr><td><code>ABIDE_DEV_SURFACE</code></td><td>Logs each request under <code>abide dev</code>.</td></tr>
+      <tr><td><code>ABIDE_ENABLE_INSPECTOR</code></td><td>Enables the <code>/__abide/inspector</code> route (off by default).</td></tr>
+      <tr><td><code>ABIDE_INSPECT</code></td><td>Enables debug instrumentation.</td></tr>
+    </tbody>
+  </table>
 </main>
+
+<style>
+  .envtable { width: 100%; border-collapse: collapse; margin: 1rem 0 1.5rem; font-size: 0.88rem; }
+  .envtable th, .envtable td { text-align: left; vertical-align: top; padding: 0.55rem 0.8rem; border-bottom: 1px solid var(--color-line); }
+  .envtable thead th { font-family: var(--font-display); color: var(--color-muted); font-weight: 600; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .envtable td:first-child { white-space: nowrap; }
+</style>

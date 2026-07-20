@@ -1,0 +1,10 @@
+<script>
+  import { state } from "abide/ui/state"
+
+  // name={expr} reactive attribute.
+  let attr = state("alpha")
+  const attrBind = { get: () => attr, set: (next) => { attr = next } }
+</script>
+
+<input id="attr-input" bind:value={attrBind} />
+<div id="attr-target" data-value={attr}>data-value tracks the input</div>

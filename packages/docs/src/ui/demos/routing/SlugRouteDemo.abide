@@ -1,0 +1,13 @@
+<script>
+  import { route } from "abide/shared/route"
+
+  // route() is isomorphic and reactive: on the [slug] param route it reads the same fields during SSR
+  // and after every soft nav. `route().params.slug` is the segment captured from the URL path.
+</script>
+
+<dl class="route">
+  <dt>route().name</dt><dd data-testid="route-name">{route().name}</dd>
+  <dt>route().kind</dt><dd data-testid="route-kind">{route().kind}</dd>
+  <dt>route().params.slug</dt><dd data-testid="route-slug">{route().params.slug}</dd>
+  <dt>route().url.search</dt><dd data-testid="route-query">{route().url.search}</dd>
+</dl>

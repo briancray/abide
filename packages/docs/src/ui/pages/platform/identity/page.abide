@@ -1,67 +1,13 @@
 <script module>
-  import Sample from "../../../components/Sample.abide"
-  import { state } from "abide/ui/state"
-  import platformIdentity from "../../../../server/rpc/platformIdentity"
-  import platformLogin from "../../../../server/rpc/platformLogin"
-  import platformLogout from "../../../../server/rpc/platformLogout"
-
-  const PAGE = "src/ui/pages/platform/identity/page.abide"
+  import Demo from "../../../components/Demo.abide"
+  import IdentityDemo from "../../../demos/platform/IdentityDemo.abide"
 </script>
-
-<script>
-  // #demo state
-  let name = state("Ada Lovelace")
-  let busy = state(false)
-  // Two-way bind over a bare state var — `bind:value={name}` — syncs both ways directly.
-  // #enddemo
-
-  // #demo login
-  async function login() {
-    busy = true
-    // Mutation seals the identity cookie; refresh re-reads identity() over a fresh request that now
-    // carries that cookie, proving the authenticated principal persisted (not just echoed back).
-    await platformLogin({ name })
-    platformIdentity.refresh()
-    busy = false
-  }
-  // #enddemo
-
-  // #demo logout
-  async function logout() {
-    busy = true
-    await platformLogout({})
-    platformIdentity.refresh()
-    busy = false
-  }
-  // #enddemo
-</script>
-
 
 <main class="page">
   <h1>Identity</h1>
   <p class="lead"><code>identity()</code> is the current request principal — never null. It starts anonymous; <code>identity.set()</code> promotes it to authenticated and the router seals a rolling cookie so it persists across requests. Log in, then watch the reflected identity flip.</p>
 
-  <Sample page={PAGE} id="principal" title="Current principal — <code>identity()</code>" client="state" server="src/server/rpc/platformIdentity.ts">
-    {#await platformIdentity()}
-      <p id="identity-block">reading…</p>
-    {:then me}
-      <p id="identity-block">
-        state: <strong id="identity-auth">{me?.authenticated ? "authenticated" : "anonymous"}</strong> ·
-        name: <strong id="identity-name">{me?.name ?? "—"}</strong>
-      </p>
-    {/await}
-  </Sample>
-
-  <Sample page={PAGE} id="login" title="Log in — <code>identity.set()</code>" client="login" server="src/server/rpc/platformLogin.ts">
-    <label>Name <input id="name-input" bind:value={name} /></label>
-    <div class="row">
-      <button id="login-btn" onclick={login} disabled={busy}>Log in</button>
-    </div>
-  </Sample>
-
-  <Sample page={PAGE} id="logout" title="Log out — <code>identity.clear()</code>" client="logout" server="src/server/rpc/platformLogout.ts">
-    <div class="row">
-      <button id="logout-btn" onclick={logout} disabled={busy}>Log out</button>
-    </div>
-  </Sample>
+  <Demo id="identity" title="<code>identity()</code> — principal, log in, log out" server="src/server/rpc/platformIdentity.ts" client="src/ui/demos/platform/IdentityDemo.abide" tab="server">
+    <IdentityDemo />
+  </Demo>
 </main>

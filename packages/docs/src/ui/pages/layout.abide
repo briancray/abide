@@ -10,10 +10,10 @@
     ] },
     { title: "Reactivity", items: [
       { href: "/reactivity", label: "State & computed" },
-      { href: "/reactivity/demo", label: "Counter demo" },
+      { href: "/reactivity/demo", label: "Reactive primitives" },
     ] },
     { title: "RPC", items: [
-      { href: "/rpc", label: "Overview" },
+      { href: "/rpc", label: "Isomorphic RPC" },
       { href: "/rpc-guide/verbs", label: "Verbs" },
       { href: "/rpc-guide/responses", label: "Responses" },
       { href: "/rpc-guide/async-reads", label: "Async reads" },
@@ -34,7 +34,7 @@
       { href: "/styling", label: "Scoped <style>" },
     ] },
     { title: "Routing", items: [
-      { href: "/routing", label: "Overview" },
+      { href: "/routing", label: "File-based routing" },
       { href: "/routing-demo", label: "Nav demo" },
       { href: "/topics/isomorphism", label: "Dynamic param" },
     ] },
@@ -50,9 +50,12 @@
       { href: "/platform/identity", label: "Identity" },
       { href: "/platform/scope", label: "Request scope" },
       { href: "/platform/observability", label: "Observability" },
+      { href: "/platform/machines", label: "Machine surfaces" },
+      { href: "/cli", label: "CLI" },
+      { href: "/deploy", label: "Build & deploy" },
     ] },
     { title: "Machines", items: [
-      { href: "/machines", label: "Agents & MCP" },
+      { href: "/machines", label: "Beyond the browser" },
     ] },
     { title: "Performance", items: [
       { href: "/bench", label: "Live render bench" },

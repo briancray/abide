@@ -1,0 +1,43 @@
+<script>
+  import { state } from "abide/ui/state"
+  import platformIdentity from "../../../server/rpc/platformIdentity"
+  import platformLogin from "../../../server/rpc/platformLogin"
+  import platformLogout from "../../../server/rpc/platformLogout"
+
+  // The request principal in one loop. `platformIdentity()` reads `identity()` — never null, anonymous
+  // by default. `login()` runs a mutation that calls `identity.set()` server-side; refreshing the read
+  // then re-reads over a fresh request carrying the sealed `abide-identity` cookie, proving the
+  // authenticated principal persisted. `logout()` clears it back to anonymous.
+  let name = state("Ada Lovelace")
+  let busy = state(false)
+
+  async function login() {
+    busy = true
+    await platformLogin({ name })
+    // Re-read identity over a fresh request that now carries the sealed cookie.
+    platformIdentity.refresh()
+    busy = false
+  }
+
+  async function logout() {
+    busy = true
+    await platformLogout({})
+    platformIdentity.refresh()
+    busy = false
+  }
+</script>
+
+{#await platformIdentity()}
+  <p id="identity-block">reading…</p>
+{:then me}
+  <p id="identity-block">
+    state: <strong id="identity-auth">{me?.authenticated ? "authenticated" : "anonymous"}</strong> ·
+    name: <strong id="identity-name">{me?.name ?? "—"}</strong>
+  </p>
+{/await}
+
+<label>Name <input id="name-input" bind:value={name} /></label>
+<div class="row">
+  <button id="login-btn" onclick={login} disabled={busy}>Log in</button>
+  <button id="logout-btn" onclick={logout} disabled={busy}>Log out</button>
+</div>

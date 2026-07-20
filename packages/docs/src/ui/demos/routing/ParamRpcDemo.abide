@@ -1,0 +1,14 @@
+<script>
+  import { route } from "abide/shared/route"
+  import routingTopic from "../../../server/rpc/routingTopic"
+
+  // The captured slug flows straight into an isomorphic read. Awaiting it blocks SSR so the resolved
+  // value lands in the initial HTML; a sibling soft nav re-captures the param and re-drives the read.
+</script>
+
+{#await routingTopic({ slug: route().params.slug as string })}
+  <p>loading…</p>
+{:then topic}
+  <pre class="out" data-testid="topic">{topic.title}
+{topic.blurb}</pre>
+{/await}

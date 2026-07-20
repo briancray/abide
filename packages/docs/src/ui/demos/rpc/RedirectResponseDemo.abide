@@ -1,0 +1,17 @@
+<script>
+  import { state } from "abide/ui/state"
+
+  // A handler returning `redirect(url, status)` is followed transparently by the browser fetch —
+  // the resolved `Response` reports `redirected` and the final `url`.
+  let redirectInfo = state(null)
+
+  async function followRedirect() {
+    const response = await fetch("/rpc/rpcGoHome?args=" + encodeURIComponent(JSON.stringify({ to: "/rpc" })))
+    redirectInfo = { redirected: response.redirected, url: new URL(response.url).pathname }
+  }
+</script>
+
+<button data-testid="redirect-btn" onclick={followRedirect}>Follow redirect</button>
+{#if redirectInfo}
+  <p class="say" data-testid="redirect-result">redirected: {String(redirectInfo.redirected)} → {redirectInfo.url}</p>
+{/if}

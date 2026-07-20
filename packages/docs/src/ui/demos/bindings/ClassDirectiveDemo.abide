@@ -1,0 +1,10 @@
+<script>
+  import { state } from "abide/ui/state"
+
+  // class:name={cond} toggle.
+  let highlight = state(false)
+  const highlightBind = { get: () => highlight, set: (next) => { highlight = next } }
+</script>
+
+<label><input id="class-input" type="checkbox" bind:checked={highlightBind} /> highlight</label>
+<div id="class-target" class:highlight={highlight}>toggles the .highlight class</div>

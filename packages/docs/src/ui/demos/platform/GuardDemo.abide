@@ -1,0 +1,33 @@
+<script>
+  import { state } from "abide/ui/state"
+  import platformGuard from "../../../server/rpc/platformGuard"
+
+  let allowedOut = state("(not run)")
+  let blockedStatus = state(null)
+
+  // Authorized call: layer 1 (authorize) calls next(), layer 2 (stamp) writes context(), handler runs.
+  // The bare call `fn(args)` is the read — awaits the value (Promise<T>); `fn.peek(args)` is the `T | undefined` snapshot.
+  async function runAllowed() {
+    const r = await platformGuard({ allow: "yes" })
+    allowedOut = "allow=" + r.allow + " · passedGuard=" + r.passedGuard
+  }
+  // Blocked call: layer 1 returns error(403) WITHOUT next() — a short-circuit; the handler never runs.
+  // The bare call `fn(args)` rejects with the HttpError carrying the short-circuited status, which we read off the
+  // catch. NOTE: `fn.raw(args, init?)` (the untouched Response) is not implemented on the RPC callable
+  // today (framework gap); catching `.load` is the honest way to observe the status from the callable.
+  async function runBlocked() {
+    try {
+      await platformGuard({ allow: "no" })
+      blockedStatus = 200
+    } catch (caught) {
+      blockedStatus = caught.status
+    }
+  }
+</script>
+
+<div class="row">
+  <button id="guard-allow-btn" onclick={runAllowed}>Allowed call</button>
+  <button id="guard-block-btn" onclick={runBlocked}>Blocked call (403)</button>
+</div>
+<pre class="out" id="guard-allow-out">allowed: {allowedOut}</pre>
+<pre class="out" id="guard-block-out">blocked: {blockedStatus === null ? "(not run)" : "HTTP " + blockedStatus}</pre>

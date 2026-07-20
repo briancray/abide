@@ -1,0 +1,11 @@
+<script>
+  import { navigate } from "abide/ui/navigate"
+
+  // navigate(path) performs a soft client-side navigation. Exact static routes win over the [slug]
+  // param route, so this resolves to the dedicated `routing-demo/details` page.
+</script>
+
+<div class="row">
+  <a data-testid="details-link" href="/routing-demo/details">Details (link)</a>
+  <button data-testid="navigate-details" onclick={() => navigate("/routing-demo/details")}>navigate("/routing-demo/details")</button>
+</div>

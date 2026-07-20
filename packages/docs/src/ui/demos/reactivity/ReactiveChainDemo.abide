@@ -1,0 +1,47 @@
+<script>
+  import { state } from "abide/ui/state"
+  import { watch } from "abide/ui/watch"
+
+  // The whole reactive chain in one component: every primitive below shares the SAME `count` signal,
+  // so driving the counter fans out to the computed, the linked cell, both watches, and the snippet.
+
+  // state(v, transform?) — a writable cell. The transform clamps every write into 0..10.
+  let count = state(0, (value) => Math.max(0, Math.min(10, value)))
+  function reset() { count = 0 }
+
+  // state.computed(...) — read-only derived cell, recomputed lazily from `count`.
+  const doubled = state.computed(() => count * 2)
+
+  // state.linked(source, transform?) — a writable cell reseeded whenever `count` changes. A local
+  // write holds until the next reseed.
+  let draft = state.linked(() => count, (value) => value * 100)
+  function bumpDraft() { draft = draft + 1 }
+
+  // watch(source, handler) — runs the handler on change only (not the initial read).
+  let changes = state(0)
+  watch(() => count, () => { changes = changes + 1 })
+
+  // watch(thunk) — an auto-tracked effect. It reads `doubled` and mirrors a derived value into a
+  // separate cell, proving the thunk re-runs when its tracked reads change.
+  let mirror = state(0)
+  watch(() => { mirror = doubled + 1 })
+</script>
+
+<div class="row">
+  <button data-testid="dec" onclick={() => count--}>Decrement</button>
+  <button data-testid="inc" onclick={() => count++}>Increment</button>
+  <button data-testid="reset" onclick={reset}>Reset</button>
+</div>
+<p>Count: <strong data-testid="count">{count}</strong> <span class="muted">(writes clamp into 0..10)</span></p>
+<p>Doubled: <strong data-testid="doubled">{doubled}</strong> <span class="muted">(<code>state.computed</code>)</span></p>
+<p>Draft: <strong data-testid="draft">{draft}</strong> <span class="muted">(<code>state.linked</code>; seeded to count × 100, editable until count changes)</span> <button data-testid="bump-draft" onclick={bumpDraft}>Bump draft +1</button></p>
+<p>Count changed <strong data-testid="changes">{changes}</strong> times since load <span class="muted">(<code>watch(source, handler)</code>)</span></p>
+<p>Mirror (doubled + 1): <strong data-testid="mirror">{mirror}</strong> <span class="muted">(<code>watch(thunk)</code>)</span></p>
+
+{#snippet badge(label, value)}
+  <span class="badge">{label}: <b>{value}</b></span>
+{/snippet}
+<div class="row" data-testid="badges">
+  {badge("Live count", count)}
+  {badge("Doubled", doubled)}
+</div>

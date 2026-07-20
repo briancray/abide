@@ -11,6 +11,7 @@
 // just without per-request isolation.
 
 import { AsyncLocalStorage } from 'node:async_hooks'
+import { isBrowser } from './isBrowser.ts'
 
 // The per-render streaming-SSR scratchpad (streaming-ssr-plan.md, PR2). Present only while an SSR page
 // render is streaming; a streaming-form read (`{#await}` block) that hasn't settled by the deadline
@@ -83,12 +84,6 @@ export interface CacheContext {
 export function createContext(): CacheContext {
     return { cache: new Map<string, unknown>(), states: [] }
 }
-
-// Server detection: on the client `window` exists; anywhere else (Bun/server, workers
-// without a DOM) we use AsyncLocalStorage for per-request scope.
-const isBrowser =
-    typeof globalThis !== 'undefined' &&
-    typeof (globalThis as { window?: unknown }).window !== 'undefined'
 
 // Client-side single module-level cache (one per tab/session). Lazily created.
 let clientContext: CacheContext | undefined

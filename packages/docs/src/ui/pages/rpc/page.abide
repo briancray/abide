@@ -1,32 +1,21 @@
 <script module>
-  import Sample from "../../components/Sample.abide"
-  import hello from "../../../server/rpc/hello"
-  import echo from "../../../server/rpc/echo"
-
-  const PAGE = "src/ui/pages/rpc/page.abide"
+  import Demo from "../../components/Demo.abide"
+  import HelloReadDemo from "../../demos/rpc/HelloReadDemo.abide"
+  import EchoShapeDemo from "../../demos/rpc/EchoShapeDemo.abide"
 </script>
 
 <main class="page">
   <h1>Isomorphic RPC</h1>
   <p class="lead">An RPC is defined once on the server and called by the <em>same name</em> everywhere. On the server it runs in-process; in the browser it becomes a fetch — same callable, same intent. Reads are cached and coalesced by the underlying <code>cell</code>, so repeated reads of the same args share one result.</p>
 
-  <Sample id="hello" title="Live read — <code>hello</code>" page={PAGE} client="hello" server="src/server/rpc/hello.ts">
-    <!-- #demo hello -->
-    <p class="say">{await hello({ who: "RPC page" })}</p>
-    <!-- #enddemo -->
-  </Sample>
+  <Demo id="hello" title="Live read — <code>hello</code>" server="src/server/rpc/hello.ts" client="src/ui/demos/rpc/HelloReadDemo.abide" tab="server">
+    <HelloReadDemo />
+  </Demo>
 
-  <Sample id="echo" title="Derived shape — <code>echo</code>" page={PAGE} client="echo" server="src/server/rpc/echo.ts">
-    <p>The <code>echo</code> RPC takes one object argument and returns a derived shape. Its value is awaited during SSR, so it lands directly in the HTML:</p>
-    <!-- #demo echo -->
-    {#await echo({ message: "abide is isomorphic" })}
-      <p>reading…</p>
-    {:then result}
-      <pre class="out">echoed: {result.echoed}
-length: {result.length}</pre>
-    {/await}
-    <!-- #enddemo -->
-  </Sample>
+  <p>The <code>echo</code> RPC takes one object argument and returns a derived shape. Its value is awaited during SSR, so it lands directly in the HTML:</p>
+  <Demo id="echo" title="Derived shape — <code>echo</code>" server="src/server/rpc/echo.ts" client="src/ui/demos/rpc/EchoShapeDemo.abide" tab="server">
+    <EchoShapeDemo />
+  </Demo>
 
   <h2>How it works</h2>
   <ul>

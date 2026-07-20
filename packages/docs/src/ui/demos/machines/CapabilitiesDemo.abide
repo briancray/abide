@@ -1,0 +1,16 @@
+<script>
+  import capabilities from "../../../server/rpc/capabilities"
+
+  // One `GET` handler, many surfaces. This list is read from the same `capabilities` RPC an agent
+  // would call over MCP — the browser await blocks SSR so the list is in the initial HTML.
+</script>
+
+<ul class="caps">
+  {#await capabilities()}
+    <li>loading…</li>
+  {:then caps}
+    {#for cap of caps}
+      <li><strong>{cap.name}</strong> — {cap.blurb}</li>
+    {/for}
+  {/await}
+</ul>

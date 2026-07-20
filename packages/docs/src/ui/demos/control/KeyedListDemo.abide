@@ -1,0 +1,36 @@
+<script>
+  import { state } from "abide/ui/state"
+
+  // Keyed by `item.id`, the {#for} block reconciles by identity: add / remove / reorder move the
+  // matching DOM nodes instead of re-creating them.
+  let items = state([
+    { id: 1, label: "Alpha" },
+    { id: 2, label: "Beta" },
+    { id: 3, label: "Gamma" },
+  ])
+  let nextId = state(4)
+
+  function addItem() {
+    items = [...items, { id: nextId, label: "Item " + nextId }]
+    nextId++
+  }
+  function removeFirst() {
+    items = items.slice(1)
+  }
+  function reverse() {
+    items = [...items].reverse()
+  }
+</script>
+
+<div class="controls">
+  <button data-testid="add" onclick={addItem}>Add</button>
+  <button data-testid="remove-first" onclick={removeFirst}>Remove first</button>
+  <button data-testid="reverse" onclick={reverse}>Reverse</button>
+</div>
+
+<ol data-testid="keyed-list" class="list">
+  {#for item, i of items by item.id}
+    <li data-testid="keyed-item">#{i} · {item.label} <span class="muted">(id {item.id})</span></li>
+  {/for}
+</ol>
+<p data-testid="keyed-count" class="muted">{items.length} items</p>

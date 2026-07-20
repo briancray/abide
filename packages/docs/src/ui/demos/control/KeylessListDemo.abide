@@ -1,0 +1,24 @@
+<script>
+  import { state } from "abide/ui/state"
+
+  // Without a `by` clause the block maps by position — perfect for a plain value list.
+  let nums = state([10, 20, 30])
+
+  function pushNum() {
+    nums = [...nums, nums.length * 10 + 10]
+  }
+  function popNum() {
+    nums = nums.slice(0, -1)
+  }
+</script>
+
+<div class="controls">
+  <button data-testid="push-num" onclick={pushNum}>Push</button>
+  <button data-testid="pop-num" onclick={popNum}>Pop</button>
+</div>
+
+<ul data-testid="keyless-list" class="list">
+  {#for n of nums}
+    <li data-testid="keyless-item">{n}</li>
+  {/for}
+</ul>

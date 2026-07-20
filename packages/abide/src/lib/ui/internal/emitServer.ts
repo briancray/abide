@@ -6,8 +6,11 @@
 // lexical `<script>` bindings from `emitSetup`. Event attributes are omitted (as `renderServer` does).
 
 import type { ScopeAnalysis, ScriptInfo } from './analyzeScope.ts'
-import { extractBindingNames, reconstructImport } from './analyzeScope.ts'
+import { reconstructImport } from './analyzeScope.ts'
+import { bindPattern } from './bindPattern.ts'
+import { componentRef } from './componentRef.ts'
 import { emitInstanceSetup, emitModuleEnsure } from './emitSetup.ts'
+import { splitParams } from './splitParams.ts'
 import type { AttrPlan, ServerChunk, TemplatePlan } from './templatePlan.ts'
 
 // RPC route imports follow the `src/server/rpc/<name>.ts` file convention, so their specifier carries a
@@ -19,7 +22,12 @@ const RPC_SPECIFIER = /(^|\/)server\/rpc\//
 // The local names bound by RPC route imports across the module + instance scripts (default and named).
 // By framework convention the import LOCAL equals the route/wire name (`$scope[local]` on both sides),
 // so the local doubles as the `rpcName` recorded on the handoff.
+// The RPC-import local names for an analysis. Memoized per-analysis: `genChunkRaw` recurses over the
+// template and asks for this on every `{#for await}` block, but the set is fixed for the whole module.
+const RPC_LOCALS_CACHE = new WeakMap<ScopeAnalysis, Set<string>>()
 function rpcImportLocals(analysis: ScopeAnalysis): Set<string> {
+    const cached = RPC_LOCALS_CACHE.get(analysis)
+    if (cached !== undefined) return cached
     const locals = new Set<string>()
     const collect = (script: ScriptInfo | null): void => {
         if (script === null) return
@@ -31,6 +39,7 @@ function rpcImportLocals(analysis: ScopeAnalysis): Set<string> {
     }
     collect(analysis.module)
     collect(analysis.instance)
+    RPC_LOCALS_CACHE.set(analysis, locals)
     return locals
 }
 
@@ -72,19 +81,6 @@ function parseAttachSource(
     const args = extractCallArgs(iterable, match.index + match[0].length - 1)
     if (args === null) return null
     return { rpcName: head, args }
-}
-
-function componentRef(analysis: ScopeAnalysis, name: string): string {
-    return analysis.declared.has(name) ? name : `$scope.${name}`
-}
-
-// Emit code that binds `pattern` from `valueExpr` onto the scope object `target`.
-function bindPattern(target: string, pattern: string, valueExpr: string): string {
-    const trimmed = pattern.trim()
-    if (/^[A-Za-z_$][\w$]*$/.test(trimmed))
-        return `${target}[${JSON.stringify(trimmed)}] = ${valueExpr};`
-    const names = extractBindingNames(trimmed)
-    return `Object.assign(${target}, (() => { const ${trimmed} = ${valueExpr}; return { ${names.join(', ')} }; })());`
 }
 
 // A child scope expression carrying an optional single binding (block param / for item).
@@ -232,17 +228,14 @@ function genChunkRaw(analysis: ScopeAnalysis, chunk: ServerChunk): string {
         case 'if': {
             let out = '  {\n    let $r = "";\n'
             let first = true
-            let hasElse = false
             for (const branch of chunk.branches) {
                 if (branch.expr === null) {
                     out += `    else { $r = await ${bodyExpr(analysis, branch.children)}($scope); }\n`
-                    hasElse = true
                 } else {
                     out += `    ${first ? 'if' : 'else if'} (await (${branch.expr})) { $r = await ${bodyExpr(analysis, branch.children)}($scope); }\n`
                     first = false
                 }
             }
-            void hasElse
             out += '    $out += $r;\n  }\n'
             return out
         }
@@ -377,24 +370,6 @@ function genChunks(analysis: ScopeAnalysis, chunks: ServerChunk[]): string {
         out += genChunk(analysis, chunk)
     }
     return out
-}
-
-// Split a snippet parameter list at top-level commas.
-function splitParams(params: string): string[] {
-    const parts: string[] = []
-    let depth = 0
-    let start = 0
-    for (let i = 0; i < params.length; i++) {
-        const char = params[i]
-        if (char === '{' || char === '[' || char === '(') depth++
-        else if (char === '}' || char === ']' || char === ')') depth--
-        else if (char === ',' && depth === 0) {
-            parts.push(params.slice(start, i).trim())
-            start = i + 1
-        }
-    }
-    parts.push(params.slice(start).trim())
-    return parts.filter((p) => p !== '')
 }
 
 export function emitServerModule(plan: TemplatePlan, analysis: ScopeAnalysis): string {

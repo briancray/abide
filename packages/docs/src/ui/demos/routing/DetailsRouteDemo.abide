@@ -1,0 +1,13 @@
+<script>
+  import { route } from "abide/shared/route"
+
+  // route() is isomorphic and reactive: the same call reads the current route on the server (during
+  // SSR) and on the client (after hydration / soft nav). This static sibling route resolves to its
+  // own dedicated page, so name/kind/url read the exact `/routing-demo/details` route.
+</script>
+
+<dl class="route">
+  <dt>route().name</dt><dd data-testid="route-name">{route().name}</dd>
+  <dt>route().kind</dt><dd data-testid="route-kind">{route().kind}</dd>
+  <dt>route().url.pathname</dt><dd data-testid="route-url">{route().url.pathname}</dd>
+</dl>

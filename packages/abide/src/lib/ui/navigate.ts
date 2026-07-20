@@ -12,7 +12,9 @@
 // A middleware short-circuit still arrives as a JSON `{redirect}` envelope (handled first). Link clicks
 // and back/forward drive the same path (see bootstrap.ts).
 //
-// Deferred: per-route code-splitting (the whole app ships in one bundle) and scroll restoration
+// CODE-SPLITTING (TODO #6): `mountPathname` is now async — it `loadPageEntry`s the destination's
+// content-hashed chunk (deferring the chunk BODY, not the pattern match) before claiming. `softLoad`
+// primes that chunk up front so its import overlaps the fetch/stream. Deferred: scroll restoration
 // (top-scroll unless `keepScroll`).
 
 import { matchRoute } from '../server/internal/matchRoute.ts'
@@ -20,7 +22,7 @@ import type { HydrationSeed } from '../server/internal/pages.ts'
 import type { RouteInfo } from '../server/internal/scope.ts'
 import { setClientRoute } from '../shared/internal/routeHolder.ts'
 import { bootstrapPage } from './internal/bootstrap.ts'
-import { pageBase, pageEntry, pagePatterns, pageSpecs } from './internal/pageRegistry.ts'
+import { loadPageEntry, pageBase, pagePatterns, pageSpecs } from './internal/pageRegistry.ts'
 
 const CONTAINER_ID = '__abide-app'
 
@@ -34,21 +36,27 @@ export interface NavigateOptions {
 // The disposer for the currently mounted page. mountPathname disposes it before mounting the next page.
 let activeCleanup: (() => void) | null = null
 
-// Match a pathname against the registered page patterns, set the reactive client route, dispose the
-// previous mount, and mount the destination page. Returns false when no page matches (caller falls
-// back to a full load). Used for the initial client mount (no `seed` → the inline seed script is
-// used) AND every soft-nav (`seed` = the envelope's hydration payload).
-export function mountPathname(pathname: string, seed?: HydrationSeed): boolean {
-    const match = matchRoute(pagePatterns(), pathname)
+// Match a pathname against the registered page patterns, LOAD the destination page's code-split chunk,
+// set the reactive client route, dispose the previous mount, and mount the destination page. Async
+// (TODO #6): the chunk import is awaited BEFORE the dispose so the swap stays atomic — the page is
+// never torn-down/blank while a chunk downloads. A resident chunk resolves in a microtask (no network),
+// so first load + same-route param nav are effectively synchronous. Returns false when no page matches
+// OR the chunk fails to load (caller falls back to a full load). Used for the initial client mount (no
+// `seed` → the inline seed script) AND every soft-nav (`seed` = the envelope's hydration payload).
+export async function mountPathname(pathname: string, seed?: HydrationSeed): Promise<boolean> {
+    // `pathname` may carry a query string (a navigate(url(…, query)) target); match on the pathname
+    // alone but keep the full URL so route().url.search reflects the query.
+    const targetUrl = new URL(pathname, location.origin)
+    const match = matchRoute(pagePatterns(), targetUrl.pathname)
     if (match === null) return false
-    const entry = pageEntry(match.pattern)
+    const entry = await loadPageEntry(match.pattern)
     if (entry === undefined) return false
 
     const info: RouteInfo = {
         kind: 'nav',
         name: match.pattern,
         params: match.params,
-        url: new URL(pathname, location.origin),
+        url: targetUrl,
         navigating: false,
     }
 
@@ -58,6 +66,7 @@ export function mountPathname(pathname: string, seed?: HydrationSeed): boolean {
     // would re-run those doomed effects against the new slug — e.g. a `{#await topic({ slug })}` block
     // would mount a SECOND resolved branch into the just-swapped DOM before it is torn down (duplicate
     // `topic`). Disposing first unsubscribes them so only the freshly-hydrated page reads the new route.
+    // The chunk is already resolved above, so this dispose→hydrate window is synchronous (no blank gap).
     if (activeCleanup !== null) {
         activeCleanup()
         activeCleanup = null
@@ -119,6 +128,12 @@ function fillSlot(id: number, html: string): void {
 async function softLoad(path: string, from: string, opts?: NavigateOptions): Promise<void> {
     const target = new URL(path, location.origin)
 
+    // Prime the destination's code-split chunk NOW (fire-and-forget), so the import overlaps the fetch +
+    // frame stream below instead of serializing after it. `loadPageEntry` dedupes with the `await` in
+    // mountPathname (one import), and swallows its own errors, so this never rejects.
+    const early = matchRoute(pagePatterns(), target.pathname)
+    if (early !== null) void loadPageEntry(early.pattern)
+
     let response: Response
     try {
         response = await fetch(path, { headers: { 'Abide-Nav': from } })
@@ -163,7 +178,7 @@ async function softLoad(path: string, from: string, opts?: NavigateOptions): Pro
     disposeActive()
 
     let seed: HydrationSeed | undefined
-    let navUrl = target.pathname
+    let navUrl = target.pathname + target.search
     try {
         for await (const frame of readFrames(response.body)) {
             if (frame.kind === 'shell') {
@@ -182,8 +197,9 @@ async function softLoad(path: string, from: string, opts?: NavigateOptions): Pro
     }
 
     // Hydrate the fully-assembled DOM: replay this stream's recorded reads then claim in place (PR3
-    // unwraps any streamed `<abide-slot>`).
-    if (!mountPathname(navUrl, seed)) {
+    // unwraps any streamed `<abide-slot>`). Awaits the destination chunk (primed above, usually already
+    // resolved); a chunk-load failure returns false → fall back to a full load rather than dead-end.
+    if (!(await mountPathname(navUrl, seed))) {
         location.href = path
         return
     }
@@ -193,14 +209,18 @@ async function softLoad(path: string, from: string, opts?: NavigateOptions): Pro
     }
 }
 
-// Client-side SPA navigation to `path`. Pushes (or replaces) a history entry, then soft-loads the
-// destination. A no-op outside the browser so importing it under SSR is safe.
-export async function navigate(path: string, opts?: NavigateOptions): Promise<void> {
+// Client-side SPA navigation to an already-resolved `target`. Pass a plain path (`navigate('/foo')`)
+// or compose a params/query-filled href with url() (`navigate(url('/users/[id]', { id }, { tab }))`)
+// — navigate itself does no segment/query resolution. A URL object contributes its path+search+hash.
+// Pushes (or replaces) a history entry, then soft-loads the destination. A no-op outside the browser
+// so importing it under SSR is safe.
+export async function navigate(target: string | URL, options?: NavigateOptions): Promise<void> {
     if (typeof document === 'undefined') return
+    const path = typeof target === 'string' ? target : target.pathname + target.search + target.hash
     const from = location.pathname
-    if (opts?.replace === true) history.replaceState(null, '', path)
+    if (options?.replace === true) history.replaceState(null, '', path)
     else history.pushState(null, '', path)
-    await softLoad(path, from, opts)
+    await softLoad(path, from, options)
 }
 
 // Whether a pathname matches a known in-app page pattern. Used to decide if a link/history entry is

@@ -118,12 +118,15 @@ test.describe('Async reads in templates', () => {
         await expect(page.getByTestId('inline-then')).toHaveText('Hello, inline then! (11)')
     })
 
-    test('fn.peek probe returns the cached value after the read resolves', async ({ page }) => {
+    test('a streaming read exposes chunk probes — peek (latest), chunks (count), done', async ({
+        page,
+    }) => {
         await page.goto('/rpc-guide/async-reads')
-        // Wait for the {#await} block to have resolved (its slot is now cached).
-        await expect(page.getByTestId('await-then')).toContainText('greeting: Hello, await block!')
-        await page.getByTestId('peek-btn').click()
-        await expect(page.getByTestId('peek-value')).toHaveText('Hello, await block!')
+        await page.getByTestId('stream-start').click()
+        // Chunks accumulate; peek tracks the latest; done flips true once the stream closes.
+        await expect(page.getByTestId('stream-latest')).toHaveText('tick 4 of 4', { timeout: 5000 })
+        await expect(page.getByTestId('stream-count')).toHaveText('4')
+        await expect(page.getByTestId('stream-done')).toHaveText('yes')
     })
 
     test('fn.raw returns the untouched Response — status, header, and JSON body', async ({

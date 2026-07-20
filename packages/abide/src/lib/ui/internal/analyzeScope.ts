@@ -693,6 +693,14 @@ function buildScopes(tokens: Tok[], braces: BraceInfo, filter: (name: string) =>
     return { declNameIdx, shadows }
 }
 
+// Is token `idx` (an identifier `name`) inside a scope that shadows the same-named outer binding?
+function isShadowed(shadows: ShadowScope[], name: string, idx: number): boolean {
+    for (const scope of shadows) {
+        if (scope.name === name && idx >= scope.start && idx <= scope.end) return true
+    }
+    return false
+}
+
 // ---------------------------------------------------------------------------
 // rewriteCellRefs — the crux
 // ---------------------------------------------------------------------------
@@ -727,19 +735,12 @@ export function rewriteCellRefs(code: string, cellNames: Set<string>): string {
     const { enclBraceOpen, isObjectBrace } = braces
     const { declNameIdx, shadows } = buildScopes(tokens, braces, (name) => cellNames.has(name))
 
-    const isShadowed = (name: string, idx: number): boolean => {
-        for (const scope of shadows) {
-            if (scope.name === name && idx >= scope.start && idx <= scope.end) return true
-        }
-        return false
-    }
-
     // Is `tokens[i]` (a cell-named Identifier) a genuine reference we should rewrite?
     const isCellRef = (i: number): boolean => {
         const prev = i > 0 ? tokenAt(tokens, i - 1).kind : undefined
         if (prev === K.DotToken || prev === K.QuestionDotToken) return false // member/property access
         if (declNameIdx.has(i)) return false // declaration / parameter name
-        if (isShadowed(tokenAt(tokens, i).text, i)) return false
+        if (isShadowed(shadows, tokenAt(tokens, i).text, i)) return false
         return true
     }
 
@@ -1170,13 +1171,6 @@ export function rewriteFreeIdentifiers(
     const { declNameIdx, shadows } = buildScopes(tokens, braces, () => true)
     const typeSkips = markTypeSkips(tokens, braces.matchClose)
 
-    const isShadowed = (name: string, idx: number): boolean => {
-        for (const scope of shadows) {
-            if (scope.name === name && idx >= scope.start && idx <= scope.end) return true
-        }
-        return false
-    }
-
     let out = ''
     let cursor = 0
     for (let i = 0; i < tokens.length; i++) {
@@ -1189,7 +1183,7 @@ export function rewriteFreeIdentifiers(
         const prev = i > 0 ? tokenAt(tokens, i - 1).kind : undefined
         if (prev === K.DotToken || prev === K.QuestionDotToken) continue // member access
         if (declNameIdx.has(i)) continue // local binding name
-        if (isShadowed(name, i)) continue // shadowed by a local binding
+        if (isShadowed(shadows, name, i)) continue // shadowed by a local binding
         const encl = numberAt(enclBraceOpen, i)
         const inObjectPosition =
             encl !== -1 &&
@@ -1228,13 +1222,6 @@ export function collectFreeIdentifiers(expr: string, declared: Set<string>): Set
     const { declNameIdx, shadows } = buildScopes(tokens, braces, () => true)
     const typeSkips = markTypeSkips(tokens, braces.matchClose)
 
-    const isShadowed = (name: string, idx: number): boolean => {
-        for (const scope of shadows) {
-            if (scope.name === name && idx >= scope.start && idx <= scope.end) return true
-        }
-        return false
-    }
-
     for (let i = 0; i < tokens.length; i++) {
         const t = tokenAt(tokens, i)
         if (!isIdentifierLike(t.kind)) continue
@@ -1252,7 +1239,7 @@ export function collectFreeIdentifiers(expr: string, declared: Set<string>): Set
             if (next === K.ColonToken || next === K.OpenParenToken) continue
         }
         if (declNameIdx.has(i)) continue // local binding name
-        if (isShadowed(t.text, i)) continue // shadowed by a local binding
+        if (isShadowed(shadows, t.text, i)) continue // shadowed by a local binding
         if (declared.has(t.text)) continue
         if (GLOBALS.has(t.text)) continue
         result.add(t.text)

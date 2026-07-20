@@ -16,11 +16,19 @@ Current smoke coverage lives in `e2e/smoke.spec.ts` (home, reactivity counter, s
 ## Coverage summary (verify phase)
 
 - **Total capabilities in this manifest: 130** (~86 browser-facing PW/PW+RT, ~44 runtime-only RT).
-- **Playwright suite: 9 spec files, 72 tests — ALL PASSING.** They drive the real docs app (a real
+- **Playwright suite: 12 spec files, 95 tests — ALL PASSING.** They drive the real docs app (a real
   abide app served in dev mode) in Chromium: SSR HTML, hydration, live reactivity, two-way binds,
   soft-nav, sockets, and machine surfaces fetched from the browser.
-  - `smoke` (4), `rpc` (18), `cache` (5), `reactivity` (8), `bindings` (13), `control` (9),
-    `routing` (6), `sockets` (6), `platform` (6).
+  - `rpc` (18), `bindings` (14), `cache` (11), `control` (10), `reactivity` (10), `platform` (9),
+    `routing` (6), `sockets` (6), `smoke` (5), `streaming` (3), `uploads` (2), `styling` (1).
+- **Docs example structure:** every live demo is a standalone `src/ui/demos/<section>/<Name>.abide`
+  component, rendered inside the reusable `components/Demo.abide` card. The card shows the demo, then
+  two source tabs in a fixed order — **server** (the full `.ts` RPC/socket) then **client** (the full
+  `.abide` component) — read live from disk via the `snippet` RPC; `tab=` opens the side the capability
+  is about (server for RPC/socket capabilities, client for UI/template ones), and a one-shot demo (a
+  single read/mutation) gets a "Run again" button (`replayable`). Coupled capabilities that share one
+  reactive signal (e.g. the reactivity chain, the verb mutations, the socket) live in one cohesive
+  component so the shared behaviour — which the e2e asserts — is preserved.
 - **Runtime (`bun test`) suite in `packages/abide`: 567 tests — ALL PASSING.** Covers the RT-only
   capabilities (agent, CLI/build, `createTestApp`, RPC `opts` internals, template compiler units) and
   the browser-facing runtime primitives at the unit level.
@@ -114,8 +122,8 @@ Import `abide/server/{json,jsonl,sse,error,redirect}`.
 | Capability | Kind | Status |
 | --- | --- | --- |
 | `json(data, init?)` → `TypedResponse<T>` | PW+RT | [x] (rpc-guide/responses) |
-| `jsonl(iterable, init?)` — `application/jsonl` stream | PW+RT | [x] (rpc-guide/responses, `{#for await}`) |
-| `sse(iterable, init?)` — `text/event-stream` stream | PW+RT | [x] (rpc-guide/responses, `{#for await}`) |
+| `jsonl(iterable, init?)` — `application/jsonl` stream (lazy, see-through) | PW+RT | [x] (rpc-guide/responses; `{#for await x of rpc()}` + Start/restart via `.refresh()`) |
+| `sse(iterable, init?)` — `text/event-stream` stream (lazy, see-through, isomorphic) | PW+RT | [x] (rpc-guide/responses; consumed via the RPC callable `{#for await}` **and** via native `EventSource`) |
 | `error(status, message?, init?)` | RT | [x] (rpc-guide/responses, caught in browser) |
 | `error.typed(name, status, schema?)` + `fn.isError(e, name)` narrowing | PW+RT | [x] (rpc-guide/responses; narrowed by `.kind`) |
 | `redirect(url, status=302, init?)` | PW+RT | [x] (rpc-guide/responses) |
@@ -125,7 +133,7 @@ Import `abide/server/{json,jsonl,sse,error,redirect}`.
 | --- | --- | --- |
 | `fn(args)` — smart read (cache + coalesce + reactive; SSR in-proc → browser fetch) | PW+RT | [x] (rpc-guide/async-reads) |
 | `fn.raw(args, init?)` — raw `Response`, full bypass | PW+RT | [x] (rpc-guide/async-reads; raw-fetch bypass — `.raw` method not yet in framework) |
-| bare call on a streaming handler → `AsyncIterable<T>` / `Stream<T>` | PW+RT | [x] (rpc-guide/responses jsonl/sse `{#for await}`) |
+| bare call on a streaming handler → replay-then-live `AsyncIterable<C>` (client proxy decodes jsonl/sse by content-type → same cell → stream slot) | PW+RT | [x] (rpc-guide/responses; browser `{#for await x of rpc()}` for jsonl + sse, verified streaming + re-run) |
 | `fn.peek` — reactive probe | PW | [x] (rpc-guide/async-reads) |
 
 ## 4. Cache verbs + probes (isomorphic — `abide/shared/*`)
@@ -159,7 +167,7 @@ Import `abide/server/{json,jsonl,sse,error,redirect}`.
 | `watch(source, handler)` / `watch(thunk)` | PW | [x] (reactivity/demo) |
 | `props<T>()` — reactive prop reader | PW | [x] (reactivity/demo) |
 | `html(str)` / `` html`…` `` — raw HTML | PW | [x] (reactivity/demo) |
-| `navigate(path, { replace?, keepScroll? })` | PW | [~] (soft-nav smoke) |
+| `navigate(target, { replace?, keepScroll? })` — target is a resolved href; compose with `url()` | PW | [x] (routing navigate() + navigate(url(...)) e2e) |
 | `bundled()` → boolean | PW | [x] (platform/observability: bundled-flag) |
 
 ## 6. Template bindings / directives (`.abide`)
@@ -208,8 +216,8 @@ Import `abide/server/{json,jsonl,sse,error,redirect}`.
 | `layout.abide` layouts | PW | [ ] |
 | `[name]` dynamic param routes → `route().params.name` | PW | [x] (routing-demo/[slug] + e2e/routing.spec) |
 | `route()` → `{ kind, name, params, url, navigating }` (isomorphic) | PW+RT | [x] (routing-demo pages assert kind/name/params/url) |
-| `navigate(path, opts)` — soft nav (same-route seeds-only vs cross-route outlet swap) | PW | [x] (routing-demo navigate() + soft-nav/back-forward e2e) |
-| `url(path, args?)` — in-app href resolver | PW+RT | [x] (routing-demo hub builds [slug] hrefs; e2e asserts href) |
+| `navigate(target, opts)` — soft nav (same-route seeds-only vs cross-route outlet swap) | PW | [x] (routing-demo navigate() + soft-nav/back-forward e2e) |
+| `url(path, params?, query?)` — in-app href resolver (typed params + query string) | PW+RT | [x] (routing-demo hub builds [slug] hrefs + query strings; e2e asserts href + query round-trip via route().url) |
 | Static assets `src/ui/public/` | PW | [ ] |
 
 ## 10. Sockets

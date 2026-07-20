@@ -1,0 +1,10 @@
+<script>
+  import { state } from "abide/ui/state"
+
+  // bind:checked two-way.
+  let checked = state(false)
+  const checkedBind = { get: () => checked, set: (next) => { checked = next } }
+</script>
+
+<label><input id="checked-input" type="checkbox" bind:checked={checkedBind} /> subscribe</label>
+<p>Checked: <span id="checked-out">{checked ? "yes" : "no"}</span></p>

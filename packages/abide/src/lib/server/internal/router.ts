@@ -37,7 +37,7 @@ import {
     publishCacheFrame,
 } from './cacheChannels.ts'
 import { authorizeChannelJoin, isCacheChannel, type SocketConnectionData } from './channelAuth.ts'
-import { buildClientBundle, buildClientCss } from './clientBundle.ts'
+import { type ClientBuild, clientBuildFor } from './clientBundle.ts'
 import type { Mutation, Rpc } from './makeRpc.ts'
 import { matchRoute } from './matchRoute.ts'
 import { handleMcp } from './mcp.ts'
@@ -153,6 +153,10 @@ export interface AppConfig {
     // bundle MINIFICATION: only an explicit production build (`dev === false`) minifies, so dev stays
     // fast + readable and tests keep their unminified assertions (TODO #6). See clientBundle.ts.
     dev?: boolean
+    // BP3: a PRE-BUILT client loaded from `dist/_app/<hash>/` (by `abide start`). When set, the router
+    // serves these artifacts as-is and NEVER runs `Bun.build` at request time — production serves the
+    // exact output of `abide build`. Absent in dev/test → the client is built in-memory on first use.
+    clientBuild?: ClientBuild
 }
 
 // Per-connection state on the multiplexed socket WS: the set of live subscriptions this client
@@ -346,32 +350,29 @@ async function dispatch(scope: RequestScope, config: AppConfig): Promise<Respons
         return json({ reachable: true })
     }
 
-    // BP1 client bundle: the browser JS that mounts the page (fresh client mount over the SSR'd
-    // container). Built once (cached per config) and served as an ES module. renderDocument injects
-    // a `<script type="module" src="/__abide/client.js">` so every SSR'd page loads it.
-    if (url.pathname === '/__abide/client.js') {
+    // Content-addressed client assets (TODO #6): the code-split loader entry + per-route chunks + shared
+    // chunks + the bundled CSS, each served by its content-hashed filename under `/__abide/chunk/`. Every
+    // name embeds a content hash, so the response is immutable + long-cacheable. renderDocument injects
+    // `<script type="module" src="/__abide/chunk/<loader>-<hash>.js">` (the loader lazily imports the
+    // matched route's chunk); the stylesheet is linked only when the app bundled CSS.
+    if (url.pathname.startsWith('/__abide/chunk/')) {
         const method = scope.request.method.toUpperCase()
         if (method !== 'GET' && method !== 'HEAD')
             return error(405, `Method not allowed: ${method}`)
-        const bundle = await buildClientBundle(config)
-        return new Response(bundle, {
+        const name = url.pathname.slice('/__abide/chunk/'.length)
+        const build = await clientBuildFor(config)
+        const content = build.files.get(name)
+        if (content === undefined) return error(404, `Not found: ${url.pathname}`)
+        const contentType = name.endsWith('.css')
+            ? 'text/css; charset=utf-8'
+            : 'text/javascript; charset=utf-8'
+        return new Response(content, {
             status: 200,
-            headers: { 'content-type': 'text/javascript; charset=utf-8' },
-        })
-    }
-
-    // TODO #20 client stylesheet: the bundled CSS from pages' `import "…css"` (Tailwind utilities
-    // processed when the plugin is present). Built alongside the JS (cached per config). renderDocument
-    // links it (`<link rel="stylesheet" href="/__abide/client.css">`) only when there IS CSS, but the
-    // route always answers 200 (empty body when no CSS) so a linked stylesheet never 404s.
-    if (url.pathname === '/__abide/client.css') {
-        const method = scope.request.method.toUpperCase()
-        if (method !== 'GET' && method !== 'HEAD')
-            return error(405, `Method not allowed: ${method}`)
-        const css = await buildClientCss(config)
-        return new Response(css, {
-            status: 200,
-            headers: { 'content-type': 'text/css; charset=utf-8' },
+            headers: {
+                'content-type': contentType,
+                // Content-addressed → the bytes for this URL never change; cache aggressively.
+                'cache-control': 'public, max-age=31536000, immutable',
+            },
         })
     }
 
@@ -417,7 +418,12 @@ async function dispatch(scope: RequestScope, config: AppConfig): Promise<Respons
                 // header so caches key first-load vs soft-nav.
                 if (isSoftNav(scope.request)) {
                     const shell = await renderPage(source, config, match.pattern, true)
-                    const body = streamSoftNav(shell, getContext(), config, url.pathname)
+                    const body = streamSoftNav(
+                        shell,
+                        getContext(),
+                        config,
+                        url.pathname + url.search,
+                    )
                     return new Response(body, {
                         status: 200,
                         headers: {
@@ -431,11 +437,16 @@ async function dispatch(scope: RequestScope, config: AppConfig): Promise<Respons
                 // true)` awaits blocking reads (a throw here still returns a controlled 500 below) and returns
                 // the SHELL; `streamPageDocument` flushes head → shell → out-of-order patches → seed+tail.
                 const shell = await renderPage(source, config, match.pattern, true)
-                // Link the client stylesheet only when the app actually bundled CSS (TODO #20).
-                const hasStyles = (await buildClientCss(config)).length > 0
+                // Boot from the content-hashed loader entry; link the client stylesheet only when the app
+                // actually bundled CSS (TODO #6/#20). Both URLs are immutable + content-addressed.
+                const build = await clientBuildFor(config)
+                const chunk = build.chunkByPattern.get(match.pattern)
                 const body = streamPageDocument(shell, getContext(), config, {
                     devReloadScript: config.devReloadScript,
-                    styles: hasStyles,
+                    clientHref: `/__abide/chunk/${build.entry}`,
+                    cssHref:
+                        build.cssFile !== undefined ? `/__abide/chunk/${build.cssFile}` : undefined,
+                    preloadHref: chunk !== undefined ? `/__abide/chunk/${chunk}` : undefined,
                 })
                 return new Response(body, {
                     status: 200,
@@ -525,7 +536,14 @@ async function dispatch(scope: RequestScope, config: AppConfig): Promise<Respons
         }
         const resumed = resumable.resumeStream(args, Number(fromRaw))
         if (!resumed.fresh && resumed.cursor !== undefined) {
-            return jsonl(resumed.cursor, { headers: { 'x-abide-stream-resume': 'live' } })
+            // Re-serve the resumed transcript in the handler's ORIGINAL encoding (sse resumes as sse),
+            // mirroring the fresh-run path below.
+            const response =
+                streamEncodingOf(resumed.cursor) === 'sse'
+                    ? sse(resumed.cursor)
+                    : jsonl(resumed.cursor)
+            response.headers.set('x-abide-stream-resume', 'live')
+            return response
         }
         resumeFresh = true
     }

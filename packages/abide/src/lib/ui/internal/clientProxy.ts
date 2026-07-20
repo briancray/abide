@@ -15,6 +15,10 @@ import type { Mutation, Rpc } from '../../server/internal/makeRpc.ts'
 import { cell } from '../../shared/cell.ts'
 import { cacheChannelName } from '../../shared/internal/cacheChannelName.ts'
 import { canonicalKey } from '../../shared/internal/codec.ts'
+import {
+    decodeStreamResponse,
+    isStreamContentType,
+} from '../../shared/internal/decodeStreamResponse.ts'
 import { applyCacheFrame } from './applyCacheFrame.ts'
 import { subscribeCacheChannel } from './cacheMux.ts'
 
@@ -82,6 +86,12 @@ export function clientProxy<Args = unknown, T = unknown>(
         const backing = cell<Args, T>(async (args: Args): Promise<T> => {
             const response = await fetch(readUrl(base, name, args), { method })
             if (!response.ok) throw await toHttpError(response)
+            // A streaming read (jsonl/sse response) decodes to an AsyncIterable of chunks; `cell` sees it
+            // as a stream source and stores a ReplayableStream, so the browser consumes it exactly like
+            // the server (`{#for await x of rpc()}`). A value read parses JSON as before.
+            if (isStreamContentType(response.headers.get('content-type'))) {
+                return decodeStreamResponse(response) as unknown as T
+            }
             return (await response.json()) as T
         })
 
@@ -121,6 +131,16 @@ export function clientProxy<Args = unknown, T = unknown>(
         rpc.pending = (args: Args): boolean => backing.pending(args)
         rpc.refreshing = (args: Args): boolean => backing.refreshing(args)
         rpc.error = (args: Args): unknown => backing.error(args)
+        // STREAMING-read chunk probes (the `StreamRead<Args, C>` surface): `peek` above is already
+        // stream-aware (latest chunk) via the cell; forward `chunks` (transcript) + `done` (closed?) too.
+        // A scalar read never calls these; only the StreamRead type surfaces them. Attached loosely — the
+        // consumer sees them through the inferred StreamRead type, the proxy object is dynamic.
+        const streamRpc = rpc as unknown as {
+            chunks: (args: Args) => unknown[] | undefined
+            done: (args: Args) => boolean
+        }
+        streamRpc.chunks = (args: Args): unknown[] | undefined => backing.chunks(args)
+        streamRpc.done = (args: Args): boolean => backing.done(args)
         rpc.watch = (args: Args, handler: (value: T | undefined) => void): (() => void) =>
             backing.watch(args, handler)
         // Raw fetch, full bypass of the cell — returns the untouched `Response` (no parse, no error throw).

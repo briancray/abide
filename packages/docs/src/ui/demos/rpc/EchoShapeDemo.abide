@@ -1,0 +1,13 @@
+<script>
+  import echo from "../../../server/rpc/echo"
+
+  // `echo` takes one object argument and returns a derived shape. The `{#await}` block awaits the
+  // read during SSR, so the derived value lands directly in the HTML.
+</script>
+
+{#await echo({ message: "abide is isomorphic" })}
+  <p>reading…</p>
+{:then result}
+  <pre class="out">echoed: {result.echoed}
+length: {result.length}</pre>
+{/await}

@@ -1,103 +1,26 @@
 <script module>
-  import Sample from "../../../components/Sample.abide"
-  import rpcGreet from "../../../../server/rpc/rpcGreet"
-  import rpcCreateNote from "../../../../server/rpc/rpcCreateNote"
-  import rpcReplaceNote from "../../../../server/rpc/rpcReplaceNote"
-  import rpcPatchNote from "../../../../server/rpc/rpcPatchNote"
-  import rpcDeleteNote from "../../../../server/rpc/rpcDeleteNote"
-
-  const PAGE = "src/ui/pages/rpc-guide/verbs/page.abide"
+  import Demo from "../../../components/Demo.abide"
+  import GetReadDemo from "../../../demos/rpc/GetReadDemo.abide"
+  import HeadPingDemo from "../../../demos/rpc/HeadPingDemo.abide"
+  import NoteMutationsDemo from "../../../demos/rpc/NoteMutationsDemo.abide"
 </script>
-
-<script>
-  import { state } from "abide/ui/state"
-
-  let text = state("first draft")
-  let postResult = state(null)
-  let putResult = state(null)
-  let patchResult = state(null)
-  let deleteResult = state(null)
-  let headStatus = state(0)
-  // Two-way bind over a bare state var — `bind:value={text}` — syncs both ways directly.
-
-  async function post() { postResult = await rpcCreateNote({ text }) }
-  async function put() { putResult = await rpcReplaceNote({ id: "n1", text }) }
-  async function patch() { patchResult = await rpcPatchNote({ id: "n1", text }) }
-  async function del() { deleteResult = await rpcDeleteNote({ id: "n1" }) }
-
-  async function head() {
-    const response = await fetch("/rpc/rpcPing", { method: "HEAD" })
-    headStatus = response.status
-  }
-</script>
-
 
 <main class="page">
   <h1>RPC verbs</h1>
   <p class="lead">One handler per file, named for the verb. <strong>Reads</strong> (<code>GET</code>/<code>HEAD</code>) put args in the URL and are cached; <strong>mutations</strong> (<code>POST</code>/<code>PUT</code>/<code>PATCH</code>/<code>DELETE</code>) put args in the body and run every call. All six are the same callable in the browser as on the server.</p>
 
-  <Sample page={PAGE} id="get" title="Read — <code>GET</code>" client="get" server="src/server/rpc/rpcGreet.ts">
-    <p>A GET read blocks SSR so its value is already in this HTML:</p>
-    <!-- #demo get -->
-    {#await rpcGreet({ name: "verbs page" })}
-      <p>reading…</p>
-    {:then greeting}
-      <p class="say" data-testid="get-read">{greeting.greeting}</p>
-    {/await}
-    <!-- #enddemo -->
-  </Sample>
+  <p>A GET read blocks SSR so its value is already in this HTML:</p>
+  <Demo id="get" title="Read — <code>GET</code>" server="src/server/rpc/rpcGreet.ts" client="src/ui/demos/rpc/GetReadDemo.abide" tab="server">
+    <GetReadDemo />
+  </Demo>
 
-  <Sample page={PAGE} id="head" title="Read — <code>HEAD</code>" client="head" server="src/server/rpc/rpcPing.ts">
-    <p>Identical semantics to GET; a HEAD carries headers only. This raw fetch reports its status line:</p>
-    <!-- #demo head -->
-    <button data-testid="head-btn" onclick={head}>HEAD /rpc/rpcPing</button>
-    <p>Status: <strong data-testid="head-status">{headStatus}</strong></p>
-    <!-- #enddemo -->
-  </Sample>
+  <p>Identical semantics to GET; a HEAD carries headers only. This raw fetch reports its status line:</p>
+  <Demo id="head" title="Read — <code>HEAD</code>" server="src/server/rpc/rpcPing.ts" client="src/ui/demos/rpc/HeadPingDemo.abide" tab="server">
+    <HeadPingDemo />
+  </Demo>
 
-  <p>Every mutation is its own self-contained sample below. They share one bound text field — <code>POST</code> creates, <code>PUT</code> replaces, <code>PATCH</code> partially updates, <code>DELETE</code> removes. Args ride in the JSON body; the handler runs on every call (mutations never cache).</p>
-  <label class="verb-text">Shared note text: <input data-testid="verb-input" bind:value={text} /></label>
-
-  <Sample page={PAGE} id="post" title="Mutation — <code>POST</code> (create)" client="post" server="src/server/rpc/rpcCreateNote.ts">
-    <!-- #demo post -->
-    <button data-testid="post-btn" onclick={post}>POST rpcCreateNote</button>
-    {#if postResult}
-      <pre class="out" data-testid="post-result">verb: {postResult.verb}
-id: {postResult.id}
-text: {postResult.text ?? "(none)"}</pre>
-    {/if}
-    <!-- #enddemo -->
-  </Sample>
-
-  <Sample page={PAGE} id="put" title="Mutation — <code>PUT</code> (replace)" client="put" server="src/server/rpc/rpcReplaceNote.ts">
-    <!-- #demo put -->
-    <button data-testid="put-btn" onclick={put}>PUT rpcReplaceNote</button>
-    {#if putResult}
-      <pre class="out" data-testid="put-result">verb: {putResult.verb}
-id: {putResult.id}
-text: {putResult.text ?? "(none)"}</pre>
-    {/if}
-    <!-- #enddemo -->
-  </Sample>
-
-  <Sample page={PAGE} id="patch" title="Mutation — <code>PATCH</code> (partial update)" client="patch" server="src/server/rpc/rpcPatchNote.ts">
-    <!-- #demo patch -->
-    <button data-testid="patch-btn" onclick={patch}>PATCH rpcPatchNote</button>
-    {#if patchResult}
-      <pre class="out" data-testid="patch-result">verb: {patchResult.verb}
-id: {patchResult.id}
-text: {patchResult.text ?? "(none)"}</pre>
-    {/if}
-    <!-- #enddemo -->
-  </Sample>
-
-  <Sample page={PAGE} id="delete" title="Mutation — <code>DELETE</code>" client="delete" server="src/server/rpc/rpcDeleteNote.ts">
-    <!-- #demo delete -->
-    <button data-testid="delete-btn" onclick={del}>DELETE rpcDeleteNote</button>
-    {#if deleteResult}
-      <pre class="out" data-testid="delete-result">verb: {deleteResult.verb}
-id: {deleteResult.id}</pre>
-    {/if}
-    <!-- #enddemo -->
-  </Sample>
+  <p>Every mutation shares one bound text field — <code>POST</code> creates, <code>PUT</code> replaces, <code>PATCH</code> partially updates, <code>DELETE</code> removes. Args ride in the JSON body; the handler runs on every call (mutations never cache).</p>
+  <Demo id="mutations" title="Mutations — <code>POST</code> / <code>PUT</code> / <code>PATCH</code> / <code>DELETE</code>" server="src/server/rpc/rpcCreateNote.ts" client="src/ui/demos/rpc/NoteMutationsDemo.abide" tab="server">
+    <NoteMutationsDemo />
+  </Demo>
 </main>

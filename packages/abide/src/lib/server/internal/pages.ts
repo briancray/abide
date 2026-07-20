@@ -293,9 +293,15 @@ export interface RenderDocumentOptions {
     devReloadScript?: string | undefined
     // The §5 hydration seed to inline into `#__abide-seed`. Absent → the empty `{}` payload.
     seed?: HydrationSeed | undefined
-    // TODO #20: when true, link the bundled client stylesheet (`/__abide/client.css`) in `<head>`. Set
-    // only when the app actually bundled CSS, so CSS-free apps emit the same document as before.
-    styles?: boolean | undefined
+    // TODO #6: the content-hashed loader entry URL the document boots from (`/__abide/chunk/<loader>-
+    // <hash>.js`). Absent only for the byte-identity oracle / hand-built callers that don't boot a client.
+    clientHref?: string | undefined
+    // TODO #6/#20: the content-hashed client stylesheet URL to link in `<head>`. Set only when the app
+    // actually bundled CSS, so CSS-free apps emit no `<link>`.
+    cssHref?: string | undefined
+    // TODO #6: the matched route's code-split chunk URL to `<link rel="modulepreload">` — so the browser
+    // fetches it in parallel with the loader (no first-load waterfall). Absent for the byte-oracle callers.
+    preloadHref?: string | undefined
 }
 
 const DOCUMENT_TITLE_ESCAPE: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;' }
@@ -323,9 +329,13 @@ function serialiseSeed(seed: HydrationSeed | undefined): string {
 export function documentHead(opts?: RenderDocumentOptions): string {
     const title = escapeTitle(opts?.title ?? 'abide')
     const stylesheet =
-        opts?.styles === true ? `<link rel="stylesheet" href="/__abide/client.css">` : ''
+        opts?.cssHref !== undefined ? `<link rel="stylesheet" href="${opts.cssHref}">` : ''
+    const preload =
+        opts?.preloadHref !== undefined
+            ? `<link rel="modulepreload" href="${opts.preloadHref}">`
+            : ''
     return (
-        `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>${stylesheet}</head>` +
+        `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>${stylesheet}${preload}</head>` +
         `<body><div id="__abide-app">`
     )
 }
@@ -338,10 +348,14 @@ export function documentTail(
         opts?.devReloadScript !== undefined && opts.devReloadScript.length > 0
             ? `<script id="__abide-dev-reload">${opts.devReloadScript}</script>`
             : ''
+    const clientScript =
+        opts?.clientHref !== undefined
+            ? `<script type="module" src="${opts.clientHref}"></script>`
+            : ''
     return (
         `</div>` +
         `<script type="application/json" id="__abide-seed">${serialiseSeed(seed)}</script>` +
-        `<script type="module" src="/__abide/client.js"></script>${devReload}</body></html>`
+        `${clientScript}${devReload}</body></html>`
     )
 }
 

@@ -1,0 +1,10 @@
+<script>
+  // bind:element fn — attach/teardown callback. Client-only DOM mutation lives inside the hook (it
+  // never runs on the server); the returned function is the teardown.
+  function attach(el: HTMLElement) {
+    el.dataset.attached = "yes"
+    return () => { delete el.dataset.attached }
+  }
+</script>
+
+<div id="attach-target" bind:element={attach}>attach fn sets data-attached</div>

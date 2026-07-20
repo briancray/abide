@@ -1,0 +1,8 @@
+<script>
+  import hello from "../../../server/rpc/hello"
+
+  // The RPC is defined once on the server and called here by the same name. The blocking read
+  // resolves during SSR, so the greeting string is already sitting in the initial HTML.
+</script>
+
+<p class="say">{await hello({ who: "RPC page" })}</p>

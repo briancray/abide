@@ -1,75 +1,20 @@
 <script module>
-  import Sample from "../../../components/Sample.abide"
-
-  const PAGE = "src/ui/pages/control/lists/page.abide"
+  import Demo from "../../../components/Demo.abide"
+  import KeyedListDemo from "../../../demos/control/KeyedListDemo.abide"
+  import KeylessListDemo from "../../../demos/control/KeylessListDemo.abide"
 </script>
-
-<script>
-  import { state } from "abide/ui/state"
-
-  let items = state([
-    { id: 1, label: "Alpha" },
-    { id: 2, label: "Beta" },
-    { id: 3, label: "Gamma" },
-  ])
-  let nextId = state(4)
-
-  function addItem() {
-    items = [...items, { id: nextId, label: "Item " + nextId }]
-    nextId++
-  }
-  function removeFirst() {
-    items = items.slice(1)
-  }
-  function reverse() {
-    items = [...items].reverse()
-  }
-
-  let nums = state([10, 20, 30])
-  function pushNum() {
-    nums = [...nums, nums.length * 10 + 10]
-  }
-  function popNum() {
-    nums = nums.slice(0, -1)
-  }
-</script>
-
 
 <main class="page">
   <h1>Lists</h1>
   <p class="lead">A <code>&#123;#for&#125;</code> block renders one body per item. Key it by identity to move DOM nodes on add / remove / reorder, or leave it keyless to map by position.</p>
 
-  <Sample page={PAGE} id="keyed" title="Keyed <code>&#123;#for item, i of list by key&#125;</code>" client="keyed">
-    <p>Keyed by <code>item.id</code>, the block reconciles by identity: adding, removing, and reordering move the matching DOM nodes instead of re-creating them.</p>
-    <!-- #demo keyed -->
-    <div class="controls">
-      <button data-testid="add" onclick={addItem}>Add</button>
-      <button data-testid="remove-first" onclick={removeFirst}>Remove first</button>
-      <button data-testid="reverse" onclick={reverse}>Reverse</button>
-    </div>
+  <p>Keyed by <code>item.id</code>, the block reconciles by identity: adding, removing, and reordering move the matching DOM nodes instead of re-creating them.</p>
+  <Demo id="keyed" title="Keyed <code>&#123;#for item, i of list by key&#125;</code>" client="src/ui/demos/control/KeyedListDemo.abide" tab="client">
+    <KeyedListDemo />
+  </Demo>
 
-    <ol data-testid="keyed-list" class="list">
-      {#for item, i of items by item.id}
-        <li data-testid="keyed-item">#{i} · {item.label} <span class="muted">(id {item.id})</span></li>
-      {/for}
-    </ol>
-    <p data-testid="keyed-count" class="muted">{items.length} items</p>
-    <!-- #enddemo -->
-  </Sample>
-
-  <Sample page={PAGE} id="keyless" title="Keyless positional <code>&#123;#for&#125;</code>" client="keyless">
-    <p>Without a <code>by</code> clause the block maps by position — perfect for a plain value list.</p>
-    <!-- #demo keyless -->
-    <div class="controls">
-      <button data-testid="push-num" onclick={pushNum}>Push</button>
-      <button data-testid="pop-num" onclick={popNum}>Pop</button>
-    </div>
-
-    <ul data-testid="keyless-list" class="list">
-      {#for n of nums}
-        <li data-testid="keyless-item">{n}</li>
-      {/for}
-    </ul>
-    <!-- #enddemo -->
-  </Sample>
+  <p>Without a <code>by</code> clause the block maps by position — perfect for a plain value list.</p>
+  <Demo id="keyless" title="Keyless positional <code>&#123;#for&#125;</code>" client="src/ui/demos/control/KeylessListDemo.abide" tab="client">
+    <KeylessListDemo />
+  </Demo>
 </main>

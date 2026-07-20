@@ -1,0 +1,15 @@
+<script>
+  import { state } from "abide/ui/state"
+
+  // HEAD has identical semantics to GET but carries headers only. This raw HEAD fetch reports the
+  // status line with no body.
+  let headStatus = state(0)
+
+  async function head() {
+    const response = await fetch("/rpc/rpcPing", { method: "HEAD" })
+    headStatus = response.status
+  }
+</script>
+
+<button data-testid="head-btn" onclick={head}>HEAD /rpc/rpcPing</button>
+<p>Status: <strong data-testid="head-status">{headStatus}</strong></p>

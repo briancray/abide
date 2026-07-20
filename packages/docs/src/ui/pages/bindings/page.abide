@@ -1,175 +1,78 @@
 <script module>
-  import Sample from "../../components/Sample.abide"
-  import { html } from "abide/ui/html"
-  import { state } from "abide/ui/state"
-
-  const PAGE = "src/ui/pages/bindings/page.abide"
+  import Demo from "../../components/Demo.abide"
+  import EscapedTextDemo from "../../demos/bindings/EscapedTextDemo.abide"
+  import RawHtmlDemo from "../../demos/bindings/RawHtmlDemo.abide"
+  import ReactiveAttrDemo from "../../demos/bindings/ReactiveAttrDemo.abide"
+  import NativeEventsDemo from "../../demos/bindings/NativeEventsDemo.abide"
+  import BindValueDemo from "../../demos/bindings/BindValueDemo.abide"
+  import BareStateBindDemo from "../../demos/bindings/BareStateBindDemo.abide"
+  import BindCheckedDemo from "../../demos/bindings/BindCheckedDemo.abide"
+  import BindGroupDemo from "../../demos/bindings/BindGroupDemo.abide"
+  import DerivedAccessorDemo from "../../demos/bindings/DerivedAccessorDemo.abide"
+  import NodeRefDemo from "../../demos/bindings/NodeRefDemo.abide"
+  import AttachFnDemo from "../../demos/bindings/AttachFnDemo.abide"
+  import ClassDirectiveDemo from "../../demos/bindings/ClassDirectiveDemo.abide"
+  import StyleDirectiveDemo from "../../demos/bindings/StyleDirectiveDemo.abide"
+  import SpreadAttrsDemo from "../../demos/bindings/SpreadAttrsDemo.abide"
 </script>
-
-<script>
-  // NOTE ON TWO-WAY BINDS: the bare `bind:value={x}` sugar over a `let x = state()` var now two-way
-  // syncs directly (#14) — the compiler wraps a bare cell in a `{ get, set }` accessor for you (see the
-  // "bare state var" sample below). The explicit `{ get, set }` accessor form is still supported and is
-  // what you reach for when the bind isn't a bare cell (a derived/transformed value, a plain `let`).
-
-  // {expr} escaped text — user input echoed as text, never parsed as HTML.
-  let escaped = state("<b>not bold</b>")
-  const escapedBind = { get: () => escaped, set: (next) => { escaped = next } }
-
-  // {html(...)} raw — a trusted HTML string rendered as real nodes.
-  let raw = state('<strong id="raw-strong">bold</strong>')
-  function swapRaw() { raw = '<em id="raw-em">emphasis</em>' }
-
-  // name={expr} reactive attribute.
-  let attr = state("alpha")
-  const attrBind = { get: () => attr, set: (next) => { attr = next } }
-
-  // on<event>={fn} native events.
-  let clicks = state(0)
-  let typed = state("")
-
-  // bind:value two-way.
-  let value = state("hello")
-  const valueBind = { get: () => value, set: (next) => { value = next } }
-
-  // bind:value over a BARE state var — the plain sugar (no hand-written accessor) two-way syncs (#14).
-  let bare = state("direct")
-
-  // bind:checked two-way.
-  let checked = state(false)
-  const checkedBind = { get: () => checked, set: (next) => { checked = next } }
-
-  // bind:group radio group.
-  let picked = state("green")
-  const pickedBind = { get: () => picked, set: (next) => { picked = next } }
-
-  // bind:value={{get,set}} derived accessor — stored lowercase, edited uppercase.
-  let stored = state("abide")
-  const upper = { get: () => stored.toUpperCase(), set: (next) => { stored = String(next).toLowerCase() } }
-
-  // bind:element cell — a bare state cell IS the node ref: abide writes the DOM node into it on mount
-  // and clears it on teardown (no attach-fn wrapper needed).
-  let node = state(null)
-
-  // bind:element fn — attach/teardown callback.
-  function attach(el) {
-    el.dataset.attached = "yes"
-    return () => { delete el.dataset.attached }
-  }
-
-  // class:name={cond} toggle.
-  let highlight = state(false)
-  const highlightBind = { get: () => highlight, set: (next) => { highlight = next } }
-
-  // style:prop={value}.
-  let color = state("rebeccapurple")
-  const colorBind = { get: () => color, set: (next) => { color = next } }
-
-  // {...spread} attributes.
-  const spread = { "data-role": "spread-target", title: "spread-title", "aria-label": "spread-label" }
-</script>
-
 
 <main class="page">
   <h1>Bindings & directives</h1>
   <p class="lead">Every template binding and directive, each wired to a live input so it can be typed, clicked, and checked. The two-way binds stay in sync both directions.</p>
 
-  <Sample page={PAGE} id="escaped" title={"<code>{expr}</code> — escaped text"} client="escaped">
-    <!-- #demo escaped -->
-    <input id="escaped-input" bind:value={escapedBind} />
-    <p>Rendered as text: <span id="escaped-out">{escaped}</span></p>
-    <!-- #enddemo -->
-  </Sample>
+  <Demo id="escaped" title={"<code>{expr}</code> — escaped text"} client="src/ui/demos/bindings/EscapedTextDemo.abide">
+    <EscapedTextDemo />
+  </Demo>
 
-  <Sample page={PAGE} id="raw" title={"<code>{html(...)}</code> — raw HTML"} client="raw">
-    <!-- #demo raw -->
-    <div id="raw-out">{html(raw)}</div>
-    <button id="raw-swap" onclick={swapRaw}>Swap markup</button>
-    <!-- #enddemo -->
-  </Sample>
+  <Demo id="raw" title={"<code>{html(...)}</code> — raw HTML"} client="src/ui/demos/bindings/RawHtmlDemo.abide">
+    <RawHtmlDemo />
+  </Demo>
 
-  <Sample page={PAGE} id="attr" title={"<code>name={expr}</code> — reactive attribute"} client="attr">
-    <!-- #demo attr -->
-    <input id="attr-input" bind:value={attrBind} />
-    <div id="attr-target" data-value={attr}>data-value tracks the input</div>
-    <!-- #enddemo -->
-  </Sample>
+  <Demo id="attr" title={"<code>name={expr}</code> — reactive attribute"} client="src/ui/demos/bindings/ReactiveAttrDemo.abide">
+    <ReactiveAttrDemo />
+  </Demo>
 
-  <Sample page={PAGE} id="events" title={"<code>on&lt;event&gt;={fn}</code> — native events"} client="events">
-    <!-- #demo events -->
-    <button id="click-btn" onclick={() => clicks++}>Clicked <span id="click-count">{clicks}</span> times</button>
-    <input id="input-evt" oninput={(e) => typed = e.target.value} placeholder="type here" />
-    <p>oninput saw: <span id="typed-out">{typed}</span></p>
-    <!-- #enddemo -->
-  </Sample>
+  <Demo id="events" title={"<code>on&lt;event&gt;={fn}</code> — native events"} client="src/ui/demos/bindings/NativeEventsDemo.abide">
+    <NativeEventsDemo />
+  </Demo>
 
-  <Sample page={PAGE} id="value" title="<code>bind:value</code>" client="value">
-    <!-- #demo value -->
-    <input id="value-input" bind:value={valueBind} />
-    <p>Mirror: <span id="value-out">{value}</span></p>
-    <!-- #enddemo -->
-  </Sample>
+  <Demo id="value" title="<code>bind:value</code>" client="src/ui/demos/bindings/BindValueDemo.abide">
+    <BindValueDemo />
+  </Demo>
 
-  <Sample page={PAGE} id="barevalue" title={"<code>bind:value={x}</code> — bare state var"} client="barevalue">
-    <!-- #demo barevalue -->
-    <input id="barevalue-input" bind:value={bare} />
-    <p>Mirror: <span id="barevalue-out">{bare}</span></p>
-    <!-- #enddemo -->
-  </Sample>
+  <Demo id="barevalue" title={"<code>bind:value={x}</code> — bare state var"} client="src/ui/demos/bindings/BareStateBindDemo.abide">
+    <BareStateBindDemo />
+  </Demo>
 
-  <Sample page={PAGE} id="checked" title="<code>bind:checked</code>" client="checked">
-    <!-- #demo checked -->
-    <label><input id="checked-input" type="checkbox" bind:checked={checkedBind} /> subscribe</label>
-    <p>Checked: <span id="checked-out">{checked ? "yes" : "no"}</span></p>
-    <!-- #enddemo -->
-  </Sample>
+  <Demo id="checked" title="<code>bind:checked</code>" client="src/ui/demos/bindings/BindCheckedDemo.abide">
+    <BindCheckedDemo />
+  </Demo>
 
-  <Sample page={PAGE} id="group" title="<code>bind:group</code>" client="group">
-    <!-- #demo group -->
-    <label><input type="radio" name="hue" value="red" bind:group={pickedBind} /> red</label>
-    <label><input type="radio" name="hue" value="green" bind:group={pickedBind} /> green</label>
-    <label><input type="radio" name="hue" value="blue" bind:group={pickedBind} /> blue</label>
-    <p>Picked: <span id="group-out">{picked}</span></p>
-    <!-- #enddemo -->
-  </Sample>
+  <Demo id="group" title="<code>bind:group</code>" client="src/ui/demos/bindings/BindGroupDemo.abide">
+    <BindGroupDemo />
+  </Demo>
 
-  <Sample page={PAGE} id="derived" title={"<code>bind:value={{get,set}}</code> — derived accessor"} client="derived">
-    <!-- #demo derived -->
-    <input id="derived-input" bind:value={upper} />
-    <p>Stored (lowercased): <span id="derived-out">{stored}</span></p>
-    <!-- #enddemo -->
-  </Sample>
+  <Demo id="derived" title={"<code>bind:value={{get,set}}</code> — derived accessor"} client="src/ui/demos/bindings/DerivedAccessorDemo.abide">
+    <DerivedAccessorDemo />
+  </Demo>
 
-  <Sample page={PAGE} id="noderef" title="<code>bind:element</code> — node ref cell" client="noderef">
-    <!-- #demo noderef -->
-    <input id="noderef-input" bind:element={node} value="ref me" />
-    <p>Referenced tag: <span id="noderef-out">{node ? node.tagName : "none"}</span></p>
-    <!-- #enddemo -->
-  </Sample>
+  <Demo id="noderef" title="<code>bind:element</code> — node ref cell" client="src/ui/demos/bindings/NodeRefDemo.abide">
+    <NodeRefDemo />
+  </Demo>
 
-  <Sample page={PAGE} id="attach" title="<code>bind:element</code> — attach fn" client="attach">
-    <!-- #demo attach -->
-    <div id="attach-target" bind:element={attach}>attach fn sets data-attached</div>
-    <!-- #enddemo -->
-  </Sample>
+  <Demo id="attach" title="<code>bind:element</code> — attach fn" client="src/ui/demos/bindings/AttachFnDemo.abide">
+    <AttachFnDemo />
+  </Demo>
 
-  <Sample page={PAGE} id="classdir" title={"<code>class:name={cond}</code>"} client="classdir">
-    <!-- #demo classdir -->
-    <label><input id="class-input" type="checkbox" bind:checked={highlightBind} /> highlight</label>
-    <div id="class-target" class:highlight={highlight}>toggles the .highlight class</div>
-    <!-- #enddemo -->
-  </Sample>
+  <Demo id="classdir" title={"<code>class:name={cond}</code>"} client="src/ui/demos/bindings/ClassDirectiveDemo.abide">
+    <ClassDirectiveDemo />
+  </Demo>
 
-  <Sample page={PAGE} id="styledir" title={"<code>style:prop={value}</code>"} client="styledir">
-    <!-- #demo styledir -->
-    <input id="style-input" bind:value={colorBind} />
-    <div id="style-target" style:color={colorBind.get()}>this text color follows the input</div>
-    <!-- #enddemo -->
-  </Sample>
+  <Demo id="styledir" title={"<code>style:prop={value}</code>"} client="src/ui/demos/bindings/StyleDirectiveDemo.abide">
+    <StyleDirectiveDemo />
+  </Demo>
 
-  <Sample page={PAGE} id="spread" title={"<code>{...expr}</code> — spread attributes"} client="spread">
-    <!-- #demo spread -->
-    <div id="spread-target" {...spread}>spread applies data-role, title, aria-label</div>
-    <!-- #enddemo -->
-  </Sample>
+  <Demo id="spread" title={"<code>{...expr}</code> — spread attributes"} client="src/ui/demos/bindings/SpreadAttrsDemo.abide">
+    <SpreadAttrsDemo />
+  </Demo>
 </main>

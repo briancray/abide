@@ -1,0 +1,21 @@
+<script>
+  import { state } from "abide/ui/state"
+
+  // A writable cell and a lazily-derived computed cell. `reset` is a plain function mutating the
+  // same cell. Fine-grained updates: clicking a button only re-renders the affected text nodes.
+  let count = state(0)
+  const doubled = state.computed(() => count * 2)
+  function reset() { count = 0 }
+</script>
+
+<div class="counter">
+  <button onclick={() => count++}>Increment</button>
+  <button onclick={reset}>Reset</button>
+</div>
+
+<p>Count: <strong>{count}</strong></p>
+<p>Doubled (computed): <strong>{doubled}</strong></p>
+
+{#if count > 4}
+  <p class="hint">A <code>{'{'}#if{'}'}</code> block reacts too — you crossed 4.</p>
+{/if}

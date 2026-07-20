@@ -1,0 +1,25 @@
+<script>
+  import { state } from "abide/ui/state"
+  import cacheCounter from "../../../server/rpc/cacheCounter"
+
+  // A cached read is a memoized slot. Repeated reads REUSE it — the server run count holds no matter how
+  // many times you read. `invalidate` drops the slot, so the next read re-fetches and the count climbs.
+  // (peek() here is just the non-blocking display of the value — its own demo lives on the Async reads page.)
+  let started = state(false)
+  let reads = state(0)
+  const runsText = state.computed(() => (started ? (cacheCounter.peek({ key: "alpha" })?.runs ?? "loading") : "idle"))
+
+  function startCounter() { started = true }
+  function readAgain() { reads++; cacheCounter({ key: "alpha" }) } // bare call = the load; cached → no re-run
+  function invalidateCounter() { cacheCounter.invalidate({ key: "alpha" }) }
+</script>
+
+<ul class="grid">
+  <li>Server runs: <strong data-testid="counter-runs">{runsText}</strong></li>
+  <li>Reads requested: <strong data-testid="counter-reads">{reads}</strong></li>
+</ul>
+<div class="row">
+  <button data-testid="counter-start" onclick={startCounter}>Load</button>
+  <button data-testid="counter-read" onclick={readAgain}>Read again</button>
+  <button data-testid="counter-invalidate" onclick={invalidateCounter}>Invalidate</button>
+</div>

@@ -1,37 +1,9 @@
 <script module>
-  import Sample from "../../../components/Sample.abide"
-  import { state } from "abide/ui/state"
-  import { online } from "abide/shared/online"
-  import { bundled } from "abide/ui/bundled"
-  import platformObserve from "../../../../server/rpc/platformObserve"
-  import platformLog from "../../../../server/rpc/platformLog"
-
-  const PAGE = "src/ui/pages/platform/observability/page.abide"
-</script>
-
-<script>
-  let health = state(null)
-
-  // #demo health
-  // Browser-only: fetch the framework health endpoint directly and render its JSON.
-  async function loadHealth() {
-    const response = await fetch("/__abide/health")
-    health = await response.json()
-  }
-  // #enddemo
-
-  let logResult = state(null)
-
-  // #demo log
-  // `log()` writes on the server; the browser can't see those lines. This RPC logs server-side (an
-  // info line on the `docs` channel + a warn line) and returns the fact that it logged, which is
-  // what the card renders. The actual output lands on the server console.
-  async function runLog() {
-    // The bare call `fn(args)` is the read — awaits the value (Promise<T>); `fn.peek(args)` would snapshot to
-    // `T | undefined` (undefined while the read is still in flight).
-    logResult = await platformLog({ message: "from the observability card" })
-  }
-  // #enddemo
+  import Demo from "../../../components/Demo.abide"
+  import RuntimeProbesDemo from "../../../demos/platform/RuntimeProbesDemo.abide"
+  import ObserveDemo from "../../../demos/platform/ObserveDemo.abide"
+  import HealthFetchDemo from "../../../demos/platform/HealthFetchDemo.abide"
+  import LogDemo from "../../../demos/platform/LogDemo.abide"
 </script>
 
 
@@ -39,45 +11,21 @@
   <h1>Observability</h1>
   <p class="lead"><code>trace()</code> returns the request's W3C traceparent, <code>health()</code> is the framework baseline probe, and <code>log()</code> writes a structured server line. The RPC below reads all three; the health endpoint is also fetched straight from the browser.</p>
 
-  <Sample page={PAGE} id="runtime" title="online() + bundled() (isomorphic probes, called in the template)" client="runtime">
+  <Demo id="runtime" title="online() + bundled() (isomorphic probes, called in the template)" client="src/ui/demos/platform/RuntimeProbesDemo.abide" tab="client">
     <p><code>online()</code> is a <em>reactive</em> connectivity boolean (true on the server; tracks <code>navigator.onLine</code> on the client, so this line re-renders when you go offline). <code>bundled()</code> is true only inside the desktop bundle. Both are imported straight from <code>abide/shared|ui/*</code> and called in the template — no RPC, no accessor plumbing.</p>
-    <!-- #demo runtime -->
-    <p id="runtime-block">online = <strong id="online-flag">{online() ? "true" : "false"}</strong>, bundled = <strong id="bundled-flag">{bundled() ? "true" : "false"}</strong></p>
-    <!-- #enddemo -->
-  </Sample>
+    <RuntimeProbesDemo />
+  </Demo>
 
-  <Sample page={PAGE} id="observe" title="trace() + health() (via RPC)" client="observe" server="src/server/rpc/platformObserve.ts">
-    <!-- #demo observe -->
-    {#await platformObserve()}
-      <p id="observe-block">reading…</p>
-    {:then o}
-      <pre class="out" id="observe-block">traceparent = {o.traceparent ?? "(none)"}
-traceId     = {o.traceId ?? "(none)"}
-health.reachable = {o.health.reachable ? "true" : "false"}</pre>
-    {/await}
-    <!-- #enddemo -->
-  </Sample>
+  <Demo id="observe" title="trace() + health() (via RPC)" server="src/server/rpc/platformObserve.ts" client="src/ui/demos/platform/ObserveDemo.abide" tab="server" replayable={true}>
+    <ObserveDemo sampleId="observe" />
+  </Demo>
 
-  <Sample page={PAGE} id="health" title="/__abide/health (fetched in-browser)" client="health">
-    <button id="health-btn" onclick={loadHealth}>Fetch /__abide/health</button>
-    {#if health}
-      <pre class="out" id="health-block">reachable = {health.reachable ? "true" : "false"}</pre>
-    {:else}
-      <p id="health-block">not fetched yet</p>
-    {/if}
-  </Sample>
+  <Demo id="health" title="/__abide/health (fetched in-browser)" client="src/ui/demos/platform/HealthFetchDemo.abide" tab="client">
+    <HealthFetchDemo />
+  </Demo>
 
-  <Sample page={PAGE} id="log" title="<code>log.channel(name)</code> + levels" client="log" server="src/server/rpc/platformLog.ts">
+  <Demo id="log" title="<code>log.channel(name)</code> + levels" server="src/server/rpc/platformLog.ts" client="src/ui/demos/platform/LogDemo.abide" tab="server">
     <p><code>log()</code> is server-side only — its structured lines go to the server console, never the browser. The RPC logs an <code>info</code> line on the <code>docs</code> channel plus a <code>warn</code> line, and returns the fact that it logged:</p>
-    <!-- #demo log -->
-    <button id="log-btn" onclick={runLog}>Call the logging RPC</button>
-    {#if logResult}
-      <pre class="out" id="log-block">logged = {logResult.logged ? "true" : "false"}
-channel = {logResult.channel}
-levels = {logResult.levels.join(", ")}</pre>
-    {:else}
-      <p id="log-block">not called yet</p>
-    {/if}
-    <!-- #enddemo -->
-  </Sample>
+    <LogDemo />
+  </Demo>
 </main>

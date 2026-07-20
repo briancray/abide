@@ -1,0 +1,10 @@
+<script>
+  import rpcGreet from "../../../server/rpc/rpcGreet"
+
+  // The inline blocking form `{#await fn() then v}` — the `then` binding folds into the opener, so
+  // there is no pending branch and the body renders once the read settles.
+</script>
+
+{#await rpcGreet({ name: "inline then" }) then greet}
+  <p class="say" data-testid="inline-then">{greet.greeting} ({greet.length})</p>
+{/await}

@@ -1,0 +1,11 @@
+<script>
+  import { online } from "abide/shared/online"
+  import { bundled } from "abide/ui/bundled"
+
+  // Two isomorphic framework probes called straight in the template — no RPC, no accessor plumbing.
+  // `online()` is a reactive connectivity boolean (true on the server; tracks `navigator.onLine` on
+  // the client, so this line re-renders when you go offline). `bundled()` is true only inside the
+  // desktop bundle.
+</script>
+
+<p id="runtime-block">online = <strong id="online-flag">{online() ? "true" : "false"}</strong>, bundled = <strong id="bundled-flag">{bundled() ? "true" : "false"}</strong></p>

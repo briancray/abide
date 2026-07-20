@@ -1,0 +1,10 @@
+<script>
+  import { state } from "abide/ui/state"
+
+  // bind:element cell — a bare state cell IS the node ref: abide writes the DOM node into it on mount
+  // and clears it on teardown (no attach-fn wrapper needed).
+  let node = state(null)
+</script>
+
+<input id="noderef-input" bind:element={node} value="ref me" />
+<p>Referenced tag: <span id="noderef-out">{node ? node.tagName : "none"}</span></p>

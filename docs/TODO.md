@@ -77,13 +77,40 @@ the known shortcuts and gaps. Ordered by impact.
    browser-execution test that a minified prod bundle is materially smaller AND still attach-hydrates +
    stays interactive in happy-dom (`server/browserBundle.test.ts`). Refs: `server/internal/router.ts`
    (`AppConfig.dev`), `cli/serve.ts`, `cli/main.ts build()`, `server/internal/clientBundle.ts`.
-   **Still deferred — per-route SPLITTING + per-chunk hashing (perf, not a bug, XL):** requires N
-   per-pattern entries (`Bun.build({ splitting, naming: "[name]-[hash]" })`), a hashed-URL serving
-   substrate (today `dist/_app/<hash>/` is written but never read at serve time; the router always serves
-   the fixed `/__abide/client.js`), and an ASYNC lazy page registry so a soft-nav to an unvisited route
-   `await import()`s its chunk before hydrate (today soft-nav needs ZERO JS round-trips). Cross-cutting
-   build→serve→hydrate change; ship as staged PRs gated on the docs Playwright e2e. Ref:
-   `server/internal/clientBundle.ts`.
+   ~~**Still deferred — per-route SPLITTING + per-chunk hashing (perf, not a bug, XL).**~~ **DONE**
+   (design of record: `docs/spec/code-splitting-plan.md`). The client is now code-split per route and
+   every artifact is content-hashed + served immutable. **Model:** ONE loader entry holds a per-pattern
+   `LOADERS = { "<pattern>": () => import("<chain>") }` map; `Bun.build({ splitting: true, publicPath:
+   "/__abide/chunk/", naming: "[name]-[hash]" })` turns each dynamic import into its own content-hashed
+   chunk + factors the shared runtime/layouts/components into shared chunks. `compose` (the layout chain)
+   moved INTO each route's chunk (a generated *chain module* that `export default compose([...levels])`).
+   **No back-compat:** the fixed `/__abide/client.js` + `/__abide/client.css` routes are GONE; one
+   `/__abide/chunk/<file>` route serves any built file with `cache-control: …immutable`, and the SSR
+   document references the hashed loader URL + `<link rel="modulepreload">`s the matched route's chunk (no
+   first-load waterfall). **Async lazy registry:** `pagePatterns()` stay eager (matchRoute/link-interception
+   never block); `loadPageEntry` imports + memoizes a route's chunk (in-flight dedup); `mountPathname` is
+   async and awaits the chunk BEFORE the dispose (atomic swap, no blank gap); soft-nav primes the
+   destination chunk up front so its import overlaps the fetch/stream. First load ships only the matched
+   route's chunk + the shared runtime (docs: was a single 298 KB min / 69 KB gz bundle every page paid).
+   `abide build` writes every hashed file + `index.json` + a stable `dist/manifest.json` pointer to
+   `dist/_app/<hash>/`, and **`abide start` serves those exact artifacts** (`loadClientBuild` →
+   `config.clientBuild`, building first if absent) with NO bundler at boot — the router resolves the
+   client via `clientBuildFor(config)` (prebuilt-from-dist if present, else in-memory for dev/test).
+   Verified: 965
+   unit + `abide check packages/docs` + docs e2e (95) + tsc + biome green; the abide browser-execution
+   tests were reworked to materialize the served split graph to disk and `await import()` the loader (real
+   split output; happy-dom can't resolve ESM dynamic imports — the docs e2e is the split-hydration gate).
+   Refs: `server/internal/{clientBundle,router,pages}.ts`, `ui/internal/{bootstrap,pageRegistry}.ts`,
+   `ui/navigate.ts`, `cli/main.ts`. **Bonus (surfaced by async hydration):** `server/sse.ts` now flushes a
+   `:ok` comment prelude on connect so an empty-tail socket's `onopen`/"live" fires immediately instead of
+   ~15s late (socket e2e first test 16.8s → 1.3s). **Deferred follow-up — shrink the shared runtime FLOOR**
+   (~26 KB min): `shared/cell.ts` drags server-only code (ReplayableStream/stream probes — dead on the
+   client, shared-store + LRU, cache-tags, broadcast, scope guards) into every client bundle (~14.6 KB
+   client closure). A lean client cell = −6.6 KB min / −2 KB gz off every app, BUT only via (a) a parallel
+   `cellClient.ts` = code duplication + drift (rejected) or (b) a non-duplicating `define`-gated dead-code
+   pass over cell.ts's hot path (a focused, well-tested standalone refactor — plain `define` measured
+   zero-effect because the branches are runtime `isBrowser` checks esbuild can't prove dead). See the plan's
+   "Deferred" section.
 7. ~~**`layout.abide` not wired**~~ **DONE** — `loadApp` now discovers `layout.abide` alongside
    `page.abide` (keyed by directory route prefix); a page's applicable layouts wrap it outer→inner,
    each rendering the next level where it calls `{children()}`. Composition reuses the existing
@@ -547,9 +574,12 @@ the known shortcuts and gaps. Ordered by impact.
     `@import "tailwindcss"` (both verified). Wiring: the emitter must PRESERVE `.css` (side-effect)
     imports in the emitted CLIENT module (today all imports are stripped → Bun.build never sees the
     CSS); `clientBundle.ts` adds the tailwind plugin (optional/dynamic) + collects the CSS asset;
-    serve `/__abide/client.css` (router) + `<link rel="stylesheet">` in `renderDocument`'s head;
+    serve the bundled CSS (router) + `<link rel="stylesheet">` in `renderDocument`'s head;
     tailwind content scanning of `.abide` files via `@source` globs in the app CSS. **Done + wired
-    into the docs app** (root `layout.abide` imports `app.css`; `/__abide/client.css` served + linked).
+    into the docs app** (root `layout.abide` imports `app.css`; the bundled stylesheet is served +
+    linked). **Superseded by #6:** the fixed `/__abide/client.css` route is gone — the stylesheet is
+    now emitted as a content-hashed `/__abide/chunk/style-<hash>.css` (immutable) and linked only when
+    the app actually bundles CSS.
     ~~Follow-up: abide should SHIP an ambient `declare module "*.css";` in its app type surface~~
     **DONE (#20/#21 follow-up)** — see #21 below (one shipped ambient file covers `*.css` + `*.abide`).
     ~~Also #13's scoped `<style>` stamps the `data-ab` attr inconsistently (nav element unstamped →

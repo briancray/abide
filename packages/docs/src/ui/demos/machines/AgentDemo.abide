@@ -1,0 +1,42 @@
+<script>
+  import { state } from "abide/ui/state"
+
+  // Gate the stream behind a click so SSR renders the button (a relative `fetch` can't run server-side),
+  // then the agent run streams client-side — matching the jsonl/sse samples.
+  let running = state(false)
+
+  // Consume the `agent()` frame stream (an `application/jsonl` response from /rpc/agentDemo) in the
+  // browser, matching how the docs consume every stream (see rpc-guide/responses jsonlTicks).
+  // NOTE: const-assigned generator expression — a top-level `async function*` isn't hoisted onto the
+  // template scope by the `.abide` script transform.
+  const agentSteps = async function* (): AsyncGenerator<{ kind: string; text: string }> {
+    const response = await fetch("/rpc/agentDemo")
+    if (!response.body) return
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ""
+    for (;;) {
+      const chunk = await reader.read()
+      if (chunk.done) break
+      buffer += decoder.decode(chunk.value, { stream: true })
+      let newline = buffer.indexOf("\n")
+      while (newline >= 0) {
+        const line = buffer.slice(0, newline).trim()
+        buffer = buffer.slice(newline + 1)
+        if (line.length > 0) yield JSON.parse(line)
+        newline = buffer.indexOf("\n")
+      }
+    }
+  }
+</script>
+
+<button data-testid="agent-btn" onclick={() => running = true}>Run agent</button>
+{#if running}
+  <ol class="agent-log" data-testid="agent-log">
+    {#for await step of agentSteps()}
+      <li data-kind={step.kind}><strong>{step.kind}</strong> {step.text}</li>
+    {:catch}
+      <li>agent run failed</li>
+    {/for}
+  </ol>
+{/if}

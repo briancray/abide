@@ -1,14 +1,7 @@
 <script module>
-  import Sample from "../../../components/Sample.abide"
-
-  const PAGE = "src/ui/pages/control/conditionals/page.abide"
-</script>
-
-<script>
-  import { state } from "abide/ui/state"
-
-  let level = state(0)
-  let status = state("idle")
+  import Demo from "../../../components/Demo.abide"
+  import IfDemo from "../../../demos/control/IfDemo.abide"
+  import SwitchDemo from "../../../demos/control/SwitchDemo.abide"
 </script>
 
 
@@ -16,47 +9,13 @@
   <h1>Conditionals</h1>
   <p class="lead">A conditional block picks exactly one branch and swaps the DOM when the state it reads crosses a threshold. Nothing is diffed by hand — the block reconciles fine-grained.</p>
 
-  <Sample page={PAGE} id="if" title="<code>&#123;#if&#125;</code> / <code>&#123;:else if&#125;</code> / <code>&#123;:else&#125;</code>" client="if">
-    <p>The block picks exactly one branch and swaps the DOM when <code>level</code> crosses a threshold.</p>
-    <!-- #demo if -->
-    <div class="controls">
-      <button data-testid="level-dec" onclick={() => level--}>−1</button>
-      <span data-testid="level-value" class="pill">level = {level}</span>
-      <button data-testid="level-inc" onclick={() => level++}>+1</button>
-    </div>
+  <p>The block picks exactly one branch and swaps the DOM when <code>level</code> crosses a threshold.</p>
+  <Demo id="if" title="<code>&#123;#if&#125;</code> / <code>&#123;:else if&#125;</code> / <code>&#123;:else&#125;</code>" client="src/ui/demos/control/IfDemo.abide" tab="client">
+    <IfDemo />
+  </Demo>
 
-    <p data-testid="if-branch" class="out">
-      {#if level < 0}
-        negative
-      {:else if level === 0}
-        zero
-      {:else if level < 5}
-        low ({level})
-      {:else}
-        high ({level})
-      {/if}
-    </p>
-    <!-- #enddemo -->
-  </Sample>
-
-  <Sample page={PAGE} id="switch" title="<code>&#123;#switch&#125;</code> / <code>&#123;:case&#125;</code> / <code>&#123;:default&#125;</code>" client="switch">
-    <p>A value is matched against cases; an unmatched value falls through to <code>&#123;:default&#125;</code>.</p>
-    <!-- #demo switch -->
-    <div class="controls">
-      <button data-testid="status-idle" onclick={() => status = "idle"}>idle</button>
-      <button data-testid="status-loading" onclick={() => status = "loading"}>loading</button>
-      <button data-testid="status-done" onclick={() => status = "done"}>done</button>
-      <button data-testid="status-other" onclick={() => status = "mystery"}>mystery</button>
-    </div>
-
-    <p data-testid="switch-branch" class="out">
-      {#switch status}
-        {:case "idle"}Waiting to start.
-        {:case "loading"}Working on it…
-        {:case "done"}All finished!
-        {:default}Unknown status: {status}
-      {/switch}
-    </p>
-    <!-- #enddemo -->
-  </Sample>
+  <p>A value is matched against cases; an unmatched value falls through to <code>&#123;:default&#125;</code>.</p>
+  <Demo id="switch" title="<code>&#123;#switch&#125;</code> / <code>&#123;:case&#125;</code> / <code>&#123;:default&#125;</code>" client="src/ui/demos/control/SwitchDemo.abide" tab="client">
+    <SwitchDemo />
+  </Demo>
 </main>

@@ -1,0 +1,9 @@
+<script>
+  import { props } from "abide/ui/props"
+
+  // props() — the reactive prop reader. A page receives no props, so the destructuring fallback is
+  // what shows; this is the same reader a child component receives when it is handed props.
+  const { heading = "Reactivity playground" } = props()
+</script>
+
+<p>A page receives no props, so the destructuring fallback renders as the heading above: <strong>{heading}</strong>.</p>

@@ -70,6 +70,8 @@ function sseReader(reader: ReadableStreamDefaultReader<Uint8Array>) {
             if (boundary >= 0) {
                 const line = buffer.slice(0, boundary)
                 buffer = buffer.slice(boundary + 2)
+                // Skip comment frames (`:...`) — the `:ok` connect prelude + heartbeats aren't data.
+                if (line.startsWith(':')) continue
                 return JSON.parse(line.slice('data: '.length))
             }
             const result = await withTimeout(reader.read(), ms, 'sse read')

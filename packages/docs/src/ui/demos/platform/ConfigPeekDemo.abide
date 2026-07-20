@@ -1,0 +1,16 @@
+<script>
+  import { state } from "abide/ui/state"
+  import { watch } from "abide/ui/watch"
+  import { props } from "abide/ui/props"
+  import platformConfig from "../../../server/rpc/platformConfig"
+
+  // A one-shot read of the same `env()`-backed GET the config page drives. The `{#await}` blocks SSR so
+  // the coerced, schema-defaulted values land in the initial HTML. `sampleId` wires the card's "Run
+  // again" button to refresh the cached read.
+  const { sampleId = "" } = props<{ sampleId?: string }>()
+
+  let replay = state.shared("replay:" + sampleId, 0)
+  watch(() => replay, () => { platformConfig.refresh() })
+</script>
+
+<pre class="out" id="config-peek">{#await platformConfig()}reading…{:then c}{c.appName} · maxItems={c.maxItems} ({c.maxItemsType}){/await}</pre>

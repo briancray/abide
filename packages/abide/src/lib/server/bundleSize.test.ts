@@ -1,12 +1,17 @@
 // M3b / PR7 — the browser bundle must NOT contain the TypeScript compiler, NOR the `.abide`
 // interpreter. Pre-PR7 the browser re-parsed `.abide` source at runtime (parse.ts + renderClient.ts +
 // mountPrepared.ts shipped, TS7-free but heavy); PR7 ships each page's AOT-emitted client mount
-// instead, so parse/compile happen only at build time. This proves the served /__abide/client.js is
-// free of TS7 AND the interpreter, and is now far smaller than the pre-PR7 bundle, while the emitted
-// client mount still works reactively under happy-dom.
+// instead, so parse/compile happen only at build time. This proves the served client assets are free
+// of TS7 AND the interpreter, and are now far smaller than the pre-PR7 bundle, while the emitted client
+// mount still works reactively under happy-dom.
+//
+// TODO #6: the client is now code-split — the document boots a content-hashed loader entry that lazily
+// imports each route's chunk. `fetchClientGraph` walks the whole served module graph (loader entry →
+// static + dynamic chunk imports) so the size/no-TS7 assertions cover ALL shipped bytes, not one file.
 
 import { expect, test } from 'bun:test'
 import { GET } from '../server/GET.ts'
+import type { TestApp } from '../test/createTestApp.ts'
 import { createTestApp } from '../test/createTestApp.ts'
 import { bootstrapPage } from '../ui/internal/bootstrap.ts'
 import { loadEmitted } from '../ui/internal/emit.ts'
@@ -14,6 +19,27 @@ import { loadEmitted } from '../ui/internal/emit.ts'
 // Yield to the microtask queue so batched reactive effects flush.
 function tick(): Promise<void> {
     return Promise.resolve()
+}
+
+// Fetch the full served client module graph: the document's loader `<script src>`, then transitively
+// every `/__abide/chunk/*.js` it (and each chunk) references (static + dynamic imports). Returns the
+// concatenated bytes so the assertions below see the WHOLE app's client code across all chunks.
+async function fetchClientGraph(app: TestApp): Promise<string> {
+    const doc = await (await app.fetch('/')).text()
+    const entry = doc.match(/src="(\/__abide\/chunk\/[^"]+\.js)"/)
+    if (entry === null) throw new Error('no client loader script in document')
+    const seen = new Set<string>()
+    const queue = [entry[1] as string]
+    let all = ''
+    while (queue.length > 0) {
+        const next = queue.pop()
+        if (next === undefined || seen.has(next)) continue
+        seen.add(next)
+        const text = await (await app.fetch(next)).text()
+        all += `${text}\n`
+        for (const ref of text.matchAll(/\/__abide\/chunk\/[^"'()\s]+\.js/g)) queue.push(ref[0])
+    }
+    return all
 }
 
 test('the served client bundle contains no TypeScript compiler and is small', async () => {
@@ -24,9 +50,7 @@ test('the served client bundle contains no TypeScript compiler and is small', as
         },
     })
 
-    const response = await app.fetch('/__abide/client.js')
-    expect(response.status).toBe(200)
-    const body = await response.text()
+    const body = await fetchClientGraph(app)
 
     // No TS7 compiler surfaces dragged into the browser bundle.
     expect(body).not.toContain('SyntaxKind')
@@ -38,17 +62,14 @@ test('the served client bundle contains no TypeScript compiler and is small', as
     expect(body).not.toContain('compileClient')
     expect(body).not.toContain('mountPrepared')
 
-    // Far smaller now that parse.ts/renderClient.ts/assembleCore no longer ship (was gated < 150 KB;
-    // the emitted-mount bundle for a hello-world page is ~31 KB). Tightened bound guards regressions
-    // against the heavy items above (TS7 compiler / `.abide` interpreter), not incidental KBs.
-    // (Bumped 50 KB → 52 KB for the Promise-read settled-hint helper; 52 KB → 58 KB when the isomorphic
-    // cell gained the ReplayableStream primitive; 58 KB → 62 KB for the stream cache accounting/cap wiring
-    // — replayable-streams.md §4; 62 KB → 64 KB for the biome-conformance lint pass, whose
-    // semantics-preserving restructures (guards / `for…of` / `.call(obj)` replacing non-null assertions)
-    // add a few incidental bytes to bundled runtime code. FUTURE: the byte-accounting/pin/cap path is
-    // server-only and could be extracted out of the isomorphic cell to shrink the client bundle back down.)
+    // Whole-app client bytes (loader + all chunks) for a hello-world page. The bound guards regressions
+    // against the heavy items above (TS7 compiler / `.abide` interpreter), not incidental KBs. History:
+    // 50→52 KB (Promise-read settled hint); 52→58 KB (ReplayableStream primitive); 58→62 KB (stream cache
+    // accounting/cap); 62→64 KB (biome conformance); 64→70 KB (TODO #6 code-splitting adds per-chunk
+    // module glue + a shared-chunk boilerplate wrapper). FUTURE (TODO #3): extract the server-only
+    // byte-accounting/pin/cap + shared-cache path out of the isomorphic cell to shrink the client floor.
     const bytes = Buffer.byteLength(body, 'utf8')
-    expect(bytes).toBeLessThan(64_000)
+    expect(bytes).toBeLessThan(70_000)
 
     // Still a real bundle that boots the app and carries the AOT client mount runtime path.
     expect(body).toContain('bootstrapPage')
@@ -57,11 +78,14 @@ test('the served client bundle contains no TypeScript compiler and is small', as
     await app.stop()
 })
 
-test("the SSR'd page still injects the client script tag", async () => {
+test("the SSR'd page injects the content-hashed client loader script tag", async () => {
     const app = createTestApp({ pages: { '/': '<h1>ok</h1>' } })
     const response = await app.fetch('/')
     const body = await response.text()
-    expect(body).toContain('<script type="module" src="/__abide/client.js"></script>')
+    // A content-hashed loader entry under /__abide/chunk/ (no longer the fixed /__abide/client.js).
+    expect(body).toMatch(
+        /<script type="module" src="\/__abide\/chunk\/loader-[a-z0-9]+\.js"><\/script>/,
+    )
     await app.stop()
 })
 

@@ -1,0 +1,44 @@
+<script>
+  import { state } from "abide/ui/state"
+  import cacheTagA from "../../../server/rpc/cacheTagA"
+  import cacheTagB from "../../../server/rpc/cacheTagB"
+  import cacheTagBust from "../../../server/rpc/cacheTagBust"
+  import cacheTagRefresh from "../../../server/rpc/cacheTagRefresh"
+  import cacheTagPending from "../../../server/rpc/cacheTagPending"
+
+  // Two shared reads carry the "docs" tag. One GLOBAL `invalidate({tags:["docs"]})` — run server-side
+  // (the tag registry is server-only) via a POST RPC — drops BOTH slots, so both re-fetch together.
+  let tagsResult = state(null)
+  let tagPendingFlag = state("(unprobed)")
+  async function loadTags() {
+    const tagA = await (await cacheTagA.raw({ tag: "a" })).json()
+    const tagB = await (await cacheTagB.raw({ tag: "b" })).json()
+    tagsResult = { a: tagA.runs, b: tagB.runs }
+  }
+  async function bustTags() {
+    await cacheTagBust({}) // server: invalidate({ tags: ["docs"] }) → drops both "docs" slots
+    await loadTags()       // re-read → both climb together
+  }
+  async function refreshTags() {
+    await cacheTagRefresh({}) // server: refresh({ tags: ["docs"] }) → eager revalidate both
+    await loadTags()
+  }
+  async function probeTagPending() {
+    const probe = await (await cacheTagPending.raw({})).json()
+    tagPendingFlag = probe.pending ? "true" : "false"
+  }
+</script>
+
+{#if tagsResult}
+  <ul class="grid">
+    <li>cacheTagA runs: <strong data-testid="tags-a">{tagsResult.a}</strong></li>
+    <li>cacheTagB runs: <strong data-testid="tags-b">{tagsResult.b}</strong></li>
+  </ul>
+{/if}
+<p>pending({'{'} tags: ["docs"] {'}'}): <strong data-testid="tags-pending">{tagPendingFlag}</strong></p>
+<div class="row">
+  <button data-testid="tags-load" onclick={loadTags}>Load both</button>
+  <button data-testid="tags-bust" onclick={bustTags}>invalidate({'{'}tags{'}'})</button>
+  <button data-testid="tags-refresh" onclick={refreshTags}>refresh({'{'}tags{'}'})</button>
+  <button data-testid="tags-probe-pending" onclick={probeTagPending}>probe pending({'{'}tags{'}'})</button>
+</div>

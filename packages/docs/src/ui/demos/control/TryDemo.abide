@@ -1,0 +1,36 @@
+<script>
+  import { state } from "abide/ui/state"
+
+  // The run carries its own `fail` flag, so the try body reads a fixed per-mount value (never a
+  // shared mutable that could re-throw into an already-mounted block). Each click bumps `id`, which
+  // is the keyed-list key — so the {#try} block re-mounts from scratch and re-evaluates.
+  let run = state({ id: 0, fail: false })
+  const risky = (fail) => {
+    if (fail) throw new Error("something went wrong")
+    return "computed successfully"
+  }
+
+  function runOk() {
+    run = { id: run.id + 1, fail: false }
+  }
+  function runFail() {
+    run = { id: run.id + 1, fail: true }
+  }
+</script>
+
+<div class="controls">
+  <button data-testid="run-ok" onclick={runOk}>Run OK</button>
+  <button data-testid="run-fail" onclick={runFail}>Run failing</button>
+</div>
+
+<div data-testid="try-region" class="region">
+  {#for r of [run] by r.id}
+    {#try}
+      <p data-testid="try-body" class="out">value: {risky(r.fail)}</p>
+    {:catch caught}
+      <p data-testid="try-caught" class="out err">caught: {caught.message}</p>
+    {:finally}
+      <p data-testid="try-finally" class="muted">finally: cleanup always runs</p>
+    {/try}
+  {/for}
+</div>

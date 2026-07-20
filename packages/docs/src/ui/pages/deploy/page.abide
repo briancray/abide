@@ -1,0 +1,68 @@
+<main class="page">
+  <h1>Build &amp; deploy</h1>
+  <p class="lead">Deploying is two steps: <code>abide build</code> writes a content-addressed client into <code>dist/</code>, and <code>abide start</code> serves it. Production runs no bundler — <code>start</code> reads the built artifacts and serves them with immutable long-cache headers.</p>
+
+  <h2 id="build">1 — Build</h2>
+  <p>The client is code-split per route: one loader entry, one chunk per <code>page.abide</code> (with its layouts folded in), and shared chunks for the runtime and shared layouts/components. Every file name embeds a content hash, so it is safe to cache forever.</p>
+  <pre class="code" data-lang="bash"><code>abide build</code></pre>
+  <p>The output is deterministic — the same source yields the same hashes (reproducible builds, CDN-friendly):</p>
+  <pre class="code" data-lang="text"><code>dist/
+├─ manifest.json                 # stable pointer → the current build
+└─ _app/
+   └─ &lt;hash&gt;/
+      ├─ index.json              # hash, entry, css, files, chunkByPattern
+      ├─ loader-&lt;hash&gt;.js        # the boot entry the document loads
+      ├─ chain-0-index-&lt;hash&gt;.js # one code-split chunk per route
+      ├─ chunk-&lt;hash&gt;.js         # shared chunks (runtime, layouts …)
+      └─ style-&lt;hash&gt;.css        # bundled + hashed stylesheet</code></pre>
+
+  <h2 id="start">2 — Serve</h2>
+  <p><code>abide start</code> loads <code>dist/manifest.json</code>, serves each hashed file under <code>/__abide/chunk/</code>, and boots the document from the hashed loader — <strong>no bundler at request or boot time</strong>. (If no build is present it builds once, then serves, so <code>start</code> always works.)</p>
+  <pre class="code" data-lang="bash"><code>ABIDE_IDENTITY_SECRET=… PORT=8080 abide start</code></pre>
+  <p>Because every asset URL is content-addressed, the response is immutable — a client caches it once and never revalidates until a new build changes the hash:</p>
+  <pre class="code" data-lang="text"><code>GET /__abide/chunk/chain-0-index-a1b2c3d4.js
+→ 200  cache-control: public, max-age=31536000, immutable</code></pre>
+  <p>The first load fetches only the matched route's chunk plus the shared runtime (the document <code>modulepreload</code>s that chunk in parallel with the loader); other routes load lazily on soft-nav. SSR still renders every page server-side — the build artifacts are the browser JS, not the server render.</p>
+
+  <h2 id="config">Configuration</h2>
+  <p>Production configuration is environment variables, validated at boot via <a href="/platform/config">env()</a>. At minimum set <code>ABIDE_IDENTITY_SECRET</code> (seals the identity cookie + tokens so authenticated identity survives restarts) and <code>PORT</code>. The full list of abide's built-in variables lives on the <a href="/platform/config#env">Config</a> page.</p>
+
+  <h2 id="standalone">Standalone binary</h2>
+  <p>For deploys without a Bun runtime on the host, <code>abide compile</code> emits a single executable with the app and client assets embedded — no external <code>dist/</code>, nothing to install.</p>
+  <pre class="code" data-lang="bash"><code>abide compile --target bun-linux-x64 --out ./server
+./server                       # runs anywhere — app + assets embedded, no dist/</code></pre>
+
+  <h2 id="docker">Container</h2>
+  <p>Two shapes, same workflow — build and run either with the <code>deploy</code> tag:</p>
+  <pre class="code" data-lang="bash"><code>docker build -t deploy .
+docker run -p 8080:8080 -e ABIDE_IDENTITY_SECRET=… deploy</code></pre>
+
+  <h3>Option A — <code>abide start</code></h3>
+  <p>A two-stage image: build the client, then serve it. The runtime stage carries the app plus its <code>dist/</code> and runs under Bun.</p>
+  <pre class="code" data-lang="text"><code>FROM oven/bun:1 AS build
+WORKDIR /app
+COPY . .
+RUN bun install --frozen-lockfile &amp;&amp; bun run abide build
+
+FROM oven/bun:1
+WORKDIR /app
+COPY --from=build /app /app
+ENV PORT=8080
+ENV ABIDE_IDENTITY_SECRET=change-me
+EXPOSE 8080
+CMD ["bun", "run", "abide", "start"]</code></pre>
+
+  <h3>Option B — <code>abide compile</code> (standalone binary)</h3>
+  <p>Compile one self-contained executable — it embeds Bun, the app, and the client assets — and drop it into a minimal base image. No Bun, no <code>dist/</code>, nothing else in the runtime layer.</p>
+  <pre class="code" data-lang="text"><code>FROM oven/bun:1 AS build
+WORKDIR /app
+COPY . .
+RUN bun install --frozen-lockfile &amp;&amp; bun run abide compile --target bun-linux-x64 --out ./server
+
+FROM debian:bookworm-slim
+COPY --from=build /app/server /usr/local/bin/server
+ENV PORT=8080
+ENV ABIDE_IDENTITY_SECRET=change-me
+EXPOSE 8080
+ENTRYPOINT ["server"]</code></pre>
+</main>

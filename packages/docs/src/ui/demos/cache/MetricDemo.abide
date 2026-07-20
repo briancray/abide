@@ -1,0 +1,22 @@
+<script>
+  import { state } from "abide/ui/state"
+  import cacheMetric from "../../../server/rpc/cacheMetric"
+
+  // Slots are keyed by the whole args object; a partial selector invalidates every superset slot.
+  let metricStarted = state(false)
+  const red1 = state.computed(() => (metricStarted ? (cacheMetric.peek({ team: "red", id: 1 })?.runs ?? "…") : "idle"))
+  const red2 = state.computed(() => (metricStarted ? (cacheMetric.peek({ team: "red", id: 2 })?.runs ?? "…") : "idle"))
+  const blue1 = state.computed(() => (metricStarted ? (cacheMetric.peek({ team: "blue", id: 1 })?.runs ?? "…") : "idle"))
+  function startMetric() { metricStarted = true }
+  function invalidateRed() { cacheMetric.invalidate({ team: "red" }) } // partial selector → both red slots
+</script>
+
+<ul class="grid">
+  <li>slot <code>{'{'}team:"red", id:1{'}'}</code> — <strong data-testid="metric-red1">{red1}</strong> runs</li>
+  <li>slot <code>{'{'}team:"red", id:2{'}'}</code> — <strong data-testid="metric-red2">{red2}</strong> runs</li>
+  <li>slot <code>{'{'}team:"blue", id:1{'}'}</code> — <strong data-testid="metric-blue1">{blue1}</strong> runs</li>
+</ul>
+<div class="row">
+  <button data-testid="metric-start" onclick={startMetric}>Load all three</button>
+  <button data-testid="metric-invalidate-red" onclick={invalidateRed}>Invalidate {'{'} team: "red" {'}'}</button>
+</div>

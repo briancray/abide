@@ -1,0 +1,8 @@
+<script>
+  import { route } from "abide/shared/route"
+
+  // route() is isomorphic — populated during SSR and after hydration. It exposes the current
+  // route's name and kind (plus params/url/navigating) without any client-only wiring.
+</script>
+
+<p>The current route name is <code>{route().name}</code> and its kind is <code>{route().kind}</code>.</p>

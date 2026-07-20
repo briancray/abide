@@ -1,10 +1,9 @@
 <script module>
-  import Sample from "../../../components/Sample.abide"
+  import Demo from "../../../components/Demo.abide"
+  import SlugRouteDemo from "../../../demos/routing/SlugRouteDemo.abide"
+  import ParamRpcDemo from "../../../demos/routing/ParamRpcDemo.abide"
   import { route } from "abide/shared/route"
   import { navigate } from "abide/ui/navigate"
-  import routingTopic from "../../../../server/rpc/routingTopic"
-
-  const PAGE = "src/ui/pages/routing-demo/[slug]/page.abide"
 </script>
 
 
@@ -12,27 +11,15 @@
   <h1 data-testid="slug-heading">Slug: {route().params.slug}</h1>
   <p class="lead">One file — <code>routing-demo/[slug]/page.abide</code> — serves this page for every value of <code>slug</code>. The segment is captured into <code>route().params.slug</code> during SSR and after every soft nav.</p>
 
-  <Sample page={PAGE} id="slug-route" title="Current route" client="slug-route">
-    <!-- #demo slug-route -->
-    <dl class="route">
-      <dt>route().name</dt><dd data-testid="route-name">{route().name}</dd>
-      <dt>route().kind</dt><dd data-testid="route-kind">{route().kind}</dd>
-      <dt>route().params.slug</dt><dd data-testid="route-slug">{route().params.slug}</dd>
-    </dl>
-    <!-- #enddemo -->
-  </Sample>
+  <Demo id="slug-route" title="Current route" client="src/ui/demos/routing/SlugRouteDemo.abide">
+    <SlugRouteDemo />
+  </Demo>
 
-  <Sample page={PAGE} id="param-rpc" title="Param → RPC" client="param-rpc" server="src/server/rpc/routingTopic.ts">
-    <p>The captured slug is passed straight into an isomorphic read, awaited so its value lands in the SSR HTML:</p>
-    <!-- #demo param-rpc -->
-    {#await routingTopic({ slug: route().params.slug as string })}
-      <p>loading…</p>
-    {:then topic}
-      <pre class="out" data-testid="topic">{topic.title}
-{topic.blurb}</pre>
-    {/await}
-    <!-- #enddemo -->
-  </Sample>
+  <p>The captured slug is passed straight into an isomorphic read, awaited so its value lands in the SSR HTML:</p>
+
+  <Demo id="param-rpc" title="Param → RPC" server="src/server/rpc/routingTopic.ts" client="src/ui/demos/routing/ParamRpcDemo.abide" tab="server">
+    <ParamRpcDemo />
+  </Demo>
 
   <div class="row">
     <a data-testid="sibling-alpha" href="/routing-demo/alpha">alpha</a>

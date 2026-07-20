@@ -1,0 +1,19 @@
+<script>
+  import { state } from "abide/ui/state"
+  import cacheSlow from "../../../server/rpc/cacheSlow"
+
+  // `pending(args)` is true while the FIRST load is in flight and false once the value settles. (Keeping
+  // a stale value visible during a re-fetch is `refreshing` — its own demo is below.)
+  let slowStarted = state(false)
+  const slowValue = state.computed(() => (slowStarted ? (cacheSlow.peek({ key: "job" })?.runs ?? "loading") : "idle"))
+  const slowPending = state.computed(() => (cacheSlow.pending({ key: "job" }) ? "yes" : "no"))
+  function startSlow() { slowStarted = true }
+</script>
+
+<ul class="grid">
+  <li>Value (runs): <strong data-testid="slow-value">{slowValue}</strong></li>
+  <li>pending: <strong data-testid="slow-pending">{slowPending}</strong></li>
+</ul>
+<div class="row">
+  <button data-testid="slow-start" onclick={startSlow}>Load</button>
+</div>

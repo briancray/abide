@@ -16,6 +16,7 @@ import {
     runInContext,
     runOutsideContext,
 } from '../../shared/internal/context.ts'
+import { isBrowser } from '../../shared/internal/isBrowser.ts'
 
 export type RouteKind =
     | 'nav'
@@ -71,10 +72,7 @@ export function anonymousPrincipal(): Principal {
 // AsyncLocalStorage is server-only (node:async_hooks). This module is reachable from the client
 // bundle via the isomorphic route() (shared/route.ts imports currentScope), so the ALS must be
 // LAZILY constructed and never instantiated in the browser — otherwise the client bundle throws
-// `new AsyncLocalStorage` (undefined is not a constructor). Mirrors shared/internal/context.ts.
-const isBrowser =
-    typeof globalThis !== 'undefined' &&
-    typeof (globalThis as { window?: unknown }).window !== 'undefined'
+// `new AsyncLocalStorage` (undefined is not a constructor).
 let scopeStorage: AsyncLocalStorage<RequestScope> | undefined
 function storage(): AsyncLocalStorage<RequestScope> | undefined {
     if (isBrowser) return undefined

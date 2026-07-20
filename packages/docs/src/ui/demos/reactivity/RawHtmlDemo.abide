@@ -1,0 +1,14 @@
+<script>
+  import { state } from "abide/ui/state"
+  import { html } from "abide/ui/html"
+
+  // html(str) — raw HTML injection. Toggling the source swaps the rendered element live (really an
+  // element, not escaped text).
+  const ITALIC = "<em data-raw-kind=\"em\">italic emphasis</em>"
+  const BOLD = "<strong data-raw-kind=\"strong\">bold shout</strong>"
+  let markup = state(ITALIC)
+  function toggleMarkup() { markup = markup === ITALIC ? BOLD : ITALIC }
+</script>
+
+<div class="raw" data-testid="raw">{html(markup)}</div>
+<button data-testid="toggle-raw" onclick={toggleMarkup}>Toggle markup</button>

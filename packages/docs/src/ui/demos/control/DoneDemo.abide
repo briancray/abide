@@ -1,0 +1,32 @@
+<script>
+  import { state } from "abide/ui/state"
+  import { done } from "abide/shared/done"
+
+  // done(stream): a reactive completion probe. The SAME stream object is handed to both {#for await}
+  // and done(), so the framework can flip the probe true when the stream finishes draining. The
+  // stream is created once (stored in a cell) and re-created on each run via a keyed wrapper.
+  let doneRunId = state(0)
+  let doneStream = state(null)
+  const makeDoneStream = async function* () {
+    for (const label of ["one", "two", "three"]) {
+      await new Promise((resolve) => setTimeout(resolve, 120))
+      yield label
+    }
+  }
+  function startDoneStream() {
+    doneStream = makeDoneStream()
+    doneRunId++
+  }
+</script>
+
+<button data-testid="done-start" onclick={startDoneStream}>Start stream</button>
+{#if doneStream}
+  <ul data-testid="done-feed" class="list">
+    {#for r of [doneRunId] by r}
+      {#for await chunk of doneStream}
+        <li data-testid="done-item">{chunk}</li>
+      {/for}
+    {/for}
+  </ul>
+  <p data-testid="done-status" class="out">{done(doneStream) ? "complete" : "streaming…"}</p>
+{/if}

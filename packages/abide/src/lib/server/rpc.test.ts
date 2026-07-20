@@ -105,7 +105,7 @@ describe('read RPC (GET/HEAD) — cache + coalesce', () => {
             const seen: unknown[] = []
             const dispose = get.watch({ n: 5 }, (v) => seen.push(v))
             await get.load({ n: 5 })
-            // watch fires on each slot transition (pending → settled); the settled value is the last.
+            // watch fires on each VALUE change; the settled value is the last (and only) one seen.
             expect(seen.at(-1)).toEqual({ doubled: 10 })
             dispose()
         })

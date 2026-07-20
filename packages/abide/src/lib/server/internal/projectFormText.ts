@@ -12,16 +12,9 @@
 // field's type is undeclared, the raw string passes through unchanged.
 
 import type { JSONSchema, JSONSchemaType } from '../../shared/internal/jsonSchema.ts'
+import { singleType } from '../../shared/internal/jsonSchema.ts'
 import { jsonSchemaOf } from '../../shared/internal/shapeToSchema.ts'
 import type { StandardSchemaV1 } from '../../shared/StandardSchema.ts'
-
-// The non-null member of a `type` union (e.g. `["string","null"]` → "string"), mirroring env.ts.
-function singleType(
-    type: JSONSchemaType | JSONSchemaType[] | undefined,
-): JSONSchemaType | undefined {
-    if (Array.isArray(type)) return type.find((candidate) => candidate !== 'null')
-    return type
-}
 
 // Coerce one raw string to its declared JSON-Schema type. Leaves the raw string when the value can't
 // be coerced (validation reports the mismatch) or the type is string/untyped.

@@ -1,9 +1,7 @@
 <script module>
-  import Sample from "../../../components/Sample.abide"
-  import { route } from "abide/shared/route"
+  import Demo from "../../../components/Demo.abide"
+  import DetailsRouteDemo from "../../../demos/routing/DetailsRouteDemo.abide"
   import { navigate } from "abide/ui/navigate"
-
-  const PAGE = "src/ui/pages/routing-demo/details/page.abide"
 </script>
 
 
@@ -11,15 +9,9 @@
   <h1 data-testid="details-heading">Details</h1>
   <p class="lead">A static sibling route — <code>routing-demo/details/page.abide</code> at <code>/routing-demo/details</code>. Exact routes win over <code>[slug]</code>, so navigating here (link or <code>navigate()</code>) reaches this dedicated page, not the param page.</p>
 
-  <Sample page={PAGE} id="details-route" title="Current route" client="details-route">
-    <!-- #demo details-route -->
-    <dl class="route">
-      <dt>route().name</dt><dd data-testid="route-name">{route().name}</dd>
-      <dt>route().kind</dt><dd data-testid="route-kind">{route().kind}</dd>
-      <dt>route().url.pathname</dt><dd data-testid="route-url">{route().url.pathname}</dd>
-    </dl>
-    <!-- #enddemo -->
-  </Sample>
+  <Demo id="details-route" title="Current route" client="src/ui/demos/routing/DetailsRouteDemo.abide" tab="client">
+    <DetailsRouteDemo />
+  </Demo>
 
   <div class="row">
     <button data-testid="back-hub" onclick={() => navigate("/routing-demo")}>← back to hub</button>

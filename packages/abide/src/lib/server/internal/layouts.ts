@@ -7,13 +7,11 @@
 // client bundle composer wrap page = `[rootLayout, …, nearestLayout, page]` — each layout rendering
 // the next level where its template calls `{children()}`.
 
-// `pages/**/layout.abide` → the directory route prefix it wraps. Drops the trailing `layout.abide`,
-// normalises to a leading slash, and collapses the empty (root) case to "/". Mirrors pageRoutePath.
+import { routePrefixFromRelative } from './routePrefixFromRelative.ts'
+
+// `pages/**/layout.abide` → the directory route prefix it wraps.
 export function layoutRoutePrefix(relativePath: string): string {
-    const dir = relativePath
-        .slice(0, relativePath.length - 'layout.abide'.length)
-        .replace(/\/$/, '')
-    return dir.length === 0 ? '/' : `/${dir}`
+    return routePrefixFromRelative(relativePath, 'layout.abide')
 }
 
 // Whether a layout at `prefix` applies to a page whose route `pattern` is at/below it. The root

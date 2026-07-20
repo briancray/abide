@@ -1,0 +1,10 @@
+<script>
+  import { state } from "abide/ui/state"
+
+  // bind:value two-way.
+  let value = state("hello")
+  const valueBind = { get: () => value, set: (next) => { value = next } }
+</script>
+
+<input id="value-input" bind:value={valueBind} />
+<p>Mirror: <span id="value-out">{value}</span></p>

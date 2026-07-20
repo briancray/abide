@@ -1,0 +1,23 @@
+<script>
+  import { state } from "abide/ui/state"
+  import cacheSlow from "../../../server/rpc/cacheSlow"
+
+  // Distinct from first-load `pending`: `refreshing` is true only while a re-fetch runs over a value
+  // that stays on screen. So during a refresh: value = the stale one, refreshing = yes, pending = no.
+  let refreshingStarted = state(false)
+  const refreshingValue = state.computed(() => (refreshingStarted ? (cacheSlow.peek({ key: "refresh-demo" })?.runs ?? "loading") : "idle"))
+  const refreshingFlag = state.computed(() => (cacheSlow.refreshing({ key: "refresh-demo" }) ? "yes" : "no"))
+  const refreshingPending = state.computed(() => (cacheSlow.pending({ key: "refresh-demo" }) ? "yes" : "no"))
+  function startRefreshing() { refreshingStarted = true }
+  function runRefreshing() { cacheSlow.refresh({ key: "refresh-demo" }) }
+</script>
+
+<ul class="grid">
+  <li>Value (runs): <strong data-testid="refreshing-value">{refreshingValue}</strong></li>
+  <li>refreshing(): <strong data-testid="refreshing-flag">{refreshingFlag}</strong></li>
+  <li>pending(): <strong data-testid="refreshing-pending">{refreshingPending}</strong></li>
+</ul>
+<div class="row">
+  <button data-testid="refreshing-start" onclick={startRefreshing}>Load</button>
+  <button data-testid="refreshing-refresh" onclick={runRefreshing}>Refresh</button>
+</div>

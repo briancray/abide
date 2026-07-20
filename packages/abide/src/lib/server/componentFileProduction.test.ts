@@ -14,7 +14,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { GET } from '../server/GET.ts'
-import { buildClientBundle } from '../server/internal/clientBundle.ts'
+import { buildClient } from '../server/internal/clientBundle.ts'
 import type { AppConfig } from '../server/internal/router.ts'
 import { createTestApp } from '../test/createTestApp.ts'
 
@@ -74,16 +74,19 @@ test('SSR (PR4): a page renders a `.abide` component resolved from disk, with pr
     await app.stop()
 })
 
-test('client bundle (PR3): includes the component + nested-component mount code and the component-only RPC spec', async () => {
-    const cfg = config()
-    const bundle = await buildClientBundle(cfg)
+test('client build (PR3): includes the component + nested-component mount code and the component-only RPC spec', async () => {
+    const build = await buildClient(config())
+    // The page's route chunk carries the component + nested-component mount code; the RPC spec lives in
+    // the loader entry. Concatenate all built JS to assert the whole split graph.
+    let js = ''
+    for (const [name, content] of build.files) if (name.endsWith('.js')) js += `${content}\n`
 
     // The component's compiled client mount carries its template literal — its presence proves the
     // component module (not the raw `.abide`) was bundled via the rewritten import specifier.
-    expect(bundle).toContain('CARD_HEADING')
+    expect(js).toContain('CARD_HEADING')
     // The NESTED component was followed transitively (recursion) and bundled too.
-    expect(bundle).toContain('BADGE_MARKER')
+    expect(js).toContain('BADGE_MARKER')
     // The RPC imported ONLY inside the component still ships its proxy spec (harvest folds in component
     // module analyses).
-    expect(bundle).toContain('cardPing')
+    expect(js).toContain('cardPing')
 })

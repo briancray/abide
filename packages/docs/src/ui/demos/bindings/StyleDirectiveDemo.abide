@@ -1,0 +1,10 @@
+<script>
+  import { state } from "abide/ui/state"
+
+  // style:prop={value}.
+  let color = state("rebeccapurple")
+  const colorBind = { get: () => color, set: (next) => { color = next } }
+</script>
+
+<input id="style-input" bind:value={colorBind} />
+<div id="style-target" style:color={colorBind.get()}>this text color follows the input</div>

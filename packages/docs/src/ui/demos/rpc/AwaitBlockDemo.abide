@@ -1,0 +1,15 @@
+<script>
+  import rpcGreet from "../../../server/rpc/rpcGreet"
+
+  // The reactive `{#await}` block: pending / `{:then}` value / `{:catch}` failure. The read into slot
+  // `{ name: "await block" }` also warms the global cell cache the `fn.peek` probe demo reads back.
+</script>
+
+{#await rpcGreet({ name: "await block" })}
+  <p data-testid="await-pending">reading…</p>
+{:then value}
+  <pre class="out" data-testid="await-then">greeting: {value.greeting}
+length: {value.length}</pre>
+{:catch failure}
+  <p class="err" data-testid="await-catch">failed: {failure.message}</p>
+{/await}

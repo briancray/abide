@@ -1,0 +1,34 @@
+<script>
+  import { state } from "abide/ui/state"
+  import { watch } from "abide/ui/watch"
+  import { props } from "abide/ui/props"
+  import cacheShared from "../../../server/rpc/cacheShared"
+  import cacheCounter from "../../../server/rpc/cacheCounter"
+
+  // Each `raw()` is a separate HTTP request. A SHARED read's slot is process-global, so two requests
+  // return the SAME run count; a per-request (non-shared) read re-runs each time and climbs.
+  // `sampleId` lets the card's "Run again" button re-fire this one-shot probe.
+  const { sampleId = "" } = props<{ sampleId?: string }>()
+
+  let sharedResult = state(null)
+  async function probeShared() {
+    const sharedA = await (await cacheShared.raw({ tag: "s" })).json()
+    const sharedB = await (await cacheShared.raw({ tag: "s" })).json()
+    const plainA = await (await cacheCounter.raw({ key: "shared-contrast" })).json()
+    const plainB = await (await cacheCounter.raw({ key: "shared-contrast" })).json()
+    sharedResult = { shared1: sharedA.runs, shared2: sharedB.runs, plain1: plainA.runs, plain2: plainB.runs }
+  }
+
+  let replay = state.shared("replay:" + sampleId, 0)
+  watch(() => replay, () => { probeShared() })
+</script>
+
+{#if sharedResult}
+  <ul class="grid">
+    <li>shared read: <strong data-testid="shared-r1">{sharedResult.shared1}</strong> then <strong data-testid="shared-r2">{sharedResult.shared2}</strong> (same)</li>
+    <li>non-shared read: <strong data-testid="shared-p1">{sharedResult.plain1}</strong> then <strong data-testid="shared-p2">{sharedResult.plain2}</strong> (climbs)</li>
+  </ul>
+{/if}
+<div class="row">
+  <button data-testid="shared-probe" onclick={probeShared}>Probe cross-request</button>
+</div>

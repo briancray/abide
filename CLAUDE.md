@@ -26,6 +26,7 @@
 * use monomorphic types and narrowing/widening instead of ad-hoc or one use types
 * use tailwindcss classes for styling, and prefer tailwind classes over style properties when possible.
 * constants should be UPPERCASE_SNAKE_CASE always, including their files
+* do not worry about backwards compatibility if there is a better way to do something at any level unless it changes a public api - then discuss
 
 > The authoritative design lives in `docs/spec/*.md`. This file is the generated public-API
 > reference. Core model: the primitive is **`cell`** — a generic isomorphic memoizer for async
@@ -66,11 +67,15 @@ middleware?, crossOrigin?, maxBodySize?, timeout?, cache?: false | { ttl?, share
   `AsyncIterable` (or `jsonl(gen())`, which sees through to it) is stored as a **ReplayableStream**
   (replay-then-live; ttl clock from stream CLOSE; open streams pinned; per-stream cap
   `ABIDE_MAX_STREAM_BUFFER_SIZE`, default unbounded) so concurrent/late viewers share one run. Resume a
-  retained transcript over `GET /rpc/<name>?args=…&from=<count>`. **Built:** primitive + cell + verb
-  routing + shared streaming + jsonl/json see-through + resumable endpoint + the **SSR→client
-  hydration handoff** — a `{#for await}` over a known-RPC source seeds its decoded transcript (a
-  `StreamHandle`) so hydrate ADOPTS the completed transcript (mode A) or RESUMES an open one over
-  `?from=<count>` (mode B) instead of re-invoking the source; a non-RPC source still re-iterates.
+  retained transcript over `GET /rpc/<name>?args=…&from=<count>` (re-encoded in the handler's ORIGINAL
+  encoding — jsonl resumes as jsonl, sse as sse). **Built:** primitive + cell + verb routing + shared
+  streaming + json/jsonl/**sse** see-through (all lazy) + resumable endpoint + the **SSR→client hydration
+  handoff** — a `{#for await}` over a known-RPC source seeds its decoded transcript (a `StreamHandle`) so
+  hydrate ADOPTS the completed transcript (mode A) or RESUMES an open one over `?from=<count>` (mode B)
+  instead of re-invoking the source; a non-RPC source still re-iterates. **Client-side consumption:** the
+  browser RPC proxy decodes a streaming response by content-type into an `AsyncIterable` (routed through
+  the same cell), so `{#for await x of rpc()}` works in the browser identically to SSR; `sse` is also
+  consumable via the native `EventSource`.
 - **`timeout`**: bilateral (client abort + server deadline); defaults to `ABIDE_RPC_TIMEOUT`.
   **`crossOrigin`**: default closed.
 
@@ -79,7 +84,7 @@ middleware?, crossOrigin?, maxBodySize?, timeout?, cache?: false | { ttl?, share
 | --- | --- |
 | `abide/server/json` | `json(data, init?)` → `TypedResponse<T>` (sees through to `data` in a cell-backed read/mutation) |
 | `abide/server/jsonl` | `jsonl(iterable, init?)` → `StreamResponse<C>`, `application/jsonl` (lazy; sees through to the iterable → ReplayableStream) |
-| `abide/server/sse` | `sse(iterable, init?)` → `text/event-stream` stream (opaque Response; not yet see-through) |
+| `abide/server/sse` | `sse(iterable, init?)` → `StreamResponse<C>`, `text/event-stream` (lazy; sees through to the iterable → ReplayableStream, on par with jsonl; also consumable via `EventSource`) |
 | `abide/server/error` | `error(status, message?, init?)`; `error.typed(name, status, schema?)` |
 | `abide/server/redirect` | `redirect(url, status=302, init?)` |
 
@@ -143,7 +148,7 @@ Partial args match every superset slot.
 | `abide/shared/HttpError` | type: `status`, `statusText`, `kind?`, `data?` |
 | `abide/shared/ValidationErrorData` | `{ issues, fields }` |
 | `abide/shared/route` | `route()` (see above) |
-| `abide/shared/url` | `url(path, args?)` in-app resolver |
+| `abide/shared/url` | `url(path \| URL, params?, query?)` — in-app href resolver; `params` fill `[name]` segments (typed from the path literal), `query` appends a query string. No-`[name]` path (or a `URL`) collapses to `url(target, query?)` |
 | `abide/shared/health` | `health()` → `{ reachable, ... }` |
 | `abide/shared/log` | `log(...)`, `.info/.warn/.error/.trace`, `.channel(name)` |
 | `abide/shared/trace` | `trace()` → W3C traceparent \| undefined |
@@ -155,7 +160,7 @@ Partial args match every superset slot.
 | `abide/ui/watch` | `watch(source, handler)` / `watch(thunk)` |
 | `abide/ui/props` | `props<T>()` |
 | `abide/ui/html` | `html(str)` / `html\`…\`` |
-| `abide/ui/navigate` | `navigate(path, { replace?, keepScroll? })` |
+| `abide/ui/navigate` | `navigate(path \| URL, { replace?, keepScroll? })` — target is an already-resolved href; compose params/query with `url()` (`navigate(url('/users/[id]', { id }, { tab }))`) |
 | `abide/ui/bundled` | `bundled()` → boolean |
 
 ## Desktop bundle — `abide/bundle/*`
@@ -230,7 +235,7 @@ Partial args match every superset slot.
 | `<style>` component-scoped · nested `<style>` subtree-scoped · tailwind optional |
 | `src/ui/pages/**/page.abide` / `layout.abide` | routes; `[name]` → `route().params.name` |
 | `route()` | `route().url`, `.params`, `.name`, `.kind`, `.navigating` |
-| `navigate` / `url` | move / build hrefs. Nav always hits the server (middleware); same-route param nav = seeds-only (no DOM swap), cross-route = HTML outlet swap |
+| `navigate` / `url` | `url(path, params?, query?)` builds an href; `navigate(target, options?)` moves to one — compose as `navigate(url(...), options)`. Nav always hits the server (middleware); same-route param nav = seeds-only (no DOM swap), cross-route = HTML outlet swap |
 
 ## App module — `src/app.ts`
 `export const middleware = [(next) => Response, …]` (onion; `next()` needs no args; return a
@@ -242,8 +247,8 @@ Partial args match every superset slot.
 | --- | --- |
 | `abide scaffold <name>` | scaffold + install + dev (`--no-install`/`--no-dev`/`--no-git`) |
 | `abide dev` | same pipeline as build + watch + full live-reload (over the socket mux) |
-| `abide build` | client bundle into `dist/_app/<hash>/` (content-addressed) |
-| `abide start` | run production server against built `dist/` |
+| `abide build` | code-split client → content-hashed chunks + `manifest.json` into `dist/_app/<hash>/` |
+| `abide start` | serve the app against the built `dist/` client assets (no bundler at boot; builds first if absent) |
 | `abide run <file> [args...]` | run script under the abide runtime (no HTTP; `onStart`/`onStop` run) |
 | `abide compile [--target] [--out]` | standalone server executable (embeds assets) |
 | `abide cli [--target] [--out] [--platforms]` | dual-mode binary: embeds app, self-hosts or targets `ABIDE_APP_URL`; interactive with no subcommand |
@@ -263,12 +268,13 @@ Partial args match every superset slot.
 | `src/ui/pages/**/page.abide` · `layout.abide` · `src/ui/public/` | routes / layouts / static |
 | `src/bundle/window.ts` | `BundleWindow` config |
 | `src/.abide/*` | generated types + JSON Schema (+ `--dump` proxies) |
-| `dist/_app/<hash>/` | content-addressed client build |
+| `dist/_app/<hash>/` | content-addressed code-split client build (hashed chunks + `index.json`; a stable `dist/manifest.json` points `abide start` at it) |
 
 ## Generated routes
 `/openapi.json` (OpenAPI 3.1) · `/__abide/mcp` (MCP; socket → tail/publish tools) · `/__abide/sockets`
 (multiplexed WS + per-socket HTTP face) · `/__abide/health` · `/__abide/cli` (per-user install) ·
-`/__abide/inspector` (gated).
+`/__abide/inspector` (gated) · `/__abide/chunk/<name>-<hash>.(js|css)` (content-hashed, code-split client
+assets — the loader entry + per-route chunks + shared chunks + CSS; served immutable/long-cache).
 
 ## Environment variables
 | Var | Effect |

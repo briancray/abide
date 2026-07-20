@@ -1,0 +1,11 @@
+<script>
+  import { state } from "abide/ui/state"
+
+  // on<event>={fn} native events.
+  let clicks = state(0)
+  let typed = state("")
+</script>
+
+<button id="click-btn" onclick={() => clicks++}>Clicked <span id="click-count">{clicks}</span> times</button>
+<input id="input-evt" oninput={(e) => typed = e.target.value} placeholder="type here" />
+<p>oninput saw: <span id="typed-out">{typed}</span></p>

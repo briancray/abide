@@ -1,0 +1,29 @@
+<script>
+  import { state } from "abide/ui/state"
+
+  // A component is a capitalised `{#snippet}` taking (props, children). `Card` receives a reactive
+  // `title` prop and renders whatever sits between its tags as its single `{children()}` slot. Both
+  // the prop and the slot stay live after hydration.
+  let title = state("Original title")
+  let count = state(0)
+
+  function rename() {
+    title = "Renamed title"
+  }
+</script>
+
+{#snippet Card(props, children)}
+  <section data-testid="card" class="card">
+    <h3 data-testid="card-title">{props.title}</h3>
+    <div class="card-body">{children()}</div>
+  </section>
+{/snippet}
+
+<div class="controls">
+  <button data-testid="rename" onclick={rename}>Rename card</button>
+  <button data-testid="inc" onclick={() => count++}>Increment count</button>
+</div>
+
+<Card title={title}>
+  This body is the slot. It reads the live count: <strong data-testid="card-count">{count}</strong>.
+</Card>

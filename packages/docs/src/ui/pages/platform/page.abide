@@ -1,8 +1,6 @@
 <script module>
-  import Sample from "../../components/Sample.abide"
-  import platformConfig from "../../../server/rpc/platformConfig"
-
-  const PAGE = "src/ui/pages/platform/page.abide"
+  import Demo from "../../components/Demo.abide"
+  import ConfigPeekDemo from "../../demos/platform/ConfigPeekDemo.abide"
 </script>
 
 
@@ -26,10 +24,8 @@
     <li><a href="/platform/machines">Machine surfaces</a> — <code>/openapi.json</code> + <code>/__abide/mcp</code> from the browser.</li>
   </ul>
 
-  <Sample page={PAGE} id="confpeek" title="Config peek — <code>env()</code>" client="confpeek" server="src/server/rpc/platformConfig.ts">
-    <p>Read live from the same <code>env()</code>-backed RPC the config page drives:</p>
-    <!-- #demo confpeek -->
-    <pre class="out" id="config-peek">{#await platformConfig()}reading…{:then c}{c.appName} · maxItems={c.maxItems} ({c.maxItemsType}){/await}</pre>
-    <!-- #enddemo -->
-  </Sample>
+  <p>Read live from the same <code>env()</code>-backed RPC the config page drives:</p>
+  <Demo id="confpeek" title="Config peek — <code>env()</code>" server="src/server/rpc/platformConfig.ts" client="src/ui/demos/platform/ConfigPeekDemo.abide" tab="server" replayable={true}>
+    <ConfigPeekDemo sampleId="confpeek" />
+  </Demo>
 </main>

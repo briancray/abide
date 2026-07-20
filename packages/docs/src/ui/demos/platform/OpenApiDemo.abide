@@ -1,0 +1,26 @@
+<script>
+  import { state } from "abide/ui/state"
+
+  // Fetch the generated OpenAPI 3.1 document from the browser and render its operation paths.
+  // Every RPC is projected as an operation — no second implementation.
+  let spec = state(null)
+
+  async function loadOpenApi() {
+    const response = await fetch("/openapi.json")
+    const document = await response.json()
+    const paths = Object.keys(document.paths ?? {})
+    spec = { title: document.info?.title ?? "(untitled)", version: document.openapi ?? "?", paths }
+  }
+</script>
+
+<button id="openapi-btn" onclick={loadOpenApi}>Fetch OpenAPI</button>
+{#if spec}
+  <p id="openapi-info">{spec.title} · OpenAPI {spec.version}</p>
+  <ul id="openapi-paths" class="list">
+    {#for path of spec.paths}
+      <li>{path}</li>
+    {/for}
+  </ul>
+{:else}
+  <p id="openapi-info">not fetched yet</p>
+{/if}

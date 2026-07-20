@@ -10,6 +10,7 @@
 // step attaches later. Surfaces treat a missing schema permissively.
 
 import type { JSONSchema } from '../../shared/internal/jsonSchema.ts'
+import { jsonSchemaOf } from '../../shared/internal/shapeToSchema.ts'
 import type { AppConfig, Route } from './router.ts'
 
 // Per-surface exposure flags (§13.3). All default-on: an absent flag means "exposed". Only an
@@ -45,30 +46,6 @@ export interface Registry {
     sockets: SocketEntry[]
 }
 
-// The JSON Schema keywords abide emits. A value carrying any of these (and NOT a `~standard`
-// marker) is treated as a raw JSON Schema; otherwise it is a Standard Schema (or nothing).
-const JSON_SCHEMA_KEYWORDS = [
-    'type',
-    'properties',
-    'anyOf',
-    'oneOf',
-    'allOf',
-    'enum',
-    'const',
-    'items',
-]
-
-// Return the value as a JSONSchema if it already IS one, else undefined. A Standard Schema
-// (`~standard` present) is deliberately not derived here — that is a later build step (MS1.3).
-function resolveJsonSchema(schema: unknown): JSONSchema | undefined {
-    if (typeof schema !== 'object' || schema === null) return undefined
-    if ('~standard' in schema) return undefined
-    for (const keyword of JSON_SCHEMA_KEYWORDS) {
-        if (keyword in schema) return schema as JSONSchema
-    }
-    return undefined
-}
-
 // Normalise the (untyped) `options.clients` into the flat Clients shape. A non-object is treated
 // as "all surfaces on".
 function resolveClients(raw: unknown): Clients {
@@ -94,10 +71,10 @@ function rpcEntry(name: string, route: Route): RpcEntry {
         clients: resolveClients(options.clients),
     }
 
-    const inputSchema = resolveJsonSchema(schemas?.input)
+    const inputSchema = jsonSchemaOf(schemas?.input)
     if (inputSchema !== undefined) entry.inputSchema = inputSchema
 
-    const outputSchema = resolveJsonSchema(schemas?.output)
+    const outputSchema = jsonSchemaOf(schemas?.output)
     if (outputSchema !== undefined) entry.outputSchema = outputSchema
 
     if (typeof options.doc === 'string' && options.doc.length > 0) entry.doc = options.doc
@@ -121,7 +98,7 @@ export function buildRegistry(config: AppConfig): Registry {
             clientPublish: options.clientPublish === true,
             clients: resolveClients(options.clients),
         }
-        const messageSchema = resolveJsonSchema(options.schema)
+        const messageSchema = jsonSchemaOf(options.schema)
         if (messageSchema !== undefined) entry.messageSchema = messageSchema
         sockets.push(entry)
     }

@@ -1,0 +1,23 @@
+<script>
+  import { state } from "abide/ui/state"
+  import { watch } from "abide/ui/watch"
+  import { props } from "abide/ui/props"
+  import platformObserve from "../../../server/rpc/platformObserve"
+
+  // A one-shot read of the observability surface. `trace()` returns the request's W3C traceparent,
+  // `health()` is the framework baseline probe, and `log()` writes a server line — the RPC reads all
+  // three and the browser renders trace + health. The `{#await}` blocks SSR so the values land in the
+  // initial HTML. `sampleId` wires the card's "Run again" button to refresh the cached read.
+  const { sampleId = "" } = props<{ sampleId?: string }>()
+
+  let replay = state.shared("replay:" + sampleId, 0)
+  watch(() => replay, () => { platformObserve.refresh() })
+</script>
+
+{#await platformObserve()}
+  <p id="observe-block">reading…</p>
+{:then o}
+  <pre class="out" id="observe-block">traceparent = {o.traceparent ?? "(none)"}
+traceId     = {o.traceId ?? "(none)"}
+health.reachable = {o.health.reachable ? "true" : "false"}</pre>
+{/await}

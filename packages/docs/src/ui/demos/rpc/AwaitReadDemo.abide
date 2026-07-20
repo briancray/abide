@@ -1,0 +1,8 @@
+<script>
+  import hello from "../../../server/rpc/hello"
+
+  // The blocking read `{await fn()}`. It resolves during SSR, so the greeting string is already
+  // in the initial HTML — the browser re-awaits the coalesced load on invalidate.
+</script>
+
+<p class="say" data-testid="await-read">{await hello({ who: "async reads" })}</p>

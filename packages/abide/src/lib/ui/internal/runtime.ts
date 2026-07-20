@@ -122,6 +122,13 @@ export function finalize(fragment: Node, parent: Node, anchor: Node | null): voi
 // so the SAME emitted call reverts to creating DOM on later reactive re-runs (after `endHydration`).
 export let hydrating = false
 
+// Live read of the hydrate flag — true only while the cursor is CLAIMING server nodes (false in create
+// mode / after `endHydration`). `seededState` consults this so a create-fallback re-mount doesn't replay
+// (and desync) the seed ordinals. A function so importers see the current value, not a stale snapshot.
+export function isHydrating(): boolean {
+    return hydrating
+}
+
 // Seed the stateful cursor (PR4) at the container's first server child so the root mount fn's walk
 // starts on real server DOM. Nested block-body mount fns are reseeded by their block helper.
 export function startHydration(container?: Node | null): void {
@@ -600,40 +607,32 @@ export function applyAttribute(element: Element, name: string, value: unknown): 
     element.setAttribute(name, String(value))
 }
 
-export function setAttr(element: Element, name: string, read: () => unknown): Disposer {
+// A reactive effect that suppresses its FIRST apply under hydration — the server already serialized
+// this attribute/class/style (decision 9); values are re-applied not verified (decision 5). `read`
+// runs on every pass (so its deps are tracked from the first run), but `apply` is skipped once while
+// priming. Used by every whole-value binding (`setAttr`/`toggleClass`/`setStyleProp`).
+function hydratableEffect(read: () => unknown, apply: (value: unknown) => void): Disposer {
     let primed = hydrating
     return effect(() => {
         const value = read()
-        // Suppress the first apply under hydration — the server already serialized this attribute
-        // (decision 9); attributes are re-applied not verified (decision 5).
         if (primed) {
             primed = false
             return
         }
-        applyAttribute(element, name, value)
+        apply(value)
     })
+}
+
+export function setAttr(element: Element, name: string, read: () => unknown): Disposer {
+    return hydratableEffect(read, (value) => applyAttribute(element, name, value))
 }
 
 export function toggleClass(element: Element, className: string, read: () => unknown): Disposer {
-    let primed = hydrating
-    return effect(() => {
-        const on = Boolean(read())
-        if (primed) {
-            primed = false
-            return
-        }
-        element.classList.toggle(className, on)
-    })
+    return hydratableEffect(read, (value) => element.classList.toggle(className, Boolean(value)))
 }
 
 export function setStyleProp(element: Element, property: string, read: () => unknown): Disposer {
-    let primed = hydrating
-    return effect(() => {
-        const value = read()
-        if (primed) {
-            primed = false
-            return
-        }
+    return hydratableEffect(read, (value) => {
         const style = (element as HTMLElement).style
         if (value === false || value === null || value === undefined) style.removeProperty(property)
         else style.setProperty(property, String(value))
@@ -1408,7 +1407,10 @@ export function forBlock(
         let index = 0
         let catchDispose: Disposer | null = null
         ;(async () => {
-            const source = options.read() as AsyncIterable<unknown>
+            // Await the source: a STREAMING RPC read is `Promise<AsyncIterable<C>>` (the cell read is
+            // async), and `for await` cannot iterate a Promise. Awaiting a non-thenable `gen()` is
+            // identity, so a plain async-generator source is unchanged. Mirrors `toIterator`.
+            const source = (await options.read()) as AsyncIterable<unknown>
             try {
                 for await (const value of source) {
                     if (disposed) return

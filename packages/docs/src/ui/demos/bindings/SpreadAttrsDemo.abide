@@ -1,0 +1,6 @@
+<script>
+  // {...spread} attributes.
+  const spread = { "data-role": "spread-target", title: "spread-title", "aria-label": "spread-label" }
+</script>
+
+<div id="spread-target" {...spread}>spread applies data-role, title, aria-label</div>

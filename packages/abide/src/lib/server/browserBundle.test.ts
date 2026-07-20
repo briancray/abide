@@ -4,23 +4,50 @@
 // AsyncLocalStorage (node:async_hooks), reachable from the client via the isomorphic route(), was
 // constructed at module load and threw `new AsyncLocalStorage` in the browser, killing hydration.
 //
-// This runs the real client bundle inside a fresh happy-dom Window (window present, the true browser
-// condition) against served SSR, and asserts no throw + an interactive counter. It runs in a
-// SUBPROCESS so setting global `window` can't pollute the shared test process (which would flip the
-// isomorphic side-detection and break other tests).
+// This runs the REAL built client (loader entry + code-split chunks — TODO #6) inside a fresh happy-dom
+// Window (window present, the true browser condition) against served SSR, and asserts no throw + an
+// interactive counter. Because happy-dom can't resolve ESM dynamic imports over HTTP, we MATERIALIZE the
+// served module graph to a temp dir (rewriting the `/__abide/chunk/` publicPath to `./` relative) and
+// `await import()` the loader, so Bun's real ESM loader resolves the split graph from disk and executes
+// it with the happy-dom globals present. It runs in a SUBPROCESS so setting global `window` can't
+// pollute the shared test process (which would flip the isomorphic side-detection and break other tests).
 
 import { expect, test } from 'bun:test'
+
+// A subprocess snippet: fetch the served client module graph (loader entry + every referenced chunk),
+// rewrite the `/__abide/chunk/` publicPath to a `./`-relative one, write each file into `dir`, and
+// `await import()` the loader so Bun executes the REAL built graph (dynamic page-chunk import resolves
+// from disk) with the happy-dom globals already installed. Returns after the boot microtasks settle.
+const MATERIALIZE = `
+async function runBuiltClient(url, ssr, dir) {
+  const entryMatch = ssr.match(/src="(\\/__abide\\/chunk\\/[^"]+\\.js)"/);
+  if (!entryMatch) throw new Error("no client loader script in SSR document");
+  const entry = entryMatch[1];
+  const seen = new Set();
+  const queue = [entry];
+  let loaderName = entry.split("/").pop();
+  while (queue.length) {
+    const u = queue.pop();
+    if (seen.has(u)) continue;
+    seen.add(u);
+    const text = await (await fetch(url + u)).text();
+    for (const m of text.matchAll(/\\/__abide\\/chunk\\/[^"'()\\s]+\\.js/g)) queue.push(m[0]);
+    await Bun.write(dir + "/" + u.split("/").pop(), text.replaceAll("/__abide/chunk/", "./"));
+  }
+  await import(dir + "/" + loaderName);
+  await new Promise((r) => setTimeout(r, 60));
+}
+`
 
 const HELPER = (dir: string, servePath: string) => `
 import { Window } from "happy-dom";
 import { serve } from ${JSON.stringify(servePath)};
+${MATERIALIZE}
 await Bun.write(${JSON.stringify(dir)} + "/src/ui/pages/page.abide", "<script>import { state } from 'abide/ui/state'; let count = state(0)</script><button onclick={() => count++}>Count: {count}</button>");
 await Bun.write(${JSON.stringify(dir)} + "/src/app.ts", "export const middleware = []\\n");
 const { url, stop } = await serve(${JSON.stringify(dir)}, { dev: true });
-// Fetch everything BEFORE polluting globals, then stop the server so no server request sees window.
+// Fetch the SSR + client graph BEFORE polluting globals; the server stays up so the graph fetch works.
 const ssr = await (await fetch(url + "/")).text();
-const bundle = await (await fetch(url + "/__abide/client.js")).text();
-await stop();
 // Real browser condition: window present before the bundle runs.
 const win = new Window({ url: url + "/" });
 const g = globalThis;
@@ -35,8 +62,9 @@ const serverBtn = win.document.body.querySelector("button");
 const serverBtnText = serverBtn ? serverBtn.firstChild : null; // the "Count: " text node inside the button
 if (!container || !serverBtn) { console.log("RESULT: no-server-dom"); process.exit(3); }
 let threw = "";
-try { new Function(bundle + "\\n//# sourceURL=client.js")(); await new Promise(r=>setTimeout(r,50)); }
-catch (e) { threw = e.message; }
+try { await runBuiltClient(url, ssr, ${JSON.stringify(dir)} + "/built"); }
+catch (e) { threw = e.message || String(e); }
+await stop();
 if (threw) { console.log("THREW: " + threw); process.exit(1); }
 const btnAfter = win.document.body.querySelector("button");
 const sameNode = btnAfter === serverBtn; // the SAME object survived hydration (claimed, not recreated)
@@ -75,33 +103,44 @@ test('built client bundle ATTACH-hydrates the SSR DOM (same node, no clear) + st
 }, 30000)
 
 // TODO #6 — a PRODUCTION build (`abide start`/`abide build`, i.e. `serve({ dev: false })`) MINIFIES
-// the client bundle; dev does not. Prove (a) minification actually engaged (the prod bundle is
-// materially smaller than the same app's dev bundle) and (b) the MINIFIED bundle still attach-hydrates
+// the client; dev does not. Prove (a) minification actually engaged (the prod client graph is
+// materially smaller than the same app's dev graph) and (b) the MINIFIED build still attach-hydrates
 // and stays interactive in a real browser env — the production path is otherwise untested (every other
 // browser test serves `dev: true`).
 const MINIFY_HELPER = (dir: string, servePath: string) => `
 import { Window } from "happy-dom";
 import { serve } from ${JSON.stringify(servePath)};
+${MATERIALIZE}
+// Sum every served client JS file (loader + all chunks) — the whole split graph's bytes.
+async function graphBytes(url, ssr) {
+  const entry = ssr.match(/src="(\\/__abide\\/chunk\\/[^"]+\\.js)"/)[1];
+  const seen = new Set(); const queue = [entry]; let total = 0;
+  while (queue.length) { const u = queue.pop(); if (seen.has(u)) continue; seen.add(u);
+    const t = await (await fetch(url + u)).text(); total += t.length;
+    for (const m of t.matchAll(/\\/__abide\\/chunk\\/[^"'()\\s]+\\.js/g)) queue.push(m[0]); }
+  return total;
+}
 await Bun.write(${JSON.stringify(dir)} + "/src/ui/pages/page.abide", "<script>import { state } from 'abide/ui/state'; let count = state(0)</script><button onclick={() => count++}>Count: {count}</button>");
 await Bun.write(${JSON.stringify(dir)} + "/src/app.ts", "export const middleware = []\\n");
 const dev = await serve(${JSON.stringify(dir)}, { dev: true });
-const devBundle = await (await fetch(dev.url + "/__abide/client.js")).text();
+const devSsr = await (await fetch(dev.url + "/")).text();
+const devBytes = await graphBytes(dev.url, devSsr);
 await dev.stop();
 const prod = await serve(${JSON.stringify(dir)}, { dev: false });
 const ssr = await (await fetch(prod.url + "/")).text();
-const bundle = await (await fetch(prod.url + "/__abide/client.js")).text();
-await prod.stop();
-if (!(bundle.length < devBundle.length * 0.9)) { console.log("RESULT: not-minified prod=" + bundle.length + " dev=" + devBundle.length); process.exit(6); }
+const prodBytes = await graphBytes(prod.url, ssr);
+if (!(prodBytes < devBytes * 0.9)) { console.log("RESULT: not-minified prod=" + prodBytes + " dev=" + devBytes); await prod.stop(); process.exit(6); }
 const win = new Window({ url: prod.url + "/" });
 const g = globalThis;
 for (const k of ["window","document","location","navigator","history","Element","Node","Event","HTMLElement"]) g[k] = win[k] ?? g[k];
 g.window = win;
 win.document.body.innerHTML = (ssr.match(/<body>([\\s\\S]*)<\\/body>/) || [,ssr])[1];
 const serverBtn = win.document.body.querySelector("button");
-if (!serverBtn) { console.log("RESULT: no-server-dom"); process.exit(3); }
+if (!serverBtn) { console.log("RESULT: no-server-dom"); await prod.stop(); process.exit(3); }
 let threw = "";
-try { new Function(bundle + "\\n//# sourceURL=client.js")(); await new Promise(r=>setTimeout(r,50)); }
-catch (e) { threw = e.message; }
+try { await runBuiltClient(prod.url, ssr, ${JSON.stringify(dir)} + "/built"); }
+catch (e) { threw = e.message || String(e); }
+await prod.stop();
 if (threw) { console.log("THREW: " + threw); process.exit(1); }
 const sameNode = win.document.body.querySelector("button") === serverBtn;
 const before = (win.document.body.textContent.match(/Count:\\s*\\d+/)||[])[0];
@@ -112,7 +151,7 @@ if (before === "Count: 0" && after === "Count: 1") { console.log("RESULT: minifi
 console.log("RESULT: not-interactive before=" + before + " after=" + after); process.exit(2);
 `
 
-test('production (minified) client bundle is smaller AND still attach-hydrates + stays interactive', async () => {
+test('production (minified) client is smaller AND still attach-hydrates + stays interactive', async () => {
     const dir = `/tmp/abide-min-${crypto.randomUUID()}`
     const servePath = `${import.meta.dir}/../cli/serve.ts`
     const helperPath = `${dir}/run.ts`
@@ -134,18 +173,30 @@ test('production (minified) client bundle is smaller AND still attach-hydrates +
 // §5 hydration seed replay in a REAL browser env: an SSR'd `{await greet(...)}` records its value
 // into the seed, and the client replays it on hydration so the RPC is NOT re-fetched. The fetch spy
 // returns a distinct "REFETCHED" sentinel — if replay were broken the page would show that (or hang,
-// since the server is already stopped) and the rpc-call count would be non-zero.
+// since the server is already stopped) and the rpc-call count would be non-zero. (The client graph is
+// materialized BEFORE the fetch spy is installed, so fetching the chunks isn't miscounted as an RPC.)
 const SEED_HELPER = (dir: string, servePath: string, getPath: string) => `
 import { Window } from "happy-dom";
 import { serve } from ${JSON.stringify(servePath)};
+${MATERIALIZE}
 await Bun.write(${JSON.stringify(dir)} + "/src/server/rpc/greet.ts", "import { GET } from " + ${JSON.stringify(JSON.stringify(getPath))} + "\\nexport default GET(({ name }) => 'hi ' + name)\\n");
 await Bun.write(${JSON.stringify(dir)} + "/src/ui/pages/page.abide", "<script>import greet from '../../server/rpc/greet'</script><p>{await greet({name:'ada'})}</p>");
 await Bun.write(${JSON.stringify(dir)} + "/src/app.ts", "export const middleware = []\\n");
 const { url, stop } = await serve(${JSON.stringify(dir)}, { dev: true });
 const ssr = await (await fetch(url + "/")).text();
-const bundle = await (await fetch(url + "/__abide/client.js")).text();
+if (!ssr.includes("hi ada")) { console.log("RESULT: ssr-missing-value"); await stop(); process.exit(3); }
+// Pre-materialize the client graph to disk (real fetch) BEFORE installing the RPC fetch spy.
+const builtDir = ${JSON.stringify(dir)} + "/built";
+{
+  const entry = ssr.match(/src="(\\/__abide\\/chunk\\/[^"]+\\.js)"/)[1];
+  const seen = new Set(); const queue = [entry];
+  while (queue.length) { const u = queue.pop(); if (seen.has(u)) continue; seen.add(u);
+    const t = await (await fetch(url + u)).text();
+    for (const m of t.matchAll(/\\/__abide\\/chunk\\/[^"'()\\s]+\\.js/g)) queue.push(m[0]);
+    await Bun.write(builtDir + "/" + u.split("/").pop(), t.replaceAll("/__abide/chunk/", "./")); }
+  globalThis.__abideLoader = builtDir + "/" + entry.split("/").pop();
+}
 await stop();
-if (!ssr.includes("hi ada")) { console.log("RESULT: ssr-missing-value"); process.exit(3); }
 const win = new Window({ url: url + "/" });
 const g = globalThis;
 for (const k of ["window","document","location","navigator","history","Element","Node","Event","HTMLElement"]) g[k] = win[k] ?? g[k];
@@ -155,8 +206,8 @@ let rpcCalls = 0;
 g.fetch = (u, ...a) => { if (String(u).includes("/rpc/")) { rpcCalls++; return Promise.resolve(new Response('"REFETCHED"', { status: 200, headers: { "content-type": "application/json" } })); } return Promise.reject(new Error("unexpected fetch " + u)); };
 win.document.body.innerHTML = (ssr.match(/<body>([\\s\\S]*)<\\/body>/) || [,ssr])[1];
 let threw = "";
-try { new Function(bundle + "\\n//# sourceURL=client.js")(); await new Promise(r=>setTimeout(r,50)); }
-catch (e) { threw = e.message; }
+try { await import(globalThis.__abideLoader); await new Promise(r=>setTimeout(r,60)); }
+catch (e) { threw = e.message || String(e); }
 if (threw) { console.log("THREW: " + threw); process.exit(1); }
 const text = win.document.body.textContent;
 if (rpcCalls === 0 && text.includes("hi ada") && !text.includes("REFETCHED")) { console.log("RESULT: replayed"); process.exit(0); }

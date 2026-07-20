@@ -1,0 +1,23 @@
+<script>
+  import { state } from "abide/ui/state"
+  import platformLog from "../../../server/rpc/platformLog"
+
+  // `log()` writes on the server; the browser can't see those lines. This RPC logs server-side (an
+  // info line on the `docs` channel + a warn line) and returns the fact that it logged, which is what
+  // the card renders. The actual output lands on the server console.
+  let logResult = state(null)
+
+  async function runLog() {
+    // The bare call `fn(args)` is the read — awaits the value (Promise<T>).
+    logResult = await platformLog({ message: "from the observability card" })
+  }
+</script>
+
+<button id="log-btn" onclick={runLog}>Call the logging RPC</button>
+{#if logResult}
+  <pre class="out" id="log-block">logged = {logResult.logged ? "true" : "false"}
+channel = {logResult.channel}
+levels = {logResult.levels.join(", ")}</pre>
+{:else}
+  <p id="log-block">not called yet</p>
+{/if}

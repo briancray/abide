@@ -1,9 +1,7 @@
 <script module>
-  import Sample from "../../components/Sample.abide"
-  import { route } from "abide/shared/route"
-
-  const PAGE = "src/ui/pages/routing/page.abide"
-  const topics = ["isomorphism", "cells", "hello"]
+  import Demo from "../../components/Demo.abide"
+  import RouteInfoDemo from "../../demos/routing/RouteInfoDemo.abide"
+  import ParamLinksDemo from "../../demos/routing/ParamLinksDemo.abide"
 </script>
 
 
@@ -11,20 +9,12 @@
   <h1>File-based routing</h1>
   <p class="lead">Pages are files. A folder chain is the URL. <code>src/ui/pages/routing/page.abide</code> is this page at <code>/routing</code>; <code>src/ui/pages/topics/[slug]/page.abide</code> is a dynamic route where <code>[slug]</code> captures a path segment into <code>route().params.slug</code>.</p>
 
-  <Sample page={PAGE} id="route-info" title="Current route" client="route-info">
-    <!-- #demo route-info -->
-    <p>The current route name is <code>{route().name}</code> and its kind is <code>{route().kind}</code>.</p>
-    <!-- #enddemo -->
-  </Sample>
+  <Demo id="route-info" title="Current route" client="src/ui/demos/routing/RouteInfoDemo.abide">
+    <RouteInfoDemo />
+  </Demo>
 
-  <Sample page={PAGE} id="param-links" title="Param routes — <code>[slug]</code>" client="param-links">
-    <p>Each link resolves the same <code>[slug]</code> page with a different captured value:</p>
-    <!-- #demo param-links -->
-    <ul class="topics">
-      {#for topic of topics}
-        <li><a href={"/topics/" + topic}>/topics/{topic}</a></li>
-      {/for}
-    </ul>
-    <!-- #enddemo -->
-  </Sample>
+  <p>Each link resolves the same <code>[slug]</code> page with a different captured value:</p>
+  <Demo id="param-links" title="Param routes — <code>[slug]</code>" client="src/ui/demos/routing/ParamLinksDemo.abide">
+    <ParamLinksDemo />
+  </Demo>
 </main>

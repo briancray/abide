@@ -1,0 +1,13 @@
+<script>
+  import rpcGreet from "../../../server/rpc/rpcGreet"
+
+  // A bare return is serialized as JSON by the router (auto-wrapped in `json`). The read blocks SSR,
+  // so the value is already sitting in the initial HTML — no client round-trip.
+</script>
+
+{#await rpcGreet({ name: "json" })}
+  <p>reading…</p>
+{:then value}
+  <pre class="out" data-testid="json-result">greeting: {value.greeting}
+length: {value.length}</pre>
+{/await}

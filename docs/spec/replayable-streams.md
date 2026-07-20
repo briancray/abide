@@ -212,15 +212,18 @@ reactively re-mountable (§5).
 change the cache/stream semantics: `json(x)` caches/seeds exactly like returning `x`, and `jsonl(gen())`
 is replayable exactly like returning `gen()`. So each helper **tags** its `Response` with the
 pre-encoding payload (`responseSource.ts`) and carries the payload TYPE in its return
-(`json(): TypedResponse<T>`, `jsonl(): StreamResponse<C>`); the cell reads the tag and taps the source,
-and `ReadSurface`/`Payload` unwrap the brand so `GET(() => json(x))` infers `Rpc<Args, typeof x>` and
-`GET(() => jsonl(gen()))` infers `StreamRead<Args, C>` — identical to the raw forms, at author time and
-at runtime (verified by type-probe + HTTP tests). Two requirements this exposed: (a) `jsonl` is now
-**lazy** (pull-based, `highWaterMark: 0`) so a Response the cell sees through and discards unread never
-drains its source (eager consumption would double-consume the one generator); (b) `fn.raw` still returns
-the real encoded `Response` (tag/init intact). **`sse` is not yet see-through** — it stays an opaque
-`Response` (eager, heartbeat-driven, battle-tested for long-lived socket faces); making `GET(() =>
-sse(gen()))` replayable needs a lazy `sse`, a deferred follow-up.
+(`json(): TypedResponse<T>`, `jsonl()`/`sse(): StreamResponse<C>`); the cell reads the tag and taps the
+source, and `ReadSurface`/`Payload` unwrap the brand so `GET(() => json(x))` infers `Rpc<Args, typeof x>`
+and `GET(() => jsonl(gen()))` / `GET(() => sse(gen()))` infer `StreamRead<Args, C>` — identical to the raw
+forms, at author time and at runtime (verified by type-probe + HTTP tests). Two requirements this exposed:
+(a) `jsonl` **and `sse`** are now **lazy** (pull-based, `highWaterMark: 0`) so a Response the cell sees
+through and discards unread never drains its source (eager consumption would double-consume the one
+generator); (b) `fn.raw` still returns the real encoded `Response` (tag/init intact). **`sse` is now
+see-through too (built).** The lazy `sse` tags its source like `jsonl` and **defers its `:ok` prelude +
+idle heartbeat to the FIRST real read**, so a discarded see-through body never opens (no timer leak) while
+the long-lived socket HTTP faces — `router.ts` `sse(sock)`, consumed WS-less by CLI/MCP — keep their
+live-tail behaviour (onopen on connect, idle keep-alive). This makes `sse` fully isomorphic
+(SSR-block/seed/`?from=` resume), on par with `jsonl`.
 
 **Data structure** (lives in the slot; one instance per `(fn, args)`):
 
@@ -248,6 +251,18 @@ concurrent/late callers each `.then` into their own cursor over the one shared b
 handler is detected by its result being an `AsyncIterable` that is **not** a `Response`/`ReadableStream`
 (those stay opaque byte bodies / `cache: false`), so existing value and `jsonl`/`sse` reads are
 untouched.
+
+**Client-side consumption (built).** In the browser the RPC proxy (`clientProxy.ts`) reaches the handler
+over HTTP; a streaming read's response (`application/jsonl` / `text/event-stream`) is decoded by
+content-type (`shared/internal/decodeStreamResponse.ts` — the inverse of the `jsonl`/`sse` encoders, an
+async generator that cancels its reader on early exit) into an `AsyncIterable` of chunks, which the SAME
+`cell` routes to a `ReplayableStream` slot. So a browser `{#for await x of rpc()}` — including a client
+re-run of a known-RPC source with no SSR seed (the `{#if}`-gated / interaction-triggered case) — consumes
+a stream identically to SSR, with `peek`/`chunks`/`done`/`resumeStream` all live client-side, and
+`.refresh()` restarts it. The client `{#for await}` **awaits the read first** (a streaming read is
+`Promise<AsyncIterable>`; a plain async-generator source is unaffected — awaiting a non-thenable is
+identity). `sse` is additionally consumable via the native **`EventSource`** DOM API, same frames on the
+wire.
 
 **Streaming read surface + reactive peek (typed, built).** `GET`/`HEAD` return a **conditional** type:
 a handler yielding `AsyncIterable<C>` produces a `StreamRead<Args, C>`, a value handler the usual
@@ -380,8 +395,10 @@ Two handoff modes, keyed on stream state at flush:
 - **(B) Open-at-flush** (SSR flushed a partial or was cut off by the budget): the seed carries a **slot
   handle** `(name, args, count, done: false)`. The client adopts the flushed values as a frozen prefix,
   then **resumes over a resumable HTTP replay** — `GET /rpc/<name>?args=<json>&from=<count>` returns a
-  `jsonl`/`sse` stream that synchronously replays `chunks[count..]` then continues live until close (one
-  deterministic stream, no lost window; reuses the initial streaming HTTP transport of rpc-core §5.5).
+  stream **re-encoded in the handler's original encoding** (`jsonl` resumes as `jsonl`, `sse` as `sse` —
+  the retained cursor carries its `tagStreamEncoding`, and the router mirrors the fresh-run encode) that
+  synchronously replays `chunks[count..]` then continues live until close (one deterministic stream, no
+  lost window; reuses the initial streaming HTTP transport of rpc-core §5.5).
   **The `@rpc:` cache mux is never the chunk path** — it carries only verb frames.
 
 Mode (B) requires the slot (and its still-running source) to **outlive the SSR request**, which only the

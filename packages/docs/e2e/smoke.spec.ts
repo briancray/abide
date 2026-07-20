@@ -13,10 +13,12 @@ test('home page loads with the abide heading and capability nav', async ({ page 
     await expect(sidebar.getByRole('link', { name: 'Home' })).toBeVisible()
     await expect(sidebar.getByRole('link', { name: 'State & computed' })).toBeVisible()
     await expect(sidebar.getByRole('link', { name: 'Cache verbs' })).toBeVisible()
-    await expect(sidebar.getByRole('link', { name: 'Agents & MCP' })).toBeVisible()
+    await expect(sidebar.getByRole('link', { name: 'Beyond the browser' })).toBeVisible()
 
-    // The capability cards are rendered from the `capabilities` RPC.
-    await expect(page.getByRole('link', { name: 'Isomorphic RPC' })).toBeVisible()
+    // The capability cards (in the page content) are rendered from the `capabilities` RPC.
+    await expect(
+        page.locator('.content').getByRole('link', { name: 'Isomorphic RPC' }),
+    ).toBeVisible()
 })
 
 test('reactivity counter increments in the live DOM after hydration', async ({ page }) => {
@@ -58,7 +60,7 @@ test('clicking an in-app nav link soft-navigates without a full page reload', as
     await page.locator('aside.sidebar').getByRole('link', { name: 'State & computed' }).click()
 
     await expect(page).toHaveURL(/\/reactivity$/)
-    await expect(page.locator('h1')).toHaveText('Reactivity')
+    await expect(page.locator('h1')).toHaveText('State & computed')
 
     const survived = await page.evaluate(
         () => (window as unknown as { __abideNoReload?: boolean }).__abideNoReload === true,

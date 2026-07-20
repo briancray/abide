@@ -28,8 +28,8 @@ import { url } from '../../shared/url.ts'
 import { disposeActive, handlePopState, isKnownPage, mountPathname, navigate } from '../navigate.ts'
 import { watch } from '../watch.ts'
 import { makeClientImports } from './clientProxy.ts'
-import { type PageEntry, type PageMount, type RpcSpecs, registerPages } from './pageRegistry.ts'
-import { beginStreamHandoff, endStreamHandoff } from './runtime.ts'
+import { type PageLoader, type PageMount, type RpcSpecs, registerPages } from './pageRegistry.ts'
+import { beginStreamHandoff, endStreamHandoff, isHydrating } from './runtime.ts'
 import { makeSeededState } from './seededState.ts'
 
 const CONTAINER_ID = '__abide-app'
@@ -105,7 +105,7 @@ export function bootstrapPage(
     // ordinal counter is created here, so it resets per mount and consumes `seed.states` in call order.
     const scope: Record<string, unknown> = {
         ...imports,
-        state: makeSeededState(seed),
+        state: makeSeededState(seed, isHydrating),
         watch,
         props: () => props,
     }
@@ -169,13 +169,16 @@ function onDocumentClick(event: MouseEvent): void {
 // back/forward (popstate) handler so in-app navigation stays a soft-nav. Returns a cleanup that
 // removes the listeners. A no-op outside the browser.
 export function bootstrapApp(
-    pages: Record<string, PageEntry>,
+    loaders: Record<string, PageLoader>,
     rpcSpecs: RpcSpecs,
     base?: string,
 ): () => void {
     if (typeof document === 'undefined') return () => {}
-    registerPages(pages, rpcSpecs, base)
-    mountPathname(location.pathname)
+    registerPages(loaders, rpcSpecs, base)
+    // `mountPathname` is async now (it imports the current route's code-split chunk); the SSR HTML is
+    // already visible, so hydration completes a tick later once the chunk loads. A load failure leaves
+    // the page as server-rendered (non-interactive) — graceful degradation, no reload loop.
+    void mountPathname(location.pathname + location.search)
     // Bare (window-level) listeners: click for link interception, popstate for back/forward.
     addEventListener('click', onDocumentClick as EventListener)
     addEventListener('popstate', handlePopState)

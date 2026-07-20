@@ -8,10 +8,17 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { clearClientRoute, setClientRoute } from '../shared/internal/routeHolder.ts'
 import { route } from '../shared/route.ts'
+import { url } from '../shared/url.ts'
 import { bootstrapApp } from './internal/bootstrap.ts'
 import { loadEmitted } from './internal/emit.ts'
-import type { PageEntry } from './internal/pageRegistry.ts'
+import type { PageEntry, PageLoader } from './internal/pageRegistry.ts'
 import { mountPathname, navigate } from './navigate.ts'
+
+// Wrap a resolved page entry as a code-split LOADER (what the client bundle registers now — TODO #6).
+// Promise.resolve stands in for the chunk import; a mount is thus one microtask late (poll for it).
+function loaderFor(entry: PageEntry): PageLoader {
+    return () => Promise.resolve({ default: entry })
+}
 
 // The two-page (+ param) app: source keyed by route pattern, exactly like the client bundle ships one
 // AOT-emitted `mount` per pattern.
@@ -20,8 +27,9 @@ const ABOUT_SOURCE = '<h2>About page</h2>'
 const USER_SOURCE =
     "<script>import { route } from 'abide/shared/route'</script><span>user {route().params.id}</span>"
 
-// Populated in beforeEach (emit is async — it instantiates each page's client module once).
-let PAGES: Record<string, PageEntry>
+// Populated in beforeEach (emit is async — it instantiates each page's client module once). Keyed by
+// route pattern → a code-split LOADER, exactly like the client bundle entry registers now.
+let PAGES: Record<string, PageLoader>
 
 // The inner HTML the server soft-nav envelope carries per path. PR7: the client now HYDRATES (claims)
 // this HTML in place rather than fresh-mounting over it, so it must be the REAL anchored SSR output of
@@ -52,9 +60,9 @@ beforeEach(async () => {
     const about = await loadEmitted(ABOUT_SOURCE)
     const user = await loadEmitted(USER_SOURCE)
     PAGES = {
-        '/': { mount: home.mount, hydrate: home.hydrate },
-        '/about': { mount: about.mount, hydrate: about.hydrate },
-        '/users/[id]': { mount: user.mount, hydrate: user.hydrate },
+        '/': loaderFor({ mount: home.mount, hydrate: home.hydrate }),
+        '/about': loaderFor({ mount: about.mount, hydrate: about.hydrate }),
+        '/users/[id]': loaderFor({ mount: user.mount, hydrate: user.hydrate }),
     }
 
     // happy-dom defaults to about:blank (null origin); give it a real URL so location behaves like a
@@ -95,10 +103,11 @@ beforeEach(async () => {
                   : (input as Request).url
         const nav = new Headers(init?.headers).get('Abide-Nav')
         fetchCalls.push({ url, nav })
-        const pathname = new URL(url, location.origin).pathname
-        const html = ENVELOPE_HTML[pathname] ?? '<p>missing</p>'
+        const parsed = new URL(url, location.origin)
+        const html = ENVELOPE_HTML[parsed.pathname] ?? '<p>missing</p>'
         // The streamed soft-nav body (PR4): a JSONL frame stream — a `shell` frame then a `seed` frame.
-        const body = `${JSON.stringify({ kind: 'shell', html, url: pathname })}\n${JSON.stringify({ kind: 'seed', seed: {} })}\n`
+        // The real server sends pathname + search as the shell `url` so route().url keeps the query.
+        const body = `${JSON.stringify({ kind: 'shell', html, url: parsed.pathname + parsed.search })}\n${JSON.stringify({ kind: 'seed', seed: {} })}\n`
         return new Response(body, { headers: { 'content-type': 'application/jsonl' } })
     }) as typeof globalThis.fetch
 
@@ -110,6 +119,12 @@ beforeEach(async () => {
     } as typeof history.pushState
 
     cleanupApp = bootstrapApp(PAGES, {})
+    // The first-load mount is async now (it imports the current route's chunk — here a Promise.resolve),
+    // so poll until the home page has hydrated into the container before the tests run.
+    for (let i = 0; i < 50; i++) {
+        if ((container().textContent ?? '').includes('Home page')) break
+        await tick()
+    }
 })
 
 afterEach(() => {
@@ -190,7 +205,7 @@ test('soft-nav HYDRATES (claims) the swapped destination DOM in place — not a 
     const serverSpan = c.querySelector('span')
     if (!serverSpan) throw new Error('expected a <span> in the swapped SSR')
 
-    const hydrated = mountPathname('/users/42')
+    const hydrated = await mountPathname('/users/42')
     expect(hydrated).toBe(true)
 
     // Attach proof: the destination span is the SAME node the innerHTML swap produced (claimed, not
@@ -209,6 +224,24 @@ test('param navigation updates route().params', async () => {
     expect(container().textContent).toContain('user 42')
 })
 
+test('navigate(url(...)) composes an href from typed params', async () => {
+    await navigate(url('/users/[id]', { id: 42 }))
+
+    expect(location.pathname).toBe('/users/42')
+    expect(route().params.id).toBe('42')
+    expect(container().textContent).toContain('user 42')
+})
+
+test('navigate(url(...query)) carries the query into the address and route().url', async () => {
+    await navigate(url('/users/[id]', { id: 42 }, { tab: 'posts', page: 2 }))
+
+    expect(location.pathname + location.search).toBe('/users/42?tab=posts&page=2')
+    expect(route().params.id).toBe('42')
+    // The query survives the soft-nav round-trip into the reactive route.
+    expect(route().url.search).toBe('?tab=posts&page=2')
+    expect(container().textContent).toContain('user 42')
+})
+
 import { registerPages } from './internal/pageRegistry.ts'
 import { isKnownPage } from './navigate.ts'
 
@@ -216,9 +249,9 @@ test('isKnownPage: only real page patterns are soft-nav targets (not /openapi.js
     const stub = (): (() => void) => () => {}
     registerPages(
         {
-            '/': { mount: stub, hydrate: stub },
-            '/machines': { mount: stub, hydrate: stub },
-            '/topics/[slug]': { mount: stub, hydrate: stub },
+            '/': loaderFor({ mount: stub, hydrate: stub }),
+            '/machines': loaderFor({ mount: stub, hydrate: stub }),
+            '/topics/[slug]': loaderFor({ mount: stub, hydrate: stub }),
         },
         {},
     )

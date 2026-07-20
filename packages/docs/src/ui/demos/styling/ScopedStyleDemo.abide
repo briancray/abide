@@ -1,0 +1,9 @@
+<p data-testid="scoped-swatch" class="swatch">styled by this component's scoped &lt;style&gt;</p>
+<p data-testid="scoped-plain">a plain paragraph — the same rule does not reach the page chrome</p>
+
+<style>
+  .swatch {
+    color: rgb(16, 185, 129);
+    font-weight: 700;
+  }
+</style>

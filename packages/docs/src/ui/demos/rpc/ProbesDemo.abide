@@ -1,0 +1,15 @@
+<script>
+  import rpcGreet from "../../../server/rpc/rpcGreet"
+
+  // The reactive probes used directly in the template. `fn.peek(args)` kicks the load and snapshots
+  // the value; `fn.pending(args)` and `fn.error(args)` report that same slot's live state as it resolves.
+</script>
+
+{#if rpcGreet.pending({ name: "probe" })}
+  <p data-testid="probe-pending">pending…</p>
+{:else if rpcGreet.error({ name: "probe" })}
+  <p class="err" data-testid="probe-error">error: {(rpcGreet.error({ name: "probe" }) as Error).message}</p>
+{:else}
+  <p class="say" data-testid="probe-value">{rpcGreet.peek({ name: "probe" })?.greeting}</p>
+{/if}
+<p>pending: <strong data-testid="probe-pending-flag">{String(rpcGreet.pending({ name: "probe" }))}</strong> · error: <strong data-testid="probe-error-flag">{(rpcGreet.error({ name: "probe" }) as Error | undefined)?.message ?? "none"}</strong></p>

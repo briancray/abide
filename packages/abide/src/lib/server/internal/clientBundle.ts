@@ -17,12 +17,16 @@
 //
 // The build is cached per config (a config's pages + routes are fixed for the app's lifetime).
 //
-// Deferred: per-route code-splitting (one bundle per page) and minification/hashing — BP1 ships a
-// single non-minified bundle for the whole app for now.
+// CODE-SPLITTING (TODO #6): the loader entry registers a per-pattern LAZY loader `() => import(chain)`
+// instead of statically importing every page. `Bun.build({ splitting: true })` turns each dynamic
+// import into its own content-hashed chunk and factors the shared runtime + shared layouts/components
+// into shared chunks. First load fetches only the matched route's chunk (+ the shared runtime); a
+// soft-nav to an unvisited route lazily imports its chunk. Every output filename embeds a content hash
+// (`[hash]` in `naming`) and is served immutable under `/__abide/chunk/` (`publicPath`).
 
-import { unlink } from 'node:fs/promises'
+import { mkdir, rm, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import type { BunPlugin } from 'bun'
 import { analyzeScope, type ScopeAnalysis } from '../../ui/internal/analyzeScope.ts'
 import { emitModuleSource } from '../../ui/internal/emit.ts'
@@ -44,15 +48,21 @@ const COMPOSE_PATH = join(import.meta.dir, '../../ui/internal/compose.ts')
 // the package) still resolve the runtime — without polluting the source tree or the dev watcher.
 const RUNTIME_PATH = join(import.meta.dir, '../../ui/internal/runtime.ts')
 
-// The built client artifacts: the browser JS bundle and the concatenated CSS (imported `.css`, with
-// Tailwind utilities processed when the plugin is available). Cached together per config.
-interface ClientArtifacts {
-    js: string
-    css: string
+// The built client: a content-addressed set of ES module files (the loader entry + code-split
+// per-route chunks + Bun's shared chunks) plus the concatenated CSS, all served under `/__abide/chunk/`
+// with immutable caching (each filename embeds a content hash). `entry` is the loader's hashed filename
+// the SSR document boots from; `cssFile` is the stylesheet's hashed filename (undefined when the app
+// bundles no CSS). Cached per config — an app's pages/routes are fixed for its lifetime.
+export interface ClientBuild {
+    entry: string
+    cssFile: string | undefined
+    files: Map<string, string>
+    // Route pattern → its code-split chunk filename, for `<link rel="modulepreload">` of the matched
+    // route's chunk (eliminates the first-load loader→dynamic-import waterfall).
+    chunkByPattern: Map<string, string>
 }
 
-// Cache the built artifacts per config object — an app's pages/routes are fixed for its lifetime.
-const BUNDLE_CACHE = new WeakMap<AppConfig, Promise<ClientArtifacts>>()
+const BUNDLE_CACHE = new WeakMap<AppConfig, Promise<ClientBuild>>()
 
 // Build the RPC specs map (name → { method, read }) the client proxies need. TREE-SHAKING: only the
 // RPCs some page actually IMPORTS (by local name matching a route name) are emitted; un-imported RPCs
@@ -230,32 +240,50 @@ async function emitModules(
     return { modules, chains }
 }
 
-// Generate the entry module source: import `bootstrapApp` + `compose` + each unique module's
-// `mount`+`hydrate`, then register per-pattern composed page entries (a page wrapped in its layouts,
-// outer→inner) and the tree-shaken RPC specs, then bootstrap the app. Keying by pattern lets `[name]`
-// param routes resolve on first load and every soft-nav (matchRoute).
-function entrySource(modules: EmittedModule[], chains: PageChain[], specsJson: string): string {
-    let imports = `import { bootstrapApp } from ${JSON.stringify(BOOTSTRAP_PATH)};\n`
-    imports += `import { compose } from ${JSON.stringify(COMPOSE_PATH)};\n`
-    let moduleList = ''
-    for (const [i, module] of modules.entries()) {
-        // Import BOTH the clone `mount` and the attach `hydrate` each emitted module exports. First load
-        // and soft-nav go through the composed `hydrate` (bootstrapPage); layers below the root mount via
-        // `mount` (positioned by their enclosing `{children()}` component slot).
-        imports += `import { mount as $m${i}, hydrate as $h${i} } from ${JSON.stringify(module.file)};\n`
-        moduleList += `${moduleList === '' ? '' : ', '}{ mount: $m${i}, hydrate: $h${i} }`
+// A filesystem-safe `[name]` for a route pattern's code-split chunk, so the emitted file is human-
+// recognisable (`chain-2-users-id-<hash>.js`). The chain INDEX prefix guarantees uniqueness even when
+// two patterns slugify to the same string (`/a-b` vs `/a/b`).
+function chainSlug(pattern: string, index: number): string {
+    const body = pattern
+        .replace(/^\//, '')
+        .replace(/[[\]]/g, '')
+        .replace(/[^a-zA-Z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+    return `chain-${index}-${body === '' ? 'index' : body}`
+}
+
+// Generate one page CHAIN module (its own dynamic-import boundary → its own code-split chunk): import
+// `compose` + this page's `mount`+`hydrate` and its layouts', then default-export the composed
+// (outer→inner) level. `compose` runs INSIDE the chunk so a page's layout modules load with it. Bun's
+// splitting factors `compose`/the runtime/shared layouts+components into shared chunks across pages.
+function chainSource(chain: PageChain, modules: EmittedModule[]): string {
+    let imports = `import { compose } from ${JSON.stringify(COMPOSE_PATH)};\n`
+    const levels: string[] = []
+    for (const [n, index] of chain.indices.entries()) {
+        const module = modules[index]
+        if (module === undefined) throw new Error(`clientBundle: no module at index ${index}`)
+        // Import BOTH the clone `mount` and the attach `hydrate` each emitted module exports (first load
+        // + soft-nav go through `hydrate`; nested layers mount via `mount` from their `{children()}` slot).
+        imports += `import { mount as $m${n}, hydrate as $h${n} } from ${JSON.stringify(module.file)};\n`
+        levels.push(`{ mount: $m${n}, hydrate: $h${n} }`)
     }
+    return `${imports}export default compose([${levels.join(', ')}]);\n`
+}
+
+// Generate the loader ENTRY: register a per-pattern LAZY loader (`() => import("<chain>")` — Bun
+// rewrites each specifier to its content-hashed chunk URL under `publicPath`), plus the tree-shaken
+// RPC specs, then bootstrap the app. Keying by pattern lets `[name]` param routes resolve on first
+// load and every soft-nav (matchRoute). Only the matched route's chunk is fetched — the rest stay lazy.
+function loaderSource(loaders: { pattern: string; file: string }[], specsJson: string): string {
     let entries = ''
-    for (const chain of chains) {
-        const levels = chain.indices.map((i) => `$MODULES[${i}]`).join(', ')
-        entries += `${entries === '' ? '' : ', '}${JSON.stringify(chain.pattern)}: compose([${levels}])`
+    for (const { pattern, file } of loaders) {
+        entries += `${entries === '' ? '' : ', '}${JSON.stringify(pattern)}: () => import(${JSON.stringify(file)})`
     }
     return (
-        imports +
-        `const $MODULES = [ ${moduleList} ];\n` +
-        `const PAGES = { ${entries} };\n` +
+        `import { bootstrapApp } from ${JSON.stringify(BOOTSTRAP_PATH)};\n` +
+        `const LOADERS = { ${entries} };\n` +
         `const RPC_SPECS = ${specsJson};\n` +
-        `bootstrapApp(PAGES, RPC_SPECS);\n`
+        `bootstrapApp(LOADERS, RPC_SPECS);\n`
     )
 }
 
@@ -275,47 +303,97 @@ function loadTailwindPlugin(): Promise<BunPlugin | null> {
     return tailwindPluginPromise
 }
 
-async function build(config: AppConfig): Promise<ClientArtifacts> {
+async function build(config: AppConfig): Promise<ClientBuild> {
     const { modules, chains } = await emitModules(config)
     const importedNames = new Set<string>()
     for (const mod of modules) for (const local of mod.locals) importedNames.add(local)
     const specsJson = JSON.stringify(rpcSpecs(config, importedNames))
 
-    const entryPath = join(tmpdir(), `abide-client-${Bun.randomUUIDv7()}.ts`)
-    await Bun.write(entryPath, entrySource(modules, chains, specsJson))
+    // Chain modules + the loader entry live in one per-build temp dir so their basenames (`[name]` in
+    // the chunk filenames) can be clean + deterministic without a UUID in the served chunk name.
+    const buildDir = join(tmpdir(), `abide-build-${Bun.randomUUIDv7()}`)
+    await mkdir(buildDir, { recursive: true })
+    const loaders: { pattern: string; file: string }[] = []
+    const chainSlugs: { pattern: string; slug: string }[] = []
+    for (const [i, chain] of chains.entries()) {
+        const slug = chainSlug(chain.pattern, i)
+        const file = join(buildDir, `${slug}.ts`)
+        await Bun.write(file, chainSource(chain, modules))
+        loaders.push({ pattern: chain.pattern, file })
+        chainSlugs.push({ pattern: chain.pattern, slug })
+    }
+    const loaderPath = join(buildDir, 'loader.ts')
+    await Bun.write(loaderPath, loaderSource(loaders, specsJson))
+
     try {
         const tailwind = await loadTailwindPlugin()
         // Minify only for an explicit production build (`abide build`/`abide start` set `config.dev =
         // false`). Dev and tests leave `dev` undefined → unminified for fast rebuilds + readable output
-        // and stable in-bundle assertions (TODO #6). Per-route splitting/hashing is still deferred.
+        // and stable in-bundle assertions. `splitting: true` code-splits each page's chain into its own
+        // content-hashed chunk (dynamic-import boundary) + factors the shared runtime into shared chunks;
+        // `publicPath` prefixes every chunk URL (static + dynamic) so the router serves them under
+        // `/__abide/chunk/`; the `[hash]` in `naming` makes every file content-addressed + immutable.
         const result = await Bun.build({
-            entrypoints: [entryPath],
+            entrypoints: [loaderPath],
             target: 'browser',
+            splitting: true,
             minify: config.dev === false,
+            publicPath: '/__abide/chunk/',
+            naming: {
+                entry: '[name]-[hash].[ext]',
+                chunk: '[name]-[hash].[ext]',
+                asset: '[name]-[hash].[ext]',
+            },
             plugins: tailwind !== null ? [tailwind] : [],
         })
         if (!result.success) {
             const messages = result.logs.map((log) => String(log)).join('\n')
             throw new Error(`abide: client bundle build failed:\n${messages}`)
         }
-        // The JS entry output is the `.js`; any imported CSS (including Tailwind-processed utilities) is
-        // emitted as separate `.css` asset outputs — concatenate them all into one served stylesheet.
-        let js = ''
-        let css = ''
+        // Every `.js` output (loader entry + per-route chunks + shared chunks) is served by filename; any
+        // imported CSS (incl. Tailwind-processed utilities) is emitted as separate `.css` asset outputs —
+        // concatenated (sorted by path for a stable content hash) into ONE served, hashed stylesheet.
+        const files = new Map<string, string>()
+        const cssParts: { path: string; text: string }[] = []
+        let entry = ''
         for (const output of result.outputs) {
-            if (output.path.endsWith('.css')) css += await output.text()
-            else if (output.kind === 'entry-point' || (js === '' && !output.path.endsWith('.css')))
-                js = await output.text()
+            const name = basename(output.path)
+            if (output.path.endsWith('.css')) {
+                cssParts.push({ path: output.path, text: await output.text() })
+                continue
+            }
+            files.set(name, await output.text())
+            if (output.kind === 'entry-point') entry = name
         }
-        if (js === '') throw new Error('abide: client bundle produced no JS output.')
-        return { js, css }
+        if (entry === '') throw new Error('abide: client bundle produced no entry output.')
+        cssParts.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
+        const css = cssParts.map((part) => part.text).join('')
+        let cssFile: string | undefined
+        if (css !== '') {
+            const hash = new Bun.CryptoHasher('sha256').update(css).digest('hex').slice(0, 16)
+            cssFile = `style-${hash}.css`
+            files.set(cssFile, css)
+        }
+        // Map each route pattern → its code-split chunk filename (via the chain's unique index-prefixed
+        // slug), so the SSR document can `<link rel="modulepreload">` the matched route's chunk and load
+        // it in parallel with the loader — eliminating the loader→dynamic-import waterfall on first load.
+        const chunkByPattern = new Map<string, string>()
+        const names = [...files.keys()]
+        for (const { pattern, slug } of chainSlugs) {
+            const escaped = slug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+            const re = new RegExp(`^${escaped}-[0-9a-z]+\\.js$`)
+            const match = names.find((name) => re.test(name))
+            if (match !== undefined) chunkByPattern.set(pattern, match)
+        }
+        return { entry, cssFile, files, chunkByPattern }
     } finally {
-        await unlink(entryPath).catch(() => {})
+        await rm(buildDir, { recursive: true, force: true }).catch(() => {})
         for (const mod of modules) await unlink(mod.file).catch(() => {})
     }
 }
 
-function buildArtifacts(config: AppConfig): Promise<ClientArtifacts> {
+// The content-addressed client build (loader entry + per-route chunks + CSS), cached per config.
+export function buildClient(config: AppConfig): Promise<ClientBuild> {
     let cached = BUNDLE_CACHE.get(config)
     if (cached === undefined) {
         cached = build(config)
@@ -324,20 +402,45 @@ function buildArtifacts(config: AppConfig): Promise<ClientArtifacts> {
     return cached
 }
 
-// The browser JS bundle for the app's pages (served at `/__abide/client.js`).
-export async function buildClientBundle(config: AppConfig): Promise<string> {
-    return (await buildArtifacts(config)).js
+// The client build the router serves: a PRE-BUILT one loaded from `dist` (production `abide start` sets
+// `config.clientBuild`) when present, else built in-memory (dev/test/first use). Keeps the router blind
+// to which path produced it — same `ClientBuild` shape either way.
+export function clientBuildFor(config: AppConfig): Promise<ClientBuild> {
+    return config.clientBuild !== undefined
+        ? Promise.resolve(config.clientBuild)
+        : buildClient(config)
 }
 
-// The bundled CSS for the app's pages (imported `.css` + processed Tailwind utilities), served at
-// `/__abide/client.css`. Empty string when no page imports any CSS.
-export async function buildClientCss(config: AppConfig): Promise<string> {
-    return (await buildArtifacts(config)).css
+// Load a pre-built client from `dist/_app/<hash>/` (written by `abide build`) via the stable
+// `dist/manifest.json` pointer, so `abide start` serves the exact build output with NO bundler at boot.
+// Returns undefined when no build is present (the caller builds instead). Every file is read into memory
+// once at boot and served from the same `files` map the in-memory build uses.
+export async function loadClientBuild(dir: string): Promise<ClientBuild | undefined> {
+    const manifestFile = Bun.file(join(dir, 'dist', 'manifest.json'))
+    if (!(await manifestFile.exists())) return undefined
+    const manifest = (await manifestFile.json()) as {
+        hash: string
+        entry: string
+        css: string | null
+        files: string[]
+        chunkByPattern: Record<string, string>
+    }
+    const buildDir = join(dir, 'dist', '_app', manifest.hash)
+    const files = new Map<string, string>()
+    for (const name of manifest.files) {
+        files.set(name, await Bun.file(join(buildDir, name)).text())
+    }
+    return {
+        entry: manifest.entry,
+        cssFile: manifest.css ?? undefined,
+        files,
+        chunkByPattern: new Map(Object.entries(manifest.chunkByPattern)),
+    }
 }
 
-// Drop the cached bundle for a config so the next `buildClientBundle`/`buildClientCss` rebuilds it.
-// The dev watcher calls this after a source change (the config object is mutated in place across
-// reloads, so the WeakMap key stays the same and the stale bundle must be evicted explicitly — BP2.4).
+// Drop the cached build for a config so the next `buildClient` rebuilds it. The dev watcher calls this
+// after a source change (the config object is mutated in place across reloads, so the WeakMap key stays
+// the same and the stale build must be evicted explicitly — BP2.4).
 export function invalidateClientBundle(config: AppConfig): void {
     BUNDLE_CACHE.delete(config)
 }

@@ -18,12 +18,12 @@
 // app's own RPCs as tools to the spawned Claude Code via abide's MCP face (`--mcp-config` at the app
 // URL + auth token) and reconciling Claude Code's permission model with abide's `ApprovalPolicy`.
 
+import { collectText, stringify } from './internal/agentText.ts'
 import type {
     AgentEngine,
     AgentFrame,
     AgentOptions,
     AgentTool,
-    NeutralContentPart,
     NeutralMessage,
 } from './internal/agentTypes.ts'
 
@@ -293,25 +293,6 @@ function renderPrompt(
     }
 
     return { system: systemParts.length > 0 ? systemParts.join('\n') : undefined, prompt }
-}
-
-function collectText(content: string | NeutralContentPart[]): string {
-    if (typeof content === 'string') return content
-    const parts: string[] = []
-    for (const part of content) {
-        if (part.type === 'text') parts.push(part.text)
-    }
-    return parts.join('\n')
-}
-
-function stringify(value: unknown): string {
-    if (typeof value === 'string') return value
-    if (value instanceof Error) return value.message
-    try {
-        return JSON.stringify(value) ?? String(value)
-    } catch {
-        return String(value)
-    }
 }
 
 function errorText(caught: unknown): string {

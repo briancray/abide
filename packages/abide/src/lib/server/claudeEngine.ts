@@ -7,6 +7,7 @@
 // Raw `fetch` + a hand-rolled SSE line parser keep this dependency-free and on web standards. Live
 // use needs `ANTHROPIC_API_KEY` (or an explicit `apiKey`); the tests stub `fetch` entirely.
 
+import { collectText, stringify } from './internal/agentText.ts'
 import type {
     AgentEngine,
     AgentFrame,
@@ -295,25 +296,6 @@ function toolResultBlock(part: {
         }
     }
     return { type: 'tool_result', tool_use_id: part.id, content: stringify(part.result) }
-}
-
-function collectText(content: string | NeutralContentPart[]): string {
-    if (typeof content === 'string') return content
-    const parts: string[] = []
-    for (const part of content) {
-        if (part.type === 'text') parts.push(part.text)
-    }
-    return parts.join('\n')
-}
-
-function stringify(value: unknown): string {
-    if (typeof value === 'string') return value
-    if (value instanceof Error) return value.message
-    try {
-        return JSON.stringify(value) ?? String(value)
-    } catch {
-        return String(value)
-    }
 }
 
 // SSE line parser over the response body. Yields the JSON payload of each `data:` line; the parsed

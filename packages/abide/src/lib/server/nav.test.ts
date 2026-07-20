@@ -95,5 +95,21 @@ test('without the Abide-Nav header the same route returns the full document', as
 test('url() fills [name] segments from params', () => {
     expect(url('/users/[id]', { id: 7 })).toBe('/users/7')
     expect(url('/users/[id]/posts/[postId]', { id: 3, postId: 9 })).toBe('/users/3/posts/9')
-    expect(() => url('/users/[id]', {})).toThrow()
+    expect(() => url('/users/[id]', {} as unknown as { id: string })).toThrow()
+})
+
+test('url() appends a query string — (path, params, query) and (path, query)', () => {
+    // Param path: third arg is the query.
+    expect(url('/users/[id]', { id: 7 }, { tab: 'posts', page: 2 })).toBe(
+        '/users/7?tab=posts&page=2',
+    )
+    // Static path: second arg is the query.
+    expect(url('/search', { q: 'abide framework' })).toBe('/search?q=abide+framework')
+    // Null/undefined values are dropped; arrays repeat the key.
+    expect(url('/f', { a: undefined, b: null, c: [1, 2] })).toBe('/f?c=1&c=2')
+    // An existing query merges with `&`; a trailing hash stays last.
+    expect(url('/p?x=1#top', { y: 2 })).toBe('/p?x=1&y=2#top')
+    // No/empty query leaves the path untouched.
+    expect(url('/plain')).toBe('/plain')
+    expect(url('/plain', {})).toBe('/plain')
 })

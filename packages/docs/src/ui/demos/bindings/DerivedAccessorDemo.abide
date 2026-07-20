@@ -1,0 +1,10 @@
+<script>
+  import { state } from "abide/ui/state"
+
+  // bind:value={{get,set}} derived accessor — stored lowercase, edited uppercase.
+  let stored = state("abide")
+  const upper = { get: () => stored.toUpperCase(), set: (next) => { stored = String(next).toLowerCase() } }
+</script>
+
+<input id="derived-input" bind:value={upper} />
+<p>Stored (lowercased): <span id="derived-out">{stored}</span></p>

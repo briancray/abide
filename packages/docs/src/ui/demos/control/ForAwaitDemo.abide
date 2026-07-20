@@ -1,0 +1,40 @@
+<script>
+  import { state } from "abide/ui/state"
+
+  // A {#for await} iterates an async iterable, appending each chunk as it arrives. If the stream
+  // throws, {:catch} is appended after the chunks already emitted. Each run re-keys the outer {#for}
+  // by bumping `runId`, which recreates the stream.
+  let runId = state(0)
+  let failNext = state(false)
+  const ticker = async function* (shouldFail) {
+    const labels = ["one", "two", "three"]
+    for (const label of labels) {
+      await new Promise((resolve) => setTimeout(resolve, 150))
+      yield label
+    }
+    if (shouldFail) throw new Error("the stream broke")
+  }
+  function runStream() {
+    failNext = false
+    runId++
+  }
+  function runFailingStream() {
+    failNext = true
+    runId++
+  }
+</script>
+
+<div class="controls">
+  <button data-testid="run-stream" onclick={runStream}>Run stream</button>
+  <button data-testid="run-stream-fail" onclick={runFailingStream}>Run failing stream</button>
+</div>
+
+<ul data-testid="feed" class="list">
+  {#for run of [runId] by run}
+    {#for await chunk of ticker(failNext)}
+      <li data-testid="feed-item">{chunk}</li>
+    {:catch streamError}
+      <li data-testid="feed-error" class="err">stream error: {streamError.message}</li>
+    {/for}
+  {/for}
+</ul>

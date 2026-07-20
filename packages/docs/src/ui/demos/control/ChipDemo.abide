@@ -1,0 +1,10 @@
+<script>
+  // A snippet is a reusable builder. Call it inline as `{name(args)}` for repeated markup — the same
+  // during SSR and after hydration.
+</script>
+
+{#snippet chip(text)}
+  <span data-testid="chip" class="chip">{text}</span>
+{/snippet}
+
+<p class="chips">{chip("alpha")}{chip("beta")}{chip("gamma")}</p>

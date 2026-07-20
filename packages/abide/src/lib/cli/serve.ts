@@ -1,9 +1,10 @@
 // serve(dir, opts) — boot a file-based abide project on a real port (M-CLI / CL2 / BP2-3).
 //
 // Loads the project at `dir` (loadApp → the createApp config), binds Bun.serve to `opts.port` or an
-// ephemeral one, runs the app's `onStart` lifecycle hook, and returns `{ url, stop }`. The client
-// bundle at `/__abide/client.js` and page SSR are already served by the router — `serve` only wires
-// the lifecycle and, in dev, the live-reload loop.
+// ephemeral one, runs the app's `onStart` lifecycle hook, and returns `{ url, stop }`. The content-
+// hashed client assets (`/__abide/chunk/*`) and page SSR are already served by the router — `serve`
+// only wires the lifecycle and, in dev, the live-reload loop. Production `abide start` passes a
+// `clientBuild` (loaded from `dist`) so the router serves the built artifacts with no bundler at boot.
 //
 // Dev mode (BP2) adds three things over the shared pipeline (no divergent runtime):
 //   (a) a reserved dev-reload channel on the socket mux (a `socket()` under `__abide_dev_reload`);
@@ -15,7 +16,7 @@
 
 import { type FSWatcher, watch } from 'node:fs'
 import { join } from 'node:path'
-import { invalidateClientBundle } from '../server/internal/clientBundle.ts'
+import { type ClientBuild, invalidateClientBundle } from '../server/internal/clientBundle.ts'
 import { type LoadedApp, loadApp } from '../server/internal/loadApp.ts'
 import { warmPages } from '../server/internal/pages.ts'
 import { createApp } from '../server/internal/router.ts'
@@ -42,6 +43,9 @@ const DEV_RELOAD_SNIPPET =
 export interface ServeOptions {
     dev?: boolean | undefined
     port?: number | undefined
+    // A pre-built client loaded from `dist` (production `abide start`). When set, the router serves it
+    // as-is and never runs Bun.build at request time. Absent → the client is built in-memory on first use.
+    clientBuild?: ClientBuild | undefined
 }
 
 export interface ServeResult {
@@ -54,6 +58,9 @@ export async function serve(dir: string, opts: ServeOptions = {}): Promise<Serve
     if (opts.port !== undefined) config.port = opts.port
     // Production (`abide start`) minifies the client bundle; `abide dev` does not (TODO #6).
     config.dev = opts.dev === true
+    // Production `abide start` passes the pre-built client loaded from `dist` — the router serves it
+    // directly (no Bun.build at request time).
+    if (opts.clientBuild !== undefined) config.clientBuild = opts.clientBuild
 
     // The dev-reload socket must exist in `config.sockets` BEFORE createApp so the router captures it
     // on the mux. Its object identity stays fixed across rebuilds so `publish` keeps reaching clients.

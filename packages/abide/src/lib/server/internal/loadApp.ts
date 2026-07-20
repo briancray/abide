@@ -17,6 +17,7 @@ import { dirname, join } from 'node:path'
 import type { Socket } from '../socket.ts'
 import { layoutRoutePrefix } from './layouts.ts'
 import type { Middleware } from './middleware.ts'
+import { routePrefixFromRelative } from './routePrefixFromRelative.ts'
 import type { AppConfig, Route } from './router.ts'
 
 // The process-lifecycle hooks a project's `src/app.ts` may export alongside `middleware` (CL3).
@@ -55,11 +56,9 @@ function rpcRouteName(relativePath: string): string {
     return relativePath.replace(/\.ts$/, '')
 }
 
-// pages/**/page.abide → the request path. Drop the trailing `page.abide`, normalise to a leading
-// slash, and collapse the empty (root) case to "/".
+// pages/**/page.abide → the request path.
 function pageRoutePath(relativePath: string): string {
-    const dir = relativePath.slice(0, relativePath.length - 'page.abide'.length).replace(/\/$/, '')
-    return dir.length === 0 ? '/' : `/${dir}`
+    return routePrefixFromRelative(relativePath, 'page.abide')
 }
 
 // sockets/<name>.ts → "<name>".

@@ -1,0 +1,11 @@
+<script>
+  import SharedTally from "../../components/SharedTally.abide"
+
+  // Two instances of SharedTally call state.shared("reactivity-tally", 0) with the SAME key, so they
+  // share one backing signal — bump either and both update (and it syncs across browser tabs).
+</script>
+
+<div class="row" data-testid="shared-tallies">
+  <SharedTally name="a" />
+  <SharedTally name="b" />
+</div>

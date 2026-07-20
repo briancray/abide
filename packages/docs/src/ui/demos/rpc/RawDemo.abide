@@ -1,0 +1,21 @@
+<script>
+  import { state } from "abide/ui/state"
+  import rpcGreet from "../../../server/rpc/rpcGreet"
+
+  // Raw bypass: `fn.raw(args, init?)` returns the UNTOUCHED Response for a read — no cell, no cache,
+  // no coalescing, no error-throw. On the client it is a bare fetch of the RPC's HTTP face; the
+  // caller reads the raw `.status`, headers, and body itself.
+  let raw = state(null)
+
+  async function rawFetch() {
+    const response = await rpcGreet.raw({ name: "raw" })
+    raw = { status: response.status, contentType: response.headers.get("content-type"), body: await response.text() }
+  }
+</script>
+
+<button data-testid="raw-btn" onclick={rawFetch}>Raw fetch /rpc/rpcGreet</button>
+{#if raw}
+  <pre class="out" data-testid="raw-result">status: {raw.status}
+content-type: {raw.contentType}
+body: {raw.body}</pre>
+{/if}

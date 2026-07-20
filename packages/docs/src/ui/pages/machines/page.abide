@@ -1,42 +1,8 @@
 <script module>
-  import Sample from "../../components/Sample.abide"
-  import capabilities from "../../../server/rpc/capabilities"
-
-  const PAGE = "src/ui/pages/machines/page.abide"
+  import Demo from "../../components/Demo.abide"
+  import CapabilitiesDemo from "../../demos/machines/CapabilitiesDemo.abide"
+  import AgentDemo from "../../demos/machines/AgentDemo.abide"
 </script>
-
-<script>
-  import { state } from "abide/ui/state"
-
-  // Gate the stream behind a click so SSR renders the button (a relative `fetch` can't run server-side),
-  // then the agent run streams client-side — matching the jsonl/sse samples.
-  let running = state(false)
-
-  // Consume the `agent()` frame stream (an `application/jsonl` response from /rpc/agentDemo) in the
-  // browser, matching how the docs consume every stream (see rpc-guide/responses jsonlTicks).
-  // NOTE: const-assigned generator expression — a top-level `async function*` isn't hoisted onto the
-  // template scope by the `.abide` script transform.
-  const agentSteps = async function* (): AsyncGenerator<{ kind: string; text: string }> {
-    const response = await fetch("/rpc/agentDemo")
-    if (!response.body) return
-    const reader = response.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ""
-    for (;;) {
-      const chunk = await reader.read()
-      if (chunk.done) break
-      buffer += decoder.decode(chunk.value, { stream: true })
-      let newline = buffer.indexOf("\n")
-      while (newline >= 0) {
-        const line = buffer.slice(0, newline).trim()
-        buffer = buffer.slice(newline + 1)
-        if (line.length > 0) yield JSON.parse(line)
-        newline = buffer.indexOf("\n")
-      }
-    }
-  }
-</script>
-
 
 <main class="page">
   <h1>Beyond the browser</h1>
@@ -46,35 +12,15 @@
     <li><a href="/openapi.json">/openapi.json</a> — an OpenAPI 3.1 document describing every RPC.</li>
     <li><code>/__abide/mcp</code> — a Model Context Protocol endpoint exposing RPCs as tools.</li>
   </ul>
+  <p>Fetch and inspect those two surfaces live from the browser on <a href="/platform/machines">Platform → Machine surfaces</a>. This page focuses on what makes them possible — capabilities as data — and the third machine consumer: an <code>agent()</code>.</p>
 
-  <Sample page={PAGE} id="capabilities" title="Capabilities as data" client="capabilities" server="src/server/rpc/capabilities.ts">
-    <p>This list is read from the same <code>capabilities</code> RPC an agent would call over MCP — one <code>GET</code> handler that a browser, an OpenAPI operation, and an MCP tool all share:</p>
-    <!-- #demo capabilities -->
-    <ul class="caps">
-      {#await capabilities()}
-        <li>loading…</li>
-      {:then caps}
-        {#for cap of caps}
-          <li><strong>{cap.name}</strong> — {cap.blurb}</li>
-        {/for}
-      {/await}
-    </ul>
-    <!-- #enddemo -->
-  </Sample>
+  <p>This list is read from the same <code>capabilities</code> RPC an agent would call over MCP — one <code>GET</code> handler that a browser, an OpenAPI operation, and an MCP tool all share:</p>
+  <Demo id="capabilities" title="Capabilities as data" server="src/server/rpc/capabilities.ts" client="src/ui/demos/machines/CapabilitiesDemo.abide" tab="server">
+    <CapabilitiesDemo />
+  </Demo>
 
-  <Sample page={PAGE} id="agent" title="The <code>agent()</code> loop — provider-neutral, streamed" client="agent" server="src/server/rpc/agentDemo.ts">
-    <p>The same <code>agent(engine, messages, options)</code> loop drives any <code>AgentEngine</code> (the shipped Claude / Claude Code engines, or a scripted one). Here a deterministic scripted engine requests the <code>clock</code> tool; the loop runs it in-process and streams every <code>AgentFrame</code> — consumed live with <code>&#123;#for await&#125;</code>:</p>
-    <!-- #demo agent -->
-    <button data-testid="agent-btn" onclick={() => running = true}>Run agent</button>
-    {#if running}
-      <ol class="agent-log" data-testid="agent-log">
-        {#for await step of agentSteps()}
-          <li data-kind={step.kind}><strong>{step.kind}</strong> {step.text}</li>
-        {:catch}
-          <li>agent run failed</li>
-        {/for}
-      </ol>
-    {/if}
-    <!-- #enddemo -->
-  </Sample>
+  <p>The same <code>agent(engine, messages, options)</code> loop drives any <code>AgentEngine</code> (the shipped Claude / Claude Code engines, or a scripted one). Here a deterministic scripted engine requests the <code>clock</code> tool; the loop runs it in-process and streams every <code>AgentFrame</code> — consumed live with <code>&#123;#for await&#125;</code>:</p>
+  <Demo id="agent" title="The <code>agent()</code> loop — provider-neutral, streamed" server="src/server/rpc/agentDemo.ts" client="src/ui/demos/machines/AgentDemo.abide" tab="server">
+    <AgentDemo />
+  </Demo>
 </main>

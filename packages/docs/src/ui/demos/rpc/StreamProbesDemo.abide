@@ -1,0 +1,21 @@
+<script>
+  import { state } from "abide/ui/state"
+  import rpcTicker from "../../../server/rpc/rpcTicker"
+
+  // A STREAMING read (a GET whose handler yields an AsyncIterable) swaps the value probes for CHUNK
+  // probes: `peek` = the latest chunk, `chunks` = the transcript so far, `done` = has the stream closed?
+  let started = state(false)
+  const latest = state.computed(() => (started ? (rpcTicker.peek({ count: 4 })?.label ?? "…") : "idle"))
+  const chunkCount = state.computed(() => (started ? (rpcTicker.chunks({ count: 4 })?.length ?? 0) : 0))
+  const closed = state.computed(() => (started ? (rpcTicker.done({ count: 4 }) ? "yes" : "no") : "—"))
+  function start() { started = true; rpcTicker.peek({ count: 4 }) } // peek kicks the stream
+</script>
+
+<ul class="grid">
+  <li>peek() — latest chunk: <strong data-testid="stream-latest">{latest}</strong></li>
+  <li>chunks() — count so far: <strong data-testid="stream-count">{chunkCount}</strong></li>
+  <li>done() — closed: <strong data-testid="stream-done">{closed}</strong></li>
+</ul>
+<div class="row">
+  <button data-testid="stream-start" onclick={start}>Start stream</button>
+</div>

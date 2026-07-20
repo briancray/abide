@@ -1,0 +1,29 @@
+<script>
+  import { state } from "abide/ui/state"
+  import rpcGreet from "../../../server/rpc/rpcGreet"
+  import rpcLimited from "../../../server/rpc/rpcLimited"
+
+  // A NAMED typed error (`error.typed`) is caught as an HttpError whose `kind` is the type name,
+  // so callers can narrow the failure ("RateLimited") from any other error.
+  let typedError = state(null)
+
+  async function callLimited() {
+    try {
+      await rpcLimited({ tokens: 0 })
+      typedError = { caught: "none" }
+    } catch (caught) {
+      // fn.isError(e, name) is the real typed-error narrower on the read surface — a generic
+      // predicate matching the caught HttpError's type name (`error.typed(name, …)` sets it).
+      if (rpcGreet.isError(caught, "RateLimited")) {
+        typedError = { caught: "RateLimited", status: caught.status, retryAfter: caught.data?.retryAfter }
+      } else {
+        typedError = { caught: "other", status: caught.status }
+      }
+    }
+  }
+</script>
+
+<button data-testid="typed-btn" onclick={callLimited}>Trigger RateLimited</button>
+{#if typedError}
+  <p class="err" data-testid="typed-result">caught: {typedError.caught} · status {typedError.status} · retryAfter {typedError.retryAfter}</p>
+{/if}

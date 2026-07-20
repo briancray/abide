@@ -1,0 +1,22 @@
+<script>
+  import { state } from "abide/ui/state"
+  import { watch } from "abide/ui/watch"
+  import { props } from "abide/ui/props"
+  import controlGreet from "../../../server/rpc/controlGreet"
+
+  // Server-resolved {#await} of a real RPC. The read blocks SSR, so the value is already in the
+  // initial HTML. `sampleId` lets the card's "Run again" button re-fire the one-shot read: bumping
+  // the shared replay cell refreshes the slot, and the {#await} re-awaits it.
+  const { sampleId = "" } = props<{ sampleId?: string }>()
+
+  let replay = state.shared("replay:" + sampleId, 0)
+  watch(() => replay, () => { controlGreet.refresh({ who: "control flow" }) })
+</script>
+
+<p data-testid="rpc-await" class="out">
+  {#await controlGreet({ who: "control flow" })}
+    reading…
+  {:then message}
+    {message}
+  {/await}
+</p>

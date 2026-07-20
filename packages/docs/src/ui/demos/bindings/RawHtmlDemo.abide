@@ -1,0 +1,11 @@
+<script>
+  import { state } from "abide/ui/state"
+  import { html } from "abide/ui/html"
+
+  // {html(...)} raw — a trusted HTML string rendered as real nodes.
+  let raw = state('<strong id="raw-strong">bold</strong>')
+  function swapRaw() { raw = '<em id="raw-em">emphasis</em>' }
+</script>
+
+<div id="raw-out">{html(raw)}</div>
+<button id="raw-swap" onclick={swapRaw}>Swap markup</button>

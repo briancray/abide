@@ -10,6 +10,7 @@
 // `trace` is referenced only inside the emit path (never at module load) so this module never
 // participates in an import cycle with the request scope.
 
+import { isBrowser } from './internal/isBrowser.ts'
 import { trace } from './trace.ts'
 
 type LogLevel = 'log' | 'info' | 'warn' | 'error' | 'trace'
@@ -25,10 +26,6 @@ export interface ChannelLogger {
 export interface Logger extends ChannelLogger {
     channel(name: string): ChannelLogger
 }
-
-const isBrowser =
-    typeof globalThis !== 'undefined' &&
-    typeof (globalThis as { window?: unknown }).window !== 'undefined'
 
 // Read a framework env var at call time so tests (and the running process) see live changes.
 function readEnv(name: string): string | undefined {

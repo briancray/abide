@@ -13,13 +13,12 @@
 // `.read()/.write()`, and free/block-bound template identifiers read off `$scope`.
 
 import type { ScopeAnalysis } from './analyzeScope.ts'
-import { extractBindingNames, reconstructImport } from './analyzeScope.ts'
+import { reconstructImport } from './analyzeScope.ts'
+import { bindPattern } from './bindPattern.ts'
+import { componentRef } from './componentRef.ts'
 import { emitInstanceSetup, emitModuleEnsure } from './emitSetup.ts'
+import { splitParams } from './splitParams.ts'
 import type { AttrPlan, ClientPlan, DynamicSlot, TemplatePlan } from './templatePlan.ts'
-
-function componentRef(analysis: ScopeAnalysis, name: string): string {
-    return analysis.declared.has(name) ? name : `$scope.${name}`
-}
 
 // Slot kinds that occupy a single `<!---->` leaf position in a level (a value node + its anchor).
 const LEAF_KINDS = new Set<string>(['interpolation', 'html', 'await'])
@@ -28,31 +27,6 @@ const BLOCK_KINDS = new Set<string>(['if', 'for', 'switch', 'try', 'awaitBlock',
 
 function isSimpleIdentifier(pattern: string): boolean {
     return /^[A-Za-z_$][\w$]*$/.test(pattern.trim())
-}
-
-// Statement(s) binding `pattern` from `valueExpr` onto scope object `target`.
-function bindPattern(target: string, pattern: string, valueExpr: string): string {
-    const trimmed = pattern.trim()
-    if (isSimpleIdentifier(trimmed)) return `${target}[${JSON.stringify(trimmed)}] = ${valueExpr};`
-    const names = extractBindingNames(trimmed)
-    return `Object.assign(${target}, (() => { const ${trimmed} = ${valueExpr}; return { ${names.join(', ')} }; })());`
-}
-
-function splitParams(params: string): string[] {
-    const parts: string[] = []
-    let depth = 0
-    let start = 0
-    for (let i = 0; i < params.length; i++) {
-        const char = params[i]
-        if (char === '{' || char === '[' || char === '(') depth++
-        else if (char === '}' || char === ']' || char === ')') depth--
-        else if (char === ',' && depth === 0) {
-            parts.push(params.slice(start, i).trim())
-            start = i + 1
-        }
-    }
-    parts.push(params.slice(start).trim())
-    return parts.filter((p) => p !== '')
 }
 
 // ---------------------------------------------------------------------------

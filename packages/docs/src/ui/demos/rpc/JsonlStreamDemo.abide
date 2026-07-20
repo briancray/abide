@@ -1,0 +1,25 @@
+<script>
+  import { state } from "abide/ui/state"
+  import rpcTicker from "../../../server/rpc/rpcTicker"
+
+  // `jsonl(iterable)` is see-through, so calling the RPC on the client returns a replay-then-live
+  // AsyncIterable of the decoded chunks — iterated directly by `{#for await}`, no fetch/reader/decoder.
+  // The same read blocks SSR and seeds its transcript at top level (isomorphic); here it is button-
+  // triggered so the chunks are visible arriving. `.refresh()` re-runs the source.
+  let started = state(false)
+  function run() {
+    if (started) rpcTicker.refresh({ count: 4 })
+    else started = true
+  }
+</script>
+
+<button data-testid="jsonl-btn" onclick={run}>{started ? "Restart" : "Start"} jsonl stream</button>
+{#if started}
+  <ul class="stream" data-testid="jsonl-list">
+    {#for await tick of rpcTicker({ count: 4 })}
+      <li>{tick.label}</li>
+    {:catch}
+      <li>stream failed</li>
+    {/for}
+  </ul>
+{/if}

@@ -1,0 +1,25 @@
+<script>
+  import { state } from "abide/ui/state"
+
+  // {#if}/{:else if}/{:else} — the block picks exactly one branch and swaps the DOM when `level`
+  // crosses a threshold. The runtime reconciles fine-grained; nothing is diffed by hand.
+  let level = state(0)
+</script>
+
+<div class="controls">
+  <button data-testid="level-dec" onclick={() => level--}>−1</button>
+  <span data-testid="level-value" class="pill">level = {level}</span>
+  <button data-testid="level-inc" onclick={() => level++}>+1</button>
+</div>
+
+<p data-testid="if-branch" class="out">
+  {#if level < 0}
+    negative
+  {:else if level === 0}
+    zero
+  {:else if level < 5}
+    low ({level})
+  {:else}
+    high ({level})
+  {/if}
+</p>

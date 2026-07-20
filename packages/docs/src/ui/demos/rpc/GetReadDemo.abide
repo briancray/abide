@@ -1,0 +1,12 @@
+<script>
+  import rpcGreet from "../../../server/rpc/rpcGreet"
+
+  // A GET read. It blocks SSR, so `greeting.greeting` is already sitting in the initial HTML —
+  // no client round-trip. The same callable would fetch on the browser.
+</script>
+
+{#await rpcGreet({ name: "verbs page" })}
+  <p>reading…</p>
+{:then greeting}
+  <p class="say" data-testid="get-read">{greeting.greeting}</p>
+{/await}

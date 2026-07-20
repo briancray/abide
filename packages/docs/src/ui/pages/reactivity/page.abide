@@ -1,34 +1,13 @@
 <script module>
-  import Sample from "../../components/Sample.abide"
-  import { state } from "abide/ui/state"
-
-  const PAGE = "src/ui/pages/reactivity/page.abide"
+  import Demo from "../../components/Demo.abide"
+  import StateComputedDemo from "../../demos/reactivity/StateComputedDemo.abide"
 </script>
-
-<script>
-  let count = state(0)
-  const doubled = state.computed(() => count * 2)
-  function reset() { count = 0 }
-</script>
-
 
 <main class="page">
-  <h1>Reactivity</h1>
+  <h1>State &amp; computed</h1>
   <p class="lead">State is a writable cell. A <code>state.computed</code> derives from it lazily and updates fine-grained — only the affected text nodes re-render. Click the button and watch both values move.</p>
 
-  <Sample page={PAGE} id="counter" title="State &amp; computed — <code>state</code>" client="counter">
-    <!-- #demo counter -->
-    <div class="counter">
-      <button onclick={() => count++}>Increment</button>
-      <button onclick={reset}>Reset</button>
-    </div>
-
-    <p>Count: <strong>{count}</strong></p>
-    <p>Doubled (computed): <strong>{doubled}</strong></p>
-    <!-- #enddemo -->
-
-    {#if count > 4}
-      <p class="hint">A <code>{'{'}#if{'}'}</code> block reacts too — you crossed 4.</p>
-    {/if}
-  </Sample>
+  <Demo id="counter" title="State &amp; computed — <code>state</code>" client="src/ui/demos/reactivity/StateComputedDemo.abide">
+    <StateComputedDemo />
+  </Demo>
 </main>

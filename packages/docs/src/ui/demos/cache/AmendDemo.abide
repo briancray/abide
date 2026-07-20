@@ -1,0 +1,27 @@
+<script>
+  import { state } from "abide/ui/state"
+  import cacheCounter from "../../../server/rpc/cacheCounter"
+
+  // amend(args, value | updater) mutates the retained slot value in place — the handler never re-runs.
+  let amendStarted = state(false)
+  const amendValue = state.computed(() => (amendStarted ? String(cacheCounter.peek({ key: "amend-demo" })?.runs ?? "loading") : "idle"))
+  const amendPeek = state.computed(() => {
+    const value = cacheCounter.peek({ key: "amend-demo" })
+    return value ? String(value.runs) : "(none)"
+  })
+  function startAmend() { amendStarted = true }
+  // value-form: replace the retained value in place — the server handler never runs.
+  function amendValueForm() { cacheCounter.amend({ key: "amend-demo" }, { key: "amend-demo", runs: 999 }) }
+  // updater-form: derive the next value from the current — also local, no re-fetch.
+  function amendUpdater() { cacheCounter.amend({ key: "amend-demo" }, (current) => ({ key: "amend-demo", runs: (current?.runs ?? 0) + 100 })) }
+</script>
+
+<ul class="grid">
+  <li>Value (runs): <strong data-testid="amend-value">{amendValue}</strong></li>
+  <li>peek(): <strong data-testid="amend-peek">{amendPeek}</strong></li>
+</ul>
+<div class="row">
+  <button data-testid="amend-start" onclick={startAmend}>Load</button>
+  <button data-testid="amend-value-form" onclick={amendValueForm}>amend → 999</button>
+  <button data-testid="amend-updater" onclick={amendUpdater}>amend +100</button>
+</div>

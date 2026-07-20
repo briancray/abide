@@ -1,0 +1,21 @@
+<script>
+  import { state } from "abide/ui/state"
+  import cacheCounter from "../../../server/rpc/cacheCounter"
+
+  // `fn.watch(args, cb)` runs cb whenever THIS slot's value changes (method form, not `watch(thunk)`).
+  let watchMethodStarted = state(false)
+  let watchMethodHits = state(0)
+  const watchMethodValue = state.computed(() => (watchMethodStarted ? (cacheCounter.peek({ key: "watch-method" })?.runs ?? "loading") : "idle"))
+  cacheCounter.watch({ key: "watch-method" }, () => { watchMethodHits++ })
+  function startWatchMethod() { watchMethodStarted = true }
+  function refreshWatched() { cacheCounter.refresh({ key: "watch-method" }) }
+</script>
+
+<ul class="grid">
+  <li>Value (runs): <strong data-testid="watchmethod-value">{watchMethodValue}</strong></li>
+  <li>watch(args, cb) fires: <strong data-testid="watchmethod-hits">{watchMethodHits}</strong></li>
+</ul>
+<div class="row">
+  <button data-testid="watchmethod-start" onclick={startWatchMethod}>Load</button>
+  <button data-testid="watchmethod-refresh" onclick={refreshWatched}>Refresh</button>
+</div>

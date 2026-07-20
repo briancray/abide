@@ -1,0 +1,30 @@
+<script>
+  import { state } from "abide/ui/state"
+
+  // Each click reseeds a promise held in state. The {#await} block shows the pending branch, then the
+  // resolved or rejected branch; {:finally} renders once the promise settles either way.
+  let job = state(Promise.resolve("ready — click a button to run again"))
+  function succeed() {
+    job = new Promise((resolve) => setTimeout(() => resolve("resolved after a delay"), 500))
+  }
+  function fail() {
+    job = new Promise((_resolve, reject) => setTimeout(() => reject(new Error("the job failed")), 500))
+  }
+</script>
+
+<div class="controls">
+  <button data-testid="run-success" onclick={succeed}>Run (success)</button>
+  <button data-testid="run-fail" onclick={fail}>Run (fail)</button>
+</div>
+
+<p data-testid="job" class="out">
+  {#await job}
+    <span data-testid="job-pending">working…</span>
+  {:then value}
+    <span data-testid="job-done">done: {value}</span>
+  {:catch err}
+    <span data-testid="job-error">error: {err.message}</span>
+  {:finally}
+    <span data-testid="job-finally"> · settled</span>
+  {/await}
+</p>

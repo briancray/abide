@@ -11,6 +11,8 @@
 // Recency = touch-on-read. The same ceiling also bounds the persistent server default-context
 // cache (the `abide run`/cron/worker path); `cell.ts` passes that store to these same helpers.
 
+import { positiveEnvBytes } from './positiveEnvBytes.ts'
+
 // The one process-global shared store. Holds cell slots keyed by `prefix + canonicalKey(args)`.
 const sharedCache = new Map<string, unknown>()
 
@@ -57,10 +59,7 @@ export function sharedCacheUnpin(store: Map<string, unknown>, key: string): void
 // The active byte ceiling, or Infinity when unset/invalid (the unbounded default). Read fresh each
 // call so operators (and tests) can change it at runtime.
 function readLimit(): number {
-    const raw = Bun.env.ABIDE_MAX_SHARED_CACHE_SIZE
-    if (raw === undefined || raw === '') return Infinity
-    const bytes = Number(raw)
-    return Number.isFinite(bytes) && bytes > 0 ? bytes : Infinity
+    return positiveEnvBytes('ABIDE_MAX_SHARED_CACHE_SIZE')
 }
 
 // Move a key to the most-recently-used end (delete + re-set) so LRU eviction drops the

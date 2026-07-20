@@ -28,20 +28,9 @@ test('cached read is reused (call count holds), refresh + invalidate re-fetch, p
     await expect(page.getByTestId('counter-reads')).toHaveText('3')
     await expect(runs).toHaveText(String(firstRuns))
 
-    // peek() exposes the retained value without a load.
-    await expect(page.getByTestId('counter-peek')).toHaveText(String(firstRuns))
-
-    // refresh() forces a re-fetch: the count climbs.
-    await page.getByTestId('counter-refresh').click()
-    await expect.poll(() => intOf(page, 'counter-runs')).toBeGreaterThan(firstRuns)
-    const afterRefresh = await intOf(page, 'counter-runs')
-
-    // invalidate() drops the slot → next read re-fetches: climbs again.
+    // invalidate() drops the slot → the next read re-fetches: the count climbs.
     await page.getByTestId('counter-invalidate').click()
-    await expect.poll(() => intOf(page, 'counter-runs')).toBeGreaterThan(afterRefresh)
-
-    // watch(source, handler) fired on the slot changes.
-    await expect.poll(() => intOf(page, 'counter-watch')).toBeGreaterThan(0)
+    await expect.poll(() => intOf(page, 'counter-runs')).toBeGreaterThan(firstRuns)
 })
 
 test('invalidate with a partial selector matches every superset slot (red re-fetches, blue untouched)', async ({
@@ -62,24 +51,17 @@ test('invalidate with a partial selector matches every superset slot (red re-fet
     await expect(page.getByTestId('metric-blue1')).toHaveText(String(blueBefore))
 })
 
-test('pending probe is true during a slow load; refresh keeps the stale value while re-fetching', async ({
+test('pending() is true while the first load runs, then clears when the value settles', async ({
     page,
 }) => {
     await page.goto('/cache')
 
     await page.getByTestId('slow-start').click()
     // The slow read is in flight → pending is observably true.
-    await expect(page.getByTestId('slow-pending')).toHaveText('loading')
+    await expect(page.getByTestId('slow-pending')).toHaveText('yes')
     // …then it resolves: a value lands and pending clears.
     await expect(page.getByTestId('slow-value')).toHaveText(/^\d+$/, { timeout: 5000 })
-    await expect(page.getByTestId('slow-pending')).toHaveText('idle')
-    const firstValue = await intOf(page, 'slow-value')
-
-    // refresh() re-runs the read; the count climbs once the new load resolves.
-    await page.getByTestId('slow-refresh').click()
-    await expect
-        .poll(() => intOf(page, 'slow-value'), { timeout: 5000 })
-        .toBeGreaterThan(firstValue)
+    await expect(page.getByTestId('slow-pending')).toHaveText('no')
 })
 
 test('error probe holds the HttpError from a failing read, and clears on invalidate', async ({

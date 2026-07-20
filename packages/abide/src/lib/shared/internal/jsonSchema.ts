@@ -42,6 +42,15 @@ export type JSONSchemaType =
     | 'array'
     | 'null'
 
+// The non-null member of a `type` union (e.g. `["string","null"]` → "string"); a scalar type passes
+// through. Used by the string→typed coercers (env config, multipart form-text projection).
+export function singleType(
+    type: JSONSchemaType | JSONSchemaType[] | undefined,
+): JSONSchemaType | undefined {
+    if (Array.isArray(type)) return type.find((candidate) => candidate !== 'null')
+    return type
+}
+
 type Issue = { message: string; path: Array<string | number> }
 
 export type ValidateJsonSchemaResult = { ok: true } | { ok: false; issues: Issue[] }

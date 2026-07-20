@@ -31,6 +31,7 @@ import {
     asStandardSchema,
     type JSONSchema,
     type JSONSchemaType,
+    singleType,
 } from '../shared/internal/jsonSchema.ts'
 import type { StandardSchemaV1 } from '../shared/StandardSchema.ts'
 
@@ -213,13 +214,6 @@ function fieldsFromSpecMap(spec: Record<string, EnvFieldSpec>): Field[] {
         })
     }
     return fields
-}
-
-function singleType(
-    type: JSONSchemaType | JSONSchemaType[] | undefined,
-): JSONSchemaType | undefined {
-    if (Array.isArray(type)) return type.find((candidate) => candidate !== 'null')
-    return type
 }
 
 type Coerced = { ok: true; value: unknown } | { ok: false; message: string }

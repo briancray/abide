@@ -260,12 +260,33 @@ function highlightAbide(code: string): string {
                 }
                 tag++
             }
-            out += highlightTag(code.slice(position, tag))
+            const raw = code.slice(position, tag)
+            out += highlightTag(raw)
             position = tag
+            // A full `.abide` file has `<script>`/`<style>` blocks whose bodies are JS/CSS, not markup —
+            // highlight the body accordingly (a bare TS `<` in a generic would otherwise be mishandled)
+            // and let the next iteration pick up the closing tag.
+            const nameMatch = raw.match(/^<\s*([A-Za-z][\w-]*)/)
+            const name = nameMatch === null ? '' : nameMatch[1].toLowerCase()
+            if ((name === 'script' || name === 'style') && !raw.endsWith('/>')) {
+                const closeTag = `</${name}>`
+                const closeIndex = code.indexOf(closeTag, position)
+                const bodyEnd = closeIndex === -1 ? length : closeIndex
+                const body = code.slice(position, bodyEnd)
+                out += name === 'script' ? highlightJs(body) : escapeHtml(body)
+                position = bodyEnd
+            }
             continue
         }
         let text = position
         while (text < length && code[text] !== '<' && code[text] !== '{') text++
+        // A `<`/`{` that started no recognised construct (e.g. `a < b` in markup text): emit it as one
+        // escaped character and advance, so the scanner can never stall.
+        if (text === position) {
+            out += escapeHtml(ch)
+            position++
+            continue
+        }
         out += escapeHtml(code.slice(position, text))
         position = text
     }

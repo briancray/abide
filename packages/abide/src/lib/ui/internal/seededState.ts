@@ -17,11 +17,24 @@ import type { HydrationSeed } from '../../server/internal/pages.ts'
 import type { State, StateCell } from '../state.ts'
 import { state } from '../state.ts'
 
-export function makeSeededState(seed: HydrationSeed): State {
+// `isHydrating` reports whether the mount cursor is CLAIMING server nodes right now. `bootstrapPage`
+// passes the live runtime flag; it defaults to always-true for direct callers/tests that replay outside
+// a real hydrate. Gating on it stops a create-fallback from desyncing the ordinal (see below).
+export function makeSeededState(
+    seed: HydrationSeed,
+    isHydrating: () => boolean = () => true,
+): State {
     const seedStates = Array.isArray(seed.states) ? seed.states : undefined
     let ordinal = 0
     return Object.assign(
         function seededState<T>(initial: T, transform?: (value: T) => T): StateCell<T> {
+            // Only REPLAY (and advance the ordinal) while actually CLAIMING server nodes. In CREATE mode —
+            // a fresh mount, or a hydration mismatch that `claimBlock` recovered by re-mounting a whole
+            // region fresh (`inCreateMode`) — there are no server nodes to match, so use the LITERAL
+            // initial and DON'T touch the ordinal. Otherwise a create-fallback re-mount (which re-runs the
+            // region's `state()` calls) would consume seed slots and desync the ordinal for every sibling
+            // region still being claimed — the value the server rendered would land on the wrong `state()`.
+            if (!isHydrating()) return state(initial, transform)
             const index = ordinal++
             const value =
                 seedStates !== undefined && index < seedStates.length
