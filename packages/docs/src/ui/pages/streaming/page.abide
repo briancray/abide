@@ -1,0 +1,47 @@
+<script>
+  import streamSlow from "../../../server/rpc/streamSlow"
+  import streamBoom from "../../../server/rpc/streamBoom"
+</script>
+
+<main class="page">
+  <h1>Streaming SSR</h1>
+  <p class="lead">
+    A slow <code>&#123;#await&#125;</code> read misses the render deadline, so the shell flushes with a
+    placeholder and the resolved branch streams in as an out-of-order patch. Hydration then claims the
+    streamed nodes in place — so the block stays reactive: refresh re-fetches and re-renders it.
+  </p>
+
+  <div data-testid="slow-block" class="rounded border border-slate-200 p-4">
+    {#await streamSlow()}
+      <span data-testid="pending">loading…</span>
+    {:then result}
+      <b data-testid="value">runs: {result.runs}</b>
+    {:catch failure}
+      <span data-testid="error">{failure.message}</span>
+    {/await}
+  </div>
+
+  <button
+    data-testid="refresh"
+    class="mt-4 rounded bg-slate-800 px-3 py-1.5 text-white"
+    onclick={() => streamSlow.refresh()}
+  >
+    Refresh
+  </button>
+
+  <p class="lead mt-8">
+    A streamed read that <em>rejects</em> after the shell flushed streams its
+    <code>&#123;:catch&#125;</code> branch as the patch — no 500 (headers are already out), and the
+    client hydrates the catch branch in place.
+  </p>
+
+  <div data-testid="error-block" class="rounded border border-slate-200 p-4">
+    {#await streamBoom()}
+      <span>loading…</span>
+    {:then ok}
+      <b>ok: {ok.ok}</b>
+    {:catch failure}
+      <i data-testid="error-value">{failure.message}</i>
+    {/await}
+  </div>
+</main>

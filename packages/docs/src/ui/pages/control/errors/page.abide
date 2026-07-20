@@ -1,0 +1,52 @@
+<script module>
+  import Sample from "../../../components/Sample.abide"
+
+  const PAGE = "src/ui/pages/control/errors/page.abide"
+</script>
+
+<script>
+  import { state } from "abide/ui/state"
+
+  // The run carries its own `fail` flag, so the try body reads a fixed per-mount value (never a
+  // shared mutable that could re-throw into an already-mounted block). Each click bumps `id`, which
+  // is the keyed-list key — so the {#try} block re-mounts from scratch and re-evaluates.
+  let run = state({ id: 0, fail: false })
+  const risky = (fail) => {
+    if (fail) throw new Error("something went wrong")
+    return "computed successfully"
+  }
+
+  function runOk() {
+    run = { id: run.id + 1, fail: false }
+  }
+  function runFail() {
+    run = { id: run.id + 1, fail: true }
+  }
+</script>
+
+
+<main class="page">
+  <h1>Error boundary — <code>&#123;#try&#125;</code></h1>
+  <p class="lead">A <code>&#123;#try&#125;</code> block renders its body; if any expression throws while the body mounts, the block switches to <code>&#123;:catch&#125;</code>. The <code>&#123;:finally&#125;</code> branch always renders. Here the body re-mounts on each click (keyed by the run id), so you can throw and recover on demand.</p>
+
+  <Sample page={PAGE} id="try" title="<code>&#123;#try&#125;</code> / <code>&#123;:catch&#125;</code> / <code>&#123;:finally&#125;</code>" client="try">
+    <!-- #demo try -->
+    <div class="controls">
+      <button data-testid="run-ok" onclick={runOk}>Run OK</button>
+      <button data-testid="run-fail" onclick={runFail}>Run failing</button>
+    </div>
+
+    <div data-testid="try-region" class="region">
+      {#for r of [run] by r.id}
+        {#try}
+          <p data-testid="try-body" class="out">value: {risky(r.fail)}</p>
+        {:catch caught}
+          <p data-testid="try-caught" class="out err">caught: {caught.message}</p>
+        {:finally}
+          <p data-testid="try-finally" class="muted">finally: cleanup always runs</p>
+        {/try}
+      {/for}
+    </div>
+    <!-- #enddemo -->
+  </Sample>
+</main>

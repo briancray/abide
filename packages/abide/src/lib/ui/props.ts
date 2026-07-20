@@ -1,17 +1,14 @@
-/*
-The prop reader. In a `.abide` component the compiler rewrites `const { name } =
-props()` to reads off the component's prop bag (`$props`), so this runtime body
-never executes there — it exists for import resolution and for typing `props()`
-in plain `.ts` modules. Called directly (only possible outside a compiled
-component) it throws, like `request()` outside a request scope, rather than
-silently returning undefined.
+// Public reactive prop reader for `.abide` components (M3a).
+//
+// In a component `<script>` an author writes `const { title = "…" } = props()` to read the instance's
+// props reactively. The emitted `mount`/`render` setup (internal/emitSetup.ts) binds `props` to the
+// REAL per-instance reader behind this import's local name, so the actual values never come from this
+// file — this module exists so the documented `abide/ui/props` specifier RESOLVES for the type-checker
+// (`tsc` / `abide check`) and so a page that must `import { props }` (no ambient identifiers) type-checks.
+//
+// Called directly outside a `.abide` instance scope (e.g. the module script, where there is no
+// instance) it yields an empty object — mirroring the emitted module-scope `props: () => ({})`.
 
-The return type is `T` (default `Record<string, unknown>`); inside a `.abide`
-file the check shadow supplies the file-contextual `RouteShape & T` instead.
-*/
-// @documentation reactive-state
 export function props<T = Record<string, unknown>>(): T {
-    throw new Error(
-        '[abide] props() is compiler-lowered inside a .abide component and has no runtime meaning when called directly',
-    )
+  return {} as T;
 }

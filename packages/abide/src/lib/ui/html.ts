@@ -1,39 +1,23 @@
-import { RAW_HTML, type RawHtml } from '../shared/html.ts'
+// Public raw-HTML marker for `.abide` templates (M3a).
+//
+// `{html(str)}` (or the tagged form html`…`) renders a trusted HTML string as real nodes instead of
+// escaped text. In a template the compiler INTERCEPTS the `html(...)` call at parse time (see
+// internal/parse.ts) and streams the argument as raw markup — so the call is never actually evaluated
+// there. This module exists so the documented `abide/ui/html` specifier RESOLVES for the type-checker
+// (`tsc` / `abide check`) and so a page that must `import { html }` (no ambient identifiers)
+// type-checks. Invoked directly it returns a branded `RawHtml` the renderers treat as pre-escaped.
 
-/*
-Marks a string as trusted raw HTML so a `{expr}` interpolation inserts its nodes
-instead of escaped text — the abide idiom for raw markup (no `{@html}` mustache).
-Works two ways:
+// A branded pre-escaped HTML string. The brand lets a renderer distinguish trusted markup from a
+// plain string without re-escaping it.
+export interface RawHtml {
+  readonly __abideRawHtml: string;
+}
 
-  html(trustedString)        // plain call — insert the string verbatim
-  html`<b>${name}</b>`       // tagged — concatenate parts verbatim
-
-Calling `html` is the explicit opt-in to raw insertion; plain `{value}` always
-escapes. The tag does NOT auto-escape interpolations (it's raw by intent), so only
-build markup from values you trust, or escape them yourself. Imported by the author
-(`import { html } from 'abide/ui/html'`) — it is UI-authoring vocabulary, only ever
-written inside a template, so it lives in `ui/` (the reader, `rawHtmlString`, is the
-isomorphic plumbing and stays in `shared/`).
-*/
-// @documentation templating
-export function html(
-    strings: TemplateStringsArray | string | null | undefined,
-    ...values: unknown[]
-): RawHtml {
-    /* A plain call with a nullish argument renders nothing. A bare async read (ADR-0032)
-       hands `html()` `undefined` while pending — `{html(highlight(code)?.html)}` — so the
-       plain-call path degrades to empty raw instead of throwing on `strings[0]`, matching
-       how a bare `{value}` stringifies `undefined` to `""`. Mirrors the null-tolerance
-       ADR-0032 added to `done()`/`peek()` for the same inline-async ergonomics. */
-    if (strings === null || strings === undefined) {
-        return { [RAW_HTML]: '' }
-    }
-    if (typeof strings === 'string') {
-        return { [RAW_HTML]: strings }
-    }
-    let markup = strings[0] ?? ''
-    for (let index = 0; index < values.length; index += 1) {
-        markup += String(values[index]) + (strings[index + 1] ?? '')
-    }
-    return { [RAW_HTML]: markup }
+export function html(strings: TemplateStringsArray | string, ...values: unknown[]): RawHtml {
+  if (typeof strings === "string") return { __abideRawHtml: strings };
+  let out = strings[0] ?? "";
+  for (let index = 0; index < values.length; index++) {
+    out += String(values[index]) + (strings[index + 1] ?? "");
+  }
+  return { __abideRawHtml: out };
 }

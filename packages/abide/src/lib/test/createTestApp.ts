@@ -1,242 +1,214 @@
-import type { Server } from 'bun'
-// @ts-expect-error virtual module resolved by abideResolverPlugin
-import * as appMod from '../../_virtual/app.ts'
-// @ts-expect-error virtual module resolved by abideResolverPlugin
-import { appInfo } from '../../_virtual/app-info.ts'
-// @ts-expect-error virtual module resolved by abideResolverPlugin
-import { assets } from '../../_virtual/assets.ts'
-// @ts-expect-error virtual module resolved by abideResolverPlugin
-import cliProgramName from '../../_virtual/cli-name.ts'
-// @ts-expect-error virtual module resolved by abideResolverPlugin
-import { layouts } from '../../_virtual/layouts.ts'
-// @ts-expect-error virtual module resolved by abideResolverPlugin
-import mcp from '../../_virtual/mcp.ts'
-// @ts-expect-error virtual module resolved by abideResolverPlugin
-import { mcpResources } from '../../_virtual/mcp-resources.ts'
-// @ts-expect-error virtual module resolved by abideResolverPlugin
-import { pages } from '../../_virtual/pages.ts'
-// @ts-expect-error virtual module resolved by abideResolverPlugin
-import { prompts } from '../../_virtual/prompts.ts'
-// @ts-expect-error virtual module resolved by abideResolverPlugin
-import { publicAssets } from '../../_virtual/public-assets.ts'
-// @ts-expect-error virtual module resolved by abideResolverPlugin
-import { rpc } from '../../_virtual/rpc.ts'
-// @ts-expect-error virtual module resolved by abideResolverPlugin
-import { shell } from '../../_virtual/shell.ts'
-// @ts-expect-error virtual module resolved by abideResolverPlugin
-import { sockets } from '../../_virtual/sockets.ts'
-import { rpcRegistry } from '../server/rpc/rpcRegistry.ts'
-import { broadcastCacheStaleness } from '../server/runtime/cacheStalenessBroadcaster.ts'
-import { createServer } from '../server/runtime/createServer.ts'
-import { pageRenderSlot } from '../server/runtime/pageRenderSlot.ts'
-import { ensureRegistriesLoaded } from '../server/runtime/registryManifests.ts'
-import { requestContext } from '../server/runtime/requestContext.ts'
-import { resolvePageSnapshot } from '../server/runtime/resolvePageSnapshot.ts'
-import { serverSlot } from '../server/runtime/serverSlot.ts'
-import { baseSlot } from '../shared/baseSlot.ts'
-import { buildRpcProxy } from '../shared/buildRpcProxy.ts'
-import { buildRpcRequest } from '../shared/buildRpcRequest.ts'
-import { cacheStalenessSlot } from '../shared/cacheStalenessSlot.ts'
-import { cacheStoreSlot } from '../shared/cacheStoreSlot.ts'
-import { commandNameForUrl } from '../shared/commandNameForUrl.ts'
-import { createCacheStore } from '../shared/createCacheStore.ts'
-import { docSnapshotsSlot } from '../shared/docSnapshotsSlot.ts'
-import { HEALTH_PATH } from '../shared/HEALTH_PATH.ts'
-import { pageSlot } from '../shared/pageSlot.ts'
-import { pendingAsyncCellsSlot } from '../shared/pendingAsyncCellsSlot.ts'
-import { resolvedCellsSlot } from '../shared/resolvedCellsSlot.ts'
-import { SOCKETS_PATH } from '../shared/SOCKETS_PATH.ts'
-import { sharedCacheStoreSlot } from '../shared/sharedCacheStoreSlot.ts'
-import { socketTailsSlot } from '../shared/socketTailsSlot.ts'
-import { streamedCellsSlot } from '../shared/streamedCellsSlot.ts'
-import type { RemoteFunction } from '../shared/types/RemoteFunction.ts'
-import type { Socket } from '../shared/types/Socket.ts'
-import { createTestSocketChannel } from './createTestSocketChannel.ts'
+// createTestApp — an in-process app harness for tests (M2 + M7 auth). Boots the real router on
+// an ephemeral port and hands back a small surface: `fetch` against the live origin, an `rpc`
+// proxy that calls registered routes with the right verb, a `health` probe, `stop`, and `as`
+// for impersonating an identity.
+//
+// `as(identity)` does not start a second server — it returns a sibling TestApp bound to the
+// same origin that stamps an `Authorization: Bearer <sealed identity>` header onto every
+// request, exercising the real per-user-token rung of the identity ladder (AU9). The rpc proxy
+// sends Content-Type: application/json on mutations so they satisfy the CSRF gate (AU8).
 
-/*
-Augmentable rpc/socket maps for `app.rpc.<rpc>` / `app.sockets.<name>`. The
-build's writeTestRpcDts / writeTestSocketsDts emit one entry per rpc/socket
-(into src/.abide/), so the keys + signatures are the project's real surface
-with no imports. Empty here; types arrive once the app has been built. Mirrors
-url's RpcRoutes / health's AppHealthMap.
-*/
-// @documentation testing
-// biome-ignore lint/suspicious/noEmptyInterface: augmented by the generated testRpc.d.ts
-export interface RpcClient {}
-// biome-ignore lint/suspicious/noEmptyInterface: augmented by the generated testSockets.d.ts
-export interface SocketClient {}
+import { createApp, type App, type Route } from "../server/internal/router.ts";
+import { seal } from "../server/internal/seal.ts";
+import type { Middleware } from "../server/internal/middleware.ts";
+import type { Principal } from "../server/internal/scope.ts";
+import type { Socket } from "../server/socket.ts";
 
-/* The booted app under test. Every named subsystem is reachable as the rpc
-   you call, the socket you iterate, or a path you fetch — over the real
-   server, so the full pipeline (CSRF, cookies, base path) runs. */
-export type TestApp = {
-    /* The kernel-assigned origin, e.g. http://localhost:51234. */
-    origin: string
-    /* fetch against the app: prefixes the kernel-assigned origin, so you pass a
-       route-space path (`/products/1`), not the wire URL. The booted server
-       matches routes at raw paths — the APP_URL mount base is stripped by an
-       external proxy in production, absent here — so paths carry no base. */
-    fetch: (path: string, init?: RequestInit) => Promise<Response>
-    /* Rpc calls over HTTP, keyed by command name: `app.rpc.getProduct({ id })`. */
-    rpc: RpcClient
-    /* Sockets keyed by name: `app.sockets.ticker` is the Socket — iterate it for
-       the live stream, `.tail(n)` to seed, `.publish(m)` to send. */
-    sockets: SocketClient
-    /* The /__abide/health payload, decoded. */
-    health: () => Promise<unknown>
-    /* Stops the server, releases the port, restores every touched slot. */
-    stop: () => Promise<void>
-    /* `await using app = await createTestApp()` — disposal runs stop(), so a
-       thrown assertion still releases the port and restores the slots rather
-       than leaking the request-scope/cache/page resolvers into the next file. */
-    [Symbol.asyncDispose]: () => Promise<void>
+// A thin test client over the multiplexed socket WS (`/__abide/sockets`). `subscribe(name)`
+// yields the framed messages for that socket; `publish(name, msg)` sends a client publish. Close
+// it (or the app) to release the connection.
+export interface SocketClient {
+  ready(): Promise<void>;
+  // `args` is sent alongside an `@rpc:` cache-channel subscribe (the raw args that must NAME the
+  // channel — the args-spoof defense); it is ignored for bare user-socket subscriptions.
+  subscribe<T = unknown>(name: string, args?: unknown): AsyncIterable<T>;
+  publish(name: string, message: unknown): void;
+  close(): void;
 }
 
-/*
-Boots the real app on an ephemeral port — the same wiring serverEntry performs,
-minus the standalone-binary env layers. Imports the framework's virtual
-manifests (resolved by abideResolverPlugin, registered via `abide/preload`
-in the consumer's bunfig), so the routes, rpcs, and sockets are the project's
-real surface, not a fixture. Pass nothing: `await createTestApp()` is the app
-exactly as `bun start` would serve it.
+export interface TestApp {
+  origin: string;
+  fetch(path: string, init?: RequestInit): Promise<Response>;
+  rpc: Record<string, (args?: unknown) => Promise<unknown>>;
+  socket(name?: string): SocketClient;
+  health(): Promise<Response>;
+  stop(): Promise<void>;
+  as(identity: Partial<Principal>): TestApp;
+}
 
-Slots are saved and restored around the boot so a suite tears down without
-leaking the request-scope/cache/page resolvers into the next test file.
-*/
-export async function createTestApp(): Promise<TestApp> {
-    const previous = {
-        cacheResolver: cacheStoreSlot.resolver,
-        sharedResolver: sharedCacheStoreSlot.resolver,
-        pageResolver: pageSlot.resolver,
-        baseResolver: baseSlot.resolver,
-        pendingAsyncCellsResolver: pendingAsyncCellsSlot.resolver,
-        resolvedCellsResolver: resolvedCellsSlot.resolver,
-        streamedCellsResolver: streamedCellsSlot.resolver,
-        socketTailsResolver: socketTailsSlot.resolver,
-        docSnapshotsResolver: docSnapshotsSlot.resolver,
-        activeServer: serverSlot.active,
-        pageRender: pageRenderSlot.render,
-        stalenessResolver: cacheStalenessSlot.resolver,
-    }
+// NOTE (contract deviation): the fixed sketch typed `routes` as `Record<string, Rpc<any, any>>`,
+// but the mutation verbs (POST/PUT/PATCH/DELETE) produce `Mutation`, which is not assignable to
+// `Rpc`. Widened to `Route` (the `Rpc | Mutation` union) so both reads and mutations register.
+export interface TestAppConfig {
+  routes?: Record<string, Route>;
+  middleware?: Middleware[];
+  sockets?: Record<string, Socket<any>>;
+  pages?: Record<string, string>;
+  layouts?: Record<string, string>;
+  // TODO #20: absolute source dirs (keyed like `pages`/`layouts`) so the client bundle can resolve a
+  // page/layout's relative CSS imports. Normally populated by the file loader; exposed here for tests.
+  pageDirs?: Record<string, string>;
+  layoutDirs?: Record<string, string>;
+}
 
-    const sharedStore = createCacheStore()
-    sharedCacheStoreSlot.resolver = () => sharedStore
-    cacheStoreSlot.resolver = () => requestContext.getStore()?.cache ?? sharedStore
-    const sharedPendingAsyncCells = { promises: [] }
-    pendingAsyncCellsSlot.resolver = () =>
-        requestContext.getStore()?.pendingAsyncCells ?? sharedPendingAsyncCells
-    const sharedResolvedCells = { entries: [] }
-    resolvedCellsSlot.resolver = () =>
-        requestContext.getStore()?.resolvedCells ?? sharedResolvedCells
-    const sharedStreamedCells = { entries: [] }
-    streamedCellsSlot.resolver = () =>
-        requestContext.getStore()?.streamedCells ?? sharedStreamedCells
-    /* No shared fallback — mirrors serverEntry: `defineSocket.peek` records off-request too, so a
-       fallback would leak. Off-request this resolves undefined and the record is skipped. */
-    socketTailsSlot.resolver = () => requestContext.getStore()?.socketTails
-    const sharedDocSnapshots = { entries: [] }
-    docSnapshotsSlot.resolver = () => requestContext.getStore()?.docSnapshots ?? sharedDocSnapshots
-    pageSlot.resolver = resolvePageSnapshot
-    /* Server-side invalidate()/refresh() broadcast over the reserved socket (ADR-0041),
-       exactly as serverEntry installs it. */
-    cacheStalenessSlot.resolver = () => broadcastCacheStaleness
+// A minimal pushable async queue: producers `push`/`close`, one consumer iterates. Backs each
+// live socket subscription on the test client.
+class MessageQueue<T> implements AsyncIterable<T> {
+  private readonly values: T[] = [];
+  private readonly waiting: ((result: IteratorResult<T>) => void)[] = [];
+  private closed = false;
 
-    /* Eager env validation, exactly as serverEntry: a top-level env(schema) in
-       src/server/config.ts fails the boot loudly here rather than lazily. No-op
-       when the file is absent. */
-    // @ts-expect-error virtual module resolved by abideResolverPlugin
-    await import('../../_virtual/config.ts')
+  push(value: T): void {
+    if (this.closed) return;
+    const resolve = this.waiting.shift();
+    if (resolve !== undefined) resolve({ value, done: false });
+    else this.values.push(value);
+  }
 
-    const server: Server<unknown> = await createServer({
-        pages,
-        layouts,
-        rpc,
-        sockets,
-        prompts,
-        shell,
-        app: appMod,
-        assets,
-        publicAssets,
-        mcpResources,
-        mcp,
-        cliProgramName,
-        appInfo,
-        port: 0,
-    })
+  close(): void {
+    if (this.closed) return;
+    this.closed = true;
+    for (const resolve of this.waiting) resolve({ value: undefined as never, done: true });
+    this.waiting.length = 0;
+  }
 
-    const origin = `http://localhost:${server.port}`
-
-    function appFetch(path: string, init?: RequestInit): Promise<Response> {
-        return fetch(`${origin}${path}`, init)
-    }
-
-    /* Rpc modules loaded once so the registry holds every RemoteFunction; the
-       proxy maps command name → an HTTP call against the booted server. */
-    await ensureRegistriesLoaded()
-    const remotes = new Map<string, RemoteFunction<unknown, unknown>>(
-        Array.from(rpcRegistry.values()).map((entry) => [
-            commandNameForUrl(entry.remote.url),
-            entry.remote,
-        ]),
-    )
-
-    function send(remote: RemoteFunction<unknown, unknown>, args: unknown): Promise<Response> {
-        /* Same-origin Origin header so the CSRF gate admits mutating rpcs; the
-           server serves rpcs at their raw url (no mount base applied here). */
-        const request = buildRpcRequest({
-            method: remote.method,
-            url: remote.url,
-            args,
-            baseUrl: `${origin}/`,
-            headers: new Headers({ origin }),
-        })
-        return fetch(request)
-    }
-
-    const rpcClient = buildRpcProxy<RpcClient>((name) => {
-        const remote = remotes.get(name)
-        return remote ? (args) => send(remote, args) : undefined
-    })
-
-    /* One ws to the booted multiplex, dialed lazily on first socket access so a
-       suite touching no socket holds no connection. http→ws, raw path. */
-    const wsUrl = `${origin.replace(/^http/, 'ws')}${SOCKETS_PATH}`
-    let channel: ReturnType<typeof createTestSocketChannel> | undefined
-    const socketNames = new Set(Object.keys(sockets as Record<string, unknown>))
-    const socketClient = new Proxy({} as Record<string, Socket<unknown>>, {
-        get(_target, prop): Socket<unknown> | undefined {
-            if (typeof prop !== 'string' || !socketNames.has(prop)) {
-                return undefined
-            }
-            channel ??= createTestSocketChannel(wsUrl)
-            return channel.socket(prop)
-        },
-    })
-
-    async function stop(): Promise<void> {
-        channel?.close()
-        server.stop(true)
-        cacheStoreSlot.resolver = previous.cacheResolver
-        sharedCacheStoreSlot.resolver = previous.sharedResolver
-        pageSlot.resolver = previous.pageResolver
-        baseSlot.resolver = previous.baseResolver
-        pendingAsyncCellsSlot.resolver = previous.pendingAsyncCellsResolver
-        resolvedCellsSlot.resolver = previous.resolvedCellsResolver
-        streamedCellsSlot.resolver = previous.streamedCellsResolver
-        socketTailsSlot.resolver = previous.socketTailsResolver
-        docSnapshotsSlot.resolver = previous.docSnapshotsResolver
-        serverSlot.active = previous.activeServer
-        pageRenderSlot.render = previous.pageRender
-        cacheStalenessSlot.resolver = previous.stalenessResolver
-    }
-
+  [Symbol.asyncIterator](): AsyncIterator<T> {
     return {
-        origin,
-        fetch: appFetch,
-        rpc: rpcClient,
-        sockets: socketClient as unknown as SocketClient,
-        health: () => appFetch(HEALTH_PATH).then((response) => response.json()),
-        stop,
-        [Symbol.asyncDispose]: stop,
+      next: (): Promise<IteratorResult<T>> => {
+        if (this.values.length > 0) return Promise.resolve({ value: this.values.shift() as T, done: false });
+        if (this.closed) return Promise.resolve({ value: undefined as never, done: true });
+        return new Promise((resolve) => this.waiting.push(resolve));
+      },
+    };
+  }
+}
+
+function socketClient(origin: string, identity: Partial<Principal> | undefined): SocketClient {
+  const queues = new Map<string, MessageQueue<unknown>[]>();
+  let ws: WebSocket | undefined;
+
+  // Seal the impersonated identity into a Bearer header BEFORE opening the WS so the upgrade
+  // resolves it through the real per-user-token rung of the identity ladder (matching HTTP `as`).
+  // Bun's WebSocket accepts a non-standard `headers` option; the DOM lib type omits it (cast).
+  const opened = (async (): Promise<void> => {
+    const url = origin.replace(/^http/, "ws") + "/__abide/sockets";
+    if (identity !== undefined) {
+      const token = await seal(identity as Principal);
+      ws = new WebSocket(url, { headers: { authorization: `Bearer ${token}` } } as unknown as string[]);
+    } else {
+      ws = new WebSocket(url);
     }
+    ws.addEventListener("message", (event) => {
+      let frame: { name?: unknown; msg?: unknown };
+      try {
+        frame = JSON.parse(String(event.data));
+      } catch {
+        return;
+      }
+      if (typeof frame.name !== "string") return;
+      const list = queues.get(frame.name);
+      if (list === undefined) return;
+      for (const queue of list) queue.push(frame.msg);
+    });
+    await new Promise<void>((resolve, reject) => {
+      ws!.addEventListener("open", () => resolve());
+      ws!.addEventListener("error", (event) => reject(event));
+    });
+  })();
+
+  return {
+    ready: (): Promise<void> => opened,
+    subscribe<T = unknown>(name: string, args?: unknown): AsyncIterable<T> {
+      const queue = new MessageQueue<T>();
+      let list = queues.get(name) as MessageQueue<T>[] | undefined;
+      if (list === undefined) {
+        list = [];
+        queues.set(name, list as MessageQueue<unknown>[]);
+      }
+      list.push(queue);
+      const frame = args !== undefined ? { t: "sub", name, args } : { t: "sub", name };
+      void opened.then(() => ws!.send(JSON.stringify(frame)));
+      return queue;
+    },
+    publish(name: string, message: unknown): void {
+      void opened.then(() => ws!.send(JSON.stringify({ t: "pub", name, msg: message })));
+    },
+    close(): void {
+      for (const list of queues.values()) for (const queue of list) queue.close();
+      queues.clear();
+      // Swallow a rejected `opened` (e.g. a denied/failed upgrade) so close() never throws.
+      void opened.then(() => ws?.close()).catch(() => {});
+      ws?.close();
+    },
+  };
+}
+
+// Read the abide-identity `Set-Cookie` back off a response as a `name=value` pair ready to send
+// as a `Cookie` header, so tests can assert the login cookie and replay it on a follow-up.
+export function identityCookie(response: Response): string | undefined {
+  for (const cookie of response.headers.getSetCookie()) {
+    if (cookie.startsWith("abide-identity=")) return cookie.split(";")[0];
+  }
+  return undefined;
+}
+
+function bind(app: App, routes: Record<string, Route>, identity: Partial<Principal> | undefined): TestApp {
+  const origin = app.origin;
+
+  async function decorate(init?: RequestInit): Promise<RequestInit> {
+    const headers = new Headers(init?.headers);
+    if (identity !== undefined) {
+      const token = await seal(identity as Principal);
+      headers.set("authorization", `Bearer ${token}`);
+    }
+    return { ...init, headers };
+  }
+
+  async function doFetch(path: string, init?: RequestInit): Promise<Response> {
+    return fetch(origin + path, await decorate(init));
+  }
+
+  const rpc = new Proxy({} as Record<string, (args?: unknown) => Promise<unknown>>, {
+    get(_target, property: string) {
+      return async (args?: unknown): Promise<unknown> => {
+        const route = routes[property];
+        const read = route?.__rpc.read ?? false;
+        let response: Response;
+        if (read) {
+          const query = args !== undefined ? `?args=${encodeURIComponent(JSON.stringify(args))}` : "";
+          response = await doFetch(`/rpc/${property}${query}`, { method: "GET" });
+        } else if (args instanceof FormData) {
+          // TODO #8 multipart upload: send the FormData as the raw body (fetch sets the boundary)
+          // with the `x-abide` header so the CSRF gate admits it — no content-type header.
+          response = await doFetch(`/rpc/${property}`, {
+            method: "POST",
+            headers: { "x-abide": "1" },
+            body: args,
+          });
+        } else {
+          response = await doFetch(`/rpc/${property}`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(args ?? {}),
+          });
+        }
+        return response.json();
+      };
+    },
+  });
+
+  return {
+    origin,
+    fetch: doFetch,
+    rpc,
+    socket: (_name?: string): SocketClient => socketClient(origin, identity),
+    health: (): Promise<Response> => doFetch("/__abide/health"),
+    stop: (): Promise<void> => app.stop(),
+    as: (asIdentity: Partial<Principal>): TestApp => bind(app, routes, asIdentity),
+  };
+}
+
+export function createTestApp(config: TestAppConfig = {}): TestApp {
+  const app = createApp(config);
+  return bind(app, config.routes ?? {}, undefined);
 }

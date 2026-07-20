@@ -1,0 +1,132 @@
+<script module>
+  import Sample from "../../../components/Sample.abide"
+
+  const PAGE = "src/ui/pages/control/async/page.abide"
+</script>
+
+<script>
+  import { state } from "abide/ui/state"
+  import { done } from "abide/shared/done"
+  import controlGreet from "../../../../server/rpc/controlGreet"
+
+  let job = state(Promise.resolve("ready — click a button to run again"))
+  function succeed() {
+    job = new Promise((resolve) => setTimeout(() => resolve("resolved after a delay"), 500))
+  }
+  function fail() {
+    job = new Promise((_resolve, reject) => setTimeout(() => reject(new Error("the job failed")), 500))
+  }
+
+  let runId = state(0)
+  let failNext = state(false)
+  const ticker = async function* (shouldFail) {
+    const labels = ["one", "two", "three"]
+    for (const label of labels) {
+      await new Promise((resolve) => setTimeout(resolve, 150))
+      yield label
+    }
+    if (shouldFail) throw new Error("the stream broke")
+  }
+  function runStream() {
+    failNext = false
+    runId++
+  }
+  function runFailingStream() {
+    failNext = true
+    runId++
+  }
+
+  // done(stream): a reactive completion probe. The SAME stream object is handed to both `{#for await}`
+  // and `done()`, so the framework can flip the probe true when the stream finishes draining. The
+  // stream is created once (stored in a cell) and re-created on each run via a keyed wrapper.
+  let doneRunId = state(0)
+  let doneStream = state(null)
+  const makeDoneStream = async function* () {
+    for (const label of ["one", "two", "three"]) {
+      await new Promise((resolve) => setTimeout(resolve, 120))
+      yield label
+    }
+  }
+  function startDoneStream() {
+    doneStream = makeDoneStream()
+    doneRunId++
+  }
+</script>
+
+
+<main class="page">
+  <h1>Async control flow</h1>
+  <p class="lead">Async blocks render a branch per promise or stream state. <code>&#123;#await&#125;</code> resolves a value (blocking SSR so it lands in the initial HTML), and <code>&#123;#for await&#125;</code> appends each chunk of an async iterable as it arrives.</p>
+
+  <Sample page={PAGE} id="await-rpc" title="Server-resolved <code>&#123;#await&#125;</code> of an RPC" client="await-rpc" server="src/server/rpc/controlGreet.ts">
+    <p>This block awaits a real RPC during SSR, so the value is already in the initial HTML.</p>
+    <!-- #demo await-rpc -->
+    <p data-testid="rpc-await" class="out">
+      {#await controlGreet({ who: "control flow" })}
+        reading…
+      {:then message}
+        {message}
+      {/await}
+    </p>
+    <!-- #enddemo -->
+  </Sample>
+
+  <Sample page={PAGE} id="await-promise" title="Interactive <code>&#123;#await&#125;</code> / <code>&#123;:then&#125;</code> / <code>&#123;:catch&#125;</code> / <code>&#123;:finally&#125;</code>" client="await-promise">
+    <p>Each click reseeds a promise held in state; the block shows the pending branch, then the resolved or rejected branch. The <code>&#123;:finally&#125;</code> branch renders once the promise settles either way.</p>
+    <!-- #demo await-promise -->
+    <div class="controls">
+      <button data-testid="run-success" onclick={succeed}>Run (success)</button>
+      <button data-testid="run-fail" onclick={fail}>Run (fail)</button>
+    </div>
+
+    <p data-testid="job" class="out">
+      {#await job}
+        <span data-testid="job-pending">working…</span>
+      {:then value}
+        <span data-testid="job-done">done: {value}</span>
+      {:catch err}
+        <span data-testid="job-error">error: {err.message}</span>
+      {:finally}
+        <span data-testid="job-finally"> · settled</span>
+      {/await}
+    </p>
+    <!-- #enddemo -->
+  </Sample>
+
+  <Sample page={PAGE} id="for-await" title="<code>&#123;#for await&#125;</code> + <code>&#123;:catch&#125;</code>" client="for-await">
+    <p>A <code>&#123;#for await&#125;</code> block iterates an async iterable, appending each chunk as it arrives. If the stream throws, the <code>&#123;:catch&#125;</code> branch is appended after the chunks already emitted.</p>
+    <!-- #demo for-await -->
+    <div class="controls">
+      <button data-testid="run-stream" onclick={runStream}>Run stream</button>
+      <button data-testid="run-stream-fail" onclick={runFailingStream}>Run failing stream</button>
+    </div>
+
+    <ul data-testid="feed" class="list">
+      {#for run of [runId] by run}
+        {#for await chunk of ticker(failNext)}
+          <li data-testid="feed-item">{chunk}</li>
+        {:catch streamError}
+          <li data-testid="feed-error" class="err">stream error: {streamError.message}</li>
+        {/for}
+      {/for}
+    </ul>
+    <!-- #enddemo -->
+  </Sample>
+
+  <Sample page={PAGE} id="done" title="<code>done(stream)</code> — reactive stream-completion probe" client="done">
+    <p><code>done(stream)</code> is a reactive boolean: <code>false</code> while a <code>&#123;#for await&#125;</code> is still draining the SAME stream object, <code>true</code> once it finishes. Import it from <code>abide/shared/done</code> and call it right in the template.</p>
+    <!-- #demo done -->
+    <button data-testid="done-start" onclick={startDoneStream}>Start stream</button>
+    {#if doneStream}
+      <ul data-testid="done-feed" class="list">
+        {#for r of [doneRunId] by r}
+          {#for await chunk of doneStream}
+            <li data-testid="done-item">{chunk}</li>
+          {/for}
+        {/for}
+      </ul>
+      <p data-testid="done-status" class="out">{done(doneStream) ? "complete" : "streaming…"}</p>
+    {/if}
+    <!-- #enddemo -->
+  </Sample>
+</main>

@@ -1,0 +1,9 @@
+<main class="page">
+  <h1>RPC guide</h1>
+  <p class="lead">Live, interactive demos of the RPC surface: the HTTP verbs, the response helpers, the isomorphic call surface, and the three async-read forms in templates. Each page calls real RPCs from the browser.</p>
+  <ul class="list">
+    <li><a href="/rpc-guide/verbs">Verbs</a> — <code>GET</code>/<code>HEAD</code> reads and <code>POST</code>/<code>PUT</code>/<code>PATCH</code>/<code>DELETE</code> mutations from the browser.</li>
+    <li><a href="/rpc-guide/responses">Responses</a> — <code>json</code>, <code>jsonl</code>/<code>sse</code> streams, <code>error</code>, <code>error.typed</code> narrowing, <code>redirect</code>.</li>
+    <li><a href="/rpc-guide/async-reads">Async reads</a> — <code>{'{'}await fn(){'}'}</code>, <code>{'{'}fn(){'}'}</code> peek, and <code>{'{'}#await{'}'}</code> plus raw bypass and <code>fn.peek</code>.</li>
+  </ul>
+</main>

@@ -1,21 +1,15 @@
-import type { StandardSchemaV1 } from './types/StandardSchemaV1.ts'
+// withJsonSchema(schema) — wrap a raw JSON Schema as a Standard Schema that ALSO exposes
+// `toJSONSchema()`. An RPC can then declare a hand-written JSON-Schema input/output that both
+// VALIDATES at runtime (through the Standard Schema `~standard.validate`) and surfaces its JSON
+// Schema to the machine surfaces (OpenAPI 3.1 / MCP tool props) — without abide having to guess the
+// schema back from a validator. Isomorphic (pure); safe on either side.
 
-/*
-Attaches a `toJSONSchema()` projection to a Standard Schema whose library
-doesn't expose one natively. jsonSchemaForSchema probes that method to feed the
-OpenAPI document, the MCP tool schemas, the CLI flag help, and the bundle setup
-form. Zod 4 / Effect / Arktype carry their own; everything else wraps once where
-the schema is declared:
+import { asStandardSchema, type JSONSchema } from "./internal/jsonSchema.ts";
+import type { StandardSchemaV1 } from "./StandardSchema.ts";
 
-  export const config = env(withJsonSchema(vSchema, (s) => toJsonSchema(s)))
+export type SchemaWithJsonSchema = StandardSchemaV1 & { toJSONSchema(): JSONSchema };
 
-Mutates and returns the same schema with the method attached, so the wrapped
-value stays usable everywhere the bare schema was.
-*/
-// @documentation rpc
-export function withJsonSchema<Schema extends StandardSchemaV1>(
-    schema: Schema,
-    toJsonSchema: (schema: Schema) => Record<string, unknown>,
-): Schema & { toJSONSchema: () => Record<string, unknown> } {
-    return Object.assign(schema, { toJSONSchema: () => toJsonSchema(schema) })
+export function withJsonSchema(schema: JSONSchema): SchemaWithJsonSchema {
+  const standard = asStandardSchema(schema);
+  return Object.assign(standard, { toJSONSchema: (): JSONSchema => schema });
 }

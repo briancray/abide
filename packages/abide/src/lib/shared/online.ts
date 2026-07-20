@@ -1,51 +1,26 @@
-import { createSubscriber } from './createSubscriber.ts'
-import { requestScopeSlot } from './requestScopeSlot.ts'
+// online() — a reactive connectivity boolean (CO2.5) for driving offline UI. On the client it
+// tracks `navigator.onLine` through an M1 signal updated by the `online`/`offline` window events,
+// so reading it inside a reactive context re-runs on connectivity change. On the server there is
+// no browser connectivity notion, so it is always true.
 
-/*
-Reactive network-connectivity probe in the pending()/refreshing() family:
-reading it from a scope().computed() / scope().effect() re-runs that scope when the browser's
-online/offline events fire. navigator.onLine's *offline* signal is reliable
-(a true network loss always reports); its online value can false-positive
-behind captive portals — verified backend reachability is a separate,
-opt-in concern (the bundle launcher's liveness watch owns it for bundles).
+import { signal, type Signal } from "./internal/reactive.ts";
 
-On the server it reflects the *calling client's* reported connectivity — the
-OFFLINE_HEADER a abide RPC fetch stamps while offline (read off the request
-scope). In a bundle the client and embedded server share a machine, so this is
-exactly the outbound reachability a handler reaching external sites needs:
-`if (!online()) return error(503)` skips a doomed fetch. True outside any
-request scope (boot, cron) and for non-abide-client requests (no header).
+const isBrowser = typeof globalThis !== "undefined" && typeof (globalThis as { window?: unknown }).window !== "undefined";
 
-It answers "did the calling client report itself offline," NOT "can this
-server reach the internet." So during SSR it is always true: the initial
-render is a browser document navigation abide didn't issue, carrying no
-header — there's been no client round-trip to report connectivity yet. Gate
-external fetches on online() in the RPC/handler path (a real client called),
-not in SSR; in SSR bound the fetch with AbortSignal.timeout instead, or defer
-the read to the hydrated client where navigator.onLine is live. Bundles feel
-this most — localhost serves the SSR even with the machine offline.
+let onlineSignal: Signal<boolean> | undefined;
 
-Reports, never acts — reading this opens no fetch and no stream.
-*/
-const subscribeOnline =
-    typeof window === 'undefined'
-        ? undefined
-        : createSubscriber((update) => {
-              const changed = () => update()
-              window.addEventListener('online', changed)
-              window.addEventListener('offline', changed)
-              return () => {
-                  window.removeEventListener('online', changed)
-                  window.removeEventListener('offline', changed)
-              }
-          })
+function ensureSignal(): Signal<boolean> {
+  if (onlineSignal === undefined) {
+    const nav = (globalThis as { navigator?: { onLine?: boolean } }).navigator;
+    onlineSignal = signal(nav?.onLine ?? true);
+    const win = globalThis as unknown as { addEventListener?: (type: string, handler: () => void) => void };
+    win.addEventListener?.("online", () => onlineSignal!.set(true));
+    win.addEventListener?.("offline", () => onlineSignal!.set(false));
+  }
+  return onlineSignal;
+}
 
-// @documentation probes
 export function online(): boolean {
-    /* window, not navigator: Bun defines a partial navigator with no onLine. */
-    if (typeof window === 'undefined') {
-        return requestScopeSlot.resolver?.()?.online ?? true
-    }
-    subscribeOnline?.()
-    return navigator.onLine
+  if (!isBrowser) return true;
+  return ensureSignal()();
 }

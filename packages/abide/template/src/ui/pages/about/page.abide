@@ -1,7 +1,0 @@
-<script>
-/* A second page — served at GET /about. Folder name becomes the URL segment; the
-   root layout.abide wraps it, same as the home page. */
-</script>
-
-<h1>About</h1>
-<p>This is a barebones abide app.</p>

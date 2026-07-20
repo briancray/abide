@@ -1,0 +1,134 @@
+<script module>
+  import "../app.css"
+  import { route } from "abide/shared/route"
+
+  // The sample index mirrors the file-based route tree (src/ui/pages/**) — in abide the navigation
+  // IS the routing, so the sidebar shows exactly the pages that exist. Grouped by capability.
+  const sections = [
+    { title: "Start", items: [
+      { href: "/", label: "Home" },
+    ] },
+    { title: "Reactivity", items: [
+      { href: "/reactivity", label: "State & computed" },
+      { href: "/reactivity/demo", label: "Counter demo" },
+    ] },
+    { title: "RPC", items: [
+      { href: "/rpc", label: "Overview" },
+      { href: "/rpc-guide/verbs", label: "Verbs" },
+      { href: "/rpc-guide/responses", label: "Responses" },
+      { href: "/rpc-guide/async-reads", label: "Async reads" },
+      { href: "/streaming", label: "Streaming SSR" },
+      { href: "/uploads", label: "File uploads" },
+    ] },
+    { title: "Control flow", items: [
+      { href: "/control/conditionals", label: "Conditionals" },
+      { href: "/control/lists", label: "Lists" },
+      { href: "/control/async", label: "Await" },
+      { href: "/control/errors", label: "Errors" },
+      { href: "/control/components", label: "Components" },
+    ] },
+    { title: "Bindings", items: [
+      { href: "/bindings", label: "Two-way binds" },
+    ] },
+    { title: "Styling", items: [
+      { href: "/styling", label: "Scoped <style>" },
+    ] },
+    { title: "Routing", items: [
+      { href: "/routing", label: "Overview" },
+      { href: "/routing-demo", label: "Nav demo" },
+      { href: "/topics/isomorphism", label: "Dynamic param" },
+    ] },
+    { title: "Sockets", items: [
+      { href: "/sockets", label: "Live publish" },
+      { href: "/sockets/mux", label: "Multiplexed" },
+    ] },
+    { title: "Cache", items: [
+      { href: "/cache", label: "Cache verbs" },
+    ] },
+    { title: "Platform", items: [
+      { href: "/platform/config", label: "Config" },
+      { href: "/platform/identity", label: "Identity" },
+      { href: "/platform/scope", label: "Request scope" },
+      { href: "/platform/observability", label: "Observability" },
+    ] },
+    { title: "Machines", items: [
+      { href: "/machines", label: "Agents & MCP" },
+    ] },
+  ]
+
+  // Clickable breadcrumb trail from the current path — each segment links to its cumulative path,
+  // reinforcing abide's file-based routing (a folder is a URL). Reactive via route().
+  function crumbs(pathname) {
+    const parts = pathname.split("/").filter(Boolean)
+    const trail = [{ label: "pages", href: "/" }]
+    let acc = ""
+    for (const part of parts) {
+      acc += "/" + part
+      trail.push({ label: part, href: acc })
+    }
+    return trail
+  }
+
+  // CLIENT-ONLY (attached via bind:element, which never runs on the server): after the page content
+  // mounts, list its `<section class="sample" id>` cards in the sidebar under the active page, and
+  // scroll-spy the one in view. Pure progressive enhancement — the page works without it.
+  function indexSamples(contentNode: Element) {
+    if (typeof IntersectionObserver === "undefined") return
+    const active = document.querySelector(".idx-link.idx-active")
+    const samples = Array.from(contentNode.querySelectorAll("section.sample[id]"))
+    if (active === null || samples.length === 0) return
+
+    const sub = document.createElement("div")
+    sub.className = "idx-samples"
+    const linkFor = new Map()
+    for (const s of samples) {
+      const heading = s.querySelector("h2, h3")
+      const link = document.createElement("a")
+      link.href = "#" + s.id
+      link.className = "idx-sample"
+      link.textContent = (heading?.textContent ?? s.id).trim()
+      sub.appendChild(link)
+      linkFor.set(s.id, link)
+    }
+    active.after(sub)
+
+    const spy = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue
+          for (const l of sub.children) l.classList.remove("idx-sample-active")
+          linkFor.get(entry.target.id)?.classList.add("idx-sample-active")
+        }
+      },
+      { rootMargin: "0px 0px -70% 0px", threshold: 0 },
+    )
+    for (const s of samples) spy.observe(s)
+
+    return () => { spy.disconnect(); sub.remove() }
+  }
+</script>
+
+<div class="shell">
+  <aside class="sidebar">
+    <a href="/" class="brand">abide <small>isomorphic</small></a>
+    <nav class="index">
+      {#for section of sections by section.title}
+        <div class="idx-group">
+          <div class="idx-label">{section.title}</div>
+          {#for item of section.items by item.href}
+            <a href={item.href} class="idx-link" class:idx-active={route().url.pathname === item.href}>{item.label}</a>
+          {/for}
+        </div>
+      {/for}
+    </nav>
+  </aside>
+
+  <main class="content">
+    <div class="content-inner" bind:element={indexSamples}>
+      <nav class="crumb" aria-label="Breadcrumb">
+        <span class="crumb-root">src/ui</span>{#for c of crumbs(route().url.pathname) by c.href}<span class="crumb-sep">/</span><a href={c.href}>{c.label}</a>{/for}
+      </nav>
+      {children()}
+    </div>
+  </main>
+</div>

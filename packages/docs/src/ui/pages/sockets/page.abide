@@ -1,0 +1,94 @@
+<script module>
+  import Sample from "../../components/Sample.abide"
+
+  const PAGE = "src/ui/pages/sockets/page.abide"
+</script>
+
+<script>
+  import { state } from "abide/ui/state"
+  import socketsPublish from "../../../server/rpc/socketsPublish"
+
+  // The live message log, a status line, and the two draft inputs. `messages` is a plain array cell —
+  // reassigning it (spread + append) is what drives the fine-grained {#for} update.
+  let messages = state([])
+  let status = state("idle")
+  let serverDraft = state("hello from the server")
+  let clientDraft = state("hello from the client")
+  // Two-way binds over a bare state var — `bind:value={serverDraft}` — sync both ways directly.
+
+  // bind:element attach fn — CLIENT-ONLY (never runs during SSR). Opens the socket's HTTP-face SSE
+  // subscription (`GET /__abide/sockets/socketsChat`); each frame is one ChatMessage and the socket's
+  // `tail` replays recent history on connect. The returned teardown closes the stream on nav-away.
+  // #demo subscribe
+  function subscribe(el) {
+    const source = new EventSource("/__abide/sockets/socketsChat")
+    source.onopen = () => { status = "live" }
+    source.onmessage = (event) => { messages = [...messages, JSON.parse(event.data)] }
+    source.onerror = () => { status = "reconnecting" }
+    return () => source.close()
+  }
+  // #enddemo
+
+  // Server publish — call the POST RPC; the server invokes `socket.publish`, which fans the message
+  // (via: "server") back to this subscription.
+  // #demo server-publish
+  async function publishFromServer() {
+    await socketsPublish({ text: serverDraft })
+  }
+  // #enddemo
+
+  // Client publish — POST straight to the socket HTTP face (allowed because `clientPublish` is on).
+  // The socket's `handler` mediates it: it stamps `via: "client"` + a fresh id, or drops it if empty.
+  // #demo client-publish
+  async function publishFromClient() {
+    await fetch("/__abide/sockets/socketsChat", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: clientDraft }),
+    })
+  }
+  // #enddemo
+
+  function clearLog() { messages = [] }
+</script>
+
+
+<main class="page">
+  <h1>Sockets</h1>
+  <p class="lead">A <code>socket()</code> is a named, typed pub/sub topic — an isomorphic <code>AsyncIterable</code>. This page subscribes to the chat socket over its <strong>HTTP face</strong> (SSE) and publishes to it two ways: from the <strong>server</strong> (a POST RPC that calls <code>socket.publish</code>) and from the <strong>client</strong> (a direct POST, allowed by <code>clientPublish</code>, mediated by the socket <code>handler</code>).</p>
+
+  <Sample page={PAGE} id="subscribe" title="Live message log — HTTP-face SSE" client="subscribe" server="src/server/sockets/socketsChat.ts">
+    <p>Subscription status: <strong id="socket-status" data-testid="socket-status">{status}</strong></p>
+    <section bind:element={subscribe}>
+      <p>Message count: <strong data-testid="message-count">{messages.length}</strong></p>
+      <ul class="log" data-testid="message-log">
+        {#for message of messages by message.id}
+          <li class="msg" data-via={message.via}><span class="via">{message.via}</span> {message.text}</li>
+        {/for}
+      </ul>
+      {#if messages.length === 0}
+        <p class="empty" data-testid="empty">No messages yet — publish one.</p>
+      {/if}
+    </section>
+  </Sample>
+
+  <Sample page={PAGE} id="server-publish" title="Publish from the server — <code>socket.publish</code>" client="server-publish" server="src/server/rpc/socketsPublish.ts">
+    <p>Calls the <code>socketsPublish</code> POST RPC; the server publishes, bypassing the handler, so the message arrives with <code>via: "server"</code>.</p>
+    <div class="controls">
+      <input id="server-input" data-testid="server-input" bind:value={serverDraft} />
+      <button id="server-publish" data-testid="server-publish" onclick={publishFromServer}>Publish (server)</button>
+    </div>
+  </Sample>
+
+  <Sample page={PAGE} id="client-publish" title="Publish from the client — <code>clientPublish</code> + <code>handler</code>" client="client-publish" server="src/server/sockets/socketsChat.ts">
+    <p>POSTs straight to <code>/__abide/sockets/socketsChat</code>. The socket <code>handler</code> stamps <code>via: "client"</code> and drops empty text.</p>
+    <div class="controls">
+      <input id="client-input" data-testid="client-input" bind:value={clientDraft} />
+      <button id="client-publish" data-testid="client-publish" onclick={publishFromClient}>Publish (client)</button>
+      <button id="clear-log" data-testid="clear-log" onclick={clearLog}>Clear local log</button>
+    </div>
+  </Sample>
+
+  <h2>Tail replay</h2>
+  <p>The socket keeps a <code>tail</code> of recent messages. Reload this page and the subscription replays them immediately — no re-publish needed. The multiplexed WS mux variant of this demo lives at <a href="/sockets/mux" data-testid="mux-link">/sockets/mux</a>.</p>
+</main>

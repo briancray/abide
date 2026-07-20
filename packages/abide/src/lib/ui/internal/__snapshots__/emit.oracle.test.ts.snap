@@ -1,0 +1,331 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`emit regression — server output plain text 1`] = `"hello world"`;
+
+exports[`emit regression — server output interpolation 1`] = `"Hi Bob<!---->!"`;
+
+exports[`emit regression — server output interpolation escapes 1`] = `"&lt;b&gt;x&lt;/b&gt;<!---->"`;
+
+exports[`emit regression — server output quotes/ampersands escaped 1`] = `"a &amp; &quot;b&quot; &#39;c&#39;<!---->"`;
+
+exports[`emit regression — server output undefined renders empty 1`] = `"[<!---->]"`;
+
+exports[`emit regression — server output null renders empty 1`] = `"[<!---->]"`;
+
+exports[`emit regression — server output zero and false 1`] = `"0<!---->/false<!---->"`;
+
+exports[`emit regression — server output expression interpolation 1`] = `"5<!---->"`;
+
+exports[`emit regression — server output globals under scope 1`] = `"42<!---->"`;
+
+exports[`emit regression — server output html() raw 1`] = `"<b>hi</b><!---->"`;
+
+exports[`emit regression — server output html() undefined 1`] = `"<!---->"`;
+
+exports[`emit regression — server output await interp escapes 1`] = `"&lt;z&gt;<!---->"`;
+
+exports[`emit regression — server output await interp value 1`] = `"ok<!---->"`;
+
+exports[`emit regression — server output static attribute 1`] = `"<a href="/x">go</a>"`;
+
+exports[`emit regression — server output static attr escaped 1`] = `"<a title="a&amp;b">x</a>"`;
+
+exports[`emit regression — server output expr attr string 1`] = `"<input type="text">"`;
+
+exports[`emit regression — server output expr attr false 1`] = `"<input>"`;
+
+exports[`emit regression — server output expr attr true 1`] = `"<input disabled>"`;
+
+exports[`emit regression — server output expr attr null 1`] = `"<input>"`;
+
+exports[`emit regression — server output boolean static attr 1`] = `"<input type="text" required>"`;
+
+exports[`emit regression — server output event omitted server 1`] = `"<button>x</button>"`;
+
+exports[`emit regression — server output class directive truthy 1`] = `"<div class="base active">x</div>"`;
+
+exports[`emit regression — server output class directive falsy 1`] = `"<div class="base">x</div>"`;
+
+exports[`emit regression — server output style directive 1`] = `"<div style="color: red">x</div>"`;
+
+exports[`emit regression — server output multiple style directives 1`] = `"<div style="color: red; margin: 0">x</div>"`;
+
+exports[`emit regression — server output spread attributes 1`] = `"<div id="x" class="c" hidden>y</div>"`;
+
+exports[`emit regression — server output bind:value server 1`] = `"<input value="hello">"`;
+
+exports[`emit regression — server output bind:checked server 1`] = `"<input checked>"`;
+
+exports[`emit regression — server output void element 1`] = `"<br>"`;
+
+exports[`emit regression — server output void with attr 1`] = `"<img src="/a.png">"`;
+
+exports[`emit regression — server output self-closing void 1`] = `"<hr>"`;
+
+exports[`emit regression — server output nested elements 1`] = `"<div><span>hi<!----></span></div>"`;
+
+exports[`emit regression — server output if truthy 1`] = `"<!--[-->yes<!--]-->"`;
+
+exports[`emit regression — server output if falsy 1`] = `"<!--[--><!--]-->"`;
+
+exports[`emit regression — server output if else 1`] = `"<!--[-->B<!--]-->"`;
+
+exports[`emit regression — server output else if 1`] = `"<!--[-->B<!--]-->"`;
+
+exports[`emit regression — server output else if to else 1`] = `"<!--[-->C<!--]-->"`;
+
+exports[`emit regression — server output for array 1`] = `"<!--[--><li>a<!----></li><li>b<!----></li><!--]-->"`;
+
+exports[`emit regression — server output for index 1`] = `"<!--[--><li>0<!---->:a<!----></li><li>1<!---->:b<!----></li><!--]-->"`;
+
+exports[`emit regression — server output for empty 1`] = `"<!--[--><!--]-->"`;
+
+exports[`emit regression — server output for destructure 1`] = `"<!--[--><li>a<!----></li><li>b<!----></li><!--]-->"`;
+
+exports[`emit regression — server output for await array 1`] = `"<!--[--><i>1<!----></i><i>2<!----></i><!--]-->"`;
+
+exports[`emit regression — server output for await catch 1`] = `"<!--[--><i>p<!----></i>err:boom<!----><!--]-->"`;
+
+exports[`emit regression — server output for keyed by key 1`] = `"<!--[--><li>a<!----></li><li>b<!----></li><!--]-->"`;
+
+exports[`emit regression — server output for + prefix (outer scope) 1`] = `"<!--[-->&gt;<!---->a<!----> <!--]-->"`;
+
+exports[`emit regression — server output for in if in element (true) 1`] = `"<ul><!--[--><!--[--><li>a<!----></li><li>b<!----></li><!--]--><!--]--></ul>"`;
+
+exports[`emit regression — server output for in if in element (false) 1`] = `"<ul><!--[--><!--]--></ul>"`;
+
+exports[`emit regression — server output await then 1`] = `"<!--[--><span>hi<!----></span><!--]-->"`;
+
+exports[`emit regression — server output await catch 1`] = `"<!--[--><b>boom<!----></b><!--]-->"`;
+
+exports[`emit regression — server output await finally 1`] = `"<!--[-->x<!---->!<!--]-->"`;
+
+exports[`emit regression — server output switch match 1`] = `"<!--[-->two<!--]-->"`;
+
+exports[`emit regression — server output switch default 1`] = `"<!--[-->other<!--]-->"`;
+
+exports[`emit regression — server output switch no match 1`] = `"<!--[--><!--]-->"`;
+
+exports[`emit regression — server output try catch 1`] = `"<!--[-->caught:nope<!----><!--]-->"`;
+
+exports[`emit regression — server output try ok 1`] = `"<!--[-->ok<!--]-->"`;
+
+exports[`emit regression — server output try finally 1`] = `"<!--[-->a!<!--]-->"`;
+
+exports[`emit regression — server output component props + children (server) 1`] = `"<!--[--><div class="card"><h1>Hello</h1>inner body<!----></div><!--]-->"`;
+
+exports[`emit regression — server output component spread (server) 1`] = `"<!--[--><b>1-2</b><!--]-->"`;
+
+exports[`emit regression — server output snippet defined and called 1`] = `"<ul><li>a<!----></li><!----><li>b<!----></li><!----></ul>"`;
+
+exports[`emit regression — server output snippet hoisted 1`] = `"<ul><li>a<!----></li><!----></ul>"`;
+
+exports[`emit regression — server output snippet not escaped 1`] = `"<b>hi<!----></b><!---->"`;
+
+exports[`emit regression — server output script emits nothing 1`] = `"<p>5<!----></p>"`;
+
+exports[`emit regression — server output style scoped (#13) 1`] = `"<style>.a[data-ab-4b4057c]{color:red}</style>"`;
+
+exports[`emit regression — server output state drives text 1`] = `"<h1>Hello world<!----></h1>"`;
+
+exports[`emit regression — server output numeric state 1`] = `"<span>42<!----></span>"`;
+
+exports[`emit regression — server output props destructuring 1`] = `"x<!---->"`;
+
+exports[`emit regression — server output computed from state 1`] = `"<span>4<!----></span>"`;
+
+exports[`emit regression — server output const + function 1`] = `"<span>15<!----></span>"`;
+
+exports[`emit regression — server output injected import 1`] = `"hi bob<!---->"`;
+
+exports[`emit regression — server output module script const 1`] = `"<span>42<!----></span>"`;
+
+exports[`emit regression — server output multiple state vars 1`] = `"<span>3<!----></span>"`;
+
+exports[`emit regression — client DOM plain text 1`] = `"hello world"`;
+
+exports[`emit regression — client DOM interpolation 1`] = `"Hi Bob<!---->!"`;
+
+exports[`emit regression — client DOM interpolation escapes 1`] = `"&lt;b&gt;x&lt;/b&gt;<!---->"`;
+
+exports[`emit regression — client DOM quotes/ampersands escaped 1`] = `"a &amp; "b" 'c'<!---->"`;
+
+exports[`emit regression — client DOM undefined renders empty 1`] = `"[<!---->]"`;
+
+exports[`emit regression — client DOM null renders empty 1`] = `"[<!---->]"`;
+
+exports[`emit regression — client DOM zero and false 1`] = `"0<!---->/false<!---->"`;
+
+exports[`emit regression — client DOM expression interpolation 1`] = `"5<!---->"`;
+
+exports[`emit regression — client DOM globals under scope 1`] = `"42<!---->"`;
+
+exports[`emit regression — client DOM html() raw 1`] = `"<b>hi</b><!---->"`;
+
+exports[`emit regression — client DOM html() undefined 1`] = `"<!---->"`;
+
+exports[`emit regression — client DOM await interp escapes 1`] = `"<!---->"`;
+
+exports[`emit regression — client DOM await interp value 1`] = `"<!---->"`;
+
+exports[`emit regression — client DOM static attribute 1`] = `"<a href="/x">go</a>"`;
+
+exports[`emit regression — client DOM static attr escaped 1`] = `"<a title="a&amp;b">x</a>"`;
+
+exports[`emit regression — client DOM expr attr string 1`] = `"<input type="text">"`;
+
+exports[`emit regression — client DOM expr attr false 1`] = `"<input>"`;
+
+exports[`emit regression — client DOM expr attr true 1`] = `"<input disabled="">"`;
+
+exports[`emit regression — client DOM expr attr null 1`] = `"<input>"`;
+
+exports[`emit regression — client DOM boolean static attr 1`] = `"<input type="text" required="">"`;
+
+exports[`emit regression — client DOM class directive truthy 1`] = `"<div class="base active">x</div>"`;
+
+exports[`emit regression — client DOM class directive falsy 1`] = `"<div class="base">x</div>"`;
+
+exports[`emit regression — client DOM style directive 1`] = `"<div style="color: red;">x</div>"`;
+
+exports[`emit regression — client DOM multiple style directives 1`] = `"<div style="color: red; margin: 0px;">x</div>"`;
+
+exports[`emit regression — client DOM spread attributes 1`] = `"<div id="x" class="c" hidden="">y</div>"`;
+
+exports[`emit regression — client DOM void element 1`] = `"<br>"`;
+
+exports[`emit regression — client DOM void with attr 1`] = `"<img src="/a.png">"`;
+
+exports[`emit regression — client DOM self-closing void 1`] = `"<hr>"`;
+
+exports[`emit regression — client DOM nested elements 1`] = `"<div><span>hi<!----></span></div>"`;
+
+exports[`emit regression — client DOM if truthy 1`] = `"<!--[-->yes<!--if--><!--]-->"`;
+
+exports[`emit regression — client DOM if falsy 1`] = `"<!--[--><!--if--><!--]-->"`;
+
+exports[`emit regression — client DOM if else 1`] = `"<!--[-->B<!--if--><!--]-->"`;
+
+exports[`emit regression — client DOM else if 1`] = `"<!--[-->B<!--if--><!--]-->"`;
+
+exports[`emit regression — client DOM else if to else 1`] = `"<!--[-->C<!--if--><!--]-->"`;
+
+exports[`emit regression — client DOM for array 1`] = `"<!--[--><!--for--><li>a<!----></li><!--/for--><!--for--><li>b<!----></li><!--/for--><!--for-end--><!--]-->"`;
+
+exports[`emit regression — client DOM for index 1`] = `"<!--[--><!--for--><li>0<!---->:a<!----></li><!--/for--><!--for--><li>1<!---->:b<!----></li><!--/for--><!--for-end--><!--]-->"`;
+
+exports[`emit regression — client DOM for empty 1`] = `"<!--[--><!--for-end--><!--]-->"`;
+
+exports[`emit regression — client DOM for destructure 1`] = `"<!--[--><!--for--><li>a<!----></li><!--/for--><!--for--><li>b<!----></li><!--/for--><!--for-end--><!--]-->"`;
+
+exports[`emit regression — client DOM for keyed by key 1`] = `"<!--[--><!--for--><li>a<!----></li><!--/for--><!--for--><li>b<!----></li><!--/for--><!--for-end--><!--]-->"`;
+
+exports[`emit regression — client DOM for + prefix (outer scope) 1`] = `"<!--[--><!--for-->&gt;<!---->a<!----> <!--/for--><!--for-end--><!--]-->"`;
+
+exports[`emit regression — client DOM for in if in element (true) 1`] = `"<ul><!--[--><!--[--><!--for--><li>a<!----></li><!--/for--><!--for--><li>b<!----></li><!--/for--><!--for-end--><!--]--><!--if--><!--]--></ul>"`;
+
+exports[`emit regression — client DOM for in if in element (false) 1`] = `"<ul><!--[--><!--if--><!--]--></ul>"`;
+
+exports[`emit regression — client DOM switch match 1`] = `"<!--[-->two<!--switch--><!--]-->"`;
+
+exports[`emit regression — client DOM switch default 1`] = `"<!--[-->other<!--switch--><!--]-->"`;
+
+exports[`emit regression — client DOM switch no match 1`] = `"<!--[--><!--switch--><!--]-->"`;
+
+exports[`emit regression — client DOM try catch 1`] = `"<!--[-->caught:nope<!----><!--try--><!--]-->"`;
+
+exports[`emit regression — client DOM try ok 1`] = `"<!--[-->ok<!--try--><!--]-->"`;
+
+exports[`emit regression — client DOM try finally 1`] = `"<!--[-->a!<!--try--><!--]-->"`;
+
+exports[`emit regression — client DOM component props (client) 1`] = `"<!--[--><div class="card"><h1>Hello</h1><!--slot--></div><!--Card--><!--]-->"`;
+
+exports[`emit regression — client DOM component children slot (client) 1`] = `"<!--[--><div class="card"><h1>Hi</h1><!--slot-->slotted Bob<!----></div><!--Card--><!--]-->"`;
+
+exports[`emit regression — client DOM snippet defined and called 1`] = `"<ul><li>a<!----></li><!----><li>b<!----></li><!----></ul>"`;
+
+exports[`emit regression — client DOM snippet hoisted 1`] = `"<ul><li>a<!----></li><!----></ul>"`;
+
+exports[`emit regression — client DOM snippet not escaped 1`] = `"<b>hi<!----></b><!---->"`;
+
+exports[`emit regression — client DOM snippet client fragment 1`] = `"Hi Bob<!---->!<!---->"`;
+
+exports[`emit regression — client DOM script emits nothing 1`] = `"<p>5<!----></p>"`;
+
+exports[`emit regression — client DOM style scoped (#13) 1`] = `"<style>.a[data-ab-4b4057c]{color:red}</style>"`;
+
+exports[`emit regression — client DOM reactive text node 1`] = `"count: 1<!---->"`;
+
+exports[`emit regression — client DOM reactive text node 2`] = `"count: 2<!---->"`;
+
+exports[`emit regression — client DOM reactive attribute 1`] = `"<div class="one"></div>"`;
+
+exports[`emit regression — client DOM reactive attribute 2`] = `"<div class="two"></div>"`;
+
+exports[`emit regression — client DOM reactive if toggle 1`] = `"<!--[--><!--if--><!--]-->"`;
+
+exports[`emit regression — client DOM reactive if toggle 2`] = `"<!--[--><p>yes</p><!--if--><!--]-->"`;
+
+exports[`emit regression — client DOM reactive keyed reorder 1`] = `"<!--[--><!--for--><li>1<!----></li><!--/for--><!--for--><li>2<!----></li><!--/for--><!--for--><li>3<!----></li><!--/for--><!--for-end--><!--]-->"`;
+
+exports[`emit regression — client DOM reactive keyed reorder 2`] = `"<!--[--><!--for--><li>3<!----></li><!--/for--><!--for--><li>1<!----></li><!--/for--><!--for--><li>2<!----></li><!--/for--><!--for-end--><!--]-->"`;
+
+exports[`emit regression — client DOM reactive switch 1`] = `"<!--[-->one<!--switch--><!--]-->"`;
+
+exports[`emit regression — client DOM reactive switch 2`] = `"<!--[-->two<!--switch--><!--]-->"`;
+
+exports[`emit regression — client DOM event click updates via signal 1`] = `"<button>0<!----></button>"`;
+
+exports[`emit regression — client DOM event click updates via signal 2`] = `"<button>1<!----></button>"`;
+
+exports[`emit regression — client DOM await inline resolves 1`] = `"<!---->"`;
+
+exports[`emit regression — client DOM await inline resolves 2`] = `"ok<!---->"`;
+
+exports[`emit regression — client DOM await block pending then 1`] = `"<!--[-->loading<!--await--><!--]-->"`;
+
+exports[`emit regression — client DOM await block pending then 2`] = `"<!--[-->done<!----><!--await--><!--]-->"`;
+
+exports[`emit regression — client DOM state drives text 1`] = `"<h1>Hello world<!----></h1>"`;
+
+exports[`emit regression — client DOM numeric state 1`] = `"<span>42<!----></span>"`;
+
+exports[`emit regression — client DOM props destructuring 1`] = `"x<!---->"`;
+
+exports[`emit regression — client DOM computed from state 1`] = `"<span>4<!----></span>"`;
+
+exports[`emit regression — client DOM const + function 1`] = `"<span>15<!----></span>"`;
+
+exports[`emit regression — client DOM injected import 1`] = `"hi bob<!---->"`;
+
+exports[`emit regression — client DOM module script const 1`] = `"<span>42<!----></span>"`;
+
+exports[`emit regression — client DOM multiple state vars 1`] = `"<span>3<!----></span>"`;
+
+exports[`emit regression — client DOM event increments state 1`] = `"<button>+</button><span>0<!----></span>"`;
+
+exports[`emit regression — client DOM event increments state 2`] = `"<button>+</button><span>1<!----></span>"`;
+
+exports[`emit regression — client DOM compound assignment 1`] = `"<button>+</button><span>0<!----></span>"`;
+
+exports[`emit regression — client DOM compound assignment 2`] = `"<button>+</button><span>5<!----></span>"`;
+
+exports[`emit regression — client DOM function handler mutates state 1`] = `"<button>+</button><span>0<!----></span>"`;
+
+exports[`emit regression — client DOM function handler mutates state 2`] = `"<button>+</button><span>1<!----></span>"`;
+
+exports[`emit regression — client DOM computed updates on state change 1`] = `"<button>+</button><span>4<!----></span>"`;
+
+exports[`emit regression — client DOM computed updates on state change 2`] = `"<button>+</button><span>6<!----></span>"`;
+
+exports[`emit regression — client DOM state drives if 1`] = `"<button>go</button><!--[--><!--if--><!--]-->"`;
+
+exports[`emit regression — client DOM state drives if 2`] = `"<button>go</button><!--[--><p>yes</p><!--if--><!--]-->"`;
+
+exports[`emit regression — client DOM state.linked reseeds 1`] = `"<button>+</button><span>10<!----></span>"`;
+
+exports[`emit regression — client DOM state.linked reseeds 2`] = `"<button>+</button><span>20<!----></span>"`;
+
+exports[`emit regression — server output style scoped element (#13/#20) 1`] = `"<div class="a" data-ab-4b4057c>x</div><style>.a[data-ab-4b4057c]{color:red}</style>"`;
+
+exports[`emit regression — client DOM style scoped element (#13/#20) 1`] = `"<div class="a" data-ab-4b4057c="">x</div><style>.a[data-ab-4b4057c]{color:red}</style>"`;

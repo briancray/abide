@@ -1,58 +1,59 @@
-/*
-Wraps an AsyncIterable<Frame> in a Response whose body is
-Server-Sent Events (text/event-stream) — each frame becomes one
-`data: <json>\n\n` event. Used inside an rpc handler to expose a
-generator over plain HTTP so EventSource (or `tail(fn.stream(args))`
-on the client) can consume it frame-by-frame.
+// Server-Sent Events streaming response (rpc-core §4). Emits a `data: <json>\n\n` frame
+// per item from a sync or async iterable, streamed through a ReadableStream.
+//
+// A long-lived subscription (e.g. a `socket(...)` HTTP face) can stay byte-idle indefinitely
+// between messages. Bun would idle-time-out that connection, so we emit a periodic SSE comment
+// (`:\n\n`, ignored by every EventSource) to keep bytes flowing. The heartbeat fires only after
+// HEARTBEAT_MS of silence, so a finite iterable that drains promptly never emits one. `cancel`
+// (client disconnect) tears the interval down AND returns the source iterator, so a subscribing
+// iterable (the socket hub) drops the subscriber instead of leaking it.
 
-  export const orderFeed = GET((args: Args) =>
-      sse(async function* () {
-          for await (const order of db.watchOrders(args)) yield order
-      }())
-  )
+const HEARTBEAT_MS = 15_000;
+const HEARTBEAT = new TextEncoder().encode(":\n\n");
 
-A 15s keepalive comment (`: keepalive\n\n`) is sent between frames so
-intermediaries (proxies, load balancers) don't drop an idle connection.
-Comments are ignored by EventSource per the spec, so they're invisible to
-consumers.
-
-Cancellation flows from the consumer through ReadableStream's `cancel`
-into `iter.return()` so the handler's `for await` exits via its normal
-control path. Errors are emitted as an `event: error` frame carrying only
-the message (full error logged server-side) before the stream closes;
-EventSource surfaces this via its `error` listener and `tail()`
-maps it to the entry's `error` field.
-*/
-import { NO_STORE } from '../shared/CACHE_CONTROL_VALUES.ts'
-import { encodeWireBody } from '../shared/encodeWireBody.ts'
-import { sseErrorFrame } from '../shared/sseErrorFrame.ts'
-import type { TypedResponse } from './rpc/types/TypedResponse.ts'
-import { streamFromIterator } from './runtime/streamFromIterator.ts'
-import { withResponseDefaults } from './runtime/withResponseDefaults.ts'
-
-const KEEPALIVE_INTERVAL_MS = 15000
-
-// @documentation response
-export function sse<Frame>(
-    iterable: AsyncIterable<Frame>,
-    init?: ResponseInit,
-): TypedResponse<AsyncIterable<Frame>> {
-    const body = streamFromIterator(iterable, {
-        /* Honest-JSON encode (same encoder as `json()`) so a frame carrying a Set/Map/bigint
-           crosses losslessly instead of the silent `{}` / bigint-throw plain JSON.stringify gave
-           — parseSse's JSON.parse reads it unchanged since the wire stays honest JSON. */
-        encodeFrame: (value) => `data: ${encodeWireBody(value)}\n\n`,
-        encodeError: (message) => sseErrorFrame.encode(message),
-        keepaliveMs: KEEPALIVE_INTERVAL_MS,
-        keepalivePayload: ': keepalive\n\n',
-    })
-    return new Response(
-        body,
-        withResponseDefaults(init, {
-            'Content-Type': 'text/event-stream; charset=utf-8',
-            'Cache-Control': NO_STORE,
-            'X-Content-Type-Options': 'nosniff',
-            Connection: 'keep-alive',
-        }),
-    ) as TypedResponse<AsyncIterable<Frame>>
+// NOTE: sse() is NOT yet a see-through/replayable helper (unlike json/jsonl) — it stays an opaque
+// Response (eager, heartbeat-driven, battle-tested for long-lived socket faces). Making `GET(() =>
+// sse(gen()))` replayable like an async generator needs a lazy (pull-based, HWM 0) sse — a follow-up.
+export function sse(iterable: AsyncIterable<unknown> | Iterable<unknown>, init?: ResponseInit): Response {
+  const encoder = new TextEncoder();
+  let source: AsyncIterator<unknown> | Iterator<unknown> | undefined;
+  let heartbeat: ReturnType<typeof setInterval> | undefined;
+  const stopHeartbeat = (): void => {
+    if (heartbeat !== undefined) {
+      clearInterval(heartbeat);
+      heartbeat = undefined;
+    }
+  };
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const asAsync = iterable as AsyncIterable<unknown>;
+      source = asAsync[Symbol.asyncIterator]?.() ?? (iterable as Iterable<unknown>)[Symbol.iterator]();
+      heartbeat = setInterval(() => {
+        try {
+          controller.enqueue(HEARTBEAT);
+        } catch {
+          stopHeartbeat();
+        }
+      }, HEARTBEAT_MS);
+      try {
+        for (let result = await source.next(); result.done !== true; result = await source.next()) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(result.value)}\n\n`));
+        }
+        stopHeartbeat();
+        controller.close();
+      } catch (caught) {
+        stopHeartbeat();
+        controller.error(caught);
+      }
+    },
+    // Client disconnected: stop the heartbeat and release the source iterator so a subscribing
+    // hub removes this subscriber (no leak).
+    async cancel() {
+      stopHeartbeat();
+      await source?.return?.(undefined);
+    },
+  });
+  const headers = new Headers(init?.headers);
+  if (!headers.has("content-type")) headers.set("content-type", "text/event-stream");
+  return new Response(stream, { ...init, headers });
 }

@@ -1,47 +1,41 @@
-/*
-Wraps an AsyncIterable<Frame> in a Response whose body is JSON Lines
-(application/jsonl) — one JSON value per line, terminated by `\n`. Used
-inside an rpc handler to turn a generator into a streaming HTTP response
-that `tail(fn.stream(args))` consumes frame-by-frame on the client.
+// JSON Lines (NDJSON) streaming response (rpc-core §4). Emits one JSON value per line
+// from a sync or async iterable, streamed through a ReadableStream so large/lazy sources
+// never fully buffer in memory.
+//
+// LAZY (pull-based): the source is consumed only as the body is READ, never eagerly. So a jsonl Response
+// that is discarded unread — e.g. when a cell-backed read sees through it to the raw source to build a
+// ReplayableStream (replayable-streams.md §4) — never drains that source, avoiding double-consumption.
 
-  export const orderFeed = GET((args: Args) =>
-      jsonl(async function* () {
-          for await (const order of db.watchOrders(args)) yield order
-      }())
-  )
+import { tagResponseSource, type StreamResponse } from "../shared/internal/responseSource.ts";
 
-Cancellation flows from the consumer through ReadableStream's `cancel`
-into `iter.return()` so the handler's `for await` exits via its normal
-control path (DB cursors, file handles, etc. get to release in finally).
-
-Errors thrown by the generator are emitted as a final
-`{"$error":"<message>"}` line before the stream closes. The convention
-keeps the format JSON-safe and lets the consumer distinguish "stream
-ended cleanly" from "handler threw" without a side-channel. The full
-error is logged server-side via the framework's error handler — only the
-message crosses the wire.
-*/
-import { NO_STORE } from '../shared/CACHE_CONTROL_VALUES.ts'
-import { jsonlErrorFrame } from '../shared/jsonlErrorFrame.ts'
-import type { TypedResponse } from './rpc/types/TypedResponse.ts'
-import { streamFromIterator } from './runtime/streamFromIterator.ts'
-import { withResponseDefaults } from './runtime/withResponseDefaults.ts'
-
-// @documentation response
-export function jsonl<Frame>(
-    iterable: AsyncIterable<Frame>,
-    init?: ResponseInit,
-): TypedResponse<AsyncIterable<Frame>> {
-    const body = streamFromIterator(iterable, {
-        encodeFrame: (value) => `${JSON.stringify(value)}\n`,
-        encodeError: (message) => jsonlErrorFrame.encode(message),
-    })
-    return new Response(
-        body,
-        withResponseDefaults(init, {
-            'Content-Type': 'application/jsonl; charset=utf-8',
-            'Cache-Control': NO_STORE,
-            'X-Content-Type-Options': 'nosniff',
-        }),
-    ) as TypedResponse<AsyncIterable<Frame>>
+export function jsonl<C>(iterable: AsyncIterable<C> | Iterable<C>, init?: ResponseInit): StreamResponse<C> {
+  const encoder = new TextEncoder();
+  let iterator: AsyncIterator<unknown> | Iterator<unknown> | undefined;
+  const stream = new ReadableStream<Uint8Array>({
+    start() {
+      // Obtain the iterator WITHOUT consuming — an async generator's body runs on the first `.next()`.
+      const asAsync = iterable as AsyncIterable<unknown>;
+      iterator = asAsync[Symbol.asyncIterator]?.() ?? (iterable as Iterable<unknown>)[Symbol.iterator]();
+    },
+    async pull(controller) {
+      try {
+        const result = await (iterator as AsyncIterator<unknown>).next();
+        if (result.done === true) controller.close();
+        else controller.enqueue(encoder.encode(JSON.stringify(result.value) + "\n"));
+      } catch (caught) {
+        controller.error(caught);
+      }
+    },
+    async cancel() {
+      await (iterator as AsyncIterator<unknown>)?.return?.(undefined);
+    },
+    // highWaterMark 0 so the runtime never eagerly pulls to pre-fill the queue — a discarded, unread
+    // jsonl Response must NOT consume its source (see-through relies on this).
+  }, { highWaterMark: 0 });
+  const headers = new Headers(init?.headers);
+  if (!headers.has("content-type")) headers.set("content-type", "application/jsonl");
+  // Tag with the pre-encoding source so a cell-backed read is REPLAYABLE exactly like a handler that
+  // returned `iterable` raw (replayable-streams.md §4); the router re-encodes as jsonl after replay. The
+  // `StreamResponse<C>` brand carries the chunk type so a read infers `StreamRead<Args, C>`.
+  return tagResponseSource(new Response(stream, { ...init, headers }), { kind: "stream", source: iterable, encoding: "jsonl" }) as StreamResponse<C>;
 }

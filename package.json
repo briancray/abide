@@ -1,41 +1,18 @@
 {
-    "name": "abide-workspace",
-    "private": true,
-    "type": "module",
-    "workspaces": [
-        "packages/*",
-        "examples/*"
-    ],
-    "scripts": {
-        "format": "biome check --write --linter-enabled=false && bun run format:abide",
-        "format:abide": "prettier --write \"**/*.abide\"",
-        "lint": "biome lint",
-        "test": "bun test ./packages/*/tests && for d in examples/*/; do if [ -d \"$d/test\" ]; then (cd \"$d\" && bun test) || exit 1; fi; done",
-        "check": "biome check --write",
-        "prepare": "git config core.hooksPath .githooks || true",
-        "verify": "bun run lint && bun run typecheck && bun run check:readme-tags && bun run test",
-        "typecheck": "tsgo -p packages/abide/tsconfig.json && tsgo -p packages/abide/tsconfig.consumer.json && tsgo -p packages/prettier-plugin-abide/tsconfig.json && bun run typecheck:abide",
-        "typecheck:abide": "bun run scripts/checkAbideExamples.ts",
-        "check:readme-tags": "bun run packages/abide/scripts/readmeSurfaces.ts",
-        "bench": "for f in packages/abide/bench/*.bench.ts; do bun \"$f\"; done",
-        "bench:gate": "bun packages/abide/bench/gate.ts",
-        "bench:delta": "bun packages/abide/bench/delta.ts",
-        "changeset": "changeset",
-        "version-packages": "bun run scripts/autofillChangesets.ts && changeset version && bun run scripts/syncRootChangelog.ts",
-        "release": "changeset publish"
-    },
-    "devDependencies": {
-        "@biomejs/biome": "^2.5.1",
-        "@changesets/changelog-github": "^0.7.0",
-        "@changesets/cli": "^2.29.7",
-        "@types/bun": "latest",
-        "@typescript/native-preview": "7.0.0-dev.20260628.1",
-        "prettier": "^3.9.1",
-        "typescript": "^6.0.3"
-    },
-    "dependencies": {
-        "@happy-dom/global-registrator": "^20.10.6",
-        "happy-dom": "^20.10.6",
-        "svelte": "^5.56.4"
-    }
+  "name": "abide-monorepo",
+  "private": true,
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "format": "biome check --write",
+    "lint": "biome check",
+    "typecheck": "bun run --filter '*' typecheck",
+    "check": "biome check && bun run --filter '*' typecheck && bun run --filter docs abide-check && bun run --filter docs abide-lsp",
+    "test": "bun run --filter abide test",
+    "e2e": "bun run --filter docs e2e:ci",
+    "verify": "bun run scripts/verify.ts",
+    "verify:fix": "bun run scripts/verify.ts --fix-only"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.4"
+  }
 }

@@ -1,0 +1,20 @@
+<script module>
+  import Sample from "../../../components/Sample.abide"
+  import { route } from "abide/shared/route"
+
+  const PAGE = "src/ui/pages/topics/[slug]/page.abide"
+</script>
+
+
+<main class="page">
+  <h1>Topic: {route().params.slug}</h1>
+  <p class="lead">This page is served by a single file — <code>src/ui/pages/topics/[slug]/page.abide</code> — for every value of <code>slug</code>. The segment was captured from the URL and is available during SSR via <code>route().params.slug</code>.</p>
+
+  <Sample page={PAGE} id="slug-param" title="Captured param — <code>route().params.slug</code>" client="slug-param">
+    <!-- #demo slug-param -->
+    <p>The <code>[slug]</code> segment captured from the URL is <strong>{route().params.slug}</strong>.</p>
+    <!-- #enddemo -->
+  </Sample>
+
+  <p><a href="/routing">← Back to routing</a></p>
+</main>

@@ -1,0 +1,335 @@
+<script module>
+  import Sample from "../../components/Sample.abide"
+
+  const PAGE = "src/ui/pages/cache/page.abide"
+</script>
+
+<script>
+  // Cache verbs + probes, all driven through the isomorphic RPC callable surface (the only cache
+  // surface a `.abide` page can reach: RPC imports are wired into template scope, arbitrary module
+  // imports are not). A read RPC exposes `(args)` smart-read + `.load/.peek/.pending/.error/.refresh/
+  // .invalidate`; `watch` observes it reactively. NOTE: an `.abide` <script> runs as plain JS on the
+  // SSR path — no TypeScript syntax here.
+  import { state } from "abide/ui/state"
+  import { watch } from "abide/ui/watch"
+  import cacheCounter from "../../../server/rpc/cacheCounter"
+  import cacheMetric from "../../../server/rpc/cacheMetric"
+  import cacheSlow from "../../../server/rpc/cacheSlow"
+  import cacheFlaky from "../../../server/rpc/cacheFlaky"
+  import cacheReachable from "../../../server/rpc/cacheReachable"
+  import cacheShared from "../../../server/rpc/cacheShared"
+  import cacheTtl from "../../../server/rpc/cacheTtl"
+  import cacheTagA from "../../../server/rpc/cacheTagA"
+  import cacheTagB from "../../../server/rpc/cacheTagB"
+  import cacheTagBust from "../../../server/rpc/cacheTagBust"
+  import cacheTagRefresh from "../../../server/rpc/cacheTagRefresh"
+  import cacheTagPending from "../../../server/rpc/cacheTagPending"
+
+  function errorText(value) {
+    if (value === undefined || value === null) return "none"
+    if (value instanceof Error) return value.message
+    if (typeof value === "object" && "message" in value) return String(value.message)
+    return String(value)
+  }
+
+  // ---- Section 1: cached read reused (call count) + peek ---------------------------------------
+  // Reads are gated behind `started` so SSR stays fully static and never kicks a fetch.
+  // #demo counter
+  let started = state(false)
+  let reads = state(0)
+  const runsText = state.computed(() => (started ? (cacheCounter.peek({ key: "alpha" })?.runs ?? "loading") : "idle"))
+  const peekText = state.computed(() => {
+    const value = cacheCounter.peek({ key: "alpha" })
+    return value ? String(value.runs) : "(none)"
+  })
+  // watch(source, handler): the handler fires whenever the read's value changes (not on first read).
+  let watchHits = state(0)
+  watch(() => cacheCounter.peek({ key: "alpha" }), () => { watchHits++ })
+
+  function startCounter() { started = true }
+  function readAgain() { reads++; cacheCounter({ key: "alpha" }) } // bare call = the load; cached → no re-run
+  function refreshCounter() { cacheCounter.refresh({ key: "alpha" }) }
+  function invalidateCounter() { cacheCounter.invalidate({ key: "alpha" }) }
+  // #enddemo
+
+  // ---- Section 2: partial-object invalidate (superset slots) -----------------------------------
+  // #demo metric
+  let metricStarted = state(false)
+  const red1 = state.computed(() => (metricStarted ? (cacheMetric.peek({ team: "red", id: 1 })?.runs ?? "…") : "idle"))
+  const red2 = state.computed(() => (metricStarted ? (cacheMetric.peek({ team: "red", id: 2 })?.runs ?? "…") : "idle"))
+  const blue1 = state.computed(() => (metricStarted ? (cacheMetric.peek({ team: "blue", id: 1 })?.runs ?? "…") : "idle"))
+  function startMetric() { metricStarted = true }
+  function invalidateRed() { cacheMetric.invalidate({ team: "red" }) } // partial selector → both red slots
+  // #enddemo
+
+  // ---- Section 3: pending probe + refresh keeps stale value visible ----------------------------
+  // #demo slow
+  let slowStarted = state(false)
+  const slowValue = state.computed(() => (slowStarted ? (cacheSlow.peek({ key: "job" })?.runs ?? "loading") : "idle"))
+  const slowPending = state.computed(() => (cacheSlow.pending({ key: "job" }) ? "loading" : "idle"))
+  function startSlow() { slowStarted = true }
+  function refreshSlow() { cacheSlow.refresh({ key: "job" }) }
+  // #enddemo
+
+  // ---- Section 4: error probe ------------------------------------------------------------------
+  // #demo flaky
+  let flakyStarted = state(false)
+  const flakyError = state.computed(() => (flakyStarted ? errorText(cacheFlaky.error({ fail: true })) : "idle"))
+  function startFlaky() {
+    flakyStarted = true
+    cacheFlaky({ fail: true }).catch(() => {}) // bare call kicks the failing load; error lands on the slot
+  }
+  function clearFlaky() { cacheFlaky.invalidate({ fail: true }); flakyStarted = false }
+  // #enddemo
+
+  // ---- Section 5: reachable(host) --------------------------------------------------------------
+  // #demo reach
+  let reachStarted = state(false)
+  const reachSelf = state.computed(() => (reachStarted ? String(cacheReachable.peek({})?.self ?? "…") : "idle"))
+  const reachDead = state.computed(() => (reachStarted ? String(cacheReachable.peek({})?.dead ?? "…") : "idle"))
+  function startReach() { reachStarted = true }
+  // #enddemo
+
+  // ---- Section 6: refreshing(args) — revalidating over a RETAINED value --------------------------
+  // Distinct from first-load `pending`: `refreshing` is true only while a re-fetch runs over a value
+  // that stays on screen. So during a refresh: value = the stale one, refreshing = yes, pending = no.
+  // #demo refreshing
+  let refreshingStarted = state(false)
+  const refreshingValue = state.computed(() => (refreshingStarted ? (cacheSlow.peek({ key: "refresh-demo" })?.runs ?? "loading") : "idle"))
+  const refreshingFlag = state.computed(() => (cacheSlow.refreshing({ key: "refresh-demo" }) ? "yes" : "no"))
+  const refreshingPending = state.computed(() => (cacheSlow.pending({ key: "refresh-demo" }) ? "yes" : "no"))
+  function startRefreshing() { refreshingStarted = true }
+  function runRefreshing() { cacheSlow.refresh({ key: "refresh-demo" }) }
+  // #enddemo
+
+  // ---- Section 7: watch(args, cb) — the METHOD form ---------------------------------------------
+  // `fn.watch(args, cb)` runs cb whenever THIS slot's value changes (method form, not `watch(thunk)`).
+  // #demo watchmethod
+  let watchMethodStarted = state(false)
+  let watchMethodHits = state(0)
+  const watchMethodValue = state.computed(() => (watchMethodStarted ? (cacheCounter.peek({ key: "watch-method" })?.runs ?? "loading") : "idle"))
+  cacheCounter.watch({ key: "watch-method" }, () => { watchMethodHits++ })
+  function startWatchMethod() { watchMethodStarted = true }
+  function refreshWatched() { cacheCounter.refresh({ key: "watch-method" }) }
+  // #enddemo
+
+  // ---- Section 8: amend(args, value | updater) — mutate the slot in place, no re-fetch ----------
+  // #demo amend
+  let amendStarted = state(false)
+  const amendValue = state.computed(() => (amendStarted ? String(cacheCounter.peek({ key: "amend-demo" })?.runs ?? "loading") : "idle"))
+  const amendPeek = state.computed(() => {
+    const value = cacheCounter.peek({ key: "amend-demo" })
+    return value ? String(value.runs) : "(none)"
+  })
+  function startAmend() { amendStarted = true }
+  // value-form: replace the retained value in place — the server handler never runs.
+  function amendValueForm() { cacheCounter.amend({ key: "amend-demo" }, { key: "amend-demo", runs: 999 }) }
+  // updater-form: derive the next value from the current — also local, no re-fetch.
+  function amendUpdater() { cacheCounter.amend({ key: "amend-demo" }, (current) => ({ key: "amend-demo", runs: (current?.runs ?? 0) + 100 })) }
+  // #enddemo
+
+  // ---- Section 9: shared — cross-request server cache ------------------------------------------
+  // Each `raw()` is a separate HTTP request. A SHARED read's slot is process-global, so two requests
+  // return the SAME run count; a per-request (non-shared) read re-runs each time and climbs.
+  // #demo shared
+  let sharedResult = state(null)
+  async function probeShared() {
+    const sharedA = await (await cacheShared.raw({ tag: "s" })).json()
+    const sharedB = await (await cacheShared.raw({ tag: "s" })).json()
+    const plainA = await (await cacheCounter.raw({ key: "shared-contrast" })).json()
+    const plainB = await (await cacheCounter.raw({ key: "shared-contrast" })).json()
+    sharedResult = { shared1: sharedA.runs, shared2: sharedB.runs, plain1: plainA.runs, plain2: plainB.runs }
+  }
+  // #enddemo
+
+  // ---- Section 10: ttl — the slot expires and re-fetches ---------------------------------------
+  // #demo ttl
+  let ttlResult = state(null)
+  let ttlBusy = state(false)
+  async function probeTtl() {
+    ttlBusy = true
+    const first = await (await cacheTtl.raw({ tag: "t" })).json()
+    const immediate = await (await cacheTtl.raw({ tag: "t" })).json()
+    await new Promise((resolve) => setTimeout(resolve, 900)) // wait out the 700ms ttl
+    const afterExpiry = await (await cacheTtl.raw({ tag: "t" })).json()
+    ttlResult = { first: first.runs, immediate: immediate.runs, afterExpiry: afterExpiry.runs }
+    ttlBusy = false
+  }
+  // #enddemo
+
+  // ---- Section 11: tags — global invalidate/refresh({tags}) + pending({tags}) ------------------
+  // Two shared reads carry the "docs" tag. One GLOBAL `invalidate({tags:["docs"]})` — run server-side
+  // (the tag registry is server-only) via a POST RPC — drops BOTH slots, so both re-fetch together.
+  // #demo tags
+  let tagsResult = state(null)
+  let tagPendingFlag = state("(unprobed)")
+  async function loadTags() {
+    const tagA = await (await cacheTagA.raw({ tag: "a" })).json()
+    const tagB = await (await cacheTagB.raw({ tag: "b" })).json()
+    tagsResult = { a: tagA.runs, b: tagB.runs }
+  }
+  async function bustTags() {
+    await cacheTagBust({}) // server: invalidate({ tags: ["docs"] }) → drops both "docs" slots
+    await loadTags()       // re-read → both climb together
+  }
+  async function refreshTags() {
+    await cacheTagRefresh({}) // server: refresh({ tags: ["docs"] }) → eager revalidate both
+    await loadTags()
+  }
+  async function probeTagPending() {
+    const probe = await (await cacheTagPending.raw({})).json()
+    tagPendingFlag = probe.pending ? "true" : "false"
+  }
+  // #enddemo
+</script>
+
+
+<main class="page">
+  <h1>Cache verbs &amp; probes</h1>
+  <p class="lead">A read is a memoized slot: reuse it, <code>refresh</code> it over the stale value, <code>invalidate</code> it to force a lazy re-fetch. The probes — <code>peek</code>, <code>pending</code>, <code>error</code> — and <code>watch</code> are reactive views of that same slot. Every demo below drives a real RPC (in-process on the server, a fetch from the browser).</p>
+
+  <Sample page={PAGE} id="counter" title="Cached read reused (call count)" client="counter" server="src/server/rpc/cacheCounter.ts">
+    <p>The server counts how many times the handler actually ran. Read again and again — the count holds because the slot is reused. <code>refresh</code> and <code>invalidate</code> force a re-fetch and it climbs.</p>
+    <ul class="grid">
+      <li>Server runs: <strong data-testid="counter-runs">{runsText}</strong></li>
+      <li>Reads requested: <strong data-testid="counter-reads">{reads}</strong></li>
+      <li>peek(): <strong data-testid="counter-peek">{peekText}</strong></li>
+      <li>watch() fires: <strong data-testid="counter-watch">{watchHits}</strong></li>
+    </ul>
+    <div class="row">
+      <button data-testid="counter-start" onclick={startCounter}>Load</button>
+      <button data-testid="counter-read" onclick={readAgain}>Read again</button>
+      <button data-testid="counter-refresh" onclick={refreshCounter}>Refresh</button>
+      <button data-testid="counter-invalidate" onclick={invalidateCounter}>Invalidate</button>
+    </div>
+  </Sample>
+
+  <Sample page={PAGE} id="metric" title="Partial-object match" client="metric" server="src/server/rpc/cacheMetric.ts">
+    <p>Slots are keyed by the whole args object. The partial selector <code>{'{'} team: "red" {'}'}</code> invalidates every superset slot — both red rows re-fetch, blue is untouched.</p>
+    <ul class="grid">
+      <li>red / 1 runs: <strong data-testid="metric-red1">{red1}</strong></li>
+      <li>red / 2 runs: <strong data-testid="metric-red2">{red2}</strong></li>
+      <li>blue / 1 runs: <strong data-testid="metric-blue1">{blue1}</strong></li>
+    </ul>
+    <div class="row">
+      <button data-testid="metric-start" onclick={startMetric}>Load</button>
+      <button data-testid="metric-invalidate-red" onclick={invalidateRed}>Invalidate team=red</button>
+    </div>
+  </Sample>
+
+  <Sample page={PAGE} id="slow" title="Pending · refresh keeps stale visible" client="slow" server="src/server/rpc/cacheSlow.ts">
+    <p>A slow read: <code>pending</code> is true on the first load; after it resolves, <code>refresh</code> keeps the old value on screen while the new one loads.</p>
+    <ul class="grid">
+      <li>Value (runs): <strong data-testid="slow-value">{slowValue}</strong></li>
+      <li>pending: <strong data-testid="slow-pending">{slowPending}</strong></li>
+    </ul>
+    <div class="row">
+      <button data-testid="slow-start" onclick={startSlow}>Load</button>
+      <button data-testid="slow-refresh" onclick={refreshSlow}>Refresh</button>
+    </div>
+  </Sample>
+
+  <Sample page={PAGE} id="flaky" title="Error probe" client="flaky" server="src/server/rpc/cacheFlaky.ts">
+    <p>A read that fails returns a 400; the <code>error</code> probe holds it as an <code>HttpError</code>.</p>
+    <ul class="grid">
+      <li>error: <strong data-testid="flaky-error">{flakyError}</strong></li>
+    </ul>
+    <div class="row">
+      <button data-testid="flaky-start" onclick={startFlaky}>Trigger failure</button>
+      <button data-testid="flaky-clear" onclick={clearFlaky}>Clear</button>
+    </div>
+  </Sample>
+
+  <Sample page={PAGE} id="reach" title="reachable(host)" client="reach" server="src/server/rpc/cacheReachable.ts">
+    <p><code>reachable(host)</code> actively probes a host: the app's own origin answers (true), a dead local port is refused (false).</p>
+    <ul class="grid">
+      <li>reachable(self): <strong data-testid="reach-self">{reachSelf}</strong></li>
+      <li>reachable(dead): <strong data-testid="reach-dead">{reachDead}</strong></li>
+    </ul>
+    <div class="row">
+      <button data-testid="reach-start" onclick={startReach}>Probe</button>
+    </div>
+  </Sample>
+
+  <Sample page={PAGE} id="refreshing" title="<code>refreshing(args)</code> — revalidating over a retained value" client="refreshing" server="src/server/rpc/cacheSlow.ts">
+    <p>Distinct from first-load <code>pending</code>: <code>refreshing</code> is true only while a re-fetch runs <em>over a value that stays on screen</em>. Load once, then refresh — the value holds, <code>refreshing</code> flips to <strong>yes</strong> and <code>pending</code> stays <strong>no</strong> the whole time.</p>
+    <ul class="grid">
+      <li>Value (runs): <strong data-testid="refreshing-value">{refreshingValue}</strong></li>
+      <li>refreshing(): <strong data-testid="refreshing-flag">{refreshingFlag}</strong></li>
+      <li>pending(): <strong data-testid="refreshing-pending">{refreshingPending}</strong></li>
+    </ul>
+    <div class="row">
+      <button data-testid="refreshing-start" onclick={startRefreshing}>Load</button>
+      <button data-testid="refreshing-refresh" onclick={runRefreshing}>Refresh</button>
+    </div>
+  </Sample>
+
+  <Sample page={PAGE} id="watchmethod" title="<code>watch(args, cb)</code> — the method form" client="watchmethod" server="src/server/rpc/cacheCounter.ts">
+    <p>The real method <code>fn.watch(args, cb)</code> runs the callback whenever <em>this slot's</em> value changes (unlike <code>watch(thunk)</code>, which auto-tracks an expression). Load, then refresh — the counter climbs and the watch callback fires.</p>
+    <ul class="grid">
+      <li>Value (runs): <strong data-testid="watchmethod-value">{watchMethodValue}</strong></li>
+      <li>watch(args, cb) fires: <strong data-testid="watchmethod-hits">{watchMethodHits}</strong></li>
+    </ul>
+    <div class="row">
+      <button data-testid="watchmethod-start" onclick={startWatchMethod}>Load</button>
+      <button data-testid="watchmethod-refresh" onclick={refreshWatched}>Refresh</button>
+    </div>
+  </Sample>
+
+  <Sample page={PAGE} id="amend" title="<code>amend(args, value | updater)</code> — mutate in place, no re-fetch" client="amend" server="src/server/rpc/cacheCounter.ts">
+    <p>Load once (the server run count is small), then <code>amend</code> the slot value in place. Value-form sets it to <code>999</code>; updater-form derives the next value from the current — both are local, so the handler never re-runs and no fetch happens.</p>
+    <ul class="grid">
+      <li>Value (runs): <strong data-testid="amend-value">{amendValue}</strong></li>
+      <li>peek(): <strong data-testid="amend-peek">{amendPeek}</strong></li>
+    </ul>
+    <div class="row">
+      <button data-testid="amend-start" onclick={startAmend}>Load</button>
+      <button data-testid="amend-value-form" onclick={amendValueForm}>amend → 999</button>
+      <button data-testid="amend-updater" onclick={amendUpdater}>amend +100</button>
+    </div>
+  </Sample>
+
+  <Sample page={PAGE} id="shared" title="<code>cache: {'{'} shared: true {'}'}</code> — cross-request cache" client="shared" server="src/server/rpc/cacheShared.ts">
+    <p>A <code>shared</code> read's slot is process-global. Each <code>raw()</code> is a separate request: the shared read returns the <strong>same</strong> run count both times (one handler run served both), while a per-request (non-shared) read re-runs and <strong>climbs</strong>. The shared handler is identity-independent and fail-closed.</p>
+    {#if sharedResult}
+      <ul class="grid">
+        <li>shared read: <strong data-testid="shared-r1">{sharedResult.shared1}</strong> then <strong data-testid="shared-r2">{sharedResult.shared2}</strong> (same)</li>
+        <li>non-shared read: <strong data-testid="shared-p1">{sharedResult.plain1}</strong> then <strong data-testid="shared-p2">{sharedResult.plain2}</strong> (climbs)</li>
+      </ul>
+    {/if}
+    <div class="row">
+      <button data-testid="shared-probe" onclick={probeShared}>Probe cross-request</button>
+    </div>
+  </Sample>
+
+  <Sample page={PAGE} id="ttl" title="<code>cache: {'{'} ttl {'}'}</code> — the slot expires + re-fetches" client="ttl" server="src/server/rpc/cacheTtl.ts">
+    <p>A shared read with a 700ms TTL. Two reads inside the window return the same count (served from cache); after the window elapses the next read re-runs the handler and the count climbs.</p>
+    {#if ttlResult}
+      <ul class="grid">
+        <li>first: <strong data-testid="ttl-first">{ttlResult.first}</strong></li>
+        <li>immediate (cached): <strong data-testid="ttl-immediate">{ttlResult.immediate}</strong></li>
+        <li>after ttl (re-fetched): <strong data-testid="ttl-after">{ttlResult.afterExpiry}</strong></li>
+      </ul>
+    {/if}
+    <div class="row">
+      <button data-testid="ttl-probe" onclick={probeTtl}>Probe expiry (~1s)</button>
+    </div>
+  </Sample>
+
+  <Sample page={PAGE} id="tags" title="<code>cache: {'{'} tags {'}'}</code> + global <code>invalidate/refresh({'{'}tags{'}'})</code>" client="tags" server="src/server/rpc/cacheTagBust.ts">
+    <p>Two shared reads carry the tag <code>"docs"</code>. The global verb <code>invalidate({'{'} tags: ["docs"] {'}'})</code> — run server-side (the tag registry is server-only) through a POST RPC — drops <strong>both</strong> slots at once, so both re-fetch together. <code>refresh({'{'}tags{'}'})</code> is the eager sibling; <code>pending({'{'}tags{'}'})</code> is the reactive aggregate (true while any tagged slot is on its first load).</p>
+    {#if tagsResult}
+      <ul class="grid">
+        <li>cacheTagA runs: <strong data-testid="tags-a">{tagsResult.a}</strong></li>
+        <li>cacheTagB runs: <strong data-testid="tags-b">{tagsResult.b}</strong></li>
+      </ul>
+    {/if}
+    <p>pending({'{'} tags: ["docs"] {'}'}): <strong data-testid="tags-pending">{tagPendingFlag}</strong></p>
+    <div class="row">
+      <button data-testid="tags-load" onclick={loadTags}>Load both</button>
+      <button data-testid="tags-bust" onclick={bustTags}>invalidate({'{'}tags{'}'})</button>
+      <button data-testid="tags-refresh" onclick={refreshTags}>refresh({'{'}tags{'}'})</button>
+      <button data-testid="tags-probe-pending" onclick={probeTagPending}>probe pending({'{'}tags{'}'})</button>
+    </div>
+  </Sample>
+</main>

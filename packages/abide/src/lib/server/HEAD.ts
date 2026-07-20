@@ -1,10 +1,7 @@
-import type { RpcHelper } from './rpc/types/RpcHelper.ts'
-import { unprocessed } from './rpc/unprocessed.ts'
+// HEAD — read-only RPC helper, identical semantics to GET (cache/coalesce/reactive).
 
-/*
-HEAD rpc helper. The bundler rewrites every `export const x = HEAD(fn)` inside
-`src/server/rpc/<file>.ts` into a defineRpc call (server target) or a
-remoteProxy stub (client target). Calling this directly throws.
-*/
-// @documentation rpc
-export const HEAD: RpcHelper = (_fn: any, _opts?: any) => unprocessed('HEAD')
+import { makeRead, type ReadSurface, type RpcOptions } from "./internal/makeRpc.ts";
+
+export function HEAD<Args, R>(fn: (args: Args) => Promise<R> | R, opts?: RpcOptions): ReadSurface<Args, R> {
+  return makeRead<Args, R>("HEAD", fn, opts) as unknown as ReadSurface<Args, R>;
+}

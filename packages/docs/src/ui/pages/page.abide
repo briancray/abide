@@ -1,0 +1,25 @@
+<script module>
+  import hello from "../../server/rpc/hello"
+  import capabilities from "../../server/rpc/capabilities"
+</script>
+
+<main class="page">
+  <h1>abide</h1>
+  <p class="lead">An isomorphic, type-safe framework for async interfaces — for humans <em>and</em> machines — built on Bun and web standards. This documentation site is itself an abide app: every page in the index is a live demo of the capability it describes.</p>
+
+  <p class="say">{await hello({ who: "reader" })}</p>
+
+  <h2>Capabilities</h2>
+  <ul class="cards">
+    {#await capabilities()}
+      <li class="src-loading">Loading capabilities…</li>
+    {:then caps}
+      {#for cap of caps by cap.path}
+        <li class="card">
+          <a href={cap.path}><strong>{cap.name}</strong></a>
+          <span class="muted">{cap.blurb}</span>
+        </li>
+      {/for}
+    {/await}
+  </ul>
+</main>

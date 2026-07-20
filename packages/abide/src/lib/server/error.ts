@@ -1,110 +1,70 @@
-import { NO_STORE } from '../shared/CACHE_CONTROL_VALUES.ts'
-import { TEXT_PLAIN } from '../shared/TEXT_PLAIN.ts'
-import type { StandardSchemaV1 } from '../shared/types/StandardSchemaV1.ts'
-import type { TypedError } from './rpc/types/TypedError.ts'
-import type { TypedResponse } from './rpc/types/TypedResponse.ts'
-import { STATUS_TEXT } from './runtime/STATUS_TEXT.ts'
-import { typedErrorResponse } from './runtime/typedErrorResponse.ts'
-import { withResponseDefaults } from './runtime/withResponseDefaults.ts'
+// Error response helpers (rpc-core §4). `error(status, message?)` produces a JSON error
+// body; `error.typed(name, status, schema?)` builds a reusable factory for a named,
+// narrowable error whose body carries the type name + payload plus a runtime marker.
 
-/*
-Plain-text error Response — clearer than constructing a Response by
-hand with a status and a text body, and shaped so the client's
-HttpError carries the message verbatim (`HttpError.response.text()`
-returns the message, no parsing).
+// Canonical HTTP reason phrases. Bun's Response does not auto-populate statusText from a
+// status code, so we carry the common table ourselves; unknown codes fall back to "".
+const STATUS_TEXT: Record<number, string> = {
+  400: "Bad Request",
+  401: "Unauthorized",
+  402: "Payment Required",
+  403: "Forbidden",
+  404: "Not Found",
+  405: "Method Not Allowed",
+  406: "Not Acceptable",
+  408: "Request Timeout",
+  409: "Conflict",
+  410: "Gone",
+  411: "Length Required",
+  412: "Precondition Failed",
+  413: "Payload Too Large",
+  414: "URI Too Long",
+  415: "Unsupported Media Type",
+  418: "I'm a Teapot",
+  422: "Unprocessable Entity",
+  425: "Too Early",
+  426: "Upgrade Required",
+  428: "Precondition Required",
+  429: "Too Many Requests",
+  431: "Request Header Fields Too Large",
+  451: "Unavailable For Legal Reasons",
+  500: "Internal Server Error",
+  501: "Not Implemented",
+  502: "Bad Gateway",
+  503: "Service Unavailable",
+  504: "Gateway Timeout",
+  505: "HTTP Version Not Supported",
+};
 
-  if (!order) return error(404, 'order not found')
-
-`message` defaults to the status's standard reason phrase when
-omitted (e.g. `error(404)` body = 'Not Found'). The body is
-text/plain so intermediaries don't try to render or sniff it. A final
-`ResponseInit` adds headers (e.g. `Retry-After` on a 429); the positional
-`status` always wins over any `init.status`.
-
-For a NAMED, typed error the client can branch on, declare a constructor with
-`error.typed(name, status, schema?)` and return it (see below). To short-circuit
-a handler instead of returning, `throw new Error(...)` or
-`throw new HttpError(error(...))` — the framework's `app.handleError` hook
-catches thrown errors. This helper deliberately returns a Response rather than
-throwing one so a single `return error(...)` is the expected pattern, with the
-same control flow as `return json(...)`.
-*/
-
-/*
-Body type is `never` because `error()` only travels the non-2xx path on
-the wire — the caller's `await fn(args)` throws `HttpError` and never
-resolves to this response's body. Returning a TypedResponse<never> lets
-the union of branches in a handler narrow to whatever the success
-branch carries (`TypedResponse<{user}> | TypedResponse<never>` → Return
-= {user}).
-*/
-function errorResponse(
-    status: number,
-    message?: string,
-    init?: ResponseInit,
-): TypedResponse<never> {
-    const body = message ?? STATUS_TEXT[status] ?? `HTTP ${status}`
-    return new Response(
-        body,
-        withStatusText(
-            withResponseDefaults(
-                init,
-                {
-                    'Content-Type': TEXT_PLAIN,
-                    'Cache-Control': NO_STORE,
-                },
-                status,
-            ),
-            status,
-        ),
-    ) as TypedResponse<never>
+function reasonPhrase(status: number): string {
+  return STATUS_TEXT[status] ?? "";
 }
 
-/*
-Stamps the status's standard reason phrase onto `init.statusText` so the wire
-status line reads `404 Not Found` and the client's `HttpError.statusText` is
-populated — Bun's `Response` never derives statusText from the code. A caller's
-explicit `init.statusText` (preserved through withResponseDefaults) still wins;
-an unlisted code leaves it untouched.
-*/
-function withStatusText(init: ResponseInit, status: number): ResponseInit {
-    if (init.statusText === undefined && STATUS_TEXT[status] !== undefined) {
-        return { ...init, statusText: STATUS_TEXT[status] }
-    }
-    return init
+function jsonResponse(status: number, body: unknown, init?: ResponseInit): Response {
+  const headers = new Headers(init?.headers);
+  if (!headers.has("content-type")) headers.set("content-type", "application/json");
+  return new Response(JSON.stringify(body), { ...init, status, headers });
 }
 
-/*
-Declares a reusable, typed error as a single constructor. With a `data` schema
-the constructor requires that input; without one it's nullary. Returning the
-constructor from a handler IS the error — it serializes a `{ $abideError, data }`
-body at `status`, and the rpc reads the constructor's branded return type to
-expose the error on `rpc.isError(e, 'name')` (`.kind` and typed `.data`). No
-`errors:` option, no set to register — compose by returning whichever you want:
-
-  const duplicateSlug = error.typed('duplicateSlug', 409, z.object({ slug: z.string() }))
-  const rateLimited = error.typed('rateLimited', 429)               // nullary
-
-  export const createPost = POST(({ slug }) =>
-      taken(slug) ? duplicateSlug({ slug }) : json(save(slug)),
-  )
-
-`name` is the wire identity and the `isError` key, so it's an explicit string
-(a const can't read its own variable name); `schema` types `.data` and is never
-validated at runtime here.
-*/
-function typed<Name extends string, Status extends number, Schema extends StandardSchemaV1>(
-    name: Name,
-    status: Status,
-    schema: Schema,
-): (data: StandardSchemaV1.InferInput<Schema>) => TypedError<Name, { status: Status; data: Schema }>
-function typed<Name extends string, Status extends number>(
-    name: Name,
-    status: Status,
-): () => TypedError<Name, { status: Status; data?: undefined }>
-function typed(name: string, status: number, _schema?: StandardSchemaV1) {
-    return (data?: unknown) => typedErrorResponse(name, status, data)
-}
-
-// @documentation response
-export const error = Object.assign(errorResponse, { typed })
+export const error: {
+  (status: number, message?: string, init?: ResponseInit): Response;
+  typed(name: string, status: number, schema?: unknown): (data?: unknown) => Response & { __typedErrorName: string };
+} = Object.assign(
+  (status: number, message?: string, init?: ResponseInit): Response => {
+    const statusText = reasonPhrase(status);
+    return jsonResponse(status, { status, statusText, message: message ?? statusText }, init);
+  },
+  {
+    typed(name: string, status: number, _schema?: unknown): (data?: unknown) => Response & { __typedErrorName: string } {
+      return (data?: unknown): Response & { __typedErrorName: string } => {
+        const statusText = reasonPhrase(status);
+        // `__typedError` is the in-body marker; the name/data are the narrowable payload.
+        const body = { status, statusText, error: name, name, data, __typedError: name };
+        const response = jsonResponse(status, body) as Response & { __typedErrorName: string };
+        // Object marker on the Response instance so the router/client can narrow synchronously.
+        response.__typedErrorName = name;
+        return response;
+      };
+    },
+  },
+);

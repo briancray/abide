@@ -1,0 +1,23 @@
+<script module>
+  const demos = [
+    { href: "/control/conditionals", label: "Conditionals", blurb: "{#if} / {:else if} / {:else} and {#switch} / {:case} / {:default}" },
+    { href: "/control/lists", label: "Lists", blurb: "{#for … by key} (add / remove / reorder) and keyless positional {#for}" },
+    { href: "/control/async", label: "Async", blurb: "{#await} / {:then} / {:catch} / {:finally} and {#for await} + {:catch}" },
+    { href: "/control/errors", label: "Errors", blurb: "{#try} / {:catch} / {:finally} error boundary" },
+    { href: "/control/components", label: "Components & snippets", blurb: "{#snippet} / {name()}, render-props, and components with {children()}" },
+  ]
+</script>
+
+<main class="page">
+  <h1>Control flow</h1>
+  <p class="lead">Every <code>.abide</code> control-flow block is a live, reactive region: it re-renders fine-grained when the state it depends on changes. Each demo below has interactive controls so you can watch the block react in a real browser.</p>
+
+  <ul class="cards">
+    {#for demo of demos}
+      <li class="card">
+        <a href={demo.href}><strong>{demo.label}</strong></a>
+        <span>{demo.blurb}</span>
+      </li>
+    {/for}
+  </ul>
+</main>

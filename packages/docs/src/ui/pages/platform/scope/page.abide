@@ -1,0 +1,75 @@
+<script module>
+  import Sample from "../../../components/Sample.abide"
+  import { state } from "abide/ui/state"
+  import platformScope from "../../../../server/rpc/platformScope"
+  import platformGuard from "../../../../server/rpc/platformGuard"
+
+  const PAGE = "src/ui/pages/platform/scope/page.abide"
+</script>
+
+<script>
+  // #demo scope
+  let cookieValue = state("dark");
+  // Two-way bind over a bare state var — `bind:value={cookieValue}` — syncs both ways directly.
+
+  function setCookie() {
+    // The browser owns the cookie; the RPC reads it back server-side via cookies().
+    // NOTE: string concatenation (not a template literal) — the `.abide` script transform mis-parses `${...}` interpolation braces (framework bug).
+    document.cookie = "platform_pref=" + encodeURIComponent(cookieValue) + "; path=/"
+    platformScope.refresh({ cookieName: "platform_pref" })
+  }
+  // #enddemo
+
+  let allowedOut = state("(not run)")
+  let blockedStatus = state(null)
+
+  // #demo guard
+  // Authorized call: layer 1 (authorize) calls next(), layer 2 (stamp) writes context(), handler runs.
+  // The bare call `fn(args)` is the read — awaits the value (Promise<T>); `fn.peek(args)` is the `T | undefined` snapshot.
+  async function runAllowed() {
+    const r = await platformGuard({ allow: "yes" })
+    allowedOut = "allow=" + r.allow + " · passedGuard=" + r.passedGuard
+  }
+  // Blocked call: layer 1 returns error(403) WITHOUT next() — a short-circuit; the handler never runs.
+  // The bare call `fn(args)` rejects with the HttpError carrying the short-circuited status, which we read off the
+  // catch. NOTE: `fn.raw(args, init?)` (the untouched Response) is not implemented on the RPC callable
+  // today (framework gap); catching `.load` is the honest way to observe the status from the callable.
+  async function runBlocked() {
+    try {
+      await platformGuard({ allow: "no" })
+      blockedStatus = 200
+    } catch (caught) {
+      blockedStatus = caught.status
+    }
+  }
+  // #enddemo
+</script>
+
+
+<main class="page">
+  <h1>Request scope</h1>
+  <p class="lead">Two per-request accessors: <code>cookies()</code> reads the request's <code>Bun.CookieMap</code>, and <code>context()</code> is a free-form carrier bag handed from middleware to handler. This page sets a cookie in the browser, then an RPC reads it — plus the value a per-RPC middleware stamped into <code>context()</code>.</p>
+
+  <Sample page={PAGE} id="scope" title="cookies() + context()" client="scope" server="src/server/rpc/platformScope.ts">
+    <label>platform_pref <input id="cookie-input" bind:value={cookieValue} /></label>
+    <button id="set-cookie-btn" onclick={setCookie}>Set cookie & read scope</button>
+
+    {#await platformScope({ cookieName: "platform_pref" })}
+      <p id="scope-block">reading…</p>
+    {:then scope}
+      <pre class="out" id="scope-block">cookie {scope?.cookieName} = {scope?.cookieValue ?? "(unset)"}
+context.stampedBy = {scope?.stampedBy ?? "(none)"}
+context.stampedAt = {scope?.stampedAt ?? "(none)"}</pre>
+    {/await}
+  </Sample>
+
+  <Sample page={PAGE} id="guard" title="RPC <code>middleware</code> — onion + short-circuit" client="guard" server="src/server/rpc/platformGuard.ts">
+    <p>A per-RPC <code>middleware</code> array composes an onion around the handler. The first layer <em>authorizes</em>: it either returns an <code>error(403)</code> Response to short-circuit (the handler never runs), or calls <code>next()</code> and lets the second layer stamp <code>context()</code>. Both calls hit the real router pipeline in the browser:</p>
+    <div class="row">
+      <button id="guard-allow-btn" onclick={runAllowed}>Allowed call</button>
+      <button id="guard-block-btn" onclick={runBlocked}>Blocked call (403)</button>
+    </div>
+    <pre class="out" id="guard-allow-out">allowed: {allowedOut}</pre>
+    <pre class="out" id="guard-block-out">blocked: {blockedStatus === null ? "(not run)" : "HTTP " + blockedStatus}</pre>
+  </Sample>
+</main>

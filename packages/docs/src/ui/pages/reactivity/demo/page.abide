@@ -1,0 +1,125 @@
+<script module>
+  import Sample from "../../../components/Sample.abide"
+  import SharedTally from "../../../components/SharedTally.abide"
+  import { html } from "abide/ui/html"
+  import { state } from "abide/ui/state"
+  import { watch } from "abide/ui/watch"
+  import { props } from "abide/ui/props"
+
+  const PAGE = "src/ui/pages/reactivity/demo/page.abide"
+</script>
+
+<script>
+  // Every reactive code block below is the REAL region between the `#demo`/`#enddemo` markers on
+  // this file, read back by the `snippet` RPC and highlighted on the server — never a copied string.
+
+  // #demo props
+  // props() — the reactive prop reader. A page's props are empty, so the destructuring fallback is
+  // what shows; this is the same reader a child receives when it is handed props.
+  const { heading = "Reactivity playground" } = props()
+  // #enddemo
+
+  // #demo state
+  // state(v, transform?) — a writable cell. The transform clamps every write into 0..10.
+  let count = state(0, (value) => Math.max(0, Math.min(10, value)))
+  function reset() { count = 0 }
+  // #enddemo
+
+  // #demo computed
+  // state.computed(...) — read-only derived cell, recomputed lazily from `count`.
+  const doubled = state.computed(() => count * 2)
+  // #enddemo
+
+  // #demo linked
+  // state.linked(source, transform?) — a writable cell reseeded whenever `count` changes. A local
+  // write holds until the next reseed.
+  let draft = state.linked(() => count, (value) => value * 100)
+  function bumpDraft() { draft = draft + 1 }
+  // #enddemo
+
+  // #demo watch-handler
+  // watch(source, handler) — runs the handler on change only (not the initial read). We surface the
+  // side effect straight into the DOM by bumping a visible counter.
+  let changes = state(0)
+  watch(() => count, () => { changes = changes + 1 })
+  // #enddemo
+
+  // #demo watch-thunk
+  // watch(thunk) — an auto-tracked effect. It reads `doubled` and mirrors a derived value into a
+  // separate cell, proving the thunk re-runs when its tracked reads change.
+  let mirror = state(0)
+  watch(() => { mirror = doubled + 1 })
+  // #enddemo
+
+  // html(str) — raw HTML injection. Toggling the source swaps the rendered element live.
+  const ITALIC = "<em data-raw-kind=\"em\">italic emphasis</em>"
+  const BOLD = "<strong data-raw-kind=\"strong\">bold shout</strong>"
+  let markup = state(ITALIC)
+  function toggleMarkup() { markup = markup === ITALIC ? BOLD : ITALIC }
+</script>
+
+
+<main class="page">
+  <h1>{heading}</h1>
+  <p class="lead">Every reactive primitive in one place. State drives fine-grained updates; a computed derives from it; a linked cell reseeds; two watches push side effects into the DOM; a snippet is a child builder receiving reactive props; and <code>html(...)</code> injects raw markup. Under each live demo is the exact source that powers it — extracted from this file and highlighted on the server.</p>
+
+  <Sample page={PAGE} id="props" title="<code>props()</code> — reactive prop reader" client="props">
+    <p>A page receives no props, so the destructuring fallback renders as the heading above: <strong>{heading}</strong>.</p>
+  </Sample>
+
+  <Sample page={PAGE} id="state" title="<code>state(v, transform?)</code> — writable cell (clamped 0..10)" client="state">
+    <div class="row">
+      <button data-testid="dec" onclick={() => count--}>Decrement</button>
+      <button data-testid="inc" onclick={() => count++}>Increment</button>
+      <button data-testid="reset" onclick={reset}>Reset</button>
+    </div>
+    <p>Count: <strong data-testid="count">{count}</strong> <span class="muted">(writes clamp into 0..10)</span></p>
+  </Sample>
+
+  <Sample page={PAGE} id="computed" title="<code>state.computed(...)</code> — derived" client="computed">
+    <p>Doubled: <strong data-testid="doubled">{doubled}</strong></p>
+  </Sample>
+
+  <Sample page={PAGE} id="linked" title="<code>state.linked(src, transform?)</code> — reseeded writable" client="linked">
+    <p>Draft: <strong data-testid="draft">{draft}</strong> <span class="muted">(seeded to count × 100; independently editable until count changes)</span></p>
+    <button data-testid="bump-draft" onclick={bumpDraft}>Bump draft +1</button>
+  </Sample>
+
+  <Sample page={PAGE} id="watch-handler" title="<code>watch(source, handler)</code> — side effect in the DOM" client="watch-handler">
+    <p>Count changed <strong data-testid="changes">{changes}</strong> times since load.</p>
+  </Sample>
+
+  <Sample page={PAGE} id="watch-thunk" title="<code>watch(thunk)</code> — auto-tracked effect" client="watch-thunk">
+    <p>Mirror (doubled + 1): <strong data-testid="mirror">{mirror}</strong></p>
+  </Sample>
+
+  <Sample page={PAGE} id="snippet" title="Child component receiving reactive props" client="snippet">
+    <p>A <code>{'{'}#snippet{'}'}</code> is an in-file child builder. It receives values as props and re-renders when they change.</p>
+    <!-- #demo snippet -->
+    {#snippet badge(label, value)}
+      <span class="badge">{label}: <b>{value}</b></span>
+    {/snippet}
+    <div class="row" data-testid="badges">
+      {badge("Live count", count)}
+      {badge("Doubled", doubled)}
+    </div>
+    <!-- #enddemo -->
+  </Sample>
+
+  <Sample page={PAGE} id="html" title="<code>html(…)</code> — raw render" client="html">
+    <!-- #demo html -->
+    <div class="raw" data-testid="raw">{html(markup)}</div>
+    <button data-testid="toggle-raw" onclick={toggleMarkup}>Toggle markup</button>
+    <!-- #enddemo -->
+  </Sample>
+
+  <Sample page={PAGE} id="shared" title="<code>state.shared(key, initial)</code> — cell shared by key" client="shared">
+    <p>Two separate component instances call <code>state.shared("reactivity-tally", 0)</code> with the SAME key, so they share one backing signal — bump either and both update. The value also syncs across other open tabs of this app (via a <code>BroadcastChannel</code>).</p>
+    <!-- #demo shared -->
+    <div class="row" data-testid="shared-tallies">
+      <SharedTally name="a" />
+      <SharedTally name="b" />
+    </div>
+    <!-- #enddemo -->
+  </Sample>
+</main>

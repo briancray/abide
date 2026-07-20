@@ -1,86 +1,204 @@
-import { mcpSurface } from '../mcp/mcpSurface.ts'
-import type { McpSurface } from '../mcp/types/McpSurface.ts'
-import { request } from './request.ts'
+// agent() — the provider-neutral agent LOOP (agent.md AG1.5). Given an `AgentEngine`, a starting
+// transcript, and options, it runs the full tool-use cycle internally: LLM turn → any tool-call
+// frames → execute each tool in-process → tool-result frames → append to the transcript → next LLM
+// turn → … until a turn produces no tool calls, then a final `done` frame. Every frame streams out
+// as it happens (a normal §12 stream, consumed isomorphically). The loop is provider-agnostic; the
+// engine normalizes its provider into `AgentFrame`s.
+//
+// Stateless (AG2.4): the caller's `messages` array is never mutated — the running transcript is a
+// local copy the loop grows across turns. Cancellation (AG2.3): `options.signal` aborts the loop.
+//
+// Engine (non-app) tools are OUT here (AG2.5, off by default) — this loop only executes tools in
+// the provided `AgentSurface`, which are the app's own RPCs gated by the app's middleware (AG1.7).
 
-/*
-The in-app agent surface. `agent(engine, messages)` runs a model engine
-against the app's own MCP surface and returns the engine's frame stream —
-it does NOT pick a transport. The handler wraps it in `jsonl()` or `sse()`,
-so consumption is the app's choice, same as any other streaming rpc:
+import type {
+  AgentEngine,
+  AgentFrame,
+  AgentOptions,
+  AgentTool,
+  ApprovalDecision,
+  ApprovalPolicy,
+  NeutralContentPart,
+  NeutralMessage,
+} from "./internal/agentTypes.ts";
 
-  // src/server/rpc/chat.ts
-  import { agent } from '@abide/abide/server/agent'
-  import { jsonl } from '@abide/abide/server/jsonl'
-  import { engine } from '@abide/anthropic'
+export type {
+  AgentEngine,
+  AgentFrame,
+  AgentOptions,
+  AgentSurface,
+  AgentTool,
+  ApprovalDecision,
+  ApprovalPolicy,
+  ApprovalRequest,
+  NeutralContentPart,
+  NeutralMessage,
+} from "./internal/agentTypes.ts";
 
-  const chatEngine = engine({ model: 'claude-opus-4-8', apiKey: config.ANTHROPIC_API_KEY })
-  export const chat = POST(({ messages }) => jsonl(agent(chatEngine, messages)), { inputSchema })
+export async function* agent(
+  engine: AgentEngine,
+  messages: NeutralMessage[],
+  options: AgentOptions = {},
+): AsyncIterable<AgentFrame> {
+  const signal = options.signal;
+  // The tool surface for this run (AG2.2): explicit `tools` wins ([] = none, [...] = a subset);
+  // otherwise none here — the app-config default (all clients.mcp RPCs) is layered on by the
+  // caller that has a registry, since agent() itself may run without app config.
+  const tools: AgentTool[] = options.tools ?? [];
 
-The engine — provider-specific, lives in a `@abide/<provider>` package —
-only sees the surface in and yields frames out, so swapping providers never
-touches the rpc or the UI.
+  // The running transcript — a local copy so the caller's array is never mutated (AG2.4).
+  const transcript: NeutralMessage[] = messages.slice();
 
-Permission is decided server-side, not negotiated at runtime: the surface
-is already gated by each rpc's `clients.mcp` declaration plus its own
-per-call handler auth, and any provider built-ins (e.g. Claude Code's bash
-tool) are fenced by static rules in the engine's config.
-*/
+  while (true) {
+    if (signal?.aborted) return;
 
-// A turn in the conversation, provider-neutral. The engine maps these to its provider's wire shape.
-// @documentation agent
-export type NeutralMessage =
-    | { role: 'user'; text: string }
-    | {
-          role: 'assistant'
-          text?: string
-          toolUses?: { id: string; name: string; input: unknown }[]
+    const toolCalls: { id: string; name: string; args: unknown }[] = [];
+
+    for await (const frame of engine.stream(transcript, tools, options)) {
+      if (signal?.aborted) return;
+      // `message-stop` is the engine's turn boundary — consumed by the loop, not surfaced. The
+      // loop, not the engine, decides `done`.
+      if (frame.type === "message-stop") break;
+      yield frame;
+      if (frame.type === "tool-call") toolCalls.push({ id: frame.id, name: frame.name, args: frame.args });
+    }
+
+    if (signal?.aborted) return;
+
+    // No tool calls → the exchange is complete.
+    if (toolCalls.length === 0) {
+      yield { type: "done" };
+      return;
+    }
+
+    // Approval gate (AG2.5): resolve each call to its EFFECTIVE args (edited args replace the
+    // model's) or a denial before anything runs. When the policy gates a call the loop surfaces an
+    // `approval-request` frame and awaits a decision over the injected transport; the resolution is
+    // surfaced as an `approval-decision` frame. Aborting while awaiting a decision returns cleanly.
+    const resolved: { call: { id: string; name: string; args: unknown }; effectiveArgs: unknown; denied: boolean; reason?: string }[] = [];
+    const policy = options.approval;
+    for (const call of toolCalls) {
+      if (signal?.aborted) return;
+
+      if (policy === undefined || !approvalRequired(policy, call)) {
+        resolved.push({ call, effectiveArgs: call.args, denied: false });
+        continue;
       }
-    | { role: 'tool'; results: { id: string; content: string; isError?: boolean }[] }
 
-// What the engine streams out; the handler frames it via jsonl()/sse() for the client.
-export type AgentFrame =
-    | { type: 'text'; delta: string }
-    | { type: 'tool_use'; id: string; name: string; input: unknown }
-    | { type: 'tool_result'; id: string; name: string; ok: boolean }
-    /*
-    `stop` is the reason the engine's loop ended. `error` covers an abnormal
-    stop the model didn't choose — a provider error/limit (e.g. Claude Code's
-    max-turns) or the engine's own tool-loop cap — so a client can tell a cut-off
-    answer from a clean `end`.
-    */
-    | {
-          type: 'done'
-          stop: 'end' | 'tool_use' | 'max_tokens' | 'refusal' | 'error'
+      yield { type: "approval-request", id: call.id, name: call.name, args: call.args };
+      const decision = await awaitDecision(policy, { id: call.id, name: call.name, args: call.args }, signal);
+      if (signal?.aborted || decision === ABORTED) return;
+      yield { type: "approval-decision", id: call.id, action: decision.action };
+
+      if (decision.action === "deny") {
+        resolved.push(
+          decision.reason === undefined
+            ? { call, effectiveArgs: call.args, denied: true }
+            : { call, effectiveArgs: call.args, denied: true, reason: decision.reason },
+        );
+      } else if (decision.action === "edit") {
+        resolved.push({ call, effectiveArgs: decision.args, denied: false });
+      } else {
+        resolved.push({ call, effectiveArgs: call.args, denied: false });
+      }
+    }
+
+    // Record the model's tool-use turn as one assistant message carrying every tool-use part —
+    // reflecting the EFFECTIVE args, so an edited call is faithfully recorded in the transcript.
+    const toolUseParts: NeutralContentPart[] = [];
+    for (const entry of resolved) {
+      toolUseParts.push({ type: "tool-use", id: entry.call.id, name: entry.call.name, args: entry.effectiveArgs });
+    }
+    transcript.push({ role: "assistant", content: toolUseParts });
+
+    // Execute each approved tool in-process, emit a tool-result frame, and append a tool message.
+    // A denied call is NOT run — it surfaces a denial as an error tool-result so the model sees it.
+    for (const entry of resolved) {
+      if (signal?.aborted) return;
+      const call = entry.call;
+
+      let result: unknown;
+      let error: unknown;
+      let threw = false;
+
+      if (entry.denied) {
+        threw = true;
+        error = new Error(entry.reason ? `tool call denied: ${entry.reason}` : "tool call denied");
+      } else {
+        const tool = findTool(tools, call.name);
+        if (tool === undefined) {
+          threw = true;
+          error = new Error(`unknown tool: ${call.name}`);
+        } else {
+          try {
+            result = await tool.run(entry.effectiveArgs);
+          } catch (caught) {
+            threw = true;
+            error = caught;
+          }
+        }
       }
 
-// The app's tool/prompt/resource surface handed to an engine (already gated).
-export type AgentSurface = McpSurface
+      if (threw) {
+        yield { type: "tool-result", id: call.id, result: undefined, error };
+        transcript.push({
+          role: "tool",
+          content: [{ type: "tool-result", id: call.id, result: undefined, error }],
+        });
+      } else {
+        yield { type: "tool-result", id: call.id, result };
+        transcript.push({
+          role: "tool",
+          content: [{ type: "tool-result", id: call.id, result }],
+        });
+      }
+    }
+    // Loop: run another engine turn with the grown transcript.
+  }
+}
 
-/*
-A model engine: surface + conversation in, frames out. It owns its own loop
-(a raw-model tool loop, or driving a full agent harness) — core only sees
-the frame stream. `origin` lets engines that reach the MCP endpoint over
-HTTP address this server. Implementations live in `@abide/<provider>`
-packages.
-*/
-export type AgentEngine = (input: {
-    surface: AgentSurface
-    messages: NeutralMessage[]
-    origin: string
-}) => AsyncIterable<AgentFrame>
+function findTool(tools: AgentTool[], name: string): AgentTool | undefined {
+  for (const tool of tools) {
+    if (tool.name === name) return tool;
+  }
+  return undefined;
+}
 
-/*
-Runs an engine against the current request's MCP surface and returns its
-AgentFrame stream. Must be called inside a rpc's request scope —
-mcpSurface() forwards the caller's auth into every tool dispatch. The
-handler chooses the transport: `jsonl(agent(engine, messages))` or
-`sse(agent(engine, messages))`.
-*/
-export function agent(engine: AgentEngine, messages: NeutralMessage[]): AsyncIterable<AgentFrame> {
-    const inbound = request()
-    return engine({
-        surface: mcpSurface(inbound),
-        messages,
-        origin: new URL(inbound.url).origin,
-    })
+// Does this call need an approval decision? Omitted `required` gates every call (supplying a policy
+// signals intent to gate); a boolean is all/none; a predicate decides per call.
+function approvalRequired(policy: ApprovalPolicy, call: { id: string; name: string; args: unknown }): boolean {
+  const required = policy.required;
+  if (required === undefined) return true;
+  if (typeof required === "function") return required(call);
+  return required;
+}
+
+// Sentinel returned when the signal aborts before a decision resolves — lets the loop return without
+// mistaking the abort for a real decision.
+const ABORTED: unique symbol = Symbol("abide.agent.approval.aborted");
+
+// Await the transport's decision, but resolve to ABORTED the moment the signal fires — so a pending
+// approval (a decision that may never arrive) can't wedge the loop past an abort (AG2.3).
+function awaitDecision(
+  policy: ApprovalPolicy,
+  request: { id: string; name: string; args: unknown },
+  signal: AbortSignal | undefined,
+): Promise<ApprovalDecision | typeof ABORTED> {
+  const decision = policy.decide(request);
+  if (signal === undefined) return decision;
+  if (signal.aborted) return Promise.resolve(ABORTED);
+  return new Promise<ApprovalDecision | typeof ABORTED>((resolve, reject) => {
+    const onAbort = (): void => resolve(ABORTED);
+    signal.addEventListener("abort", onAbort, { once: true });
+    decision.then(
+      (value) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(value);
+      },
+      (caught) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(caught);
+      },
+    );
+  });
 }

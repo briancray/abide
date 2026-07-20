@@ -1,0 +1,15 @@
+<script>
+  import { props } from "abide/ui/props"
+  import { state } from "abide/ui/state"
+
+  // Two instances of this component share ONE cell by key: `state.shared("reactivity-tally", 0)`.
+  // Bumping either instance updates both (same backing signal), and it also syncs across browser tabs.
+  const { name = "a" } = props()
+  let n = state.shared("reactivity-tally", 0)
+  function bump() { n = n + 1 }
+</script>
+
+<div class="row">
+  <button data-testid={"tally-" + name + "-bump"} onclick={bump}>Instance {name}: bump</button>
+  <strong data-testid={"tally-" + name + "-val"}>{n}</strong>
+</div>

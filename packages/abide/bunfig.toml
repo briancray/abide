@@ -1,14 +1,2 @@
 [test]
-# Mirror of the root bunfig's preload so `bun test` also works with this
-# package as cwd — bunfig resolution is cwd-relative, and without this the
-# rune-based suites fail with "$effect is not defined".
-preload = ["./tests/support/uiPreload.ts"]
-
-# Scope the test scan to ./tests so a bare `bun test` here can't discover
-# template/test/app.test.ts — the SCAFFOLD's example test, which imports
-# `abide/test/createTestApp` → `../../_virtual/app.ts`. Those `_virtual/*`
-# modules are emitted by abideResolverPlugin only against a built, scaffolded
-# app (absent in this repo), so discovering that file fails the whole run with
-# "Cannot find module '../../_virtual/app.ts'". Explicit paths
-# (`bun test ./tests/foo.test.ts`) still work.
-root = "tests"
+preload = ["./src/lib/test/happydom.ts"]

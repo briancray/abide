@@ -1,19 +1,11 @@
-import { requestContext } from './runtime/requestContext.ts'
+// Accessor for the current request's raw Request. Throws outside a request scope.
 
-/*
-Returns the inbound Request for the current SSR/RPC pass. Implemented as an
-AsyncLocalStorage lookup over the per-request store the server installs at
-the fetch boundary. Throws if called outside a request scope (e.g. from
-top-level module code or from app.ts init) — silent undefined would mask
-the misuse.
-*/
-// @documentation request-scope
+import { currentScope } from "./internal/scope.ts";
+
 export function request(): Request {
-    const store = requestContext.getStore()
-    if (!store) {
-        throw new Error(
-            '[abide] request() called outside a request scope — it only resolves while an SSR render or rpc handler is in flight',
-        )
-    }
-    return store.req
+  const scope = currentScope();
+  if (scope === undefined) {
+    throw new Error("request(): no active request scope — call it inside a request handler.");
+  }
+  return scope.request;
 }

@@ -1,42 +1,19 @@
-/*
-Subscribes to bundle menu clicks. Each custom menu item declared in the bundle
-window config dispatches a `abide:menu` CustomEvent into the page when clicked.
-Two forms, both returning an unsubscribe so they drop straight into an
-`effect`:
+// onMenu(...) — subscribe to native-menu `emit` events (BU4).
+//
+// Two forms:
+//   - `onMenu(name, handler)` — fire `handler` when the menu emits exactly `name`;
+//   - `onMenu(handler)` — fire `handler` on every menu emit (a catch-all sink).
+// Returns an unsubscribe function. The native shell / launcher drives the other side by calling
+// `emitMenu(name)` when a menu item is chosen.
 
-    // catch-all — every emit name flows through one handler
-    effect(() =>
-        onMenu((name) => {
-            if (name === 'reload') location.reload()
-        }),
-    )
+import { registerAll, registerNamed, type MenuHandler } from "./internal/menuRegistry.ts";
 
-    // filtered — handler fires only for the named item
-    effect(() => onMenu('reload', () => location.reload()))
-
-Inert during SSR and in a plain browser tab — `effect` only runs client-side,
-the native menu that fires the event exists only in the bundled desktop app,
-and `window` is guarded so importing the module never assumes a DOM.
-*/
-// @documentation bundle
-export function onMenu(handler: (name: string) => void): () => void
-export function onMenu(name: string, handler: () => void): () => void
-export function onMenu(
-    nameOrHandler: string | ((name: string) => void),
-    maybeHandler?: () => void,
-): () => void {
-    if (typeof window === 'undefined') {
-        return () => {}
-    }
-    // String first arg = filter to that emit name; otherwise a catch-all handler.
-    const filter = typeof nameOrHandler === 'string' ? nameOrHandler : undefined
-    const handler = typeof nameOrHandler === 'string' ? maybeHandler : nameOrHandler
-    function listener(event: Event) {
-        const name = (event as CustomEvent<{ name: string }>).detail.name
-        if (filter === undefined || filter === name) {
-            handler?.(name)
-        }
-    }
-    window.addEventListener('abide:menu', listener)
-    return () => window.removeEventListener('abide:menu', listener)
+export function onMenu(name: string, handler: MenuHandler): () => void;
+export function onMenu(handler: MenuHandler): () => void;
+export function onMenu(nameOrHandler: string | MenuHandler, handler?: MenuHandler): () => void {
+  if (typeof nameOrHandler === "string") {
+    if (handler === undefined) throw new TypeError("onMenu(name, handler): handler is required");
+    return registerNamed(nameOrHandler, handler);
+  }
+  return registerAll(nameOrHandler);
 }

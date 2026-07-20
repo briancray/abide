@@ -1,0 +1,92 @@
+<script module>
+  import Sample from "../../../components/Sample.abide"
+
+  const PAGE = "src/ui/pages/sockets/mux/page.abide"
+</script>
+
+<script>
+  import { state } from "abide/ui/state"
+  import socketsPublish from "../../../../server/rpc/socketsPublish"
+
+  // Same chat socket, consumed over the MULTIPLEXED WebSocket mux at `/__abide/sockets` instead of the
+  // per-socket HTTP face. One WS carries every named socket; frames are `{ name, msg }`. You subscribe
+  // with `{ t: "sub", name }`, publish with `{ t: "pub", name, msg }` (allowed by `clientPublish`).
+  let messages = state([])
+  let status = state("idle")
+  let clientDraft = state("hello over the mux")
+  let serverDraft = state("server over the mux")
+  let connection = state(null)
+  // Two-way binds over bare state vars — `bind:value={clientDraft}` — sync both ways directly.
+
+  const SOCKET_NAME = "socketsChat"
+
+  // bind:element attach fn — CLIENT-ONLY. Opens the mux WS, joins the chat socket, and fans each
+  // framed message into the DOM. Teardown closes the socket on nav-away.
+  // #demo connect
+  function connect(el) {
+    const scheme = location.protocol === "https:" ? "wss:" : "ws:"
+    const ws = new WebSocket(scheme + "//" + location.host + "/__abide/sockets")
+    ws.onopen = () => {
+      status = "live"
+      ws.send(JSON.stringify({ t: "sub", name: SOCKET_NAME }))
+    }
+    ws.onmessage = (event) => {
+      const frame = JSON.parse(event.data)
+      if (frame && frame.name === SOCKET_NAME) messages = [...messages, frame.msg]
+    }
+    ws.onclose = () => { status = "closed" }
+    ws.onerror = () => { status = "error" }
+    connection = ws
+    return () => ws.close()
+  }
+  // #enddemo
+
+  // Client publish over the mux — a `pub` frame on the same WS.
+  // #demo mux-publish
+  function publishOverMux() {
+    const ws = connection
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ t: "pub", name: SOCKET_NAME, msg: { text: clientDraft } }))
+    }
+  }
+  // #enddemo
+
+  // Server publish — the same POST RPC; the server publish also fans out over the mux subscription.
+  // #demo mux-server-publish
+  async function publishFromServer() {
+    await socketsPublish({ text: serverDraft })
+  }
+  // #enddemo
+</script>
+
+
+<main class="page" data-testid="mux-root" bind:element={connect}>
+  <h1>Sockets — multiplexed WS mux</h1>
+  <p class="lead">The same chat socket, subscribed over the multiplexed WebSocket at <code>/__abide/sockets</code>. One connection carries every named socket; join with a <code>sub</code> frame and publish with a <code>pub</code> frame.</p>
+
+  <Sample page={PAGE} id="connect" title="Subscribe over the mux" client="connect" server="src/server/sockets/socketsChat.ts">
+    <p>Mux status: <strong data-testid="mux-status">{status}</strong></p>
+    <p>Message count: <strong data-testid="mux-count">{messages.length}</strong></p>
+    <ul class="log" data-testid="mux-log">
+      {#for message of messages by message.id}
+        <li class="msg" data-via={message.via}><span class="via">{message.via}</span> {message.text}</li>
+      {/for}
+    </ul>
+  </Sample>
+
+  <Sample page={PAGE} id="mux-publish" title="Publish over the mux" client="mux-publish">
+    <p>A client publish is just a <code>pub</code> frame on the same WS (allowed by <code>clientPublish</code>):</p>
+    <div class="controls">
+      <input data-testid="mux-input" bind:value={clientDraft} />
+      <button data-testid="mux-publish" onclick={publishOverMux}>Publish (mux client)</button>
+    </div>
+  </Sample>
+
+  <Sample page={PAGE} id="mux-server-publish" title="Publish from the server" client="mux-server-publish" server="src/server/rpc/socketsPublish.ts">
+    <p>The same <code>socketsPublish</code> POST RPC — a server publish fans out over the mux subscription too:</p>
+    <div class="controls">
+      <input data-testid="mux-server-input" bind:value={serverDraft} />
+      <button data-testid="mux-server-publish" onclick={publishFromServer}>Publish (server)</button>
+    </div>
+  </Sample>
+</main>

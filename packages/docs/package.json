@@ -1,0 +1,25 @@
+{
+  "name": "docs",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "abide": "workspace:*",
+    "bun-plugin-tailwind": "^0.1.2",
+    "tailwindcss": "^4.3.3"
+  },
+  "scripts": {
+    "dev": "abide dev",
+    "build": "abide build",
+    "start": "abide start",
+    "e2e": "playwright test",
+    "e2e:ci": "playwright test --workers=1 --retries=1",
+    "typecheck": "tsc --noEmit",
+    "abide-check": "abide check .",
+    "abide-lsp": "bun scripts/lsp-dogfood.ts"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "@types/bun": "1.3.14",
+    "typescript": "^7.0.0"
+  }
+}

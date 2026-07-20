@@ -1,0 +1,67 @@
+<script module>
+  import Sample from "../../../components/Sample.abide"
+  import { state } from "abide/ui/state"
+
+  const PAGE = "src/ui/pages/platform/machines/page.abide"
+</script>
+
+<script>
+  let spec = state(null)
+  let tools = state(null)
+
+  // #demo openapi
+  // Fetch the generated OpenAPI 3.1 document from the browser and render its operation paths.
+  async function loadOpenApi() {
+    const response = await fetch("/openapi.json")
+    const document = await response.json()
+    const paths = Object.keys(document.paths ?? {})
+    spec = { title: document.info?.title ?? "(untitled)", version: document.openapi ?? "?", paths }
+  }
+  // #enddemo
+
+  // #demo mcp
+  // Call the MCP endpoint (JSON-RPC 2.0 over HTTP POST) with tools/list and render the tool names.
+  async function loadTools() {
+    const response = await fetch("/__abide/mcp", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+    })
+    const reply = await response.json()
+    tools = (reply.result?.tools ?? []).map((tool) => ({ name: tool.name, readOnly: tool.annotations?.readOnlyHint === true }))
+  }
+  // #enddemo
+</script>
+
+
+<main class="page">
+  <h1>Machine surfaces</h1>
+  <p class="lead">Every RPC is automatically a machine surface — no second implementation. Fetch the OpenAPI document and call the MCP endpoint's <code>tools/list</code> directly from this browser page and render what a machine would see.</p>
+
+  <Sample page={PAGE} id="openapi" title="/openapi.json" client="openapi">
+    <button id="openapi-btn" onclick={loadOpenApi}>Fetch OpenAPI</button>
+    {#if spec}
+      <p id="openapi-info">{spec.title} · OpenAPI {spec.version}</p>
+      <ul id="openapi-paths" class="list">
+        {#for path of spec.paths}
+          <li>{path}</li>
+        {/for}
+      </ul>
+    {:else}
+      <p id="openapi-info">not fetched yet</p>
+    {/if}
+  </Sample>
+
+  <Sample page={PAGE} id="mcp" title="/__abide/mcp — tools/list" client="mcp">
+    <button id="mcp-btn" onclick={loadTools}>List MCP tools</button>
+    {#if tools}
+      <ul id="mcp-tools" class="list">
+        {#for tool of tools}
+          <li><strong>{tool.name}</strong> — {tool.readOnly ? "read-only" : "mutating"}</li>
+        {/for}
+      </ul>
+    {:else}
+      <p id="mcp-empty">not fetched yet</p>
+    {/if}
+  </Sample>
+</main>

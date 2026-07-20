@@ -1,0 +1,35 @@
+<script module>
+  import Sample from "../../components/Sample.abide"
+  import platformConfig from "../../../server/rpc/platformConfig"
+
+  const PAGE = "src/ui/pages/platform/page.abide"
+</script>
+
+
+<main class="page">
+  <h1 id="platform-title">Platform &amp; machine surfaces</h1>
+  <p class="lead">The request scope, config, and observability primitives — plus the machine surfaces every RPC is automatically exposed through. Each sub-page drives one primitive as a live, interactive demo.</p>
+
+  <nav class="nav">
+    <a href="/platform/identity">Identity</a>
+    <a href="/platform/scope">Scope</a>
+    <a href="/platform/config">Config</a>
+    <a href="/platform/observability">Observability</a>
+    <a href="/platform/machines">Machines</a>
+  </nav>
+
+  <ul class="links">
+    <li><a href="/platform/identity">Identity</a> — <code>identity()</code>, login/logout via <code>identity.set()/clear()</code>.</li>
+    <li><a href="/platform/scope">Request scope</a> — <code>cookies()</code> + <code>context()</code> carrier bag via an RPC.</li>
+    <li><a href="/platform/config">Config</a> — <code>env(schema)</code> typed, boot-validated config.</li>
+    <li><a href="/platform/observability">Observability</a> — <code>trace()</code>, <code>health()</code>, <code>log()</code>.</li>
+    <li><a href="/platform/machines">Machine surfaces</a> — <code>/openapi.json</code> + <code>/__abide/mcp</code> from the browser.</li>
+  </ul>
+
+  <Sample page={PAGE} id="confpeek" title="Config peek — <code>env()</code>" client="confpeek" server="src/server/rpc/platformConfig.ts">
+    <p>Read live from the same <code>env()</code>-backed RPC the config page drives:</p>
+    <!-- #demo confpeek -->
+    <pre class="out" id="config-peek">{#await platformConfig()}reading…{:then c}{c.appName} · maxItems={c.maxItems} ({c.maxItemsType}){/await}</pre>
+    <!-- #enddemo -->
+  </Sample>
+</main>

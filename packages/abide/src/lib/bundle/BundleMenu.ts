@@ -1,12 +1,11 @@
-import type { BundleMenuItem } from './BundleMenuItem.ts'
+// BundleMenu — a declarative native-menu tree (BU4).
+//
+// `label` names the menu (e.g. "File"); `items` are its entries. Single-level this slice; nested
+// submenus are expressed by the platform shell rendering the items — the model stays flat.
 
-/*
-A top-level bundle menu, inserted into the macOS menu bar between the standard
-Edit and Window menus. `label` titles the menu; `items` are its entries top to
-bottom.
-*/
-// @documentation bundle
-export type BundleMenu = {
-    label: string
-    items: BundleMenuItem[]
+import type { BundleMenuItem } from "./BundleMenuItem.ts";
+
+export interface BundleMenu {
+  label?: string;
+  items: BundleMenuItem[];
 }

@@ -1,77 +1,157 @@
-import { computed } from './computed.ts'
-import { linked } from './linked.ts'
-import { createSignalNode } from './runtime/createSignalNode.ts'
-import { readNode } from './runtime/readNode.ts'
-import type { State } from './runtime/types/State.ts'
-import { writeNode } from './runtime/writeNode.ts'
-import { scope } from './scope.ts'
+// Public reactive state primitive for `.abide` components (M3a).
+//
+// In a `.abide` `<script>` an author writes `let count = state(0)` and then reads/writes `count` as a
+// plain identifier. The AOT emitter's scope analysis (internal/analyzeScope.ts) recognises the cell
+// this declaration returns and rewrites every reference — `count` → `count.read()`, `count = x` →
+// `count.write(x)` — so the bare name reads and writes the underlying signal.
+//
+// A `StateCell` is a small branded record over the M1 signal substrate. The brand is a global-registry
+// symbol so the analysis can detect a cell (syntactically, at the declaration) without importing
+// anything from here (keeps the one-export-per-file rule intact). Cells are NOT callable — the
+// `.read()/.write()` rewrite is what makes `count` behave like a plain value.
 
-/* The imported reactive surface: the `state` callable plus its attached members.
-   `state`/`state.linked`/`state.computed` are the reactive primitives an author
-   imports (`import { state } from '@abide/abide/ui/state'`); the compiler resolves
-   the import binding (alias-safe) and lowers each onto the ambient scope. `.share`/
-   `.shared` are the context seam — the reference store the runtime scope exposes,
-   reached ambiently so a component can pass a named value down its subtree. */
-type StateFn = {
-    /* No-arg form for an undefined initial with a declared type: `state<Foo>()` is
-       `State<Foo | undefined>`. Without it `state(undefined)` infers `T = undefined`
-       (every `.value` access then narrows to `never`). */
-    <T>(): State<T | undefined>
-    <T>(initial: T, transform?: (next: T, previous: T) => T): State<T>
-    /* The no-arg form spelled out: `state<Foo>(undefined)` is `State<Foo | undefined>`
-       too. Kept a distinct overload (not `initial?: T`) BELOW the general form — a real
-       initial still binds `T` from the value; only an explicit `undefined` (which the
-       general form rejects as "not assignable to T") falls through to here. A bare
-       `state(undefined)` still resolves against the general form (`T = undefined`), so
-       this overload changes nothing for it. */
-    <T>(initial: undefined): State<T | undefined>
-    /* A writable cell reseeded from a reactive thunk (`state.linked(() => src())`). */
-    linked: typeof linked
-    /* A read-only cell computed from other cells (`state.computed(() => a() + b())`). */
-    computed: typeof computed
-    /* Puts a named value on the ambient scope, read down the tree by `state.shared`. */
-    share: (key: string, value: unknown) => void
-    /* Reads the closest ancestor scope that shared `key`; undefined if none provided. */
-    shared: <T>(key: string) => T | undefined
+import { computed, effect, signal, type Signal } from "../shared/internal/reactive.ts";
+
+// Global-registry brand so `analyzeScope.ts` recognises a cell by identity without a shared import.
+const STATE_CELL = Symbol.for("abide.ui.stateCell");
+
+// The reactive kinds a cell can be. `computed` cells are read-only (no setter installed).
+type StateKind = "state" | "computed" | "linked" | "shared";
+
+// Client (browser DOM) vs SSR (bun, no DOM). `document` is the reliable discriminator: present in a
+// real browser AND under the test DOM, absent on the abide server — where a process-global shared
+// registry would leak one request's state into another's, so `.shared` must stay per-render there.
+const isClient = typeof document !== "undefined";
+
+// A branded reactive cell. `read()` tracks; `write()` publishes; `peek()` reads untracked. `computed`
+// cells throw on `write`.
+export interface StateCell<T> {
+  [STATE_CELL]: StateKind;
+  read(): T;
+  write(value: T): void;
+  peek(): T;
 }
 
-/*
-A writable reactive cell — abide's from-scratch reactive primitive, with no
-compiler sigil and no external reactivity-library import. `.value` is a
-plain getter/setter over a signal node, so a read/write shows up as exactly that
-in a stack trace. Imported and called bare (`let count = state(0)`); the compiler
-resolves the `state` import binding (alias-safe), desugars plain `state(initial)` to
-a serializable `model` doc slot, and keeps `state(initial, transform)` as a `.value`
-cell routed onto the ambient scope; the runtime needs no magic.
+// The public `state` surface: callable to make a writable cell, with `.computed` / `.linked` /
+// `.shared` factories.
+export interface State {
+  <T>(initial: T, transform?: (value: T) => T): StateCell<T>;
+  computed<T>(fn: () => T): StateCell<T>;
+  linked<S, T>(source: () => S, transform?: (value: S) => T): StateCell<T>;
+  shared<T>(key: string, initial: T): StateCell<T>;
+}
 
-`transform` is an optional coercion gate on the write path: every `.value =`
-runs it and stores what it returns, with `previous` for clamp-relative writes or
-rejection (`return previous` is an `Object.is` no-op). It is the local-truth
-mirror of `computed`'s write-through `set` — here the value lives in this cell, so
-the gate *returns* what to store rather than writing an external target. The
-construction `initial` is taken verbatim; the gate runs on writes only.
-*/
-function stateCell<T>(initial?: T, transform?: (next: T, previous: T) => T): State<T | undefined> {
-    const node = createSignalNode(initial)
-    return {
-        get value(): T | undefined {
-            return readNode(node) as T | undefined
-        },
-        set value(next: T | undefined) {
-            writeNode(node, transform === undefined ? next : transform(next as T, node.value as T))
-        },
+function makeState<T>(initial: T, transform?: (value: T) => T): StateCell<T> {
+  const backing = signal<T>(transform ? transform(initial) : initial);
+  return {
+    [STATE_CELL]: "state",
+    read: () => backing(),
+    write: (value: T) => backing.set(transform ? transform(value) : value),
+    peek: () => backing.peek(),
+  };
+}
+
+function makeComputed<T>(fn: () => T): StateCell<T> {
+  const derived = computed<T>(fn);
+  return {
+    [STATE_CELL]: "computed",
+    read: () => derived(),
+    write: () => {
+      throw new TypeError("state.computed(...) is read-only and cannot be assigned");
+    },
+    peek: () => derived.peek(),
+  };
+}
+
+// A writable cell whose value is reseeded whenever `source` changes. Local writes hold until the next
+// reseed. The reseed effect lives for the component's lifetime (owned by the instance scope).
+function makeLinked<S, T>(source: () => S, transform?: (value: S) => T): StateCell<T> {
+  const backing = signal<T>(undefined as unknown as T);
+  let seeded = false;
+  effect(() => {
+    const next = source();
+    const value = (transform ? transform(next) : (next as unknown as T)) as T;
+    backing.set(value);
+    seeded = true;
+  });
+  // Guard: if an effect flush has not yet run (server single-pass), the effect above ran synchronously
+  // on creation, so `seeded` is already true here.
+  void seeded;
+  return {
+    [STATE_CELL]: "linked",
+    read: () => backing(),
+    write: (value: T) => backing.set(value),
+    peek: () => backing.peek(),
+  };
+}
+
+// A writable cell shared by KEY across every component instance on the client — same key, same backing
+// signal — and synced across same-origin browser TABS over a Web-standard `BroadcastChannel`. A write
+// updates the local signal and posts `{ key, value }` (JSON-serializable values only) to the other
+// tabs, whose matching cells apply it WITHOUT re-broadcasting. On the SERVER there is no cross-instance
+// sharing (a process-global store would leak one request's state to another), so it degrades to a plain
+// per-render cell seeded with `initial` — the same value the client's first instance starts from, so
+// hydration stays consistent.
+interface SharedSlot {
+  backing: Signal<unknown>;
+}
+const SHARED_SLOTS = new Map<string, SharedSlot>();
+let sharedChannel: BroadcastChannel | undefined;
+let channelResolved = false;
+
+function ensureChannel(): BroadcastChannel | undefined {
+  if (!isClient) return undefined;
+  if (!channelResolved) {
+    channelResolved = true;
+    try {
+      const channel = new BroadcastChannel("abide:state:shared");
+      channel.onmessage = (event: MessageEvent) => {
+        const data = event.data as { key?: unknown; value?: unknown } | null;
+        if (data === null || typeof data.key !== "string") return;
+        const slot = SHARED_SLOTS.get(data.key);
+        if (slot !== undefined) slot.backing.set(data.value); // apply remote write WITHOUT re-broadcast
+      };
+      sharedChannel = channel;
+    } catch {
+      sharedChannel = undefined;
     }
+  }
+  return sharedChannel;
 }
 
-const stateFn = stateCell as StateFn
-stateFn.linked = linked
-stateFn.computed = computed
-/* `.share`/`.shared` route onto the ambient scope, read/written at call time so the
-   state ↔ scope module cycle resolves. */
-stateFn.share = (key: string, value: unknown): void => {
-    scope().share(key, value)
+function makeShared<T>(key: string, initial: T): StateCell<T> {
+  if (!isClient) {
+    // Server: isolated per-render cell (no cross-request registry).
+    const backing = signal<T>(initial);
+    return { [STATE_CELL]: "shared", read: () => backing(), write: (value: T) => backing.set(value), peek: () => backing.peek() };
+  }
+  let slot = SHARED_SLOTS.get(key);
+  if (slot === undefined) {
+    slot = { backing: signal<unknown>(initial) };
+    SHARED_SLOTS.set(key, slot);
+  }
+  ensureChannel();
+  const backing = slot.backing;
+  return {
+    [STATE_CELL]: "shared",
+    read: () => backing() as T,
+    write: (value: T) => {
+      backing.set(value);
+      const channel = ensureChannel();
+      if (channel !== undefined) {
+        try {
+          channel.postMessage({ key, value });
+        } catch {
+          // Non-serializable value: keep it local rather than throwing on the write path.
+        }
+      }
+    },
+    peek: () => backing.peek() as T,
+  };
 }
-stateFn.shared = <T>(key: string): T | undefined => scope().shared<T>(key)
 
-// @documentation reactive-state
-export const state = stateFn
+export const state: State = Object.assign(makeState as State, {
+  computed: makeComputed,
+  linked: makeLinked,
+  shared: makeShared,
+});

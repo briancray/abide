@@ -1,0 +1,24 @@
+<script module>
+  import Sample from "../../../components/Sample.abide"
+  import platformConfig from "../../../../server/rpc/platformConfig"
+
+  const PAGE = "src/ui/pages/platform/config/page.abide"
+</script>
+
+
+<main class="page">
+  <h1>Config</h1>
+  <p class="lead"><code>env(schema)</code> reads typed, boot-validated config from the environment. Strings are coerced by the schema (<code>"25"</code> → number, <code>"true"</code> → boolean), schema defaults fill missing keys, and it fails fast if a required var is missing or invalid. Below is a live read of an <code>env()</code>-backed RPC.</p>
+
+  <Sample page={PAGE} id="config" title="Live config value" client="config" server="src/server/rpc/platformConfig.ts">
+    <!-- #demo config -->
+    {#await platformConfig()}
+      <p id="config-block">reading…</p>
+    {:then config}
+      <pre class="out" id="config-block">appName        = {config.appName}
+maxItems       = {config.maxItems}  (coerced to {config.maxItemsType})
+featureMachines = {config.featureMachines ? "on" : "off"}</pre>
+    {/await}
+    <!-- #enddemo -->
+  </Sample>
+</main>

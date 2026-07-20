@@ -1,0 +1,168 @@
+<script module>
+  import Sample from "../../../components/Sample.abide"
+  import rpcGreet from "../../../../server/rpc/rpcGreet"
+  import rpcBoom from "../../../../server/rpc/rpcBoom"
+  import rpcLimited from "../../../../server/rpc/rpcLimited"
+
+  const PAGE = "src/ui/pages/rpc-guide/responses/page.abide"
+</script>
+
+<script>
+  import { state } from "abide/ui/state"
+
+  let streamingJsonl = state(false)
+  let streamingSse = state(false)
+  let plainError = state(null)
+  let typedError = state(null)
+  let redirectInfo = state(null)
+
+  // Consume the jsonl (application/jsonl) stream line by line in the browser.
+  // NOTE: const-assigned generator expression — a top-level `async function*` declaration isn't
+  // hoisted onto the template scope by the `.abide` script transform (framework bug).
+  const jsonlTicks = async function* () {
+    const response = await fetch("/rpc/rpcTicker")
+    if (!response.body) return
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ""
+    for (;;) {
+      const chunk = await reader.read()
+      if (chunk.done) break
+      buffer += decoder.decode(chunk.value, { stream: true })
+      let newline = buffer.indexOf("\n")
+      while (newline >= 0) {
+        const line = buffer.slice(0, newline).trim()
+        buffer = buffer.slice(newline + 1)
+        if (line.length > 0) yield JSON.parse(line)
+        newline = buffer.indexOf("\n")
+      }
+    }
+  }
+
+  // Consume the SSE (text/event-stream) stream, parsing `data:` frames in the browser.
+  // NOTE: const-assigned generator expression (see jsonlTicks — top-level `async function*` isn't scope-hoisted).
+  const sseFrames = async function* () {
+    const response = await fetch("/rpc/rpcEvents")
+    if (!response.body) return
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ""
+    for (;;) {
+      const chunk = await reader.read()
+      if (chunk.done) break
+      buffer += decoder.decode(chunk.value, { stream: true })
+      let split = buffer.indexOf("\n\n")
+      while (split >= 0) {
+        const frame = buffer.slice(0, split)
+        buffer = buffer.slice(split + 2)
+        const line = frame.split("\n").find((l) => l.startsWith("data:"))
+        if (line) yield JSON.parse(line.slice(5).trim())
+        split = buffer.indexOf("\n\n")
+      }
+    }
+  }
+
+  async function callBoom() {
+    try {
+      await rpcBoom({ ok: false })
+      plainError = { message: "(no error)" }
+    } catch (caught) {
+      plainError = { status: caught.status, message: caught.message }
+    }
+  }
+
+  async function callLimited() {
+    try {
+      await rpcLimited({ tokens: 0 })
+      typedError = { caught: "none" }
+    } catch (caught) {
+      // fn.isError(e, name) is the real typed-error narrower on the read surface — a generic
+      // predicate matching the caught HttpError's type name (`error.typed(name, …)` sets it).
+      if (rpcGreet.isError(caught, "RateLimited")) {
+        typedError = { caught: "RateLimited", status: caught.status, retryAfter: caught.data?.retryAfter }
+      } else {
+        typedError = { caught: "other", status: caught.status }
+      }
+    }
+  }
+
+  async function followRedirect() {
+    const response = await fetch("/rpc/rpcGoHome?args=" + encodeURIComponent(JSON.stringify({ to: "/rpc" })))
+    redirectInfo = { redirected: response.redirected, url: new URL(response.url).pathname }
+  }
+</script>
+
+
+<main class="page">
+  <h1>Response helpers</h1>
+  <p class="lead">A handler returns a plain value (auto-wrapped in <code>json</code>) or an explicit response: <code>json</code>, <code>jsonl</code>, <code>sse</code>, <code>error</code>, <code>error.typed</code>, or <code>redirect</code>. Each is a real HTTP response consumed live in the browser below.</p>
+
+  <Sample page={PAGE} id="json" title="<code>json(data)</code>" client="json" server="src/server/rpc/rpcGreet.ts">
+    <p>A bare return is serialized as JSON — the value lands in SSR HTML:</p>
+    <!-- #demo json -->
+    {#await rpcGreet({ name: "json" })}
+      <p>reading…</p>
+    {:then value}
+      <pre class="out" data-testid="json-result">greeting: {value.greeting}
+length: {value.length}</pre>
+    {/await}
+    <!-- #enddemo -->
+  </Sample>
+
+  <Sample page={PAGE} id="jsonl" title="<code>jsonl(iterable)</code> — newline-delimited stream" client="jsonl" server="src/server/rpc/rpcTicker.ts">
+    <!-- #demo jsonl -->
+    <button data-testid="jsonl-btn" onclick={() => streamingJsonl = true}>Start jsonl stream</button>
+    {#if streamingJsonl}
+      <ul class="stream" data-testid="jsonl-list">
+        {#for await tick of jsonlTicks()}
+          <li>{tick.label}</li>
+        {:catch}
+          <li>stream failed</li>
+        {/for}
+      </ul>
+    {/if}
+    <!-- #enddemo -->
+  </Sample>
+
+  <Sample page={PAGE} id="sse" title="<code>sse(iterable)</code> — Server-Sent Events stream" client="sse" server="src/server/rpc/rpcEvents.ts">
+    <!-- #demo sse -->
+    <button data-testid="sse-btn" onclick={() => streamingSse = true}>Start SSE stream</button>
+    {#if streamingSse}
+      <ul class="stream" data-testid="sse-list">
+        {#for await frame of sseFrames()}
+          <li>#{frame.seq} — {frame.kind}</li>
+        {:catch}
+          <li>stream failed</li>
+        {/for}
+      </ul>
+    {/if}
+    <!-- #enddemo -->
+  </Sample>
+
+  <Sample page={PAGE} id="error" title="<code>error(status, message)</code>" client="error" server="src/server/rpc/rpcBoom.ts">
+    <!-- #demo error -->
+    <button data-testid="error-btn" onclick={callBoom}>Trigger 422</button>
+    {#if plainError}
+      <p class="err" data-testid="error-result">{plainError.status} — {plainError.message}</p>
+    {/if}
+    <!-- #enddemo -->
+  </Sample>
+
+  <Sample page={PAGE} id="typed" title="<code>error.typed(name, status)</code> + narrowing" client="typed" server="src/server/rpc/rpcLimited.ts">
+    <!-- #demo typed -->
+    <button data-testid="typed-btn" onclick={callLimited}>Trigger RateLimited</button>
+    {#if typedError}
+      <p class="err" data-testid="typed-result">caught: {typedError.caught} · status {typedError.status} · retryAfter {typedError.retryAfter}</p>
+    {/if}
+    <!-- #enddemo -->
+  </Sample>
+
+  <Sample page={PAGE} id="redirect" title="<code>redirect(url, status)</code>" client="redirect" server="src/server/rpc/rpcGoHome.ts">
+    <!-- #demo redirect -->
+    <button data-testid="redirect-btn" onclick={followRedirect}>Follow redirect</button>
+    {#if redirectInfo}
+      <p class="say" data-testid="redirect-result">redirected: {String(redirectInfo.redirected)} → {redirectInfo.url}</p>
+    {/if}
+    <!-- #enddemo -->
+  </Sample>
+</main>

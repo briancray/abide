@@ -1,20 +1,11 @@
-import { tailProbeSlot } from './tailProbeSlot.ts'
-import type { NamedAsyncIterable } from './types/NamedAsyncIterable.ts'
+// done(iterable) — a reactive boolean: has this async iterable finished streaming? Pair it with a
+// `{#for await}` over the SAME iterable object (create the stream once and reuse it): the runtime
+// flips this true when the stream ends (or throws). It is true on the server only if the stream
+// completed within the single SSR pass; otherwise it becomes true reactively on the client once the
+// stream drains. Isomorphic — safe to call in a `.abide` template (imported via `abide/shared/done`).
 
-/*
-Reactive terminal-state reader for a stream: true once the source has closed (its
-tail entry status === 'done'). Stream-only — a cache entry's "done" is just
-`!pending && !refreshing`, so there is no cache-selector form. The residual bit the
-`pending` / `refreshing` / `error` probes don't cover (see design Part 4). No prober
-registered (server render, or tail never imported) reads as not-done.
-*/
-// @documentation probes
-export function done(subscribable: NamedAsyncIterable<unknown>): boolean {
-    /* Null-tolerant: a promise/iterable subexpression peek-lifts to `undefined` while
-       pending (ADR-0032), so `done(getFeed())` in a template hands us `undefined` on the
-       first pass — treat a missing source as not-done rather than throwing. */
-    if (subscribable == null) {
-        return false
-    }
-    return tailProbeSlot.probe?.(subscribable.name)?.done ?? false
+import { iterableDone } from "./internal/iterableDone.ts";
+
+export function done(iterable: unknown): boolean {
+  return iterableDone(iterable);
 }

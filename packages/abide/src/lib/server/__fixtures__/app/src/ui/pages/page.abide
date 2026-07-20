@@ -1,0 +1,2 @@
+<script>import greet from "../../../server/rpc/greet";</script>
+<h1>{await greet({name:"x"})}</h1>

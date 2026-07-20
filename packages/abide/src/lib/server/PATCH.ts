@@ -1,10 +1,7 @@
-import type { MutatingRpcHelper } from './rpc/types/RpcHelper.ts'
-import { unprocessed } from './rpc/unprocessed.ts'
+// PATCH — mutating RPC helper, identical semantics to POST (no cache, direct call).
 
-/*
-PATCH rpc helper. The bundler rewrites every `export const x = PATCH(fn)` inside
-`src/server/rpc/<file>.ts` into a defineRpc call (server target) or a
-remoteProxy stub (client target). Calling this directly throws.
-*/
-// @documentation rpc
-export const PATCH: MutatingRpcHelper = (_fn: any, _opts?: any) => unprocessed('PATCH')
+import { makeMutation, type Mutation, type Payload, type RpcOptions } from "./internal/makeRpc.ts";
+
+export function PATCH<Args, R>(fn: (args: Args) => Promise<R> | R, opts?: RpcOptions): Mutation<Args, Payload<R>> {
+  return makeMutation<Args, R>("PATCH", fn, opts);
+}

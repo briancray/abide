@@ -1,4 +1,0 @@
-[test]
-# Register the abide preload so `.abide` components compile under `bun test`
-# (same runtime as the server).
-preload = ["@abide/abide/preload"]

@@ -1,10 +1,7 @@
-import type { MutatingRpcHelper } from './rpc/types/RpcHelper.ts'
-import { unprocessed } from './rpc/unprocessed.ts'
+// DELETE — mutating RPC helper, identical semantics to POST (no cache, direct call).
 
-/*
-DELETE rpc helper. The bundler rewrites every `export const x = DELETE(fn)` inside
-`src/server/rpc/<file>.ts` into a defineRpc call (server target) or a
-remoteProxy stub (client target). Calling this directly throws.
-*/
-// @documentation rpc
-export const DELETE: MutatingRpcHelper = (_fn: any, _opts?: any) => unprocessed('DELETE')
+import { makeMutation, type Mutation, type Payload, type RpcOptions } from "./internal/makeRpc.ts";
+
+export function DELETE<Args, R>(fn: (args: Args) => Promise<R> | R, opts?: RpcOptions): Mutation<Args, Payload<R>> {
+  return makeMutation<Args, R>("DELETE", fn, opts);
+}

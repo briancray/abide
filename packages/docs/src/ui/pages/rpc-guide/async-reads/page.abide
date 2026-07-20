@@ -1,0 +1,103 @@
+<script module>
+  import Sample from "../../../components/Sample.abide"
+  import hello from "../../../../server/rpc/hello"
+  import rpcGreet from "../../../../server/rpc/rpcGreet"
+
+  const PAGE = "src/ui/pages/rpc-guide/async-reads/page.abide"
+</script>
+
+<script>
+  import { state } from "abide/ui/state"
+
+  let raw = state(null)
+  let peeked = state("(click to peek)")
+
+  // Raw bypass: `fn.raw(args, init?)` returns the UNTOUCHED Response for a read — no cell, no cache,
+  // no coalescing, no error-throw. On the client it is a bare fetch of the RPC's HTTP face; the
+  // caller reads the raw `.status`, headers, and body itself.
+  async function rawFetch() {
+    const response = await rpcGreet.raw({ name: "raw" })
+    raw = { status: response.status, contentType: response.headers.get("content-type"), body: await response.text() }
+  }
+
+  // fn.peek(args) — the reactive snapshot: current retained value or undefined. Subscribes and kicks
+  // a coalesced load when cold (the non-blocking display read; the bare call is the awaitable load).
+  function peek() {
+    const value = rpcGreet.peek({ name: "await block" })
+    peeked = value ? value.greeting : "still pending"
+  }
+</script>
+
+
+<main class="page">
+  <h1>Async reads in templates</h1>
+  <p class="lead">A read RPC's bare call is the awaitable, coalesced load (<code>Promise&lt;T&gt;</code>); <code>fn.peek(args)</code> is the non-blocking <code>T | undefined</code> snapshot. On the server the blocking forms land the value in SSR HTML; in the browser the peek is non-blocking while the blocking forms suspend.</p>
+
+  <Sample page={PAGE} id="await-read" title="<code>{'{'}await fn(){'}'}</code> — blocking read" client="await-read" server="src/server/rpc/hello.ts">
+    <p>Awaited during SSR; the string is already in this HTML:</p>
+    <!-- #demo await-read -->
+    <p class="say" data-testid="await-read">{await hello({ who: "async reads" })}</p>
+    <!-- #enddemo -->
+  </Sample>
+
+  <Sample page={PAGE} id="peek-read" title="<code>{'{'}fn.peek(args){'}'}</code> — non-blocking snapshot" client="peek-read" server="src/server/rpc/hello.ts">
+    <p>The peek is <code>undefined</code> while pending in the browser (it subscribes and kicks the load), the value once loaded:</p>
+    <!-- #demo peek-read -->
+    <p class="say" data-testid="peek-read">{hello.peek({ who: "peek" })}</p>
+    <!-- #enddemo -->
+  </Sample>
+
+  <Sample page={PAGE} id="await-block" title="<code>{'{'}#await{'}'}</code> / <code>{'{'}:then{'}'}</code> / <code>{'{'}:catch{'}'}</code>" client="await-block" server="src/server/rpc/rpcGreet.ts">
+    <!-- #demo await-block -->
+    {#await rpcGreet({ name: "await block" })}
+      <p data-testid="await-pending">reading…</p>
+    {:then value}
+      <pre class="out" data-testid="await-then">greeting: {value.greeting}
+length: {value.length}</pre>
+    {:catch failure}
+      <p class="err" data-testid="await-catch">failed: {failure.message}</p>
+    {/await}
+    <!-- #enddemo -->
+  </Sample>
+
+  <Sample page={PAGE} id="await-inline" title="<code>{'{'}#await fn() then v{'}'}</code> — inline blocking form" client="await-inline" server="src/server/rpc/rpcGreet.ts">
+    <p>The <code>then</code> binding folds into the opener: no pending branch, <code>v</code> is the resolved value (<code>T</code>), and the body renders once the read settles.</p>
+    <!-- #demo await-inline -->
+    {#await rpcGreet({ name: "inline then" }) then greet}
+      <p class="say" data-testid="inline-then">{greet.greeting} ({greet.length})</p>
+    {/await}
+    <!-- #enddemo -->
+  </Sample>
+
+  <Sample page={PAGE} id="peek-probe" title="<code>fn.peek</code> — reactive probe" client="peek-probe" server="src/server/rpc/rpcGreet.ts">
+    <!-- #demo peek-probe -->
+    <button data-testid="peek-btn" onclick={peek}>Peek cached greet</button>
+    <p>Peeked value: <strong data-testid="peek-value">{peeked}</strong></p>
+    <!-- #enddemo -->
+  </Sample>
+
+  <Sample page={PAGE} id="raw" title="Raw bypass — untouched <code>Response</code>" client="raw" server="src/server/rpc/rpcGreet.ts">
+    <!-- #demo raw -->
+    <button data-testid="raw-btn" onclick={rawFetch}>Raw fetch /rpc/rpcGreet</button>
+    {#if raw}
+      <pre class="out" data-testid="raw-result">status: {raw.status}
+content-type: {raw.contentType}
+body: {raw.body}</pre>
+    {/if}
+    <!-- #enddemo -->
+  </Sample>
+
+  <Sample page={PAGE} id="probes" title="In-template <code>fn.pending()</code> / <code>fn.error()</code> probes" client="probes" server="src/server/rpc/rpcGreet.ts">
+    <p>The reactive probes are usable directly in the template. <code>{'{'}rpcGreet.peek(args){'}'}</code> kicks the load and snapshots the value; <code>fn.pending(args)</code> and <code>fn.error(args)</code> report that same slot's live state as it resolves:</p>
+    <!-- #demo probes -->
+    {#if rpcGreet.pending({ name: "probe" })}
+      <p data-testid="probe-pending">pending…</p>
+    {:else if rpcGreet.error({ name: "probe" })}
+      <p class="err" data-testid="probe-error">error: {(rpcGreet.error({ name: "probe" }) as Error).message}</p>
+    {:else}
+      <p class="say" data-testid="probe-value">{rpcGreet.peek({ name: "probe" })?.greeting}</p>
+    {/if}
+    <p>pending: <strong data-testid="probe-pending-flag">{String(rpcGreet.pending({ name: "probe" }))}</strong> · error: <strong data-testid="probe-error-flag">{(rpcGreet.error({ name: "probe" }) as Error | undefined)?.message ?? "none"}</strong></p>
+    <!-- #enddemo -->
+  </Sample>
+</main>

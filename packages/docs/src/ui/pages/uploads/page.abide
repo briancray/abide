@@ -1,0 +1,64 @@
+<script module>
+  import Sample from "../../components/Sample.abide"
+
+  const PAGE = "src/ui/pages/uploads/page.abide"
+</script>
+
+<script>
+  import { state } from "abide/ui/state"
+  import rpcUpload from "../../../server/rpc/rpcUpload"
+
+  // The upload RPC's single argument is a real FormData: the picked File plus the caption text field.
+  // The browser calls the SAME callable as the server — the client proxy sends the FormData as the raw
+  // multipart body. A 422 (missing/short caption, or a missing/oversize/wrong-type file) throws an
+  // HttpError we surface below.
+  let caption = state("")
+  let fileNode = state(null)
+  let result = state(null)
+  let errorMsg = state("")
+
+  // Capture the file <input> node on mount (bind:element attach form), so upload() can read its
+  // live `.files` at click time.
+  const bindFile = (el) => {
+    fileNode = el
+    return () => { fileNode = null }
+  }
+
+  async function upload() {
+    errorMsg = ""
+    result = null
+    const form = new FormData()
+    form.set("caption", caption)
+    const file = fileNode?.files?.[0]
+    if (file) form.set("avatar", file)
+    try {
+      result = await rpcUpload(form)
+    } catch (caught) {
+      const err = caught as { data?: { fields?: Record<string, string> }; message?: string }
+      const fields = err.data?.fields
+      errorMsg = fields ? Object.values(fields).join("; ") : (err.message ?? "upload failed")
+    }
+  }
+</script>
+
+<main class="page">
+  <h1>File uploads — multipart</h1>
+  <p class="lead">A mutation whose single argument is a <code>FormData</code> accepts a file upload: the <code>File</code> rides in the multipart body, never in a JSON args object. The <code>files</code> schema validates the uploaded FILE (present, size, MIME); the JSON <code>input</code> schema validates the multipart TEXT fields (here <code>caption</code> is required and non-empty). Either failure is one 422 the client narrows to a <code>ValidationError</code>.</p>
+
+  <Sample page={PAGE} id="upload" title="Multipart upload with file + text validation" client="upload" server="src/server/rpc/rpcUpload.ts">
+    <!-- #demo upload -->
+    <div class="controls">
+      <label>caption <input data-testid="upload-caption" bind:value={caption} placeholder="required, non-empty" /></label>
+      <input data-testid="upload-file" type="file" bind:element={bindFile} />
+      <button data-testid="upload-submit" onclick={upload}>Upload</button>
+    </div>
+
+    {#if result}
+      <p data-testid="upload-result" class="out">uploaded <strong>{result.name}</strong> ({result.size} bytes, {result.type}) — caption: "{result.caption}"</p>
+    {/if}
+    {#if errorMsg}
+      <p data-testid="upload-error" class="out err">rejected: {errorMsg}</p>
+    {/if}
+    <!-- #enddemo -->
+  </Sample>
+</main>

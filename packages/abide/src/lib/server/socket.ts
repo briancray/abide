@@ -1,32 +1,52 @@
-import type { Socket } from '../shared/types/Socket.ts'
-import type { StandardSchemaV1 } from '../shared/types/StandardSchemaV1.ts'
-import type { SocketOptions } from './sockets/types/SocketOptions.ts'
+// socket(...) — the named, typed pub/sub topic primitive (sockets.md S1-S2). A socket is an
+// isomorphic `Socket<T>` = `AsyncIterable<T>`: subscribe by iterating (`for await (const m of
+// sock)`), unsubscribe by breaking. `publish(msg)` is the server broadcast path. Client-mediated
+// publishes go through the hub's `ingressPublish` (M6 transport, phase 2), which is surfaced on
+// `__socket` for the transport to call.
+//
+// One socket per file in `src/server/sockets/<name>.ts`; the name comes from the filename. This
+// core is single-process (S3.3) — tail buffer + fanout live in one server process.
 
-/*
-Declares a Socket inside a file under `src/server/sockets/`. Each file contains
-exactly one export, named after the file (e.g. `chat.ts` →
-`export const chat = socket<ChatMessage>(...)`). The bundler reads the
-export name from the filename and the socket name from the file path
-under `src/server/sockets/`, then rewrites this call to bind the name into the
-runtime implementation (defineSocket on the server, socketProxy on the
-client). Opts (tail, clientPublish, schema, clients) live on the
-server side only; the client target discards them.
+import { SocketHub, DROP } from "./internal/socketHub.ts";
 
-When `schema` is set, `T` infers from `InferOutput<Schema>` and publish
-payloads validate against it on the server. `clients` controls which
-adapter surfaces (browser / mcp / cli) advertise the socket — defaults
-to browser-only when schemaless, all surfaces when a schema is present.
+// A mediating handler may return the transformed value to publish, or `void`/`DROP` to suppress
+// the client publish. `DROP` is the explicit drop signal; a bare `void`/`undefined` return drops
+// too.
+export interface SocketOptions<T> {
+  tail?: number;
+  ttl?: number;
+  clientPublish?: boolean;
+  schema?: unknown;
+  clients?: unknown;
+  handler?: (message: T) => T | void | typeof DROP | Promise<T | void | typeof DROP>;
+  crossOrigin?: unknown;
+}
 
-This function exists only for the type signature; calling it directly
-means the bundler plugin didn't process the file, which throws.
-*/
-// @documentation sockets
-export function socket<Schema extends StandardSchemaV1>(
-    opts: SocketOptions<Schema> & { schema: Schema },
-): Socket<StandardSchemaV1.InferOutput<Schema>>
-export function socket<T = unknown>(opts?: SocketOptions): Socket<T>
-export function socket<T = unknown>(_opts?: SocketOptions): Socket<T> {
-    throw new Error(
-        '[abide] `socket(...)` was called outside an $sockets module — the socket helper is only valid as the value of `export const <filename> = ...` inside a file under src/server/sockets/',
-    )
+// Internal handle carried on `__socket`: the resolved options plus the transport ingress path.
+export interface SocketInternals<T> {
+  options: SocketOptions<T>;
+  ingressPublish(message: T): Promise<void>;
+  tailSnapshot(): T[];
+}
+
+export interface Socket<T> extends AsyncIterable<T> {
+  publish(message: T): void;
+  readonly __socket: SocketInternals<T>;
+}
+
+export function socket<T>(options?: SocketOptions<T>): Socket<T> {
+  const hub = new SocketHub<T>(options ?? {});
+  return {
+    publish(message: T): void {
+      hub.publish(message);
+    },
+    [Symbol.asyncIterator](): AsyncIterator<T> {
+      return hub.subscribe();
+    },
+    __socket: {
+      options: hub.options,
+      ingressPublish: (message: T): Promise<void> => hub.ingressPublish(message),
+      tailSnapshot: (): T[] => hub.tailSnapshot(),
+    },
+  };
 }
