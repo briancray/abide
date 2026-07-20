@@ -1,27 +1,25 @@
 // `abide check` — best-effort TYPE-CHECK of `.abide` files (spec C10: generate-TS-then-check via TS7).
 //
 // WHAT IT CHECKS (and what it deliberately does not):
-//   For every `.abide` under `dir` we parse it, take the `<script module>` + `<script>` bodies, and
-//   generate a small sibling `.ts` module made of:
-//     • a tiny header declaring the cell-unwrap helper (see below),
-//     • the script IMPORTS verbatim (so unresolved imports are real errors), and
-//     • the script DECLARATIONS/statements — with one rewrite: a top-level `let/const/var x = <init>`
-//       becomes `let x = __abideUnwrap(<init>)`. `__abideUnwrap` maps a `StateCell<T>` to `T` and is
-//       identity for everything else. This mirrors the runtime `$def` accessor: in a `.abide` script
-//       the author reads/writes a state var as its underlying value (`count++`), so a state var must
-//       type-check as `T`, not `StateCell<T>`. Without this every arithmetic use of a cell in the
-//       script would be a false positive.
+//   For every `.abide` under `dir` we parse it and lower it to a type-only sibling `.ts` module via
+//   `emitCheck` (ui/internal/emitCheck.ts): a tiny header, the script IMPORTS verbatim (so unresolved
+//   imports are real errors), the script DECLARATIONS/statements, AND the template body as real
+//   lexically-scoped TS so TS's own scoping + narrowing flow through it. One rewrite: a top-level
+//   `let/const/var x = <init>` becomes `let x = __abideUnwrap(<init>)`. `__abideUnwrap` maps a
+//   `StateCell<T>` to its VALUE type `T` (with `__AbideWiden` repairing degenerate empty/nullish inits)
+//   and is identity for everything else — mirroring the runtime `$def` accessor, where a `.abide` script
+//   reads/writes a state var as its underlying value (`count++`), so a state var must type-check as `T`,
+//   not `StateCell<T>`. Without this every use of a cell would be a false positive.
 //   The generated module is type-checked with TypeScript 7 (the same `typescript/unstable` sync API
 //   `deriveSchema` uses; under Bun that API cannot open its pipe, so — exactly like `deriveSchema` —
 //   we bridge through a `node` subprocess running THIS file). Diagnostics are mapped back to the
 //   `.abide` source by an offset segment map (best-effort line/column).
 //
-//   This catches: unresolved imports, undefined identifiers used in the SCRIPT, and type errors in
-//   the script — including wrong argument types to imported+typed RPCs when the RPC is called from the
-//   script. It does NOT type-flow TEMPLATE expressions (`{await rpc(args)}`, `{#for}` bindings, etc.):
-//   template-scope type-checking is out of scope for this minimal checker (documented limit, C10).
-//   Nested branch-local `<script>`s are also not checked — only the top-level module + instance
-//   scripts.
+//   This catches: unresolved imports, undefined identifiers, and type errors in BOTH the script and
+//   template expressions — including wrong argument types to imported+typed RPCs called from a template
+//   (`{await rpc(args)}`), `{#for}`/`{#await}` bindings, and control-flow narrowing. Cross-file component
+//   props are typed via each `.abide`'s `.d.ts` companion. NOT checked: quoted-attribute interpolation
+//   (`title="x {n}"`) and nested branch-local `<script>`s — only the top-level module + instance scripts.
 
 import { type Dirent, readdirSync, readFileSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
