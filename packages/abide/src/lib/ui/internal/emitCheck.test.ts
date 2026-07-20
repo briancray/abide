@@ -83,3 +83,83 @@ describe('lowering shape', () => {
         expect(code).toContain('for (const [i, item] of __entries(items))')
     })
 })
+
+// A declarator initializer spanning lines is ONE statement, exactly as JS ASI reads it. The old scanner
+// broke on any depth-0 line break, severing the tail into an orphaned statement that TS rejects (a
+// false positive on valid code). Each case wraps the WHOLE multi-line initializer in one `__abideUnwrap`.
+describe('multi-line initializer continuation (ASI parity with TS)', () => {
+    const wrapped = (src: string): string =>
+        emitCheck(`<script>${src}</script>`, parse(`<script>${src}</script>`)).code
+
+    test('leading-dot method chain stays in one initializer', () => {
+        expect(wrapped('let total = items\n  .reduce((a, b) => a + b, 0)')).toContain(
+            '__abideUnwrap( items\n  .reduce((a, b) => a + b, 0))',
+        )
+    })
+
+    test('multi-line ternary stays in one initializer', () => {
+        expect(wrapped("let label = big\n  ? 'a'\n  : 'b'")).toContain(
+            "__abideUnwrap( big\n  ? 'a'\n  : 'b')",
+        )
+    })
+
+    test('trailing binary operator continues to the next line', () => {
+        expect(wrapped('let sum = 1 +\n  2')).toContain('__abideUnwrap( 1 +\n  2)')
+    })
+
+    test('leading logical operator continues the previous line', () => {
+        expect(wrapped('let ok = a\n  && b')).toContain('__abideUnwrap( a\n  && b)')
+    })
+
+    test('two adjacent one-line declarations are NOT merged', () => {
+        const code = wrapped('let a = 1\nlet b = 2')
+        expect(code).toContain('__abideUnwrap( 1)')
+        expect(code).toContain('__abideUnwrap( 2)')
+    })
+})
+
+// A state var must type as its underlying VALUE, so all three binding shapes get the SAME `bar: T` a
+// plain `let` would — the initializer is unwrapped whether the identifier is bare, carries an explicit
+// factory type argument, or is annotated. Destructuring is copied verbatim (a cell is never destructured).
+describe('state binding shapes (inference / annotation / explicit generic)', () => {
+    const wrapped = (src: string): string =>
+        emitCheck(`<script>${src}</script>`, parse(`<script>${src}</script>`)).code
+
+    test('inferred binding unwraps the initializer', () => {
+        expect(wrapped('let count = state(0)')).toContain('= __abideUnwrap( state(0));')
+    })
+
+    test('explicit factory type argument unwraps the whole call', () => {
+        expect(wrapped('let list = state<Item[]>([])')).toContain(
+            '= __abideUnwrap( state<Item[]>([]));',
+        )
+    })
+
+    test('a type annotation is preserved AND the initializer is unwrapped', () => {
+        const code = wrapped('let total: number = state(0)')
+        expect(code).toContain('total: number = __abideUnwrap( state(0));')
+    })
+
+    test('a function-type annotation splits at the real `=`, not the `=>`', () => {
+        // Regression: the `=` inside `=>` must not be mistaken for the assignment operator.
+        expect(wrapped('let f: () => void = fn')).toContain(': () => void = __abideUnwrap( fn);')
+    })
+
+    test('a destructuring binding is copied verbatim (never unwrapped)', () => {
+        const code = wrapped('const { title = "x" } = props()')
+        expect(code).toContain('{ title = "x" } = props();')
+        expect(code).not.toContain('__abideUnwrap( props())')
+    })
+})
+
+// The widen helper repairs the empty/nullish inits whose degenerate inference (`never[]`, `null`) would
+// otherwise false-positive; concrete inits keep their real value type. See the HEADER comment.
+describe('cell-value widening header', () => {
+    test('emits the __AbideWiden mapping over the cell unwrap overload', () => {
+        const { code } = emitCheck('<p>{x}</p>', parse('<p>{x}</p>'))
+        expect(code).toContain('type __AbideWiden<__T>')
+        expect(code).toContain(
+            'declare function __abideUnwrap<__T>(cell: __AbideStateCell<__T>): __AbideWiden<__T>;',
+        )
+    })
+})

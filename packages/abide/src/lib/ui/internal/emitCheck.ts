@@ -37,12 +37,20 @@ export interface CheckModule {
 }
 
 // Synthetic preamble. Self-contained (no imports → resolves in any project). `__abideUnwrap` models the
-// runtime `$def` accessor (a state cell reads/writes as its value → `any`, dodging narrow-literal false
-// positives); `__ref` forces an expression to be type-checked without an unused-expression lint;
-// `__entries` types `{#for item, i}` as `[index, item]`; `children` is the intrinsic slot callable.
+// runtime `$def` accessor: in a `.abide` script a state var reads/writes as its underlying VALUE, so a
+// cell must type as its value `__T` (not `StateCell<__T>`) — that is what gives `let bar = state<T>(x)`,
+// `let bar: T = state(x)`, and inferred `let bar = state(x)` the SAME `bar: T` a plain `let` would have,
+// across `state`/`.linked`/`.computed`/`.shared` (all `StateCell`-shaped). `__AbideWiden` repairs the one
+// place bare inference diverges from a plain `let`: an empty/nullish initializer flows through the generic
+// factory CALL and so misses TS's evolving-any special-case (`state([])` → `never[]`, `state(null)` →
+// `null`), which would false-positive on the very reassignments those slots exist for — widen them back to
+// a permissive type while every concrete init (`state(0)` → number) keeps real inference. `__ref` forces
+// an expression to be type-checked without an unused-expression lint; `__entries` types `{#for item, i}`
+// as `[index, item]`; `children` is the intrinsic slot callable.
 const HEADER =
     `interface __AbideStateCell<__T> { read(): __T; write(value: __T): void; peek(): __T; }\n` +
-    `declare function __abideUnwrap<__T>(cell: __AbideStateCell<__T>): any;\n` +
+    `type __AbideWiden<__T> = [__T] extends [never] ? any : __T extends readonly never[] ? any[] : [__T] extends [null | undefined] ? any : __T;\n` +
+    `declare function __abideUnwrap<__T>(cell: __AbideStateCell<__T>): __AbideWiden<__T>;\n` +
     `declare function __abideUnwrap<__T>(value: __T): __T;\n` +
     `declare function __ref(value: unknown): void;\n` +
     `declare function __entries<__T>(list: Iterable<__T> | ArrayLike<__T>): IterableIterator<[number, __T]>;\n` +
@@ -466,6 +474,70 @@ const CLOSE = new Set<SyntaxKind>([
     SyntaxKind.CloseBraceToken,
 ])
 
+// JS never applies ASI around these: a declarator initializer spanning lines (`let x = a\n  .b()`,
+// `let t = c\n  ? x\n  : y`, `let s = a +\n  b`) is ONE statement, not a `let` followed by an orphaned
+// tail. A depth-0 line break ends the initializer only when NEITHER the token before it nor the token
+// after it is a continuation — otherwise the scanner would sever a valid expression and emit code that
+// is a SYNTAX error in TS but not in `.abide` (a false positive). Binary/relational/logical operators,
+// `.`/`?.`, ternary `?`/`:`, assignment, `=>`, template continuations, and `in`/`instanceof`/`as`/
+// `satisfies` all bind their two sides across a line break in both roles. A leading `(`/`[` (call /
+// index continuation) and the prefix keywords `new`/`typeof`/`void`/`await`/`yield`/`delete`/`keyof`
+// only continue in one role, so they live in the direction-specific sets below.
+const CONTINUATION_OPERATORS = new Set<SyntaxKind>([
+    SyntaxKind.DotToken,
+    SyntaxKind.QuestionDotToken,
+    SyntaxKind.QuestionToken,
+    SyntaxKind.ColonToken,
+    SyntaxKind.CommaToken,
+    SyntaxKind.PlusToken,
+    SyntaxKind.MinusToken,
+    SyntaxKind.AsteriskToken,
+    SyntaxKind.AsteriskAsteriskToken,
+    SyntaxKind.SlashToken,
+    SyntaxKind.PercentToken,
+    SyntaxKind.AmpersandAmpersandToken,
+    SyntaxKind.BarBarToken,
+    SyntaxKind.QuestionQuestionToken,
+    SyntaxKind.LessThanToken,
+    SyntaxKind.GreaterThanToken,
+    SyntaxKind.LessThanEqualsToken,
+    SyntaxKind.GreaterThanEqualsToken,
+    SyntaxKind.EqualsEqualsToken,
+    SyntaxKind.ExclamationEqualsToken,
+    SyntaxKind.EqualsEqualsEqualsToken,
+    SyntaxKind.ExclamationEqualsEqualsToken,
+    SyntaxKind.AmpersandToken,
+    SyntaxKind.BarToken,
+    SyntaxKind.CaretToken,
+    SyntaxKind.EqualsToken,
+    SyntaxKind.EqualsGreaterThanToken,
+    SyntaxKind.InKeyword,
+    SyntaxKind.InstanceOfKeyword,
+    SyntaxKind.AsKeyword,
+    SyntaxKind.SatisfiesKeyword,
+    SyntaxKind.TemplateMiddle,
+    SyntaxKind.TemplateTail,
+])
+// A line whose PREVIOUS token is one of these has a dangling operand that the next line supplies.
+const CONTINUES_AFTER_PREV = new Set<SyntaxKind>([
+    ...CONTINUATION_OPERATORS,
+    SyntaxKind.NewKeyword,
+    SyntaxKind.TypeOfKeyword,
+    SyntaxKind.VoidKeyword,
+    SyntaxKind.AwaitKeyword,
+    SyntaxKind.YieldKeyword,
+    SyntaxKind.DeleteKeyword,
+    SyntaxKind.KeyOfKeyword,
+])
+// A line whose NEXT token is one of these continues the previous line (a call / index / member /
+// operator tail). Statements never begin with these, so treating them as continuation can't swallow a
+// genuinely separate statement.
+const CONTINUES_AT_NEXT = new Set<SyntaxKind>([
+    ...CONTINUATION_OPERATORS,
+    SyntaxKind.OpenParenToken,
+    SyntaxKind.OpenBracketToken,
+])
+
 function emitScript(
     source: string,
     script: Script,
@@ -487,16 +559,28 @@ function emitScript(
     const scanToStatementEnd = (): { rawEnd: number; end: number } => {
         let localDepth = 0
         let prevEnd = scanner.getTokenEnd()
+        // Seed with the keyword token (`let`/`const`/`var`) just scanned by the caller: it never trails a
+        // continuation, so the first line break is governed only by whatever token follows it.
+        let prevToken = scanner.getToken()
         for (;;) {
             const token = scanner.scan()
             if (token === SyntaxKind.EndOfFile) return { rawEnd: prevEnd, end: prevEnd }
-            if (localDepth === 0 && scanner.hasPrecedingLineBreak())
+            // A depth-0 line break ends the initializer only when the expression is complete on BOTH sides
+            // of it — otherwise it is a mid-expression wrap (`a\n .b()`, `c ?\n x`, `a +\n b`) that JS keeps
+            // as one statement, and severing it would emit TS-invalid code the author never wrote.
+            if (
+                localDepth === 0 &&
+                scanner.hasPrecedingLineBreak() &&
+                !CONTINUES_AFTER_PREV.has(prevToken) &&
+                !CONTINUES_AT_NEXT.has(token)
+            )
                 return { rawEnd: prevEnd, end: prevEnd }
             if (localDepth === 0 && token === SyntaxKind.SemicolonToken)
                 return { rawEnd: scanner.getTokenStart(), end: scanner.getTokenEnd() }
             if (OPEN.has(token)) localDepth++
             else if (CLOSE.has(token)) localDepth--
             prevEnd = scanner.getTokenEnd()
+            prevToken = token
         }
     }
 
@@ -554,11 +638,15 @@ function emitDeclarators(
     for (const part of splitTopLevelCommas(rawDeclarators)) {
         const text = part.text
         const partAbs = absBase + part.start
-        const equalsIndex = topLevelIndexOf(text, '=')
+        const equalsIndex = topLevelAssignmentIndex(text)
         const pattern = (equalsIndex === -1 ? text : text.slice(0, equalsIndex)).trim()
         if (pattern === '') continue
-        const isSimple = /^[A-Za-z_$][\w$]*$/.test(pattern)
-        if (!isSimple || equalsIndex === -1) {
+        // A bare identifier binding, with an OPTIONAL type annotation (`bar` or `bar: T`). Either way the
+        // init is unwrapped, so `let bar: Item[] = state([])` type-checks against its annotation and an
+        // inferred `let bar = state(0)` reads as `number`. Destructuring patterns (`{…}`/`[…]`) and
+        // un-initialized declarators are copied verbatim — a cell is never destructured.
+        const isSimpleBinding = /^[A-Za-z_$][\w$]*\s*(:[\s\S]+)?$/.test(pattern)
+        if (!isSimpleBinding || equalsIndex === -1) {
             emitSynthetic(`${keyword} `)
             emitOriginal(partAbs, text)
             emitSynthetic(';\n')
@@ -619,7 +707,10 @@ function splitTopLevelCommas(text: string): CommaPart[] {
     return parts
 }
 
-function topLevelIndexOf(text: string, target: string): number {
+// Index of the first top-level assignment `=`, skipping the `=` that belongs to a comparison/arrow token
+// (`==`, `===`, `!=`, `>=`, `<=`, `=>`). Needed so a function-type ANNOTATION (`let f: () => void = fn`)
+// splits at the real assignment, not at the `=` inside its `=>`.
+function topLevelAssignmentIndex(text: string): number {
     let depth = 0
     for (let index = 0; index < text.length; index++) {
         const char = text[index]
@@ -630,7 +721,18 @@ function topLevelIndexOf(text: string, target: string): number {
         }
         if (char === '{' || char === '[' || char === '(') depth++
         else if (char === '}' || char === ']' || char === ')') depth--
-        else if (depth === 0 && char === target) return index
+        else if (depth === 0 && char === '=') {
+            const prev = text[index - 1]
+            const next = text[index + 1]
+            const partOfOperator =
+                next === '=' ||
+                next === '>' ||
+                prev === '=' ||
+                prev === '!' ||
+                prev === '<' ||
+                prev === '>'
+            if (!partOfOperator) return index
+        }
     }
     return -1
 }

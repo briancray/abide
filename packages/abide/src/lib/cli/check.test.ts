@@ -95,3 +95,52 @@ test('a page with no <script> is skipped (no diagnostics)', async () => {
     expect(result.ok).toBe(true)
     expect(result.diagnostics).toEqual([])
 })
+
+// A `StateCell`-shaped factory (matched structurally by the checker's `__abideUnwrap`) stands in for
+// `abide/ui/state`, so these exercise the real type engine without a workspace-resolution dependency.
+const CELL_MODULE =
+    'export interface Cell<T> { read(): T; write(v: T): void; peek(): T }\n' +
+    'export function state<T>(initial: T): Cell<T> {\n' +
+    '  return { read: () => initial, write: () => {}, peek: () => initial }\n' +
+    '}\n'
+
+test('state vars type as their value: concrete inits keep inference, empty/nullish inits stay usable', async () => {
+    const page =
+        '<script>\n' +
+        "import { state } from '../../cell.ts'\n" +
+        'let count = state(0)\n' + // inferred number
+        'let items = state([])\n' + // widened -> any[]
+        'let picks: number[] = state([])\n' + // annotated
+        'let sel = state(null)\n' + // widened -> any
+        'count = count + 1\n' +
+        'items.push(1)\n' +
+        'picks.push(2)\n' +
+        'sel = { anything: true }\n' +
+        '</script>\n' +
+        '<p>{count.toFixed(2)}</p>\n'
+    const root = await makeProject({
+        'src/ui/cell.ts': CELL_MODULE,
+        'src/ui/pages/ok/page.abide': page,
+    })
+    const result = await check(root)
+    expect(result.diagnostics).toEqual([])
+    expect(result.ok).toBe(true)
+})
+
+test('an inferred state var is checked against its value type (number has no toUpperCase)', async () => {
+    const page =
+        '<script>\n' +
+        "import { state } from '../../cell.ts'\n" +
+        'let count = state(0)\n' +
+        'const bad = count.toUpperCase()\n' + // 4 -> number has no toUpperCase
+        '</script>\n' +
+        '<p>{bad}</p>\n'
+    const root = await makeProject({
+        'src/ui/cell.ts': CELL_MODULE,
+        'src/ui/pages/bad/page.abide': page,
+    })
+    const result = await check(root)
+    expect(result.ok).toBe(false)
+    const usage = result.diagnostics.find((diagnostic) => diagnostic.code === 2339)
+    expect(usage?.line).toBe(4)
+})

@@ -37,7 +37,12 @@ export interface StateCell<T> {
 export interface State {
     <T>(initial: T, transform?: (value: T) => T): StateCell<T>
     computed<T>(fn: () => T): StateCell<T>
-    linked<S, T>(source: () => S, transform?: (value: S) => T): StateCell<T>
+    // Two overloads so the value type is precise in BOTH shapes: without a transform the cell holds the
+    // SOURCE type (`state.linked(() => count)` → `StateCell<number>`), with one it holds the transform's
+    // RETURN type. A single `transform?` param cannot express this — it would leave the no-transform value
+    // type uninferable (`unknown`/`any`).
+    linked<S>(source: () => S): StateCell<S>
+    linked<S, T>(source: () => S, transform: (value: S) => T): StateCell<T>
     shared<T>(key: string, initial: T): StateCell<T>
 }
 
